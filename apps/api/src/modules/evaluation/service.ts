@@ -10,7 +10,8 @@
  *     detail and the list;
  *   - `writes.ts`: create, patch, delete, and the narrow writers the other
  *     modules call;
- *   - `items.ts`: the item list, the pools it draws from, and the copy.
+ *   - `items.ts`: the item list, the pools it draws from, and the copy;
+ *   - `activities.ts`: the Activities section, across classrooms (#190).
  *
  * Three rules shape this layer:
  *   - an item freezes ONE published question version at the moment it is
@@ -42,6 +43,7 @@ export {
   transition,
 } from "./stateMachine.js";
 export type { JoinedItem } from "./reads.js";
+export { listActivities } from "./activities.js";
 export {
   seatsOf,
   classroomIdOf,

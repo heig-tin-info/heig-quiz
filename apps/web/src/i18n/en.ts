@@ -72,6 +72,7 @@ export const en = {
 
   "nav.courses": "Courses",
   "nav.admin": "Administration",
+  "nav.activities": "Activities",
   "nav.classroomCourse": "{code} · {name}",
   "nav.classroomTip": "{name} — {course}",
 
@@ -2429,6 +2430,7 @@ export const en = {
   // teacher taking a seat in their own class.
   "view.cards": "Cards",
   "view.list": "List",
+  "view.schedule": "Schedule",
   "classrooms.tabs": "Classroom sections",
   "roster.joinDone": "You now see this classroom in the student view.",
   "roster.joinFailed": "You could not be enrolled in this classroom.",
@@ -2715,6 +2717,42 @@ export const en = {
   "settings.coachHint": "Bubbles that introduce each screen the first time you open it, and help when you seem stuck.",
   "settings.coachReplay": "Show them again",
   "settings.coachReplayed": "The tips will show again on every screen.",
+
+  // The Activities section (#190): every activity across classrooms.
+  "activities.title": "Activities",
+  "activities.subtitle": "Every exam, exercise and poll of your classrooms, in one place.",
+  "activities.loadFailed": "Could not load your activities",
+  "activities.empty.title": "No activity yet",
+  "activities.empty.body": "An exam or an exercise is created in one of your classrooms; a poll starts from the launcher.",
+  "activities.filtered.title": "Nothing matches these filters",
+  "activities.filtered.clear": "Clear the filters",
+  "activities.filtered.count": "{n} of {total} activities",
+  "activities.filter.type": "Filter by type",
+  "activities.filter.state": "Filter by state",
+  "activities.bucket.upcoming": "Upcoming",
+  "activities.bucket.open": "Open",
+  "activities.bucket.ended": "Ended",
+  "activities.takeHome": "take-home",
+  "activities.noClassroom": "No classroom",
+  "activities.col.title": "Activity",
+  "activities.col.classroom": "Classroom",
+  "activities.col.when": "Opens",
+  "activities.col.closes": "Closes",
+  "activities.closes": "until {at}",
+  "activities.live.title": "Live now",
+  "activities.live.started": "Started",
+  "activities.live.opens": "Opens",
+  "activities.live.closesAt": "closes at {time}",
+  "activities.live.end": "End the poll {name}",
+  "activities.endFailed": "The poll could not be ended.",
+  "activities.week": "Week {n} · {from} – {to}",
+  "activities.week.this": "This week",
+  "activities.week.next": "Next week",
+  "activities.week.undated": "Not scheduled",
+  "activities.week.showPast": "Show the {n} earlier weeks",
+  "activities.week.showPast.one": "Show the earlier week",
+  "activities.week.hidePast": "Hide the earlier weeks",
+  "activities.week.nothingAhead": "Nothing from this week on.",
 };
 
 export type Dict = typeof en;

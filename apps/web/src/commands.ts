@@ -1,6 +1,7 @@
 import {
   BarChart3,
   BookOpen,
+  CalendarRange,
   ClipboardCheck,
   CircleHelp,
   ClipboardList,
@@ -154,6 +155,14 @@ export function buildCommands(ctx: CommandContext): Command[] {
   }
 
   if (ctx.teacherUi) {
+    commands.push({
+      id: "nav:activities",
+      label: t("nav.activities"),
+      icon: CalendarRange,
+      group: "navigate",
+      keywords: "activities activités schedule planning live exams polls",
+      run: () => navigate({ view: "activities" }),
+    });
     commands.push({
       id: "nav:pools",
       label: t("pools.title"),

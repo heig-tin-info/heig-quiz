@@ -1,6 +1,7 @@
 /** Section 6 of the mock — see `index.ts` for the layout. */
 import {
   PollQuestionType,
+  type ActivitySummary,
   type PollPoolPage,
   type PollPublicView,
   type PollQuestionPick,
@@ -1106,4 +1107,56 @@ on("POST", "/app/api/evaluations/:id/poll/keep", (m) => {
     }
   }
   return pollTeacherView(tp);
+});
+
+// --- The Activities section (#190) ----------------------------------------
+//
+// Registered here, one file down from the evaluations it lists, because it
+// also lists the teacher's ANONYMOUS polls, which only this file knows. The
+// same scope as the server: every evaluation of a classroom that is not
+// archived (the mock teacher sits on every course's staff), and their own
+// classroom-less polls. `updatedAt` is "a minute ago" for a session in the
+// room, so the deploy guard's 12-hour rule keeps it live, as on the server.
+
+const LIVE_STATES = new Set(["lobby", "running", "paused"]);
+
+on("GET", "/app/api/activities", (): ActivitySummary[] => {
+  const inClassrooms = evaluations.flatMap((e): ActivitySummary[] => {
+    const room = rooms.find((r) => r.id === e.classroomId);
+    if (!room || room.archivedAt !== null) return [];
+    const course = courses.find((c) => c.id === room.courseId);
+    return [
+      {
+        id: e.id,
+        title: e.title,
+        mode: e.mode,
+        state: e.state,
+        classroom: { id: room.id, name: room.name, courseCode: course?.code ?? "" },
+        takeHome: e.mode === "exercise" && e.settings.lobby === "skip",
+        opensAt: e.opensAt,
+        closesAt: e.closesAt,
+        startedAt: e.startedAt,
+        updatedAt: LIVE_STATES.has(e.state) ? iso(-60_000) : (e.closedAt ?? e.createdAt),
+      },
+    ];
+  });
+  const anonymous = teacherPolls.flatMap((tp): ActivitySummary[] => {
+    const poll = pollOfTeacher(tp);
+    if (tp.classroomId !== null || poll === null) return [];
+    return [
+      {
+        id: tp.id,
+        title: poll.title,
+        mode: "poll",
+        state: poll.state === "ended" ? "closed" : "running",
+        classroom: null,
+        takeHome: false,
+        opensAt: null,
+        closesAt: null,
+        startedAt: tp.createdAt,
+        updatedAt: poll.state === "ended" ? tp.createdAt : iso(-60_000),
+      },
+    ];
+  });
+  return [...inClassrooms, ...anonymous].sort((a, b) => b.id.localeCompare(a.id));
 });

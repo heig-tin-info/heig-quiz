@@ -9,9 +9,11 @@
  * and three copies of a colour map is three chances to disagree about what
  * "paused" looks like.
  */
-import type { EvaluationState, EvaluationSummary } from "@quiz/contracts";
+import type { EvaluationMode, EvaluationState, EvaluationSummary } from "@quiz/contracts";
 
+import { gradingLinks } from "../grading";
 import type { Dict, TFunction } from "../i18n";
+import type { Route } from "../router";
 import type { Tone } from "../ui";
 
 /**
@@ -55,4 +57,20 @@ export function isGraded(state: EvaluationState): boolean {
 /** The states whose dashboard is worth opening at all. */
 export function hasDashboard(summary: Pick<EvaluationSummary, "state">): boolean {
   return summary.state !== "draft";
+}
+
+/**
+ * Where a click on an evaluation leads, in a classroom's list as in the
+ * Activities section (#190): the dashboard while the class is in it, the
+ * grading panel once it is closed — that is the work waiting — the results
+ * once they are published, and the configuration screen before any of that.
+ * A poll has no configuration screen and no grid: it IS its projection,
+ * whether it is still running or already over (F-LIVE-13).
+ */
+export function evaluationHome(row: { id: string; mode: EvaluationMode; state: EvaluationState }): Route {
+  if (row.mode === "poll") return { view: "poll", id: row.id };
+  if (isLive(row.state)) return { view: "live", id: row.id };
+  if (!isGraded(row.state)) return { view: "evaluation", id: row.id };
+  const links = gradingLinks(row.id);
+  return row.state === "released" ? links.results : links.grading;
 }

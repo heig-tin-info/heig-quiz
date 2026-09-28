@@ -11,6 +11,8 @@ import { readFileSync } from "node:fs";
 import type { PGlite } from "@electric-sql/pglite";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { isLiveNow, isTakeHome } from "@quiz/domain";
+
 import type { Db } from "./db/client.js";
 import { classrooms, courses, evaluations } from "./db/schema.js";
 import { testDatabase } from "./test/db.js";
@@ -123,5 +125,42 @@ describe("the deploy guard's live evaluations", () => {
       ["Test 1", "running", "exam", "2026-09-28 08:15", "2026-09-28 10:00"],
       ["No times", "lobby", "exam", "-", "-"],
     ]);
+  });
+
+  it("names exactly what `isLiveNow` of @quiz/domain calls live (#190)", async () => {
+    // The Activities section groups "Live now" with the TypeScript twin of
+    // this query: one definition of live, pinned on every case above at once.
+    const cases: Parameters<typeof evaluation>[0][] = [
+      { title: "lobby", state: "lobby" },
+      { title: "running", state: "running" },
+      { title: "paused", state: "paused" },
+      { title: "draft", state: "draft" },
+      { title: "released", state: "released" },
+      { title: "soon", state: "scheduled", opensAt: ago(-10 * 60_000) },
+      { title: "later", state: "scheduled", opensAt: ago(-20 * 60_000) },
+      { title: "just passed", state: "scheduled", opensAt: ago(5 * 60_000) },
+      { title: "stale", state: "scheduled", opensAt: ago(13 * HOUR) },
+      { title: "take-home", state: "running", mode: "exercise", lobby: "skip" },
+      { title: "in class", state: "running", mode: "exercise", lobby: "manual" },
+      { title: "poll", state: "running", mode: "poll" },
+      { title: "forgotten", state: "running", updatedAt: ago(13 * HOUR) },
+    ];
+    for (const row of cases) await evaluation(row);
+    const now = new Date();
+    const rows = await db.select().from(evaluations);
+    const twin = rows
+      .filter((r) =>
+        isLiveNow(
+          {
+            state: r.state,
+            takeHome: isTakeHome({ mode: r.mode, lobby: (r.settings as { lobby?: string }).lobby }),
+            opensAt: r.opensAt,
+            updatedAt: r.updatedAt,
+          },
+          now,
+        ),
+      )
+      .map((r) => r.title);
+    expect((await live()).sort()).toEqual(twin.sort());
   });
 });

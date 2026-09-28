@@ -171,6 +171,9 @@ const TeamsLinkPage = lazy(() =>
 const TeamsTabPage = lazy(() =>
   import("./notifications/TeamsTabPage").then((m) => ({ default: m.TeamsTabPage })),
 );
+const ActivitiesPage = lazy(() =>
+  import("./activities/ActivitiesPage").then((m) => ({ default: m.ActivitiesPage })),
+);
 const PollLauncher = lazy(() =>
   import("./poll/PollLauncher").then((m) => ({ default: m.PollLauncher })),
 );
@@ -219,6 +222,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   course: (r, c) => <CoursePage id={r.id} navigate={c.navigate} />,
   template: (r, c) => <TemplateEditor id={r.id} navigate={c.navigate} />,
   classroom: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} />,
+  activities: (_, c) => <ActivitiesPage navigate={c.navigate} />,
   polls: (_, c) => <PollLauncher navigate={c.navigate} />,
   // The projection is for a beamer: no sidebar, no chrome.
   poll: (r, c) => <PollProjection id={r.id} navigate={c.navigate} />,

@@ -26,6 +26,11 @@ export type Route =
    * sees it, the page reads it off the query string.
    */
   | { view: "classroom"; id: string; tab?: "roster" }
+  /**
+   * Every evaluation and poll the teacher manages, across classrooms (#190):
+   * a table, cards or a week-by-week schedule, "Live now" on top.
+   */
+  | { view: "activities" }
   /** The teacher's question pools (WP7). */
   | { view: "pools" }
   | { view: "pool"; id: string }
@@ -97,7 +102,7 @@ export type Route =
 export type RouteOf<V extends Route["view"]> = Extract<Route, { view: V }>;
 
 /** The sidebar sections (`Shell`'s `Nav`): the row that stays lit while a view is up. */
-export type NavSection = "home" | "pools" | "polls" | "admin";
+export type NavSection = "home" | "activities" | "pools" | "polls" | "admin";
 
 /**
  * Everything the app knows about one view, in one place: how it is written
@@ -196,6 +201,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     match: ([head, id]) => (head === "classrooms" && id ? { view: "classroom", id } : null),
     studentSafe: false,
   },
+  activities: { ...fixed("activities", { view: "activities" }), section: "activities" },
   pools: {
     path: () => "/pools",
     match: ([head, id]) => (head === "pools" && !id ? { view: "pools" } : null),

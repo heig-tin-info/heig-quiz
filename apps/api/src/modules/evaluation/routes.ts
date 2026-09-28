@@ -41,6 +41,7 @@ import {
   findAccessibleClassroom,
   loadEvaluation,
   loadTemplate,
+  managedEvaluationAccess,
   teacherGuard,
 } from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
@@ -112,6 +113,15 @@ export async function evaluationPlugin(app: FastifyInstance) {
   }
 
   // --- Collection --------------------------------------------------------
+
+  /**
+   * The Activities section (issue #190): every evaluation of the classrooms
+   * the caller teaches, and their own anonymous polls, in one read. The
+   * scope IS the access predicate (invariant 6); no input, so no schema.
+   */
+  app.get("/app/api/activities", { preHandler: requireTeacher }, async (req) =>
+    service.listActivities(app.db, managedEvaluationAccess(req.user!)),
+  );
 
   app.get(
     "/app/api/classrooms/:id/evaluations",

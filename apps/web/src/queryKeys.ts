@@ -100,6 +100,12 @@ export const questionPreviewKey = (id: string, source: "draft" | number | undefi
 // --- Evaluations ---------------------------------------------------------------
 
 export const evaluationsKey = (classroomId: string) => ["evaluations", classroomId] as const;
+/**
+ * `GET /activities` (#190): every evaluation and poll the teacher manages.
+ * Its own root, refreshed by every hint that touches an evaluation
+ * (`realtime/hints.ts`).
+ */
+export const activitiesKey = ["activities"] as const;
 export const evaluationKey = (id: string) => ["evaluation", id] as const;
 /** The summary of a template pull (F-EVAL-26): under the evaluation, so its refresh reaches it. */
 export const templatePullKey = (id: string) => ["evaluation", id, "pull-template"] as const;

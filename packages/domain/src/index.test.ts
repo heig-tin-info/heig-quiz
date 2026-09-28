@@ -5,6 +5,8 @@ describe("@quiz/domain public surface", () => {
   it("exports every rule the plan names, plus the seeded shuffle from @quiz/core", () => {
     const expected = [
       "GRACE_MS",
+      "isLiveNow",
+      "isTakeHome",
       "allowedFeedbackWhen",
       "assembleSource",
       "announcedWindowS",

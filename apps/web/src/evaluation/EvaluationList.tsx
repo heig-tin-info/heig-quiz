@@ -38,10 +38,10 @@ import {
   type Column,
 } from "../ui";
 import {
+  evaluationHome,
   evaluationStateLabel,
   hasDashboard,
   isGraded,
-  isLive,
   stateTone,
 } from "./common";
 import { classroomKey, evaluationsKey } from "../queryKeys";
@@ -235,20 +235,8 @@ export function EvaluationList({
     onSuccess: invalidate,
   });
 
-  /**
-   * Where a row leads: the dashboard while the class is in it, the grading
-   * panel once it is closed — that is the work waiting — the results once
-   * they are published, and the configuration screen before any of that.
-   */
-  const open = (row: EvaluationSummary) => {
-    // A poll has no configuration screen and no grid: it IS its projection,
-    // whether it is still running or already over (F-LIVE-13).
-    if (row.mode === "poll") return navigate({ view: "poll", id: row.id });
-    if (isLive(row.state)) return navigate({ view: "live", id: row.id });
-    if (!isGraded(row.state)) return navigate({ view: "evaluation", id: row.id });
-    const links = gradingLinks(row.id);
-    return navigate(row.state === "released" ? links.results : links.grading);
-  };
+  /** Where a row leads (`evaluationHome`, shared with the Activities section). */
+  const open = (row: EvaluationSummary) => navigate(evaluationHome(row));
 
   /**
    * Secondary in the section header and primary only inside the empty state:

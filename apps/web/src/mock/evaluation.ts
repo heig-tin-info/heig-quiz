@@ -26,6 +26,7 @@ import {
   MockPayload,
   flags,
   iso,
+  now,
   on,
   rand,
 } from "./runtime";
@@ -612,6 +613,51 @@ function seedEvaluations() {
   );
 }
 if (!flags.empty) seedEvaluations();
+
+/**
+ * A semester of weekly take-home series in EMB-2026 (#190): what the
+ * Activities section is for — the four behind (two published, two waiting
+ * for their grading), this week's open, and the five ahead scheduled. Each
+ * opens on a Monday at 08:00 and closes the Sunday after at 23:59.
+ */
+function seedSeries() {
+  const monday = new Date(now);
+  monday.setHours(8, 0, 0, 0);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  for (let week = -4; week <= 5; week++) {
+    const opens = new Date(monday);
+    opens.setDate(opens.getDate() + 7 * week);
+    const closes = new Date(opens);
+    closes.setDate(closes.getDate() + 6);
+    closes.setHours(23, 59, 0, 0);
+    const state = week < -2 ? "released" : week < 0 ? "closed" : week === 0 ? "running" : "scheduled";
+    const e = makeEvaluation("r3", `Série ${week + 5} — ${SERIES[week + 4]}`, state, 0, {
+      mode: "exercise",
+      durationS: null,
+      settings: { ...defaultEvaluationSettings(), timing: "deadline", lobby: "skip" },
+      opensAt: opens.toISOString(),
+      closesAt: closes.toISOString(),
+      startedAt: week <= 0 ? opens.toISOString() : null,
+      closedAt: week < 0 ? closes.toISOString() : null,
+      releasedAt: week < -2 ? closes.toISOString() : null,
+      createdAt: iso(-40 * D),
+    });
+    evaluations.push(e);
+  }
+}
+const SERIES = [
+  "GPIO",
+  "Interruptions",
+  "Timers",
+  "UART",
+  "SPI",
+  "I2C",
+  "ADC",
+  "PWM",
+  "DMA",
+  "Basse consommation",
+];
+if (!flags.empty) seedSeries();
 
 /**
  * `?mytest=1` — the teacher joined their own classroom and walked every
