@@ -323,6 +323,7 @@ const scenes = [
   { name: "player-run-manual", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 4); await p.getByRole("button", { name: /^(free try|essai libre)$/i }).click(); await p.getByRole("button", { name: /^(run once|exécuter une fois)$/i }).click(); await p.getByLabel(/^(Output|Sortie)$/).waitFor({ timeout: 60000 }); await p.waitForTimeout(300); } },
   // `codeimage` (ADR-021): question 6. Its runtime is the server's, so Run
   // goes through the mock's `POST /attempts/:id/simulate`.
+  { name: "player-circuit", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 5) },
   { name: "player-codeimage", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 6) },
   { name: "player-codeimage-run", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); } },
   { name: "player-codeimage-diff", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); await p.getByRole("radio", { name: /^(difference|différence)$/i }).check({ force: true }); } },
@@ -365,6 +366,7 @@ const scenes = [
   { name: "pools-error", role: "teacher", path: "/pools?fail=1", settle: 2500 },
   // The icon picker, reached the way a teacher reaches it: the New pool form
   // first, then the round button beside the name.
+  { name: "pool-new", role: "teacher", path: "/pools", fold: true, act: (p) => p.getByRole("button", { name: /^(new pool|nouvelle banque)$/i }).first().click() },
   { name: "pools-icon", role: "teacher", path: "/pools", fold: true, act: async (p) => {
       await p.getByRole("button", { name: /^(new pool|nouvelle banque)$/i }).first().click();
       await p.waitForTimeout(300);
@@ -549,6 +551,7 @@ const scenes = [
   // `codeimage` (ADR-021): the last question of the mock pool. The try runs
   // through the mock's `POST /try`, whose details carry the reference image.
   { name: "editor-codeimage", role: "teacher", path: "/questions/q16", settle: 5000 },
+  { name: "editor-circuit", role: "teacher", path: "/questions/q8" },
   { name: "editor-codeimage-try", role: "teacher", path: "/questions/q16", settle: 5000, act: async (p) => { await p.getByRole("button", { name: /try the reference solution|essayer la solution de référence/i }).click(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).waitFor(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).scrollIntoViewIfNeeded(); } },
   // "Student preview": a page of its own, opened by the editor in a new tab.
   { name: "question-preview", role: "teacher", path: "/questions/q2/preview", settle: 3000 },

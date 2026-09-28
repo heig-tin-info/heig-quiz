@@ -30,6 +30,7 @@
     "@quiz/qt-mcq": "workspace:*",
     "@quiz/qt-short": "workspace:*",
     "@quiz/registry": "workspace:*",
+    "@quiz/ui": "workspace:*",
     "@runno/wasi": "0.10.0",
     "@tanstack/react-query": "^5.101.2",
     "@tiptap/core": "3.31.3",
