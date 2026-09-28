@@ -98,6 +98,18 @@ export async function notify(
 }
 
 /**
+ * One notification for one account. `channels`, when given, is the most it
+ * may use: the recipient's preferences still decide within it, and a channel
+ * left out is not used whatever they chose — an in-class exercise opening
+ * stays in the app (ADR-030 §h.3). Absent, every channel the recipient chose.
+ */
+export interface Delivery {
+  userId: string;
+  payload: NotificationPayload;
+  channels?: readonly NotificationChannel[];
+}
+
+/**
  * Delivers notifications to many accounts at once — a release tells a whole
  * class — with the reads grouped: the preferences in one query, the Teams
  * links in one, the bell rows in one multi-row insert (a folded kind, §e:
@@ -116,16 +128,23 @@ export async function notify(
  */
 export async function notifyMany(
   db: Db,
-  deliveries: readonly { userId: string; payload: NotificationPayload }[],
+  deliveries: readonly Delivery[],
 ): Promise<(Notification | null)[]> {
   if (deliveries.length === 0) return [];
   const parsed = deliveries.map((d) => ({
     userId: d.userId,
     payload: NotificationPayload.parse(d.payload),
+    channels: d.channels ?? NOTIFICATION_CHANNELS,
   }));
   const userIds = [...new Set(parsed.map((d) => d.userId))];
   const wantedBy = await channelsFor(db, userIds, [...new Set(parsed.map((d) => d.payload.kind))]);
-  const planned = parsed.map((d) => ({ ...d, wanted: wantedBy(d.userId, d.payload.kind) }));
+  const planned = parsed.map((d) => {
+    const chosen = wantedBy(d.userId, d.payload.kind);
+    const wanted = Object.fromEntries(
+      NOTIFICATION_CHANNELS.map((c) => [c, chosen[c] && d.channels.includes(c)]),
+    ) as Record<NotificationChannel, boolean>;
+    return { userId: d.userId, payload: d.payload, wanted };
+  });
 
   // A Teams job needs a link; without one it would only be dropped later.
   const linked = await teamsLinkedUsers(

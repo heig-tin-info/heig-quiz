@@ -119,6 +119,14 @@ export const evaluations = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true }),
     pausedAt: timestamp("paused_at", { withTimezone: true }),
     closedAt: timestamp("closed_at", { withTimezone: true }),
+    /**
+     * When the students were told that this exercise was scheduled
+     * (`activity_scheduled`, ADR-030 §c and §h): at most once in its life,
+     * whatever reschedules or trips back to draft follow. Claimed by one
+     * conditional UPDATE (`announce.ts`); null for an exam, a poll, and an
+     * exercise never scheduled. Never copied, never cleared.
+     */
+    scheduledAnnouncedAt: timestamp("scheduled_announced_at", { withTimezone: true }),
     releasedAt: timestamp("released_at", { withTimezone: true }),
     /** Frozen grades at release (ADR-012); written by WP6, never recomputed. */
     releasedGrades: jsonb("released_grades"),

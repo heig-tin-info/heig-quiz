@@ -179,6 +179,34 @@ describe("the inbox in the account menu", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "pool", id: "p4" });
   });
 
+  it("announces a student's exercises: scheduled opens the home, open opens the attempt", async () => {
+    const scheduled: Notification = {
+      id: "n7",
+      payload: { kind: "activity_scheduled", classroomId: "r1", classroomName: "PRG1-2026", count: 16 },
+      createdAt: new Date(Date.now() - 60_000).toISOString(),
+      readAt: null,
+    };
+    const open: Notification = {
+      id: "n8",
+      payload: { kind: "activity_available", evaluationId: "e5", evaluationTitle: "Série 3" },
+      createdAt: new Date(Date.now() - 120_000).toISOString(),
+      readAt: null,
+    };
+    mockFetch({
+      [`GET ${LIST}`]: ok({ items: [scheduled, open], unread: 2 }),
+      "POST /app/api/notifications/n7/read": { status: 204 },
+      "POST /app/api/notifications/n8/read": { status: 204 },
+    });
+    const navigate = vi.fn();
+    renderMenu(navigate);
+    await openInbox();
+    await userEvent.click(screen.getByText("The exercise “Série 3” is open."));
+    expect(navigate).toHaveBeenCalledWith({ view: "attempt", evaluationId: "e5" });
+    await openInbox();
+    await userEvent.click(screen.getByText("16 exercises scheduled in PRG1-2026."));
+    expect(navigate).toHaveBeenLastCalledWith({ view: "home" });
+  });
+
   it("marks the whole inbox read from the panel", async () => {
     const { calls } = mockFetch({
       [`GET ${LIST}`]: ok({ items: [SHARED], unread: 1 }),

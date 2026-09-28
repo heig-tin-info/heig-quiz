@@ -26,8 +26,8 @@ import { notificationsKey } from "../queryKeys";
 /**
  * The inbox: what happened to this account while it was away — a pool
  * shared or inherited (F-POOL-05), results released (F-GRADE-09), students
- * who joined a classroom, roster entries to decide, grading to validate and
- * questions published in a shared pool (#198). It lives in the account menu — an
+ * who joined a classroom, roster entries to decide, grading to validate,
+ * questions published in a shared pool, exercises scheduled and opened (#198). It lives in the account menu — an
  * item "Notifications" and a count on the avatar — rather than behind a bell
  * of its own, which sat beside the account row and truncated the e-mail.
  * A notification survives a reload, so the list is a query and not a state;
@@ -79,6 +79,13 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
       });
     case "results_released":
       return t("notif.resultsReleased", { evaluationTitle: payload.evaluationTitle });
+    case "activity_scheduled":
+      return t(payload.count === 1 ? "notif.activityScheduled.one" : "notif.activityScheduled", {
+        n: payload.count,
+        classroom: payload.classroomName,
+      });
+    case "activity_available":
+      return t("notif.activityAvailable", { evaluationTitle: payload.evaluationTitle });
     case "student_joined":
       return t(payload.count === 1 ? "notif.studentJoined.one" : "notif.studentJoined", {
         n: payload.count,
@@ -105,7 +112,8 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
 /**
  * Where a notification takes the reader: the pool it is about, the
  * feedback page of the attempt whose results were released, the roster
- * of the classroom, or the grading panel of the evaluation. The e-mail and
+ * of the classroom, the grading panel of the evaluation, the student home
+ * (exercises scheduled) or the attempt of an exercise that opened. The e-mail and
  * the Teams message link to the same page (`templates.ts` on the server).
  */
 function notificationRoute(payload: NotificationPayload): Route {
@@ -121,6 +129,10 @@ function notificationRoute(payload: NotificationPayload): Route {
       return { view: "classroom", id: payload.classroomId, tab: "roster" };
     case "grading_ready":
       return { view: "grading", evaluationId: payload.evaluationId };
+    case "activity_scheduled":
+      return { view: "home" };
+    case "activity_available":
+      return { view: "attempt", evaluationId: payload.evaluationId };
   }
 }
 

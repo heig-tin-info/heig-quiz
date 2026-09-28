@@ -204,6 +204,13 @@
       "when": 1790627103909,
       "tag": "0028_notification_pool_fold",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790628507427,
+      "tag": "0029_activity_notifications",
+      "breakpoints": true
     }
   ]
 }

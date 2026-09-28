@@ -1,8 +1,8 @@
 /**
  * The notifications a user's action raises are BEST-EFFORT (ADR-030 §h,
- * #198 step 5): when `notifyMany` fails, the publication and the grading it
- * would have announced are still written, and nothing is thrown at the
- * caller.
+ * #198 steps 5 and 6): when `notifyMany` fails, the publication, the grading
+ * and the move of an exercise it would have announced are still written, and
+ * nothing is thrown at the caller — the ticker included.
  */
 import { randomUUID } from "node:crypto";
 
@@ -16,8 +16,10 @@ import { attempts, gradings, poolMembers, questions, users } from "../../db/sche
 import { seedCodeEvaluation } from "../../test/codeFixture.js";
 import { testApp, testDb } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
-import { seedLive } from "../../test/live.js";
+import { reload, seedLive } from "../../test/live.js";
+import * as evaluationService from "../evaluation/service.js";
 import { runEvaluationGrading } from "../grading/jobs.js";
+import * as live from "../live/service.js";
 import * as poolService from "../pool/service.js";
 import { notifyMany } from "./service.js";
 
@@ -78,5 +80,25 @@ describe("a failing notification", () => {
     expect(notifyMany).toHaveBeenCalledTimes(1);
     // The stub runner leaves a proposal: exactly what grading_ready would announce.
     expect(rows).toEqual([{ state: "proposed" }]);
+  });
+
+  it("never fails the move of an exercise: scheduled, then opened by the ticker", async () => {
+    const opensAt = new Date(Date.now() + 3_600_000);
+    const seed = await seedLive(db, { mode: "exercise", opensAt, settings: { lobby: "skip" } });
+    vi.mocked(notifyMany).mockClear();
+    const scheduled = await evaluationService.transition(
+      db,
+      await reload(db, seed.evaluationId),
+      "scheduled",
+      new Date(),
+    );
+    expect(scheduled.state).toBe("scheduled");
+    const opened = await live.autoOpenScheduled(db, new Date(opensAt.getTime() + 1000));
+    expect(opened.map((r) => r.id)).toContain(seed.evaluationId);
+    expect((await reload(db, seed.evaluationId)).state).toBe("running");
+    // Both announcements were attempted, and both failed.
+    expect(vi.mocked(notifyMany).mock.calls.map(([, d]) => d[0]?.payload.kind)).toEqual(
+      expect.arrayContaining(["activity_scheduled", "activity_available"]),
+    );
   });
 });

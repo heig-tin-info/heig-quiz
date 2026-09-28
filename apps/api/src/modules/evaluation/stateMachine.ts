@@ -18,6 +18,7 @@ import {
   PollNotImplemented,
 } from "./shared.js";
 import { byId, settingsOf, attemptCount } from "./reads.js";
+import { announceMove } from "./announce.js";
 
 /**
  * The legal moves. `closed → draft` is the "reopen" arrow of §5.1 and is
@@ -193,7 +194,11 @@ export async function applyState(
   return (await tryApplyState(db, row, to, now)) ?? (await byId(db, row.id))!;
 }
 
-/** The authoring transitions of §4.3; guards included. */
+/**
+ * The authoring transitions of §4.3; guards included. A move this call made
+ * (not one somebody else made first) is announced to the students
+ * (`announceMove`), after it has committed.
+ */
 export async function transition(
   db: Db,
   row: EvaluationRecord,
@@ -210,5 +215,8 @@ export async function transition(
     attemptCount: await attemptCount(db, row.id),
     now,
   });
-  return applyState(db, row, to, now);
+  const moved = await tryApplyState(db, row, to, now);
+  if (moved === null) return (await byId(db, row.id))!;
+  await announceMove(db, moved, now);
+  return moved;
 }

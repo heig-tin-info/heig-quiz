@@ -1,0 +1,2 @@
+ALTER TABLE "evaluations" ADD COLUMN "scheduled_announced_at" timestamp with time zone;--> statement-breakpoint
+CREATE UNIQUE INDEX "notifications_activity_scheduled_fold_uq" ON "notifications" USING btree ("user_id","classroom_id") WHERE "notifications"."payload"->>'kind' = 'activity_scheduled' and "notifications"."read_at" is null;

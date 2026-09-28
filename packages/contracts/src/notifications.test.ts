@@ -4,6 +4,7 @@ import {
   DEFAULT_CHANNEL_ENABLED,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_KINDS,
+  notificationKindsFor,
 } from "./notifications.js";
 
 describe("DEFAULT_CHANNEL_ENABLED — the defaults per kind (ADR-030, #198)", () => {
@@ -34,5 +35,21 @@ describe("DEFAULT_CHANNEL_ENABLED — the defaults per kind (ADR-030, #198)", ()
       email: false,
       teams: false,
     });
+  });
+
+  it("keeps activity_scheduled in the app only, and activity_available on everywhere (§h)", () => {
+    expect(DEFAULT_CHANNEL_ENABLED.activity_scheduled).toEqual({ bell: true, email: false, teams: false });
+    expect(DEFAULT_CHANNEL_ENABLED.activity_available).toEqual({ bell: true, email: true, teams: true });
+  });
+});
+
+describe("notificationKindsFor", () => {
+  it("gives a student the student kinds, and a teacher everything", () => {
+    expect(notificationKindsFor("student")).toEqual([
+      "results_released",
+      "activity_scheduled",
+      "activity_available",
+    ]);
+    expect(notificationKindsFor("teacher")).toEqual([...NOTIFICATION_KINDS]);
   });
 });

@@ -24,6 +24,14 @@ const en = {
   "results_released.subject": "Results available: {evaluationTitle}",
   "results_released.body": "The results of “{evaluationTitle}” are available.",
   "results_released.action": "See my results",
+  "activity_scheduled.subject": "{count} exercises scheduled in {classroomName}",
+  "activity_scheduled.subject.one": "An exercise scheduled in {classroomName}",
+  "activity_scheduled.body": "{count} exercises were scheduled in {classroomName}.",
+  "activity_scheduled.body.one": "An exercise was scheduled in {classroomName}.",
+  "activity_scheduled.action": "See my activities",
+  "activity_available.subject": "Exercise open: {evaluationTitle}",
+  "activity_available.body": "The exercise “{evaluationTitle}” is open. You can take it now.",
+  "activity_available.action": "Open the exercise",
   "pool_shared.subject": "A pool was shared with you: {poolName}",
   "pool_shared.body": "{byName} shared the pool “{poolName}” with you as {role}.",
   "pool_shared.action": "Open the pool",
@@ -79,13 +87,13 @@ const en = {
   "activity.grading_ready.template": "Grading to validate: {evaluationTitle}",
   "activity.pool_question_added.description": "A colleague publishes questions in a pool you share",
   "activity.pool_question_added.template": "{poolName}: {count} new question(s)",
-  // Declared ahead of the kinds that will use them (ADR-030 §f): the app is
-  // re-uploaded once for all of them. Their placeholders are the template
-  // parameters those kinds will carry.
   "activity.activity_scheduled.description": "Exercises are scheduled in your classroom",
   "activity.activity_scheduled.template": "{classroomName}: {count} exercise(s) scheduled",
   "activity.activity_available.description": "An exercise opens",
   "activity.activity_available.template": "Exercise open: {evaluationTitle}",
+  // Declared ahead of the kinds that will use them (ADR-030 §f): the app is
+  // re-uploaded once for all of them. Their placeholders are the template
+  // parameters those kinds will carry.
   "activity.deadline_approaching.description": "An evaluation you have not submitted closes within 24 hours",
   "activity.deadline_approaching.template": "Closes within 24 hours: {evaluationTitle}",
   "activity.results_updated.description": "Your grade of a released evaluation changes",
@@ -98,6 +106,14 @@ const fr: Record<Key, string> = {
   "results_released.subject": "Résultats disponibles : {evaluationTitle}",
   "results_released.body": "Les résultats de « {evaluationTitle} » sont disponibles.",
   "results_released.action": "Voir mes résultats",
+  "activity_scheduled.subject": "{count} exercices planifiés dans {classroomName}",
+  "activity_scheduled.subject.one": "Un exercice planifié dans {classroomName}",
+  "activity_scheduled.body": "{count} exercices ont été planifiés dans {classroomName}.",
+  "activity_scheduled.body.one": "Un exercice a été planifié dans {classroomName}.",
+  "activity_scheduled.action": "Voir mes activités",
+  "activity_available.subject": "Exercice ouvert : {evaluationTitle}",
+  "activity_available.body": "L'exercice « {evaluationTitle} » est ouvert. Vous pouvez le faire dès maintenant.",
+  "activity_available.action": "Ouvrir l'exercice",
   "pool_shared.subject": "Une banque a été partagée avec vous : {poolName}",
   "pool_shared.body": "{byName} a partagé la banque « {poolName} » avec vous comme {role}.",
   "pool_shared.action": "Ouvrir la banque",
@@ -204,9 +220,12 @@ function varsOf(payload: NotificationPayload, t: Record<Key, string>): Record<st
       return { poolName: payload.poolName, byName: payload.byName, role: t[`role.${payload.role}`] };
     case "pool_ownership":
       return { poolName: payload.poolName, fromName: payload.fromName };
+    case "activity_scheduled":
     case "student_joined":
     case "roster_conflict":
       return { classroomName: payload.classroomName, count: String(payload.count) };
+    case "activity_available":
+      return { evaluationTitle: payload.evaluationTitle };
     case "grading_ready":
       return { evaluationTitle: payload.evaluationTitle, count: String(payload.count) };
     case "pool_question_added":
@@ -241,6 +260,12 @@ export function notificationPath(payload: NotificationPayload): string {
       return `/classrooms/${payload.classroomId}?tab=roster`;
     case "grading_ready":
       return `/evaluations/${payload.evaluationId}/grading`;
+    // The student home lists what is coming; the page of an attempt lets the
+    // student in (the server decides between the lobby and the player).
+    case "activity_scheduled":
+      return "/";
+    case "activity_available":
+      return `/take/${payload.evaluationId}`;
   }
 }
 

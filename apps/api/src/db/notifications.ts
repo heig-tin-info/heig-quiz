@@ -35,6 +35,7 @@ import { pools } from "./pool.js";
  * `modules/notifications/service.ts` reads it to pick its arbiter.
  */
 export const NOTIFICATION_FOLD_TARGETS = {
+  activity_scheduled: "classroomId",
   student_joined: "classroomId",
   roster_conflict: "classroomId",
   pool_question_added: "poolId",
@@ -79,7 +80,7 @@ export const notifications = pgTable(
     poolId: uuid("pool_id").references(() => pools.id, { onDelete: "cascade" }),
     /** Same rule for a kind about an evaluation (`results_released`). */
     evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
-    /** Same rule for a kind about a classroom (`student_joined`, `roster_conflict`). */
+    /** Same rule for a kind about a classroom (`student_joined`, `roster_conflict`, `activity_scheduled`). */
     classroomId: uuid("classroom_id").references(() => classrooms.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     /** null = unread; the count of the bell is a count of nulls. */

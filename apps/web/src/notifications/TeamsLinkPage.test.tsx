@@ -25,6 +25,8 @@ const preview: TeamsLinkPreview = {
 const linked: NotificationSettings = {
   matrix: {
     results_released: { bell: true, email: true, teams: true },
+    activity_scheduled: { bell: true, email: false, teams: false },
+    activity_available: { bell: true, email: true, teams: true },
     pool_shared: { bell: true, email: true, teams: true },
     pool_ownership: { bell: true, email: true, teams: true },
     student_joined: { bell: true, email: false, teams: false },

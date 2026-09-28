@@ -27,6 +27,8 @@ function settings(teams: NotificationSettings["teams"]): NotificationSettings {
   return {
     matrix: {
       results_released: ALL_ON,
+      activity_scheduled: { bell: true, email: false, teams: false },
+      activity_available: ALL_ON,
       pool_shared: { ...ALL_ON, email: false },
       pool_ownership: ALL_ON,
       student_joined: { bell: true, email: false, teams: false },
@@ -42,13 +44,16 @@ function settings(teams: NotificationSettings["teams"]): NotificationSettings {
 const GET = "GET /app/api/notifications/settings";
 
 describe("the notification settings", () => {
-  it("shows a student the one kind they receive, and no Teams column when Teams is off", async () => {
+  it("shows a student the kinds they receive, and no Teams column when Teams is off", async () => {
     mockFetch({ [GET]: ok(settings(OFF)) });
     renderWithProviders(<SettingsPage me={makeMe({ role: "student" })} />);
 
     const grid = await screen.findByRole("table", { name: "Notifications" });
-    expect(within(grid).getAllByRole("rowheader")).toHaveLength(1);
+    expect(within(grid).getAllByRole("rowheader")).toHaveLength(3);
     expect(within(grid).getByText("Results released")).toBeVisible();
+    expect(within(grid).getByText("Exercise scheduled")).toBeVisible();
+    expect(within(grid).getByText("Exercise open")).toBeVisible();
+    expect(within(grid).queryByText("Grading to validate")).toBeNull();
     expect(within(grid).queryByRole("columnheader", { name: "Teams" })).toBeNull();
     expect(screen.getByText("Sent to lea@heig.test. Nothing to set up.")).toBeVisible();
     expect(screen.getByText("Not available on this platform yet.")).toBeVisible();
@@ -64,7 +69,7 @@ describe("the notification settings", () => {
     renderWithProviders(<SettingsPage me={makeMe({ role: "teacher" })} />);
 
     const grid = await screen.findByRole("table", { name: "Notifications" });
-    expect(within(grid).getAllByRole("rowheader")).toHaveLength(7);
+    expect(within(grid).getAllByRole("rowheader")).toHaveLength(9);
     const shared = within(grid).getByRole("switch", { name: "Pool shared with you: Email" });
     expect(shared).toHaveAttribute("aria-checked", "false");
     await user.click(shared);

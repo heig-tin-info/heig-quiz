@@ -78,7 +78,10 @@ describe("renderNotification", () => {
       { ...ready, count: 1 },
       added,
       { ...added, count: 1 },
-    ]) {
+      { kind: "activity_scheduled", classroomId: CLASSROOM, classroomName: "PRG1-2026", count: 16 },
+      { kind: "activity_scheduled", classroomId: CLASSROOM, classroomName: "PRG1-2026", count: 1 },
+      { kind: "activity_available", evaluationId: EVAL, evaluationTitle: "Série 3" },
+    ] satisfies NotificationPayload[]) {
       for (const locale of ["en", "fr"] as const) {
         const out = renderNotification(payload, locale, "https://quiz.test");
         for (const part of [out.subject, out.text, out.html, out.preview]) {
@@ -183,5 +186,26 @@ describe("the teacher kinds of step 5 (#198)", () => {
     expect(renderNotification({ ...added, count: 1 }, "fr", "https://quiz.test").subject).toBe(
       "Une question publiée dans PRG",
     );
+  });
+});
+
+describe("the student kinds of step 6 (#198)", () => {
+  it("sends activity_scheduled to the student home, counted per classroom", () => {
+    const scheduled = { kind: "activity_scheduled", classroomId: CLASSROOM, classroomName: "PRG1-2026" } as const;
+    expect(notificationPath({ ...scheduled, count: 16 })).toBe("/");
+    expect(renderNotification({ ...scheduled, count: 16 }, "en", "https://quiz.test").subject).toBe(
+      "16 exercises scheduled in PRG1-2026",
+    );
+    expect(renderNotification({ ...scheduled, count: 1 }, "fr", "https://quiz.test").subject).toBe(
+      "Un exercice planifié dans PRG1-2026",
+    );
+  });
+
+  it("sends activity_available to the page that lets the student in", () => {
+    const available = { kind: "activity_available", evaluationId: EVAL, evaluationTitle: "Série 3" } as const;
+    expect(notificationPath(available)).toBe(`/take/${EVAL}`);
+    const out = renderNotification(available, "fr", "https://quiz.test");
+    expect(out.subject).toBe("Exercice ouvert : Série 3");
+    expect(out.text).toContain(`https://quiz.test/take/${EVAL}`);
   });
 });
