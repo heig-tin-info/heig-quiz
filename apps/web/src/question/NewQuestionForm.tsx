@@ -1,6 +1,6 @@
 import { useT } from "../i18n";
 import { QuestionTypePicker } from "../pool/QuestionTypePicker";
-import { Field } from "../ui";
+import { Field, useCoarsePointer } from "../ui";
 
 /**
  * The two fields a new question starts from: its type, as the tile grid, and
@@ -27,6 +27,10 @@ export function NewQuestionForm({
   onName: (name: string) => void;
 }) {
   const t = useT();
+  // A coarse pointer (phone, tablet) has no physical keyboard: autofocusing
+  // the name field opens the soft keyboard immediately and covers the type
+  // grid the teacher has to choose from first. Desktop keeps the autofocus.
+  const coarse = useCoarsePointer();
   return (
     <>
       <fieldset>
@@ -37,7 +41,7 @@ export function NewQuestionForm({
         label={t("pool.questionName")}
         hint={t("pool.questionNameHint")}
         fullWidth
-        autoFocus
+        autoFocus={!coarse}
         placeholder={t("pool.questionNamePlaceholder")}
         value={name}
         onChange={(e) => onName(e.target.value)}
