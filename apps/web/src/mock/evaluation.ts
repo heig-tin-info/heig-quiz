@@ -1245,13 +1245,18 @@ on("POST", "/app/api/questions/move", (_m, body) => {
     blocking.set(course.id, entry);
   }
   const blocked = [...blocking.values()];
+  // As the server does: a course the caller cannot open is named by its code only.
+  const asSeen = (c: Record<string, unknown>) =>
+    c.mayLink === true
+      ? c
+      : { courseId: null, courseName: null, courseCode: c.courseCode, classrooms: [], mayLink: false };
   let linkedCourseIds: string[] = [];
   if (blocked.length > 0) {
     if (body.linkCourses !== true) {
       throw new MockPayload(409, {
         error: "pool_not_linked",
         message: "This question is used by a classroom whose course does not draw from that pool",
-        courses: blocked,
+        courses: blocked.map(asSeen),
         names: [],
       });
     }
@@ -1260,7 +1265,7 @@ on("POST", "/app/api/questions/move", (_m, body) => {
       throw new MockPayload(409, {
         error: "course_forbidden",
         message: "You are not on the teaching staff of that course",
-        courses: forbidden,
+        courses: forbidden.map(asSeen),
         names: [],
       });
     }

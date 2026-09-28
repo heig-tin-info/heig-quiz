@@ -808,14 +808,13 @@ export class PoolLinkForbidden extends Error {
  * needs the caller's effective role to be at least `contributor`, because the
  * link makes the whole staff contributors of it. A pool already linked stays
  * when the list keeps it, and unlinking needs nothing more than the course.
- * `viewer` is omitted by the seed only, which owns every pool it links.
  */
 export async function setCoursePools(
   db: Db,
   courseId: string,
   poolIds: readonly string[],
   allowed: SQL | undefined,
-  viewer?: { id: string; role: string },
+  viewer: { id: string; role: string },
 ) {
   const unique = [...new Set(poolIds)];
   const reachable = unique.length
@@ -835,7 +834,7 @@ export async function setCoursePools(
     ).map((r) => r.poolId),
   );
   const added = reachable.filter((id) => !current.has(id));
-  if (viewer && added.length) {
+  if (added.length) {
     const refused = (await listPools(db, inArray(pools.id, added), viewer)).filter(
       (p) => !poolRoleAllows(p.role, "contributor"),
     );

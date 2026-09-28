@@ -127,7 +127,9 @@ pull request.)
 - At instantiation, a question version marked deprecated warns and does not
   block; a question whose pool is no longer linked to the course blocks
   (`422 template_pool_unlinked`, listing the items), because the instance
-  could not have been authored with it either (F-EVAL-01).
+  could not have been authored with it either (F-EVAL-01). The same rule and
+  the same answer apply to a duplicate (F-EVAL-14): every copy into a
+  classroom goes through `copyEvaluation`, which checks the target course.
 - An instance is made in a classroom of the SAME course; any other classroom
   is the 404 of a classroom the template does not reach.
 - Pulling a newer revision into an instance checks "no attempt" in the same

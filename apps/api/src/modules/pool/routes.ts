@@ -88,6 +88,9 @@ import { userTopic } from "../realtime/bus.js";
 import { poolChanged, poolPeopleChanged } from "./events.js";
 import * as service from "./service.js";
 
+/** A course that plays a moved question, with whether the caller may link it. */
+type BlockingCourse = service.UsingCourse & { mayLink: boolean };
+
 /**
  * The contracts enum and the registry constant must name the same types.
  * This assignment is the compile-time proof: adding a fifth type to
@@ -955,7 +958,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     req: FastifyRequest,
     ids: string[],
     targetPoolId: string,
-  ): Promise<(service.UsingCourse & { mayLink: boolean })[]> {
+  ): Promise<BlockingCourse[]> {
     const using = await service.coursesUsingQuestions(app.db, ids);
     const linked = await service.coursesLinkedToPool(
       app.db,
@@ -979,7 +982,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
    * link. Null when the move may go on (linking every blocking course).
    */
   function linkRefusal(
-    named: (service.UsingCourse & { mayLink: boolean })[],
+    named: BlockingCourse[],
     linkCourses: boolean | undefined,
     target: typeof pools.$inferSelect,
   ): MoveConflict | null {
@@ -1009,7 +1012,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
    * seat on it, by its code alone otherwise — no id, no name, no classroom
    * of a course they cannot open (invariant 6).
    */
-  function asSeen(course: service.UsingCourse & { mayLink: boolean }): MoveBlockingCourse {
+  function asSeen(course: BlockingCourse): MoveBlockingCourse {
     return course.mayLink
       ? course
       : { courseId: null, courseName: null, courseCode: course.courseCode, classrooms: [], mayLink: false };

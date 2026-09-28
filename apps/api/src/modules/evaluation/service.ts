@@ -1338,15 +1338,19 @@ export async function transition(
 
 // --- Items ----------------------------------------------------------------
 
-/** The pools this evaluation may draw questions from (F-EVAL-01). */
-async function coursePoolIds(db: Db, evaluationId: string): Promise<Set<string>> {
+/** The pools an evaluation of this classroom may draw questions from (F-EVAL-01). */
+async function coursePoolIds(db: Db, classroomId: string): Promise<Set<string>> {
   const rows = await db
     .select({ poolId: coursePools.poolId })
-    .from(evaluations)
-    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
+    .from(classrooms)
     .innerJoin(coursePools, eq(coursePools.courseId, classrooms.courseId))
-    .where(eq(evaluations.id, evaluationId));
+    .where(eq(classrooms.id, classroomId));
   return new Set(rows.map((r) => r.poolId));
+}
+
+/** THE test of F-EVAL-01: the question sits in one of the course's pools. */
+function inLinkedPool(question: { poolId: string | null }, linked: Set<string>): boolean {
+  return question.poolId !== null && linked.has(question.poolId);
 }
 
 /**
@@ -1357,10 +1361,10 @@ async function coursePoolIds(db: Db, evaluationId: string): Promise<Set<string>>
  */
 export async function listCoursePools(
   db: Db,
-  evaluationId: string,
+  classroomId: string,
   viewer: { id: string; role: string },
 ): Promise<PoolSummary[]> {
-  const ids = await coursePoolIds(db, evaluationId);
+  const ids = await coursePoolIds(db, classroomId);
   if (ids.size === 0) return [];
   return listPools(db, inArray(pools.id, [...ids]), viewer);
 }
@@ -1407,7 +1411,7 @@ export async function addItems(
   keyed: (type: string, version: typeof questionVersions.$inferSelect) => boolean = () => true,
 ): Promise<ItemRow[]> {
   assertItemListEditable(row, ctx);
-  const allowed = await coursePoolIds(db, row.id);
+  const allowed = await coursePoolIds(db, classroomIdOf(row));
   const found = await db.select().from(questions).where(inArray(questions.id, questionIds));
   const byQuestion = new Map(found.map((q) => [q.id, q]));
   const versions = await latestPublished(db, questionIds);
@@ -1416,12 +1420,7 @@ export async function addItems(
   const values: (typeof evaluationItems.$inferInsert)[] = [];
   for (const questionId of questionIds) {
     const question = byQuestion.get(questionId);
-    if (
-      !question ||
-      question.deletedAt !== null ||
-      question.poolId === null ||
-      !allowed.has(question.poolId)
-    ) {
+    if (!question || question.deletedAt !== null || !inLinkedPool(question, allowed)) {
       throw new QuestionNotInCourse(questionId);
     }
     const version = versions.get(questionId);
@@ -1586,16 +1585,8 @@ export async function copyEvaluation(
     // F-EVAL-01, the rule `addItems` enforces: a copy into a classroom —
     // of this course or of another — draws only from the pools its course
     // links. Checked outside the transaction, like an item added just before.
-    const linked = new Set(
-      (
-        await db
-          .select({ poolId: coursePools.poolId })
-          .from(classrooms)
-          .innerJoin(coursePools, eq(coursePools.courseId, classrooms.courseId))
-          .where(eq(classrooms.id, target.home.classroomId))
-      ).map((r) => r.poolId),
-    );
-    const unlinked = joined.filter((j) => j.question.poolId === null || !linked.has(j.question.poolId));
+    const linked = await coursePoolIds(db, target.home.classroomId);
+    const unlinked = joined.filter((j) => !inLinkedPool(j.question, linked));
     if (unlinked.length > 0) throw new PoolUnlinked(unlinked.map(itemRef));
   }
   const items = joined.map((j) => j.item);

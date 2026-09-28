@@ -45,7 +45,7 @@ import { ItemsStep } from "./ItemsStep";
 import { LaunchStep } from "./LaunchStep";
 import { missingTiming, TIMING_FIELD_ID } from "./timing";
 import { TimingStep } from "./TimingStep";
-import { SaveAsTemplateDialog } from "./templates";
+import { SaveAsTemplateDialog, useDuplicateErrorToast } from "./templates";
 import { useEvaluationPatch } from "./usePatch";
 import { classroomKey, evaluationKey, evaluationsKey } from "../queryKeys";
 
@@ -105,6 +105,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
     queryFn: () => api(`/app/api/classrooms/${classroomId}`),
   });
 
+  const duplicateFailed = useDuplicateErrorToast();
   const duplicate = useMutation({
     mutationFn: (title: string) =>
       api<{ id: string }>(`/app/api/evaluations/${id}/duplicate`, {
@@ -115,6 +116,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
       if (classroomId) await qc.invalidateQueries({ queryKey: evaluationsKey(classroomId) });
       navigate({ view: "evaluation", id: row.id });
     },
+    onError: duplicateFailed,
   });
   /** The teacher throws away their own staff test so they can walk it again. */
   const resetAttempt = useMutation({

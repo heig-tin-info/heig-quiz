@@ -331,7 +331,7 @@ describe("items (F-EVAL-02, F-EVAL-03)", () => {
     const seed = await seedLive(db, { questions: 1 });
     const other = await seedLive(db, { questions: 1 });
     const viewer = { id: seed.teacherId, role: "teacher" };
-    const offered = await service.listCoursePools(db, seed.evaluationId, viewer);
+    const offered = await service.listCoursePools(db, seed.classroomId, viewer);
     expect(offered.map((p) => p.id)).toEqual([seed.poolId]);
     expect(offered.map((p) => p.id)).not.toContain(other.poolId);
   });
