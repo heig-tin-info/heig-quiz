@@ -58,6 +58,27 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("student_joined"), ...classroomCount }),
   /** Roster lines of a classroom were flagged for the teacher's decision (AU-21). */
   z.object({ kind: z.literal("roster_conflict"), ...classroomCount }),
+  z.object({
+    /**
+     * The automatic grading of an evaluation finished and proposals remain
+     * for the staff to validate (ADR-030, addendum §c). How many, never
+     * whose, and never a grade.
+     */
+    kind: z.literal("grading_ready"),
+    evaluationId: z.uuid(),
+    evaluationTitle: z.string(),
+    count: z.number().int().positive(),
+  }),
+  z.object({
+    /**
+     * Colleagues published questions (a first version or a new one) in a
+     * pool the recipient owns or contributes to, folded per pool (§e).
+     */
+    kind: z.literal("pool_question_added"),
+    poolId: z.uuid(),
+    poolName: z.string(),
+    count: z.number().int().positive(),
+  }),
 ]);
 export type NotificationPayload = z.infer<typeof NotificationPayload>;
 
@@ -89,8 +110,10 @@ export const NOTIFICATION_KINDS = [
   "results_released",
   "student_joined",
   "roster_conflict",
+  "grading_ready",
   "pool_shared",
   "pool_ownership",
+  "pool_question_added",
 ] as const;
 export const NotificationKind = z.enum(NOTIFICATION_KINDS);
 export type NotificationKind = z.infer<typeof NotificationKind>;
@@ -119,8 +142,10 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   results_released: { bell: true, email: true, teams: true },
   student_joined: { bell: true, email: false, teams: false },
   roster_conflict: { bell: true, email: true, teams: true },
+  grading_ready: { bell: true, email: true, teams: true },
   pool_shared: { bell: true, email: true, teams: true },
   pool_ownership: { bell: true, email: true, teams: true },
+  pool_question_added: { bell: true, email: false, teams: false },
 };
 
 /** The kinds a role receives, as the settings grid lists them. */

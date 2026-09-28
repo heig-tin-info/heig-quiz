@@ -129,6 +129,56 @@ describe("the inbox in the account menu", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "feedback", attemptId: "a7" });
   });
 
+  it("announces grading to validate and opens the grading panel of that evaluation", async () => {
+    const READY: Notification = {
+      id: "n4",
+      payload: {
+        kind: "grading_ready",
+        evaluationId: "e2",
+        evaluationTitle: "Test 1 — pointeurs",
+        count: 7,
+      },
+      createdAt: new Date(Date.now() - 60_000).toISOString(),
+      readAt: null,
+    };
+    mockFetch({
+      [`GET ${LIST}`]: ok({ items: [READY], unread: 1 }),
+      "POST /app/api/notifications/n4/read": { status: 204 },
+    });
+    const navigate = vi.fn();
+    renderMenu(navigate);
+    await openInbox();
+    await userEvent.click(
+      screen.getByText(/Grading of “Test 1 — pointeurs” is finished: 7 proposals to validate\./),
+    );
+    expect(navigate).toHaveBeenCalledWith({ view: "grading", evaluationId: "e2" });
+  });
+
+  it("counts the questions published in a shared pool, and opens that pool", async () => {
+    const one: Notification = {
+      id: "n5",
+      payload: { kind: "pool_question_added", poolId: "p1", poolName: "Programmation C", count: 1 },
+      createdAt: new Date(Date.now() - 60_000).toISOString(),
+      readAt: null,
+    };
+    const many: Notification = {
+      id: "n6",
+      payload: { kind: "pool_question_added", poolId: "p4", poolName: "Réseaux", count: 50 },
+      createdAt: new Date(Date.now() - 120_000).toISOString(),
+      readAt: null,
+    };
+    mockFetch({
+      [`GET ${LIST}`]: ok({ items: [one, many], unread: 2 }),
+      "POST /app/api/notifications/n6/read": { status: 204 },
+    });
+    const navigate = vi.fn();
+    renderMenu(navigate);
+    await openInbox();
+    expect(screen.getByText(/A question published in “Programmation C”\./)).toBeVisible();
+    await userEvent.click(screen.getByText(/50 questions published in “Réseaux”\./));
+    expect(navigate).toHaveBeenCalledWith({ view: "pool", id: "p4" });
+  });
+
   it("marks the whole inbox read from the panel", async () => {
     const { calls } = mockFetch({
       [`GET ${LIST}`]: ok({ items: [SHARED], unread: 1 }),

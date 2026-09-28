@@ -7,7 +7,7 @@ import { displayName } from "@quiz/domain";
 import type { Db } from "../../db/client.js";
 import { poolMembers, pools, userEmails, users } from "../../db/schema.js";
 import { audit } from "../../audit.js";
-import { notify } from "../notifications/service.js";
+import { notify, notifyMany } from "../notifications/service.js";
 import { accessRevoked, userTopic } from "../realtime/bus.js";
 import { poolPeopleChanged } from "./events.js";
 import { type PoolRow, qualified } from "./shared.js";
@@ -224,6 +224,45 @@ export async function poolAudience(db: Db, pool: PoolRow): Promise<string[]> {
     .from(poolMembers)
     .where(eq(poolMembers.poolId, pool.id));
   return [...new Set([pool.ownerId, ...rows.map((r) => r.userId)])];
+}
+
+/**
+ * `pool_question_added` (ADR-030, addendum §c): a question was published in
+ * the pool — its first version or a new one, both are "a colleague published
+ * a question" — so its owner and its `contributor` and `owner` members hear
+ * of it; never a `reader`, never the author. Folded per pool (§e): fifty
+ * questions published in one sitting, by hand or by an import through the
+ * API, are one entry that counts fifty.
+ *
+ * Called once the publication has committed. Best-effort: a notification
+ * that fails is logged and never fails the publication, already written.
+ */
+export async function tellPoolOfPublication(db: Db, poolId: string, authorId: string): Promise<void> {
+  try {
+    const [pool] = await db
+      .select({ name: pools.name, ownerId: pools.ownerId })
+      .from(pools)
+      .where(eq(pools.id, poolId))
+      .limit(1);
+    if (!pool) return;
+    const members = await db
+      .select({ userId: poolMembers.userId })
+      .from(poolMembers)
+      .where(and(eq(poolMembers.poolId, poolId), inArray(poolMembers.role, ["contributor", "owner"])));
+    const recipients = new Set([pool.ownerId, ...members.map((m) => m.userId)]);
+    recipients.delete(authorId);
+    await notifyMany(
+      db,
+      [...recipients].map((userId) => ({
+        userId,
+        payload: { kind: "pool_question_added", poolId, poolName: pool.name, count: 1 },
+      })),
+    );
+  } catch (err) {
+    // The service layer has no logger (as `realtime/bus.ts`): stderr, which
+    // the process log collects.
+    console.error(`pool: telling the colleagues of a publication in ${poolId} failed`, err);
+  }
 }
 
 /**

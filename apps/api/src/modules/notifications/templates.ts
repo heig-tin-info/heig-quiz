@@ -40,6 +40,16 @@ const en = {
   "roster_conflict.body": "{count} entries of the roster of {classroomName} could not be matched to an account on their own and need your decision.",
   "roster_conflict.body.one": "An entry of the roster of {classroomName} could not be matched to an account on its own and needs your decision.",
   "roster_conflict.action": "Open the roster",
+  "grading_ready.subject": "{count} proposals to validate: {evaluationTitle}",
+  "grading_ready.subject.one": "A proposal to validate: {evaluationTitle}",
+  "grading_ready.body": "The automatic grading of “{evaluationTitle}” is finished. {count} proposals await your validation.",
+  "grading_ready.body.one": "The automatic grading of “{evaluationTitle}” is finished. A proposal awaits your validation.",
+  "grading_ready.action": "Open the grading",
+  "pool_question_added.subject": "{count} questions published in {poolName}",
+  "pool_question_added.subject.one": "A question published in {poolName}",
+  "pool_question_added.body": "Colleagues published {count} questions in the pool “{poolName}”.",
+  "pool_question_added.body.one": "A colleague published a question in the pool “{poolName}”.",
+  "pool_question_added.action": "Open the pool",
   "role.reader": "reader",
   "role.contributor": "contributor",
   "role.owner": "owner",
@@ -65,13 +75,13 @@ const en = {
   "activity.student_joined.template": "New in {classroomName}: {count} student(s)",
   "activity.roster_conflict.description": "Roster entries of one of your classrooms need your decision",
   "activity.roster_conflict.template": "Roster of {classroomName}: {count} entry(ies) to decide",
-  // Declared ahead of the kinds that will use them (ADR-030 §f): the app is
-  // re-uploaded once for all of them. Their placeholders are the template
-  // parameters those kinds will carry.
   "activity.grading_ready.description": "Automatic grading finished and proposals await your validation",
   "activity.grading_ready.template": "Grading to validate: {evaluationTitle}",
   "activity.pool_question_added.description": "A colleague publishes questions in a pool you share",
   "activity.pool_question_added.template": "{poolName}: {count} new question(s)",
+  // Declared ahead of the kinds that will use them (ADR-030 §f): the app is
+  // re-uploaded once for all of them. Their placeholders are the template
+  // parameters those kinds will carry.
   "activity.activity_scheduled.description": "Exercises are scheduled in your classroom",
   "activity.activity_scheduled.template": "{classroomName}: {count} exercise(s) scheduled",
   "activity.activity_available.description": "An exercise opens",
@@ -104,6 +114,16 @@ const fr: Record<Key, string> = {
   "roster_conflict.body": "{count} entrées de la liste de {classroomName} n'ont pas pu être rattachées d'elles-mêmes à un compte et demandent votre décision.",
   "roster_conflict.body.one": "Une entrée de la liste de {classroomName} n'a pas pu être rattachée d'elle-même à un compte et demande votre décision.",
   "roster_conflict.action": "Ouvrir la liste",
+  "grading_ready.subject": "{count} propositions à valider : {evaluationTitle}",
+  "grading_ready.subject.one": "Une proposition à valider : {evaluationTitle}",
+  "grading_ready.body": "La correction automatique de « {evaluationTitle} » est terminée. {count} propositions attendent votre validation.",
+  "grading_ready.body.one": "La correction automatique de « {evaluationTitle} » est terminée. Une proposition attend votre validation.",
+  "grading_ready.action": "Ouvrir la correction",
+  "pool_question_added.subject": "{count} questions publiées dans {poolName}",
+  "pool_question_added.subject.one": "Une question publiée dans {poolName}",
+  "pool_question_added.body": "Des collègues ont publié {count} questions dans la banque « {poolName} ».",
+  "pool_question_added.body.one": "Un collègue a publié une question dans la banque « {poolName} ».",
+  "pool_question_added.action": "Ouvrir la banque",
   "role.reader": "lecteur",
   "role.contributor": "contributeur",
   "role.owner": "propriétaire",
@@ -187,6 +207,10 @@ function varsOf(payload: NotificationPayload, t: Record<Key, string>): Record<st
     case "student_joined":
     case "roster_conflict":
       return { classroomName: payload.classroomName, count: String(payload.count) };
+    case "grading_ready":
+      return { evaluationTitle: payload.evaluationTitle, count: String(payload.count) };
+    case "pool_question_added":
+      return { poolName: payload.poolName, count: String(payload.count) };
   }
 }
 
@@ -210,10 +234,13 @@ export function notificationPath(payload: NotificationPayload): string {
       return `/attempts/${payload.attemptId}/feedback`;
     case "pool_shared":
     case "pool_ownership":
+    case "pool_question_added":
       return `/pools/${payload.poolId}`;
     case "student_joined":
     case "roster_conflict":
       return `/classrooms/${payload.classroomId}?tab=roster`;
+    case "grading_ready":
+      return `/evaluations/${payload.evaluationId}/grading`;
   }
 }
 

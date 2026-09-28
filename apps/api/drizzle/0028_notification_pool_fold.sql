@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "notifications_pool_question_added_fold_uq" ON "notifications" USING btree ("user_id","pool_id") WHERE "notifications"."payload"->>'kind' = 'pool_question_added' and "notifications"."read_at" is null;

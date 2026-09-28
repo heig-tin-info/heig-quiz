@@ -26,7 +26,8 @@ import { notificationsKey } from "../queryKeys";
 /**
  * The inbox: what happened to this account while it was away — a pool
  * shared or inherited (F-POOL-05), results released (F-GRADE-09), students
- * who joined a classroom and roster entries to decide (#198). It lives in the account menu — an
+ * who joined a classroom, roster entries to decide, grading to validate and
+ * questions published in a shared pool (#198). It lives in the account menu — an
  * item "Notifications" and a count on the avatar — rather than behind a bell
  * of its own, which sat beside the account row and truncated the e-mail.
  * A notification survives a reload, so the list is a query and not a state;
@@ -88,25 +89,38 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
         n: payload.count,
         classroom: payload.classroomName,
       });
+    case "grading_ready":
+      return t(payload.count === 1 ? "notif.gradingReady.one" : "notif.gradingReady", {
+        n: payload.count,
+        evaluationTitle: payload.evaluationTitle,
+      });
+    case "pool_question_added":
+      return t(payload.count === 1 ? "notif.poolQuestionAdded.one" : "notif.poolQuestionAdded", {
+        n: payload.count,
+        poolName: payload.poolName,
+      });
   }
 }
 
 /**
  * Where a notification takes the reader: the pool it is about, the
- * feedback page of the attempt whose results were released, or the roster
- * of the classroom. The e-mail and
+ * feedback page of the attempt whose results were released, the roster
+ * of the classroom, or the grading panel of the evaluation. The e-mail and
  * the Teams message link to the same page (`templates.ts` on the server).
  */
 function notificationRoute(payload: NotificationPayload): Route {
   switch (payload.kind) {
     case "pool_shared":
     case "pool_ownership":
+    case "pool_question_added":
       return { view: "pool", id: payload.poolId };
     case "results_released":
       return { view: "feedback", attemptId: payload.attemptId };
     case "student_joined":
     case "roster_conflict":
       return { view: "classroom", id: payload.classroomId, tab: "roster" };
+    case "grading_ready":
+      return { view: "grading", evaluationId: payload.evaluationId };
   }
 }
 

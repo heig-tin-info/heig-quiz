@@ -228,6 +228,13 @@ const notifications: Notification[] = [
     readAt: null,
   },
   {
+    // Folded per pool (ADR-030 §e): a colleague's afternoon of publishing.
+    id: "n5",
+    payload: { kind: "pool_question_added", poolId: "p1", poolName: "Programmation C", count: 12 },
+    createdAt: iso(-3 * H),
+    readAt: null,
+  },
+  {
     id: "n4",
     payload: { kind: "roster_conflict", classroomId: "r1", classroomName: "PRG1-2026", count: 1 },
     createdAt: iso(-5 * D),
