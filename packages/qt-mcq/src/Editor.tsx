@@ -66,7 +66,6 @@ import {
   sectionClass,
   sectionTitle,
   Segmented,
-  textareaClass,
 } from "@quiz/ui";
 import {
   choiceLetter,
@@ -412,8 +411,6 @@ export function McqEditor({
           disabled={disabled}
           RichText={RichText}
           uploadImage={uploadAsset}
-          labelClassName={label}
-          textareaClassName={cx(textareaClass, "w-full resize-y font-mono text-[13px]")}
         />
         <IssueList issues={issuesAt(issues, "prompt")} />
       </section>

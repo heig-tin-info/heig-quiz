@@ -27,7 +27,6 @@ import {
   label,
   PromptField,
   sectionClass,
-  textareaClass,
 } from "@quiz/ui";
 
 type ClozeEditorProps = Omit<EditorProps<ClozeConfig>, "uploadAsset"> & {
@@ -74,8 +73,6 @@ export function ClozeEditor({
           // save.
           holes
           rows={8}
-          labelClassName={label}
-          textareaClassName={cx(textareaClass, "w-full resize-y font-mono text-[13px]")}
         />
         <p className={hint}>{s.textHint}</p>
         <IssueList issues={issuesAt(issues, "text")} />

@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 
 import type { RichTextComponent } from "@quiz/core/client";
 
+import { cx, label as labelToken, textareaClass } from "./styles.js";
+
 /**
  * The statement field of an editor, with its label (audit P-01b): the host's
  * WYSIWYG editor when it lent one (`EditorProps.RichText`), a textarea
@@ -16,7 +18,16 @@ import type { RichTextComponent } from "@quiz/core/client";
  * and keeps its label.
  *
  * It renders the label and the field as siblings, so the caller keeps its own
- * wrapper (and puts its hint and its issues after them).
+ * wrapper (and puts its hint and its issues after them). It wears the one
+ * label and the one multi-line field of the package: the prompt of an mcq and
+ * the statement of a code question are the same field.
+ *
+ * Why both this and `PromptSection`: this is the FIELD, the part every editor
+ * shares. `PromptSection` is the statement CARD of the code and circuit
+ * editors — this field, its issues and the type's settings beside the
+ * statement, in an `EditorSection`. The mcq, short and cloze editors are
+ * plain forms with no cards, so they place the field in their own
+ * `sectionClass` section, beside a hint of their own.
  */
 export function PromptField({
   id,
@@ -28,8 +39,6 @@ export function PromptField({
   uploadImage,
   holes,
   rows = 4,
-  labelClassName,
-  textareaClassName,
 }: {
   /** Shared by both surfaces, so a host can focus the field by id. */
   id: string;
@@ -45,13 +54,11 @@ export function PromptField({
   /** `cloze` only: the `{{…}}` holes are objects of the rich field (`RichTextProps.holes`). */
   holes?: boolean | undefined;
   rows?: number | undefined;
-  labelClassName: string;
-  textareaClassName: string;
 }): ReactNode {
   if (RichText) {
     return (
       <>
-        <span className={labelClassName}>{label}</span>
+        <span className={labelToken}>{label}</span>
         <RichText
           id={id}
           aria-label={label}
@@ -66,13 +73,13 @@ export function PromptField({
   }
   return (
     <>
-      <label className={labelClassName} htmlFor={id}>
+      <label className={labelToken} htmlFor={id}>
         {label}
       </label>
       <textarea
         id={id}
         rows={rows}
-        className={textareaClassName}
+        className={cx(textareaClass, "w-full resize-y")}
         aria-label={label}
         value={value}
         disabled={disabled}

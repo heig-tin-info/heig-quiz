@@ -11,7 +11,7 @@ import type { ConfigIssue, RichTextComponent } from "@quiz/core/client";
 
 import { IssueList } from "./issues.js";
 import { PromptField } from "./PromptField.js";
-import { card, cx, hint as hintToken, label, sectionTitle, textareaClass } from "./styles.js";
+import { card, cx, hint as hintToken, sectionTitle } from "./styles.js";
 
 /**
  * One card of an editor's main column: its title, an optional one-line
@@ -41,9 +41,11 @@ export function EditorSection({
 }
 
 /**
- * The statement card every editor opens with: the prompt field and the
- * issues found on it, then whatever settings of the type belong beside the
- * statement (a language, a runtime).
+ * The statement card the code and circuit editors open with: the prompt
+ * field ({@link PromptField}, the part every editor shares) and the issues
+ * found on it, then whatever settings of the type belong beside the statement
+ * (a language, a runtime). The mcq, short and cloze editors are plain forms
+ * without cards and place the same field in a section of their own.
  */
 export function PromptSection({
   title,
@@ -85,8 +87,6 @@ export function PromptSection({
           RichText={RichText}
           uploadImage={uploadImage}
           {...(rows === undefined ? {} : { rows })}
-          labelClassName={label}
-          textareaClassName={cx(textareaClass, "w-full")}
         />
         <IssueList issues={issues} />
       </div>
