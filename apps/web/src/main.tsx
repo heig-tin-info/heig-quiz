@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 
 import { ApiError } from "./api";
 import App from "./App";
+import { CrashBoundary } from "./CrashBoundary";
 import { ConfirmProvider } from "./confirm";
 import { HelpProvider } from "./help";
 import { I18nProvider, loadLocale, storedLocale } from "./i18n";
@@ -42,13 +43,15 @@ async function boot() {
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         <I18nProvider>
-          <ToastProvider>
-            <ConfirmProvider>
-              <HelpProvider>
-                <App />
-              </HelpProvider>
-            </ConfirmProvider>
-          </ToastProvider>
+          <CrashBoundary>
+            <ToastProvider>
+              <ConfirmProvider>
+                <HelpProvider>
+                  <App />
+                </HelpProvider>
+              </ConfirmProvider>
+            </ToastProvider>
+          </CrashBoundary>
         </I18nProvider>
       </QueryClientProvider>
     </StrictMode>,

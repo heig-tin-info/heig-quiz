@@ -1,7 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" translate="no">
   <head>
     <meta charset="UTF-8" />
+    <!-- No machine translation (#228): Chrome's rewrites React's text nodes
+         and crashes the next render, and an exam statement must read as the
+         teacher wrote it. The app speaks French and English on its own, and
+         follows the browser's language by default (src/i18n/index.tsx). -->
+    <meta name="google" content="notranslate" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- Browser chrome (address bar, status bar) in the colour of the app's
