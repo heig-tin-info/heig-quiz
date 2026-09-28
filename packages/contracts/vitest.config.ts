@@ -1,7 +1,5 @@
 import { defineConfig } from "vitest/config";
 
-export default defineConfig({
-  test: {
-    include: ["src/**/*.test.ts"],
-  },
-});
+import { nodeTests } from "../../vitest.shared.js";
+
+export default defineConfig(nodeTests);
