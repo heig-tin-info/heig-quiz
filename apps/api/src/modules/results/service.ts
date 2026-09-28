@@ -76,7 +76,7 @@ import {
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
-import { notify, withdrawResultsReleased } from "../notifications/service.js";
+import { notifyMany, withdrawResultsReleased } from "../notifications/service.js";
 import {
   keptAttempts,
   pairKey,
@@ -316,15 +316,24 @@ export async function releaseResults(
   // about, and telling them twice would announce nothing new. Only a student
   // with an attempt has a feedback page to open; an absent one is not told.
   if (evaluation.releasedAt === null) {
-    for (const row of snapshot.rows) {
-      if (row.attemptId === null) continue;
-      await notify(db, row.userId, {
-        kind: "results_released",
-        evaluationId: evaluation.id,
-        evaluationTitle: evaluation.title,
-        attemptId: row.attemptId,
-      });
-    }
+    await notifyMany(
+      db,
+      snapshot.rows.flatMap((row) =>
+        row.attemptId === null
+          ? []
+          : [
+              {
+                userId: row.userId,
+                payload: {
+                  kind: "results_released" as const,
+                  evaluationId: evaluation.id,
+                  evaluationTitle: evaluation.title,
+                  attemptId: row.attemptId,
+                },
+              },
+            ],
+      ),
+    );
   }
   return { releasedAt, rows: snapshot.rows.length };
 }
