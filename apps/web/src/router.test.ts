@@ -17,6 +17,7 @@ describe("routeToPath / parsePath", () => {
     { view: "settings" },
     { view: "admin" },
     { view: "course", id: "k-1" },
+    { view: "template", id: "t-1" },
     { view: "classroom", id: "c-1" },
     { view: "pools" },
     { view: "pool", id: "p-1" },
@@ -49,6 +50,13 @@ describe("routeToPath / parsePath", () => {
     expect(sectionOf({ view: "course", id: "k-1" })).toBe("home");
   });
 
+  it("parses the editor of one template, a page of its course (F-EVAL-25)", () => {
+    expect(routeToPath({ view: "template", id: "t-1" })).toBe("/templates/t-1");
+    expect(parsePath("/templates/t-1")).toEqual({ view: "template", id: "t-1" });
+    expect(parsePath("/templates")).toEqual({ view: "home" });
+    expect(sectionOf({ view: "template", id: "t-1" })).toBe("home");
+  });
+
   it("parses the pool routes, and /pools alone is the list", () => {
     expect(parsePath("/pools")).toEqual({ view: "pools" });
     expect(parsePath("/pools/p-1")).toEqual({ view: "pool", id: "p-1" });
@@ -68,6 +76,9 @@ describe("routeToPath / parsePath", () => {
     // The evaluation the editor was opened from travels in the query string
     // (#127): the editor reads it there, the path stays the editor's.
     expect(routeToPath({ view: "question", id: "q-1", from: "e-1" })).toBe("/questions/q-1?from=e-1");
+    expect(routeToPath({ view: "question", id: "q-1", fromTemplate: "t-1" })).toBe(
+      "/questions/q-1?fromTemplate=t-1",
+    );
     expect(parsePath("/questions/q-1")).toEqual({ view: "question", id: "q-1" });
   });
 
@@ -128,6 +139,7 @@ describe("ROUTES", () => {
     settings: { view: "settings" },
     admin: { view: "admin" },
     course: { view: "course", id: "k-1" },
+    template: { view: "template", id: "t-1" },
     classroom: { view: "classroom", id: "c-1" },
     pools: { view: "pools" },
     poolCategories: { view: "poolCategories", id: "p-1" },
@@ -181,6 +193,7 @@ describe("ROUTES", () => {
     expect(lit).toMatchObject({
       home: "home",
       course: "home",
+      template: "home",
       pools: "pools",
       pool: "pools",
       question: "pools",

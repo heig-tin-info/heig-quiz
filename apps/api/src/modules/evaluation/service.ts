@@ -499,14 +499,14 @@ export interface JoinedItem {
   question: typeof questions.$inferSelect;
 }
 
-const selectJoinedItems = (db: Db) =>
+const selectJoinedItems = (db: DbOrTx) =>
   db
     .select({ item: evaluationItems, version: questionVersions, question: questions })
     .from(evaluationItems)
     .innerJoin(questionVersions, eq(evaluationItems.questionVersionId, questionVersions.id))
     .innerJoin(questions, eq(questionVersions.questionId, questions.id));
 
-export async function joinedItems(db: Db, evaluationId: string): Promise<JoinedItem[]> {
+export async function joinedItems(db: DbOrTx, evaluationId: string): Promise<JoinedItem[]> {
   return selectJoinedItems(db)
     .where(eq(evaluationItems.evaluationId, evaluationId))
     .orderBy(asc(evaluationItems.position));
@@ -585,7 +585,7 @@ export async function itemCountsByEvaluation(
 }
 
 /** The highest published version number of each question, in one query. */
-async function latestNumbers(db: Db, questionIds: string[]): Promise<Map<string, number>> {
+async function latestNumbers(db: DbOrTx, questionIds: string[]): Promise<Map<string, number>> {
   if (questionIds.length === 0) return new Map();
   const rows = await db
     .select({
@@ -603,8 +603,12 @@ async function latestNumbers(db: Db, questionIds: string[]): Promise<Map<string,
   return new Map(rows.map((r) => [r.questionId, Number(r.latest)]));
 }
 
-export async function itemRows(db: Db, evaluationId: string): Promise<ItemRow[]> {
-  const joined = await joinedItems(db, evaluationId);
+export async function itemRows(db: DbOrTx, evaluationId: string): Promise<ItemRow[]> {
+  return itemRowsOf(db, await joinedItems(db, evaluationId));
+}
+
+/** `itemRows` for a caller that already holds the joined items. */
+export async function itemRowsOf(db: DbOrTx, joined: readonly JoinedItem[]): Promise<ItemRow[]> {
   const latest = await latestNumbers(db, [...new Set(joined.map((j) => j.question.id))]);
   return joined.map((j) => ({
     id: j.item.id,
@@ -751,7 +755,7 @@ async function selfOf(
  * allows. A pool the viewer does not reach at all resolves to `reader`, and
  * its questions are simply not in the list.
  */
-async function editableQuestionIdsOf(
+export async function editableQuestionIdsOf(
   db: Db,
   items: readonly ItemRow[],
   viewer: { id: string; role: string },
@@ -889,8 +893,7 @@ function presetSettings(preset: "exam" | "exercise"): {
 
 export async function createEvaluation(
   db: Db,
-  input: {
-    classroomId: string;
+  input: CopyHome & {
     title: string;
     mode: EvaluationMode;
     preset?: "exam" | "exercise" | undefined;
@@ -905,7 +908,10 @@ export async function createEvaluation(
   const mcqPolicy = await preferredMcqPolicy(db, input.createdBy);
   await db.insert(evaluations).values({
     id,
-    classroomId: input.classroomId,
+    // A classroom's draft, or a course's empty template (F-EVAL-24) at revision 1.
+    ...("courseId" in input
+      ? { courseId: input.courseId, revision: 1 }
+      : { classroomId: input.classroomId }),
     title: input.title,
     mode: input.mode,
     state: "draft",
@@ -1017,7 +1023,7 @@ export async function createPollEvaluation(
  * A handle or an open transaction: the state change below is also the second
  * half of a withdrawal that must not land alone (`unreleaseResults`).
  */
-type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
+export type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 export async function byId(db: DbOrTx, id: string): Promise<EvaluationRecord | null> {
   const [row] = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
@@ -1034,7 +1040,7 @@ export async function byId(db: DbOrTx, id: string): Promise<EvaluationRecord | n
  * feedback is never patched: it moves with the reveal (`PollFeedbackLocked`).
  */
 export async function patchEvaluation(
-  db: Db,
+  db: DbOrTx,
   row: EvaluationRecord,
   patch: EvaluationPatch,
   ctx: { attemptCount: number },
@@ -1338,40 +1344,56 @@ export async function transition(
 
 // --- Items ----------------------------------------------------------------
 
-/** The pools an evaluation of this classroom may draw questions from (F-EVAL-01). */
-async function coursePoolIds(db: Db, classroomId: string): Promise<Set<string>> {
-  const rows = await db
-    .select({ poolId: coursePools.poolId })
-    .from(classrooms)
-    .innerJoin(coursePools, eq(coursePools.courseId, classrooms.courseId))
-    .where(eq(classrooms.id, classroomId));
+/**
+ * THE pools a home may draw questions from (F-EVAL-01, ADR-031 addendum c):
+ * those linked to its course — a template's own, or its classroom's. The one
+ * source behind `addItems`, the picker, every copy into a classroom and a
+ * template's `poolUnlinked` flag.
+ */
+export async function coursePoolIds(db: DbOrTx, home: CopyHome): Promise<Set<string>> {
+  const rows =
+    "courseId" in home
+      ? await db
+          .select({ poolId: coursePools.poolId })
+          .from(coursePools)
+          .where(eq(coursePools.courseId, home.courseId))
+      : await db
+          .select({ poolId: coursePools.poolId })
+          .from(classrooms)
+          .innerJoin(coursePools, eq(coursePools.courseId, classrooms.courseId))
+          .where(eq(classrooms.id, home.classroomId));
   return new Set(rows.map((r) => r.poolId));
 }
 
 /** THE test of F-EVAL-01: the question sits in one of the course's pools. */
-function inLinkedPool(question: { poolId: string | null }, linked: Set<string>): boolean {
+export function inLinkedPool(question: { poolId: string | null }, linked: Set<string>): boolean {
   return question.poolId !== null && linked.has(question.poolId);
+}
+
+/** Where a row lives: its course for a template, its classroom otherwise. */
+function homeOf(row: EvaluationRecord): CopyHome {
+  return row.courseId !== null ? { courseId: row.courseId } : { classroomId: classroomIdOf(row) };
 }
 
 /**
  * The pools the question picker offers (F-EVAL-01): exactly the ones linked
- * to the evaluation's course, the same set `addItems` enforces — a pool the
- * teacher reaches but the course does not draw from would only end in
+ * to the course, the same set `addItems` enforces — a pool the teacher
+ * reaches but the course does not draw from would only end in
  * `422 question_not_in_course`.
  */
 export async function listCoursePools(
   db: Db,
-  classroomId: string,
+  home: CopyHome,
   viewer: { id: string; role: string },
 ): Promise<PoolSummary[]> {
-  const ids = await coursePoolIds(db, classroomId);
+  const ids = await coursePoolIds(db, home);
   if (ids.size === 0) return [];
   return listPools(db, inArray(pools.id, [...ids]), viewer);
 }
 
 /** The latest PUBLISHED version of each question, or null when there is none. */
 async function latestPublished(
-  db: Db,
+  db: DbOrTx,
   questionIds: string[],
 ): Promise<Map<string, typeof questionVersions.$inferSelect>> {
   if (questionIds.length === 0) return new Map();
@@ -1387,7 +1409,7 @@ async function latestPublished(
   return out;
 }
 
-async function nextPosition(db: Db, evaluationId: string): Promise<number> {
+async function nextPosition(db: DbOrTx, evaluationId: string): Promise<number> {
   const [row] = await db
     .select({ max: sql<number | null>`max(${evaluationItems.position})` })
     .from(evaluationItems)
@@ -1403,7 +1425,7 @@ async function nextPosition(db: Db, evaluationId: string): Promise<number> {
  * (`422 question_keyless`): only a poll runs one.
  */
 export async function addItems(
-  db: Db,
+  db: DbOrTx,
   row: EvaluationRecord,
   questionIds: string[],
   defaultPoints: (type: string, version: typeof questionVersions.$inferSelect) => number,
@@ -1411,7 +1433,7 @@ export async function addItems(
   keyed: (type: string, version: typeof questionVersions.$inferSelect) => boolean = () => true,
 ): Promise<ItemRow[]> {
   assertItemListEditable(row, ctx);
-  const allowed = await coursePoolIds(db, classroomIdOf(row));
+  const allowed = await coursePoolIds(db, homeOf(row));
   const found = await db.select().from(questions).where(inArray(questions.id, questionIds));
   const byQuestion = new Map(found.map((q) => [q.id, q]));
   const versions = await latestPublished(db, questionIds);
@@ -1440,7 +1462,7 @@ export async function addItems(
 }
 
 export async function patchItem(
-  db: Db,
+  db: DbOrTx,
   row: EvaluationRecord,
   itemId: string,
   patch: ItemPatch,
@@ -1458,7 +1480,7 @@ export async function patchItem(
 }
 
 export async function deleteItem(
-  db: Db,
+  db: DbOrTx,
   row: EvaluationRecord,
   itemId: string,
   ctx: { attemptCount: number },
@@ -1484,7 +1506,7 @@ export async function deleteItem(
  * deferrable (see `db/evaluation.ts`), so a one-pass UPDATE would collide
  * with itself on any swap.
  */
-async function renumber(db: Db, evaluationId: string, orderedIds: string[]): Promise<void> {
+async function renumber(db: DbOrTx, evaluationId: string, orderedIds: string[]): Promise<void> {
   if (orderedIds.length === 0) return;
   await db.transaction(async (tx) => {
     await tx
@@ -1503,7 +1525,7 @@ async function renumber(db: Db, evaluationId: string, orderedIds: string[]): Pro
 }
 
 export async function reorderItems(
-  db: Db,
+  db: DbOrTx,
   row: EvaluationRecord,
   itemIds: string[],
   ctx: { attemptCount: number },
@@ -1528,7 +1550,7 @@ export async function reorderItems(
  * answering another question — and once the evaluation is opened (#79).
  */
 export async function updateVersions(
-  db: Db,
+  db: DbOrTx,
   row: EvaluationRecord,
   itemIds: string[] | undefined,
   ctx: { attemptCount: number },
@@ -1569,7 +1591,7 @@ type CopyHome = { classroomId: string } | { courseId: string };
  * has none to give. One transaction: a copy is never half-made.
  */
 export async function copyEvaluation(
-  db: Db,
+  db: DbOrTx,
   row: EvaluationRecord,
   target: {
     home: CopyHome;
@@ -1585,7 +1607,7 @@ export async function copyEvaluation(
     // F-EVAL-01, the rule `addItems` enforces: a copy into a classroom —
     // of this course or of another — draws only from the pools its course
     // links. Checked outside the transaction, like an item added just before.
-    const linked = await coursePoolIds(db, target.home.classroomId);
+    const linked = await coursePoolIds(db, target.home);
     const unlinked = joined.filter((j) => !inLinkedPool(j.question, linked));
     if (unlinked.length > 0) throw new PoolUnlinked(unlinked.map(itemRef));
   }

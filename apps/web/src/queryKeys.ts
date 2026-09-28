@@ -55,6 +55,8 @@ export const poolsKey = ["pools"] as const;
 export const allPoolsKey = ["pools", "all"] as const;
 /** The pools an evaluation's picker offers: under `poolsKey`, for the same reason. */
 export const evaluationPoolsKey = (id: string) => ["pools", "evaluation", id] as const;
+/** The pools a template's picker offers (its course's linked pools), likewise. */
+export const templatePoolsKey = (id: string) => ["pools", "template", id] as const;
 /** The prefix of EVERY pool's cache — details, questions, tags — for a move across pools. */
 export const anyPoolKey = ["pool"] as const;
 /** `undefined` while the id is not known yet (a question editor before its detail loads). */
@@ -93,12 +95,18 @@ export const questionPreviewKey = (id: string, source: "draft" | number | undefi
 
 export const evaluationsKey = (classroomId: string) => ["evaluations", classroomId] as const;
 export const evaluationKey = (id: string) => ["evaluation", id] as const;
+/** `GET /templates/:id`, the editor of one template (F-EVAL-25). */
+export const templateKey = (id: string) => ["template", id] as const;
 /**
- * One item at its frozen version (issue #127). The version is in the key, so
+ * One item at its frozen version (issue #127), under the key of the
+ * evaluation or the template that holds it. The version is in the key, so
  * an "Update" on the row is a new preview and not a stale cached one.
  */
-export const itemPreviewKey = (evaluationId: string, itemId: string, versionId: string) =>
-  ["evaluation", evaluationId, "item-preview", itemId, versionId] as const;
+export const itemPreviewKey = (
+  owner: ReturnType<typeof evaluationKey> | ReturnType<typeof templateKey>,
+  itemId: string,
+  versionId: string,
+) => [...owner, "item-preview", itemId, versionId] as const;
 /**
  * Both toggles are in the key because both are in the REQUEST: the answers
  * travel only with `?includeAnswers=1`, and the live verdicts of ADR-020 are

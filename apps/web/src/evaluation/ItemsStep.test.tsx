@@ -3,10 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ItemPreview } from "@quiz/contracts";
+import { itemListLock } from "@quiz/domain";
 
 import { EVALUATION_ID, makeEvaluationDetail, makeItemRow } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
+import { evaluationTarget } from "./editTarget";
 import { ItemsStep } from "./ItemsStep";
+
+const target = evaluationTarget(EVALUATION_ID);
 
 /*
  * The Preview and Edit buttons of a row of the question list (issue #127):
@@ -47,6 +51,8 @@ describe("ItemsStep — preview and edit (#127)", () => {
     const { calls } = mockFetch({ [previewUrl]: ok(preview) });
     renderWithProviders(
       <ItemsStep
+        target={target}
+        lock={null}
         detail={makeEvaluationDetail({ items: [frozen, other], staleItems: [frozen.id] })}
         navigate={vi.fn()}
       />,
@@ -56,7 +62,7 @@ describe("ItemsStep — preview and edit (#127)", () => {
       within(rowOf("pointer-decl")).getByRole("button", { name: /preview pointer-decl/i }),
     );
     const sheet = await screen.findByRole("dialog");
-    expect(within(sheet).getByText(/version 2, the one this evaluation uses/i)).toBeInTheDocument();
+    expect(within(sheet).getByText(/version 2, the one frozen in this list/i)).toBeInTheDocument();
     expect(await within(sheet).findByText(/\(v2\)/)).toBeInTheDocument();
     // The student's own player: the choices are there to be clicked.
     expect(within(sheet).getByRole("radio", { name: "&x" })).toBeInTheDocument();
@@ -71,7 +77,12 @@ describe("ItemsStep — preview and edit (#127)", () => {
     mockFetch({});
     const navigate = vi.fn();
     renderWithProviders(
-      <ItemsStep detail={makeEvaluationDetail({ items: [frozen, other] })} navigate={navigate} />,
+      <ItemsStep
+        target={target}
+        lock={null}
+        detail={makeEvaluationDetail({ items: [frozen, other] })}
+        navigate={navigate}
+      />,
     );
 
     await user.click(within(rowOf("pointer-decl")).getByRole("button", { name: "Edit pointer-decl" }));
@@ -88,6 +99,8 @@ describe("ItemsStep — preview and edit (#127)", () => {
     const navigate = vi.fn();
     renderWithProviders(
       <ItemsStep
+        target={target}
+        lock={null}
         detail={makeEvaluationDetail({
           items: [frozen, other],
           editableQuestionIds: [other.questionId],
@@ -112,10 +125,12 @@ describe("ItemsStep — preview and edit (#127)", () => {
     const user = userEvent.setup();
     mockFetch({ [previewUrl]: ok(preview) });
     const navigate = vi.fn();
-    const base = makeEvaluationDetail({ items: [frozen, other] });
     renderWithProviders(
       <ItemsStep
-        detail={{ ...base, evaluation: { ...base.evaluation, state: "running" }, attemptCount: 3 }}
+        target={target}
+        // A running evaluation with attempts (issue #79).
+        lock={itemListLock("running", 3)}
+        detail={makeEvaluationDetail({ items: [frozen, other] })}
         navigate={navigate}
       />,
     );

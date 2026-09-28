@@ -1,9 +1,8 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ExternalLink, Eye, Library, Search } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type {
-  EvaluationDetail,
   PoolSummary,
   PreviewResult,
   QuestionPage,
@@ -35,7 +34,8 @@ import {
   Tip,
   useMinWidth,
 } from "../ui";
-import { evaluationKey, evaluationPoolsKey, poolQuestionsKey } from "../queryKeys";
+import { poolQuestionsKey } from "../queryKeys";
+import { useTargetRefresh, type EditTarget } from "./editTarget";
 import { questionPreviewQuery } from "../question/previewQuery";
 import { PreviewedQuestion, type StudentQuestion } from "./PreviewedQuestion";
 
@@ -61,19 +61,22 @@ import { PreviewedQuestion, type StudentQuestion } from "./PreviewedQuestion";
  * sheet when the window has room for both, in place of the list otherwise
  * (a sheet never opens another sheet). Every row can be looked at, the
  * disabled ones included: "what is this draft?" is the question they raise.
+ *
+ * It fills an evaluation or a template alike: the `target` names the pools
+ * to offer (the course's linked pools, either way) and where the pick goes.
  */
 export function AddQuestionsSheet({
-  evaluationId,
+  target,
   existing,
   onClose,
 }: {
-  evaluationId: string;
-  /** Question ids already in the evaluation; they are ticked and disabled. */
+  target: EditTarget;
+  /** Question ids already in the list; they are ticked and disabled. */
   existing: Set<string>;
   onClose: () => void;
 }) {
   const t = useT();
-  const qc = useQueryClient();
+  const refresh = useTargetRefresh(target);
   const [poolId, setPoolId] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [type, setType] = useState("");
@@ -90,8 +93,8 @@ export function AddQuestionsSheet({
   const backTo = useRef<string | null>(null);
 
   const pools = useQuery<PoolSummary[]>({
-    queryKey: evaluationPoolsKey(evaluationId),
-    queryFn: () => api(`/app/api/evaluations/${evaluationId}/pools`),
+    queryKey: target.poolsKey,
+    queryFn: () => api(`${target.base}/pools`),
   });
   const current = poolId ?? pools.data?.[0]?.id ?? null;
 
@@ -126,12 +129,12 @@ export function AddQuestionsSheet({
 
   const add = useMutation({
     mutationFn: () =>
-      api<EvaluationDetail>(`/app/api/evaluations/${evaluationId}/items`, {
+      api(`${target.base}/items`, {
         method: "POST",
         body: JSON.stringify({ questionIds: picked }),
       }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: evaluationKey(evaluationId) });
+      await refresh();
       onClose();
     },
   });
@@ -369,7 +372,7 @@ export function AddQuestionsSheet({
 
 /**
  * One question of the picker as a student will read it: the latest PUBLISHED
- * version — the one "Add" would freeze into the evaluation — or the draft of
+ * version — the one "Add" would freeze into the list — or the draft of
  * a question never published, said so. Same request and cache entry as the
  * editor's own preview (`questionPreviewKey`), through `studentView` on the
  * server (invariant 4). The editor opens in a new tab: leaving would close

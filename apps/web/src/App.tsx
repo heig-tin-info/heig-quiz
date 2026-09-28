@@ -34,6 +34,9 @@ const Feedback = lazy(() => import("./student/Feedback").then((m) => ({ default:
 const CoursePage = lazy(() =>
   import("./course/CoursePage").then((m) => ({ default: m.CoursePage })),
 );
+const TemplateEditor = lazy(() =>
+  import("./evaluation/TemplateEditor").then((m) => ({ default: m.TemplateEditor })),
+);
 const ClassroomView = lazy(() =>
   import("./ClassroomView").then((m) => ({ default: m.ClassroomView })),
 );
@@ -202,6 +205,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   devUi: (_, c) => (import.meta.env.DEV ? <DevGallery /> : <TeacherHome navigate={c.navigate} />),
   admin: (_, c) => (c.me.role === "admin" ? <AdminPage /> : <TeacherHome navigate={c.navigate} />),
   course: (r, c) => <CoursePage id={r.id} navigate={c.navigate} />,
+  template: (r, c) => <TemplateEditor id={r.id} navigate={c.navigate} />,
   classroom: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} />,
   polls: (_, c) => <PollLauncher navigate={c.navigate} />,
   // The projection is for a beamer: no sidebar, no chrome (mockup 10).

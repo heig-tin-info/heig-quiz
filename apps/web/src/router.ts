@@ -16,6 +16,11 @@ export type Route =
    */
   | { view: "course"; id: string }
   /**
+   * One evaluation template of a course, edited in place (F-EVAL-25). A page
+   * of its course, so the Courses row stays lit too.
+   */
+  | { view: "template"; id: string }
+  /**
    * `tab`: the section to open on (the launch checklist's "Roster" link,
    * #152), carried in `?tab=` like the page's own tabs; `parsePath` never
    * sees it, the page reads it off the query string.
@@ -28,10 +33,11 @@ export type Route =
   | { view: "poolCategories"; id: string }
   /**
    * `from`: the evaluation the editor was opened from (issue #127), carried
-   * in `?from=` so the way back survives a reload. The editor reads it off
-   * the query string (`useSearchParam`); `parsePath` never sees it.
+   * in `?from=` so the way back survives a reload; `fromTemplate`, likewise,
+   * a template (F-EVAL-25), in `?fromTemplate=`. The editor reads them off
+   * the query string (`useSearchParam`); `parsePath` never sees them.
    */
-  | { view: "question"; id: string; from?: string }
+  | { view: "question"; id: string; from?: string; fromTemplate?: string }
   /**
    * What a student would see for ONE question, in a page of its own
    * (docs/spec/08 §8.2, "See what the student sees"). The editor opens it in
@@ -171,6 +177,12 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: false,
     section: "home",
   },
+  template: {
+    path: (r) => `/templates/${r.id}`,
+    match: ([head, id]) => (head === "templates" && id ? { view: "template", id } : null),
+    studentSafe: false,
+    section: "home",
+  },
   classroom: {
     path: (r) => `/classrooms/${r.id}${r.tab ? `?tab=${r.tab}` : ""}`,
     match: ([head, id]) => (head === "classrooms" && id ? { view: "classroom", id } : null),
@@ -200,8 +212,13 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   // `/questions/:id/preview` is the student preview; every other tail is the
   // editor itself (its tab lives in the query string, not in the path).
   question: {
-    path: (r) =>
-      `/questions/${r.id}${r.from ? `?${new URLSearchParams({ from: r.from }).toString()}` : ""}`,
+    path: (r) => {
+      const query = new URLSearchParams();
+      if (r.from) query.set("from", r.from);
+      if (r.fromTemplate) query.set("fromTemplate", r.fromTemplate);
+      const q = query.toString();
+      return `/questions/${r.id}${q ? `?${q}` : ""}`;
+    },
     match: ([head, id, tail]) =>
       head === "questions" && id && tail !== "preview" ? { view: "question", id } : null,
     studentSafe: false,

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { EvaluationDetail } from "@quiz/contracts";
+import type { EvaluationDetail, TemplateDetail } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
@@ -17,28 +17,44 @@ import { useEditorShortcuts } from "./useEditorShortcuts";
 import { useQuestionActions } from "./useQuestionActions";
 import { useQuestionDraft } from "./useQuestionDraft";
 import { VersionHistory } from "./VersionHistory";
-import { evaluationKey, poolKey, questionKey } from "../queryKeys";
+import { evaluationKey, poolKey, questionKey, templateKey } from "../queryKeys";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * The evaluation the editor was opened from (`?from=`, issue #127), and its
- * title for the way back. The query is the evaluation page's own, so coming
- * from there costs no request; after a reload it costs one. Anything that is
- * not an evaluation id this reader reaches is ignored, and the header falls
+ * What the editor was opened from — an evaluation (`?from=`, issue #127) or
+ * a template (`?fromTemplate=`, F-EVAL-25) — with its title and the route
+ * back. The query is that page's own, under its key and read whole, so
+ * coming from there costs no request; after a reload it costs one. Anything
+ * that is not an id this reader reaches is ignored, and the header falls
  * back to the pool.
  */
-function useOrigin(): { id: string; title: string } | null {
-  const [from] = useSearchParam("from", "");
-  const valid = UUID.test(from);
-  const origin = useQuery<EvaluationDetail>({
-    queryKey: evaluationKey(from),
-    enabled: valid,
-    queryFn: () => api(`/app/api/evaluations/${from}`),
+function useOrigin(): { title: string; back: Route } | null {
+  const [fromEvaluation] = useSearchParam("from", "");
+  const [fromTemplate] = useSearchParam("fromTemplate", "");
+  const source = UUID.test(fromTemplate)
+    ? {
+        key: templateKey(fromTemplate),
+        url: `/app/api/templates/${fromTemplate}`,
+        title: (d: unknown) => (d as TemplateDetail).template.title,
+        back: { view: "template", id: fromTemplate } as const,
+      }
+    : UUID.test(fromEvaluation)
+      ? {
+          key: evaluationKey(fromEvaluation),
+          url: `/app/api/evaluations/${fromEvaluation}`,
+          title: (d: unknown) => (d as EvaluationDetail).evaluation.title,
+          back: { view: "evaluation", id: fromEvaluation } as const,
+        }
+      : null;
+  const origin = useQuery<unknown>({
+    queryKey: source?.key ?? evaluationKey(""),
+    enabled: source !== null,
+    queryFn: () => api(source!.url),
     retry: false,
   });
-  if (!valid || !origin.data) return null;
-  return { id: from, title: origin.data.evaluation.title };
+  if (!source || !origin.data) return null;
+  return { title: source.title(origin.data), back: source.back };
 }
 
 /**
@@ -156,9 +172,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         origin={origin?.title}
         onBack={() =>
           navigate(
-            origin
-              ? { view: "evaluation", id: origin.id }
-              : { view: "pool", id: data.meta.poolId },
+            origin ? origin.back : { view: "pool", id: data.meta.poolId },
           )
         }
         onPublish={startPublish}

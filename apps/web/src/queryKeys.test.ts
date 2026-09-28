@@ -30,6 +30,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["poolsKey", keys.poolsKey, ["pools"]],
     ["allPoolsKey", keys.allPoolsKey, ["pools", "all"]],
     ["evaluationPoolsKey", keys.evaluationPoolsKey("e1"), ["pools", "evaluation", "e1"]],
+    ["templatePoolsKey", keys.templatePoolsKey("t1"), ["pools", "template", "t1"]],
     ["anyPoolKey", keys.anyPoolKey, ["pool"]],
     ["poolKey", keys.poolKey("p1"), ["pool", "p1"]],
     ["poolKey (not loaded)", keys.poolKey(undefined), ["pool", undefined]],
@@ -51,10 +52,16 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ],
     ["evaluationsKey", keys.evaluationsKey("r1"), ["evaluations", "r1"]],
     ["evaluationKey", keys.evaluationKey("e1"), ["evaluation", "e1"]],
+    ["templateKey", keys.templateKey("t1"), ["template", "t1"]],
     [
       "itemPreviewKey",
-      keys.itemPreviewKey("e1", "i1", "v1"),
+      keys.itemPreviewKey(keys.evaluationKey("e1"), "i1", "v1"),
       ["evaluation", "e1", "item-preview", "i1", "v1"],
+    ],
+    [
+      "itemPreviewKey (template)",
+      keys.itemPreviewKey(keys.templateKey("t1"), "i1", "v1"),
+      ["template", "t1", "item-preview", "i1", "v1"],
     ],
     ["dashboardKey", keys.dashboardKey("e1", true), ["dashboard", "e1", true, false]],
     [
@@ -150,8 +157,14 @@ describe("queryKeys — the prefixes invalidations rely on", () => {
     [
       "evaluationKey ⊂ itemPreviewKey",
       keys.evaluationKey("e1"),
-      keys.itemPreviewKey("e1", "i1", "v1"),
+      keys.itemPreviewKey(keys.evaluationKey("e1"), "i1", "v1"),
     ],
+    [
+      "templateKey ⊂ itemPreviewKey",
+      keys.templateKey("t1"),
+      keys.itemPreviewKey(keys.templateKey("t1"), "i1", "v1"),
+    ],
+    ["poolsKey ⊂ templatePoolsKey", keys.poolsKey, keys.templatePoolsKey("t1")],
     [
       "gradingKey ⊂ gradingQueueKey",
       keys.gradingKey("e1"),

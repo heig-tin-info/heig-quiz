@@ -362,20 +362,28 @@ const _settingsPatchKeys: SameKeys<EvaluationSettings, Required<EvaluationSettin
 const _feedbackPatchKeys: SameKeys<FeedbackPolicy, Required<FeedbackPolicyPatch>> = true;
 void [_settingsPatchKeys, _feedbackPatchKeys];
 
-export const EvaluationPatch = z
-  .object({
-    title: z.string().trim().min(1).max(200).optional(),
-    settings: EvaluationSettingsPatch.optional(),
-    gradingScale: GradingScale.optional(),
-    feedbackPolicy: FeedbackPolicyPatch.optional(),
-    mcqPolicy: McqPolicy.optional(),
-    opensAt: z.iso.datetime().nullable().optional(),
-    closesAt: z.iso.datetime().nullable().optional(),
-    durationS: z.number().int().min(30).max(24 * 3600).nullable().optional(),
-    accessCode: z.string().trim().min(3).max(32).nullable().optional(),
-    ipAllowlist: z.array(z.string().trim().min(1).max(64)).max(32).optional(),
-  })
-  .refine((b) => Object.keys(b).length > 0, { message: "Nothing to update" });
+/**
+ * The fields of an evaluation patch, before the "something to update" rule:
+ * the one list {@link EvaluationPatch} and {@link TemplatePatch} are cut from.
+ */
+const EvaluationPatchFields = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  settings: EvaluationSettingsPatch.optional(),
+  gradingScale: GradingScale.optional(),
+  feedbackPolicy: FeedbackPolicyPatch.optional(),
+  mcqPolicy: McqPolicy.optional(),
+  opensAt: z.iso.datetime().nullable().optional(),
+  closesAt: z.iso.datetime().nullable().optional(),
+  durationS: z.number().int().min(30).max(24 * 3600).nullable().optional(),
+  accessCode: z.string().trim().min(3).max(32).nullable().optional(),
+  ipAllowlist: z.array(z.string().trim().min(1).max(64)).max(32).optional(),
+});
+
+const somethingToUpdate = (b: object) => Object.keys(b).length > 0;
+
+export const EvaluationPatch = EvaluationPatchFields.refine(somethingToUpdate, {
+  message: "Nothing to update",
+});
 export type EvaluationPatch = z.infer<typeof EvaluationPatch>;
 
 /** A deletion names the evaluation it removes, exactly like a classroom's. */
@@ -419,12 +427,72 @@ export const EvaluationTemplate = z.object({
   courseId: z.uuid(),
   title: z.string(),
   mode: EvaluationMode.exclude(["poll"]),
-  /** 1 at creation. Editing in place (ADR-031, PR 3) will move it. */
+  /** 1 at creation; every committed change to the content moves it (F-EVAL-25). */
   revision: z.number().int().min(1),
   itemCount: z.number().int(),
   totalPoints: z.number(),
 });
 export type EvaluationTemplate = z.infer<typeof EvaluationTemplate>;
+
+/**
+ * `POST /courses/:id/templates` — a new, EMPTY template of the course
+ * (F-EVAL-24): the fields of an evaluation's creation, in the course rather
+ * than in a classroom. `poll` parses and is refused `422 template_poll`, like
+ * *Save as template* on a poll.
+ */
+export const TemplateNew = EvaluationCreate;
+export type TemplateNew = z.infer<typeof TemplateNew>;
+
+/**
+ * `PATCH /templates/:id` (F-EVAL-25): the evaluation patch without anything
+ * of a run. STRICT at the top level: `opensAt`, `closesAt`, `accessCode` or
+ * `ipAllowlist` — or any unknown top-level key — is a `400`, never silently
+ * stripped (ADR-031, addendum c). The nested `settings` and `feedbackPolicy`
+ * patches are the evaluation's, which strip an unknown key as they always
+ * have. The title is patchable and does not move the revision.
+ */
+export const TemplatePatch = EvaluationPatchFields.omit({
+  opensAt: true,
+  closesAt: true,
+  accessCode: true,
+  ipAllowlist: true,
+})
+  .strict()
+  .refine(somethingToUpdate, { message: "Nothing to update" });
+export type TemplatePatch = z.infer<typeof TemplatePatch>;
+
+/**
+ * One row of a template's item table: an {@link ItemRow} (whose
+ * `latestVersionNumber` says "stale" and `deprecated` says the frozen version
+ * was withdrawn), plus `poolUnlinked` — the question's pool is no longer
+ * linked to the course. These are what *Instantiate* warns about
+ * (`deprecated`) and refuses on (`poolUnlinked`), shown before it is tried.
+ */
+export const TemplateItemRow = ItemRow.extend({ poolUnlinked: z.boolean() });
+export type TemplateItemRow = z.infer<typeof TemplateItemRow>;
+
+/**
+ * `GET /templates/:id`, and the answer of every write under it: what the
+ * editor of a template reads. The template carries its whole configuration
+ * but nothing of a run (no dates, code, IP list, state or attempts); it is
+ * always editable, having neither attempts nor a state beyond `draft`.
+ */
+export const TemplateDetail = z.object({
+  template: EvaluationTemplate.extend({
+    settings: EvaluationSettings,
+    gradingScale: GradingScale,
+    feedbackPolicy: FeedbackPolicy,
+    mcqPolicy: McqPolicy,
+    durationS: z.number().int().nullable(),
+  }),
+  items: z.array(TemplateItemRow),
+  totalPoints: z.number(),
+  /** Item ids whose frozen version is not the latest published one. */
+  staleItems: z.array(z.uuid()),
+  /** As {@link EvaluationDetail.shape.editableQuestionIds}: whom the question editor lets in. */
+  editableQuestionIds: z.array(z.uuid()),
+});
+export type TemplateDetail = z.infer<typeof TemplateDetail>;
 
 /** `POST /evaluations/:id/template` — "Save as template". */
 export const TemplateCreate = z.object({

@@ -305,15 +305,19 @@ describe("save, list, instantiate, delete", () => {
         .orderBy(evaluationItems.position);
     const before = { row: await service.byId(server.app.db, instanceId), items: await itemsOf(instanceId) };
 
-    // No edit route yet (a later PR): the template's rows move by hand.
-    await server.app.db
-      .update(evaluations)
-      .set({ durationS: 60, settings: { navigation: "free" }, revision: 2 })
-      .where(eq(evaluations.id, template.id));
-    await server.app.db
-      .update(evaluationItems)
-      .set({ points: 42 })
-      .where(eq(evaluationItems.evaluationId, template.id));
+    // Edited in place through its own routes (F-EVAL-25).
+    expect(
+      (await call(teacher, "PATCH", `/app/api/templates/${template.id}`, { durationS: 60 })).statusCode,
+    ).toBe(200);
+    const [templateItem] = await itemsOf(template.id);
+    expect(
+      (
+        await call(teacher, "PATCH", `/app/api/templates/${template.id}/items/${templateItem!.id}`, {
+          points: 42,
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect((await service.byId(server.app.db, template.id))!.revision).toBe(3);
     expect(await service.byId(server.app.db, instanceId)).toEqual(before.row);
     expect(await itemsOf(instanceId)).toEqual(before.items);
 

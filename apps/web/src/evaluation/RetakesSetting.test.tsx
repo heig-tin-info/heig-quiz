@@ -7,7 +7,8 @@ import type { EvaluationDetail } from "@quiz/contracts";
 import { EVALUATION_ID, makeEvaluationDetail } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { RetakesSetting } from "./RetakesSetting";
-import { useEvaluationPatch } from "./usePatch";
+import { evaluationTarget } from "./editTarget";
+import { useConfigPatch } from "./usePatch";
 
 /* F-EVAL-15 (ADR-025): the retake rule of an exercise, sent whole. */
 
@@ -24,8 +25,8 @@ const exercise = (retakes?: EvaluationDetail["evaluation"]["settings"]["retakes"
 };
 
 function Harness({ detail, disabled = false }: { detail: EvaluationDetail; disabled?: boolean }) {
-  const patch = useEvaluationPatch(EVALUATION_ID);
-  return <RetakesSetting detail={detail} patch={patch} disabled={disabled} />;
+  const patch = useConfigPatch(evaluationTarget(EVALUATION_ID));
+  return <RetakesSetting settings={detail.evaluation.settings} patch={patch} disabled={disabled} />;
 }
 
 const PATCH = `PATCH /app/api/evaluations/${EVALUATION_ID}`;

@@ -14,6 +14,7 @@ import {
 import { useState } from "react";
 
 import { EvaluationPatch, type ClassroomDetail, type EvaluationDetail } from "@quiz/contracts";
+import { itemListLock } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -41,12 +42,13 @@ import {
   isGraded,
   stateTone,
 } from "./common";
+import { evaluationTarget } from "./editTarget";
 import { ItemsStep } from "./ItemsStep";
 import { LaunchStep } from "./LaunchStep";
 import { missingTiming, TIMING_FIELD_ID } from "./timing";
 import { TimingStep } from "./TimingStep";
 import { SaveAsTemplateDialog, useDuplicateErrorToast } from "./templates";
-import { useEvaluationPatch } from "./usePatch";
+import { useConfigPatch } from "./usePatch";
 import { classroomKey, evaluationKey, evaluationsKey } from "../queryKeys";
 
 /**
@@ -97,7 +99,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
     queryKey: evaluationKey(id),
     queryFn: () => api(`/app/api/evaluations/${id}`),
   });
-  const patch = useEvaluationPatch(id);
+  const patch = useConfigPatch(evaluationTarget(id));
   const classroomId = detail.data?.evaluation.classroomId ?? null;
   const classroom = useQuery<ClassroomDetail>({
     queryKey: classroomKey(classroomId),
@@ -362,7 +364,14 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
 
       <TabPanel idPrefix="eval-step" value={step}>
         {step === "questions" ? (
-          <ItemsStep detail={data} navigate={navigate} />
+          <ItemsStep
+            target={evaluationTarget(id)}
+            detail={data}
+            // The server's rule (issue #79): frozen once a student has an
+            // attempt OR once the evaluation has been opened.
+            lock={itemListLock(evaluation.state, data.attemptCount)}
+            navigate={navigate}
+          />
         ) : step === "timing" ? (
           <TimingStep
             detail={data}

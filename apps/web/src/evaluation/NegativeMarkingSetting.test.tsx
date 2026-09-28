@@ -7,7 +7,8 @@ import type { EvaluationDetail } from "@quiz/contracts";
 import { EVALUATION_ID, makeEvaluationDetail } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { AdvancedDisclosure } from "./AdvancedDisclosure";
-import { useEvaluationPatch } from "./usePatch";
+import { evaluationTarget } from "./editTarget";
+import { useConfigPatch } from "./usePatch";
 
 /* ADR-026 (#130): negative marking, one switch for the whole evaluation. */
 
@@ -30,9 +31,15 @@ const withMode = (
 };
 
 function Harness({ detail, disabled = false }: { detail: EvaluationDetail; disabled?: boolean }) {
-  const patch = useEvaluationPatch(EVALUATION_ID);
+  const patch = useConfigPatch(evaluationTarget(EVALUATION_ID));
   return (
-    <AdvancedDisclosure detail={detail} patch={patch} disabled={disabled} feedbackDisabled={false} />
+    <AdvancedDisclosure
+      config={detail.evaluation}
+      totalPoints={detail.totalPoints}
+      patch={patch}
+      disabled={disabled}
+      feedbackDisabled={false}
+    />
   );
 }
 

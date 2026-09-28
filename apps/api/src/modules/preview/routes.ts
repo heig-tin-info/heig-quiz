@@ -1,11 +1,12 @@
 /**
  * HTTP surface of the teacher's stateless evaluation preview (issue #75,
  * ADR-018 fourth addendum). Four POSTs under `/app/api/evaluations/:id/preview`,
- * and one GET for a single item (issue #127).
+ * and one GET for a single item (issue #127), with its twin for a template.
  *
  * Every one of them is a teacher route: the evaluation is LOADED through
- * `loadEvaluation`, so a caller off the course's staff gets the same 404 as a
- * missing evaluation (invariant 6), and every body is parsed by a schema from
+ * `loadEvaluation` (a template through `loadTemplate`), so a caller off the
+ * course's staff gets the same 404 as a missing evaluation (invariant 6),
+ * and every body is parsed by a schema from
  * `@quiz/contracts` that the web client uses too (invariant 7). The preview
  * is open in every state of the evaluation: it touches nothing a student
  * could see.
@@ -31,7 +32,7 @@ import {
 } from "@quiz/contracts";
 import type { RunnerOutcome } from "@quiz/core/server";
 
-import { loadEvaluation, teacherGuard } from "../guards.js";
+import { loadEvaluation, loadTemplate, teacherGuard } from "../guards.js";
 import { teacherRoute } from "../http.js";
 import * as service from "./service.js";
 
@@ -77,6 +78,24 @@ export async function previewPlugin(app: FastifyInstance) {
       { params: ItemParam, load: staffEvaluation },
       ({ params, scope }): Promise<ItemPreview> =>
         service.itemPreview(app.db, scope.evaluation, params.itemId),
+    ),
+  );
+
+  /**
+   * The same item preview for a TEMPLATE's editor (F-EVAL-25), loaded by
+   * `loadTemplate` only (ADR-031, addendum c): the course's staff previews
+   * every item of the course's templates.
+   */
+  app.get(
+    "/app/api/templates/:id/preview/items/:itemId",
+    { preHandler: requireTeacher },
+    teacher(
+      {
+        params: ItemParam,
+        load: (req, reply, p) => loadTemplate(app, req, reply, p.id),
+      },
+      ({ params, scope }): Promise<ItemPreview> =>
+        service.itemPreview(app.db, scope.template, params.itemId),
     ),
   );
 

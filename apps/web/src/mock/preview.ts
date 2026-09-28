@@ -21,7 +21,7 @@ import type {
 } from "@quiz/contracts";
 import { gradeFromPoints, round2 } from "@quiz/domain";
 
-import { evaluationOr404, itemQuestion, type MockEvaluation } from "./evaluation";
+import { evaluationOr404, itemQuestion, templateOr404, type MockEvaluation } from "./evaluation";
 import { frozenConfig, solutionOf, studentView, tryAnswer } from "./pool";
 import { MockError, flags, on } from "./runtime";
 
@@ -101,12 +101,12 @@ on("POST", "/app/api/evaluations/:id/preview", (m): EvaluationPreview => {
 });
 
 /**
- * One item at the version its evaluation froze (issue #127): that version's
- * config when the question still has it, through the same `studentView`.
+ * One item at the version its evaluation or template froze (issue #127,
+ * F-EVAL-25): that version's config when the question still has it, through
+ * the same `studentView`.
  */
-on("GET", "/app/api/evaluations/:id/preview/items/:itemId", (m): ItemPreview => {
-  const e = evaluationOr404(m.groups!.id!);
-  const item = e.items.find((i) => i.id === m.groups!.itemId);
+function itemPreview(e: MockEvaluation, itemId: string): ItemPreview {
+  const item = e.items.find((i) => i.id === itemId);
   const q = item ? itemQuestion(item) : null;
   if (!item || !q) throw new MockError(404, "not_found");
   const frozen = q.versions.find((v) => v.number === item.versionNumber)?.config ?? frozenConfig(q);
@@ -117,7 +117,14 @@ on("GET", "/app/api/evaluations/:id/preview/items/:itemId", (m): ItemPreview => 
     points: item.points,
     student: studentView(q, frozen),
   };
-});
+}
+
+on("GET", "/app/api/evaluations/:id/preview/items/:itemId", (m) =>
+  itemPreview(evaluationOr404(m.groups!.id!), m.groups!.itemId!),
+);
+on("GET", "/app/api/templates/:id/preview/items/:itemId", (m) =>
+  itemPreview(templateOr404(m.groups!.id!).shell, m.groups!.itemId!),
+);
 
 on("POST", "/app/api/evaluations/:id/preview/run", () => {
   throw new MockError(503, "runner_unavailable");
