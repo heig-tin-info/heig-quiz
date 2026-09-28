@@ -17,7 +17,9 @@ import {
   SectionHeading,
   Skeleton,
 } from "../ui";
-import { ArchivedClassrooms, ClassroomRow, CoursePools, HiddenBadge, useCourseActions, useCourses } from "./parts";
+import { CoursePools } from "./CoursePools";
+import { ArchivedClassrooms, ClassroomRow, HiddenBadge, useCourses } from "./parts";
+import { useCourseActions } from "./useCourseActions";
 
 /**
  * The page of one course (F-ORG-12): what the course holds, in the order a
