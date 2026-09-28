@@ -717,9 +717,19 @@ export async function validateGrading(
   userId: string,
   now: Date,
 ): Promise<GradingRecord> {
+  return writeGrading(db, validationOf(grading, input, userId, now));
+}
+
+/** The write that validates `grading`: {@link validateGrading}'s, and each of {@link batchValidate}'s. */
+function validationOf(
+  grading: GradingRecord,
+  input: { points?: number | undefined; comment?: string | undefined },
+  userId: string,
+  now: Date,
+): WriteGradingInput {
   if (grading.state !== "proposed") throw new NotPending();
   const adjusted = input.points !== undefined && round2(input.points) !== grading.points;
-  return writeGrading(db, {
+  return {
     attemptId: grading.attemptId,
     itemId: grading.itemId,
     answerId: grading.answerId,
@@ -733,7 +743,7 @@ export async function validateGrading(
     gradedBy: userId,
     regradeNote: grading.regradeNote ?? undefined,
     now,
-  });
+  };
 }
 
 interface BatchFilter {
@@ -744,8 +754,10 @@ interface BatchFilter {
 
 /**
  * F-GRADE-04, the "validate every high-confidence proposal of question 3"
- * button. It validates proposals one by one through {@link writeGrading}, so a
- * batch leaves the same history a click would.
+ * button. Each proposal becomes the very write a click would make
+ * ({@link validationOf}), and they all go through {@link writeGradings} at
+ * once — one transaction per chunk, not one per cell — so a batch leaves the
+ * same history a click would.
  */
 export async function batchValidate(
   db: Db,
@@ -768,12 +780,11 @@ export async function batchValidate(
       ),
     )
     .orderBy(asc(gradings.gradedAt));
-  let validated = 0;
-  for (const { grading } of rows) {
-    await validateGrading(db, grading, {}, userId, now);
-    validated += 1;
-  }
-  return validated;
+  const written = await writeGradings(
+    db,
+    rows.map(({ grading }) => validationOf(grading, {}, userId, now)),
+  );
+  return written.length;
 }
 
 /** The full history of one cell, newest first (F-GRADE-05, F-GRADE-06). */

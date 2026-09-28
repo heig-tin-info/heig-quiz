@@ -481,6 +481,45 @@ describe("batch validation (F-GRADE-04)", () => {
     const rest = await service.batchValidate(db, evaluation.id, {}, rows[0]!.userId, now);
     expect(rest).toBe(1);
   });
+
+  it("leaves the history a click by click validation would", async () => {
+    const { app, evaluation, items, attempts: rows } = await closedEvaluation();
+    const propose = (attemptId: string) =>
+      service.writeGrading(db, {
+        attemptId,
+        itemId: items[1]!.item.id,
+        answerId: null,
+        points: 0.5,
+        maxPoints: 1,
+        source: "auto",
+        state: "proposed",
+        confidence: "medium",
+        comment: "machine",
+        regradeNote: "note",
+        details: { reason: "llm" },
+        now: app.clock.now(),
+      });
+    const [clicked, batched] = [await propose(rows[0]!.id), await propose(rows[1]!.id)];
+    app.clock.advance(1000);
+    const teacher = rows[0]!.userId;
+    await service.validateGrading(db, clicked, {}, teacher, app.clock.now());
+    expect(
+      await service.batchValidate(db, evaluation.id, { itemId: items[1]!.item.id }, teacher, app.clock.now()),
+    ).toBe(1);
+
+    // The same cell history, field for field, but for the ids and the attempt.
+    const shape = async (proposal: typeof clicked) => {
+      const history = await db
+        .select()
+        .from(gradings)
+        .where(and(eq(gradings.attemptId, proposal.attemptId), eq(gradings.itemId, proposal.itemId)))
+        .orderBy(gradings.createdAt);
+      expect(history.map((g) => g.state)).toEqual(["superseded", "validated"]);
+      expect(history[1]!.supersedesId).toBe(proposal.id);
+      return history.map(({ id, attemptId, supersedesId, ...rest }) => rest);
+    };
+    expect(await shape(batched)).toEqual(await shape(clicked));
+  });
 });
 
 describe("runner-backed grading (decision D14)", () => {
