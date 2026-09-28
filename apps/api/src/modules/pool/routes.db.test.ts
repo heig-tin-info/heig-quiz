@@ -282,7 +282,10 @@ describe("the draft and publication routes", () => {
       theirs: await categoryIn(stranger, "stranger's pool"),
       missing: "00000000-0000-4000-8000-00000000cafe",
     };
+    const questionCount = async () =>
+      (await server.app.db.select({ id: questions.id }).from(questions)).length;
     for (const [label, categoryId] of Object.entries(foreign)) {
+      let before = await questionCount();
       const created = await post(owner, `/app/api/pools/${poolId}/questions`, {
         type: "short",
         internalName: `in a foreign category ${label}`,
@@ -290,27 +293,52 @@ describe("the draft and publication routes", () => {
       });
       expect(created.statusCode, label).toBe(404);
       expect(created.json(), label).toEqual({ error: "not_found" });
+      expect(await questionCount(), label).toBe(before);
 
       const id = await createQuestion(`to patch ${label}`);
       const patched = await server.app.inject({
         method: "PATCH",
         url: `/app/api/questions/${id}`,
         headers: owner.headers,
-        payload: { categoryId },
+        payload: { internalName: `renamed ${label}`, categoryId },
       });
       expect(patched.statusCode, label).toBe(404);
       expect(patched.json(), label).toEqual({ error: "not_found" });
+      // The whole patch is refused: the name did not change either.
+      const [row] = await server.app.db.select().from(questions).where(eq(questions.id, id));
+      expect(row!.internalName, label).toBe(`to patch ${label}`);
+      expect(row!.categoryId, label).toBeNull();
 
+      before = await questionCount();
       const copied = await post(owner, `/app/api/questions/${id}/copy`, {
         targetPoolId: poolId,
         categoryId,
       });
       expect(copied.statusCode, label).toBe(404);
       expect(copied.json(), label).toEqual({ error: "not_found" });
+      expect(await questionCount(), label).toBe(before);
     }
-    // Nothing was written: no question of the pool sits in a foreign category.
+    // No question of the pool sits in a foreign category.
     const rows = await server.app.db.select().from(questions).where(eq(questions.poolId, poolId));
     expect(rows.every((q) => q.categoryId === null)).toBe(true);
+  });
+
+  it("refuses a rename onto a name the pool holds with 409 duplicate_name", async () => {
+    await createQuestion("taken name");
+    const id = await createQuestion("free name");
+    const renamed = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/questions/${id}`,
+      headers: owner.headers,
+      payload: { internalName: "taken name" },
+    });
+    expect(renamed.statusCode).toBe(409);
+    expect(renamed.json()).toEqual({
+      error: "duplicate_name",
+      message: "This pool already has a question by that name",
+    });
+    const [row] = await server.app.db.select().from(questions).where(eq(questions.id, id));
+    expect(row!.internalName).toBe("free name");
   });
 });
 
