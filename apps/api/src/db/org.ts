@@ -125,6 +125,9 @@ export const enrollments = pgTable(
   (t) => [
     uniqueIndex("enrollments_classroom_email_uq").on(t.classroomId, t.email),
     uniqueIndex("enrollments_classroom_user_uq").on(t.classroomId, t.userId),
+    // The student side reads seats by account alone (the student home, every
+    // SSE connect): the unique index above leads with the classroom.
+    index("enrollments_user_idx").on(t.userId),
     index("enrollments_email_idx").on(sql`lower(${t.email})`),
   ],
 );

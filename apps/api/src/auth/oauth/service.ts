@@ -11,7 +11,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 
-import { and, desc, eq, gt, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, isNull, lt, notExists, or } from "drizzle-orm";
 
 import { OAUTH_SCOPE, OAUTH_SCOPES_SUPPORTED, type OAuthConnection, type OAuthRequestView } from "@quiz/contracts";
 
@@ -22,10 +22,10 @@ import { isLoopback, type OAuthClient } from "./clients.js";
 
 const REQUEST_TTL_MS = 10 * 60_000;
 const CODE_TTL_MS = 60_000;
-export const ACCESS_TTL_S = 3600;
+const ACCESS_TTL_S = 3600;
 const REFRESH_TTL_MS = 90 * 86_400_000;
 
-export const ACCESS_PREFIX = "quiz_oat_";
+const ACCESS_PREFIX = "quiz_oat_";
 const REFRESH_PREFIX = "quiz_ort_";
 
 /** An RFC 6749 §5.2 error: the token endpoint answers `400 { error, error_description }`. */
@@ -174,7 +174,7 @@ export async function decide(
   };
 }
 
-export interface TokenResponse {
+interface TokenResponse {
   access_token: string;
   token_type: "Bearer";
   expires_in: number;
@@ -325,10 +325,18 @@ export async function purgeOAuth(db: Db, now: Date) {
   await db
     .delete(oauthGrants)
     .where(or(lt(oauthGrants.expiresAt, monthAgo), lt(oauthGrants.revokedAt, monthAgo)));
-  const orphans = await db
-    .select({ id: oauthClients.id })
-    .from(oauthClients)
-    .leftJoin(oauthGrants, eq(oauthGrants.clientId, oauthClients.id))
-    .where(and(eq(oauthClients.kind, "dcr"), lt(oauthClients.createdAt, dayAgo), isNull(oauthGrants.id)));
-  for (const { id } of orphans) await db.delete(oauthClients).where(eq(oauthClients.id, id));
+  await db
+    .delete(oauthClients)
+    .where(
+      and(
+        eq(oauthClients.kind, "dcr"),
+        lt(oauthClients.createdAt, dayAgo),
+        notExists(
+          db
+            .select({ id: oauthGrants.id })
+            .from(oauthGrants)
+            .where(eq(oauthGrants.clientId, oauthClients.id)),
+        ),
+      ),
+    );
 }
