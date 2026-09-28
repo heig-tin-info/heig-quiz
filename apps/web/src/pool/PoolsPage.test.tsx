@@ -160,13 +160,33 @@ describe("PoolsPage", () => {
     // Every tile previews its icon in the colour being chosen.
     const tile = screen.getByRole("button", { name: "code" });
     expect(tile).toHaveAttribute("aria-pressed", "true");
-    expect(tile.querySelector("svg")).toHaveClass("text-pool-cyan!");
+    expect(tile.querySelector("svg")).toHaveStyle({ color: "var(--pool-cyan)" });
 
     // Picking the icon takes both back to the form; Save sends both.
     await userEvent.click(tile);
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     const patch = calls.find((c) => c.method === "PATCH");
     expect(patch?.body).toEqual({ name: "Programmation C", icon: "code", color: "cyan" });
+  });
+
+  it("saves a colour alone, without picking the icon again (#213)", async () => {
+    const { calls } = mockFetch({
+      [`GET ${POOLS}`]: ok([makePool()]),
+      [`PATCH ${POOLS}/p1`]: ok(makePool({ color: "pink" })),
+    });
+    renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient: withMe() });
+    await screen.findByText("Programmation C");
+
+    await userEvent.click(screen.getByRole("button", { name: "Actions" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /Change icon/ }));
+    await userEvent.click(screen.getByRole("radio", { name: "Pink" }));
+    // Leaving the picker keeps the colour: the form holds it, ready to save.
+    await userEvent.keyboard("{Escape}");
+    const trigger = await screen.findByRole("button", { name: "Change the icon" });
+    expect(trigger.querySelector("svg")).toHaveStyle({ color: "var(--pool-pink)" });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    const patch = calls.find((c) => c.method === "PATCH");
+    expect(patch?.body).toEqual({ name: "Programmation C", icon: "code", color: "pink" });
   });
 
   it("draws a pool's colour on its card and keeps grey as it always was (#213)", async () => {
@@ -184,10 +204,10 @@ describe("PoolsPage", () => {
     });
     renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient: withMe() });
     const grey = await screen.findByRole("button", { name: /Programmation C/ });
-    expect(grey.querySelector("svg")?.getAttribute("class")).not.toMatch(/text-pool-/);
+    expect(grey.querySelector("svg")?.getAttribute("style")).toBeNull();
     // A reader sees the colour...
     const coloured = screen.getByRole("button", { name: /Électronique/ });
-    expect(coloured.querySelector("svg")).toHaveClass("text-pool-violet!");
+    expect(coloured.querySelector("svg")).toHaveStyle({ color: "var(--pool-violet)" });
     // ...and is offered no way to change it.
     await userEvent.click(screen.getAllByRole("button", { name: "Actions" })[1]!);
     const menu = screen.getByRole("menu");

@@ -292,14 +292,17 @@ export function PoolFormModal({
       <PoolIconPicker
         value={icon}
         color={color}
-        onPick={(picked, pickedColor) => {
+        onColor={setColor}
+        onPick={(picked) => {
           setIcon(picked);
-          setColor(pickedColor);
           setStep("form");
         }}
         // Opened straight on the picker: there is no form step to go back to
-        // that the teacher asked for, so the way out is out.
-        onClose={() => (startAt === "icon" && pool ? onClose() : setStep("form"))}
+        // that the teacher asked for, so the way out is out — unless a colour
+        // was picked on the way, which the form then holds, ready to save.
+        onClose={() =>
+          startAt === "icon" && pool && color === pool.color ? onClose() : setStep("form")
+        }
       />
     );
   }

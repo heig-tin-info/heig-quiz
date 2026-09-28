@@ -2,7 +2,6 @@ import { POOL_COLORS, type PoolColor } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { cx, Tip } from "../ui";
-import { POOL_COLOR_CLASS } from "./poolColors";
 
 /**
  * The colour row of the icon picker (#213): grey, the default (`null`), then
@@ -14,8 +13,9 @@ import { POOL_COLOR_CLASS } from "./poolColors";
  * else, so every radio carries its colour's NAME as its accessible name, and
  * the tooltip says the same thing to the pointer.
  *
- * The chosen swatch is ringed in ink (`fg`), never in the accent: once icons
- * are coloured, a red ring would read as the red swatch.
+ * The chosen swatch is ringed in ink (`fg`), and so is the focused one, never
+ * in the accent: once icons are coloured, a red ring would read as the red
+ * swatch.
  */
 export function PoolColorSwatches({
   value,
@@ -25,11 +25,12 @@ export function PoolColorSwatches({
   onChange: (color: PoolColor | null) => void;
 }) {
   const t = useT();
+  // Grey is the call sites' own ink, `fg-muted`; the others are their token.
   const swatches: { color: PoolColor | null; fill: string; label: string }[] = [
-    { color: null, fill: "bg-fg-muted", label: t("pools.color.gray") },
+    { color: null, fill: "var(--fg-muted)", label: t("pools.color.gray") },
     ...POOL_COLORS.map((color) => ({
       color,
-      fill: POOL_COLOR_CLASS[color].fill,
+      fill: `var(--pool-${color})`,
       label: t(`pools.color.${color}`),
     })),
   ];
@@ -47,7 +48,7 @@ export function PoolColorSwatches({
               <label
                 className={cx(
                   "inline-flex size-6 cursor-pointer items-center justify-center rounded-full transition-shadow duration-150",
-                  "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent",
+                  "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-fg",
                   checked
                     ? "ring-2 ring-fg ring-offset-2 ring-offset-surface"
                     : "hover:ring-2 hover:ring-line-strong hover:ring-offset-2 hover:ring-offset-surface",
@@ -61,7 +62,11 @@ export function PoolColorSwatches({
                   checked={checked}
                   onChange={() => onChange(s.color)}
                 />
-                <span aria-hidden="true" className={cx("size-5 rounded-full", s.fill)} />
+                <span
+                  aria-hidden="true"
+                  className="size-5 rounded-full"
+                  style={{ backgroundColor: s.fill }}
+                />
               </label>
             </Tip>
           );

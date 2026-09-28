@@ -365,9 +365,9 @@ const scenes = [
 
   // Pools, the question editors and the try panel (WP7). The mock question
   // ids are stable: q1 code, q2 mcq, q3 short, q4 cloze.
-  { name: "pools", role: "teacher", path: "/pools" },
+  { name: "pools", role: "teacher", path: "/pools", act: skipCoach },
   { name: "pools-admin-all", role: "admin", path: "/pools", act: (p) => p.getByRole("switch", { name: /other teachers/i }).click() },
-  { name: "pools-list", role: "teacher", path: "/pools", ls: { "quiz-pools-view": "list" } },
+  { name: "pools-list", role: "teacher", path: "/pools", ls: { "quiz-pools-view": "list" }, act: skipCoach },
   { name: "pools-empty", role: "teacher", path: "/pools?empty=1" },
   { name: "pools-error", role: "teacher", path: "/pools?fail=1", settle: 2500 },
   // The icon picker, reached the way a teacher reaches it: the New pool form

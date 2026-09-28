@@ -32,14 +32,13 @@ import {
   Waves,
   Wrench,
   Zap,
+  type LucideIcon,
 } from "lucide-react";
 import type { IconName } from "lucide-react/dynamic";
 import { lazy, Suspense } from "react";
 
 import type { PoolColor } from "@quiz/contracts";
 
-import { cx, type IconType } from "../ui";
-import { POOL_COLOR_CLASS } from "./poolColors";
 import { DEFAULT_POOL_ICON } from "./poolIcons";
 
 /**
@@ -71,7 +70,7 @@ import { DEFAULT_POOL_ICON } from "./poolIcons";
  * `POOL_ICONS`, and `poolIcons.test.ts` asserts the two lists are the same
  * set — the map is a rendering detail, the names stay the source of truth.
  */
-export const POOL_ICON_COMPONENTS: Record<string, IconType> = {
+export const POOL_ICON_COMPONENTS: Record<string, LucideIcon> = {
   library: Library,
   cpu: Cpu,
   "circuit-board": CircuitBoard,
@@ -115,7 +114,7 @@ const DynamicIcon = lazy(() =>
 export function PoolIcon({
   icon,
   color,
-  className: size = "size-5",
+  className = "size-5",
 }: {
   /** The pool's stored icon name; null (or unknown to this lucide) is the default. */
   icon: string | null | undefined;
@@ -123,20 +122,25 @@ export function PoolIcon({
   color?: PoolColor | null | undefined;
   className?: string;
 }) {
-  const className = cx(size, color && POOL_COLOR_CLASS[color].ink);
+  // The colour is a token (`--pool-<name>` in style.css, swapped under
+  // html.dark) set inline: it then wins over the call site's own `text-fg-*`,
+  // the grey a pool with no colour keeps exactly as before, and the fifteen
+  // names need no class map for Tailwind to find.
+  const style = color ? { color: `var(--pool-${color})` } : undefined;
   const name = icon ?? DEFAULT_POOL_ICON;
   const Curated = POOL_ICON_COMPONENTS[name];
-  if (Curated) return <Curated className={className} aria-hidden="true" />;
+  if (Curated) return <Curated className={className} style={style} aria-hidden="true" />;
   const Fallback = POOL_ICON_COMPONENTS[DEFAULT_POOL_ICON]!;
   return (
-    <Suspense fallback={<Fallback className={className} aria-hidden="true" />}>
+    <Suspense fallback={<Fallback className={className} style={style} aria-hidden="true" />}>
       <DynamicIcon
         name={name as IconName}
         className={className}
+        style={style}
         aria-hidden="true"
         // A name this lucide no longer ships (a rename between two releases)
         // draws the default rather than nothing at all.
-        fallback={() => <Fallback className={className} aria-hidden="true" />}
+        fallback={() => <Fallback className={className} style={style} aria-hidden="true" />}
       />
     </Suspense>
   );

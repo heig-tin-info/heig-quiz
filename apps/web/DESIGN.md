@@ -652,35 +652,42 @@ live in `ui/state.ts`, each written once.
   like the default icon, so a pool nobody coloured looks as it always did
   (the call site's `fg-muted` / `fg-faint`). The fifteen others are a closed
   set of NAMES (`PoolColor` in `@quiz/contracts`), each a `--pool-<name>`
-  token swapped under `html.dark`, never a stored hex. Decoration only
+  token swapped under `html.dark`, never a stored hex, and set INLINE
+  (`color: var(--pool-teal)`) — it then wins over the call site's grey ink
+  without a class map for Tailwind to find. Decoration only
   (N-A11Y-03): the name and the icon stay the identifiers. The colours come
   first in the icon picker, as a row of round swatches — native radios, so
   the arrow keys walk the row and Tab leaves it in one step, each named in
   both languages — and every tile previews its icon in the colour being
-  chosen; picking an icon takes both, so no second button appears. The
-  chosen swatch is ringed in ink with a 2 px `surface` offset, for the same
-  reason as the tile. Held to 3:1 (a graphic object) on `surface` and on
-  `surface-2`, the card's icon well; the Tailwind 600 shade where it holds
-  that, the 700 where it does not (amber, yellow, lime, green), the 400 in
-  dark:
+  chosen; no second button appears. The
+  chosen swatch is ringed in ink with a 2 px `surface` offset, and the
+  focused one outlined in ink too, for the same reason as the tile. The
+  colour is set in the form like the icon: a swatch changes it at once, so a
+  colour alone is picked and saved without touching the icon. Held to 3:1 (a graphic object) on `surface` and on
+  `surface-2`, the card's icon well. The values are hand-picked, not a
+  palette's one shade: at 20 px the stock 600/700 shades gave near-twins
+  (amber and yellow both brown, violet and purple at a CIE94 ΔE of 3), so each
+  neighbour is pulled apart in hue AND lightness — no two colours closer than
+  ΔE94 9.7 in light, 9.0 in dark — the yellow is a saturated gold that still
+  holds 3:1, and the three blues step down in lightness (sky, blue, indigo):
 
   | Colour | Light | on `surface` / `surface-2` | Dark | on `surface` / `surface-2` |
   | --- | --- | --- | --- | --- |
-  | red | `#dc2626` | 4.83 / 4.28 | `#f87171` | 6.29 / 5.75 |
-  | orange | `#ea580c` | 3.56 / 3.16 | `#fb923c` | 7.68 / 7.02 |
-  | amber | `#b45309` | 5.02 / 4.45 | `#fbbf24` | 10.42 / 9.52 |
-  | yellow | `#a16207` | 4.92 / 4.36 | `#facc15` | 11.36 / 10.38 |
-  | lime | `#4d7c0f` | 4.99 / 4.43 | `#a3e635` | 11.53 / 10.54 |
-  | green | `#15803d` | 5.02 / 4.45 | `#4ade80` | 9.98 / 9.12 |
-  | emerald | `#059669` | 3.77 / 3.34 | `#34d399` | 9.05 / 8.27 |
-  | teal | `#0d9488` | 3.74 / 3.32 | `#2dd4bf` | 9.34 / 8.54 |
-  | cyan | `#0891b2` | 3.68 / 3.26 | `#22d3ee` | 9.62 / 8.80 |
-  | sky | `#0284c7` | 4.10 / 3.63 | `#38bdf8` | 8.12 / 7.42 |
-  | blue | `#2563eb` | 5.17 / 4.58 | `#60a5fa` | 6.84 / 6.25 |
-  | indigo | `#4f46e5` | 6.29 / 5.57 | `#818cf8` | 5.83 / 5.33 |
-  | violet | `#7c3aed` | 5.70 / 5.05 | `#a78bfa` | 6.39 / 5.84 |
-  | purple | `#9333ea` | 5.38 / 4.77 | `#c084fc` | 6.58 / 6.02 |
-  | pink | `#db2777` | 4.60 / 4.07 | `#f472b6` | 6.57 / 6.00 |
+  | red | `#d42424` | 5.15 / 4.57 | `#f87171` | 6.29 / 5.75 |
+  | orange | `#e05a00` | 3.73 / 3.31 | `#fb923c` | 7.68 / 7.02 |
+  | amber | `#b87000` | 3.92 / 3.48 | `#f5b000` | 9.19 / 8.40 |
+  | yellow | `#9e8800` | 3.51 / 3.12 | `#ede04a` | 12.72 / 11.63 |
+  | lime | `#5a8c00` | 4.05 / 3.59 | `#a3e635` | 11.53 / 10.54 |
+  | green | `#1f8a3a` | 4.42 / 3.92 | `#5ccf5c` | 8.72 / 7.97 |
+  | emerald | `#00876a` | 4.49 / 3.98 | `#34d399` | 9.05 / 8.27 |
+  | teal | `#00868e` | 4.37 / 3.88 | `#2dd4bf` | 9.34 / 8.54 |
+  | cyan | `#0086b3` | 4.15 / 3.68 | `#22d3ee` | 9.62 / 8.80 |
+  | sky | `#2f7fe6` | 3.96 / 3.51 | `#38bdf8` | 8.12 / 7.42 |
+  | blue | `#2244cc` | 7.59 / 6.73 | `#5b8dfa` | 5.49 / 5.02 |
+  | indigo | `#3f2a9e` | 10.31 / 9.14 | `#8f7cf0` | 5.22 / 4.78 |
+  | violet | `#8a3ce6` | 5.43 / 4.81 | `#c490f0` | 7.12 / 6.51 |
+  | purple | `#b0209e` | 5.92 / 5.25 | `#e070d8` | 6.19 / 5.66 |
+  | pink | `#e0306e` | 4.36 / 3.86 | `#f472b6` | 6.57 / 6.00 |
 - Kbd: a key cap for the places that teach a shortcut — 6 px radius, hairline,
   `surface-2`, 11 px / 500 in `fg-muted`, 6 px horizontal padding. `font-sans`,
   not mono: the mono face is reserved for SHAs, repository names and what a
