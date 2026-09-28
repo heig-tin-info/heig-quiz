@@ -148,7 +148,7 @@ describe("claimForExistingUsers (reverse claim)", () => {
     const userId = await seedUser(db, "leoverdelaw@gmail.test", "leo.verdelaw@heig.test");
     const enrollmentId = await seedEntry(db, classroomId, "leo.verdelaw@heig.test", "Verdelaw");
 
-    expect(await claimForExistingUsers(db, classroomId)).toBe(1);
+    expect(await claimForExistingUsers(db, classroomId, randomUUID())).toBe(1);
     expect((await entry(db, enrollmentId)).userId).toBe(userId);
   });
 
@@ -159,7 +159,7 @@ describe("claimForExistingUsers (reverse claim)", () => {
     await seedUser(db, "twin-b@gmail.test", shared);
     const enrollmentId = await seedEntry(db, classroomId, shared, "Twin");
 
-    expect(await claimForExistingUsers(db, classroomId)).toBe(0);
+    expect(await claimForExistingUsers(db, classroomId, randomUUID())).toBe(0);
     const row = await entry(db, enrollmentId);
     expect(row.userId).toBeNull();
     expect(row.conflictFlag).toBe(true);
