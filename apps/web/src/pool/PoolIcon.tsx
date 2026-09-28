@@ -36,7 +36,10 @@ import {
 import type { IconName } from "lucide-react/dynamic";
 import { lazy, Suspense } from "react";
 
-import type { IconType } from "../ui";
+import type { PoolColor } from "@quiz/contracts";
+
+import { cx, type IconType } from "../ui";
+import { POOL_COLOR_CLASS } from "./poolColors";
 import { DEFAULT_POOL_ICON } from "./poolIcons";
 
 /**
@@ -111,12 +114,16 @@ const DynamicIcon = lazy(() =>
 
 export function PoolIcon({
   icon,
-  className = "size-5",
+  color,
+  className: size = "size-5",
 }: {
   /** The pool's stored icon name; null (or unknown to this lucide) is the default. */
   icon: string | null | undefined;
+  /** The pool's colour (#213); null keeps whatever ink the call site gives. */
+  color?: PoolColor | null | undefined;
   className?: string;
 }) {
+  const className = cx(size, color && POOL_COLOR_CLASS[color].ink);
   const name = icon ?? DEFAULT_POOL_ICON;
   const Curated = POOL_ICON_COMPONENTS[name];
   if (Curated) return <Curated className={className} aria-hidden="true" />;

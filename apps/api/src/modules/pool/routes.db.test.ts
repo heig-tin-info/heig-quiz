@@ -799,6 +799,7 @@ describe("pool sharing", () => {
     });
     expect(created.statusCode).toBe(201);
     expect(created.json().icon).toBe("cpu");
+    expect(created.json().color).toBeNull();
     expect(created.json().visibility).toBe("private");
     shared = created.json().id;
 
@@ -840,6 +841,37 @@ describe("pool sharing", () => {
     // stranger: the pool does not exist.
     expect((await readPool(shared, outsider)).statusCode).toBe(404);
     expect((await writeQuestion(shared, outsider, "intruder")).statusCode).toBe(404);
+  });
+
+  it("lets only an owner colour the pool's icon, like the icon itself (#213)", async () => {
+    const paint = (who: Actor, color: string | null) =>
+      server.app.inject({
+        method: "PATCH",
+        url: `/app/api/pools/${shared}`,
+        headers: who.headers,
+        payload: { color },
+      });
+    // Grey is the default, and it is null.
+    expect((await readPool(shared, poolOwner)).json().pool.color).toBeNull();
+
+    const painted = await paint(poolOwner, "teal");
+    expect(painted.statusCode).toBe(200);
+    expect(painted.json().color).toBe("teal");
+    expect(painted.json().icon).toBe("cpu");
+
+    // Everyone who reads the pool sees the colour...
+    expect((await readPool(shared, reader)).json().pool.color).toBe("teal");
+    // ...only an owner changes it; a stranger does not even find the pool.
+    expect((await paint(reader, "pink")).statusCode).toBe(403);
+    expect((await paint(contributor, "pink")).statusCode).toBe(403);
+    expect((await paint(outsider, "pink")).statusCode).toBe(404);
+    expect((await paint(poolOwner, "chartreuse")).statusCode).toBe(400);
+    expect((await readPool(shared, poolOwner)).json().pool.color).toBe("teal");
+
+    // A co-owner takes it back to grey.
+    const reset = await paint(coOwner, null);
+    expect(reset.statusCode).toBe(200);
+    expect(reset.json().color).toBeNull();
   });
 
   it("keeps the admin's shelf to their own pools unless they ask for all", async () => {

@@ -381,6 +381,18 @@ const scenes = [
       // its tooltip then sits in the middle of the grid.
       await p.mouse.move(0, 0);
     } },
+  // #213: the same step with a colour picked — the swatch ringed, every tile
+  // previewing its icon in it.
+  { name: "pools-icon-color", role: "teacher", path: "/pools", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^(new pool|nouvelle banque)$/i }).first().click();
+      await p.waitForTimeout(300);
+      await p.getByRole("button", { name: /^(change the icon|changer l'icône)$/i }).first().click();
+      await p.waitForTimeout(300);
+      // The radio is visually hidden: its swatch (the label) takes the click.
+      await p.getByRole("radio", { name: /^(teal|sarcelle)$/i }).locator("..").click();
+      await p.waitForTimeout(300);
+      await p.mouse.move(0, 0);
+    } },
   { name: "pool-share", role: "teacher", path: "/pools", fold: true, act: async (p) => {
       await openRowMenu(p, /^(actions)$/i);
       await p.getByRole("menuitem", { name: /^(share|partager)…$/i }).click();

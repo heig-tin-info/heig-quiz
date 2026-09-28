@@ -1,8 +1,11 @@
 import { lazy, Suspense, useState } from "react";
 
+import type { PoolColor } from "@quiz/contracts";
+
 import { useT } from "../i18n";
 import { Button, Modal, Spinner } from "../ui";
 import { IconTile } from "./IconTile";
+import { PoolColorSwatches } from "./PoolColorSwatches";
 import { POOL_ICONS } from "./poolIcons";
 
 /**
@@ -17,6 +20,12 @@ import { POOL_ICONS } from "./poolIcons";
  *
  * Picking is the action, so the dialog has no primary button at all: the
  * footer only carries the step change.
+ *
+ * The COLOUR (#213) is chosen on the way: the swatch row sits above the
+ * shelf, every tile — on the shelf and in the catalogue — previews its icon
+ * in it, and picking an icon takes both. So the dialog keeps its one intent,
+ * "give this pool its look", and no second button appears: a teacher who only
+ * wants a colour picks it, then the icon already outlined.
  */
 
 /** 1500 names and their lazy imports: downloaded when, and if, they are asked for. */
@@ -24,18 +33,23 @@ const IconCatalogue = lazy(() => import("./IconCatalogue"));
 
 export function PoolIconPicker({
   value,
+  color: initialColor,
   onPick,
   onClose,
 }: {
   /** The pool's current icon; null is the default. */
   value: string | null;
-  /** A tile was picked: the caller stores it and takes the dialog back. */
-  onPick: (icon: string | null) => void;
-  /** Escape, the X, or "Back": the dialog closes with the icon unchanged. */
+  /** The pool's current colour; null is grey, the default. */
+  color: PoolColor | null;
+  /** A tile was picked: the caller stores both and takes the dialog back. */
+  onPick: (icon: string | null, color: PoolColor | null) => void;
+  /** Escape, the X, or "Back": the dialog closes with the icon and colour unchanged. */
   onClose: () => void;
 }) {
   const t = useT();
   const [all, setAll] = useState(false);
+  const [color, setColor] = useState(initialColor);
+  const pick = (icon: string | null) => onPick(icon, color);
 
   return (
     <Modal
@@ -56,25 +70,30 @@ export function PoolIconPicker({
     >
       {all ? (
         <Suspense fallback={<Spinner className="py-16" label={t("common.loading")} />}>
-          <IconCatalogue value={value} onPick={onPick} />
+          <IconCatalogue value={value} color={color} onPick={pick} />
         </Suspense>
       ) : (
-        <div className="grid grid-cols-5 gap-2 sm:grid-cols-8">
-          <IconTile
-            label={t("pools.icon.default")}
-            icon={null}
-            selected={value === null}
-            onPick={() => onPick(null)}
-          />
-          {POOL_ICONS.map((name) => (
+        <div className="space-y-5">
+          <PoolColorSwatches value={color} onChange={setColor} />
+          <div className="grid grid-cols-5 gap-2 sm:grid-cols-8">
             <IconTile
-              key={name}
-              label={name}
-              icon={name}
-              selected={value === name}
-              onPick={() => onPick(name)}
+              label={t("pools.icon.default")}
+              icon={null}
+              color={color}
+              selected={value === null}
+              onPick={() => pick(null)}
             />
-          ))}
+            {POOL_ICONS.map((name) => (
+              <IconTile
+                key={name}
+                label={name}
+                icon={name}
+                color={color}
+                selected={value === name}
+                onPick={() => pick(name)}
+              />
+            ))}
+          </div>
         </div>
       )}
     </Modal>

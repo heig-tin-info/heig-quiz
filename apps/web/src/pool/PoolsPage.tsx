@@ -15,7 +15,13 @@ import {
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import { PoolInUse, type Me, type Pool, type PoolSummary } from "@quiz/contracts";
+import {
+  PoolInUse,
+  type Me,
+  type Pool,
+  type PoolColor,
+  type PoolSummary,
+} from "@quiz/contracts";
 
 import { api, ApiError, useMe } from "../api";
 import { useConfirm } from "../confirm";
@@ -265,11 +271,12 @@ export function PoolFormModal({
   const qc = useQueryClient();
   const [name, setName] = useState(pool?.name ?? "");
   const [icon, setIcon] = useState<string | null>(pool?.icon ?? null);
+  const [color, setColor] = useState<PoolColor | null>(pool?.color ?? null);
   const [step, setStep] = useState<"form" | "icon">(startAt);
 
   const save = useMutation({
     mutationFn: () => {
-      const body = JSON.stringify({ name: name.trim(), icon });
+      const body = JSON.stringify({ name: name.trim(), icon, color });
       return pool
         ? api<Pool>(`/app/api/pools/${pool.id}`, { method: "PATCH", body })
         : api<Pool>("/app/api/pools", { method: "POST", body });
@@ -284,8 +291,10 @@ export function PoolFormModal({
     return (
       <PoolIconPicker
         value={icon}
-        onPick={(picked) => {
+        color={color}
+        onPick={(picked, pickedColor) => {
           setIcon(picked);
+          setColor(pickedColor);
           setStep("form");
         }}
         // Opened straight on the picker: there is no form step to go back to
@@ -318,7 +327,7 @@ export function PoolFormModal({
               aria-label={t("pools.icon.change")}
               className="inline-flex size-8.5 items-center justify-center rounded-field border border-line-strong bg-surface text-fg-muted transition-colors hover:border-fg-faint hover:text-fg"
             >
-              <PoolIcon icon={icon} className="size-4.5" />
+              <PoolIcon icon={icon} color={color} className="size-4.5" />
             </button>
           </Tip>
         </div>
@@ -364,7 +373,7 @@ function PoolCard({
         className="flex w-full flex-1 items-start gap-3 p-4 pr-11 text-left transition-colors hover:bg-surface-2/50"
       >
         <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-field bg-surface-2 text-fg-muted">
-          <PoolIcon icon={pool.icon} className="size-6" />
+          <PoolIcon icon={pool.icon} color={pool.color} className="size-6" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-bold">{pool.name}</span>
@@ -415,7 +424,11 @@ function PoolRow({
     >
       <td className={T.td}>
         <span className="flex min-w-0 items-center gap-2.5">
-          <PoolIcon icon={pool.icon} className="size-4 shrink-0 text-fg-muted" />
+          <PoolIcon
+            icon={pool.icon}
+            color={pool.color}
+            className="size-4 shrink-0 text-fg-muted"
+          />
           <span className="min-w-0 truncate font-semibold">{pool.name}</span>
         </span>
       </td>

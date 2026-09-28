@@ -28,6 +28,8 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import { POOL_COLORS } from "@quiz/contracts";
+
 import { users } from "./auth.js";
 import { courses } from "./org.js";
 
@@ -50,6 +52,8 @@ export const pools = pgTable(
     name: text("name").notNull(),
     /** A lucide icon name (`cpu`, `flask-conical`); null shows the default. */
     icon: text("icon"),
+    /** The icon's colour, a `PoolColor` name (`teal`); null is grey, the default. */
+    color: text("color", { enum: POOL_COLORS }),
     visibility: text("visibility", { enum: ["private", "shared", "public"] })
       .notNull()
       .default("private"),

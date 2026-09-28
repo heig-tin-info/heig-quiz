@@ -22,6 +22,7 @@ const POOL: PoolDetail = {
     id: "p1",
     name: "Programmation C",
     icon: null,
+    color: null,
     visibility: "private",
     ownerId: "u-me",
     isPersonal: false,

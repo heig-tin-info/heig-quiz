@@ -34,6 +34,7 @@ const makePool = (over: Partial<PoolSummary> = {}): PoolSummary => ({
   id: "p1",
   name: "Programmation C",
   icon: "code",
+  color: null,
   visibility: "private",
   ownerId: "u-me",
   isPersonal: false,
@@ -130,7 +131,67 @@ describe("PoolsPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Create pool" }));
 
     const post = calls.find((c) => c.method === "POST");
-    expect(post?.body).toEqual({ name: "Chimie", icon: "flask-conical" });
+    // Grey, the default colour, travels as null (#213).
+    expect(post?.body).toEqual({ name: "Chimie", icon: "flask-conical", color: null });
+  });
+
+  it("colours the icon from the same dialog and saves it with the icon (#213)", async () => {
+    const { calls } = mockFetch({
+      [`GET ${POOLS}`]: ok([makePool()]),
+      [`PATCH ${POOLS}/p1`]: ok(makePool({ color: "cyan" })),
+    });
+    renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient: withMe() });
+    await screen.findByText("Programmation C");
+
+    await userEvent.click(screen.getByRole("button", { name: "Actions" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /Change icon/ }));
+
+    // Sixteen swatches, each named, grey (the default) chosen.
+    const swatches = within(screen.getByRole("group", { name: "Colour" })).getAllByRole("radio");
+    expect(swatches).toHaveLength(16);
+    expect(screen.getByRole("radio", { name: "Grey (default)" })).toBeChecked();
+
+    // A click, then the arrow keys walk the row.
+    await userEvent.click(screen.getByRole("radio", { name: "Teal" }));
+    expect(screen.getByRole("radio", { name: "Teal" })).toBeChecked();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(screen.getByRole("radio", { name: "Cyan" })).toBeChecked();
+
+    // Every tile previews its icon in the colour being chosen.
+    const tile = screen.getByRole("button", { name: "code" });
+    expect(tile).toHaveAttribute("aria-pressed", "true");
+    expect(tile.querySelector("svg")).toHaveClass("text-pool-cyan!");
+
+    // Picking the icon takes both back to the form; Save sends both.
+    await userEvent.click(tile);
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    const patch = calls.find((c) => c.method === "PATCH");
+    expect(patch?.body).toEqual({ name: "Programmation C", icon: "code", color: "cyan" });
+  });
+
+  it("draws a pool's colour on its card and keeps grey as it always was (#213)", async () => {
+    mockFetch({
+      [`GET ${POOLS}`]: ok([
+        makePool({ color: null }),
+        makePool({
+          id: "p2",
+          name: "Électronique",
+          color: "violet",
+          role: "reader",
+          ownerId: "t1",
+        }),
+      ]),
+    });
+    renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient: withMe() });
+    const grey = await screen.findByRole("button", { name: /Programmation C/ });
+    expect(grey.querySelector("svg")?.getAttribute("class")).not.toMatch(/text-pool-/);
+    // A reader sees the colour...
+    const coloured = screen.getByRole("button", { name: /Électronique/ });
+    expect(coloured.querySelector("svg")).toHaveClass("text-pool-violet!");
+    // ...and is offered no way to change it.
+    await userEvent.click(screen.getAllByRole("button", { name: "Actions" })[1]!);
+    const menu = screen.getByRole("menu");
+    expect(within(menu).queryByRole("menuitem", { name: /Change icon/ })).toBeNull();
   });
 
   it("switches to the table reading and keeps the same facts", async () => {

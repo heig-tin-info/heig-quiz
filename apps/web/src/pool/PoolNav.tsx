@@ -82,7 +82,7 @@ function PoolRow({
         drop.over && "bg-accent-soft text-accent outline-2 outline-offset-[-2px] outline-accent",
       )}
     >
-      <PoolIcon icon={pool.icon} className="size-4 shrink-0 text-fg-faint" />
+      <PoolIcon icon={pool.icon} color={pool.color} className="size-4 shrink-0 text-fg-faint" />
       <span className="min-w-0 flex-1 truncate">{pool.name}</span>
       <span className="shrink-0 tabular-nums text-[11px] text-fg-faint">
         {pool.questionCount}

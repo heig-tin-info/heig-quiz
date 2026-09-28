@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 
-import type { Pool, PoolInUse, PoolRole, PoolSummary } from "@quiz/contracts";
+import type { Pool, PoolColor, PoolInUse, PoolRole, PoolSummary } from "@quiz/contracts";
 import { displayName, effectivePoolRole } from "@quiz/domain";
 
 import { isForeignKeyViolation, type Db } from "../../db/client.js";
@@ -30,6 +30,7 @@ export function poolJson(pool: PoolRow): Pool {
     id: pool.id,
     name: pool.name,
     icon: pool.icon,
+    color: pool.color,
     visibility: pool.visibility,
     ownerId: pool.ownerId,
     isPersonal: pool.isPersonal,
@@ -104,6 +105,7 @@ export async function createPool(
     visibility: "private" | "shared" | "public";
     ownerId: string;
     icon?: string | null | undefined;
+    color?: PoolColor | null | undefined;
   },
 ) {
   const [row] = await db
@@ -112,6 +114,7 @@ export async function createPool(
       id: randomUUID(),
       name: input.name,
       icon: input.icon ?? null,
+      color: input.color ?? null,
       visibility: input.visibility,
       ownerId: input.ownerId,
     })
@@ -166,6 +169,7 @@ export async function updatePool(
   patch: {
     name?: string | undefined;
     icon?: string | null | undefined;
+    color?: PoolColor | null | undefined;
     visibility?: "private" | "shared" | "public" | undefined;
   },
 ) {

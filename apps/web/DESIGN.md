@@ -641,10 +641,46 @@ live in `ui/state.ts`, each written once.
   window: "more" is the same decision seen wider.
   Picking IS the action, so the dialog has no primary button; the footer only
   changes step. A tile is a value you switch on and wears the `ToggleChip`
-  language (hairline at rest, `accent-soft` on an `accent` border when it is
-  the current one). A tile's label is the RAW lucide name (`flask-conical`),
+  language at rest (a hairline), but its pressed state is an INK ring — `fg`
+  border plus a 1 px `fg` ring on `surface-2` — and not the accent: the tile
+  draws its icon in the pool's colour, and a red border around a red icon
+  says nothing. A tile's label is the RAW lucide name (`flask-conical`),
   untranslated on purpose: it is an identifier, like a SHA or a tag, and in
   the search step it is the very string the reader typed.
+- Pool colour (#213): the colour of the ICON, and of nothing else — never
+  the card, the name or a page header. Grey is the default and is `null`,
+  like the default icon, so a pool nobody coloured looks as it always did
+  (the call site's `fg-muted` / `fg-faint`). The fifteen others are a closed
+  set of NAMES (`PoolColor` in `@quiz/contracts`), each a `--pool-<name>`
+  token swapped under `html.dark`, never a stored hex. Decoration only
+  (N-A11Y-03): the name and the icon stay the identifiers. The colours come
+  first in the icon picker, as a row of round swatches — native radios, so
+  the arrow keys walk the row and Tab leaves it in one step, each named in
+  both languages — and every tile previews its icon in the colour being
+  chosen; picking an icon takes both, so no second button appears. The
+  chosen swatch is ringed in ink with a 2 px `surface` offset, for the same
+  reason as the tile. Held to 3:1 (a graphic object) on `surface` and on
+  `surface-2`, the card's icon well; the Tailwind 600 shade where it holds
+  that, the 700 where it does not (amber, yellow, lime, green), the 400 in
+  dark:
+
+  | Colour | Light | on `surface` / `surface-2` | Dark | on `surface` / `surface-2` |
+  | --- | --- | --- | --- | --- |
+  | red | `#dc2626` | 4.83 / 4.28 | `#f87171` | 6.29 / 5.75 |
+  | orange | `#ea580c` | 3.56 / 3.16 | `#fb923c` | 7.68 / 7.02 |
+  | amber | `#b45309` | 5.02 / 4.45 | `#fbbf24` | 10.42 / 9.52 |
+  | yellow | `#a16207` | 4.92 / 4.36 | `#facc15` | 11.36 / 10.38 |
+  | lime | `#4d7c0f` | 4.99 / 4.43 | `#a3e635` | 11.53 / 10.54 |
+  | green | `#15803d` | 5.02 / 4.45 | `#4ade80` | 9.98 / 9.12 |
+  | emerald | `#059669` | 3.77 / 3.34 | `#34d399` | 9.05 / 8.27 |
+  | teal | `#0d9488` | 3.74 / 3.32 | `#2dd4bf` | 9.34 / 8.54 |
+  | cyan | `#0891b2` | 3.68 / 3.26 | `#22d3ee` | 9.62 / 8.80 |
+  | sky | `#0284c7` | 4.10 / 3.63 | `#38bdf8` | 8.12 / 7.42 |
+  | blue | `#2563eb` | 5.17 / 4.58 | `#60a5fa` | 6.84 / 6.25 |
+  | indigo | `#4f46e5` | 6.29 / 5.57 | `#818cf8` | 5.83 / 5.33 |
+  | violet | `#7c3aed` | 5.70 / 5.05 | `#a78bfa` | 6.39 / 5.84 |
+  | purple | `#9333ea` | 5.38 / 4.77 | `#c084fc` | 6.58 / 6.02 |
+  | pink | `#db2777` | 4.60 / 4.07 | `#f472b6` | 6.57 / 6.00 |
 - Kbd: a key cap for the places that teach a shortcut — 6 px radius, hairline,
   `surface-2`, 11 px / 500 in `fg-muted`, 6 px horizontal padding. `font-sans`,
   not mono: the mono face is reserved for SHAs, repository names and what a
