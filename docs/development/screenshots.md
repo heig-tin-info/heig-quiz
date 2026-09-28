@@ -79,7 +79,7 @@ captured back to back, so they show the same state.
 | --- | --- |
 | `seeded` | exactly what `pnpm seed` left: four evaluations, "Test 0" closed and graded without a runner |
 | `graded` | one grading pass with the real runner settled the code answers of "Test 0" |
-| `lobby` | the exercise "Quiz d'entraînement" holds all four question types; Léa and Noah wait in its lobby |
+| `lobby` | the exercise "Quiz d'entraînement" holds a multiple choice, a short answer, a cloze and a code question; Léa and Noah wait in its lobby |
 | `running` | the teacher started it; Noah handed in, Léa answered two questions, Emma one, Louis only opened it |
 | `poll-open` | a live poll on a multiple-choice question, three students answered through the join code |
 | `poll-revealed` | the teacher revealed the answer |

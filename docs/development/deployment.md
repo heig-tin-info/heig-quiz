@@ -3,7 +3,7 @@
 This page is the operator's runbook: the shape of the deployment, the exact
 commands for the two machines, and what to do on a bad day. The root
 `deploy.md` only points here. Its section numbers (§1 to §8) are kept on
-purpose, because scripts and ADRs cite them.
+purpose, because comments in the scripts and compose files cite them.
 
 Production is `https://quiz.chevallier.io` and staging is
 `https://quiz.dev.chevallier.io` (§8). They run on two virtual machines and
@@ -148,9 +148,9 @@ precondition of the 4 h RTO ([ADR-010](../adr/ADR-010-stockage-secrets.md)).
 `quiz-runner.service` from it at `daemon-reload`, and `deploy.sh` installs it
 at every deploy. The unit runs the CI image with host networking,
 `HOST=127.0.0.1` and `PORT=3200`, so the service is reachable from the host's
-loopback only and Caddy is the single way in. Two things come from the host,
-read-only: the rootful socket `/run/podman/podman.sock` and the seccomp
-profile. The service itself has a read-only root, a tmpfs on `/tmp`, no
+loopback only and Caddy is the single way in. Two things come from the host:
+the rootful socket `/run/podman/podman.sock` (mounted as is, since the
+service must write to it) and the seccomp profile (read-only). The service itself has a read-only root, a tmpfs on `/tmp`, no
 capability, `NoNewPrivileges` and a 512 MB memory cap. `Pull=never`: the
 image is pulled by the deploy script with the CI's token, never at boot.
 
@@ -349,8 +349,11 @@ Re-run the `deploy-production` job of the run of the healthy commit (Actions
 manual deploy above with that sha. The sha tags stay on GHCR, so every past
 commit remains deployable.
 
-Migrations are additive, so an older image runs against a newer schema; when
-in doubt, restore the pre-migration dump first (§6). A rollback holds until
+Most migrations are additive, so an older image runs against a newer
+schema. Two are not: `0008_schema_audit.sql` (drops `enrollments.status` and
+three unused tables) and `0022_teams_uploaded_app.sql` (drops `teams_links`).
+A rollback to an image older than either needs that migration's
+pre-migration dump restored first (§6); when in doubt, restore it anyway. A rollback holds until
 the next approved promotion.
 
 !!! warning "Never build on the application VM"

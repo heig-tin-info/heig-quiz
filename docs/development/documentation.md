@@ -32,7 +32,7 @@ pnpm docs:build               # zensical build: the static site in site/ (gitign
 | `docs/spec/` | the product specification, nine chapters |
 | `docs/adr/` | the architecture decision records |
 | `docs/development/` | these pages |
-| `docs/PLAN-MVP.md` | the implementation plan |
+| `docs/PLAN-MVP.md` | the phase-1 implementation plan, archived |
 | `docs/assets/screenshots/` | the screenshots, two files per image (see below) |
 
 A page appears in the site only when it is listed in the `nav` array of

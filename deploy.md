@@ -4,7 +4,7 @@ The deployment runbook lives in
 [`docs/development/deployment.md`](docs/development/deployment.md), published
 at <https://heig-tin-info.github.io/heig-quiz/development/deployment/>.
 
-Comments in the scripts, the compose files and the ADRs cite "deploy.md §n":
+Comments in the scripts and the compose files cite "deploy.md §n":
 the runbook keeps the same numbering.
 
 | § | Section |
