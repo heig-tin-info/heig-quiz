@@ -172,6 +172,9 @@ importers:
       '@quiz/registry':
         specifier: workspace:*
         version: link:../../packages/registry
+      '@quiz/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@runno/wasi':
         specifier: 0.10.0
         version: 0.10.0

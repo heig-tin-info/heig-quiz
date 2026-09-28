@@ -9,8 +9,6 @@ const base = {
   id: "p",
   label: "Statement",
   value: "Hello",
-  labelClassName: "lbl",
-  textareaClassName: "ta",
 };
 
 describe("PromptField", () => {

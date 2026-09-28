@@ -21,7 +21,7 @@ import { LockedEditor } from "./LockedEditor.js";
 import { initialRegions } from "./segments.js";
 import type { ProgramStudent } from "./schema.js";
 import type { CodePlayerStrings } from "./strings.js";
-import { badge, button, cx, hint, markdown } from "@quiz/ui";
+import { badge, buttonClass, cx, hint, markdown } from "@quiz/ui";
 
 /** Where a run is, for the one line the player shows while it gets there. */
 export type CodeRunStage = "loading" | "compiling" | "running";
@@ -326,7 +326,7 @@ export function RunButton({
   return (
     <button
       type="button"
-      className={button(variant, "sm", cx("relative overflow-hidden", className))}
+      className={buttonClass(variant, "sm", cx("relative overflow-hidden", className))}
       disabled={disabled || cooling}
       onClick={onClick}
     >

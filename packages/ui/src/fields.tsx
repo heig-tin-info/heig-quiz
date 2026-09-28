@@ -6,13 +6,15 @@
  */
 import type { ReactNode } from "react";
 
-import { cx, inputSm, label as labelToken } from "./styles.js";
+import { cx, inputClass, inputSize, label as labelToken } from "./styles.js";
 
 /**
- * The segmented control of `apps/web/src/ui/controls.tsx`, mirrored class for class:
- * a pill track on `surface-3`, the selected option lifted onto `surface` with
- * a hairline ring. Its track is 34 px tall, the height of a field, so a
- * segmented control and the fields beside it sit on one baseline.
+ * The segmented control of the whole product — `apps/web` re-exports this
+ * one: a pill track on `surface-3`, the selected option lifted onto `surface`
+ * with a hairline ring (selection is structure, never colour: the accent
+ * stays for primary actions). At `md` its track is 34 px tall, the height of
+ * a field, so a segmented control and the fields beside it sit on one
+ * baseline; `sm` is the dense toolbar variant.
  *
  * Native radios, visually hidden inside the labels: the arrow keys, the
  * grouping and the announcement come from the platform rather than from a
@@ -24,15 +26,25 @@ export function Segmented<T extends string>({
   options,
   onChange,
   disabled,
+  size = "md",
   wrap,
+  label,
   labelledBy,
 }: {
-  /** Groups the native radios (one editor holds several groups). */
+  /** Groups the native radios (one form holds several groups). */
   name: string;
   value: T;
   options: ReadonlyArray<{ value: T; label: ReactNode }>;
   onChange: (value: T) => void;
   disabled?: boolean | undefined;
+  size?: "sm" | "md" | undefined;
+  /**
+   * The name of the GROUP, for a radiogroup with no visible caption of its
+   * own — two segmented controls side by side ("Group by", "Sort by") are
+   * otherwise two anonymous rows of pills to a screen reader. With a visible
+   * caption, point at it with `labelledBy` instead.
+   */
+  label?: string | undefined;
   /**
    * Lets the pills fall on a second row instead of sizing the track to their
    * total width. Six policies do not fit the 288 px right column on one line,
@@ -50,6 +62,7 @@ export function Segmented<T extends string>({
   return (
     <div
       role="radiogroup"
+      {...(label === undefined ? {} : { "aria-label": label })}
       {...(labelledBy === undefined ? {} : { "aria-labelledby": labelledBy })}
       className={cx(
         "gap-0.5 bg-surface-3 p-0.75",
@@ -57,7 +70,7 @@ export function Segmented<T extends string>({
         // draws two half-circles the height of both rows. It becomes what it
         // now is — a recessed panel — and keeps the card radius of the design
         // scale, while the pills inside stay pills.
-        wrap ? "flex w-full flex-wrap rounded-card" : "inline-flex shrink-0 flex-wrap rounded-full",
+        wrap ? "flex w-full flex-wrap rounded-card" : "inline-flex shrink-0 rounded-full",
         disabled && "opacity-60",
       )}
     >
@@ -65,7 +78,8 @@ export function Segmented<T extends string>({
         <label
           key={o.value}
           className={cx(
-            "inline-flex h-7 items-center justify-center rounded-full px-3 text-[13px] font-medium transition-colors has-focus-visible:ring-2 has-focus-visible:ring-accent/50",
+            "inline-flex items-center justify-center rounded-full px-3 font-medium transition-colors has-focus-visible:ring-2 has-focus-visible:ring-accent/50",
+            size === "sm" ? "h-6 text-xs" : "h-7 text-[13px]",
             value === o.value
               ? "bg-surface text-fg ring-1 ring-line-strong/70"
               : cx("text-fg-muted", !disabled && "cursor-pointer hover:text-fg"),
@@ -146,7 +160,7 @@ export function NumberField({
   step,
   placeholder,
   width = "w-28",
-  inputClassName = inputSm,
+  size = "sm",
   "aria-label": ariaLabel,
   ...chrome
 }: FieldCellChrome & {
@@ -161,8 +175,8 @@ export function NumberField({
   step?: number | string | undefined;
   placeholder?: string | undefined;
   width?: string;
-  /** The field chrome of the caller's family; `inputSm` by default. */
-  inputClassName?: string;
+  /** The control height: `sm` 28 px in a dense row (the default), `md` 34 px in a form. */
+  size?: keyof typeof inputSize;
   /** When the visible label is shared by several rows ("Points" → "Points 2"). */
   "aria-label"?: string | undefined;
 }): ReactNode {
@@ -171,7 +185,7 @@ export function NumberField({
       <input
         id={id}
         type="number"
-        className={cx(inputClassName, width, "text-right tabular-nums")}
+        className={cx(inputClass, inputSize[size], width, "text-right tabular-nums")}
         {...(ariaLabel === undefined ? {} : { "aria-label": ariaLabel })}
         disabled={disabled}
         {...(min === undefined ? {} : { min })}

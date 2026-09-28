@@ -2,37 +2,28 @@ import { Check, ChevronDown, Loader2, Search } from "lucide-react";
 import { useId } from "react";
 import type { ReactNode } from "react";
 
-import { cx, HelpIcon, type IconType } from "./layers";
+import {
+  buttonClass,
+  cx,
+  inputClass,
+  inputSize,
+  label as fieldLabel,
+  Segmented,
+  textareaClass,
+  type ButtonSize,
+  type ButtonVariant,
+} from "@quiz/ui";
+
+import { HelpIcon, type IconType } from "./layers";
 
 // --- Buttons ---
 
-type ButtonVariant = "primary" | "secondary" | "subtle" | "ghost" | "danger";
-type ButtonSize = "sm" | "md" | "lg";
-
-const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-on-fill hover:bg-accent-hover",
-  secondary: "border border-line-strong bg-surface text-fg hover:bg-surface-2",
-  subtle: "bg-surface-3 text-fg hover:bg-line-strong/70",
-  ghost: "text-fg-muted hover:bg-surface-2 hover:text-fg",
-  danger: "bg-danger text-on-fill hover:opacity-90",
-};
-const BUTTON_SIZES: Record<ButtonSize, string> = {
-  sm: "h-7 px-3 text-[13px] [&_svg]:size-3.5",
-  md: "h-8.5 px-4 text-sm [&_svg]:size-4",
-  lg: "h-10 px-5 text-sm [&_svg]:size-4",
-};
-
-/** Class list of a button; shared by <Button>, <LinkButton> and raw anchors. */
-export function buttonClass(variant: ButtonVariant = "primary", size: ButtonSize = "md", extra = "") {
-  return cx(
-    // disabled:pointer-events-none: hovering a disabled button must hit the
-    // wrapping Tip span (disabled controls swallow mouse events).
-    "inline-flex shrink-0 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-[background-color,color,border-color,opacity,transform] duration-150 ease-out-emphasized active:scale-97 disabled:pointer-events-none disabled:opacity-50",
-    BUTTON_VARIANTS[variant],
-    BUTTON_SIZES[size],
-    extra,
-  );
-}
+/*
+ * The class list of a button (`buttonClass`, five variants, three sizes) is
+ * written once, in `@quiz/ui`, where the question types read it too; <Button>,
+ * <LinkButton> and the raw anchors of the app wear the same list.
+ */
+export { buttonClass };
 
 export function Button({
   children,
@@ -80,22 +71,15 @@ export function LinkButton({
 
 // --- Form controls ---
 
-/**
- * Field chrome, with no width and no height of its own. Tailwind resolves
- * conflicting utilities by their order in the generated stylesheet, not by
- * their order in the class attribute, so a `w-16` or an `h-8` written next to
- * this string was never guaranteed to win. Size comes from `inputSize` and
- * width from the caller, which both compose instead of fighting.
+/*
+ * The field chrome (`inputClass`, no width and no height of its own), the two
+ * control heights (`inputSize`) and the multi-line field (`textareaClass`)
+ * are written once, in `@quiz/ui`: the editors and players of the question
+ * types wear them too, so a field in a question editor is the field of every
+ * other form of the app.
  */
-export const inputClass =
-  "rounded-field border border-line-strong bg-surface px-3 text-sm text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50 disabled:hover:border-line-strong";
-
-/** Control heights, aligned on the button scale of DESIGN.md (sm 28, md 34). */
-type InputSize = "sm" | "md";
-export const inputSize: Record<InputSize, string> = {
-  sm: "h-7",
-  md: "h-8.5",
-};
+export { inputClass, inputSize, textareaClass };
+type InputSize = keyof typeof inputSize;
 
 /**
  * Label above a control; used by Field, Select and Textarea.
@@ -118,7 +102,7 @@ export function FieldLabel({
   hint?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-1 text-[13px] font-medium text-fg">
+    <div className={fieldLabel}>
       <label htmlFor={htmlFor}>{children}</label>
       {help ? <HelpIcon topic={help} /> : null}
       {hint ? <span className="ml-auto font-normal text-fg-faint">{hint}</span> : null}
@@ -220,7 +204,7 @@ export function Textarea({
     <textarea
       {...props}
       id={id}
-      className={cx(inputClass, "min-h-24 w-full py-2 leading-relaxed", className)}
+      className={cx(textareaClass, "min-h-24 w-full", className)}
     />
   );
   if (!label) return control;
@@ -372,69 +356,12 @@ export function Switch({
   );
 }
 
-/**
- * Segmented control for a small set of mutually exclusive choices: the
- * selected chip is raised (surface + hairline) — selection is structure,
- * never color, the accent stays reserved for primary actions. Native radios
- * underneath (sr-only) keep it a keyboard-accessible radiogroup.
+/*
+ * The segmented control (`Segmented`) is written once, in `@quiz/ui`: the
+ * question editors use the very same one, their `wrap` and `labelledBy`
+ * beside the app's `size` and `label`.
  */
-export function Segmented<T extends string>({
-  name,
-  value,
-  options,
-  onChange,
-  disabled,
-  size = "md",
-  label,
-}: {
-  /** Groups the native radios (one form can hold several groups). */
-  name: string;
-  value: T;
-  options: { value: T; label: ReactNode }[];
-  onChange: (value: T) => void;
-  disabled?: boolean;
-  size?: "sm" | "md";
-  /**
-   * The name of the GROUP, for a radiogroup that has no visible caption of
-   * its own — two segmented controls side by side ("Group by", "Sort by")
-   * are otherwise two anonymous rows of pills to a screen reader.
-   */
-  label?: string;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      {...(label === undefined ? {} : { "aria-label": label })}
-      className={cx(
-        "inline-flex shrink-0 gap-0.5 rounded-full bg-surface-3 p-0.75",
-        disabled && "opacity-60",
-      )}
-    >
-      {options.map((o) => (
-        <label
-          key={o.value}
-          className={cx(
-            "inline-flex items-center justify-center rounded-full px-3 font-medium transition-colors has-focus-visible:ring-2 has-focus-visible:ring-accent/50",
-            size === "sm" ? "h-6 text-xs" : "h-7 text-[13px]",
-            value === o.value
-              ? "bg-surface text-fg ring-1 ring-line-strong/70"
-              : cx("text-fg-muted", !disabled && "cursor-pointer hover:text-fg"),
-          )}
-        >
-          <input
-            type="radio"
-            name={name}
-            className="sr-only"
-            checked={value === o.value}
-            onChange={() => onChange(o.value)}
-            disabled={disabled}
-          />
-          {o.label}
-        </label>
-      ))}
-    </div>
-  );
-}
+export { Segmented };
 
 /**
  * Settings row: label + a description of the CURRENT choice on the left

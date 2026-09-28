@@ -54,16 +54,17 @@ import {
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
 import {
   AsideSection,
-  cardTitleClass,
   cx,
-  helpClass,
+  hint,
   inputClass,
+  inputSize,
   IssueList,
-  labelClass,
+  label,
   patchAt,
   PromptField,
   removeAt,
   sectionClass,
+  sectionTitle,
   Segmented,
 } from "@quiz/ui";
 import {
@@ -275,7 +276,7 @@ export function McqEditor({
    */
   const scoring = (
     <AsideSection aside={aside}>
-      <h3 className={aside ? cardTitleClass : labelClass}>{s.scoring}</h3>
+      <h3 className={aside ? sectionTitle : label}>{s.scoring}</h3>
 
       {/*
        * The policy, and only in `multiple` mode: with one key there is
@@ -292,7 +293,7 @@ export function McqEditor({
       {multiple ? (
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className={labelClass} id="mcq-policy-label">
+            <span className={label} id="mcq-policy-label">
               {s.policy}
             </span>
             {renderHelp ? renderHelp("mcq-policies") : null}
@@ -309,7 +310,7 @@ export function McqEditor({
           {/* What the one chosen policy does, in one line: a legend of six
               lines is a table nobody reads, and the help "?" holds the long
               form. */}
-          <p className={helpClass} data-testid="mcq-policy-desc">
+          <p className={hint} data-testid="mcq-policy-desc">
             {s[(POLICY_OPTIONS.find((o) => o.value === config.policy) ?? POLICY_OPTIONS[0]!).desc]}
           </p>
         </div>
@@ -317,7 +318,7 @@ export function McqEditor({
 
       {multiple ? (
         <div className="flex flex-col gap-1.5">
-          <label className={labelClass} htmlFor="mcq-max">
+          <label className={label} htmlFor="mcq-max">
             {s.maxSelections}
           </label>
           <input
@@ -325,7 +326,7 @@ export function McqEditor({
             type="number"
             min={1}
             max={MCQ_MAX_CHOICES}
-            className={cx(inputClass, "w-28 tabular-nums")}
+            className={cx(inputClass, inputSize.md, "w-28 tabular-nums")}
             value={config.maxSelections ?? ""}
             disabled={disabled}
             onChange={(e) => {
@@ -335,7 +336,7 @@ export function McqEditor({
               onChange(next);
             }}
           />
-          <p className={helpClass}>{s.maxSelectionsHint}</p>
+          <p className={hint}>{s.maxSelectionsHint}</p>
           {/* A cap below the number of correct choices makes the full mark
               unreachable. The editor says so at once and the schema refuses
               the draft; `maxIssues` is the two merged into one line. */}
@@ -360,7 +361,7 @@ export function McqEditor({
           />
           {s.neverShuffle}
         </label>
-        <p className={cx(helpClass, "pl-6")}>{s.neverShuffleHint}</p>
+        <p className={cx(hint, "pl-6")}>{s.neverShuffleHint}</p>
       </div>
     </AsideSection>
   );
@@ -410,18 +411,16 @@ export function McqEditor({
           disabled={disabled}
           RichText={RichText}
           uploadImage={uploadAsset}
-          labelClassName={labelClass}
-          textareaClassName={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
         />
         <IssueList issues={issuesAt(issues, "prompt")} />
       </section>
 
       <section className={sectionClass}>
-        <h3 className={labelClass}>{s.choices}</h3>
+        <h3 className={label}>{s.choices}</h3>
         {/* A poll's key is optional, and the launcher says so once
             (ADR-014, addendum 2026-09-23): "Tick the correct answers" would
             contradict it. */}
-        {ungraded ? null : <p className={helpClass}>{s.choicesHint}</p>}
+        {ungraded ? null : <p className={hint}>{s.choicesHint}</p>}
 
         <DndContext
           sensors={sensors}
@@ -612,7 +611,7 @@ function ChoiceRow({
         <input
           type="text"
           id={choiceId(index)}
-          className={cx(inputClass, "min-w-0 flex-1")}
+          className={cx(inputClass, inputSize.md, "min-w-0 flex-1")}
           aria-label={`${s.choiceText} ${letter}`}
           value={choice.text}
           disabled={disabled}

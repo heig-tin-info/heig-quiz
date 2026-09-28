@@ -6,7 +6,7 @@
 import type { ReactNode } from "react";
 
 import { CheckboxField, FieldCell, NumberField } from "./fields.js";
-import { badge, button, cx, inputSm, sectionTitle } from "./styles.js";
+import { badge, buttonClass, cx, inputClass, inputSize, sectionTitle } from "./styles.js";
 
 /** The list with the row at `index` merged with `patch`; the others untouched. */
 export function patchAt<T>(list: readonly T[], index: number, patch: Partial<T>): T[] {
@@ -39,7 +39,7 @@ export function RowListHeader({
       <span className={badge()}>{count}</span>
       <button
         type="button"
-        className={button("secondary", "sm", "ml-auto")}
+        className={buttonClass("secondary", "sm", "ml-auto")}
         disabled={addDisabled}
         onClick={onAdd}
       >
@@ -86,7 +86,7 @@ export function RemoveRowButton({
   return (
     <button
       type="button"
-      className={button("ghost", "sm")}
+      className={buttonClass("ghost", "sm")}
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
@@ -154,7 +154,7 @@ export function RowHead({
       <FieldCell label={nameLabel} htmlFor={nameId} className="min-w-40 flex-1">
         <input
           id={nameId}
-          className={cx(inputSm, "w-full font-medium")}
+          className={cx(inputClass, inputSize.sm, "w-full font-medium")}
           aria-label={nameAriaLabel}
           disabled={disabled}
           value={name}

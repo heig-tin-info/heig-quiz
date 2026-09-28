@@ -12,6 +12,8 @@ import {
 import type { ComponentType, ReactNode, RefCallback, RefObject } from "react";
 import { createPortal } from "react-dom";
 
+import { cx } from "@quiz/ui";
+
 import { useI18n, useT } from "../i18n";
 
 /*
@@ -20,9 +22,12 @@ import { useI18n, useT } from "../i18n";
  * mode by themselves, so components carry no `dark:` variants.
  */
 
-/** Joins class names, skipping falsy entries. */
-export const cx = (...parts: (string | false | null | undefined)[]) =>
-  parts.filter(Boolean).join(" ");
+/**
+ * Joins class names, skipping falsy entries. Written once, in `@quiz/ui`,
+ * which the question-type packages use too: the app and the `qt-*` surfaces
+ * it hosts compose their classes with the same function.
+ */
+export { cx };
 
 export type IconType = ComponentType<{ className?: string }>;
 

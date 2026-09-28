@@ -25,18 +25,21 @@ import { explainMatcher } from "./explain.js";
 import { shortEditorStrings, type ShortEditorStringKey } from "./strings.js";
 import {
   buttonClass,
+  caption,
   CheckboxField,
   cx,
   FieldCell,
-  helpClass,
+  hint,
   inputClass,
+  inputSize,
   IssueList,
-  labelClass,
+  label,
   NumberField,
   PromptField,
   removeAt,
   sectionClass,
   Segmented,
+  textareaClass,
 } from "@quiz/ui";
 
 type ShortEditorProps = Omit<EditorProps<ShortConfig>, "uploadAsset"> & {
@@ -123,7 +126,7 @@ function MatcherFields({
 }) {
   const id = (name: string) => `${idBase}-${name}`;
   const wide = "col-span-2 sm:min-w-48 sm:flex-1";
-  const narrow = { inputClassName: inputClass, width: "w-full sm:w-28" };
+  const narrow = { size: "md", width: "w-full sm:w-28" } as const;
 
   switch (matcher.kind) {
     /*
@@ -136,7 +139,7 @@ function MatcherFields({
           <input
             id={id("value")}
             type="text"
-            className={cx(inputClass, "w-full")}
+            className={cx(inputClass, inputSize.md, "w-full")}
             value={matcher.value}
             disabled={disabled}
             onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
@@ -150,7 +153,7 @@ function MatcherFields({
             <input
               id={id("pattern")}
               type="text"
-              className={cx(inputClass, "w-full font-mono text-[13px]")}
+              className={cx(inputClass, inputSize.md, "w-full font-mono text-[13px]")}
               value={matcher.pattern}
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, pattern: e.target.value })}
@@ -160,7 +163,7 @@ function MatcherFields({
             <input
               id={id("flags")}
               type="text"
-              className={cx(inputClass, "w-full font-mono text-[13px] sm:w-20")}
+              className={cx(inputClass, inputSize.md, "w-full font-mono text-[13px] sm:w-20")}
               value={matcher.flags}
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, flags: e.target.value })}
@@ -198,7 +201,7 @@ function MatcherFields({
           <FieldCell label={s.toleranceMode} htmlFor={id("mode")} {...rowCell(index)}>
             <select
               id={id("mode")}
-              className={cx(inputClass, "w-full sm:w-36")}
+              className={cx(inputClass, inputSize.md, "w-full sm:w-36")}
               value={matcher.toleranceMode}
               disabled={disabled}
               onChange={(e) =>
@@ -213,7 +216,7 @@ function MatcherFields({
             <input
               id={id("unit")}
               type="text"
-              className={cx(inputClass, "w-full sm:w-24")}
+              className={cx(inputClass, inputSize.md, "w-full sm:w-24")}
               value={matcher.unit ?? ""}
               disabled={disabled}
               onChange={(e) => {
@@ -247,7 +250,7 @@ function MatcherFields({
             <input
               id={id("value")}
               type="date"
-              className={cx(inputClass, "w-full sm:w-40")}
+              className={cx(inputClass, inputSize.md, "w-full sm:w-40")}
               value={matcher.value}
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
@@ -277,7 +280,7 @@ function MatcherFields({
             <input
               id={id("value")}
               type="time"
-              className={cx(inputClass, "w-full sm:w-32")}
+              className={cx(inputClass, inputSize.md, "w-full sm:w-32")}
               value={matcher.value}
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
@@ -302,7 +305,7 @@ function MatcherFields({
           <textarea
             id={id("rubric")}
             rows={2}
-            className={cx(inputClass, "w-full resize-y")}
+            className={cx(textareaClass, "w-full resize-y")}
             value={matcher.rubric}
             disabled={disabled}
             onChange={(e) => onPatch({ ...matcher, rubric: e.target.value })}
@@ -342,7 +345,7 @@ function ConstraintFields({
   s: Strings;
   onPatch: (next: ShortConstraints) => void;
 }) {
-  const field = { labelClassName: labelClass, inputClassName: inputClass };
+  const field = { size: "md" } as const;
 
   switch (kind) {
     case "text":
@@ -404,21 +407,21 @@ function ConstraintFields({
     case "date":
       return (
         <>
-          <FieldCell labelClassName={labelClass} label={s.from} htmlFor="short-from">
+          <FieldCell label={s.from} htmlFor="short-from">
             <input
               id="short-from"
               type="date"
-              className={cx(inputClass, "w-40")}
+              className={cx(inputClass, inputSize.md, "w-40")}
               value={constraints.from ?? ""}
               disabled={disabled}
               onChange={(e) => onPatch(withBound(constraints, "from", e.target.value || undefined))}
             />
           </FieldCell>
-          <FieldCell labelClassName={labelClass} label={s.to} htmlFor="short-to">
+          <FieldCell label={s.to} htmlFor="short-to">
             <input
               id="short-to"
               type="date"
-              className={cx(inputClass, "w-40")}
+              className={cx(inputClass, inputSize.md, "w-40")}
               value={constraints.to ?? ""}
               disabled={disabled}
               onChange={(e) => onPatch(withBound(constraints, "to", e.target.value || undefined))}
@@ -471,8 +474,6 @@ export function ShortEditor({
           disabled={disabled}
           RichText={RichText}
           uploadImage={uploadAsset}
-          labelClassName={labelClass}
-          textareaClassName={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
         />
         <IssueList issues={issuesAt(issues, "prompt")} />
       </section>
@@ -486,7 +487,7 @@ export function ShortEditor({
       <section className={sectionClass}>
         <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
           <div className="flex flex-col gap-1.5">
-            <span className={labelClass} id="short-kind-label">
+            <span className={label} id="short-kind-label">
               {s.kind}
             </span>
             <Segmented
@@ -514,13 +515,13 @@ export function ShortEditor({
         <IssueList issues={issuesAt(issues, "constraints")} />
 
         <div className="flex flex-col gap-1.5">
-          <label className={labelClass} htmlFor="short-placeholder">
+          <label className={label} htmlFor="short-placeholder">
             {s.placeholder}
           </label>
           <input
             id="short-placeholder"
             type="text"
-            className={cx(inputClass, "w-full")}
+            className={cx(inputClass, inputSize.md, "w-full")}
             value={config.placeholder ?? ""}
             disabled={disabled}
             onChange={(e) => {
@@ -537,8 +538,8 @@ export function ShortEditor({
           none (`EditorProps.ungraded`): its tally folds spellings by itself. */}
       {ungraded ? null : (
         <section className={sectionClass}>
-          <h3 className={labelClass}>{s.prefilters}</h3>
-          <p className={helpClass}>{s.prefiltersHint}</p>
+          <h3 className={label}>{s.prefilters}</h3>
+          <p className={hint}>{s.prefiltersHint}</p>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
             <CheckboxField
               label={s.prefilterTrim}
@@ -557,8 +558,8 @@ export function ShortEditor({
       )}
 
       <section className={sectionClass}>
-        <h3 className={labelClass}>{s.matchers}</h3>
-        <p className={helpClass}>{s.matchersHint}</p>
+        <h3 className={label}>{s.matchers}</h3>
+        <p className={hint}>{s.matchersHint}</p>
         <ol className="flex flex-col gap-2">
           {config.matchers.map((matcher, index) => {
             const rowId = `${idBase}-m${index}`;
@@ -581,7 +582,7 @@ export function ShortEditor({
                     >
                       <select
                         id={`${rowId}-kind`}
-                        className={cx(inputClass, "w-full sm:w-44")}
+                        className={cx(inputClass, inputSize.md, "w-full sm:w-44")}
                         value={matcher.kind}
                         disabled={disabled}
                         onChange={(e) =>
@@ -616,7 +617,7 @@ export function ShortEditor({
                             min={0}
                             max={1}
                             step={0.25}
-                            className={cx(inputClass, "w-20 tabular-nums")}
+                            className={cx(inputClass, inputSize.md, "w-20 tabular-nums")}
                             aria-describedby={`${rowId}-points-hint`}
                             value={matcher.points}
                             disabled={disabled}
@@ -624,7 +625,9 @@ export function ShortEditor({
                               replace(index, { ...matcher, points: Number(e.target.value) })
                             }
                           />
-                          <span id={`${rowId}-points-hint`} className={helpClass}>
+                          {/* An aside in a dense row whose labels are 12 px:
+                              a caption, not a 13 px hint. */}
+                          <span id={`${rowId}-points-hint`} className={caption}>
                             {s.pointsHint}
                           </span>
                         </div>
@@ -638,7 +641,7 @@ export function ShortEditor({
                 </div>
                 <button
                   type="button"
-                  className={cx(buttonClass, "mt-6 w-7 px-0 text-fg-muted hover:text-danger")}
+                  className={buttonClass("secondary", "sm", "mt-6 w-7 px-0! text-fg-muted! hover:text-danger!")}
                   aria-label={`${s.removeMatcher} ${index + 1}`}
                   // A graded question keeps one accepted answer; a poll may
                   // have none (an opinion poll, `keylessConfigSchema`).
@@ -655,7 +658,7 @@ export function ShortEditor({
         <div>
           <button
             type="button"
-            className={buttonClass}
+            className={buttonClass("secondary", "sm")}
             disabled={disabled || config.matchers.length >= SHORT_MAX_MATCHERS}
             onClick={() => setMatchers([...config.matchers, blankMatcher("exact")])}
           >

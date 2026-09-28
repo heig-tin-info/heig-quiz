@@ -9,7 +9,7 @@ import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/
 import { resolveStrings, showsSection } from "@quiz/core/client";
 import type { ShortAnswer, ShortDetails, ShortSolution, ShortStudent } from "./schema.js";
 import { shortReviewStrings, type ShortReviewStringKey } from "./strings.js";
-import { type BadgeTone, helpClass, markdown, ScoreHeader, Verdict } from "@quiz/ui";
+import { type BadgeTone, caption, markdown, ScoreHeader, Verdict } from "@quiz/ui";
 
 type ShortReviewProps = ReviewProps<
   ShortStudent,
@@ -53,7 +53,7 @@ export function ShortReview({
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[13px] font-medium text-fg">{s.yourAnswer}</span>
         {given === "" ? (
-          <span className={helpClass}>{s.noAnswer}</span>
+          <span className={caption}>{s.noAnswer}</span>
         ) : (
           <code className="rounded bg-surface-3 px-1.5 py-0.5 font-mono text-[13px] text-fg">
             {given}
@@ -63,7 +63,7 @@ export function ShortReview({
       </div>
 
       {typeof details?.matchedIndex === "number" ? (
-        <p className={helpClass}>
+        <p className={caption}>
           {s.matchedBy} #{details.matchedIndex + 1} · {details.matchedKind}
         </p>
       ) : null}

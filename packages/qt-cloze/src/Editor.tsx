@@ -22,10 +22,9 @@ import { clozeEditorStrings, type ClozeEditorStringKey } from "./strings.js";
 import {
   CheckboxField,
   cx,
-  helpClass,
-  inputClass,
+  hint,
   IssueList,
-  labelClass,
+  label,
   PromptField,
   sectionClass,
 } from "@quiz/ui";
@@ -74,10 +73,8 @@ export function ClozeEditor({
           // save.
           holes
           rows={8}
-          labelClassName={labelClass}
-          textareaClassName={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
         />
-        <p className={helpClass}>{s.textHint}</p>
+        <p className={hint}>{s.textHint}</p>
         <IssueList issues={issuesAt(issues, "text")} />
         {parse.errors.length > 0 ? (
           <IssueList issues={parse.errors.map((e) => ({ path: ["text"], message: e.message }))} />
@@ -102,10 +99,10 @@ export function ClozeEditor({
       </section>
 
       <section className={sectionClass}>
-        <h3 className={labelClass}>{s.blanks}</h3>
-        <p className={helpClass}>{s.blanksHint}</p>
+        <h3 className={label}>{s.blanks}</h3>
+        <p className={hint}>{s.blanksHint}</p>
         {parse.blanks.length === 0 ? (
-          <p className={helpClass}>{s.noBlank}</p>
+          <p className={hint}>{s.noBlank}</p>
         ) : (
           <table className="w-full text-left text-[13px]">
             <thead className="text-fg-faint">

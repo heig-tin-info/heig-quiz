@@ -40,6 +40,13 @@ export function pointsOrDash(points: number | null): number | "—" {
 /**
  * The score line under a review: the caller's word for "Score", then
  * `points / max`, then whatever breakdown the type adds (`children`).
+ *
+ * The mcq, short and cloze reviews end with it, a quiet line under the
+ * answer, which is short. The code and circuit reviews do not: their score is
+ * the HEADING of a long review (cases, stimuli, a compiler's output), with the
+ * runner's state as badges beside it, so they write it as a `sectionTitle`
+ * over their own sentence. What both share is the rule, {@link pointsOrDash};
+ * making one look like the other is a design decision, not a refactoring.
  */
 export function ScoreHeader({
   label,

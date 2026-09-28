@@ -41,15 +41,15 @@ import type { CodeAnswer, CodeStudent } from "./schema.js";
 import { PLAYER_STRINGS, type CodePlayerStrings } from "./strings.js";
 import {
   badge,
-  button,
+  buttonClass,
   card,
   cx,
   hint,
-  input,
   isLocked,
   lockedBlock,
   sectionTitle,
   table,
+  textareaClass,
   Verdict,
   verdictTone,
 } from "@quiz/ui";
@@ -278,7 +278,7 @@ export function CodePlayer({
             {canFreeTry ? (
               <button
                 type="button"
-                className={button(freeOpen ? "subtle" : "secondary", "sm")}
+                className={buttonClass(freeOpen ? "subtle" : "secondary", "sm")}
                 aria-expanded={freeOpen}
                 aria-controls={`${ids}-free`}
                 onClick={() => setFreeOpen((open) => !open)}
@@ -341,7 +341,7 @@ export function CodePlayer({
                 id={`${ids}-manual-stdin`}
                 rows={3}
                 aria-label={s.stdin}
-                className={cx(input, "w-full py-1.5 font-mono")}
+                className={cx(textareaClass, "w-full font-mono")}
                 disabled={locked}
                 value={manualStdin}
                 onChange={(e) => setManualStdin(e.target.value)}

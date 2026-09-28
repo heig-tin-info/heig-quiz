@@ -11,7 +11,7 @@ import { resolveStrings } from "@quiz/core/client";
 import type { ClozeAnswer, ClozeStudent } from "./schema.js";
 import { clozePlayerStrings, type ClozePlayerStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
-import { cx, helpClass, inputClass, isLocked } from "@quiz/ui";
+import { caption, cx, inputClass, isLocked } from "@quiz/ui";
 
 type ClozePlayerProps = PlayerProps<ClozeStudent, ClozeAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
@@ -57,7 +57,7 @@ export function ClozePlayer({
       return (
         <select
           aria-label={label}
-          className={cx(inputClass, "mx-0.5 h-8 py-0 align-baseline")}
+          className={cx(inputClass, "mx-0.5 h-8 align-baseline")}
           value={value}
           disabled={locked}
           onChange={(e) => onChange(withBlank(given, count, index, e.target.value))}
@@ -81,7 +81,7 @@ export function ClozePlayer({
         spellCheck={false}
         size={Math.max(6, value.length + 2)}
         maxLength={200}
-        className={cx(inputClass, "mx-0.5 h-8 py-0 align-baseline")}
+        className={cx(inputClass, "mx-0.5 h-8 align-baseline")}
         value={value}
         disabled={locked}
         onChange={(e) => onChange(withBlank(given, count, index, e.target.value))}
@@ -96,7 +96,7 @@ export function ClozePlayer({
       <div className="flex flex-col gap-3">
         <Text template={student.template} renderBlank={renderBlank} />
       </div>
-      <p className={helpClass}>{s.hint}</p>
+      <p className={caption}>{s.hint}</p>
     </div>
   );
 }

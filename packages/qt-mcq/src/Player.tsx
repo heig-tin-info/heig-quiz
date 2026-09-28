@@ -10,7 +10,7 @@ import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/
 import { resolveStrings } from "@quiz/core/client";
 import type { McqAnswer, McqStudent } from "./schema.js";
 import { mcqPlayerStrings, type McqPlayerStringKey } from "./strings.js";
-import { cx, helpClass, isLocked, markdown } from "@quiz/ui";
+import { caption, cx, isLocked, markdown } from "@quiz/ui";
 import { choiceLetter, Pastille } from "./ui.js";
 
 type McqPlayerProps = PlayerProps<McqStudent, McqAnswer> & {
@@ -52,7 +52,7 @@ export function McqPlayer({
       <legend className="mb-2 text-lg leading-relaxed text-fg">
         {markdown(renderMarkdown, student.prompt)}
       </legend>
-      <p className={helpClass}>{instructions}</p>
+      <p className={caption}>{instructions}</p>
       {/*
        * Negative marking (ADR-026): said on the question itself, where the
        * decision to guess is taken — the waiting room said it once already,
@@ -111,7 +111,7 @@ export function McqPlayer({
         })}
       </ul>
       {atLimit ? (
-        <p className={helpClass} role="status">
+        <p className={caption} role="status">
           {s.limitReached}
         </p>
       ) : null}

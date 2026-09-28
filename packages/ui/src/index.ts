@@ -21,25 +21,24 @@
  */
 export {
   badge,
-  button,
   buttonClass,
+  caption,
   card,
-  cardTitleClass,
   codeArea,
   cx,
-  helpClass,
   hint,
-  input,
   inputClass,
-  inputSm,
+  inputSize,
   label,
-  labelClass,
   lockedBlock,
   sectionClass,
   sectionTitle,
   setting,
   table,
+  textareaClass,
   type BadgeTone,
+  type ButtonSize,
+  type ButtonVariant,
 } from "./styles.js";
 export { breakdownOf, isLocked, markdown } from "./content.js";
 export { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";

@@ -31,6 +31,12 @@ describe("Segmented", () => {
     expect(group.className).toContain("opacity-60");
     expect(screen.getByRole("radio", { name: "Beta" })).toBeDisabled();
   });
+
+  it("takes an aria-label when no caption names it, and a dense size", () => {
+    render(<Segmented name="k" label="Group by" size="sm" value="a" options={options} onChange={() => {}} />);
+    screen.getByRole("radiogroup", { name: "Group by" });
+    expect(screen.getByText("Alpha").className).toContain("h-6");
+  });
 });
 
 describe("FieldCell", () => {
