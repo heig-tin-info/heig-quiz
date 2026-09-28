@@ -122,6 +122,7 @@ export function QuestionEditTab({
             labelHidden
             disabled={readOnly}
             label={t("question.explanation")}
+            placeholder={t("question.explanation.placeholder")}
             value={draft?.explanation ?? ""}
             onChange={(explanation) =>
               setDraft((current) => (current ? { ...current, explanation } : current))
