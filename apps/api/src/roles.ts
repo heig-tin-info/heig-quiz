@@ -11,12 +11,14 @@
  * still holds a grant. It reads the whole address set: a grant issued on an
  * institutional address must apply to someone signing in under a private one.
  */
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+
+import type { RoleReason } from "@quiz/contracts";
 
 import { affiliationKindsIn } from "./auth/claims.js";
 import type { AppConfig } from "./config.js";
 import type { Db } from "./db/client.js";
-import { courseStaff, teacherGrants, userIdpClaims, users } from "./db/schema.js";
+import { courseStaff, teacherGrants, userEmails, userIdpClaims, users } from "./db/schema.js";
 import { knownEmails, normalizeEmail, ownersOf } from "./identity.js";
 import { transferOnLoss } from "./modules/pool/service.js";
 
@@ -32,42 +34,125 @@ export interface Identity {
   userId?: string;
 }
 
-export async function roleForIdentity(
-  db: Db,
-  config: AppConfig,
-  identity: Identity,
-): Promise<UserRole> {
-  const emails = [...new Set(identity.emails.map(normalizeEmail))].filter((e) => e !== "");
-  if (config.SUPER_ADMIN_EMAIL && emails.includes(normalizeEmail(config.SUPER_ADMIN_EMAIL))) {
-    return "admin";
+/** The role, and which branch of the rule gave it (`null` for a student). */
+export interface RoleDecision {
+  role: UserRole;
+  reason: RoleReason | null;
+}
+
+/**
+ * The facts the rule reads, however they were loaded: one account at a time
+ * (`roleForIdentity`, at every login and role change) or every account at
+ * once (`roleDecisionsOfAll`, for the administration list).
+ */
+interface RoleFacts {
+  /** Normalized, non-empty. */
+  emails: readonly string[];
+  affiliations: readonly string[];
+  /** A `teacher_grants` row holds one of `emails`. */
+  hasGrant: boolean;
+  /** The account holds a seat on at least one course staff. */
+  hasSeat: boolean;
+}
+
+/** THE rule. Pure: every caller loads the facts, none re-derives the rule. */
+function decideRole(config: AppConfig, facts: RoleFacts): RoleDecision {
+  if (config.SUPER_ADMIN_EMAIL && facts.emails.includes(normalizeEmail(config.SUPER_ADMIN_EMAIL))) {
+    return { role: "admin", reason: "super_admin" };
   }
-  if (emails.length > 0) {
-    const [grant] = await db
-      .select({ id: teacherGrants.id })
-      .from(teacherGrants)
-      .where(inArray(teacherGrants.email, emails))
-      .limit(1);
-    if (grant) return "teacher";
-  }
+  if (facts.hasGrant) return { role: "teacher", reason: "grant" };
   // A seat on a course staff is a teacher role, so a colleague added by
   // another teacher does not need an admin grant as well.
-  if (identity.userId) {
-    const [seat] = await db
-      .select({ courseId: courseStaff.courseId })
-      .from(courseStaff)
-      .where(eq(courseStaff.userId, identity.userId))
-      .limit(1);
-    if (seat) return "teacher";
-  }
+  if (facts.hasSeat) return { role: "teacher", reason: "course_seat" };
   // edu-ID tells us who is staff. A `staff` affiliation WITHOUT a `student`
   // one is an employee, and reaches the teacher UI without an invitation.
   // Their own courses only: the guards are unchanged, so this grants no
   // access to anyone else's. Only affiliations scoped to OUR institutions
   // count, both ways: a `staff@unige.ch` is somebody else's employee, and a
   // bare `staff` names no institution at all — neither makes a teacher.
-  const kinds = affiliationKindsIn(identity.affiliations ?? [], config.STAFF_AFFILIATION_DOMAINS);
-  if (kinds.includes("staff") && !kinds.includes("student")) return "teacher";
-  return "student";
+  const kinds = affiliationKindsIn(facts.affiliations, config.STAFF_AFFILIATION_DOMAINS);
+  if (kinds.includes("staff") && !kinds.includes("student")) {
+    return { role: "teacher", reason: "staff_affiliation" };
+  }
+  return { role: "student", reason: null };
+}
+
+function normalizedSet(emails: readonly string[]): string[] {
+  return [...new Set(emails.map(normalizeEmail))].filter((e) => e !== "");
+}
+
+export async function roleForIdentity(
+  db: Db,
+  config: AppConfig,
+  identity: Identity,
+): Promise<RoleDecision> {
+  const emails = normalizedSet(identity.emails);
+  const [grant] =
+    emails.length > 0
+      ? await db
+          .select({ id: teacherGrants.id })
+          .from(teacherGrants)
+          .where(inArray(teacherGrants.email, emails))
+          .limit(1)
+      : [];
+  const [seat] = identity.userId
+    ? await db
+        .select({ courseId: courseStaff.courseId })
+        .from(courseStaff)
+        .where(eq(courseStaff.userId, identity.userId))
+        .limit(1)
+    : [];
+  return decideRole(config, {
+    emails,
+    affiliations: identity.affiliations ?? [],
+    hasGrant: grant !== undefined,
+    hasSeat: seat !== undefined,
+  });
+}
+
+/**
+ * The decision for EVERY non-anonymized account, keyed by id: the facts of
+ * `roleForUser` (verified addresses, stored affiliations, grants, seats)
+ * loaded in four queries whatever the number of accounts, then the same
+ * `decideRole`. For the administration list, which shows why each account
+ * is what it is.
+ */
+export async function roleDecisionsOfAll(
+  db: Db,
+  config: AppConfig,
+): Promise<Map<string, RoleDecision>> {
+  const [accounts, addresses, grants, seats, claims] = await Promise.all([
+    db.select({ id: users.id }).from(users).where(isNull(users.anonymizedAt)),
+    db
+      .select({ userId: userEmails.userId, email: userEmails.email })
+      .from(userEmails)
+      .where(eq(userEmails.verified, true)),
+    db.select({ email: teacherGrants.email }).from(teacherGrants),
+    db.selectDistinct({ userId: courseStaff.userId }).from(courseStaff),
+    db
+      .select({ userId: userIdpClaims.userId, affiliations: userIdpClaims.affiliations })
+      .from(userIdpClaims),
+  ]);
+  const emailsOf = new Map<string, string[]>();
+  for (const a of addresses) emailsOf.set(a.userId, [...(emailsOf.get(a.userId) ?? []), a.email]);
+  const granted = new Set(grants.map((g) => g.email));
+  const seated = new Set(seats.map((s) => s.userId));
+  const affiliationsOf = new Map(claims.map((c) => [c.userId, c.affiliations]));
+
+  return new Map(
+    accounts.map(({ id }) => {
+      const emails = normalizedSet(emailsOf.get(id) ?? []);
+      return [
+        id,
+        decideRole(config, {
+          emails,
+          affiliations: affiliationsOf.get(id) ?? [],
+          hasGrant: emails.some((e) => granted.has(e)),
+          hasSeat: seated.has(id),
+        }),
+      ];
+    }),
+  );
 }
 
 /** The stored identity of an existing account. */
@@ -75,7 +160,7 @@ async function roleForUser(
   db: Db,
   config: AppConfig,
   userId: string,
-): Promise<UserRole> {
+): Promise<RoleDecision> {
   const [stored] = await db
     .select({ affiliations: userIdpClaims.affiliations })
     .from(userIdpClaims)
@@ -94,7 +179,7 @@ async function roleForUser(
  * that can notice an account LOSING the teacher role.
  *
  * Both entry points below go through it, which is why the pool succession
- * (F-POOL-05) is wired here and not in `modules/admin.ts`: revoking a grant
+ * (F-POOL-05) is wired here and not in `modules/admin/`: revoking a grant
  * is only one of the two ways the role falls (`org/routes.ts` removes the last
  * staff seat through `syncRoleOfUser`), and an account is NEVER deleted —
  * "removed from the system" means exactly "no longer teacher nor admin".
@@ -148,7 +233,7 @@ export async function syncUserRole(db: Db, config: AppConfig, email: string): Pr
     owners.push(...legacy.map((u) => u.id));
   }
   for (const userId of owners) {
-    await storeRole(db, userId, await roleForUser(db, config, userId));
+    await storeRole(db, userId, (await roleForUser(db, config, userId)).role);
   }
   return owners.length;
 }
@@ -160,5 +245,5 @@ export async function syncRoleOfUser(
   userId: string,
   options: StoreOptions = {},
 ): Promise<void> {
-  await storeRole(db, userId, await roleForUser(db, config, userId), options);
+  await storeRole(db, userId, (await roleForUser(db, config, userId)).role, options);
 }

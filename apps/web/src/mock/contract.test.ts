@@ -25,6 +25,7 @@
  *    is a failure.
  */
 import {
+  AdminUser,
   AttemptInspect,
   AttemptOrLobby,
   ByQuestion,
@@ -308,6 +309,7 @@ const CHECKED: Case[] = [
       StudentFeedback,
     ),
   ]),
+  each("/app/api/admin/users", "/app/api/admin/users", AdminUser),
   each("/app/api/polls", "/app/api/polls", PollSummary),
   each("/app/api/polls/questions", "/app/api/polls/questions", PollQuestionPick),
   one("/app/api/polls/pool-questions", "/app/api/polls/pool-questions", PollPoolPage),

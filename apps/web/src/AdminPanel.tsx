@@ -25,12 +25,14 @@ import {
   useSortableTable,
   type Column,
 } from "./ui";
+import { UsersSection } from "./AdminUsers";
 import { adminTeachersKey } from "./queryKeys";
 
 type SortKey = "email" | "name" | "lastLoginAt" | "courses" | "grantedAt";
 
 /**
- * Administration: the teacher grants, and nothing else.
+ * Administration: the teacher grants, then every account (`UsersSection`,
+ * read-only).
  *
  * A grant is an e-mail address, issued before or after that person ever
  * signs in — the role is recomputed server-side at every login, so this
@@ -190,6 +192,8 @@ export function AdminPage() {
           </Card>
         )}
       </section>
+
+      <UsersSection />
     </div>
   );
 }
