@@ -32,6 +32,9 @@ const en = {
   "activity_available.subject": "Exercise open: {evaluationTitle}",
   "activity_available.body": "The exercise “{evaluationTitle}” is open. You can take it now.",
   "activity_available.action": "Open the exercise",
+  "deadline_approaching.subject": "Closes within 24 hours: {evaluationTitle}",
+  "deadline_approaching.body": "“{evaluationTitle}” closes in less than 24 hours, and you have not submitted it yet.",
+  "deadline_approaching.action": "Open the evaluation",
   "pool_shared.subject": "A pool was shared with you: {poolName}",
   "pool_shared.body": "{byName} shared the pool “{poolName}” with you as {role}.",
   "pool_shared.action": "Open the pool",
@@ -91,11 +94,11 @@ const en = {
   "activity.activity_scheduled.template": "{classroomName}: {count} exercise(s) scheduled",
   "activity.activity_available.description": "An exercise opens",
   "activity.activity_available.template": "Exercise open: {evaluationTitle}",
+  "activity.deadline_approaching.description": "An evaluation you have not submitted closes within 24 hours",
+  "activity.deadline_approaching.template": "Closes within 24 hours: {evaluationTitle}",
   // Declared ahead of the kinds that will use them (ADR-030 §f): the app is
   // re-uploaded once for all of them. Their placeholders are the template
   // parameters those kinds will carry.
-  "activity.deadline_approaching.description": "An evaluation you have not submitted closes within 24 hours",
-  "activity.deadline_approaching.template": "Closes within 24 hours: {evaluationTitle}",
   "activity.results_updated.description": "Your grade of a released evaluation changes",
   "activity.results_updated.template": "Results updated: {evaluationTitle}",
 } as const;
@@ -114,6 +117,9 @@ const fr: Record<Key, string> = {
   "activity_available.subject": "Exercice ouvert : {evaluationTitle}",
   "activity_available.body": "L'exercice « {evaluationTitle} » est ouvert. Vous pouvez le faire dès maintenant.",
   "activity_available.action": "Ouvrir l'exercice",
+  "deadline_approaching.subject": "Se termine dans les 24 heures : {evaluationTitle}",
+  "deadline_approaching.body": "« {evaluationTitle} » se termine dans moins de 24 heures et vous n'avez pas encore rendu votre travail.",
+  "deadline_approaching.action": "Ouvrir l'évaluation",
   "pool_shared.subject": "Une banque a été partagée avec vous : {poolName}",
   "pool_shared.body": "{byName} a partagé la banque « {poolName} » avec vous comme {role}.",
   "pool_shared.action": "Ouvrir la banque",
@@ -225,6 +231,7 @@ function varsOf(payload: NotificationPayload, t: Record<Key, string>): Record<st
     case "roster_conflict":
       return { classroomName: payload.classroomName, count: String(payload.count) };
     case "activity_available":
+    case "deadline_approaching":
       return { evaluationTitle: payload.evaluationTitle };
     case "grading_ready":
       return { evaluationTitle: payload.evaluationTitle, count: String(payload.count) };
@@ -265,6 +272,7 @@ export function notificationPath(payload: NotificationPayload): string {
     case "activity_scheduled":
       return "/";
     case "activity_available":
+    case "deadline_approaching":
       return `/take/${payload.evaluationId}`;
   }
 }

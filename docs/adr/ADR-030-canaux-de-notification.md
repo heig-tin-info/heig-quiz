@@ -704,3 +704,35 @@ Step 6 (`activity_scheduled`, `activity_available`) settled:
   column).
 - Best-effort, as `tellStaff`: a failure is logged and never fails the
   transition, the start or the ticker pass.
+
+Step 7 (`deadline_approaching`) settled:
+
+- **A tick task, `notifications.deadline_reminders`**, once a minute in
+  `CORE_TASKS` (`modules/notifications/deadline.ts`, on the injected clock).
+  It applies to every evaluation that is `running`, is not a poll and has a
+  `closes_at`: exams and exercises alike, whatever the timing mode.
+- **Not for an end already past**: the condition is `closes_at - 24 h <= now
+  < closes_at`. An evaluation still `running` after its `closes_at` (an
+  accommodation or a "+N min" keeps it open) is closing, not approaching.
+- **"Has not submitted" means no FINISHED attempt**: a claimed, non-staff
+  seat whose student holds no attempt of that evaluation in `submitted` or
+  `expired` — no attempt at all, or one not started or in progress. With
+  retakes (F-EVAL-15), a student who has submitted once already has an
+  attempt that counts, and is not reminded even while a retake is open.
+- **The marker is a table, `deadline_reminders (evaluation_id, user_id,
+  sent_at)`**, primary key on the pair, both keys cascading, owned by the
+  notifications module (migration `0030_deadline_reminders`). The claim IS
+  the selection: one `INSERT … SELECT … ON CONFLICT DO NOTHING RETURNING`
+  writes the markers of every due pair, and only the pairs it returns are
+  notified, so two concurrent scans tell a student once. A marker is never
+  cleared: an evaluation reopened after its close, or whose `closes_at`
+  moved, does not remind anybody a second time.
+- **The payload is `{ evaluationId, evaluationTitle }`**, with no
+  `closesAt`: the e-mail would have to render a date in the recipient's time
+  zone. The sentence says "closes in less than 24 hours", true whenever a
+  late scan sends it. The entry opens the attempt page (`/take/<id>`). App,
+  e-mail and Teams on by default.
+- **Best-effort, one fan-out per evaluation**: a `notifyMany` that fails is
+  logged, the other evaluations of the pass are still told, and the scan
+  never throws at the ticker. The markers of a failed fan-out stay claimed
+  and are not retried.

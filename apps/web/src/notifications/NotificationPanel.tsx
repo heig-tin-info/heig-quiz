@@ -27,7 +27,8 @@ import { notificationsKey } from "../queryKeys";
  * The inbox: what happened to this account while it was away — a pool
  * shared or inherited (F-POOL-05), results released (F-GRADE-09), students
  * who joined a classroom, roster entries to decide, grading to validate,
- * questions published in a shared pool, exercises scheduled and opened (#198). It lives in the account menu — an
+ * questions published in a shared pool, exercises scheduled and opened, an
+ * evaluation closing within 24 hours (#198). It lives in the account menu — an
  * item "Notifications" and a count on the avatar — rather than behind a bell
  * of its own, which sat beside the account row and truncated the e-mail.
  * A notification survives a reload, so the list is a query and not a state;
@@ -86,6 +87,8 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
       });
     case "activity_available":
       return t("notif.activityAvailable", { evaluationTitle: payload.evaluationTitle });
+    case "deadline_approaching":
+      return t("notif.deadlineApproaching", { evaluationTitle: payload.evaluationTitle });
     case "student_joined":
       return t(payload.count === 1 ? "notif.studentJoined.one" : "notif.studentJoined", {
         n: payload.count,
@@ -113,7 +116,8 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
  * Where a notification takes the reader: the pool it is about, the
  * feedback page of the attempt whose results were released, the roster
  * of the classroom, the grading panel of the evaluation, the student home
- * (exercises scheduled) or the attempt of an exercise that opened. The e-mail and
+ * (exercises scheduled) or the attempt of an exercise that opened or of an
+ * evaluation about to close. The e-mail and
  * the Teams message link to the same page (`templates.ts` on the server).
  */
 function notificationRoute(payload: NotificationPayload): Route {
@@ -132,6 +136,7 @@ function notificationRoute(payload: NotificationPayload): Route {
     case "activity_scheduled":
       return { view: "home" };
     case "activity_available":
+    case "deadline_approaching":
       return { view: "attempt", evaluationId: payload.evaluationId };
   }
 }

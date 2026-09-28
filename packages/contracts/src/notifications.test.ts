@@ -41,6 +41,10 @@ describe("DEFAULT_CHANNEL_ENABLED — the defaults per kind (ADR-030, #198)", ()
     expect(DEFAULT_CHANNEL_ENABLED.activity_scheduled).toEqual({ bell: true, email: false, teams: false });
     expect(DEFAULT_CHANNEL_ENABLED.activity_available).toEqual({ bell: true, email: true, teams: true });
   });
+
+  it("keeps deadline_approaching on everywhere: a reminder a student must not miss (§c)", () => {
+    expect(DEFAULT_CHANNEL_ENABLED.deadline_approaching).toEqual({ bell: true, email: true, teams: true });
+  });
 });
 
 describe("notificationKindsFor", () => {
@@ -49,6 +53,7 @@ describe("notificationKindsFor", () => {
       "results_released",
       "activity_scheduled",
       "activity_available",
+      "deadline_approaching",
     ]);
     expect(notificationKindsFor("teacher")).toEqual([...NOTIFICATION_KINDS]);
   });
