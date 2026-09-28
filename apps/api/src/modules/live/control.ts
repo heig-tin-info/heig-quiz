@@ -125,7 +125,8 @@ export async function resumeEvaluation(
     // the teacher's countdown reads it, and a student who arrives after the
     // resume gets "until the common end" (F-LIVE-12) — none of them may lose
     // the time the evaluation stood still (#77).
-    if (pausedFor > 0 && settingsOf(next).timing === "deadline") {
+    const movesEnd = pausedFor > 0 && settingsOf(next).timing === "deadline";
+    if (movesEnd) {
       next = (await extendClosesAt(tx, next.id, pausedFor / 1000, now)) ?? next;
     }
     if (pausedFor > 0) {
@@ -133,7 +134,9 @@ export async function resumeEvaluation(
         .update(attempts)
         .set({
           deadlineAt: sql`${attempts.deadlineAt} + make_interval(secs => ${pausedFor / 1000})`,
-          extraS: sql`${attempts.extraS} + ${Math.round(pausedFor / 1000)}`,
+          // Once `closes_at` carries the pause, the attempt's own extra time
+          // must not: a reopening recomputes from both (#252).
+          ...(movesEnd ? {} : { extraS: sql`${attempts.extraS} + ${Math.round(pausedFor / 1000)}` }),
           updatedAt: now,
         })
         .where(
@@ -220,8 +223,10 @@ export async function extendTime(
     // may have outdated since this request loaded it.
     if (committed) events.stateChanged(committed, now);
   }
-  // A `not_started` attempt takes its deadline from `closes_at` when it
-  // begins: once that has moved, extra time on it would count twice.
+  // Once `closes_at` has moved, the minutes are there and nowhere else: a
+  // `not_started` attempt takes its deadline from it when it begins, and a
+  // reopened one recomputes from it (#252). Extra time on the attempt as well
+  // would count them twice; an `in_progress` one only has its deadline moved.
   const where =
     target === undefined
       ? and(
@@ -232,7 +237,7 @@ export async function extendTime(
   const updated = await db
     .update(attempts)
     .set({
-      extraS: sql`${attempts.extraS} + ${seconds}`,
+      ...(movesEnd ? {} : { extraS: sql`${attempts.extraS} + ${seconds}` }),
       // A `manual` attempt has no deadline to move; the extra time is still
       // recorded, so a later switch of timing mode is consistent.
       deadlineAt: sql`case when ${attempts.deadlineAt} is null then null else ${attempts.deadlineAt} + make_interval(secs => ${seconds}) end`,

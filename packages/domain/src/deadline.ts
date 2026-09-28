@@ -24,7 +24,14 @@ export interface BonusInput {
 
 export interface DeadlineInput extends BonusInput {
   startedAt: Date;
-  /** Manual extension already granted (the +1/+5/+10 buttons), in seconds. */
+  /**
+   * Time granted to this attempt on top of its anchor, in seconds: the
+   * +1/+5/+10 buttons and the pauses it sat through. In `deadline` timing the
+   * anchor is `closesAt`, so a shift common to everybody (an extension to all,
+   * a pause) moves `closesAt` and is NEVER counted here as well (#252); only
+   * what one student was given alone is. In `duration` timing there is no
+   * common anchor, and every shift is counted here.
+   */
   extraS: number;
 }
 

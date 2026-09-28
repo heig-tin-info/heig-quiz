@@ -1265,7 +1265,9 @@ export async function closeAttempt(
 /**
  * Reopens one attempt (a student closed a tab too early, a laptop died). The
  * deadline is recomputed from the ORIGINAL start plus everything already
- * granted, so reopening is not a second full duration.
+ * granted, so reopening is not a second full duration. In `deadline` timing a
+ * shift common to everybody is in `closes_at` and not in `extraS` (#252), so
+ * each is counted once.
  */
 export async function reopenAttempt(
   db: Db,
