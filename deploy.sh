@@ -73,7 +73,6 @@ trap '[ -z "${DOCKER_CONFIG:-}" ] || rm -rf "$DOCKER_CONFIG"' EXIT
 request="${SSH_ORIGINAL_COMMAND:-}"
 if [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
   QUIZ_DEPLOY_FORCE=
-  QUIZ_DEPLOY_PREVIOUS=
 fi
 if [[ "$request" =~ ^force[[:space:]]+(.+)$ ]]; then
   QUIZ_DEPLOY_FORCE=1
@@ -102,13 +101,13 @@ before=$(git rev-parse HEAD)
 git fetch --quiet origin main
 git checkout --quiet --detach "${QUIZ_DEPLOY_SHA:-origin/main}"
 if [ "$before" != "$(git rev-parse HEAD)" ] && [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
-  QUIZ_DEPLOY_REEXEC=1 QUIZ_DEPLOY_PREVIOUS="$before" SSH_ORIGINAL_COMMAND='' exec "$0" "$@"
+  QUIZ_DEPLOY_REEXEC=1 SSH_ORIGINAL_COMMAND='' exec "$0" "$@"
 fi
 
 # The guard (docs/spec/05-architecture.md §5.9): production is never restarted
 # under a live evaluation. scripts/live-evaluations.sql says what "live"
 # means; it runs in the RUNNING database, before anything is pulled or
-# restarted. On a refusal the checkout goes back to the deployed commit and
+# restarted. On a refusal the checkout goes back to the running commit and
 # the job fails, so the operator re-runs it once the room is empty, or with
 # "force" (deploy.md §5, *The live-evaluation guard*). Staging is not
 # guarded: nobody sits an exam there, its data is a copy of production's
@@ -131,9 +130,12 @@ if [ "$environment" = production ] && [ -f .env.image ]; then
       echo "deploy: production has a live evaluation (title | state | mode | opens | closes):"
       printf '%s\n' "$live" | sed 's/\t/ | /g; s/^/  /'
     } >&2
-    if [ -z "$QUIZ_DEPLOY_FORCE" ]; then
+    if [ -z "${QUIZ_DEPLOY_FORCE:-}" ]; then
       echo "deploy: REFUSED. Re-run the deploy job once it has closed, or force it (deploy.md §5)." >&2
-      git checkout --quiet --detach "${QUIZ_DEPLOY_PREVIOUS:-$before}"
+      # Back to the commit actually running: .env.image names it, whichever
+      # copy of this script (old or new) did the checkout.
+      running=$(sed -n 's/^IMAGE_TAG=//p' .env.image)
+      git checkout --quiet --detach "${running:-$before}"
       exit 3
     fi
     echo "deploy: FORCED, restarting anyway." >&2

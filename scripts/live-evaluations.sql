@@ -11,15 +11,19 @@
 --
 -- Live means students are in the room, or about to be:
 --   - `lobby`, `running` or `paused`: connected, or waiting to start;
---   - `scheduled` with an opening time in the next 15 minutes: the ticker
---     would open it in the middle of the restart.
+--   - `scheduled` with an opening time in the next 15 minutes, or passed
+--     less than 12 hours ago (the ticker opens it the moment the app is
+--     back): it would open in the middle of the restart.
 -- Two exclusions keep a forgotten session from freezing every deploy:
 --   - a take-home exercise (an `exercise` whose waiting room is `skip`, the
 --     glossary's `exercise`, `isInClass` in @quiz/domain): it may stay open
 --     for days, and a student loses a few seconds of reconnection at most;
---   - a session whose state has not changed for 12 hours: a sitting in the
---     room lasts hours, so that one was left open and nobody is waiting on
---     it. `updated_at` is set by every transition (`tryApplyState`).
+--   - a session untouched for 12 hours (`updated_at`, set by every
+--     transition and every edit): a sitting in the room lasts hours, so that
+--     one was left open and nobody is waiting on it. Likewise a `scheduled`
+--     row whose opening time passed 12 hours ago: while the app is down the
+--     ticker opens nothing, and such a row must not block the deploy that
+--     brings it back.
 select
   title,
   state,
@@ -30,6 +34,8 @@ from evaluations
 where (mode <> 'exercise' or coalesce(settings ->> 'lobby', 'manual') <> 'skip')
   and (
     (state in ('lobby', 'running', 'paused') and updated_at > now() - interval '12 hours')
-    or (state = 'scheduled' and opens_at < now() + interval '15 minutes')
+    or (state = 'scheduled'
+      and opens_at < now() + interval '15 minutes'
+      and opens_at > now() - interval '12 hours')
   )
 order by opens_at nulls last, title;

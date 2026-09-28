@@ -87,6 +87,14 @@ describe("the deploy guard's live evaluations", () => {
     expect(await live()).toEqual(["soon"]);
   });
 
+  it("names a scheduled evaluation whose opening just passed, not one 12 hours old", async () => {
+    // While the app is down the ticker opens nothing: a past opening time is
+    // still about to open, until it is so old that it would block for ever.
+    await evaluation({ title: "just passed", state: "scheduled", opensAt: ago(5 * 60_000) });
+    await evaluation({ title: "stale", state: "scheduled", opensAt: ago(13 * HOUR) });
+    expect(await live()).toEqual(["just passed"]);
+  });
+
   it("ignores a take-home exercise, not an in-class one nor a poll", async () => {
     await evaluation({ title: "take-home", state: "running", mode: "exercise", lobby: "skip" });
     await evaluation({ title: "in class", state: "running", mode: "exercise", lobby: "manual" });

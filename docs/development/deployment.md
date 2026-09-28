@@ -354,11 +354,12 @@ step comes after).
 Live means:
 
 - `lobby`, `running` or `paused`: students connected, or waiting to start;
-- `scheduled` and opening within the next 15 minutes;
+- `scheduled` and opening within the next 15 minutes, or opened less than
+  12 hours ago (while the app is down the ticker opens nothing);
 
 except a take-home exercise (an `exercise` whose waiting room is `skip`: it
 may stay open for days, and a restart costs its students a few seconds of
-reconnection) and a session whose state has not changed for 12 hours (left
+reconnection) and a session untouched for 12 hours (left
 open by mistake: it must not freeze every deploy). The guard fails closed: a
 query that cannot run refuses the deploy like a live row. It does not run on
 a first deploy (no `.env.image`) nor when PostgreSQL is not running.
