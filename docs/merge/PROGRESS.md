@@ -7,8 +7,9 @@ separate commit on `main`. Protocol: [`README.md`](README.md).
 ## Now
 
 - **Phase**: M0 — decisions and paper.
-- **Next actions**: the product owner settles D01, D02, D04, D16 and gives
-  the go for M0-02 (production measurements), which settles D08 and D09.
+- **Next actions**: D01, D02, D04, D08, D16 settled; M0-02 done. Remaining
+  for M0: confirm D09 (workspace after the cutover), then M0-03 (ADRs) and
+  M0-04 (spec) can start; M1-06 now knows login adoption is required.
 - **Classroom sync point**: `ab98cc0` (classroom `origin/main`,
   2026-09-28). A classroom commit after it touching a ported file must be
   forwarded (see strategy §1.2, principle 6). Check with
@@ -28,8 +29,8 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M0-01 | Settle blocking decisions | todo | — | | | |
-| M0-02 | Measure production (read-only) | todo | PO go | | | |
+| M0-01 | Settle blocking decisions | in progress | — | | | D01, D02, D04, D08, D16 settled 2026-09-28; D09 awaits confirmation |
+| M0-02 | Measure production (read-only) | done | PO go | `plan/merge-classroom` | — | `measures-2026-09-28.md`: pairwise edu-ID subs (login adoption needed), workspace unused by real classes, 3 classes to merge into existing Quiz classrooms, 0 pending staff; App permissions not checked |
 | M0-03 | ADRs (035 accepted, imports, amendments) | todo | M0-01 | | | |
 | M0-04 | Spec amendments | todo | M0-01 | | | |
 | M0-05 | `CLAUDE.md`, `AGENTS.md`, reviewer prompts | todo | M0-03 | | | |
@@ -146,6 +147,10 @@ In the critical path only if D09 finds online assignments in production.
 
 Newest first. One line per session that changed the state: date, who,
 what moved, what the next session must know.
+
+- 2026-09-28 — planning session, continued: product owner settled D01
+  (Project), D02 (per classroom), D04 (widening accepted, risks noted), D16;
+  M0-02 measured production read-only (D08 settled, D09 measured).
 
 - 2026-09-28 — planning session: ADR-035 proposed, `docs/merge/` written on
   branch `plan/merge-classroom` from five read-only analyses of both

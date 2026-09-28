@@ -14,7 +14,7 @@ Status values: `open`, `settled`, `superseded`.
 - **Suggested**: *Project* (FR *Projet*); "assignment" stays forbidden;
   covers a lab as well as a semester project.
 - Blocks: M0-04 (glossary), every contract name.
-- **Status**: open.
+- **Status**: settled 2026-09-28 (product owner, planning conversation): *Project*.
 
 ### D02 — Where a GitHub organization attaches
 - **Options**: per classroom (as classroom does; one link table) or per
@@ -23,7 +23,7 @@ Status values: `open`, `settled`, `superseded`.
   proposing the org of the course's other classrooms. Migration is 1:1 and a
   course may legitimately change org between years.
 - Blocks: M2-01.
-- **Status**: open.
+- **Status**: settled 2026-09-28 (product owner, planning conversation): per classroom.
 
 ### D04 — Staff model
 - **Questions**: (a) is widening from classroom staff to course staff
@@ -34,20 +34,34 @@ Status values: `open`, `settled`, `superseded`.
   few, report and re-invite by hand; (c) dropped (display-only in
   classroom).
 - Blocks: M1-06 (migration of staff), M0-04.
-- **Status**: open.
+- **Status**: (a) settled 2026-09-28 (product owner, planning conversation):
+  widening accepted. Noted risks, accepted: a teacher who has different
+  assistants per class cannot keep them apart, and any staff of the course
+  sees every classroom (risk of acting in the wrong one). A per-classroom
+  restriction of staff is a possible later refinement, not part of the
+  merge. (b) moot: M0-02 found 0 pending seats; (c) dropped as
+  suggested.
 
 ### D08 — Identity key for the migration
 - **Suggested**: the cascade `swiss_edu_id` → `sub` (only if shared) →
   verified e-mail → new user with `classroom:<sub>` + login adoption.
   Final shape after M0-02 measures the overlap.
 - Blocks: M1-06.
-- **Status**: open (needs M0-02).
+- **Status**: settled by measurement 2026-09-28 (`measures-2026-09-28.md`):
+  0 of 55 shared people have the same `sub` — edu-ID subjects are pairwise.
+  Cascade `swiss_edu_id` → verified address → new user; **login adoption is
+  required** (M1-06, with its ADR).
 
 ### D16 — Rename Quiz's "attempt journal"
 - **Suggested**: yes, "attempt log" in docs and comments (not in table
   names), so "journal" means one thing.
 - Blocks: M0-04.
-- **Status**: open.
+- **Status**: settled 2026-09-28 (product owner, on the suggestion).
+  Scope: `attempt_events` and the spec/ADR prose calling it the attempt's
+  "journal" (e.g. spec 05 §5.5, ADR-018) become "attempt log"; the French UI
+  strings that say "journal" for it (`eval.resetAttempt.message`,
+  `eval.logVisibility.desc`) become "historique" or similar so that the
+  word "Journal" in the student UI means only the course journal.
 
 ## Blocking later phases
 
@@ -93,7 +107,9 @@ Status values: `open`, `settled`, `superseded`.
   migration drops the codespace columns (reported); the portal is untouched
   meanwhile.
 - Blocks: M6, M8-04.
-- **Status**: open (needs M0-02).
+- **Status**: measured 2026-09-28: 3 online assignments, all in test
+  classrooms with a roster of 1. The suggestion applies (M6 after the
+  cutover); awaiting the product owner's confirmation.
 
 ### D10 — Periodic tasks
 - **Suggested**: port `scheduled_tasks` (restart-safe, admin-visible

@@ -95,6 +95,7 @@ nav = [
       { "7. Incompatibilities" = "merge/07-incompatibilities.md" },
       { "8. Decisions" = "merge/08-decisions.md" },
       { "9. Task cards" = "merge/09-tasks.md" },
+      { "Production measurements" = "merge/measures-2026-09-28.md" },
     ] },
     { "Archive" = [
       { "MVP plan (phase 1)" = "PLAN-MVP.md" },
