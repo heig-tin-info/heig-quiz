@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import type { ClassroomDetail, EvaluationMode, EvaluationSummary } from "@quiz/contracts";
+import type { ClassroomDetail, EvaluationSummary } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -29,7 +29,6 @@ import {
   Menu,
   pressable,
   QueryError,
-  Segmented,
   Select,
   Skeleton,
   T,
@@ -45,6 +44,7 @@ import {
   stateTone,
 } from "./common";
 import { classroomKey, evaluationsKey } from "../queryKeys";
+import { ModeChoice, type CreatedMode } from "./ModeChoice";
 import {
   InstantiateError,
   useCourseTemplates,
@@ -73,7 +73,7 @@ function NewEvaluationModal({
   const t = useT();
   const qc = useQueryClient();
   const [title, setTitle] = useState("");
-  const [mode, setMode] = useState<Exclude<EvaluationMode, "poll">>("exam");
+  const [mode, setMode] = useState<CreatedMode>("exam");
   /*
    * "Start from a template" (ADR-031) exists only when the course has one:
    * the classroom names its course, the course lists its templates, and a
@@ -148,21 +148,7 @@ function NewEvaluationModal({
       {template ? (
         <p className="text-[13px] text-fg-muted">{t("templates.useHelp")}</p>
       ) : (
-        <div className="space-y-1.5">
-          <span className="text-[13px] font-medium">{t("eval.mode")}</span>
-          <div>
-            <Segmented
-              name="eval-mode"
-              value={mode}
-              onChange={setMode}
-              options={[
-                { value: "exam", label: t("eval.mode.exam") },
-                { value: "exercise", label: t("eval.mode.exercise") },
-              ]}
-            />
-          </div>
-          <p className="text-[13px] text-fg-muted">{t(`eval.mode.desc.${mode}`)}</p>
-        </div>
+        <ModeChoice value={mode} onChange={setMode} />
       )}
     </FormDialog>
   );

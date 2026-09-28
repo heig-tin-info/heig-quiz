@@ -84,6 +84,34 @@ const scenes = [
   // ADR-031: the course's evaluation templates, on its page, and the dialog
   // that makes a classroom's evaluation from one.
   { name: "course-template-use", role: "teacher", path: "/courses/c1", fold: true, act: (p) => p.getByRole("button", { name: /use in a classroom|utiliser dans une classe/i }).first().click() },
+  // F-EVAL-24 / F-EVAL-25: "New template" on the course page, and a
+  // template's editor — the mock's exam template carries a stale item, and a
+  // circuit question from a pool the course does not link — its settings tab
+  // with the advanced options open, a new (empty) one, and an unknown id.
+  { name: "template-new", role: "teacher", path: "/courses/c1", fold: true, act: async (p) => { await skipCoach(p); await p.getByRole("button", { name: /^(new template|nouveau modèle)$/i }).first().click(); } },
+  { name: "template-editor", role: "teacher", path: "/courses/c1", act: openTemplate },
+  { name: "template-editor-settings", role: "teacher", path: "/courses/c1", act: async (p) => {
+      await openTemplate(p);
+      await p.getByRole("tab", { name: /^(settings|réglages)$/i }).click();
+      await p.getByRole("button", { name: /^(advanced options|options avancées)$/i }).click();
+    } },
+  { name: "template-editor-picker", role: "teacher", path: "/courses/c1", fold: true, act: async (p) => {
+      await openTemplate(p);
+      await p.getByRole("button", { name: /^(add questions|ajouter des questions)$/i }).first().click();
+      // The question looked at (issue #207), docked beside the list at 1440.
+      await p.getByRole("dialog").getByRole("button", { name: /^(Preview|Aperçu de) / }).nth(1).click();
+      await p.waitForTimeout(800);
+    } },
+  { name: "template-editor-empty", role: "teacher", path: "/courses/c1", act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(new template|nouveau modèle)$/i }).first().click();
+      await p.getByRole("dialog").getByRole("textbox").first().fill("Examen de rattrapage");
+      await p.getByRole("button", { name: /^(create template|créer le modèle)$/i }).click();
+      await p.waitForURL(/\/templates\//);
+      await p.waitForTimeout(600);
+      await skipCoach(p);
+    } },
+  { name: "template-editor-not-found", role: "teacher", path: "/templates/nope", act: skipCoach },
   { name: "eval-new-from-template", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /new evaluation|nouvelle évaluation/i }).first().click() },
   { name: "eval-save-template", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /^actions$/i }).first().click(); await p.getByRole("menuitem", { name: /save as template|enregistrer comme modèle/i }).click(); } },
   // #155: a hidden course brought back by "Show hidden", the course menu with
@@ -721,6 +749,15 @@ async function skipCoach(page) {
     await skip.click({ timeout: 3000, force: true }).catch(() => {});
     await page.waitForTimeout(300);
   }
+}
+
+/** The course page's first template (the mock's exam), opened from its row. */
+async function openTemplate(page) {
+  await skipCoach(page);
+  await page.getByRole("button", { name: /Examen final/ }).first().click();
+  await page.waitForURL(/\/templates\//);
+  await page.waitForTimeout(600);
+  await skipCoach(page);
 }
 
 /** The evaluation page can queue a second walk behind the first one. */

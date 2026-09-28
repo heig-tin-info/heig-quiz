@@ -44,9 +44,19 @@ au moment de remplir une évaluation.
 
 Un modèle est une évaluation gardée par le cours plutôt que par une classe :
 ses questions, ses points et ses réglages, sans dates, code d'accès ni
-adresses IP. **Enregistrer comme modèle**, dans le menu d'une évaluation, en
-crée un ; la page du cours les liste, et **Utiliser dans une classe** part
-de l'un d'eux pour une nouvelle évaluation.
+adresses IP. **Nouveau modèle**, sur la page du cours, en crée un vide (un
+titre et un mode) ; **Enregistrer comme modèle**, dans le menu d'une
+évaluation, en crée un à partir de cette évaluation. **Utiliser dans une
+classe** part de l'un d'eux pour une nouvelle évaluation.
+
+Un clic sur un modèle ouvre son éditeur : son titre, ses questions (ajouter,
+retirer, réordonner, points, séparations de section, dernière version d'une
+question) et ses réglages — tout sauf les dates et le code d'accès, que
+chaque évaluation créée depuis lui règle pour elle-même. Chaque changement
+des questions ou des réglages fait avancer sa révision (**rév. 3**) ; le
+renommer non. Une question dont la banque n'est plus liée au cours y est
+signalée : utiliser le modèle est refusé tant que la banque n'est pas à
+nouveau liée ou la question retirée.
 
 ## Supprimer
 

@@ -16,6 +16,11 @@ export type Route =
    */
   | { view: "course"; id: string }
   /**
+   * One evaluation template of a course, edited in place (F-EVAL-25). A page
+   * of its course, so the Courses row stays lit too.
+   */
+  | { view: "template"; id: string }
+  /**
    * `tab`: the section to open on (the launch checklist's "Roster" link,
    * #152), carried in `?tab=` like the page's own tabs; `parsePath` never
    * sees it, the page reads it off the query string.
@@ -168,6 +173,12 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   course: {
     path: (r) => `/courses/${r.id}`,
     match: ([head, id]) => (head === "courses" && id ? { view: "course", id } : null),
+    studentSafe: false,
+    section: "home",
+  },
+  template: {
+    path: (r) => `/templates/${r.id}`,
+    match: ([head, id]) => (head === "templates" && id ? { view: "template", id } : null),
     studentSafe: false,
     section: "home",
   },

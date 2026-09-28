@@ -14,6 +14,7 @@ import {
   renderWithProviders,
 } from "../test/render";
 import { AddQuestionsSheet } from "./AddQuestionsSheet";
+import { evaluationTarget } from "./editTarget";
 
 /*
  * The question picker of F-EVAL-01.
@@ -143,7 +144,7 @@ function setup(
   const stubs = mockFetch(routes(over));
   const rendered = renderWithProviders(
     <AddQuestionsSheet
-      evaluationId="e1"
+      target={evaluationTarget("e1")}
       existing={options.existing ?? new Set()}
       onClose={onClose}
     />,

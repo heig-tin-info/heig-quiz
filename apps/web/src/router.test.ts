@@ -17,6 +17,7 @@ describe("routeToPath / parsePath", () => {
     { view: "settings" },
     { view: "admin" },
     { view: "course", id: "k-1" },
+    { view: "template", id: "t-1" },
     { view: "classroom", id: "c-1" },
     { view: "pools" },
     { view: "pool", id: "p-1" },
@@ -47,6 +48,13 @@ describe("routeToPath / parsePath", () => {
     expect(routeToPath({ view: "course", id: "k-1" })).toBe("/courses/k-1");
     expect(parsePath("/courses/k-1")).toEqual({ view: "course", id: "k-1" });
     expect(sectionOf({ view: "course", id: "k-1" })).toBe("home");
+  });
+
+  it("parses the editor of one template, a page of its course (F-EVAL-25)", () => {
+    expect(routeToPath({ view: "template", id: "t-1" })).toBe("/templates/t-1");
+    expect(parsePath("/templates/t-1")).toEqual({ view: "template", id: "t-1" });
+    expect(parsePath("/templates")).toEqual({ view: "home" });
+    expect(sectionOf({ view: "template", id: "t-1" })).toBe("home");
   });
 
   it("parses the pool routes, and /pools alone is the list", () => {
@@ -128,6 +136,7 @@ describe("ROUTES", () => {
     settings: { view: "settings" },
     admin: { view: "admin" },
     course: { view: "course", id: "k-1" },
+    template: { view: "template", id: "t-1" },
     classroom: { view: "classroom", id: "c-1" },
     pools: { view: "pools" },
     poolCategories: { view: "poolCategories", id: "p-1" },
@@ -181,6 +190,7 @@ describe("ROUTES", () => {
     expect(lit).toMatchObject({
       home: "home",
       course: "home",
+      template: "home",
       pools: "pools",
       pool: "pools",
       question: "pools",

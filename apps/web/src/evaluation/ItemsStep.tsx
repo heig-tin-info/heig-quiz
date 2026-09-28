@@ -16,10 +16,11 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import {
   Eye,
   Flag,
+  Unlink,
   GripVertical,
   ListOrdered,
   Pencil,
@@ -28,10 +29,10 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type { EvaluationDetail, ItemRow } from "@quiz/contracts";
-import { itemListLock } from "@quiz/domain";
+import type { ItemListLock } from "@quiz/domain";
 
 import { api } from "../api";
 import type { Route } from "../router";
@@ -53,8 +54,9 @@ import {
   Tip,
 } from "../ui";
 import { AddQuestionsSheet } from "./AddQuestionsSheet";
+import type { EditTarget } from "./editTarget";
+import { useTargetRefresh } from "./editTarget";
 import { ItemPreviewSheet } from "./ItemPreviewSheet";
-import { evaluationKey } from "../queryKeys";
 
 /**
  * Step 1 of the novice flow (docs/spec/08 §8.2): WHICH questions, in WHICH
@@ -79,7 +81,15 @@ import { evaluationKey } from "../queryKeys";
  *
  * The points field commits on blur, not on every keystroke: typing "12" over
  * a "1" must not first save a "1".
+ *
+ * It edits an evaluation's items or a template's (F-EVAL-25) through the
+ * same code: the `target` names the routes and the caches, the `lock` is the
+ * caller's to compute (a template has none), and a row flagged
+ * `poolUnlinked` — only a template's rows carry the flag — says so.
  */
+
+/** A row of either list: a template's rows also say when their pool left the course. */
+type Row = ItemRow & { poolUnlinked?: boolean };
 
 function PointsField({
   item,
@@ -270,7 +280,7 @@ function ItemCard({
   onPreview,
   onEdit,
 }: {
-  item: ItemRow;
+  item: Row;
   index: number;
   stale: boolean;
   locked: boolean;
@@ -321,6 +331,13 @@ function ItemCard({
           <span className="flex flex-wrap items-center gap-2">
             <span className="truncate font-semibold">{item.internalName}</span>
             {item.deprecated ? <Badge tone="red">{t("eval.questions.deprecated")}</Badge> : null}
+            {item.poolUnlinked ? (
+              <Tip label={t("templates.poolUnlinked.hint")}>
+                <Badge tone="amber" icon={Unlink}>
+                  {t("templates.poolUnlinked")}
+                </Badge>
+              </Tip>
+            ) : null}
           </span>
           <span className="text-xs text-fg-faint">{typeLabel(t, item.type)}</span>
         </span>
@@ -378,25 +395,40 @@ function ItemCard({
   );
 }
 
+/** What the list reads off an evaluation's detail or a template's: both have these. */
+type ItemList = Pick<EvaluationDetail, "staleItems" | "editableQuestionIds" | "totalPoints"> & {
+  items: Row[];
+};
+
 export function ItemsStep({
+  target,
   detail,
+  lock,
   navigate,
+  addVariant = "primary",
+  notices,
 }: {
-  detail: EvaluationDetail;
+  target: EditTarget;
+  detail: ItemList;
+  /** Why the list is frozen (issue #79), or null while it may change. */
+  lock: ItemListLock | null;
   navigate: (r: Route) => void;
+  /**
+   * "Add questions" is the step's primary on an evaluation; on a page whose
+   * primary is elsewhere (a template's "Use in a classroom") it steps down.
+   */
+  addVariant?: "primary" | "secondary";
+  /** Warnings of the caller's own, under the heading beside the list's. */
+  notices?: ReactNode;
 }) {
   const t = useT();
-  const qc = useQueryClient();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   /** The row whose Preview sheet is open (#127). */
   const [previewing, setPreviewing] = useState<string | null>(null);
   const editable = new Set(detail.editableQuestionIds);
-  const id = detail.evaluation.id;
-  // The same rule the server applies (issue #79): the list is frozen once a
-  // student has an attempt OR once the evaluation has been opened, so every
-  // control below is disabled instead of failing with a 409.
-  const lock = itemListLock(detail.evaluation.state, detail.attemptCount);
+  // The server's rule (issue #79), computed by the caller: every control
+  // below is disabled instead of failing with a 409.
   const locked = lock !== null;
   const stale = new Set(detail.staleItems);
 
@@ -420,10 +452,10 @@ export function ItemsStep({
     }
   }, [detail.items, pendingOrder]);
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: evaluationKey(id) });
+  const invalidate = useTargetRefresh(target);
   const patch = useMutation({
     mutationFn: (v: { itemId: string; body: Record<string, unknown> }) =>
-      api(`/app/api/evaluations/${id}/items/${v.itemId}`, {
+      api(`${target.base}/items/${v.itemId}`, {
         method: "PATCH",
         body: JSON.stringify(v.body),
       }),
@@ -431,7 +463,7 @@ export function ItemsStep({
   });
   const reorder = useMutation({
     mutationFn: (itemIds: string[]) =>
-      api(`/app/api/evaluations/${id}/items/order`, {
+      api(`${target.base}/items/order`, {
         method: "PUT",
         body: JSON.stringify({ itemIds }),
       }),
@@ -445,12 +477,12 @@ export function ItemsStep({
   });
   const remove = useMutation({
     mutationFn: (itemId: string) =>
-      api(`/app/api/evaluations/${id}/items/${itemId}`, { method: "DELETE" }),
+      api(`${target.base}/items/${itemId}`, { method: "DELETE" }),
     onSuccess: invalidate,
   });
   const updateVersions = useMutation({
     mutationFn: (itemIds?: string[]) =>
-      api(`/app/api/evaluations/${id}/items/update-versions`, {
+      api(`${target.base}/items/update-versions`, {
         method: "POST",
         body: JSON.stringify(itemIds ? { itemIds } : {}),
       }),
@@ -482,7 +514,7 @@ export function ItemsStep({
   const removeItem = (item: ItemRow) => remove.mutate(item.id);
 
   const addButton = (
-    <Button onClick={() => setAdding(true)} disabled={locked}>
+    <Button variant={addVariant} onClick={() => setAdding(true)} disabled={locked}>
       <Plus /> {t("eval.questions.add")}
     </Button>
   );
@@ -500,6 +532,7 @@ export function ItemsStep({
         actions={items.length > 0 ? addButton : undefined}
       />
 
+      {notices}
       {lock === "attempts" ? <Alert tone="warning" title={t("eval.locked")} /> : null}
       {lock === "opened" ? (
         <Alert tone="warning" title={t("eval.questions.frozen")}>
@@ -570,7 +603,9 @@ export function ItemsStep({
                       onRemove={() => removeItem(item)}
                       canEdit={editable.has(item.questionId)}
                       onPreview={() => setPreviewing(item.id)}
-                      onEdit={() => navigate({ view: "question", id: item.questionId, from: id })}
+                      onEdit={() =>
+                        navigate({ view: "question", id: item.questionId, from: target.questionFrom })
+                      }
                     />
                   ))}
                 </ul>
@@ -588,7 +623,7 @@ export function ItemsStep({
 
       {previewed ? (
         <ItemPreviewSheet
-          evaluationId={id}
+          target={target}
           item={previewed}
           onClose={() => setPreviewing(null)}
         />
@@ -596,7 +631,7 @@ export function ItemsStep({
 
       {adding ? (
         <AddQuestionsSheet
-          evaluationId={id}
+          target={target}
           existing={new Set(detail.items.map((i) => i.questionId))}
           onClose={() => setAdding(false)}
         />

@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-import { McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationDetail, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
+import { McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
 import { allowedFeedbackWhen, feedbackWhenFor, isInClass } from "@quiz/domain";
 
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import { Button, Card, cx, inputClass, inputSize, Segmented, Select, SettingRow, Switch } from "../ui";
+import type { ConfigPatch, ConfigView } from "./editTarget";
 import type { useEvaluationPatch } from "./usePatch";
 
 /**
@@ -16,15 +17,23 @@ import type { useEvaluationPatch } from "./usePatch";
  *
  * Folded by default and not persisted. A disclosure that remembers being open
  * is a disclosure that is always open, and then it is not a disclosure.
+ *
+ * It reads and writes the configuration an evaluation and a template share
+ * (`ConfigView`, `ConfigPatch`); what only a run has — the access code — is
+ * a row the evaluation hands in as `children`, in its place in the list.
  */
 export function AdvancedDisclosure({
-  detail,
+  config,
+  totalPoints,
   patch,
   disabled,
   feedbackDisabled,
+  children,
 }: {
-  detail: EvaluationDetail;
-  patch: ReturnType<typeof useEvaluationPatch>;
+  config: ConfigView;
+  /** The threshold scale's default pass mark. */
+  totalPoints: number;
+  patch: ConfigPatch;
   /** The structural settings: frozen by an attempt, or by the run (#86). */
   disabled: boolean;
   /**
@@ -34,11 +43,12 @@ export function AdvancedDisclosure({
    * disabled — a student locked out mid-exam must be let back in.
    */
   feedbackDisabled: boolean;
+  /** The rows of a run's own (the access code), before the grade scale. */
+  children?: ReactNode;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const { settings, feedbackPolicy, accessCode, mode, mcqPolicy } = detail.evaluation;
-  const [code, setCode] = useState(accessCode ?? "");
+  const { settings, feedbackPolicy, mode, mcqPolicy, gradingScale } = config;
 
   const set = (next: Partial<EvaluationSettings>) => patch.mutate({ settings: next });
   const feedback = (next: Partial<FeedbackPolicy>) => patch.mutate({ feedbackPolicy: next });
@@ -259,35 +269,19 @@ export function AdvancedDisclosure({
           </SettingRow>
         ) : null}
 
-        <SettingRow title={t("eval.accessCode")} desc={t("eval.accessCode.desc")}>
-          <input
-            aria-label={t("eval.accessCode")}
-            placeholder={t("eval.accessCodePlaceholder")}
-            className={cx(inputClass, inputSize.sm, "w-44")}
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            onBlur={() => {
-              const next = code.trim();
-              if (next === (accessCode ?? "")) return;
-              // F-EVAL-12: three characters is the schema's floor; an empty
-              // field means "no code at all", which is a null and not a "".
-              if (next !== "" && next.length < 3) return;
-              patch.mutate({ accessCode: next === "" ? null : next });
-            }}
-          />
-        </SettingRow>
+        {children}
 
         <SettingRow
           title={t("eval.scale")}
           desc={
-            detail.evaluation.gradingScale.kind === "linear"
+            gradingScale.kind === "linear"
               ? t("eval.scale.desc.linear")
               : t("eval.scale.desc.threshold")
           }
         >
           <Segmented
             name="scale"
-            value={detail.evaluation.gradingScale.kind}
+            value={gradingScale.kind}
             disabled={disabled}
             onChange={(kind) =>
               patch.mutate({
@@ -297,7 +291,7 @@ export function AdvancedDisclosure({
                     : {
                         kind: "threshold",
                         rounding: "nearest",
-                        threshold: Math.max(1, detail.totalPoints || 1),
+                        threshold: Math.max(1, totalPoints || 1),
                       },
               })
             }
@@ -309,5 +303,39 @@ export function AdvancedDisclosure({
         </SettingRow>
       </Card>
     </div>
+  );
+}
+
+/**
+ * The access code (F-EVAL-12), a row of the advanced options that only a run
+ * has: a template leaves it to each evaluation made from it.
+ */
+export function AccessCodeRow({
+  accessCode,
+  patch,
+}: {
+  accessCode: string | null;
+  patch: ReturnType<typeof useEvaluationPatch>;
+}) {
+  const t = useT();
+  const [code, setCode] = useState(accessCode ?? "");
+  return (
+    <SettingRow title={t("eval.accessCode")} desc={t("eval.accessCode.desc")}>
+      <input
+        aria-label={t("eval.accessCode")}
+        placeholder={t("eval.accessCodePlaceholder")}
+        className={cx(inputClass, inputSize.sm, "w-44")}
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+        onBlur={() => {
+          const next = code.trim();
+          if (next === (accessCode ?? "")) return;
+          // F-EVAL-12: three characters is the schema's floor; an empty
+          // field means "no code at all", which is a null and not a "".
+          if (next !== "" && next.length < 3) return;
+          patch.mutate({ accessCode: next === "" ? null : next });
+        }}
+      />
+    </SettingRow>
   );
 }

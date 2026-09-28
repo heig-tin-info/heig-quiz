@@ -157,10 +157,13 @@ pull request.)
 Items 1 and 2 are merged. Items 3 and 4 were re-split on 2026-09-28 into
 A1 (the course page), A2 (creating an empty template and editing one in
 place) and B (pulling a revision, with the "behind template" badge); the
-addendum below is the current plan. A1 is merged; the API half of A2
-(F-EVAL-24, F-EVAL-25: the routes, `TemplatePatch`, `TemplateDetail`, the
-revision helper, the lock of *Instantiate*, `template.update`) is done, its
-web half follows. B is not started.
+addendum below is the current plan. A1 is merged; A2 is done in both
+halves: the API (F-EVAL-24, F-EVAL-25: the routes, `TemplatePatch`,
+`TemplateDetail`, the revision helper, the lock of *Instantiate*,
+`template.update`) and the web (*New template* on the course page, and the
+template's editor at `/templates/:id`, built from the evaluation editor's
+own blocks handed a template's routes rather than from a copy of them).
+B is not started.
 
 ## Consequences
 

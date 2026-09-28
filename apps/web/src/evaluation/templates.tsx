@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CopyPlus, FileStack, Trash2 } from "lucide-react";
+import { CopyPlus, FileStack, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -10,6 +10,7 @@ import {
   type TemplateInstance,
   type TemplateInstantiate,
   type TemplateItemRef,
+  type TemplateNew,
 } from "@quiz/contracts";
 
 import { api, ApiError, apiErrorMessage } from "../api";
@@ -18,7 +19,18 @@ import { useT, type TFunction } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
 import { CoursePart } from "../course/parts";
-import { Actions, EmptyState, Field, FormDialog, FormError, QueryError, Select, Skeleton } from "../ui";
+import {
+  Actions,
+  Button,
+  EmptyState,
+  Field,
+  FormDialog,
+  FormError,
+  QueryError,
+  Select,
+  Skeleton,
+} from "../ui";
+import { ModeChoice, type CreatedMode } from "./ModeChoice";
 import { courseTemplatesKey, evaluationsKey } from "../queryKeys";
 
 /**
@@ -29,8 +41,9 @@ import { courseTemplatesKey, evaluationsKey } from "../queryKeys";
  * The course page is the ONE surface that lists them, and there the section
  * shows even while it is empty (ADR-031, addendum of 2026-09-28): a teacher
  * who opened a course has asked to see all of it, and the empty state is
- * where they learn that "Save as template", in an evaluation's menu, is the
- * door in. The novice home is spared: the course card lists no template.
+ * where they learn the two doors in — "New template" here (F-EVAL-24), and
+ * "Save as template" in an evaluation's menu. The novice home is spared: the
+ * course card lists no template.
  */
 
 export function useCourseTemplates(courseId: string | null) {
@@ -106,7 +119,8 @@ export function InstantiateError({ error }: { error: unknown }) {
   );
 }
 
-function UseTemplateDialog({
+/** "Use in a classroom": a draft evaluation of one of the course's classrooms. */
+export function UseTemplateDialog({
   template,
   classrooms,
   onClose,
@@ -158,9 +172,117 @@ function UseTemplateDialog({
 }
 
 /**
- * The templates of one course, as a section of its page. Each row offers
- * what a template is for — a new evaluation in one of the course's classrooms
- * — and its deletion; two actions, so two icon buttons (`Actions`).
+ * The actions of one template, wherever it is shown: the row of the course
+ * page and the header of its editor. "Use in a classroom" only exists while
+ * the course has one; the deletion asks first.
+ */
+export function useTemplateActions(
+  courseId: string,
+  classrooms: ClassroomSummary[],
+  options: { onDeleted?: () => void } = {},
+) {
+  const t = useT();
+  const qc = useQueryClient();
+  const confirm = useConfirm();
+  const toastError = useErrorToast();
+  const [using, setUsing] = useState<EvaluationTemplate | null>(null);
+  const remove = useMutation({
+    mutationFn: (template: EvaluationTemplate) =>
+      api(`/app/api/templates/${template.id}`, { method: "DELETE" }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: courseTemplatesKey(courseId) });
+      options.onDeleted?.();
+    },
+    onError: toastError("error.save"),
+  });
+  const canUse = classrooms.length > 0;
+  const deleteItem = (template: EvaluationTemplate) => ({
+    label: t("templates.delete"),
+    icon: Trash2,
+    danger: true,
+    onSelect: async () => {
+      if (
+        await confirm({
+          title: t("templates.delete"),
+          message: t("templates.deleteConfirm", { name: template.title }),
+          confirmLabel: t("common.delete"),
+          cancelLabel: t("common.cancel"),
+          danger: true,
+        })
+      ) {
+        remove.mutate(template);
+      }
+    },
+  });
+  const useItem = (template: EvaluationTemplate) => ({
+    label: t("templates.use"),
+    icon: CopyPlus,
+    onSelect: () => setUsing(template),
+  });
+  return { canUse, use: setUsing, useItem, deleteItem, using, closeUse: () => setUsing(null) };
+}
+
+/**
+ * "New template" (F-EVAL-24): a title and a mode, exactly as an evaluation's
+ * creation asks, in the course rather than in a classroom. The mode names
+ * the preset, as there. On success the teacher lands in the new template's
+ * editor, since an empty template is only a start.
+ */
+export function NewTemplateDialog({
+  courseId,
+  onClose,
+  navigate,
+}: {
+  courseId: string;
+  onClose: () => void;
+  navigate: (r: Route) => void;
+}) {
+  const t = useT();
+  const qc = useQueryClient();
+  const [title, setTitle] = useState("");
+  const [mode, setMode] = useState<CreatedMode>("exam");
+  const create = useMutation({
+    mutationFn: () =>
+      api<EvaluationTemplate>(`/app/api/courses/${courseId}/templates`, {
+        method: "POST",
+        body: JSON.stringify({ title: title.trim(), mode, preset: mode } satisfies TemplateNew),
+      }),
+    onSuccess: async (made) => {
+      await qc.invalidateQueries({ queryKey: courseTemplatesKey(courseId) });
+      navigate({ view: "template", id: made.id });
+    },
+  });
+  return (
+    <FormDialog
+      title={t("templates.new")}
+      onClose={onClose}
+      onSubmit={() => create.mutate()}
+      submitLabel={t("templates.create")}
+      submitting={create.isPending}
+      canSubmit={title.trim() !== ""}
+      error={<FormError error={create.error} fallback={t("templates.newFailed")} />}
+    >
+      <Field
+        label={t("eval.titleLabel")}
+        placeholder={t("templates.titlePlaceholder")}
+        required
+        fullWidth
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+      />
+      <ModeChoice value={mode} onChange={setMode} />
+    </FormDialog>
+  );
+}
+
+/**
+ * The templates of one course, as a section of its page. A row opens the
+ * template's editor, like a classroom row opens the classroom; beside it sit
+ * what a template is for — a new evaluation in one of the course's
+ * classrooms — and its deletion; two actions, so two icon buttons
+ * (`Actions`). "New template" is the section's own action, ghost like the
+ * pools' "Link a pool": the page's one primary stays "New classroom".
  */
 export function CourseTemplates({
   courseId,
@@ -172,22 +294,18 @@ export function CourseTemplates({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
-  const qc = useQueryClient();
-  const confirm = useConfirm();
-  const toastError = useErrorToast();
   const list = useCourseTemplates(courseId);
-  const [using, setUsing] = useState<EvaluationTemplate | null>(null);
-
-  const remove = useMutation({
-    mutationFn: (template: EvaluationTemplate) =>
-      api(`/app/api/templates/${template.id}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: courseTemplatesKey(courseId) }),
-    onError: toastError("error.save"),
-  });
+  const actions = useTemplateActions(courseId, classrooms);
+  const [creating, setCreating] = useState(false);
 
   const templates = list.data ?? [];
+  const newButton = (variant: "ghost" | "secondary") => (
+    <Button size="sm" variant={variant} onClick={() => setCreating(true)}>
+      <Plus /> {t("templates.new")}
+    </Button>
+  );
   return (
-    <CoursePart page icon={FileStack} title={t("templates.title")}>
+    <CoursePart page icon={FileStack} title={t("templates.title")} action={newButton("ghost")}>
       {list.isLoading ? (
         <Skeleton className="h-6 w-64" />
       ) : list.isError ? (
@@ -198,67 +316,60 @@ export function CourseTemplates({
           retrying={list.isFetching}
         />
       ) : templates.length === 0 ? (
-        // No button: until a template can be written here (A2), the one door
-        // is an evaluation's menu, and the empty state says where it is.
-        <EmptyState icon={FileStack} title={t("templates.empty.title")} className="py-8">
+        <EmptyState
+          icon={FileStack}
+          title={t("templates.empty.title")}
+          className="py-8"
+          action={newButton("secondary")}
+        >
           {t("templates.empty.body")}
         </EmptyState>
       ) : (
         <ul className="space-y-0.5">
           {templates.map((template) => (
-            <li key={template.id} className="flex items-center gap-2 px-2 py-1 text-[13px]">
-              <FileStack className="size-3.5 shrink-0 text-fg-faint" />
-              <span className="min-w-0 flex-1 truncate font-medium">{template.title}</span>
-              {/* On a phone the title keeps the room: the mode leaves first,
-                  the counts stay. */}
-              <span className="hidden shrink-0 text-xs text-fg-muted sm:inline">
-                {t(`eval.mode.${template.mode}`)}
-              </span>
-              <span className="shrink-0 text-xs tabular-nums text-fg-muted">
-                {t(template.itemCount === 1 ? "templates.meta.one" : "templates.meta", {
-                  n: template.itemCount,
-                  points: template.totalPoints,
-                  revision: template.revision,
-                })}
-              </span>
+            <li key={template.id} className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => navigate({ view: "template", id: template.id })}
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-field px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-surface-2"
+              >
+                <FileStack className="size-3.5 shrink-0 text-fg-faint" />
+                <span className="min-w-0 flex-1 truncate font-medium">{template.title}</span>
+                {/* On a phone the title keeps the room: the mode leaves first,
+                    the counts stay. */}
+                <span className="hidden shrink-0 text-xs text-fg-muted sm:inline">
+                  {t(`eval.mode.${template.mode}`)}
+                </span>
+                <span className="shrink-0 text-xs tabular-nums text-fg-muted">
+                  {t(template.itemCount === 1 ? "templates.meta.one" : "templates.meta", {
+                    n: template.itemCount,
+                    points: template.totalPoints,
+                    revision: template.revision,
+                  })}
+                </span>
+              </button>
               <Actions
                 label={t("common.actions")}
                 size="sm"
                 items={[
-                  ...(classrooms.length > 0
-                    ? [{ label: t("templates.use"), icon: CopyPlus, onSelect: () => setUsing(template) }]
-                    : []),
-                  {
-                    label: t("templates.delete"),
-                    icon: Trash2,
-                    danger: true,
-                    onSelect: async () => {
-                      if (
-                        await confirm({
-                          title: t("templates.delete"),
-                          message: t("templates.deleteConfirm", { name: template.title }),
-                          confirmLabel: t("common.delete"),
-                          cancelLabel: t("common.cancel"),
-                          danger: true,
-                        })
-                      ) {
-                        remove.mutate(template);
-                      }
-                    },
-                  },
+                  ...(actions.canUse ? [actions.useItem(template)] : []),
+                  actions.deleteItem(template),
                 ]}
               />
             </li>
           ))}
         </ul>
       )}
-      {using ? (
+      {actions.using ? (
         <UseTemplateDialog
-          template={using}
+          template={actions.using}
           classrooms={classrooms}
-          onClose={() => setUsing(null)}
+          onClose={actions.closeUse}
           navigate={navigate}
         />
+      ) : null}
+      {creating ? (
+        <NewTemplateDialog courseId={courseId} onClose={() => setCreating(false)} navigate={navigate} />
       ) : null}
     </CoursePart>
   );

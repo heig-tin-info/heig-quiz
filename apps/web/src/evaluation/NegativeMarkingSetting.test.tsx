@@ -32,7 +32,13 @@ const withMode = (
 function Harness({ detail, disabled = false }: { detail: EvaluationDetail; disabled?: boolean }) {
   const patch = useEvaluationPatch(EVALUATION_ID);
   return (
-    <AdvancedDisclosure detail={detail} patch={patch} disabled={disabled} feedbackDisabled={false} />
+    <AdvancedDisclosure
+      config={detail.evaluation}
+      totalPoints={detail.totalPoints}
+      patch={patch}
+      disabled={disabled}
+      feedbackDisabled={false}
+    />
   );
 }
 

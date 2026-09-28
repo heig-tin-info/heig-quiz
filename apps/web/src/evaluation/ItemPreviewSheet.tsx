@@ -6,6 +6,7 @@ import type { ItemPreview, ItemRow } from "@quiz/contracts";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { itemPreviewKey } from "../queryKeys";
+import type { EditTarget } from "./editTarget";
 import { typeLabel } from "../questionTypes";
 import { Alert, Sheet } from "../ui";
 import { PreviewedQuestion } from "./PreviewedQuestion";
@@ -21,25 +22,26 @@ import { PreviewedQuestion } from "./PreviewedQuestion";
  *   - the payload comes out of `studentView` on the server (invariant 4), and
  *     it is mounted through the player's own `QuestionHost`, so what the
  *     teacher reads is the student's rendering, not a second one;
- *   - it is loaded through the EVALUATION: a colleague of the course previews
- *     an item whatever pool it was drawn from.
+ *   - it is loaded through the EVALUATION (or the template, whose twin route
+ *     the `target` names): a colleague of the course previews an item
+ *     whatever pool it was drawn from.
  *
  * Nothing is saved, run or graded: the whole-exam preview (#75) is where an
  * evaluation is rehearsed end to end.
  */
 export function ItemPreviewSheet({
-  evaluationId,
+  target,
   item,
   onClose,
 }: {
-  evaluationId: string;
+  target: EditTarget;
   item: ItemRow;
   onClose: () => void;
 }) {
   const t = useT();
   const preview = useQuery<ItemPreview>({
-    queryKey: itemPreviewKey(evaluationId, item.id, item.questionVersionId),
-    queryFn: () => api(`/app/api/evaluations/${evaluationId}/preview/items/${item.id}`),
+    queryKey: itemPreviewKey(target.detailKey, item.id, item.questionVersionId),
+    queryFn: () => api(`${target.base}/preview/items/${item.id}`),
     // Seed 0, a frozen version: the same view on every open.
     staleTime: Infinity,
   });

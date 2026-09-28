@@ -59,6 +59,7 @@ import {
   ResultsView,
   StudentFeedback,
   StudentHome,
+  TemplateDetail,
 } from "@quiz/contracts";
 import { describe, expect, it } from "vitest";
 
@@ -144,6 +145,13 @@ for (const id of gradedIds) {
   gradedItems.push(results.items[0]!.id);
   gradedAttempts.push(results.rows.find((r) => r.attemptId !== null)!.attemptId!);
 }
+/** The course's templates (ADR-031), and the items of the first one. */
+const templateIds = (
+  (await get(`/app/api/courses/${courses[0]!.id}/templates`)) as Ref[]
+).map((x) => x.id);
+const templateItems = (
+  (await get(`/app/api/templates/${templateIds[0]}`)) as { items: Ref[] }
+).items.map((i) => i.id);
 const polls = (await get("/app/api/polls")) as { id: string; code: string | null }[];
 
 // --- Route -> schema -------------------------------------------------------
@@ -175,6 +183,18 @@ const CHECKED: Case[] = [
     "/app/api/courses/:id/templates",
     `/app/api/courses/${courses[0]!.id}/templates`,
     EvaluationTemplate,
+  ),
+  // F-EVAL-25: every template's editor, its picker's pools, and each item's preview.
+  ...templateIds.flatMap((id) => [
+    one("/app/api/templates/:id", `/app/api/templates/${id}`, TemplateDetail),
+    each("/app/api/templates/:id/pools", `/app/api/templates/${id}/pools`, PoolSummary),
+  ]),
+  ...templateItems.map((itemId) =>
+    one(
+      "/app/api/templates/:id/preview/items/:itemId",
+      `/app/api/templates/${templateIds[0]}/preview/items/${itemId}`,
+      ItemPreview,
+    ),
   ),
   each(
     "/app/api/classrooms/:id/evaluations",

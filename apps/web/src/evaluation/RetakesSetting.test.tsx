@@ -25,7 +25,7 @@ const exercise = (retakes?: EvaluationDetail["evaluation"]["settings"]["retakes"
 
 function Harness({ detail, disabled = false }: { detail: EvaluationDetail; disabled?: boolean }) {
   const patch = useEvaluationPatch(EVALUATION_ID);
-  return <RetakesSetting detail={detail} patch={patch} disabled={disabled} />;
+  return <RetakesSetting settings={detail.evaluation.settings} patch={patch} disabled={disabled} />;
 }
 
 const PATCH = `PATCH /app/api/evaluations/${EVALUATION_ID}`;

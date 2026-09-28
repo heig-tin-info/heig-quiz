@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 
-import { retakesOf, type EvaluationDetail, type RetakeSettings } from "@quiz/contracts";
+import { retakesOf, type EvaluationSettings, type RetakeSettings } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { Card, cx, inputClass, inputSize, Segmented, SettingRow, Switch } from "../ui";
-import type { useEvaluationPatch } from "./usePatch";
+import type { ConfigPatch } from "./editTarget";
 
 /**
  * F-EVAL-15 (ADR-025): several attempts on an exercise.
@@ -18,16 +18,16 @@ import type { useEvaluationPatch } from "./usePatch";
  * sends the three fields together.
  */
 export function RetakesSetting({
-  detail,
+  settings,
   patch,
   disabled,
 }: {
-  detail: EvaluationDetail;
-  patch: ReturnType<typeof useEvaluationPatch>;
+  settings: EvaluationSettings;
+  patch: ConfigPatch;
   disabled: boolean;
 }) {
   const t = useT();
-  const retakes = retakesOf(detail.evaluation.settings);
+  const retakes = retakesOf(settings);
   const set = (next: Partial<RetakeSettings>) =>
     patch.mutate({ settings: { retakes: { ...retakes, ...next } } });
 

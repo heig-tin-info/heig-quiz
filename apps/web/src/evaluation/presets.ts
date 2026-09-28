@@ -8,7 +8,12 @@
  * and reading back "which preset is this?" is a comparison, never a flag that
  * could drift from the settings it claims to describe.
  */
-import type { EvaluationDetail, EvaluationMode, EvaluationPatch } from "@quiz/contracts";
+import type {
+  EvaluationMode,
+  EvaluationPatch,
+  EvaluationSettings,
+  TemplatePatch,
+} from "@quiz/contracts";
 import { feedbackWhenFor } from "@quiz/domain";
 
 export type PresetId = "classroom" | "homework";
@@ -19,11 +24,11 @@ const CLASSROOM_DURATION_S = 45 * 60;
 /** A week, which is what "exercise of the week" means. */
 const HOMEWORK_WINDOW_MS = 7 * 24 * 3600 * 1000;
 
-export function presetPatch(
-  id: PresetId,
-  mode: EvaluationMode,
-  now = Date.now(),
-): EvaluationPatch {
+/**
+ * What a preset sets that is not a date: the whole preset on a template,
+ * which has no dates to set (F-EVAL-25), and the base of an evaluation's.
+ */
+export function presetSettings(id: PresetId, mode: EvaluationMode): TemplatePatch {
   if (id === "classroom") {
     return {
       settings: {
@@ -36,7 +41,6 @@ export function presetPatch(
         showProgressBar: true,
       },
       durationS: CLASSROOM_DURATION_S,
-      closesAt: null,
       feedbackPolicy: { when: "on_release", showKey: true, showExplanation: true },
     };
   }
@@ -51,11 +55,6 @@ export function presetPatch(
       showProgressBar: true,
     },
     durationS: null,
-    // A common end needs its opening time: it is the base of the extra time
-    // (decision D8), and the waiting room refuses to open without it (#76).
-    // The window the preset promises starts now.
-    opensAt: new Date(now).toISOString(),
-    closesAt: new Date(now + HOMEWORK_WINDOW_MS).toISOString(),
     // Right away, where the rule allows it: an exam never gives immediate
     // feedback, and the server refuses the pair rather than fixing it (#78).
     feedbackPolicy: {
@@ -66,13 +65,29 @@ export function presetPatch(
   };
 }
 
+/** An evaluation's preset: its settings, and the dates it implies. */
+export function presetPatch(
+  id: PresetId,
+  mode: EvaluationMode,
+  now = Date.now(),
+): EvaluationPatch {
+  if (id === "classroom") return { ...presetSettings(id, mode), closesAt: null };
+  return {
+    ...presetSettings(id, mode),
+    // A common end needs its opening time: it is the base of the extra time
+    // (decision D8), and the waiting room refuses to open without it (#76).
+    // The window the preset promises starts now.
+    opensAt: new Date(now).toISOString(),
+    closesAt: new Date(now + HOMEWORK_WINDOW_MS).toISOString(),
+  };
+}
+
 /**
  * Which preset the current settings look like, or null for "custom". Only the
  * decisions the preset is ABOUT are compared: a teacher who ticked "shuffle
  * the choices" off has not left the in-class preset behind.
  */
-export function matchPreset(detail: EvaluationDetail): PresetId | null {
-  const { settings } = detail.evaluation;
+export function matchPreset(settings: EvaluationSettings): PresetId | null {
   if (settings.timing === "duration" && settings.lobby === "manual") return "classroom";
   if (settings.timing === "deadline" && settings.lobby === "skip") return "homework";
   return null;

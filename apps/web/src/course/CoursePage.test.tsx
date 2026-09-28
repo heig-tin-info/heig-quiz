@@ -84,8 +84,10 @@ describe("CoursePage", () => {
 
     const create = await screen.findAllByRole("button", { name: /New classroom/ });
     expect(create).toHaveLength(1);
-    // No "New template" before a template can be written in place (A2).
-    expect(screen.queryByRole("button", { name: /template/i })).toBeNull();
+    // "New template" is the templates section's own action, not a second primary.
+    const newTemplate = await screen.findByRole("button", { name: "New template" });
+    expect(newTemplate.className).not.toMatch(/bg-accent/);
+    expect(create[0]!.className).toMatch(/bg-accent/);
     await userEvent.click(create[0]!);
     expect(await screen.findByRole("dialog", { name: "New classroom" })).toBeVisible();
   });
@@ -95,7 +97,45 @@ describe("CoursePage", () => {
     renderWithProviders(<CoursePage id="c1" navigate={vi.fn()} />);
 
     expect(await screen.findByText("No template yet")).toBeVisible();
-    expect(screen.getByText(/“Save as template”, in an evaluation's menu/)).toBeVisible();
+    expect(screen.getByText(/“New template”, or .* “Save as template” in its menu/)).toBeVisible();
+    // The empty state's action, beside the section's own.
+    expect(screen.getAllByRole("button", { name: "New template" })).toHaveLength(2);
+  });
+
+  it("creates an empty template from the section, then opens its editor (F-EVAL-24)", async () => {
+    const { calls } = mockFetch({
+      ...world([]),
+      "POST /app/api/courses/c1/templates": ok({ ...TEMPLATE, id: "t9", itemCount: 0, totalPoints: 0, revision: 1 }),
+    });
+    const navigate = vi.fn();
+    renderWithProviders(<CoursePage id="c1" navigate={navigate} />);
+
+    await userEvent.click((await screen.findAllByRole("button", { name: "New template" }))[0]!);
+    const dialog = await screen.findByRole("dialog", { name: "New template" });
+    const submit = within(dialog).getByRole("button", { name: "Create template" });
+    expect(submit).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText(/Title/), "Series 3");
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Exercise" }));
+    await userEvent.click(submit);
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "template", id: "t9" }));
+    const post = calls.find((c) => c.method === "POST");
+    expect(post?.body).toEqual({
+      title: "Series 3",
+      mode: "exercise",
+      preset: "exercise",
+    });
+  });
+
+  it("opens a template's editor from its row, and keeps its two actions beside it", async () => {
+    mockFetch(world());
+    const navigate = vi.fn();
+    renderWithProviders(<CoursePage id="c1" navigate={navigate} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: /Final exam/ }));
+    expect(navigate).toHaveBeenCalledWith({ view: "template", id: "t1" });
+    expect(screen.getByRole("button", { name: "Use in a classroom" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Delete template" })).toBeVisible();
   });
 
   it("says a course it cannot find does not exist, and offers the way back", async () => {

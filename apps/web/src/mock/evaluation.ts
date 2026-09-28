@@ -739,21 +739,26 @@ const rosterOf = (e: MockEvaluation) => {
   };
 };
 
-const evaluationDetail = (e: MockEvaluation) => ({
-  evaluation: toEvaluation(e),
-  items: e.items.map((i) => ({ ...i })),
+/** What an item list says about itself, for an evaluation and a template alike. */
+const itemListFacts = (e: MockEvaluation) => ({
   totalPoints: totalPointsOf(e),
   staleItems: e.items
     .filter((i) => i.latestVersionNumber !== null && i.latestVersionNumber > i.versionNumber)
     .map((i) => i.id),
-  attemptCount: attemptCountOf(e),
-  editable: isConfigEditable(e.state, attemptCountOf(e)),
-  self: selfOf(e),
   // Like the server: the questions whose pool this reader may write (#127).
   editableQuestionIds: e.items.flatMap((i) => {
     const q = itemQuestion(i);
     return q && q.poolId && poolSummary(poolOr404(q.poolId)).role !== "reader" ? [q.id] : [];
   }),
+});
+
+const evaluationDetail = (e: MockEvaluation) => ({
+  evaluation: toEvaluation(e),
+  items: e.items.map((i) => ({ ...i })),
+  ...itemListFacts(e),
+  attemptCount: attemptCountOf(e),
+  editable: isConfigEditable(e.state, attemptCountOf(e)),
+  self: selfOf(e),
   roster: rosterOf(e),
 });
 
@@ -907,6 +912,19 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
       message: "a poll's feedback follows its reveal: use the poll's reveal route",
     });
   }
+  assertConfigPatch(e, body);
+  applyConfigPatch(e, body);
+  if ("opensAt" in body) e.opensAt = body.opensAt as string | null;
+  if ("closesAt" in body) e.closesAt = body.closesAt as string | null;
+  if ("accessCode" in body) e.accessCode = body.accessCode as string | null;
+  return evaluationDetail(e);
+});
+
+/**
+ * The server's refusals of a configuration patch that do not depend on a run
+ * (F-EVAL-15, F-EVAL-11): an evaluation's and a template's alike.
+ */
+function assertConfigPatch(e: MockEvaluation, body: Record<string, unknown>): void {
   const settings = body.settings as
     | { lobby?: LobbyName; retakes?: { enabled?: boolean } }
     | undefined;
@@ -930,6 +948,10 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
       });
     }
   }
+}
+
+/** The fields an evaluation and a template share, written. */
+function applyConfigPatch(e: MockEvaluation, body: Record<string, unknown>): void {
   if (typeof body.title === "string") e.title = body.title;
   if (body.settings) e.settings = { ...e.settings, ...(body.settings as object) };
   if (body.feedbackPolicy) {
@@ -937,12 +959,8 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
   }
   if (body.gradingScale) e.gradingScale = body.gradingScale as Record<string, unknown>;
   if (body.mcqPolicy) e.mcqPolicy = body.mcqPolicy as McqScorePolicy;
-  if ("opensAt" in body) e.opensAt = body.opensAt as string | null;
-  if ("closesAt" in body) e.closesAt = body.closesAt as string | null;
   if ("durationS" in body) e.durationS = body.durationS as number | null;
-  if ("accessCode" in body) e.accessCode = body.accessCode as string | null;
-  return evaluationDetail(e);
-});
+}
 on("DELETE", "/app/api/evaluations/:id", (m) => {
   const i = evaluations.findIndex((e) => e.id === m.groups!.id);
   if (i >= 0) evaluations.splice(i, 1);
@@ -993,7 +1011,7 @@ function makeTemplate(courseId: string, source: MockEvaluation): MockTemplate {
   return { id: shell.id, courseId, revision: 1, shell };
 }
 
-const templateOr404 = (id: string) => {
+export const templateOr404 = (id: string) => {
   const found = templates.find((x) => x.id === id);
   if (!found) throw new MockError(404, "Template not found");
   return found;
@@ -1008,6 +1026,30 @@ const templateSummary = (x: MockTemplate) => ({
   itemCount: x.shell.items.length,
   totalPoints: totalPointsOf(x.shell),
 });
+
+/**
+ * `GET /templates/:id` (F-EVAL-25): the template with its configuration, and
+ * its items flagged, like the server, when their pool left the course.
+ */
+export const templateDetail = (x: MockTemplate) => {
+  const e = x.shell;
+  const linked = coursePools[x.courseId] ?? [];
+  return {
+    template: {
+      ...templateSummary(x),
+      settings: e.settings,
+      gradingScale: e.gradingScale,
+      feedbackPolicy: e.feedbackPolicy,
+      mcqPolicy: e.mcqPolicy,
+      durationS: e.durationS,
+    },
+    items: e.items.map((i) => {
+      const poolId = itemQuestion(i)?.poolId ?? null;
+      return { ...i, poolUnlinked: poolId !== null && !linked.includes(poolId) };
+    }),
+    ...itemListFacts(e),
+  };
+};
 
 // Two templates on the first course, so the course card and the "Start from"
 // choice of a new evaluation have something to show (none under `?empty=1`).
@@ -1094,20 +1136,20 @@ function assertItemListEditable(
   }
 }
 
-on("POST", "/app/api/evaluations/:id/items/update-versions", (m, body) => {
-  const e = evaluationOr404(m.groups!.id!);
-  assertItemListEditable(e, "attempts_exist");
-  const ids = (body.itemIds as string[] | undefined) ?? null;
+// --- Item lists, an evaluation's or a template's -----------------------------
+//
+// The edits themselves, written once: the evaluation routes gate them with
+// the item-list lock, the template routes move the revision after them.
+
+function updateVersionsOf(e: MockEvaluation, ids: string[] | null): void {
   for (const item of e.items) {
     if (ids !== null && !ids.includes(item.id)) continue;
     if (item.latestVersionNumber !== null) item.versionNumber = item.latestVersionNumber;
   }
-  return e.items.map((i) => ({ ...i }));
-});
-on("POST", "/app/api/evaluations/:id/items", (m, body) => {
-  const e = evaluationOr404(m.groups!.id!);
-  assertItemListEditable(e);
-  for (const questionId of (body.questionIds as string[] | undefined) ?? []) {
+}
+
+function addItemsTo(e: MockEvaluation, questionIds: string[]): void {
+  for (const questionId of questionIds) {
     const q = questions.find((x) => x.id === questionId);
     const latest = q?.versions.at(-1);
     // A question that was never published cannot be added: the picker shows
@@ -1134,32 +1176,136 @@ on("POST", "/app/api/evaluations/:id/items", (m, body) => {
       deprecated: latest.deprecatedAt !== null,
     });
   }
+}
+
+function patchItemOf(e: MockEvaluation, itemId: string, body: Record<string, unknown>) {
+  const item = e.items.find((i) => i.id === itemId);
+  if (!item) throw new MockError(404, "Item not found");
+  if (typeof body.points === "number") item.points = body.points;
+  if (typeof body.milestone === "boolean") item.milestone = body.milestone;
+  return item;
+}
+
+function reorderItemsOf(e: MockEvaluation, order: string[]): void {
+  e.items.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+  e.items.forEach((i, index) => (i.position = index + 1));
+}
+
+function removeItemOf(e: MockEvaluation, itemId: string): void {
+  e.items = e.items.filter((i) => i.id !== itemId);
+  e.items.forEach((i, index) => (i.position = index + 1));
+}
+
+on("POST", "/app/api/evaluations/:id/items/update-versions", (m, body) => {
+  const e = evaluationOr404(m.groups!.id!);
+  assertItemListEditable(e, "attempts_exist");
+  updateVersionsOf(e, (body.itemIds as string[] | undefined) ?? null);
+  return e.items.map((i) => ({ ...i }));
+});
+on("POST", "/app/api/evaluations/:id/items", (m, body) => {
+  const e = evaluationOr404(m.groups!.id!);
+  assertItemListEditable(e);
+  addItemsTo(e, (body.questionIds as string[] | undefined) ?? []);
   return e.items.map((i) => ({ ...i }));
 });
 on("PATCH", "/app/api/evaluations/:id/items/:itemId", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
   assertItemListEditable(e);
-  const item = e.items.find((i) => i.id === m.groups!.itemId);
-  if (!item) throw new MockError(404, "Item not found");
-  if (typeof body.points === "number") item.points = body.points;
-  if (typeof body.milestone === "boolean") item.milestone = body.milestone;
-  return { ...item };
+  return { ...patchItemOf(e, m.groups!.itemId!, body) };
 });
 on("PUT", "/app/api/evaluations/:id/items/order", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
   assertItemListEditable(e);
-  const order = (body.itemIds as string[]) ?? [];
-  e.items.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
-  e.items.forEach((i, index) => (i.position = index + 1));
+  reorderItemsOf(e, (body.itemIds as string[]) ?? []);
   return e.items.map((i) => ({ ...i }));
 });
 on("DELETE", "/app/api/evaluations/:id/items/:itemId", (m) => {
   const e = evaluationOr404(m.groups!.id!);
   assertItemListEditable(e);
-  e.items = e.items.filter((i) => i.id !== m.groups!.itemId);
-  e.items.forEach((i, index) => (i.position = index + 1));
+  removeItemOf(e, m.groups!.itemId!);
   return undefined;
 });
+
+// --- Editing a template in place (F-EVAL-25) ---------------------------------
+//
+// The same edits under `/templates/:id/...`, each answering the whole
+// `TemplateDetail`, and moving the revision by one when the content moved —
+// anything but the title, as on the server (ADR-031, addendum d).
+
+/** The run's own fields: a template's patch refuses them (strict schema, 400). */
+const RUN_FIELDS = ["opensAt", "closesAt", "accessCode", "ipAllowlist"];
+
+/** One write to a template: `edit` says whether the content moved. */
+function templateWrite(id: string, edit: (e: MockEvaluation) => boolean) {
+  const template = templateOr404(id);
+  if (edit(template.shell)) template.revision += 1;
+  return templateDetail(template);
+}
+
+on("POST", "/app/api/courses/:id/templates", (m, body) => {
+  const course = courses.find((c) => c.id === m.groups!.id);
+  if (!course) throw new MockError(404, "Course not found");
+  if (body.mode === "poll") {
+    throw new MockPayload(422, { error: "template_poll", message: "a poll cannot be a template" });
+  }
+  const made = makeTemplate(
+    course.id,
+    makeEvaluation("", String(body.title), "draft", 0, {
+      mode: (body.mode as MockEvaluation["mode"]) ?? "exam",
+      mcqPolicy: me?.mcqPolicy ?? "all_or_nothing",
+      createdAt: iso(0),
+    }),
+  );
+  templates.unshift(made);
+  return templateSummary(made);
+});
+on("GET", "/app/api/templates/:id", (m) => templateDetail(templateOr404(m.groups!.id!)));
+on("GET", "/app/api/templates/:id/pools", (m) =>
+  (coursePools[templateOr404(m.groups!.id!).courseId] ?? [])
+    .map((id) => poolSummary(poolOr404(id)))
+    .sort((a, b) => a.name.localeCompare(b.name)),
+);
+on("PATCH", "/app/api/templates/:id", (m, body) =>
+  templateWrite(m.groups!.id!, (e) => {
+    const run = Object.keys(body).filter((k) => RUN_FIELDS.includes(k));
+    if (run.length > 0) throw new MockError(400, `Unrecognized keys: ${run.join(", ")}`);
+    assertConfigPatch(e, body);
+    applyConfigPatch(e, body);
+    return Object.keys(body).some((k) => k !== "title");
+  }),
+);
+on("POST", "/app/api/templates/:id/items/update-versions", (m, body) =>
+  templateWrite(m.groups!.id!, (e) => {
+    const before = e.items.map((i) => i.versionNumber).join();
+    updateVersionsOf(e, (body.itemIds as string[] | undefined) ?? null);
+    return e.items.map((i) => i.versionNumber).join() !== before;
+  }),
+);
+on("POST", "/app/api/templates/:id/items", (m, body) =>
+  templateWrite(m.groups!.id!, (e) => {
+    const before = e.items.length;
+    addItemsTo(e, (body.questionIds as string[] | undefined) ?? []);
+    return e.items.length !== before;
+  }),
+);
+on("PATCH", "/app/api/templates/:id/items/:itemId", (m, body) =>
+  templateWrite(m.groups!.id!, (e) => {
+    patchItemOf(e, m.groups!.itemId!, body);
+    return true;
+  }),
+);
+on("PUT", "/app/api/templates/:id/items/order", (m, body) =>
+  templateWrite(m.groups!.id!, (e) => {
+    reorderItemsOf(e, (body.itemIds as string[]) ?? []);
+    return true;
+  }),
+);
+on("DELETE", "/app/api/templates/:id/items/:itemId", (m) =>
+  templateWrite(m.groups!.id!, (e) => {
+    removeItemOf(e, m.groups!.itemId!);
+    return true;
+  }),
+);
 on("POST", "/app/api/evaluations/:id/state", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
   // The server's two readiness refusals (`guardTransition`), with the same
