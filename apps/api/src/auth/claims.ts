@@ -83,31 +83,67 @@ interface KnownAddress {
   email: string;
   /** `login`, or the claim the address came from. */
   source: string;
+  /**
+   * Whether the address may identify the account. An address asserted by
+   * the home organization is verified by construction; the login address
+   * only when the IdP says `email_verified` — it is the one the user picked.
+   */
+  verified: boolean;
 }
 
 /**
  * Every address a login reveals: the `email` claim, then those asserted by
- * the institution. Deduplicated on the address, first source wins.
+ * the institution. Deduplicated on the address, first source wins; an
+ * address the institution also asserts is verified whatever the login says.
  */
-export function addressesOf(claims: Record<string, unknown>): KnownAddress[] {
+export function addressesOf(
+  claims: Record<string, unknown>,
+  loginVerified: boolean,
+): KnownAddress[] {
   const found = new Map<string, KnownAddress>();
-  const add = (raw: string, source: string) => {
+  const add = (raw: string, source: string, verified: boolean) => {
     const email = normalizeEmail(raw);
-    if (email !== "" && !found.has(email)) found.set(email, { email, source });
+    if (email === "") return;
+    const seen = found.get(email);
+    if (seen) seen.verified ||= verified;
+    else found.set(email, { email, source, verified });
   };
-  if (typeof claims.email === "string") add(claims.email, "login");
+  if (typeof claims.email === "string") add(claims.email, "login", loginVerified);
   for (const claim of MAIL_CLAIMS) {
-    for (const value of claimList(claims[claim])) add(value, claim);
+    for (const value of claimList(claims[claim])) add(value, claim, true);
   }
   return [...found.values()];
 }
 
 /**
- * Bare affiliation kinds (`student`, `staff`, …), the scope dropped:
- * `student@heig-vd.ch` and `student` both yield `student`.
+ * The addresses a login may act on BEFORE anything is stored (the staging
+ * allowlist). Everything after reads the stored set (`knownEmails`), whose
+ * `verified` flag follows the same `addressesOf`.
  */
-export function affiliationKinds(affiliations: readonly string[]): string[] {
-  return [...new Set(affiliations.map((a) => a.split("@")[0]!).filter((a) => a !== ""))];
+export function verifiedAddressesOf(
+  claims: Record<string, unknown>,
+  loginVerified: boolean,
+): string[] {
+  return addressesOf(claims, loginVerified)
+    .filter((a) => a.verified)
+    .map((a) => a.email);
+}
+
+/**
+ * The affiliation kinds (`student`, `staff`, …) asserted by one of `domains`:
+ * `staff@hes-so.ch` yields `staff` when `hes-so.ch` is listed, nothing
+ * otherwise. An UNSCOPED affiliation (`staff`) names no institution, so it
+ * yields nothing either: any edu-ID home organization may assert it.
+ */
+export function affiliationKindsIn(
+  affiliations: readonly string[],
+  domains: readonly string[],
+): string[] {
+  const kinds = affiliations.flatMap((a) => {
+    const at = a.indexOf("@");
+    return at > 0 && domains.includes(a.slice(at + 1)) ? [a.slice(0, at)] : [];
+  });
+  return [...new Set(kinds)];
 }
 
 /** Everything worth keeping from a login, the token plumbing removed. */
@@ -117,7 +153,8 @@ export function persistableClaims(claims: Record<string, unknown>): Record<strin
 
 /**
  * One row per user, overwritten at each login: the point is to know what
- * the IdP says *now*, not to build a history nobody would read.
+ * the IdP says *now*, not to build a history nobody would read. The
+ * affiliations it stores drive the role (roles.ts).
  */
 export async function recordIdpClaims(
   db: Db,
@@ -147,11 +184,9 @@ export async function recordIdpClaims(
 /**
  * Records the addresses a login revealed. Purely additive: an address seen
  * once is never removed, and `first_seen_at` keeps the date of the login
- * that revealed it.
- *
- * Only the login address carries the IdP's `email_verified`; an address
- * asserted by the home organization is verified by construction — that is
- * precisely why it is worth more than the preferred address the user chose.
+ * that revealed it. `verified` follows `addressesOf` and only ever rises: a
+ * login address verified later becomes verified, never the reverse.
+ * Returns the number of addresses added or newly verified.
  */
 export async function syncUserEmails(
   db: Db,
@@ -159,19 +194,16 @@ export async function syncUserEmails(
   claims: Record<string, unknown>,
   loginVerified: boolean,
 ): Promise<number> {
-  const addresses = addressesOf(claims);
+  const addresses = addressesOf(claims, loginVerified);
   if (addresses.length === 0) return 0;
   const inserted = await db
     .insert(userEmails)
-    .values(
-      addresses.map((a) => ({
-        userId,
-        email: a.email,
-        source: a.source,
-        verified: a.source === "login" ? loginVerified : true,
-      })),
-    )
-    .onConflictDoNothing({ target: [userEmails.userId, userEmails.email] })
+    .values(addresses.map((a) => ({ userId, ...a })))
+    .onConflictDoUpdate({
+      target: [userEmails.userId, userEmails.email],
+      set: { verified: true },
+      setWhere: sql`excluded.verified and not ${userEmails.verified}`,
+    })
     .returning({ email: userEmails.email });
   return inserted.length;
 }

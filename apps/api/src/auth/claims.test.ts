@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   addressesOf,
-  affiliationKinds,
+  affiliationKindsIn,
   affiliationsOf,
   claimList,
   persistableClaims,
+  verifiedAddressesOf,
 } from "./claims.js";
 import { scopeFor } from "./oidc.js";
 
@@ -76,39 +77,73 @@ describe("addressesOf", () => {
     // Shape observed on production: a private login address, one @heig-vd.ch
     // affiliation address.
     expect(
-      addressesOf({
-        email: "Willy.TK89@gmail.test",
-        swissEduIDLinkedAffiliationMail: ["William.Ammann@heig-vd.ch"],
-      }),
+      addressesOf(
+        {
+          email: "Willy.TK89@gmail.test",
+          swissEduIDLinkedAffiliationMail: ["William.Ammann@heig-vd.ch"],
+        },
+        true,
+      ),
     ).toEqual([
-      { email: "willy.tk89@gmail.test", source: "login" },
-      { email: "william.ammann@heig-vd.ch", source: "swissEduIDLinkedAffiliationMail" },
+      { email: "willy.tk89@gmail.test", source: "login", verified: true },
+      {
+        email: "william.ammann@heig-vd.ch",
+        source: "swissEduIDLinkedAffiliationMail",
+        verified: true,
+      },
     ]);
   });
 
   it("keeps the first source of an address released twice", () => {
-    const found = addressesOf({
-      email: "a@heig.test",
-      swissEduIDLinkedAffiliationMail: ["a@heig.test"],
-      swissEduIDAssociatedMail: ["b@heig.test"],
-    });
+    const found = addressesOf(
+      {
+        email: "a@heig.test",
+        swissEduIDLinkedAffiliationMail: ["a@heig.test"],
+        swissEduIDAssociatedMail: ["b@heig.test"],
+      },
+      false,
+    );
+    // The institution vouches for the login address the IdP did not verify.
     expect(found).toEqual([
-      { email: "a@heig.test", source: "login" },
-      { email: "b@heig.test", source: "swissEduIDAssociatedMail" },
+      { email: "a@heig.test", source: "login", verified: true },
+      { email: "b@heig.test", source: "swissEduIDAssociatedMail", verified: true },
     ]);
   });
 
   it("is empty when the IdP released nothing usable", () => {
-    expect(addressesOf({ sub: "abc" })).toEqual([]);
+    expect(addressesOf({ sub: "abc" }, true)).toEqual([]);
   });
 });
 
-describe("affiliationKinds", () => {
-  it("drops the scope so student@heig-vd.ch reads as student", () => {
-    expect(affiliationKinds(["student", "student@heig-vd.ch", "staff@hes-so.ch"])).toEqual([
+describe("verifiedAddressesOf", () => {
+  const claims = {
+    email: "boss@heig.test",
+    swissEduIDLinkedAffiliationMail: ["first.last@heig-vd.ch"],
+  };
+
+  it("drops the login address the IdP did not verify", () => {
+    expect(verifiedAddressesOf(claims, false)).toEqual(["first.last@heig-vd.ch"]);
+  });
+
+  it("keeps it once verified", () => {
+    expect(verifiedAddressesOf(claims, true)).toEqual(["boss@heig.test", "first.last@heig-vd.ch"]);
+  });
+});
+
+describe("affiliationKindsIn", () => {
+  const ours = ["heig-vd.ch", "hes-so.ch"];
+
+  it("reads the kinds scoped to a listed institution", () => {
+    expect(affiliationKindsIn(["student@heig-vd.ch", "staff@hes-so.ch"], ours)).toEqual([
       "student",
       "staff",
     ]);
+  });
+
+  it("ignores another institution's scope and an unscoped kind", () => {
+    expect(affiliationKindsIn(["staff@unige.ch", "staff", "student", "affiliate@eduid.ch"], ours)).toEqual(
+      [],
+    );
   });
 });
 

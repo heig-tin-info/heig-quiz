@@ -1,3 +1,6 @@
+/** A base no request can come from: what a path resolves against. */
+const PROBE_ORIGIN = "https://x.invalid";
+
 /**
  * Where to land after a login round trip — the ONE validator both login
  * paths use (the OIDC callback and the development persona picker).
@@ -8,14 +11,29 @@
  * through the login as `?next=`.
  *
  * Only a same-origin, absolute PATH is accepted: anything else — a full URL,
- * a protocol-relative `//evil.example`, a backslash Windows browsers once
- * folded to a slash — falls back to the home page. That is what keeps the
- * parameter from ever becoming an open redirect.
+ * a protocol-relative `//evil.example`, a backslash browsers fold to a slash,
+ * a tab or newline they strip (`/\t/evil.example` is `//evil.example`) —
+ * falls back to the home page. The path is resolved the way a browser would
+ * and must stay on our origin; only its path, query and fragment are
+ * returned, never the raw string. That is what keeps the parameter from
+ * ever becoming an open redirect.
  */
 export function safeReturnTo(raw: unknown): string {
   if (typeof raw !== "string") return "/";
-  if (!raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return "/";
-  return raw;
+  if (!raw.startsWith("/") || raw.includes("\\") || /[\x00-\x20\x7f]/.test(raw)) return "/";
+  let url: URL;
+  try {
+    url = new URL(raw, PROBE_ORIGIN);
+  } catch {
+    return "/";
+  }
+  // Dot segments may collapse to `//` (`/..//evil.example`): the result is
+  // checked again, since it is what the Location header will carry. The
+  // origin check is belt and braces: the filters above already leave no
+  // input that resolves elsewhere.
+  const path = url.pathname + url.search + url.hash;
+  if (url.origin !== PROBE_ORIGIN || path.startsWith("//")) return "/";
+  return path;
 }
 
 /** `?next=` wins; `?returnTo=` is the name the SPA already sends. */

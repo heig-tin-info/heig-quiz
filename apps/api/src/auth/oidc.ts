@@ -42,6 +42,11 @@ export interface OidcClaims {
   picture: string | null;
   /** Everything the IdP released, ID token and userinfo merged (GH-11). */
   raw: Record<string, unknown>;
+  /**
+   * Whether userinfo answered. edu-ID releases the affiliations there only,
+   * so without it `raw` says nothing about them — which is not "none".
+   */
+  complete: boolean;
 }
 
 export class OidcProvider {
@@ -129,6 +134,7 @@ export class OidcProvider {
     // otherwise enough for: the extra attributes are a bonus, the login is
     // not.
     let userinfo: Record<string, unknown> = {};
+    let complete = true;
     try {
       userinfo = (await oidc.fetchUserInfo(
         config,
@@ -136,6 +142,7 @@ export class OidcProvider {
         idClaims.sub,
       )) as unknown as Record<string, unknown>;
     } catch (err) {
+      complete = false;
       this.log?.warn({ err }, "OIDC userinfo unavailable, falling back to the ID token");
     }
     // The ID token wins on the claims it carries (it is signed and bound to
@@ -155,6 +162,7 @@ export class OidcProvider {
           : null,
       picture: typeof claims.picture === "string" ? claims.picture : null,
       raw: claims,
+      complete,
     };
   }
 }
