@@ -70,6 +70,17 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     evaluationId: z.uuid(),
     evaluationTitle: z.string(),
   }),
+  z.object({
+    /**
+     * An evaluation the recipient has not submitted closes within 24 hours
+     * (ADR-030, addendum §d): sent once per (evaluation, student) by the
+     * ticker's scan. No `closesAt`: the e-mail would have to render a date in
+     * the recipient's time zone, and "within 24 hours" says what matters.
+     */
+    kind: z.literal("deadline_approaching"),
+    evaluationId: z.uuid(),
+    evaluationTitle: z.string(),
+  }),
   /** Students took their seat in a classroom (join code, or a roster claim). */
   z.object({ kind: z.literal("student_joined"), ...classroomCount }),
   /** Roster lines of a classroom were flagged for the teacher's decision (AU-21). */
@@ -126,6 +137,7 @@ export const NOTIFICATION_KINDS = [
   "results_released",
   "activity_scheduled",
   "activity_available",
+  "deadline_approaching",
   "student_joined",
   "roster_conflict",
   "grading_ready",
@@ -164,6 +176,8 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   // On, but only a take-home exercise leaves the app: an in-class one opens
   // with the students in the room (§h.3, the `channels` of `notifyMany`).
   activity_available: { bell: true, email: true, teams: true },
+  // A reminder a student must not miss (§c).
+  deadline_approaching: { bell: true, email: true, teams: true },
   student_joined: { bell: true, email: false, teams: false },
   roster_conflict: { bell: true, email: true, teams: true },
   grading_ready: { bell: true, email: true, teams: true },
@@ -177,6 +191,7 @@ const STUDENT_KINDS: readonly NotificationKind[] = [
   "results_released",
   "activity_scheduled",
   "activity_available",
+  "deadline_approaching",
 ];
 
 /** The kinds a role receives, as the settings grid lists them. */

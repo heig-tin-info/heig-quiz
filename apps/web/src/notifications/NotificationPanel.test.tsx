@@ -207,6 +207,26 @@ describe("the inbox in the account menu", () => {
     expect(navigate).toHaveBeenLastCalledWith({ view: "home" });
   });
 
+  it("reminds a student of a deadline, and opens the attempt", async () => {
+    const reminder: Notification = {
+      id: "n9",
+      payload: { kind: "deadline_approaching", evaluationId: "e6", evaluationTitle: "Série 4" },
+      createdAt: new Date(Date.now() - 60_000).toISOString(),
+      readAt: null,
+    };
+    mockFetch({
+      [`GET ${LIST}`]: ok({ items: [reminder], unread: 1 }),
+      "POST /app/api/notifications/n9/read": { status: 204 },
+    });
+    const navigate = vi.fn();
+    renderMenu(navigate);
+    await openInbox();
+    await userEvent.click(
+      screen.getByText("“Série 4” closes in less than 24 hours. You have not submitted it yet."),
+    );
+    expect(navigate).toHaveBeenCalledWith({ view: "attempt", evaluationId: "e6" });
+  });
+
   it("marks the whole inbox read from the panel", async () => {
     const { calls } = mockFetch({
       [`GET ${LIST}`]: ok({ items: [SHARED], unread: 1 }),

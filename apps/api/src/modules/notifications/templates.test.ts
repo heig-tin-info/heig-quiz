@@ -81,6 +81,7 @@ describe("renderNotification", () => {
       { kind: "activity_scheduled", classroomId: CLASSROOM, classroomName: "PRG1-2026", count: 16 },
       { kind: "activity_scheduled", classroomId: CLASSROOM, classroomName: "PRG1-2026", count: 1 },
       { kind: "activity_available", evaluationId: EVAL, evaluationTitle: "Série 3" },
+      { kind: "deadline_approaching", evaluationId: EVAL, evaluationTitle: "Série 4" },
     ] satisfies NotificationPayload[]) {
       for (const locale of ["en", "fr"] as const) {
         const out = renderNotification(payload, locale, "https://quiz.test");
@@ -206,6 +207,20 @@ describe("the student kinds of step 6 (#198)", () => {
     expect(notificationPath(available)).toBe(`/take/${EVAL}`);
     const out = renderNotification(available, "fr", "https://quiz.test");
     expect(out.subject).toBe("Exercice ouvert : Série 3");
+    expect(out.text).toContain(`https://quiz.test/take/${EVAL}`);
+  });
+});
+
+describe("deadline_approaching (#198 step 7)", () => {
+  it("sends the reminder to the attempt, with no date to render", () => {
+    const reminder = { kind: "deadline_approaching", evaluationId: EVAL, evaluationTitle: "Série 4" } as const;
+    expect(notificationPath(reminder)).toBe(`/take/${EVAL}`);
+    expect(renderNotification(reminder, "en", "https://quiz.test").subject).toBe(
+      "Closes within 24 hours: Série 4",
+    );
+    const out = renderNotification(reminder, "fr", "https://quiz.test");
+    expect(out.subject).toBe("Se termine dans les 24 heures : Série 4");
+    expect(out.text).toContain("moins de 24 heures");
     expect(out.text).toContain(`https://quiz.test/take/${EVAL}`);
   });
 });

@@ -100,6 +100,32 @@ export const notifications = pgTable(
 );
 
 /**
+ * The `deadline_approaching` reminders already sent (ADR-030, addendum §d):
+ * at most ONE per (evaluation, student), ever. The ticker's scan claims a
+ * row with `INSERT … ON CONFLICT DO NOTHING RETURNING` before it notifies,
+ * so two scans racing (two processes, a slow tick) tell a student once, a
+ * `closes_at` moved after the reminder does not send it again, and a scan
+ * that missed the boundary (a restart) still finds the pair unmarked.
+ *
+ * A claimed row whose notification then failed is not retried
+ * (best-effort, as the other kinds). Both keys cascade: deleting the
+ * evaluation or the account removes its markers.
+ */
+export const deadlineReminders = pgTable(
+  "deadline_reminders",
+  {
+    evaluationId: uuid("evaluation_id")
+      .notNull()
+      .references(() => evaluations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.evaluationId, t.userId] })],
+);
+
+/**
  * The channels a user chose, per kind (ADR-030). SPARSE: a row exists only
  * for a toggle the user actually moved, and a missing row means the default
  * of its kind in `DEFAULT_CHANNEL_ENABLED` — so a kind added later reaches
