@@ -51,7 +51,7 @@ describe("CodeReview", () => {
   it("names the check that failed once the key travelled with the details", () => {
     setup(graded.details, {
       audience: "teacher",
-      solution: codeServer.toSolution(config),
+      solution: codeServer.toSolution(config, { seed: 0, itemId: "i", shuffle: false }),
     });
     // The failing visible case printed "nope" and left with 0: the exit code
     // is the one the case wanted, so the output is what did not hold.

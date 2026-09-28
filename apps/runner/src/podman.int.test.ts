@@ -40,7 +40,8 @@ beforeAll(async () => {
 });
 
 function request(
-  language: RunnerLanguage,
+  // spice names its files per stimulus (`s0.cir`…), not `main.<ext>`.
+  language: Exclude<RunnerLanguage, "spice">,
   source: string,
   overrides: Partial<RunnerRequest> = {},
 ): RunnerRequest {

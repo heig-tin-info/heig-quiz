@@ -1,5 +1,5 @@
-import { availableParallelism } from "node:os";
 import { defineConfig } from "vitest/config";
+import { maxWorkers } from "../../vitest.shared.js";
 
 /**
  * Every `*.db.test.ts` file boots its own PGlite and replays the whole
@@ -11,15 +11,14 @@ import { defineConfig } from "vitest/config";
  *
  * `maxWorkers` is capped for the same reason, and for memory: each worker
  * holds a PGlite of ~800 MB, and several agents testing at once on one
- * workstation once exhausted its RAM. Never above vitest's own default
- * (cores - 1), so a small CI runner is not oversubscribed.
- * VITEST_MAX_WORKERS overrides it.
+ * workstation once exhausted its RAM. The formula (and its
+ * VITEST_MAX_WORKERS override) is the one of ../../vitest.shared.ts.
  */
 export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],
     testTimeout: 60_000,
     hookTimeout: 120_000,
-    maxWorkers: Number(process.env.VITEST_MAX_WORKERS) || Math.max(1, Math.min(6, availableParallelism() - 1)),
+    maxWorkers,
   },
 });

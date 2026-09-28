@@ -19,6 +19,7 @@ describe("resolveStrings", () => {
   });
 
   it("skips an entry whose value is undefined rather than blanking the default", () => {
+    // @ts-expect-error -- exactOptionalPropertyTypes forbids it; a caller spreading a partial object can still pass it
     expect(resolveStrings(DEFAULTS, { title: undefined }).title).toBe("Answer");
   });
 
