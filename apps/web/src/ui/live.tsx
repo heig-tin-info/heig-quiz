@@ -15,11 +15,11 @@ import {
   WifiOff,
   X,
 } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import { useT } from "../i18n";
-import { cx, rovingIndex, type IconType } from "./layers";
+import { cx, rovingIndex, useNow, type IconType } from "./layers";
 
 // --- Live primitives (PLAN-MVP §6.4) ---
 //
@@ -29,8 +29,9 @@ import { cx, rovingIndex, type IconType } from "./layers";
 // share three rules. Time is tabular, always, or the last digit dances.
 // Nothing is carried by colour alone (N-A11Y): every state also has an icon
 // and a word, visible or in the accessible name. And none of them owns a
-// clock: the caller passes `now`, because on the live path that `now` is the
-// SERVER's (`useServerClock`), never the browser's.
+// clock: the caller passes `now` — or, to `ClockCountdown`, the clock to
+// tick on — because on the live path that time is the SERVER's
+// (`useServerClock`), never the browser's.
 
 /**
  * "12:47", or "1:05:00" past an hour. Tabular digits are applied by the
@@ -163,6 +164,29 @@ export function Countdown({
     </>
   );
 }
+
+/**
+ * A `Countdown` that ticks by itself, once a second, on the clock it is
+ * given — the SERVER's on the live path (`useServerClock().now`), so every
+ * countdown of a screen reads one time and the deadline stays the server's
+ * (invariant 5).
+ *
+ * The tick lives here, in the leaf, and nowhere above it: the player and the
+ * live dashboard hand down a stable `clock` function rather than a `now` that
+ * changes every second, so a tick re-renders the digits and not the question
+ * editor or the thirty-by-twelve grid around them. All of them share the one
+ * timer of `useNow`, so two countdowns on a screen never disagree.
+ */
+export const ClockCountdown = memo(function ClockCountdown({
+  clock,
+  ...countdown
+}: Omit<ComponentProps<typeof Countdown>, "now"> & {
+  /** The time to count against; must be stable, it is re-read every tick. */
+  clock: () => number;
+}) {
+  const now = useNow(1_000, clock);
+  return <Countdown {...countdown} now={now} />;
+});
 
 /**
  * Progress ring: the lobby's "present / enrolled" and the dashboard's

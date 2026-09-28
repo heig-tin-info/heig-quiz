@@ -4,10 +4,9 @@ import { Clock, DoorOpen, Eye, GraduationCap, RotateCcw, WifiOff } from "lucide-
 import type { DashboardRow, DashboardView } from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { Badge, cx, IconButton, T, VerdictCell } from "../ui";
+import { Badge, ClockCountdown, cx, IconButton, T, VerdictCell } from "../ui";
 import { AnswerTip } from "./AnswerTip";
 import { cellState, cellValue, completionOf } from "./cells";
-import { ClockCountdown } from "./ClockCountdown";
 
 /** Fixed width of a question column: two glyphs and the icon, and no more. */
 export const COL = "w-16 min-w-16";
@@ -96,8 +95,9 @@ export const GridRow = memo(function GridRow({
   showResults: boolean;
   onInspect: (row: DashboardRow, itemId: string) => void;
   onExtend: (row: DashboardRow) => void;
-  onClose: (row: DashboardRow) => void;
-  onReopen: (row: DashboardRow) => void;
+  /** With the name the row shows, for the confirmation that asks first. */
+  onClose: (row: DashboardRow, name: string) => void;
+  onReopen: (row: DashboardRow, name: string) => void;
 }) {
   const t = useT();
   const presence = presenceOf(row, t);
@@ -285,7 +285,7 @@ export const GridRow = memo(function GridRow({
               size="sm"
               danger
               label={t("live.row.close")}
-              onClick={() => onClose(row)}
+              onClick={() => onClose(row, name)}
             >
               <DoorOpen />
             </IconButton>
@@ -295,7 +295,7 @@ export const GridRow = memo(function GridRow({
               size="sm"
               danger
               label={t("live.row.reopen")}
-              onClick={() => onReopen(row)}
+              onClick={() => onReopen(row, name)}
             >
               <RotateCcw />
             </IconButton>

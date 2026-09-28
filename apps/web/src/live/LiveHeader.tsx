@@ -4,8 +4,7 @@ import type { EvaluationState } from "@quiz/contracts";
 
 import { evaluationStateLabel, isGraded, stateTone } from "../evaluation/common";
 import { useT } from "../i18n";
-import { Badge, Button, IconButton, Menu, PageHeader } from "../ui";
-import { ClockCountdown } from "./ClockCountdown";
+import { Badge, Button, ClockCountdown, IconButton, Menu, PageHeader } from "../ui";
 
 /**
  * The band a teacher watches from the back of the room: where we are, how

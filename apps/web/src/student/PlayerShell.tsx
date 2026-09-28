@@ -33,11 +33,11 @@ import { Home, Moon, Sun } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { CommandPalette } from "../CommandPalette";
-import { ClockCountdown } from "../live/ClockCountdown";
 import type { Command } from "../commands";
 import { useT } from "../i18n";
 import { setThemeChoice, useResolvedTheme } from "../theme";
 import {
+  ClockCountdown,
   cx,
   IconButton,
   ProgressSegments,

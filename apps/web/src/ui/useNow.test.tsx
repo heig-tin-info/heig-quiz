@@ -50,4 +50,25 @@ describe("useNow", () => {
     act(() => void vi.advanceTimersByTime(2_000));
     expect(shown("server")).toBe(4_602_000);
   });
+
+  it("gives each subscriber of a shared timer its own clock", () => {
+    const setInterval = vi.spyOn(globalThis, "setInterval");
+    render(
+      <>
+        <Clock name="browser" />
+        <Clock name="server" read={() => Date.now() + 3_600_000} />
+      </>,
+    );
+    expect(setInterval).toHaveBeenCalledTimes(1);
+    act(() => void vi.advanceTimersByTime(1_000));
+    expect(shown("browser")).toBe(1_001_000);
+    expect(shown("server")).toBe(4_601_000);
+  });
+
+  it("reads a new clock at once, not a tick later", () => {
+    const { rerender } = render(<Clock name="c" read={() => 1} />);
+    expect(shown("c")).toBe(1);
+    rerender(<Clock name="c" read={() => 2} />);
+    expect(shown("c")).toBe(2);
+  });
 });

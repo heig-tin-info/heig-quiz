@@ -205,13 +205,15 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
       }),
     [mutateControl],
   );
+  // The grid hands back the name it showed: depending on `nameOf`, which
+  // changes with the rows, would re-render every row on every live answer.
   const closeRow = useCallback(
-    (row: DashboardRow) => confirmAttempt(row, "close", nameOf(row)),
-    [confirmAttempt, nameOf],
+    (row: DashboardRow, name: string) => confirmAttempt(row, "close", name),
+    [confirmAttempt],
   );
   const reopenRow = useCallback(
-    (row: DashboardRow) => confirmAttempt(row, "reopen", nameOf(row)),
-    [confirmAttempt, nameOf],
+    (row: DashboardRow, name: string) => confirmAttempt(row, "reopen", name),
+    [confirmAttempt],
   );
 
   useLiveCommands({ t, state: evaluationState, controls, navigate, id });

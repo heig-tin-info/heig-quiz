@@ -71,8 +71,9 @@ export function StudentGrid({
   selected: { attemptId: string; itemId: string } | null;
   onInspect: (row: DashboardRow, itemId: string) => void;
   onExtend: (row: DashboardRow) => void;
-  onClose: (row: DashboardRow) => void;
-  onReopen: (row: DashboardRow) => void;
+  /** With the name the row shows, for the confirmation that asks first. */
+  onClose: (row: DashboardRow, name: string) => void;
+  onReopen: (row: DashboardRow, name: string) => void;
 }) {
   const t = useT();
   const { view } = state;

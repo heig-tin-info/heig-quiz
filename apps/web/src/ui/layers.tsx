@@ -132,7 +132,11 @@ function onTick(intervalMs: number, listener: () => void): () => void {
  */
 export function useNow(intervalMs = 30_000, read: () => number = Date.now): number {
   const [now, setNow] = useState(read);
-  useEffect(() => onTick(intervalMs, () => setNow(read())), [intervalMs, read]);
+  useEffect(() => {
+    // A new clock is read at once, not a tick later.
+    setNow(read());
+    return onTick(intervalMs, () => setNow(read()));
+  }, [intervalMs, read]);
   return now;
 }
 
