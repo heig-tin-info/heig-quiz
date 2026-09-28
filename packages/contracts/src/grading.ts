@@ -189,7 +189,6 @@ export type GradingRunAccepted = z.infer<typeof GradingRunAccepted>;
 export const ManualGradingBody = z.object({
   points: z.number().min(-1000).max(1000),
   comment: z.string().trim().min(1).max(4000),
-  details: z.unknown().optional(),
 });
 export type ManualGradingBody = z.infer<typeof ManualGradingBody>;
 

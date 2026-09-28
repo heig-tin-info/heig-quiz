@@ -17,7 +17,7 @@ import { and, eq, getTableName, isNull, sql, type AnyColumn, type SQL } from "dr
 import { z } from "zod";
 
 import type { PoolRole } from "@quiz/contracts";
-import { effectivePoolRole, poolRoleAllows } from "@quiz/domain";
+import { effectivePoolRole, ipAllowed, poolRoleAllows } from "@quiz/domain";
 
 import type { Db } from "../db/client.js";
 import {
@@ -538,22 +538,27 @@ export async function findReachableEvaluation(
 }
 
 /**
- * ADR-027: whether this request may SIT `evaluation` — enter it, answer it,
- * watch it as a participant. A `seb` session sits its own evaluation and
- * nothing else; any other session sits every evaluation that does not require
- * Safe Exam Browser, staff included: a teacher rehearses a SEB exam with its
- * `.seb`, like a student. `staffWatch` is a staff member watching somebody
- * else (dashboard, inspector), which is not sitting. Checked after the loaders
- * of invariant 6, and answered with their 404.
+ * ADR-027: why this request may NOT sit `evaluation` — enter it, answer it,
+ * watch it as a participant — or `null` when it may. A `seb` session sits its
+ * own evaluation and nothing else; any other session sits every evaluation
+ * that does not require Safe Exam Browser, staff included: a teacher
+ * rehearses a SEB exam with its `.seb`, like a student. And nobody sits from
+ * outside the room (F-EVAL-12): the IP allow-list holds on every sitting
+ * request, not only at the entry. `staffWatch` is a staff member watching
+ * somebody else (dashboard, inspector), which is not sitting. Checked after
+ * the loaders of invariant 6; `seb` is answered with their 404.
  */
-export function sits(
+export function sitRefusal(
   req: FastifyRequest,
   evaluation: typeof evaluations.$inferSelect,
   staffWatch: boolean,
-): boolean {
+): "seb" | "ip" | null {
   const confinedTo = req.auth?.evaluationId ?? null;
-  if (confinedTo !== null) return confinedTo === evaluation.id;
-  return staffWatch || !sebRequired(evaluation);
+  if (confinedTo !== null ? confinedTo !== evaluation.id : !staffWatch && sebRequired(evaluation)) {
+    return "seb";
+  }
+  if (!staffWatch && !ipAllowed(evaluation.ipAllowlist, req.ip)) return "ip";
+  return null;
 }
 
 /** `findReachableEvaluation`, answering 404 when it finds nothing. */

@@ -38,6 +38,8 @@ export type AuditAction =
   | "course.pools_update"
   | "course.staff_remove"
   | "course.update"
+  /** A wrong access code typed by a student (F-EVAL-12), counted for the lockout. */
+  | "evaluation.access_code_failed"
   | "evaluation.close"
   | "evaluation.create"
   | "evaluation.delete"
@@ -101,7 +103,7 @@ export type AuditAction =
  * role has neither UPDATE nor DELETE on this table.
  */
 export async function audit(
-  db: Db,
+  db: Db | Parameters<Parameters<Db["transaction"]>[0]>[0],
   entry: {
     actorUserId?: string | null;
     actorType: "user" | "system" | "api_key";
@@ -109,6 +111,8 @@ export async function audit(
     subjectType: string;
     subjectId: string;
     payload?: unknown;
+    /** The server's instant, when a rule reads the entry back by time. */
+    at?: Date;
   },
 ) {
   await db.insert(auditLog).values({
@@ -118,6 +122,7 @@ export async function audit(
     subjectType: entry.subjectType,
     subjectId: entry.subjectId,
     payload: entry.payload ?? null,
+    ...(entry.at ? { createdAt: entry.at } : {}),
   });
 }
 

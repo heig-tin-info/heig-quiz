@@ -6,21 +6,21 @@
  */
 import { useCallback, useEffect, useRef } from "react";
 
-import type { AttemptEventKind } from "@quiz/contracts";
+import type { AttemptEventBody } from "@quiz/contracts";
 
 import { api } from "../api";
 import type { Autosave } from "./autosave";
 
-export type Report = (kind: AttemptEventKind, details?: unknown) => void;
+export type Report = (event: AttemptEventBody) => void;
 
 /** F-EVAL-13: the journal. Never blocks, never surfaces an error. */
 export function useJournal(attemptId: string, preview: boolean): Report {
   return useCallback<Report>(
-    (kind, details) => {
+    (event) => {
       if (preview) return;
       void api(`/app/api/attempts/${attemptId}/events`, {
         method: "POST",
-        body: JSON.stringify(details === undefined ? { kind } : { kind, details }),
+        body: JSON.stringify(event),
       }).catch(() => {
         // A journal entry is never worth interrupting an attempt for.
       });
@@ -33,8 +33,8 @@ export function useJournal(attemptId: string, preview: boolean): Report {
 export function useBrowserSignals(report: Report, saver: Autosave, preview: boolean): void {
   useEffect(() => {
     if (preview) return;
-    const onVisibility = () => report("visibility", { state: document.visibilityState });
-    const onBlur = () => report("focus", { focused: false });
+    const onVisibility = () => report({ kind: "visibility", details: { state: document.visibilityState } });
+    const onBlur = () => report({ kind: "focus", details: { focused: false } });
     const onOnline = () => saver.resume();
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("blur", onBlur);

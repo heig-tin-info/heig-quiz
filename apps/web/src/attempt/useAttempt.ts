@@ -227,7 +227,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     // Not on the first open: only a connection that was lost and came back
     // has answers to replay and a reconnection to journal (F-EVAL-13).
     onReopen: () => {
-      report("reconnect");
+      report({ kind: "reconnect" });
       saver.resume();
       void query.refetch();
     },

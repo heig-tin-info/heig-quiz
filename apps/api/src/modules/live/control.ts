@@ -50,18 +50,23 @@ async function attemptsWithBonus(db: Db, evaluation: EvaluationRecord): Promise<
   return rows.map((r) => ({ ...r.attempt, timeBonusPercent: r.bonus ?? 0 }));
 }
 
-/** `lobby|scheduled|draft → running` (F-LIVE-03/04). */
-export async function startEvaluation(
+/**
+ * Begins every attempt still `not_started` on an evaluation that has just
+ * become `running`: the ones of the lobby at the start, the ones that
+ * entered during a pause at the resume. Their clock starts now, never at
+ * the entry.
+ */
+async function beginWaitingAttempts(
   db: Db,
   evaluation: EvaluationRecord,
+  rows: readonly AttemptWithBonus[],
   now: Date,
-): Promise<EvaluationRecord> {
-  const next = await applyState(db, evaluation, "running", now);
-  for (const attempt of await attemptsWithBonus(db, next)) {
+): Promise<void> {
+  for (const attempt of rows) {
     if (attempt.state !== "not_started") continue;
     await beginAttempt(
       db,
-      next,
+      evaluation,
       attempt,
       {
         userId: attempt.userId,
@@ -71,6 +76,16 @@ export async function startEvaluation(
       now,
     );
   }
+}
+
+/** `lobby|scheduled|draft → running` (F-LIVE-03/04). */
+export async function startEvaluation(
+  db: Db,
+  evaluation: EvaluationRecord,
+  now: Date,
+): Promise<EvaluationRecord> {
+  const next = await applyState(db, evaluation, "running", now);
+  await beginWaitingAttempts(db, next, await attemptsWithBonus(db, next), now);
   events.stateChanged(next, now);
   return next;
 }
@@ -135,11 +150,15 @@ export async function resumeEvaluation(
     return next;
   });
   if (next === null) return (await evaluationById(db, evaluation.id))!;
-  for (const attempt of await attemptsWithBonus(db, next)) {
+  const rows = await attemptsWithBonus(db, next);
+  for (const attempt of rows) {
     if (attempt.state !== "in_progress") continue;
     await logAttemptEvent(db, attempt.id, "resumed", { pausedMs: pausedFor }, now);
     events.deadlineChanged(next, attempt, "pause_resume", now);
   }
+  // Last: an attempt that entered during the pause starts on the resume. It
+  // sat through no pause, so it gets neither the shift nor a `resumed` entry.
+  await beginWaitingAttempts(db, next, rows, now);
   events.stateChanged(next, now);
   return next;
 }

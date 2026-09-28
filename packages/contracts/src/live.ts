@@ -35,11 +35,18 @@ export type ClosedBy = z.infer<typeof ClosedBy>;
 export const CellStatus = z.enum(["empty", "seen", "in_progress", "skipped", "done"]);
 export type CellStatus = z.infer<typeof CellStatus>;
 
+/**
+ * The journal kinds a student's client may write (F-EVAL-13). The others of
+ * {@link AttemptEventKind} are the server's own record — an address change,
+ * a pause, a `+N min`, a run — and a client that could write them could
+ * forge its own history.
+ */
+export const ClientEventKind = z.enum(["visibility", "focus", "reconnect"]);
+export type ClientEventKind = z.infer<typeof ClientEventKind>;
+
 export const AttemptEventKind = z.enum([
-  "visibility",
-  "focus",
+  ...ClientEventKind.options,
   "ip_change",
-  "reconnect",
   "time_added",
   "paused",
   "resumed",
@@ -253,10 +260,26 @@ export const SubmitResponse = z.object({
 });
 export type SubmitResponse = z.infer<typeof SubmitResponse>;
 
-export const AttemptEventBody = z.object({
-  kind: AttemptEventKind,
-  details: z.unknown().optional(),
-});
+/**
+ * `POST /attempts/:id/events`: a client-writable kind, and for the two that
+ * carry details exactly what the player sends — nothing a client could grow
+ * the journal with.
+ */
+const client = ClientEventKind.enum;
+export const AttemptEventBody = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal(client.visibility),
+    details: z.strictObject({ state: z.enum(["visible", "hidden"]) }),
+  }),
+  z.strictObject({
+    kind: z.literal(client.focus),
+    details: z.strictObject({ focused: z.boolean() }),
+  }),
+  z.strictObject({ kind: z.literal(client.reconnect) }),
+]);
+// Every client kind has its arm: one added to `ClientEventKind` without one
+// is a compile error here.
+void (true satisfies [ClientEventKind] extends [AttemptEventBody["kind"]] ? true : never);
 export type AttemptEventBody = z.infer<typeof AttemptEventBody>;
 
 /**

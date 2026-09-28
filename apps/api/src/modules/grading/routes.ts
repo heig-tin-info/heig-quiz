@@ -147,11 +147,7 @@ export async function gradingPlugin(app: FastifyInstance) {
     const row = await service.manualOverride(
       app.db,
       cell,
-      {
-        points: body.points,
-        comment: body.comment,
-        ...(body.details === undefined ? {} : { details: body.details }),
-      },
+      { points: body.points, comment: body.comment },
       req.user!.id,
       now,
     );
