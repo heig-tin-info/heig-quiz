@@ -59,6 +59,28 @@ function commit(): { sha: string; date: string } | null {
 export default defineConfig({
   plugins: [react(), tailwindcss(), lucideAliases()],
   define: { __COMMIT__: JSON.stringify(commit()) },
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              // The icons the app imports statically. `dynamicIconImports`
+              // (the pool icon catalogue) makes every icon file its own
+              // import target, so each statically used one was split into a
+              // chunk of its own and the first load preloaded ~77 files of a
+              // few hundred bytes. `$initial` keeps the group to what the
+              // entry reaches statically: the catalogue's other icons stay
+              // lazy, one chunk each.
+              name: "lucide-icons",
+              test: /lucide-react[\\/]dist[\\/]esm[\\/]icons[\\/]/,
+              tags: ["$initial"],
+            },
+          ],
+        },
+      },
+    },
+  },
   server: {
     // Listen on every interface: under WSL2 the browser runs on the Windows
     // side and reaches the dev server through the VM's address, not localhost.
