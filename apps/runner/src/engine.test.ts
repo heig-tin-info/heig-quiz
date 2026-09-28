@@ -219,7 +219,11 @@ describe("pruneOrphans", () => {
   it("gives every engine an instance of its own when none is configured", () => {
     const labelOf = (args: string[]): string | undefined =>
       args.find((arg) => arg.startsWith("quiz.runner.instance="));
+    // An explicit `undefined` is what overrides the helper's default instance;
+    // exactOptionalPropertyTypes rejects it, the engine must still cope.
+    // @ts-expect-error -- see above
     const one = labelOf(engine({ instanceId: undefined }).containerArgs(CREATE));
+    // @ts-expect-error -- see above
     const other = labelOf(engine({ instanceId: undefined }).containerArgs(CREATE));
     expect(one).toBeDefined();
     expect(one).not.toBe(other);

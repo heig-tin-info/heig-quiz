@@ -1,4 +1,11 @@
 {
+  // Every package and app but apps/web extends this file. `${configDir}` is
+  // the directory of the tsconfig that is finally used, so a package's own
+  // tsconfig.json only adds what is its own (the DOM library and JSX for the
+  // browser-side packages; TypeScript 6's DOM includes DOM.Iterable). The
+  // Dockerfiles copy this one file, so it is the only shared tsconfig.
+  // The build leaves the tests and their helpers (`src/test`) out; each
+  // package's tsconfig.test.json puts them back for `typecheck`.
   "compilerOptions": {
     "target": "ES2023",
     "module": "NodeNext",
@@ -13,6 +20,13 @@
     "skipLibCheck": true,
     "declaration": true,
     "sourceMap": true,
-    "composite": true
-  }
+    "rootDir": "${configDir}/src",
+    "outDir": "${configDir}/dist"
+  },
+  "include": ["${configDir}/src"],
+  "exclude": [
+    "${configDir}/src/**/*.test.ts",
+    "${configDir}/src/**/*.test.tsx",
+    "${configDir}/src/test"
+  ]
 }

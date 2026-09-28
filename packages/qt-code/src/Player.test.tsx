@@ -181,7 +181,8 @@ describe("CodePlayer", () => {
   });
 
   it("announces the runtime download, which only happens once", async () => {
-    let release: (() => void) | null = null;
+    // The executor runs synchronously, so `release` is assigned right away.
+    let release!: () => void;
     const held = new Promise<void>((resolve) => {
       release = resolve;
     });
@@ -196,7 +197,7 @@ describe("CodePlayer", () => {
     expect(
       await screen.findByText("Loading the language runtime… this happens once."),
     ).toBeInTheDocument();
-    release?.();
+    release();
   });
 
   it("offers the free input only where the host can honour it", async () => {

@@ -1,10 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist",
-    "composite": false
-  },
-  "include": ["src"],
-  "exclude": ["src/**/*.test.ts"]
+  // `typecheck` still runs on this file, not on tsconfig.test.json: the test
+  // files carry ~540 latent type errors (mostly the `inject` helpers under
+  // exactOptionalPropertyTypes). Until they are fixed, the helpers of
+  // `src/test` stay in this program so that at least they are checked.
+  "exclude": ["${configDir}/src/**/*.test.ts"]
 }

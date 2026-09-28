@@ -13,7 +13,13 @@ function setup(
 ) {
   const onChange = vi.fn<(next: CodeImageConfig) => void>();
   const view = render(
-    <CodeImageEditor config={config} onChange={onChange} monaco={false} onTry={onTry} />,
+    <CodeImageEditor
+      config={config}
+      onChange={onChange}
+      monaco={false}
+      onTry={onTry}
+      uploadAsset={async () => "asset:none"}
+    />,
   );
   return { onChange, view };
 }
@@ -112,6 +118,7 @@ describe("CodeImageEditor", () => {
         onChange={() => {}}
         monaco={false}
         onTry={async () => "unavailable"}
+        uploadAsset={async () => "asset:none"}
       />,
     );
     expect(screen.getByText(/changed since this run/)).toBeInTheDocument();
