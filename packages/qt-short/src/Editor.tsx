@@ -28,7 +28,7 @@ import {
   CheckboxField,
   cx,
   FieldCell,
-  helpClass,
+  hint,
   inputClass,
   inputSize,
   IssueList,
@@ -540,7 +540,7 @@ export function ShortEditor({
       {ungraded ? null : (
         <section className={sectionClass}>
           <h3 className={label}>{s.prefilters}</h3>
-          <p className={helpClass}>{s.prefiltersHint}</p>
+          <p className={hint}>{s.prefiltersHint}</p>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
             <CheckboxField
               label={s.prefilterTrim}
@@ -560,7 +560,7 @@ export function ShortEditor({
 
       <section className={sectionClass}>
         <h3 className={label}>{s.matchers}</h3>
-        <p className={helpClass}>{s.matchersHint}</p>
+        <p className={hint}>{s.matchersHint}</p>
         <ol className="flex flex-col gap-2">
           {config.matchers.map((matcher, index) => {
             const rowId = `${idBase}-m${index}`;
@@ -626,7 +626,7 @@ export function ShortEditor({
                               replace(index, { ...matcher, points: Number(e.target.value) })
                             }
                           />
-                          <span id={`${rowId}-points-hint`} className={helpClass}>
+                          <span id={`${rowId}-points-hint`} className={hint}>
                             {s.pointsHint}
                           </span>
                         </div>

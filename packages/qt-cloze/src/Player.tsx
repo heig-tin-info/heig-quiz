@@ -11,7 +11,7 @@ import { resolveStrings } from "@quiz/core/client";
 import type { ClozeAnswer, ClozeStudent } from "./schema.js";
 import { clozePlayerStrings, type ClozePlayerStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
-import { cx, helpClass, inputClass, isLocked } from "@quiz/ui";
+import { caption, cx, inputClass, isLocked } from "@quiz/ui";
 
 type ClozePlayerProps = PlayerProps<ClozeStudent, ClozeAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
@@ -96,7 +96,7 @@ export function ClozePlayer({
       <div className="flex flex-col gap-3">
         <Text template={student.template} renderBlank={renderBlank} />
       </div>
-      <p className={helpClass}>{s.hint}</p>
+      <p className={caption}>{s.hint}</p>
     </div>
   );
 }

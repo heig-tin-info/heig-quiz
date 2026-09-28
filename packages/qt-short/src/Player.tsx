@@ -22,7 +22,7 @@ import {
   type ShortStudent,
 } from "./schema.js";
 import { shortPlayerStrings, type ShortPlayerStringKey } from "./strings.js";
-import { cx, helpClass, inputClass, inputSize, isLocked, label, markdown } from "@quiz/ui";
+import { caption, cx, inputClass, inputSize, isLocked, label, markdown } from "@quiz/ui";
 
 type ShortPlayerProps = PlayerProps<ShortStudent, ShortAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
@@ -117,7 +117,7 @@ export function ShortPlayer({
           disabled={locked}
           onChange={(e) => onChange({ text: e.target.value })}
         />
-        <p className={helpClass}>{hint}</p>
+        <p className={caption}>{hint}</p>
       </div>
     </div>
   );

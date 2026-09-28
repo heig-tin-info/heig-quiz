@@ -25,7 +25,20 @@ export const sectionTitle = "text-base font-semibold text-fg";
  */
 export const label = "flex items-center gap-1 text-[13px] font-medium text-fg";
 
+/**
+ * The sentence that explains a control or a section of an editor — what a
+ * field accepts, what a policy does. 13 px in `fg-muted`, the description line
+ * of `apps/web`'s `SettingRow`: it carries information the teacher needs.
+ */
 export const hint = "text-[13px] text-fg-muted";
+
+/**
+ * A quiet aside that only supports what is around it: the instruction under a
+ * question in a player ("Choose one answer."), "no answer" in a review, a
+ * count under a chart. 12 px in `fg-faint`, which DESIGN.md holds to 4.5:1.
+ * An explanation of a control is a {@link hint}, never a caption.
+ */
+export const caption = "text-xs text-fg-faint";
 
 /** A checkbox in a column of settings (`CheckboxField.className`): no fixed height, the body ink. */
 export const setting = "flex items-center gap-2 text-[13px] text-fg";
@@ -123,7 +136,6 @@ export const table = {
  * a literal `rounded-xl` (audit P-01, divergence 1).
  */
 
-export const helpClass = "text-xs text-fg-faint";
 export const sectionClass = "flex flex-col gap-2";
 
 /** The 16 px section title of a card, as `SectionHeading` writes it. */

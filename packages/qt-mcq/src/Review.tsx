@@ -13,7 +13,7 @@ import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/
 import { resolveStrings, showsSection } from "@quiz/core/client";
 import type { McqAnswer, McqDetails, McqSolution, McqStudent } from "./schema.js";
 import { mcqReviewStrings, type McqReviewStringKey } from "./strings.js";
-import { type BadgeTone, cx, helpClass, markdown, ScoreHeader, Verdict } from "@quiz/ui";
+import { type BadgeTone, caption, cx, markdown, ScoreHeader, Verdict } from "@quiz/ui";
 
 type McqReviewProps = ReviewProps<McqStudent, McqAnswer, McqSolution, McqDetails> & {
   strings?: StringOverrides<McqReviewStringKey>;
@@ -75,7 +75,7 @@ export function McqReview({
         })}
       </ul>
 
-      {selected.length === 0 ? <p className={helpClass}>{s.noAnswer}</p> : null}
+      {selected.length === 0 ? <p className={caption}>{s.noAnswer}</p> : null}
 
       <ScoreHeader label={s.score} points={points} maxPoints={maxPoints}>
         {typeof details?.C === "number" ? (
@@ -84,8 +84,8 @@ export function McqReview({
           </span>
         ) : null}
       </ScoreHeader>
-      {details?.negativeMarking ? <p className={helpClass}>{s.negativeMarking}</p> : null}
-      {details?.truncated ? <p className={helpClass}>{s.truncated}</p> : null}
+      {details?.negativeMarking ? <p className={caption}>{s.negativeMarking}</p> : null}
+      {details?.truncated ? <p className={caption}>{s.truncated}</p> : null}
     </div>
   );
 }

@@ -15,7 +15,7 @@ import { resolveStrings, showsSection } from "@quiz/core/client";
 import type { ClozeAnswer, ClozeDetails, ClozeSolution, ClozeStudent } from "./schema.js";
 import { clozeReviewStrings, type ClozeReviewStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
-import { breakdownOf, cx, helpClass, ScoreHeader, Verdict, verdictTone } from "@quiz/ui";
+import { breakdownOf, caption, cx, ScoreHeader, Verdict, verdictTone } from "@quiz/ui";
 
 type ClozeReviewProps = ReviewProps<
   ClozeStudent,
@@ -101,7 +101,7 @@ export function ClozeReview({
                 <td className="py-1 pr-3 tabular-nums text-fg-muted">{blank.index + 1}</td>
                 <td className="py-1 pr-3">
                   {label === null ? (
-                    <span className={helpClass}>{s.noAnswer}</span>
+                    <span className={caption}>{s.noAnswer}</span>
                   ) : (
                     <span className="font-mono text-fg">{label}</span>
                   )}

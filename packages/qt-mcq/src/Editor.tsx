@@ -56,7 +56,7 @@ import {
   AsideSection,
   cardTitleClass,
   cx,
-  helpClass,
+  hint,
   inputClass,
   inputSize,
   IssueList,
@@ -311,7 +311,7 @@ export function McqEditor({
           {/* What the one chosen policy does, in one line: a legend of six
               lines is a table nobody reads, and the help "?" holds the long
               form. */}
-          <p className={helpClass} data-testid="mcq-policy-desc">
+          <p className={hint} data-testid="mcq-policy-desc">
             {s[(POLICY_OPTIONS.find((o) => o.value === config.policy) ?? POLICY_OPTIONS[0]!).desc]}
           </p>
         </div>
@@ -337,7 +337,7 @@ export function McqEditor({
               onChange(next);
             }}
           />
-          <p className={helpClass}>{s.maxSelectionsHint}</p>
+          <p className={hint}>{s.maxSelectionsHint}</p>
           {/* A cap below the number of correct choices makes the full mark
               unreachable. The editor says so at once and the schema refuses
               the draft; `maxIssues` is the two merged into one line. */}
@@ -362,7 +362,7 @@ export function McqEditor({
           />
           {s.neverShuffle}
         </label>
-        <p className={cx(helpClass, "pl-6")}>{s.neverShuffleHint}</p>
+        <p className={cx(hint, "pl-6")}>{s.neverShuffleHint}</p>
       </div>
     </AsideSection>
   );
@@ -423,7 +423,7 @@ export function McqEditor({
         {/* A poll's key is optional, and the launcher says so once
             (ADR-014, addendum 2026-09-23): "Tick the correct answers" would
             contradict it. */}
-        {ungraded ? null : <p className={helpClass}>{s.choicesHint}</p>}
+        {ungraded ? null : <p className={hint}>{s.choicesHint}</p>}
 
         <DndContext
           sensors={sensors}
