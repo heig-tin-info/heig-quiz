@@ -51,7 +51,7 @@ provider is Switch edu-ID; in development it is a Keycloak realm from
 
 ## Repository and package graph
 
-Three applications and eight workspace packages. The arrows below are the
+Three applications and ten workspace packages. The arrows below are the
 `workspace:*` dependencies read from the `package.json` files, and nothing
 else.
 
@@ -64,12 +64,14 @@ flowchart TB
   CON["contracts"]
   DOM["domain"]
   CORE["core (./server, ./client, ./rng)"]
+  UI["ui"]
   subgraph QT["the question types"]
     direction LR
     MCQ["qt-mcq"]
     SHORT["qt-short"]
     CLOZE["qt-cloze"]
-    CODE["qt-code"]
+    CODE["qt-code (code, codeimage)"]
+    CIRCUIT["qt-circuit (./canvas too)"]
   end
   API --> CON
   API --> REG
@@ -81,21 +83,26 @@ flowchart TB
   REG --> QT
   REG --> CORE
   QT --> DOM
+  QT --> UI
   QT --> CORE
+  UI --> CORE
   DOM --> CORE
   CORE -. "never: this arrow would be the cycle" .-> REG
 ```
 
 `core` sits at the bottom: the `QuestionTypeServer` and `QuestionTypeClient`
 contracts, the seeded RNG and the runner interface, with no React at runtime
-in either entry point. Every `qt-*` package implements that contract and
-depends on `domain` for its pure rules. `registry` is the only package that
+in either entry point. Every `qt-*` package implements that contract,
+depends on `domain` for its pure rules and on `ui` for the primitives its
+editor and player share with the other types (`ui` depends on `core` only and
+never imports a `qt-*` package). `registry` is the only package that
 imports the `qt-*` packages: it is the static map from a type id to its
 implementation, split in `./server` and `./client` so the API never loads a
 component. If `core` held the registry, `core` would import `qt-mcq` and
 `qt-mcq` would import `core`, which is the cycle decision D1 breaks by moving
-the wiring one package up. The apps also depend on every `qt-*` package
-directly, which is omitted above because the registry already carries the
+the wiring one package up. The apps also depend on some `qt-*` packages
+directly (`apps/web` on all five, `apps/api` on `qt-code`, and both on
+`core`), which is omitted above because the registry already carries the
 edge. Settled by
 [5.2 Code modularity](../spec/05-architecture.md#52-code-modularity) and
 decision D1 of the [MVP plan](../PLAN-MVP.md).
@@ -119,6 +126,9 @@ flowchart TB
   NOTIF["notifications"]
   RT["realtime: bus, SSE, presence"]
   RUNNERC["runner client (HttpRunner or stub)"]
+  PREVIEW["preview: the teacher's stateless run-through"]
+  MCP["mcp: the MCP server"]
+  ROUTES["the /app/api routes"]
   ORG --> POOL
   EVAL --> LIVE
   LIVE --> EVAL
@@ -137,6 +147,10 @@ flowchart TB
   POOL --> LIVE
   RT --> LIVE
   LIVE --> RT
+  PREVIEW --> EVAL
+  PREVIEW --> LIVE
+  PREVIEW --> GRADING
+  MCP -. "in-process HTTP, the caller's token" .-> ROUTES
 ```
 
 Three edges deserve a word. `live` and `evaluation` point at each other on
@@ -151,9 +165,16 @@ Every live event is built and addressed in `realtime/bus.ts`; `live`,
 `grading`, `poll`, `pool`, `results` and `notifications` all call one of its
 named functions and never touch the emitter, and only the `live` edge is
 drawn. `realtime` calls back into `live` for the snapshot a stream opens
-with. `auth`, `guards.ts`
-and the single-file modules (`admin`, `courses`, `roster`, `student`,
-`avatar`) are omitted. Settled by
+with. `preview` is the teacher's preview of a whole evaluation: it draws a
+seed and reuses `live`'s student view and `grading`'s graders without writing
+a row ([ADR-018](../adr/ADR-018-vue-etudiant-reelle.md)). `mcp` imports no
+service at all: each MCP tool calls the same `/app/api` routes the web app
+calls, in process, with the caller's bearer token, so the access loaders, the
+contract validation and the audit apply unchanged
+([ADR-022](../adr/ADR-022-jetons-api-et-serveur-mcp.md)). The roster import
+lives in `org` (`org/roster.ts`). `auth` (`apps/api/src/auth/`), `guards.ts`,
+`http.ts` and the two single-file plugins (`admin.ts`, `avatar.ts`) are
+omitted. Settled by
 [5.2 API modules](../spec/05-architecture.md#52-code-modularity) and
 [ADR-001](../adr/ADR-001-monolithe-modulaire.md).
 

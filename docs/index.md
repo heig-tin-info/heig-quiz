@@ -14,7 +14,7 @@ person, with the code runner on a virtual machine of its own.
     ---
 
     How to use the platform: courses and classrooms, question pools, the
-    four question types, evaluations from configuration to released
+    six question types, evaluations from configuration to released
     results, live polls, and what a student sees.
 
     [:octicons-arrow-right-24: Start with the overview](guide/index.md)

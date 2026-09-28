@@ -12,8 +12,9 @@ change) or a mistake.
 
 The product spec lives in `docs/spec/`. Before building a screen, read the
 file that describes it — `02-exigences-fonctionnelles.md` for behaviour,
-`08-experience-deux-niveaux.md` for the two-level experience, and the
-matching mockup under `mockups/`.
+`08-experience-deux-niveaux.md` for the two-level experience. For the look,
+`apps/web/DESIGN.md` is the reference, and the screenshots of the user guide
+(`docs/assets/screenshots/`, light and dark) show the screens as they ship.
 
 ## Decide before you draw
 

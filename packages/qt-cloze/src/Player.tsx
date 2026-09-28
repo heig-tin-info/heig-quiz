@@ -1,5 +1,5 @@
 /**
- * The `cloze` player (mockup `mockups/07-etudiant-zen.html`): the text as the
+ * The `cloze` player (in `apps/web/src/student/Player.tsx`): the text as the
  * teacher wrote it, with a field or a dropdown at each blank.
  *
  * Controlled — the host owns the answer and autosaves it. A dropdown stores the

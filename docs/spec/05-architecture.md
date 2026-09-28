@@ -32,6 +32,12 @@ Modular monolith, ADR-001 of heig-classroom: a single API process, a single depl
 
 ### Repository
 
+*This tree is the TARGET layout of the specification, not the current one.
+`canonical/`, `cli/` and the `qt-rich` package do not exist yet, `deploy/` was
+never created (the deployment files are at the root), and `qt-circuit` and the
+`codeimage` type of `qt-code` came later (ADR-019, ADR-021). The current
+layout is in `CLAUDE.md` and on the development site's repository page.*
+
 ```
 quiz/
   apps/
@@ -103,7 +109,7 @@ qt-mcq/
 
 - **Public REST API** under `/api/v1`, authenticated by a personal token created in the settings, scope limited to the teacher's pools: list, read, create a draft, publish, export, import. Documented by OpenAPI generated from the zod schemas.
 - **CLI** `quiz` in `packages/cli`: `quiz pull <pool> ./dir` writes the pool as YAML, `quiz push ./dir` creates drafts or publishes with `--publish`, `quiz diff` compares the folder and the server. Lets one version questions in git and edit them in one's own editor.
-- **MCP server** in phase 3, exposing the same operations as the API to an LLM client.
+- **MCP server** in phase 3, exposing the same operations as the API to an LLM client. *Amendment (ADR-022, ADR-023): shipped ahead of phase 3, with the personal API tokens. The MCP server lives in the `mcp` module at `/app/api/mcp`, and each tool calls the same `/app/api` routes as the web app with the caller's token; assistants connect through OAuth. The token API is served under `/app/api`, not a separate `/api/v1` (PLAN-MVP D18 was rejected).*
 
 ## 5.3 Database
 
@@ -264,7 +270,7 @@ The `realtime` module keeps `topic → connections` in memory. Opening and closi
 
 ## 5.5 Runner
 
-Internal HTTP service, not exposed, called by the API.
+Internal HTTP service, called by the API only. *Amendment (ADR-016): in production it runs on another VM and is reached over HTTPS, `https://code.chevallier.io:8443`, behind that VM's Caddy, which admits the application VM's address only; the service itself requires the shared `RUNNER_TOKEN` on every route.*
 
 ```
 POST /run
@@ -272,11 +278,11 @@ POST /run
 → { compile: { ok, stdout, stderr, ms }, cases: [{ exitCode, stdout, stderr, ms, timedOut, oom }] }
 ```
 
-- One image per language, built from `apps/runner/images/`, derived from the codespace's `c-dev` without code-server. Rebuilt every week.
+- One image per language, built from `apps/runner/images/`, derived from the codespace's `c-dev` without code-server. Rebuilt every week. *Current state: `c`, `cpp`, `python`, `js` and `spice` are built by default, `rust` on demand (`apps/runner/images/build.sh`).*
 - **`spice` is a language of the runner**: an Alpine image with ngspice, for the `circuit` question type (ADR-019). It is one image, one run plan and the same hardened container as the others — no flag is relaxed for it, no environment variable is added. Nothing is built: a netlist is the program, so `compile` is the "nothing to do" answer and a malformed netlist is a FAILED CASE, not a compile error.
 - **In `spice`, the case's `args` carry the file to simulate.** One request holds one schematic and its stimuli: one file per stimulus (`s0.cir`, `s1.cir`, …) and one case per stimulus, named after it, with `args: ["s0.cir"]`. The argv is therefore `timeout -s KILL <s> ngspice -b s0.cir`, and one container serves every stimulus of one answer. The other languages name their file in the run plan and use `args` for the program's own `argv[1..]`; this convention is what lets both share `execute.ts` unchanged.
 - **`POST /attempts/:id/simulate`** is the student's own run for a type that builds its own request (`QuestionTypeServer.interactiveRequest`): the API forces `priority: "interactive"`, counts it against the question's budget in the attempt journal, and hands the `RunnerOutcome` back raw. It is generic — the live module knows nothing of netlists.
-- Each request creates a container with the options of the codespace's `run-hardened.sh`: `--network none`, `--read-only`, `--tmpfs /work:size=32m`, `--memory`, `--cpus 1`, `--pids-limit 64`, `--userns=auto`, `--cap-drop ALL`, `--security-opt no-new-privileges`, seccomp profile `codespace.json`, and `--runtime runsc` if gVisor is installed. The wall-clock time is enforced by the service, which kills the container when it is exceeded.
+- Each request creates a container with the options of the codespace's `run-hardened.sh`: `--network none`, `--read-only`, `--tmpfs /work:size=32m`, `--memory`, `--cpus 1`, `--pids-limit 64`, `--userns=auto`, `--cap-drop ALL`, `--security-opt no-new-privileges`, seccomp profile `codespace.json`, and `--runtime runsc` if gVisor is installed. The wall-clock time is enforced by the service, which kills the container when it is exceeded. *Amendment: the profile now lives at `apps/runner/infra/seccomp/runner.json`, and the exact, tested flag list is `containerArgs` in `apps/runner/src/engine.ts`, documented in `apps/runner/README.md`, which is the reference.*
 - Compilation then execution of the cases in the same container, sequentially, each with its own limit.
 - Two queues: `interactive` for student runs during an evaluation, `grading` for the final grading, lower priority. Configurable concurrency, 4 by default. Beyond a depth limit, 429 and the client retries.
 - The source code is rebuilt on the API side from the template and the editable regions, never taken as-is.
@@ -298,11 +304,11 @@ A single point of exit of content towards a student: the type's `toStudent`, cal
 
 - Export of a pool: zip archive generated on the fly, `pool.yaml`, category folders, `<internal_name>.yaml`, `assets/`. The same function feeds the API, the CLI and the button in the interface.
 - Import: validation of each file by the type's schema, `migrate` if `configVersion` is old, error report per file, single transaction, drafts created by default, publication with `--publish`.
-- Backup: the `backup` service of heig-classroom, compressed `pg_dump` plus the assets volume, sent every hour to a Hetzner object storage through `rclone`, 30-day retention. Restoration documented and tested on a blank VM.
+- Backup: the `backup` service of heig-classroom, compressed `pg_dump` plus the assets volume, sent every hour to a Hetzner object storage through `rclone`, 30-day retention. Restoration documented and tested on a blank VM. *Amendment (current state, deployment runbook §6): a daily provider backup of the whole VM (Hetzner Backups) and a daily `pg_dump -Fc` kept 30 days on the VM itself. The off-site copy of the logical dumps (`rclone`) is not wired yet (06, question 10).*
 
 ## 5.9 Deployment
 
-`compose.prod.yml` reused from heig-classroom: `caddy`, `app`, `postgres`, `backup`, plus `runner` with access to the host's Podman socket. *Amendment (ADR-016): in production the `runner` does not run in this compose file but on the VM `code.chevallier.io`, behind its own Caddy, and the API reaches it over HTTPS with a shared token (`RUNNER_TOKEN`); Caddy is native on the host, not a compose service.* Keycloak is removed from production. `deploy.sh` refuses an update if an evaluation is `running` or `lobby`, unless `--force`. Migrations are additive to allow a rollback to the previous image.
+`compose.prod.yml` reused from heig-classroom: `caddy`, `app`, `postgres`, `backup`, plus `runner` with access to the host's Podman socket. *Amendment (ADR-016, ADR-028): `compose.prod.yml` holds `app`, `postgres` and `backup` only. Caddy is native on the host, not a compose service. The `runner` runs on the VM `code.chevallier.io`, behind its own Caddy, and the API reaches it over HTTPS with a shared token (`RUNNER_TOKEN`). A staging environment runs beside production on the same VM, and production is promoted by sha after approval. The current runbook is `docs/development/deployment.md`.* Keycloak is removed from production. `deploy.sh` refuses an update if an evaluation is `running` or `lobby`, unless `--force` *(planned, not implemented: `deploy.sh` has no such guard today)*. Migrations are additive to allow a rollback to the previous image.
 
 ## 5.10 Architecture decisions
 
@@ -316,4 +322,4 @@ A single point of exit of content towards a student: the type's `toStudent`, cal
 | Frontend | SPA | Server rendering: useless behind an authentication |
 | Markdown editor | Tiptap, markdown as the source of truth, WYSIWYG / source toggle | Two separate editors: two sources of truth |
 | Drawing | Embedded Excalidraw | Home-made canvas |
-| Expert extension | Token REST API, CLI, MCP later | Outgoing webhooks: no identified consumer |
+| Expert extension | Token REST API, CLI, MCP (shipped: ADR-022, ADR-023) | Outgoing webhooks: no identified consumer |

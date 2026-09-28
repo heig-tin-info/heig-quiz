@@ -6,8 +6,10 @@ results. One VM, one PostgreSQL, one repository, operable by one person.
 
 This repository started as a **pruned copy of `~/heig-classroom`** (same
 author, same stack, same identity provider, in production). Its ADRs 001–010
-and 012 apply here as written and live in `docs/adr/`. What was reused,
-adapted or dropped is spelled out in `docs/spec/07-reutilisation-heig-classroom.md`.
+and 012 live in `docs/adr/` and apply here as written, except ADR-007 (not
+applicable: the quiz has its own runner, ADR-016) and ADR-009 and ADR-010
+(amended, see their status). What was reused, adapted or dropped is spelled
+out in `docs/spec/07-reutilisation-heig-classroom.md`.
 
 ## Several agents at once
 
@@ -33,7 +35,8 @@ before implementing it.** It is nine documents; the relevant one is short.
 | `07-reutilisation-heig-classroom.md` | What comes from the sibling project |
 | `08-experience-deux-niveaux.md` | The novice / expert split |
 
-`mockups/` holds the HTML mockups of the main screens, with `mockups/BRIEF.md`.
+The screens as they ship are in the user guide's screenshots
+(`docs/assets/screenshots/`); `apps/web/DESIGN.md` is the design reference.
 
 ## Layout
 
@@ -57,8 +60,10 @@ packages/
               (./server, ./client, ./canvas)
 docs/
   spec/       the product specification (above)
-  adr/        the architecture decisions inherited from heig-classroom
-mockups/      HTML mockups of the target screens
+  adr/        the architecture decisions, inherited (001–010, 012) and our own
+  guide/      the user guide
+  development/  the developer pages, deployment runbook included
+mockups/      circuit.html, the origin of qt-circuit's schematic editor
 infra/        Keycloak development realm
 ```
 
