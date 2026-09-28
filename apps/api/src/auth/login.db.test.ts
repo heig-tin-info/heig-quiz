@@ -117,6 +117,30 @@ describe("signIn", () => {
     expect(pool!.ownerId).toBe(teacher.id);
   });
 
+  it("demotes a teacher whose staff affiliation is gone, but leaves the pools alone", async () => {
+    const sub = `s-${randomUUID()}`;
+    const email = `gone-${sub}@heig.test`;
+    const teacher = await signIn(
+      db,
+      config,
+      claims(sub, { email, eduPersonScopedAffiliation: ["staff@hes-so.ch"] }, true),
+    );
+    const member = await signIn(db, config, claims(`s-${randomUUID()}`, { email: `m2-${sub}@heig.test` }, true));
+    const poolId = randomUUID();
+    await db.insert(pools).values({ id: poolId, name: `Stays ${poolId}`, ownerId: teacher.id });
+    await db.insert(poolMembers).values({ poolId, userId: member.id, role: "reader" });
+
+    // userinfo answered, without the staff affiliation this time.
+    const again = await signIn(
+      db,
+      config,
+      claims(sub, { email, eduPersonScopedAffiliation: ["member@hes-so.ch"] }, true),
+    );
+    expect(again.role).toBe("student");
+    const [pool] = await db.select().from(pools).where(eq(pools.id, poolId));
+    expect(pool!.ownerId).toBe(teacher.id);
+  });
+
   it("verifies a stored login address once the IdP vouches for it", async () => {
     const sub = `s-${randomUUID()}`;
     expect((await signIn(db, config, claims(sub, { email: "granted@heig.test" }, false))).role).toBe(

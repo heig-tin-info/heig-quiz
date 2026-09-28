@@ -30,8 +30,8 @@ export function loginAdmits(
 /**
  * User upsert (key: oidc_sub), then the address set and the affiliations,
  * then the role through the single rule of roles.ts — the same path as any
- * later recompute, so it counts the course seats and runs the pool
- * succession on a loss. A new account starts as a student; an existing one
+ * later recompute, so it counts the course seats — but without the pool
+ * succession, which stays tied to the admin and staff actions. A new account starts as a student; an existing one
  * keeps its role until the recompute.
  */
 export async function signIn(db: Db, config: AppConfig, claims: OidcClaims): Promise<SessionUser> {
@@ -58,7 +58,8 @@ export async function signIn(db: Db, config: AppConfig, claims: OidcClaims): Pro
   // their pools on. The address set only ever grows, so it is safe either way.
   if (claims.complete) await recordIdpClaims(db, row.id, claims.raw);
   await syncUserEmails(db, row.id, claims.raw, claims.emailVerified);
-  await syncRoleOfUser(db, config, row.id);
+  // No pool succession from a login (ADR-013): see storeRole.
+  await syncRoleOfUser(db, config, row.id, { succession: false });
   await claimEnrollments(db, row);
   const [user] = await db.select().from(users).where(eq(users.id, row.id));
   if (!user) throw new Error("Signed-in user vanished");

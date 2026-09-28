@@ -102,8 +102,22 @@ async function roleForUser(
  * The transfer runs after the role is stored, so a failure of the succession
  * can never leave an account teacher-by-accident; re-running the sync picks
  * the pools up again (`transferOnLoss` is idempotent).
+ *
+ * A LOGIN stores the role with `succession: false`: what the IdP releases
+ * may vary from one login to the next, and ADR-013 ties the handover to the
+ * two deliberate actions above, never to a login. The pools stay with their
+ * owner until one of those actions runs.
  */
-async function storeRole(db: Db, userId: string, role: UserRole): Promise<void> {
+interface StoreOptions {
+  succession?: boolean;
+}
+
+async function storeRole(
+  db: Db,
+  userId: string,
+  role: UserRole,
+  { succession = true }: StoreOptions = {},
+): Promise<void> {
   const [before] = await db
     .select({ role: users.role })
     .from(users)
@@ -112,7 +126,7 @@ async function storeRole(db: Db, userId: string, role: UserRole): Promise<void> 
   await db.update(users).set({ role }).where(eq(users.id, userId));
   const was = before?.role === "teacher" || before?.role === "admin";
   const is = role === "teacher" || role === "admin";
-  if (was && !is) await transferOnLoss(db, userId);
+  if (succession && was && !is) await transferOnLoss(db, userId);
 }
 
 /**
@@ -139,7 +153,12 @@ export async function syncUserRole(db: Db, config: AppConfig, email: string): Pr
   return owners.length;
 }
 
-/** Recomputes one account's role (after a course-staff change). */
-export async function syncRoleOfUser(db: Db, config: AppConfig, userId: string): Promise<void> {
-  await storeRole(db, userId, await roleForUser(db, config, userId));
+/** Recomputes one account's role (after a course-staff change, or a login). */
+export async function syncRoleOfUser(
+  db: Db,
+  config: AppConfig,
+  userId: string,
+  options: StoreOptions = {},
+): Promise<void> {
+  await storeRole(db, userId, await roleForUser(db, config, userId), options);
 }
