@@ -517,6 +517,13 @@ describe("Shell student view banner", () => {
     expect(banner.parentElement!.style.getPropertyValue("--banner-h")).not.toBe("");
     expect(banner.parentElement!.contains(sidebar)).toBe(true);
   });
+
+  it("names the mode in a short line on phones, the sentence from sm up", () => {
+    renderShell({ studentView: true, teacherUi: false });
+    const banner = screen.getByRole("region", { name: "You are viewing the portal as a student." });
+    expect(within(banner).getByText("Student view")).toHaveClass("sm:hidden");
+    expect(within(banner).getByText("You are viewing the portal as a student.")).toHaveClass("hidden", "sm:inline");
+  });
 });
 
 describe("ModeBanner", () => {

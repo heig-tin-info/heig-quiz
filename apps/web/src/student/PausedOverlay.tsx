@@ -23,7 +23,7 @@ export function PausedOverlay({ show }: { show: boolean }) {
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-0 z-40 flex items-center justify-center bg-canvas/85 px-4 backdrop-blur-[2px]"
+      className="fixed inset-x-0 top-(--banner-h) bottom-0 z-40 flex items-center justify-center bg-canvas/85 px-4 backdrop-blur-[2px]"
     >
       <div className="w-full max-w-115 rounded-card border border-line bg-surface px-6 py-8 text-center">
         <PauseCircle className="mx-auto size-8 text-fg-faint" aria-hidden />

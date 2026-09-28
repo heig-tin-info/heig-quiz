@@ -29,6 +29,7 @@ export const fr: Record<keyof Dict, string> = {
   "menu.lightTheme": "Thème clair",
   "menu.darkTheme": "Thème sombre",
   "menu.studentViewBanner": "Vous consultez le portail comme un étudiant.",
+  "menu.studentViewBannerShort": "Vue étudiant",
   "view.label": "Afficher comme",
   "view.teacher": "Enseignant",
   "view.student": "Étudiant",

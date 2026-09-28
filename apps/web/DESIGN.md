@@ -334,8 +334,11 @@ live in `ui/state.ts`, each written once.
   application — the student view today, acting as someone else later — is
   stated above everything, not as a page notice. Full width over the sidebar,
   sticky at the top (`Z.banner`, above the sticky bars, under the coach and
-  every dialog), 32 px high, 12 px medium text, a message that truncates and
-  one compact 24 px outline pill for the way out. Solid **`fg` fill with
+  every dialog), 32 px high, 12 px medium text, a message (a short one under
+  `sm`, so a phone still reads the word that names the mode; truncation is the
+  fallback) and one compact 24 px outline pill for the way out. A fixed
+  overlay of the page under it (the paused attempt) starts at `--banner-h`, so
+  the way out stays reachable. Solid **`fg` fill with
   `canvas` ink** (about 16:1 in both themes, since both tokens swap):
   inverted rather than red, because the one red element of a screen is the
   thing to click, and a mode is not something to click. The pill's focus

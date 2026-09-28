@@ -641,16 +641,19 @@ const BANNER_HEIGHT = "2rem";
  *
  * Generic on purpose: the student view says one thing and offers the way
  * back; another mode (acting as someone else) says another and offers its
- * own way out.
+ * own way out. `short` is what a phone shows, where the full sentence would
+ * be cut before the word that names the mode; `message` names the region.
  */
 export function ModeBanner({
   icon,
   message,
+  short,
   action,
   children,
 }: {
   icon?: ReactNode;
-  message: ReactNode;
+  message: string;
+  short?: string | undefined;
   action?: { label: string; onClick: () => void } | undefined;
   children: ReactNode;
 }) {
@@ -658,14 +661,23 @@ export function ModeBanner({
     <div style={{ "--banner-h": BANNER_HEIGHT } as CSSProperties}>
       <div
         role="region"
-        aria-label={typeof message === "string" ? message : undefined}
+        aria-label={message}
         className={cx(
-          "sticky top-0 flex h-(--banner-h) items-center gap-2 bg-fg px-4 py-1 text-xs font-medium text-canvas [&>svg]:size-3.5 [&>svg]:shrink-0",
+          "sticky top-0 flex h-(--banner-h) items-center gap-2 bg-fg px-4 text-xs font-medium text-canvas [&>svg]:size-3.5 [&>svg]:shrink-0",
           Z.banner,
         )}
       >
         {icon}
-        <span className="min-w-0 flex-1 truncate">{message}</span>
+        <span className="min-w-0 flex-1 truncate">
+          {short ? (
+            <>
+              <span className="sm:hidden">{short}</span>
+              <span className="hidden sm:inline">{message}</span>
+            </>
+          ) : (
+            message
+          )}
+        </span>
         {action ? (
           <button
             type="button"
@@ -699,6 +711,7 @@ export function StudentViewBanner({
     <ModeBanner
       icon={<Eye />}
       message={t("menu.studentViewBanner")}
+      short={t("menu.studentViewBannerShort")}
       action={onLeave ? { label: t("menu.teacherView"), onClick: onLeave } : undefined}
     >
       {children}
