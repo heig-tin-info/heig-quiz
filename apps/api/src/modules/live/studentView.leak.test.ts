@@ -170,6 +170,24 @@ const DRAFT_COMPLETIONS: Record<string, (draft: unknown) => unknown> = {
    * texts are both sown, so the search covers each of them.
    */
   rich: (draft) => ({ ...(draft as object), reference: "" }),
+  /*
+   * `categorize`'s draft has two columns and no card, and a question needs
+   * one card in a column (`categorize.no_target`). Its key is not a string
+   * but the id lists inside the columns, which the value search cannot sow:
+   * the test of its own below checks it.
+   */
+  categorize: (draft) => {
+    const config = draft as { columns: { id: string; cards: string[] }[] };
+    const [first, ...rest] = config.columns;
+    return {
+      ...config,
+      columns: [{ ...first, cards: ["t4rg3tk1"] }, ...rest],
+      cards: [
+        { id: "t4rg3tk1", text: "" },
+        { id: "d1str4ct", text: "" },
+      ],
+    };
+  },
 };
 
 function filledDraft(type: AnyQuestionTypeServer): unknown {
@@ -359,6 +377,24 @@ describe("studentView never leaks the key (invariant 4)", () => {
   it("sows the rubric and the model answer of the real `rich` type", () => {
     // An essay's whole key is two strings: both must be under the value search.
     expect(sowSecrets(questionType("rich")).markers).toHaveLength(2);
+  });
+
+  it("hands `categorize` the evaluation's negative marking, and its columns no key (ADR-036)", () => {
+    // What studentView adds to the type's own toStudent (tested in
+    // packages/qt-categorize): the evaluation's defaults reach the type, which
+    // publishes the flag and nothing else of them; the columns' key stays home.
+    const type = questionType("categorize");
+    const payload = studentView({
+      type: "categorize",
+      version: { config: filledDraft(type), configVersion: type.configVersion },
+      seed: 0,
+      itemId: "55555555-5555-4555-8555-555555555555",
+      shuffle: false,
+      defaults: { categorize: { policy: "all_or_nothing", negativeMarking: true } },
+    }) as { columns: Record<string, unknown>[]; negativeMarking?: boolean };
+    expect(payload.negativeMarking).toBe(true);
+    expect(JSON.stringify(payload)).not.toContain("all_or_nothing");
+    for (const column of payload.columns) expect(column).not.toHaveProperty("cards");
   });
 
   it("keeps the key of the fake test type out too", () => {

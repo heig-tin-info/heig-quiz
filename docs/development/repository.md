@@ -25,6 +25,8 @@ packages/
   qt-code/    question types: code graded by the runner, and its variant
               codeimage graded pixel by pixel
   qt-circuit/ question type: two-port schematic, graded by ngspice simulation
+  qt-rich/    question type: essay, graded by hand against a rubric
+  qt-categorize/ question type: cards sorted into columns (ADR-036)
 docs/
   guide/      the user guide
   spec/       the product specification
@@ -90,10 +92,12 @@ the flags of every container, the request lifecycle, the images under
 | `@quiz/core` | `./server`, `./client`, `./rng` | the `QuestionTypeServer` and `QuestionTypeClient` contracts, the `GradeResult` union, the seeded RNG, the `Runner` interface and its request/outcome types |
 | `@quiz/registry` | `./server`, `./client` | the two static maps from a question-type id to its implementation |
 | `@quiz/contracts` | `.` | one zod schema per route and per SSE event, and the payload types both sides import |
-| `@quiz/domain` | `.`, `./<file>` | pure functions with unit tests: the Swiss grade scale, deadlines and time bonus, the MCQ scoring policies, the cloze parser, the roster import, output comparison, stats, pseudonyms |
+| `@quiz/domain` | `.`, `./<file>` | pure functions with unit tests: the Swiss grade scale, deadlines and time bonus, the MCQ and categorize scoring policies, the cloze parser, the roster import, output comparison, stats, pseudonyms |
 | `@quiz/ui` | `.` | the shared primitives of the question-type surfaces (React as a peer, `@quiz/core` its only dependency; it never imports a `qt-*` package nor `apps/web`) |
 | `@quiz/qt-mcq`, `qt-short`, `qt-cloze` | `./server`, `./client` | one question type each: config schema, canonical form, grading on the server; Editor, Player and Review components on the client |
 | `@quiz/qt-code` | `./server`, `./client` | two types sharing one program half: `code`, graded by the runner's test cases, and `codeimage`, judged by the picture its stdout draws ([ADR-021](../adr/ADR-021-codeimage-variante-de-code.md)) |
+| `@quiz/qt-rich` | `./server`, `./client` | `rich`, shown as "Essay": a text graded by hand against a rubric (docs/spec/04 §4.8) |
+| `@quiz/qt-categorize` | `./server`, `./client` | `categorize`, shown as "Categorize": cards sorted into columns, with distractors and an optional order, scored per card or all or nothing, and by the evaluation's negative marking ([ADR-036](../adr/ADR-036-type-classement.md)) |
 | `@quiz/qt-circuit` | `./server`, `./client`, `./canvas` | `circuit`, a two-port schematic graded by simulating it with ngspice through the runner's `spice` language ([ADR-019](../adr/ADR-019-simulation-de-circuit.md)); `./canvas` is the schematic editor |
 
 ### Server and client halves

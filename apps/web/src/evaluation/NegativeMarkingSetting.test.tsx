@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -30,7 +30,15 @@ const withMode = (
   };
 };
 
-function Harness({ detail, disabled = false }: { detail: EvaluationDetail; disabled?: boolean }) {
+function Harness({
+  detail,
+  disabled = false,
+  holdsCategorize = false,
+}: {
+  detail: EvaluationDetail;
+  disabled?: boolean;
+  holdsCategorize?: boolean;
+}) {
   const patch = useConfigPatch(evaluationTarget(EVALUATION_ID));
   return (
     <AdvancedDisclosure
@@ -39,6 +47,7 @@ function Harness({ detail, disabled = false }: { detail: EvaluationDetail; disab
       patch={patch}
       disabled={disabled}
       feedbackDisabled={false}
+      holdsCategorize={holdsCategorize}
     />
   );
 }
@@ -78,5 +87,35 @@ describe("the negative-marking setting", () => {
     renderWithProviders(<Harness detail={withMode("poll")} />);
     await open();
     expect(screen.queryByRole("switch", { name: "Negative marking" })).toBeNull();
+  });
+});
+
+/* ADR-036: the categorize policy, what an `inherit` categorize question defers to. */
+describe("the categorize policy setting", () => {
+  it("reads per card when absent, and sends the setting alone", async () => {
+    const detail = withMode("exam");
+    const { calls } = mockFetch({ [PATCH]: ok(detail) });
+    renderWithProviders(<Harness detail={detail} holdsCategorize />);
+    await open();
+    const group = screen.getByRole("radiogroup", { name: "Categorize scoring" });
+    expect(within(group).getByRole("radio", { name: "Per card" })).toBeChecked();
+    await userEvent.click(within(group).getByRole("radio", { name: "Exact" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
+        settings: { categorizePolicy: "all_or_nothing" },
+      }),
+    );
+  });
+
+  it("says, on both policy rows, that negative marking replaces them while it is on", async () => {
+    renderWithProviders(<Harness detail={withMode("exam", true)} holdsCategorize />);
+    await open();
+    expect(screen.getAllByText(/Negative marking is on and replaces this policy\./)).toHaveLength(2);
+  });
+
+  it("is not offered while the evaluation holds no categorize question", async () => {
+    renderWithProviders(<Harness detail={withMode("exam")} />);
+    await open();
+    expect(screen.queryByRole("radiogroup", { name: "Categorize scoring" })).toBeNull();
   });
 });

@@ -31,6 +31,7 @@ import {
   rand,
 } from "./runtime";
 import {
+  CATEGORIZE_ANSWER,
   MockQuestion,
   RC_REFERENCE,
   RC_STUDENT,
@@ -112,9 +113,11 @@ function itemSource(): MockQuestion[] {
    * evaluations the grading panel is built from carry one (issue #192).
    */
   const essay = published.filter((q) => q.type === "rich");
-  const rest = primary.filter((q) => q.type !== "rich");
+  // The categorize question follows the essay, sixth (docs/04 §4.13).
+  const categorize = published.filter((q) => q.type === "categorize");
+  const rest = primary.filter((q) => q.type !== "rich" && q.type !== "categorize");
   if (primary.length === 0) return published;
-  return [...rest.slice(0, 2), ...circuit, ...rest.slice(2, 3), ...essay, ...rest.slice(3)];
+  return [...rest.slice(0, 2), ...circuit, ...rest.slice(2, 3), ...essay, ...categorize, ...rest.slice(3)];
 }
 
 const studentConfigOf = (q: MockQuestion): unknown => studentView(q, frozenConfig(q));
@@ -188,6 +191,15 @@ function answerOf(q: MockQuestion, seedValue: number): unknown {
     // An essay has no wrong answer to pick: a short one and a longer one.
     case "rich":
       return { text: wrong ? RICH_SHORT_ANSWER : RICH_LONG_ANSWER };
+    // The mockup's partly right answer, or the key itself.
+    case "categorize":
+      return wrong
+        ? CATEGORIZE_ANSWER
+        : {
+            columns: Object.fromEntries(
+              ((config.columns ?? []) as { id: string; cards: string[] }[]).map((c) => [c.id, c.cards]),
+            ),
+          };
   }
 }
 
@@ -235,6 +247,11 @@ export function summaryOf(q: MockQuestion, seedValue: number): string {
       const chars = (answer as { text: string }).text.length;
       const max = frozenConfig(q).maxChars as number | undefined;
       return max === undefined ? String(chars) : `${chars}/${max}`;
+    }
+    // `summarizeAnswer` of `@quiz/qt-categorize`: cards placed / cards.
+    case "categorize": {
+      const placed = Object.values((answer as { columns: Record<string, string[]> }).columns).flat().length;
+      return `${placed}/${((frozenConfig(q).cards ?? []) as unknown[]).length}`;
     }
   }
 }

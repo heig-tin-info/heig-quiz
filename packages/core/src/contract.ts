@@ -26,9 +26,19 @@ export const ANSWER_SUMMARY_MAX = 24;
  * simulation path (`packages/qt-circuit`) — and `codeimage`, the variant of
  * `code` judged by the picture its program prints (§4.9, ADR-021), which
  * lives inside `packages/qt-code`, and `rich` — the essay of §4.8, graded
- * by hand in v1 (`packages/qt-rich`, issue #192).
+ * by hand in v1 (`packages/qt-rich`, issue #192), and `categorize` — cards
+ * sorted into columns, §4.13 (`packages/qt-categorize`, ADR-036).
  */
-export const QUESTION_TYPE_IDS = ["mcq", "short", "cloze", "code", "circuit", "codeimage", "rich"] as const;
+export const QUESTION_TYPE_IDS = [
+  "mcq",
+  "short",
+  "cloze",
+  "code",
+  "circuit",
+  "codeimage",
+  "rich",
+  "categorize",
+] as const;
 export type QuestionTypeId = (typeof QUESTION_TYPE_IDS)[number];
 
 // ---------------------------------------------------------------------------

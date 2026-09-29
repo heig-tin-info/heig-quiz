@@ -543,6 +543,7 @@ describe("the setting", () => {
     expect(evaluationService.negativeMarkingEnabled(row)).toBe(false);
     expect(evaluationService.gradeDefaults(row)).toEqual({
       mcq: { policy: row.mcqPolicy, negativeMarking: false },
+      categorize: { policy: "per_item", negativeMarking: false },
     });
   });
 });

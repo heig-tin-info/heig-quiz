@@ -35,8 +35,8 @@ Modular monolith, ADR-001 of heig-classroom: a single API process, a single depl
 *This tree is the TARGET layout of the specification, not the current one.
 `canonical/` and `cli/` do not exist yet, `deploy/` was
 never created (the deployment files are at the root), and `qt-circuit`, the
-`codeimage` type of `qt-code` and `qt-rich` came later (ADR-019, ADR-021,
-issue #192). The current
+`codeimage` type of `qt-code`, `qt-rich` and `qt-categorize` came later
+(ADR-019, ADR-021, issue #192, ADR-036). The current
 layout is in `CLAUDE.md` and on the development site's repository page.*
 
 ```
@@ -51,7 +51,7 @@ quiz/
     domain/              pure business rules: grade scale, MCQ policies, cloze, roster, FSRS
     canonical/           YAML format, import / export, GIFT and Moodle XML converters
     ui/                  design system: tokens, primitives, quiz components
-    qt-mcq/ qt-short/ qt-cloze/ qt-code/ qt-rich/ ...   one package per type
+    qt-mcq/ qt-short/ qt-cloze/ qt-code/ qt-rich/ qt-categorize/ ...   one package per type
     cli/                 `quiz` on the command line: pull / push of a pool, phase 2
   docs/
   deploy/
@@ -294,7 +294,7 @@ Alternative evaluated: Piston, a free multi-language runner, isolation by Unix u
 
 ## 5.6 Grading
 
-After closing, the `grading` module enqueues a `grading.evaluation` job over the whole evaluation — one job per request, never deduplicated, since two requests may differ in scope (#273) (on an `exercise` with retakes, each attempt is also graded alone as soon as it ends, and the results read the KEPT attempt of each student, best or last: ADR-025). The job walks the attempts and, for each answer, calls the type's `grade`. Immediate result: `auto` grading, validated. `pending: 'runner'`: a `grading.runner` job per answer, low-priority queue. `pending: 'llm'`: a `grading.llm` job per answer, `llm` grading proposed. The jobs are idempotent: they check the absence of a validated, non-superseded grading before writing. `grading.progress` informs the teacher. The evaluation's per-type settings reach `grade` through `GradeContext.defaults` (`gradeDefaults`): the MCQ policy an `inherit` question defers to, and negative marking (ADR-026). Every total of an attempt — grade table, CSV, release snapshot, feedback, cards, kept attempt of a retake — is `attemptTotal` of `@quiz/domain`: per-question points are kept signed, the total is floored at 0, and the grade is computed from it.
+After closing, the `grading` module enqueues a `grading.evaluation` job over the whole evaluation — one job per request, never deduplicated, since two requests may differ in scope (#273) (on an `exercise` with retakes, each attempt is also graded alone as soon as it ends, and the results read the KEPT attempt of each student, best or last: ADR-025). The job walks the attempts and, for each answer, calls the type's `grade`. Immediate result: `auto` grading, validated. `pending: 'runner'`: a `grading.runner` job per answer, low-priority queue. `pending: 'llm'`: a `grading.llm` job per answer, `llm` grading proposed. The jobs are idempotent: they check the absence of a validated, non-superseded grading before writing. `grading.progress` informs the teacher. The evaluation's per-type settings reach `grade` through `GradeContext.defaults` (`gradeDefaults`): the MCQ policy and the categorize policy (`settings.categorizePolicy`, ADR-036) an `inherit` question defers to, and negative marking (ADR-026), which covers `mcq` and `categorize`. Every total of an attempt — grade table, CSV, release snapshot, feedback, cards, kept attempt of a retake — is `attemptTotal` of `@quiz/domain`: per-question points are kept signed, the total is floored at 0, and the grade is computed from it.
 
 The `llm` module builds the prompt from a template per purpose, requires a JSON output validated by zod, retries once on invalid JSON, logs into `llm_calls` without the content. Providers: Anthropic SDK and an OpenAI-compatible client behind a common interface. Default model for grading: Claude Opus, for generation: Claude Sonnet, configurable.
 

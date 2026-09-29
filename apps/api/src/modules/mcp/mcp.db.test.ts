@@ -118,7 +118,7 @@ describe("the transport", () => {
 });
 
 describe("the question-type guide", () => {
-  it.each(["mcq", "short", "cloze"])("gives a %s example the publication gate accepts", (type) => {
+  it.each(["mcq", "short", "cloze", "categorize"])("gives a %s example the publication gate accepts", (type) => {
     const guide = describeQuestionType(type) as { example: unknown; configSchema: { type: string } };
     expect(guide.configSchema.type).toBe("object");
     expect(checkConfig(type, guide.example)).toBeNull();

@@ -89,6 +89,30 @@ function short(answer: unknown): AnswerText | null {
   return { kind: "text", ...clip(answer.text.trim()) };
 }
 
+/**
+ * Cards sorted into columns: one line per column that holds a card, "Integer:
+ * int, size_t", in the student's display order of the columns and the order
+ * of the cards within each. The tray is what is left: not listed.
+ */
+function categorize(student: unknown, answer: unknown): AnswerText | null {
+  if (!isRecord(answer) || !isRecord(answer.columns)) return null;
+  const placed = answer.columns;
+  const cards = new Map<string, string>();
+  for (const c of isRecord(student) && Array.isArray(student.cards) ? student.cards : []) {
+    if (isRecord(c) && typeof c.id === "string" && typeof c.text === "string") cards.set(c.id, c.text);
+  }
+  const columns = isRecord(student) && Array.isArray(student.columns) ? student.columns : [];
+  const lines: string[] = [];
+  for (const column of columns) {
+    if (!isRecord(column) || typeof column.id !== "string" || !Object.hasOwn(placed, column.id)) continue;
+    const ids = placed[column.id];
+    if (!Array.isArray(ids) || ids.length === 0) continue;
+    const texts = ids.map((id) => (typeof id === "string" ? cards.get(id) : undefined) ?? "?");
+    lines.push(`${String(column.label)}: ${texts.join(", ")}`);
+  }
+  return { kind: "text", ...clip(lines.join("\n")) };
+}
+
 function code(answer: unknown): AnswerText | null {
   if (!isRecord(answer) || !Array.isArray(answer.regions)) return null;
   const regions = answer.regions.filter(
@@ -138,6 +162,8 @@ export function answerText(type: string, student: unknown, answer: unknown): Ans
     case "code":
     case "codeimage":
       return code(answer);
+    case "categorize":
+      return categorize(student, answer);
     default:
       return null;
   }

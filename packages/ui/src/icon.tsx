@@ -48,3 +48,16 @@ export function typeIcon(
     <StrokeIcon className={className}>{outline}</StrokeIcon>
   );
 }
+
+/**
+ * The six dots of a drag handle. Shared because every reorderable list of
+ * the question surfaces draws the same one (the mcq choices, the categorize
+ * cards), and two copies of it had already drifted by a stroke width.
+ */
+export function GripIcon({ className = "size-3.5" }: { className?: string | undefined }): ReactNode {
+  return (
+    <StrokeIcon className={className} strokeWidth={1.6}>
+      <path d="M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01" />
+    </StrokeIcon>
+  );
+}

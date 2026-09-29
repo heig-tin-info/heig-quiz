@@ -55,6 +55,8 @@ import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
 import {
   AsideSection,
   cx,
+  gripClass,
+  GripIcon,
   hint,
   inputClass,
   inputSize,
@@ -69,8 +71,6 @@ import {
 } from "@quiz/ui";
 import {
   choiceLetter,
-  gripClass,
-  GripIcon,
   iconButtonClass,
   Pastille,
   PlusIcon,
@@ -543,7 +543,7 @@ function ChoiceRow({
       ref={setNodeRef}
       style={style}
       className={cx(
-        "group/choice flex items-start gap-2 rounded-field",
+        "group/grip flex items-start gap-2 rounded-field",
         isDragging && "relative z-10 bg-surface ring-1 ring-line-strong",
       )}
     >

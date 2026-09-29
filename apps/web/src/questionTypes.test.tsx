@@ -7,6 +7,11 @@ import { shortEditorStrings, shortPlayerStrings, shortReviewStrings } from "@qui
 import { clozeEditorStrings, clozePlayerStrings, clozeReviewStrings } from "@quiz/qt-cloze/client";
 import { richEditorStrings, richPlayerStrings, richReviewStrings } from "@quiz/qt-rich/client";
 import {
+  categorizeEditorStrings,
+  categorizePlayerStrings,
+  categorizeReviewStrings,
+} from "@quiz/qt-categorize/client";
+import {
   EDITOR_STRINGS,
   IMAGE_EDITOR_STRINGS,
   IMAGE_PLAYER_STRINGS,
@@ -79,6 +84,9 @@ const DICTIONARIES: [string, object][] = [
   ["qt.rich.e", richEditorStrings],
   ["qt.rich.p", richPlayerStrings],
   ["qt.rich.r", richReviewStrings],
+  ["qt.categorize.e", categorizeEditorStrings],
+  ["qt.categorize.p", categorizePlayerStrings],
+  ["qt.categorize.r", categorizeReviewStrings],
 ];
 
 /**

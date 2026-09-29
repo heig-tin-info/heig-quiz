@@ -157,3 +157,15 @@ export const table = {
  * their sections are many and long; the tokens inside are the same.
  */
 export const sectionClass = "flex flex-col gap-2";
+
+/**
+ * The drag handle of a reorderable row ({@link GripIcon} inside a button).
+ *
+ * VISIBLE at rest, which the first version was not: the grip was drawn in the
+ * hover colour only, so a teacher looking at the list saw no affordance at all
+ * and the reordering might as well not have existed. `fg-muted` at rest, `fg`
+ * as soon as the pointer is anywhere on a row that wears `group/grip`, or the
+ * handle has the focus, and the two cursors that say what the thing does.
+ */
+export const gripClass =
+  "inline-flex h-7 w-6 shrink-0 cursor-grab items-center justify-center rounded-md text-fg-muted transition-colors group-hover/grip:text-fg hover:bg-surface-2 focus-visible:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:cursor-grabbing disabled:pointer-events-none disabled:opacity-40";

@@ -6,6 +6,7 @@ import {
   EvaluationSettings,
   EvaluationSettingsPatch,
   RetakeSettings,
+  categorizePolicyOf,
   negativeMarkingOf,
   retakesOf,
   FeedbackPolicy,
@@ -140,5 +141,23 @@ describe("negative marking (ADR-026)", () => {
   it("travels in a settings patch, alone", () => {
     expect(EvaluationSettingsPatch.parse({ negativeMarking: true })).toEqual({ negativeMarking: true });
     expect(negativeMarkingOf(EvaluationSettings.parse({ negativeMarking: true }))).toBe(true);
+  });
+});
+
+describe("the categorize policy (ADR-036)", () => {
+  it("is absent on a stored evaluation, and reads as per_item", () => {
+    const settings = EvaluationSettings.parse({});
+    expect(settings).not.toHaveProperty("categorizePolicy");
+    expect(categorizePolicyOf(settings)).toBe("per_item");
+  });
+
+  it("travels in a settings patch, alone, and refuses an unknown policy", () => {
+    expect(EvaluationSettingsPatch.parse({ categorizePolicy: "all_or_nothing" })).toEqual({
+      categorizePolicy: "all_or_nothing",
+    });
+    expect(EvaluationSettingsPatch.safeParse({ categorizePolicy: "symmetric" }).success).toBe(false);
+    expect(categorizePolicyOf(EvaluationSettings.parse({ categorizePolicy: "all_or_nothing" }))).toBe(
+      "all_or_nothing",
+    );
   });
 });

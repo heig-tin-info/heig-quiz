@@ -223,6 +223,7 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
               patch={patch}
               presetOf={(preset) => presetSettings(preset, template.mode)}
               summary={presetSummary(template, t, isoDateTime)}
+              holdsCategorize={data.items.some((i) => i.type === "categorize")}
               dates={
                 <p className="self-center text-[13px] text-fg-muted">{t("templates.datesLater")}</p>
               }

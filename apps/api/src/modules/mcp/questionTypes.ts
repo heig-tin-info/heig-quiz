@@ -105,6 +105,39 @@ const GUIDES: Record<string, TypeGuide> = {
       format: "markdown",
     },
   },
+  categorize: {
+    summary: "Categorize: the student sorts cards into 2 to 6 labelled columns; some cards may be distractors that belong nowhere.",
+    rules: [
+      "`prompt`, every card `text` and every column `label` are Markdown; keep cards short (a word, an expression, one line of code).",
+      "Every card and column has an `id`: an OPAQUE string of 4 to 40 lowercase letters and digits (`/^[a-z0-9]{4,40}$/`; use 8 random ones), unique in the question. Never an index, a label or a hint such as `int-entier`: the student sees the ids.",
+      "The KEY is inside the columns: each column's `cards` lists the ids of the cards that belong there. A card may appear in one column at most.",
+      "A card listed by no column is a DISTRACTOR: the student is expected to leave it out. At least one card must belong to a column.",
+      "Limits: 2 to 6 columns, 1 to 30 cards.",
+      "`ordered: true` makes the rank inside each column count too (list each column's `cards` in the expected order); a card is then right only at its exact rank.",
+      "`shuffleCards` (default true) and `shuffleColumns` (default false: the column order often means something) shuffle per student.",
+      'Leave `policy` to `inherit` unless the teacher asks: the evaluation decides. `"per_item"` gives each card its share (a distractor left out counts); `"all_or_nothing"` all the points only for a perfect answer. Under the evaluation\'s negative marking a misplaced card costs points.',
+    ],
+    example: {
+      configVersion: 1,
+      prompt: "Classez chaque type C selon sa **catégorie**.",
+      columns: [
+        { id: "k3v9qz1a", label: "Entier", cards: ["m2x7c4pd", "t8r1w6hn"] },
+        { id: "b5n0ys2e", label: "Virgule flottante", cards: ["q4j9f3lu"] },
+        { id: "w1g6ta8o", label: "Pointeur", cards: ["z7e2k5vb"] },
+      ],
+      cards: [
+        { id: "m2x7c4pd", text: "`int`" },
+        { id: "q4j9f3lu", text: "`double`" },
+        { id: "z7e2k5vb", text: "`char *`" },
+        { id: "t8r1w6hn", text: "`size_t`" },
+        { id: "h0c3u9sy", text: "`string`" },
+      ],
+      ordered: false,
+      shuffleCards: true,
+      shuffleColumns: false,
+      policy: "inherit",
+    },
+  },
   circuit: {
     summary: "Circuit: the student draws a schematic, graded by an ngspice simulation.",
     rules: [

@@ -80,6 +80,24 @@ describe("answerText (#94)", () => {
     expect(isEmptyAnswerText(text!)).toBe(true);
   });
 
+  it("lists a categorize answer column by column, in display order, the tray left out", () => {
+    const student = {
+      columns: [
+        { id: "c2", label: "Pointer" },
+        { id: "c1", label: "Integer" },
+      ],
+      cards: [
+        { id: "k1", text: "int" },
+        { id: "k2", text: "char *" },
+        { id: "k3", text: "size_t" },
+      ],
+    };
+    const text = answerText("categorize", student, { columns: { c1: ["k1", "k3"], c2: ["k2"] } });
+    expect(text).toEqual({ kind: "text", text: "Pointer: char *\nInteger: int, size_t", truncated: false });
+    expect(isEmptyAnswerText(answerText("categorize", student, { columns: {} })!)).toBe(true);
+    expect(answerText("categorize", student, { columns: [] })).toBeNull();
+  });
+
   it("gives null for no answer, an unknown type or a shape it does not read", () => {
     expect(answerText("short", {}, null)).toBeNull();
     expect(answerText("circuit", {}, { schematic: { components: [], wires: [] } })).toBeNull();

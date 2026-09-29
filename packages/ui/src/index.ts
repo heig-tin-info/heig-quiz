@@ -26,6 +26,7 @@ export {
   card,
   codeArea,
   cx,
+  gripClass,
   hint,
   inputClass,
   inputSize,
@@ -42,7 +43,7 @@ export {
 } from "./styles.js";
 export { breakdownOf, isLocked, markdown } from "./content.js";
 export { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";
-export { StrokeIcon, typeIcon } from "./icon.js";
+export { GripIcon, StrokeIcon, typeIcon } from "./icon.js";
 export { IssueList } from "./issues.js";
 export {
   AsideSection,

@@ -76,7 +76,7 @@ MoSCoW priority: M = must, S = should, C = could.
 
 | Area | Content | Prio |
 |---|---|---|
-| Questions | Drawing. The schematic type (`circuit`) was brought forward and now ships with a simulation grading, ADR-019; the code-image type (`codeimage`) was brought forward too, as a variant of `code` graded pixel by pixel, ADR-021 | S |
+| Questions | Drawing. The schematic type (`circuit`) was brought forward and now ships with a simulation grading, ADR-019; the code-image type (`codeimage`) was brought forward too, as a variant of `code` graded pixel by pixel, ADR-021; the categorize type (`categorize`, cards sorted into columns, with negative marking like `mcq`) was added, ADR-036 | S |
 | Code | TAP unit tests, additional files, locked regions, further languages | S |
 | Plugins | External question packages, loaded at build time | C |
 | Generation | "Generate 10 min quiz" by tags and difficulty | C |

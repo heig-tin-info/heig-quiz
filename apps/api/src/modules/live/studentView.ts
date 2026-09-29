@@ -99,7 +99,8 @@ interface StudentViewInput {
   /**
    * The evaluation's per-type settings (`gradeDefaults`), for a view built
    * for one: a type publishes from it only what a student must know before
-   * answering — `mcq`'s negative marking (ADR-026).
+   * answering — the negative marking of `mcq` and `categorize` (ADR-026,
+   * ADR-036).
    */
   defaults?: Readonly<Record<string, unknown>>;
 }

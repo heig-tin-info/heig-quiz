@@ -44,6 +44,11 @@ import {
 } from "@quiz/qt-short/client";
 import { richEditorStrings, richPlayerStrings, richReviewStrings } from "@quiz/qt-rich/client";
 import {
+  categorizeEditorStrings,
+  categorizePlayerStrings,
+  categorizeReviewStrings,
+} from "@quiz/qt-categorize/client";
+import {
   clozeEditorStrings,
   clozePlayerStrings,
   clozeReviewStrings,
@@ -204,6 +209,7 @@ export const editorStrings = {
     ...translated(t, IMAGE_EDITOR_STRINGS, "qt.codeimage.e"),
   }),
   rich: (t: TFunction) => translated(t, richEditorStrings, "qt.rich.e"),
+  categorize: (t: TFunction) => translated(t, categorizeEditorStrings, "qt.categorize.e"),
 };
 
 /**
@@ -239,6 +245,7 @@ export const playerStrings = {
     ...translated(t, IMAGE_PLAYER_STRINGS, "qt.codeimage.p"),
   }),
   rich: (t: TFunction) => translated(t, richPlayerStrings, "qt.rich.p"),
+  categorize: (t: TFunction) => translated(t, categorizePlayerStrings, "qt.categorize.p"),
 };
 
 export const reviewStrings = {
@@ -254,6 +261,7 @@ export const reviewStrings = {
     ...translated(t, IMAGE_REVIEW_STRINGS, "qt.codeimage.r"),
   }),
   rich: (t: TFunction) => translated(t, richReviewStrings, "qt.rich.r"),
+  categorize: (t: TFunction) => translated(t, categorizeReviewStrings, "qt.categorize.r"),
 };
 
 // --- Hosts -----------------------------------------------------------------

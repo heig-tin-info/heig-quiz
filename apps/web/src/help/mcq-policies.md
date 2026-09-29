@@ -39,3 +39,8 @@ Guessing at random is worth 0 on average, so it no longer pays. The points
 of a question may be negative and are shown as such; the evaluation's total
 never goes below 0. Students are told in the waiting room and on each
 choice question.
+
+The same switch covers the **categorize** questions: a card placed in the
+right column earns `1/T` (T the cards that belong somewhere), a card placed in
+a wrong column, or a distractor placed at all, costs `1/(T·(k - 1))` with `k`
+columns, and a card left in the tray is 0.

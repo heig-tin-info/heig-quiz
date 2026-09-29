@@ -1,6 +1,6 @@
 # Question types
 
-Seven types are available today: multiple choice, short answer, fill in the blanks, code, code with image, circuit and essay. This chapter walks through the first four; the last three are summed up under [More types](#more-types). All but the essay are graded automatically, and all are written in the editor described in [Question pools](pools.md). This chapter covers what each form asks for, how the answer is scored and what the student gets.
+Eight types are available today: multiple choice, short answer, fill in the blanks, code, categorize, code with image, circuit and essay. This chapter walks through the first five; the last three are summed up under [More types](#more-types). All but the essay are graded automatically, and all are written in the editor described in [Question pools](pools.md). This chapter covers what each form asks for, how the answer is scored and what the student gets.
 
 ## Multiple choice
 
@@ -261,6 +261,43 @@ After **Run**, the table shows for each visible case its stdin, the expected out
 !!! tip
     Give one or two visible cases that show the input format, and keep the discriminating ones hidden. Run **Try the reference solution** before publishing: a case your own solution fails is a case nobody can pass.
 
+## Categorize
+
+For a question where the student sorts: cards to put into two to six labelled columns, such as C types under *Integer*, *Floating point* and *Pointer*, or the steps of a build in order. Some cards may belong nowhere: those **distractors** are meant to stay out.
+
+### The editor
+
+You write the key on the same board the student answers on. Type each card in the tray (**New definition, Enter to add**), name the columns, then drag every card that belongs somewhere into its column. A card you leave in the tray **is** a distractor: there is no separate checkbox to disagree with where the card sits. **Add a column** appends one; removing a column sends its cards back to the tray. Two columns at least, six at most, and up to thirty cards. A card goes by drag and drop, with the keyboard (Space picks it up, the arrows carry it, Space drops it) or by clicking the card and then the column.
+
+The options:
+
+- **Order matters**: inside each column, the cards must follow the order of your key, which the editor shows as ranks.
+- **Shuffle cards** (on by default): each student gets the cards in an order of their own.
+- **Shuffle columns** (off by default): leave it off when the order of the columns means something, such as *before*, *during*, *after*.
+- **Scoring policy**: **Inherited** by default, which takes the evaluation's; or **Per card**, or **Exact**.
+
+### How it is graded
+
+With `T` cards that belong in a column, `D` distractors, `n = T + D` cards in all, and in the student's answer `t` cards at their place, `x` cards placed at a wrong place and `p` distractors placed:
+
+| Policy | Score | In words |
+| --- | --- | --- |
+| **Per card** | `(t + D - p) / n` | every card is worth `1/n`; a distractor left out counts as right |
+| **Exact** | 1 if every card is at its place and no distractor is placed, else 0 | the whole board or nothing |
+
+A question set to **Inherited** takes the policy chosen under the evaluation's advanced options (**Categorize scoring**), **Per card** unless you change it. An answer that places no card at all scores 0, whatever the policy: leaving every distractor out earns nothing on its own.
+
+With **Order matters**, a card is at its place only in its column **and** at its exact rank. A card missing near the top of a column therefore moves every card under it off its rank; this is deliberate, so a student can check the rule by looking at the board.
+
+**Negative marking**, when the evaluation turns it on, applies here as on multiple choice and replaces the policy: with `k` columns, a card in its column earns `1/T`, a card in a wrong column or a placed distractor costs `1/(T·(k − 1))`, and a card left in the tray is 0. Placing a card at random is worth nothing on average. The score goes from −1 to 1, and only the total of the attempt is brought back to 0.
+
+### What the student sees
+
+The statement, a line saying whether the order matters, the tray of cards to sort, and the columns side by side under it. The student drags each card into a column, or clicks a card and then the column; with the keyboard, Space picks a card up and the arrows carry it. **Put everything back** empties the columns. The question reads **Answered** as soon as one card is placed. The student never sees which cards are distractors, nor your policy; under negative marking, the question says that wrong placements cost points. The live dashboard shows how many cards each student has placed, never where.
+
+!!! tip
+    One distractor or two that a student with a precise misconception would place are worth more than many obvious ones: a distractor everybody leaves out only lowers the weight of the other cards under **Per card**.
+
 ## Comparison
 
 | Type | Auto-graded | Partial credit | On a phone | Typical use |
@@ -269,6 +306,7 @@ After **Run**, the table shows for each visible case its stdin, the expected out
 | Short answer | yes | yes, per matcher | yes | a keyword, a computed value, a date |
 | Fill in the blanks | yes | yes, per blank | yes, with short blanks | complete a sentence, a formula or a line of code |
 | Code | yes, on the server | yes, per case | not comfortably | write or complete a function against test cases |
+| Categorize | yes | yes, per card | yes, by clicking | sort terms into groups, put steps in order |
 | Essay | no, by hand | yes, your points | yes, for a short text | explain, argue, describe in a few paragraphs |
 
 ## More types
