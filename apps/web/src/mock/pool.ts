@@ -72,6 +72,9 @@ import { codeimageConfig, codeimageStudentView, codeimageTryDetails } from "./co
  */
 import { richServer } from "@quiz/qt-rich/server";
 import type { RichConfig } from "@quiz/qt-rich/client";
+/* `categorize` likewise: its `toStudent` drops the key, its grade is the real one. */
+import { categorizeServer } from "@quiz/qt-categorize/server";
+import type { CategorizeAnswer, CategorizeConfig } from "@quiz/qt-categorize/client";
 import type { RunnerService } from "@quiz/core/server";
 
 /** `rich` never runs anything; its grade context still names a runner. */
@@ -103,7 +106,7 @@ interface MockVersion {
 export interface MockQuestion {
   id: string;
   poolId: string;
-  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich";
+  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich" | "categorize";
   internalName: string;
   categoryId: string | null;
   difficulty: number;
@@ -712,6 +715,45 @@ export const RICH_CONFIG: Record<string, unknown> = {
   format: "markdown",
 };
 
+/**
+ * The categorize question of the mock (docs/04 §4.13): the "C types" of
+ * `mockups/categorize.html`. Three columns, eight targets and one distractor
+ * (`string`, which C does not have). The ids are opaque, as the editor mints them.
+ */
+export const CATEGORIZE_CONFIG: Record<string, unknown> = {
+  configVersion: 1,
+  prompt: "Classez chaque type C selon ce qu'il représente.",
+  columns: [
+    { id: "k3v8a1c2", label: "Entier", cards: ["m1x0q7ta", "m4r2b9zc", "m8n5c3ud"] },
+    { id: "p7w2d5e9", label: "Virgule flottante", cards: ["m2t6e1vf", "m9y3f8wg"] },
+    { id: "r5j8g1h4", label: "Pointeur", cards: ["m6u4h2xh", "m0i7j5yi", "m3o1k9zj"] },
+  ],
+  cards: [
+    { id: "m1x0q7ta", text: "`int`" },
+    { id: "m4r2b9zc", text: "`unsigned long`" },
+    { id: "m8n5c3ud", text: "`size_t`" },
+    { id: "m2t6e1vf", text: "`double`" },
+    { id: "m9y3f8wg", text: "`float`" },
+    { id: "m6u4h2xh", text: "`char *`" },
+    { id: "m0i7j5yi", text: "`void *`" },
+    { id: "m3o1k9zj", text: "`int (*)(void)`" },
+    { id: "m5p2l6ak", text: "`string`" },
+  ],
+  ordered: false,
+  shuffleCards: true,
+  shuffleColumns: false,
+  policy: "inherit",
+};
+
+/** A student's partly right answer to {@link CATEGORIZE_CONFIG}, the one of the mockup. */
+export const CATEGORIZE_ANSWER = {
+  columns: {
+    k3v8a1c2: ["m1x0q7ta", "m8n5c3ud", "m4r2b9zc", "m0i7j5yi"],
+    p7w2d5e9: ["m2t6e1vf", "m9y3f8wg"],
+    r5j8g1h4: ["m6u4h2xh", "m3o1k9zj", "m5p2l6ak"],
+  },
+};
+
 export const questions: MockQuestion[] = [
   makeQuestion({
     poolId: "p1",
@@ -1074,6 +1116,23 @@ export const questions: MockQuestion[] = [
     config: RICH_CONFIG,
     explanation: "La pile est bornée : une récursion sans fin finit par toucher la page de garde.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 6 }],
+  }),
+  /*
+   * The `categorize` question (docs/04 §4.13), last for the reason `rich` is;
+   * `itemSource` in `evaluation.ts` splices it into the evaluations too.
+   */
+  makeQuestion({
+    poolId: "p1",
+    type: "categorize",
+    internalName: "types-c-classement",
+    categoryId: "k1",
+    difficulty: 1,
+    shuffleable: true,
+    randomizable: false,
+    tags: ["types", "classement"],
+    config: CATEGORIZE_CONFIG,
+    explanation: "`string` n'existe pas en C : une chaîne est un tableau de `char`.",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 5 }],
   }),
 ];
 
@@ -1486,6 +1545,8 @@ export function studentView(q: MockQuestion, config: Record<string, unknown>): u
       return codeimageStudentView(config);
     case "rich":
       return richServer.toStudent(config as RichConfig, { seed: 0, itemId: q.id, shuffle: false });
+    case "categorize":
+      return categorizeServer.toStudent(config as CategorizeConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "code": {
       const cases = ((config.tests as { cases?: CodeCaseLike[] })?.cases ?? []) as CodeCaseLike[];
       const visible = cases.filter((c) => c.visible);
@@ -1616,6 +1677,8 @@ export function solutionOf(q: MockQuestion): unknown {
       };
     case "rich":
       return richServer.toSolution(config as RichConfig, { seed: 0, itemId: q.id, shuffle: false });
+    case "categorize":
+      return categorizeServer.toSolution(config as CategorizeConfig, { seed: 0, itemId: q.id, shuffle: false });
   }
 }
 
@@ -1641,6 +1704,29 @@ export function tryAnswer(
       details: graded.details,
       solution: solutionOf(q),
       ...(graded.state === "proposed" ? { manual: true } : {}),
+    };
+  }
+  // `categorize` is graded by its own server half, the evaluation's negative marking included.
+  if (q.type === "categorize") {
+    const graded = categorizeServer.grade(
+      config as CategorizeConfig,
+      (answer as CategorizeAnswer | null) ?? null,
+      {
+        seed: 0,
+        itemId: q.id,
+        attemptId: "",
+        itemPoints: 1,
+        now: new Date(),
+        runner: NO_RUNNER,
+        ...(negativeMarking ? { defaults: { categorize: { policy: "per_item", negativeMarking: true } } } : {}),
+      },
+    ) as { points: number; maxPoints: number; details: unknown };
+    return {
+      status: "graded",
+      points: graded.points,
+      maxPoints: graded.maxPoints,
+      details: graded.details,
+      solution: solutionOf(q),
     };
   }
   /*
@@ -2193,6 +2279,8 @@ export function emptyConfig(type: MockQuestion["type"]): Record<string, unknown>
       return { ...codeimageConfig(), prompt: "", template: "", referenceSolution: "", target: null };
     case "rich":
       return { ...richServer.emptyDraft() };
+    case "categorize":
+      return { ...categorizeServer.emptyDraft() };
     case "circuit":
       return {
         configVersion: 1,

@@ -58,23 +58,30 @@ packages/
               codeimage graded pixel by pixel (./server, ./client)
   qt-circuit/ question type: two-port schematic, graded by ngspice simulation
               (./server, ./client, ./canvas)
+  qt-rich/    question type: essay, graded by hand (./server, ./client)
+  qt-categorize/ question type: cards sorted into columns (./server, ./client)
 docs/
   spec/       the product specification (above)
   adr/        the architecture decisions, inherited (001–010, 012) and our own
   guide/      the user guide
   development/  the developer pages, deployment runbook included
-mockups/      circuit.html, the origin of qt-circuit's schematic editor
+mockups/      circuit.html, the origin of qt-circuit's schematic editor;
+              categorize.html, the origin of qt-categorize's board
 infra/        Keycloak development realm
 ```
 
-`packages/qt-mcq`, `qt-short`, `qt-cloze`, `qt-code` and `qt-circuit` exist
-and are registered in `packages/registry` in two places (`./server` and
+`packages/qt-mcq`, `qt-short`, `qt-cloze`, `qt-code`, `qt-circuit`, `qt-rich`
+and `qt-categorize` exist and are registered in `packages/registry` in two places (`./server` and
 `./client`). `qt-circuit` (ADR-019) grades a schematic by simulating it with
 ngspice through the runner's `spice` language; its rules are in
 `docs/spec/04-types-de-questions.md` §4.11. `qt-code` also carries a second
 type, `codeimage` (ADR-021, §4.9): the same program half (`src/Program*.tsx`,
 `programFields`), judged by the picture its stdout draws (`src/image/`),
 exported as `codeimageServer` / `codeimageClient` and registered beside `code`.
+`qt-categorize` (ADR-036, §4.13) sorts cards into columns; its scoring rules
+live in `@quiz/domain/categorizeScore`, an `inherit` question takes the
+evaluation's `settings.categorizePolicy`, and negative marking (ADR-026)
+covers it like `mcq`.
 `packages/ui` exists since the refactoring campaign of 2026-09-23 (PR #51): the
 shared primitives of the question-type surfaces (`@quiz/ui`, React as a
 peer, `@quiz/core` its only dependency; it never imports a `qt-*` package nor
@@ -198,7 +205,7 @@ delete it to start over. It is single-process: stop the API before `pnpm seed`.
 `pnpm seed` (`apps/api/src/seed.ts`, content in `apps/api/src/seed/`) is
 idempotent and builds everything through the ORDINARY SERVICES, never by raw
 inserts: course PRG1, classroom PRG1-2026, six students, two pools with
-seventeen published questions of all seven types, and four evaluations — one
+eighteen published questions of all eight types, and four evaluations — one
 `draft`, one `scheduled`, one exercise in `lobby`, and `Test 0 — bases du C`
 closed, answered by five of the six students, graded by the real grading pass
 and left UNRELEASED so the panel has proposals to validate. Keyed on internal

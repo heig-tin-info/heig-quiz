@@ -6,6 +6,7 @@
  */
 export * from "./activity.js";
 export * from "./batchable.js";
+export * from "./categorizeScore.js";
 export * from "./cloze.js";
 export * from "./compareOutput.js";
 export * from "./cooldown.js";

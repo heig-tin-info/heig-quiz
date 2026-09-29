@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-import { McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationPatch, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
+import { CategorizePolicy, categorizePolicyOf, McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationPatch, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
 import { allowedFeedbackWhen, feedbackWhenFor, isInClass } from "@quiz/domain";
 
 import type { Dict } from "../i18n";
@@ -28,6 +28,7 @@ export function AdvancedDisclosure({
   patch,
   disabled,
   feedbackDisabled,
+  holdsCategorize = false,
   children,
 }: {
   config: ConfigView;
@@ -43,6 +44,12 @@ export function AdvancedDisclosure({
    * disabled — a student locked out mid-exam must be let back in.
    */
   feedbackDisabled: boolean;
+  /**
+   * The item list holds a `categorize` question: only then is its policy
+   * row shown (docs/spec/08, a setting nobody needs is a setting nobody
+   * reads). A poll never holds one.
+   */
+  holdsCategorize?: boolean;
   /** The rows of a run's own (the access code), before the grade scale. */
   children?: ReactNode;
 }) {
@@ -53,6 +60,10 @@ export function AdvancedDisclosure({
   const set = (next: Partial<EvaluationSettings>) => patch.mutate({ settings: next });
   const feedback = (next: Partial<FeedbackPolicy>) => patch.mutate({ feedbackPolicy: next });
   const inClass = isInClass({ mode, lobby: settings.lobby });
+  // ADR-026: negative marking replaces both policies below; each row says so
+  // while it is on, so a teacher never tunes a policy nothing reads.
+  const policyDesc = (desc: string) =>
+    negativeMarkingOf(settings) && mode !== "poll" ? `${desc} ${t("eval.policy.overridden")}` : desc;
 
   if (!open) {
     return (
@@ -224,7 +235,7 @@ export function AdvancedDisclosure({
             decides a score. */}
         <SettingRow
           title={t("mcq.policy.title")}
-          desc={t(`mcq.policy.desc.${mcqPolicy}` as keyof Dict)}
+          desc={policyDesc(t(`mcq.policy.desc.${mcqPolicy}` as keyof Dict))}
           help="mcq-policies"
         >
           <Select
@@ -243,7 +254,28 @@ export function AdvancedDisclosure({
           </Select>
         </SettingRow>
 
-        {/* ADR-026: negative marking, beside the policy it overrides. For
+        {/* ADR-036: the same, for the categorize items that say "inherited",
+            shown only while the evaluation holds one. */}
+        {holdsCategorize ? (
+          <SettingRow
+            title={t("eval.categorizePolicy")}
+            desc={policyDesc(t(`eval.categorizePolicy.desc.${categorizePolicyOf(settings)}`))}
+          >
+            <Segmented
+              name="categorizePolicy"
+              label={t("eval.categorizePolicy")}
+              value={categorizePolicyOf(settings)}
+              disabled={disabled}
+              onChange={(categorizePolicy) => set({ categorizePolicy })}
+              options={CategorizePolicy.options.map((policy) => ({
+                value: policy,
+                label: t(`eval.categorizePolicy.${policy}`),
+              }))}
+            />
+          </SettingRow>
+        ) : null}
+
+        {/* ADR-026: negative marking, beside the policies it overrides. For
             the whole evaluation, never per question, and frozen with the
             rest of what decides a score. A poll has no score to penalise. */}
         {mode === "poll" ? null : (

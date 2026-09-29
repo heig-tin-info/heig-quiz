@@ -149,26 +149,10 @@ export function Tip({
 }
 
 /**
- * Three icons, drawn here rather than imported: `lucide-react` is a dependency
+ * Two icons, drawn here rather than imported (the grip is `@quiz/ui`'s): `lucide-react` is a dependency
  * of `apps/web`, not of this package, and a leaf question type has no business
  * pulling an icon set of its own (`McqIcon` in `client.tsx` does the same).
  */
-export function GripIcon({ className = "size-3.5" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.6}
-      strokeLinecap="round"
-      className={className}
-      aria-hidden
-    >
-      <path d="M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01" />
-    </svg>
-  );
-}
-
 export function TrashIcon({ className = "size-3.5" }: { className?: string }) {
   return (
     <svg
@@ -185,18 +169,6 @@ export function TrashIcon({ className = "size-3.5" }: { className?: string }) {
     </svg>
   );
 }
-
-/**
- * The drag handle of a choice row.
- *
- * VISIBLE at rest, which the first version was not: the grip was drawn in the
- * hover colour only, so a teacher looking at the list saw no affordance at all
- * and the reordering might as well not have existed. `fg-muted` at rest,
- * `fg` as soon as the pointer is anywhere on the row or the handle has the
- * focus, and the two cursors that say what the thing does.
- */
-export const gripClass =
-  "inline-flex h-7 w-6 shrink-0 cursor-grab items-center justify-center rounded-md text-fg-muted transition-colors group-hover/choice:text-fg hover:bg-surface-2 focus-visible:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:cursor-grabbing disabled:pointer-events-none disabled:opacity-40";
 
 /** Round control the size of a row: the bin, and the `+` that adds one. */
 export const iconButtonClass =

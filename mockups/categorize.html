@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classement, proposition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --canvas:#f6f5f2; --surface:#fff; --surface-2:#f3f1ed; --surface-3:#eae7e1;
+  --line:#e7e4de; --line-strong:#d3cfc7; --fg:#1a1917; --fg-muted:#67635b; --fg-faint:#726d64;
+  --accent:#b41f24; --accent-hover:#9a1b1f; --accent-soft:#fbebeb; --on-fill:#fff;
+  --success:#1f7a4d; --success-soft:#e7f4ec; --warning:#a35810; --warning-soft:#fdf1e2;
+  --danger:#c2242a; --danger-soft:#fbe9e9; --info:#1268a0; --info-soft:#e8f2f9;
+  --shadow:0 10px 30px rgb(0 0 0 / .14), 0 2px 6px rgb(0 0 0 / .08);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --canvas:#131211; --surface:#1b1a18; --surface-2:#232220; --surface-3:#2c2a27;
+    --line:#2a2825; --line-strong:#3a3733; --fg:#ecebe7; --fg-muted:#a39e94; --fg-faint:#8d887f;
+    --accent:#e85f64; --accent-hover:#f0787c; --accent-soft:rgb(232 95 100 / .10); --on-fill:#131211;
+    --success:#4cc38a; --success-soft:rgb(76 195 138 / .14); --warning:#f0a04b; --warning-soft:rgb(240 160 75 / .14);
+    --danger:#f26d72; --danger-soft:rgb(242 109 114 / .14); --info:#58a9e0; --info-soft:rgb(88 169 224 / .14);
+    --shadow:0 10px 30px rgb(0 0 0 / .5); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --canvas:#131211; --surface:#1b1a18; --surface-2:#232220; --surface-3:#2c2a27;
+  --line:#2a2825; --line-strong:#3a3733; --fg:#ecebe7; --fg-muted:#a39e94; --fg-faint:#8d887f;
+  --accent:#e85f64; --accent-hover:#f0787c; --accent-soft:rgb(232 95 100 / .10); --on-fill:#131211;
+  --success:#4cc38a; --success-soft:rgb(76 195 138 / .14); --warning:#f0a04b; --warning-soft:rgb(240 160 75 / .14);
+  --danger:#f26d72; --danger-soft:rgb(242 109 114 / .14); --info:#58a9e0; --info-soft:rgb(88 169 224 / .14);
+  --shadow:0 10px 30px rgb(0 0 0 / .5); color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--canvas);color:var(--fg);font:400 14px/1.5 Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code,.mono{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.92em}
+
+.wrap{max-width:1120px;margin:0 auto;padding:24px 24px 64px}
+@media (max-width:640px){.wrap{padding:16px 16px 48px}}
+
+.mock-bar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;margin-bottom:24px}
+.mock-bar h1{margin:0;font-size:28px;font-weight:700;letter-spacing:-.02em}
+.mock-bar p{margin:2px 0 0;color:var(--fg-muted)}
+.seg{display:inline-flex;background:var(--surface-3);border-radius:999px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:transparent;border-radius:999px;padding:6px 14px;font-size:13px;font-weight:500;color:var(--fg-muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgb(0 0 0 / .08)}
+.note{border:1px dashed var(--line-strong);border-radius:12px;padding:12px 16px;color:var(--fg-muted);font-size:13px;margin-top:32px}
+.note h3{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--fg)}
+.note ol{margin:0;padding-left:20px}
+.note li{margin:4px 0}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.card-h{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;justify-content:space-between}
+.card-h h2{margin:0;font-size:16px;font-weight:600}
+.card-b{padding:16px 20px}
+.label{display:block;font-weight:500;font-size:13px;margin-bottom:6px}
+.hint{color:var(--fg-faint);font-size:12px}
+.field{width:100%;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:8px 12px}
+textarea.field{resize:vertical;min-height:64px}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:6px 14px;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-fill)}
+.btn.primary:hover{background:var(--accent-hover)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--fg-muted)}
+.btn.ghost:hover{background:var(--surface-2);color:var(--fg)}
+.icon-btn{border:0;background:transparent;border-radius:999px;width:24px;height:24px;display:inline-grid;place-items:center;color:var(--fg-faint);cursor:pointer;flex:none}
+.icon-btn:hover{background:var(--surface-3);color:var(--fg)}
+.chip-tag{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:500}
+.tag-info{background:var(--info-soft);color:var(--info)}
+.tag-warn{background:var(--warning-soft);color:var(--warning)}
+.switch-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.switch-row:first-child{border-top:0;padding-top:0}
+.switch-row .txt{flex:1}
+.switch-row .txt b{display:block;font-weight:500}
+.switch{appearance:none;width:34px;height:20px;border-radius:999px;background:var(--line-strong);position:relative;cursor:pointer;flex:none;margin-top:2px;transition:background .15s}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s}
+.switch:checked{background:var(--success)}
+.switch:checked::after{transform:translateX(14px)}
+
+.board{display:flex;flex-direction:column;gap:16px}
+.tray{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:12px}
+.tray-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px}
+.tray-h b{font-size:13px;font-weight:600;white-space:nowrap}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.col{background:var(--surface);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-width:0}
+.col-h{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px}
+.col-h .name{font-weight:600;font-size:14px;flex:1;min-width:0}
+.col-h input.name{border:1px solid transparent;background:transparent;border-radius:8px;padding:2px 6px;margin-left:-6px}
+.col-h input.name:hover{border-color:var(--line)}
+.col-h input.name:focus{border-color:var(--line-strong);background:var(--surface);outline:none}
+.col-h .count{color:var(--fg-faint);font-size:12px;font-variant-numeric:tabular-nums}
+.zone{flex:1;min-height:120px;padding:8px;display:flex;flex-direction:column;gap:6px;border-radius:0 0 12px 12px;transition:background .12s}
+.tray .zone{min-height:44px;flex-direction:row;flex-wrap:wrap;padding:0;border-radius:8px}
+.zone.empty::before{content:attr(data-empty);color:var(--fg-faint);font-size:12px;margin:auto;text-align:center;padding:8px}
+.zone.over{background:var(--info-soft)}
+.zone.target{outline:1.5px dashed var(--info);outline-offset:-4px;cursor:pointer}
+
+.item{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:7px 10px;font-size:13.5px;cursor:grab;user-select:none;touch-action:none;position:relative}
+.item:hover{border-color:var(--fg-faint)}
+.item .grip{color:var(--fg-faint);flex:none;display:grid}
+.item .txt{flex:1;min-width:0;overflow-wrap:anywhere}
+.item .pos{flex:none;width:20px;height:20px;border-radius:999px;background:var(--surface-3);color:var(--fg-muted);font-size:11px;font-weight:600;display:grid;place-items:center;font-variant-numeric:tabular-nums}
+.item.sel{border-color:var(--info);box-shadow:0 0 0 2px var(--info-soft)}
+.item.ghost-src{opacity:.35}
+.item.drag{position:fixed;z-index:50;pointer-events:none;box-shadow:var(--shadow);cursor:grabbing;transform:rotate(-1.5deg)}
+.caret{height:2px;background:var(--info);border-radius:2px;margin:-4px 2px}
+.tray .caret{width:2px;height:auto;align-self:stretch;margin:0 -4px}
+.item.ok{border-color:var(--success);background:var(--success-soft)}
+.item.ko{border-color:var(--danger);background:var(--danger-soft)}
+.item .verdict{flex:none;font-size:12px;font-weight:600}
+.item.ok .verdict{color:var(--success)} .item.ko .verdict{color:var(--danger)}
+.item .expected{display:block;font-size:12px;color:var(--fg-muted);font-weight:500}
+.item.static{cursor:default}
+
+.add-row{display:flex;gap:8px;margin-top:10px}
+.add-row .field{flex:1}
+
+.editor{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:start}
+@media (max-width:900px){.editor{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:20px}
+.q-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px}
+.q-head .n{color:var(--fg-faint);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.prompt{font-size:16px;font-weight:500;margin:0 0 4px}
+.instr{color:var(--fg-faint);font-size:12px;margin:0 0 16px}
+.footer{display:flex;justify-content:space-between;align-items:center;margin-top:20px;gap:12px;flex-wrap:wrap}
+.score{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;margin:0}
+.kv dt{color:var(--fg-muted)} .kv dd{margin:0;font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="mock-bar">
+    <div>
+      <h1>Classement <span class="hint mono">categorize</span></h1>
+      <p>Maquette interactive : glisser une carte, ou la cliquer puis cliquer une colonne.</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div class="seg" role="group" aria-label="Vue" id="viewSeg">
+        <button data-view="editor" aria-pressed="true">Éditeur</button>
+        <button data-view="player" aria-pressed="false">Élève</button>
+        <button data-view="review" aria-pressed="false">Correction</button>
+      </div>
+      <div class="seg" role="group" aria-label="Exemple" id="presetSeg">
+        <button data-preset="types" aria-pressed="true">Types C</button>
+        <button data-preset="chain" aria-pressed="false">Ordre important</button>
+      </div>
+    </div>
+  </div>
+
+  <section id="v-editor">
+    <div class="editor">
+      <div class="stack">
+        <div class="card">
+          <div class="card-b">
+            <label class="label" for="e-prompt">Énoncé</label>
+            <textarea class="field" id="e-prompt"></textarea>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h">
+            <div>
+              <h2>Réponse attendue</h2>
+              <div class="hint">Écrivez les définitions, puis glissez chacune dans sa colonne. Ce qui reste en haut est un distracteur.</div>
+            </div>
+            <button class="btn" id="e-addcol">+ Colonne</button>
+          </div>
+          <div class="card-b board" id="e-board"></div>
+        </div>
+      </div>
+
+      <div class="stack">
+        <div class="card">
+          <div class="card-h"><h2>Options</h2></div>
+          <div class="card-b">
+            <div class="switch-row">
+              <div class="txt"><b>L'ordre compte</b><span class="hint">Dans chaque colonne, les cartes doivent suivre l'ordre de la réponse. Les rangs s'affichent.</span></div>
+              <input type="checkbox" class="switch" id="o-ordered">
+            </div>
+            <div class="switch-row">
+              <div class="txt"><b>Mélanger les cartes</b><span class="hint">Chaque élève reçoit les définitions dans un ordre différent (graine de la tentative).</span></div>
+              <input type="checkbox" class="switch" id="o-shuffle" checked>
+            </div>
+            <div class="switch-row">
+              <div class="txt"><b>Mélanger les colonnes</b><span class="hint">À laisser éteint quand l'ordre des colonnes a un sens (« avant / pendant / après »).</span></div>
+              <input type="checkbox" class="switch" id="o-shufflecols">
+            </div>
+            <div class="switch-row" style="display:block">
+              <label class="label" for="o-policy">Notation</label>
+              <select class="field" id="o-policy">
+                <option value="per_item">Par carte : part des cartes bien placées</option>
+                <option value="symmetric">Symétrique : justes − fausses, plancher 0</option>
+                <option value="all_or_nothing">Tout ou rien</option>
+              </select>
+              <div class="hint" id="o-policy-hint" style="margin-top:6px"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>Résumé</h2></div>
+          <div class="card-b"><dl class="kv" id="e-summary"></dl></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="v-player" hidden>
+    <div class="card" style="max-width:880px;margin:0 auto">
+      <div class="card-b" style="padding:24px">
+        <div class="q-head"><span class="n">Question 4 sur 12</span><span class="chip-tag tag-info" id="p-sync">Enregistré</span></div>
+        <p class="prompt" id="p-prompt"></p>
+        <p class="instr" id="p-instr"></p>
+        <div class="board" id="p-board"></div>
+        <div class="footer">
+          <button class="btn ghost" id="p-reset">Tout remettre en haut</button>
+          <button class="btn primary">Question suivante</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="v-review" hidden>
+    <div class="card" style="max-width:880px;margin:0 auto">
+      <div class="card-b" style="padding:24px">
+        <div class="q-head"><span class="n">Question 4 : votre réponse</span><span class="score" id="r-score"></span></div>
+        <p class="prompt" id="r-prompt"></p>
+        <p class="instr" id="r-instr"></p>
+        <div class="board" id="r-board"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="note">
+    <h3>Points à trancher</h3>
+    <ol>
+      <li><b>Distracteurs</b> : une carte laissée hors colonne par l'enseignant « ne va nulle part ». L'élève doit donc pouvoir la laisser en haut, et elle compte juste si elle y reste. Ou on interdit les distracteurs ?</li>
+      <li><b>Une carte dans plusieurs colonnes</b> ? (<code>char</code> : entier ET caractère). Ici non : une carte, une colonne.</li>
+      <li><b>« L'ordre compte »</b> : ici global, et une carte n'est juste que si colonne ET rang sont bons (un échange de deux cartes = deux fautes). Plus clément : plus longue sous-séquence commune. Et l'option par colonne (une colonne ordonnée, l'autre non) ?</li>
+      <li><b>Notation</b> : trois politiques calquées sur <code>mcq</code>. Faut-il un <code>inherit</code> de l'évaluation ?</li>
+      <li><b>Contenu des cartes</b> : markdown court (code inline, formules). Des images plus tard ?</li>
+      <li><b>Nombre de colonnes</b> : 2 à 6 ? Sur téléphone elles s'empilent ; le « cliquer puis cliquer » reste utilisable.</li>
+      <li><b>Nom</b> : « Classement » (UI) / <code>categorize</code> (code) — ou « Catégorisation », « Tri » ?</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+const PRESETS = {
+  types: {
+    prompt: "Classez chaque type C selon ce qu'il représente.",
+    columns: [{id:"c1",label:"Entier"},{id:"c2",label:"Virgule flottante"},{id:"c3",label:"Pointeur"}],
+    items: [
+      {id:"i1",text:"`int`"},{id:"i2",text:"`unsigned long`"},{id:"i3",text:"`size_t`"},
+      {id:"i4",text:"`double`"},{id:"i5",text:"`float`"},{id:"i6",text:"`char *`"},
+      {id:"i7",text:"`void *`"},{id:"i8",text:"`int (*)(void)`"},{id:"i9",text:"`string`"}
+    ],
+    key: {c1:["i1","i2","i3"],c2:["i4","i5"],c3:["i6","i7","i8"]},
+    ordered:false, policy:"per_item",
+    student: {c1:["i1","i3","i2","i7"],c2:["i4","i5"],c3:["i6","i8","i9"]}
+  },
+  chain: {
+    prompt: "Placez les étapes de `gcc main.c -o main` dans l'ordre où elles s'exécutent, et écartez ce qui n'en fait pas partie.",
+    columns: [{id:"c1",label:"Chaîne de compilation"},{id:"c2",label:"Pas une étape de gcc"}],
+    items: [
+      {id:"i1",text:"Préprocesseur (`#include`, `#define`)"},{id:"i2",text:"Compilation en assembleur"},
+      {id:"i3",text:"Assemblage en fichier objet `.o`"},{id:"i4",text:"Édition de liens"},
+      {id:"i5",text:"Chargement en mémoire par l'OS"},{id:"i6",text:"Interprétation ligne à ligne"}
+    ],
+    key: {c1:["i1","i2","i3","i4"],c2:["i5","i6"]},
+    ordered:true, policy:"per_item",
+    student: {c1:["i1","i3","i2","i4"],c2:["i5","i6"]}
+  }
+};
+
+let cfg, student, view = "editor", selected = null;
+const $ = s => document.querySelector(s);
+const clone = o => JSON.parse(JSON.stringify(o));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const md = s => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+const item = id => cfg.items.find(i => i.id === id);
+const colOf = (map, id) => Object.keys(map).find(c => map[c].includes(id)) || null;
+const colLabel = id => id ? cfg.columns.find(c => c.id === id)?.label : "aucune colonne";
+const plural = (n, w) => `${n} ${w}${n>1?"s":""}`;
+
+function loadPreset(name){ cfg = clone(PRESETS[name]); student = clone(cfg.student); selected = null; render(); }
+function trayOf(map){ const placed = new Set(Object.values(map).flat()); return cfg.items.map(i=>i.id).filter(id=>!placed.has(id)); }
+
+function verdicts(){
+  const v = {};
+  for (const it of cfg.items){
+    const want = colOf(cfg.key, it.id), got = colOf(student, it.id);
+    let ok = want === got;
+    if (ok && cfg.ordered && want) ok = cfg.key[want].indexOf(it.id) === student[got].indexOf(it.id);
+    v[it.id] = {ok, want, wantPos: want ? cfg.key[want].indexOf(it.id)+1 : 0};
+  }
+  return v;
+}
+function score(){
+  const v = Object.values(verdicts()), n = v.length, c = v.filter(x=>x.ok).length;
+  if (cfg.policy === "all_or_nothing") return c === n ? 1 : 0;
+  if (cfg.policy === "symmetric") return Math.max(0, (c - (n - c)) / n);
+  return c / n;
+}
+
+const GRIP = `<span class="grip" aria-hidden="true"><svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.3"/><circle cx="7.5" cy="2.5" r="1.3"/><circle cx="2.5" cy="7" r="1.3"/><circle cx="7.5" cy="7" r="1.3"/><circle cx="2.5" cy="11.5" r="1.3"/><circle cx="7.5" cy="11.5" r="1.3"/></svg></span>`;
+
+function itemEl(id, {pos, drag=true, verdict}={}){
+  const el = document.createElement("div");
+  el.className = "item" + (selected===id?" sel":"") + (drag?"":" static");
+  el.dataset.id = id;
+  if (drag){ el.tabIndex = 0; el.setAttribute("role","button"); }
+  let h = drag ? GRIP : "";
+  if (pos) h += `<span class="pos">${pos}</span>`;
+  h += `<span class="txt">${md(item(id).text)}`;
+  if (verdict && !verdict.ok) h += `<span class="expected">Attendu : ${esc(colLabel(verdict.want))}${cfg.ordered && verdict.want ? `, rang ${verdict.wantPos}` : ""}</span>`;
+  h += `</span>`;
+  if (verdict){ el.classList.add(verdict.ok?"ok":"ko"); h += `<span class="verdict">${verdict.ok?"✓":"✗"}</span>`; }
+  if (drag && view==="editor") h += `<button class="icon-btn" data-del="${id}" title="Supprimer" aria-label="Supprimer">×</button>`;
+  el.innerHTML = h;
+  return el;
+}
+
+function zoneEl(colId, ids, {drag, mode, empty}){
+  const z = document.createElement("div");
+  z.className = "zone" + (ids.length ? "" : " empty");
+  z.dataset.zone = colId ?? "__tray";
+  z.dataset.empty = empty;
+  const v = mode==="review" ? verdicts() : null;
+  ids.forEach((id, k) => z.appendChild(itemEl(id, {pos: cfg.ordered && colId ? k+1 : 0, drag, verdict: v && v[id]})));
+  if (selected && drag){ z.classList.add("target"); z.tabIndex = 0; z.setAttribute("aria-label","Déposer ici"); }
+  return z;
+}
+
+function boardEl(map, mode){
+  const frag = document.createDocumentFragment();
+  const drag = mode !== "review";
+  const trayIds = trayOf(map);
+  const tray = document.createElement("div");
+  tray.className = "tray";
+  const title = {editor:"Définitions", player:"À classer", review:"Laissées de côté"}[mode];
+  const hint = mode==="editor" ? `${plural(trayIds.length,"distracteur")} (hors colonne)`
+             : mode==="player" ? `${plural(trayIds.length,"restante")} · une carte peut n'aller nulle part` : "";
+  tray.innerHTML = `<div class="tray-h"><b>${title}</b><span class="hint">${hint}</span></div>`;
+  tray.appendChild(zoneEl(null, trayIds, {drag, mode, empty: mode==="player" ? "Tout est classé." : "Aucune"}));
+  if (mode==="editor"){
+    const row = document.createElement("form");
+    row.className = "add-row";
+    row.innerHTML = `<input class="field" id="e-new" placeholder="Nouvelle définition, Entrée pour ajouter" autocomplete="off"><button class="btn">Ajouter</button>`;
+    row.onsubmit = e => { e.preventDefault(); const v = $("#e-new").value.trim(); if(!v) return;
+      cfg.items.push({id:"i"+Date.now(), text:v}); render(); $("#e-new").focus(); };
+    tray.appendChild(row);
+  }
+  if (!(mode==="review" && trayIds.length===0)) frag.appendChild(tray);
+
+  const cols = document.createElement("div");
+  cols.className = "cols";
+  for (const c of cfg.columns){
+    const ids = map[c.id] || [];
+    const col = document.createElement("div");
+    col.className = "col";
+    col.innerHTML = `<div class="col-h">${mode==="editor"
+      ? `<input class="name" value="${esc(c.label)}" data-rename="${c.id}" aria-label="Nom de la colonne"><span class="count">${ids.length}</span><button class="icon-btn" data-delcol="${c.id}" title="Supprimer la colonne" aria-label="Supprimer la colonne">×</button>`
+      : `<span class="name">${esc(c.label)}</span><span class="count">${ids.length}</span>`}</div>`;
+    col.appendChild(zoneEl(c.id, ids, {drag, mode, empty: mode==="editor" ? "Glissez les définitions ici" : "Déposez ici"}));
+    cols.appendChild(col);
+  }
+  frag.appendChild(cols);
+  return frag;
+}
+
+const POLICY_HINT = {
+  per_item: "Chaque carte vaut 1/n. Un distracteur laissé de côté compte comme juste.",
+  symmetric: "Une carte mal placée annule une carte juste. Jamais en dessous de 0.",
+  all_or_nothing: "Les points seulement si toutes les cartes sont à leur place."
+};
+
+function render(){
+  for (const v of ["editor","player","review"]) $("#v-"+v).hidden = v !== view;
+  document.querySelectorAll("#viewSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.view===view));
+  const instr = (cfg.ordered ? "Glissez chaque carte dans sa colonne, dans le bon ordre." : "Glissez chaque carte dans sa colonne.")
+    + " Certaines cartes ne vont dans aucune colonne.";
+  if (view==="editor"){
+    $("#e-prompt").value = cfg.prompt;
+    $("#o-ordered").checked = cfg.ordered;
+    $("#o-policy").value = cfg.policy;
+    $("#o-policy-hint").textContent = POLICY_HINT[cfg.policy];
+    const b = $("#e-board"); b.innerHTML = ""; b.appendChild(boardEl(cfg.key, "editor"));
+    const empties = cfg.columns.filter(c => !(cfg.key[c.id]||[]).length).length;
+    $("#e-summary").innerHTML =
+      `<dt>Colonnes</dt><dd>${cfg.columns.length}</dd><dt>Définitions</dt><dd>${cfg.items.length}</dd>`+
+      `<dt>Distracteurs</dt><dd>${trayOf(cfg.key).length}</dd><dt>Ordre</dt><dd>${cfg.ordered?"compte":"libre"}</dd>`+
+      (empties ? `<dt></dt><dd><span class="chip-tag tag-warn">${plural(empties,"colonne")} vide${empties>1?"s":""}</span></dd>` : "");
+  }
+  if (view==="player"){
+    $("#p-prompt").innerHTML = md(cfg.prompt); $("#p-instr").textContent = instr;
+    const b = $("#p-board"); b.innerHTML = ""; b.appendChild(boardEl(student, "player"));
+  }
+  if (view==="review"){
+    $("#r-prompt").innerHTML = md(cfg.prompt); $("#r-instr").textContent = instr;
+    const pts = 2, s = Math.round(score()*pts*100)/100;
+    $("#r-score").textContent = `${s} / ${pts} pt`;
+    const b = $("#r-board"); b.innerHTML = ""; b.appendChild(boardEl(student, "review"));
+  }
+}
+
+function activeMap(){ return view==="editor" ? cfg.key : student; }
+function move(id, zone, index){
+  const map = activeMap();
+  for (const k of Object.keys(map)) map[k] = map[k].filter(x => x !== id);
+  if (zone !== "__tray"){ map[zone] = map[zone] || []; map[zone].splice(index ?? map[zone].length, 0, id); }
+  selected = null;
+  if (view==="player") flashSync();
+  render();
+}
+function flashSync(){ const s=$("#p-sync"); s.textContent="Enregistrement…"; s.className="chip-tag tag-warn";
+  clearTimeout(flashSync.t); flashSync.t=setTimeout(()=>{s.textContent="Enregistré";s.className="chip-tag tag-info";},500); }
+
+function indexAt(zone, x, y){
+  const kids = [...zone.querySelectorAll(":scope > .item:not(.ghost-src)")];
+  const row = zone.closest(".tray");
+  for (let k=0;k<kids.length;k++){
+    const r = kids[k].getBoundingClientRect();
+    if (row ? (y < r.top) || (y < r.bottom && x < r.left + r.width/2) : y < r.top + r.height/2) return k;
+  }
+  return kids.length;
+}
+
+let drag = null;
+document.addEventListener("pointerdown", e => {
+  const it = e.target.closest(".item");
+  if (!it || it.classList.contains("static") || e.target.closest("button")) return;
+  drag = {id: it.dataset.id, src: it, x0: e.clientX, y0: e.clientY, moved:false};
+});
+document.addEventListener("pointermove", e => {
+  if (!drag) return;
+  if (!drag.moved && Math.hypot(e.clientX-drag.x0, e.clientY-drag.y0) < 5) return;
+  if (!drag.moved){
+    drag.moved = true;
+    const r = drag.src.getBoundingClientRect();
+    drag.dx = e.clientX - r.left; drag.dy = e.clientY - r.top;
+    drag.ghost = drag.src.cloneNode(true); drag.ghost.classList.add("drag");
+    drag.ghost.style.width = r.width+"px"; document.body.appendChild(drag.ghost);
+    drag.src.classList.add("ghost-src");
+  }
+  drag.ghost.style.left = (e.clientX-drag.dx)+"px"; drag.ghost.style.top = (e.clientY-drag.dy)+"px";
+  document.querySelectorAll(".zone.over").forEach(z=>z.classList.remove("over"));
+  document.querySelectorAll(".caret").forEach(c=>c.remove());
+  const z = document.elementFromPoint(e.clientX, e.clientY)?.closest(".zone");
+  if (z){
+    z.classList.add("over");
+    const kids = [...z.querySelectorAll(":scope > .item:not(.ghost-src)")];
+    const caret = document.createElement("div"); caret.className = "caret";
+    z.insertBefore(caret, kids[indexAt(z, e.clientX, e.clientY)] || null);
+  }
+});
+document.addEventListener("pointerup", e => {
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (!d.moved){ selected = selected === d.id ? null : d.id; render(); return; }
+  d.ghost.remove();
+  document.querySelectorAll(".caret").forEach(c=>c.remove());
+  const z = document.elementFromPoint(e.clientX, e.clientY)?.closest(".zone");
+  if (!z){ render(); return; }
+  move(d.id, z.dataset.zone, indexAt(z, e.clientX, e.clientY));
+});
+document.addEventListener("click", e => {
+  const del = e.target.closest("[data-del]");
+  if (del){ const id = del.dataset.del; cfg.items = cfg.items.filter(i=>i.id!==id);
+    for (const m of [cfg.key, student]) for (const k of Object.keys(m)) m[k] = m[k].filter(x=>x!==id); render(); return; }
+  const dc = e.target.closest("[data-delcol]");
+  if (dc){ const id = dc.dataset.delcol; cfg.columns = cfg.columns.filter(c=>c.id!==id); delete cfg.key[id]; delete student[id]; render(); return; }
+  if (selected){ const z = e.target.closest(".zone.target"); if (z && !e.target.closest(".item")) move(selected, z.dataset.zone); }
+});
+document.addEventListener("keydown", e => {
+  const it = e.target.closest?.(".item:not(.static)");
+  if (it && (e.key==="Enter"||e.key===" ")){ e.preventDefault(); const id = it.dataset.id;
+    selected = selected===id ? null : id; render(); document.querySelector(`.item[data-id="${id}"]`)?.focus(); return; }
+  const z = e.target.closest?.(".zone.target");
+  if (z && selected && (e.key==="Enter"||e.key===" ")){ e.preventDefault(); move(selected, z.dataset.zone); }
+  if (e.key==="Escape" && selected){ selected = null; render(); }
+});
+document.addEventListener("change", e => {
+  const r = e.target.closest("[data-rename]"); if (r) cfg.columns.find(c=>c.id===r.dataset.rename).label = r.value;
+});
+$("#e-addcol").onclick = () => { const id = "c"+Date.now(); cfg.columns.push({id, label:"Colonne "+(cfg.columns.length+1)}); render();
+  document.querySelector(`[data-rename="${id}"]`)?.select(); };
+$("#e-prompt").oninput = e => cfg.prompt = e.target.value;
+$("#o-ordered").onchange = e => { cfg.ordered = e.target.checked; render(); };
+$("#o-policy").onchange = e => { cfg.policy = e.target.value; render(); };
+$("#p-reset").onclick = () => { student = {}; render(); };
+document.querySelectorAll("#viewSeg button").forEach(b => b.onclick = () => { view = b.dataset.view; selected = null; render(); });
+document.querySelectorAll("#presetSeg button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#presetSeg button").forEach(x => x.setAttribute("aria-pressed", x===b)); loadPreset(b.dataset.preset); });
+
+loadPreset("types");
+</script>
+</body>
+</html>

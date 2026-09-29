@@ -40,3 +40,8 @@ Deviner au hasard vaut 0 en moyenne : cela ne paie plus. Les points d'une
 question peuvent être négatifs et sont affichés tels quels ; le total de
 l'évaluation ne descend jamais sous 0. Les étudiants en sont avertis dans la
 salle d'attente et sur chaque question à choix.
+
+Le même réglage couvre les questions de **classement** : une carte placée
+dans sa colonne rapporte `1/T` (T le nombre de cartes qui ont une place), une
+carte placée dans une autre colonne, ou un intrus placé, coûte
+`1/(T·(k - 1))` avec `k` colonnes, et une carte laissée de côté vaut 0.

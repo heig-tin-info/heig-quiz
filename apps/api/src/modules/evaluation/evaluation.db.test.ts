@@ -812,6 +812,36 @@ describe("patch and duplicate", () => {
     ).rejects.toMatchObject({ code: "locked", status: 409 });
   });
 
+  it("stores the categorize policy in the settings and hands it to the grader (ADR-036)", async () => {
+    const seed = await seedLive(db);
+    let row = await reload(db, seed.evaluationId);
+    // Absent on a fresh evaluation: `inherit` questions score per item.
+    expect(service.settingsOf(row)).not.toHaveProperty("categorizePolicy");
+    expect(service.gradeDefaults(row)).toMatchObject({
+      categorize: { policy: "per_item", negativeMarking: false },
+    });
+
+    row = await service.patchEvaluation(
+      db,
+      row,
+      { settings: { categorizePolicy: "all_or_nothing", negativeMarking: true } },
+      { attemptCount: 0, now: clock.now() },
+    );
+    expect(service.settingsOf(row).categorizePolicy).toBe("all_or_nothing");
+    // Negative marking is one rule of the evaluation, for both choice types.
+    expect(service.gradeDefaults(row)).toEqual({
+      mcq: { policy: row.mcqPolicy, negativeMarking: true },
+      categorize: { policy: "all_or_nothing", negativeMarking: true },
+    });
+
+    // A later patch of another setting leaves it where it was.
+    row = await service.patchEvaluation(db, row, { settings: { shuffleItems: true } }, {
+      attemptCount: 0,
+      now: clock.now(),
+    });
+    expect(service.settingsOf(row).categorizePolicy).toBe("all_or_nothing");
+  });
+
   it("refuses immediate feedback to an exam (F-EVAL-11)", async () => {
     const seed = await seedLive(db);
     const row = await reload(db, seed.evaluationId);

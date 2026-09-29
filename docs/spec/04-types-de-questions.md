@@ -77,7 +77,7 @@ variables:
 
 **Which rule applies**, in this order:
 
-1. the evaluation uses **negative marking** (`settings.negativeMarking`, ADR-026): every choice question of the evaluation, single or multiple answer, is scored with the negative rule below, whatever its policy;
+1. the evaluation uses **negative marking** (`settings.negativeMarking`, ADR-026): every choice question of the evaluation, single or multiple answer, is scored with the negative rule below, whatever its policy (the same setting covers `categorize` with a rule of its own, §4.13, ADR-036);
 2. otherwise a `single` question is always `all_or_nothing`;
 3. otherwise the question's own `policy`, or, when it says `inherit`, the evaluation's `mcqPolicy` (seeded at creation from the teacher's preference).
 
@@ -342,3 +342,54 @@ config:
 ## 4.12 Poll `poll`, phase 2
 
 This is not a question type but a single-item evaluation mode, which accepts `mcq`, `short` and a `scale` variant from 1 to N. The live projection screen draws the answers with the host's own `PollBars` (`apps/web/src/poll`), counted server-side by `pollTally` in `@quiz/domain`, for `mcq` and `short` alike. There is no per-type `Stats` component: that optional hook of `QuestionTypeClient` was never mounted and was removed on 2026-09-28.
+
+## 4.13 Categorize `categorize`
+
+Shown as **Categorize** / « Classement » in the interface. The student sorts **cards** into labelled **columns**; some cards may be **distractors** that belong nowhere and stay in the tray. Brought forward outside the phases (ADR-036, `packages/qt-categorize`); the origin of its board is `mockups/categorize.html`.
+
+**Configuration** (`configVersion: 1`):
+
+```yaml
+config:
+  prompt: markdown
+  columns:                     # 2 to 6
+    - { id: q7m2xk4a, label: "Entier", cards: [f3n8wz1c, j2r5hd7s] }   # the key, in order
+    - { id: c9t1vp6z, label: "Virgule flottante", cards: [a4k7mq2x] }
+  cards:                       # 1 to 30, markdown, short
+    - { id: f3n8wz1c, text: "`int`" }
+    - { id: j2r5hd7s, text: "`size_t`" }
+    - { id: a4k7mq2x, text: "`double`" }
+    - { id: e2z5oa7r, text: "`string`" }    # listed by no column: a distractor
+  ordered: false               # the rank inside a column counts too
+  shuffleCards: true           # per student
+  shuffleColumns: false        # off by default: the column order often means something
+  policy: inherit              # inherit (default), per_item, all_or_nothing
+```
+
+- **The key lives in the columns**: each column's `cards` lists the ids of the cards that belong there, in the expected order. A card listed by no column is a distractor. A card belongs to **one column at most**. The schema refuses a duplicate id (`categorize.duplicate_id`), a key naming a card that does not exist (`categorize.unknown_card`), a card in two columns (`categorize.card_twice`) and a question without a single target (`categorize.no_target`).
+- **Ids are opaque**: every id matches `/^[a-z0-9]{4,40}$/`; the editor mints eight random base-36 characters, never an index nor a label. The student's view carries them — the answer is written with them — so an id must say nothing about where a card goes. An author who writes ids by hand (MCP, import) is responsible for that: a readable id such as `int-entier` would reach the student through `toStudent`.
+
+**Answer**: `{ columns: { <column id>: [card ids, in order] } }`. A card in no column is in the tray and absent from the answer. `answerMisfit` refuses an unknown column or card and a card placed twice (`422 answer_invalid`, key `categorize.answer_misfit`); the grader still reads such a stored answer defensively (first place wins, unknown ids ignored). `isAnswered`: at least one card is placed.
+
+**Scoring**. The formulas live in `@quiz/domain/categorizeScore`. With `T` targets, `D` distractors, `n = T + D`, `k` columns, and in one answer `t` targets at their place, `x` targets placed at a wrong place, `p` distractors placed:
+
+| Policy | Formula | Comment |
+|---|---|---|
+| `per_item` | (t + D − p) / n | Default. Every card is worth 1/n; a distractor left in the tray counts |
+| `all_or_nothing` | 1 if t = T and p = 0, otherwise 0 | Every target at its place, no distractor placed |
+
+- **An answer that places no card scores 0**, whatever the policy: the tray is where an unplaced card stays, and an empty answer must not earn D/n for leaving the distractors "right".
+- **Which rule applies**, in this order: the evaluation's negative marking (below); otherwise the question's own `policy`; when it says `inherit`, the evaluation's `settings.categorizePolicy` (absent = `per_item`; set under the evaluation's advanced options, a row shown only while the evaluation holds a categorize item; no per-teacher preference, unlike `mcqPolicy`); without an evaluation (the Try panel), `per_item`. The policies are named apart from `mcq`'s on purpose: `symmetric` or `true_false` would promise the `mcq` formula.
+- **"The order counts"** (`ordered: true`): a target is right only in its column AND at its exact 1-based rank. A card missing near the top of a column shifts every card under it; this cascade is accepted on purpose (ADR-036) for a rule the student can check by looking at the board.
+- **Negative marking** (the evaluation's `settings.negativeMarking`, ADR-026 extended by ADR-036) overrides the policy: f = (t − (x + p) / (k − 1)) / T, not floored, in [−1, 1]. A target is +1 in its column and −1/(k − 1) elsewhere, so placing a target at random has an expected value of 0 (without the order); a card left in the tray is 0, target or distractor. The total of the evaluation is floored at 0 (`attemptTotal`), a manual correction ranges over [−max, max].
+- Both policies lie in [0, 1]. The fraction is multiplied by the item's points (`defaultPoints`: 1) and rounded to the hundredth. `gradings.details` records the counts, the resolved policy, `negativeMarking` when it applied, and a verdict per card (`placed`, `rank`, `expected`, `expectedRank`, `right`).
+
+**Student** (`toStudent`, invariant 4): the prompt, the columns **without** their `cards` (the key), every card (distractors included: which card is a distractor is the key too), `ordered` (a rule the student must know before answering), and `negativeMarking: true` when the evaluation uses it. The policy never leaves. The cards (`shuffleCards`) and the columns (`shuffleColumns`) are shuffled per student from `(attempt.seed, item.id, purpose)` on two streams (decision D19). Unless the feedback policy publishes the key, `studentDetails` drops each card's `expected` and `expectedRank`, keeps the verdict (`right`) of the cards the student PLACED only — feedback on their own answer, like `cloze`'s per-blank verdict — gives an unplaced card no verdict, and drops the counts `T` and `D`: which cards are distractors, or how many there are, is the key.
+
+**Editor**: the teacher writes the key on the same board the student answers on. Every card starts in the tray; dragging it into a column puts it in that column's key; a card left in the tray **is** a distractor — there is no separate checkbox to disagree with where the card sits. Removing a column sends its cards back to the tray. The options: the order counts, shuffle the cards, shuffle the columns, the policy (`inherit` by default).
+
+**Player**: the prompt, a line saying whether the order counts, the negative-marking line when it applies, the tray of unplaced cards, and the columns side by side under it (they wrap onto more rows on a narrow screen). A card moves two ways, neither being the "real" one: **drag and drop** (the pointer, or the keyboard: Space picks up, the arrows carry, Space drops; a column is sortable inside) and **click then click** (select a card, then a column or the tray, each of which offers a named "drop here" button while a card is selected) — what works on a phone and with a screen reader.
+
+**Review**: the student's board with each card marked right or wrong and, when the key is published, where each card was expected.
+
+**Dashboard and more**: the live cell shows "placed/total", figures only. Not pollable, no drill rating, no `aggregate` (the hook would only see opaque ids).

@@ -8,6 +8,12 @@ Accepted (2026-09-25, issue #130, with `@quiz/domain/mcqScore`
 (`negativeMarkingOn`, `scoresNegatively`) and the evaluation setting
 `settings.negativeMarking`). No migration.
 
+Extended by [ADR-036](ADR-036-type-classement.md) (2026-09-29): the
+`categorize` type is a choice question too — placing a card is a choice among
+the columns — and negative marking scores it with its own rule
+(`categorizeFraction`). "Every choice question" below now means `mcq` and
+`categorize` (`NEGATIVE_MARKING_TYPES`).
+
 ## Context
 
 The first MCQ configuration (docs/spec/04 §4.4, v1) carried a `penalty`

@@ -38,6 +38,7 @@ import {
   ME_TEACHER,
 } from "./org";
 import {
+  CATEGORIZE_ANSWER,
   CircuitStimulusLike,
   CodeCaseLike,
   EMPTY_SCHEMATIC,
@@ -174,6 +175,10 @@ function mockAnswer(q: MockQuestion, config: Record<string, unknown>, ability: n
   }
   if (q.type === "rich") {
     return { text: rand() < ability ? RICH_LONG_ANSWER : RICH_SHORT_ANSWER };
+  }
+  if (q.type === "categorize") {
+    const key = (config.columns ?? []) as { id: string; cards: string[] }[];
+    return rand() < ability ? { columns: Object.fromEntries(key.map((c) => [c.id, c.cards])) } : CATEGORIZE_ANSWER;
   }
   const good = rand() < ability;
   return {

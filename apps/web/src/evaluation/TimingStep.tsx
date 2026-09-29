@@ -176,6 +176,7 @@ export function ConfigSettings({
   missing = new Set(),
   dates,
   advancedRows,
+  holdsCategorize = false,
 }: {
   config: ConfigView;
   totalPoints: number;
@@ -190,6 +191,8 @@ export function ConfigSettings({
   missing?: ReadonlySet<TimingField>;
   dates?: ReactNode;
   advancedRows?: ReactNode;
+  /** An item is a `categorize` question: its policy row is shown (ADR-036). */
+  holdsCategorize?: boolean;
 }) {
   const t = useT();
   const { settings, durationS, mode } = config;
@@ -293,6 +296,7 @@ export function ConfigSettings({
         patch={patch}
         disabled={disabled}
         feedbackDisabled={feedbackDisabled}
+        holdsCategorize={holdsCategorize}
       >
         {advancedRows}
       </AdvancedDisclosure>
@@ -376,6 +380,7 @@ export function TimingStep({
         summary={summary}
         disabled={locked}
         feedbackDisabled={!isConfigFieldWritable(lock, "feedbackPolicy")}
+        holdsCategorize={detail.items.some((i) => i.type === "categorize")}
         missing={missing}
         dates={
           <>

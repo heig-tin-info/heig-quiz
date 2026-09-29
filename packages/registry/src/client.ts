@@ -15,6 +15,7 @@ import {
   type AnyQuestionTypeClient,
   type QuestionTypeId,
 } from "@quiz/core/client";
+import { categorizeClient } from "@quiz/qt-categorize/client";
 import { clozeClient } from "@quiz/qt-cloze/client";
 import { mcqClient } from "@quiz/qt-mcq/client";
 import { richClient } from "@quiz/qt-rich/client";
@@ -32,6 +33,7 @@ export const clientRegistry: Partial<Record<QuestionTypeId, AnyQuestionTypeClien
     circuit: circuitClient,
     codeimage: codeimageClient,
     rich: richClient,
+    categorize: categorizeClient,
   });
 
 /** Total lookup; an unregistered id throws `UnknownQuestionType`. */

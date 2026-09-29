@@ -79,6 +79,8 @@ export function playerStringsFor(type: string, t: TFunction): unknown {
       return playerStrings.codeimage(t);
     case "rich":
       return playerStrings.rich(t);
+    case "categorize":
+      return playerStrings.categorize(t);
     default:
       return undefined;
   }

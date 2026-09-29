@@ -191,8 +191,9 @@ export function isConfigEditable(state: EvaluationStateName, attemptCount: numbe
 // --- Negative marking (ADR-026, #130) --------------------------------------
 
 /**
- * Negative marking scores the CHOICE questions of an evaluation with a rule
- * where a wrong answer costs points (`mcqFraction`, `negativeMarking`). It is
+ * Negative marking scores the CHOICE questions of an evaluation — `mcq` and
+ * `categorize` (ADR-036) — with a rule where a wrong answer costs points
+ * (`mcqFraction`, `categorizeFraction`). It is
  * a setting of the evaluation, never of a question: mixing penalised and
  * unpenalised questions in one sitting would leave the student guessing which
  * is which.
@@ -224,8 +225,11 @@ export function negativeMarkingOn(
   return negativeMarkingAllowedFor(mode) && negativeMarking === true;
 }
 
-/** The question types negative marking applies to: the choice questions. */
-export const NEGATIVE_MARKING_TYPES: readonly string[] = ["mcq"];
+/**
+ * The question types negative marking applies to: the choice questions, and
+ * `categorize`, where placing a card is a choice among the columns (ADR-036).
+ */
+export const NEGATIVE_MARKING_TYPES: readonly string[] = ["mcq", "categorize"];
 
 /** Whether an item of `type` may score below 0 in an evaluation where it is `on`. */
 export function scoresNegatively(type: string, on: boolean): boolean {

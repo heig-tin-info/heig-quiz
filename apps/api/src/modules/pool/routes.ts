@@ -13,8 +13,19 @@
 import fastifyMultipart from "@fastify/multipart";
 import type { FastifyInstance } from "fastify";
 
-import { DEFAULT_MCQ_POLICY, McqPolicy, type QuestionTypeId } from "@quiz/contracts";
+import {
+  CategorizePolicy,
+  DEFAULT_CATEGORIZE_POLICY,
+  DEFAULT_MCQ_POLICY,
+  McqPolicy,
+  type QuestionTypeId,
+} from "@quiz/contracts";
 import { QUESTION_TYPE_IDS } from "@quiz/core/server";
+import {
+  CATEGORIZE_SCORE_POLICIES,
+  DEFAULT_CATEGORIZE_SCORE_POLICY,
+  type CategorizeScorePolicy,
+} from "@quiz/domain/categorizeScore";
 import {
   DEFAULT_MCQ_SCORE_POLICY,
   MCQ_SCORE_POLICIES,
@@ -48,6 +59,12 @@ const _mcqPoliciesAgree: readonly McqScorePolicy[] = McqPolicy.options;
 const _mcqPoliciesAgreeBack: readonly McqPolicy[] = MCQ_SCORE_POLICIES;
 const _mcqDefaultsAgree: typeof DEFAULT_MCQ_SCORE_POLICY = DEFAULT_MCQ_POLICY;
 void [_mcqPoliciesAgree, _mcqPoliciesAgreeBack, _mcqDefaultsAgree];
+
+/** And for the categorize policies (ADR-036), an evaluation setting. */
+const _categorizePoliciesAgree: readonly CategorizeScorePolicy[] = CategorizePolicy.options;
+const _categorizePoliciesAgreeBack: readonly CategorizePolicy[] = CATEGORIZE_SCORE_POLICIES;
+const _categorizeDefaultsAgree: typeof DEFAULT_CATEGORIZE_SCORE_POLICY = DEFAULT_CATEGORIZE_POLICY;
+void [_categorizePoliciesAgree, _categorizePoliciesAgreeBack, _categorizeDefaultsAgree];
 
 export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;

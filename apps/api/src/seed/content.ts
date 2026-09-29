@@ -11,7 +11,10 @@
  * looks them up before it writes, so running it twice changes nothing.
  */
 
-type QuestionTypeName = "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich";
+import type { QuestionTypeId } from "@quiz/contracts";
+
+/** Every registered type: the seed's union can never fall behind the registry. */
+type QuestionTypeName = QuestionTypeId;
 
 export interface QuestionSpec {
   /** Unique inside its pool, and the key the seed is idempotent on. */
@@ -461,6 +464,44 @@ const C_POOL: PoolSpec = {
           "transforme en `SIGSEGV`.",
         maxChars: 1500,
         format: "markdown",
+      },
+    },
+    {
+      internalName: "prg1-classement-types-c",
+      type: "categorize",
+      category: TYPES,
+      difficulty: 2,
+      tags: ["types", "pointeurs", "classement"],
+      explanation:
+        "`int`, `unsigned long` et `size_t` sont des entiers ; `double` et `float` des " +
+        "flottants ; `char *`, `void *` et `int (*)(void)` (un pointeur de fonction) des " +
+        "pointeurs. `string` n'est pas un type C : il n'existe qu'en C++.",
+      // ADR-036: the ids are opaque on purpose — the student's view carries
+      // them, so they must say nothing about where a card goes. Written by
+      // hand rather than minted, so a second seed run writes the same config.
+      config: {
+        configVersion: 1,
+        prompt: "Classez chaque type C dans sa **catégorie**. Un type qui n'existe pas en C reste de côté.",
+        columns: [
+          { id: "q7m2xk4a", label: "Entier", cards: ["f3n8wz1c", "u6b0ty9e", "j2r5hd7s"] },
+          { id: "c9t1vp6z", label: "Virgule flottante", cards: ["a4k7mq2x", "y8e3gn5w"] },
+          { id: "h5w8re3n", label: "Pointeur", cards: ["p1x6jc0v", "d7s4lb8k", "m0g9fu3t"] },
+        ],
+        cards: [
+          { id: "f3n8wz1c", text: "`int`" },
+          { id: "u6b0ty9e", text: "`unsigned long`" },
+          { id: "j2r5hd7s", text: "`size_t`" },
+          { id: "a4k7mq2x", text: "`double`" },
+          { id: "y8e3gn5w", text: "`float`" },
+          { id: "p1x6jc0v", text: "`char *`" },
+          { id: "d7s4lb8k", text: "`void *`" },
+          { id: "m0g9fu3t", text: "`int (*)(void)`" },
+          { id: "e2z5oa7r", text: "`string`" },
+        ],
+        ordered: false,
+        shuffleCards: true,
+        shuffleColumns: false,
+        policy: "inherit",
       },
     },
   ],

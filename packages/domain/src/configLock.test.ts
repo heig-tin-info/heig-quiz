@@ -84,10 +84,12 @@ describe("negative marking (ADR-026)", () => {
     expect(negativeMarkingOn("poll", true)).toBe(false);
   });
 
-  it("concerns the choice questions only", () => {
-    expect(scoresNegatively("mcq", true)).toBe(true);
-    expect(scoresNegatively("mcq", false)).toBe(false);
-    for (const type of ["short", "cloze", "code", "codeimage", "circuit"]) {
+  it("concerns the choice questions only: mcq and categorize (ADR-036)", () => {
+    for (const type of ["mcq", "categorize"]) {
+      expect(scoresNegatively(type, true), type).toBe(true);
+      expect(scoresNegatively(type, false), type).toBe(false);
+    }
+    for (const type of ["short", "cloze", "code", "codeimage", "circuit", "rich"]) {
       expect(scoresNegatively(type, true), type).toBe(false);
     }
   });

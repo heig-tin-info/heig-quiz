@@ -4,6 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import {
   DEFAULT_MCQ_POLICY,
+  categorizePolicyOf,
   EvaluationSettings,
   FeedbackPolicy,
   GradingScale,
@@ -160,15 +161,22 @@ export async function templateRevisionsOf(
  * a question config that says "inherit" defers to (invariant: the core knows
  * no type's shape, each type parses its own entry).
  *
- * One entry today, `mcq`; a second type with an evaluation-level setting adds
- * its key here and nowhere else.
+ * Two entries, `mcq` and `categorize` (ADR-036); a type with an
+ * evaluation-level setting adds its key here and nowhere else. Negative
+ * marking travels in both: it is one rule of the evaluation for every choice
+ * question.
  */
 export function gradeDefaults(row: EvaluationRecord): Readonly<Record<string, unknown>> {
-  return { mcq: { policy: row.mcqPolicy, negativeMarking: negativeMarkingEnabled(row) } };
+  const negativeMarking = negativeMarkingEnabled(row);
+  return {
+    mcq: { policy: row.mcqPolicy, negativeMarking },
+    categorize: { policy: categorizePolicyOf(settingsOf(row)), negativeMarking },
+  };
 }
 
 /**
- * ADR-026: the evaluation scores its choice questions with negative marking.
+ * ADR-026: the evaluation scores its choice questions (`mcq`, and
+ * `categorize` since ADR-036) with negative marking.
  * Read here and nowhere else — the grader through {@link gradeDefaults}, the
  * student's question through the same defaults, the waiting room, and the
  * range of a manual correction — and never on a poll, whatever its row says.

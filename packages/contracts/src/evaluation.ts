@@ -71,6 +71,29 @@ export type McqPolicy = z.infer<typeof McqPolicy>;
 /** What an evaluation gets when its creator expressed no preference. */
 export const DEFAULT_MCQ_POLICY = "all_or_nothing" satisfies McqPolicy;
 
+/**
+ * How a `categorize` question is scored (docs/04 §4.13, ADR-036). The two
+ * formulas live in `@quiz/domain/categorizeScore`, whose
+ * `CATEGORIZE_SCORE_POLICIES` is the reference list; this is the WIRE name of
+ * the same two, spelled again because `packages/contracts` depends on no
+ * package. `apps/api` checks the two equal, both ways, at compile time
+ * (`modules/pool/routes.ts`), like {@link McqPolicy}.
+ *
+ * It is a setting of the evaluation (`settings.categorizePolicy`), which a
+ * question configured `inherit` defers to; there is no per-teacher
+ * preference.
+ */
+export const CategorizePolicy = z.enum(["per_item", "all_or_nothing"]);
+export type CategorizePolicy = z.infer<typeof CategorizePolicy>;
+
+/** What an evaluation without the setting scores `inherit` questions with. */
+export const DEFAULT_CATEGORIZE_POLICY = "per_item" satisfies CategorizePolicy;
+
+/** The categorize policy of an evaluation's settings (ADR-036); absent is {@link DEFAULT_CATEGORIZE_POLICY}. */
+export const categorizePolicyOf = (settings: {
+  categorizePolicy?: CategorizePolicy | undefined;
+}): CategorizePolicy => settings.categorizePolicy ?? DEFAULT_CATEGORIZE_POLICY;
+
 /** F-EVAL-15: which attempt is a student's result when an exercise allows several. */
 export const RetakeKeep = z.enum(["best", "last"]);
 export type RetakeKeep = z.infer<typeof RetakeKeep>;
@@ -126,12 +149,20 @@ export const EvaluationSettings = z.object({
    */
   retakes: RetakeSettings.optional(),
   /**
-   * ADR-026 (#130): every choice question of the evaluation is scored with
-   * negative marking — a wrong answer costs points, no answer costs nothing,
-   * and the total is floored at 0. Refused on a `poll`. Absent means off:
-   * read it through {@link negativeMarkingOf}, never raw.
+   * ADR-026 (#130): every choice question of the evaluation — `mcq` and
+   * `categorize` (ADR-036) — is scored with negative marking: a wrong answer
+   * costs points, no answer costs nothing, and the total is floored at 0.
+   * Refused on a `poll`. Absent means off: read it through
+   * {@link negativeMarkingOf}, never raw.
    */
   negativeMarking: z.boolean().optional(),
+  /**
+   * ADR-036: what a `categorize` question configured `inherit` is scored
+   * with. Absent means `per_item`: read it through
+   * {@link categorizePolicyOf}, never raw. Kept in the JSON column rather than
+   * beside `mcqPolicy`, so it needed no migration.
+   */
+  categorizePolicy: CategorizePolicy.optional(),
   /**
    * ADR-027 (#139): the evaluation is sat in Safe Exam Browser only. A
    * student launches it from the portal with a one-time `.seb` file; a
@@ -358,6 +389,7 @@ export const EvaluationSettingsPatch = z.object({
   /** Replaced whole: the three fields of the retake rule travel together. */
   retakes: RetakeSettings.optional(),
   negativeMarking: z.boolean().optional(),
+  categorizePolicy: CategorizePolicy.optional(),
   safeExamBrowser: z.boolean().optional(),
   poll: EvaluationSettings.shape.poll,
 });
