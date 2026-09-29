@@ -5,9 +5,10 @@
 Accepted (2026-09-29, decided by the teacher who owns the product: exams
 only, and only attempts whose other items are all validated; the method,
 the thresholds and the bands were delegated). With `pearson`,
-`evaluationDiscrimination`, `fisherCombine`, `discrimination`,
-`discriminationBand`, `DISCRIMINATION_MIN_ITEMS` and `DISCRIMINATION_MIN_N`
-in `@quiz/domain/stats`, `discriminationsOf` in the `stats` module and
+`evaluationDiscrimination`, `discrimination`, `discriminationBand` and
+the constants `DISCRIMINATION_MIN_ITEMS`, `DISCRIMINATION_MIN_N`,
+`DISCRIMINATION_FAIR` and `DISCRIMINATION_GOOD` in `@quiz/domain/stats`,
+`formatDecimal` in the web app's i18n, `discriminationsOf` in the `stats` module and
 `DiscriminationStats` in `@quiz/contracts/stats`. No migration. Revises
 F-STAT-02 (docs/spec/02). Builds on ADR-038 (what is counted) and ADR-039
 (the not-reached rule).
@@ -84,14 +85,16 @@ by `tanh`. `|r|` is capped at 0.9999 before `atanh`, so a perfect sample
 stays finite. Pooling the raw pairs instead would correlate totals of
 different exams; averaging `r` directly would bias it towards zero.
 
-A question that appears twice in one exam (two items) gives two samples;
-they are not independent, and it is rare enough to be accepted.
+A question that appears twice in one exam (two items) gives two samples,
+each against the rest of the exam — the other copy included; they are not
+independent, and it is rare enough to be accepted in the value. The counts
+shown stay honest: that exam counts once, and its attempts once.
 
 ### 3. What is shown, and when
 
 `QuestionStats.discrimination` is `{ r, evaluations, n }`: the combined
-index rounded to two decimals, the number of exams behind it and the sum of
-their attempts. It is `null` — decided by the server, like `p` — when no
+index rounded to two decimals, the number of DISTINCT exams behind it and
+the number of distinct attempts. It is `null` — decided by the server, like `p` — when no
 exam qualifies. It is carried only on an entry that already exists, that is
 a question with its ten counted answers (§4 of ADR-038); every attempt in
 the index is one of them, so it never reveals a smaller population.
@@ -108,13 +111,16 @@ attempts"), with one sentence on what the index means:
 
 The bands are those of the classical item-analysis literature (Ebel's
 0.2 / 0.3 / 0.4 collapsed into three readings), applied to the rounded
-value so the label matches the number. `discriminationBand` in
-`@quiz/domain` is the one definition, read by the panel.
+value so the label matches the number. `discriminationBand` and the two
+thresholds in `@quiz/domain` are the one definition: the panel reads them,
+its sentence interpolates the thresholds, and every decimal is written in
+the reader's notation (`0.42`, `0,42`).
 
 ### 4. Performance
 
 Two more queries per pool read, no cache: the items of the exams that
-contain a pool question, and every validated grading of those exams. Each
+contain a pool question, and every validated grading of the counted exam
+attempts (by attempt id, so an attempt that is not counted is never read). Each
 exam is computed once, grouped in memory by item, then by question. For a
 pool used in twenty exams of a hundred students of twenty items, that is
 some forty thousand small rows; should it outgrow the process, the rest of

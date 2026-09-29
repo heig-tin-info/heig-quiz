@@ -6,7 +6,7 @@
  * its discrimination index (ADR-040).
  */
 import { MAX_GRADE, MIN_GRADE } from "./grade.js";
-import { round2 } from "./round.js";
+import { clamp, round2 } from "./round.js";
 
 export interface Description {
   count: number;
@@ -174,19 +174,22 @@ export function pearson(xs: readonly number[], ys: readonly number[]): number | 
   return sxy / Math.sqrt(sxx * syy);
 }
 
-/** One exam's correlation, over its `n` attempts. */
-export interface DiscriminationSample {
-  r: number;
-  n: number;
-}
-
 /**
- * One counted attempt of an exam: the question's own points, and the rest
- * of the test — the points and the maximum of every OTHER item, summed.
+ * One counted attempt of an exam: which attempt, the question's own points,
+ * and the rest of the test — the points and the maximum of every OTHER
+ * item, summed.
  */
 export interface DiscriminationAttempt {
+  attemptId: string;
   item: ScoredAnswer;
   rest: ScoredAnswer;
+}
+
+/** One exam's correlation, with the attempts it rests on. */
+export interface DiscriminationSample {
+  evaluationId: string;
+  r: number;
+  attemptIds: readonly string[];
 }
 
 /**
@@ -197,43 +200,32 @@ export interface DiscriminationAttempt {
  * positive maximum on both sides, or no variance on either side.
  */
 export function evaluationDiscrimination(
+  evaluationId: string,
   attempts: Iterable<DiscriminationAttempt>,
   otherItems: number,
 ): DiscriminationSample | null {
   if (otherItems < DISCRIMINATION_MIN_ITEMS) return null;
   const xs: number[] = [];
   const ys: number[] = [];
-  for (const { item, rest } of attempts) {
+  const attemptIds: string[] = [];
+  for (const { attemptId, item, rest } of attempts) {
     if (item.maxPoints <= 0 || rest.maxPoints <= 0) continue;
     xs.push(item.points / item.maxPoints);
     ys.push(rest.points / rest.maxPoints);
+    attemptIds.push(attemptId);
   }
-  if (xs.length < DISCRIMINATION_MIN_N) return null;
+  if (attemptIds.length < DISCRIMINATION_MIN_N) return null;
   const r = pearson(xs, ys);
-  return r === null ? null : { r, n: xs.length };
+  return r === null ? null : { evaluationId, r, attemptIds };
 }
 
 /** Keeps `atanh` finite on a perfect correlation. */
 const R_LIMIT = 0.9999;
 
 /**
- * Several correlations combined by Fisher's z, each weighted by `n - 3`
- * (the inverse of the variance of its z), back-transformed; unrounded.
- * `null` when no sample carries weight.
+ * A question's discrimination index, over `evaluations` distinct exams and
+ * `n` distinct attempts.
  */
-export function fisherCombine(samples: Iterable<DiscriminationSample>): number | null {
-  let weights = 0;
-  let sum = 0;
-  for (const { r, n } of samples) {
-    const w = n - 3;
-    if (w <= 0) continue;
-    sum += w * Math.atanh(Math.max(-R_LIMIT, Math.min(R_LIMIT, r)));
-    weights += w;
-  }
-  return weights === 0 ? null : Math.tanh(sum / weights);
-}
-
-/** A question's discrimination index, over `evaluations` exams and `n` attempts. */
 export interface Discrimination {
   r: number;
   evaluations: number;
@@ -241,30 +233,49 @@ export interface Discrimination {
 }
 
 /**
- * The index as it may be shown: the qualifying exams' correlations combined,
- * rounded to two decimals; `null` when no exam qualifies (each `null` of
- * {@link evaluationDiscrimination} is skipped).
+ * The index as it may be shown: the qualifying samples combined by Fisher's
+ * z — `atanh(r)` averaged with the weight `n - 3` (the inverse of its
+ * variance), back-transformed —, rounded to two decimals; `null` when no
+ * exam qualifies (each `null` of {@link evaluationDiscrimination} is
+ * skipped). Every sample holds at least {@link DISCRIMINATION_MIN_N}
+ * attempts, so every weight is positive. A question placed twice in one
+ * exam gives two samples but counts one exam, and its attempts once.
  */
-export function discrimination(
-  samples: Iterable<DiscriminationSample | null>,
-): Discrimination | null {
+export function discrimination(samples: Iterable<DiscriminationSample | null>): Discrimination | null {
   const kept = [...samples].filter((s): s is DiscriminationSample => s !== null);
-  const r = fisherCombine(kept);
-  if (r === null) return null;
-  return { r: round2(r), evaluations: kept.length, n: kept.reduce((s, x) => s + x.n, 0) };
+  if (kept.length === 0) return null;
+  let weights = 0;
+  let sum = 0;
+  for (const { r, attemptIds } of kept) {
+    const w = attemptIds.length - 3;
+    sum += w * Math.atanh(clamp(r, -R_LIMIT, R_LIMIT));
+    weights += w;
+  }
+  return {
+    r: round2(Math.tanh(sum / weights)),
+    evaluations: new Set(kept.map((s) => s.evaluationId)).size,
+    n: new Set(kept.flatMap((s) => s.attemptIds)).size,
+  };
 }
 
+/** From this index on, a question discriminates fairly (ADR-040). */
+export const DISCRIMINATION_FAIR = 0.2;
+
+/** From this index on, a question discriminates well (ADR-040). */
+export const DISCRIMINATION_GOOD = 0.3;
+
 /**
- * The reading of an index: below 0.2 weak, from 0.2 fair, from 0.3 good —
- * and `inverse` below zero, where the stronger students do WORSE on the
- * question (a wrong key, an ambiguous wording).
+ * The reading of an index: below {@link DISCRIMINATION_FAIR} weak, then
+ * fair, from {@link DISCRIMINATION_GOOD} good — and `inverse` below zero,
+ * where the stronger students do WORSE on the question (a wrong key, an
+ * ambiguous wording).
  */
 export type DiscriminationBand = "inverse" | "weak" | "fair" | "good";
 
 export function discriminationBand(r: number): DiscriminationBand {
   if (r < 0) return "inverse";
-  if (r < 0.2) return "weak";
-  if (r < 0.3) return "fair";
+  if (r < DISCRIMINATION_FAIR) return "weak";
+  if (r < DISCRIMINATION_GOOD) return "fair";
   return "good";
 }
 

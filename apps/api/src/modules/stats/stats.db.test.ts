@@ -7,7 +7,6 @@ import { randomUUID } from "node:crypto";
 import { count, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { fisherCombine, pearson, round2 } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
@@ -438,11 +437,17 @@ describe("the time spent (ADR-039)", () => {
 });
 
 describe("the discrimination index (ADR-040)", () => {
-  /** How many of the five other items each of ten students earned, and what they earned on the question. */
+  /*
+   * Ten students: how many of the five other items each earned, and what
+   * they earned on the question. The expected indexes are worked out by hand
+   * (Pearson of the item against rest / 5): `good` 0.5528, `inverse` its
+   * opposite, `mixed` 0.2462.
+   */
   const rests = [0, 1, 1, 2, 2, 3, 3, 4, 5, 5];
   const good = [0, 0, 1, 0, 1, 0, 1, 1, 1, 1];
   const inverse = good.map((x) => 1 - x);
-  const rOf = (item: readonly number[]) => pearson(item, rests.map((k) => k / 5))!;
+  const mixed = [0, 1, 0, 0, 1, 1, 0, 1, 1, 0];
+  const GOOD = { r: 0.55, evaluations: 1, n: 10 };
 
   interface ExamOptions {
     evaluationId?: string;
@@ -450,13 +455,19 @@ describe("the discrimination index (ADR-040)", () => {
     startedAt?: Date;
     /** The student whose last other item is still a proposal. */
     pending?: number;
+    /** Tracked attempts on which only the question was ever on screen. */
+    tracked?: boolean;
   }
 
   /** Each student sits the exam once: `item[i]` on the question (item 0), 1 on the first `rests[i]` others. */
   async function sitExam(seed: Seeded, item: readonly number[], o: ExamOptions = {}) {
     const itemIds = o.itemIds ?? seed.itemIds;
     for (const [i, points] of item.entries()) {
-      const id = await attempt(o.evaluationId ?? seed.evaluationId, seed.studentIds[i]!, { startedAt: o.startedAt ?? BEFORE });
+      const id = await attempt(o.evaluationId ?? seed.evaluationId, seed.studentIds[i]!, {
+        startedAt: o.startedAt ?? BEFORE,
+        tracked: o.tracked ?? false,
+      });
+      if (o.tracked) await shown(id, itemIds[0]!, 1000);
       await grade(id, itemIds[0]!, points);
       for (const [k, other] of itemIds.slice(1).entries()) {
         const state = o.pending === i && k === itemIds.length - 2 ? "proposed" : "validated";
@@ -473,13 +484,11 @@ describe("the discrimination index (ADR-040)", () => {
   it("correlates the question with the rest of the exam, signed", async () => {
     const seed = await seedLive(db, { students: 10, questions: 6 });
     await sitExam(seed, good);
-    expect(await discriminationOf(seed)).toEqual({ r: round2(rOf(good)), evaluations: 1, n: 10 });
-    expect(rOf(good)).toBeGreaterThan(0.3);
+    expect(await discriminationOf(seed)).toEqual(GOOD);
 
     const other = await seedLive(db, { students: 10, questions: 6 });
     await sitExam(other, inverse);
-    expect(await discriminationOf(other)).toEqual({ r: round2(rOf(inverse)), evaluations: 1, n: 10 });
-    expect(rOf(inverse)).toBeLessThan(0);
+    expect(await discriminationOf(other)).toEqual({ r: -0.55, evaluations: 1, n: 10 });
   });
 
   it("counts exams only, never an exercise", async () => {
@@ -494,12 +503,21 @@ describe("the discrimination index (ADR-040)", () => {
     await sitExam(seed, [...good, 1], { pending: 10 });
     // The student with a pending proposal counts in p, not in the index.
     expect(await statsOf(seed)).toMatchObject({ n: 11 });
-    expect(await discriminationOf(seed)).toEqual({ r: round2(rOf(good)), evaluations: 1, n: 10 });
+    expect(await discriminationOf(seed)).toEqual(GOOD);
 
     const short = await seedLive(db, { students: 10, questions: 6 });
     await sitExam(short, good, { pending: 3 });
     expect(await statsOf(short)).toMatchObject({ n: 10 });
     expect(await discriminationOf(short)).toBeNull();
+  });
+
+  it("keeps the validated 0 of an other item never reached in the rest of the test", async () => {
+    // Every attempt is tracked and only the question was ever on screen: the
+    // other items were never reached, and their validated grades — 0 for the
+    // items not earned — still make the rest of the test, unchanged.
+    const seed = await seedLive(db, { students: 10, questions: 6 });
+    await sitExam(seed, good, { tracked: true });
+    expect(await discriminationOf(seed)).toEqual(GOOD);
   });
 
   it("needs five other items", async () => {
@@ -528,7 +546,7 @@ describe("the discrimination index (ADR-040)", () => {
       for (const itemId of seed.itemIds) await grade(id, itemId, itemId === seed.itemIds[0] ? 0 : 1);
     }
 
-    expect(await discriminationOf(seed)).toEqual({ r: round2(rOf(good)), evaluations: 1, n: 10 });
+    expect(await discriminationOf(seed)).toEqual(GOOD);
   });
 
   it("counts only the exams started since the reset", async () => {
@@ -537,22 +555,34 @@ describe("the discrimination index (ADR-040)", () => {
     await poolService.resetQuestionStats(db, seed.questionIds[0]!, new Date("2026-09-05T08:00:00.000Z"));
     const second = await anotherEvaluation(seed, seed.questionIds);
     await sitExam(seed, good, { ...second, startedAt: AFTER });
-    expect(await discriminationOf(seed)).toEqual({ r: round2(rOf(good)), evaluations: 1, n: 10 });
+    expect(await discriminationOf(seed)).toEqual(GOOD);
   });
 
   it("combines several exams by Fisher's z, and skips one with too few attempts", async () => {
     const seed = await seedLive(db, { students: 10, questions: 6 });
-    const mixed = [0, 1, 0, 0, 1, 1, 0, 1, 1, 0];
     await sitExam(seed, good);
     const second = await anotherEvaluation(seed, seed.questionIds);
     await sitExam(seed, mixed, second);
     const third = await anotherEvaluation(seed, seed.questionIds);
     await sitExam(seed, good.slice(0, 9), third);
 
-    expect(await discriminationOf(seed)).toEqual({
-      r: round2(fisherCombine([{ r: rOf(good), n: 10 }, { r: rOf(mixed), n: 10 }])!),
-      evaluations: 2,
-      n: 20,
-    });
+    // tanh((7 atanh 0.5528 + 7 atanh 0.2462) / 14) = 0.4110
+    expect(await discriminationOf(seed)).toEqual({ r: 0.41, evaluations: 2, n: 20 });
+  });
+
+  it("counts one exam and its attempts once when the question sits in it twice", async () => {
+    const seed = await seedLive(db, { students: 10, questions: 6 });
+    const twice = await anotherEvaluation(seed, [...seed.questionIds, seed.questionIds[0]!]);
+    const [first, ...others] = twice.itemIds;
+    const last = others.pop()!;
+    for (const [i, points] of good.entries()) {
+      const id = await attempt(twice.evaluationId, seed.studentIds[i]!);
+      await grade(id, first!, points);
+      await grade(id, last, points);
+      for (const [k, other] of others.entries()) await grade(id, other, k < rests[i]! ? 1 : 0);
+    }
+    // Two samples, each against the five items and the other copy:
+    // Pearson(good, (rests + good) / 6) = 0.7158.
+    expect(await discriminationOf(seed)).toEqual({ r: 0.72, evaluations: 1, n: 10 });
   });
 });

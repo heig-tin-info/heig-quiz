@@ -62,7 +62,7 @@ import {
   questions,
 } from "../../db/schema.js";
 import { isStaffAttempt } from "../evaluation/service.js";
-import { keptAttemptsOf } from "../grading/service.js";
+import { keptAttemptsOf, pairKey, type PairKey } from "../grading/service.js";
 
 /**
  * What makes an attempt count, whatever the series: a finished attempt of a
@@ -138,24 +138,24 @@ export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQue
 
   // Only the kept attempt counts — never a fallback to another attempt when
   // the kept one's grading of the item is still a proposal.
-  const scored = new Map<string, { since: Date | null; list: ScoredAnswer[] }>();
   const counted = rows.filter((row) => kept.has(row.attemptId));
+  const scored = new Map<string, ScoredAnswer[]>();
+  const sinceOf = new Map<string, Date | null>();
   for (const row of counted) {
-    const entry = scored.get(row.questionId) ?? { since: row.since, list: [] };
-    entry.list.push({ points: row.points, maxPoints: row.maxPoints });
-    scored.set(row.questionId, entry);
+    push(scored, row.questionId, row);
+    sinceOf.set(row.questionId, row.since);
   }
 
   const dwells = await dwellsOf(db, poolId);
   const discriminations = await discriminationsOf(db, counted.filter((row) => row.mode === "exam"));
   const items: PoolQuestionStats["items"] = [];
-  for (const [questionId, { since, list }] of scored) {
+  for (const [questionId, list] of scored) {
     const shown = shownItemStats(itemStats(list));
     if (!shown) continue;
     const time = shownTimeSpread(spread(dwells.get(questionId) ?? []));
     items.push({
       questionId,
-      since: isoOrNull(since),
+      since: isoOrNull(sinceOf.get(questionId) ?? null),
       ...shown,
       time: time && inSeconds(time),
       discrimination: discrimination(discriminations.get(questionId) ?? []),
@@ -191,11 +191,7 @@ async function dwellsOf(db: Db, poolId: string): Promise<Map<string, number[]>> 
       ),
     );
   const byQuestion = new Map<string, number[]>();
-  for (const row of rows) {
-    const list = byQuestion.get(row.questionId) ?? [];
-    list.push(row.dwellMs);
-    byQuestion.set(row.questionId, list);
-  }
+  for (const row of rows) push(byQuestion, row.questionId, row.dwellMs);
   return byQuestion;
 }
 
@@ -232,8 +228,9 @@ async function discriminationsOf(
     .where(and(inArray(evaluationItems.evaluationId, evaluationIds), gt(evaluationItems.points, 0)));
   for (const item of items) push(itemsOf, item.evaluationId, item.id);
 
-  // Every validated grading of those exams, by attempt then item.
-  const graded = new Map<string, Map<string, ScoredAnswer>>();
+  // Every validated grading of the counted attempts, by (attempt, item).
+  const attemptIds = [...new Set(counted.map((a) => a.attemptId))];
+  const graded = new Map<PairKey, ScoredAnswer>();
   const validated = await db
     .select({
       attemptId: gradings.attemptId,
@@ -242,13 +239,8 @@ async function discriminationsOf(
       maxPoints: gradings.maxPoints,
     })
     .from(gradings)
-    .innerJoin(evaluationItems, eq(evaluationItems.id, gradings.itemId))
-    .where(and(inArray(evaluationItems.evaluationId, evaluationIds), eq(gradings.state, "validated")));
-  for (const g of validated) {
-    const byItem = graded.get(g.attemptId) ?? new Map<string, ScoredAnswer>();
-    byItem.set(g.itemId, { points: g.points, maxPoints: g.maxPoints });
-    graded.set(g.attemptId, byItem);
-  }
+    .where(and(inArray(gradings.attemptId, attemptIds), eq(gradings.state, "validated")));
+  for (const g of validated) graded.set(pairKey(g.attemptId, g.itemId), g);
 
   // One sample per item of a pool question: its answers against the rest.
   const byItem = new Map<string, CountedExamAnswer[]>();
@@ -258,19 +250,23 @@ async function discriminationsOf(
     const others = (itemsOf.get(evaluationId) ?? []).filter((id) => id !== itemId);
     const attempts: DiscriminationAttempt[] = [];
     for (const answer of answers) {
-      const rest = restOfTest(graded.get(answer.attemptId), others);
-      if (rest) attempts.push({ item: answer, rest });
+      const rest = restOfTest(graded, answer.attemptId, others);
+      if (rest) attempts.push({ attemptId: answer.attemptId, item: answer, rest });
     }
-    push(samples, questionId, evaluationDiscrimination(attempts, others.length));
+    push(samples, questionId, evaluationDiscrimination(evaluationId, attempts, others.length));
   }
   return samples;
 }
 
 /** The points and the maximum of `others` on one attempt; null when one of them is not validated. */
-function restOfTest(graded: Map<string, ScoredAnswer> | undefined, others: readonly string[]): ScoredAnswer | null {
+function restOfTest(
+  graded: ReadonlyMap<PairKey, ScoredAnswer>,
+  attemptId: string,
+  others: readonly string[],
+): ScoredAnswer | null {
   const rest = { points: 0, maxPoints: 0 };
-  for (const id of others) {
-    const g = graded?.get(id);
+  for (const itemId of others) {
+    const g = graded.get(pairKey(attemptId, itemId));
     if (!g) return null;
     rest.points += g.points;
     rest.maxPoints += g.maxPoints;
@@ -278,6 +274,7 @@ function restOfTest(graded: Map<string, ScoredAnswer> | undefined, others: reado
   return rest;
 }
 
+/** Appends `value` to the list of `key`, the one grouping idiom of this module. */
 function push<K, V>(map: Map<K, V[]>, key: K, value: V) {
   const list = map.get(key);
   if (list) list.push(value);
