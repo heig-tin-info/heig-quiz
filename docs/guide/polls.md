@@ -34,7 +34,7 @@ Press **Start the poll**. The poll is running from that instant and the projecti
 
 ## The projection
 
-The projection is the one screen of the product that is not a page: no sidebar, no header, dark by default because a beamer throws light. Put this window on the beamer and press the full-screen button at the top right, or the `F` key.
+The projection is the one screen of the product that is not a page: no sidebar, no header, dark by default because a beamer throws light. Put this window on the beamer and press the full-screen button at the top right, or the `F` key. The sun or moon button beside it, or the `T` key, switches between the dark and the light theme; hovering either button names its key.
 
 <figure markdown="span">
   ![The projection of a running poll: the question in large type, its choices with the votes hidden, the join code and its QR code](../assets/screenshots/poll-projection-light.png#only-light)

@@ -226,12 +226,14 @@ export function ProjectionHeader({
           ) : null}
           <IconButton
             label={dark ? t("menu.lightTheme") : t("menu.darkTheme")}
+            shortcut="T"
             onClick={onToggleTheme}
           >
             {dark ? <Sun /> : <Moon />}
           </IconButton>
           <IconButton
             label={fullscreen ? t("poll.exitFullscreen") : t("poll.fullscreen")}
+            shortcut="F"
             onClick={onToggleFullscreen}
           >
             {fullscreen ? <Minimize2 /> : <Maximize2 />}

@@ -262,13 +262,16 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
       } else if (k === "f") {
         e.preventDefault();
         toggleFullscreen();
+      } else if (k === "t") {
+        e.preventDefault();
+        toggleTheme();
       }
       // Escape is the browser's while it owns the full screen, and
       // `fullscreenchange` above is what tells us it left.
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [keyed, view, setDisplay, toggleFullscreen]);
+  }, [keyed, view, setDisplay, toggleFullscreen, toggleTheme]);
 
   const fit = useStageFit(view !== null);
 

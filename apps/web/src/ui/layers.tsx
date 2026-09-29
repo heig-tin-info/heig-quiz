@@ -517,6 +517,7 @@ export function IconButton({
   label,
   danger,
   active,
+  shortcut,
   size = "md",
   className = "",
   ...props
@@ -525,14 +526,21 @@ export function IconButton({
   danger?: boolean;
   /** Pressed state (view toggles, filters): accent-soft chip. */
   active?: boolean;
+  /**
+   * The key that does the same thing, a single letter the screen listens to:
+   * the tooltip names it in parentheses ("Full screen (F)"), and assistive
+   * technology reads it from `aria-keyshortcuts` rather than from the name.
+   */
+  shortcut?: string;
   size?: "sm" | "md";
 }) {
   return (
-    <Tip label={label}>
+    <Tip label={shortcut ? `${label} (${shortcut})` : label}>
       <button
         type="button"
         {...props}
         aria-label={label}
+        aria-keyshortcuts={shortcut}
         aria-pressed={active}
         className={cx(
           "inline-flex shrink-0 items-center justify-center rounded-full transition-colors duration-150 disabled:pointer-events-none disabled:opacity-40",
