@@ -103,7 +103,7 @@ export function AddQuestionsSheet({
   const current = poolId ?? pools.data?.[0]?.id ?? null;
   const starred = useStarredQuestions(current);
   const favourites = starred.data?.items ?? NO_ROWS;
-  const { setStars } = useSetStars(current ?? "");
+  const { setStars } = useSetStars(current);
   // What the last "Add favourites" did, until the pool changes.
   const [notice, setNotice] = useState<{ plan: FavouritePlan; unstarred: boolean } | null>(null);
 
@@ -393,18 +393,33 @@ const SECTION_TITLE =
   "flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-fg-muted";
 
 /**
+ * Why a row cannot be picked, or null when it can: already in the list,
+ * never published (`422 no_published_version`), or kept after an opinion
+ * poll with no key, which would grade the class against nothing
+ * (`422 question_keyless`). The one rule behind a disabled tick box and
+ * behind what "Add favourites" leaves out.
+ */
+export function skipReason(
+  row: QuestionRow,
+  existing: ReadonlySet<string>,
+): "already" | "unpublished" | "keyless" | null {
+  if (existing.has(row.id)) return "already";
+  if (row.latestNumber === null) return "unpublished";
+  if (row.keyless) return "keyless";
+  return null;
+}
+
+/**
  * What "Add favourites" does with the starred questions of the shown pool:
- * the ids it can add, and how many it leaves out for each reason — already
- * in the list, never published, or kept after a poll without a key. The
- * server refuses the last two (`422`); asking it would lose the whole batch.
+ * the ids it can add, and how many it leaves out for each reason. Posting a
+ * refused one would lose the whole batch.
  */
 export function planFavourites(rows: readonly QuestionRow[], existing: ReadonlySet<string>) {
   const plan = { add: [] as string[], already: 0, unpublished: 0, keyless: 0 };
   for (const row of rows) {
-    if (existing.has(row.id)) plan.already += 1;
-    else if (row.latestNumber === null) plan.unpublished += 1;
-    else if (row.keyless) plan.keyless += 1;
-    else plan.add.push(row.id);
+    const reason = skipReason(row, existing);
+    if (reason === null) plan.add.push(row.id);
+    else plan[reason] += 1;
   }
   return plan;
 }
@@ -474,18 +489,14 @@ function PickerRows({
   return (
     <ul className="divide-y divide-line rounded-field border border-line">
       {rows.map((row, index) => {
-        const unpublished = row.latestNumber === null;
-        // Kept after an opinion poll: no key, so it would grade the
-        // class against nothing (`422 question_keyless`).
-        const keyless = !unpublished && row.keyless;
-        const already = existing.has(row.id);
+        const reason = skipReason(row, existing);
         const looked = shown?.id === row.id;
         const key = `${section}:${row.id}`;
         return (
           <li key={row.id} className={cx("flex items-center gap-3 px-3", looked && "bg-accent-soft")}>
             <Checkbox
-              checked={already || picked.includes(row.id)}
-              disabled={unpublished || keyless || already}
+              checked={reason === "already" || picked.includes(row.id)}
+              disabled={reason !== null}
               onChange={() => onToggle(row.id)}
               label={null}
               aria-labelledby={`${nameId}-${index}`}
@@ -499,7 +510,7 @@ function PickerRows({
               aria-pressed={looked}
               aria-label={t("question.preview.show", { name: row.internalName })}
               onClick={() => onLook(row, key)}
-              onKeyDown={(e) => walk(e, index, !(unpublished || keyless || already))}
+              onKeyDown={(e) => walk(e, index, reason === null)}
               className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 py-2 text-left text-sm"
             >
               <span id={`${nameId}-${index}`} className="truncate font-medium">
@@ -508,12 +519,12 @@ function PickerRows({
               <span className="text-xs text-fg-faint">{typeLabel(t, row.type)}</span>
               <DifficultyDots value={row.difficulty} />
               {row.deprecated ? <Badge tone="amber">{t("eval.questions.deprecated")}</Badge> : null}
-              {unpublished ? (
+              {reason === "unpublished" ? (
                 <Tip label={t("picker.unpublishedHint")}>
                   <Badge tone="zinc">{t("picker.unpublished")}</Badge>
                 </Tip>
               ) : null}
-              {keyless ? (
+              {reason === "keyless" ? (
                 <Tip label={t("picker.keylessHint")}>
                   <Badge tone="zinc">{t("picker.keyless")}</Badge>
                 </Tip>

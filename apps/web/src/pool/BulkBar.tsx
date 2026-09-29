@@ -76,7 +76,8 @@ export function BulkBar({
    * something else is running.
    */
   const [moving, setMoving] = useState(false);
-  const allStarred = ids.every((id) => rows.find((r) => r.id === id)?.starred === true);
+  const starredIds = new Set(rows.filter((r) => r.starred).map((r) => r.id));
+  const allStarred = ids.every((id) => starredIds.has(id));
   /** The chosen target pool of the "another pool" dialog, and its category. */
   const [targetPoolId, setTargetPoolId] = useState("");
   const [targetCategoryId, setTargetCategoryId] = useState("");

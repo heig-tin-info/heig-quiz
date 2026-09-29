@@ -69,8 +69,8 @@ sur les lignes cochées. Personne d'autre ne voit vos étoiles — un collègue
 qui partage la banque a les siennes — et un lecteur peut aussi en mettre.
 Quand vous remplissez une évaluation ou un modèle, **Ajouter des questions**
 montre d'abord les favoris de la banque affichée, et **Ajouter les favoris**
-les ajoute d'un coup. **Effacer les favoris**, en haut de la banque, retire
-toutes les étoiles que vous y avez mises.
+les ajoute d'un coup. **Effacer les favoris**, l'étoile barrée à côté du nombre de questions,
+retire toutes les étoiles que vous y avez mises.
 
 ## Une banque partagée avec vous
 

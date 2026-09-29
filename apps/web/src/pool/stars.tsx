@@ -11,6 +11,7 @@
  */
 import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { Star } from "lucide-react";
+import { useRef } from "react";
 
 import type { QuestionPage, QuestionRow, QuestionStarBody, StarsCleared } from "@quiz/contracts";
 
@@ -37,23 +38,27 @@ export function useStarredQuestions(poolId: string | null) {
 
 /**
  * `(ids, starred) => ok`: stars or unstars a batch of one pool's questions,
- * optimistically. `ids === "all"` flips every cached row, for a clear.
+ * optimistically, and `clearAll` for the pool's "Clear favourites". Null
+ * while no pool is shown: both are then no-ops.
+ *
+ * A question whose request is still in flight is left out of the next one:
+ * two quick toggles would otherwise race, and the server could apply them in
+ * the other order. The second press is simply ignored.
  */
-export function useSetStars(poolId: string) {
+export function useSetStars(poolId: string | null) {
   const qc = useQueryClient();
   const toastError = useErrorToast();
+  const pending = useRef(new Set<string>());
 
-  const patch = (ids: ReadonlySet<string> | "all", starred: boolean) =>
-    qc.setQueriesData<InfiniteData<QuestionPage>>({ queryKey: poolQuestionListsKey(poolId) }, (data) =>
+  const patch = (pool: string, ids: ReadonlySet<string>, starred: boolean) =>
+    qc.setQueriesData<InfiniteData<QuestionPage>>({ queryKey: poolQuestionListsKey(pool) }, (data) =>
       data
         ? {
             ...data,
             pages: data.pages.map((page) => ({
               ...page,
               items: page.items.map((row) =>
-                (ids === "all" || ids.has(row.id)) && row.starred !== starred
-                  ? { ...row, starred }
-                  : row,
+                ids.has(row.id) && row.starred !== starred ? { ...row, starred } : row,
               ),
             })),
           }
@@ -61,13 +66,15 @@ export function useSetStars(poolId: string) {
     );
 
   const setStars = async (questionIds: string[], starred: boolean): Promise<boolean> => {
-    if (questionIds.length === 0) return true;
+    const ids = questionIds.filter((id) => !pending.current.has(id));
+    if (poolId === null || ids.length === 0) return true;
     const lists = poolQuestionListsKey(poolId);
+    for (const id of ids) pending.current.add(id);
     // A page landing mid-flight would overwrite the patch with the old flag.
     await qc.cancelQueries({ queryKey: lists });
     const before = qc.getQueriesData<InfiniteData<QuestionPage>>({ queryKey: lists });
-    patch(new Set(questionIds), starred);
-    const body: QuestionStarBody = { questionIds };
+    patch(poolId, new Set(ids), starred);
+    const body: QuestionStarBody = { questionIds: ids };
     try {
       await api("/app/api/questions/star", {
         method: starred ? "PUT" : "DELETE",
@@ -79,17 +86,28 @@ export function useSetStars(poolId: string) {
       toastError("pool.star.failed")(error);
       return false;
     } finally {
+      for (const id of ids) pending.current.delete(id);
       void qc.invalidateQueries({ queryKey: poolStarredKey(poolId) });
     }
   };
 
-  /** `DELETE /pools/:id/stars`; the count it answers, or null on a failure. */
+  /**
+   * `DELETE /pools/:id/stars`; the count it answers, or null on a failure.
+   * The rows to unstar in the cache are the favourites query's own; when it
+   * does not hold them all (more than one page), the lists are refetched.
+   */
   const clearAll = async (): Promise<number | null> => {
+    if (poolId === null) return null;
+    const favourites = qc.getQueryData<QuestionPage>(poolStarredKey(poolId));
     try {
       const { cleared } = await api<StarsCleared>(`/app/api/pools/${poolId}/stars`, {
         method: "DELETE",
       });
-      patch("all", false);
+      if (favourites && favourites.items.length === favourites.total) {
+        patch(poolId, new Set(favourites.items.map((r) => r.id)), false);
+      } else {
+        void qc.invalidateQueries({ queryKey: poolQuestionListsKey(poolId) });
+      }
       return cleared;
     } catch (error) {
       toastError("pool.star.failed")(error);

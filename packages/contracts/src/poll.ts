@@ -167,7 +167,12 @@ export type PollQuestionPick = z.infer<typeof PollQuestionPick>;
  * linked to that classroom's course; the classroom is loaded through the
  * staff predicate, and an unreachable one is a 404.
  */
-export const PollPoolSearch = QuestionSearch.omit({ categoryId: true, includeDeleted: true }).extend({
+export const PollPoolSearch = QuestionSearch.omit({
+  categoryId: true,
+  includeDeleted: true,
+  // Favourites are a pool's (F-POOL-10); the launcher searches across pools.
+  starred: true,
+}).extend({
   classroomId: z.uuid().optional(),
 });
 export type PollPoolSearch = z.infer<typeof PollPoolSearch>;

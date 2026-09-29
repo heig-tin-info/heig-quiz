@@ -78,7 +78,7 @@ Before a test, browse the pool and star the questions you want: the star in fron
 
 Then, in the evaluation or the template, **Add questions** shows the favourites of the pool on display first, above the whole list (they step aside while you search or filter). **Add favourites** adds every one that can be added and says what it left out: a question never published, one kept after a poll without a correct answer, or one already in the list. The notice then offers **Unstar these**, to start the next test from a clean slate; nothing is unstarred unless you ask.
 
-**Clear favourites**, at the top of the pool, removes all your stars in that pool after a confirmation that counts them. A question moved to another pool keeps its star; a copy starts without one; a deleted question's star comes back only if the question does.
+**Clear favourites**, the crossed-out star beside the question count above the list, removes all your stars in that pool after a confirmation that counts them. A question moved to another pool keeps its star; a copy starts without one; a deleted question's star comes back only if the question does.
 
 ### Question statistics
 

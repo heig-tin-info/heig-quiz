@@ -20,6 +20,7 @@ import { useSearchParam } from "../router";
 import { useScreenCommands } from "../screenCommands";
 import { useShortcuts } from "../shortcuts";
 import {
+  Actions,
   ASIDE_MIN_WIDTH,
   Badge,
   Button,
@@ -110,8 +111,9 @@ import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
  * A question can be STARRED (F-POOL-10): the caller's own favourite, to find
  * it again in the question picker. The star is on every row and card, Space
  * toggles it on the focused one, the bulk bar stars a selection, and "Clear
- * favourites" — beside the primary action, drawn only while the caller has
- * stars in this pool — takes them all off. Starring is a preference, not an
+ * favourites" — an icon on the filter bar's second row, the list's tertiary
+ * action, drawn only while the caller has stars in this pool — takes them
+ * all off. Starring is a preference, not an
  * edit, so a reader has all of it but the bulk bar, which needs tick boxes.
  *
  * The item analysis (ADR-038) is fetched apart from the rows, in one call for
@@ -362,22 +364,15 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
               })
         }
         actions={
-          <>
-            {starredCount > 0 ? (
-              <Button variant="secondary" onClick={() => void clearFavourites()}>
-                <StarOff /> {t("pool.stars.clear")}
-              </Button>
-            ) : null}
-            {readOnly ? (
-              <Badge tone="zinc" icon={Eye}>
-                {t("pool.readOnly")}
-              </Badge>
-            ) : (
-              <Button data-coach="pool.new-question" onClick={() => setCreating(QUESTION_TYPE_IDS[0]!)}>
-                <Plus /> {t("pool.newQuestion")}
-              </Button>
-            )}
-          </>
+          readOnly ? (
+            <Badge tone="zinc" icon={Eye}>
+              {t("pool.readOnly")}
+            </Badge>
+          ) : (
+            <Button data-coach="pool.new-question" onClick={() => setCreating(QUESTION_TYPE_IDS[0]!)}>
+              <Plus /> {t("pool.newQuestion")}
+            </Button>
+          )
         }
       />
 
@@ -405,6 +400,22 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 onView={setView}
                 group={group}
                 onGroup={setGroup}
+                actions={
+                  <Actions
+                    size="sm"
+                    items={
+                      starredCount > 0
+                        ? [
+                            {
+                              label: t("pool.stars.clear"),
+                              icon: StarOff,
+                              onSelect: () => void clearFavourites(),
+                            },
+                          ]
+                        : []
+                    }
+                  />
+                }
               />
 
               {questions.isLoading ? (

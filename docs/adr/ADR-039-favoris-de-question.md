@@ -3,7 +3,7 @@
 ## Status
 
 Accepted (2026-09-29, settled with the product owner; with the table
-`question_stars` (migration `0033_question_stars`), the routes
+`question_stars` (migration `0034_question_stars`), the routes
 `PUT`/`DELETE /questions/star` and `DELETE /pools/:id/stars` of the `pool`
 module, the `starred` flag and filter of `QuestionRow` / `QuestionSearch`,
 and F-POOL-10).

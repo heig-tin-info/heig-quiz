@@ -66,8 +66,8 @@ Space does the same on the focused row, and **Star** in the bottom bar on
 the ticked ones. Nobody else sees your stars — a colleague sharing the pool
 has their own — and a reader may star too. When you fill an evaluation or a
 template, **Add questions** lists the favourites of the shown pool first,
-and **Add favourites** adds them all at once. **Clear favourites**, at the
-top of the pool, takes off every star you put in it.
+and **Add favourites** adds them all at once. **Clear favourites**, the crossed
+star beside the question count, takes off every star you put in it.
 
 ## A pool someone shared with you
 

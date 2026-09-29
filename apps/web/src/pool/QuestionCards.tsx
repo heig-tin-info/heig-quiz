@@ -85,7 +85,7 @@ function QuestionCard({
         </span>
         {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
         <RowStatsButton row={row} statsFor={statsFor} />
-        {row.deletedAt ? null : <StarButton row={row} onToggle={onStar} />}
+        <StarButton row={row} onToggle={onStar} />
         {readOnly ? null : (
           <span onClick={(e) => e.stopPropagation()}>
             <Checkbox

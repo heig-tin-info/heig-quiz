@@ -31,6 +31,10 @@ import { QuestionSearchBar } from "./QuestionSearchBar";
  * shows the whole (short, known) set and the current one at a glance, which
  * is what a habit control is for. The caption before the grouping track is
  * also the `aria-label` of its radiogroup.
+ *
+ * `actions` are the list's own tertiary actions, drawn after the count as
+ * `Actions` draws them — today the one "Clear favourites" (F-POOL-10), which
+ * acts on the list and is too rare to stand beside the page's primary.
  */
 export type ListView = "cards" | "list";
 
@@ -43,6 +47,7 @@ export function FilterBar({
   onView,
   group,
   onGroup,
+  actions,
 }: {
   filters: QuestionFilters;
   onChange: (next: QuestionFilters) => void;
@@ -54,6 +59,7 @@ export function FilterBar({
   onView: (next: ListView) => void;
   group: GroupBy;
   onGroup: (next: GroupBy) => void;
+  actions?: ReactNode;
 }) {
   const t = useT();
 
@@ -94,6 +100,7 @@ export function FilterBar({
               {t(total === 1 ? "pool.results.one" : "pool.results", { n: total })}
             </span>
           )}
+          {actions}
           <Segmented
             name="pool-view"
             size="sm"

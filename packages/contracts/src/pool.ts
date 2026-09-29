@@ -8,7 +8,7 @@
  */
 import { z } from "zod";
 
-import { IntList, StringList, ZodIssueLite, pageOf } from "./common.js";
+import { BoolFlag, IntList, StringList, ZodIssueLite, pageOf } from "./common.js";
 
 /**
  * The question types of the MVP. `QUESTION_TYPE_IDS` in `@quiz/core` is the
@@ -316,15 +316,9 @@ export const QuestionSearch = z.object({
   difficulty: IntList.optional(),
   categoryId: z.uuid().optional(),
   /** Soft-deleted questions are hidden unless this is set (F-QST-11). */
-  includeDeleted: z
-    .union([z.string(), z.boolean()])
-    .transform((v) => v === true || v === "1" || v === "true")
-    .optional(),
+  includeDeleted: BoolFlag.optional(),
   /** Only the questions the caller starred (F-POOL-10); the order and the cursor are unchanged. */
-  starred: z
-    .union([z.string(), z.boolean()])
-    .transform((v) => v === true || v === "1" || v === "true")
-    .optional(),
+  starred: BoolFlag.optional(),
   /**
    * Published version number bounds (`version:>1`, `version:v2` in the search
    * box). A draft-only question has no number and matches neither bound.
