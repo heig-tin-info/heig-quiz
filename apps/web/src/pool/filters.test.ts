@@ -160,6 +160,7 @@ describe("the statistics bounds (F-STAT-03)", () => {
     p,
     since: null,
     time,
+    discrimination: null,
   });
 
   it("lets everything through while no bound is set", () => {

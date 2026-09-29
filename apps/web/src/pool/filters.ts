@@ -215,7 +215,7 @@ export function matchesStats(stats: QuestionStats | undefined, filters: StatsBou
   const time = hasTimeBound(filters);
   if (!rate && !time) return true;
   if (!stats) return filters.withoutStats;
-  if (rate && !inRange(ratePercent(stats.p),filters.rateMin, filters.rateMax)) return false;
+  if (rate && !inRange(ratePercent(stats.p), filters.rateMin, filters.rateMax)) return false;
   if (!time) return true;
   if (!stats.time) return filters.withoutStats;
   return inRange(stats.time.medianS, filters.timeMin, filters.timeMax);
