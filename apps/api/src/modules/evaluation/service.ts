@@ -93,6 +93,8 @@ export {
   type CachedGrade,
   setModifiedAfterRelease,
   flagReleasedEvaluationsOf,
+  claimGradingReady,
+  clearGradingReadyOfItem,
   retargetItemVersion,
 } from "./writes.js";
 export {

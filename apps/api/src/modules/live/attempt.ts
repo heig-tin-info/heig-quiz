@@ -713,7 +713,6 @@ export async function gradeFinishedRetakes(
   await enqueueEvaluationGrading(app, {
     evaluationId: evaluation.id,
     attemptIds: [...attemptIds],
-    retake: true,
   });
 }
 

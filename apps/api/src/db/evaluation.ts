@@ -127,6 +127,15 @@ export const evaluations = pgTable(
      * exercise never scheduled. Never copied, never cleared.
      */
     scheduledAnnouncedAt: timestamp("scheduled_announced_at", { withTimezone: true }),
+    /**
+     * When the staff were told that the automatic grading of this closed
+     * evaluation is finished (`grading_ready`, ADR-030 §c; #286): at most
+     * once per completed grid. Claimed by one conditional UPDATE
+     * (`claimGradingReady`) by whichever grading path — the pass or a runner
+     * job — finds the grid complete first; cleared by a re-grade, which
+     * empties cells, and by a reopening to draft.
+     */
+    gradingReadyAt: timestamp("grading_ready_at", { withTimezone: true }),
     releasedAt: timestamp("released_at", { withTimezone: true }),
     /** Frozen grades at release (ADR-012); written by WP6, never recomputed. */
     releasedGrades: jsonb("released_grades"),
