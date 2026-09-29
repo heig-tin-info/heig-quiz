@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import type { Me } from "@quiz/contracts";
 
@@ -38,11 +38,6 @@ export function PersonAvatar({
   // The side of the enlarged picture, once it has loaded; 0 = no preview.
   const [preview, setPreview] = useState(0);
   const coarse = useCoarsePointer();
-  // A cached picture may be complete before React listens for `load`, so the
-  // ref measures too.
-  const measure = useCallback((img: HTMLImageElement | null) => {
-    if (img?.complete && img.naturalWidth > 0) setPreview(previewSize(img));
-  }, []);
   const picture = src && !failed;
   return (
     <Tip
@@ -62,7 +57,6 @@ export function PersonAvatar({
     >
       {picture ? (
         <img
-          ref={measure}
           src={src}
           alt={label ?? ""}
           referrerPolicy="no-referrer"

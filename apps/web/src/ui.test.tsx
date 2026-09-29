@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "./api";
 import { useErrorToast } from "./notify";
 import { renderWithProviders } from "./test/render";
+import { PersonPill } from "./ui/people";
 import {
   Alert,
   Button,
@@ -1187,15 +1188,64 @@ describe("PersonAvatar", () => {
     vi.useRealTimers();
   });
 
-  it("stays shut while the disc's own panel is open", () => {
+  it("has no preview when the picture is no larger than the disc", () => {
     vi.useFakeTimers();
     const { container } = renderWithProviders(
-      <button type="button" aria-expanded="true">
-        <PersonAvatar name={["Ada", "Lovelace"]} src="/ada.png" label="Ada Lovelace" />
-      </button>,
+      <PersonAvatar name={["Ada", "Lovelace"]} src="/ada.png" className="size-24" />,
+    );
+    const img = container.querySelector("img")!;
+    Object.defineProperty(img, "offsetWidth", { value: 96, configurable: true });
+    load(img, 96);
+    hover(container.firstElementChild!);
+    expect(document.body.querySelector(".tip-bubble")).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("puts no picture in the bubble on a touch screen", () => {
+    vi.useFakeTimers();
+    const coarse = vi.spyOn(window, "matchMedia").mockImplementation(
+      (query: string) =>
+        ({
+          matches: query === "(pointer: coarse)",
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList,
+    );
+    const { container } = renderWithProviders(
+      <PersonAvatar name={["Ada", "Lovelace"]} src="/ada.png" label="Ada Lovelace" />,
     );
     load(container.querySelector("img")!, 256);
-    hover(container.querySelector("button > span")!);
+    hover(container.firstElementChild!);
+    expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
+    expect(enlarged()).toBeNull();
+    coarse.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it("stays shut while a PersonPill's card is open", () => {
+    vi.useFakeTimers();
+    renderWithProviders(
+      <PersonPill
+        person={{
+          userId: "u1",
+          givenName: "Ada",
+          familyName: "Lovelace",
+          email: "ada@heig-vd.ch",
+          avatarUrl: "/ada.png",
+        }}
+      />,
+    );
+    const disc = screen.getByRole("button", { name: "Ada Lovelace" });
+    load(disc.querySelector("img")!, 256);
+    const tip = disc.firstElementChild!;
+    hover(tip);
+    expect(enlarged()).not.toBeNull();
+    fireEvent.click(disc.querySelector("img")!);
+    expect(screen.getByRole("dialog", { name: "Ada Lovelace" })).toBeInTheDocument();
+    expect(document.body.querySelector(".tip-bubble")).toBeNull();
+    fireEvent.mouseLeave(tip);
+    hover(tip);
     expect(document.body.querySelector(".tip-bubble")).toBeNull();
     vi.useRealTimers();
   });

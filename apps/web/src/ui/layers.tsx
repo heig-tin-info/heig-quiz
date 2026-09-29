@@ -299,10 +299,12 @@ export function useScrollLock() {
  * come": the wrapper is there already, so the child is not remounted when
  * it arrives.
  * The bubble never takes the focus (portal, `pointer-events-none`, no
- * tabindex) and Escape dismisses it (WCAG 1.4.13). It stays shut while the
- * control it sits in holds an open panel (`aria-expanded="true"` on an
- * ancestor, a `Popover` or `Menu` trigger): the panel says more, and the two
- * would overlap.
+ * tabindex) and Escape dismisses it (WCAG 1.4.13). A Tip INSIDE a popup
+ * trigger whose panel is open (an ancestor with `aria-haspopup` and
+ * `aria-expanded="true"`, a `Popover` or `Menu` trigger) stays shut: the
+ * panel says more, and the two would overlap. A plain disclosure row does not
+ * silence it, and neither does a Tip wrapped AROUND its trigger (`IconButton`):
+ * that gap is accepted, the click that opens the panel already dismisses it.
  */
 export function Tip({
   label,
@@ -353,7 +355,7 @@ export function Tip({
   const arm = (el: HTMLElement) => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      if ((!label && !media) || el.closest('[aria-expanded="true"]')) return;
+      if ((!label && !media) || el.closest('[aria-haspopup][aria-expanded="true"]')) return;
       const r = el.getBoundingClientRect();
       setTip({
         x: Math.min(Math.max(r.left + r.width / 2, 16), window.innerWidth - 16),

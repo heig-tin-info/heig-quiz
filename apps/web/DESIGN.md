@@ -225,10 +225,9 @@ Inside the palette the arrows move the selection, Home and End jump, Enter
 runs and Escape closes, all without the focus ever leaving the search input.
 
 `Tip` never takes the focus (portal, `pointer-events-none`, `aria-hidden`)
-and Escape dismisses it. It stays shut while the control it sits in has its
-own panel open (`aria-expanded="true"`, a `Menu` or `Popover` trigger), and a
-bubble too tall for the room above its anchor (a picture, `media`) opens
-below instead.
+and Escape dismisses it. A `Tip` inside a popup trigger whose panel is open
+(a `Menu` or `Popover` trigger) stays shut, and a bubble too tall for the room
+above its anchor (a picture, `media`) opens below instead.
 
 A label cut by an ellipsis carries a `Tip` with the whole of it — the
 sidebar's classroom names first, which outgrow 240 px routinely. The `Tip`
@@ -376,19 +375,11 @@ live in `ui/state.ts`, each written once.
   The signed-in user's own disc (`Avatar`) takes the `accent` tone. An
   avatar standing alone — the row of a course's staff — carries the full
   name as its accessible name and as a `Tip`, never a native `title`; one
-  with the name written beside it (a roster row) carries neither. Every
-  avatar whose picture LOADED — the signed-in user's own included — shows it
-  larger on hover, in that same `Tip` (the 120 ms delay, the same flip and
-  clamp): one bubble with the picture on top and the name under it when there
-  is a label, never a second bubble. The picture is at most 176 px and never
-  past its natural size (an upload is 256 px; an IdP picture may be smaller,
-  and one no larger than the disc gets no preview). Initials and a failed
-  picture get none, a touch screen gets none, and the copy is decorative
-  (`alt=""`, the bubble aria-hidden): the name stays the accessible name. A
-  disc that opens a `Popover` (`PersonPill`) closes it on the click and keeps
-  it shut while the card is open — a `Tip` never shows over the panel its own
-  control opened. It exists because three places drew "a picture, or
-  initials", and two of them had no fallback.
+  with the name written beside it (a roster row) carries neither. A picture
+  that loaded shows larger on hover — at most 176 px, never upscaled — with
+  the name in the same bubble; initials never do, nor does a touch screen. It
+  exists because three places drew "a picture, or initials", and two of them
+  had no fallback.
 - PersonPill / PeopleStack: a group of people as a row of 24 px discs — the
   staff of a course, the teachers of a classroom. A disc carries the name in a
   `Tip` and nothing else, because a name is all a reader wants while scanning;
