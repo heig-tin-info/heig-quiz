@@ -52,7 +52,7 @@ import {
   joinedItems,
   negativeMarkingEnabled,
   retargetItemVersion,
-  clearGradingReadyOfItem,
+  clearGradingReady,
   staffAttemptIds,
   type EvaluationRecord,
   type JoinedItem,
@@ -880,7 +880,7 @@ export async function batchValidate(
  */
 export async function regradeItem(
   db: Db,
-  item: { itemId: string; questionId: string },
+  item: { evaluationId: string; itemId: string; questionId: string },
   input: { note: string; toVersionNumber?: number | undefined },
 ): Promise<string | null> {
   return db.transaction(async (tx) => {
@@ -906,7 +906,7 @@ export async function regradeItem(
       .where(and(eq(gradings.itemId, item.itemId), ne(gradings.state, "superseded")));
     // The item's cells are empty again: the pass that refills them completes a
     // new grid, and the staff hear of it (`ready.ts`, #286).
-    await clearGradingReadyOfItem(tx, item.itemId);
+    await clearGradingReady(tx, item.evaluationId);
     return note;
   });
 }

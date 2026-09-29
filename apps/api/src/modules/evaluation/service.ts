@@ -94,7 +94,7 @@ export {
   setModifiedAfterRelease,
   flagReleasedEvaluationsOf,
   claimGradingReady,
-  clearGradingReadyOfItem,
+  clearGradingReady,
   retargetItemVersion,
 } from "./writes.js";
 export {

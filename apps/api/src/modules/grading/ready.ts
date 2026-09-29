@@ -46,20 +46,26 @@ export async function announceGradingReady(
 ): Promise<void> {
   if (evaluation.mode === "poll") return;
   try {
-    const progress = await progressOf(app.db, evaluation.id);
+    // The row NOW, not the one the job loaded when it started. Told already,
+    // or not closed yet: nothing to read, and the grid scan below — one per
+    // runner job — is skipped.
+    const current = await byId(app.db, evaluation.id);
+    if (!current || current.gradingReadyAt !== null) return;
+    if (current.state === "running" || current.state === "paused") return;
+    const progress = await progressOf(app.db, current.id);
     const proposed = progress.pending.runner + progress.pending.llm + progress.failed;
     if (progress.done + proposed < progress.total || proposed === 0) return;
-    if (!(await claimGradingReady(app.db, evaluation.id, app.clock.now()))) return;
-    // The title NOW, not the row the job loaded when it started.
-    const current = (await byId(app.db, evaluation.id)) ?? evaluation;
-    const staff = await staffOf(app.db, evaluation);
+    // At most once: claimed BEFORE the send, so a crash between the two
+    // drops the notice rather than doubling it (best-effort, ADR-030).
+    if (!(await claimGradingReady(app.db, current.id, app.clock.now()))) return;
+    const staff = await staffOf(app.db, current);
     await notifyMany(
       app.db,
       staff.map((userId) => ({
         userId,
         payload: {
           kind: "grading_ready",
-          evaluationId: evaluation.id,
+          evaluationId: current.id,
           evaluationTitle: current.title,
           count: proposed,
         },

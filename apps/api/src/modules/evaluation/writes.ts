@@ -4,7 +4,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import {
   EvaluationSettings,
@@ -463,9 +463,15 @@ export async function flagReleasedEvaluationsOf(
 }
 
 /**
+ * The states in which an evaluation's grading can be finished: after its
+ * close. Also the states the migration `0032_grading_ready_claim` backfills.
+ */
+const GRADED_STATES = ["closed", "grading", "released"] as const;
+
+/**
  * The claim of `grading_ready` (#286): true for exactly one caller per
- * completed grid. Refused while the evaluation runs or is paused — a retake
- * graded alone mid-run (ADR-025) completes nothing — and read by the UPDATE
+ * completed grid. Refused before the close — a retake graded alone mid-run
+ * (ADR-025) completes nothing — and read by the UPDATE
  * itself, so the state and the marker are those of the row NOW, not those
  * of a record the caller loaded when its job started. A closed evaluation
  * never runs again (`closed → draft` needs no attempt, and clears the
@@ -479,7 +485,7 @@ export async function claimGradingReady(db: DbOrTx, id: string, now: Date): Prom
       and(
         eq(evaluations.id, id),
         isNull(evaluations.gradingReadyAt),
-        notInArray(evaluations.state, ["running", "paused"]),
+        inArray(evaluations.state, [...GRADED_STATES]),
       ),
     )
     .returning({ id: evaluations.id });
@@ -487,23 +493,12 @@ export async function claimGradingReady(db: DbOrTx, id: string, now: Date): Prom
 }
 
 /**
- * Gives the evaluation owning `itemId` its `grading_ready` again: a re-grade
- * empties the item's cells, and the pass that fills them completes a new
- * grid. Called in the re-grade's own transaction.
+ * Gives the evaluation its `grading_ready` again: a re-grade empties an
+ * item's cells, and the pass that fills them completes a new grid. Called in
+ * the re-grade's own transaction.
  */
-export async function clearGradingReadyOfItem(db: DbOrTx, itemId: string): Promise<void> {
-  await db
-    .update(evaluations)
-    .set({ gradingReadyAt: null })
-    .where(
-      inArray(
-        evaluations.id,
-        db
-          .select({ id: evaluationItems.evaluationId })
-          .from(evaluationItems)
-          .where(eq(evaluationItems.id, itemId)),
-      ),
-    );
+export async function clearGradingReady(db: DbOrTx, id: string): Promise<void> {
+  await db.update(evaluations).set({ gradingReadyAt: null }).where(eq(evaluations.id, id));
 }
 
 /**

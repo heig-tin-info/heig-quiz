@@ -655,6 +655,13 @@ Step 5 (`grading_ready`, `pool_question_added`) settled:
   pass run again with nothing new finds the claim taken and tells nobody; a
   re-grade empties its item's cells and gives the claim back, so its pass
   tells again if proposals remain; a reopening to `draft` clears it too.
+  The notice is at most once, not exactly once: the claim is taken before
+  the send, so a crash between the two drops it — best-effort by design;
+  claiming after the send would reopen the duplicate. The migration that
+  added the marker backfilled it on every evaluation already `closed`,
+  `grading` or `released`, accepting to lose the notice of one whose grid
+  was still incomplete at the deploy (runner jobs in flight, or a legacy
+  `in_progress` attempt left open after the close, #95).
   Nothing is sent while the evaluation is `running` or `paused` — the claim
   reads the state of the row at the moment of telling, not the row the job
   loaded, since a runner job picked up during the run may complete the grid

@@ -152,7 +152,11 @@ describe("grading_ready", () => {
     const { app, evaluation, items } = await closedEvaluation(true);
     await runEvaluationGrading(app, { evaluationId: evaluation.id });
     const item = items[0]!;
-    await regradeItem(db, { itemId: item.item.id, questionId: item.question.id }, { note: "typo" });
+    await regradeItem(
+      db,
+      { evaluationId: evaluation.id, itemId: item.item.id, questionId: item.question.id },
+      { note: "typo" },
+    );
     await runEvaluationGrading(app, {
       evaluationId: evaluation.id,
       itemIds: [item.item.id],
@@ -179,6 +183,19 @@ describe("grading_ready", () => {
     } finally {
       restore();
     }
+  });
+
+  it("gives the claim back on a reopening to draft, so a new close tells again", async () => {
+    const { app, evaluation } = await closedEvaluation(true);
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+    expect((await reload(db, evaluation.id)).gradingReadyAt).not.toBeNull();
+
+    const draft = await applyState(db, await reload(db, evaluation.id), "draft", app.clock.now());
+    expect(draft.gradingReadyAt).toBeNull();
+    const running = await applyState(db, draft, "running", app.clock.now());
+    await applyState(db, running, "closed", app.clock.now());
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+    expect(await readyRows(evaluation.id)).toHaveLength(4);
   });
 
   it("says nothing while the evaluation runs (a retake graded alone)", async () => {
