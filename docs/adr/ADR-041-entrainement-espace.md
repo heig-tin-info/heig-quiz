@@ -10,7 +10,8 @@ that comment did not decide; the implementation details of §5 are this
 ADR's. §10 records the second round of decisions (issue #317, last
 comment, 2026-09-29): the product owner accepted every proposal this ADR
 had listed as "to be confirmed", one of them changed, and settled question
-28 of docs/spec/06. Slice 1 of #317 implements the pure rules in
+28 of docs/spec/06; §13 records the third round (the review of slice 2).
+Slice 1 of #317 implements the pure rules in
 `@quiz/domain`, with the `ts-fsrs` dependency; slice 2 the `drill` module.
 Amends F-DRILL-01 to F-DRILL-04 and adds F-DRILL-06 (docs/spec/02); amends
 N-DATA-02, N-DATA-03 and N-DATA-07 (docs/spec/03), the question-type
@@ -248,6 +249,47 @@ rating or the recall rate, and there is no extra practice (06, question
 - **The hooks go one way.** `results` (`onResultsReleased`) and `live`
   (`onAttemptsEnded`) call their listeners after the commit; the `drill`
   module registers them and neither module imports it.
+
+### 13. Third round (product owner, 2026-09-29, review of slice 2)
+
+Recorded in the last comment of issue #317; all accepted as recommended.
+
+1. **Backfill on enabling.** When a teacher enables the drill for a
+   classroom — the first time or again — cards are created for its past
+   evaluations that allow the drill: the exams whose results are released,
+   the exercises for every student who handed one in. Same path as at a
+   release or a hand-in (`backfillClassroom`): the same eligibility, the
+   first meeting wins, nothing twice.
+2. **An exercise's key.** An exercise's card is served only once the
+   exercise's own feedback policy shows the key to that student — the rule
+   of the feedback page (`results.keyShownTo`) on the student's latest
+   attempt: at the hand-in under immediate feedback with the key, at the
+   release under `on_release`, never when the key is not shown. The drill
+   never shows a key earlier than the exercise would. The card exists from
+   the hand-in; the serving rule, not a due date, holds it back, so the
+   session, the serve and the answer all refuse it alike.
+3. **A withdrawn release.** An exam's cards are served only while its
+   results are released. Withdrawn, they are suspended — not served, their
+   history kept; the next release serves them again and creates only what
+   is missing.
+4. **The version served.** A review serves the latest published version of
+   the question, so a corrected key reaches the drill. The consequence: an
+   edit made for a future exam reaches the drill too, and a question reused
+   in a future exam is practised, key included, by the students who met it.
+   "Allow drill" is what controls that risk. **The note next to the "Allow
+   drill" switch says so** (slice 3): students see the key after each
+   review, and the latest version of the question is served.
+5. **The opt-out is visible.** The teacher sees that, and when, a student
+   opted out (slice 4's view, from `enrollments.drill_opted_out_at`).
+   **The opt-out confirmation tells the student so** (slice 3), besides
+   that their past activity stays visible (§10, (k)).
+6. **Unanswered questions become cards.** Eligibility is a property of the
+   question (§12), so a question the student left blank becomes a card like
+   any other.
+
+UI copy obligations of slice 3, together: the "Allow drill" note (the key
+is shown after each review; the latest version is served) and the opt-out
+confirmation (past activity stays visible; the teacher sees the opt-out).
 
 ## Consequences
 
