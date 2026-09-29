@@ -571,7 +571,10 @@ function BodePlot({
     const fMax = fs.length > 0 ? Math.max(...fs) : 10;
     const top = domainOf([series.magDb, ...(expected ? [expected.magDb] : [])]);
     const magnitude: Domain = { min: Math.max(top.min, top.max - MAG_SPAN_DB), max: top.max };
-    const phase = domainOf([series.phaseDeg, ...(expected ? [expected.phaseDeg] : [])]);
+    // The phase of a point below the magnitude window is numerical noise that
+    // `cph` may have unwrapped by many turns: it must not stretch the axis.
+    const audible = (d: AcSeries): number[] => d.phaseDeg.filter((_, i) => (d.magDb[i] ?? -Infinity) >= magnitude.min);
+    const phase = domainOf([audible(series), ...(expected ? [audible(expected)] : [])]);
     return { fMin, fMax: fMax > fMin ? fMax : fMin * 10, magnitude, phase };
   }, [expected, series]);
 

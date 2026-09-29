@@ -122,6 +122,16 @@ describe("Plot, Bode", () => {
     for (const tick of ["10", "100", "1k", "10k"]) expect(screen.getAllByText(tick)).toHaveLength(1);
   });
 
+  it("scales the phase on the points the magnitude panel shows, not on the noise under it", () => {
+    const noisy = bode();
+    noisy.f.push(1e5, 1e6);
+    noisy.magDb.push(-250, -300);
+    noisy.phaseDeg.push(-3600, -7200);
+    render(<Plot series={noisy} />);
+    expect(screen.queryByText("-3600")).not.toBeInTheDocument();
+    expect(screen.queryByText("-720")).not.toBeInTheDocument();
+  });
+
   it("ignores a transient offered as the reference of a sweep", () => {
     const { container } = render(<Plot series={bode()} expected={sine()} />);
     expect(paths(container)).toEqual(["vout", "vout-phase"]);
