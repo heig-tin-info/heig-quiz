@@ -144,6 +144,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
           title: body.title,
           mode: body.mode,
           preset: body.preset,
+          allowDrill: body.allowDrill,
           createdBy: req.user!.id,
         });
         await trace(req, "evaluation.create", "evaluation", row.id, {

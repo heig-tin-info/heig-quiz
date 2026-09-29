@@ -217,6 +217,17 @@ export function safeExamBrowserOn(
   return mode === "exam" && safeExamBrowser === true;
 }
 
+/**
+ * Whether the questions of this evaluation become drill cards (ADR-041 §2):
+ * the teacher's choice when there is one, else ON for an exercise and OFF
+ * for an exam; never on a poll, whose questions are opinions or warm-ups
+ * (ADR-041 §10).
+ */
+export function drillAllowedOn(mode: EvaluationModeName, allowDrill: boolean | undefined): boolean {
+  if (mode === "poll") return false;
+  return allowDrill ?? mode === "exercise";
+}
+
 /** Whether this evaluation scores its choice questions negatively. */
 export function negativeMarkingOn(
   mode: EvaluationModeName,

@@ -26,6 +26,7 @@ import {
   retakesOn,
   round2,
   safeExamBrowserOn,
+  drillAllowedOn,
 } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
@@ -192,6 +193,11 @@ export function gradeDefaults(row: EvaluationRecord): Readonly<Record<string, un
  */
 export function negativeMarkingEnabled(row: EvaluationRecord): boolean {
   return negativeMarkingOn(row.mode, negativeMarkingOf(settingsOf(row)));
+}
+
+/** ADR-041 §2: its questions become drill cards (the classroom's switch aside). */
+export function drillAllowed(row: EvaluationRecord): boolean {
+  return drillAllowedOn(row.mode, settingsOf(row).allowDrill);
 }
 
 /** ADR-027: sat in Safe Exam Browser only. An exam's switch; inert on any other mode. */

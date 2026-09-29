@@ -38,6 +38,7 @@ import {
   type EvaluationRecord,
   type ItemRecord,
   type DbOrTx,
+  EvaluationError,
   Locked,
   RunningLocked,
   RetakesNotAllowed,
@@ -79,6 +80,8 @@ export async function createEvaluation(
     title: string;
     mode: EvaluationMode;
     preset?: "exam" | "exercise" | undefined;
+    /** ADR-041 §2: the teacher's choice at creation; absent is the mode's default. */
+    allowDrill?: boolean | undefined;
     createdBy: string;
   },
 ): Promise<EvaluationRecord> {
@@ -97,7 +100,8 @@ export async function createEvaluation(
     title: input.title,
     mode: input.mode,
     state: "draft",
-    settings: preset.settings,
+    settings:
+      input.allowDrill === undefined ? preset.settings : { ...preset.settings, allowDrill: input.allowDrill },
     gradingScale: defaultGradingScale(),
     feedbackPolicy: preset.feedbackPolicy,
     mcqPolicy,
@@ -345,6 +349,38 @@ export async function setPollSettings(
     .update(evaluations)
     .set({ ...values, updatedAt: now })
     .where(eq(evaluations.id, id));
+}
+
+/** `409 allow_drill_locked`: "Allow drill" is editable until the release, and never on a poll. */
+export class AllowDrillLocked extends EvaluationError {
+  constructor(reason: "released" | "poll") {
+    super("allow_drill_locked", 409, `Allow drill cannot change on this evaluation (${reason})`, { reason });
+  }
+}
+
+/**
+ * `drill`'s switch on an evaluation (ADR-041 §10, item 3): `settings.allowDrill`,
+ * writable whatever the configuration lock says — attempts and a run do not
+ * freeze it — until the release, whose cards it decides. The one write of
+ * the settings outside {@link patchEvaluation}. A poll never has it.
+ */
+export async function setAllowDrill(
+  db: DbOrTx,
+  row: EvaluationRecord,
+  allowDrill: boolean,
+  now: Date,
+): Promise<EvaluationRecord> {
+  if (row.mode === "poll") throw new AllowDrillLocked("poll");
+  const [updated] = await db
+    .update(evaluations)
+    .set({
+      settings: sql`${evaluations.settings} || jsonb_build_object('allowDrill', ${allowDrill}::boolean)`,
+      updatedAt: now,
+    })
+    .where(and(eq(evaluations.id, row.id), sql`${evaluations.state} <> 'released'`))
+    .returning();
+  if (!updated) throw new AllowDrillLocked("released");
+  return updated;
 }
 
 /** `results.releaseResults`: the frozen grades (ADR-012) and the state they imply. */

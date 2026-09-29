@@ -171,6 +171,16 @@ export const EvaluationSettings = z.object({
    */
   safeExamBrowser: z.boolean().optional(),
   /**
+   * ADR-041 §2 (#317): the questions of this evaluation become drill cards —
+   * at the release of an exam, at the hand-in of an exercise — when its
+   * classroom has the drill on. Absent means the mode's default, ON for an
+   * exercise and OFF for an exam, never on a poll: read it through
+   * `drillAllowedOn` (`@quiz/domain`), never raw. Unlike the rest of the
+   * settings it stays editable until the release (`PUT
+   * /evaluations/:id/drill`).
+   */
+  allowDrill: z.boolean().optional(),
+  /**
    * Only on a `poll` evaluation (`./poll.ts`); absent everywhere else. Whether
    * the poll is anonymous is NOT stored here: it is the absence of a
    * classroom (`PollAudience`, ADR-014 addendum 2026-09-27). A row written
@@ -361,6 +371,8 @@ export const EvaluationCreate = z.object({
   mode: EvaluationMode.default("exam"),
   /** Named preset of settings; `exam` and `exercise` for now. */
   preset: z.enum(["exam", "exercise"]).optional(),
+  /** ADR-041 §2: the teacher's choice at creation; absent is the mode's default. */
+  allowDrill: z.boolean().optional(),
 });
 export type EvaluationCreate = z.infer<typeof EvaluationCreate>;
 
@@ -391,6 +403,7 @@ export const EvaluationSettingsPatch = z.object({
   negativeMarking: z.boolean().optional(),
   categorizePolicy: CategorizePolicy.optional(),
   safeExamBrowser: z.boolean().optional(),
+  allowDrill: z.boolean().optional(),
   poll: EvaluationSettings.shape.poll,
 });
 export type EvaluationSettingsPatch = z.infer<typeof EvaluationSettingsPatch>;
