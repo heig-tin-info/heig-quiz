@@ -11,6 +11,8 @@ spent on a question comes in a second step, announced in §8.
 
 Amended by ADR-039: the time spent (§8) and the "not reached" rule (§2).
 Extended by ADR-040: the discrimination index, over the same counted answers.
+Extended by ADR-041: the distractors of a multiple-choice question, over the
+same counted answers.
 
 ## Context
 
