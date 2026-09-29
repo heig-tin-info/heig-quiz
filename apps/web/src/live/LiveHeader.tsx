@@ -155,6 +155,7 @@ export function LiveHeader({
           ) : null}
           <IconButton
             label={fullscreen ? t("live.exitFullscreen") : t("live.fullscreen")}
+            shortcut="F"
             active={fullscreen}
             onClick={onToggleFullscreen}
           >

@@ -81,6 +81,23 @@ describe("PollProjection", () => {
     expect(screen.queryByText("Correct answer")).toBeNull();
   });
 
+  it("names the keys of the theme and the full screen, and answers T", async () => {
+    mockFetch({ [`GET ${POLL}`]: ok(view()) });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    const theme = await screen.findByRole("button", { name: "Light theme" });
+    expect(theme).toHaveAttribute("aria-keyshortcuts", "T");
+    expect(screen.getByRole("button", { name: "Full screen" })).toHaveAttribute(
+      "aria-keyshortcuts",
+      "F",
+    );
+    await userEvent.hover(theme);
+    expect(await screen.findByText("Light theme (T)")).toBeInTheDocument();
+
+    await userEvent.keyboard("t");
+    expect(await screen.findByRole("button", { name: "Dark theme" })).toBeVisible();
+    expect(document.documentElement).not.toHaveClass("dark");
+  });
+
   it("writes where the poll is held without a second request", async () => {
     const { calls } = mockFetch({ [`GET ${POLL}`]: ok(view()) });
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
