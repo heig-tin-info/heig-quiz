@@ -103,7 +103,7 @@ export type DrillReviewResult = z.infer<typeof DrillReviewResult>;
 
 // --- Teacher ---------------------------------------------------------------
 
-/** `GET|PUT /classrooms/:id/drill`. */
+/** The answer of `PUT /classrooms/:id/drill`. */
 export const DrillClassroomSettings = z.object({
   enabled: z.boolean(),
   enabledAt: z.iso.datetime().nullable(),
@@ -113,7 +113,10 @@ export type DrillClassroomSettings = z.infer<typeof DrillClassroomSettings>;
 export const DrillClassroomBody = z.object({ enabled: z.boolean() });
 export type DrillClassroomBody = z.infer<typeof DrillClassroomBody>;
 
-/** `PUT /evaluations/:id/drill`: editable until the release (ADR-041 §10, item 3). */
+/**
+ * `PUT /evaluations/:id/drill`, the one writer of `settings.allowDrill`:
+ * editable until the release (ADR-041 §10, item 3).
+ */
 export const EvaluationDrillBody = z.object({ allowDrill: z.boolean() });
 export type EvaluationDrillBody = z.infer<typeof EvaluationDrillBody>;
 
@@ -127,53 +130,3 @@ export type EvaluationDrill = z.infer<typeof EvaluationDrill>;
 /** `DELETE /evaluations/:id/drill/cards`: "Remove these questions from the drill". */
 export const DrillCardsRemoved = z.object({ removed: z.number().int() });
 export type DrillCardsRemoved = z.infer<typeof DrillCardsRemoved>;
-
-/**
- * One time window of a student's activity. The recall rate of ADR-041 §10
- * (item 8) is `recalled / repeated`: among the reviews of a question the
- * student had already drilled, the share not rated Again.
- */
-export const DrillActivityWindow = z.object({
-  reviews: z.number().int(),
-  /** Days with at least one review (Zurich calendar). */
-  sessions: z.number().int(),
-  /** Distinct questions reviewed. */
-  questionsSeen: z.number().int(),
-  repeated: z.number().int(),
-  recalled: z.number().int(),
-});
-export type DrillActivityWindow = z.infer<typeof DrillActivityWindow>;
-
-export const DrillStudentActivity = z.object({
-  userId: z.uuid(),
-  nom: z.string(),
-  prenom: z.string(),
-  /** Activity after this instant is not shown (06, question 28 (k)). */
-  optedOutAt: z.iso.datetime().nullable(),
-  cards: z.number().int(),
-  last7Days: DrillActivityWindow,
-  last30Days: DrillActivityWindow,
-  all: DrillActivityWindow,
-});
-export type DrillStudentActivity = z.infer<typeof DrillStudentActivity>;
-
-/** `GET /classrooms/:id/drill/activity`: one row per student of the roster. */
-export const DrillActivity = z.object({ students: z.array(DrillStudentActivity) });
-export type DrillActivity = z.infer<typeof DrillActivity>;
-
-/**
- * `GET /classrooms/:id/drill/mastery`: per tag, the mean retrievability
- * (FSRS) of the cards already reviewed, now (ADR-041 §10, item 10).
- */
-export const DrillTagMastery = z.object({
-  tag: z.string(),
-  students: z.number().int(),
-  cards: z.number().int(),
-  reviewedCards: z.number().int(),
-  /** 0 to 1; null when no card of the tag was reviewed yet. */
-  meanRetrievability: z.number().nullable(),
-});
-export type DrillTagMastery = z.infer<typeof DrillTagMastery>;
-
-export const DrillMastery = z.object({ tags: z.array(DrillTagMastery) });
-export type DrillMastery = z.infer<typeof DrillMastery>;

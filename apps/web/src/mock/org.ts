@@ -448,6 +448,7 @@ const classroomDetail = (r: Room): ClassroomDetail => {
     periodStart: r.periodStart,
     periodEnd: r.periodEnd,
     archivedAt: r.archivedAt,
+    drillEnabled: false,
     course: { id: c.id, name: c.name, code: c.code },
     roster: r.roster,
   };

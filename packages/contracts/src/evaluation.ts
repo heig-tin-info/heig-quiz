@@ -175,9 +175,10 @@ export const EvaluationSettings = z.object({
    * at the release of an exam, at the hand-in of an exercise — when its
    * classroom has the drill on. Absent means the mode's default, ON for an
    * exercise and OFF for an exam, never on a poll: read it through
-   * `drillAllowedOn` (`@quiz/domain`), never raw. Unlike the rest of the
-   * settings it stays editable until the release (`PUT
-   * /evaluations/:id/drill`).
+   * `drillAllowedOn` (`@quiz/domain`), never raw — `Evaluation.allowDrill`
+   * carries the effective value. Unlike the rest of the settings it is NOT in
+   * {@link EvaluationSettingsPatch}: its one writer is `PUT
+   * /evaluations/:id/drill`, editable until the release.
    */
   allowDrill: z.boolean().optional(),
   /**
@@ -237,6 +238,8 @@ export const Evaluation = z.object({
   mode: EvaluationMode,
   state: EvaluationState,
   settings: EvaluationSettings,
+  /** ADR-041 §2: the effective "Allow drill" (`settings.allowDrill` or the mode's default). */
+  allowDrill: z.boolean(),
   gradingScale: GradingScale,
   feedbackPolicy: FeedbackPolicy,
   /** Seeded at creation from the creator's preference; an `inherit` question takes it. */
@@ -403,7 +406,6 @@ export const EvaluationSettingsPatch = z.object({
   negativeMarking: z.boolean().optional(),
   categorizePolicy: CategorizePolicy.optional(),
   safeExamBrowser: z.boolean().optional(),
-  allowDrill: z.boolean().optional(),
   poll: EvaluationSettings.shape.poll,
 });
 export type EvaluationSettingsPatch = z.infer<typeof EvaluationSettingsPatch>;
@@ -420,9 +422,13 @@ const FeedbackPolicyPatch = z.object({
 type FeedbackPolicyPatch = z.infer<typeof FeedbackPolicyPatch>;
 
 // A field added to the full body and forgotten here would be silently
-// stripped from every patch: the two key sets must stay equal, both ways.
+// stripped from every patch: the two key sets must stay equal, both ways —
+// save `allowDrill`, which has a writer of its own (ADR-041 §10, item 3).
 type SameKeys<A, B> = [keyof A] extends [keyof B] ? ([keyof B] extends [keyof A] ? true : false) : false;
-const _settingsPatchKeys: SameKeys<EvaluationSettings, Required<EvaluationSettingsPatch>> = true;
+const _settingsPatchKeys: SameKeys<
+  Omit<EvaluationSettings, "allowDrill">,
+  Required<EvaluationSettingsPatch>
+> = true;
 const _feedbackPatchKeys: SameKeys<FeedbackPolicy, Required<FeedbackPolicyPatch>> = true;
 void [_settingsPatchKeys, _feedbackPatchKeys];
 

@@ -9,15 +9,18 @@
  *   - every instant is the server's (invariant 5): the serve, each report of
  *     the tab's visibility, the answer. The active time is summed here from
  *     those instants, each interval capped by `DWELL_IDLE_CAP_MS` (ADR-039);
- *   - a card is served only while it is ACTIVE ({@link activeCards}): its
+ *   - a card is reached only while it is ACTIVE ({@link activeCards}): its
  *     classroom has the drill on and is not archived (06, question 28 (g)),
  *     the student still holds a student seat there and has not opted out,
- *     and the question is not deleted. Anything else is the 404 of a
- *     missing card (invariant 6).
+ *     and the question is not deleted; and it is served or answered only
+ *     when TODAY's session would hand it out ({@link servableToday}) and its
+ *     question can still be drilled. Anything else is the 404 of a missing
+ *     card (invariant 6) — which is also what closes answering a card twice
+ *     in a day and the "extra practice" of 06, question 28 (b).
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 
 import type { DrillDeviceClass, DrillReviewResult, DrillServed, DrillSession } from "@quiz/contracts";
 import {
@@ -27,9 +30,8 @@ import {
   DRILL_NEW_PER_DAY,
   DRILL_SESSION_BUDGET_MS,
   drillRating,
-  drillReferenceMs,
+  drillReferenceOf,
   DWELL_IDLE_CAP_MS,
-  isDrillEligible,
 } from "@quiz/domain";
 import {
   drillRetrievability,
@@ -49,17 +51,17 @@ import {
   questionTags,
   questions,
 } from "../../db/schema.js";
-import { byId, gradeDefaults } from "../evaluation/service.js";
+import { byId, gradeDefaults, type DbOrTx } from "../evaluation/service.js";
 import { DomainError } from "../http.js";
-import { isShuffleable, studentSolutionView, studentView } from "../live/studentView.js";
-import { loadConfig, typeOf } from "../pool/config.js";
-import { currentVersions, keyHashOf, NO_RUNNER } from "./lifecycle.js";
+import { drawSeed, isShuffleable, studentSolutionView, studentView } from "../live/service.js";
+import { loadConfig, typeOf } from "../pool/service.js";
+import { currentVersions, drillGradeContext, isDrillableQuestion, keyHashOf } from "./lifecycle.js";
 
 export class DrillError extends DomainError {
   override name = "DrillError";
 }
 
-/** A card that is not the caller's, or not active: indistinguishable from a missing one. */
+/** A card that is not the caller's, not active, or not in today's session: indistinguishable from a missing one. */
 export class DrillCardNotFound extends DrillError {
   constructor() {
     super("not_found", 404);
@@ -80,23 +82,8 @@ export class DrillAnswerInvalid extends DrillError {
   }
 }
 
-/**
- * The question no longer grades automatically and finally (an edit gave it
- * an `llm` matcher): the card leaves the drill (ADR-041 §3).
- */
-export class DrillCardRetired extends DrillError {
-  constructor() {
-    super("drill_card_retired", 409, "this question can no longer be drilled");
-  }
-}
-
-/** A 32-bit seed, drawn once per review (06, question 28 (i)). */
-function drawSeed(): number {
-  return Math.floor(Math.random() * 0x7fffffff);
-}
-
-/** The cards the drill may serve, with what the session needs to know of them. */
-function activeCards(db: Db, where: SQL | undefined) {
+/** The cards the drill may reach, with what the session needs to know of them. */
+function activeCards(db: DbOrTx, where: SQL | undefined) {
   return db
     .select({
       card: drillCards,
@@ -128,13 +115,17 @@ function activeCards(db: Db, where: SQL | undefined) {
     .where(where);
 }
 
-async function ownActiveCard(db: Db, userId: string, cardId: string) {
+type ActiveRow = Awaited<ReturnType<typeof activeCards>>[number];
+type CardRow = typeof drillCards.$inferSelect;
+type Day = { start: Date; end: Date };
+
+async function ownActiveCard(db: DbOrTx, userId: string, cardId: string): Promise<ActiveRow> {
   const [row] = await activeCards(db, and(eq(drillCards.id, cardId), eq(drillCards.userId, userId)));
   if (!row) throw new DrillCardNotFound();
   return row;
 }
 
-const stateOf = (card: typeof drillCards.$inferSelect): DrillCard => ({
+const stateOf = (card: CardRow): DrillCard => ({
   stability: card.stability,
   difficulty: card.difficulty,
   dueAt: card.dueAt,
@@ -143,46 +134,126 @@ const stateOf = (card: typeof drillCards.$inferSelect): DrillCard => ({
   lapses: card.lapses,
 });
 
+/** New cards the student met for the first time today (their first review is today). */
+async function introducedToday(db: DbOrTx, userId: string, day: Day): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(drillCards)
+    .where(
+      and(
+        eq(drillCards.userId, userId),
+        sql`(select min(${drillReviews.reviewedAt}) from ${drillReviews} where ${drillReviews.cardId} = ${drillCards.id}) >= ${day.start.toISOString()}::timestamptz`,
+      ),
+    );
+  return row?.n ?? 0;
+}
+
+/**
+ * Whether today's session may hand this card out (F-DRILL-03): not reviewed
+ * yet today, and either due before the day ends or new while the day's cap
+ * of new cards is not reached. The same rule the session is composed under,
+ * the budget aside: the budget orders a session, it does not forbid a card.
+ */
+function servableToday(card: CardRow, day: Day, introduced: number): boolean {
+  if (card.lastReviewAt !== null && card.lastReviewAt >= day.start) return false;
+  if (card.lastReviewAt === null) return introduced < DRILL_NEW_PER_DAY;
+  return card.dueAt < day.end;
+}
+
+/**
+ * The question of a card as it stands now, the settings of the evaluation
+ * where it was met first (06, question 28 (e)), and whether it can still be
+ * drilled (ADR-041 §3). Null when the question has no published version or
+ * the evaluation is gone.
+ */
+async function questionOf(db: DbOrTx, row: ActiveRow, now: Date) {
+  const version = (await currentVersions(db, [row.card.questionId])).get(row.card.questionId);
+  const evaluation = await byId(db, row.card.evaluationId);
+  if (!version || !evaluation) return null;
+  const stored = { config: version.config, configVersion: version.configVersion };
+  const defaults = gradeDefaults(evaluation);
+  const config = loadConfig(row.type, stored);
+  const drillable = await isDrillableQuestion(row.type, config, defaults, now);
+  return { version: stored, config, defaults, drillable };
+}
+
+/** The view of one review: the card is the item, so a new seed gives a new shuffle (06, question 28 (d)). */
+function viewOf(row: ActiveRow, version: { config: unknown; configVersion: number }, seed: number) {
+  return {
+    type: row.type,
+    version,
+    seed,
+    itemId: row.card.id,
+    shuffle: row.shuffleable && isShuffleable(row.type, version),
+  };
+}
+
+/**
+ * The card, if today's session may hand it out and its question can still
+ * be drilled; the 404 otherwise. A question that stopped being drillable
+ * keeps its card and its history: it is simply not served.
+ */
+async function servable(db: DbOrTx, userId: string, cardId: string, now: Date) {
+  const row = await ownActiveCard(db, userId, cardId);
+  const day = drillDayBounds(now);
+  if (!servableToday(row.card, day, await introducedToday(db, userId, day))) throw new DrillCardNotFound();
+  const question = await questionOf(db, row, now);
+  if (!question?.drillable) throw new DrillCardNotFound();
+  return { row, question };
+}
+
 /**
  * The reference time of each question for one student on one device class
- * (ADR-041 §4, `drillReferenceMs`): the correct reviews of every student on
- * that class, and the student's own latest one. Read before the review being
- * rated is written. No estimate per type in v1: a right answer with no
+ * (ADR-041 §4, `drillReferenceOf`): the count and the median of the correct
+ * reviews of every student on that class, and the student's own latest
+ * correct time, all three computed by the database. Read before the review
+ * being rated is written. No estimate per type in v1: a right answer with no
  * reference is rated Good (ADR-041 §10, item 7).
  */
 async function referenceTimes(
-  db: Db,
+  db: DbOrTx,
   questionIds: readonly string[],
   device: DrillDeviceClass,
   userId: string,
 ): Promise<Map<string, number | null>> {
   if (questionIds.length === 0) return new Map();
-  const rows = await db
-    .select({
-      questionId: drillCards.questionId,
-      userId: drillCards.userId,
-      elapsedMs: drillReviews.elapsedMs,
-    })
-    .from(drillReviews)
-    .innerJoin(drillCards, eq(drillCards.id, drillReviews.cardId))
-    .where(
-      and(
-        inArray(drillCards.questionId, [...questionIds]),
-        eq(drillReviews.correctness, "right"),
-        eq(drillReviews.deviceClass, device),
-      ),
-    )
-    .orderBy(drillReviews.reviewedAt);
-  const all = new Map<string, number[]>();
-  const own = new Map<string, number>();
-  for (const row of rows) {
-    all.set(row.questionId, [...(all.get(row.questionId) ?? []), row.elapsedMs]);
-    if (row.userId === userId) own.set(row.questionId, row.elapsedMs);
-  }
+  const correct = and(
+    inArray(drillCards.questionId, [...questionIds]),
+    eq(drillReviews.correctness, "right"),
+    eq(drillReviews.deviceClass, device),
+  );
+  const [all, own] = await Promise.all([
+    db
+      .select({
+        questionId: drillCards.questionId,
+        n: sql<number>`count(*)::int`,
+        median: sql<number>`percentile_cont(0.5) within group (order by ${drillReviews.elapsedMs})`,
+      })
+      .from(drillReviews)
+      .innerJoin(drillCards, eq(drillCards.id, drillReviews.cardId))
+      .where(correct)
+      .groupBy(drillCards.questionId),
+    db
+      .selectDistinctOn([drillCards.questionId], {
+        questionId: drillCards.questionId,
+        elapsedMs: drillReviews.elapsedMs,
+      })
+      .from(drillReviews)
+      .innerJoin(drillCards, eq(drillCards.id, drillReviews.cardId))
+      .where(and(correct, eq(drillCards.userId, userId)))
+      .orderBy(drillCards.questionId, desc(drillReviews.reviewedAt)),
+  ]);
+  const stats = new Map(all.map((r) => [r.questionId, r]));
+  const mine = new Map(own.map((r) => [r.questionId, r.elapsedMs]));
   return new Map(
     questionIds.map((id) => [
       id,
-      drillReferenceMs({ correctTimesMs: all.get(id) ?? [], previousOwnMs: own.get(id) ?? null, typeDefaultMs: null }),
+      drillReferenceOf({
+        correctCount: stats.get(id)?.n ?? 0,
+        correctMedianMs: stats.has(id) ? Number(stats.get(id)!.median) : null,
+        previousOwnMs: mine.get(id) ?? null,
+        typeDefaultMs: null,
+      }),
     ]),
   );
 }
@@ -190,8 +261,9 @@ async function referenceTimes(
 /**
  * Today's session (F-DRILL-03, ADR-041 §6): the due cards — due before the
  * end of the day, Zurich time — then the new ones up to the day's cap, until
- * the budget is spent, courses and tags interleaved. An empty day gives the
- * next due date (06, question 28 (b)).
+ * the budget is spent, courses and tags interleaved. A card reviewed today,
+ * or whose question can no longer be drilled, is left out. An empty day
+ * gives the next due date (06, question 28 (b)).
  */
 export async function drillSession(
   db: Db,
@@ -199,55 +271,55 @@ export async function drillSession(
   device: DrillDeviceClass,
   now: Date,
 ): Promise<DrillSession> {
-  const rows = await activeCards(db, eq(drillCards.userId, userId));
   const day = drillDayBounds(now);
+  const drillable = new Map<string, boolean>();
+  const rows: ActiveRow[] = [];
+  for (const row of await activeCards(db, eq(drillCards.userId, userId))) {
+    const key = `${row.card.questionId}:${row.card.evaluationId}`;
+    if (!drillable.has(key)) drillable.set(key, (await questionOf(db, row, now))?.drillable ?? false);
+    if (drillable.get(key)) rows.push(row);
+  }
   const questionIds = [...new Set(rows.map((r) => r.card.questionId))];
-  const [introduced] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(
-      db
-        .select({ cardId: drillReviews.cardId })
-        .from(drillReviews)
-        .innerJoin(drillCards, eq(drillCards.id, drillReviews.cardId))
-        .where(eq(drillCards.userId, userId))
-        .groupBy(drillReviews.cardId)
-        .having(sql`min(${drillReviews.reviewedAt}) >= ${day.start.toISOString()}::timestamptz`)
-        .as("introduced"),
-    );
-  const tags = questionIds.length === 0
-    ? []
-    : await db
-        .select({ questionId: questionTags.questionId, tag: sql<string>`min(${questionTags.tag})` })
-        .from(questionTags)
-        .where(inArray(questionTags.questionId, questionIds))
-        .groupBy(questionTags.questionId);
+  const introduced = await introducedToday(db, userId, day);
+  const tags =
+    questionIds.length === 0
+      ? []
+      : await db
+          .select({ questionId: questionTags.questionId, tag: sql<string>`min(${questionTags.tag})` })
+          .from(questionTags)
+          .where(inArray(questionTags.questionId, questionIds))
+          .groupBy(questionTags.questionId);
   const tagOf = new Map(tags.map((t) => [t.questionId, t.tag]));
   const references = await referenceTimes(db, questionIds, device, userId);
+  const reviewedToday = (card: CardRow) => card.lastReviewAt !== null && card.lastReviewAt >= day.start;
 
   const rowOf = new Map(rows.map((r) => [r.card.id, r]));
   const ids = composeDrillSession({
-    cards: rows.map(({ card, courseCode }) => ({
-      id: card.id,
-      isNew: card.lastReviewAt === null,
-      dueAt: card.dueAt,
-      retrievability: drillRetrievability(stateOf(card), now),
-      referenceMs: references.get(card.questionId) ?? null,
-      group: `${courseCode}\u0000${tagOf.get(card.questionId) ?? ""}`,
-    })),
+    cards: rows
+      .filter(({ card }) => !reviewedToday(card))
+      .map(({ card, courseCode }) => ({
+        id: card.id,
+        isNew: card.lastReviewAt === null,
+        dueAt: card.dueAt,
+        retrievability: drillRetrievability(stateOf(card), now),
+        referenceMs: references.get(card.questionId) ?? null,
+        group: `${courseCode}\u0000${tagOf.get(card.questionId) ?? ""}`,
+      })),
     // "Due" is due before the day ends: FSRS counts whole days from the
     // instant of the last review, and a card due at 14:00 belongs to the
     // morning's session.
     now: new Date(day.end.getTime() - 1),
     budgetMs: DRILL_SESSION_BUDGET_MS,
-    newAllowed: DRILL_NEW_PER_DAY - (introduced?.n ?? 0),
+    newAllowed: DRILL_NEW_PER_DAY - introduced,
   });
 
   let nextDueAt: Date | null = null;
-  if (ids.length === 0 && rows.length > 0) {
+  if (ids.length === 0) {
     for (const { card } of rows) {
-      // A new card held back by the day's cap is due tomorrow.
-      const at = card.lastReviewAt === null ? day.end : card.dueAt;
-      if (nextDueAt === null || at < nextDueAt) nextDueAt = at;
+      // Nothing is left for today: a new card held back by the cap, or a
+      // card reviewed today, comes back tomorrow at the earliest.
+      const next = card.lastReviewAt === null || card.dueAt < day.end ? day.end : card.dueAt;
+      if (nextDueAt === null || next < nextDueAt) nextDueAt = next;
     }
   }
   return {
@@ -260,56 +332,32 @@ export async function drillSession(
   };
 }
 
-type ActiveRow = Awaited<ReturnType<typeof ownActiveCard>>;
-
-/** The question of a card as the student sees it, and what grading it needs. */
-async function questionOf(db: Db, row: ActiveRow, seed: number) {
-  const version = (await currentVersions(db, [row.card.questionId])).get(row.card.questionId);
-  // A question in the drill was published to be in an evaluation.
-  if (!version) throw new DrillCardNotFound();
-  const evaluation = await byId(db, row.card.evaluationId);
-  if (!evaluation) throw new DrillCardNotFound();
-  const stored = { config: version.config, configVersion: version.configVersion };
-  const view = {
-    type: row.type,
-    version: stored,
-    seed,
-    // The card is the item: the shuffle stream is per card, and a new seed
-    // per review gives new choices' order (06, question 28 (d)).
-    itemId: row.card.id,
-    shuffle: row.shuffleable && isShuffleable(row.type, stored),
-  };
-  // The settings of the evaluation where the card was met first (06, question 28 (e)).
-  const defaults = gradeDefaults(evaluation);
-  return { version: stored, view, defaults };
-}
-
 /**
  * Serves a card: a new seed, the question on screen from now. Serving again
  * before the answer (a reload) keeps the seed and the time already counted,
  * and reopens the interval on screen if the tab had hidden it.
  */
 export async function serveCard(db: Db, userId: string, cardId: string, now: Date): Promise<DrillServed> {
-  const row = await ownActiveCard(db, userId, cardId);
+  const { row, question } = await servable(db, userId, cardId, now);
   const at = sql`${now.toISOString()}::timestamptz`;
   // One conditional statement each: two tabs serving at once share one seed.
   await db
     .update(drillCards)
-    .set({ serveSeed: drawSeed(), servedAt: now, shownSince: now, activeMs: 0 })
+    .set({ serveSeed: drawSeed(), shownSince: now, activeMs: 0 })
     .where(and(eq(drillCards.id, cardId), isNull(drillCards.serveSeed)));
   const [served] = await db
     .update(drillCards)
     .set({ shownSince: sql`coalesce(${drillCards.shownSince}, ${at})` })
     .where(eq(drillCards.id, cardId))
     .returning({ seed: drillCards.serveSeed });
-  const { view, defaults } = await questionOf(db, row, served!.seed!);
-  return { cardId, type: row.type, student: studentView({ ...view, defaults }) };
+  const view = viewOf(row, question.version, served!.seed!);
+  return { cardId, type: row.type, student: studentView({ ...view, defaults: question.defaults }) };
 }
 
 /** The credit of the open interval at `now`, capped (ADR-039): SQL on `drill_cards`. */
-function openCredit(now: Date): SQL {
+function openCredit(now: Date): SQL<number> {
   const at = sql`${now.toISOString()}::timestamptz`;
-  return sql`case when ${drillCards.shownSince} is null then 0 else least(${DWELL_IDLE_CAP_MS}, greatest(0, floor(extract(epoch from (${at} - ${drillCards.shownSince})) * 1000)))::int end`;
+  return sql<number>`case when ${drillCards.shownSince} is null then 0 else least(${DWELL_IDLE_CAP_MS}, greatest(0, floor(extract(epoch from (${at} - ${drillCards.shownSince})) * 1000)))::int end`;
 }
 
 /**
@@ -352,46 +400,46 @@ export async function answerCard(
   input: { answer: unknown; deviceClass: DrillDeviceClass },
   now: Date,
 ): Promise<DrillReviewResult> {
-  const row = await ownActiveCard(db, userId, cardId);
-  const type = typeOf(row.type);
+  const type = typeOf((await ownActiveCard(db, userId, cardId)).type);
   let answer: unknown = null;
   if (input.answer !== null && input.answer !== undefined) {
     const parsed = type.answerSchema.safeParse(input.answer);
     if (!parsed.success) throw new DrillAnswerInvalid();
     answer = parsed.data;
   }
-  const references = await referenceTimes(db, [row.card.questionId], input.deviceClass, userId);
-  const referenceMs = references.get(row.card.questionId) ?? null;
 
   return db.transaction(async (tx) => {
     // The card row is the lock: two answers at once rate the card once.
     const [locked] = await tx
-      .select({ card: drillCards, credit: openCredit(now) })
+      .select({ serveSeed: drillCards.serveSeed, credit: openCredit(now) })
       .from(drillCards)
-      .where(eq(drillCards.id, cardId))
+      .where(and(eq(drillCards.id, cardId), eq(drillCards.userId, userId)))
       .for("update");
-    if (!locked || locked.card.serveSeed === null) throw new DrillNotServed();
-    const card = locked.card;
-    const seed = card.serveSeed!;
-    const { version, view, defaults } = await questionOf(tx as unknown as Db, { ...row, card }, seed);
-    const config = loadConfig(row.type, version);
-    const result = await type.grade(config, answer, {
-      seed,
-      itemId: card.id,
-      attemptId: card.id,
-      itemPoints: type.defaultPoints(config),
-      now,
-      runner: NO_RUNNER,
-      defaults,
-    });
-    if (!isDrillEligible(row.type, result) || result.kind !== "graded") {
-      await tx.delete(drillCards).where(eq(drillCards.id, cardId));
-      throw new DrillCardRetired();
-    }
+    if (!locked) throw new DrillCardNotFound();
+    // Under the lock: the card as it stands, still in today's session.
+    const { row, question } = await servable(tx, userId, cardId, now);
+    if (locked.serveSeed === null) throw new DrillNotServed();
+    const card = row.card;
+    const seed = locked.serveSeed;
+    const references = await referenceTimes(tx, [card.questionId], input.deviceClass, userId);
+    const referenceMs = references.get(card.questionId) ?? null;
+    const result = await type.grade(
+      question.config,
+      answer,
+      drillGradeContext({
+        seed,
+        key: card.id,
+        itemPoints: type.defaultPoints(question.config),
+        now,
+        defaults: question.defaults,
+      }),
+    );
+    // `servable` checked the question is drillable: its grading is final.
+    if (result.kind !== "graded") throw new DrillCardNotFound();
     const correctness = drillCorrectness(result.points, result.maxPoints);
     const activeMs = card.activeMs + Number(locked.credit);
     const rating = drillRating({ correctness, activeMs, referenceMs });
-    const keyHash = keyHashOf(row.type, version);
+    const keyHash = keyHashOf(row.type, question.version);
     const before = keyHash === card.keyHash ? stateOf(card) : newDrillCard(now);
     const next = reviewDrillCard(before, rating, now);
     await tx.insert(drillReviews).values({
@@ -406,14 +454,7 @@ export async function answerCard(
     });
     await tx
       .update(drillCards)
-      .set({
-        ...next,
-        keyHash,
-        serveSeed: null,
-        servedAt: null,
-        shownSince: null,
-        activeMs: 0,
-      })
+      .set({ ...next, keyHash, serveSeed: null, shownSince: null, activeMs: 0 })
       .where(eq(drillCards.id, cardId));
     return {
       correctness,
@@ -423,7 +464,7 @@ export async function answerCard(
       activeMs,
       referenceMs: referenceMs === null ? null : Math.round(referenceMs),
       dueAt: iso(next.dueAt),
-      solution: studentSolutionView(view),
+      solution: studentSolutionView(viewOf(row, question.version, seed)),
     };
   });
 }

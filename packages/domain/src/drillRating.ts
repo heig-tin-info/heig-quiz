@@ -44,12 +44,28 @@ export interface DrillReferenceInput {
  * else the type's estimate, else none.
  */
 export function drillReferenceMs(input: DrillReferenceInput): number | null {
-  if (input.correctTimesMs.length >= DRILL_REFERENCE_MIN_N) {
-    return quantile(
-      [...input.correctTimesMs].sort((a, b) => a - b),
-      0.5,
-    );
-  }
+  const n = input.correctTimesMs.length;
+  return drillReferenceOf({
+    correctCount: n,
+    correctMedianMs: n === 0 ? null : quantile([...input.correctTimesMs].sort((a, b) => a - b), 0.5),
+    previousOwnMs: input.previousOwnMs,
+    typeDefaultMs: input.typeDefaultMs,
+  });
+}
+
+/** {@link DrillReferenceInput} already aggregated: what a database computes in one query. */
+export interface DrillReferenceSummary {
+  /** How many correct reviews there are, on this question and this device class. */
+  correctCount: number;
+  /** Their median (linear interpolation, `percentile_cont(0.5)`); null when there are none. */
+  correctMedianMs: number | null;
+  previousOwnMs: number | null;
+  typeDefaultMs: number | null;
+}
+
+/** THE rule of {@link drillReferenceMs}, on the aggregates rather than on every time. */
+export function drillReferenceOf(input: DrillReferenceSummary): number | null {
+  if (input.correctCount >= DRILL_REFERENCE_MIN_N && input.correctMedianMs !== null) return input.correctMedianMs;
   return input.previousOwnMs ?? input.typeDefaultMs;
 }
 

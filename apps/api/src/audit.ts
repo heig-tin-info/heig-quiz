@@ -44,6 +44,8 @@ export type AuditAction =
   | "drill.disable"
   /** "Remove these questions from the drill": an evaluation's cards deleted (ADR-041 §10). */
   | "drill.cards_remove"
+  /** "Allow drill" set on an evaluation (`payload.allowDrill`, ADR-041 §2). */
+  | "drill.allow"
   /** A wrong access code typed by a student (F-EVAL-12), counted for the lockout. */
   | "evaluation.access_code_failed"
   | "evaluation.close"

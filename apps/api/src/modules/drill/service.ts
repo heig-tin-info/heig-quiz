@@ -5,22 +5,36 @@
  * This file is the entry other modules import (`import * as drill from
  * "../drill/service.js"`); the code lives beside it:
  *   - `lifecycle.ts`: the cards created at a release or a hand-in, removed by
- *     the teacher, purged after five years, and the key fingerprint;
+ *     the teacher, purged after five years; the key fingerprint and the
+ *     eligibility of a question;
  *   - `review.ts`: the student's session, the served card, its time on
- *     screen and the review;
- *   - `teacher.ts`: each student's activity and the mastery per tag.
+ *     screen and the review.
  *
  * The module owns `drill_cards` and `drill_reviews`. The switches it reads
  * belong to their modules and are written through their services:
  * `classrooms.drill_enabled_at` and `enrollments.drill_opted_out_at`
- * (`org`), `settings.allowDrill` (`evaluation`).
+ * (`org`), `settings.allowDrill` (`evaluation`). It depends on `live` (the
+ * student exit, the seed, the end of an attempt), never the reverse.
  */
+import { onAttemptsEnded } from "../live/service.js";
+import { onResultsReleased } from "../results/service.js";
+import { cardsAtHandIn, cardsAtRelease } from "./lifecycle.js";
+
+// ADR-041 §1: an exam enters the drill at the release of its results, an
+// exercise at the hand-in. `results` and `live` call their listeners after
+// the commit and log one that throws; neither imports this module, the
+// dependency goes one way. Registered once, when this module is first
+// loaded: `app.ts` loads it through the drill routes and the ticker's
+// `drill.purge` task.
+onResultsReleased(cardsAtRelease);
+onAttemptsEnded(cardsAtHandIn);
+
 export {
   DRILL_RETENTION,
-  bestEffort,
   cardsAtHandIn,
   cardsAtRelease,
   evaluationCardCount,
+  isDrillableQuestion,
   keyHashOf,
   purgeExpiredDrill,
   removeEvaluationCards,
@@ -30,11 +44,9 @@ export {
   DrillCardNotFound,
   DrillNotServed,
   DrillAnswerInvalid,
-  DrillCardRetired,
   answerCard,
   drillSession,
   reportShown,
   serveCard,
   studentDrillClassrooms,
 } from "./review.js";
-export { classroomActivity, classroomMastery } from "./teacher.js";

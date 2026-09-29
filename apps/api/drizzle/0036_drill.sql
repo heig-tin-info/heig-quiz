@@ -12,11 +12,10 @@ CREATE TABLE "drill_cards" (
 	"last_review_at" timestamp with time zone,
 	"key_hash" text NOT NULL,
 	"serve_seed" integer,
-	"served_at" timestamp with time zone,
 	"shown_since" timestamp with time zone,
 	"active_ms" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone NOT NULL,
-	CONSTRAINT "drill_cards_serve_ck" CHECK (("drill_cards"."serve_seed" is null and "drill_cards"."served_at" is null and "drill_cards"."shown_since" is null) or ("drill_cards"."serve_seed" is not null and "drill_cards"."served_at" is not null))
+	CONSTRAINT "drill_cards_serve_ck" CHECK ("drill_cards"."serve_seed" is not null or ("drill_cards"."shown_since" is null and "drill_cards"."active_ms" = 0))
 );
 --> statement-breakpoint
 CREATE TABLE "drill_reviews" (

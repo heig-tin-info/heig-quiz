@@ -24,6 +24,7 @@
  *     indexes (see `db/pool.ts`).
  */
 export type { PoolRow, QuestionRecord } from "./shared.js";
+export { loadConfig, typeOf } from "./config.js";
 export {
   DraftInvalid,
   MissingDraft,

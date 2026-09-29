@@ -179,6 +179,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
       modifiedAfterRelease: false,
       createdAt: liveAt(-HOUR),
       originRevision: null,
+      allowDrill: false,
       ...overrides.evaluation,
     },
     items,

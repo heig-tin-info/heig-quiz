@@ -339,10 +339,19 @@ describe("today's session (F-DRILL-03)", () => {
     expect(session.cards).toHaveLength(1);
     expect(session.cards[0]!.isNew).toBe(true);
 
+    // The tenth is served; an eleventh new card is not today's to serve.
+    const tenth = session.cards[0]!.id;
+    await drill.serveCard(db, userId, tenth, app.clock.now());
+    await drill.answerCard(db, userId, tenth, { answer: "wrong", deviceClass: "fine" }, app.clock.now());
+    const eleventh = (await cardsOf({ userId })).find((c) => c.lastReviewAt === null)!;
+    await expect(drill.serveCard(db, userId, eleventh.id, app.clock.now())).rejects.toBeInstanceOf(
+      drill.DrillCardNotFound,
+    );
+
     // The next day, the cap is whole again (the budget of ten minutes holds ten unknown cards).
     app.clock.advance(86_400_000);
     const tomorrow = await drill.drillSession(db, userId, "fine", app.clock.now());
-    expect(tomorrow.cards.filter((c) => c.isNew)).toHaveLength(4);
+    expect(tomorrow.cards.filter((c) => c.isNew)).toHaveLength(3);
   });
 });
 
@@ -357,6 +366,35 @@ describe("a review (F-DRILL-02, ADR-041 §4)", () => {
     for (const key of [...COMMON_FORBIDDEN_STUDENT_KEYS, ...FORBIDDEN_STUDENT_KEYS]) {
       expect(text).not.toContain(`"${key}"`);
     }
+  });
+
+  it("stops serving a card whose question can no longer be drilled, and keeps its history", async () => {
+    const app = await appAt();
+    const { userId, right } = await oneStudent(app);
+    await drill.serveCard(db, userId, right.id, app.clock.now());
+    const proposing = registerForTests({
+      ...fakeShort,
+      grade: (_config, _answer, ctx) => ({
+        kind: "graded",
+        points: 0,
+        maxPoints: ctx.itemPoints,
+        details: { matched: false, expected: "" },
+        state: "proposed",
+      }),
+    });
+    try {
+      await expect(
+        drill.answerCard(db, userId, right.id, { answer: "answer-q0", deviceClass: "fine" }, app.clock.now()),
+      ).rejects.toBeInstanceOf(drill.DrillCardNotFound);
+      await expect(drill.serveCard(db, userId, right.id, app.clock.now())).rejects.toBeInstanceOf(
+        drill.DrillCardNotFound,
+      );
+      expect((await drill.drillSession(db, userId, "fine", app.clock.now())).cards).toEqual([]);
+    } finally {
+      proposing();
+    }
+    expect(await cardsOf({ userId })).toHaveLength(2);
+    expect((await drill.drillSession(db, userId, "fine", app.clock.now())).cards).toHaveLength(2);
   });
 
   it("refuses an answer to a card that was not served, and another student's card", async () => {
@@ -416,13 +454,23 @@ describe("a review (F-DRILL-02, ADR-041 §4)", () => {
     // No reference yet: a right answer is Good (ADR-041 §10, item 7).
     expect(first).toMatchObject({ correctness: "right", rating: 3, referenceMs: null });
     const [card] = await db.select().from(drillCards).where(eq(drillCards.id, right.id));
-    expect(card).toMatchObject({ reps: 1, serveSeed: null, servedAt: null, activeMs: 0 });
+    expect(card).toMatchObject({ reps: 1, serveSeed: null, shownSince: null, activeMs: 0 });
     expect(card!.lastReviewAt!.toISOString()).toBe(app.clock.now().toISOString());
     expect(card!.dueAt.getTime()).toBeGreaterThan(app.clock.now().getTime() + 86_400_000);
     expect(first.dueAt).toBe(card!.dueAt.toISOString());
 
+    // Not twice in a day: a card reviewed today is not today's to serve again,
+    // nor one not due before the day ends.
+    await expect(drill.serveCard(db, userId, right.id, app.clock.now())).rejects.toBeInstanceOf(
+      drill.DrillCardNotFound,
+    );
+    app.clock.advance(86_400_000);
+    await expect(drill.serveCard(db, userId, right.id, app.clock.now())).rejects.toBeInstanceOf(
+      drill.DrillCardNotFound,
+    );
+
     // The student's own previous time is the reference now: much faster is Easy.
-    app.clock.advance(3 * 86_400_000);
+    app.clock.set(card!.dueAt);
     await drill.serveCard(db, userId, right.id, app.clock.now());
     app.clock.advance(5_000);
     const second = await drill.answerCard(db, userId, right.id, { answer: "answer-q0", deviceClass: "fine" }, app.clock.now());
@@ -441,6 +489,7 @@ describe("a review (F-DRILL-02, ADR-041 §4)", () => {
       expect(again!.serveSeed).toBe(served!.serveSeed);
       seeds.add(served!.serveSeed!);
       await drill.answerCard(db, userId, right.id, { answer: "x", deviceClass: "fine" }, app.clock.now());
+      app.clock.advance(30 * 86_400_000);
     }
     expect(seeds.size).toBeGreaterThan(1);
   });
@@ -461,12 +510,12 @@ describe("a review (F-DRILL-02, ADR-041 §4)", () => {
     expect((await review()).reps).toBe(1);
 
     await publish({ statement: "Reworded", answer: "answer-q0" });
-    app.clock.advance(86_400_000);
+    app.clock.advance(60 * 86_400_000);
     const kept = await review();
     expect(kept.reps).toBe(2);
 
     await publish({ statement: "Reworded", answer: "answer-q0-new" });
-    app.clock.advance(86_400_000);
+    app.clock.advance(365 * 86_400_000);
     const reset = await review();
     // Reset to new, then reviewed once: the first review of a new card.
     expect(reset.reps).toBe(1);
@@ -530,60 +579,9 @@ describe("the mcq of a review (06, question 28 (d), (h))", () => {
       );
       expect(result.correctness).toBe("right");
       expect(result.solution).toEqual({ correct: [2] });
+      app.clock.set((await db.select().from(drillCards).where(eq(drillCards.id, card!.id)))[0]!.dueAt);
     }
     expect(orders.size).toBeGreaterThan(1);
-  });
-});
-
-describe("the teacher's reads (ADR-041 §8, §10)", () => {
-  it("counts each student's activity, and hides what came after an opt-out", async () => {
-    const app = await appAt();
-    const { seed, userId, right, other } = await oneStudent(app);
-    await drill.serveCard(db, userId, right.id, app.clock.now());
-    await drill.answerCard(db, userId, right.id, { answer: "answer-q0", deviceClass: "fine" }, app.clock.now());
-    app.clock.advance(2 * 86_400_000);
-    await drill.serveCard(db, userId, right.id, app.clock.now());
-    await drill.answerCard(db, userId, right.id, { answer: "nope", deviceClass: "fine" }, app.clock.now());
-    await drill.serveCard(db, userId, other.id, app.clock.now());
-    await drill.answerCard(db, userId, other.id, { answer: "answer-q1", deviceClass: "fine" }, app.clock.now());
-
-    const before = await drill.classroomActivity(db, seed.classroomId, app.clock.now());
-    expect(before.students).toHaveLength(1);
-    expect(before.students[0]).toMatchObject({
-      userId,
-      cards: 2,
-      optedOutAt: null,
-      all: { reviews: 3, sessions: 2, questionsSeen: 2, repeated: 1, recalled: 0 },
-    });
-
-    app.clock.advance(60_000);
-    await org.setDrillOptOut(db, seed.classroomId, userId, true, app.clock.now());
-    // A review recorded after the opt-out is not the teacher's to see.
-    await db.insert(drillReviews).values({
-      id: randomUUID(),
-      cardId: right.id,
-      rating: 3,
-      correctness: "right",
-      elapsedMs: 1000,
-      deviceClass: "fine",
-      reviewedAt: new Date(app.clock.now().getTime() + 60_000),
-    });
-    const after = await drill.classroomActivity(db, seed.classroomId, new Date(app.clock.now().getTime() + 120_000));
-    expect(after.students[0]!.optedOutAt).not.toBeNull();
-    expect(after.students[0]!.all.reviews).toBe(3);
-  });
-
-  it("gives the mastery per tag", async () => {
-    const app = await appAt();
-    const { seed, userId, right } = await oneStudent(app);
-    const [question] = await db.select().from(questions).where(eq(questions.id, seed.questionIds[0]!));
-    await poolService.patchQuestion(db, question!, { tags: ["pointers"] });
-    await drill.serveCard(db, userId, right.id, app.clock.now());
-    await drill.answerCard(db, userId, right.id, { answer: "answer-q0", deviceClass: "fine" }, app.clock.now());
-    const mastery = await drill.classroomMastery(db, seed.classroomId, app.clock.now());
-    expect(mastery.tags).toHaveLength(1);
-    expect(mastery.tags[0]).toMatchObject({ tag: "pointers", students: 1, cards: 1, reviewedCards: 1 });
-    expect(mastery.tags[0]!.meanRetrievability).toBeCloseTo(1, 2);
   });
 });
 

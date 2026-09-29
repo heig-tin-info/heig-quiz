@@ -1,5 +1,5 @@
 {
-  "id": "cb309df8-ae82-480b-8c97-60f7b57cb2ab",
+  "id": "259bff22-6357-4dab-bbb0-d26ff7382031",
   "prevId": "2d6d6bc8-4f71-4fc5-8741-6ad62ef4d740",
   "version": "7",
   "dialect": "postgresql",
@@ -5020,12 +5020,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "served_at": {
-          "name": "served_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "shown_since": {
           "name": "shown_since",
           "type": "timestamp with time zone",
@@ -5195,7 +5189,7 @@
       "checkConstraints": {
         "drill_cards_serve_ck": {
           "name": "drill_cards_serve_ck",
-          "value": "(\"drill_cards\".\"serve_seed\" is null and \"drill_cards\".\"served_at\" is null and \"drill_cards\".\"shown_since\" is null) or (\"drill_cards\".\"serve_seed\" is not null and \"drill_cards\".\"served_at\" is not null)"
+          "value": "\"drill_cards\".\"serve_seed\" is not null or (\"drill_cards\".\"shown_since\" is null and \"drill_cards\".\"active_ms\" = 0)"
         }
       },
       "isRLSEnabled": false

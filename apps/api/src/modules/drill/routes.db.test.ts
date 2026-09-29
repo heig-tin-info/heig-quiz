@@ -8,13 +8,13 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
-  DrillActivity,
+  DrillCardsRemoved,
   DrillClassroom,
-  DrillMastery,
   DrillReviewResult,
   DrillServed,
   DrillSession,
   EvaluationDrill,
+  EvaluationSettingsPatch,
 } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
@@ -81,14 +81,13 @@ describe("the drill over HTTP", () => {
   it("lets the classroom's staff, and nobody else, switch the drill on", async () => {
     const url = `/app/api/classrooms/${seed.classroomId}/drill`;
     expect((await call("PUT", url, stranger, { enabled: true })).statusCode).toBe(404);
-    expect((await call("GET", url, stranger)).statusCode).toBe(404);
     expect((await call("PUT", url, student, { enabled: true })).statusCode).toBe(403);
     expect((await call("PUT", url, teacher, { enabled: "yes" })).statusCode).toBe(400);
 
     const on = await call("PUT", url, teacher, { enabled: true });
     expect(on.statusCode).toBe(200);
     expect(on.json()).toEqual({ enabled: true, enabledAt: server.clock.now().toISOString() });
-    expect((await call("GET", url, teacher)).json().enabled).toBe(true);
+    expect((await call("GET", `/app/api/classrooms/${seed.classroomId}`, teacher)).json().drillEnabled).toBe(true);
     expect(await audited("drill.enable")).toHaveLength(1);
     await handIn();
   });
@@ -145,20 +144,6 @@ describe("the drill over HTTP", () => {
     expect(result).toMatchObject({ correctness: "right", rating: 3, activeMs: 6_000, solution: { answer: "answer-q0" } });
   });
 
-  it("gives the staff each student's activity and the mastery, and nobody else", async () => {
-    for (const path of ["activity", "mastery"]) {
-      const url = `/app/api/classrooms/${seed.classroomId}/drill/${path}`;
-      expect((await call("GET", url, stranger)).statusCode).toBe(404);
-      expect((await call("GET", url, student)).statusCode).toBe(403);
-    }
-    const activity = DrillActivity.parse(
-      (await call("GET", `/app/api/classrooms/${seed.classroomId}/drill/activity`, teacher)).json(),
-    );
-    const mine = activity.students.find((s) => s.userId === student.id)!;
-    expect(mine).toMatchObject({ cards: 2, all: { reviews: 1, questionsSeen: 1, sessions: 1 } });
-    DrillMastery.parse((await call("GET", `/app/api/classrooms/${seed.classroomId}/drill/mastery`, teacher)).json());
-  });
-
   it("lets the student opt out, which empties the session and the tab's switch says so", async () => {
     const url = `/app/api/drill/classrooms/${seed.classroomId}/opt-out`;
     expect((await call("PUT", url, outsider, { optedOut: true })).statusCode).toBe(404);
@@ -172,18 +157,22 @@ describe("the drill over HTTP", () => {
 
   it("sets 'Allow drill' and removes an evaluation's cards, for the staff only, audited", async () => {
     const url = `/app/api/evaluations/${seed.evaluationId}/drill`;
-    expect((await call("GET", url, stranger)).statusCode).toBe(404);
     expect((await call("PUT", url, stranger, { allowDrill: false })).statusCode).toBe(404);
     expect((await call("DELETE", `${url}/cards`, stranger)).statusCode).toBe(404);
 
-    expect(EvaluationDrill.parse((await call("GET", url, teacher)).json())).toEqual({ allowDrill: true, cards: 4 });
+    const detail = `/app/api/evaluations/${seed.evaluationId}`;
+    expect((await call("GET", detail, teacher)).json().evaluation.allowDrill).toBe(true);
     const off = await call("PUT", url, teacher, { allowDrill: false });
     // Turning it off keeps the cards (ADR-041 §10, item 3).
-    expect(off.json()).toEqual({ allowDrill: false, cards: 4 });
-    expect((await audited("evaluation.update")).some((r) => (r.payload as { allowDrill?: boolean })?.allowDrill === false)).toBe(true);
+    expect(EvaluationDrill.parse(off.json())).toEqual({ allowDrill: false, cards: 4 });
+    expect((await call("GET", detail, teacher)).json().evaluation.allowDrill).toBe(false);
+    const [allow] = await audited("drill.allow");
+    expect(allow!.payload).toEqual({ allowDrill: false });
+    // The settings PATCH is not a writer of it: its contract strips the key.
+    expect(EvaluationSettingsPatch.parse({ allowDrill: true })).toEqual({});
 
     const removed = await call("DELETE", `${url}/cards`, teacher);
-    expect(removed.json()).toEqual({ removed: 4 });
+    expect(DrillCardsRemoved.parse(removed.json())).toEqual({ removed: 4 });
     expect(await audited("drill.cards_remove")).toHaveLength(1);
     expect(DrillSession.parse((await call("GET", "/app/api/drill/session", student)).json()).cards).toEqual([]);
   });

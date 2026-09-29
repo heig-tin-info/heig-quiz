@@ -98,7 +98,6 @@ import {
 import { answeredBy } from "../live/service.js";
 import { solutionView, stripKeys, studentSolutionView, studentView } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
-import * as drill from "../drill/service.js";
 
 export { watchReleasedGrades, type GradeWatch } from "./updated.js";
 
@@ -293,6 +292,19 @@ export async function resultsView(db: Db, evaluation: EvaluationRecord): Promise
 
 // --- Release (F-RES-04, F-GRADE-09) --------------------------------------
 
+type ReleasedListener = (db: Db, evaluation: EvaluationRecord, now: Date) => Promise<unknown>;
+const releasedListeners = new Set<ReleasedListener>();
+
+/**
+ * Called after every commit of {@link releaseResults}, the first release and
+ * a re-release alike. The `drill` module registers here (ADR-041 §1), so
+ * that `results` never imports it. A listener that throws is logged and
+ * ignored: the release has committed.
+ */
+export function onResultsReleased(listener: ReleasedListener): void {
+  releasedListeners.add(listener);
+}
+
 /**
  * The release, in ONE transaction: the frozen snapshot and the instant are
  * written together, and the state moves to `released`. Idempotent — releasing
@@ -331,9 +343,15 @@ export async function releaseResults(
   };
   await setRelease(db, evaluation.id, { releasedAt, releasedGrades: snapshot }, now);
   // ADR-041 §1: an exam's questions become drill cards at the release, never
-  // before. Best-effort like the notification below; a re-release creates
-  // only what is missing.
-  await drill.bestEffort("cards at release", () => drill.cardsAtRelease(db, evaluation, now));
+  // before — the drill module listens here. Best-effort like the
+  // notification below.
+  for (const listener of releasedListeners) {
+    try {
+      await listener(db, evaluation, now);
+    } catch (err) {
+      console.error(`results: a release listener of ${evaluation.id} failed`, err);
+    }
+  }
   // F-GRADE-09: the students are told — on the FIRST release only. A
   // re-release keeps the original `released_at`, the date they were told
   // about, and telling them twice would announce nothing new. Only a student

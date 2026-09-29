@@ -31,7 +31,28 @@ import { DWELL_IDLE_CAP_MS } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { attempts } from "../../db/schema.js";
-import * as drill from "../drill/service.js";
+
+/** An attempt {@link endAttempts} ended: what a listener needs, read in the same statement. */
+export interface EndedAttempt {
+  id: string;
+  evaluationId: string;
+  userId: string | null;
+  seed: number;
+}
+
+type EndedListener = (db: Db, ended: readonly EndedAttempt[], now: Date) => Promise<unknown>;
+const endedListeners = new Set<EndedListener>();
+
+/**
+ * Called after every commit of {@link endAttempts} that ended something.
+ * The `drill` module registers here (ADR-041 §1: the hand-in of an exercise
+ * is when its questions become cards), so that `live` never imports it —
+ * the dependency goes one way, drill on live. A listener that throws is
+ * logged and ignored: the attempt is over whatever it makes of it.
+ */
+export function onAttemptsEnded(listener: EndedListener): void {
+  endedListeners.add(listener);
+}
 
 /** The attempts of an evaluation still being taken. */
 export function openAttemptsOf(evaluationId: string): SQL {
@@ -80,16 +101,15 @@ export async function closeShown(db: Db, which: SQL, end: Date): Promise<void> {
  * is credited, then their state is written. Answers the attempts it ended;
  * one already finished is left alone.
  *
- * What it ended is then handed to the drill (ADR-041 §1): the hand-in of an
- * exercise is when its questions become cards. After the commit, and
- * best-effort: the attempt is over whatever the drill makes of it.
+ * What it ended is then handed to the {@link onAttemptsEnded} listeners,
+ * after the commit.
  */
 export async function endAttempts(
   db: Db,
   which: SQL,
   set: { state: "submitted" | "expired"; closedBy: ClosedBy; submittedAt?: Date },
   now: Date,
-): Promise<{ id: string; evaluationId: string }[]> {
+): Promise<EndedAttempt[]> {
   const ended = await db.transaction(async (tx) => {
     const locked = await tx
       .select({ id: attempts.id })
@@ -104,8 +124,22 @@ export async function endAttempts(
       .update(attempts)
       .set({ ...set, closedAt: now, updatedAt: now })
       .where(ids)
-      .returning({ id: attempts.id, evaluationId: attempts.evaluationId });
+      .returning({
+        id: attempts.id,
+        evaluationId: attempts.evaluationId,
+        userId: attempts.userId,
+        seed: attempts.seed,
+      });
   });
-  if (ended.length > 0) await drill.bestEffort("cards at hand-in", () => drill.cardsAtHandIn(db, ended, now));
+  if (ended.length > 0) {
+    for (const listener of endedListeners) {
+      try {
+        await listener(db, ended, now);
+      } catch (err) {
+        // The service layer has no logger (as `results/service.ts`): stderr.
+        console.error("live: an attempts-ended listener failed", err);
+      }
+    }
+  }
   return ended;
 }

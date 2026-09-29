@@ -796,6 +796,10 @@ export const toEvaluation = (e: MockEvaluation) => ({
   mode: e.mode,
   state: e.state,
   settings: e.settings,
+  // The server's `drillAllowed` (ADR-041 §2): the setting, else the mode's default.
+  allowDrill:
+    e.mode !== "poll" &&
+    (typeof e.settings["allowDrill"] === "boolean" ? e.settings["allowDrill"] : e.mode === "exercise"),
   gradingScale: e.gradingScale,
   feedbackPolicy: e.feedbackPolicy,
   mcqPolicy: e.mcqPolicy,

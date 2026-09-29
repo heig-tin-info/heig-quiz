@@ -66,7 +66,18 @@ export {
   closeAttempt,
   reopenAttempt,
   studentHome,
+  drawSeed,
 } from "./attempt.js";
+export { onAttemptsEnded, type EndedAttempt } from "./dwell.js";
+// The one student exit (invariant 4), for the modules that serve a question
+// outside an attempt: the drill (ADR-041 §9).
+export {
+  FORBIDDEN_STUDENT_KEYS,
+  isShuffleable,
+  solutionView,
+  studentSolutionView,
+  studentView,
+} from "./studentView.js";
 export {
   answeredBy,
   saveAnswer,

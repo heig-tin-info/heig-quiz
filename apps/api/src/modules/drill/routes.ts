@@ -7,8 +7,9 @@
  * (invariant 6).
  *
  * Teacher: the drill switch of a classroom, "Allow drill" and "Remove these
- * questions from the drill" on an evaluation, each student's activity and
- * the mastery per tag — every one loaded through `staffAccess` first.
+ * questions from the drill" on an evaluation, each loaded through
+ * `staffAccess` first. The reads of the teacher's view (activity, mastery)
+ * are slice 4's.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
@@ -20,6 +21,7 @@ import {
   DrillShownBody,
   EvaluationDrillBody,
   IdParam,
+  type DrillCardsRemoved,
   type DrillClassroom,
   type DrillClassroomSettings,
   type EvaluationDrill,
@@ -107,17 +109,10 @@ export async function drillPlugin(app: FastifyInstance) {
   );
 
   // --- Teacher -------------------------------------------------------------
-
-  const classroomSettings = (enabledAt: Date | null): DrillClassroomSettings => ({
-    enabled: enabledAt !== null,
-    enabledAt: isoOrNull(enabledAt),
-  });
-
-  app.get(
-    "/app/api/classrooms/:id/drill",
-    { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: staffClassroom }, ({ scope }) => classroomSettings(scope.room.drillEnabledAt)),
-  );
+  //
+  // The state of the switches is read from the classroom's and the
+  // evaluation's own details (`drillEnabled`, `allowDrill`); these routes
+  // only write.
 
   /** ADR-041 §6: the teacher enables the drill for a classroom; its students are then in by default. */
   app.put(
@@ -128,47 +123,21 @@ export async function drillPlugin(app: FastifyInstance) {
       if (body.enabled !== (scope.room.drillEnabledAt !== null)) {
         await trace(req, body.enabled ? "drill.enable" : "drill.disable", "classroom", scope.room.id);
       }
-      return classroomSettings(enabledAt);
+      return { enabled: enabledAt !== null, enabledAt: isoOrNull(enabledAt) } satisfies DrillClassroomSettings;
     }),
   );
 
-  /** Each student's activity (ADR-041 §8): questions seen, sessions, recall rate on repeated reviews. */
-  app.get(
-    "/app/api/classrooms/:id/drill/activity",
-    { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: staffClassroom }, ({ now, scope }) =>
-      service.classroomActivity(app.db, scope.room.id, now),
-    ),
-  );
-
-  /** Mastery per tag (ADR-041 §10, item 10). */
-  app.get(
-    "/app/api/classrooms/:id/drill/mastery",
-    { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: staffClassroom }, ({ now, scope }) =>
-      service.classroomMastery(app.db, scope.room.id, now),
-    ),
-  );
-
-  app.get(
-    "/app/api/evaluations/:id/drill",
-    { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: staffEvaluation }, async ({ scope }): Promise<EvaluationDrill> => ({
-      allowDrill: drillAllowed(scope.evaluation),
-      cards: await service.evaluationCardCount(app.db, scope.evaluation.id),
-    })),
-  );
-
   /**
-   * "Allow drill", editable until the release (ADR-041 §10, item 3). Turning
-   * it off keeps the cards already created: the removal is its own action.
+   * "Allow drill", the one writer of `settings.allowDrill`, editable until
+   * the release (ADR-041 §10, item 3). Turning it off keeps the cards
+   * already created: the removal is its own action. Answers the card count.
    */
   app.put(
     "/app/api/evaluations/:id/drill",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, body: EvaluationDrillBody, load: staffEvaluation }, async ({ req, now, body, scope }) => {
       const row = await setAllowDrill(app.db, scope.evaluation, body.allowDrill, now);
-      await trace(req, "evaluation.update", "evaluation", row.id, { allowDrill: body.allowDrill });
+      await trace(req, "drill.allow", "evaluation", row.id, { allowDrill: body.allowDrill });
       return {
         allowDrill: drillAllowed(row),
         cards: await service.evaluationCardCount(app.db, row.id),
@@ -183,7 +152,7 @@ export async function drillPlugin(app: FastifyInstance) {
     teacher({ params: IdParam, load: staffEvaluation }, async ({ req, scope }) => {
       const removed = await service.removeEvaluationCards(app.db, scope.evaluation.id);
       await trace(req, "drill.cards_remove", "evaluation", scope.evaluation.id, { removed });
-      return { removed };
+      return { removed } satisfies DrillCardsRemoved;
     }),
   );
 }

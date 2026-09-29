@@ -17,8 +17,7 @@
  *     question deletes the cards it gave rise to, and a card its reviews.
  *     The user is NO ACTION, like `attempts.user_id`: an account leaves by
  *     anonymisation, never by a DELETE;
- *   - `drill_cards_serve_ck`: the review in progress (a served question, its
- *     seed, its open interval on screen) is whole or absent.
+ *   - `drill_cards_serve_ck`: no time on screen without a served question.
  */
 import { sql } from "drizzle-orm";
 import {
@@ -70,12 +69,11 @@ export const drillCards = pgTable(
     keyHash: text("key_hash").notNull(),
     /**
      * The review in progress: the seed the question was served with (a new
-     * one at each review, 06, question 28 (i)), the server's instant it was
-     * served, the open interval on screen (null while the tab is hidden) and
-     * the active time already credited. Cleared by the answer.
+     * one at each review, 06, question 28 (i)) — null when none is — the
+     * open interval on screen (null while the tab is hidden) and the active
+     * time already credited. Cleared by the answer.
      */
     serveSeed: integer("serve_seed"),
-    servedAt: timestamp("served_at", { withTimezone: true }),
     shownSince: timestamp("shown_since", { withTimezone: true }),
     activeMs: integer("active_ms").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
@@ -88,7 +86,7 @@ export const drillCards = pgTable(
     index("drill_cards_evaluation_idx").on(t.evaluationId),
     check(
       "drill_cards_serve_ck",
-      sql`(${t.serveSeed} is null and ${t.servedAt} is null and ${t.shownSince} is null) or (${t.serveSeed} is not null and ${t.servedAt} is not null)`,
+      sql`${t.serveSeed} is not null or (${t.shownSince} is null and ${t.activeMs} = 0)`,
     ),
   ],
 );

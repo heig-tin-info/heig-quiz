@@ -116,6 +116,7 @@ export function toEvaluation(row: EvaluationRecord): Evaluation {
     mode: row.mode,
     state: row.state,
     settings: settingsOf(row),
+    allowDrill: drillAllowed(row),
     gradingScale: GradingScale.parse(row.gradingScale),
     feedbackPolicy: feedbackOf(row),
     mcqPolicy: row.mcqPolicy,
