@@ -4,7 +4,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import {
   EvaluationSettings,
@@ -460,6 +460,45 @@ export async function flagReleasedEvaluationsOf(
         ),
       ),
     );
+}
+
+/**
+ * The states in which an evaluation's grading can be finished: after its
+ * close. Also the states the migration `0033_grading_ready_claim` backfills.
+ */
+const GRADED_STATES = ["closed", "grading", "released"] as const;
+
+/**
+ * The claim of `grading_ready` (#286): true for exactly one caller per
+ * completed grid. Refused before the close — a retake graded alone mid-run
+ * (ADR-025) completes nothing — and read by the UPDATE
+ * itself, so the state and the marker are those of the row NOW, not those
+ * of a record the caller loaded when its job started. A closed evaluation
+ * never runs again (`closed → draft` needs no attempt, and clears the
+ * marker), so a claim taken is always the claim of the current close.
+ */
+export async function claimGradingReady(db: DbOrTx, id: string, now: Date): Promise<boolean> {
+  const rows = await db
+    .update(evaluations)
+    .set({ gradingReadyAt: now })
+    .where(
+      and(
+        eq(evaluations.id, id),
+        isNull(evaluations.gradingReadyAt),
+        inArray(evaluations.state, [...GRADED_STATES]),
+      ),
+    )
+    .returning({ id: evaluations.id });
+  return rows.length > 0;
+}
+
+/**
+ * Gives the evaluation its `grading_ready` again: a re-grade empties an
+ * item's cells, and the pass that fills them completes a new grid. Called in
+ * the re-grade's own transaction.
+ */
+export async function clearGradingReady(db: DbOrTx, id: string): Promise<void> {
+  await db.update(evaluations).set({ gradingReadyAt: null }).where(eq(evaluations.id, id));
 }
 
 /**

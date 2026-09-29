@@ -278,7 +278,7 @@ export async function gradingPlugin(app: FastifyInstance) {
 
         const note = await service.regradeItem(
           app.db,
-          { itemId: item.item.id, questionId: item.question.id },
+          { evaluationId: scope.evaluation.id, itemId: item.item.id, questionId: item.question.id },
           body,
         );
         if (note === null) return notFound(reply);
