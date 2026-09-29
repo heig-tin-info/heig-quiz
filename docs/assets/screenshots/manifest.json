@@ -921,9 +921,9 @@
     },
     {
       "name": "poll-projection",
-      "caption": "The projection of a running poll: the question, the live tally, the join code and its QR.",
+      "caption": "The projection of a running poll: the question, its choices with the votes hidden, the join code and its QR.",
       "persona": "teacher",
-      "path": "/evaluations/ef92b717-da38-47f6-b9ba-f5c8009f35ca/poll",
+      "path": "/evaluations/5f42ee0c-fc4c-4512-8993-ca5724bbd4c2/poll",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -932,21 +932,21 @@
         "dark"
       ],
       "action": "Nothing: the page as it loads.",
-      "state": "A poll on “prg1-pointeur-non-initialise”; three students answered. The tally is live, the correct answer is not revealed yet.",
+      "state": "A poll on “prg1-pointeur-non-initialise”; three students answered. The votes are hidden (the default) and the correct answer is not revealed yet.",
       "phase": "poll-open",
       "files": {
         "light": "poll-projection-light.png",
         "dark": "poll-projection-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T13:20:52.557Z",
+      "commit": "c3dcb6e",
       "base": "http://localhost:3100"
     },
     {
       "name": "join-mcq-phone",
       "caption": "A phone joining the poll through the code.",
       "persona": "guest",
-      "path": "/p/5BC8A7",
+      "path": "/p/74M4WC",
       "width": 390,
       "height": 844,
       "fullPage": false,
@@ -961,15 +961,15 @@
         "light": "join-mcq-phone-light.png",
         "dark": "join-mcq-phone-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T13:20:52.557Z",
+      "commit": "c3dcb6e",
       "base": "http://localhost:3100"
     },
     {
       "name": "poll-revealed",
       "caption": "The answer revealed: the tally, with the correct choice marked.",
       "persona": "teacher",
-      "path": "/evaluations/ef92b717-da38-47f6-b9ba-f5c8009f35ca/poll",
+      "path": "/evaluations/5f42ee0c-fc4c-4512-8993-ca5724bbd4c2/poll",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -984,15 +984,15 @@
         "light": "poll-revealed-light.png",
         "dark": "poll-revealed-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T13:20:52.557Z",
+      "commit": "c3dcb6e",
       "base": "http://localhost:3100"
     },
     {
       "name": "join-revealed-phone",
       "caption": "The phone after the reveal.",
       "persona": "guest",
-      "path": "/p/5BC8A7",
+      "path": "/p/74M4WC",
       "width": 390,
       "height": 844,
       "fullPage": false,
@@ -1007,15 +1007,15 @@
         "light": "join-revealed-phone-light.png",
         "dark": "join-revealed-phone-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T13:20:52.557Z",
+      "commit": "c3dcb6e",
       "base": "http://localhost:3100"
     },
     {
       "name": "poll-ended",
       "caption": "The poll ended.",
       "persona": "teacher",
-      "path": "/evaluations/ef92b717-da38-47f6-b9ba-f5c8009f35ca/poll",
+      "path": "/evaluations/5f42ee0c-fc4c-4512-8993-ca5724bbd4c2/poll",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1030,8 +1030,8 @@
         "light": "poll-ended-light.png",
         "dark": "poll-ended-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T13:20:52.557Z",
+      "commit": "c3dcb6e",
       "base": "http://localhost:3100"
     },
     {

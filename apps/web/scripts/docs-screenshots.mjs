@@ -1147,8 +1147,8 @@ const prepare = {
     await releaseHeld(world);
     const created = await teacher.post("/app/api/polls", {
       questionId: world.questions.mcq.id,
-      classroomId: world.classroom.id,
-      anonymous: true,
+      // Anonymous (ADR-014, addendum 2026-09-27): the join scenes are a guest's.
+      audience: { kind: "anonymous" },
     });
     world.poll = { id: created.evaluation.id, code: created.evaluation.code };
     console.log(`   ok  poll ${world.poll.code} created`);

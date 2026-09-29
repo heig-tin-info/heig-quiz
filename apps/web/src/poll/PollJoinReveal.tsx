@@ -204,7 +204,8 @@ function rowState(own: boolean, keyShown: boolean, correct: boolean): RowState {
  * The distribution, in the order the wall draws it. A revealed key ticks its
  * rows (`success`, with the word); once the poll has ended, this browser's
  * own answer is named too — right, wrong, or simply "yours" when the key is
- * not shown. The bars wear the wall's `info`; an untouched row no tone at all.
+ * not shown. The bars are neutral (`info`), never the accent red that
+ * reads as "wrong"; an untouched row wears no tone at all.
  */
 function ResultsReveal({
   type,
