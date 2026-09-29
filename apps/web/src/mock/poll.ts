@@ -7,6 +7,7 @@ import {
   type PollQuestionPick,
 } from "@quiz/contracts";
 import { pollOutcome, type PollRunCounts } from "@quiz/domain";
+import { hasKey } from "../poll/pollTally";
 import {
   D,
   MockError,
@@ -18,10 +19,7 @@ import {
   pick,
   rand,
 } from "./runtime";
-import {
-  me,
-  setMe,
-} from "./session";
+import { me, setMe } from "./session";
 import {
   EVAL_ROOM,
   aliased,
@@ -30,10 +28,7 @@ import {
   makeEvaluation,
   uuid,
 } from "./evaluation";
-import {
-  courses,
-  rooms,
-} from "./org";
+import { courses, rooms } from "./org";
 import {
   ME_MEMBER,
   MockQuestion,
@@ -88,7 +83,8 @@ const pollFlag = (name: string): boolean => {
   return raw !== null && raw !== "0" && raw !== "false";
 };
 
-if (new URLSearchParams(window.location.search).get("as") === "guest") setMe(null);
+if (new URLSearchParams(window.location.search).get("as") === "guest")
+  setMe(null);
 
 interface MockPoll {
   code: string;
@@ -189,14 +185,38 @@ export const polls: MockPoll[] = [
         "Dans une fonction C qui reçoit `int tab[]` et `size_t n`, quelle affirmation décrit **correctement** ce que la fonction peut faire du tableau reçu ?",
       mode: "single",
       choices: [
-        { id: 0, text: "Elle reçoit une copie complète du tableau et peut le modifier sans que l'appelant en voie quoi que ce soit" },
-        { id: 1, text: "Elle reçoit un pointeur sur le premier élément et modifie donc le tableau de l'appelant" },
-        { id: 2, text: "Elle peut retrouver la taille du tableau avec `sizeof(tab) / sizeof(tab[0])`, comme dans l'appelant" },
-        { id: 3, text: "Elle doit recevoir `n` parce que le tableau reçu a perdu sa taille en devenant un pointeur" },
-        { id: 4, text: "Elle peut agrandir le tableau avec `realloc(tab, …)` tant que l'appelant ne s'en sert plus après" },
-        { id: 5, text: "Elle ne peut écrire dans le tableau que si le paramètre est déclaré `const int tab[]`" },
-        { id: 6, text: "Elle reçoit le tableau par valeur, sauf si l'appelant écrit explicitement `&tab` à l'appel" },
-        { id: 7, text: "Elle peut renvoyer `tab` à l'appelant, qui obtiendra un pointeur sur une variable locale détruite" },
+        {
+          id: 0,
+          text: "Elle reçoit une copie complète du tableau et peut le modifier sans que l'appelant en voie quoi que ce soit",
+        },
+        {
+          id: 1,
+          text: "Elle reçoit un pointeur sur le premier élément et modifie donc le tableau de l'appelant",
+        },
+        {
+          id: 2,
+          text: "Elle peut retrouver la taille du tableau avec `sizeof(tab) / sizeof(tab[0])`, comme dans l'appelant",
+        },
+        {
+          id: 3,
+          text: "Elle doit recevoir `n` parce que le tableau reçu a perdu sa taille en devenant un pointeur",
+        },
+        {
+          id: 4,
+          text: "Elle peut agrandir le tableau avec `realloc(tab, …)` tant que l'appelant ne s'en sert plus après",
+        },
+        {
+          id: 5,
+          text: "Elle ne peut écrire dans le tableau que si le paramètre est déclaré `const int tab[]`",
+        },
+        {
+          id: 6,
+          text: "Elle reçoit le tableau par valeur, sauf si l'appelant écrit explicitement `&tab` à l'appel",
+        },
+        {
+          id: 7,
+          text: "Elle peut renvoyer `tab` à l'appelant, qui obtiendra un pointeur sur une variable locale détruite",
+        },
       ],
     },
     // Two of the eight are right, which is what makes the reveal worth a
@@ -207,7 +227,7 @@ export const polls: MockPoll[] = [
   },
   {
     // An opinion poll (ADR-014, addendum 2026-09-23): nothing is right, so
-    // the key is empty and "Reveal" hands the phones the distribution.
+    // the key is empty and only "Show votes" hands the phones the distribution.
     code: "AV3R8T",
     title: "Avis — rythme des laboratoires",
     state: "running",
@@ -274,8 +294,19 @@ function votesOn(poll: MockPoll): boolean {
   return poll.votes === true || (poll.state === "running" && pollFlag("votes"));
 }
 
+/**
+ * The key switch, `?revealed=1` turning it on for a running poll that HAS a
+ * key: the server never reveals an opinion poll (ADR-014, addendum 2026-09-29).
+ */
+function revealedOn(poll: MockPoll): boolean {
+  return (
+    (poll.revealed || (poll.state === "running" && pollFlag("revealed"))) &&
+    hasKey(poll)
+  );
+}
+
 function pollPublicView(poll: MockPoll): PollPublicView {
-  const revealed = poll.revealed || (poll.state === "running" && pollFlag("revealed"));
+  const revealed = revealedOn(poll);
   const loginRequired = !poll.anonymous && me === null;
   return {
     code: poll.code,
@@ -299,7 +330,9 @@ function pollPublicView(poll: MockPoll): PollPublicView {
 /** The distribution a phone reads once revealed: its teacher poll's, when it has one. */
 function publicTally(poll: MockPoll): PollPublicView["tally"] {
   const tp = teacherPolls.find((t) => t.code === poll.code);
-  return tp ? tallyOf(tp, poll) : { joined: 0, answered: 0, choices: [], answers: [] };
+  return tp
+    ? tallyOf(tp, poll)
+    : { joined: 0, answered: 0, choices: [], answers: [] };
 }
 
 on("GET", "/app/api/p/:code", (m) => {
@@ -311,7 +344,8 @@ on("GET", "/app/api/p/:code", (m) => {
 on("POST", "/app/api/p/:code/join", (m) => {
   const poll = pollOr404(m.groups!.code!);
   refuseOffRoster(poll);
-  if (!poll.anonymous && me === null) throw new MockError(401, "login_required");
+  if (!poll.anonymous && me === null)
+    throw new MockError(401, "login_required");
   poll.joined = true;
   return pollPublicView(poll);
 });
@@ -320,7 +354,8 @@ on("POST", "/app/api/p/:code/answer", (m, body) => {
   const poll = pollOr404(m.groups!.code!);
   if (poll.state === "ended") throw new MockError(410, "This poll has ended.");
   refuseOffRoster(poll);
-  if (!poll.anonymous && me === null) throw new MockError(401, "login_required");
+  if (!poll.anonymous && me === null)
+    throw new MockError(401, "login_required");
   poll.joined = true;
   poll.answer = body.payload ?? null;
   return pollPublicView(poll);
@@ -416,13 +451,19 @@ function seedPollEvaluation(tp: MockTeacherPoll, alias: string): void {
   if (poll === null) return;
   pollAliases.set(alias, tp.id);
   if (tp.classroomId === null) return;
-  const e = makeEvaluation(tp.classroomId, poll.title, poll.state === "ended" ? "closed" : "running", 0, {
-    id: tp.id,
-    mode: "poll",
-    createdAt: tp.createdAt,
-    startedAt: tp.createdAt,
-    durationS: null,
-  });
+  const e = makeEvaluation(
+    tp.classroomId,
+    poll.title,
+    poll.state === "ended" ? "closed" : "running",
+    0,
+    {
+      id: tp.id,
+      mode: "poll",
+      createdAt: tp.createdAt,
+      startedAt: tp.createdAt,
+      durationS: null,
+    },
+  );
   e.rows = [];
   e.items = [
     {
@@ -461,7 +502,9 @@ if (!flags.empty && polls.length >= 5) {
       counts: [27, 14, 8, 3],
       texts: [],
       // Kept in the Polls pool after an earlier lecture.
-      questionId: questions.find((q) => q.poolId === "p0" && q.type === "mcq")?.id ?? null,
+      questionId:
+        questions.find((q) => q.poolId === "p0" && q.type === "mcq")?.id ??
+        null,
     },
     {
       id: POLL_SHORT,
@@ -549,8 +592,8 @@ function pollWhere(classroomId: string | null): {
 /** The teacher's whole view: the same question the room has, plus the key. */
 function pollTeacherView(tp: MockTeacherPoll) {
   const poll = pollOfTeacher(tp)!;
-  // `?revealed=1` reveals every RUNNING poll, on both halves at once.
-  const revealed = poll.revealed || (poll.state === "running" && pollFlag("revealed"));
+  // `?revealed=1` reveals every RUNNING keyed poll, on both halves at once.
+  const revealed = revealedOn(poll);
   return {
     evaluation: {
       id: tp.id,
@@ -575,10 +618,18 @@ function pollTeacherView(tp: MockTeacherPoll) {
 }
 
 /** `saved` and `pool` of the teacher view: where "Keep this question" put it. */
-function savedIn(tp: MockTeacherPoll): { saved: boolean; pool: { id: string; name: string } | null } {
-  const q = tp.questionId ? questions.find((x) => x.id === tp.questionId) : undefined;
+function savedIn(tp: MockTeacherPoll): {
+  saved: boolean;
+  pool: { id: string; name: string } | null;
+} {
+  const q = tp.questionId
+    ? questions.find((x) => x.id === tp.questionId)
+    : undefined;
   const pool = q ? pools.find((p) => p.id === q.poolId) : undefined;
-  return { saved: q !== undefined, pool: pool ? { id: pool.id, name: pool.name } : null };
+  return {
+    saved: q !== undefined,
+    pool: pool ? { id: pool.id, name: pool.name } : null,
+  };
 }
 
 /** The teacher's personal pool, made on first use like `ensurePersonalPool`. */
@@ -597,7 +648,9 @@ function ensurePersonalPool() {
       updatedAt: iso(0),
     };
     pools.push(personal);
-    poolMembers[personal.id] = [{ ...ME_MEMBER, role: "owner", addedAt: iso(0) }];
+    poolMembers[personal.id] = [
+      { ...ME_MEMBER, role: "owner", addedAt: iso(0) },
+    ];
   }
   return personal;
 }
@@ -606,7 +659,10 @@ function ensurePersonalPool() {
 function keptName(poolId: string, name: string): string {
   const taken = (candidate: string) =>
     questions.some(
-      (q) => q.poolId === poolId && q.deletedAt === null && q.internalName.toLowerCase() === candidate.toLowerCase(),
+      (q) =>
+        q.poolId === poolId &&
+        q.deletedAt === null &&
+        q.internalName.toLowerCase() === candidate.toLowerCase(),
     );
   for (let n = 1; n < 50; n += 1) {
     const candidate = n === 1 ? name : `${name} (${n})`;
@@ -761,7 +817,9 @@ const pastRuns: MockPastRun[] = (() => {
   const kept = questions.filter((q) => q.poolId === "p0");
   const [sizeofQ, bitsQ, paceQ] = kept;
   const [loopQ, wordQ] = unsavedPast;
-  const roster = rooms.find((r) => r.id === EVAL_ROOM)?.roster.filter((s) => !s.staff).length ?? 24;
+  const roster =
+    rooms.find((r) => r.id === EVAL_ROOM)?.roster.filter((s) => !s.staff)
+      .length ?? 24;
   const runs: MockPastRun[] = [];
   // A classroom poll asked who answers: correct / incorrect / no answer.
   if (sizeofQ) {
@@ -778,7 +836,14 @@ const pastRuns: MockPastRun[] = (() => {
       { question: loopQ, daysAgo: 6, answered: 38, correct: 17, roster: null },
     );
   }
-  if (bitsQ) runs.push({ question: bitsQ, daysAgo: 9, answered: 22, correct: 20, roster });
+  if (bitsQ)
+    runs.push({
+      question: bitsQ,
+      daysAgo: 9,
+      answered: 22,
+      correct: 20,
+      roster,
+    });
   // Opinion polls: no key, "n answers".
   if (paceQ) {
     runs.push(
@@ -786,7 +851,14 @@ const pastRuns: MockPastRun[] = (() => {
       { question: paceQ, daysAgo: 16, answered: 35, correct: 0, roster: null },
     );
   }
-  if (wordQ) runs.push({ question: wordQ, daysAgo: 0.1, answered: 12, correct: 0, roster: null });
+  if (wordQ)
+    runs.push({
+      question: wordQ,
+      daysAgo: 0.1,
+      answered: 12,
+      correct: 0,
+      roster: null,
+    });
   return runs;
 })();
 
@@ -803,7 +875,12 @@ const hasSolution = (q: MockQuestion): boolean => {
  * never-run questions of the personal pool.
  */
 on("GET", "/app/api/polls/questions", (): PollQuestionPick[] => {
-  type Run = { question: MockQuestion; at: string; running: boolean; counts: PollRunCounts | null };
+  type Run = {
+    question: MockQuestion;
+    at: string;
+    running: boolean;
+    counts: PollRunCounts | null;
+  };
   const runs: Run[] = pastRuns.map((r) => ({
     question: r.question,
     at: iso(-r.daysAgo * D),
@@ -816,7 +893,8 @@ on("GET", "/app/api/polls/questions", (): PollQuestionPick[] => {
     },
   }));
   for (const tp of teacherPolls) {
-    const question = tp.unsaved ?? questions.find((q) => q.id === tp.questionId);
+    const question =
+      tp.unsaved ?? questions.find((q) => q.id === tp.questionId);
     const poll = pollOfTeacher(tp);
     if (!question || !poll) continue;
     const key = (solutionOf(question) as { correct?: number[] }).correct ?? [];
@@ -833,7 +911,9 @@ on("GET", "/app/api/polls/questions", (): PollQuestionPick[] => {
             correct: key.reduce((sum, i) => sum + (tp.counts[i] ?? 0), 0),
             roster: poll.anonymous
               ? null
-              : (rooms.find((r) => r.id === tp.classroomId)?.roster.filter((s) => !s.staff).length ?? 0),
+              : (rooms
+                  .find((r) => r.id === tp.classroomId)
+                  ?.roster.filter((s) => !s.staff).length ?? 0),
           },
     });
   }
@@ -841,7 +921,10 @@ on("GET", "/app/api/polls/questions", (): PollQuestionPick[] => {
 
   const rows = new Map<string, { question: MockQuestion; runs: Run[] }>();
   for (const run of runs) {
-    const entry = rows.get(run.question.id) ?? { question: run.question, runs: [] };
+    const entry = rows.get(run.question.id) ?? {
+      question: run.question,
+      runs: [],
+    };
     entry.runs.push(run);
     rows.set(run.question.id, entry);
   }
@@ -854,7 +937,9 @@ on("GET", "/app/api/polls/questions", (): PollQuestionPick[] => {
   return [...rows.values()]
     .filter(
       ({ question: q }) =>
-        q.deletedAt === null && q.versions.length > 0 && PollQuestionType.safeParse(q.type).success,
+        q.deletedAt === null &&
+        q.versions.length > 0 &&
+        PollQuestionType.safeParse(q.type).success,
     )
     .map(({ question: q, runs: its }) => ({
       id: q.id,
@@ -867,7 +952,8 @@ on("GET", "/app/api/polls/questions", (): PollQuestionPick[] => {
       outcome: pollOutcome(its.flatMap((r) => (r.counts ? [r.counts] : []))),
     }))
     .sort((a, b) => {
-      if ((a.lastUsedAt === null) !== (b.lastUsedAt === null)) return a.lastUsedAt === null ? 1 : -1;
+      if ((a.lastUsedAt === null) !== (b.lastUsedAt === null))
+        return a.lastUsedAt === null ? 1 : -1;
       return (b.lastUsedAt ?? "").localeCompare(a.lastUsedAt ?? "");
     });
 });
@@ -928,7 +1014,10 @@ on("GET", "/app/api/polls/pool-questions", (_m, _body, url): PollPoolPage => {
       type: q.type as PollQuestionType,
       internalName: q.internalName,
       prompt: String(frozenConfig(q).prompt ?? ""),
-      pool: { id: q.poolId, name: pools.find((p) => p.id === q.poolId)?.name ?? "" },
+      pool: {
+        id: q.poolId,
+        name: pools.find((p) => p.id === q.poolId)?.name ?? "",
+      },
       tags: q.tags,
       difficulty: q.difficulty,
       latestNumber: q.versions.at(-1)!.number,
@@ -947,8 +1036,11 @@ on("POST", "/app/api/polls", (_m, body) => {
   // ran it, as the API finds it (ADR-014, addendum 2026-09-27).
   const id = String(body.questionId);
   const unsaved =
-    unsavedPast.find((q) => q.id === id) ?? teacherPolls.find((tp) => tp.unsaved?.id === id)?.unsaved;
-  return unsaved ? startPoll(unsaved, body, { unsaved: true }) : startPoll(questionOr404(id), body);
+    unsavedPast.find((q) => q.id === id) ??
+    teacherPolls.find((tp) => tp.unsaved?.id === id)?.unsaved;
+  return unsaved
+    ? startPoll(unsaved, body, { unsaved: true })
+    : startPoll(questionOr404(id), body);
 });
 
 /**
@@ -975,7 +1067,8 @@ on("POST", "/app/api/polls/inline", (_m, body) => {
     published: [{ number: 1, changeNote: "", daysAgo: 0 }],
   });
   const issues = draftIssues(q, { keyOptional: true });
-  if (issues.length > 0) throw new MockValidation("The question is incomplete", issues);
+  if (issues.length > 0)
+    throw new MockValidation("The question is incomplete", issues);
   return startPoll(q, body, { unsaved: true });
 });
 
@@ -988,8 +1081,12 @@ function startPoll(
   const code = `QZ${Math.floor(rand() * 9000 + 1000)}`;
   const choiceCount = ((config.choices ?? []) as unknown[]).length;
   // `PollAudience`: anyone with the code (no classroom), or one classroom.
-  const audience = (body.audience ?? {}) as { kind?: string; classroomId?: string };
-  const classroomId = audience.kind === "classroom" ? String(audience.classroomId) : null;
+  const audience = (body.audience ?? {}) as {
+    kind?: string;
+    classroomId?: string;
+  };
+  const classroomId =
+    audience.kind === "classroom" ? String(audience.classroomId) : null;
   if (classroomId !== null && !rooms.some((r) => r.id === classroomId)) {
     throw new MockError(404, "Not found");
   }
@@ -1014,14 +1111,18 @@ function startPoll(
     answered: 0,
     counts: q.type === "short" ? [] : new Array<number>(choiceCount).fill(0),
     texts: [],
-    ...(options.unsaved ? { questionId: null, unsaved: q } : { questionId: q.id }),
+    ...(options.unsaved
+      ? { questionId: null, unsaved: q }
+      : { questionId: q.id }),
   };
   teacherPolls.push(tp);
   seedPollEvaluation(tp, code);
   return pollTeacherView(tp);
 }
 
-on("GET", "/app/api/evaluations/:id/poll", (m) => pollTeacherView(teacherPollOr404(m.groups!.id!)));
+on("GET", "/app/api/evaluations/:id/poll", (m) =>
+  pollTeacherView(teacherPollOr404(m.groups!.id!)),
+);
 
 on("POST", "/app/api/evaluations/:id/poll/reveal", (m, body) => {
   const tp = teacherPollOr404(m.groups!.id!);
@@ -1103,7 +1204,10 @@ on("POST", "/app/api/evaluations/:id/poll/keep", (m) => {
   // Every show of hands on the same question is now a show of hands on a
   // kept one.
   for (const other of teacherPolls) {
-    if (other === tp || (tp.unsaved !== undefined && other.unsaved === tp.unsaved)) {
+    if (
+      other === tp ||
+      (tp.unsaved !== undefined && other.unsaved === tp.unsaved)
+    ) {
       other.questionId = q.id;
       delete other.unsaved;
     }
@@ -1133,12 +1237,18 @@ on("GET", "/app/api/activities", (): ActivitySummary[] => {
         title: e.title,
         mode: e.mode,
         state: e.state,
-        classroom: { id: room.id, name: room.name, courseCode: course?.code ?? "" },
+        classroom: {
+          id: room.id,
+          name: room.name,
+          courseCode: course?.code ?? "",
+        },
         takeHome: e.mode === "exercise" && e.settings.lobby === "skip",
         opensAt: e.opensAt,
         closesAt: e.closesAt,
         startedAt: e.startedAt,
-        updatedAt: LIVE_STATES.has(e.state) ? iso(-60_000) : (e.closedAt ?? e.createdAt),
+        updatedAt: LIVE_STATES.has(e.state)
+          ? iso(-60_000)
+          : (e.closedAt ?? e.createdAt),
       },
     ];
   });
@@ -1160,5 +1270,7 @@ on("GET", "/app/api/activities", (): ActivitySummary[] => {
       },
     ];
   });
-  return [...inClassrooms, ...anonymous].sort((a, b) => b.id.localeCompare(a.id));
+  return [...inClassrooms, ...anonymous].sort((a, b) =>
+    b.id.localeCompare(a.id),
+  );
 });

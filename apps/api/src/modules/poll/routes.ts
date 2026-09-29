@@ -330,7 +330,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     "/app/api/evaluations/:id/poll/reveal",
     { preHandler: requireTeacher },
     teacher(
-      { params: IdParam, body: PollRevealBody, optionalBody: true, load: staffPoll },
+      { params: IdParam, body: PollRevealBody, load: staffPoll },
       async ({ req, now, body, scope }) => {
         const updated = await service.setDisplay(app.db, scope, body, now);
         await trace(req, "poll.reveal", "evaluation", updated.id, body);

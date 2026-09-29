@@ -42,7 +42,16 @@ import { useT } from "../i18n";
 import type { Route } from "../router";
 import { isAnswered, QuestionHost } from "../student/QuestionHost";
 import { SignInGate } from "../SignInGate";
-import { Alert, Button, Card, EmptyState, Field, GateFrame, QueryError, Skeleton } from "../ui";
+import {
+  Alert,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  GateFrame,
+  QueryError,
+  Skeleton,
+} from "../ui";
 import { PollJoinReveal } from "./PollJoinReveal";
 import { publicPollKey } from "../queryKeys";
 
@@ -50,13 +59,15 @@ import { publicPollKey } from "../queryKeys";
 const POLL_MS = 3_000;
 
 const errorCode = (error: unknown): string | null =>
-  error instanceof ApiError ? ((error.body as { error?: string })?.error ?? null) : null;
+  error instanceof ApiError
+    ? ((error.body as { error?: string })?.error ?? null)
+    : null;
 
 const statusOf = (error: unknown): number | null =>
   error instanceof ApiError ? error.status : null;
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-
+const same = (a: unknown, b: unknown) =>
+  JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
 export function PollJoin({
   code,
@@ -76,12 +87,14 @@ export function PollJoin({
     // A code that names no running poll is a SCREEN here, not a failure to
     // retry: the reader mistyped six characters and the page says so.
     retry: false,
-    queryFn: () => api<PollPublicView>(`/app/api/p/${encodeURIComponent(code)}`),
+    queryFn: () =>
+      api<PollPublicView>(`/app/api/p/${encodeURIComponent(code)}`),
     // The teacher's two switches (the key, the votes) and the end of the poll
     // are what must reach a phone nobody is touching. A poll runs for a minute or two,
     // so three seconds of polling is cheaper in every sense than a socket per
     // participant — and it stops by itself once the poll has ended.
-    refetchInterval: (query) => (query.state.data?.state === "running" ? POLL_MS : false),
+    refetchInterval: (query) =>
+      query.state.data?.state === "running" ? POLL_MS : false,
   });
 
   const view = poll.data ?? null;
@@ -172,7 +185,9 @@ export function PollJoin({
     if (errorCode(poll.error) === "not_on_roster") return <NotOnRoster />;
     return (
       <GateFrame>
-        <h1 className="mb-4 text-lg font-bold tracking-tight">{t("join.loadFailed")}</h1>
+        <h1 className="mb-4 text-lg font-bold tracking-tight">
+          {t("join.loadFailed")}
+        </h1>
         <QueryError
           title={t("error.title")}
           error={poll.error}
@@ -185,13 +200,14 @@ export function PollJoin({
 
   // --- The gate: this poll wants to know who is answering ------------------
 
-  if (view.me.loginRequired) return <LoginGate code={code} title={view.title} />;
+  if (view.me.loginRequired)
+    return <LoginGate code={code} title={view.title} />;
 
   const ended = view.state === "ended";
   // What the teacher shows — the key, the votes — never closes the vote:
   // only End does (ADR-014, addendum 2026-09-29). While the poll runs, the
   // question and its Send button stay, and what is shown sits under them.
-  const shown =
+  const revealBlock =
     view.solution !== null || view.tally !== null ? (
       <PollJoinReveal
         type={view.question.type}
@@ -212,7 +228,9 @@ export function PollJoin({
         <p className="text-[12px] font-medium uppercase tracking-wide text-fg-faint">
           {t("join.eyebrow")}
         </p>
-        <h1 className="mt-0.5 text-base font-semibold leading-tight">{view.title}</h1>
+        <h1 className="mt-0.5 text-base font-semibold leading-tight">
+          {view.title}
+        </h1>
 
         {ended ? (
           <div className="mt-5">
@@ -223,8 +241,8 @@ export function PollJoin({
         ) : null}
 
         <Card className="mt-6 px-4 py-5 sm:px-6">
-          {ended && shown ? (
-            shown
+          {ended && revealBlock ? (
+            revealBlock
           ) : (
             <QuestionHost
               type={view.question.type}
@@ -236,7 +254,9 @@ export function PollJoin({
           )}
         </Card>
 
-        {!ended && shown ? <Card className="mt-4 px-4 py-5 sm:px-6">{shown}</Card> : null}
+        {!ended && revealBlock ? (
+          <Card className="mt-4 px-4 py-5 sm:px-6">{revealBlock}</Card>
+        ) : null}
 
         {join.isError ? (
           <div className="mt-4">
@@ -279,7 +299,10 @@ export function PollJoin({
             {/* The whole sync report: a check and a word, in a polite live
                 region, because "did that go?" is the only question a
                 participant has after tapping. */}
-            <p className="min-w-0 flex-1 text-[13px] text-fg-muted" role="status">
+            <p
+              className="min-w-0 flex-1 text-[13px] text-fg-muted"
+              role="status"
+            >
               {sent ? (
                 <span className="inline-flex items-center gap-1.5 text-success">
                   <Check className="size-4" aria-hidden />
@@ -315,7 +338,9 @@ function LoginGate({ code, title }: { code: string; title: string }) {
     <SignInGate
       next={`/p/${code}`}
       header={
-        <p className="text-[12px] font-medium uppercase tracking-wide text-fg-faint">{t("join.eyebrow")}</p>
+        <p className="text-[12px] font-medium uppercase tracking-wide text-fg-faint">
+          {t("join.eyebrow")}
+        </p>
       }
       title={title}
       body={t("join.login.body")}
@@ -335,7 +360,12 @@ function NotOnRoster() {
   return (
     <GateFrame>
       <Card className="px-6 py-6">
-        <EmptyState icon={UserX} titleAs="h1" title={t("join.notOnRoster.title")} className="py-6">
+        <EmptyState
+          icon={UserX}
+          titleAs="h1"
+          title={t("join.notOnRoster.title")}
+          className="py-6"
+        >
           {t("join.notOnRoster.body")}
         </EmptyState>
       </Card>
