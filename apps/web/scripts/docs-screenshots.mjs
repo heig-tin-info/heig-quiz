@@ -766,13 +766,16 @@ const scenes = [
     state: "“Quiz d'entraînement” running; Léa has answered two questions of five.",
   },
   {
+    // A graded quiz whose results are not published: the card offers only
+    // Back to home (issue #203). The exercise would add See my results, its
+    // feedback being immediate.
     name: "player-done",
     caption: "After handing in.",
-    persona: "noah",
-    path: (w) => `/take/${w.evals.lobby.id}`,
-    phase: "running",
+    persona: "lea",
+    path: (w) => `/take/${w.evals.closed.id}`,
+    phase: "graded",
     settle: 2500,
-    state: "“Quiz d'entraînement” running; Noah handed in.",
+    state: "“Test 0” handed in by Léa, results unreleased.",
   },
   {
     name: "feedback-pending",
@@ -911,10 +914,14 @@ async function login(ctx, persona) {
  * is remembered by the server, so it shows once per persona at most.
  */
 async function skipCoach(page) {
-  const skip = page.getByRole("button", { name: /^(Skip|Passer)$/ }).locator("visible=true").first();
+  // The close cross skips, like Skip, on a tour and on a single tip alike
+  // (a single tip has no Skip, and its Got it throws a burst). A tip scrolls
+  // its anchor into view, so the page goes back to the top once it is gone.
+  const skip = page.getByRole("button", { name: /^(Close the tip|Fermer la bulle)$/ }).locator("visible=true").first();
   if (await skip.waitFor({ timeout: 1500 }).then(() => true, () => false)) {
     await skip.click({ timeout: 3000, force: true }).catch(() => {});
     await page.waitForTimeout(300);
+    await page.evaluate(() => window.scrollTo(0, 0));
   }
 }
 

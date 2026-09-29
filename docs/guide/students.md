@@ -15,8 +15,8 @@ A **Classroom code** field sits at the bottom of your home. Use it only if your 
 Your home shows what your classrooms have opened for you, in three sections.
 
 <figure markdown="span">
-  ![The student home: an exercise open now with Enter the waiting room, a graded quiz coming up in two days, a past graded quiz with View, and the classroom card with extra time](../assets/screenshots/student-home-light.png#only-light)
-  ![The student home: an exercise open now with Enter the waiting room, a graded quiz coming up in two days, a past graded quiz with View, and the classroom card with extra time](../assets/screenshots/student-home-dark.png#only-dark)
+  ![The student home: an exercise open now with Enter the waiting room, a graded quiz coming up in two days, a past graded quiz handed in with results not published yet, and the classroom card with extra time](../assets/screenshots/student-home-light.png#only-light)
+  ![The student home: an exercise open now with Enter the waiting room, a graded quiz coming up in two days, a past graded quiz handed in with results not published yet, and the classroom card with extra time](../assets/screenshots/student-home-dark.png#only-dark)
   <figcaption>The home: what is open now, what is coming up, what is past, and your classrooms.</figcaption>
 </figure>
 
@@ -135,8 +135,8 @@ Press **Hand in** in the header when you are done. The confirmation names how ma
 Once handed in, the player is replaced by a card that says **Handed in**, with **Back to home**. When your teacher shows the results right after hand-in, the card also offers **See my results**.
 
 <figure markdown="span">
-  ![The Handed in card: Your answers are with your teacher, with Back to home](../assets/screenshots/player-done-light.png#only-light)
-  ![The Handed in card: Your answers are with your teacher, with Back to home](../assets/screenshots/player-done-dark.png#only-dark)
+  ![The Handed in card of a graded quiz whose results are not published: Your answers are with your teacher, with Back to home only](../assets/screenshots/player-done-light.png#only-light)
+  ![The Handed in card of a graded quiz whose results are not published: Your answers are with your teacher, with Back to home only](../assets/screenshots/player-done-dark.png#only-dark)
   <figcaption>After handing in.</figcaption>
 </figure>
 

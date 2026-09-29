@@ -1214,8 +1214,8 @@
         "light": "student-home-light.png",
         "dark": "student-home-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T06:27:13.806Z",
+      "commit": "3f472ba",
       "base": "http://localhost:3100"
     },
     {
@@ -1237,8 +1237,8 @@
         "light": "student-home-phone-light.png",
         "dark": "student-home-phone-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T06:27:13.806Z",
+      "commit": "3f472ba",
       "base": "http://localhost:3100"
     },
     {
@@ -1428,8 +1428,8 @@
     {
       "name": "player-done",
       "caption": "After handing in.",
-      "persona": "noah",
-      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "persona": "lea",
+      "path": "/take/f7905f9d-aa9d-4790-b441-5bfa227f6b12",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1438,14 +1438,14 @@
         "dark"
       ],
       "action": "Nothing: the page as it loads.",
-      "state": "“Quiz d'entraînement” running; Noah handed in.",
-      "phase": "running",
+      "state": "“Test 0” handed in by Léa, results unreleased.",
+      "phase": "graded",
       "files": {
         "light": "player-done-light.png",
         "dark": "player-done-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T06:27:13.806Z",
+      "commit": "3f472ba",
       "base": "http://localhost:3100"
     },
     {

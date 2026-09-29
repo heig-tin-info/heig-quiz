@@ -98,8 +98,9 @@ the API, so they change from one seed to the next.
 
 <!-- scenes:start -->
 Last full run: 2026-09-21, commit `828d8d8`. The `live-*` and `grading*`
-scenes were retaken on their own (`--only`) on 2026-09-28, on a fresh seed,
-which is why their ids differ from the other rows.
+scenes were retaken on their own (`--only`) on 2026-09-28, and the
+`student-home` and `player-done` scenes on 2026-09-29, each time on a fresh
+seed, which is why their ids differ from the other rows.
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |
@@ -164,7 +165,7 @@ which is why their ids differ from the other rows.
 | `player-code` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | running | Moved to question 5 through the progress strip. | 1440×900 |
 | `player-run` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | running | Moved to question 5, clicked “Run”, waited for “Compiled”. | 1440×900, full page |
 | `player-submit` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | running | Clicked “Hand in”. | 1440×900 |
-| `player-done` | noah | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | running | Nothing: the page as it loads. | 1440×900 |
+| `player-done` | lea | `/take/f7905f9d-aa9d-4790-b441-5bfa227f6b12` | graded | Nothing: the page as it loads. | 1440×900 |
 | `feedback-pending` | lea | `/attempts/3f4538b5-1a06-4271-8d98-735ab8b03c8f/feedback` | graded | Nothing: the page as it loads. | 1440×900 |
 | `results-released` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results` | released | Nothing: the page as it loads. | 1440×900, full page |
 | `feedback` | lea | `/attempts/3f4538b5-1a06-4271-8d98-735ab8b03c8f/feedback` | released | Nothing: the page as it loads. | 1440×900, full page |
