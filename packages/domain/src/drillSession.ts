@@ -9,6 +9,8 @@
 export const DRILL_SESSION_BUDGET_MS = 600_000;
 /** New cards a student meets per day at most, so that one exam does not flood the next day. */
 export const DRILL_NEW_PER_DAY = 10;
+/** The time counted for a card with no reference time at all. */
+export const DRILL_UNKNOWN_REFERENCE_MS = 60_000;
 
 export interface DrillCandidate {
   id: string;
@@ -17,8 +19,8 @@ export interface DrillCandidate {
   dueAt: Date;
   /** From `drillRetrievability` at the session's `now`. */
   retrievability: number;
-  /** The expected time of one review on this device class, from `drillReferenceMs` (or a type default). */
-  referenceMs: number;
+  /** The expected time of one review on this device class, from `drillReferenceMs`; null counts `DRILL_UNKNOWN_REFERENCE_MS`. */
+  referenceMs: number | null;
   /** What is interleaved: a course, a tag, or both joined — the caller's choice. */
   group: string;
 }
@@ -54,9 +56,10 @@ export function composeDrillSession({ cards, now, budgetMs, newAllowed }: DrillS
   const taken: DrillCandidate[] = [];
   let spent = 0;
   for (const card of [...due, ...fresh]) {
-    if (taken.length > 0 && spent + card.referenceMs > budgetMs) break;
+    const cost = card.referenceMs ?? DRILL_UNKNOWN_REFERENCE_MS;
+    if (taken.length > 0 && spent + cost > budgetMs) break;
     taken.push(card);
-    spent += card.referenceMs;
+    spent += cost;
   }
   const seen = interleaveByGroup(taken.filter((c) => !c.isNew));
   return [...seen, ...interleaveByGroup(taken.filter((c) => c.isNew))].map((c) => c.id);
@@ -66,7 +69,7 @@ export function composeDrillSession({ cards, now, budgetMs, newAllowed }: DrillS
  * Round-robin over the groups, each group keeping its own order, the groups
  * taken in the order their first card appears.
  */
-export function interleaveByGroup<T extends { group: string }>(items: readonly T[]): T[] {
+function interleaveByGroup<T extends { group: string }>(items: readonly T[]): T[] {
   const queues = new Map<string, T[]>();
   for (const item of items) {
     const queue = queues.get(item.group);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { composeDrillSession, interleaveByGroup, type DrillCandidate } from "./drillSession.js";
+import { composeDrillSession, DRILL_UNKNOWN_REFERENCE_MS, type DrillCandidate } from "./drillSession.js";
 
 const now = new Date("2026-10-10T08:00:00Z");
 const day = (d: number) => new Date(now.getTime() + d * 86_400_000);
@@ -65,6 +65,12 @@ describe("composeDrillSession", () => {
     expect(compose([card("n", { isNew: true })], 0)).toEqual(["n"]);
   });
 
+  it("counts a card without a reference time as the declared fallback", () => {
+    const cards = [card("a", { retrievability: 0.1, referenceMs: null }), card("b", { retrievability: 0.2, referenceMs: null })];
+    expect(compose(cards, 2 * DRILL_UNKNOWN_REFERENCE_MS)).toEqual(["a", "b"]);
+    expect(compose(cards, 2 * DRILL_UNKNOWN_REFERENCE_MS - 1)).toEqual(["a"]);
+  });
+
   it("interleaves the groups within the due block and within the new block", () => {
     const cards = [
       card("a1", { retrievability: 0.1, group: "A" }),
@@ -77,13 +83,8 @@ describe("composeDrillSession", () => {
       card("na", { isNew: true, dueAt: day(0), group: "A" }),
     ];
     expect(compose(cards)).toEqual(["a1", "b1", "c1", "a2", "a3", "nb", "na", "nb2"]);
-  });
-});
-
-describe("interleaveByGroup", () => {
-  it("round-robins over the groups in the order they first appear, keeping each group's order", () => {
-    const items = ["x1", "y1", "x2", "x3", "z1", "y2"].map((id) => ({ id, group: id[0]! }));
-    expect(interleaveByGroup(items).map((i) => i.id)).toEqual(["x1", "y1", "z1", "x2", "y2", "x3"]);
-    expect(interleaveByGroup([])).toEqual([]);
+    // round-robin in the order the groups first appear, each keeping its own order
+    const mixed = ["x1", "y1", "x2", "x3", "z1", "y2"].map((id, i) => card(id, { retrievability: i / 10, group: id[0]! }));
+    expect(compose(mixed)).toEqual(["x1", "y1", "z1", "x2", "y2", "x3"]);
   });
 });

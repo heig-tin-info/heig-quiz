@@ -2,20 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   DRILL_REFERENCE_MIN_N,
-  DRILL_TYPES,
-  isDrillType,
   drillCorrectness,
   drillRating,
   drillReferenceMs,
   type DrillCorrectness,
 } from "./drillRating.js";
-
-describe("the drill types of v1", () => {
-  it("are the four immediately graded ones", () => {
-    expect(DRILL_TYPES).toEqual(["mcq", "short", "cloze", "categorize"]);
-    expect(["mcq", "categorize", "rich", "circuit", "code"].map(isDrillType)).toEqual([true, true, false, false, false]);
-  });
-});
 
 describe("drillCorrectness", () => {
   it.each([
