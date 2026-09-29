@@ -307,6 +307,9 @@ export async function releaseResults(
   if (!isOver(evaluation)) {
     throw new NotReleasable("an evaluation is released once it is closed");
   }
+  // A poll is never released (06, row 16): it would write a grade for the
+  // whole classroom under a title that is its question's internal name (#305).
+  if (evaluation.mode === "poll") throw new NotReleasable("a poll is never released");
   const computed = await computeResults(db, evaluation);
   const releasedAt = evaluation.releasedAt ?? now;
   const snapshot: ReleasedGrades = {

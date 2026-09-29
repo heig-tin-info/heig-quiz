@@ -38,7 +38,6 @@ const mcqStudent = {
 function view(patch: Partial<PollPublicView> = {}): PollPublicView {
   return {
     code: CODE,
-    title: "Échauffement",
     state: "running",
     settings: { anonymous: true, revealed: false, votes: false },
     question: { type: "mcq", student: mcqStudent },

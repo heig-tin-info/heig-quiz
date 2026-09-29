@@ -923,7 +923,7 @@
       "name": "poll-projection",
       "caption": "The projection of a running poll: the question, its choices with the votes hidden, the join code and its QR.",
       "persona": "teacher",
-      "path": "/evaluations/5f42ee0c-fc4c-4512-8993-ca5724bbd4c2/poll",
+      "path": "/evaluations/36e15847-ce4d-47c8-b577-39017a776034/poll",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -938,15 +938,15 @@
         "light": "poll-projection-light.png",
         "dark": "poll-projection-dark.png"
       },
-      "takenAt": "2026-09-29T13:20:52.557Z",
-      "commit": "c3dcb6e",
+      "takenAt": "2026-09-29T15:22:08.549Z",
+      "commit": "4aa03bd",
       "base": "http://localhost:3100"
     },
     {
       "name": "join-mcq-phone",
       "caption": "A phone joining the poll through the code.",
       "persona": "guest",
-      "path": "/p/74M4WC",
+      "path": "/p/VSLAQA",
       "width": 390,
       "height": 844,
       "fullPage": false,
@@ -961,15 +961,15 @@
         "light": "join-mcq-phone-light.png",
         "dark": "join-mcq-phone-dark.png"
       },
-      "takenAt": "2026-09-29T13:20:52.557Z",
-      "commit": "c3dcb6e",
+      "takenAt": "2026-09-29T15:22:08.549Z",
+      "commit": "4aa03bd",
       "base": "http://localhost:3100"
     },
     {
       "name": "poll-revealed",
       "caption": "The answer revealed: the tally, with the correct choice marked.",
       "persona": "teacher",
-      "path": "/evaluations/5f42ee0c-fc4c-4512-8993-ca5724bbd4c2/poll",
+      "path": "/evaluations/36e15847-ce4d-47c8-b577-39017a776034/poll",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -984,15 +984,15 @@
         "light": "poll-revealed-light.png",
         "dark": "poll-revealed-dark.png"
       },
-      "takenAt": "2026-09-29T13:20:52.557Z",
-      "commit": "c3dcb6e",
+      "takenAt": "2026-09-29T15:22:08.549Z",
+      "commit": "4aa03bd",
       "base": "http://localhost:3100"
     },
     {
       "name": "join-revealed-phone",
       "caption": "The phone after the reveal.",
       "persona": "guest",
-      "path": "/p/74M4WC",
+      "path": "/p/VSLAQA",
       "width": 390,
       "height": 844,
       "fullPage": false,
@@ -1007,15 +1007,15 @@
         "light": "join-revealed-phone-light.png",
         "dark": "join-revealed-phone-dark.png"
       },
-      "takenAt": "2026-09-29T13:20:52.557Z",
-      "commit": "c3dcb6e",
+      "takenAt": "2026-09-29T15:22:08.549Z",
+      "commit": "4aa03bd",
       "base": "http://localhost:3100"
     },
     {
       "name": "poll-ended",
       "caption": "The poll ended.",
       "persona": "teacher",
-      "path": "/evaluations/5f42ee0c-fc4c-4512-8993-ca5724bbd4c2/poll",
+      "path": "/evaluations/36e15847-ce4d-47c8-b577-39017a776034/poll",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1030,8 +1030,8 @@
         "light": "poll-ended-light.png",
         "dark": "poll-ended-dark.png"
       },
-      "takenAt": "2026-09-29T13:20:52.557Z",
-      "commit": "c3dcb6e",
+      "takenAt": "2026-09-29T15:22:08.549Z",
+      "commit": "4aa03bd",
       "base": "http://localhost:3100"
     },
     {
