@@ -1,7 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { AlertTriangle, Check, RotateCcw } from "lucide-react";
 
-import type { DiscriminationStats, QuestionRow, QuestionStats, StatsReset } from "@quiz/contracts";
+import type {
+  DiscriminationStats,
+  DistractorStats,
+  QuestionRow,
+  QuestionStats,
+  StatsReset,
+} from "@quiz/contracts";
 import {
   DISCRIMINATION_FAIR,
   DISCRIMINATION_GOOD,
@@ -9,16 +15,19 @@ import {
   DISCRIMINATION_MIN_N,
   discriminationBand,
   DWELL_IDLE_CAP_MS,
+  QUESTION_STATS_MIN_N,
   QUESTION_TIME_MIN_N,
   type DiscriminationBand,
 } from "@quiz/domain";
+import { choiceLetter } from "@quiz/qt-mcq/client";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { formatDecimal, formatSpan, useI18n, useT } from "../i18n";
+import { MarkdownView } from "../markdown/MarkdownView";
 import { useErrorToast, useToast } from "../notify";
 import { poolQuestionStatsKey } from "../queryKeys";
-import { Alert, Badge, Button, isoDateParts, SectionHeading, Sheet, Stat, type Tone } from "../ui";
+import { Alert, Badge, Button, cx, isoDateParts, SectionHeading, Sheet, Stat, type Tone } from "../ui";
 import { ratePercent } from "./filters";
 
 /**
@@ -142,6 +151,7 @@ export function QuestionStatsSheet({
           )}
         </section>
         <DiscriminationBlock discrimination={stats.discrimination} />
+        {stats.distractors === undefined ? null : <DistractorBlock distractors={stats.distractors} />}
       </div>
     </Sheet>
   );
@@ -210,6 +220,95 @@ function DiscriminationValue({ discrimination }: { discrimination: Discriminatio
           good: formatDecimal(DISCRIMINATION_GOOD, 1, locale),
         })}
       </p>
+    </>
+  );
+}
+
+/**
+ * The distractor analysis of a multiple-choice question (ADR-041), a fourth
+ * block, drawn only for a type that has it: one row per option in the
+ * question's order — its letter, its text, its share and a bar — then the
+ * answers that picked nothing. The key is never colour alone: its letter
+ * fills AND the row says "Correct". A bar is `info`, never a verdict colour:
+ * a share is a datum (DESIGN.md, "Projection"). Only shares, never counts:
+ * the server sends nothing else (N-DATA-06).
+ *
+ * It rests on its own `n` — the answers to the versions that carry the
+ * current options — so the basis line says since which version when the
+ * options changed along the way.
+ */
+function DistractorBlock({ distractors }: { distractors: DistractorStats | null }) {
+  const t = useT();
+  return (
+    <section className="space-y-3">
+      <SectionHeading title={t("pool.stats.choices")} />
+      {distractors ? (
+        <DistractorRows distractors={distractors} />
+      ) : (
+        <p className="text-sm text-fg-muted">{t("pool.stats.choicesNone", { min: QUESTION_STATS_MIN_N })}</p>
+      )}
+    </section>
+  );
+}
+
+function DistractorRows({ distractors }: { distractors: DistractorStats }) {
+  const t = useT();
+  const rows = [
+    ...distractors.options.map((option, index) => ({ ...option, letter: choiceLetter(index) })),
+    { text: null, correct: false, share: distractors.none, letter: null },
+  ];
+  return (
+    <>
+      <ul className="flex flex-col gap-3">
+        {rows.map((row) => (
+          <li key={row.letter ?? "none"} className="flex flex-col gap-1.5 text-sm">
+            <div className="flex items-start justify-between gap-3">
+              <span className="flex min-w-0 items-start gap-2">
+                {row.letter === null ? null : (
+                  <span
+                    className={cx(
+                      "inline-flex size-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold",
+                      row.correct ? "border-success bg-success text-on-fill" : "border-line-strong text-fg-muted",
+                    )}
+                    aria-hidden
+                  >
+                    {row.letter}
+                  </span>
+                )}
+                {row.text === null ? (
+                  <span className="text-fg-muted">{t("pool.stats.choicesNoAnswer")}</span>
+                ) : (
+                  <MarkdownView as="span" source={row.text} inline className="min-w-0" />
+                )}
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                {row.correct ? (
+                  <span className="inline-flex items-center gap-1 text-[12px] font-medium text-success [&_svg]:size-3.5">
+                    <Check aria-hidden />
+                    {t("pool.stats.choicesCorrect")}
+                  </span>
+                ) : null}
+                <span className="font-mono text-[13px] font-semibold tabular-nums">
+                  {t("poll.percent", { n: row.share })}
+                </span>
+              </span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
+              <span
+                className={cx("block h-full rounded-full", row.letter === null ? "bg-fg-faint/50" : "bg-info")}
+                style={{ width: `${row.share}%` }}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-fg-faint">
+        {distractors.sinceVersion === 1
+          ? t("pool.stats.choicesBasis", { n: distractors.n })
+          : t("pool.stats.choicesBasisSince", { n: distractors.n, version: distractors.sinceVersion })}
+        {distractors.multiple ? ` ${t("pool.stats.choicesMultiple")}` : null}
+      </p>
+      <p className="text-sm text-fg-muted">{t("pool.stats.choicesScope")}</p>
     </>
   );
 }

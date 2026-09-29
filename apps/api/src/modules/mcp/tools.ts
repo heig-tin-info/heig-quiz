@@ -175,7 +175,10 @@ export const TOOLS: Tool[] = [
       "and exercises of EVERY class that used the question (not only the teacher's own); `p` is the mean " +
       "share of the points earned, from 0 to 1, and may be NEGATIVE under negative marking; `since` is the " +
       "last reset (null: never). `time` is the time spent on the question in exams, in whole seconds " +
-      "(median, P25, P75, mean, over `time.n` answers), or null below ten timed answers. Aggregates only: " +
+      "(median, P25, P75, mean, over `time.n` answers), or null below ten timed answers. `distractors`, on an " +
+      "mcq question only, is the whole-percent share of students who picked each option (`correct` marks the " +
+      "key) and of `none` (picked nothing), over `distractors.n` answers to versions `sinceVersion` onward, " +
+      "whose options are the current ones; null below ten such answers (ADR-041). Aggregates only: " +
       "no student, no individual grade.",
     input: z.object({ poolId: Id }),
     annotations: READ,

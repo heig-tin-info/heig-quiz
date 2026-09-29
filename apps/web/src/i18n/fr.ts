@@ -711,6 +711,14 @@ export const fr: Record<keyof Dict, string> = {
     "Sous zéro : les meilleurs étudiants réussissent moins bien cette question que les plus faibles. Vérifiez le corrigé et la formulation.",
   "pool.stats.discriminationNone":
     "La discrimination s'affiche dès qu'un examen d'au moins {items} autres questions a {min} tentatives entièrement corrigées.",
+  "pool.stats.choices": "Choix des étudiants",
+  "pool.stats.choicesCorrect": "Correct",
+  "pool.stats.choicesNoAnswer": "Sans réponse",
+  "pool.stats.choicesBasis": "Part de {n} réponses.",
+  "pool.stats.choicesBasisSince": "Part de {n} réponses, depuis la version {version}, où les choix ont changé pour la dernière fois.",
+  "pool.stats.choicesMultiple": "Plusieurs choix peuvent être cochés : le total dépasse donc 100\u202f%.",
+  "pool.stats.choicesScope": "Un mauvais choix que personne ne coche ne trompe personne : reformulez-le ou retirez-le. Un mauvais choix plus coché que la bonne réponse signale une idée fausse répandue, ou une erreur dans le corrigé.",
+  "pool.stats.choicesNone": "Les choix des étudiants s'affichent dès {min} réponses données depuis le dernier changement des choix.",
   "pool.stats.reset": "Réinitialiser les statistiques",
   "pool.stats.resetTitle": "Réinitialiser les statistiques de {name} ?",
   "pool.stats.resetBody":

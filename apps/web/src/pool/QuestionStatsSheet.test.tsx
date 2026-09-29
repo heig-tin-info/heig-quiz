@@ -130,6 +130,67 @@ describe("QuestionStatsSheet", () => {
     expect(screen.queryByText("Discrimination index")).not.toBeInTheDocument();
   });
 
+  const DISTRACTORS = {
+    n: 12,
+    sinceVersion: 1,
+    multiple: false,
+    options: [
+      { text: "NULL", correct: false, share: 50 },
+      { text: "An indeterminate value", correct: true, share: 33 },
+      { text: "Zero", correct: false, share: 8 },
+    ],
+    none: 8,
+  };
+
+  it("shows each choice's share, the key flagged in words, and the answers that picked nothing", () => {
+    mockFetch({});
+    renderWithProviders(
+      <QuestionStatsSheet poolId="p1" row={ROW} stats={{ ...STATS, distractors: DISTRACTORS }} canReset onClose={vi.fn()} />,
+    );
+    expect(screen.getByText("Choices picked")).toBeInTheDocument();
+    const rows = screen.getAllByRole("listitem");
+    expect(rows.map((r) => r.textContent)).toEqual([
+      "ANULL50%",
+      "BAn indeterminate valueCorrect33%",
+      "CZero8%",
+      "No answer8%",
+    ]);
+    expect(screen.getByText("Share of 12 answers.")).toBeInTheDocument();
+    expect(screen.getByText(/A wrong choice nobody picks distracts no one/)).toBeInTheDocument();
+    expect(screen.queryByText(/add up to more than 100%/)).not.toBeInTheDocument();
+  });
+
+  it("says a multiple-choice question's shares add up past 100, and since which version they count", () => {
+    mockFetch({});
+    renderWithProviders(
+      <QuestionStatsSheet
+        poolId="p1"
+        row={ROW}
+        stats={{ ...STATS, distractors: { ...DISTRACTORS, multiple: true, sinceVersion: 3 } }}
+        canReset
+        onClose={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "Share of 12 answers, from version 3, when the choices last changed. Several choices may be ticked, so the shares add up to more than 100%.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("says when the choices will show, and draws no block for a type without them", () => {
+    mockFetch({});
+    const { unmount } = renderWithProviders(
+      <QuestionStatsSheet poolId="p1" row={ROW} stats={{ ...STATS, distractors: null }} canReset onClose={vi.fn()} />,
+    );
+    expect(
+      screen.getByText("The choices picked show from 10 answers given since the choices last changed."),
+    ).toBeInTheDocument();
+    unmount();
+    renderWithProviders(<QuestionStatsSheet poolId="p1" row={ROW} stats={STATS} canReset onClose={vi.fn()} />);
+    expect(screen.queryByText("Choices picked")).not.toBeInTheDocument();
+  });
+
   it("offers no reset to a reader", () => {
     mockFetch({});
     renderWithProviders(<QuestionStatsSheet poolId="p1" row={ROW} stats={STATS} canReset={false} onClose={vi.fn()} />);
