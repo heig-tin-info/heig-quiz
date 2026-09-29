@@ -33,7 +33,10 @@ import {
   CourseDetail,
   DashboardView,
   DrillClassroom,
+  DrillProgress,
   DrillSession,
+  DrillStudentActivity,
+  DrillTagMastery,
   EvaluationDetail,
   EvaluationDrill,
   EvaluationSummary,
@@ -161,6 +164,8 @@ const templateItems = (
   (await get(`/app/api/templates/${templateIds[0]}`)) as { items: Ref[] }
 ).items.map((i) => i.id);
 const polls = (await get("/app/api/polls")) as { id: string; code: string | null }[];
+/** A student seat of the classroom, for one student's drill progression. */
+const firstSeat = ((await get(`/app/api/classrooms/${classroomId}`)) as { roster: Ref[] }).roster[0]!.id;
 
 // --- Route -> schema -------------------------------------------------------
 
@@ -326,6 +331,19 @@ const CHECKED: Case[] = [
   ...evaluations.map((e) =>
     one("/app/api/evaluations/:id/drill", `/app/api/evaluations/${e.id}/drill`, EvaluationDrill),
   ),
+  // The teacher's view of the classroom's drill (slice 4).
+  each(
+    "/app/api/classrooms/:id/drill/activity",
+    `/app/api/classrooms/${classroomId}/drill/activity`,
+    DrillStudentActivity,
+  ),
+  one("/app/api/classrooms/:id/drill/progress", `/app/api/classrooms/${classroomId}/drill/progress`, DrillProgress),
+  one(
+    "/app/api/classrooms/:id/drill/progress",
+    `/app/api/classrooms/${classroomId}/drill/progress?student=${firstSeat}`,
+    DrillProgress,
+  ),
+  each("/app/api/classrooms/:id/drill/mastery", `/app/api/classrooms/${classroomId}/drill/mastery`, DrillTagMastery),
   // F-EVAL-15: the score-only feedback between two attempts of an exercise.
   one(
     `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`,

@@ -12,6 +12,12 @@
  */
 import { DRILL_TIME_ZONE } from "./drillSession.js";
 
+/**
+ * The share of cards the scheduler aims to have remembered when they come
+ * due (ADR-041 §5): what a recall rate near target means the schedule works.
+ */
+export const DRILL_TARGET_RETENTION = 0.9;
+
 /** A review counts as recalled from this rating on: anything but 1 Again. */
 export const DRILL_RECALLED_MIN_RATING = 2;
 

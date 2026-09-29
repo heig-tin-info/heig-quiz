@@ -1,7 +1,8 @@
 /**
  * 7. The drill (ADR-041, #317): the student's session, cards served and
  * reviewed, the opt-out per classroom, and the teacher's switches — the
- * classroom's drill and an evaluation's "Allow drill" with its cards.
+ * classroom's drill and an evaluation's "Allow drill" with its cards — and
+ * the teacher's view of a classroom's drill (the end of this file).
  *
  * The cards are questions of section 2, served through their type's own
  * `toStudent` (`studentView`) and graded by the same `tryAnswer` the preview
@@ -16,17 +17,22 @@
 import type {
   DrillClassroom,
   DrillClassroomSettings,
+  DrillProgress,
+  DrillRecall,
   DrillReviewResult,
   DrillServed,
   DrillSession,
+  DrillStudentActivity,
+  DrillTagMastery,
+  DrillWeek,
   EvaluationDrill,
 } from "@quiz/contracts";
-import { allowDrillWritable } from "@quiz/domain";
+import { allowDrillWritable, drillLocalDate, drillProgressRange, drillWeekStarts } from "@quiz/domain";
 
 import { evaluationOr404, evaluations, toEvaluation, type MockEvaluation } from "./evaluation";
-import { courses, roomOr404, rooms } from "./org";
+import { courses, roomOr404, rooms, type Room } from "./org";
 import { frozenConfig, questions, studentSolutionOf, studentView, tryAnswer, type MockQuestion } from "./pool";
-import { D, flags, iso, MockError, now, on } from "./runtime";
+import { D, flags, H, iso, MockError, now, on } from "./runtime";
 
 /** The classrooms the student persona sits in (`studentRooms` in org.ts). */
 const studentRoomIds = () => rooms.slice(0, 2).map((r) => r.id);
@@ -236,4 +242,166 @@ on("DELETE", "/app/api/evaluations/:id/drill/cards", (m) => {
   const removed = evaluationCards.get(e.id) ?? 0;
   evaluationCards.delete(e.id);
   return { removed };
+});
+
+// --- Teacher's view (slice 4) ----------------------------------------------
+//
+// `r1` has a term of practice behind it: every claimed student has a level
+// of engagement, most of them improving, two opted out along the way, and
+// the unclaimed seats never practised. `r2` has the drill on and nothing
+// yet ("no activity yet"); every other classroom has it off.
+
+/** A stable pseudo-random number in [0, 1) for a (student, week) pair. */
+const noise = (a: number, b: number) => {
+  const x = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+interface MockWeek extends DrillWeek {
+  /** The last review of the week, for "last activity". */
+  lastAt: string | null;
+}
+
+/**
+ * Every week the progression spans for a room, from the domain's own rule —
+ * except `r1`, which the mock gives fourteen weeks of history whatever
+ * today's date, so that the trend and the semester-end chart have something
+ * to show early in a semester too.
+ */
+const weeksOf = (room: Room): string[] => {
+  const today = drillLocalDate(new Date(now));
+  if (hasHistory(room.id)) return drillWeekStarts(drillLocalDate(new Date(now - 13 * 7 * D)), today);
+  const range = drillProgressRange({
+    periodStart: room.periodStart,
+    periodEnd: room.periodEnd,
+    enabledOn: room.drillEnabledAt ? drillLocalDate(new Date(room.drillEnabledAt)) : null,
+    firstReviewOn: null,
+    today,
+  });
+  return range ? drillWeekStarts(range.from, range.to) : [];
+};
+
+const emptyWeek = (weekStart: string): MockWeek => ({
+  weekStart,
+  reviews: 0,
+  sessions: 0,
+  questions: 0,
+  students: 0,
+  recall: { repeated: 0, recalled: 0 },
+  lastAt: null,
+});
+
+/** Opted out: roster index -> days ago. */
+const OPTED_OUT: Record<number, number> = { 3: 12, 9: 25 };
+const hasHistory = (roomId: string) => roomId === "r1";
+
+/** One student's weeks in `r1`: engagement by seat, recall rising for most. */
+function studentWeeks(index: number, weeks: string[]): MockWeek[] {
+  const level = [1, 0.7, 0.35, 0.9, 0.15, 0.6][index % 6]!;
+  const improving = index % 4 !== 2;
+  const outDays = OPTED_OUT[index];
+  const outAt = outDays === undefined ? Infinity : now - outDays * D;
+  return weeks.map((weekStart, w) => {
+    const start = Date.parse(`${weekStart}T08:00:00Z`);
+    const sessions = start >= outAt || start > now ? 0 : Math.round(level * 5 * (0.5 + noise(index, w)));
+    if (sessions === 0) return emptyWeek(weekStart);
+    const reviews = sessions * (6 + Math.round(4 * noise(w, index)));
+    const repeated = w === 0 ? 0 : Math.round(reviews * 0.7);
+    const trend = improving ? 0.6 + 0.025 * w : 0.86 - 0.025 * w;
+    const rate = Math.min(0.95, trend + 0.06 * (noise(index + w, 3) - 0.5));
+    const lastAt = Math.min(now - H, start + (sessions - 1) * D + 10 * H);
+    return {
+      weekStart,
+      reviews,
+      sessions,
+      questions: Math.round(reviews * 0.8),
+      students: 1,
+      recall: { repeated, recalled: Math.round(repeated * rate) },
+      lastAt: new Date(lastAt).toISOString(),
+    };
+  });
+}
+
+/** Every student seat's weeks, the unclaimed ones empty. */
+function seatWeeks(roomId: string) {
+  const room = roomOr404(roomId);
+  const weeks = weeksOf(room);
+  return {
+    weeks,
+    seats: room.roster
+      .filter((s) => !s.staff)
+      .map((seat, index) => ({
+        seat,
+        index,
+        weeks: hasHistory(roomId) && seat.userId !== null ? studentWeeks(index, weeks) : weeks.map(emptyWeek),
+      })),
+  };
+}
+
+const sumRecall = (ws: DrillWeek[]): DrillRecall => ({
+  repeated: ws.reduce((a, w) => a + w.recall.repeated, 0),
+  recalled: ws.reduce((a, w) => a + w.recall.recalled, 0),
+});
+const sum = (ws: DrillWeek[], k: "reviews" | "sessions" | "questions") => ws.reduce((a, w) => a + w[k], 0);
+
+on("GET", "/app/api/classrooms/:id/drill/activity", (m): DrillStudentActivity[] => {
+  const roomId = m.groups!.id!;
+  return seatWeeks(roomId).seats.map(({ seat, index, weeks }) => {
+    const outDays = hasHistory(roomId) ? OPTED_OUT[index] : undefined;
+    return {
+      enrollmentId: seat.id,
+      nom: seat.nom,
+      prenom: seat.prenom,
+      questionsSeen: Math.min(60, sum(weeks, "questions")),
+      sessions: sum(weeks, "sessions"),
+      lastReviewAt: weeks.filter((w) => w.lastAt !== null).at(-1)?.lastAt ?? null,
+      reviews: {
+        last7: sum(weeks.slice(-1), "reviews"),
+        last30: sum(weeks.slice(-4), "reviews"),
+        all: sum(weeks, "reviews"),
+      },
+      recall: {
+        last30: sumRecall(weeks.slice(-4)),
+        previous30: sumRecall(weeks.slice(-8, -4)),
+        all: sumRecall(weeks),
+      },
+      optedOutAt: outDays === undefined ? null : iso(-outDays * D),
+    };
+  });
+});
+
+on("GET", "/app/api/classrooms/:id/drill/progress", (m, _body, url): DrillProgress => {
+  const student = url.searchParams.get("student");
+  const { weeks, seats } = seatWeeks(m.groups!.id!);
+  const chosen = student === null ? seats : seats.filter((s) => s.seat.id === student);
+  if (student !== null && chosen.length === 0) throw new MockError(404, "Student not found");
+  return {
+    weeks: weeks.map((weekStart, w) => {
+      const of = chosen.map((s) => s.weeks[w]!);
+      return {
+        weekStart,
+        reviews: sum(of, "reviews"),
+        sessions: sum(of, "sessions"),
+        questions: sum(of, "questions"),
+        students: of.filter((x) => x.reviews > 0).length,
+        recall: sumRecall(of),
+      };
+    }),
+  };
+});
+
+/** The tags of the C course, and the questions without one. */
+const MASTERY: [string | null, number][] = [
+  ["pointeurs", 0.58],
+  ["memoire", 0.66],
+  ["tableaux", 0.74],
+  ["boucles", 0.83],
+  ["types", 0.88],
+  [null, 0.79],
+];
+
+on("GET", "/app/api/classrooms/:id/drill/mastery", (m): DrillTagMastery[] => {
+  if (!hasHistory(roomOr404(m.groups!.id!).id)) return [];
+  return MASTERY.map(([tag, retrievability], i) => ({ tag, cards: 40 + 17 * i, students: 18 - i, retrievability }))
+    .sort((a, b) => a.retrievability - b.retrievability);
 });

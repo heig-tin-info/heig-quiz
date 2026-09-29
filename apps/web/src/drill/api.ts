@@ -10,6 +10,7 @@ import {
   DrillAnswerBody,
   DrillClassroomBody,
   DrillOptOutBody,
+  type DrillProgressQuery,
   DrillSessionQuery,
   DrillShownBody,
   EvaluationDrillBody,
@@ -17,14 +18,17 @@ import {
   type DrillClassroom,
   type DrillClassroomSettings,
   type DrillDeviceClass,
+  type DrillProgress,
   type DrillReviewResult,
   type DrillServed,
   type DrillSession,
+  type DrillStudentActivity,
+  type DrillTagMastery,
   type EvaluationDrill,
 } from "@quiz/contracts";
 
 import { api } from "../api";
-import { drillClassroomsKey, drillSessionKey } from "../queryKeys";
+import { classroomDrillKey, drillClassroomsKey, drillSessionKey } from "../queryKeys";
 import { useCoarsePointer } from "../ui";
 
 /** A write's body, parsed by its contract before it leaves. */
@@ -135,3 +139,36 @@ export const setEvaluationDrill = (evaluationId: string, allowDrill: boolean) =>
 
 export const removeEvaluationCards = (evaluationId: string) =>
   api<DrillCardsRemoved>(`/app/api/evaluations/${evaluationId}/drill/cards`, { method: "DELETE" });
+
+// --- Teacher's view (slice 4) ------------------------------------------------
+
+/** Each student's activity in the classroom's drill (ADR-041 §8). */
+export function useClassroomDrillActivity(classroomId: string) {
+  return useQuery({
+    queryKey: classroomDrillKey(classroomId, "activity"),
+    queryFn: () => api<DrillStudentActivity[]>(`/app/api/classrooms/${classroomId}/drill/activity`),
+  });
+}
+
+/**
+ * One student's weeks (an enrollment id). The query is typed by its
+ * contract, not parsed by it: the id comes from the server's own answer,
+ * like the ids of every path the app builds, and the mock's readable ids
+ * are not uuids.
+ */
+export function useDrillProgress(classroomId: string, student: string) {
+  const query: DrillProgressQuery = { student };
+  return useQuery({
+    queryKey: classroomDrillKey(classroomId, "progress", student),
+    queryFn: () =>
+      api<DrillProgress>(`/app/api/classrooms/${classroomId}/drill/progress?${new URLSearchParams(query)}`),
+  });
+}
+
+/** The mastery per tag of the classroom (ADR-041 §10, item 10). */
+export function useClassroomDrillMastery(classroomId: string) {
+  return useQuery({
+    queryKey: classroomDrillKey(classroomId, "mastery"),
+    queryFn: () => api<DrillTagMastery[]>(`/app/api/classrooms/${classroomId}/drill/mastery`),
+  });
+}
