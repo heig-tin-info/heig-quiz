@@ -279,6 +279,50 @@ export function discriminationBand(r: number): DiscriminationBand {
   return "good";
 }
 
+/**
+ * The distractor analysis of a choice question (ADR-041): which option the
+ * counted answers picked, as whole-percent shares. It reads only the answers
+ * given to the versions whose options are the latest version's own.
+ */
+
+/**
+ * The versions that share the LATEST one's key, going back from it until
+ * the first one that differs: a contiguous run, never a version from before
+ * a change, even when a later edit put the options back. `ascending` is in
+ * version order; a `null` key (a version that cannot be read) matches
+ * nothing and ends the run — and an unreadable latest version gives none.
+ */
+export function latestRun<T>(ascending: readonly T[], keyOf: (version: T) => string | null): T[] {
+  const latest = ascending.at(-1);
+  const key = latest === undefined ? null : keyOf(latest);
+  if (key === null) return [];
+  let start = ascending.length - 1;
+  while (start > 0 && keyOf(ascending[start - 1]!) === key) start -= 1;
+  return ascending.slice(start);
+}
+
+/** What the counted answers picked, as whole percents of `n`. */
+export interface OptionShares {
+  /** One share per option, in the options' order. */
+  options: number[];
+  /** The answers that picked nothing: blank, skipped, not reached on an older attempt. */
+  none: number;
+}
+
+/**
+ * The shares as they may be shown: each count over `n`, rounded to a whole
+ * percent on its own — so a single-choice question may sum to 99 or 101,
+ * and a multiple-choice one well above 100, since an answer may pick several
+ * options. `null` below {@link QUESTION_STATS_MIN_N} answers: the threshold
+ * of the success rate, applied to this analysis's own `n` (ADR-041). Never a
+ * count, only a share (N-DATA-06).
+ */
+export function optionShares(counts: readonly number[], none: number, n: number): OptionShares | null {
+  if (n < QUESTION_STATS_MIN_N) return null;
+  const share = (count: number) => Math.round((100 * count) / n);
+  return { options: counts.map(share), none: share(none) };
+}
+
 export interface HistogramBucket {
   /** Lower bound of the bucket, e.g. 3.5 for [3.5, 4.0). The last bucket is exactly 6.0. */
   bucket: number;

@@ -11,6 +11,8 @@ import {
   describe as describeSeries,
   histogram,
   itemStats,
+  latestRun,
+  optionShares,
   quantile,
   QUESTION_STATS_MIN_N,
   QUESTION_TIME_MIN_N,
@@ -261,5 +263,57 @@ describe("discriminationBand", () => {
     expect(discriminationBand(0.2)).toBe("fair");
     expect(discriminationBand(0.29)).toBe("fair");
     expect(discriminationBand(0.3)).toBe("good");
+  });
+});
+
+describe("latestRun", () => {
+  const v = (number: number, key: string | null) => ({ number, key });
+  const run = (versions: { number: number; key: string | null }[]) =>
+    latestRun(versions, (x) => x.key).map((x) => x.number);
+
+  it("takes every version when the options never changed", () => {
+    expect(run([v(1, "a"), v(2, "a"), v(3, "a")])).toEqual([1, 2, 3]);
+  });
+
+  it("stops at the last change", () => {
+    expect(run([v(1, "a"), v(2, "b"), v(3, "b")])).toEqual([2, 3]);
+    expect(run([v(1, "a"), v(2, "b")])).toEqual([2]);
+  });
+
+  it("keeps a run contiguous: options put back after a change start a new run", () => {
+    expect(run([v(1, "a"), v(2, "b"), v(3, "a")])).toEqual([3]);
+  });
+
+  it("gives nothing without versions or with an unreadable latest one", () => {
+    expect(run([])).toEqual([]);
+    expect(run([v(1, "a"), v(2, null)])).toEqual([]);
+  });
+
+  it("stops at an unreadable version", () => {
+    expect(run([v(1, "a"), v(2, null), v(3, "a")])).toEqual([3]);
+  });
+});
+
+describe("optionShares", () => {
+  it("rounds each share to a whole percent of n", () => {
+    expect(optionShares([7, 2, 1], 0, 10)).toEqual({ options: [70, 20, 10], none: 0 });
+    // 1/3 = 33.3 → 33; 2/3 = 66.7 → 67 — each on its own.
+    expect(optionShares([4, 4, 3, 1], 0, 12)).toEqual({ options: [33, 33, 25, 8], none: 0 });
+  });
+
+  it("counts the answers that picked nothing as their own share", () => {
+    expect(optionShares([6, 2], 3, 11)).toEqual({ options: [55, 18], none: 27 });
+  });
+
+  it("lets a multiple-choice question sum above 100", () => {
+    const shares = optionShares([9, 8, 2], 0, 10)!;
+    expect(shares.options).toEqual([90, 80, 20]);
+    expect(shares.options.reduce((a, b) => a + b, 0)).toBeGreaterThan(100);
+  });
+
+  it("is null below the threshold of the success rate", () => {
+    expect(QUESTION_STATS_MIN_N).toBe(10);
+    expect(optionShares([5, 4], 0, 9)).toBeNull();
+    expect(optionShares([5, 5], 0, 10)).not.toBeNull();
   });
 });
