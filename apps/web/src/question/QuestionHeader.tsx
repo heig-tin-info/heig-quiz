@@ -113,31 +113,33 @@ export function QuestionHeader({
            * than staying as a row of actions that answer with an error.
            */}
           {readOnly ? null : (
-            <>
-              <Button data-coach="question.publish" onClick={onPublish}>
-                {t("question.publish")}
-              </Button>
-              <Menu
-                label={t("common.actions")}
-                items={[
-                  { label: t("question.saveNow"), icon: Save, onSelect: () => autosave.flush() },
-                  {
-                    label: t("question.duplicate"),
-                    icon: Copy,
-                    onSelect: onDuplicate,
-                  },
-                  {
-                    label: t("question.delete"),
-                    icon: Trash2,
-                    danger: true,
-                    separator: true,
-                    onSelect: onDelete,
-                  },
-                ]}
-              />
-            </>
+            <Button data-coach="question.publish" onClick={onPublish}>
+              {t("question.publish")}
+            </Button>
           )}
         </>
+      }
+      menu={
+        readOnly ? null : (
+          <Menu
+            label={t("common.actions")}
+            items={[
+              { label: t("question.saveNow"), icon: Save, onSelect: () => autosave.flush() },
+              {
+                label: t("question.duplicate"),
+                icon: Copy,
+                onSelect: onDuplicate,
+              },
+              {
+                label: t("question.delete"),
+                icon: Trash2,
+                danger: true,
+                separator: true,
+                onSelect: onDelete,
+              },
+            ]}
+          />
+        )
       }
     />
   );

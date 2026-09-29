@@ -71,7 +71,7 @@ Every main screen carries a small question-mark icon beside its title. Click it 
 <figure markdown="span">
   ![The help drawer on a classroom](../assets/screenshots/help-drawer-light.png#only-light)
   ![The help drawer on a classroom](../assets/screenshots/help-drawer-dark.png#only-dark)
-  <figcaption>The help drawer of the classroom screen, opened from the question mark beside the title.</figcaption>
+  <figcaption>The help drawer of the classroom screen, opened from the question mark at the top right, beside the actions.</figcaption>
 </figure>
 
 The topics are short and describe one screen each. This guide is the longer version: it walks through the tasks that cross several screens.

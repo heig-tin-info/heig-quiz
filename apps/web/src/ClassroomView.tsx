@@ -33,7 +33,6 @@ import {
   EditableTitle,
   EmptyState,
   FormDialog,
-  HelpIcon,
   Menu,
   PageHeader,
   ParentLink,
@@ -269,16 +268,12 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
         }
         title={
           <span className="flex flex-wrap items-baseline gap-3">
-            {/* The "?" follows the name, not the period, or it reads as help
-                about the period (#295); PageHeader's `help` would close the title. */}
-            <span className="mr-5 inline-flex items-center">
-              <ClassroomName room={data} />
-              <HelpIcon topic="classroom" coach="page.help" />
-            </span>
+            <ClassroomName room={data} />
             <PeriodLink room={data} onOpen={() => setEditingPeriod(true)} />
             {data.archivedAt ? <Badge tone="zinc">{t("classrooms.archived")}</Badge> : null}
           </span>
         }
+        help="classroom"
         actions={
           <>
             {/* Secondary, and to the left of the primary: it is a detour into
@@ -308,46 +303,48 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
                 <Plus /> {t("eval.new")}
               </Button>
             ) : null}
-            <Menu
-              label={t("common.actions")}
-              items={[
-                data.archivedAt
-                  ? {
-                      label: t("classrooms.unarchive"),
-                      icon: ArchiveRestore,
-                      onSelect: () => archive.mutate("unarchive"),
-                    }
-                  : {
-                      label: t("classrooms.archive"),
-                      icon: Archive,
-                      onSelect: () => archive.mutate("archive"),
-                    },
-                {
-                  label: t("classrooms.setPeriod"),
-                  icon: CalendarRange,
-                  onSelect: () => setEditingPeriod(true),
-                },
-                {
-                  label: t("classrooms.delete"),
-                  icon: Trash2,
-                  danger: true,
-                  separator: true,
-                  onSelect: async () => {
-                    if (
-                      await confirm({
-                        title: t("classrooms.deleteConfirm", { name: data.name }),
-                        confirmLabel: t("common.delete"),
-                        cancelLabel: t("common.cancel"),
-                        danger: true,
-                      })
-                    ) {
-                      remove.mutate();
-                    }
-                  },
-                },
-              ]}
-            />
           </>
+        }
+        menu={
+          <Menu
+            label={t("common.actions")}
+            items={[
+              data.archivedAt
+                ? {
+                    label: t("classrooms.unarchive"),
+                    icon: ArchiveRestore,
+                    onSelect: () => archive.mutate("unarchive"),
+                  }
+                : {
+                    label: t("classrooms.archive"),
+                    icon: Archive,
+                    onSelect: () => archive.mutate("archive"),
+                  },
+              {
+                label: t("classrooms.setPeriod"),
+                icon: CalendarRange,
+                onSelect: () => setEditingPeriod(true),
+              },
+              {
+                label: t("classrooms.delete"),
+                icon: Trash2,
+                danger: true,
+                separator: true,
+                onSelect: async () => {
+                  if (
+                    await confirm({
+                      title: t("classrooms.deleteConfirm", { name: data.name }),
+                      confirmLabel: t("common.delete"),
+                      cancelLabel: t("common.cancel"),
+                      danger: true,
+                    })
+                  ) {
+                    remove.mutate();
+                  }
+                },
+              },
+            ]}
+          />
         }
       />
 

@@ -259,92 +259,94 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
                 <ClipboardCheck /> {t("eval.grading")}
               </Button>
             ) : null}
-            <Menu
-              label={t("common.actions")}
-              items={[
-                ...(isGraded(evaluation.state)
-                  ? [
-                      {
-                        label: t("eval.results"),
-                        icon: BarChart3,
-                        onSelect: () => navigate(links.results),
-                      },
-                    ]
-                  : []),
-                {
-                  label: t("eval.dashboard"),
-                  icon: MonitorPlay,
-                  onSelect: () => navigate({ view: "live", id }),
-                },
-                {
-                  label: t("eval.duplicate"),
-                  icon: Copy,
-                  onSelect: () =>
-                    duplicate.mutate(t("eval.duplicateTitle", { title: evaluation.title })),
-                },
-                // ADR-031: keep this evaluation at the course level, for every
-                // classroom of the course to start from.
-                ...(classroom.data
-                  ? [
-                      {
-                        label: t("templates.save"),
-                        icon: FileStack,
-                        onSelect: () => setSavingTemplate(true),
-                      },
-                    ]
-                  : []),
-                /*
-                 * The teacher's own test attempt, thrown away so the walk can
-                 * be done again (ADR-018). It only exists when there is one,
-                 * and it lives in the overflow beside the other destructive
-                 * item rather than as a fourth button in the header: the
-                 * action tiers of DESIGN.md allow three secondaries, and the
-                 * red of a destructive action belongs to the dialog it opens.
-                 */
-                ...(self.attemptId !== null && self.staffSeat
-                  ? [
-                      {
-                        label: t("eval.resetAttempt"),
-                        icon: RotateCcw,
-                        danger: true,
-                        separator: true,
-                        onSelect: async () => {
-                          if (
-                            await confirm({
-                              title: t("eval.resetAttempt.title"),
-                              message: t("eval.resetAttempt.message"),
-                              confirmLabel: t("eval.resetAttempt.confirm"),
-                              cancelLabel: t("common.cancel"),
-                              danger: true,
-                            })
-                          ) {
-                            resetAttempt.mutate();
-                          }
-                        },
-                      },
-                    ]
-                  : []),
-                {
-                  label: t("eval.delete"),
-                  icon: Trash2,
-                  danger: true,
-                  separator: self.attemptId === null || !self.staffSeat,
-                  onSelect: async () => {
-                    if (
-                      await confirm({
-                        title: t("eval.deleteConfirm", { name: evaluation.title }),
-                        confirmLabel: t("common.delete"),
-                        cancelLabel: t("common.cancel"),
-                        danger: true,
-                      })
-                    ) {
-                      remove.mutate(evaluation.title);
-                    }
-                  },
-                },
-              ]}
-            />
           </>
+        }
+        menu={
+          <Menu
+            label={t("common.actions")}
+            items={[
+              ...(isGraded(evaluation.state)
+                ? [
+                    {
+                      label: t("eval.results"),
+                      icon: BarChart3,
+                      onSelect: () => navigate(links.results),
+                    },
+                  ]
+                : []),
+              {
+                label: t("eval.dashboard"),
+                icon: MonitorPlay,
+                onSelect: () => navigate({ view: "live", id }),
+              },
+              {
+                label: t("eval.duplicate"),
+                icon: Copy,
+                onSelect: () =>
+                  duplicate.mutate(t("eval.duplicateTitle", { title: evaluation.title })),
+              },
+              // ADR-031: keep this evaluation at the course level, for every
+              // classroom of the course to start from.
+              ...(classroom.data
+                ? [
+                    {
+                      label: t("templates.save"),
+                      icon: FileStack,
+                      onSelect: () => setSavingTemplate(true),
+                    },
+                  ]
+                : []),
+              /*
+               * The teacher's own test attempt, thrown away so the walk can
+               * be done again (ADR-018). It only exists when there is one,
+               * and it lives in the overflow beside the other destructive
+               * item rather than as a fourth button in the header: the
+               * action tiers of DESIGN.md allow three secondaries, and the
+               * red of a destructive action belongs to the dialog it opens.
+               */
+              ...(self.attemptId !== null && self.staffSeat
+                ? [
+                    {
+                      label: t("eval.resetAttempt"),
+                      icon: RotateCcw,
+                      danger: true,
+                      separator: true,
+                      onSelect: async () => {
+                        if (
+                          await confirm({
+                            title: t("eval.resetAttempt.title"),
+                            message: t("eval.resetAttempt.message"),
+                            confirmLabel: t("eval.resetAttempt.confirm"),
+                            cancelLabel: t("common.cancel"),
+                            danger: true,
+                          })
+                        ) {
+                          resetAttempt.mutate();
+                        }
+                      },
+                    },
+                  ]
+                : []),
+              {
+                label: t("eval.delete"),
+                icon: Trash2,
+                danger: true,
+                separator: self.attemptId === null || !self.staffSeat,
+                onSelect: async () => {
+                  if (
+                    await confirm({
+                      title: t("eval.deleteConfirm", { name: evaluation.title }),
+                      confirmLabel: t("common.delete"),
+                      cancelLabel: t("common.cancel"),
+                      danger: true,
+                    })
+                  ) {
+                    remove.mutate(evaluation.title);
+                  }
+                },
+              },
+            ]}
+          />
         }
       />
 

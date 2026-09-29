@@ -562,8 +562,13 @@ live in `ui/state.ts`, each written once.
   Width is a prop, never a class beside `inputClass`: Tailwind settles two
   width or height utilities on one element by their order in the generated
   stylesheet, not by the order they were written in.
+- Help of a whole page (`PageHeader`'s `help`, `PageHelpButton`): a round
+  34 px button outlined like a secondary one, in the header's action row,
+  after the page's actions and before the overflow "…" — never beside the
+  h1. The title is renamed in place, carries badges and wraps on a phone; a
+  "?" riding it never sat right, the action row does not move.
 - Help "?" (`HelpIcon`): **16 px**, `fg-faint` at rest, accent on hover, the
-  same beside a 28 px page title, a 16 px section heading and a 13 px field
+  same beside a 16 px section heading, a dialog title and a 13 px field
   label — it is a mark next to a word, not an action of its own, and one size
   is what makes it read as the same mark everywhere. It is placed by the
   component and never by the call site, which only says WHICH topic. Its rows
