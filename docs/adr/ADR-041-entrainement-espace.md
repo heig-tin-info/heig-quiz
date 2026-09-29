@@ -3,17 +3,18 @@
 ## Status
 
 Accepted (2026-09-29). §1 to §4, the opt-in of §6, and §7 to §8 record the
-decisions of the product owner in issue #317 (last comment). §5 (FSRS-5, default weights,
-target retention 0.9, `ts-fsrs`) and the session composition of §6 adopt the
-issue's own proposals (body, §2 and §3), which that comment did not decide;
-the implementation details of §5 are this ADR's. Everything else this ADR
-adds is listed apart, under "Proposed in this ADR, to be confirmed by the
-product owner". Slice 1
-of #317 implements the pure rules in `@quiz/domain`, with the `ts-fsrs`
-dependency. Amends F-DRILL-01 to F-DRILL-04 and adds F-DRILL-06
-(docs/spec/02); amends N-DATA-02, N-DATA-03 and N-DATA-07 (docs/spec/03),
-the question-type contract (docs/spec/04 §4.1) and the drill tables
-(docs/spec/05 §5.4).
+decisions of the product owner in issue #317 (first decision comment). §5
+(FSRS-5, default weights, target retention 0.9, `ts-fsrs`) and the session
+composition of §6 adopt the issue's own proposals (body, §2 and §3), which
+that comment did not decide; the implementation details of §5 are this
+ADR's. §10 records the second round of decisions (issue #317, last
+comment, 2026-09-29): the product owner accepted every proposal this ADR
+had listed as "to be confirmed", one of them changed, and settled question
+28 of docs/spec/06. Slice 1 of #317 implements the pure rules in
+`@quiz/domain`, with the `ts-fsrs` dependency; slice 2 the `drill` module.
+Amends F-DRILL-01 to F-DRILL-04 and adds F-DRILL-06 (docs/spec/02); amends
+N-DATA-02, N-DATA-03 and N-DATA-07 (docs/spec/03), the question-type
+contract (docs/spec/04 §4.1) and the drill tables (docs/spec/05 §5.4).
 
 ## Context
 
@@ -126,35 +127,80 @@ default"):
 - **Invariant 6.** The teacher's per-student view is loaded through
   `staffAccess` on the classroom; otherwise a 404.
 
-## Proposed in this ADR, to be confirmed by the product owner
+### 10. Second round (product owner, 2026-09-29)
 
-- A card enters as **new**: the evaluation's answer is not its first review
-  (its time was an exam's pace), and a later attempt of an exercise creates
-  nothing. A poll creates no card.
-- Turning "Allow drill" off leaves the cards already created. The setting is
-  editable until the release and copied into and from templates (F-EVAL-18).
-- Opting out is **per classroom**, not global.
-- The eligibility rule of §3 (automatic and final grading) rather than a
-  list of exceptions: it excludes a `short` question with an `llm` matcher.
-- The `toDrillGrade` hook is **removed from the contract** (docs/spec/04
-  §4.1): strategy A needs correctness, and correctness is the same function
-  of the points for the four v1 types. A later type may bring a hook back.
-- The answer-key change of §7 is detected by a hash of the type's
-  `toSolution` under a fixed view, stored on the card.
-- Retention anchors: a review is purged five years after it was made, a card
-  five years after its last review (or its creation if never reviewed).
-- A right answer with no reference at all is rated Good; a card with no
-  reference time counts a fixed fallback in the session budget.
-- New cards are capped at **10 per day**; a card longer than the whole
-  budget is still served alone, so a session is never empty while a card is
-  available.
-- **The improvement metric** (slice 4): the **recall rate** per time window
-  — among the reviews of a question the student had already drilled, the
-  share not rated Again; a question's first drill review is left out, since
-  it measures the evaluation, not the practice. It is FSRS's "true
-  retention": near the target when the schedule works, rising with
-  progress.
-- Mastery per tag is shown to the teacher per classroom.
+Every proposal of the first version of this ADR is accepted; item 3 is
+changed.
+
+1. A card enters as **new**: the evaluation's answer is not its first review
+   (its time was an exam's pace), and a later attempt of an exercise creates
+   nothing.
+2. A **poll creates no card**.
+3. **Changed.** Turning "Allow drill" off keeps the cards already created,
+   and the teacher has an explicit action, **"Remove these questions from
+   the drill"**, which deletes the cards the evaluation gave rise to (and
+   their reviews). The setting stays editable until the release, and is
+   copied into and from templates (F-EVAL-18).
+4. Opting out is **per classroom**, not global.
+5. Only a grading that is **automatic and final** creates a card (§3): this
+   excludes a `short` question with an `llm` matcher.
+6. The `toDrillGrade` hook is **removed from the contract** (docs/spec/04
+   §4.1) in favour of the common eligibility rule: strategy A needs
+   correctness, and correctness is the same function of the points for the
+   four v1 types. A later type may bring a hook back.
+7. A right answer with **no reference time** at all is rated **Good**; a
+   card with no reference time counts a fixed fallback in the session
+   budget.
+8. **Progress** is shown to the teacher as activity (questions seen,
+   sessions) beside the **recall rate on repeated reviews**, per time
+   window: among the reviews of a question the student had already
+   drilled, the share not rated Again. A question's first drill review is
+   left out, since it measures the evaluation, not the practice. It is
+   FSRS's "true retention": near the target when the schedule works,
+   rising with progress.
+9. At most **10 new cards per day**; a card longer than the whole budget is
+   still served alone, so a session is never empty while a card is
+   available. A per-classroom setting may come later.
+10. **Mastery per tag, per classroom**, for the teacher.
+
+Two more rules this ADR proposed are adopted with them:
+
+- The answer-key change of §7 is detected by a **hash of the type's
+  `toSolution` under a fixed view**, stored on the card.
+- **Retention anchors:** a review is purged five years after it was made, a
+  card five years after its last review (or its creation if never
+  reviewed).
+
+And the answers to question 28 of docs/spec/06, which bind the
+implementation:
+
+- **(a)** Deleting a classroom, an evaluation or a question deletes the
+  drill data derived from it (N-DATA-03).
+- **(b)** No extra practice in v1. An empty day says "nothing to review
+  today" and gives the next due date.
+- **(c)** One budget of ten minutes, every v1 type on both device classes.
+- **(d)** No damping of Easy; the choices of an `mcq` are shuffled at each
+  review.
+- **(e)** A review is graded with the settings of the evaluation where the
+  card was met first.
+- **(f)** No whole-pool drill in v1.
+- **(g)** A card leaves the session when its classroom is archived; its
+  data is kept for the retention period.
+- **(h)** A drill review always shows the key (`studentSolutionView`). **The
+  "Allow drill" setting says so next to its switch**: students will see the
+  key of these questions after each review.
+- **(i)** A new seed at each review.
+- **(j)** A card belongs to the classroom where it was met first, and only
+  that classroom's staff see its reviews.
+- **(k)** An opt-out hides the activity **from then on**: what was recorded
+  before stays visible to the teacher, and **the opt-out confirmation tells
+  the student so**.
+- **(l)** No minimum group size within a classroom, since the per-student
+  view is visible anyway. The 10-student threshold stays for
+  cross-classroom or multi-year statistics (N-DATA-06).
+
+The two sentences in bold under (h) and (k) are UI copy obligations of
+slice 3 (the student's tab) and of the evaluation settings screen.
 
 ## Consequences
 
@@ -187,4 +233,5 @@ dependency restores the package.
 
 ## Left open
 
-docs/spec/06, question 28, each with an assumed answer.
+Nothing of question 28 (settled in §10). A per-classroom cap on new cards,
+a configurable budget (F-ADMIN-03) and strategy C remain later work.
