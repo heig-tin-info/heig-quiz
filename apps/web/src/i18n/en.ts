@@ -2257,7 +2257,7 @@ export const en = {
   "grading.history.regrade": "Re-graded — {note}",
   "grading.comment": "Your comment, visible to the student",
   "grading.machineComment": "Grading note",
-  "grading.reason.reference_failed": "Your reference circuit did not simulate: check it before trusting this score.",
+  "grading.reason.reference_failed": "Your reference circuit did not simulate: check it, this answer could not be compared.",
   "grading.reason.palette_violation": "The schematic uses components the palette does not offer.",
   "grading.reason.runner_request_invalid": "The program or circuit is too large to be run.",
   "grading.reason.template_region_mismatch": "The answer no longer fits the template's editable regions.",
