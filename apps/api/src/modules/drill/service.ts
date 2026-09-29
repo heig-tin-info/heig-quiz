@@ -38,6 +38,7 @@ export function registerDrillHooks(): void {
 
 export {
   DRILL_RETENTION,
+  backfillClassroom,
   cardsAtHandIn,
   cardsAtRelease,
   evaluationCardCount,

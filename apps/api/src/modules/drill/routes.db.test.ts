@@ -86,7 +86,7 @@ describe("the drill over HTTP", () => {
 
     const on = await call("PUT", url, teacher, { enabled: true });
     expect(on.statusCode).toBe(200);
-    expect(on.json()).toEqual({ enabled: true, enabledAt: server.clock.now().toISOString() });
+    expect(on.json()).toEqual({ enabled: true, enabledAt: server.clock.now().toISOString(), cardsCreated: 0 });
     expect((await call("GET", `/app/api/classrooms/${seed.classroomId}`, teacher)).json().drillEnabled).toBe(true);
     expect(await audited("drill.enable")).toHaveLength(1);
     await handIn();

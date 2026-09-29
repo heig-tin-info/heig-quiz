@@ -563,6 +563,17 @@ export function resultsState(
   return "pending";
 }
 
+/**
+ * Whether the feedback policy shows THE KEY to a student whose attempt is in
+ * `attemptState`, now: the rule {@link studentFeedback} applies, for the
+ * drill, which never shows a key earlier than the exercise would (ADR-041
+ * §13).
+ */
+export function keyShownTo(evaluation: EvaluationRecord, attemptState: string): boolean {
+  const policy = feedbackOf(evaluation);
+  return policy.showKey && feedbackAvailable(policy, evaluation, attemptState).ok;
+}
+
 /** Whether a student may see anything at all right now. */
 function feedbackAvailable(
   policy: FeedbackPolicy,

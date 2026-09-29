@@ -120,10 +120,17 @@ export async function drillPlugin(app: FastifyInstance) {
     { preHandler: requireTeacher },
     teacher({ params: IdParam, body: DrillClassroomBody, load: staffClassroom }, async ({ req, now, body, scope }) => {
       const enabledAt = await setClassroomDrill(app.db, scope.room.id, body.enabled, now);
+      // Enabled, the first time or again: the past evaluations' cards (ADR-041 §13).
+      const cardsCreated = body.enabled ? await service.backfillClassroom(app.db, scope.room.id, now) : 0;
       if (body.enabled !== (scope.room.drillEnabledAt !== null)) {
-        await trace(req, body.enabled ? "drill.enable" : "drill.disable", "classroom", scope.room.id);
+        const action = body.enabled ? "drill.enable" : "drill.disable";
+        await trace(req, action, "classroom", scope.room.id, body.enabled ? { cardsCreated } : undefined);
       }
-      return { enabled: enabledAt !== null, enabledAt: isoOrNull(enabledAt) } satisfies DrillClassroomSettings;
+      return {
+        enabled: enabledAt !== null,
+        enabledAt: isoOrNull(enabledAt),
+        cardsCreated,
+      } satisfies DrillClassroomSettings;
     }),
   );
 

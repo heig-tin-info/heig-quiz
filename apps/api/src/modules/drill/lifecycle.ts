@@ -17,7 +17,15 @@ import type { GradeContext } from "@quiz/core/server";
 import { DRILL_TYPES, isDrillEligible } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { attempts, classrooms, drillCards, drillReviews, enrollments, questionVersions } from "../../db/schema.js";
+import {
+  attempts,
+  classrooms,
+  drillCards,
+  drillReviews,
+  enrollments,
+  evaluations,
+  questionVersions,
+} from "../../db/schema.js";
 import {
   byId,
   drillAllowed,
@@ -203,18 +211,37 @@ async function createCards(
  */
 export async function cardsAtRelease(db: Db, evaluation: EvaluationRecord, now: Date): Promise<number> {
   if (evaluation.mode !== "exam") return 0;
+  return createCards(db, evaluation, await finishedTakers(db, evaluation.id), now);
+}
+
+/** The students with a finished attempt of an evaluation: who handed it in. */
+async function finishedTakers(db: Db, evaluationId: string): Promise<string[]> {
   const ended = await db
     .selectDistinct({ userId: attempts.userId })
     .from(attempts)
-    .where(
-      and(eq(attempts.evaluationId, evaluation.id), inArray(attempts.state, ["submitted", "expired"])),
-    );
-  return createCards(
-    db,
-    evaluation,
-    ended.flatMap((a) => (a.userId === null ? [] : [a.userId])),
-    now,
-  );
+    .where(and(eq(attempts.evaluationId, evaluationId), inArray(attempts.state, ["submitted", "expired"])));
+  return ended.flatMap((a) => (a.userId === null ? [] : [a.userId]));
+}
+
+/**
+ * The drill enabled for a classroom — the first time or again (ADR-041
+ * §13): the cards its past evaluations would have created, by the same path —
+ * the exams whose results are released, the exercises for every student who
+ * handed one in. Idempotent: a card that exists is kept, the first meeting
+ * wins, and an evaluation that does not allow drill creates nothing.
+ */
+export async function backfillClassroom(db: Db, classroomId: string, now: Date): Promise<number> {
+  const rows = await db
+    .select()
+    .from(evaluations)
+    .where(and(eq(evaluations.classroomId, classroomId), inArray(evaluations.mode, ["exam", "exercise"])))
+    .orderBy(evaluations.createdAt, evaluations.id);
+  let created = 0;
+  for (const evaluation of rows) {
+    if (evaluation.mode === "exam" && evaluation.releasedAt === null) continue;
+    created += await createCards(db, evaluation, await finishedTakers(db, evaluation.id), now);
+  }
+  return created;
 }
 
 /**

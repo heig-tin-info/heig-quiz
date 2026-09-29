@@ -107,6 +107,8 @@ export type DrillReviewResult = z.infer<typeof DrillReviewResult>;
 export const DrillClassroomSettings = z.object({
   enabled: z.boolean(),
   enabledAt: z.iso.datetime().nullable(),
+  /** The cards the past evaluations gave rise to when the drill was enabled (ADR-041 §13); 0 when disabled. */
+  cardsCreated: z.number().int(),
 });
 export type DrillClassroomSettings = z.infer<typeof DrillClassroomSettings>;
 

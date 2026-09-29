@@ -13,8 +13,9 @@
  *     classroom has the drill on and is not archived (06, question 28 (g)),
  *     the student still holds a student seat there and has not opted out,
  *     and the question is not deleted; and it is served or answered only
- *     when TODAY's session would hand it out ({@link servableToday}) and its
- *     question can still be drilled. Anything else is the 404 of a missing
+ *     when TODAY's session would hand it out ({@link servableToday}), its
+ *     question can still be drilled and its evaluation lets the key reach
+ *     the student ({@link keyReleased}). Anything else is the 404 of a missing
  *     card (invariant 6) — which is also what closes answering a card twice
  *     in a day and the "extra practice" of 06, question 28 (b).
  */
@@ -43,6 +44,7 @@ import {
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import {
+  attempts,
   classrooms,
   courses,
   drillCards,
@@ -51,10 +53,11 @@ import {
   questionTags,
   questions,
 } from "../../db/schema.js";
-import { byId, gradeDefaults, type DbOrTx } from "../evaluation/service.js";
+import { byId, gradeDefaults, type DbOrTx, type EvaluationRecord } from "../evaluation/service.js";
 import { DomainError } from "../http.js";
 import { drawSeed, isShuffleable, studentSolutionView, studentView } from "../live/service.js";
 import { loadConfig, typeOf } from "../pool/service.js";
+import { keyShownTo } from "../results/service.js";
 import { currentVersions, drillGradeContext, isDrillableQuestion, keyHashOf } from "./lifecycle.js";
 
 export class DrillError extends DomainError {
@@ -161,10 +164,33 @@ function servableToday(card: CardRow, day: Day, introduced: number): boolean {
 }
 
 /**
+ * Whether the card's evaluation lets its key reach this student now (ADR-041
+ * §13) — a review always ends on the key:
+ *   - an exam's, once its results are released: a withdrawn release
+ *     suspends its cards until the next one;
+ *   - an exercise's, once its own feedback policy shows the key to the
+ *     student's latest attempt (`results.keyShownTo`, the rule of the
+ *     feedback page): at the hand-in under immediate feedback with the key,
+ *     at the release under `on_release`, never when the key is not shown.
+ */
+async function keyReleased(db: DbOrTx, evaluation: EvaluationRecord, userId: string): Promise<boolean> {
+  if (evaluation.mode === "exam") return evaluation.releasedAt !== null;
+  if (evaluation.mode !== "exercise") return false;
+  const [latest] = await db
+    .select({ state: attempts.state })
+    .from(attempts)
+    .where(and(eq(attempts.evaluationId, evaluation.id), eq(attempts.userId, userId)))
+    .orderBy(desc(attempts.attemptNumber))
+    .limit(1);
+  return latest !== undefined && keyShownTo(evaluation, latest.state);
+}
+
+/**
  * The question of a card as it stands now, the settings of the evaluation
- * where it was met first (06, question 28 (e)), and whether it can still be
- * drilled (ADR-041 §3). Null when the question has no published version or
- * the evaluation is gone.
+ * where it was met first (06, question 28 (e)), and whether the card may be
+ * served: its question can still be drilled (ADR-041 §3) and its
+ * evaluation lets the key reach the student ({@link keyReleased}). Null when
+ * the question has no published version or the evaluation is gone.
  */
 async function questionOf(db: DbOrTx, row: ActiveRow, now: Date) {
   const version = (await currentVersions(db, [row.card.questionId])).get(row.card.questionId);
@@ -173,8 +199,10 @@ async function questionOf(db: DbOrTx, row: ActiveRow, now: Date) {
   const stored = { config: version.config, configVersion: version.configVersion };
   const defaults = gradeDefaults(evaluation);
   const config = loadConfig(row.type, stored);
-  const drillable = await isDrillableQuestion(row.type, config, defaults, now);
-  return { version: stored, config, defaults, drillable };
+  const open =
+    (await isDrillableQuestion(row.type, config, defaults, now)) &&
+    (await keyReleased(db, evaluation, row.card.userId));
+  return { version: stored, config, defaults, open };
 }
 
 /** The view of one review: the card is the item, so a new seed gives a new shuffle (06, question 28 (d)). */
@@ -189,16 +217,17 @@ function viewOf(row: ActiveRow, version: { config: unknown; configVersion: numbe
 }
 
 /**
- * The card, if today's session may hand it out and its question can still
- * be drilled; the 404 otherwise. A question that stopped being drillable
- * keeps its card and its history: it is simply not served.
+ * The card, if today's session may hand it out, its question can still be
+ * drilled and its key may reach the student; the 404 otherwise. A card
+ * refused for either of the last two keeps its history: it is simply not
+ * served, until it may be again.
  */
 async function servable(db: DbOrTx, userId: string, cardId: string, now: Date) {
   const row = await ownActiveCard(db, userId, cardId);
   const day = drillDayBounds(now);
   if (!servableToday(row.card, day, await introducedToday(db, userId, day))) throw new DrillCardNotFound();
   const question = await questionOf(db, row, now);
-  if (!question?.drillable) throw new DrillCardNotFound();
+  if (!question?.open) throw new DrillCardNotFound();
   return { row, question };
 }
 
@@ -272,12 +301,12 @@ export async function drillSession(
   now: Date,
 ): Promise<DrillSession> {
   const day = drillDayBounds(now);
-  const drillable = new Map<string, boolean>();
+  const open = new Map<string, boolean>();
   const rows: ActiveRow[] = [];
   for (const row of await activeCards(db, eq(drillCards.userId, userId))) {
     const key = `${row.card.questionId}:${row.card.evaluationId}`;
-    if (!drillable.has(key)) drillable.set(key, (await questionOf(db, row, now))?.drillable ?? false);
-    if (drillable.get(key)) rows.push(row);
+    if (!open.has(key)) open.set(key, (await questionOf(db, row, now))?.open ?? false);
+    if (open.get(key)) rows.push(row);
   }
   const questionIds = [...new Set(rows.map((r) => r.card.questionId))];
   const introduced = await introducedToday(db, userId, day);

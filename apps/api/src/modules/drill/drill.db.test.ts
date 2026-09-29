@@ -35,7 +35,7 @@ import { FORBIDDEN_STUDENT_KEYS } from "../live/studentView.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import * as org from "../org/service.js";
 import * as poolService from "../pool/service.js";
-import { releaseResults } from "../results/service.js";
+import { releaseResults, unreleaseResults } from "../results/service.js";
 import * as drill from "./service.js";
 
 let db: Db;
@@ -67,7 +67,7 @@ const points = (type: string, version: { config: unknown; configVersion: number 
 async function sit(
   app: App,
   seed: Seeded,
-  opts: { students?: string[]; release?: boolean; answers?: unknown[] } = {},
+  opts: { students?: string[]; release?: boolean; answers?: unknown[]; blank?: boolean } = {},
 ) {
   let evaluation = await evaluationService.applyState(db, await reload(db, seed.evaluationId), "running", app.clock.now());
   for (const userId of opts.students ?? seed.studentIds) {
@@ -75,6 +75,7 @@ async function sit(
     const created = await live.ensureAttempt(db, evaluation, participant, app.clock.now());
     const attempt = await live.beginAttempt(db, evaluation, created, participant, app.clock.now());
     for (const [index, itemId] of seed.itemIds.entries()) {
+      if (opts.blank) break;
       await live.saveAnswer(db, {
         evaluation,
         attempt,
@@ -623,5 +624,105 @@ describe("the switches (ADR-041 §2, §6)", () => {
       .from(enrollments)
       .where(and(eq(enrollments.classroomId, seed.classroomId), eq(enrollments.userId, userId)));
     expect(seat!.drillOptedOutAt!.toISOString()).toBe(T0);
+  });
+});
+
+describe("the third round (ADR-041 §13)", () => {
+  const serves = async (app: App, userId: string, cardId: string) => {
+    try {
+      await drill.serveCard(db, userId, cardId, app.clock.now());
+      return true;
+    } catch (error) {
+      if (error instanceof drill.DrillCardNotFound) return false;
+      throw error;
+    }
+  };
+
+  it("backfills a classroom's past evaluations when its drill is enabled, and again at a re-enable", async () => {
+    const app = await appAt();
+    const exam = await world(app, { allowDrill: true, enabled: false, students: 1 });
+    await sit(app, exam, { release: true });
+    // An exam not released yet, and one that does not allow drill: nothing.
+    const hidden = await seedLive(db, { studentIds: exam.studentIds, questions: 1, teacherId: exam.teacherId });
+    await db.update(evaluations).set({ classroomId: exam.classroomId }).where(eq(evaluations.id, hidden.evaluationId));
+    await evaluationService.setAllowDrill(db, await reload(db, hidden.evaluationId), true, app.clock.now());
+    await sit(app, { ...hidden, classroomId: exam.classroomId });
+    const exercise = await evaluationService.createEvaluation(db, {
+      classroomId: exam.classroomId,
+      title: "Exercise",
+      mode: "exercise",
+      createdBy: exam.teacherId,
+    });
+    const items = await evaluationService.addItems(db, exercise, exam.questionIds, points, { attemptCount: 0 });
+    await sit(app, { ...exam, evaluationId: exercise.id, itemIds: items.map((i) => i.id) });
+    expect(await cardsOf({ userId: exam.studentIds[0]! })).toHaveLength(0);
+
+    await org.setClassroomDrill(db, exam.classroomId, true, app.clock.now());
+    expect(await drill.backfillClassroom(db, exam.classroomId, app.clock.now())).toBe(2);
+    const cards = await cardsOf({ userId: exam.studentIds[0]! });
+    // The exam came first: it is where the questions were met.
+    expect(cards.map((c) => c.evaluationId)).toEqual([exam.evaluationId, exam.evaluationId]);
+
+    await org.setClassroomDrill(db, exam.classroomId, false, app.clock.now());
+    await org.setClassroomDrill(db, exam.classroomId, true, app.clock.now());
+    expect(await drill.backfillClassroom(db, exam.classroomId, app.clock.now())).toBe(0);
+  });
+
+  it("serves an exercise's card only once its feedback policy shows the key", async () => {
+    const app = await appAt();
+    const seed = await world(app, { mode: "exercise", students: 1 });
+    const policy = (await reload(db, seed.evaluationId)).feedbackPolicy as Record<string, unknown>;
+    await db
+      .update(evaluations)
+      .set({ feedbackPolicy: { ...policy, when: "on_release", showKey: true } })
+      .where(eq(evaluations.id, seed.evaluationId));
+    await sit(app, seed);
+    const userId = seed.studentIds[0]!;
+    const [card] = await cardsOf({ userId });
+    expect(await serves(app, userId, card!.id)).toBe(false);
+    expect((await drill.drillSession(db, userId, "fine", app.clock.now())).cards).toEqual([]);
+    await expect(
+      drill.answerCard(db, userId, card!.id, { answer: "x", deviceClass: "fine" }, app.clock.now()),
+    ).rejects.toBeInstanceOf(drill.DrillCardNotFound);
+
+    const closed = await live.closeEvaluation(db, await reload(db, seed.evaluationId), app.clock.now());
+    await releaseResults(db, closed, app.clock.now());
+    expect(await serves(app, userId, card!.id)).toBe(true);
+
+    // A key the exercise never shows is never shown by the drill.
+    await db
+      .update(evaluations)
+      .set({ feedbackPolicy: { ...policy, when: "immediate", showKey: false } })
+      .where(eq(evaluations.id, seed.evaluationId));
+    expect((await drill.drillSession(db, userId, "fine", app.clock.now())).cards).toEqual([]);
+  });
+
+  it("suspends an exam's cards while its release is withdrawn, and serves them again at the next", async () => {
+    const app = await appAt();
+    const seed = await world(app, { allowDrill: true, students: 1 });
+    await sit(app, seed, { release: true });
+    const userId = seed.studentIds[0]!;
+    const [card] = await cardsOf({ userId });
+    await drill.serveCard(db, userId, card!.id, app.clock.now());
+    await drill.answerCard(db, userId, card!.id, { answer: "x", deviceClass: "fine" }, app.clock.now());
+
+    await unreleaseResults(db, await reload(db, seed.evaluationId), app.clock.now());
+    app.clock.advance(30 * 86_400_000);
+    expect(await serves(app, userId, card!.id)).toBe(false);
+    expect((await drill.drillSession(db, userId, "fine", app.clock.now())).cards).toEqual([]);
+    // History kept.
+    expect(await db.select().from(drillReviews).where(eq(drillReviews.cardId, card!.id))).toHaveLength(1);
+
+    await releaseResults(db, await reload(db, seed.evaluationId), app.clock.now());
+    expect(await cardsOf({ userId })).toHaveLength(2);
+    expect(await serves(app, userId, card!.id)).toBe(true);
+  });
+
+  it("makes cards of the questions left unanswered", async () => {
+    const app = await appAt();
+    const seed = await world(app, { mode: "exercise", students: 1 });
+    await sit(app, seed, { blank: true });
+    const cards = await cardsOf({ userId: seed.studentIds[0]! });
+    expect(new Set(cards.map((c) => c.questionId))).toEqual(new Set(seed.questionIds));
   });
 });
