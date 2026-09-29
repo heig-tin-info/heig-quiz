@@ -20,7 +20,7 @@
  * which is why the sections are one component taking a render function.
  */
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CalendarClock, CheckCircle2, GraduationCap, School } from "lucide-react";
 
 import { formatPoints } from "@quiz/domain";
@@ -53,6 +53,7 @@ import {
   useNow,
 } from "../ui";
 import { studentClassroomsKey, studentHomeKey } from "../queryKeys";
+import { HOME_SECTION } from "./bottomNavSlots";
 import { useRetake } from "./retake";
 import { SebLaunchModal } from "./SebLaunchModal";
 
@@ -314,6 +315,14 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
   // (`retake.ts`). The server decides (`canRetake`, and `retake_refused` on
   // the route); on success the player opens on the new attempt.
   const retake = useRetake(navigate);
+  // A section named by the address (`/#past`, the bottom bar's Grades, #191)
+  // exists only once the lists are drawn: scroll to it then. Optional call:
+  // `scrollIntoView` does not exist under jsdom.
+  const drawn = !home.isLoading && !rooms.isLoading;
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (drawn && id) document.getElementById(id)?.scrollIntoView?.({ block: "start" });
+  }, [drawn]);
   // Issue #270: the SEB card opens its instructions; the file comes from there.
   const [sebFor, setSebFor] = useState<EvaluationCardData | null>(null);
 
@@ -411,7 +420,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
             )}
           </section>
 
-          <section className="space-y-3">
+          <section id={HOME_SECTION.grades} className="scroll-mt-[calc(4.5rem+var(--banner-h))] space-y-3">
             <SectionHeading title={t("shome.past")} />
             {past.length === 0 ? (
               <Card className="px-5 py-4 text-sm text-fg-muted">{t("shome.past.empty")}</Card>
@@ -443,7 +452,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
         </>
       )}
 
-      <section className="space-y-3">
+      <section id={HOME_SECTION.courses} className="scroll-mt-[calc(4.5rem+var(--banner-h))] space-y-3">
         <SectionHeading title={t("shome.classrooms")} />
         {rooms.isLoading ? (
           <Skeleton className="h-20 w-full" />

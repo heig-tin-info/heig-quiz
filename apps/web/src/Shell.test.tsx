@@ -940,3 +940,60 @@ describe("Shell course tree", () => {
     expect(within(sidebar()).queryByRole("button", { name: "PRG1" })).toBeNull();
   });
 });
+
+describe("Shell student bottom bar (#191)", () => {
+  const bar = () => screen.queryByRole("navigation", { name: "Main navigation" });
+  const student = { teacherUi: false, canSwitchView: false, me: makeMe({ role: "student" }) };
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("stays out of the teacher's frame, and the drawer stays", () => {
+    renderShell();
+    expect(bar()).toBeNull();
+    expect(screen.getByRole("button", { name: "Open menu" })).toBeInTheDocument();
+  });
+
+  it("gives the student four labelled slots, the current one marked", () => {
+    renderShell(student);
+    const nav = within(bar()!);
+    expect(nav.getAllByRole("link").map((a) => a.textContent)).toEqual([
+      "Activities",
+      "Courses",
+      "Grades",
+      "Profile",
+    ]);
+    expect(nav.getByRole("link", { name: "Activities" })).toHaveAttribute("aria-current", "page");
+    expect(nav.getByRole("link", { name: "Courses" })).not.toHaveAttribute("aria-current");
+    expect(nav.getByRole("link", { name: "Grades" })).toHaveAttribute("href", "/#past");
+    expect(nav.getByRole("link", { name: "Profile" })).toHaveAttribute("href", "/settings");
+  });
+
+  it("marks Grades on a feedback page", () => {
+    renderShell({ ...student, route: { view: "feedback", attemptId: "a1" } });
+    expect(within(bar()!).getByRole("link", { name: "Grades" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("does not repeat itself in the top bar: no drawer, no Settings in the avatar", async () => {
+    renderShell(student);
+    expect(screen.queryByRole("button", { name: "Open menu" })).toBeNull();
+    // Two account menus exist, the sidebar's and the phone's; the last is the phone's.
+    const avatars = screen.getAllByRole("button", { name: "User menu" });
+    await userEvent.click(avatars[avatars.length - 1]!);
+    expect(screen.queryByRole("menuitem", { name: "Settings" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
+  });
+
+  it("navigates, and a section slot names its place in the address", async () => {
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    const { navigate } = renderShell({ ...student, route: { view: "settings" } });
+    await userEvent.click(within(bar()!).getByRole("link", { name: "Courses" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "home" });
+    expect(window.location.hash).toBe("#classrooms");
+    await userEvent.click(within(bar()!).getByRole("link", { name: "Profile" }));
+    expect(navigate).toHaveBeenLastCalledWith({ view: "settings" });
+    expect(window.location.hash).toBe("");
+  });
+});

@@ -90,6 +90,15 @@
      the window. Zero without one; the banner sets it on the frame it wraps,
      and every sticky bar and full-height column under it offsets by it. */
   --banner-h: 0px;
+  /* The height of the student's bottom navigation bar (`BottomNav.tsx`,
+     #191): zero unless the bar is mounted AND the screen is under `lg`,
+     where it shows. The page's spacer and the toast stack read it. */
+  --bottom-nav-h: 0px;
+}
+:root[data-bottom-nav] {
+  @variant max-lg {
+    --bottom-nav-h: calc(3.5rem + env(safe-area-inset-bottom));
+  }
 }
 html.dark {
   --canvas: #131211;
