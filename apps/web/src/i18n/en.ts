@@ -2675,7 +2675,6 @@ export const en = {
   "join.reveal.matched": "Among the accepted answers",
   "join.reveal.notMatched": "Not among the accepted answers",
   "join.reveal.results": "The results",
-  "join.reveal.noKey": "This poll has no correct answer: here is how the room answered.",
 
   // The teacher's half of a poll (F-LIVE-13 / F-LIVE-14): the launcher, and
   // the projection thrown on the lecture-hall wall.
@@ -2758,8 +2757,8 @@ export const en = {
   "poll.percent": "{n}%",
   "poll.ringLabel": "{answered} answers received out of {joined} present",
   "poll.joined": "{n} present",
-  "poll.received": "{answered} answers received · {waiting} waiting",
-  "poll.received.one": "1 answer received · {waiting} waiting",
+  "poll.received": "{n} answers received",
+  "poll.received.one": "1 answer received",
   "poll.noAnswersYet": "No answer yet",
   "poll.moreAnswers": "+ {n} other answers",
   "poll.moreAnswers.one": "+ 1 other answer",

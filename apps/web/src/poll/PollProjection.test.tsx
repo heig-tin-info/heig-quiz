@@ -76,7 +76,7 @@ describe("PollProjection", () => {
     // The way in is permanent: a latecomer joins from the back of the room.
     expect(screen.getByText("QZ4F7K")).toBeVisible();
     expect(screen.getByText(/quiz\.heig-vd\.ch/)).toBeVisible();
-    expect(screen.getByText("8 answers received · 2 waiting")).toBeVisible();
+    expect(screen.getByText("8 answers received")).toBeVisible();
     // Not revealed: nothing on the wall says which one is right.
     expect(screen.queryByText("Correct answer")).toBeNull();
   });
@@ -204,7 +204,7 @@ describe("PollProjection", () => {
     expect(screen.queryByText("6 votes")).toBeNull();
     expect(screen.getByRole("switch", { name: "Show votes" })).not.toBeChecked();
     // The footer still says how many answered: that is when to move on.
-    expect(screen.getByText("8 answers received · 2 waiting")).toBeVisible();
+    expect(screen.getByText("8 answers received")).toBeVisible();
 
     await userEvent.keyboard("{ArrowRight}");
     expect(await screen.findByText("75%")).toBeVisible();
@@ -323,22 +323,6 @@ describe("PollProjection", () => {
     expect(await screen.findByText("75%")).toBeVisible();
     expect(screen.queryByText("Correct answer")).toBeNull();
     expect(screen.getByText("25%").className).not.toContain("text-fg-faint");
-  });
-
-  it("shows the votes of a keyless poll revealed before the switches were split", async () => {
-    const keyless = { id: "q1", type: "mcq" as const, student: view().question.student, solution: { correct: [] }, saved: false, pool: null };
-    const { calls } = mockFetch({
-      [`GET ${POLL}`]: ok(view({ settings: { anonymous: true, revealed: true, votes: false }, question: keyless })),
-      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: false, votes: false }, question: keyless })),
-    });
-    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
-    await screen.findByRole("heading", { name: /How many bytes/ });
-
-    expect(screen.getByText("75%")).toBeVisible();
-    expect(screen.getByRole("switch", { name: "Show votes" })).toBeChecked();
-    await userEvent.click(screen.getByRole("switch", { name: "Show votes" }));
-    // Hiding clears the stored reveal too, or the votes would stay on.
-    expect(calls.find((c) => c.url === `${POLL}/reveal`)?.body).toEqual({ votes: false, revealed: false });
   });
 
   it("reveals through the server, never locally", async () => {

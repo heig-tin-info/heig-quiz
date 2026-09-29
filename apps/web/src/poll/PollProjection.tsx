@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo } from "react";
 import { Check } from "lucide-react";
 
-import { pollVotesShown, type PollTeacherView, type WatchSubject } from "@quiz/contracts";
+import type { PollRevealBody, PollTeacherView, WatchSubject } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -15,12 +15,7 @@ import { useProjectionTheme } from "../theme";
 import { cx, isTyping, PageError, Skeleton, useFullscreen } from "../ui";
 import { PollBars } from "./PollBars";
 import { ProjectionFooter } from "./ProjectionFooter";
-import {
-  type PollDisplay,
-  ProjectionHeader,
-  projectionPhase,
-  stepFrom,
-} from "./ProjectionHeader";
+import { ProjectionHeader, projectionPhase, stepFrom } from "./ProjectionHeader";
 import { hasKey, pollRows, PROJECTION_ROW_CAP, promptOf, questionScale } from "./pollTally";
 import { useStageFit } from "./useStageFit";
 import { anyPoolKey, pollKey, pollQuestionsKey, poolsKey } from "../queryKeys";
@@ -81,17 +76,12 @@ import { anyPoolKey, pollKey, pollQuestionsKey, poolsKey } from "../queryKeys";
  * revealed; a short answer's rows ARE the votes, so none is drawn, and a
  * revealed key is its accepted answers.
  */
-function ProjectionQuestion({
-  view,
-  display,
-}: {
-  view: PollTeacherView;
-  display: PollDisplay;
-}) {
+function ProjectionQuestion({ view }: { view: PollTeacherView }) {
   const t = useT();
   const allRows = useMemo(() => pollRows(view.question, view.tally), [view]);
-  const marked = display.revealed;
-  const hidden = !display.votes;
+  // The switches as the server normalised them (`pollSettingsOf`).
+  const marked = view.settings.revealed;
+  const hidden = !view.settings.votes;
   if (hidden && view.question.type === "short") {
     const expected = (view.question.solution as { expected?: unknown } | null)?.expected;
     return (
@@ -190,10 +180,10 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
   const view = poll.data ?? null;
 
   const act = useMutation({
-    mutationFn: (v: { path: "reveal" | "end" | "again"; body?: unknown }) =>
+    mutationFn: (v: { path: "reveal"; body: PollRevealBody } | { path: "end" | "again" }) =>
       api<PollTeacherView>(`/app/api/evaluations/${id}/poll/${v.path}`, {
         method: "POST",
-        body: JSON.stringify(v.body ?? {}),
+        body: JSON.stringify(v.path === "reveal" ? v.body : {}),
       }),
     onSuccess: (data, v) => {
       if (v.path === "again") {
@@ -224,27 +214,14 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
     onError: toastError("poll.keepFailed"),
   });
 
+  // Only which switches exist and where the remote walks: a poll without a
+  // key has no reveal.
   const keyed = view ? hasKey(view.question) : true;
-  // What the wall shows. A poll without a key has no reveal; a stored one
-  // (written before ADR-014's addendum of 2026-09-29) shows its votes.
-  const display: PollDisplay = useMemo(
-    () => ({
-      votes: view ? pollVotesShown(view.settings, keyed) : false,
-      revealed: view ? view.settings.revealed && keyed : false,
-    }),
-    [view, keyed],
-  );
   const setDisplay = useCallback(
-    (change: Partial<PollDisplay>) =>
-      act.mutate({
-        path: "reveal",
-        // Hiding the votes of a keyless poll clears a legacy `revealed` too,
-        // or they would stay on (`pollVotesShown`).
-        body: !keyed && change.votes === false ? { ...change, revealed: false } : change,
-      }),
+    (body: PollRevealBody) => act.mutate({ path: "reveal", body }),
     // `act` is rebuilt on every render; `mutate` itself is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [keyed],
+    [],
   );
 
   const endPoll = useCallback(() => {
@@ -274,14 +251,14 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
       const back = k === "arrowleft" || k === "pageup";
       if (view !== null && (forward || back)) {
         e.preventDefault();
-        const next = stepFrom(keyed, display, forward);
+        const next = stepFrom(keyed, view.settings, forward);
         if (next) setDisplay(next);
       } else if (k === "r" && view !== null && keyed) {
         e.preventDefault();
-        setDisplay({ revealed: !display.revealed });
+        setDisplay({ revealed: !view.settings.revealed });
       } else if (k === "v" && view !== null) {
         e.preventDefault();
-        setDisplay({ votes: !display.votes });
+        setDisplay({ votes: !view.settings.votes });
       } else if (k === "f") {
         e.preventDefault();
         toggleFullscreen();
@@ -291,7 +268,7 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [display, keyed, view, setDisplay, toggleFullscreen]);
+  }, [keyed, view, setDisplay, toggleFullscreen]);
 
   const fit = useStageFit(view !== null);
 
@@ -341,7 +318,6 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
       <ProjectionHeader
         view={view}
         phase={projectionPhase(view)}
-        display={display}
         onDisplay={setDisplay}
         onAgain={() => act.mutate({ path: "again" })}
         againPending={act.isPending}
@@ -397,7 +373,7 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
                 : null),
             }}
           >
-            <ProjectionQuestion view={view} display={display} />
+            <ProjectionQuestion view={view} />
           </div>
         </div>
       </div>

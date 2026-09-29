@@ -54,8 +54,8 @@ export const PollSettings = z.object({
    * "Reveal the answer": the key is shown — on the wall and on every phone.
    * An independent, reversible switch (ADR-014, addendum 2026-09-29): it
    * never closes the vote (only End does) and never implies `votes`. A poll
-   * without a key refuses it; a row that holds it anyway (written before
-   * that addendum) shows its distribution instead ({@link pollVotesShown}).
+   * without a key refuses it, and reads as `false` here: a row stored `true`
+   * before that addendum reads as `votes` instead (the server normalises it).
    */
   revealed: z.boolean().default(false),
   /**
@@ -66,20 +66,6 @@ export const PollSettings = z.object({
   votes: z.boolean().default(false),
 });
 export type PollSettings = z.infer<typeof PollSettings>;
-
-/**
- * Whether the distribution is shown, on the wall and on the phones: the ONE
- * rule both the server (`PollPublicView.tally`) and the projection read.
- * `votes` says so; for a question without a key, a stored `revealed` does
- * too — the reveal of an opinion poll was its results before the addendum
- * of 2026-09-29, and such rows are kept as they are, not migrated.
- */
-export function pollVotesShown(
-  settings: Pick<PollSettings, "revealed" | "votes">,
-  keyed: boolean,
-): boolean {
-  return settings.votes || (!keyed && settings.revealed);
-}
 
 /** `POST /app/api/polls`: creates the evaluation AND starts it. */
 export const PollCreate = z.object({
@@ -290,8 +276,8 @@ export const PollPublicView = z.object({
   }),
   solution: z.unknown().nullable(),
   /**
-   * The distribution, exactly while the teacher shows it
-   * ({@link pollVotesShown}); null otherwise. It is all a phone has to show
+   * The distribution, exactly while the teacher shows it (`settings.votes`);
+   * null otherwise. It is all a phone has to show
    * when the question has no key (an opinion poll, ADR-014 addendum
    * 2026-09-23).
    */
@@ -321,12 +307,17 @@ export type PollCodeParam = z.infer<typeof PollCodeParam>;
  * `POST /app/api/evaluations/:id/poll/reveal`: the two display switches,
  * independent (ADR-014, addendum 2026-09-29). A switch omitted stays where it
  * was. `revealed: true` on a poll whose question has no key is refused
- * (`422 poll_keyless`): there is nothing to reveal.
+ * (`422 poll_keyless`): there is nothing to reveal. A body that names
+ * neither switch is refused: it would write and audit nothing.
  */
-export const PollRevealBody = z.object({
-  revealed: z.boolean().optional(),
-  votes: z.boolean().optional(),
-});
+export const PollRevealBody = z
+  .object({
+    revealed: z.boolean().optional(),
+    votes: z.boolean().optional(),
+  })
+  .refine((body) => body.revealed !== undefined || body.votes !== undefined, {
+    message: "name at least one of `revealed` and `votes`",
+  });
 export type PollRevealBody = z.infer<typeof PollRevealBody>;
 
 /** `POST /app/api/p/:code/answer`: the whole answer, validated by the type's schema. */

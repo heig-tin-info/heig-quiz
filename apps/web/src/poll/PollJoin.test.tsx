@@ -238,13 +238,15 @@ describe("the poll participant page", () => {
     expect(screen.getByRole("button", { name: /Update/ })).toBeInTheDocument();
   });
 
-  it("reveals the distribution, and no verdict, when the poll has no key", async () => {
+  it("names only its own answer in the distribution of a poll with no key", async () => {
     render({
       [`GET ${URL}`]: ok(
         view({
           state: "ended",
-          settings: { anonymous: true, revealed: true, votes: true },
-          solution: { correct: [] },
+          // A keyless poll never carries a key: the server reads a legacy
+          // reveal as the votes (`pollSettingsOf`).
+          settings: { anonymous: true, revealed: false, votes: true },
+          solution: null,
           tally: { joined: 5, answered: 4, choices: [{ index: 0, count: 1 }, { index: 1, count: 3 }], answers: [] },
           me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },
         }),
@@ -252,7 +254,6 @@ describe("the poll participant page", () => {
     });
 
     expect(await screen.findByText("The results")).toBeVisible();
-    expect(screen.getByText(/This poll has no correct answer/)).toBeVisible();
     expect(screen.getByText("25%")).toBeVisible();
     expect(screen.getByText("75%")).toBeVisible();
     expect(screen.getByText("Your answer")).toBeVisible();

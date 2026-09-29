@@ -40,8 +40,8 @@ import {
   type PollSettings,
   type PollSummary,
   type PollTally,
+  type PollRevealBody,
   type PollTeacherView,
-  pollVotesShown,
 } from "@quiz/contracts";
 import { pollOutcome, pollTally, type PollRunCounts, type PollType } from "@quiz/domain";
 
@@ -167,18 +167,41 @@ export interface PollScope {
 }
 
 /**
- * The poll's two switches as the views carry them. `anonymous` is DERIVED —
- * a poll is anonymous exactly when it belongs to no classroom — and never
- * read from the stored settings, which keep `revealed` only: one fact, one
- * place (ADR-014, addendum 2026-09-27).
+ * The poll's switches as every view carries them, and as `setDisplay` reads
+ * them before it writes. `anonymous` is DERIVED — a poll is anonymous exactly
+ * when it belongs to no classroom — and never read from the stored settings
+ * (ADR-014, addendum 2026-09-27).
+ *
+ * This is also the ONE place a keyless poll's legacy reveal is read
+ * (addendum 2026-09-29): a question without a key has no reveal, and a row
+ * stored `revealed` before that addendum meant "the results are shown". It is
+ * read as `votes`, never migrated, and the next `setDisplay` writes the
+ * normalised pair.
  */
-export function pollSettingsOf(evaluation: EvaluationRecord): PollSettings {
+export function pollSettingsOf(scope: PollScope): PollSettings {
+  const { evaluation, item } = scope;
   const stored = settingsOf(evaluation).poll;
+  const revealed = stored?.revealed ?? false;
+  const votes = stored?.votes ?? false;
+  const keyed = isKeyed(item);
   return {
     anonymous: isOwnedPoll(evaluation),
-    revealed: stored?.revealed ?? false,
-    votes: stored?.votes ?? false,
+    revealed: revealed && keyed,
+    votes: votes || (!keyed && revealed),
   };
+}
+
+/** Whether a frozen question version names a right answer. */
+function keyedOf(type: string, version: { config: unknown; configVersion: number }): boolean {
+  return hasKey(type, loadConfig(type, version));
+}
+
+/** Whether the poll's frozen question names a right answer. */
+function isKeyed(item: JoinedItem): boolean {
+  return keyedOf(item.question.type, {
+    config: item.version.config,
+    configVersion: item.version.configVersion,
+  });
 }
 
 /** The classroom a poll is for, or null for anyone with the code. */
@@ -334,17 +357,6 @@ export class PollKeyless extends PollError {
   }
 }
 
-/** Whether the poll's frozen question names a right answer. */
-export function isKeyed(item: JoinedItem): boolean {
-  return hasKey(
-    item.question.type,
-    loadConfig(item.question.type, {
-      config: item.version.config,
-      configVersion: item.version.configVersion,
-    }),
-  );
-}
-
 /**
  * The two display switches of a poll (F-LIVE-13), independent and reversible
  * (ADR-014, addendum 2026-09-29): a switch omitted stays where it was, and
@@ -357,18 +369,19 @@ export function isKeyed(item: JoinedItem): boolean {
  * `GET /attempts/:id/feedback` before the teacher revealed anything. A
  * question with no key has nothing to reveal: `revealed: true` is refused.
  *
- * `votes` puts the distribution on the wall and on the phones
- * (`pollVotesShown`, read by `publicView`).
+ * `votes` puts the distribution on the wall and on the phones (`publicView`).
+ * What is written is the pair `pollSettingsOf` reads, so a legacy keyless
+ * reveal is normalised the first time a switch moves.
  */
 export async function setDisplay(
   db: Db,
   scope: PollScope,
-  change: { revealed?: boolean | undefined; votes?: boolean | undefined },
+  change: PollRevealBody,
   now: Date,
 ): Promise<EvaluationRecord> {
   const { evaluation, item } = scope;
   if (change.revealed === true && !isKeyed(item)) throw new PollKeyless();
-  const current = pollSettingsOf(evaluation);
+  const current = pollSettingsOf(scope);
   const revealed = change.revealed ?? current.revealed;
   const votes = change.votes ?? current.votes;
   const feedbackPolicy = {
@@ -667,7 +680,7 @@ export async function teacherView(
       createdAt: iso(evaluation.createdAt),
     },
     joinUrl: joinUrl(webUrl, evaluation.accessCode ?? ""),
-    settings: pollSettingsOf(evaluation),
+    settings: pollSettingsOf(scope),
     question: {
       id: item.question.id,
       type: item.question.type as PollType,
@@ -699,7 +712,7 @@ export async function publicView(
   viewer: Viewer & { loggedIn: boolean },
 ): Promise<PollPublicView> {
   const { evaluation, item } = scope;
-  const settings = pollSettingsOf(evaluation);
+  const settings = pollSettingsOf(scope);
   const attempt = await attemptOfViewer(db, evaluation, viewer);
   const answer =
     attempt === null
@@ -718,7 +731,7 @@ export async function publicView(
     settings,
     question: { type: item.question.type as PollType, student: studentOf(item) },
     solution: settings.revealed ? solutionOf(item) : null,
-    tally: pollVotesShown(settings, isKeyed(item)) ? await tallyOf(db, evaluation) : null,
+    tally: settings.votes ? await tallyOf(db, evaluation) : null,
     me: {
       identified: viewer.userId !== null || viewer.guestId !== null,
       loginRequired: !viewer.loggedIn && !settings.anonymous,
@@ -871,7 +884,7 @@ export async function questionPicks(
     entry.useCount += 1;
     if (run.evaluation.state === "running") continue;
     const type = typeById.get(run.questionId)!;
-    const keyed = hasKey(type, loadConfig(type, { config: run.config, configVersion: run.configVersion }));
+    const keyed = keyedOf(type, { config: run.config, configVersion: run.configVersion });
     const answered = answeredOf.get(run.evaluation.id) ?? 0;
     const graded = gradedOf.get(run.evaluation.id);
     entry.counts.push({
@@ -881,7 +894,7 @@ export async function questionPicks(
       // a run the grading pass has not reached is no result yet.
       correct: answered === 0 ? 0 : graded ? graded.correct : null,
       roster: rosterOfRun(
-        pollSettingsOf(run.evaluation).anonymous,
+        isOwnedPoll(run.evaluation),
         run.evaluation.classroomId,
         rosters,
       ),

@@ -544,18 +544,18 @@ owner the same day:
    nothing else: it never closes the vote and no longer implies `votes`. The display has
    four states — nothing, votes only, key only, both — and a phone receives `tally` iff the
    votes are shown and `solution` iff the key is revealed. `POST …/poll/reveal` takes
-   `{ revealed?, votes? }`, a switch omitted staying where it was. This supersedes "Three
-   steps, one progression" of the addendum of 2026-09-27: `PollDisplay` and `pollDisplayOf`
-   leave the contract, and ONE rule, `pollVotesShown(settings, keyed)` in
-   `@quiz/contracts`, decides whether the distribution is shown, for the server and the
-   projection alike. Decision 7 stands: `feedbackPolicy.showKey`/`showExplanation` still
+   `{ revealed?, votes? }`, a switch omitted staying where it was and a body naming neither
+   refused (`400 validation`). This supersedes "Three steps, one progression" of the
+   addendum of 2026-09-27: `PollDisplay` and `pollDisplayOf` leave the contract, and every
+   view carries the two switches as they are shown. Decision 7 stands: `feedbackPolicy.showKey`/`showExplanation` still
    move with `revealed`.
 4. **No reveal without a key.** A question with no key (addendum 2026-09-23, 5) has no
    reveal switch on the projection, and the server refuses `revealed: true` for it with
    `422 poll_keyless`; `revealed: false` is always accepted. A row stored `revealed: true`
-   on a keyless poll before this addendum is not migrated: for a keyless poll
-   `votes || revealed` shows the distribution (`pollVotesShown`), and switching the votes
-   off from the projection clears both. This amends the "Reveal" bullet of the addendum of
+   on a keyless poll before this addendum is not migrated. It is normalised in ONE place,
+   on the server at read time: `pollSettingsOf(scope)` gives `votes || (!keyed && revealed)`
+   and `revealed && keyed`, every view and `setDisplay` read it, so no client knows the
+   legacy shape and the first switch moved on such a poll writes the normalised pair. This amends the "Reveal" bullet of the addendum of
    2026-09-23, 5.
 5. **Late answers count.** An answer given after the reveal counts like any other, in the
    tally and in "Recent polls" (`pollOutcome`). A keyed poll whose key was on the wall
@@ -572,8 +572,9 @@ owner the same day:
    Down / Page Up (a presentation remote) still walk hidden → votes → votes and key, and a
    keyless poll hidden → votes. The phase label has two values, Live and Poll ended: a
    reveal is no longer a phase.
-8. **Load.** Each phone keeps its 3 s refetch, and a shown distribution is now computed for
-   each of those reads (`tallyOf`). No tally cache is added. Follow-up if a large room makes
+8. **Load.** Each phone keeps its 3 s refetch. While the votes are shown, EVERY phone's
+   refetch computes the tally (`tallyOf`), so a room of N phones costs N tally queries every
+   3 s. No tally cache is added. Follow-up if a large room makes
    it a concern: cache the tally per evaluation for the refetch period, invalidated by the
    answer write.
 

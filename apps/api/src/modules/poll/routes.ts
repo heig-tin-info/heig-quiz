@@ -333,10 +333,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       { params: IdParam, body: PollRevealBody, optionalBody: true, load: staffPoll },
       async ({ req, now, body, scope }) => {
         const updated = await service.setDisplay(app.db, scope, body, now);
-        await trace(req, "poll.reveal", "evaluation", updated.id, {
-          ...(body.revealed === undefined ? {} : { revealed: body.revealed }),
-          ...(body.votes === undefined ? {} : { votes: body.votes }),
-        });
+        await trace(req, "poll.reveal", "evaluation", updated.id, body);
         return view(req, { ...scope, evaluation: updated });
       },
     ),
@@ -513,7 +510,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       // Nothing to join any more; the page still shows the question.
       return service.publicView(app.db, scope, found.state, viewer);
     }
-    const settings = service.pollSettingsOf(scope.evaluation);
+    const settings = service.pollSettingsOf(scope);
     if (!viewer.loggedIn && !settings.anonymous) {
       return reply.code(401).send({
         error: "login_required",

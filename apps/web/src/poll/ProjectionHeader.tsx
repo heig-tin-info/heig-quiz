@@ -10,7 +10,7 @@ import {
   Sun,
 } from "lucide-react";
 
-import type { PollTeacherView } from "@quiz/contracts";
+import type { PollRevealBody, PollSettings, PollTeacherView } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { Button, IconButton, Switch } from "../ui";
@@ -33,11 +33,8 @@ export function projectionPhase(view: PollTeacherView): ProjectionPhase {
   return isEnded(view.evaluation.state) ? "ended" : "live";
 }
 
-/** The two display switches of a poll, as `POST …/poll/reveal` takes them. */
-export interface PollDisplay {
-  votes: boolean;
-  revealed: boolean;
-}
+/** The two display switches of a poll, as the views carry them. */
+type PollDisplay = Pick<PollSettings, "votes" | "revealed">;
 
 /**
  * The steps a presentation remote walks (Page Down / Page Up), in the order a
@@ -46,7 +43,7 @@ export interface PollDisplay {
  * the distribution. The two switches stay independent; this is only the
  * one-button path through them.
  */
-export function displaySteps(keyed: boolean): PollDisplay[] {
+function displaySteps(keyed: boolean): PollDisplay[] {
   const steps: PollDisplay[] = [
     { votes: false, revealed: false },
     { votes: true, revealed: false },
@@ -62,7 +59,7 @@ export function displaySteps(keyed: boolean): PollDisplay[] {
 export function stepFrom(keyed: boolean, at: PollDisplay, forward: boolean): PollDisplay | null {
   const steps = displaySteps(keyed);
   const found = steps.findIndex((s) => s.votes === at.votes && s.revealed === at.revealed);
-  const next = found === -1 ? (forward ? 2 : 0) : found + (forward ? 1 : -1);
+  const next = found === -1 ? (forward ? steps.length - 1 : 0) : found + (forward ? 1 : -1);
   return next < 0 || next >= steps.length ? null : steps[next]!;
 }
 
@@ -110,7 +107,6 @@ function DisplaySwitch({
 export function ProjectionHeader({
   view,
   phase,
-  display,
   onDisplay,
   onAgain,
   againPending,
@@ -126,10 +122,8 @@ export function ProjectionHeader({
 }: {
   view: PollTeacherView;
   phase: ProjectionPhase;
-  /** What the wall shows; it stays where it was once the poll has ended. */
-  /** What the wall and the phones show; both switches stay usable once ended. */
-  display: PollDisplay;
-  onDisplay: (change: Partial<PollDisplay>) => void;
+  /** Moves the switches (`view.settings`); both stay usable once ended. */
+  onDisplay: (change: PollRevealBody) => void;
   onAgain: () => void;
   againPending: boolean;
   dark: boolean;
@@ -195,13 +189,13 @@ export function ProjectionHeader({
               votes, and the key. Neither closes the vote — End does. */}
           <DisplaySwitch
             label={t("poll.showVotes")}
-            checked={display.votes}
+            checked={view.settings.votes}
             onChange={(votes) => onDisplay({ votes })}
           />
           {keyed ? (
             <DisplaySwitch
               label={t("poll.reveal")}
-              checked={display.revealed}
+              checked={view.settings.revealed}
               onChange={(revealed) => onDisplay({ revealed })}
             />
           ) : null}

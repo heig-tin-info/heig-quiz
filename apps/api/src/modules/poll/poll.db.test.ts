@@ -923,13 +923,20 @@ describe("an opinion poll, whose question has no key", () => {
       .update(evaluations)
       .set({ settings: { ...(row!.settings as object), poll: { revealed: true, votes: false } } })
       .where(eq(evaluations.id, id));
+    // Read normalised, on both sides: the votes on, no reveal, no key.
     const legacy = (await get(`/app/api/p/${pollCode}`)).json();
-    expect(legacy.solution).toEqual({ correct: [] });
+    expect(legacy.settings).toMatchObject({ revealed: false, votes: true });
+    expect(legacy.solution).toBeNull();
     expect(legacy.tally.choices.map((c: { count: number }) => c.count)).toEqual([0, 2, 1]);
-    // Taking it back is allowed: `revealed: false` needs no key.
-    const cleared = await post(`/app/api/evaluations/${id}/poll/reveal`, teacher.headers, { revealed: false });
-    expect(cleared.statusCode).toBe(200);
+    const wall = await get(`/app/api/evaluations/${id}/poll`, teacher.headers);
+    expect(wall.json().settings).toMatchObject({ revealed: false, votes: true });
+    // The first switch that moves writes the normalised pair: the legacy
+    // reveal is gone from the row.
+    const hidden = await post(`/app/api/evaluations/${id}/poll/reveal`, teacher.headers, { votes: false });
+    expect(hidden.statusCode).toBe(200);
     expect((await get(`/app/api/p/${pollCode}`)).json().tally).toBeNull();
+    const [stored] = await server.app.db.select().from(evaluations).where(eq(evaluations.id, id));
+    expect((stored!.settings as { poll: unknown }).poll).toEqual({ revealed: false, votes: false });
     // Still only `toStudent` on the question (invariant 4).
     const serialized = JSON.stringify(phone.question.student);
     for (const forbidden of FORBIDDEN_STUDENT_KEYS) {
@@ -1203,6 +1210,12 @@ describe("the order of the refusals on the teacher side", () => {
     const malformed = await post(url, teacher.headers, badBody);
     expect(malformed.statusCode).toBe(400);
     expect(malformed.json().error).toBe("validation");
+    // A body that names neither switch would write and audit nothing.
+    for (const empty of [{}, undefined]) {
+      const refused = await post(url, teacher.headers, empty);
+      expect(refused.statusCode).toBe(400);
+      expect(refused.json().error).toBe("validation");
+    }
 
     await post(`/app/api/evaluations/${id}/poll/end`, teacher.headers);
   });

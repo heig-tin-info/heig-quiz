@@ -5,7 +5,7 @@
  * Neither closes the vote — only End does (ADR-014, addendum 2026-09-29, after
  * the incident of poll KUFE5R where a reveal read as "you may not answer").
  * So while the poll RUNS, this sits UNDER the still-editable question and
- * names no verdict (`verdict` false): no "your answer — wrong" beside a field
+ * names no verdict (`ended` false): no "your answer — wrong" beside a field
  * the reader may still change. Once the poll has ENDED it replaces the
  * question, and the verdict joins it.
  *
@@ -36,7 +36,7 @@ import type { ShortSolution, ShortStudent } from "@quiz/qt-short/client";
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { cx } from "../ui";
-import { hasKey, pollRows, PROJECTION_ROW_CAP } from "./pollTally";
+import { pollRows, PROJECTION_ROW_CAP } from "./pollTally";
 
 /** The canonical indices an `mcq` payload holds, whatever the server sent. */
 function selectedOf(answer: unknown): number[] {
@@ -178,11 +178,33 @@ function ShortReveal({
   );
 }
 
+/** How one row of the distribution stands: the key's, this browser's, both, or neither. */
+type RowState = "yoursRight" | "right" | "wrong" | "yours" | "none";
+
+/** What each state wears: a tag (tone, icon, words) and the row's tint. */
+const ROW_LOOK: Record<
+  RowState,
+  { tone: string; icon: ReactNode; label: "join.reveal.yoursCorrect" | "join.reveal.correct" | "join.reveal.yoursWrong" | "join.reveal.yours" | null; row: string }
+> = {
+  yoursRight: { tone: "text-success", icon: <Check aria-hidden />, label: "join.reveal.yoursCorrect", row: "border-success/40 bg-success-soft" },
+  right: { tone: "text-success", icon: <Check aria-hidden />, label: "join.reveal.correct", row: "border-success/40 bg-success-soft" },
+  wrong: { tone: "text-danger", icon: <X aria-hidden />, label: "join.reveal.yoursWrong", row: "border-danger/40 bg-danger-soft" },
+  // Neutral, never the accent: red already means "wrong".
+  yours: { tone: "font-semibold text-fg", icon: null, label: "join.reveal.yours", row: "border-line-strong bg-surface-2" },
+  none: { tone: "", icon: null, label: null, row: "border-line bg-surface" },
+};
+
+function rowState(own: boolean, keyShown: boolean, correct: boolean): RowState {
+  if (keyShown && correct) return own ? "yoursRight" : "right";
+  if (!own) return "none";
+  return keyShown ? "wrong" : "yours";
+}
+
 /**
  * The distribution, in the order the wall draws it. A revealed key ticks its
- * rows (`success`, with the word); with the verdict on, this browser's own
- * answer is named too — right, wrong, or simply "yours" when there is no key.
- * The bars wear the wall's `info`; an untouched row no tone at all.
+ * rows (`success`, with the word); once the poll has ended, this browser's
+ * own answer is named too — right, wrong, or simply "yours" when the key is
+ * not shown. The bars wear the wall's `info`; an untouched row no tone at all.
  */
 function ResultsReveal({
   type,
@@ -191,7 +213,7 @@ function ResultsReveal({
   tally,
   answer,
   keyShown,
-  verdict,
+  ended,
 }: {
   type: PollQuestionType;
   student: unknown;
@@ -199,43 +221,24 @@ function ResultsReveal({
   tally: PollTally;
   answer: unknown;
   keyShown: boolean;
-  verdict: boolean;
+  ended: boolean;
 }) {
   const t = useT();
   const rows = pollRows({ type, student, solution }, tally).slice(0, PROJECTION_ROW_CAP);
   const selected = new Set(selectedOf(answer).map((i) => `c${i}`));
   const text = textOf(answer);
   const mine = (key: string) =>
-    verdict &&
+    ended &&
     (type === "mcq" ? selected.has(key) : text.trim() !== "" && key === `a${foldPollAnswer(text)}`);
   if (rows.length === 0) return <p className="text-[13px] text-fg-muted">{t("poll.noAnswersYet")}</p>;
   return (
     <ul className="flex flex-col gap-2">
       {rows.map((row) => {
-        const own = mine(row.key);
-        const right = keyShown && row.correct;
-        const wrong = own && keyShown && !row.correct;
-        const tag = right
-          ? { tone: "text-success", icon: <Check aria-hidden />, label: t(own ? "join.reveal.yoursCorrect" : "join.reveal.correct") }
-          : wrong
-            ? { tone: "text-danger", icon: <X aria-hidden />, label: t("join.reveal.yoursWrong") }
-            : own
-              ? { tone: "font-semibold text-fg", icon: null, label: t("join.reveal.yours") }
-              : null;
+        const look = ROW_LOOK[rowState(mine(row.key), keyShown, row.correct)];
         return (
           <li
             key={row.key}
-            className={cx(
-              "flex flex-col gap-2 rounded-card border px-3 py-2.5 text-sm",
-              right
-                ? "border-success/40 bg-success-soft"
-                : wrong
-                  ? "border-danger/40 bg-danger-soft"
-                  : // Neutral, never the accent: red already means "wrong".
-                    own
-                    ? "border-line-strong bg-surface-2"
-                    : "border-line bg-surface",
-            )}
+            className={cx("flex flex-col gap-2 rounded-card border px-3 py-2.5 text-sm", look.row)}
           >
             <div className="flex items-start justify-between gap-3">
               {row.markdown ? (
@@ -244,10 +247,10 @@ function ResultsReveal({
                 <span className="min-w-0 break-words">{row.label}</span>
               )}
               <span className="flex shrink-0 items-center gap-2">
-                {tag ? (
-                  <span className={cx(tagClass, tag.tone)}>
-                    {tag.icon}
-                    {tag.label}
+                {look.label ? (
+                  <span className={cx(tagClass, look.tone)}>
+                    {look.icon}
+                    {t(look.label)}
                   </span>
                 ) : null}
                 <span className="font-mono text-[13px] font-semibold tabular-nums">
@@ -295,34 +298,31 @@ export function PollJoinReveal({
   solution,
   tally = null,
   answer,
-  verdict,
-  withPrompt,
+  ended,
 }: {
   type: PollQuestionType;
   student: unknown;
+  /** The key, while the teacher reveals it (never for a poll without one). */
   solution: unknown;
   /** The distribution, while the teacher shows the votes. */
   tally?: PollTally | null;
   answer: unknown;
-  /** Name this browser's answer, right or wrong: once the poll has ended only. */
-  verdict: boolean;
-  /** Draw the prompt: this block replaces the question (the poll has ended). */
-  withPrompt: boolean;
+  /**
+   * The poll has ended: this block replaces the question (so it draws the
+   * prompt) and names this browser's answer, right or wrong.
+   */
+  ended: boolean;
 }) {
   const t = useT();
   const prompt = (student as { prompt?: unknown } | null)?.prompt;
-  const keyShown = solution !== null && hasKey({ type, solution });
+  const keyShown = solution !== null;
   const mcqKey =
     keyShown && type === "mcq" && Array.isArray((solution as McqSolution | null)?.correct);
   const shortKey =
     keyShown && type === "short" && Array.isArray((solution as ShortSolution | null)?.expected);
-  // A reveal stored on a question with no key (before ADR-014's addendum of
-  // 2026-09-29) is what hands this phone the distribution: say why nothing
-  // in it is marked.
-  const keyless = solution !== null && !keyShown;
   return (
     <div className="flex flex-col gap-5">
-      {withPrompt && typeof prompt === "string" ? (
+      {ended && typeof prompt === "string" ? (
         <MarkdownView source={prompt} className="text-lg leading-relaxed text-fg" />
       ) : null}
       {mcqKey && !tally ? (
@@ -331,18 +331,17 @@ export function PollJoinReveal({
             student={student as McqStudent}
             solution={solution as McqSolution}
             answer={answer}
-            verdict={verdict}
+            verdict={ended}
           />
         </Section>
       ) : null}
       {shortKey ? (
         <Section title={t("join.reveal.title")}>
-          <ShortReveal solution={solution as ShortSolution} answer={answer} verdict={verdict} />
+          <ShortReveal solution={solution as ShortSolution} answer={answer} verdict={ended} />
         </Section>
       ) : null}
       {tally ? (
         <Section title={t(mcqKey ? "join.reveal.title" : "join.reveal.results")}>
-          {keyless ? <p className="text-[13px] text-fg-muted">{t("join.reveal.noKey")}</p> : null}
           <ResultsReveal
             type={type}
             student={student}
@@ -350,7 +349,7 @@ export function PollJoinReveal({
             tally={tally}
             answer={answer}
             keyShown={keyShown}
-            verdict={verdict}
+            ended={ended}
           />
         </Section>
       ) : null}

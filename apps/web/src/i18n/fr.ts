@@ -2665,7 +2665,6 @@ export const fr: Record<keyof Dict, string> = {
   "join.reveal.matched": "Parmi les réponses acceptées",
   "join.reveal.notMatched": "Pas parmi les réponses acceptées",
   "join.reveal.results": "Les résultats",
-  "join.reveal.noKey": "Ce sondage n'a pas de bonne réponse : voici comment la salle a répondu.",
 
   "poll.nav": "Sondage",
   "poll.start": "Lancer un sondage",
@@ -2746,8 +2745,8 @@ export const fr: Record<keyof Dict, string> = {
   "poll.percent": "{n}\u202f%",
   "poll.ringLabel": "{answered} réponses reçues sur {joined} présents",
   "poll.joined": "{n} présents",
-  "poll.received": "{answered} réponses reçues · {waiting} en attente",
-  "poll.received.one": "1 réponse reçue · {waiting} en attente",
+  "poll.received": "{n} réponses reçues",
+  "poll.received.one": "1 réponse reçue",
   "poll.noAnswersYet": "Aucune réponse pour l'instant",
   "poll.moreAnswers": "+ {n} autres réponses",
   "poll.moreAnswers.one": "+ 1 autre réponse",

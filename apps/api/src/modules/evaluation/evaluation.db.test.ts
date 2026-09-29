@@ -731,7 +731,8 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
         new Date(),
       );
       expect(service.feedbackOf(revealed), state).toMatchObject({ showKey: true, showExplanation: true });
-      expect(pollService.pollSettingsOf(revealed).revealed, state).toBe(true);
+      const scope = (await pollService.scopeOf(db, revealed))!;
+      expect(pollService.pollSettingsOf(scope).revealed, state).toBe(true);
     }
   });
 

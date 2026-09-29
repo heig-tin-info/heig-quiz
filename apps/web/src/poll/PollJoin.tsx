@@ -191,7 +191,17 @@ export function PollJoin({
   // What the teacher shows — the key, the votes — never closes the vote:
   // only End does (ADR-014, addendum 2026-09-29). While the poll runs, the
   // question and its Send button stay, and what is shown sits under them.
-  const shown = view.solution !== null || view.tally !== null;
+  const shown =
+    view.solution !== null || view.tally !== null ? (
+      <PollJoinReveal
+        type={view.question.type}
+        student={view.question.student}
+        solution={view.solution}
+        tally={view.tally}
+        answer={stored}
+        ended={ended}
+      />
+    ) : null;
   const dirty = !same(answer, stored);
   const sent = stored !== null && !dirty;
   const closedByServer = errorCode(send.error) === "attempt_closed";
@@ -214,15 +224,7 @@ export function PollJoin({
 
         <Card className="mt-6 px-4 py-5 sm:px-6">
           {ended && shown ? (
-            <PollJoinReveal
-              type={view.question.type}
-              student={view.question.student}
-              solution={view.solution}
-              tally={view.tally}
-              answer={stored}
-              verdict
-              withPrompt
-            />
+            shown
           ) : (
             <QuestionHost
               type={view.question.type}
@@ -234,19 +236,7 @@ export function PollJoin({
           )}
         </Card>
 
-        {!ended && shown ? (
-          <Card className="mt-4 px-4 py-5 sm:px-6">
-            <PollJoinReveal
-              type={view.question.type}
-              student={view.question.student}
-              solution={view.solution}
-              tally={view.tally}
-              answer={stored}
-              verdict={false}
-              withPrompt={false}
-            />
-          </Card>
-        ) : null}
+        {!ended && shown ? <Card className="mt-4 px-4 py-5 sm:px-6">{shown}</Card> : null}
 
         {join.isError ? (
           <div className="mt-4">
