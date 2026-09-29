@@ -2419,6 +2419,10 @@ on("POST", "/app/api/questions/:id/versions/:number/deprecate", (m, body) => {
   version.deprecationNote = String(body.note ?? "");
   return versionRow(version);
 });
+/** The id of a mock question, by its pool and internal name. */
+const mockQuestionId = (poolId: string, name: string) =>
+  liveQuestions(poolId).find((q) => q.internalName === name)!.id;
+
 /**
  * The item analysis of ADR-038, as the server shapes it: only the questions
  * with ten answers or more appear. The first three questions of `p1` carry
@@ -2433,10 +2437,6 @@ on("POST", "/app/api/questions/:id/versions/:number/deprecate", (m, body) => {
  * shows a multiple-choice question's (the shares add up past 100), and
  * `array-decay` an mcq with too few answers on its current choices.
  */
-/** The id of a mock question, by its pool and internal name. */
-const mockQuestionId = (poolId: string, name: string) =>
-  liveQuestions(poolId).find((q) => q.internalName === name)!.id;
-
 const questionStats = new Map<string, QuestionStats>([
   ...liveQuestions("p1")
     .slice(0, 3)

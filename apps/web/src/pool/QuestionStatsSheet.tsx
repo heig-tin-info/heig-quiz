@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, RotateCcw } from "lucide-react";
+import { AlertTriangle, RotateCcw } from "lucide-react";
 
 import type {
   DiscriminationStats,
@@ -27,7 +27,7 @@ import { formatDecimal, formatSpan, useI18n, useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { useErrorToast, useToast } from "../notify";
 import { poolQuestionStatsKey } from "../queryKeys";
-import { Alert, Badge, Button, cx, isoDateParts, SectionHeading, Sheet, Stat, type Tone } from "../ui";
+import { Alert, Badge, Button, isoDateParts, SectionHeading, SegmentedBar, Sheet, Stat, type Tone } from "../ui";
 import { ratePercent } from "./filters";
 
 /**
@@ -228,10 +228,10 @@ function DiscriminationValue({ discrimination }: { discrimination: Discriminatio
  * The distractor analysis of a multiple-choice question (ADR-042), a fourth
  * block, drawn only for a type that has it: one row per option in the
  * question's order — its letter, its text, its share and a bar — then the
- * answers that picked nothing. The key is never colour alone: its letter
- * fills AND the row says "Correct". A bar is `info`, never a verdict colour:
- * a share is a datum (DESIGN.md, "Projection"). Only shares, never counts:
- * the server sends nothing else (N-DATA-06).
+ * answers that picked nothing, drawn like the class debrief's distribution
+ * (results/ByQuestionView). The key says so in words, the debrief's green
+ * badge. The bar is `info`, never a verdict colour: a share is a datum. Only
+ * shares, never counts: the server sends nothing else (N-DATA-06).
  *
  * It rests on its own `n` — the answers to the versions that carry the
  * current options —, which the basis line says.
@@ -261,43 +261,21 @@ function DistractorRows({ distractors }: { distractors: DistractorStats }) {
       <ul className="flex flex-col gap-3">
         {rows.map((row) => (
           <li key={row.letter ?? "none"} className="flex flex-col gap-1.5 text-sm">
-            <div className="flex items-start justify-between gap-3">
-              <span className="flex min-w-0 items-start gap-2">
-                {row.letter === null ? null : (
-                  <span
-                    className={cx(
-                      "inline-flex size-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold",
-                      row.correct ? "border-success bg-success text-on-fill" : "border-line-strong text-fg-muted",
-                    )}
-                    aria-hidden
-                  >
-                    {row.letter}
-                  </span>
-                )}
-                {row.text === null ? (
-                  <span className="text-fg-muted">{t("pool.stats.choicesNoAnswer")}</span>
-                ) : (
-                  <MarkdownView as="span" source={row.text} inline className="min-w-0" />
-                )}
-              </span>
-              <span className="flex shrink-0 items-center gap-2">
-                {row.correct ? (
-                  <span className="inline-flex items-center gap-1 text-[12px] font-medium text-success [&_svg]:size-3.5">
-                    <Check aria-hidden />
-                    {t("pool.stats.choicesCorrect")}
-                  </span>
-                ) : null}
-                <span className="font-mono text-[13px] font-semibold tabular-nums">
-                  {t("poll.percent", { n: row.share })}
-                </span>
+            <div className="flex items-start gap-2">
+              {row.letter === null ? null : (
+                <span className="w-4 shrink-0 font-semibold text-fg-muted">{row.letter}</span>
+              )}
+              {row.text === null ? (
+                <span className="min-w-0 flex-1 text-fg-muted">{t("pool.stats.choicesNoAnswer")}</span>
+              ) : (
+                <MarkdownView as="span" source={row.text} inline className="min-w-0 flex-1" />
+              )}
+              {row.correct ? <Badge tone="green">{t("results.byQuestion.correct")}</Badge> : null}
+              <span className="shrink-0 font-mono text-[13px] font-semibold tabular-nums">
+                {t("poll.percent", { n: row.share })}
               </span>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
-              <span
-                className={cx("block h-full rounded-full", row.letter === null ? "bg-fg-faint/50" : "bg-info")}
-                style={{ width: `${row.share}%` }}
-              />
-            </div>
+            <SegmentedBar parts={[{ tone: row.letter === null ? "muted" : "info", value: row.share }]} total={100} />
           </li>
         ))}
       </ul>

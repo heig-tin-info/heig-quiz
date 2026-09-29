@@ -717,7 +717,6 @@ export const en = {
   "pool.stats.discriminationNone":
     "The discrimination shows once an exam with at least {items} other questions has {min} attempts graded in full.",
   "pool.stats.choices": "Choices picked",
-  "pool.stats.choicesCorrect": "Correct",
   "pool.stats.choicesNoAnswer": "No answer",
   "pool.stats.choicesBasis": "Share of {n} answers, on the versions whose choices are these ones.",
   "pool.stats.choicesMultiple": "Several choices may be ticked, so the shares add up to more than 100%.",

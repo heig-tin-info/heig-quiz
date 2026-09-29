@@ -712,7 +712,6 @@ export const fr: Record<keyof Dict, string> = {
   "pool.stats.discriminationNone":
     "La discrimination s'affiche dès qu'un examen d'au moins {items} autres questions a {min} tentatives entièrement corrigées.",
   "pool.stats.choices": "Choix des étudiants",
-  "pool.stats.choicesCorrect": "Correct",
   "pool.stats.choicesNoAnswer": "Sans réponse",
   "pool.stats.choicesBasis": "Part de {n} réponses, sur les versions dont les choix sont ceux-ci.",
   "pool.stats.choicesMultiple": "Plusieurs choix peuvent être cochés : le total dépasse donc 100\u202f%.",

@@ -150,7 +150,7 @@ describe("QuestionStatsSheet", () => {
     const rows = screen.getAllByRole("listitem");
     expect(rows.map((r) => r.textContent)).toEqual([
       "ANULL50%",
-      "BAn indeterminate valueCorrect33%",
+      "BAn indeterminate valuecorrect answer33%",
       "CZero8%",
       "No answer8%",
     ]);
