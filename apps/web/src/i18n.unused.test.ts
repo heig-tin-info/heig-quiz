@@ -78,13 +78,21 @@ const prefixes = [
   ]),
 ].filter((prefix) => prefix !== "");
 
+/**
+ * Every key-shaped token written between two quotes, collected in ONE pass.
+ * A regex per key over the whole corpus was keys × corpus and outgrew the
+ * test timeout on a loaded CI runner once both grew (#291). Keys use only
+ * `[A-Za-z0-9_.]`, so the token between the quotes IS the key the old
+ * per-key regex looked for.
+ */
+const quoted = new Set([...corpus.matchAll(/(?<=["'`])[A-Za-z0-9_.]+(?=["'`])/g)].map((m) => m[0]));
+
 /** The keys among `candidates` that no literal and no dynamic prefix reads. */
 function unread(candidates: string[]): string[] {
-  return candidates.filter((key) => {
-    const literal = new RegExp(`["'\`]${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'\`]`);
-    if (literal.test(corpus)) return false;
-    return !prefixes.some((prefix) => key.startsWith(prefix) && key.length > prefix.length);
-  });
+  return candidates.filter(
+    (key) =>
+      !quoted.has(key) && !prefixes.some((prefix) => key.startsWith(prefix) && key.length > prefix.length),
+  );
 }
 
 describe("the en dictionary", () => {
