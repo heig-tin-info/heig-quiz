@@ -1781,18 +1781,6 @@ export const fr: Record<keyof Dict, string> = {
   "player.accessCodeLocked": "Trop de codes erronés. Attendez dix minutes avant de réessayer, ou adressez-vous à votre enseignant.",
   "player.enter": "Entrer",
 
-  "qt.mcq.chooseOne": "Choisissez une réponse.",
-  "qt.mcq.chooseSeveral": "Choisissez toutes les réponses correctes.",
-  "qt.mcq.chooseUpTo": "Choisissez au plus le nombre de réponses autorisé.",
-  "qt.mcq.limitReached": "Vous avez atteint le nombre maximum de choix.",
-  "qt.short.player.label": "Votre réponse",
-  "qt.short.hintText": "Saisissez votre réponse.",
-  "qt.short.hintNumber": "Saisissez un nombre ; la virgule et le point fonctionnent.",
-  "qt.short.hintDate": "Saisissez une date, par exemple 2026-09-20.",
-  "qt.short.hintTime": "Saisissez une heure, par exemple 14:05.",
-  "qt.cloze.blank": "Trou",
-  "qt.cloze.choose": "choisir…",
-  "qt.cloze.player.hint": "Complétez chaque trou. Vos réponses sont enregistrées au fil de la frappe.",
   // WP8: evaluation + dashboard
   "eval.title": "Évaluations",
   "eval.new": "Nouvelle évaluation",

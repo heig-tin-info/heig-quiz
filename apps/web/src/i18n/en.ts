@@ -1788,18 +1788,6 @@ export const en = {
   "player.accessCodeLocked": "Too many wrong codes. Wait ten minutes before trying again, or ask your teacher.",
   "player.enter": "Enter",
 
-  "qt.mcq.chooseOne": "Choose one answer.",
-  "qt.mcq.chooseSeveral": "Choose every correct answer.",
-  "qt.mcq.chooseUpTo": "Choose at most the allowed number of answers.",
-  "qt.mcq.limitReached": "You have reached the maximum number of selections.",
-  "qt.short.player.label": "Your answer",
-  "qt.short.hintText": "Type your answer.",
-  "qt.short.hintNumber": "Type a number; a comma or a dot both work.",
-  "qt.short.hintDate": "Type a date, for instance 2026-09-20.",
-  "qt.short.hintTime": "Type a time, for instance 14:05.",
-  "qt.cloze.blank": "Blank",
-  "qt.cloze.choose": "Choose…",
-  "qt.cloze.player.hint": "Fill every blank. Your answers are saved as you type.",
   // WP8: evaluation + dashboard
   "eval.title": "Evaluations",
   "eval.new": "New evaluation",
