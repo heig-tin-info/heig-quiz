@@ -224,7 +224,7 @@ const studentPayloads: Record<number, unknown> = {
         source: { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 },
         sourceOhms: 0,
         load: { kind: "resistor", ohms: 1_000_000 },
-        analysis: { stopMs: 5, skipMs: 0, points: 500 },
+        analysis: { kind: "tran", stopMs: 5, skipMs: 0, points: 500 },
         points: 2,
       },
     ],

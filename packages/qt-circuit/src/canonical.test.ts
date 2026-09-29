@@ -72,6 +72,59 @@ describe("the round trip", () => {
     expect(fromCanonical(canonical)).toStrictEqual(config);
   });
 
+  it("writes a transient without its `kind`, as every file before the AC sweep did", () => {
+    const canonical = toCanonical(circuitConfig()) as { stimuli: { analysis?: unknown }[] };
+    expect(canonical.stimuli[1]?.analysis).toEqual({ stopMs: 1, skipMs: 0, points: 500 });
+    expect(JSON.stringify(canonical)).not.toContain('"kind":"tran"');
+  });
+
+  it("is exact for an AC sweep and a Bode envelope of the teacher's own", () => {
+    const config = CircuitConfig.parse({
+      ...emptyCircuitConfig(),
+      prompt: "Filter it.",
+      reference: rcLowPass().schematic,
+      stimuli: [
+        {
+          name: "Bode",
+          source: { kind: "dc", volts: 1 },
+          load: { kind: "open" },
+          analysis: { kind: "ac", fStartHz: 10, fStopHz: 1e5, pointsPerDecade: 40 },
+        },
+      ],
+      grading: {
+        mode: "simulation",
+        tolerance: 0.05,
+        bode: { magDb: 2, floorDb: 40, phaseDeg: null },
+        rubric: "",
+      },
+    });
+    const canonical = toCanonical(config) as {
+      stimuli: { analysis: unknown }[];
+      grading: Record<string, unknown>;
+    };
+    expect(canonical.stimuli[0]?.analysis).toEqual({
+      kind: "ac",
+      fStartHz: 10,
+      fStopHz: 1e5,
+      pointsPerDecade: 40,
+    });
+    expect(canonical.grading["bode"]).toEqual({ magDb: 2, floorDb: 40, phaseDeg: null });
+    expect(fromCanonical(canonical)).toStrictEqual(config);
+  });
+
+  it("leaves the default Bode envelope out of the grading block", () => {
+    const config = CircuitConfig.parse({
+      ...emptyCircuitConfig(),
+      prompt: "Filter it.",
+      grading: { mode: "manual", tolerance: 0.05, rubric: "Look at the corner." },
+    });
+    expect(toCanonical(config)["grading"]).toEqual({
+      mode: "manual",
+      tolerance: 0.05,
+      rubric: "Look at the corner.",
+    });
+  });
+
   it("refuses a canonical file the schema rejects", () => {
     expect(() => fromCanonical({ prompt: "" })).toThrow();
     expect(() => fromCanonical({ prompt: "x", grading: { mode: "simulation" } })).toThrow();

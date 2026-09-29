@@ -59,7 +59,7 @@ function student(overrides: Partial<CircuitStudent> = {}): CircuitStudent {
         source: { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 },
         sourceOhms: 0,
         load: { kind: "resistor", ohms: 10_000 },
-        analysis: { stopMs: 5, skipMs: 0, points: 500 },
+        analysis: { kind: "tran", stopMs: 5, skipMs: 0, points: 500 },
         points: 1,
       },
     ],
@@ -98,6 +98,24 @@ describe("CircuitPlayer", () => {
     expect(screen.getByLabelText("Your circuit")).toBeInTheDocument();
     expect(screen.getByText("1 kHz")).toBeInTheDocument();
     expect(screen.getByText("Sine 1 V @ 1kHz · load 10kΩ · 5 ms")).toBeInTheDocument();
+  });
+
+  it("describes an AC stimulus by its band and its bias", () => {
+    setup({
+      student: student({
+        visibleStimuli: [
+          {
+            name: "Bode",
+            source: { kind: "dc", volts: 2.5 },
+            sourceOhms: 0,
+            load: { kind: "open" },
+            analysis: { kind: "ac", fStartHz: 10, fStopHz: 1e5, pointsPerDecade: 20 },
+            points: 1,
+          },
+        ],
+      }),
+    });
+    expect(screen.getByText("Bode 10Hz → 100kHz · bias 2.5 V · open output")).toBeInTheDocument();
   });
 
   it("counts the components and names what is still floating", () => {
@@ -161,7 +179,7 @@ describe("CircuitPlayer", () => {
             source: { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 },
             sourceOhms: 0,
             load: { kind: "open" },
-            analysis: { stopMs: 5, skipMs: 0, points: 500 },
+            analysis: { kind: "tran", stopMs: 5, skipMs: 0, points: 500 },
             points: 1,
           },
           {
@@ -169,7 +187,7 @@ describe("CircuitPlayer", () => {
             source: { kind: "sine", amplitude: 1, frequencyHz: 10_000, offset: 0 },
             sourceOhms: 0,
             load: { kind: "open" },
-            analysis: { stopMs: 5, skipMs: 0, points: 500 },
+            analysis: { kind: "tran", stopMs: 5, skipMs: 0, points: 500 },
             points: 1,
           },
         ],

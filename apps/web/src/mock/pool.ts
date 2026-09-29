@@ -414,7 +414,7 @@ const circuitConfig = (
       source: { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 },
       sourceOhms: 0,
       load: { kind: "resistor", ohms: 1_000_000 },
-      analysis: { stopMs: 5, skipMs: 0, points: 500 },
+      analysis: { kind: "tran", stopMs: 5, skipMs: 0, points: 500 },
       points: 2,
       visible: true,
     },
@@ -423,7 +423,7 @@ const circuitConfig = (
       source: { kind: "sine", amplitude: 1, frequencyHz: 10_000, offset: 0 },
       sourceOhms: 0,
       load: { kind: "resistor", ohms: 1_000_000 },
-      analysis: { stopMs: 1, skipMs: 0, points: 500 },
+      analysis: { kind: "tran", stopMs: 1, skipMs: 0, points: 500 },
       points: 1,
       visible: false,
     },
@@ -432,6 +432,7 @@ const circuitConfig = (
   grading: {
     mode: "manual",
     tolerance: 0.05,
+    bode: { magDb: 1, floorDb: 60, phaseDeg: 10 },
     rubric:
       "Résistance en série, condensateur en parallèle sur la sortie, produit R·C cohérent avec 1 kHz.",
   },

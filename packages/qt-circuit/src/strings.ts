@@ -103,10 +103,19 @@ export interface CircuitEditorStrings {
   loadOhms: string;
   loadFarads: string;
 
+  analysisKind: string;
+  analysisTran: string;
+  analysisAc: string;
+  acHint: string;
+  bias: string;
   analysis: string;
   stopMs: string;
   skipMs: string;
   samples: string;
+  sweep: string;
+  fStartHz: string;
+  fStopHz: string;
+  pointsPerDecade: string;
   hidden: string;
   points: string;
 
@@ -130,6 +139,11 @@ export interface CircuitEditorStrings {
   modeLlmHint: string;
   tolerance: string;
   toleranceHint: string;
+  bodeMagDb: string;
+  bodeFloorDb: string;
+  bodePhase: string;
+  bodePhaseDeg: string;
+  bodeHint: string;
   rubric: string;
   rubricHint: string;
   showExpected: string;
@@ -198,10 +212,20 @@ export const EDITOR_STRINGS: CircuitEditorStrings = {
   loadOhms: "Load (Ω)",
   loadFarads: "Load (F)",
 
+  analysisKind: "Analysis",
+  analysisTran: "Waveform",
+  analysisAc: "Bode plot",
+  acHint:
+    "A Bode plot linearises the circuit around its DC bias: a saturated op-amp or an unbiased diode gives a meaningless one. A sharp resonance built with non-standard values may also miss the envelope.",
+  bias: "Bias (V)",
   analysis: "Transient",
   stopMs: "Stop (ms)",
   skipMs: "Skip (ms)",
   samples: "Samples",
+  sweep: "Frequency sweep",
+  fStartHz: "From (Hz)",
+  fStopHz: "To (Hz)",
+  pointsPerDecade: "Points per decade",
   hidden: "Hidden",
   points: "Points",
 
@@ -228,6 +252,12 @@ export const EDITOR_STRINGS: CircuitEditorStrings = {
   tolerance: "Tolerance",
   toleranceHint:
     "A stimulus passes when the distance to the reference output stays under this share of its swing.",
+  bodeMagDb: "Gain tolerance (dB)",
+  bodeFloorDb: "Floor (dB below the peak)",
+  bodePhase: "Compare the phase",
+  bodePhaseDeg: "Phase tolerance (°)",
+  bodeHint:
+    "A Bode plot passes when the gain stays within the tolerance of the reference at every frequency, and the phase too when it is compared. Below the floor the output only has to stay low.",
   rubric: "Criteria",
   rubricHint: "What you are looking for, in your own words.",
   showExpected: "Show the expected waveform",
@@ -274,6 +304,8 @@ export interface CircuitPlayerStrings {
   loadResistor: string;
   loadCapacitor: string;
   window: string;
+  sweep: string;
+  srcBias: string;
 
   simulate: string;
   simulating: string;
@@ -315,6 +347,8 @@ export const PLAYER_STRINGS: CircuitPlayerStrings = {
   loadResistor: "load {value}Ω",
   loadCapacitor: "load {value}F",
   window: "{ms} ms",
+  sweep: "Bode {from} → {to}",
+  srcBias: "bias {volts} V",
 
   simulate: "Simulate",
   simulating: "Simulating…",
@@ -370,6 +404,9 @@ export interface CircuitReviewStrings {
   notRun: string;
   error: string;
   errorPercent: string;
+  /** An AC stimulus's error: the worst gap to the reference's Bode plot. */
+  envelopeGap: string;
+  envelopeGapPhase: string;
   reason: string;
   reasonNotSimulated: string;
   reasonSpiceFailed: string;
@@ -417,6 +454,8 @@ export const REVIEW_STRINGS: CircuitReviewStrings = {
   notRun: "Not run",
   error: "Error",
   errorPercent: "{percent} %",
+  envelopeGap: "{db} dB",
+  envelopeGapPhase: "{db} dB · {deg}°",
   reason: "Reason",
   reasonNotSimulated: "Not simulated",
   reasonSpiceFailed: "The simulator refused this circuit",
