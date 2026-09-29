@@ -27,7 +27,10 @@ type ShortClient = QuestionTypeClient<
 
 /** A caret in a field: the mark of a typed answer. */
 const ShortIcon = typeIcon(
-  <path d="M3 6.5h18v11H3zM7 10v4M10.5 10h-3M10.5 14h-3" />,
+  <>
+    <rect x="2.5" y="7" width="19" height="10" rx="2.5" />
+    <path d="M6.5 12h5M14.5 9.5v5" />
+  </>,
   "size-4",
 );
 

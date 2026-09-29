@@ -208,7 +208,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const [categoryParam] = useSearchParam("category", "");
   const categoryId = categoryParam === "" ? null : categoryParam;
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
-  const [creating, setCreating] = useState<string | null>(null);
+  const [creating, setCreating] = useState<{ type: string | null } | null>(null);
   const [view, setView] = usePersistentChoice(VIEW_KEY, VIEWS, "list");
   const [statsRow, setStatsRow] = useState<QuestionRow | null>(null);
   const [group, setGroup] = usePersistentChoice<GroupBy>(GROUP_KEY, isGroupBy, "none");
@@ -230,7 +230,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           label: t("palette.newQuestion", { type: typeLabel(t, typeId) }),
           icon: typeIcon(typeId),
           group: "action" as const,
-          run: () => setCreating(typeId),
+          run: () => setCreating({ type: typeId }),
         }))
       : [],
   );
@@ -391,7 +391,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
               {t("pool.readOnly")}
             </Badge>
           ) : (
-            <Button data-coach="pool.new-question" onClick={() => setCreating(QUESTION_TYPE_IDS[0]!)}>
+            <Button data-coach="pool.new-question" onClick={() => setCreating({ type: null })}>
               <Plus /> {t("pool.newQuestion")}
             </Button>
           )
@@ -455,7 +455,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 <PoolEmpty
                   questionCount={detail.questionCount}
                   readOnly={readOnly}
-                  onCreate={() => setCreating(QUESTION_TYPE_IDS[0]!)}
+                  onCreate={() => setCreating({ type: null })}
                   // The sort is not a filter: clearing what hides the rows must not
                   // also change the order they come back in.
                   onClearFilters={() =>
@@ -557,7 +557,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
         <NewQuestionModal
           poolId={id}
           categoryId={categoryId}
-          initialType={creating}
+          initialType={creating.type}
           onClose={() => setCreating(null)}
           onCreated={async (question) => {
             setCreating(null);

@@ -149,7 +149,8 @@ const scenes = [
   { name: "sidebar-classrooms", role: "teacher", path: "/classrooms/r4", fold: true },
   { name: "sidebar-classroom-tip", role: "teacher", path: "/classrooms/r4", fold: true, act: async (p) => {
       await p.getByRole("button", { name: "Prog-C-2026-2027-test", exact: true }).first().hover();
-      await p.waitForTimeout(400);
+      await p.getByLabel(/internal name|nom interne/i).waitFor();
+    await p.waitForTimeout(250); // the slide
     } },
   // #154: the course → classroom tree under "Courses", in its three states,
   // and a second course's row in "all" with its code's tip. The rows open the
@@ -160,7 +161,8 @@ const scenes = [
   })),
   { name: "sidebar-courses-all-tip", role: "teacher", path: "/classrooms/r4", fold: true, ls: { "quiz-courses-nav": "all" }, act: async (p) => {
       await p.getByRole("button", { name: "EMB", exact: true }).first().hover();
-      await p.waitForTimeout(400);
+      await p.getByLabel(/internal name|nom interne/i).waitFor();
+    await p.waitForTimeout(250); // the slide
     } },
   { name: "classroom-roster", role: "teacher", path: "/classrooms/r1?tab=roster" },
   { name: "classroom-empty", role: "teacher", path: "/classrooms/r1?empty=1", settle: 800 },
@@ -241,7 +243,8 @@ const scenes = [
       await remove.first().waitFor({ timeout: 5000 });
       for (let i = 0; i < 20 && (await remove.count()) > 0; i++) {
         await remove.first().click({ timeout: 2000 }).catch(() => {});
-        await p.waitForTimeout(400);
+        await p.getByLabel(/internal name|nom interne/i).waitFor();
+    await p.waitForTimeout(250); // the slide
       }
       await p.getByRole("tab", { name: /^(launch|lancement)$/i }).click();
       await p.waitForTimeout(300);
@@ -607,13 +610,21 @@ const scenes = [
       await p.getByRole("button", { name: /^(move|déplacer)$/i }).first().click();
     } },
   { name: "pool-new-question", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /nouvelle question|new question/i }).first().click() },
+  // Its second step: a type chosen, the name field holding the focus.
+  { name: "pool-new-question-name", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+    await p.getByRole("button", { name: /nouvelle question|new question/i }).first().click();
+    await p.getByRole("button", { name: /^(code|code image)\b/i }).first().click();
+    await p.getByLabel(/internal name|nom interne/i).waitFor();
+    await p.waitForTimeout(250); // the slide
+  } },
   // The categories live in the frame's sidebar now, so on a phone they are
   // inside the drawer: the scene opens it first when there is one.
   { name: "pool-category-menu", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
       const drawer = p.getByRole("button", { name: /open menu|ouvrir le menu/i });
       if (await drawer.isVisible()) {
         await drawer.click();
-        await p.waitForTimeout(400);
+        await p.getByLabel(/internal name|nom interne/i).waitFor();
+    await p.waitForTimeout(250); // the slide
       }
       await openRowMenu(p, /^actions$/i);
     } },

@@ -241,4 +241,11 @@ describe("rovingIndex", () => {
     expect(rovingIndex("ArrowRight", 0, 0)).toBeNull();
     expect(rovingIndex("ArrowDown", 0, 3)).toBeNull();
   });
+
+  it("moves a row in a grid, and stays put at its edges", () => {
+    expect(rovingIndex("ArrowDown", 1, 8, 4)).toBe(5);
+    expect(rovingIndex("ArrowUp", 5, 8, 4)).toBe(1);
+    expect(rovingIndex("ArrowUp", 1, 8, 4)).toBe(1);
+    expect(rovingIndex("ArrowDown", 6, 8, 4)).toBe(6);
+  });
 });
