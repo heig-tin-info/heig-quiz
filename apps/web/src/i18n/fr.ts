@@ -665,7 +665,6 @@ export const fr: Record<keyof Dict, string> = {
   "pool.stats.negative": "Sous zéro : les points négatifs ont retiré plus qu'ils n'ont donné.",
   "pool.stats.since": "Depuis le {date}",
   "pool.stats.sinceAlways": "Depuis la première utilisation",
-  "pool.stats.notEnough": "Moins de {min} réponses depuis la dernière réinitialisation.",
   "pool.stats.reset": "Réinitialiser les statistiques",
   "pool.stats.resetTitle": "Réinitialiser les statistiques de {name} ?",
   "pool.stats.resetBody":

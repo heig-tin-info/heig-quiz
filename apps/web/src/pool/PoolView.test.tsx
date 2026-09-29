@@ -329,8 +329,7 @@ describe("PoolView", () => {
     const user = userEvent.setup();
     mockFetch(
       routes({
-        "GET /app/api/pools/p1/question-stats": ok({ items: [{ questionId: "q1", n: 24, p: 0.73 }] }),
-        "GET /app/api/questions/q1/stats": ok({ since: null, stats: { n: 24, p: 0.73 } }),
+        "GET /app/api/pools/p1/question-stats": ok({ items: [{ questionId: "q1", n: 24, p: 0.73, since: null }] }),
       }),
     );
     renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
@@ -347,8 +346,7 @@ describe("PoolView", () => {
     mockFetch(
       routes({
         "GET /app/api/pools/p1": ok({ ...POOL, role: "reader" }),
-        "GET /app/api/pools/p1/question-stats": ok({ items: [{ questionId: "q2", n: 10, p: 0.5 }] }),
-        "GET /app/api/questions/q2/stats": ok({ since: null, stats: { n: 10, p: 0.5 } }),
+        "GET /app/api/pools/p1/question-stats": ok({ items: [{ questionId: "q2", n: 10, p: 0.5, since: null }] }),
       }),
     );
     renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);

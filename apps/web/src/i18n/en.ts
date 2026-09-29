@@ -671,7 +671,6 @@ export const en = {
   "pool.stats.negative": "Below zero: negative marking took away more than it gave.",
   "pool.stats.since": "Since {date}",
   "pool.stats.sinceAlways": "Since the question was first used",
-  "pool.stats.notEnough": "Fewer than {min} answers since the last reset.",
   "pool.stats.reset": "Reset statistics",
   "pool.stats.resetTitle": "Reset the statistics of {name}?",
   "pool.stats.resetBody":

@@ -4,7 +4,6 @@ import { useMemo, useState, type DragEvent } from "react";
 
 import type {
   CategoryNode,
-  ItemStats,
   PoolDetail,
   PoolQuestionStats,
   QuestionPage,
@@ -42,7 +41,7 @@ import { PoolEmpty, PoolListSkeleton, PoolListTail } from "./PoolListStates";
 import { QuestionCards } from "./QuestionCards";
 import { groupQuestions, isGroupBy, type GroupBy } from "./QuestionGroups";
 import { QuestionStatsSheet } from "./QuestionStatsSheet";
-import { QuestionTable, type RowStats } from "./QuestionTable";
+import { QuestionTable, type StatsFor } from "./QuestionTable";
 import { useQuestionActions } from "../question/useQuestionActions";
 import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
 
@@ -190,10 +189,11 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
     queryFn: () => api(`/app/api/pools/${id}/question-stats`),
   });
   const statsById = useMemo(
-    () => new Map<string, ItemStats>((questionStats.data?.items ?? []).map((s) => [s.questionId, s])),
+    () => new Map((questionStats.data?.items ?? []).map((s) => [s.questionId, s])),
     [questionStats.data],
   );
-  const rowStats: RowStats = { has: (questionId) => statsById.has(questionId), open: setStatsRow };
+  const statsFor: StatsFor = (row) => (statsById.has(row.id) ? () => setStatsRow(row) : undefined);
+  const shownStats = statsRow ? statsById.get(statsRow.id) : undefined;
 
   const rows = useMemo(
     () => (questions.data?.pages ?? []).flatMap((page) => page.items),
@@ -336,7 +336,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 onDelete={(row) => void askDelete(row)}
                 onDragStart={readOnly ? undefined : startDrag}
                 readOnly={readOnly}
-                stats={rowStats}
+                statsFor={statsFor}
               />
             ) : (
               <QuestionTable
@@ -356,7 +356,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 onSort={sortBy}
                 onDragStart={readOnly ? undefined : startDrag}
                 readOnly={readOnly}
-                stats={rowStats}
+                statsFor={statsFor}
               />
             )}
             <PoolListTail
@@ -379,11 +379,11 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
         />
       ) : null}
 
-      {statsRow !== null ? (
+      {statsRow !== null && shownStats ? (
         <QuestionStatsSheet
           poolId={id}
           row={statsRow}
-          seed={statsById.get(statsRow.id)}
+          stats={shownStats}
           canReset={!readOnly}
           onClose={() => setStatsRow(null)}
         />

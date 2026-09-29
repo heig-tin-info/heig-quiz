@@ -130,11 +130,16 @@ export function StatsButton({ row, onOpen }: { row: QuestionRow; onOpen: () => v
   );
 }
 
-/** What the table and the cards need to draw {@link StatsButton}. */
-export interface RowStats {
-  /** Whether the question has statistics to show. */
-  has: (id: string) => boolean;
-  open: (row: QuestionRow) => void;
+/**
+ * What the table and the cards take to draw {@link StatsButton}: the opener
+ * of a row's statistics, undefined when the question has none to show.
+ */
+export type StatsFor = (row: QuestionRow) => (() => void) | undefined;
+
+/** {@link StatsButton} when the row has statistics, nothing otherwise. */
+export function RowStatsButton({ row, statsFor }: { row: QuestionRow; statsFor?: StatsFor | undefined }) {
+  const open = statsFor?.(row);
+  return open ? <StatsButton row={row} onOpen={open} /> : null;
 }
 
 export function QuestionTableSkeleton({ rows = 5 }: { rows?: number }) {
@@ -160,7 +165,7 @@ export function QuestionTable({
   onSort,
   onDragStart,
   readOnly = false,
-  stats,
+  statsFor,
 }: {
   /** One section per "group by" value; `none` hands over a single unlabelled one. */
   groups: QuestionGroup[];
@@ -182,8 +187,8 @@ export function QuestionTable({
   onDragStart?: (event: DragEvent, row: QuestionRow) => void;
   /** A pool the caller only reads: no tick boxes, no row actions (F-POOL-05). */
   readOnly?: boolean;
-  /** The questions with statistics; absent while they load or when they failed. */
-  stats?: RowStats | undefined;
+  /** Absent while the statistics load or when they failed. */
+  statsFor?: StatsFor | undefined;
 }) {
   const t = useT();
   const rows = groups.flatMap((g) => g.rows);
@@ -270,7 +275,7 @@ export function QuestionTable({
                     <TypeGlyph type={row.type} />
                     <span className="font-mono font-bold">{row.internalName}</span>
                     {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
-                    {stats?.has(row.id) ? <StatsButton row={row} onOpen={() => stats.open(row)} /> : null}
+                    <RowStatsButton row={row} statsFor={statsFor} />
                   </span>
                 </td>
                 <td className={cx(T.td, "max-w-56", T.colHigh)}>

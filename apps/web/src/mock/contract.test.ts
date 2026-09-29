@@ -59,7 +59,6 @@ import {
   PoolTag,
   QuestionDetail,
   QuestionPage,
-  QuestionStats,
   ResultsView,
   StudentFeedback,
   StudentHome,
@@ -220,7 +219,6 @@ const CHECKED: Case[] = [
   // Every question: the payload of a `circuit` is not the payload of an
   // `mcq`, and only the type that drifted would fail.
   ...questionIds.map((id) => one("/app/api/questions/:id", `/app/api/questions/${id}`, QuestionDetail)),
-  ...questionIds.map((id) => one("/app/api/questions/:id/stats", `/app/api/questions/${id}/stats`, QuestionStats)),
   one("/app/api/notifications", "/app/api/notifications", NotificationList),
   one("/app/api/notifications/settings", "/app/api/notifications/settings", NotificationSettings),
   each("/app/api/me/tokens", "/app/api/me/tokens", ApiToken),
