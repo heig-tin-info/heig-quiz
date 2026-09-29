@@ -238,6 +238,8 @@ Shown as **Essay** / « Rédaction » in the interface; the id `rich` is the one
 
 **Scoring, v1**: manual. `grade` proposes 0 points (`state: proposed`, `details.reason: manual`) for a written answer, and a validated 0 for nothing written (`reason: empty`); the teacher sets the points and a comment in the grading panel, which shows the answer beside the rubric and the model answer (`toSolution`). The dashboard cell shows the character count, never the text. Not pollable, no drill.
 
+**The key a student reads**: the rubric is teacher-only material and never reaches a student, not even under `showKey` (an exercise with immediate feedback included). The type's `studentSolution` hook keeps the model answer alone, as the expected answer, and gives `null` when there is none, so the student's review draws no guide at all (ADR-037).
+
 **Scoring, later**: `grade` returns `pending: 'llm'`. The LLM service receives the statement, the rubric, the reference, the anonymised answer, and must reply in JSON: points per criterion, short justification per criterion, confidence `low` / `medium` / `high`. The teacher validates in the grading panel (F-LLM-01..04). A rubric of criteria with `label`, `points` and `description`, used as the grading form, comes with it.
 
 ## 4.9 Code image `codeimage`
@@ -337,6 +339,7 @@ config:
 - **Answer**: `{ schematic }` — the components with their position, orientation, designator and value, and the wires with their routed polyline. **No netlist is ever stored, and none ever comes from the browser**: it is rebuilt server-side from the stored schematic and the stimulus, every time (invariant 14). Values are parsed case-sensitively, because SPICE reads `1M` as milli and `1Meg` as mega.
 - **Player button**: "Simulate" runs the student's own circuit under the VISIBLE stimuli and plots `v(in)`, `v(out)` and the load current, with the reference's curve beside them when `showExpected` is on. It goes through `POST /app/api/attempts/:id/simulate`, is budgeted by `simulationsPerMinute` per attempt, and is refused once the attempt is closed like any other write. The button is absent when the question has no visible stimulus.
 - **What `toStudent` strips** (invariant 4): the reference, the hidden stimuli (only their count and their total points remain), the tolerance, the rubric and the grading mode. What stays is what the student needs to draw and to simulate: the prompt, the palette, the supplies, `commonGround`, the visible stimuli and the budget.
+- **The key a student reads** under `showKey` is the reference alone: the type's `studentSolution` hook drops the stimuli (the hidden ones included) and the grading block (mode, tolerance, rubric), which stay the teacher's (ADR-037).
 - **Points**: the sum of the stimuli's points; `defaultPoints` proposes it.
 
 ## 4.12 Poll `poll`, phase 2

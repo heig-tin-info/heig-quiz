@@ -71,7 +71,7 @@ import { codeimageConfig, codeimageStudentView, codeimageTryDetails } from "./co
  * so the mock calls it rather than restating it.
  */
 import { richServer } from "@quiz/qt-rich/server";
-import type { RichConfig } from "@quiz/qt-rich/client";
+import type { RichConfig, RichSolution } from "@quiz/qt-rich/client";
 /* `categorize` likewise: its `toStudent` drops the key, its grade is the real one. */
 import { categorizeServer } from "@quiz/qt-categorize/server";
 import type { CategorizeAnswer, CategorizeConfig } from "@quiz/qt-categorize/client";
@@ -1679,6 +1679,22 @@ export function solutionOf(q: MockQuestion): unknown {
       return richServer.toSolution(config as RichConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "categorize":
       return categorizeServer.toSolution(config as CategorizeConfig, { seed: 0, itemId: q.id, shuffle: false });
+  }
+}
+
+/**
+ * The key as a STUDENT reads it, the API's `studentSolutionView` (ADR-037):
+ * an essay's rubric and a circuit's stimuli and grading stay the teacher's.
+ */
+export function studentSolutionOf(q: MockQuestion, solution: unknown): unknown {
+  if (solution === null || solution === undefined) return null;
+  switch (q.type) {
+    case "rich":
+      return richServer.studentSolution!(solution as RichSolution, frozenConfig(q) as RichConfig);
+    case "circuit":
+      return { reference: (solution as { reference?: unknown }).reference ?? null };
+    default:
+      return solution;
   }
 }
 

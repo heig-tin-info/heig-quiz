@@ -82,6 +82,7 @@ nav = [
       { "ADR-032 Per-user course preferences" = "adr/ADR-032-preferences-de-cours-par-utilisateur.md" },
       { "ADR-034 Acting as a student" = "adr/ADR-034-agir-en-tant-qu-etudiant.md" },
       { "ADR-035 Merging heig-classroom" = "adr/ADR-035-fusion-de-classroom.md" },
+      { "ADR-037 Teacher-only material in a solution" = "adr/ADR-037-materiel-reserve-a-l-enseignant.md" },
     ] },
     { "Classroom merge" = [
       { "Overview" = "merge/README.md" },

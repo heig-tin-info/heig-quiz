@@ -100,6 +100,15 @@ export const circuitServer: QuestionTypeServer<
     };
   },
 
+  /**
+   * A student under a shown key gets the reference, and nothing that says
+   * how it was compared: no stimuli (the hidden ones least of all), no
+   * grading mode, tolerance or rubric (ADR-037).
+   */
+  studentSolution(solution: CircuitSolution): CircuitSolution {
+    return { reference: solution.reference };
+  },
+
   studentDetails(details: CircuitDetails, policy): unknown {
     return studentDetails(details, {
       showKey: policy.showKey,

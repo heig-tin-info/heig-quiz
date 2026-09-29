@@ -10,7 +10,7 @@
  *     `modules/live/service.ts` (`ensureAttempt`, `beginAttempt`,
  *     `saveAnswer`), so a poll answer travels the same path as an exam one;
  *   - the question content only ever leaves through `studentView`
- *     (invariant 4), the key only through `solutionView`, and the key only
+ *     (invariant 4), the key only through `studentSolutionView`, and the key only
  *     travels once the teacher revealed;
  *   - the aggregate is the pure rule `pollTally` of `@quiz/domain`.
  *
@@ -73,7 +73,7 @@ import {
   type JoinedItem,
 } from "../evaluation/service.js";
 import * as live from "../live/service.js";
-import { solutionView, studentViewOf } from "../live/studentView.js";
+import { studentSolutionView, studentViewOf } from "../live/studentView.js";
 import { hasKey, loadConfig, typeOf } from "../pool/config.js";
 import { createUnsavedQuestion, searchReachableQuestions } from "../pool/service.js";
 import * as events from "./events.js";
@@ -623,8 +623,13 @@ function studentOf(item: JoinedItem): unknown {
   );
 }
 
+/**
+ * The key of a poll, as the ROOM may read it (ADR-037): the phones read it
+ * once revealed, and the teacher's own view feeds the beamer projection, so
+ * both carry the student's key — never a type's teacher-only material.
+ */
 function solutionOf(item: JoinedItem): unknown {
-  return solutionView({
+  return studentSolutionView({
     type: item.question.type,
     version: { config: item.version.config, configVersion: item.version.configVersion },
     seed: 0,

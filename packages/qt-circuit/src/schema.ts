@@ -350,10 +350,16 @@ export type CircuitStudent = z.infer<typeof CircuitStudent>;
 // Solution
 // ---------------------------------------------------------------------------
 
+/**
+ * The key. The teacher's surfaces get it whole; a student under a shown key
+ * gets the reference alone — the stimuli (hidden ones included) and the
+ * grading (mode, tolerance, rubric) stay the teacher's (`studentSolution`,
+ * ADR-037), hence optional here.
+ */
 export const CircuitSolution = z.object({
   reference: Schematic.nullable(),
-  stimuli: z.array(Stimulus),
-  grading: Grading,
+  stimuli: z.array(Stimulus).optional(),
+  grading: Grading.optional(),
 });
 export type CircuitSolution = z.infer<typeof CircuitSolution>;
 

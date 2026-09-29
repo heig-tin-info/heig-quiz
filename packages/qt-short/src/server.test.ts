@@ -40,6 +40,29 @@ describe("the contract", () => {
     expect(expectedAnswers(SECRET_CONFIG)).toContain("4 ± 0.5 bytes");
   });
 
+  it("keeps an llm matcher's rubric out of a student's key (ADR-037)", () => {
+    const view = { seed: 1, itemId: "i", shuffle: false };
+    const rubric = "RUBRIC-SECRET names the endianness";
+    const mixed = config({
+      matchers: [
+        { kind: "exact", value: "0x1004", points: 1 },
+        { kind: "llm", rubric, points: 1 },
+      ],
+    });
+    expect(shortServer.toSolution(mixed, view).expected).toContain(rubric);
+    expect(shortServer.studentSolution!(shortServer.toSolution(mixed, view), mixed)).toEqual({
+      expected: ["0x1004"],
+    });
+    const llmOnly = config({ matchers: [{ kind: "llm", rubric, points: 1 }] });
+    expect(shortServer.studentSolution!(shortServer.toSolution(llmOnly, view), llmOnly)).toEqual({ expected: [] });
+    // Every other matcher reaches the student as the teacher reads it.
+    const teacher = shortServer.toSolution(SECRET_CONFIG, view).expected;
+    expect(shortServer.studentSolution!(shortServer.toSolution(SECRET_CONFIG, view), SECRET_CONFIG)).toEqual({
+      expected: teacher.filter((line) => line !== "Newton and his three laws"),
+    });
+    expect(teacher).toHaveLength(6);
+  });
+
   it("indexes the prompt and the expected answers for the teacher's search", () => {
     const text = shortServer.searchText(SECRET_CONFIG);
     expect(text).toContain("32-bit");

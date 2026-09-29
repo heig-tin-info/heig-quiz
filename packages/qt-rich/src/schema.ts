@@ -90,9 +90,13 @@ export const RichStudentSchema = z.object({
 });
 export type RichStudent = z.infer<typeof RichStudentSchema>;
 
-/** The grader's guide, served on the teacher's panel and under a released key. */
+/**
+ * The grader's guide. The teacher's panel gets it whole; a student, once the
+ * key is shown, gets the model answer alone — the rubric is the teacher's
+ * (`studentSolution`, ADR-037), hence optional here.
+ */
 export const RichSolutionSchema = z.object({
-  rubric: z.string(),
+  rubric: z.string().optional(),
   reference: z.string().optional(),
 });
 export type RichSolution = z.infer<typeof RichSolutionSchema>;

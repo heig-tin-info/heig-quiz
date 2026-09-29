@@ -969,9 +969,10 @@ export const en = {
   "qt.rich.e.maxCharsPages": "About {pages} A4 page(s).",
   "qt.rich.e.rubric": "Grading criteria",
   "qt.rich.e.rubricHint":
-    "How you will award the points, for yourself or another grader: shown beside every answer in the grading panel. Example: \"2 pts: names the complexity. 1 pt: gives an example.\" Students see it only if the evaluation shows the expected answer: at release, or right away in an exercise with immediate feedback.",
+    "How you will award the points, for yourself or another grader: shown beside every answer in the grading panel. Example: \"2 pts: names the complexity. 1 pt: gives an example.\" Students never see it.",
   "qt.rich.e.reference": "Model answer",
-  "qt.rich.e.referenceHint": "Optional. Shown to the grader beside every answer.",
+  "qt.rich.e.referenceHint":
+    "Optional. Shown to the grader beside every answer, and to students when the evaluation shows the expected answer.",
   "qt.rich.e.manualGrading":
     "Graded by hand: every written answer reaches the grading panel as a proposal of 0 points, to settle.",
   "qt.rich.e.decimal": ".",

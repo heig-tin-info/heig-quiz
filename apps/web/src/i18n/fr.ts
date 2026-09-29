@@ -953,9 +953,10 @@ export const fr: Record<keyof Dict, string> = {
   "qt.rich.e.maxCharsPages": "Environ {pages} page(s) A4.",
   "qt.rich.e.rubric": "Grille de correction",
   "qt.rich.e.rubricHint":
-    "Comment vous attribuerez les points, pour vous ou un autre correcteur : affichée à côté de chaque réponse dans le panneau de correction. Exemple : « 2 pts : nomme la complexité. 1 pt : donne un exemple. » Les étudiants ne la voient que si l'évaluation montre la réponse attendue : à la publication, ou tout de suite pour un exercice à retour immédiat.",
+    "Comment vous attribuerez les points, pour vous ou un autre correcteur : affichée à côté de chaque réponse dans le panneau de correction. Exemple : « 2 pts : nomme la complexité. 1 pt : donne un exemple. » Les étudiants ne la voient jamais.",
   "qt.rich.e.reference": "Réponse modèle",
-  "qt.rich.e.referenceHint": "Facultative. Montrée au correcteur à côté de chaque réponse.",
+  "qt.rich.e.referenceHint":
+    "Facultative. Montrée au correcteur à côté de chaque réponse, et aux étudiants quand l'évaluation montre la réponse attendue.",
   "qt.rich.e.manualGrading":
     "Corrigée à la main : chaque réponse rédigée arrive dans le panneau de correction comme une proposition de 0 point, à trancher.",
   "qt.rich.e.decimal": ",",

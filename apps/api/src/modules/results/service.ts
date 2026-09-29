@@ -96,7 +96,7 @@ import {
   type StudentAttempts,
 } from "../grading/service.js";
 import { answeredBy } from "../live/service.js";
-import { solutionView, stripKeys, studentView } from "../live/studentView.js";
+import { solutionView, stripKeys, studentSolutionView, studentView } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
 
 export { watchReleasedGrades, type GradeWatch } from "./updated.js";
@@ -645,7 +645,8 @@ export async function studentFeedback(
         defaults: gradeDefaults(evaluation),
       }),
       answer: policy.showAnswer ? (answer?.payload ?? null) : null,
-      solution: policy.showKey ? solutionView(view) : null,
+      // The student's key: the grading criteria stay the teacher's (ADR-037).
+      solution: policy.showKey ? studentSolutionView(view) : null,
       explanation:
         policy.showExplanation && item.version.explanation !== ""
           ? item.version.explanation

@@ -48,6 +48,7 @@ import {
   RC_STUDENT,
   mockCircuitDetails,
   questions,
+  studentSolutionOf,
   studentView,
   tryAnswer,
   versionRow,
@@ -954,7 +955,8 @@ on("GET", "/app/api/attempts/:id/feedback", (m) => {
           : null,
         student: studentView(q, config),
         answer,
-        solution,
+        // The student's key: an essay's rubric stays the teacher's (ADR-037).
+        solution: studentSolutionOf(q, solution),
         explanation: q.versions.at(-1)?.explanation || null,
         details: grading?.details ?? null,
         comment: grading?.comment ?? null,

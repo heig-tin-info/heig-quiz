@@ -108,6 +108,12 @@ describe("CircuitReview", () => {
     expect(screen.queryByText("Reference circuit")).not.toBeInTheDocument();
   });
 
+  it("reads a student's key, the reference alone, without drawing it (ADR-037)", () => {
+    setup({ audience: "student", solution: { reference } });
+    expect(screen.getAllByTestId("schematic-view")).toHaveLength(1);
+    expect(screen.getByText("1 / 2 points")).toBeInTheDocument();
+  });
+
   it("numbers a hidden stimulus for a student and names it for a teacher", () => {
     setup({ audience: "student" });
     expect(screen.getByText("#1")).toBeInTheDocument();

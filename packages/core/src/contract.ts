@@ -329,8 +329,25 @@ export interface QuestionTypeServer<
    */
   toStudent(config: TConfig, view: StudentView): TStudent;
 
-  /** Key + rationale for review, served ONLY when the feedback policy allows it. */
+  /**
+   * Key + rationale, whole: what the TEACHER surfaces show (grading panel,
+   * dashboard inspector, results by question, the editor's try). A student
+   * gets it only when the feedback policy shows the key, and then through
+   * {@link studentSolution}, never as-is.
+   */
   toSolution(config: TConfig, view: StudentView): TSolution;
+
+  /**
+   * The part of the solution a STUDENT may read once the key is shown
+   * (docs/05 §5.7, ADR-037). Some material in a solution is the teacher's
+   * alone whatever the policy says — the grading criteria of an essay, the
+   * tolerance and the hidden stimuli of a circuit — and this hook is where
+   * it comes back out. `solution` is what {@link toSolution} returned for
+   * `config`; the result is served as the student's key, `null` meaning
+   * "nothing left to show". Pure. Omitting it means the whole solution is
+   * fit for a student.
+   */
+  studentSolution?(solution: TSolution, config: TConfig): TSolution | null;
 
   /**
    * Whether this config holds an answer key at all. Only a config accepted

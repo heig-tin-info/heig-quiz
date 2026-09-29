@@ -73,6 +73,17 @@ export const richServer: QuestionTypeServer<
   },
 
   /**
+   * The grading criteria are the teacher's, whatever the feedback policy
+   * (ADR-037): a student under a shown key reads the model answer, and
+   * nothing at all when there is none.
+   */
+  studentSolution(solution): RichSolution | null {
+    return solution.reference === undefined || solution.reference.trim() === ""
+      ? null
+      : { reference: solution.reference };
+  },
+
+  /**
    * The question's own limit, which `answerSchema` cannot see: the autosave
    * refuses a longer answer with `422 answer_invalid`. The player never sends
    * one; this is the server's word, for a client that would.

@@ -22,7 +22,7 @@ import type {
 import { gradeFromPoints, round2 } from "@quiz/domain";
 
 import { evaluationOr404, itemQuestion, templateOr404, type MockEvaluation } from "./evaluation";
-import { frozenConfig, solutionOf, studentView, tryAnswer } from "./pool";
+import { frozenConfig, solutionOf, studentSolutionOf, studentView, tryAnswer } from "./pool";
 import { MockError, flags, on } from "./runtime";
 
 /** The placeholder the API sends as the attempt id of a preview. */
@@ -188,7 +188,7 @@ on("POST", "/app/api/evaluations/:id/preview/grade", (m, body): PreviewCorrectio
               : "wrong",
       student: shown.student,
       answer: answer ?? null,
-      solution: tried?.solution ?? solutionOf(q),
+      solution: studentSolutionOf(q, tried?.solution ?? solutionOf(q)),
       explanation: q.versions.at(-1)?.explanation || null,
       details: tried?.status === "graded" ? (tried.details ?? null) : null,
     });

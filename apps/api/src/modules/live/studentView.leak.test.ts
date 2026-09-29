@@ -29,7 +29,7 @@ import {
 } from "@quiz/core/server";
 
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
-import { FORBIDDEN_STUDENT_KEYS, studentView, stripMetadata } from "./studentView.js";
+import { FORBIDDEN_STUDENT_KEYS, studentSolutionView, studentView, stripMetadata } from "./studentView.js";
 
 /**
  * Keys that name the answer key rather than the question. `expected` and
@@ -99,6 +99,8 @@ function setAt(root: unknown, path: Path, value: unknown): void {
 interface Sown {
   config: unknown;
   markers: string[];
+  /** Where each marker was sown, index for index. */
+  paths: Path[];
 }
 
 /**
@@ -216,6 +218,7 @@ function filledDraft(type: AnyQuestionTypeServer): unknown {
 function sowSecrets(type: AnyQuestionTypeServer): Sown {
   let config: unknown = filledDraft(type);
   const markers: string[] = [];
+  const paths: Path[] = [];
   for (const path of secretPaths(config)) {
     const original = getAt(config, path);
     if (typeof original !== "string") continue;
@@ -226,8 +229,9 @@ function sowSecrets(type: AnyQuestionTypeServer): Sown {
     if (!parsed.success) continue;
     config = parsed.data;
     markers.push(marker);
+    paths.push(path);
   }
-  return { config, markers };
+  return { config, markers, paths };
 }
 
 /** Every key name appearing anywhere in a serialised payload. */
@@ -434,6 +438,95 @@ describe("studentView never leaks the key (invariant 4)", () => {
     } finally {
       restore();
     }
+  });
+});
+
+/**
+ * ADR-037: grading criteria are the teacher's even under a shown key. The
+ * student's key (`studentSolutionView`, the one exit every student-facing
+ * reader of a key uses) must carry no sown `rubric`, for every registered
+ * type — while the model answer an essay publishes, and a circuit's
+ * reference, still travel.
+ */
+describe("studentSolutionView keeps the teacher's material home (ADR-037)", () => {
+  const itemId = "66666666-6666-4666-8666-666666666666";
+  const studentKeyOf = (id: string, config: unknown) =>
+    studentSolutionView({
+      type: id,
+      version: { config, configVersion: questionType(id).configVersion },
+      seed: 0,
+      itemId,
+    });
+
+  const rubricTypes: string[] = [];
+  for (const id of registeredServerIds()) {
+    it(`serves no grading criteria of "${id}" to a student`, () => {
+      const { config, markers, paths } = sowSecrets(questionType(id));
+      const serialized = JSON.stringify(studentKeyOf(id, config) ?? null);
+      markers.forEach((marker, i) => {
+        if (paths[i]!.at(-1) !== "rubric") return;
+        rubricTypes.push(id);
+        expect(serialized, `${id}: the rubric reached a student (${marker})`).not.toContain(marker);
+      });
+    });
+  }
+
+  it("really sowed a rubric into the essay and the circuit", () => {
+    // Runs after the loop above: without a sown rubric it proved nothing.
+    expect(rubricTypes).toEqual(expect.arrayContaining(["rich", "circuit"]));
+  });
+
+  it("gives a student the essay's model answer, alone", () => {
+    const { config, markers, paths } = sowSecrets(questionType("rich"));
+    const reference = markers[paths.findIndex((p) => p.at(-1) === "reference")]!;
+    const key = studentKeyOf("rich", config) as Record<string, unknown>;
+    expect(Object.keys(key)).toEqual(["reference"]);
+    expect(JSON.stringify(key)).toContain(reference);
+  });
+
+  it("gives a student the circuit's reference, and no stimulus, mode or tolerance", () => {
+    const type = questionType("circuit");
+    const reference = {
+      components: [{ id: "c1", kind: "R", x: 0, y: 0, name: "RSECRETREF", value: "4.7k" }],
+      wires: [],
+    };
+    const config = type.configSchema.parse({
+      ...(filledDraft(type) as object),
+      reference,
+      stimuli: [
+        {
+          name: "S3CR3THIDDEN",
+          source: { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 },
+          load: { kind: "open" },
+          visible: false,
+        },
+      ],
+      grading: { mode: "simulation", tolerance: 0.0137, rubric: "S3CR3TRUBRIC" },
+    });
+    // The teacher's key has it all: the fixture is not empty.
+    const teacher = JSON.stringify(type.toSolution(config, { seed: 0, itemId, shuffle: false }));
+    for (const secret of ["S3CR3THIDDEN", "0.0137", "S3CR3TRUBRIC", "simulation"]) {
+      expect(teacher).toContain(secret);
+    }
+    const key = studentKeyOf("circuit", config) as Record<string, unknown>;
+    expect(Object.keys(key)).toEqual(["reference"]);
+    const serialized = JSON.stringify(key);
+    expect(serialized).toContain("RSECRETREF");
+    for (const secret of ["S3CR3THIDDEN", "0.0137", "S3CR3TRUBRIC", "simulation"]) {
+      expect(serialized).not.toContain(secret);
+    }
+  });
+
+  it("leaves out an llm matcher's rubric from a short answer's key", () => {
+    const type = questionType("short");
+    const config = type.configSchema.parse({
+      ...(filledDraft(type) as object),
+      matchers: [
+        { kind: "exact", value: "shown" },
+        { kind: "llm", rubric: "S3CR3TRUBRIC" },
+      ],
+    });
+    expect(studentKeyOf("short", config)).toEqual({ expected: ["shown"] });
   });
 });
 

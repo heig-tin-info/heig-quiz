@@ -140,6 +140,16 @@ export const shortServer: QuestionTypeServer<
 
   toSolution: (config) => ({ expected: expectedAnswers(config) }),
 
+  /**
+   * An `llm` matcher reads as its rubric (`describeMatcher`), and a rubric is
+   * the teacher's whatever the feedback policy (ADR-037): a student's key —
+   * the feedback page, a poll's reveal — lists the other matchers only. An
+   * empty list stays a list, as `toSolution` gives it for a keyless poll.
+   */
+  studentSolution: (_solution, config): ShortSolution => ({
+    expected: config.matchers.filter((m) => m.kind !== "llm").map(describeMatcher),
+  }),
+
   hasKey: (config) => config.matchers.length > 0,
 
   /**
