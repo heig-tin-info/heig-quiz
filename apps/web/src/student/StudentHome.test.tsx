@@ -2,7 +2,12 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { EvaluationCard, Me, StudentHome as StudentHomeData } from "@quiz/contracts";
+import type {
+  EvaluationCard,
+  Me,
+  StudentClassroom,
+  StudentHome as StudentHomeData,
+} from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { StudentHome } from "./StudentHome";
@@ -43,6 +48,16 @@ const card = (over: Partial<EvaluationCard>): EvaluationCard => ({
   results: "none",
   ...over,
 });
+
+const room: StudentClassroom = {
+  id: "r1",
+  name: "PRG1-2026",
+  period: "",
+  courseName: "Programmation 1",
+  courseCode: "PRG1",
+  teachers: [],
+  timeBonusPercent: 0,
+};
 
 const home: StudentHomeData = {
   polls: [],
@@ -236,11 +251,39 @@ describe("the student home", () => {
   it("shows the empty state when nothing is open", async () => {
     mockFetch({
       "GET /app/api/student/home": ok({ open: [], upcoming: [], past: [], serverNow: "x" }),
-      "GET /app/api/student/classrooms": ok([]),
+      "GET /app/api/student/classrooms": ok([room]),
     });
     render();
     expect(await screen.findByText("Rien à faire pour l'instant")).toBeInTheDocument();
+    expect(await screen.findByText("PRG1-2026")).toBeInTheDocument();
+    // A classroom joined, the code field lives in the frame, not on the page.
+    expect(screen.queryByLabelText("Code")).toBeNull();
+  });
+
+  it("is the code field and its note alone, without a classroom (ADR-045)", async () => {
+    mockFetch({
+      "GET /app/api/student/home": ok({ polls: [], open: [], upcoming: [], past: [], serverNow: "x" }),
+      "GET /app/api/student/classrooms": ok([]),
+    });
+    render();
     expect(await screen.findByText("Aucune classe")).toBeInTheDocument();
+    expect(screen.getByText(/inscrivent automatiquement par votre adresse e-mail/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Code")).toBeInTheDocument();
+    // The screen's one primary action; three empty lists would bury it.
+    expect(screen.getByRole("button", { name: "Rejoindre" })).toHaveClass("bg-accent");
+    expect(screen.queryByText("Rien à faire pour l'instant")).toBeNull();
+  });
+
+  it("gives a teacher in their student view the note, never the field (ADR-018 addendum, no. 6)", async () => {
+    mockFetch({
+      "GET /app/api/student/home": ok({ polls: [], open: [], upcoming: [], past: [], serverNow: "x" }),
+      "GET /app/api/student/classrooms": ok([]),
+    });
+    renderWithProviders(<StudentHome me={{ ...me, role: "teacher" }} navigate={vi.fn()} />, {
+      locale: "fr",
+    });
+    expect(await screen.findByText("Aucune classe")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Code")).toBeNull();
   });
 
   it("shows the query error with a retry", async () => {
@@ -256,7 +299,7 @@ describe("the student home", () => {
     const { calls } = mockFetch({
       "GET /app/api/student/home": ok(home),
       "GET /app/api/student/classrooms": ok([]),
-      "POST /app/api/join/PRG1-2026": ok({
+      "POST /app/api/join/K7PMQ2XR": ok({
         classroomId: "r1",
         classroomName: "PRG1-2026",
         courseCode: "PRG1",
@@ -264,9 +307,9 @@ describe("the student home", () => {
       }),
     });
     render();
-    await userEvent.type(await screen.findByLabelText("Code de la classe"), "PRG1-2026");
+    await userEvent.type(await screen.findByLabelText("Code"), "k7pm-q2xr");
     await userEvent.click(screen.getByRole("button", { name: "Rejoindre" }));
-    expect(calls.some((c) => c.url === "/app/api/join/PRG1-2026" && c.method === "POST")).toBe(
+    expect(calls.some((c) => c.url === "/app/api/join/K7PMQ2XR" && c.method === "POST")).toBe(
       true,
     );
     expect(await screen.findByText("Vous avez rejoint PRG1-2026.")).toBeInTheDocument();

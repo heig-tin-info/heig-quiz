@@ -106,7 +106,9 @@ scenes were retaken on their own (`--only`) on 2026-09-28, the
 which is why their ids differ from the other rows. The `grading*` scenes
 describe the grading table (ADR-044); their images were retaken again on
 2026-09-29 with the columns of every question type, on a fresh seed and
-without a runner (so the code answers wait for it).
+without a runner (so the code answers wait for it). The `student-home`
+scenes were retaken once more on 2026-09-30, on a fresh seed, for the
+student's one code field (ADR-045).
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |

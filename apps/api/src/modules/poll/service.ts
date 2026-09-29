@@ -31,6 +31,7 @@ import type { FastifyInstance } from "fastify";
 
 import {
   type ClosedBy,
+  POLL_CODE_LENGTH,
   POLL_SHORT_CAP,
   type PollAudience,
   type PollPoolPage,
@@ -104,7 +105,6 @@ class PollUnpublished extends PollError {
  * lecture hall and typed on a phone (F-LIVE-13).
  */
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const CODE_LENGTH = 6;
 
 /**
  * How long a finished poll still answers on its code. A phone that scanned
@@ -116,11 +116,15 @@ const CODE_LENGTH = 6;
  */
 const ENDED_GRACE_MS = 2 * 60 * 60 * 1000;
 
-/** One uniformly drawn session code. Six characters is 32^6 ≈ 10^9 codes. */
+/**
+ * One uniformly drawn session code. Six characters is 32^6 ≈ 10^9 codes.
+ * Never the length of a classroom's join code: the student's one code field
+ * tells the two apart by it (ADR-045).
+ */
 export function drawCode(): string {
   // `randomInt`, not `byte % length`: uniform whatever the alphabet's size.
   const draw = () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
-  return Array.from({ length: CODE_LENGTH }, draw).join("");
+  return Array.from({ length: POLL_CODE_LENGTH }, draw).join("");
 }
 
 /** How many codes `createPoll` draws before giving up; one collision is already rare. */

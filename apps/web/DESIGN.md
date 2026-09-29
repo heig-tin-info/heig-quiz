@@ -249,6 +249,14 @@ whole classroom name when the ellipsis cut it. The Classrooms section sits
 under a `border-t border-line` hairline, like the shortcut strip: it is apart
 from the navigation, and it looks apart.
 
+A real student's sidebar holds one row that is a gesture, not a place:
+**Enter a code** (ADR-045), which opens the code field in a small `Modal`.
+It wears the muted `NavItem` look and is never lit, because nothing on
+screen is "the code page"; the phone, whose bottom bar leaves no drawer,
+carries it as a `#` icon button in the top bar. The field itself is
+`EnterCodeForm`, one component: in the dialog and on a home with no
+classroom its button is the primary; nowhere else is it on a page.
+
 "Courses" and "Question pools" disclose a tree under their row, and both
 behave alike (`useNavCycle`, #154): collapsed → the one being read → all,
 remembered per browser; a click from outside the section navigates (and

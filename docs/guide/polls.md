@@ -58,7 +58,7 @@ The two switches are independent: votes only, answer only, both, or neither. `V`
 
 ## How the room joins
 
-Participants scan the QR code, or type the code into the address `/p/CODE` of the platform, the same address printed next to the code. The code alphabet has no `I`, `O`, `0` or `1`, so it can be read from the back of the room and typed on a phone without doubt.
+Participants scan the QR code, or type the code into the address `/p/CODE` of the platform, the same address printed next to the code. A signed-in student may also type it in **Enter a code**, in their sidebar, which opens the same page. The code alphabet has no `I`, `O`, `0` or `1`, so it can be read from the back of the room and typed on a phone without doubt.
 
 <figure markdown="span">
   ![A phone showing the poll: the statement, the four choices and a Send button](../assets/screenshots/join-mcq-phone-light.png#only-light){ width="390" }

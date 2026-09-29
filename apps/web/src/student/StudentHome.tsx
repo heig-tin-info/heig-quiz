@@ -2,8 +2,9 @@
  * The student's home.
  *
  * Three questions, in the order a student asks them: what can I do NOW, what
- * is coming, what did I already hand in. The classrooms and the join code
- * come last, because they are administration, not work.
+ * is coming, what did I already hand in. The classrooms come last, because
+ * they are administration, not work — except when there is none yet, and
+ * the code field that joins one is the page (ADR-045).
  *
  * The four decisions:
  *   - Type: the open evaluation's title is the one 17 px line on the page;
@@ -26,7 +27,6 @@ import { CalendarClock, CheckCircle2, GraduationCap, School } from "lucide-react
 import { formatPoints } from "@quiz/domain";
 import type {
   EvaluationCard as EvaluationCardData,
-  JoinResult,
   Me,
   StudentClassroom,
   StudentHome as StudentHomeData,
@@ -36,14 +36,12 @@ import type {
 import { api } from "../api";
 import { feedbackLink } from "../grading";
 import { formatDuration, useT, type TFunction } from "../i18n";
-import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
 import {
   Badge,
   Button,
   Card,
   EmptyState,
-  Field,
   isoDateParts,
   isoDateTime,
   PageHeader,
@@ -54,6 +52,7 @@ import {
 } from "../ui";
 import { studentClassroomsKey, studentHomeKey } from "../queryKeys";
 import { HOME_SECTION } from "./bottomNavSlots";
+import { EnterCodeForm, entersCodes } from "./EnterCode";
 import { useRetake } from "./retake";
 import { SebLaunchModal } from "./SebLaunchModal";
 
@@ -243,62 +242,6 @@ function PollRow({ poll, navigate }: { poll: StudentPollCard; navigate: (r: Rout
   );
 }
 
-function JoinCard() {
-  const t = useT();
-  const toast = useToast();
-  const toastError = useErrorToast();
-  const [code, setCode] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const join = async () => {
-    setBusy(true);
-    try {
-      const result = await api<JoinResult>(`/app/api/join/${encodeURIComponent(code.trim())}`, {
-        method: "POST",
-      });
-      toast(
-        t(result.status === "joined" ? "join.joined" : "join.already", {
-          name: result.classroomName,
-        }),
-        "success",
-      );
-      setCode("");
-    } catch (error) {
-      toastError("join.failed")(error);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Card className="p-5">
-      <form
-        className="flex flex-wrap items-end gap-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void join();
-        }}
-      >
-        <div className="min-w-0 flex-1 basis-60 sm:max-w-80">
-          <Field
-            data-coach="student.join"
-            label={t("join.label")}
-            placeholder={t("join.placeholder")}
-            fullWidth
-            value={code}
-            autoComplete="off"
-            onChange={(e) => setCode(e.target.value)}
-          />
-          <p className="mt-1.5 text-[13px] text-fg-faint">{t("join.hint")}</p>
-        </div>
-        <Button type="submit" variant="secondary" loading={busy} disabled={code.trim().length < 4}>
-          {t("join.action")}
-        </Button>
-      </form>
-    </Card>
-  );
-}
-
 export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => void }) {
   const t = useT();
   const now = useNow(30_000);
@@ -364,6 +307,74 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
   const upcoming = home.data?.upcoming ?? [];
   const past = home.data?.past ?? [];
 
+  // No classroom yet: the classrooms come first, because joining is what is
+  // missing, and with nothing listed either they are the whole page — three
+  // empty lists above the code field would bury the one thing this student
+  // can do (ADR-045). A classroom joined, the code field leaves the page for
+  // the frame (sidebar, top bar, palette): it is administration, and the
+  // open evaluations' buttons are this screen's actions.
+  const noRoom = rooms.data?.length === 0;
+  const idle =
+    home.data != null && [polls, open, upcoming, past].every((list) => list.length === 0);
+
+  const classrooms = (
+    <section id={HOME_SECTION.courses} className="space-y-3">
+      <SectionHeading title={t("shome.classrooms")} />
+      {rooms.isLoading ? (
+        <Skeleton className="h-20 w-full" />
+      ) : rooms.isError ? (
+        <QueryError
+          title={t("shome.classrooms")}
+          error={rooms.error}
+          onRetry={() => void rooms.refetch()}
+          retrying={rooms.isFetching}
+          fallback={t("error.server")}
+        />
+      ) : noRoom ? (
+        <Card>
+          <EmptyState
+            icon={GraduationCap}
+            title={t("shome.rooms.empty.title")}
+            // A teacher in their student view reads the note alone: a gesture
+            // there must never write a roster (ADR-018 addendum, no. 6).
+            action={
+              entersCodes(me) ? (
+                <div className="w-80 max-w-full">
+                  <EnterCodeForm navigate={navigate} />
+                </div>
+              ) : null
+            }
+          >
+            {t("shome.rooms.empty.body")}
+          </EmptyState>
+        </Card>
+      ) : (
+        rooms.data!.map((room) => (
+          <Card key={room.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 p-5">
+            <School className="size-5 shrink-0 text-fg-faint" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] font-semibold tracking-tight">{room.name}</p>
+              <p className="text-sm text-fg-muted">
+                {room.courseCode} — {room.courseName}
+                {room.period ? ` · ${room.period}` : ""}
+              </p>
+              {room.teachers.length > 0 ? (
+                <p className="mt-1 text-[13px] text-fg-faint">
+                  {t("shome.teachers", { names: room.teachers.join(", ") })}
+                </p>
+              ) : null}
+            </div>
+            {room.timeBonusPercent > 0 ? (
+              <Badge tone="accent" icon={CalendarClock}>
+                {t("shome.bonus", { n: room.timeBonusPercent })}
+              </Badge>
+            ) : null}
+          </Card>
+        ))
+      )}
+    </section>
+  );
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -371,7 +382,9 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
         description={t("shome.subtitle")}
       />
 
-      {home.isLoading ? (
+      {noRoom ? classrooms : null}
+
+      {noRoom && idle ? null : home.isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-24 w-full" />
@@ -456,50 +469,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
         </>
       )}
 
-      <section id={HOME_SECTION.courses} className="space-y-3">
-        <SectionHeading title={t("shome.classrooms")} />
-        {rooms.isLoading ? (
-          <Skeleton className="h-20 w-full" />
-        ) : rooms.isError ? (
-          <QueryError
-            title={t("shome.classrooms")}
-            error={rooms.error}
-            onRetry={() => void rooms.refetch()}
-            retrying={rooms.isFetching}
-            fallback={t("error.server")}
-          />
-        ) : (rooms.data ?? []).length === 0 ? (
-          <Card>
-            <EmptyState icon={GraduationCap} title={t("shome.rooms.empty.title")}>
-              {t("shome.rooms.empty.body")}
-            </EmptyState>
-          </Card>
-        ) : (
-          rooms.data!.map((room) => (
-            <Card key={room.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 p-5">
-              <School className="size-5 shrink-0 text-fg-faint" aria-hidden />
-              <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-semibold tracking-tight">{room.name}</p>
-                <p className="text-sm text-fg-muted">
-                  {room.courseCode} — {room.courseName}
-                  {room.period ? ` · ${room.period}` : ""}
-                </p>
-                {room.teachers.length > 0 ? (
-                  <p className="mt-1 text-[13px] text-fg-faint">
-                    {t("shome.teachers", { names: room.teachers.join(", ") })}
-                  </p>
-                ) : null}
-              </div>
-              {room.timeBonusPercent > 0 ? (
-                <Badge tone="accent" icon={CalendarClock}>
-                  {t("shome.bonus", { n: room.timeBonusPercent })}
-                </Badge>
-              ) : null}
-            </Card>
-          ))
-        )}
-        <JoinCard />
-      </section>
+      {noRoom ? null : classrooms}
 
       {sebFor ? (
         <SebLaunchModal

@@ -261,8 +261,8 @@ export const TOURS: readonly CoachTour[] = [
       },
     ],
   },
-  // A student has one thing to learn: where a quiz shows up, and how to
-  // join a poll projected in class.
+  // A student has one thing to learn: where a quiz shows up, and where the
+  // code of a poll or a classroom is typed (the frame's entry, ADR-045).
   {
     id: "student-home",
     views: ["home"],

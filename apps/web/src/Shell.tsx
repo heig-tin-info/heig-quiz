@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Eye,
   FolderTree,
+  Hash,
   Library,
   Menu as MenuIcon,
   School,
@@ -51,6 +52,7 @@ import {
 } from "./ui";
 import { coursesKey, poolsKey } from "./queryKeys";
 import { BottomNav } from "./student/BottomNav";
+import { EnterCodeDialog, entersCodes } from "./student/EnterCode";
 import { bottomNavShown } from "./student/bottomNavSlots";
 
 /**
@@ -172,6 +174,7 @@ function Nav({
   teacherUi,
   poolNav,
   courseNav,
+  onEnterCode,
   onNavigate,
 }: {
   me: Me;
@@ -187,6 +190,8 @@ function Nav({
   poolNav: NavCycle;
   /** The same, for the course → classroom tree under "Courses" (#154). */
   courseNav: NavCycle;
+  /** Opens the code dialog (ADR-045); defined for a real student only. */
+  onEnterCode?: (() => void) | undefined;
   /** Called after any navigation (closes the mobile drawer). */
   onNavigate?: () => void;
 }) {
@@ -290,6 +295,20 @@ function Nav({
               onClick={() => go({ view: "polls" })}
             />
           </>
+        ) : null}
+        {/* ADR-045: a poll's or a classroom's code, for a real student only.
+            A dialog and not a page: it is a gesture, and a muted row, since
+            the screen's primary belongs to the screen. */}
+        {onEnterCode ? (
+          <NavItem
+            icon={Hash}
+            label={t("code.title")}
+            coach="student.join"
+            onClick={() => {
+              onNavigate?.();
+              onEnterCode();
+            }}
+          />
         ) : null}
         {/* Settings is not a section of the product: it lives in the account
             menu at the bottom of this sidebar, and in the palette. */}
@@ -413,6 +432,12 @@ export function Shell({
   const poolNav = usePoolNavState();
   const courseNav = useCourseNavState();
   const [palette, setPalette] = useState(false);
+  // ADR-045: the one code field, in a dialog the frame owns, so the sidebar
+  // row, the phone's top bar and the palette open the same one. Never for a
+  // teacher in student view (ADR-018 addendum, no. 6), whose `me.role` is
+  // not "student".
+  const [codeDialog, setCodeDialog] = useState(false);
+  const onEnterCode = entersCodes(me) ? () => setCodeDialog(true) : undefined;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // Ctrl+Alt+K and Ctrl+Shift+K belong to the browser (the web console,
@@ -524,6 +549,7 @@ export function Shell({
           teacherUi={teacherUi}
           poolNav={poolNav}
           courseNav={courseNav}
+          onEnterCode={onEnterCode}
         />
         <ShortcutStrip />
         {/* The account row: what is about the PERSON rather than about the
@@ -566,6 +592,7 @@ export function Shell({
               teacherUi={teacherUi}
               poolNav={poolNav}
               courseNav={courseNav}
+              onEnterCode={onEnterCode}
               onNavigate={() => setDrawer(false)}
             />
             <div className="border-t border-line p-2">
@@ -594,6 +621,13 @@ export function Shell({
           {brand()}
           <span className="flex-1" />
           {viewToggle(true)}
+          {/* The phone's way to the code field: the student's bottom bar
+              leaves no drawer to hold the sidebar row. */}
+          {onEnterCode ? (
+            <IconButton label={t("code.title")} data-coach="student.join" onClick={onEnterCode}>
+              <Hash />
+            </IconButton>
+          ) : null}
           <IconButton label={t("palette.open")} onClick={() => setPalette(true)}>
             <Search />
           </IconButton>
@@ -638,7 +672,11 @@ export function Shell({
           helpTopics={topics}
           signOut={signOut}
           onStartPoll={teacherUi ? () => navigate({ view: "polls" }) : undefined}
+          onEnterCode={onEnterCode}
         />
+      ) : null}
+      {codeDialog ? (
+        <EnterCodeDialog navigate={navigate} onClose={() => setCodeDialog(false)} />
       ) : null}
 
     </div>

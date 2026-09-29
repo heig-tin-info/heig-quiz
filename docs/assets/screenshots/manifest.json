@@ -1191,9 +1191,9 @@
         "light": "student-home-light.png",
         "dark": "student-home-dark.png"
       },
-      "takenAt": "2026-09-29T06:27:13.806Z",
-      "commit": "3f472ba",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-09-29T22:16:02.480Z",
+      "commit": "c3077ad",
+      "base": "http://localhost:3187"
     },
     {
       "name": "student-home-phone",
@@ -1214,9 +1214,9 @@
         "light": "student-home-phone-light.png",
         "dark": "student-home-phone-dark.png"
       },
-      "takenAt": "2026-09-29T06:27:13.806Z",
-      "commit": "3f472ba",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-09-29T22:16:02.480Z",
+      "commit": "c3077ad",
+      "base": "http://localhost:3187"
     },
     {
       "name": "student-lobby",

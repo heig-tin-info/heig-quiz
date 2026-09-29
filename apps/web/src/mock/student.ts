@@ -742,5 +742,5 @@ on("POST", "/app/api/join/:code", (m): JoinResult => ({
   classroomId: "r1",
   classroomName: "PRG1-2026",
   courseCode: "PRG1",
-  status: m.groups!.code!.toUpperCase() === "PRG1-2026" ? "already" : "joined",
+  status: m.groups!.code!.toUpperCase() === "K7PMQ2XR" ? "already" : "joined",
 }));

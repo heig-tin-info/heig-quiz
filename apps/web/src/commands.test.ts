@@ -168,6 +168,16 @@ describe("buildCommands: who sees what", () => {
     expect(pick(buildCommands(ctx), "action:student-view")).toBeUndefined();
     expect(pick(plainStudent, "action:student-view")).toBeDefined();
   });
+
+  it("offers the code field only when the frame hands it over (ADR-045)", () => {
+    const onEnterCode = vi.fn();
+    const student = makeContext({ me: makeMe({ role: "student" }), teacherUi: false, onEnterCode });
+    need(buildCommands(student), "action:enter-code").run();
+    expect(onEnterCode).toHaveBeenCalledOnce();
+    // Typed in French or in English, "join" finds it.
+    expect(ids(filterCommands("rejoindre", buildCommands(student)))).toContain("action:enter-code");
+    expect(pick(buildCommands(makeContext()), "action:enter-code")).toBeUndefined();
+  });
 });
 
 describe("buildCommands: the theme and language actions", () => {

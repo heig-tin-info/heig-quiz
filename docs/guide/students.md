@@ -8,7 +8,14 @@ Open the platform and press **Sign in with Switch edu-ID**. You sign in with the
 
 Your teacher adds your school e-mail address to the class list. The seat is attached to your account the first time you sign in with a matching address: there is no code to enter and nothing to accept. If a classroom you expect is missing from your home, check that you signed in with the address your teacher used, and that this address is registered on your Switch edu-ID account.
 
-A **Classroom code** field sits at the bottom of your home. Use it only if your teacher gave you a code for the classroom: type it and press **Join**. Most classrooms use the e-mail match above and have no code.
+### Entering a code
+
+**Enter a code**, in the sidebar (the **#** button at the top of the screen on a phone, or **Ctrl K** then *Enter a code*), takes the two codes a teacher may give you. Type it and press **Join**; spaces, dashes and lower case do not matter.
+
+- A **classroom code** has 8 characters. Use it only if your teacher gave you one: it puts you in the classroom. Most classrooms use the e-mail match above and have no code.
+- A **poll code** has 6 characters, shown on the screen in class under the QR code. It opens the poll, like scanning the QR code does.
+
+As long as you are in no classroom, the field is on your home itself, under **My classrooms**. An exam's **access code** does not go there: you type it on the exam's own page, after opening the exam from your home.
 
 ## Your home
 

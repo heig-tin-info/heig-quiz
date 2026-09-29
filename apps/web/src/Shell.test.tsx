@@ -281,6 +281,23 @@ describe("Shell sidebar", () => {
     expect(nav.getByRole("button", { name: "Home" })).toBeInTheDocument();
     expect(nav.queryByRole("button", { name: /^Classroom 1(?!\d)/ })).toBeNull();
   });
+
+  it("offers a real student the code field, in a dialog (ADR-045)", async () => {
+    renderShell({ teacherUi: false, canSwitchView: false, me: makeMe({ role: "student" }) });
+    await userEvent.click(within(sidebar()).getByRole("button", { name: "Enter a code" }));
+    const dialog = await screen.findByRole("dialog", { name: "Enter a code" });
+    expect(within(dialog).getByLabelText("Code")).toHaveFocus();
+  });
+
+  it("never offers it in a teacher's student view: it would write a roster (ADR-018 addendum, no. 6)", () => {
+    renderShell({ teacherUi: false, studentView: true });
+    expect(screen.queryByRole("button", { name: "Enter a code" })).toBeNull();
+  });
+
+  it("never offers it to a teacher", () => {
+    renderShell();
+    expect(screen.queryByRole("button", { name: "Enter a code" })).toBeNull();
+  });
 });
 
 /*

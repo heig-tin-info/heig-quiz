@@ -2423,9 +2423,9 @@ on("POST", "/app/api/questions/:id/versions/:number/deprecate", (m, body) => {
   version.deprecationNote = String(body.note ?? "");
   return versionRow(version);
 });
-/** The id of a mock question, by its pool and internal name. */
+/** The id of a mock question, by its pool and internal name (none under `?empty=1`). */
 const mockQuestionId = (poolId: string, name: string) =>
-  liveQuestions(poolId).find((q) => q.internalName === name)!.id;
+  liveQuestions(poolId).find((q) => q.internalName === name)?.id ?? `missing:${name}`;
 
 /**
  * The item analysis of ADR-038, as the server shapes it: only the questions

@@ -13,7 +13,7 @@ import { randomInt, randomUUID } from "node:crypto";
 
 import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 
-import type { EnrollmentPatch, StudentClassroom } from "@quiz/contracts";
+import { JOIN_CODE_LENGTH, type EnrollmentPatch, type StudentClassroom } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
 import {
@@ -477,10 +477,12 @@ const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 /**
  * Each character drawn uniformly by `randomInt`: `byte % 31` would favour
- * the first nine characters (256 is not a multiple of 31).
+ * the first nine characters (256 is not a multiple of 31). Never the length
+ * of a poll's session code: the student's one code field tells the two apart
+ * by it (ADR-045).
  */
 function newJoinCode(): string {
-  return Array.from({ length: 8 }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
+  return Array.from({ length: JOIN_CODE_LENGTH }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
 }
 
 /**

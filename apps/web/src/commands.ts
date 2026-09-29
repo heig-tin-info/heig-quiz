@@ -8,6 +8,7 @@ import {
   Code2,
   FolderTree,
   GraduationCap,
+  Hash,
   Languages,
   Library,
   LogOut,
@@ -83,6 +84,13 @@ export interface CommandContext {
    * the Shell owns — the palette has no sheet of its own to open.
    */
   onStartPoll?: () => void;
+  /**
+   * Opens the student's code dialog (ADR-045). Defined by the Shell for a
+   * real student only — never in a teacher's student view (ADR-018
+   * addendum, no. 6) — and never reaches the exam's palette, which is a
+   * fixed list (W15).
+   */
+  onEnterCode?: (() => void) | undefined;
 }
 
 /** Id prefix of the per-classroom commands; the cap below recognizes them by it. */
@@ -151,6 +159,18 @@ export function buildCommands(ctx: CommandContext): Command[] {
       group: "action",
       keywords: "poll vote sondage question live",
       run: () => startPoll(),
+    });
+  }
+
+  if (ctx.onEnterCode) {
+    const enterCode = ctx.onEnterCode;
+    commands.push({
+      id: "action:enter-code",
+      label: t("code.title"),
+      icon: Hash,
+      group: "action",
+      keywords: "code join poll classroom rejoindre sondage classe",
+      run: () => enterCode(),
     });
   }
 
