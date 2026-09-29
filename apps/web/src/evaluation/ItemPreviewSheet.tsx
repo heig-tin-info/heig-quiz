@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Eye } from "lucide-react";
 
-import type { ItemPreview, ItemRow } from "@quiz/contracts";
+import type { ItemPreview, ItemRow, PreviewSolution } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
@@ -9,7 +9,7 @@ import { itemPreviewKey } from "../queryKeys";
 import type { EditTarget } from "./editTarget";
 import { typeLabel } from "../questionTypes";
 import { Alert, Sheet } from "../ui";
-import { PreviewedQuestion } from "./PreviewedQuestion";
+import { PreviewedQuestion } from "../question/PreviewedQuestion";
 
 /**
  * The Preview of a row of the question list (issue #127): ONE item, as a
@@ -39,8 +39,9 @@ export function ItemPreviewSheet({
   onClose: () => void;
 }) {
   const t = useT();
+  const key = itemPreviewKey(target.detailKey, item.id, item.questionVersionId);
   const preview = useQuery<ItemPreview>({
-    queryKey: itemPreviewKey(target.detailKey, item.id, item.questionVersionId),
+    queryKey: key,
     queryFn: () => api(`${target.base}/preview/items/${item.id}`),
     // Seed 0, a frozen version: the same view on every open.
     staleTime: Infinity,
@@ -60,7 +61,13 @@ export function ItemPreviewSheet({
         <Alert icon={Eye} title={t("eval.questions.preview.banner")}>
           {t("eval.questions.preview.bannerBody")}
         </Alert>
-        <PreviewedQuestion query={preview} />
+        <PreviewedQuestion
+          query={preview}
+          solution={{
+            queryKey: [...key, "solution"],
+            queryFn: () => api<PreviewSolution>(`${target.base}/preview/items/${item.id}/solution`),
+          }}
+        />
       </div>
     </Sheet>
   );

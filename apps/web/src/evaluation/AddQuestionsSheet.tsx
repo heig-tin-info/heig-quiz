@@ -36,8 +36,8 @@ import {
 } from "../ui";
 import { poolQuestionsKey } from "../queryKeys";
 import { useTargetRefresh, type EditTarget } from "./editTarget";
-import { questionPreviewQuery } from "../question/previewQuery";
-import { PreviewedQuestion, type StudentQuestion } from "./PreviewedQuestion";
+import { questionPreviewQuery, questionSolutionQuery } from "../question/previewQuery";
+import { PreviewedQuestion, type StudentQuestion } from "../question/PreviewedQuestion";
 
 /**
  * The question picker (F-EVAL-01): a pool on the left of the filter bar, a
@@ -418,7 +418,7 @@ function QuestionPreview({ row }: { row: QuestionRow }) {
           {t("picker.preview.draftBody")}
         </Alert>
       ) : null}
-      <PreviewedQuestion query={query} />
+      <PreviewedQuestion query={query} solution={questionSolutionQuery(row.id, source)} />
     </div>
   );
 }

@@ -302,7 +302,7 @@ The `llm` module builds the prompt from a template per purpose, requires a JSON 
 
 A single point of exit of content towards a student: the type's `toStudent`, called in a `studentView` service of the `live` module, which also removes the internal name, the tags, the difficulty, the explanation, then applies the feedback policy. Tests: for each type, a full configuration passed through `toStudent` contains no forbidden field, tested by a blacklist of keys and by searching for the answer-key values in the serialised output.
 
-The key has one student exit too: once the feedback policy shows it (`showKey`), a student reads the type's `toSolution` passed through its optional `studentSolution` hook, in `studentSolutionView` beside `studentView`. The hook drops from the solution what stays the teacher's even under a shown key — the grading criteria of an essay, a short answer's `llm` rubric. Every student-facing reader of a key goes through it (the feedback page, a poll's reveal, the teacher's preview "as a student"); the teacher's surfaces keep the whole `toSolution` (ADR-037).
+The key has one student exit too: once the feedback policy shows it (`showKey`), a student reads the type's `toSolution` passed through its optional `studentSolution` hook, in `studentSolutionView` beside `studentView`. The hook drops from the solution what stays the teacher's even under a shown key — the grading criteria of an essay, a short answer's `llm` rubric. Every student-facing reader of a key goes through it (the feedback page, a poll's reveal, the teacher's preview "as a student" and the "Show answers" of a question's preview, which asks for the key on the click only); the teacher's surfaces keep the whole `toSolution` (ADR-037).
 
 ## 5.8 Export, import, backup
 

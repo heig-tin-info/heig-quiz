@@ -1,16 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Eye } from "lucide-react";
-import { useState } from "react";
 
 import type { PreviewResult } from "@quiz/contracts";
 
 import { apiErrorMessage } from "../api";
 import { useT } from "../i18n";
+import { PlayedQuestion } from "./PreviewedQuestion";
 import { PlayerShell } from "../student/PlayerShell";
-import { QuestionHost } from "../student/QuestionHost";
 import { Alert, Button, Card, Skeleton } from "../ui";
-import { emptyAnswerOf } from "../questionTypes";
-import { questionPreviewQuery } from "./previewQuery";
+import { questionPreviewQuery, questionSolutionQuery } from "./previewQuery";
 
 /**
  * "See what the student sees" for ONE question (docs/spec/08 §8.2), in a page
@@ -27,13 +25,14 @@ import { questionPreviewQuery } from "./previewQuery";
  * is graded. The server answers `POST /questions/:id/preview` with the view
  * that came out of the question type's `toStudent` (invariant 4) at seed 0
  * and without shuffling, exactly what the panel used to read — so the teacher
- * sees the student's payload, never the answer key.
+ * sees the student's payload. The answer key comes only on "Show answers"
+ * (mcq and cloze), from a request of its own made on the click.
  *
  * The four decisions, and they are the player's, on purpose: the point of the
  * screen is that it looks like the exam.
  *   - Type: the statement at reading size, the chrome at 13 px.
- *   - Color: no accent at all. The banner is the calm `neutral` alert; there
- *     is nothing here to click that changes anything.
+ *   - Color: no accent at all. The banner is the calm `neutral` alert, and
+ *     "Show answers" is secondary: it changes nothing but this tab.
  *   - Space: the player's 760 px column, the player's spacing.
  *   - Finish: the player's hairline bar over the warm canvas, no shadow.
  *
@@ -84,38 +83,16 @@ export function StudentPreviewPage({ id }: { id: string }) {
           {apiErrorMessage(preview.error, t("question.preview.incomplete"))}
         </Alert>
       ) : (
-        <PreviewedQuestion type={preview.data.type} student={preview.data.student} />
+        // The player's own card and host (`QuestionHost`), which lends every
+        // type its strings and `MarkdownView`: a second mounting path would be
+        // a second rendering, and a preview that renders differently from the
+        // player previews nothing.
+        <PlayedQuestion
+          view={{ type: preview.data.type, student: preview.data.student, points: preview.data.itemPoints }}
+          solution={questionSolutionQuery(id, "draft")}
+          label={t("player.question", { n: 1 })}
+        />
       )}
     </PlayerShell>
-  );
-}
-
-/**
- * The question itself, in the player's own card and through the player's own
- * host — the SAME `QuestionHost` the student sits behind, which is what lends
- * every type its translated strings and `MarkdownView` (the one renderer of
- * untrusted content). A second mounting path is a second rendering, and a
- * preview that renders differently from the player previews nothing.
- */
-function PreviewedQuestion({ type, student }: { type: string; student: unknown }) {
-  const t = useT();
-  const [answer, setAnswer] = useState<unknown>(() => emptyAnswerOf(type, student));
-  return (
-    <>
-      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <p className="text-[13px] font-semibold uppercase tracking-wide text-fg-muted">
-          {t("player.question", { n: 1 })}
-        </p>
-      </div>
-      <Card className="p-5 sm:p-6">
-        <QuestionHost
-          type={type}
-          student={student}
-          answer={answer}
-          onChange={setAnswer}
-          readOnly={false}
-        />
-      </Card>
-    </>
   );
 }

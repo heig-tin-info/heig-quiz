@@ -2486,6 +2486,9 @@ export const fr: Record<keyof Dict, string> = {
   "preview.bannerBody":
     "Vous voyez exactement ce que reçoit un étudiant, dans un ordre tiré au hasard. Vos réponses restent dans cet onglet ; rendez la copie pour voir la correction complète.",
   "preview.restart": "Recommencer",
+  "preview.answers.show": "Afficher les réponses",
+  "preview.answers.hide": "Masquer les réponses",
+  "preview.answers.failed": "Impossible de charger les réponses",
   "preview.restart.title": "Recommencer l'aperçu ?",
   "preview.restart.message":
     "Vos réponses sont effacées et un nouvel ordre est tiré au hasard.",

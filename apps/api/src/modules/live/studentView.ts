@@ -116,6 +116,12 @@ export function studentViewOf(type: string, config: unknown, view: StudentView):
   return stripMetadata(typeOf(type).toStudent(config, view));
 }
 
+/**
+ * The view of a teacher's preview of one question: seed 0 and no shuffle, so
+ * the same view on every open (decision D19) — and the key of the same view.
+ */
+export const teacherPreviewView = (itemId: string): StudentView => ({ seed: 0, itemId, shuffle: false });
+
 /** The student-facing payload of one item. The ONLY producer of one. */
 export function studentView(input: StudentViewInput): unknown {
   return studentViewOf(input.type, loadConfig(input.type, input.version), {
@@ -156,20 +162,25 @@ export function solutionViewOf(type: string, config: unknown, view: StudentView)
  *
  * Every student-facing reader of a key comes through here: the feedback
  * page (and a teacher acting as a student, ADR-034), a poll's reveal, and the
- * teacher's preview "as a student" (ADR-018). It does NOT check the policy:
+ * teacher's previews "as a student" (ADR-018, and the "Show answers" of a
+ * question's preview). It does NOT check the policy:
  * the caller serves it only when `showKey` holds.
  */
 export function studentSolutionView(
   input: Omit<StudentViewInput, "shuffle"> & { shuffle?: boolean },
 ): unknown {
-  const config = loadConfig(input.type, input.version);
-  const type = typeOf(input.type);
-  const solution = type.toSolution(config, {
+  return studentSolutionViewOf(input.type, loadConfig(input.type, input.version), {
     seed: input.seed,
     itemId: input.itemId,
     shuffle: input.shuffle ?? false,
   });
-  return type.studentSolution ? type.studentSolution(solution, config) : solution;
+}
+
+/** {@link studentSolutionView} for a caller that already holds the PARSED config. */
+export function studentSolutionViewOf(type: string, config: unknown, view: StudentView): unknown {
+  const t = typeOf(type);
+  const solution = t.toSolution(config, view);
+  return t.studentSolution ? t.studentSolution(solution, config) : solution;
 }
 
 /** `type.shuffleable(config)`: whether shuffling means anything for this one. */
