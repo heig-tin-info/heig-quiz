@@ -841,6 +841,7 @@ export const fr: Record<keyof Dict, string> = {
   "qt.mcq.e.choices": "Choix",
   "qt.mcq.e.choicesHint": "Cochez les bonnes réponses.",
   "qt.mcq.e.choiceText": "Texte du choix",
+  "qt.mcq.e.issueAt": "{field} — {message}",
   "qt.mcq.e.correctChoice": "Le choix {letter} est correct",
   "qt.mcq.e.addChoice": "Ajouter un choix",
   "qt.mcq.e.removeChoice": "Retirer le choix",

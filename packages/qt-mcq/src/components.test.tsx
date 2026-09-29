@@ -88,6 +88,20 @@ describe("McqEditor", () => {
     expect(screen.getByText("mcq.no_correct_choice")).toBeInTheDocument();
   });
 
+  it("names the choice an issue is about, and marks its field", () => {
+    render(
+      <McqEditor
+        config={SECRET_CONFIG}
+        onChange={() => {}}
+        // The wire carries the index as a string.
+        issues={[{ path: ["choices", "1", "text"], message: "This field is empty." }]}
+      />,
+    );
+    expect(screen.getByText("Text of choice B — This field is empty.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Text of choice B")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("Text of choice A")).not.toHaveAttribute("aria-invalid");
+  });
+
   it("takes the host's French strings", () => {
     render(
       <McqEditor config={SECRET_CONFIG} onChange={() => {}} strings={{ prompt: "Énoncé" }} />,

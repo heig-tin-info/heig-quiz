@@ -43,7 +43,7 @@ import type {
   RichTextComponent,
   StringOverrides,
 } from "@quiz/core/client";
-import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
+import { fmt, issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import {
   MCQ_MAX_CHOICES,
   MCQ_MIN_CHOICES,
@@ -396,6 +396,24 @@ export function McqEditor({
     </Tip>
   );
 
+  /**
+   * Under the choices: the list's own issues, then those of one choice, named
+   * by its letter ("Text of choice B — This field is empty."), and that
+   * choice's field turns red.
+   */
+  const choiceIssues = issuesAt(issues, "choices");
+  const refused = new Set(choiceIssues.flatMap((i) => (i.path.length < 2 ? [] : [String(i.path[1])])));
+  const locate = (issue: ConfigIssue): ConfigIssue =>
+    issue.path.length < 2
+      ? issue
+      : {
+          ...issue,
+          message: fmt(s.issueAt, {
+            field: `${s.choiceText} ${choiceLetter(Number(issue.path[1]))}`,
+            message: issue.message,
+          }),
+        };
+
   return (
     <div className="flex flex-col gap-6">
       <IssueList issues={rootIssues(issues)} />
@@ -437,6 +455,7 @@ export function McqEditor({
                 <ChoiceRow
                   key={index}
                   index={index}
+                  invalid={refused.has(String(index))}
                   choice={choice}
                   s={s}
                   disabled={disabled === true}
@@ -475,7 +494,7 @@ export function McqEditor({
           </SortableContext>
         </DndContext>
 
-        <IssueList issues={issuesAt(issues, "choices")} />
+        <IssueList issues={choiceIssues.map(locate)} />
       </section>
 
       {ungraded ? null : scoring}
@@ -499,6 +518,7 @@ export function McqEditor({
  */
 function ChoiceRow({
   index,
+  invalid,
   choice,
   s,
   disabled,
@@ -513,6 +533,8 @@ function ChoiceRow({
   trailing,
 }: {
   index: number;
+  /** The last save refused this choice (an empty text, in practice). */
+  invalid: boolean;
   choice: McqChoice;
   s: Strings;
   disabled: boolean;
@@ -593,6 +615,7 @@ function ChoiceRow({
           toolbar="focus"
           id={choiceId(index)}
           aria-label={`${s.choiceText} ${letter}`}
+          aria-invalid={invalid || undefined}
           value={choice.text}
           onChange={onText}
           disabled={disabled}
@@ -605,14 +628,15 @@ function ChoiceRow({
             { keys: "Tab", label: s.addChoice },
             { keys: "Enter", label: s.nextChoice },
           ]}
-          className="min-w-0 flex-1"
+          className={cx("min-w-0 flex-1", invalid && "rounded-field ring-1 ring-danger")}
         />
       ) : (
         <input
           type="text"
           id={choiceId(index)}
-          className={cx(inputClass, inputSize.md, "min-w-0 flex-1")}
+          className={cx(inputClass, inputSize.md, "min-w-0 flex-1", invalid && "border-danger")}
           aria-label={`${s.choiceText} ${letter}`}
+          aria-invalid={invalid || undefined}
           value={choice.text}
           disabled={disabled}
           onChange={(e) => onText(e.target.value)}
