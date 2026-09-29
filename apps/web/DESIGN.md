@@ -1185,12 +1185,17 @@ draws before the session gate, so it carries its own door.
   There is **no autosave**: a poll is one deliberate tap, and an answer that
   saved itself mid-gesture is an answer nobody meant to send. The whole sync
   report is a `success` check and the word "Sent", in a polite live region.
-- **Reveal replaces the control.** Once the teacher has revealed — and on a
-  poll that has ended — the answer control is gone rather than disabled with a
-  key beside it: an input that still accepts a tap after the room has read the
-  answer is a trap. The key wears `success`, a wrong own pick `danger`, and
-  both carry a WORD beside the tint (`PollJoinReveal`), because a lecture hall
-  projector and a red-green reader both lose a tint alone.
+- **Only End takes the control away** (ADR-014, addendum 2026-09-29). While
+  the poll runs, what the teacher shows — the key, the votes — sits in a
+  second card UNDER the question, which keeps its "Send"/"Update" bar: a
+  reveal that removed the control read as "you may not answer" to everyone
+  who joined after it (poll KUFE5R). That card names no verdict (no "your
+  answer — wrong" beside a field the reader may still change). Once the poll
+  has ended the same block REPLACES the question and the verdict joins it.
+  The key wears `success`, a wrong own pick `danger`, and both carry a WORD
+  beside the tint (`PollJoinReveal`), because a lecture hall projector and a
+  red-green reader both lose a tint alone. An mcq whose key and votes are both
+  shown draws one list — the distribution with the key ticked in it.
 - The type's own `Review` is deliberately not reused for that reveal: it is a
   GRADED surface (it always prints a score line, and `short` reads its verdict
   from grading details) and a poll produces none of that. A poll reveals the

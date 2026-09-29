@@ -466,27 +466,27 @@ describe("the public page (F-AUTH-05)", () => {
     expect(refused.statusCode).toBe(422);
   });
 
-  it("puts the votes on the wall only: a phone still sees no distribution (#157)", async () => {
+  it("shows the votes on the wall AND the phones, and never the key with them (addendum 2026-09-29)", async () => {
     const shown = await post(
       `/app/api/evaluations/${evaluationId}/poll/reveal`,
       teacher.headers,
-      { revealed: false, votes: true },
+      { votes: true },
     );
     expect(shown.statusCode).toBe(200);
     expect(shown.json().settings).toMatchObject({ revealed: false, votes: true });
     const phone = (await get(`/app/api/p/${code}`)).json();
-    expect(phone.tally).toBeNull();
+    expect(phone.tally).toMatchObject({ joined: 2, answered: 2 });
     expect(phone.solution).toBeNull();
-    // A reveal that says nothing of the votes leaves them where they were.
     const hidden = await post(
       `/app/api/evaluations/${evaluationId}/poll/reveal`,
       teacher.headers,
-      { revealed: false, votes: false },
+      { votes: false },
     );
     expect(hidden.json().settings.votes).toBe(false);
+    expect((await get(`/app/api/p/${code}`)).json().tally).toBeNull();
   });
 
-  it("shows the key once the teacher reveals, and not before", async () => {
+  it("reveals the key without the votes, keeps the vote open, and takes the reveal back", async () => {
     expect((await get(`/app/api/p/${code}`)).json().solution).toBeNull();
     const revealed = await post(
       `/app/api/evaluations/${evaluationId}/poll/reveal`,
@@ -494,10 +494,49 @@ describe("the public page (F-AUTH-05)", () => {
       { revealed: true },
     );
     expect(revealed.statusCode).toBe(200);
-    expect(revealed.json().settings.revealed).toBe(true);
+    // The reveal no longer implies the votes: two independent switches.
+    expect(revealed.json().settings).toMatchObject({ revealed: true, votes: false });
     // Every exit builds the same teacher view, audience included.
     expect(revealed.json().evaluation.classroomId).toBeNull();
-    expect((await get(`/app/api/p/${code}`)).json().solution).toEqual({ correct: [0] });
+    const phone = (await get(`/app/api/p/${code}`)).json();
+    expect(phone.solution).toEqual({ correct: [0] });
+    expect(phone.tally).toBeNull();
+    expect(phone.state).toBe("running");
+
+    // Only End closes the vote: an answer after the reveal is taken, and
+    // counted like any other (incident of poll KUFE5R, 2026-09-29).
+    const late = await post(`/app/api/p/${code}/join`);
+    const lateCookie = `${GUEST_COOKIE}=${guestCookieOf(late)!}`;
+    const answered = await post(`/app/api/p/${code}/answer`, { cookie: lateCookie }, { payload: { selected: [2] } });
+    expect(answered.statusCode).toBe(200);
+    const changed = await post(
+      `/app/api/p/${code}/answer`,
+      { cookie: `${GUEST_COOKIE}=${firstGuest}` },
+      { payload: { selected: [0] } },
+    );
+    expect(changed.statusCode).toBe(200);
+    const wall = await get(`/app/api/evaluations/${evaluationId}/poll`, teacher.headers);
+    expect(wall.json().tally).toMatchObject({ joined: 3, answered: 3 });
+
+    // Both switches on, then the key taken back: the votes stay.
+    await post(`/app/api/evaluations/${evaluationId}/poll/reveal`, teacher.headers, { votes: true });
+    const both = (await get(`/app/api/p/${code}`)).json();
+    expect(both.solution).toEqual({ correct: [0] });
+    expect(both.tally).toMatchObject({ answered: 3 });
+    const unrevealed = await post(
+      `/app/api/evaluations/${evaluationId}/poll/reveal`,
+      teacher.headers,
+      { revealed: false },
+    );
+    expect(unrevealed.json().settings).toMatchObject({ revealed: false, votes: true });
+    const [row] = await server.app.db.select().from(evaluations).where(eq(evaluations.id, evaluationId));
+    expect(row!.feedbackPolicy).toMatchObject({ showKey: false, showExplanation: false });
+    const after = (await get(`/app/api/p/${code}`)).json();
+    expect(after.solution).toBeNull();
+    expect(after.tally).not.toBeNull();
+
+    // Revealed again for what follows.
+    await post(`/app/api/evaluations/${evaluationId}/poll/reveal`, teacher.headers, { revealed: true, votes: false });
   });
 
   it("ends: the poll is closed, the page still answers, the writes do not", async () => {
@@ -866,12 +905,38 @@ describe("an opinion poll, whose question has no key", () => {
     expect(view.json().tally).toMatchObject({ joined: 3, answered: 3 });
     expect(view.json().tally.choices.map((c: { count: number }) => c.count)).toEqual([0, 2, 1]);
 
-    // The reveal names no answer and hands the phones the distribution.
-    const revealed = await post(`/app/api/evaluations/${id}/poll/reveal`, teacher.headers, { revealed: true });
-    expect(revealed.statusCode).toBe(200);
+    // Nothing to reveal: the switch is refused (addendum 2026-09-29).
+    const refused = await post(`/app/api/evaluations/${id}/poll/reveal`, teacher.headers, { revealed: true });
+    expect(refused.statusCode).toBe(422);
+    expect(refused.json().error).toBe("poll_keyless");
+    // The votes are what hands the phones the distribution.
+    const shown = await post(`/app/api/evaluations/${id}/poll/reveal`, teacher.headers, { votes: true });
+    expect(shown.statusCode).toBe(200);
     const phone = (await get(`/app/api/p/${pollCode}`)).json();
-    expect(phone.solution).toEqual({ correct: [] });
+    expect(phone.solution).toBeNull();
     expect(phone.tally.choices.map((c: { count: number }) => c.count)).toEqual([0, 2, 1]);
+
+    // A row revealed before the addendum still shows its distribution, with
+    // no migration: `revealed` on a keyless poll counts as the votes.
+    const [row] = await server.app.db.select().from(evaluations).where(eq(evaluations.id, id));
+    await server.app.db
+      .update(evaluations)
+      .set({ settings: { ...(row!.settings as object), poll: { revealed: true, votes: false } } })
+      .where(eq(evaluations.id, id));
+    // Read normalised, on both sides: the votes on, no reveal, no key.
+    const legacy = (await get(`/app/api/p/${pollCode}`)).json();
+    expect(legacy.settings).toMatchObject({ revealed: false, votes: true });
+    expect(legacy.solution).toBeNull();
+    expect(legacy.tally.choices.map((c: { count: number }) => c.count)).toEqual([0, 2, 1]);
+    const wall = await get(`/app/api/evaluations/${id}/poll`, teacher.headers);
+    expect(wall.json().settings).toMatchObject({ revealed: false, votes: true });
+    // The first switch that moves writes the normalised pair: the legacy
+    // reveal is gone from the row.
+    const hidden = await post(`/app/api/evaluations/${id}/poll/reveal`, teacher.headers, { votes: false });
+    expect(hidden.statusCode).toBe(200);
+    expect((await get(`/app/api/p/${pollCode}`)).json().tally).toBeNull();
+    const [stored] = await server.app.db.select().from(evaluations).where(eq(evaluations.id, id));
+    expect((stored!.settings as { poll: unknown }).poll).toEqual({ revealed: false, votes: false });
     // Still only `toStudent` on the question (invariant 4).
     const serialized = JSON.stringify(phone.question.student);
     for (const forbidden of FORBIDDEN_STUDENT_KEYS) {
@@ -1145,6 +1210,12 @@ describe("the order of the refusals on the teacher side", () => {
     const malformed = await post(url, teacher.headers, badBody);
     expect(malformed.statusCode).toBe(400);
     expect(malformed.json().error).toBe("validation");
+    // A body that names neither switch would write and audit nothing.
+    for (const empty of [{}, undefined]) {
+      const refused = await post(url, teacher.headers, empty);
+      expect(refused.statusCode).toBe(400);
+      expect(refused.json().error).toBe("validation");
+    }
 
     await post(`/app/api/evaluations/${id}/poll/end`, teacher.headers);
   });

@@ -334,7 +334,7 @@ export async function extendClosesAt(
   return row ?? null;
 }
 
-/** `poll.setRevealed`: the poll switches and the feedback policy, moved together. */
+/** `poll.setDisplay`: the poll switches and the feedback policy, moved together. */
 export async function setPollSettings(
   db: DbOrTx,
   id: string,

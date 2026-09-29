@@ -4,7 +4,6 @@ import type { PollTeacherView } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { Ring } from "../ui";
-import { waitingOf } from "./pollTally";
 
 /**
  * Band 3 of the projection — where the room is at. The way in left this
@@ -18,7 +17,6 @@ export function ProjectionFooter({
   anonymous: boolean;
 }) {
   const t = useT();
-  const waiting = waitingOf(tally);
   return (
     <div className="flex flex-wrap items-end justify-between gap-6">
       <div className="flex items-center gap-3.5">
@@ -43,8 +41,7 @@ export function ProjectionFooter({
             {tally.answered === 0
               ? t("poll.noAnswersYet")
               : t(tally.answered === 1 ? "poll.received.one" : "poll.received", {
-                  answered: tally.answered,
-                  waiting,
+                  n: tally.answered,
                 })}
           </span>
           {anonymous ? (

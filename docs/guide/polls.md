@@ -46,12 +46,15 @@ From top to bottom: the course and classroom with a **Live** pulse, the statemen
 
 The footer carries the ring of answers received out of people present, the join address, the six-character session code and its QR code. A crossed eye reminds the room that no name is shown.
 
-The controls at the top right are the segmented **Hide votes** / **Show votes** / **Reveal answer** switch, a bookmark to **Keep this question** (for a question written in the launcher), the theme toggle, **Full screen** and **End poll**. The arrow before the course name goes back to the classroom. Nothing else happens on this screen.
+The controls at the top right are two switches, **Show votes** and **Reveal answer**, a bookmark to **Keep this question** (for a question written in the launcher), the theme toggle, **Full screen**, and the primary action, **End poll**, with the number of people who joined but have not answered yet beside it. The arrow before the course name goes back to the classroom. Nothing else happens on this screen.
 
-The switch is three steps of one progression, and the arrow keys walk it: `→` or `Page Down` one step on, `←` or `Page Up` one step back, which is what a presenter clicker sends. `V` shows or hides the votes, `R` reveals or hides the answer. An opinion poll, which has no correct answer, has two steps: **Hide votes** and **Show results**.
+The two switches are independent: votes only, answer only, both, or neither. `V` shows or hides the votes, `R` reveals or hides the answer. The arrow keys and `Page Down` / `Page Up`, which is what a presenter clicker sends, walk the usual order one step at a time: hidden, then the votes, then the votes with the answer. An opinion poll, which has no correct answer, has no **Reveal answer** switch: its votes are all there is to show.
 
 !!! note
-    The distribution is sent only to you. **Show votes** puts it on the wall, never on the phones: a phone in the room never sees how the votes are spread before you reveal the answer, so the majority does not drag the undecided along.
+    Neither switch closes the vote: only **End poll** does. While the poll runs, every phone keeps the question and its **Send** button, whatever the wall shows, and an answer given after the reveal counts like any other.
+
+!!! note
+    **Show votes** puts the distribution on the wall AND on the phones. It is off when the poll starts, so the majority does not drag the undecided along.
 
 ## How the room joins
 
@@ -77,7 +80,7 @@ Switch the control at the top right to **Reveal answer**, or press `R`. On the w
   <figcaption>The reveal on the wall; as above, the fourth choice sits just below the visible area at this window height.</figcaption>
 </figure>
 
-The phones follow within a few seconds. The answer field goes away, the choices are listed with the correct one marked, and a participant who answered sees whether their own answer was right. For a short-answer question the phone shows the accepted answers and whether the participant's text was among them.
+The phones follow within a few seconds. The question and its **Send** button stay — the poll is still open — and the correct answer appears under them, without telling anyone whether their own answer was right. Once you end the poll, the phone replaces the question with the key and says whether the participant's answer was right; for a short-answer question, the accepted answers and whether the participant's text was among them.
 
 <figure markdown="span">
   ![The phone after the reveal: the correct choice highlighted in green, the others greyed out](../assets/screenshots/join-revealed-phone-light.png#only-light){ width="390" }
@@ -85,7 +88,7 @@ The phones follow within a few seconds. The answer field goes away, the choices 
   <figcaption>The same poll on a guest phone once the answer is revealed.</figcaption>
 </figure>
 
-Revealing is reversible: switch back to **Show votes** or **Hide votes** and the key is hidden again, on the wall and on the phones. You can reveal before or after ending the poll.
+Revealing is reversible: switch **Reveal answer** off and the key is hidden again, on the wall and on the phones. You can reveal before or after ending the poll.
 
 ## Ending the poll
 
@@ -97,7 +100,7 @@ Revealing is reversible: switch back to **Show votes** or **Hide votes** and the
   <figcaption>The poll ended: the code and the QR leave the screen, the tally stays, and Run again is offered.</figcaption>
 </figure>
 
-A poll you forget to end ends on its own: once twelve hours have gone by without an answer (counted from the last answer, or from the start or the last reveal step when nobody answered), the server ends it exactly as **End poll** would.
+A poll you forget to end ends on its own: once twelve hours have gone by without an answer (counted from the last answer, or from the start or the last switch when nobody answered), the server ends it exactly as **End poll** would.
 
 The code keeps working for two hours after the end. A phone that reloads the page still gets the question and the revealed answer, so the room keeps the result in hand while you comment on it. After two hours the code is free again.
 

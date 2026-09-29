@@ -112,7 +112,7 @@ export class FeedbackNotAllowed extends EvaluationError {
 
 /**
  * A poll keeps its reveal in two places, moved together by the poll's own
- * reveal route (`poll.setRevealed`, F-LIVE-13): `settings.poll.revealed`,
+ * reveal route (`poll.setDisplay`, F-LIVE-13): `settings.poll.revealed`,
  * which the projection reads, and `feedbackPolicy.showKey`/`showExplanation`,
  * which the feedback route obeys. A generic patch of the second half would
  * publish the key while the projection still says "not revealed" (#86).

@@ -2,7 +2,6 @@ import {
   ArrowLeft,
   BookmarkCheck,
   BookmarkPlus,
-  Check,
   Maximize2,
   Minimize2,
   Moon,
@@ -11,19 +10,19 @@ import {
   Sun,
 } from "lucide-react";
 
-import type { PollDisplay, PollTeacherView } from "@quiz/contracts";
+import type { PollRevealBody, PollSettings, PollTeacherView } from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { Button, IconButton, Segmented } from "../ui";
+import { Button, IconButton, Switch } from "../ui";
 import { PollQr } from "./PollQr";
-import { hasKey, joinHost } from "./pollTally";
+import { hasKey, joinHost, waitingOf } from "./pollTally";
 
 /**
- * Where the room is: still answering, looking at the key, or done. `ended`
- * wins over `revealed` — a closed poll whose key was on the wall is over, and
- * "Run again" is what is left.
+ * Where the room is: still answering, or done. Showing the votes or the key
+ * does not end anything (ADR-014, addendum 2026-09-29): only End does, so
+ * there are two phases, not three.
  */
-export type ProjectionPhase = "live" | "revealed" | "ended";
+export type ProjectionPhase = "live" | "ended";
 
 /** The states in which the poll is over and "Run again" is what is left. */
 function isEnded(state: string): boolean {
@@ -31,27 +30,41 @@ function isEnded(state: string): boolean {
 }
 
 export function projectionPhase(view: PollTeacherView): ProjectionPhase {
-  if (isEnded(view.evaluation.state)) return "ended";
-  return view.settings.revealed ? "revealed" : "live";
+  return isEnded(view.evaluation.state) ? "ended" : "live";
+}
+
+/** The two display switches of a poll, as the views carry them. */
+type PollDisplay = Pick<PollSettings, "votes" | "revealed">;
+
+/**
+ * The steps a presentation remote walks (Page Down / Page Up), in the order a
+ * lecture usually takes them (#157): the choices alone while the room votes,
+ * then the distribution, then the key over it. A poll without a key stops at
+ * the distribution. The two switches stay independent; this is only the
+ * one-button path through them.
+ */
+function displaySteps(keyed: boolean): PollDisplay[] {
+  const steps: PollDisplay[] = [
+    { votes: false, revealed: false },
+    { votes: true, revealed: false },
+  ];
+  return keyed ? [...steps, { votes: true, revealed: true }] : steps;
 }
 
 /**
- * The steps of the display switch, in the order a lecture walks them (#157):
- * the choices alone while the room votes, then the distribution, then the
- * key. An opinion poll has no key, so its second step is the last one, and
- * it is the reveal: that is what hands the phones the results.
+ * The step one press of the remote leads to, or null at either end. From the
+ * one state off the path — the key without the votes — forward adds the
+ * votes and back hides everything.
  */
-export function displaySteps(keyed: boolean): PollDisplay[] {
-  return keyed ? ["hidden", "votes", "answer"] : ["hidden", "answer"];
+export function stepFrom(keyed: boolean, at: PollDisplay, forward: boolean): PollDisplay | null {
+  const steps = displaySteps(keyed);
+  const found = steps.findIndex((s) => s.votes === at.votes && s.revealed === at.revealed);
+  const next = found === -1 ? (forward ? steps.length - 1 : 0) : found + (forward ? 1 : -1);
+  return next < 0 || next >= steps.length ? null : steps[next]!;
 }
 
-/** The body of `POST …/poll/reveal` that puts the wall on `step`. */
-export function displayBody(step: PollDisplay): { revealed: boolean; votes: boolean } {
-  return { revealed: step === "answer", votes: step !== "hidden" };
-}
-
-/** The word after the context: one of the three phases, never the colour alone. */
-function PhaseLabel({ phase, keyed }: { phase: ProjectionPhase; keyed: boolean }) {
+/** The word after the context: the phase, never the colour alone. */
+function PhaseLabel({ phase }: { phase: ProjectionPhase }) {
   const t = useT();
   if (phase === "ended") {
     return (
@@ -60,18 +73,28 @@ function PhaseLabel({ phase, keyed }: { phase: ProjectionPhase; keyed: boolean }
       </span>
     );
   }
-  if (phase === "revealed") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-[clamp(13px,1.2vw,16px)] font-semibold text-success">
-        <Check className="size-[1.1em]" aria-hidden />
-        {t(keyed ? "poll.revealed" : "poll.resultsShown")}
-      </span>
-    );
-  }
   return (
     <span className="inline-flex items-center gap-2 text-[clamp(13px,1.2vw,16px)] font-semibold text-accent">
       <span className="size-2.5 animate-pulse rounded-full bg-accent" aria-hidden />
       {t("poll.live")}
+    </span>
+  );
+}
+
+/** A display switch with its words beside it: a state, not an action. */
+function DisplaySwitch({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (on: boolean) => void;
+}) {
+  return (
+    <span className="inline-flex items-center gap-2 text-[13px] font-medium text-fg-muted">
+      <Switch label={label} checked={checked} onChange={onChange} />
+      <span aria-hidden>{label}</span>
     </span>
   );
 }
@@ -84,7 +107,6 @@ function PhaseLabel({ phase, keyed }: { phase: ProjectionPhase; keyed: boolean }
 export function ProjectionHeader({
   view,
   phase,
-  display,
   onDisplay,
   onAgain,
   againPending,
@@ -100,9 +122,8 @@ export function ProjectionHeader({
 }: {
   view: PollTeacherView;
   phase: ProjectionPhase;
-  /** What the wall shows; it stays where it was once the poll has ended. */
-  display: PollDisplay;
-  onDisplay: (display: PollDisplay) => void;
+  /** Moves the switches (`view.settings`); both stay usable once ended. */
+  onDisplay: (change: PollRevealBody) => void;
   onAgain: () => void;
   againPending: boolean;
   dark: boolean;
@@ -131,9 +152,10 @@ export function ProjectionHeader({
     view.evaluation.classroomName === null
       ? t("poll.audience.context")
       : `${view.evaluation.courseName ?? ""} · ${view.evaluation.classroomName}`;
-  // An opinion poll has no answer to reveal; the switch shows the phones
-  // the results instead (ADR-014, addendum 2026-09-23).
+  // An opinion poll has no answer to reveal, so it has no reveal switch
+  // (ADR-014, addendum 2026-09-29).
   const keyed = hasKey(view.question);
+  const waiting = waitingOf(view.tally);
   /*
    * "Keep this question" (ADR-014, addenda item 6). A question written in
    * the launcher is saved nowhere until the teacher says so. While the room
@@ -161,28 +183,22 @@ export function ProjectionHeader({
           {context}
         </span>
         <span className="size-1 rounded-full bg-fg-faint" aria-hidden />
-        <PhaseLabel phase={phase} keyed={keyed} />
+        <PhaseLabel phase={phase} />
         <span className="ml-auto flex flex-wrap items-center gap-2">
-          {/* What the wall shows, one step after the other (#157): the
-              room votes before it sees how the others voted. */}
-          <Segmented
-            name="poll-display"
-            label={t("poll.display")}
-            value={display}
-            onChange={onDisplay}
-            options={displaySteps(keyed).map((step) => ({
-              value: step,
-              label: t(
-                step === "hidden"
-                  ? "poll.hideVotes"
-                  : step === "votes"
-                    ? "poll.showVotes"
-                    : keyed
-                      ? "poll.reveal"
-                      : "poll.showResults",
-              ),
-            }))}
+          {/* Two independent switches (ADR-014, addendum 2026-09-29): the
+              votes, and the key. Neither closes the vote — End does. */}
+          <DisplaySwitch
+            label={t("poll.showVotes")}
+            checked={view.settings.votes}
+            onChange={(votes) => onDisplay({ votes })}
           />
+          {keyed ? (
+            <DisplaySwitch
+              label={t("poll.reveal")}
+              checked={view.settings.revealed}
+              onChange={(revealed) => onDisplay({ revealed })}
+            />
+          ) : null}
           {ended && !saved ? (
             <Button size="sm" variant="secondary" onClick={onKeep} loading={keepPending}>
               <BookmarkPlus /> {t("poll.keep")}
@@ -220,12 +236,20 @@ export function ProjectionHeader({
           >
             {fullscreen ? <Minimize2 /> : <Maximize2 />}
           </IconButton>
-          {/* Words, not a bare icon: a slip of the hand here ends the poll
-              for the whole room, so it is named, kept apart and confirmed. */}
+          {/* THE action while the room answers: only End closes the vote.
+              Named, and confirmed — a slip here ends it for everyone. Beside
+              it, who it would leave out. */}
           {ended ? null : (
-            <Button size="sm" variant="ghost" onClick={onEnd} className="ml-2">
-              <Square /> {t("poll.end")}
-            </Button>
+            <span className="ml-2 inline-flex items-center gap-3">
+              {waiting > 0 ? (
+                <span className="text-[13px] text-fg-muted">
+                  {t(waiting === 1 ? "poll.notYet.one" : "poll.notYet", { n: waiting })}
+                </span>
+              ) : null}
+              <Button size="sm" onClick={onEnd}>
+                <Square /> {t("poll.end")}
+              </Button>
+            </span>
           )}
         </span>
       </div>

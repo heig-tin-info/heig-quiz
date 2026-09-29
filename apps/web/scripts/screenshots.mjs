@@ -493,13 +493,16 @@ const scenes = [
   { name: "poll-projection-long-revealed", role: "teacher", path: "/evaluations/poll-long/poll?revealed=1", fold: true },
   // An opinion poll: no key, so the reveal marks nothing and says "Results
   // shown"; the phone gets the distribution instead of a verdict.
-  { name: "poll-projection-opinion-revealed", role: "teacher", path: "/evaluations/poll-opinion/poll?revealed=1", fold: true },
+  { name: "poll-projection-opinion-revealed", role: "teacher", path: "/evaluations/poll-opinion/poll?votes=1", fold: true },
   // The participant's half, as a GUEST: no session at all, which is what a
   // phone in the room has (`?as=guest` in src/mock/poll.ts).
   { name: "join-mcq", role: "teacher", path: "/p/QZ4F7K?as=guest" },
   { name: "join-revealed", role: "teacher", path: "/p/QZ4F7K?as=guest&revealed=1" },
+  // Votes and key both shown while the poll runs: the question and Send stay
+  // (ADR-014, addendum 2026-09-29).
+  { name: "join-revealed-votes", role: "teacher", path: "/p/QZ4F7K?as=guest&revealed=1&votes=1" },
   { name: "join-ended", role: "teacher", path: "/p/EN6D3D?as=guest" },
-  { name: "join-opinion-revealed", role: "teacher", path: "/p/AV3R8T?as=guest&revealed=1" },
+  { name: "join-opinion-revealed", role: "teacher", path: "/p/AV3R8T?as=guest&votes=1" },
   // A classroom's poll, and this account is on neither its roster nor its staff
   // (ADR-014, addendum 2026-09-27): the refusal, and nothing of the question.
   { name: "join-not-on-roster", role: "student", path: "/p/CL5S9P" },
