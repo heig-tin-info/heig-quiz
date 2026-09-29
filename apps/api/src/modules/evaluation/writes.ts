@@ -19,6 +19,7 @@ import {
   retakesOf,
 } from "@quiz/contracts";
 import {
+  allowDrillWritable,
   configLock,
   isConfigFieldWritable,
   isFeedbackAllowed,
@@ -370,7 +371,11 @@ export async function setAllowDrill(
   allowDrill: boolean,
   now: Date,
 ): Promise<EvaluationRecord> {
-  if (row.mode === "poll") throw new AllowDrillLocked("poll");
+  // The one rule (`@quiz/domain`); the conditional update below closes the
+  // race with a release landing between the load and the write.
+  if (!allowDrillWritable(row.mode, row.state)) {
+    throw new AllowDrillLocked(row.mode === "poll" ? "poll" : "released");
+  }
   const [updated] = await db
     .update(evaluations)
     .set({

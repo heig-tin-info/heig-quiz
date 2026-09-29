@@ -31,7 +31,7 @@ import { tracer } from "../../audit.js";
 import { isoOrNull } from "../../clock.js";
 import { accessibleClassroom, loadEvaluation, teacherGuard } from "../guards.js";
 import { invalid, notFound, studentRoute, teacherRoute } from "../http.js";
-import { drillAllowed, setAllowDrill } from "../evaluation/service.js";
+import { drillAllowed, setAllowDrill, type EvaluationRecord } from "../evaluation/service.js";
 import { setClassroomDrill, setDrillOptOut } from "../org/service.js";
 import * as service from "./service.js";
 
@@ -49,6 +49,11 @@ export async function drillPlugin(app: FastifyInstance) {
     accessibleClassroom(app, req, reply, p);
   const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     loadEvaluation(app, req, reply, p.id);
+  /** What the settings screen reads of an evaluation's drill: the switch and its cards. */
+  const evaluationDrill = async (row: EvaluationRecord): Promise<EvaluationDrill> => ({
+    allowDrill: drillAllowed(row),
+    cards: await service.evaluationCardCount(app.db, row.id),
+  });
 
   // --- Student -------------------------------------------------------------
 
@@ -142,10 +147,7 @@ export async function drillPlugin(app: FastifyInstance) {
   app.get(
     "/app/api/evaluations/:id/drill",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: staffEvaluation }, async ({ scope }) => ({
-      allowDrill: drillAllowed(scope.evaluation),
-      cards: await service.evaluationCardCount(app.db, scope.evaluation.id),
-    }) satisfies EvaluationDrill),
+    teacher({ params: IdParam, load: staffEvaluation }, ({ scope }) => evaluationDrill(scope.evaluation)),
   );
 
   /**
@@ -159,10 +161,7 @@ export async function drillPlugin(app: FastifyInstance) {
     teacher({ params: IdParam, body: EvaluationDrillBody, load: staffEvaluation }, async ({ req, now, body, scope }) => {
       const row = await setAllowDrill(app.db, scope.evaluation, body.allowDrill, now);
       await trace(req, "drill.allow", "evaluation", row.id, { allowDrill: body.allowDrill });
-      return {
-        allowDrill: drillAllowed(row),
-        cards: await service.evaluationCardCount(app.db, row.id),
-      } satisfies EvaluationDrill;
+      return evaluationDrill(row);
     }),
   );
 

@@ -228,8 +228,20 @@ export function safeExamBrowserOn(
  * (ADR-041 §10).
  */
 export function drillAllowedOn(mode: EvaluationModeName, allowDrill: boolean | undefined): boolean {
-  if (mode === "poll") return false;
+  if (!drillModeOf(mode)) return false;
   return allowDrill ?? mode === "exercise";
+}
+
+/** A poll never feeds the drill: the half of both rules below and above. */
+const drillModeOf = (mode: EvaluationModeName): boolean => mode !== "poll";
+
+/**
+ * Whether "Allow drill" may still change (ADR-041 §10, item 3): until the
+ * release, and never on a poll. The API's writer, the settings screen and the
+ * mock all ask this one rule.
+ */
+export function allowDrillWritable(mode: EvaluationModeName, state: EvaluationStateName): boolean {
+  return drillModeOf(mode) && state !== "released";
 }
 
 /** Whether this evaluation scores its choice questions negatively. */
