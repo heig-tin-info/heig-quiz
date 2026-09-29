@@ -167,7 +167,10 @@ When the key is not published, `studentDetails` drops each card's
 distractors, or how many there are, is the key. The verdict (`right`) of a
 card the student PLACED stays — it is feedback on their own answer, like
 `cloze`'s per-blank verdict; a card left in the tray carries no verdict, since
-"right to leave out" would name a distractor. The dashboard cell is "placed/total",
+"right to leave out" would name a distractor. Dropping `T` and `D` is
+defence in depth, not a secret kept: under `per_item` the published
+`fraction`, `t` and `p` still let a determined student compute `D`. What is
+protected is WHICH cards are distractors, never how many. The dashboard cell is "placed/total",
 figures only. The type is not pollable, and has no drill rating nor
 `aggregate`.
 
