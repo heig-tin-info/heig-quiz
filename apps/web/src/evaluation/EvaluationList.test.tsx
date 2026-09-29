@@ -6,7 +6,7 @@ import type { EvaluationSummary } from "@quiz/contracts";
 
 import { EVALUATION_ID, id, liveAt } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
-import { EvaluationList } from "./EvaluationList";
+import { EvaluationList, NewEvaluationModal } from "./EvaluationList";
 
 /*
  * The list on the classroom page: the badges, the one primary action, and
@@ -47,7 +47,7 @@ describe("EvaluationList", () => {
         summary({ id: id("evaluation", 2), state: "running", title: "Quiz 4" }),
       ]),
     );
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} />);
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
     expect(await screen.findByText("draft")).toBeInTheDocument();
     expect(screen.getByText("running")).toBeInTheDocument();
   });
@@ -61,7 +61,7 @@ describe("EvaluationList", () => {
         summary({ id: id("evaluation", 2), state: "running", title: "Live quiz" }),
       ]),
     );
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} />);
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} onNew={vi.fn()} />);
 
     await user.click(await screen.findByText("Draft quiz"));
     expect(navigate).toHaveBeenLastCalledWith({ view: "evaluation", id: EVALUATION_ID });
@@ -79,7 +79,7 @@ describe("EvaluationList", () => {
         summary({ id: id("evaluation", 2), state: "released", title: "Published quiz" }),
       ]),
     );
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} />);
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} onNew={vi.fn()} />);
 
     await user.click(await screen.findByText("Closed quiz"));
     expect(navigate).toHaveBeenLastCalledWith({ view: "grading", evaluationId: EVALUATION_ID });
@@ -99,7 +99,7 @@ describe("EvaluationList", () => {
         summary({ id: id("evaluation", 2), state: "draft", title: "Draft quiz" }),
       ]),
     );
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} />);
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} onNew={vi.fn()} />);
 
     await user.click(await screen.findByRole("button", { name: /Closed quiz/ }));
     expect(await screen.findByRole("menuitem", { name: "Results" })).toBeInTheDocument();
@@ -112,16 +112,34 @@ describe("EvaluationList", () => {
     expect(screen.queryByRole("menuitem", { name: "Results" })).not.toBeInTheDocument();
   });
 
-  it("creates one from the empty state and goes straight to its configuration", async () => {
+  it("asks the page for the dialog from the empty state, and has no button of its own", async () => {
     const user = userEvent.setup();
-    const navigate = vi.fn();
+    const onNew = vi.fn();
+    mockFetch(list([]));
+    const { unmount } = renderWithProviders(
+      <EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={onNew} />,
+    );
+    await user.click(await screen.findByRole("button", { name: /new evaluation/i }));
+    expect(onNew).toHaveBeenCalledOnce();
+    unmount();
+
+    // With rows, "New evaluation" is the page header's (#295), not the list's.
+    mockFetch(list([summary()]));
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={onNew} />);
+    await screen.findByText("Quiz 3");
+    expect(screen.queryByRole("button", { name: /new evaluation/i })).toBeNull();
+  });
+
+  it("creates one from the dialog and hands its id over", async () => {
+    const user = userEvent.setup();
+    const onCreated = vi.fn();
     const { calls } = mockFetch({
-      ...list([]),
       [`POST /app/api/classrooms/${CLASSROOM}/evaluations`]: ok(summary()),
     });
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} />);
+    renderWithProviders(
+      <NewEvaluationModal classroomId={CLASSROOM} onClose={vi.fn()} onCreated={onCreated} />,
+    );
 
-    await user.click(await screen.findByRole("button", { name: /new evaluation/i }));
     const dialog = await screen.findByRole("dialog");
     await user.type(within(dialog).getByLabelText(/title/i), "Quiz 5");
     await user.click(within(dialog).getByRole("button", { name: /create evaluation/i }));
@@ -131,9 +149,7 @@ describe("EvaluationList", () => {
         body: { title: "Quiz 5", mode: "exam", preset: "exam" },
       }),
     );
-    await waitFor(() =>
-      expect(navigate).toHaveBeenCalledWith({ view: "evaluation", id: EVALUATION_ID }),
-    );
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(EVALUATION_ID));
   });
 
   it("stands in the server's order until a column label is clicked", async () => {
@@ -144,7 +160,7 @@ describe("EvaluationList", () => {
         summary({ id: id("evaluation", 2), title: "Alpha", state: "closed" }),
       ]),
     );
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} />);
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
     await screen.findByText("Zebra");
 
     // The list arrives the way the classroom works through it, and stays there.
@@ -166,13 +182,13 @@ describe("EvaluationList", () => {
   it("renders the empty and the failed states", async () => {
     mockFetch(list([]));
     const { unmount } = renderWithProviders(
-      <EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} />,
+      <EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />,
     );
     expect(await screen.findByText(/no evaluation yet/i)).toBeInTheDocument();
     unmount();
 
     mockFetch({});
-    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} />);
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
     expect(await screen.findByText(/evaluation not found/i)).toBeInTheDocument();
   });
 
@@ -203,12 +219,12 @@ describe("EvaluationList", () => {
     it("leaves the dialog unchanged when the course has none", async () => {
       const user = userEvent.setup();
       mockFetch({
-        ...list([summary()]),
         ...classroom,
         [`GET /app/api/courses/${COURSE}/templates`]: ok([]),
       });
-      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} />);
-      await user.click(await screen.findByRole("button", { name: /new evaluation/i }));
+      renderWithProviders(
+        <NewEvaluationModal classroomId={CLASSROOM} onClose={vi.fn()} onCreated={vi.fn()} />,
+      );
       const dialog = await screen.findByRole("dialog");
       expect(within(dialog).queryByLabelText("Start from")).not.toBeInTheDocument();
       expect(within(dialog).getByText("Mode")).toBeInTheDocument();
@@ -216,10 +232,9 @@ describe("EvaluationList", () => {
 
     it("instantiates the chosen template and opens the new evaluation", async () => {
       const user = userEvent.setup();
-      const navigate = vi.fn();
+      const onCreated = vi.fn();
       const created = id("evaluation", 9);
       const { calls } = mockFetch({
-        ...list([summary()]),
         ...classroom,
         [`GET /app/api/courses/${COURSE}/templates`]: ok([template]),
         [`POST /app/api/templates/${TEMPLATE}/instances`]: {
@@ -227,15 +242,16 @@ describe("EvaluationList", () => {
           body: { evaluation: { id: created }, deprecatedItems: [] },
         },
       });
-      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} />);
-      await user.click(await screen.findByRole("button", { name: /new evaluation/i }));
+      renderWithProviders(
+        <NewEvaluationModal classroomId={CLASSROOM} onClose={vi.fn()} onCreated={onCreated} />,
+      );
       const select = await screen.findByLabelText("Start from");
       await user.selectOptions(select, TEMPLATE);
       const dialog = screen.getByRole("dialog");
       expect(within(dialog).getByRole("textbox")).toHaveValue("Final exam");
       expect(within(dialog).queryByText("Mode")).not.toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: "Create evaluation" }));
-      await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "evaluation", id: created }));
+      await waitFor(() => expect(onCreated).toHaveBeenCalledWith(created));
       const post = calls.find((c) => c.method === "POST");
       expect(post?.body).toEqual({ classroomId: CLASSROOM, title: "Final exam" });
     });
@@ -277,7 +293,7 @@ describe("EvaluationList", () => {
           summary({ id: id("evaluation", 5), title: "Scheduled behind", state: "scheduled", ...BEHIND }),
         ]),
       );
-      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} />);
+      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
       await screen.findByText("Behind draft");
       const badges = screen.getAllByRole("button", { name: /from its template/i });
       expect(badges.map((b) => b.getAttribute("aria-label"))).toEqual([
@@ -300,7 +316,7 @@ describe("EvaluationList", () => {
           return ok({ detail: {}, deprecatedItems: [] });
         },
       });
-      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} />);
+      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} onNew={vi.fn()} />);
 
       await user.click(await screen.findByRole("button", { name: /from its template/i }));
       // The badge opens the confirmation, not the evaluation.
@@ -336,7 +352,7 @@ describe("EvaluationList", () => {
           unlinkedItems: [{ position: 0, questionId: id("question", 0), internalName: "sizeof-ptr" }],
         }),
       });
-      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} />);
+      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
       await user.click(await screen.findByRole("button", { name: /from its template/i }));
       const dialog = await screen.findByRole("dialog");
       expect(await within(dialog).findByText(/only the new revision is recorded/i)).toBeInTheDocument();

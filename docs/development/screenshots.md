@@ -99,18 +99,20 @@ the API, so they change from one seed to the next.
 <!-- scenes:start -->
 Last full run: 2026-09-21, commit `828d8d8`. The `live-*` and `grading*`
 scenes were retaken on their own (`--only`) on 2026-09-28, the
-`student-home` and `player-done` scenes on 2026-09-29, and the `poll-*` and
-`join-*` scenes later on 2026-09-29, each time on a fresh seed, which is why
-their ids differ from the other rows.
+`student-home` and `player-done` scenes on 2026-09-29, the `poll-*` and
+`join-*` scenes later on 2026-09-29, and the four classroom scenes
+(`classroom-evaluations`, `classroom-roster`, `roster-import`,
+`help-drawer`) together on 2026-09-29 (#295), each time on a fresh seed,
+which is why their ids differ from the other rows.
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |
 | `sign-in` | none | `/` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `teacher-home` | teacher | `/` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `classroom-evaluations` | teacher | `/classrooms/797acf2d-b3af-4367-aabd-4f5f6159f1aa` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `classroom-roster` | teacher | `/classrooms/797acf2d-b3af-4367-aabd-4f5f6159f1aa?tab=roster` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `roster-import` | teacher | `/classrooms/797acf2d-b3af-4367-aabd-4f5f6159f1aa?tab=roster` | seeded | Clicked “Add students” on the roster tab. | 1440×900 |
-| `help-drawer` | teacher | `/classrooms/797acf2d-b3af-4367-aabd-4f5f6159f1aa` | seeded | Clicked the “Help” icon of the classroom page. | 1440×900 |
+| `classroom-evaluations` | teacher | `/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `classroom-roster` | teacher | `/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535?tab=roster` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `roster-import` | teacher | `/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535?tab=roster` | seeded | Clicked “Add students” on the roster tab. | 1440×900 |
+| `help-drawer` | teacher | `/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535` | seeded | Clicked the “Help” icon of the classroom page. | 1440×900 |
 | `pools` | teacher | `/pools` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `pool` | teacher | `/pools/014cc676-210c-4231-8342-00a0009f060c` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `pool-filters` | teacher | `/pools/014cc676-210c-4231-8342-00a0009f060c` | seeded | Clicked “Filters” above the question table. | 1440×900 |

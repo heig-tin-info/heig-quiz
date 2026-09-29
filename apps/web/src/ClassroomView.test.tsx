@@ -10,8 +10,9 @@ import { fail, mockFetch, ok, renderWithProviders } from "./test/render";
 
 /*
  * One classroom: its roster and its evaluations, one tab each. The primary
- * action follows the tab — "Add students" on the roster, which is what
- * unblocks everything, and the evaluation list's own button on the other.
+ * action follows the tab, in the same slot of the header — "Add students" on
+ * the roster, which is what unblocks everything, and "New evaluation" on
+ * the evaluations (#295).
  *
  * The page opens on the tab that holds the work: the evaluations once there
  * are students, the roster while it is empty.
@@ -88,9 +89,73 @@ describe("ClassroomView", () => {
       "true",
     );
     expect(screen.getByRole("tab", { name: /Roster/ })).toHaveTextContent("1");
-    // One primary action per screen: the evaluation list carries its own, so
-    // the header does not offer "Add students" here.
+    // One primary action per tab, in the header's slot: "New evaluation"
+    // here, never "Add students" beside it.
     expect(screen.queryByRole("button", { name: /Add students/ })).toBeNull();
+  });
+
+  it("creates an evaluation from the header and opens its configuration (#295)", async () => {
+    const navigate = vi.fn();
+    const { calls } = mockFetch({
+      [`GET ${ROOM}`]: ok(makeClassroomDetail()),
+      [`GET ${EVALUATIONS}`]: ok([summary({ title: "Test 0" })]),
+      [`GET /app/api/courses/c1/templates`]: ok([]),
+      [`POST ${EVALUATIONS}`]: ok(summary({ id: "e9" })),
+    });
+    renderWithProviders(<ClassroomView id="r1" navigate={navigate} />);
+    await screen.findByText("Test 0");
+    // The list has rows, so the header's button is the only one.
+    const buttons = screen.getAllByRole("button", { name: /New evaluation/ });
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]!.className).toMatch(/bg-accent/);
+    await userEvent.click(buttons[0]!);
+
+    const dialog = await screen.findByRole("dialog", { name: "New evaluation" });
+    await userEvent.type(within(dialog).getByLabelText(/Title/), "Quiz 5");
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create evaluation/ }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "evaluation", id: "e9" }));
+    expect(calls.find((c) => c.method === "POST")?.body).toMatchObject({ title: "Quiz 5" });
+  });
+
+  it("opens the period dialog from the period beside the title (#295)", async () => {
+    mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()) });
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
+    await userEvent.click(await screen.findByRole("button", { name: "Change period: 2026-A" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("textbox", { name: "Period label" })).toHaveValue("2026-A");
+  });
+
+  it("names a dated period left without a label by its months", async () => {
+    mockFetch({
+      [`GET ${ROOM}`]: ok(
+        makeClassroomDetail({ period: "", periodStart: "2026-09", periodEnd: "2027-01" }),
+      ),
+    });
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
+    expect(
+      await screen.findByRole("button", { name: "Change period: 2026-09 – 2027-01" }),
+    ).toHaveTextContent("2026-09 – 2027-01");
+  });
+
+  it("offers a quiet Set period when there is none", async () => {
+    mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail({ period: "" })) });
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
+    await userEvent.click(await screen.findByRole("button", { name: "Set period" }));
+    expect(await screen.findByRole("dialog")).toBeVisible();
+  });
+
+  it("puts the page help right after the name, before the period (#295)", async () => {
+    mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()) });
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
+    const heading = await screen.findByRole("heading", { level: 1 });
+    const order = within(heading)
+      .getAllByRole("button")
+      .map((b) => b.getAttribute("aria-label"));
+    expect(order).toEqual([expect.stringMatching(RENAME), "Help", "Change period: 2026-A"]);
+    expect(within(heading).getByRole("button", { name: "Help" })).toHaveAttribute(
+      "data-coach",
+      "page.help",
+    );
   });
 
   it("counts every row of the table on the roster tab, staff seats included", async () => {

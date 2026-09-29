@@ -32,7 +32,7 @@ On the course card, click **New classroom**. A classroom has a **Name**, such as
 
 ### The classroom screen
 
-The eyebrow above the title names the course and goes back to it. Under the title, two tabs, and the primary action of the page changes with the tab: **Add students** on the roster, **New evaluation** on the evaluations.
+The eyebrow above the title names the course and goes back to it. The title is the classroom's name, followed by the page's help **?** and by the period. Under the title, two tabs, and the primary action at the right of the title changes with the tab, always in the same place: **Add students** on the roster, **New evaluation** on the evaluations.
 
 <figure markdown="span">
   ![A classroom, on its evaluations tab](../assets/screenshots/classroom-evaluations-light.png#only-light)
@@ -90,13 +90,14 @@ The menu at the end of a row offers **Edit**, **Revoke claim** and **Remove from
 
 ## Join as student
 
-The classroom's menu, the three dots beside the title, carries **Join as student**. It gives you a seat in your own classroom, flagged *staff*, which stays out of the headcount and the results. With it, **Switch to student view** in the account menu shows you this classroom the way a student gets it, and you can take an evaluation from start to finish as one. It is the right way to check an evaluation before opening it to the class.
+**Join as student**, the button beside the primary action, gives you a seat in your own classroom, flagged *staff*, which stays out of the headcount and the results. With it, **Switch to student view** in the account menu shows you this classroom the way a student gets it, and you can take an evaluation from start to finish as one. It is the right way to check an evaluation before opening it to the class.
 
 ## Archive, rename, delete
 
-The same menu holds the rest of the classroom's life.
+The name and the period are changed where they are written, and the classroom's menu (the three dots at the right of the title) holds the rest of its life.
 
-- **Rename** changes the name and the period, nothing else.
+- **Rename**: click the classroom's name. It turns into a field; **Enter** saves, **Escape** cancels.
+- **Period**: click the period beside the name, or **Set period** when there is none (the menu's **Period…** does the same). The dialog sets its months and its label.
 - **Archive** puts a finished classroom aside without deleting anything: it leaves the sidebar and the course card, and its roster, evaluations and results stay readable on its own page, marked *archived*. **Restore**, in the same menu, brings it back. Today no list shows the archived classrooms, so keep the page's address (or a bookmark) if you expect to come back to one.
 - **Delete classroom** is the other thing entirely. The roster, the evaluations, the attempts, the answers and their gradings go, after a confirmation that names the classroom. The questions of the pools are never touched.
 

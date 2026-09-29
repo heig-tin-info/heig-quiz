@@ -28,9 +28,13 @@ Les évaluations de cette classe, chacune avec son état — brouillon,
 planifiée, salle d'attente, en cours, en pause, clôturée, correction,
 publiée. Depuis une ligne, vous atteignez sa configuration, le tableau de
 bord, le panneau de correction ou les résultats, selon l'endroit où elle en
-est.
+est. **Nouvelle évaluation**, en haut à droite tant que cet onglet est
+ouvert, en crée une.
 
 ## Archiver, renommer, supprimer
+
+Un clic sur le nom de la classe le renomme ; un clic sur la période (ou sur
+**Définir la période** quand il n'y en a pas) ouvre ses dates et son libellé.
 
 **Archiver** met de côté une classe terminée sans rien supprimer ;
 **Restaurer** la ramène. **Supprimer** est tout autre chose : la liste, les

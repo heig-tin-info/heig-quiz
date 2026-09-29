@@ -128,6 +128,8 @@ export const en = {
   "classrooms.namePlaceholder": "PRG1-2026",
   "classrooms.period": "Period label",
   "classrooms.setPeriod": "Period…",
+  "classrooms.setPeriodLink": "Set period",
+  "classrooms.changePeriod": "Change period: {period}",
   "classrooms.dates": "Dates",
   "classrooms.firstMonth": "First month",
   "classrooms.lastMonth": "Last month",
