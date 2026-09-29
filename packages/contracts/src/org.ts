@@ -7,6 +7,8 @@
  */
 import { z } from "zod";
 
+import { JOIN_CODE_LENGTH } from "./codes.js";
+
 /** One roster entry of one classroom: `/classrooms/:id/roster/:eid`. */
 export const RosterEntryParams = z.object({ id: z.uuid(), eid: z.uuid() });
 export type RosterEntryParams = z.infer<typeof RosterEntryParams>;
@@ -100,7 +102,7 @@ export const ClassroomPatch = z
 export type ClassroomPatch = z.infer<typeof ClassroomPatch>;
 
 /** `POST /app/api/join/:code` — the student side of F-ORG-06. */
-export const JoinParams = z.object({ code: z.string().trim().min(4).max(32) });
+export const JoinParams = z.object({ code: z.string().trim().length(JOIN_CODE_LENGTH) });
 export type JoinParams = z.infer<typeof JoinParams>;
 
 export const JoinResult = z.object({

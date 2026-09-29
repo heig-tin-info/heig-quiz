@@ -44,8 +44,8 @@ after the student opened it from their home.
 2. **The length separates the two namespaces.** Six characters is a poll,
    eight a classroom, any other length is refused on the spot with a message
    that says what the field takes. The two lengths are constants of
-   `@quiz/contracts`, both server generators draw exactly them, and a test
-   asserts they differ: **a poll code will never be eight characters long,
+   `@quiz/contracts`: both server generators draw exactly them, and the route
+   schemas (`PollCodeParam`, `JoinParams`) accept exactly them. **A poll code will never be eight characters long,
    and a join code never six.** Changing either length is a change to this
    ADR, not a tweak of a generator.
 

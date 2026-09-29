@@ -14,6 +14,7 @@
  */
 import { z } from "zod";
 
+import { POLL_CODE_LENGTH } from "./codes.js";
 import { pageOf } from "./common.js";
 import { QuestionSearch, QuestionTypeId } from "./pool.js";
 
@@ -304,7 +305,7 @@ export type PollPublicView = z.infer<typeof PollPublicView>;
  * server-side, so a phone that types it in lower case still joins.
  */
 export const PollCodeParam = z.object({
-  code: z.string().trim().min(4).max(12).regex(/^[A-Za-z0-9]+$/),
+  code: z.string().trim().length(POLL_CODE_LENGTH).regex(/^[A-Za-z0-9]+$/),
 });
 export type PollCodeParam = z.infer<typeof PollCodeParam>;
 

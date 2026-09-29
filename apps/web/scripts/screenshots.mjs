@@ -318,11 +318,6 @@ const scenes = [
   // Student
   { name: "student-home", role: "student", path: "/" },
   { name: "student-empty", role: "student", path: "/?empty=1" },
-  // ADR-045: the one code field, opened from the frame (the sidebar row on a
-  // desktop, the top bar's button on a phone), and its refusal of a length
-  // that is neither a poll's nor a classroom's.
-  { name: "student-enter-code", role: "student", path: "/", fold: true, act: (p) => p.locator('[data-coach="student.join"]:visible').first().click() },
-  { name: "student-enter-code-error", role: "student", path: "/", fold: true, act: async (p) => { await p.locator('[data-coach="student.join"]:visible').first().click(); await p.getByRole("dialog").getByRole("textbox").fill("abc12"); await p.keyboard.press("Enter"); } },
   { name: "student-error", role: "student", path: "/?fail=1", settle: 2500 },
   { name: "student-loading", role: "student", path: "/?slow=1", settle: 300 },
   { name: "student-settings", role: "student", path: "/settings" },
