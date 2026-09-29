@@ -76,6 +76,17 @@ export const poolKey = (id: string | undefined) => ["pool", id] as const;
  */
 export const poolQuestionsKey = (poolId: string, search: string) =>
   ["pool", poolId, "questions", search] as const;
+/**
+ * Every list of a pool's questions, whatever its search: the prefix a star
+ * patches in place (F-POOL-10), rather than refetching every page it holds.
+ */
+export const poolQuestionListsKey = (poolId: string) => ["pool", poolId, "questions"] as const;
+/**
+ * The caller's favourites of a pool (`?starred=1`, F-POOL-10): one query for
+ * the pool screen's "Clear favourites" count and the picker's section. Under
+ * the pool, so whatever refreshes the pool refreshes it too.
+ */
+export const poolStarredKey = (poolId: string) => ["pool", poolId, "starred"] as const;
 export const poolTagsKey = (poolId: string) => ["pool", poolId, "tags"] as const;
 /** `GET /pools/:id/categories`, the tree with its counts: under the pool, like the tags. */
 export const poolCategoriesKey = (poolId: string) => ["pool", poolId, "categories"] as const;

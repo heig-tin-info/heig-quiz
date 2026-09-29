@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderInput, FolderSymlink, Tag, Trash2, X } from "lucide-react";
+import { FolderInput, FolderSymlink, Star, StarOff, Tag, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 import type { Category, CategoryNode, PoolDetail, PoolSummary, QuestionRow } from "@quiz/contracts";
@@ -30,6 +30,13 @@ import { anyPoolKey, poolKey, poolsKey } from "../queryKeys";
  * already taken there — and twenty separate calls would mean twenty separate
  * confirmations for one intention. It is also the keyboard's way to do what
  * the sidebar does with a drag.
+ *
+ * "Star" is one call too (`PUT /questions/star`, F-POOL-10), and ONE button
+ * rather than a pair: it reads "Unstar" when every ticked question is
+ * already starred and "Star" otherwise, so it always offers the one gesture
+ * that changes something — and the bar, already five actions wide, does not
+ * grow a sixth. It keeps the selection: the rows flip in place, and the
+ * teacher may go on to tag or move what they just starred.
  */
 
 /** The `<option>` value that opens the "name it" field instead of picking. */
@@ -40,6 +47,7 @@ export function BulkBar({
   ids,
   rows,
   categories,
+  onStar,
   onClear,
 }: {
   poolId: string;
@@ -47,6 +55,8 @@ export function BulkBar({
   /** The loaded rows, so "add a tag" can keep the tags a question already has. */
   rows: QuestionRow[];
   categories: CategoryNode[];
+  /** Stars or unstars the selection, optimistically (`useSetStars`). */
+  onStar: (ids: string[], starred: boolean) => Promise<boolean>;
   onClear: () => void;
 }) {
   const t = useT();
@@ -66,6 +76,7 @@ export function BulkBar({
    * something else is running.
    */
   const [moving, setMoving] = useState(false);
+  const allStarred = ids.every((id) => rows.find((r) => r.id === id)?.starred === true);
   /** The chosen target pool of the "another pool" dialog, and its category. */
   const [targetPoolId, setTargetPoolId] = useState("");
   const [targetCategoryId, setTargetCategoryId] = useState("");
@@ -192,17 +203,20 @@ export function BulkBar({
       <div
         role="region"
         aria-label={t("pool.bulk.selected", { n: ids.length })}
-        // 48 rem, not 40: the fourth action ("another pool") is what pushed
-        // the row onto a second line at the old width, and a pill bar that
+        // 54 rem: 40 held three actions, 48 the fourth ("another pool"), and the
+        // fifth ("Star") pushed the close button onto a second line — a pill bar that
         // wraps reads as two bars. The radius is 28 px rather than `full`:
         // on one line the browser clamps it to half the height, so the pill is
-        // unchanged, and on a phone — where four actions really do wrap — the
+        // unchanged, and on a phone — where five actions really do wrap — the
         // bar stays a rounded rectangle instead of becoming a lens.
-        className={`fixed inset-x-0 bottom-4 mx-auto flex w-[min(48rem,calc(100%-2rem))] flex-wrap items-center gap-2 rounded-[28px] border border-line bg-surface px-4 py-2 shadow-overlay ${Z.popover}`}
+        className={`fixed inset-x-0 bottom-4 mx-auto flex w-[min(54rem,calc(100%-2rem))] flex-wrap items-center gap-2 rounded-[28px] border border-line bg-surface px-4 py-2 shadow-overlay ${Z.popover}`}
       >
         <span className="text-[13px] font-medium tabular-nums">
           {t("pool.bulk.selected", { n: ids.length })}
         </span>
+        <Button size="sm" variant="ghost" onClick={() => void onStar(ids, !allStarred)}>
+          {allStarred ? <StarOff /> : <Star />} {t(allStarred ? "pool.bulk.unstar" : "pool.bulk.star")}
+        </Button>
         <Button size="sm" variant="ghost" onClick={() => setDialog("tag")}>
           <Tag /> {t("pool.bulk.tag")}
         </Button>

@@ -64,6 +64,8 @@ The actions are provided by the mounted screens, through a command registry in `
 | Global | `Ctrl+K` | Palette |
 | Global | `?` | List of shortcuts |
 | Global | `g` then `p` / `c` / `s` | Go to the pool / the courses / the settings |
+| Pool | `P` | Preview the focused question in the reading pane (Enter opens the editor) |
+| Pool | `Space` | Star or unstar the focused question, a personal favourite found again in the question picker (F-POOL-10) |
 | Editor | `Ctrl+S` | Save the draft, already automatic, reassures |
 | Editor | `Ctrl+Shift+P` | Publish |
 | Editor | `Ctrl+Shift+M` | Toggle WYSIWYG / source |

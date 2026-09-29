@@ -51,7 +51,7 @@ function backfillStatement(): string {
 const search = (extra: Record<string, unknown> = {}) =>
   ({ limit: 50, sort: "updated", dir: "desc", ...extra }) as Parameters<
     typeof service.listQuestions
-  >[2];
+  >[3];
 
 /** The caller of `listPools`: the seeded owner, an ordinary teacher. */
 const viewer = () => ({ id: ownerId, role: "teacher" });
@@ -144,7 +144,7 @@ describe("publication (F-QST-03)", () => {
     const version = await service.publishQuestion(db, await questionRow(id), { userId: ownerId });
 
     const stateInList = async () => {
-      const page = await service.listQuestions(db, poolId, search({ q: "republished" }));
+      const page = await service.listQuestions(db, poolId, ownerId, search({ q: "republished" }));
       const row = page.items.find((r) => r.id === id)!;
       return { latestNumber: row.latestNumber, hasDraftChanges: row.hasDraftChanges };
     };
@@ -314,7 +314,7 @@ describe("versions", () => {
     const version = await service.deprecateVersion(db, id, 1, "superseded by the new syllabus");
     expect(version?.deprecatedAt).not.toBeNull();
     expect(version?.deprecationNote).toBe("superseded by the new syllabus");
-    const page = await service.listQuestions(db, poolId, search({ q: "Old" }));
+    const page = await service.listQuestions(db, poolId, ownerId, search({ q: "Old" }));
     expect(page.items.find((q) => q.id === id)?.deprecated).toBe(true);
   });
 });
@@ -326,10 +326,10 @@ describe("soft delete (F-QST-11)", () => {
     await service.publishQuestion(db, await questionRow(id), { userId: ownerId });
 
     await service.softDeleteQuestion(db, await questionRow(id));
-    const visible = await service.listQuestions(db, poolId, search());
+    const visible = await service.listQuestions(db, poolId, ownerId, search());
     expect(visible.items.map((q) => q.id)).not.toContain(id);
 
-    const withDeleted = await service.listQuestions(db, poolId, search({ includeDeleted: true }));
+    const withDeleted = await service.listQuestions(db, poolId, ownerId, search({ includeDeleted: true }));
     expect(withDeleted.items.map((q) => q.id)).toContain(id);
     expect(await service.listVersions(db, id)).toHaveLength(1);
   });
@@ -370,27 +370,27 @@ describe("search", () => {
   });
 
   it("finds a question by the text of its draft, through the generated tsvector", async () => {
-    const page = await service.listQuestions(db, searchPool, search({ q: "malloc" }));
+    const page = await service.listQuestions(db, searchPool, ownerId, search({ q: "malloc" }));
     expect(page.items.map((q) => q.id)).toEqual([alpha]);
   });
 
   it("finds a question by its internal name", async () => {
-    const page = await service.listQuestions(db, searchPool, search({ q: "Recursion" }));
+    const page = await service.listQuestions(db, searchPool, ownerId, search({ q: "Recursion" }));
     expect(page.items.map((q) => q.id)).toEqual([beta]);
   });
 
   it("filters by tag, by type and by difficulty", async () => {
     expect(
-      (await service.listQuestions(db, searchPool, search({ tag: ["memory"] }))).items.map((q) => q.id),
+      (await service.listQuestions(db, searchPool, ownerId, search({ tag: ["memory"] }))).items.map((q) => q.id),
     ).toEqual([alpha]);
     expect(
-      (await service.listQuestions(db, searchPool, search({ difficulty: [2] }))).items.map((q) => q.id),
+      (await service.listQuestions(db, searchPool, ownerId, search({ difficulty: [2] }))).items.map((q) => q.id),
     ).toEqual([beta]);
     expect(
-      (await service.listQuestions(db, searchPool, search({ type: ["short"] }))).items,
+      (await service.listQuestions(db, searchPool, ownerId, search({ type: ["short"] }))).items,
     ).toHaveLength(2);
     expect(
-      (await service.listQuestions(db, searchPool, search({ type: ["mcq"] }))).items,
+      (await service.listQuestions(db, searchPool, ownerId, search({ type: ["mcq"] }))).items,
     ).toHaveLength(0);
   });
 
@@ -404,12 +404,10 @@ describe("search", () => {
   });
 
   it("paginates with an opaque cursor", async () => {
-    const first = await service.listQuestions(db, searchPool, search({ limit: 1 }));
+    const first = await service.listQuestions(db, searchPool, ownerId, search({ limit: 1 }));
     expect(first.items).toHaveLength(1);
     expect(first.nextCursor).not.toBeNull();
-    const second = await service.listQuestions(
-      db,
-      searchPool,
+    const second = await service.listQuestions(db, searchPool, ownerId,
       search({ limit: 1, cursor: first.nextCursor }),
     );
     expect(second.items).toHaveLength(1);
@@ -418,17 +416,15 @@ describe("search", () => {
   });
 
   it("counts every question the search matches, on every page", async () => {
-    const first = await service.listQuestions(db, searchPool, search({ limit: 1 }));
+    const first = await service.listQuestions(db, searchPool, ownerId, search({ limit: 1 }));
     expect(first.total).toBe(2);
-    const second = await service.listQuestions(
-      db,
-      searchPool,
+    const second = await service.listQuestions(db, searchPool, ownerId,
       search({ limit: 1, cursor: first.nextCursor }),
     );
     expect(second.total).toBe(2);
-    const tagged = await service.listQuestions(db, searchPool, search({ tag: ["memory"] }));
+    const tagged = await service.listQuestions(db, searchPool, ownerId, search({ tag: ["memory"] }));
     expect(tagged.total).toBe(1);
-    const none = await service.listQuestions(db, searchPool, search({ q: "nothing-matches" }));
+    const none = await service.listQuestions(db, searchPool, ownerId, search({ q: "nothing-matches" }));
     expect(none.total).toBe(0);
   });
 });
@@ -920,9 +916,9 @@ describe("question listing: sort, cursor and version bounds (F-POOL-03)", () => 
   });
 
   it("sorts by internal name, case-insensitively, in both directions", async () => {
-    const asc = await service.listQuestions(db, sorted, search({ sort: "name", dir: "asc" }));
+    const asc = await service.listQuestions(db, sorted, ownerId, search({ sort: "name", dir: "asc" }));
     expect(asc.items.map((q) => q.internalName)).toEqual(["alpha", "Bravo", "Charlie", "delta"]);
-    const desc = await service.listQuestions(db, sorted, search({ sort: "name", dir: "desc" }));
+    const desc = await service.listQuestions(db, sorted, ownerId, search({ sort: "name", dir: "desc" }));
     expect(desc.items.map((q) => q.internalName)).toEqual(["delta", "Charlie", "Bravo", "alpha"]);
   });
 
@@ -930,9 +926,7 @@ describe("question listing: sort, cursor and version bounds (F-POOL-03)", () => 
     const seen: string[] = [];
     let cursor: string | null | undefined;
     do {
-      const page = await service.listQuestions(
-        db,
-        sorted,
+      const page = await service.listQuestions(db, sorted, ownerId,
         search({ sort: "name", dir: "asc", limit: 2, ...(cursor ? { cursor } : {}) }),
       );
       seen.push(...page.items.map((q) => q.internalName));
@@ -942,32 +936,32 @@ describe("question listing: sort, cursor and version bounds (F-POOL-03)", () => 
   });
 
   it("refuses a cursor that belongs to another order", async () => {
-    const page = await service.listQuestions(db, sorted, search({ sort: "name", dir: "asc", limit: 1 }));
+    const page = await service.listQuestions(db, sorted, ownerId, search({ sort: "name", dir: "asc", limit: 1 }));
     expect(page.nextCursor).toBeTruthy();
     await expect(
-      service.listQuestions(db, sorted, search({ sort: "difficulty", dir: "asc", cursor: page.nextCursor! })),
+      service.listQuestions(db, sorted, ownerId, search({ sort: "difficulty", dir: "asc", cursor: page.nextCursor! })),
     ).rejects.toBeInstanceOf(service.InvalidCursor);
     await expect(
-      service.listQuestions(db, sorted, search({ sort: "name", dir: "desc", cursor: page.nextCursor! })),
+      service.listQuestions(db, sorted, ownerId, search({ sort: "name", dir: "desc", cursor: page.nextCursor! })),
     ).rejects.toBeInstanceOf(service.InvalidCursor);
     await expect(
-      service.listQuestions(db, sorted, search({ sort: "name", dir: "asc", cursor: "not-a-cursor" })),
+      service.listQuestions(db, sorted, ownerId, search({ sort: "name", dir: "asc", cursor: "not-a-cursor" })),
     ).rejects.toBeInstanceOf(service.InvalidCursor);
   });
 
   it("sorts by version with the unpublished questions last, whatever the direction", async () => {
-    const desc = await service.listQuestions(db, sorted, search({ sort: "version", dir: "desc" }));
+    const desc = await service.listQuestions(db, sorted, ownerId, search({ sort: "version", dir: "desc" }));
     expect(desc.items.map((q) => q.latestNumber)).toEqual([2, 1, null, null]);
-    const asc = await service.listQuestions(db, sorted, search({ sort: "version", dir: "asc" }));
+    const asc = await service.listQuestions(db, sorted, ownerId, search({ sort: "version", dir: "asc" }));
     expect(asc.items.map((q) => q.latestNumber)).toEqual([1, 2, null, null]);
   });
 
   it("bounds the published version number, and a draft-only question matches neither", async () => {
-    const atLeastTwo = await service.listQuestions(db, sorted, search({ versionMin: 2 }));
+    const atLeastTwo = await service.listQuestions(db, sorted, ownerId, search({ versionMin: 2 }));
     expect(atLeastTwo.items.map((q) => q.internalName)).toEqual(["alpha"]);
-    const atMostOne = await service.listQuestions(db, sorted, search({ versionMax: 1 }));
+    const atMostOne = await service.listQuestions(db, sorted, ownerId, search({ versionMax: 1 }));
     expect(atMostOne.items.map((q) => q.internalName)).toEqual(["Bravo"]);
-    const between = await service.listQuestions(db, sorted, search({ versionMin: 1, versionMax: 2 }));
+    const between = await service.listQuestions(db, sorted, ownerId, search({ versionMin: 1, versionMax: 2 }));
     expect(between.items.map((q) => q.internalName).sort()).toEqual(["Bravo", "alpha"]);
   });
 });

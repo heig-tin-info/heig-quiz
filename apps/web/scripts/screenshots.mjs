@@ -214,6 +214,8 @@ const scenes = [
   // The picker with a question looked at (issue #207): docked beside the list
   // from 1280 px, in place of the list below.
   { name: "eval-config-picker-preview", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /add questions/i }).first().click(); await p.getByRole("dialog").getByRole("button", { name: /^(Preview|Aperçu de) / }).nth(1).click(); await p.waitForTimeout(800); } },
+  // "Add favourites" (F-POOL-10): what it added and skipped, and the offer to unstar.
+  { name: "eval-config-picker-favourites", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /add questions/i }).first().click(); await p.getByRole("button", { name: /^(Add favourites|Ajouter les favoris)$/ }).click(); await p.waitForTimeout(600); } },
   { name: "eval-config-milestone-gap", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /^reorder /i }).first().hover() },
   { name: "eval-config-timing", role: "teacher", path: "/evaluations/draft?step=timing" },
   { name: "eval-config-advanced", role: "teacher", path: "/evaluations/draft?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
@@ -530,6 +532,10 @@ const scenes = [
       await p.getByText("ptr-arith-01", { exact: true }).first().click();
       await p.waitForTimeout(1500);
     } },
+  // Favourites (F-POOL-10): the mock starts with three starred questions of
+  // p1 — the stars on the cards, and the confirm of "Clear favourites".
+  { name: "pool-stars-cards", role: "teacher", path: "/pools/p1", ls: { "quiz-pool-view": "cards" }, act: skipCoach },
+  { name: "pool-stars-clear", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /^(Clear favourites|Effacer les favoris)$/ }).first().click() },
   // The row's own three actions, and the confirm dialog the last one goes through.
   { name: "pool-row-delete", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /^(Delete|Supprimer) ptr-arith-01$/ }).first().click() },
   // A question's statistics (ADR-038): the panel with its reset, the reset's

@@ -10,7 +10,14 @@ import type {
 } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
-import { coursePools, pools, questionTags, questionVersions, questions } from "../../db/schema.js";
+import {
+  coursePools,
+  pools,
+  questionStars,
+  questionTags,
+  questionVersions,
+  questions,
+} from "../../db/schema.js";
 import { hasKey, loadConfig, publicationIssuesOf, tryLoadConfig } from "./config.js";
 import { type QuestionRecord, poolOf, type VersionRecord, qualified } from "./shared.js";
 
@@ -104,12 +111,22 @@ function keyText(value: unknown): string {
  * ANY version of the question plus its internal name, because a teacher
  * searches for what they wrote, published or not.
  */
-function searchWhere(poolId: string, search: QuestionSearch): SQL[] {
-  return [eq(questions.poolId, poolId), ...filterWhere(search)];
+function searchWhere(poolId: string, userId: string, search: QuestionSearch): SQL[] {
+  const clauses = [eq(questions.poolId, poolId), ...filterWhere(search)];
+  // The caller's favourites only (F-POOL-10). A star on a soft-deleted
+  // question stays hidden even with `includeDeleted`: it comes back with the
+  // question, never before.
+  if (search.starred) {
+    clauses.push(
+      isNull(questions.deletedAt),
+      sql`EXISTS (SELECT 1 FROM ${questionStars} WHERE ${qualified(questionStars.questionId)} = ${qualified(questions.id)} AND ${qualified(questionStars.userId)} = ${userId})`,
+    );
+  }
+  return clauses;
 }
 
 /** What {@link filterWhere} reads: the search without its order and page. */
-type SearchFilters = Omit<QuestionSearch, "sort" | "dir" | "limit" | "cursor">;
+type SearchFilters = Omit<QuestionSearch, "sort" | "dir" | "limit" | "cursor" | "starred">;
 
 /**
  * The filters of the search box and its sheet, without the pool: shared by
@@ -235,6 +252,7 @@ function rowJson(
   question: QuestionRecord,
   tags: string[],
   facts: VersionFacts | undefined,
+  starred: boolean,
 ): QuestionRow {
   return {
     id: question.id,
@@ -249,21 +267,28 @@ function rowJson(
     deprecated: facts?.deprecated ?? false,
     deletedAt: question.deletedAt?.toISOString() ?? null,
     keyless: isKeyless(question.type, facts?.latest ?? null),
+    starred: starred && question.deletedAt === null,
   };
 }
 
 /**
  * `GET /pools/:id/questions`: filtered, sorted on the requested column,
- * cursor-paginated.
+ * cursor-paginated, each row carrying whether the CALLER starred it.
  */
-export async function listQuestions(db: Db, poolId: string, search: QuestionSearch) {
-  const { page, tags, facts, nextCursor, total } = await pageWhere(
+export async function listQuestions(
+  db: Db,
+  poolId: string,
+  userId: string,
+  search: QuestionSearch,
+) {
+  const { page, tags, facts, starred, nextCursor, total } = await pageWhere(
     db,
-    searchWhere(poolId, search),
+    searchWhere(poolId, userId, search),
     search,
+    userId,
   );
   return {
-    items: page.map((q) => rowJson(q, tags.get(q.id) ?? [], facts.get(q.id))),
+    items: page.map((q) => rowJson(q, tags.get(q.id) ?? [], facts.get(q.id), starred.has(q.id))),
     nextCursor,
     total,
   };
@@ -276,7 +301,7 @@ export async function listQuestions(db: Db, poolId: string, search: QuestionSear
  * exact value the database produced — a `lower()` recomputed in JavaScript
  * could disagree with the collation and silently skip a row at a page break.
  */
-async function pageWhere(db: Db, where: SQL[], search: QuestionSearch) {
+async function pageWhere(db: Db, where: SQL[], search: QuestionSearch, starredBy?: string) {
   const clauses = [...where];
   // Counted before the cursor narrows the clauses: the total of the search,
   // the same on every page, and not the size of the page.
@@ -296,13 +321,25 @@ async function pageWhere(db: Db, where: SQL[], search: QuestionSearch) {
     );
   }
   const order = descending ? desc : asc;
+  // The caller's star, by a left join on its primary key: one row at most per
+  // question, so the page and its order are exactly what they were without it.
   const rows = await db
-    .select({ question: questions, sortKey: key })
+    .select({ question: questions, sortKey: key, starredAt: questionStars.starredAt })
     .from(questions)
+    .leftJoin(
+      questionStars,
+      and(
+        eq(questionStars.questionId, questions.id),
+        starredBy === undefined ? sql`false` : eq(questionStars.userId, starredBy),
+      ),
+    )
     .where(and(...clauses))
     .orderBy(order(key), order(questions.id))
     .limit(search.limit + 1);
   const page = rows.slice(0, search.limit).map((r) => r.question);
+  const starred = new Set(
+    rows.slice(0, search.limit).flatMap((r) => (r.starredAt === null ? [] : [r.question.id])),
+  );
   const ids = page.map((q) => q.id);
   const [tags, facts] = await Promise.all([tagsOf(db, ids), versionFactsOf(db, ids)]);
   const last = rows[search.limit - 1];
@@ -310,6 +347,7 @@ async function pageWhere(db: Db, where: SQL[], search: QuestionSearch) {
     page,
     tags,
     facts,
+    starred,
     nextCursor:
       rows.length > search.limit && last
         ? encodeCursor({

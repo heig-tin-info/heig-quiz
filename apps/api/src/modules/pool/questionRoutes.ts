@@ -33,9 +33,9 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
     { preHandler: requireTeacher },
     teacher(
       { params: IdParam, query: QuestionSearch, load: inPool() },
-      async ({ reply, query, scope: pool }) => {
+      async ({ req, reply, query, scope: pool }) => {
         try {
-          return await service.listQuestions(app.db, pool.id, query);
+          return await service.listQuestions(app.db, pool.id, req.user!.id, query);
         } catch (error) {
           // A cursor is only valid for the order that produced it: a client that
           // changes column mid-scroll starts the list again rather than reading a

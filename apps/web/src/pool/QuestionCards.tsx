@@ -7,6 +7,7 @@ import { useT } from "../i18n";
 import { Badge, Card, Checkbox, cx, IconButton, RelativeTime, Skeleton } from "../ui";
 import { DifficultyDots, RowStatsButton, TypeGlyph, VersionCell, type StatsFor } from "./QuestionTable";
 import type { QuestionGroup } from "./QuestionGroups";
+import { StarButton } from "./stars";
 import { entryKey, type RowProps } from "./useQuestionBrowse";
 
 /**
@@ -28,8 +29,8 @@ import { entryKey, type RowProps } from "./useQuestionBrowse";
  *
  * The card answers the same gestures as the table's row (`useQuestionBrowse`,
  * and `QuestionTable` for why): a click, ↑/↓ and P show the question in the
- * reading pane, Enter, a double-click and the pencil open the editor, Space is
- * kept for the favourite star. A card is a focusable list item wearing
+ * reading pane, Enter, a double-click and the pencil open the editor, Space and
+ * the star beside the name star it (F-POOL-10). A card is a focusable list item wearing
  * `aria-current` when shown, not a button: a click on it does not do what
  * Enter does. The arrows walk the cards in reading order,
  * section after section, whatever the grid does with the columns.
@@ -50,9 +51,11 @@ function QuestionCard({
   onDragStart,
   readOnly,
   statsFor,
+  onStar,
 }: {
   row: QuestionRow;
   browse: RowProps;
+  onStar: () => void;
   checked: boolean;
   onToggleCheck: () => void;
   onEdit: () => void;
@@ -82,6 +85,7 @@ function QuestionCard({
         </span>
         {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
         <RowStatsButton row={row} statsFor={statsFor} />
+        {row.deletedAt ? null : <StarButton row={row} onToggle={onStar} />}
         {readOnly ? null : (
           <span onClick={(e) => e.stopPropagation()}>
             <Checkbox
@@ -166,6 +170,7 @@ export function QuestionCards({
   onDragStart,
   readOnly = false,
   statsFor,
+  onStar,
 }: {
   groups: QuestionGroup[];
   checked: ReadonlySet<string>;
@@ -180,6 +185,8 @@ export function QuestionCards({
   onDragStart?: (event: DragEvent, row: QuestionRow) => void;
   readOnly?: boolean;
   statsFor?: StatsFor | undefined;
+  /** The card's star (F-POOL-10), for every role. */
+  onStar: (row: QuestionRow) => void;
 }) {
   return (
     <div className="@container space-y-6">
@@ -205,6 +212,7 @@ export function QuestionCards({
                 onDragStart={onDragStart ? (event) => onDragStart(event, row) : undefined}
                 readOnly={readOnly}
                 statsFor={statsFor}
+                onStar={() => onStar(row)}
               />
             ))}
           </div>

@@ -42,6 +42,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-POOL-07 | A pool exports as an archive of YAML files in the canonical format, one file per question, the category tree as folders. Importing this archive recreates the pool or merges into an existing pool by id. | P1 | S |
 | F-POOL-08 | Import of GIFT and Moodle XML files for the supported types. Questions that cannot be converted are listed with the reason. | P2 | C |
 | F-POOL-09 | Deleting a pool is refused while an evaluation or an evaluation template pins one of its question versions; the refusal names the holders the caller can open and counts the others (ADR-031). | P1 | M |
+| F-POOL-10 | A teacher stars questions of any pool they can see — a reader and a public pool included — as personal favourites: a colleague never sees nor clears them, and nothing is audited. On the pool screen, a star on each row and card, Space on the focused one, "Star" in the bulk bar and "Clear favourites" (this pool, after a confirm that counts them). In the question picker of an evaluation or a template, the starred questions of the shown pool come first, and "Add favourites" adds every one that can be added, says what it skipped and why, then offers to unstar them. A star follows its question when it is moved to another pool; a copy starts without one; a soft-deleted question's star stays hidden until it is restored (ADR-039). | P1 | S |
 
 ## F-QST Questions and versions
 

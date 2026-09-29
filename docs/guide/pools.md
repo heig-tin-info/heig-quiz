@@ -68,9 +68,17 @@ Anything else is free text. Several `tag:` words add up, and two `version:` boun
 
 Each row shows the type as an icon, the internal name, the tags, the difficulty as five dots, the published version and the last change. The three icons at the end of the row are **Edit**, **Duplicate** and **Delete**.
 
-A click on a row shows the question as a student will read it, in a panel beside the list; on a narrower window the panel takes the list's place, and **Back to the list** returns to the row you left. The version shown is the latest published one, the one an evaluation would take, or the draft of a question never published; a line says so when the draft has changes not yet published. From the keyboard, P shows the focused row; on a wide window ↑ and ↓ move from row to row and show each one, opening the panel if it was closed. Escape or the **×** closes it. With the panel open, the table drops the columns it has no room for (version, last change, tags), and gets them back when it closes. To edit, press Enter on the row, double-click it, click its pencil or **Open in the editor** in the panel.
+A click on a row shows the question as a student will read it, in a panel beside the list; on a narrower window the panel takes the list's place, and **Back to the list** returns to the row you left. The version shown is the latest published one, the one an evaluation would take, or the draft of a question never published; a line says so when the draft has changes not yet published. From the keyboard, P shows the focused row and Space stars it (below); on a wide window ↑ and ↓ move from row to row and show each one, opening the panel if it was closed. Escape or the **×** closes it. With the panel open, the table drops the columns it has no room for (version, last change, tags), and gets them back when it closes. To edit, press Enter on the row, double-click it, click its pencil or **Open in the editor** in the panel.
 
-Tick several rows and a bar appears at the bottom: **Add a tag**, **Move to a category**, **Delete**. Deleting hides the questions from the lists; the results already recorded are kept.
+Tick several rows and a bar appears at the bottom: **Star**, **Add a tag**, **Move to a category**, **Move to another pool**, **Delete**. Deleting hides the questions from the lists; the results already recorded are kept.
+
+### Favourites
+
+Before a test, browse the pool and star the questions you want: the star in front of a question's name, Space on the focused row, or **Star** in the bottom bar for the ticked rows (it reads **Unstar** when they are all starred already). A star is yours alone: a colleague who shares the pool never sees it and cannot clear it, and a reader may star as well, since a star changes nothing in the pool.
+
+Then, in the evaluation or the template, **Add questions** shows the favourites of the pool on display first, above the whole list (they step aside while you search or filter). **Add favourites** adds every one that can be added and says what it left out: a question never published, one kept after a poll without a correct answer, or one already in the list. The notice then offers **Unstar these**, to start the next test from a clean slate; nothing is unstarred unless you ask.
+
+**Clear favourites**, at the top of the pool, removes all your stars in that pool after a confirmation that counts them. A question moved to another pool keeps its star; a copy starts without one; a deleted question's star comes back only if the question does.
 
 ### Question statistics
 
