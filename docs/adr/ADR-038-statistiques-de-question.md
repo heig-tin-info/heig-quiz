@@ -82,7 +82,7 @@ maximum: they bring an individual grade back from an aggregate (N-DATA-06).
 ### 4. A threshold, enforced by the server
 
 Below `QUESTION_STATS_MIN_N` answers (ten), a question has no statistics:
-it is absent from the pool list and its own route returns `stats: null`. The
+it is absent from the pool list, the one route that serves them. The
 threshold is applied in the `stats` module, so a smaller `n` never travels
 to a browser, not even hidden.
 
@@ -119,13 +119,15 @@ resets at the start of the year.
   the cycle.
 - The RESET is a write to `questions`, which belongs to `pool`: it is
   `POST /questions/:id/stats/reset` in `pool/questionRoutes.ts`.
-- `GET /pools/:id/question-stats` answers the whole pool in one call; the
-  pool screen merges it with its rows by id. `QuestionRow` and
+- `GET /pools/:id/question-stats` answers the whole pool in one call, each
+  entry with its `since`; the pool screen merges it with its rows by id and
+  the side panel reads its entry, with no request of its own. After a reset
+  the panel closes and the question leaves the list. `QuestionRow` and
   `listQuestions` do not change, so the MCP tool `list_questions` does not
   carry statistics; an MCP tool for them is a follow-up.
-- `isStaffAttempt` (`evaluation`) and `keptAttemptIdsOf` (`grading`) are the
-  cross-evaluation forms of `staffAttemptIds` and `keptAttempts`, held equal
-  to them by a test.
+- `isStaffAttempt` (`evaluation`) is THE staff-attempt predicate, which
+  `staffAttemptIds` now reads too; `keptAttemptsOf` (`grading`) is the kept
+  rule over several evaluations, which `keptAttempts` calls for one.
 
 ### 8. Next: the time spent
 
@@ -139,12 +141,22 @@ exist today.
 
 - The pool's table and cards show a chart icon after the name of every
   question with statistics; it opens a side panel, for a reader too.
-- One query per call gathers the candidates; one more, and two for the kept
-  attempts, only when some student holds several attempts. Every counted
-  answer travels to the process. Should a pool's history outgrow that, the
-  same filters pre-aggregate in SQL, and only the retaken rows are fetched
-  one by one.
+- One query gathers the candidates, one loads their evaluations, two find
+  the kept attempts (the points only of students who hold several). Every
+  counted answer travels to the process. Should a pool's history outgrow
+  that, the same filters pre-aggregate in SQL, and only the attempts of
+  students who retook an exercise are fetched one by one.
 - The filters on statistics that F-STAT-03 promises are still to do.
+
+### Residual risk
+
+A reader who reads a question's figures just before and just after ONE new
+answer is counted (`n` from 10 to 11) can infer that answer's points by
+differencing `p`. Accepted: the figures carry no identity, and a teacher who
+could narrow the answer down to one student already sees that class's
+results. Should it ever matter, two mitigations exist, neither built: a
+coarser rounding of `p`, or refreshing the figures only when an
+evaluation's results are released.
 
 ### Rollback
 
