@@ -109,6 +109,7 @@ describe("visibleBottom (#191)", () => {
     el.getBoundingClientRect = () =>
       ({ top, height, bottom: top + height, left: 0, right: 390, width: 390, x: 0, y: top }) as DOMRect;
     document.body.append(el);
+    return el;
   };
   afterEach(() => document.querySelectorAll("[data-bottom-dock]").forEach((el) => el.remove()));
 
@@ -119,6 +120,11 @@ describe("visibleBottom (#191)", () => {
   it("stops at the top of a bar docked on the window's bottom edge", () => {
     dock(window.innerHeight - 56, 56);
     expect(visibleBottom()).toBe(window.innerHeight - 56);
+  });
+
+  it("leaves the whole window to a target inside the dock itself", () => {
+    const slot = dock(window.innerHeight - 56, 56).appendChild(document.createElement("a"));
+    expect(visibleBottom(slot)).toBe(window.innerHeight);
   });
 
   it("ignores a dock in the flow away from the edge, and one not drawn", () => {

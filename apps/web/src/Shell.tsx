@@ -471,14 +471,8 @@ export function Shell({
       <Logo id={titleId} className={width} />
     </button>
   );
-  /*
-   * #191: the student's phone navigates from the bottom bar, and the top bar
-   * stops repeating it. The drawer held one row (the home, which the bar and
-   * the wordmark both reach) over the account row, so its trigger goes; the
-   * avatar stays for what is about the PERSON (the inbox, the theme, signing
-   * out) but loses Settings, which is the bar's Profile slot. The drawer is
-   * still the teacher's, and a student's on a page without the bar.
-   */
+  // Where the student's bottom bar shows, the top bar does not repeat it:
+  // DESIGN.md, "The student's bottom bar" (#191).
   const bottomNav = bottomNavShown(route, teacherUi);
   const userMenu = (compact: boolean) => (
     <UserMenu
@@ -585,7 +579,7 @@ export function Shell({
 
       <div className="min-w-0 flex-1">
         {/* Mobile top bar */}
-        <div className="sticky top-(--banner-h) z-20 flex h-14 items-center gap-2 border-b border-line bg-canvas/90 px-3 backdrop-blur lg:hidden">
+        <div className="sticky top-(--banner-h) z-20 flex h-(--topbar-h) items-center gap-2 border-b border-line bg-canvas/90 px-3 backdrop-blur lg:hidden">
           {bottomNav ? null : (
             <IconButton
               label={t("menu.openMenu")}

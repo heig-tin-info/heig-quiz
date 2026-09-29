@@ -43,15 +43,13 @@ export function findTarget(selector: string): HTMLElement | null {
 const modalOpen = () => document.querySelector('[aria-modal="true"]') != null;
 
 /**
- * The bottom of the part of the window the page is readable in: the window's
- * own bottom, or the top of a bar docked on it (`data-bottom-dock`: the
- * student's bottom navigation, the launch step's phone dock). A dock that is
- * in the flow and not at the window's edge takes nothing away. The bubble is
- * placed, and the ring clipped, above that line, so neither is drawn over the
- * bar a thumb is reaching for.
+ * The bottom of the readable band: the top of a `data-bottom-dock` bar on the
+ * window's edge, else the window's bottom (DESIGN.md, "Coach marks"). A
+ * target inside such a bar is pointed at where it is.
  */
-export function visibleBottom(): number {
+export function visibleBottom(target?: Element | null): number {
   let bottom = window.innerHeight;
+  if (target?.closest("[data-bottom-dock]")) return bottom;
   for (const el of document.querySelectorAll<HTMLElement>("[data-bottom-dock]")) {
     const r = el.getBoundingClientRect();
     if (r.height > 0 && r.bottom >= window.innerHeight - 1) bottom = Math.min(bottom, r.top);
@@ -312,9 +310,8 @@ function Bubble({
     const first = findTarget(step.target);
     if (first) {
       const r = first.getBoundingClientRect();
-      const bottom = visibleBottom();
+      const bottom = visibleBottom(first);
       if (r.top < 64 || r.bottom > bottom - 64) {
-        // Centred in what is left above a bottom dock, not in the window:
         // `scrollIntoView` knows nothing of a fixed bar over the page.
         const behavior = reducedMotion() ? "auto" : "smooth";
         const dock = window.innerHeight - bottom;
@@ -334,10 +331,7 @@ function Bubble({
       if (!a || !b || !ringEl || !tailEl) return;
       const el = findTarget(step.target);
       const r = el?.getBoundingClientRect();
-      const bottom = visibleBottom();
-      // A target wholly behind a bottom dock is not on screen: the bubble
-      // would point into the bar. It waits, as for a target not drawn yet,
-      // and comes back once the reader scrolls it into the readable band.
+      const bottom = visibleBottom(el);
       const hide = !el || !r || r.top >= bottom || modalOpen();
       a.style.visibility = hide ? "hidden" : "visible";
       ringEl.style.opacity = hide ? "0" : "1";
@@ -372,9 +366,8 @@ function Bubble({
 
       const pad = 6;
       const radius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 8;
-      // Kept inside the viewport: a sidebar row touches its left edge. And
-      // above a bottom dock: a target partly behind it is ringed where it
-      // shows, never across the bar.
+      // Kept inside the viewport (a sidebar row touches its left edge) and
+      // above a bottom dock.
       const left = Math.max(2, r.left - pad);
       const right = Math.min(window.innerWidth - 2, r.right + pad);
       const top = r.top - pad;

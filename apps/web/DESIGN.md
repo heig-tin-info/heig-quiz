@@ -1239,16 +1239,19 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
 - **Shape.** Fixed to the bottom, 56 px plus the iOS home-indicator inset
   (`env(safe-area-inset-bottom)`), `canvas` at 90 % with a blur and a
   hairline over it — the phone top bar, mirrored. `--bottom-nav-h` is its
-  whole height while it is mounted (zero from `lg` up, zero without it): a
-  spacer under the page and the toast stack read it, so neither the end of a
-  page nor a toast is ever behind the bar.
-- **Where it is drawn: an allowlist**, the pages its slots lead to (the
-  home, a feedback page, the settings) and nothing else. Hidden on the
+  whole height while it is in the page (pure CSS, `:root:has(nav[data-bottom-dock])`
+  under `lg`; zero otherwise): a spacer under the page and the toast stack
+  read it, so neither the end of a page nor a toast is ever behind the bar.
+  An anchored section lands under the sticky top bar through one
+  `scroll-padding-top` on the root, from `--topbar-h`.
+- **Where it is drawn: an allowlist**, the views the route table gives a
+  `bottomSlot` (`router.ts`: the home, a feedback page, the settings) and
+  nothing else. Hidden on the
   attempt (lobby and player), the poll join page, every projection and
   preview, a SEB-confined page, and any screen with a sticky bottom bar of its
   own (the player's, PollJoin's "Send", the launch step's dock): two bars at
   the bottom fight for the thumb, and the one that is the screen's action must
-  win. A new student page does not get the bar until it is added to the list.
+  win. A new student page does not get the bar until its route has a slot.
 - **No repeats.** Where the bar shows, the top bar loses the drawer's trigger
   (the drawer held the home, which the bar and the wordmark both reach) and
   the avatar menu loses Settings (the Profile slot). The avatar stays, for

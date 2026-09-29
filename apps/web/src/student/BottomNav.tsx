@@ -1,5 +1,5 @@
 import { CalendarRange, School, Trophy, UserRound } from "lucide-react";
-import { useEffect, useLayoutEffect, useReducer, type MouseEvent } from "react";
+import type { MouseEvent } from "react";
 
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
@@ -14,55 +14,25 @@ const SLOT_LOOK: Record<BottomSlotId, { icon: IconType; label: keyof Dict }> = {
   profile: { icon: UserRound, label: "bnav.profile" },
 };
 
-/**
- * The student's bottom navigation bar on a phone (#191, DESIGN.md). It is
- * NAVIGATION, never an action: no slot wears the accent fill, and a screen's
- * one primary button stays the one red thing on it.
- *
- * Fixed to the bottom under `lg` (the frame's own breakpoint: the sidebar
- * above it, the top bar and this bar below), with the iOS home-indicator
- * inset under its row. `--bottom-nav-h` (style.css) is its whole height while
- * it is mounted, which the spacer below and the toast stack read, so neither
- * the end of the page nor a toast ever sits behind it.
- */
+/** The student's bottom bar on a phone: DESIGN.md, "The student's bottom bar" (#191). */
 export function BottomNav({ route, navigate }: { route: Route; navigate: (r: Route) => void }) {
   const t = useT();
-  // The address bar's hash IS the state (`#past`, `#classrooms`); this only
-  // re-renders when it changes without a route change.
-  const [, rerender] = useReducer((n: number) => n + 1, 0);
-  useEffect(() => {
-    window.addEventListener("hashchange", rerender);
-    return () => window.removeEventListener("hashchange", rerender);
-  }, []);
-  // Before the first paint, so the spacer never starts at zero.
-  useLayoutEffect(() => {
-    document.documentElement.setAttribute("data-bottom-nav", "");
-    return () => document.documentElement.removeAttribute("data-bottom-nav");
-  }, []);
   const active = activeSlot(route, window.location.hash);
 
   const go = (slot: BottomSlot) => (e: MouseEvent<HTMLAnchorElement>) => {
     // A modified click is the browser's: a new tab gets the real address.
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
-    navigate(slot.route);
-    // The section rides the address, replaced rather than pushed: it is a
-    // place on the same page, and Back should leave the page, not scroll it.
+    // A fresh route: the same slot twice is a new state, so the bar re-reads the hash.
+    navigate({ ...slot.route });
+    // After the push, and replaced: the section is a place on the page, and
+    // Back leaves the page. The home scrolls to it (`StudentHome`).
     window.history.replaceState(null, "", hrefOf(slot));
-    rerender();
-    if (slot.anchor) {
-      const anchor = slot.anchor;
-      // The home may be mounting: its own effect scrolls once it is drawn.
-      requestAnimationFrame(() =>
-        // Optional call: `scrollIntoView` does not exist under jsdom.
-        document.getElementById(anchor)?.scrollIntoView?.({ block: "start" }),
-      );
-    } else window.scrollTo({ top: 0 });
   };
 
   return (
     <>
-      <div aria-hidden className="h-(--bottom-nav-h) lg:hidden" />
+      <div aria-hidden className="h-(--bottom-nav-h)" />
       <nav
         data-bottom-dock=""
         aria-label={t("bnav.label")}
