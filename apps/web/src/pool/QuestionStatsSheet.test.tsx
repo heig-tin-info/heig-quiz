@@ -8,11 +8,12 @@ import { QuestionStatsSheet } from "./QuestionStatsSheet";
 /*
  * The statistics panel of one question (ADR-038): the two numbers, a signed
  * rate, since when, and the reset — confirmed, and only for whoever may write
- * the pool.
+ * the pool. And the time spent (ADR-039), or why it is not there yet.
  */
 
 const ROW = { id: "q1", internalName: "ptr-arith-01" };
-const STATS = { n: 24, p: 0.73, since: null };
+const STATS = { n: 24, p: 0.73, since: null, time: null };
+const TIME = { n: 21, meanS: 95, medianS: 80, p25S: 52, p75S: 121 };
 
 describe("QuestionStatsSheet", () => {
   it("shows the success rate and the number of answers", () => {
@@ -27,7 +28,7 @@ describe("QuestionStatsSheet", () => {
   it("keeps a negative rate signed, and says why", () => {
     mockFetch({});
     renderWithProviders(
-      <QuestionStatsSheet poolId="p1" row={ROW} stats={{ n: 12, p: -0.08, since: null }} canReset onClose={vi.fn()} />,
+      <QuestionStatsSheet poolId="p1" row={ROW} stats={{ ...STATS, n: 12, p: -0.08 }} canReset onClose={vi.fn()} />,
     );
     expect(screen.getByText("-8%")).toBeInTheDocument();
     expect(screen.getByText(/Below zero/)).toBeInTheDocument();
@@ -45,6 +46,27 @@ describe("QuestionStatsSheet", () => {
       />,
     );
     expect(screen.getByText(/^Since /)).toBeInTheDocument();
+  });
+
+  it("shows the time spent: the median with its middle half, the mean and the timed answers", () => {
+    mockFetch({});
+    renderWithProviders(
+      <QuestionStatsSheet poolId="p1" row={ROW} stats={{ ...STATS, time: TIME }} canReset onClose={vi.fn()} />,
+    );
+    expect(screen.getByText("Time spent")).toBeInTheDocument();
+    expect(screen.getByText("1 min 20 s")).toBeInTheDocument();
+    expect(screen.getByText("Middle half: 52 s to 2 min 01 s")).toBeInTheDocument();
+    expect(screen.getByText("1 min 35 s")).toBeInTheDocument();
+    expect(screen.getByText("21")).toBeInTheDocument();
+    expect(screen.getByText(/counts 10 minutes at most/)).toBeInTheDocument();
+    expect(screen.queryByText(/The time shows from/)).not.toBeInTheDocument();
+  });
+
+  it("says in one line when there are too few timed answers", () => {
+    mockFetch({});
+    renderWithProviders(<QuestionStatsSheet poolId="p1" row={ROW} stats={STATS} canReset onClose={vi.fn()} />);
+    expect(screen.getByText("The time shows from 10 timed exam answers.")).toBeInTheDocument();
+    expect(screen.queryByText("Median time")).not.toBeInTheDocument();
   });
 
   it("offers no reset to a reader", () => {

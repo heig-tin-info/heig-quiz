@@ -2,7 +2,7 @@
  * Descriptive statistics for the results screens (PLAN-MVP §7.6), and the
  * item analysis of a question in its pool (ADR-038): the mean success rate
  * over the answers counted, reported with their number and shown only from
- * `QUESTION_STATS_MIN_N` answers on.
+ * `QUESTION_STATS_MIN_N` answers on — and the time spent on it (ADR-039).
  */
 import { MAX_GRADE, MIN_GRADE } from "./grade.js";
 import { round2 } from "./round.js";
@@ -66,6 +66,67 @@ export function itemStats(answers: Iterable<ScoredAnswer>): ItemStats {
 /** The statistics as they may be shown: `null` below `QUESTION_STATS_MIN_N` answers. */
 export function shownItemStats(stats: ItemStats): ItemStats | null {
   return stats.n >= QUESTION_STATS_MIN_N ? stats : null;
+}
+
+/**
+ * The `q`-quantile of an ascending series, by linear interpolation between
+ * the closest ranks (type 7 of Hyndman & Fan, the default of R and NumPy):
+ * `h = (n - 1) q`. `quantile(sorted, 0.5)` is the median of {@link describe},
+ * unrounded. An empty series answers 0, like `describe`.
+ */
+export function quantile(sorted: readonly number[], q: number): number {
+  const n = sorted.length;
+  if (n === 0) return 0;
+  const h = (n - 1) * q;
+  const low = Math.floor(h);
+  const high = Math.min(low + 1, n - 1);
+  return sorted[low]! + (h - low) * (sorted[high]! - sorted[low]!);
+}
+
+/** Below this many timed answers, a question's time is not shown (ADR-039). */
+export const QUESTION_TIME_MIN_N = 10;
+
+/**
+ * The idle cap of the dwell (ADR-039): an interval on screen is credited up
+ * to this long after the later of its start and the student's last write to
+ * the question. The SQL flush of the `live` module and the sentence of the
+ * statistics sheet both read it.
+ */
+export const DWELL_IDLE_CAP_MS = 600_000;
+
+/**
+ * A series' centre and middle half, in the unit of its values, unrounded:
+ * what the time spent on a question shows (ADR-039). No extremes, no
+ * standard deviation (N-DATA-06).
+ */
+export interface Spread {
+  n: number;
+  mean: number;
+  median: number;
+  p25: number;
+  p75: number;
+}
+
+/**
+ * The {@link Spread} of the finite values; anything else is left out. Which
+ * values belong in the series is the caller's call (the time: a positive
+ * dwell, filtered in the query).
+ */
+export function spread(values: Iterable<number>): Spread {
+  const sorted = [...values].filter(Number.isFinite).sort((a, b) => a - b);
+  const n = sorted.length;
+  return {
+    n,
+    mean: n === 0 ? 0 : sorted.reduce((s, v) => s + v, 0) / n,
+    median: quantile(sorted, 0.5),
+    p25: quantile(sorted, 0.25),
+    p75: quantile(sorted, 0.75),
+  };
+}
+
+/** The time as it may be shown: `null` below `QUESTION_TIME_MIN_N` timed answers. */
+export function shownTimeSpread(stats: Spread): Spread | null {
+  return stats.n >= QUESTION_TIME_MIN_N ? stats : null;
 }
 
 export interface HistogramBucket {

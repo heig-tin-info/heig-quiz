@@ -450,6 +450,9 @@ export const fr: Record<keyof Dict, string> = {
   "dur.minutes": "{n} minutes",
   "dur.and": "et",
   "dur.soon": "moins d'une minute",
+  "dur.s": "{n} s",
+  "dur.minSec": "{m} min {s} s",
+  "dur.hourMin": "{h} h {m} min",
   "time.now": "à l'instant",
 
   // --- Live primitives (ui/live.tsx) ---
@@ -661,10 +664,18 @@ export const fr: Record<keyof Dict, string> = {
   "pool.stats.successRate": "Taux de réussite",
   "pool.stats.answers": "Réponses comptées",
   "pool.stats.scope":
-    "Tentatives retenues des examens et exercices, toutes versions de la question, sans les essais des enseignants. Une réponse vide ou absente compte 0.",
+    "Tentatives retenues des examens et exercices, toutes versions de la question, sans les essais des enseignants. Une réponse vide compte 0 ; une question jamais ouverte n'est pas comptée.",
   "pool.stats.negative": "Sous zéro : les points négatifs ont retiré plus qu'ils n'ont donné.",
   "pool.stats.since": "Depuis le {date}",
   "pool.stats.sinceAlways": "Depuis la première utilisation",
+  "pool.stats.time": "Temps passé",
+  "pool.stats.timeMedian": "Temps médian",
+  "pool.stats.timeMean": "Temps moyen",
+  "pool.stats.timeRange": "Moitié centrale : de {p25} à {p75}",
+  "pool.stats.timeAnswers": "Réponses chronométrées",
+  "pool.stats.timeScope":
+    "Examens uniquement. Temps où la question est à l'écran, mesuré par le serveur ; une période sans activité compte au plus {cap} minutes.",
+  "pool.stats.timeNone": "Le temps s'affiche dès {min} réponses d'examen chronométrées.",
   "pool.stats.reset": "Réinitialiser les statistiques",
   "pool.stats.resetTitle": "Réinitialiser les statistiques de {name} ?",
   "pool.stats.resetBody":

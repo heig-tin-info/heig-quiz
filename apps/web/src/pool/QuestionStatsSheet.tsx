@@ -2,13 +2,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
 
 import type { QuestionRow, QuestionStats, StatsReset } from "@quiz/contracts";
+import { DWELL_IDLE_CAP_MS, QUESTION_TIME_MIN_N } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
-import { useT } from "../i18n";
+import { formatSpan, useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import { poolQuestionStatsKey } from "../queryKeys";
-import { Button, isoDateParts, Sheet, Stat } from "../ui";
+import { Button, isoDateParts, SectionHeading, Sheet, Stat } from "../ui";
 
 /**
  * The item analysis of one question (ADR-038), opened from the chart icon of
@@ -16,6 +17,10 @@ import { Button, isoDateParts, Sheet, Stat } from "../ui";
  * answers it rests on, what was counted, and since when. Everything comes
  * from the pool's own list, which only holds the questions with enough
  * answers: the panel has no request of its own, and no empty state.
+ *
+ * The time spent (ADR-039) is a second block, with its own threshold: a
+ * question may show its rate long before it has enough timed exam answers,
+ * and then the block says so in one line rather than showing nothing.
  *
  * A reading panel: it has no primary action. The only button is the reset,
  * drawn for a contributor or an owner and absent for a reader (what is not
@@ -99,6 +104,33 @@ export function QuestionStatsSheet({
               : t("pool.stats.sinceAlways")}
           </p>
         </div>
+        <section className="space-y-3">
+          <SectionHeading title={t("pool.stats.time")} />
+          {stats.time ? (
+            <>
+              {/* On a phone the median takes the row, the two others share the next. */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div className="col-span-2 sm:col-span-1">
+                  <Stat
+                    label={t("pool.stats.timeMedian")}
+                    value={formatSpan(stats.time.medianS, t)}
+                    hint={t("pool.stats.timeRange", {
+                      p25: formatSpan(stats.time.p25S, t),
+                      p75: formatSpan(stats.time.p75S, t),
+                    })}
+                  />
+                </div>
+                <Stat label={t("pool.stats.timeMean")} value={formatSpan(stats.time.meanS, t)} />
+                <Stat label={t("pool.stats.timeAnswers")} value={stats.time.n} />
+              </div>
+              <p className="text-sm text-fg-muted">
+                {t("pool.stats.timeScope", { cap: DWELL_IDLE_CAP_MS / 60_000 })}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-fg-muted">{t("pool.stats.timeNone", { min: QUESTION_TIME_MIN_N })}</p>
+          )}
+        </section>
       </div>
     </Sheet>
   );

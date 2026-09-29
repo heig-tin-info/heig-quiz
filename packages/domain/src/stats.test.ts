@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { describe as describeSeries, histogram, itemStats, QUESTION_STATS_MIN_N, shownItemStats } from "./stats.js";
+import {
+  describe as describeSeries,
+  histogram,
+  itemStats,
+  quantile,
+  QUESTION_STATS_MIN_N,
+  QUESTION_TIME_MIN_N,
+  shownItemStats,
+  shownTimeSpread,
+  spread,
+} from "./stats.js";
 
 describe("describe", () => {
   it("summarises a series", () => {
@@ -74,5 +84,58 @@ describe("shownItemStats", () => {
     expect(QUESTION_STATS_MIN_N).toBe(10);
     expect(shownItemStats({ n: 9, p: 0.5 })).toBeNull();
     expect(shownItemStats({ n: 10, p: 0.5 })).toEqual({ n: 10, p: 0.5 });
+  });
+});
+
+describe("quantile", () => {
+  it("interpolates between the closest ranks (type 7)", () => {
+    expect(quantile([1, 2, 3, 4], 0.25)).toBe(1.75);
+    expect(quantile([1, 2, 3, 4], 0.5)).toBe(2.5);
+    expect(quantile([1, 2, 3, 4], 0.75)).toBe(3.25);
+  });
+
+  it("answers the value itself for a single one, 0 for none", () => {
+    expect(quantile([7], 0.25)).toBe(7);
+    expect(quantile([7], 0.75)).toBe(7);
+    expect(quantile([], 0.5)).toBe(0);
+  });
+
+  it("gives the known quartiles of ten values", () => {
+    const ten = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    expect(quantile(ten, 0.25)).toBe(3.25);
+    expect(quantile(ten, 0.75)).toBe(7.75);
+  });
+
+  it("agrees with the median of describe", () => {
+    for (const series of [[3, 1, 2], [4, 1, 3, 2], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110]]) {
+      const sorted = [...series].sort((a, b) => a - b);
+      expect(quantile(sorted, 0.5)).toBe(describeSeries(series).median);
+    }
+  });
+});
+
+describe("spread", () => {
+  it("summarises the finite values only, unrounded", () => {
+    expect(spread([4000, 1000, Number.NaN, Number.POSITIVE_INFINITY, 3000, 2000])).toEqual({
+      n: 4,
+      mean: 2500,
+      median: 2500,
+      p25: 1750,
+      p75: 3250,
+    });
+    expect(spread([1, 2]).mean).toBe(1.5);
+    expect(spread([1, 1, 2]).mean).toBeCloseTo(4 / 3);
+  });
+
+  it("is all zeroes on nothing", () => {
+    expect(spread([])).toEqual({ n: 0, mean: 0, median: 0, p25: 0, p75: 0 });
+  });
+});
+
+describe("shownTimeSpread", () => {
+  it("hides the time below the threshold, shows it from it", () => {
+    expect(QUESTION_TIME_MIN_N).toBe(10);
+    expect(shownTimeSpread(spread([1, 2, 3, 4, 5, 6, 7, 8, 9]))).toBeNull();
+    expect(shownTimeSpread(spread([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))?.n).toBe(10);
   });
 });

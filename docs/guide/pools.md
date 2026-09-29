@@ -72,7 +72,9 @@ Tick several rows and a bar appears at the bottom: **Add a tag**, **Move to a ca
 
 ### Question statistics
 
-A question answered at least ten times shows a chart icon after its name. It opens its **Statistics**: the **Success rate**, the mean share of the points students earned on it, and the number of **Answers counted**. Every version of the question counts, in exams and exercises (the attempt kept, when a student retook one); a teacher's own test attempt does not, and a blank or unanswered question counts 0. Under negative marking the rate can fall below zero.
+A question answered at least ten times shows a chart icon after its name. It opens its **Statistics**: the **Success rate**, the mean share of the points students earned on it, and the number of **Answers counted**. Every version of the question counts, in exams and exercises (the attempt kept, when a student retook one); a teacher's own test attempt does not, and a blank answer counts 0. A question the student never opened (the time ran out before they got to it) is left out rather than counted 0. Under negative marking the rate can fall below zero.
+
+Below, **Time spent** says how long students keep the question on screen in exams: the **Median time**, with the middle half of the students between two durations, the **Mean time** and the number of **Timed answers**. The server measures it, not the browser, and a stretch without activity counts ten minutes at most, so a forgotten tab does not inflate it. It shows from ten timed exam answers; until then the panel says so.
 
 **Reset statistics** (contributors and owners) starts the count again: only attempts started afterwards count. Nothing is deleted; grades and results stay as they are.
 

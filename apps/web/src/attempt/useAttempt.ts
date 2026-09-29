@@ -46,7 +46,7 @@ import {
   type PlayerState,
 } from "./playerReducer";
 import { useAttemptRun, type RunFn } from "./run";
-import { useBrowserSignals, useJournal, usePosition, type Report } from "./signals";
+import { useBrowserSignals, useDocumentVisible, useJournal, usePosition, type Report } from "./signals";
 import { useStateWrites, type StateWrites } from "./writes";
 import { attemptKey } from "../queryKeys";
 
@@ -108,6 +108,9 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
   const { sample, now: clock } = useServerClock();
   const autosave = useRef<Autosave | null>(null);
   const preview = initial?.attempt.preview === true;
+  const visible = useDocumentVisible();
+  // Bumped on every reconnection of the stream: the position goes out again.
+  const [reopened, setReopened] = useState(0);
 
   const query = useQuery<AttemptOrLobby>({
     queryKey: attemptKey(attemptId),
@@ -228,13 +231,18 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     // has answers to replay and a reconnection to journal (F-EVAL-13).
     onReopen: () => {
       report({ kind: "reconnect" });
+      setReopened((n) => n + 1);
       saver.resume();
       void query.refetch();
     },
   });
 
   useBrowserSignals(report, saver, preview);
-  usePosition(attemptId, state.items[state.index]?.id ?? null, !preview && closed === null);
+  usePosition(attemptId, state.items[state.index]?.id ?? null, {
+    live: !preview && closed === null && !paused,
+    visible,
+    resend: reopened,
+  });
 
   const setAnswer = useCallback(
     (itemId: string, payload: unknown, answered?: boolean) => {

@@ -15,7 +15,10 @@
  *     what makes the one-second ticker sweep free;
  *   - `answers_attempt_item_uq` is the target of the autosave upsert, whose
  *     `WHERE answers.revision < excluded.revision` settles the revision race
- *     in one statement, with no read-modify-write (§4.7).
+ *     in one statement, with no read-modify-write (§4.7);
+ *   - `attempts_shown_ck` ties the question on screen to the instant it was
+ *     shown: the dwell (ADR-039) has either an open interval or none, never
+ *     half of one.
  */
 import { sql } from "drizzle-orm";
 
@@ -103,6 +106,19 @@ export const attempts = pgTable(
     lastItemId: uuid("last_item_id"),
     /** Last sign of life; the presence map is in memory, this survives a restart. */
     presentAt: timestamp("present_at", { withTimezone: true }),
+    /**
+     * The open interval of the dwell (ADR-039): the item on the student's
+     * screen since `shown_since`, on the server's clock. Null when no
+     * question is on screen. No foreign key, like `last_item_id`.
+     */
+    shownItemId: uuid("shown_item_id"),
+    shownSince: timestamp("shown_since", { withTimezone: true }),
+    /**
+     * The attempt reports what is on screen (ADR-039). False for every attempt
+     * of before migration 0034, whose items were never reported shown: the
+     * statistics keep their old rule for them.
+     */
+    displayTracked: boolean("display_tracked").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -124,6 +140,10 @@ export const attempts = pgTable(
     check(
       "attempts_owner_ck",
       sql`(${t.userId} is null) <> (${t.guestId} is null)`,
+    ),
+    check(
+      "attempts_shown_ck",
+      sql`(${t.shownItemId} is null) = (${t.shownSince} is null)`,
     ),
     index("attempts_deadline_idx")
       .on(t.deadlineAt)
@@ -164,6 +184,18 @@ export const answers = pgTable(
      */
     flagged: boolean("flagged").notNull().default(false),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }),
+    /**
+     * The first time the question was on the student's screen (ADR-039):
+     * set by the first position report on it, or by the first write to it.
+     * Null on an item never displayed — the "not reached" of the statistics.
+     */
+    firstShownAt: timestamp("first_shown_at", { withTimezone: true }),
+    /**
+     * The time the question was on screen, summed over its closed intervals,
+     * idle-capped and clamped at the deadline (ADR-039). Never sent to anyone:
+     * only its aggregates leave the server.
+     */
+    dwellMs: integer("dwell_ms").notNull().default(0),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
