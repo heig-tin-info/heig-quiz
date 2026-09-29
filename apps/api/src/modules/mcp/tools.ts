@@ -9,6 +9,10 @@
  * (docs/08 §8.1): the MCP server is one more client of that surface, not a
  * second implementation of it.
  *
+ * Statistics are read through the pool screen's own route: the threshold of
+ * ADR-038 §4 is the route's, so a tool cannot see a smaller `n` than the
+ * browser does.
+ *
  * Deliberately absent: every deletion, and every transition of a live
  * evaluation (start, pause, close, grading, release). A model may prepare
  * work; a teacher runs it.
@@ -159,6 +163,23 @@ export const TOOLS: Tool[] = [
       pool: await api.get(`/pools/${a.poolId}`),
       categories: await api.get(`/pools/${a.poolId}/categories`),
     }),
+  }),
+
+  tool({
+    name: "get_pool_question_stats",
+    title: "Get the statistics of a pool's questions",
+    description:
+      "How students did on a pool's questions, to pick or fix one (ADR-038). One entry per question with " +
+      "enough answers: a question absent from `items` has fewer than ten counted answers, and its figures " +
+      "are withheld, not zero. `n` answers counted, every version pooled, over exams " +
+      "and exercises of EVERY class that used the question (not only the teacher's own); `p` is the mean " +
+      "share of the points earned, from 0 to 1, and may be NEGATIVE under negative marking; `since` is the " +
+      "last reset (null: never). `time` is the time spent on the question in exams, in whole seconds " +
+      "(median, P25, P75, mean, over `time.n` answers), or null below ten timed answers. Aggregates only: " +
+      "no student, no individual grade.",
+    input: z.object({ poolId: Id }),
+    annotations: READ,
+    run: (api, a) => api.get(`/pools/${a.poolId}/question-stats`),
   }),
 
   tool({

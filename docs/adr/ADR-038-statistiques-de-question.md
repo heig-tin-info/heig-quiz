@@ -133,6 +133,8 @@ resets at the start of the year.
   the panel closes and the question leaves the list. `QuestionRow` and
   `listQuestions` do not change, so the MCP tool `list_questions` does not
   carry statistics; an MCP tool for them is a follow-up.
+  *Done: `get_pool_question_stats`, one call to this route (ADR-022 §C,
+  amended 2026-09-29).*
 - `isStaffAttempt` (`evaluation`) is THE staff-attempt predicate, which
   `staffAttemptIds` now reads too; `keptAttemptsOf` (`grading`) is the kept
   rule over several evaluations, which `keptAttempts` calls for one.
@@ -157,6 +159,8 @@ exist today.
   that, the same filters pre-aggregate in SQL, and only the attempts of
   students who retook an exercise are fetched one by one.
 - The filters on statistics that F-STAT-03 promises are still to do.
+  *Done 2026-09-29: the pool's filter sheet bounds the rate and the median
+  time in the page, on this route's answer — no route of their own.*
 
 ### Residual risk
 
