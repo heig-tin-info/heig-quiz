@@ -775,6 +775,32 @@ describe("succession when the owner loses the teacher role (F-POOL-05)", () => {
     expect(await service.transferOnLoss(db, leaving)).toEqual([]);
   });
 
+  it("passes over a member demoted to student, and keeps the owner when no staff member remains (#287)", async () => {
+    const leaving = await seedTeacher(`leaving3-${randomUUID().slice(0, 6)}@heig.test`);
+    const demoted = await seedTeacher(`demoted3-${randomUUID().slice(0, 6)}@heig.test`);
+    const heir = await seedTeacher(`heir3-${randomUUID().slice(0, 6)}@heig.test`);
+    const id = randomUUID();
+    await db.insert(pools).values({ id, name: `Demoted ${id.slice(0, 8)}`, ownerId: leaving });
+    const [pool] = await db.select().from(pools).where(eq(pools.id, id));
+    await service.addMember(db, pool!, demoted, "owner");
+    await db
+      .update(poolMembers)
+      .set({ createdAt: new Date(Date.now() - 60_000) })
+      .where(and(eq(poolMembers.poolId, id), eq(poolMembers.userId, demoted)));
+    await service.addMember(db, pool!, heir, "reader");
+    await db.update(users).set({ role: "student" }).where(eq(users.id, demoted));
+
+    expect(await service.transferOnLoss(db, leaving)).toEqual([{ poolId: id, toUserId: heir }]);
+    const inbox = await db.select().from(notifications).where(eq(notifications.userId, demoted));
+    expect(inbox).toEqual([]);
+
+    // The heir leaves in turn: only the demoted member is left, so nobody inherits.
+    await db.update(users).set({ role: "student" }).where(eq(users.id, heir));
+    expect(await service.transferOnLoss(db, heir)).toEqual([]);
+    const [after] = await db.select().from(pools).where(eq(pools.id, id));
+    expect(after!.ownerId).toBe(heir);
+  });
+
   it("leaves a pool with no member alone rather than orphaning it", async () => {
     const lonely = await seedTeacher(`lonely-${randomUUID().slice(0, 6)}@heig.test`);
     const id = randomUUID();

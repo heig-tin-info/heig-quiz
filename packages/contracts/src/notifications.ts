@@ -209,40 +209,46 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
 /**
  * Who a kind is sent to. `seat`: the claimed STUDENT seats of a classroom
  * (`enrollments.staff = false`), whatever the account's global role — a
- * teacher or an admin on a colleague's roster holds one too. `staff`: staff
- * seats, pool owners and sharees, which only a teacher or an admin reaches.
- * A kind added to {@link NOTIFICATION_KINDS} without its row here is a
- * compile error.
+ * teacher or an admin on a colleague's roster holds one too. `course`: the
+ * staff seats of a course (`course_staff`: `tellStaff`, `staffOf`), never a
+ * seatless admin. `pool`: pool owners and members, which only a teacher or an
+ * admin reaches. A kind added to {@link NOTIFICATION_KINDS} without its row
+ * here is a compile error.
  */
-export const NOTIFICATION_AUDIENCE: Readonly<Record<NotificationKind, "seat" | "staff">> = {
+export const NOTIFICATION_AUDIENCE: Readonly<Record<NotificationKind, "seat" | "course" | "pool">> = {
   results_released: "seat",
   activity_scheduled: "seat",
   activity_available: "seat",
   deadline_approaching: "seat",
   results_updated: "seat",
-  student_joined: "staff",
-  roster_conflict: "staff",
-  grading_ready: "staff",
-  pool_shared: "staff",
-  pool_ownership: "staff",
-  pool_question_added: "staff",
+  student_joined: "course",
+  roster_conflict: "course",
+  grading_ready: "course",
+  pool_shared: "pool",
+  pool_ownership: "pool",
+  pool_question_added: "pool",
 };
 
 /**
  * The kinds an account can receive, as the settings grid lists them (ADR-030
  * §f: a toggle for a kind that sends nothing is a lie). A student always sees
  * the seat kinds, before the first seat is claimed too; a teacher or an admin
- * sees the staff kinds, and the seat kinds only while holding a student seat.
+ * sees the pool kinds, and the seat kinds only while holding a student seat.
+ * The course kinds go to a teacher, whose course seat may come at any time,
+ * and to an admin only while holding one: without it they are a row that
+ * controls nothing (#287).
  */
 export function notificationKindsFor(
   role: "student" | "teacher" | "admin",
   holdsStudentSeat: boolean,
+  holdsCourseSeat: boolean,
 ): NotificationKind[] {
-  const seat = role === "student" || holdsStudentSeat;
-  const staff = role !== "student";
-  return NOTIFICATION_KINDS.filter((kind) =>
-    NOTIFICATION_AUDIENCE[kind] === "seat" ? seat : staff,
-  );
+  const reaches = {
+    seat: role === "student" || holdsStudentSeat,
+    course: role === "teacher" || (role === "admin" && holdsCourseSeat),
+    pool: role !== "student",
+  };
+  return NOTIFICATION_KINDS.filter((kind) => reaches[NOTIFICATION_AUDIENCE[kind]]);
 }
 
 /** The resolved grid: every kind × every channel, defaults filled in. */

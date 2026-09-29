@@ -2059,8 +2059,9 @@ const notificationSettings: NotificationSettings = {
     ...structuredClone(DEFAULT_CHANNEL_ENABLED),
     pool_shared: { ...DEFAULT_CHANNEL_ENABLED.pool_shared, email: false },
   },
-  // The mock's teacher and admin hold no student seat: the staff kinds only.
-  kinds: notificationKindsFor(me?.role ?? "student", false),
+  // The mock's teacher and admin hold a course seat and no student seat:
+  // the staff kinds only.
+  kinds: notificationKindsFor(me?.role ?? "student", false, true),
   email: me?.email ?? "",
   teams: { available: true, linkedAt: null, teamsName: null, teamsUsername: null },
 };

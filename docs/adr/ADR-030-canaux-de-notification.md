@@ -322,7 +322,11 @@ backfill. The grid is served resolved (`NotificationMatrix`, every kind ×
 every channel); the settings list only the kinds the account can receive
 (`kinds`, from `notificationKindsFor` and `NOTIFICATION_AUDIENCE`, #277):
 the student-seat kinds for a student, or for a teacher or an admin while
-they hold a claimed student seat; the staff kinds for a teacher or an admin.
+they hold a claimed student seat; the pool kinds for a teacher or an admin;
+the course kinds (`student_joined`, `roster_conflict`, `grading_ready`,
+sent to `course_staff` seats only) for a teacher, whose seat may come, and
+for an admin only while they hold one (#287). The pool kinds reach only
+members whose role is still teacher or admin, like the succession.
 
 ### 6. `results_released`
 

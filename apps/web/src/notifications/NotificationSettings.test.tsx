@@ -14,9 +14,9 @@ import { mockFetch, ok, renderWithProviders } from "../test/render";
  * and the Teams link.
  */
 
-const STUDENT = notificationKindsFor("student", false);
-const TEACHER = notificationKindsFor("teacher", false);
-const TEACHER_ON_A_ROSTER = notificationKindsFor("teacher", true);
+const STUDENT = notificationKindsFor("student", false, false);
+const TEACHER = notificationKindsFor("teacher", false, false);
+const TEACHER_ON_A_ROSTER = notificationKindsFor("teacher", true, false);
 
 const ALL_ON = { bell: true, email: true, teams: true };
 const OFF = { available: false, linkedAt: null, teamsName: null, teamsUsername: null };

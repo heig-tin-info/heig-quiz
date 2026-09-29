@@ -6,7 +6,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
@@ -110,6 +110,16 @@ describe("pool_question_added", () => {
     await db.insert(pools).values({ id: lonely, name: "Mine", ownerId: pool.owner });
     await publish(lonely, pool.owner);
     expect(await addedRows(lonely)).toEqual([]);
+  });
+
+  it("never tells a member demoted to student, nor a demoted owner (#287)", async () => {
+    const pool = await sharedPool();
+    await db.update(users).set({ role: "student" }).where(inArray(users.id, [pool.owner, pool.coOwner]));
+    await publish(pool.poolId, pool.contributor);
+    expect(await addedRows(pool.poolId)).toEqual([]);
+    expect(await poolService.poolAudience(db, { id: pool.poolId, ownerId: pool.owner })).toEqual(
+      expect.not.arrayContaining([pool.owner, pool.coOwner]),
+    );
   });
 
   it("folds a bulk publication into ONE entry per recipient that counts every question", async () => {
