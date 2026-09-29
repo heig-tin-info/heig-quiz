@@ -96,7 +96,7 @@ The one red button of the screen, at the end of the filter row, says what comes 
 
 ### When the runner is unavailable
 
-If the runner cannot be reached when the evaluation closes, the code answers are not lost: each one comes back as a proposal worth `0 / 5` with the message **The answer could not be run automatically; it is waiting for a manual grade.** and a **Grading note** that says the runner was unavailable (never a raw code). The banner above the table counts them and offers **Run grading**. Once the runner is back, **Run grading** sends them again and the proposals are replaced by real verdicts. If it will not be back in time, **Grade** each one by hand (a zero included, with its comment). The same happens, with a note saying so, when the runner was saturated.
+If the runner cannot be reached when the evaluation closes, the code answers are not lost: each one comes back as a proposal worth `0 / 5` with the message **The answer could not be run automatically; it is waiting for a manual grade.** and a **Grading note** that says the runner was unavailable (never a raw code). The banner above the table counts them and offers **Run grading**. Once the runner is back, **Run grading** sends them again and the proposals are replaced by real verdicts. If it will not be back in time, open each one and **Adjust** it by hand (a zero included, with its comment). The same happens, with a note saying so, when the runner was saturated.
 
 ### Shortcuts
 

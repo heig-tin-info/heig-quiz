@@ -10,6 +10,7 @@ import {
   needsPass,
   nextSort,
   panelTarget,
+  pendingReason,
   primaryAction,
   rowAction,
   rowVerdict,
@@ -161,6 +162,14 @@ describe("primaryAction", () => {
       kind: "blocked",
       reason: "hidden",
     });
+  });
+});
+
+describe("rowAction", () => {
+  it("offers no Grade on a proposal the runner never settled: a new pass is its remedy", () => {
+    const unrun = row("a", 0, { state: "proposed", confidence: null, details: { reason: "runner_unavailable" } });
+    expect(pendingReason(unrun)).toBe("ungraded");
+    expect(rowAction(unrun)).toBeNull();
   });
 });
 

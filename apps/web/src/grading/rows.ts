@@ -51,7 +51,9 @@ export type PendingReason = "ungraded" | "byHand";
 
 export function pendingReason(entry: GradingEntry): PendingReason | null {
   if (isMissing(entry)) return null;
-  if (entry.grading === null) return "ungraded";
+  // A proposal the runner never settled waits for a new pass, not for a
+  // person: its remedy is the question's Run grading, not a Grade button.
+  if (entry.grading === null || needsPass(entry)) return "ungraded";
   return isProposed(entry) && !canBatch(entry) ? "byHand" : null;
 }
 
