@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { CSP, TEAMS_TAB_CSP } from "./csp.js";
 
 // M1 foundation: the server must start and respond even without a reachable
 // database (healthz "degraded", never a crash), a precondition for the 11 pm
@@ -182,5 +183,33 @@ describe("app (serving the built SPA)", () => {
     const res = await app.inject({ method: "POST", url: "/whatever" });
     expect(res.statusCode).toBe(404);
     expect(res.json()).toEqual({ error: "not_found" });
+  });
+
+  // N-SEC-02 (#319): the application, not Caddy, sends the policy.
+  it("sends the CSP and SAMEORIGIN framing with the SPA, its assets and the API", async () => {
+    for (const url of ["/", "/classrooms/c1", "/app.js", "/app/api/nope", "/healthz"]) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.headers["content-security-policy"], url).toBe(CSP);
+      expect(res.headers["x-frame-options"], url).toBe("SAMEORIGIN");
+    }
+  });
+
+  it("lets Teams frame the tab, and that page only", async () => {
+    const tab = await app.inject({ method: "GET", url: "/teams?x=1" });
+    expect(tab.headers["content-security-policy"]).toBe(TEAMS_TAB_CSP);
+    expect(tab.headers["content-security-policy"]).toMatch(
+      /frame-ancestors [^;]*https:\/\/teams\.microsoft\.com/,
+    );
+    expect(tab.headers["x-frame-options"]).toBeUndefined();
+    const link = await app.inject({ method: "GET", url: "/teams/link" });
+    expect(link.headers["content-security-policy"]).toBe(CSP);
+  });
+
+  it("admits no inline script, no eval and no third party, and falls back to self", () => {
+    const directives = new Map(CSP.split("; ").map((d) => [d.split(" ")[0], d.split(" ").slice(1)]));
+    expect(directives.get("default-src")).toEqual(["'self'"]);
+    expect(directives.get("script-src")).toEqual(["'self'", "'wasm-unsafe-eval'"]);
+    expect(directives.get("object-src")).toEqual(["'none'"]);
+    expect(directives.get("frame-ancestors")).toEqual(["'self'"]);
   });
 });

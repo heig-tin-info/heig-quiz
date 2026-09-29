@@ -77,9 +77,12 @@ The `postgres` service carries the same low-memory tuning as the classroom's
 one vCPU and 2 GB, shared by three services and two PostgreSQL instances.
 
 The Caddy fragment does two things beyond proxying to `localhost:3002`: it
-sets the security headers (HSTS, `nosniff`, referrer policy) and it proxies
+sets the transport headers (HSTS, `nosniff`, referrer policy) and it proxies
 `/app/api/events` with `flush_interval -1`, so the server-sent event stream
 ([ADR-005](../adr/ADR-005-sse-sans-websocket.md)) is never buffered.
+The Content-Security-Policy and `X-Frame-Options` are NOT Caddy's: the
+application sends them (`apps/api/src/csp.ts`), the Teams tab's exception
+included, so staging and production carry the same policy.
 
 ### The `srv` account
 
@@ -438,6 +441,43 @@ deployed image and not `:latest` (main's head, not yet approved):
 ```bash
 docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image <command>
 ```
+
+### The CSP moves from Caddy to the application (#319, once)
+
+The release that brings `apps/api/src/csp.ts` also removes the CSP,
+`X-Frame-Options` and the `@teamsTab` block from `Caddyfile` and
+`Caddyfile.staging`. The fragments are installed by hand, so this is one
+manual step per environment, in this order:
+
+1. **The image first.** Let the merge deploy staging, then check that the
+   application sends the policy:
+   `curl -sI https://quiz.dev.chevallier.io/ | grep -i content-security` shows
+   `default-src 'self'`.
+2. **Then staging's fragment**, as `srv`. Production's checkout is still at
+   the previous release, so the new file comes from `origin/main`:
+
+   ```bash
+   cd /srv/quiz && git fetch -q origin && git show origin/main:Caddyfile.staging > /etc/caddy/conf.d/quiz-staging.caddy \
+     && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
+   ```
+
+3. **Approve production**, check the header as in step 1 on
+   `quiz.chevallier.io`, then install its fragment, as `srv` (the checkout is
+   now at the release):
+
+   ```bash
+   cd /srv/quiz && cp Caddyfile /etc/caddy/conf.d/quiz.caddy \
+     && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
+   ```
+
+Why this order: the new fragment in front of the OLD image leaves the site
+with no CSP at all until the image arrives. The old fragment in front of the
+new image is safe but not finished: every page carries both policies (the
+browser enforces both, and the old one only adds `frame-ancestors`), while
+on `/teams` the old `@teamsTab` block REPLACES the application's policy with
+its framing-only one. Hence the reinstall right after each deploy. A
+rollback to an image older than this release needs the previous fragments
+back (`git show <old sha>:Caddyfile`), for the first reason.
 
 ### Rollback
 

@@ -17,8 +17,8 @@
  *    translation (`./diagnostics.ts`). The marker lines (`// @@lock`) are
  *    noise to a student, so they are HIDDEN with `setHiddenAreas`, which
  *    folds a line away without renumbering the others. That method lives on
- *    the code editor widget of every Monaco this package loads (0.5x, CDN
- *    included) but not in its public typings, so it is feature-checked: a
+ *    the code editor widget of every Monaco this package loads (0.5x, as
+ *    bundled) but not in its public typings, so it is feature-checked: a
  *    Monaco without it shows the markers as greyed, read-only comments and
  *    keeps the right line numbers — the degradation is cosmetic. Stripping
  *    the markers instead would have meant a display-line → source-line map
@@ -50,8 +50,8 @@
  *    ({@link realignLayout}), and the decorations are laid again on them.
  *
  * 5. **The fallback is the stack**: one read-only block per locked segment,
- *    one textarea per region — in jsdom, while Monaco loads, if its CDN is
- *    blocked, or when `monaco={false}`. Every component test drives it.
+ *    one textarea per region — in jsdom, while Monaco loads, if its chunk
+ *    fails to load, or when `monaco={false}`. Every component test drives it.
  */
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";

@@ -18,6 +18,7 @@ import { authPlugin } from "./auth/plugin.js";
 import { requestLog } from "./redact.js";
 import { systemClock } from "./clock.js";
 import type { AppConfig } from "./config.js";
+import { registerSecurityHeaders } from "./csp.js";
 import { createDb } from "./db/client.js";
 import { publish } from "./events.js";
 import { adminPlugin } from "./modules/admin/routes.js";
@@ -94,6 +95,9 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     req.log.error({ err, cause: err.cause }, "request failed");
     return reply.code(status).send({ error: "internal_error" });
   });
+
+  // The CSP and the framing header, on every response (N-SEC-02, `csp.ts`).
+  registerSecurityHeaders(app);
 
   // Roster import: the CSV arrives as-is in req.body.
   app.addContentTypeParser(["text/csv", "text/plain"], { parseAs: "string" }, (_req, body, done) =>
