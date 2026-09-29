@@ -25,9 +25,13 @@ you through the real waiting room and player.
 The evaluations of this classroom, each with its state — draft, scheduled,
 waiting room, running, paused, closed, grading, released. From a row you
 reach its configuration, the live dashboard, the grading panel or the
-results, depending on where it stands.
+results, depending on where it stands. **New evaluation**, at the top right
+while this tab is open, creates one.
 
 ## Archive, rename, delete
+
+A click on the classroom's name renames it; a click on the period (or on
+**Set period** when there is none) opens its dates and its label.
 
 **Archive** puts a finished classroom aside without deleting anything;
 **Restore** brings it back. **Delete** is the other thing entirely: the

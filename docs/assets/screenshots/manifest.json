@@ -72,7 +72,7 @@
       "name": "classroom-evaluations",
       "caption": "A classroom, on its evaluations tab.",
       "persona": "teacher",
-      "path": "/classrooms/797acf2d-b3af-4367-aabd-4f5f6159f1aa",
+      "path": "/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -87,15 +87,15 @@
         "light": "classroom-evaluations-light.png",
         "dark": "classroom-evaluations-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T13:30:51.372Z",
+      "commit": "a6a2f17",
       "base": "http://localhost:3100"
     },
     {
       "name": "classroom-roster",
       "caption": "The same classroom, on its roster tab.",
       "persona": "teacher",
-      "path": "/classrooms/797acf2d-b3af-4367-aabd-4f5f6159f1aa?tab=roster",
+      "path": "/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535?tab=roster",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -110,15 +110,15 @@
         "light": "classroom-roster-light.png",
         "dark": "classroom-roster-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T13:30:51.372Z",
+      "commit": "a6a2f17",
       "base": "http://localhost:3100"
     },
     {
       "name": "roster-import",
       "caption": "Adding students: paste a list or a CSV export.",
       "persona": "teacher",
-      "path": "/classrooms/797acf2d-b3af-4367-aabd-4f5f6159f1aa?tab=roster",
+      "path": "/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535?tab=roster",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -133,15 +133,15 @@
         "light": "roster-import-light.png",
         "dark": "roster-import-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T13:30:51.372Z",
+      "commit": "a6a2f17",
       "base": "http://localhost:3100"
     },
     {
       "name": "help-drawer",
       "caption": "Every screen has a help drawer, opened from the question mark.",
       "persona": "teacher",
-      "path": "/classrooms/797acf2d-b3af-4367-aabd-4f5f6159f1aa",
+      "path": "/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -156,8 +156,8 @@
         "light": "help-drawer-light.png",
         "dark": "help-drawer-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T13:30:51.372Z",
+      "commit": "a6a2f17",
       "base": "http://localhost:3100"
     },
     {

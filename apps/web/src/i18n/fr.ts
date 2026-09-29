@@ -125,6 +125,8 @@ export const fr: Record<keyof Dict, string> = {
   "classrooms.namePlaceholder": "PRG1-2026",
   "classrooms.period": "Libellé de la période",
   "classrooms.setPeriod": "Période…",
+  "classrooms.setPeriodLink": "Définir la période",
+  "classrooms.changePeriod": "Modifier la période : {period}",
   "classrooms.dates": "Dates",
   "classrooms.firstMonth": "Premier mois",
   "classrooms.lastMonth": "Dernier mois",

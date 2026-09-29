@@ -59,11 +59,12 @@ import { PullTemplateDialog, TemplateBehindBadge } from "./templatePull";
  *
  * It is a list and not a grid of cards: what a teacher looks for here is one
  * line — which quiz, in which state, how many students have taken it — and a
- * table reads those four facts in one scan. The single action of the section
- * is "New evaluation"; everything else is per row, in the overflow menu.
+ * table reads those four facts in one scan. The single action of the tab is
+ * "New evaluation", which the classroom's page header carries (it owns the
+ * dialog below); everything else is per row, in the overflow menu.
  */
 
-function NewEvaluationModal({
+export function NewEvaluationModal({
   classroomId,
   onClose,
   onCreated,
@@ -181,14 +182,16 @@ function evaluationRank(
 export function EvaluationList({
   classroomId,
   navigate,
+  onNew,
 }: {
   classroomId: string;
   navigate: (r: Route) => void;
+  /** Opens the page's "New evaluation" dialog, from the empty state. */
+  onNew: () => void;
 }) {
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
-  const [creating, setCreating] = useState(false);
   /** The row whose template pull is being confirmed (F-EVAL-26). */
   const [pulling, setPulling] = useState<string | null>(null);
 
@@ -238,25 +241,11 @@ export function EvaluationList({
   /** Where a row leads (`evaluationHome`, shared with the Activities section). */
   const open = (row: EvaluationSummary) => navigate(evaluationHome(row));
 
-  /**
-   * Secondary in the section header and primary only inside the empty state:
-   * the classroom page's one primary action is "Add students" — a roster is
-   * what unblocks everything else — and a second accent button beside it
-   * would make the squint test ambiguous.
-   */
-  const newButton = (variant: "primary" | "secondary") => (
-    <Button variant={variant} onClick={() => setCreating(true)}>
-      <Plus /> {t("eval.new")}
-    </Button>
-  );
-
   return (
     <section className="space-y-3">
-      {/* No heading: the tab above already names it. "New evaluation" is the
-          one thing this tab is for, so it stands alone, hard right. */}
-      {list.data && list.data.length > 0 ? (
-        <div className="flex justify-end">{newButton("primary")}</div>
-      ) : null}
+      {/* No heading and no button: the tab above names the list, and "New
+          evaluation" sits in the page header, where "Add students" stands on
+          the roster tab — one primary per tab, always in the same place. */}
       {list.isLoading ? (
         <Skeleton className="h-40 w-full" />
       ) : list.isError || !list.data ? (
@@ -269,7 +258,15 @@ export function EvaluationList({
         />
       ) : list.data.length === 0 ? (
         <Card>
-          <EmptyState icon={ClipboardList} title={t("eval.empty.title")} action={newButton("primary")}>
+          <EmptyState
+            icon={ClipboardList}
+            title={t("eval.empty.title")}
+            action={
+              <Button onClick={onNew}>
+                <Plus /> {t("eval.new")}
+              </Button>
+            }
+          >
             {t("eval.empty.body")}
           </EmptyState>
         </Card>
@@ -408,16 +405,6 @@ export function EvaluationList({
           evaluationId={pulling}
           classroomId={classroomId}
           onClose={() => setPulling(null)}
-        />
-      ) : null}
-      {creating ? (
-        <NewEvaluationModal
-          classroomId={classroomId}
-          onClose={() => setCreating(false)}
-          onCreated={(id) => {
-            setCreating(false);
-            navigate({ view: "evaluation", id });
-          }}
         />
       ) : null}
     </section>

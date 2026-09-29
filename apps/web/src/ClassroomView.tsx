@@ -5,6 +5,7 @@ import {
   CalendarRange,
   ClipboardList,
   GraduationCap,
+  Plus,
   Trash2,
   UserPlus,
   Users,
@@ -18,7 +19,7 @@ import { PeriodFields, periodBody, periodInvalid, type PeriodDraft } from "./Cla
 import { useConfirm } from "./confirm";
 import { useT } from "./i18n";
 // WP8: evaluation + dashboard
-import { EvaluationList } from "./evaluation/EvaluationList";
+import { EvaluationList, NewEvaluationModal } from "./evaluation/EvaluationList";
 import { useErrorToast, useToast } from "./notify";
 import { RosterImport } from "./RosterImport";
 import { RosterTable } from "./RosterTable";
@@ -30,6 +31,7 @@ import {
   EditableTitle,
   EmptyState,
   FormDialog,
+  HelpIcon,
   Menu,
   PageHeader,
   ParentLink,
@@ -46,9 +48,10 @@ import { invalidateHint } from "./realtime/hints";
  *
  * Two lists that never answer the same question sat stacked on one page, so
  * a teacher looking for a quiz scrolled past thirty names to find it. The
- * tabs also settle the primary action: on the roster it is "Add students" —
- * an empty roster is the only thing that blocks everything a classroom is
- * for — and on the evaluations it is the list's own "New evaluation".
+ * tabs also settle the primary action, and the page header carries it in the
+ * same slot whichever tab is open: "Add students" on the roster — an empty
+ * roster is the only thing that blocks everything a classroom is for — and
+ * "New evaluation" on the evaluations (#295).
  */
 
 type Tab = "roster" | "evaluations";
@@ -90,9 +93,11 @@ function ClassroomName({ room }: { room: ClassroomDetail }) {
 /**
  * The period: its dates and its label (F-ORG-03, #156), in a dialog.
  *
- * The name renames in the title; the period does not, because an empty one
- * leaves nothing on screen to hover and click. Two fields (the dates with
- * their presets, and the label), so a modal and not a sheet.
+ * It opens from the period beside the title, and from the "Set period" link
+ * that stands there when there is none (#295): an empty period still has
+ * something on screen to click. It does not edit in place like the name,
+ * because it is two fields (the dates with their presets, and the label) —
+ * so a modal, and not a sheet.
  */
 function PeriodModal({ room, onClose }: { room: ClassroomDetail; onClose: () => void }) {
   const t = useT();
@@ -130,6 +135,31 @@ function PeriodModal({ room, onClose }: { room: ClassroomDetail; onClose: () => 
   );
 }
 
+/**
+ * The period beside the title, as the door to its dialog (#295): the label —
+ * or the months, for a dated period left without one — in the title's quiet
+ * 16 px grey, with no pencil, since it is a detail of the name and not a
+ * second title. Same hover as ParentLink. Without a period it reads "Set
+ * period", so there is always something to click.
+ */
+function PeriodLink({ room, onOpen }: { room: ClassroomDetail; onOpen: () => void }) {
+  const t = useT();
+  const value =
+    room.period ||
+    (room.periodStart && room.periodEnd ? `${room.periodStart} – ${room.periodEnd}` : "");
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      // The value is in the name, as the classroom's is in its rename button.
+      aria-label={value ? t("classrooms.changePeriod", { period: value }) : undefined}
+      className="text-base font-normal text-fg-muted transition-colors hover:text-fg hover:underline"
+    >
+      {value || t("classrooms.setPeriodLink")}
+    </button>
+  );
+}
+
 export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();
   const qc = useQueryClient();
@@ -139,6 +169,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
   const me = useMe();
   const [importing, setImporting] = useState(false);
   const [editingPeriod, setEditingPeriod] = useState(false);
+  const [creating, setCreating] = useState(false);
   // "" and not a tab name: which tab opens depends on the roster, which is
   // not loaded yet when this runs. The empty value means "whatever the page
   // decides"; a click always writes a real one.
@@ -227,7 +258,6 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
   return (
     <div className="space-y-6">
       <PageHeader
-        help="classroom"
         eyebrow={
           <ParentLink onClick={() => navigate({ view: "course", id: data.course.id })}>
             {data.course.code} — {data.course.name}
@@ -235,10 +265,13 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
         }
         title={
           <span className="flex flex-wrap items-baseline gap-3">
-            <ClassroomName room={data} />
-            {data.period ? (
-              <span className="text-base font-normal text-fg-muted">{data.period}</span>
-            ) : null}
+            {/* The "?" follows the name, not the period, or it reads as help
+                about the period (#295); PageHeader's `help` would close the title. */}
+            <span className="mr-5 inline-flex items-center">
+              <ClassroomName room={data} />
+              <HelpIcon topic="classroom" coach="page.help" />
+            </span>
+            <PeriodLink room={data} onOpen={() => setEditingPeriod(true)} />
             {data.archivedAt ? <Badge tone="zinc">{t("classrooms.archived")}</Badge> : null}
           </span>
         }
@@ -260,14 +293,17 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
                 <GraduationCap /> {t("roster.join")}
               </Button>
             </Tip>
-            {/* The roster tab's one primary action. On the evaluations tab the
-                list carries its own, and two accent fills would make the
-                squint test ambiguous. */}
+            {/* The open tab's one primary action, always in this slot: the
+                page never shows both, so the squint test has one answer. */}
             {tab === "roster" ? (
               <Button data-coach="classroom.add" onClick={() => setImporting(true)}>
                 <UserPlus /> {t("roster.add")}
               </Button>
-            ) : null}
+            ) : (
+              <Button onClick={() => setCreating(true)}>
+                <Plus /> {t("eval.new")}
+              </Button>
+            )}
             <Menu
               label={t("common.actions")}
               items={[
@@ -359,7 +395,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
           </section>
         ) : (
           // WP8: evaluation + dashboard
-          <EvaluationList classroomId={id} navigate={navigate} />
+          <EvaluationList classroomId={id} navigate={navigate} onNew={() => setCreating(true)} />
         )}
       </div>
 
@@ -367,6 +403,16 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
         <RosterImport classroomId={id} onClose={() => setImporting(false)} />
       ) : null}
       {editingPeriod ? <PeriodModal room={data} onClose={() => setEditingPeriod(false)} /> : null}
+      {creating ? (
+        <NewEvaluationModal
+          classroomId={id}
+          onClose={() => setCreating(false)}
+          onCreated={(evaluation) => {
+            setCreating(false);
+            navigate({ view: "evaluation", id: evaluation });
+          }}
+        />
+      ) : null}
     </div>
   );
 }
