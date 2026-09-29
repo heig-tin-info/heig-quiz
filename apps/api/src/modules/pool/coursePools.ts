@@ -5,7 +5,8 @@ import { poolRoleAllows } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { DomainError } from "../http.js";
-import { coursePools, pools } from "../../db/schema.js";
+import { coursePools, courseStaff, pools } from "../../db/schema.js";
+import { accessRevoked } from "../realtime/bus.js";
 import { questionCount, poolJson, listPools } from "./pools.js";
 
 export async function poolsOfCourse(db: Db, courseId: string) {
@@ -42,6 +43,9 @@ export class PoolLinkForbidden extends DomainError {
  * needs the caller's effective role to be at least `contributor`, because the
  * link makes the whole staff contributors of it. A pool already linked stays
  * when the list keeps it, and unlinking needs nothing more than the course.
+ * An unlink closes the course staff's open streams once committed (#259):
+ * their `pool:` topics were computed at connection, and the reconnection
+ * keeps the pool only for whoever still reaches it another way.
  */
 export async function setCoursePools(
   db: Db,
@@ -68,6 +72,7 @@ export async function setCoursePools(
     ).map((r) => r.poolId),
   );
   const added = reachable.filter((id) => !current.has(id));
+  const unlinked = [...current].some((id) => !reachable.includes(id));
   if (added.length) {
     const refused = (await listPools(db, inArray(pools.id, added), viewer)).filter(
       (p) => !poolRoleAllows(p.role, "contributor"),
@@ -82,5 +87,12 @@ export async function setCoursePools(
         .values(reachable.map((poolId) => ({ courseId, poolId })));
     }
   });
+  if (unlinked) {
+    const staff = await db
+      .select({ userId: courseStaff.userId })
+      .from(courseStaff)
+      .where(eq(courseStaff.courseId, courseId));
+    accessRevoked(staff.map((s) => s.userId));
+  }
   return poolsOfCourse(db, courseId);
 }
