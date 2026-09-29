@@ -17,7 +17,6 @@ A type is a TypeScript package that exports a `QuestionType` object:
 | `Player` | React component for answering. Receives the student configuration, the current answer, an `onChange` callback. |
 | `Review` | React component for review: answer, key, grading, for the teacher and for the student feedback. |
 | `toCanonical` / `fromCanonical` | Conversion from and to the canonical format, if it differs from the raw configuration. |
-| `toDrillGrade(grading)` | Optional. Converts a grading into a recall rating from 1 to 4 for FSRS. |
 | `configVersion`, `migrate(config, from)` | Version of the configuration schema and upgrade on read. Lets a type evolve without an SQL migration, see 5.2. |
 | `generate(ctx)` | Optional. The type's LLM templates for "Generate the answer", "Generate the explanation", "Generate a variant", see 8.2. |
 | `searchText(config)` | Text indexed for the full-text search of the pool. |
@@ -26,6 +25,7 @@ Rules:
 
 - A type has no tables. Its configuration and its answers live in JSONB in the core tables.
 - A type makes no direct network call. It goes through `ctx.runner` and `ctx.llm`.
+- A type has no drill hook. The drill (F-DRILL) takes its correctness from `grade`'s points — all of them right, none (or fewer than none) wrong, the rest partial — and the time from the review, and the drill types are one list, `DRILL_TYPES` in `@quiz/domain` (ADR-041 §3–4, which dropped the former `toDrillGrade`).
 - The phase 1 types live in the monorepo under `packages/qt-*`, with two entry points `server` and `client`, see 5.2. Loading is static, through two registries.
 
 ## 4.2 Canonical format
@@ -401,4 +401,4 @@ config:
 
 **Review**: the student's board with each card marked right or wrong and, when the key is published, where each card was expected.
 
-**Dashboard and more**: the live cell shows "placed/total", figures only. Not pollable, no drill rating, no `aggregate` (the hook would only see opaque ids).
+**Dashboard and more**: the live cell shows "placed/total", figures only. Not pollable, no `aggregate` (the hook would only see opaque ids).

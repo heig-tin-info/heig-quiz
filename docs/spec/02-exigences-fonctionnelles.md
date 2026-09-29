@@ -189,11 +189,12 @@ What a user is told, and where (ADR-030 and its addendum of #198). A notificatio
 
 | Id | Requirement | Phase | Prio |
 |---|---|---|---|
-| F-DRILL-01 | Every question a student meets in an evaluation becomes a drill card. The teacher may also open a whole pool to drill for a classroom. | P2 | S |
-| F-DRILL-02 | Scheduling follows FSRS. The student rates their answer, or the automatic grading provides the recall rating. | P2 | S |
-| F-DRILL-03 | The student has a drill tab with the session of the day or of the week, of N questions, duration configured by the teacher or the admin. | P2 | S |
-| F-DRILL-04 | Drill is opt-in. The teacher sees aggregates per classroom and per tag, never the individual detail by default. | P2 | S |
+| F-DRILL-01 | A question a student meets in an evaluation becomes a drill card: at the **release of the results** of an exam, never before, and at the **hand-in** of an exercise. Only when the evaluation allows it (`settings.allowDrill`: on by default for an exercise; off by default for an exam, the teacher choosing at creation), the classroom has the drill enabled (F-DRILL-04), and the question is of a drill type — `mcq`, `short` (not an `llm` matcher), `cloze`, `categorize` in v1; `code` and `codeimage` later, on a computer, through the browser runner. A poll creates no card. The card enters as new. Opening a whole pool to drill for a classroom is still open (06, question 28). ADR-041 §1–3. | P2 | S |
+| F-DRILL-02 | Scheduling follows FSRS-5, default weights, target retention 0.9. The recall rating is computed, never asked: wrong or empty → 1, partly right → 2, right in more than 1.5 × the reference time → 2, right in at most 0.6 × → 4, otherwise right → 3. The time is the active time, the clock paused while the tab is hidden, measured by the server. The reference is the median time of the correct answers on the same device class (`coarse` / `fine`, recorded on each review) once there are 10, else the student's own previous time, else an estimate per type. ADR-041 §4–5. | P2 | S |
+| F-DRILL-03 | The student has a drill tab with the session of the day: the due cards first, the nearest to being forgotten ahead, then new cards capped per day, until a time budget of about ten minutes (configured by the teacher or the admin, F-ADMIN-03) counted from the questions' reference times; courses and tags interleaved. No reminders and no streaks: a "today's drill is available" badge on the home and on the centre slot of the bottom bar. ADR-041 §6. | P2 | S |
+| F-DRILL-04 | The teacher enables the drill per classroom; its students are then in by default and may opt out. The teacher sees each student's individual activity — questions seen, reviews, sessions — and its progression over time (the recall rate per window, ADR-041 §8), besides the aggregates per classroom and per tag. The drill tab tells the student that their teacher sees this activity. Amended by ADR-041, which replaced "never the individual detail by default". | P2 | S |
 | F-DRILL-05 | The student sees per tag a mastery indicator derived from the FSRS retention, and their strengths and weaknesses. | P2 | S |
+| F-DRILL-06 | A question edited after its card exists keeps the card's FSRS state, unless its answer key changed: then the card is reset to new. ADR-041 §7. | P2 | S |
 
 ## F-ADMIN Administration
 

@@ -43,8 +43,8 @@
 | Id | Requirement |
 |---|---|
 | N-DATA-01 | Legal basis: processing required by the teacher's teaching duty. Data is stored on a server in Europe, a Hetzner VM. |
-| N-DATA-02 | Data processed: edu-ID identity, classroom membership, answers, gradings, grades, attempt events, drill cards. |
-| N-DATA-03 | Retention: the data of a classroom or an evaluation is kept until its deletion by the teacher. Deletion is effective and irreversible, including in backups beyond 30 days. |
+| N-DATA-02 | Data processed: edu-ID identity, classroom membership, answers, gradings, grades, attempt events, drill cards and drill reviews (rating, active time, device class). |
+| N-DATA-03 | Retention: the data of a classroom or an evaluation is kept until its deletion by the teacher. Deletion is effective and irreversible, including in backups beyond 30 days. A student's drill data (cards and reviews) is kept **five years**: a review is deleted five years after it was made, a card five years after its last review, or its creation if never reviewed (ADR-041 §8). |
 | N-DATA-04 | A student may view and export all their data from their profile, in JSON format. |
 | N-DATA-05 | Sending to an LLM provider: anonymised content, without name, email, identifier, nor classroom metadata. The teacher is informed of the provider in use. The provider is configured in no-retention mode when the option exists. |
 | N-DATA-06 | Question statistics in the pool are aggregated and cannot be traced back to a student. |
