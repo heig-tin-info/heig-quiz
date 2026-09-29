@@ -15,7 +15,7 @@ import { Button, Field, FormError, IconButton, NotePanel, Sheet, Textarea } from
 import { RowMarks } from "./GradingTable";
 import { GradingHistory } from "./GradingHistory";
 import { gradingStateLabel, machineReason, sourceLabel, whoOf } from "./labels";
-import { isMissing, type PanelTarget } from "./rows";
+import { isMissing, rowAction, type PanelTarget } from "./rows";
 import { useGradingInvalidate } from "./useGradingInvalidate";
 import type { GradingItem } from "./useGradingData";
 import { ExpectedGlyph, VerdictGlyph } from "./VerdictGlyph";
@@ -222,7 +222,8 @@ function EntrySheet({
             <Button variant="secondary" disabled={path === null} onClick={() => onAdjust(true)}>
               <PencilLine /> {t("grading.override")}
             </Button>
-            {grading?.state === "proposed" ? (
+            {/* A placeholder (an essay at 0) is graded, never validated unread. */}
+            {rowAction(entry) === "validate" ? (
               <Button loading={validating} onClick={() => onValidate(entry)}>
                 <Check /> {t("grading.validate")}
               </Button>

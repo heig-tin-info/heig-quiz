@@ -55,6 +55,19 @@ export function pendingReason(entry: GradingEntry): PendingReason | null {
   return isProposed(entry) && !canBatch(entry) ? "byHand" : null;
 }
 
+/**
+ * What a row offers besides opening it: `validate` a proposal the batch
+ * could take as it stands, `grade` a 0-point placeholder that waits for a
+ * person (an essay) — never validated at zero without being read — or
+ * nothing (a validated or ungraded answer; Adjust stays in the panel).
+ */
+export type RowAction = "validate" | "grade";
+
+export function rowAction(entry: GradingEntry): RowAction | null {
+  if (canBatch(entry)) return "validate";
+  return pendingReason(entry) === "byHand" ? "grade" : null;
+}
+
 export function rowVerdict(entry: GradingEntry): RowVerdict {
   if (isMissing(entry)) return "wrong";
   if (pendingReason(entry) !== null) return "pending";

@@ -39,7 +39,8 @@ the grading it replaces stays in the history, never lost.
 
 The red button validates every proposal the table shows in one click, then
 becomes **Next question**, and **Results** after the last one. An essay
-proposed at 0 points is never validated in a batch.
+proposed at 0 points is never validated, in a batch or alone: its row
+offers **Grade**, which opens it on the adjustment form.
 
 **Re-grade**, on the expected row, runs the automatic grading of the
 question again on every attempt, against the frozen version or a newer

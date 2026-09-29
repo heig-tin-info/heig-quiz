@@ -356,7 +356,7 @@ export const studentAttemptView = (): AttemptView => ({
     const stored = studentAnswers.get(studentItem(n));
     return {
       id: studentItem(n),
-      position: n,
+      position: n - 1,
       points: n === 4 ? 5 : n === 5 || n === 7 ? 3 : n === 3 ? 1 : 2,
       type:
         n === 1

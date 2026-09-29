@@ -43,7 +43,9 @@ résultat ; la correction remplacée reste dans l'historique, jamais perdue.
 
 Le bouton rouge valide en un clic toutes les propositions que montre le
 tableau, puis devient **Question suivante**, et **Résultats** après la
-dernière. Un texte libre proposé à 0 point n'est jamais validé en lot.
+dernière. Un texte libre proposé à 0 point n'est jamais validé, ni en lot
+ni seul : sa ligne propose **Noter**, qui l'ouvre sur le formulaire de
+modification.
 
 **Re-corriger**, sur la ligne attendue, relance la correction automatique
 de la question sur toutes les tentatives, contre la version figée ou une

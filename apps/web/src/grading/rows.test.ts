@@ -11,6 +11,7 @@ import {
   nextSort,
   panelTarget,
   primaryAction,
+  rowAction,
   rowVerdict,
   shuffled,
   sortRows,
@@ -180,6 +181,20 @@ describe("needsPass", () => {
     expect(needsPass(essay)).toBe(false);
     expect(needsPass(row("b", 1, { state: "proposed", confidence: "high" }))).toBe(false);
     expect(needsPass(row("c", 2, { state: "validated" }))).toBe(false);
+  });
+});
+
+describe("rowAction", () => {
+  it("validates what the batch would take, and sends a placeholder to be graded", () => {
+    expect(rowAction(row("a", 1, { state: "proposed", confidence: "high" }))).toBe("validate");
+    expect(rowAction(row("a", 0, { state: "proposed", confidence: "low" }))).toBe("validate");
+    const essay = row("a", 0, { state: "proposed", confidence: null, details: { reason: "manual" } });
+    expect(rowAction(essay)).toBe("grade");
+  });
+
+  it("offers nothing on a validated or an ungraded answer", () => {
+    expect(rowAction(row("a", 2, { state: "validated" }))).toBeNull();
+    expect(rowAction(makeEntry({ grading: null }))).toBeNull();
   });
 });
 

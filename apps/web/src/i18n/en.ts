@@ -2325,6 +2325,7 @@ export const en = {
   "grading.steps.toValidate": "{n} to validate",
   "grading.steps.done": "All validated",
   "grading.validate": "Validate",
+  "grading.grade": "Grade",
   "grading.validate.failed": "Could not validate this grading.",
   "grading.override": "Adjust",
   "grading.override.title": "Adjust this grading",

@@ -10,7 +10,7 @@ import { useT } from "../i18n";
 import { Badge, Button, cx, IconButton, pressable, TableHead, T, Tip, type Column } from "../ui";
 import type { SortColumn } from "./columns";
 import { confidenceLabelShort, whoOf } from "./labels";
-import { entryKey, EXPECTED, isMissing, isProposed, type Sort } from "./rows";
+import { entryKey, EXPECTED, isMissing, rowAction, type Sort } from "./rows";
 import { ExpectedGlyph, VerdictGlyph } from "./VerdictGlyph";
 
 /**
@@ -67,7 +67,8 @@ export interface GradingTableProps {
  * shrinks to its content, so there is never a wide empty column at the end;
  * past the width of the page the table scrolls sideways under its sticky
  * first columns. A row waiting for a decision wears no fill of its own: its
- * glyph and its visible Validate say it, and the one accent of the screen
+ * glyph and its visible action say it — Validate for a proposal, Grade for a
+ * placeholder to read and grade by hand — and the one accent of the screen
  * stays the batch.
  */
 export function GradingTable(props: GradingTableProps) {
@@ -230,7 +231,7 @@ function AnswerRow({
   const t = useT();
   const key = entryKey(entry);
   const current = selected === key;
-  const proposed = isProposed(entry);
+  const action = rowAction(entry);
   const cell = cx(T.td, CELL, current && SELECTED);
   const grading = entry.grading;
   return (
@@ -296,23 +297,33 @@ function AnswerRow({
             "inline-flex items-center gap-1",
             // Hidden, not removed: the column keeps its width, so a row
             // hovered never pushes its neighbours sideways.
-            !proposed && !current && "invisible group-hover:visible group-focus-within:visible",
+            action === null && !current && "invisible group-hover:visible group-focus-within:visible",
           )}
           onClick={(e) => e.stopPropagation()}
         >
-          {proposed ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              loading={validating && current}
-              onClick={() => onValidate(entry)}
-            >
-              <Check /> {t("grading.validate")}
+          {action === "grade" ? (
+            // A 0-point placeholder (an essay) is never validated unread: its
+            // one action opens it on the grading form.
+            <Button size="sm" variant="secondary" onClick={() => onOpen(key, true)}>
+              <PencilLine /> {t("grading.grade")}
             </Button>
-          ) : null}
-          <Button size="sm" variant="ghost" onClick={() => onOpen(key, true)}>
-            {t("grading.override")}
-          </Button>
+          ) : (
+            <>
+              {action === "validate" ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  loading={validating && current}
+                  onClick={() => onValidate(entry)}
+                >
+                  <Check /> {t("grading.validate")}
+                </Button>
+              ) : null}
+              <Button size="sm" variant="ghost" onClick={() => onOpen(key, true)}>
+                {t("grading.override")}
+              </Button>
+            </>
+          )}
         </span>
       </td>
     </tr>

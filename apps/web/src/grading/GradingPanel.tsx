@@ -23,15 +23,16 @@ import { RegradeSheet } from "./RegradeSheet";
 import {
   ANY,
   byName,
+  canBatch,
   entryKey,
   EXPECTED,
   filterRows,
-  isProposed,
   moveSelection,
   needsPass,
   nextSort,
   panelTarget,
   primaryAction,
+  rowAction,
   shuffled,
   sortRows,
   type Sort,
@@ -128,18 +129,25 @@ export function GradingPanel({
     },
     [items.length],
   );
+  // A placeholder to grade by hand (an essay) opens on the grading form:
+  // reading it and giving it points is the only thing to do with it.
+  const toGrade = (key: string) => {
+    const entry = entries.find((e) => entryKey(e) === key);
+    return entry !== undefined && rowAction(entry) === "grade";
+  };
   const open = (key: string, adjust = false) => {
     setSelected(key);
-    setPanel({ key, adjust: adjust && key !== EXPECTED });
+    setPanel({ key, adjust: key !== EXPECTED && (adjust || toGrade(key)) });
   };
   const move = (delta: number) => {
     const next = moveSelection(rows, selected, lastIndex.current, delta);
     setSelected(next);
-    if (panel) setPanel({ key: next, adjust: false });
+    if (panel) setPanel({ key: next, adjust: toGrade(next) });
   };
   const selectedEntry = entries.find((e) => entryKey(e) === selected) ?? null;
+  // V takes what the batch would take, one row at a time: never a placeholder.
   const validateOne = (entry: (typeof entries)[number]) => {
-    if (entry.grading && isProposed(entry)) actions.validate.mutate(entry.grading.id);
+    if (entry.grading && canBatch(entry)) actions.validate.mutate(entry.grading.id);
   };
 
   useGradingKeys({

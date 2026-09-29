@@ -1223,7 +1223,9 @@ One question's answers as a table (`src/grading/`, origin
   the key in `info` without a fill; a 16 px tick box filled `success` or
   `danger`, dashed `success` for a correct choice left out.
 - **No fill for a row waiting for a decision** (owner decision): its glyph
-  and its visible Validate say it. The selected row is `surface-2` with a
+  and its visible action say it — Validate for a proposal the batch would
+  take, **Grade** for a 0-point placeholder (an essay), which opens the
+  panel on the adjustment form and is never validated unread (nor by V). The selected row is `surface-2` with a
   3 px inset bar on its left (`fg`; `info` on the key's row). Adjust stays
   invisible on a validated row until hover, focus or selection — hidden,
   not removed, so the column keeps its width.

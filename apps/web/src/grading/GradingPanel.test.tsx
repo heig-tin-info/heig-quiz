@@ -186,12 +186,57 @@ describe("GradingPanel — the one primary action", () => {
     mockFetch(routes([placeholder]));
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
     await table();
-    // The row keeps its own Validate; the primary one is the disabled one.
-    expect(
-      screen.getAllByRole("button", { name: /^Validate$/ }).some((b) => b.hasAttribute("disabled")),
-    ).toBe(true);
+    // The primary Validate is disabled, and the row offers Grade, not Validate.
+    expect(screen.getByRole("button", { name: /^Validate$/ })).toBeDisabled();
+    expect(within(rowOf("a1")).queryByRole("button", { name: /^Validate$/ })).toBeNull();
+    expect(within(rowOf("a1")).getByRole("button", { name: "Grade" })).toBeInTheDocument();
     // Its verdict is not judged yet.
     expect(within(rowOf("a1")).getByRole("img", { name: "To grade by hand" })).toBeInTheDocument();
+  });
+});
+
+const placeholder = (attemptId: string) =>
+  makeEntry({
+    attemptId,
+    grading: makeGrading({
+      id: `g-${attemptId}`,
+      attemptId,
+      points: 0,
+      state: "proposed",
+      confidence: null,
+      details: { reason: "manual" },
+    }),
+  });
+
+describe("GradingPanel — an essay to grade by hand", () => {
+  it("opens on the grading form, with no Validate in the panel", async () => {
+    mockFetch(routes([placeholder("a1")]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+    await userEvent.click(within(rowOf("a1")).getByRole("button", { name: "Grade" }));
+    const panel = await screen.findByRole("dialog");
+    expect(within(panel).getByRole("spinbutton", { name: /Points/ })).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Validate" })).toBeNull();
+  });
+
+  it("opens on the form from a click on the row too", async () => {
+    mockFetch(routes([placeholder("a1")]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+    await userEvent.click(rowOf("a1"));
+    const panel = await screen.findByRole("dialog");
+    expect(within(panel).getByRole("spinbutton", { name: /Points/ })).toBeInTheDocument();
+  });
+
+  it("is never validated by V", async () => {
+    const { calls } = mockFetch(routes([placeholder("a1")]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(rowOf("a1")).toHaveAttribute("aria-current", "true");
+    await userEvent.keyboard("v");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(calls.some((c) => c.url.endsWith("/validate"))).toBe(false);
   });
 });
 

@@ -362,3 +362,12 @@ describe("the mock answers what the contracts describe", () => {
     expect(registered.filter((r) => !classified.has(r))).toEqual([]);
   });
 });
+
+describe("the mock numbers what the API numbers", () => {
+  // `evaluation_items.position` is 0-based on the wire and every screen adds
+  // one; a mock counting from 1 titled question 1 "2." in the re-grade sheet.
+  it.each(evaluations.map((e) => [e.id] as const))("items of %s count from 0", async (id) => {
+    const body = (await get(`/app/api/evaluations/${id}`)) as { items: { position: number }[] };
+    expect(body.items.map((i) => i.position)).toEqual(body.items.map((_, i) => i));
+  });
+});

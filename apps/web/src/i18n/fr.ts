@@ -2315,6 +2315,7 @@ export const fr: Record<keyof Dict, string> = {
   "grading.steps.toValidate": "{n} à valider",
   "grading.steps.done": "Tout validé",
   "grading.validate": "Valider",
+  "grading.grade": "Noter",
   "grading.validate.failed": "Cette correction n'a pas pu être validée.",
   "grading.override": "Modifier",
   "grading.override.title": "Modifier cette correction",

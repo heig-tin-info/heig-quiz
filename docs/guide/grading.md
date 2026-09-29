@@ -72,7 +72,7 @@ A code question shows the points earned, then one row per test case: **Case**, *
 
 ## Acting on an answer
 
-**Validate** takes a proposal as it stands. It appears on the rows still waiting for you, and at the foot of the open answer; automatic gradings are already validated.
+**Validate** takes a proposal as it stands. It appears on the rows still waiting for you, and at the foot of the open answer; automatic gradings are already validated. A proposal worth 0 points that no grader stood behind — an essay waiting to be read, a program the runner never ran — is never validated as it stands: its row offers **Grade** instead, which opens the answer on the adjustment form, and **V** leaves it alone.
 
 <figure markdown="span">
   ![Adjusting a grading: points and a comment](../assets/screenshots/grading-override-light.png#only-light)
@@ -96,7 +96,7 @@ The one red button of the screen, at the end of the filter row, says what comes 
 
 ### When the runner is unavailable
 
-If the runner cannot be reached when the evaluation closes, the code answers are not lost: each one comes back as a proposal worth `0 / 5` with the message **The answer could not be run automatically; it is waiting for a manual grade.** and a **Grading note** that says the runner was unavailable (never a raw code). The banner above the table counts them and offers **Run grading**. Once the runner is back, **Run grading** sends them again and the proposals are replaced by real verdicts. If it will not be back in time, **Adjust** each one by hand, or accept the zero with **Validate**. The same happens, with a note saying so, when the runner was saturated.
+If the runner cannot be reached when the evaluation closes, the code answers are not lost: each one comes back as a proposal worth `0 / 5` with the message **The answer could not be run automatically; it is waiting for a manual grade.** and a **Grading note** that says the runner was unavailable (never a raw code). The banner above the table counts them and offers **Run grading**. Once the runner is back, **Run grading** sends them again and the proposals are replaced by real verdicts. If it will not be back in time, **Grade** each one by hand (a zero included, with its comment). The same happens, with a note saying so, when the runner was saturated.
 
 ### Shortcuts
 
