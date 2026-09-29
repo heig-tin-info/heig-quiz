@@ -70,9 +70,14 @@ tracked attempt is already out of the population).
 The counting is the type's own: `mcq`'s `aggregate` hook (ADR-033), called
 through the registry as the results module calls it, over the stored
 payloads — a choice ticked twice in one answer counts once. "Picked nothing"
-is the type's `isAnswered` predicate, the one the grid and the student list
-use. `details` are not passed: the key comes from the latest version's
-config, identical across those versions by construction.
+is the class debrief's rule: a skipped question, or a payload that
+`answeredBy` (the `live` module's reading of the type's `isAnswered`) says
+holds nothing. A payload stored under an older schema that no longer parses
+holds something by that rule, so it is never "no answer"; it counts under
+the options the type's `aggregate` still recognises in it, or under none —
+in one bucket at most, never two. `details` are not passed: the key comes
+from the latest version's config, identical across those versions by
+construction.
 
 Each share is a whole percent of `n`, rounded on its own. A single-choice
 question may therefore sum to 99 or 101; a largest-remainder rounding would
@@ -80,6 +85,11 @@ fix that for single choice only and hide how each number was obtained.
 
 A **multiple-choice** question lets an answer pick several options: its
 shares add up to more than 100 %, and the panel says so in one sentence.
+The mode is not part of the version rule (the owner's rule is the options'
+text and key), so a single-choice latest version may count answers given
+to a multiple-choice one with the same options: `multiple` is true when ANY
+counted version was multiple-choice, so the sentence shows whenever the
+shares may pass 100.
 
 ### 3. What is shown, and when
 
@@ -101,9 +111,10 @@ loader (ADR-013): its readers may read the question itself. No student path
 is touched: invariant 4 is not involved.
 
 The panel's fourth block, **Choices picked**: one row per option — letter,
-text, share, a bar — the key marked by a filled letter AND the word
-"Correct" (never colour alone), then **No answer**. The bars are `info`: a
-share is a datum, not a verdict. Under the bars, the basis ("Share of 12 answers, on the
+text, share, a bar — the key marked by the green "correct answer" badge of
+the results' class debrief, in words, then **No answer**. The bars are the
+debrief's `SegmentedBar`, in a new `info` tone: a share is a datum, not a
+verdict. Under the bars, the basis ("Share of 12 answers, on the
 versions whose choices are these ones", and the multiple-choice sentence),
 then one sentence on how to read it: a wrong choice nobody picks distracts
 no one; a wrong choice picked more often than the right one points to a
@@ -121,10 +132,12 @@ block will show.
   `choices` for its tally; the counting goes through the type's `aggregate`.
   No contract change: a second type that wants this analysis would earn a
   hook then, not before.
-- `poolQuestionStats` selects the question's type and the item's version in
-  its one query of counted answers; `distractorsOf` receives those rows,
-  loads the published versions of the mcq questions (one query) and, for the
-  questions that reach ten matching answers only, their payloads (one query).
+- `poolQuestionStats` selects the question's type, the item's version, the
+  `skipped` flag and — for an mcq only, so no other type's payload travels —
+  the stored payload in its one query of counted answers, which already
+  joins `answers`; `distractorsOf` receives those rows and loads the
+  published versions of the mcq questions (one query). The threshold is
+  `optionShares`' alone.
 
 ## Consequences
 

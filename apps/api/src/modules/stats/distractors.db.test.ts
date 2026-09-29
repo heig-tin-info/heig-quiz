@@ -95,13 +95,14 @@ async function evaluationOf(seed: Seeded, questionId: string, mode: "exam" | "ex
 /**
  * One finished attempt per `picks` entry, each by a student of `users`: the
  * picked choices stored as the answer, on screen (`null`: no answer row at
- * all, which only an attempt of before ADR-039 counts; `"skip"`: skipped),
- * graded and validated.
+ * all, which only an attempt of before ADR-039 counts; `"skip"`: skipped
+ * with a choice left in it; `{ raw }`: a payload stored as is), graded and
+ * validated.
  */
 async function sit(
   target: { evaluationId: string; itemId: string },
   users: readonly string[],
-  picks: readonly (number[] | null | "skip")[],
+  picks: readonly (number[] | null | "skip" | { raw: unknown })[],
   o: { startedAt?: Date } = {},
 ) {
   for (const [i, pick] of picks.entries()) {
@@ -121,7 +122,7 @@ async function sit(
         id: randomUUID(),
         attemptId,
         itemId: target.itemId,
-        payload: { selected: pick === "skip" ? [0] : pick },
+        payload: pick === "skip" ? { selected: [0] } : Array.isArray(pick) ? { selected: pick } : pick.raw,
         skipped: pick === "skip",
         firstShownAt: BEFORE,
       });
@@ -193,6 +194,25 @@ describe("the distractor analysis (ADR-042)", () => {
     expect(shares?.none).toBe(27);
   });
 
+  it("puts a payload of an older schema in one bucket at most, as the class debrief does", async () => {
+    const seed = await seedLive(db, { students: 10, questions: 0 });
+    const q = await mcqQuestion(seed, mcq(SINGLE));
+    await sit(await evaluationOf(seed, q), seed.studentIds, [
+      [0], [0], [0], [0], [0], [0], [0],
+      // Not the current schema, yet it holds something: answered, so never "no answer" —
+      // counted under the option the type recognises in it, or under none at all.
+      { raw: { selected: [0, "x"] } },
+      { raw: { choice: 1 } },
+      [],
+    ]);
+
+    expect(await distractorsOf(seed, q)).toMatchObject({
+      n: 10,
+      options: [{ share: 80 }, { share: 0 }, { share: 0 }],
+      none: 10,
+    });
+  });
+
   it("lets a multiple-choice question's shares add up past 100", async () => {
     const seed = await seedLive(db, { students: 10, questions: 0 });
     const choices = [
@@ -209,6 +229,16 @@ describe("the distractor analysis (ADR-042)", () => {
     expect(shares?.multiple).toBe(true);
     // A choice ticked twice in one answer counts once.
     expect(shares?.options.map((o) => o.share)).toEqual([90, 80, 20]);
+  });
+
+  it("says several choices may be ticked when any counted version allowed it", async () => {
+    const seed = await seedLive(db, { students: 10, questions: 0 });
+    const q = await mcqQuestion(seed, mcq(SINGLE, { mode: "multiple" }));
+    await sit(await evaluationOf(seed, q), seed.studentIds, [[0, 1], [0], [0], [0], [0], [0], [0], [0], [1], [2]]);
+    // v2 is single-choice with the same options: v1's answers still count, and may hold two.
+    await publish(seed, q, mcq(SINGLE));
+
+    expect(await distractorsOf(seed, q)).toMatchObject({ n: 10, multiple: true, options: [{ share: 80 }, { share: 20 }, { share: 10 }] });
   });
 
   it("reads only the versions whose options are the latest's", async () => {
