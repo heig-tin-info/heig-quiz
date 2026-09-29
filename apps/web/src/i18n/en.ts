@@ -855,6 +855,7 @@ export const en = {
   "qt.mcq.e.choices": "Choices",
   "qt.mcq.e.choicesHint": "Tick the correct answers.",
   "qt.mcq.e.choiceText": "Text of choice",
+  "qt.mcq.e.issueAt": "{field} — {message}",
   "qt.mcq.e.correctChoice": "Choice {letter} is correct",
   "qt.mcq.e.addChoice": "Add a choice",
   "qt.mcq.e.removeChoice": "Remove choice",

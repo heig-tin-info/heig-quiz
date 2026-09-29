@@ -576,6 +576,8 @@ const scenes = [
     } },
 
   { name: "editor-mcq", role: "teacher", path: "/questions/q2" },
+  // A choice emptied: the autosave's issue, on the field and named under the list.
+  { name: "editor-mcq-issues", role: "teacher", path: "/questions/q2", settle: 3000, act: async (p) => { await p.getByRole("textbox", { name: "Text of choice B" }).fill(""); await p.waitForTimeout(2500); } },
   { name: "editor-code", role: "teacher", path: "/questions/q1", settle: 5000 },
   { name: "editor-short", role: "teacher", path: "/questions/q3" },
   // Issue #97: every field of an accepted answer labelled, and the sentence
