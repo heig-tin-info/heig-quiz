@@ -29,17 +29,7 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  * `impersonating`: the session is an admin acting as this persona, read-only (ADR-034).
  * `reviewed`: the student already did today's drill, the empty day (`mock/drill.ts`).
  */
-export const FLAG_NAMES = [
-  "empty",
-  "fail",
-  "slow",
-  "many",
-  "mytest",
-  "negative",
-  "impersonating",
-  "seb",
-  "reviewed",
-] as const;
+export const FLAG_NAMES = ["empty", "fail", "slow", "many", "mytest", "negative", "impersonating", "seb", "reviewed"] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;
 for (const name of FLAG_NAMES) {

@@ -16,11 +16,9 @@ import type { DrillClassroom } from "@quiz/contracts";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
+import { drillRootKey } from "../queryKeys";
 import { Card, isoDateParts, SectionHeading, SettingRow, Switch } from "../ui";
 import { setOptOut } from "./api";
-
-/** Every drill query of the student: the classrooms, and the session they feed. */
-const DRILL_ROOT = ["student", "drill"] as const;
 
 export function DrillClassrooms({ rooms }: { rooms: readonly DrillClassroom[] }) {
   const t = useT();
@@ -33,7 +31,7 @@ export function DrillClassrooms({ rooms }: { rooms: readonly DrillClassroom[] })
     mutationFn: ({ room, optedOut }: { room: DrillClassroom; optedOut: boolean }) =>
       setOptOut(room.classroomId, optedOut),
     onSuccess: async (room) => {
-      await qc.invalidateQueries({ queryKey: DRILL_ROOT });
+      await qc.invalidateQueries({ queryKey: drillRootKey });
       toast(
         t(room.optedOutAt === null ? "drill.optIn.done" : "drill.optOut.done", {
           name: room.classroomName,
@@ -41,7 +39,7 @@ export function DrillClassrooms({ rooms }: { rooms: readonly DrillClassroom[] })
         "success",
       );
     },
-    onError: toastError("drill.optOut.failed"),
+    onError: toastError("drill.failed"),
   });
 
   const toggle = async (room: DrillClassroom, inDrill: boolean) => {

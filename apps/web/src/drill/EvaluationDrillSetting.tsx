@@ -17,6 +17,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Info, Trash2 } from "lucide-react";
 
 import type { Evaluation, EvaluationDrill } from "@quiz/contracts";
+import { allowDrillWritable } from "@quiz/domain";
 
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
@@ -33,7 +34,8 @@ export function EvaluationDrillSetting({ evaluation }: { evaluation: Evaluation 
   const toastError = useErrorToast();
   const key = evaluationDrillKey(evaluation.id);
   const drill = useQuery({ queryKey: key, queryFn: () => fetchEvaluationDrill(evaluation.id) });
-  const released = evaluation.state === "released";
+  // The one rule of the API's writer (`@quiz/domain`): until the release.
+  const writable = allowDrillWritable(evaluation.mode, evaluation.state);
 
   const settle = async (data: EvaluationDrill) => {
     qc.setQueryData(key, data);
@@ -42,21 +44,21 @@ export function EvaluationDrillSetting({ evaluation }: { evaluation: Evaluation 
   const allow = useMutation({
     mutationFn: (allowDrill: boolean) => setEvaluationDrill(evaluation.id, allowDrill),
     onSuccess: settle,
-    onError: toastError("eval.drill.failed"),
+    onError: toastError("drill.failed"),
   });
   const remove = useMutation({
     mutationFn: () => removeEvaluationCards(evaluation.id),
     onSuccess: async ({ removed }) => {
       await settle({ allowDrill: evaluation.allowDrill, cards: 0 });
-      toast(t("eval.drill.removed", { n: removed }), "success");
+      toast(removed === 1 ? t("eval.drill.removed.one") : t("eval.drill.removed", { n: removed }), "success");
     },
-    onError: toastError("eval.drill.failed"),
+    onError: toastError("drill.failed"),
   });
 
   const cards = drill.data?.cards ?? 0;
   const askRemove = async () => {
     const ok = await confirm({
-      title: t("eval.drill.remove.title", { n: cards }),
+      title: cards === 1 ? t("eval.drill.remove.title.one") : t("eval.drill.remove.title", { n: cards }),
       message: t("eval.drill.remove.body"),
       confirmLabel: t("eval.drill.remove"),
       danger: true,
@@ -69,11 +71,11 @@ export function EvaluationDrillSetting({ evaluation }: { evaluation: Evaluation 
       <div className="pb-3">
         <SettingRow
           title={t("eval.drill")}
-          desc={released ? t("eval.drill.locked") : t("eval.drill.desc")}
+          desc={writable ? t("eval.drill.desc") : t("eval.drill.locked")}
         >
           <Switch
             checked={evaluation.allowDrill}
-            disabled={released || allow.isPending}
+            disabled={!writable || allow.isPending}
             label={t("eval.drill")}
             onChange={(next) => allow.mutate(next)}
           />

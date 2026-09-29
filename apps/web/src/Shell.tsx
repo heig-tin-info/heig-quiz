@@ -53,7 +53,8 @@ import {
 import { coursesKey, poolsKey } from "./queryKeys";
 import { BottomNav } from "./student/BottomNav";
 import { bottomNavShown } from "./student/bottomNavSlots";
-import { useDrillAvailability } from "./drill/api";
+import { useDrillAvailability, type DrillAvailability } from "./drill/api";
+import { AvailableDot } from "./drill/AvailableDot";
 
 /**
  * Application frame: a 240 px sidebar on desktop (navigation, the teacher's
@@ -183,7 +184,7 @@ function Nav({
   /** The teacher UI is on (false in student view and for students). */
   teacherUi: boolean;
   /** The student's drill: whether its row is drawn, and today's badge (#317). */
-  drill: { shown: boolean; available: boolean };
+  drill: DrillAvailability;
   /**
    * The three-state disclosure of the pools section, held by the frame: the
    * desktop sidebar and the mobile drawer both draw this navigation, and two
@@ -304,14 +305,7 @@ function Nav({
             label={t("nav.drill")}
             active={section === "drill"}
             onClick={() => go({ view: "drill" })}
-            trailing={
-              drill.available ? (
-                <>
-                  <span aria-hidden className="size-2 shrink-0 rounded-full bg-accent" />
-                  <span className="sr-only">{t("drill.available")}</span>
-                </>
-              ) : null
-            }
+            trailing={drill.available ? <AvailableDot /> : null}
           />
         ) : null}
         {/* Settings is not a section of the product: it lives in the account
@@ -593,7 +587,7 @@ export function Shell({
               teacherUi={teacherUi}
               poolNav={poolNav}
               courseNav={courseNav}
-          drill={drill}
+              drill={drill}
               onNavigate={() => setDrawer(false)}
             />
             <div className="border-t border-line p-2">

@@ -10,6 +10,7 @@ import {
   DrillAnswerBody,
   DrillClassroomBody,
   DrillOptOutBody,
+  DrillSessionQuery,
   DrillShownBody,
   EvaluationDrillBody,
   type DrillCardsRemoved,
@@ -40,15 +41,25 @@ export function useDrillDevice(): DrillDeviceClass {
 // --- Student ---------------------------------------------------------------
 
 export const fetchDrillSession = (device: DrillDeviceClass) =>
-  api<DrillSession>(`/app/api/drill/session?device=${device}`);
+  api<DrillSession>(
+    `/app/api/drill/session?${new URLSearchParams(DrillSessionQuery.parse({ device }))}`,
+  );
 
 export const fetchDrillClassrooms = () => api<DrillClassroom[]>("/app/api/drill/classrooms");
 
 export const serveCard = (cardId: string) =>
   api<DrillServed>(`/app/api/drill/cards/${cardId}/serve`, { method: "POST" });
 
+/**
+ * `keepalive`, like the attempt's journal: the hidden report leaves as the
+ * tab goes away, and a hidden report LOST would leave the interval open on
+ * the server, crediting the time off screen up to the idle cap.
+ */
 export const reportShown = (cardId: string, shown: boolean) =>
-  api<void>(`/app/api/drill/cards/${cardId}/shown`, send("POST", DrillShownBody, { shown }));
+  api<void>(`/app/api/drill/cards/${cardId}/shown`, {
+    ...send("POST", DrillShownBody, { shown }),
+    keepalive: true,
+  });
 
 export const answerCard = (cardId: string, answer: unknown, deviceClass: DrillDeviceClass) =>
   api<DrillReviewResult>(
@@ -89,12 +100,20 @@ export function useDrillSession(device: DrillDeviceClass, enabled = true) {
  * anything, for the "today's drill is available" badge. No count, no streak
  * (06, question 28): only whether there is something today.
  */
-export function useDrillAvailability(enabled: boolean): { shown: boolean; available: boolean } {
+export interface DrillAvailability {
+  shown: boolean;
+  available: boolean;
+  /** Today's session, while it holds something; null otherwise. */
+  session: DrillSession | null;
+}
+
+export function useDrillAvailability(enabled: boolean): DrillAvailability {
   const device = useDrillDevice();
   const rooms = useDrillClassrooms(enabled);
   const shown = enabled && (rooms.data?.length ?? 0) > 0;
-  const session = useDrillSession(device, shown);
-  return { shown, available: shown && (session.data?.cards.length ?? 0) > 0 };
+  const today = useDrillSession(device, shown).data;
+  const session = shown && today && today.cards.length > 0 ? today : null;
+  return { shown, available: session !== null, session };
 }
 
 // --- Teacher ---------------------------------------------------------------

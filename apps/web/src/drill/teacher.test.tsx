@@ -25,13 +25,16 @@ describe("the classroom's drill switch", () => {
     const { calls } = mockFetch({
       "PUT /app/api/classrooms/r1/drill": ok({ enabled: true, enabledAt: new Date().toISOString(), cardsCreated: 42 }),
     });
-    renderWithProviders(<ClassroomDrillSetting room={makeClassroomDetail()} />);
+    const { rerender } = renderWithProviders(<ClassroomDrillSetting room={makeClassroomDetail()} />);
 
     const toggle = screen.getByRole("switch", { name: "Drill" });
     expect(toggle).toHaveAttribute("aria-checked", "false");
     await user.click(toggle);
 
-    expect(await screen.findByText("Drill on: 42 cards created from past evaluations.")).toBeVisible();
+    expect(await screen.findByText("Drill on.")).toBeVisible();
+    // The classroom, read again, has the drill on: the row keeps the count.
+    rerender(<ClassroomDrillSetting room={makeClassroomDetail({ drillEnabled: true })} />);
+    expect(screen.getByText("42 cards created from past evaluations.")).toBeVisible();
     expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ enabled: true });
   });
 

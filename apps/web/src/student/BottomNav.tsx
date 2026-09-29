@@ -1,6 +1,8 @@
 import { CalendarRange, Dumbbell, School, Trophy, UserRound } from "lucide-react";
 import type { MouseEvent } from "react";
 
+import type { DrillAvailability } from "../drill/api";
+import { AvailableDot } from "../drill/AvailableDot";
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import { routeToPath, type Route } from "../router";
@@ -27,7 +29,7 @@ export function BottomNav({
 }: {
   route: Route;
   navigate: (r: Route) => void;
-  drill: { shown: boolean; available: boolean };
+  drill: DrillAvailability;
 }) {
   const t = useT();
   const active = activeSlot(route, window.location.hash);
@@ -74,10 +76,13 @@ export function BottomNav({
                     )}
                   >
                     <Icon aria-hidden className="size-5" />
-                    {badge ? <AvailableDot /> : null}
+                    {badge ? (
+                      <span className="absolute right-2.5 top-0.5">
+                        <AvailableDot />
+                      </span>
+                    ) : null}
                   </span>
                   <span className="max-w-full truncate px-1">{t(label)}</span>
-                  {badge ? <span className="sr-only">{t("drill.available")}</span> : null}
                 </a>
               </li>
             );
@@ -85,21 +90,6 @@ export function BottomNav({
         </ul>
       </nav>
     </>
-  );
-}
-
-/**
- * "Today's drill is available" (ADR-041 §6): a dot, never a count — a
- * number of cards left is a streak by another name (06, question 28).
- * The words are the caller's, for a screen reader.
- */
-export function AvailableDot({ className = "right-2.5 top-0.5" }: { className?: string }) {
-  return (
-    <span
-      aria-hidden
-      data-testid="drill-available"
-      className={cx("absolute size-2 rounded-full bg-accent ring-2 ring-canvas", className)}
-    />
   );
 }
 

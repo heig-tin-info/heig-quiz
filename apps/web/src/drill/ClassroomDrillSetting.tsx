@@ -29,26 +29,23 @@ export function ClassroomDrillSetting({ room }: { room: ClassroomDetail }) {
     onSuccess: async (settings) => {
       setCreated(settings.enabled ? settings.cardsCreated : null);
       await qc.invalidateQueries({ queryKey: classroomKey(room.id) });
-      toast(
-        settings.enabled
-          ? t("classroom.drill.on", { n: settings.cardsCreated })
-          : t("classroom.drill.off"),
-        "success",
-      );
+      toast(t(settings.enabled ? "classroom.drill.on" : "classroom.drill.off"), "success");
     },
-    onError: toastError("classroom.drill.failed"),
+    onError: toastError("drill.failed"),
   });
 
   return (
     <Card className="px-4">
       <SettingRow
-        title={t("classroom.drill")}
+        title={t("nav.drill")}
         desc={
           <>
             {t("classroom.drill.desc")}
             {room.drillEnabled && created !== null ? (
               <span className="mt-1 block font-medium text-fg">
-                {t("classroom.drill.created", { n: created })}
+                {created === 1
+                  ? t("classroom.drill.created.one")
+                  : t("classroom.drill.created", { n: created })}
               </span>
             ) : null}
           </>
@@ -57,7 +54,7 @@ export function ClassroomDrillSetting({ room }: { room: ClassroomDetail }) {
         <Switch
           checked={room.drillEnabled}
           disabled={change.isPending}
-          label={t("classroom.drill")}
+          label={t("nav.drill")}
           onChange={(enabled) => change.mutate(enabled)}
         />
       </SettingRow>

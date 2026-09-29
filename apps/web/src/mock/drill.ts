@@ -21,6 +21,7 @@ import type {
   DrillSession,
   EvaluationDrill,
 } from "@quiz/contracts";
+import { allowDrillWritable } from "@quiz/domain";
 
 import { evaluationOr404, evaluations, toEvaluation, type MockEvaluation } from "./evaluation";
 import { courses, roomOr404, rooms } from "./org";
@@ -223,7 +224,7 @@ on("GET", "/app/api/evaluations/:id/drill", (m) => evaluationDrill(evaluationOr4
 
 on("PUT", "/app/api/evaluations/:id/drill", (m, body): EvaluationDrill => {
   const e = evaluationOr404(m.groups!.id!);
-  if (e.mode === "poll" || e.state === "released") {
+  if (!allowDrillWritable(e.mode, e.state)) {
     throw new MockError(409, "The drill setting no longer changes once the results are released");
   }
   e.settings["allowDrill"] = body.allowDrill === true;

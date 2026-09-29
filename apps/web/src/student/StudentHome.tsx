@@ -35,7 +35,7 @@ import type {
 } from "@quiz/contracts";
 
 import { api } from "../api";
-import { useDrillAvailability, useDrillDevice, useDrillSession } from "../drill/api";
+import { useDrillAvailability } from "../drill/api";
 import { sessionCourses, sessionLine } from "../drill/format";
 import { feedbackLink } from "../grading";
 import { formatDuration, useT, type TFunction } from "../i18n";
@@ -382,9 +382,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
 
   // ADR-041 §6 (#317): today's drill, while it holds something — the home's
   // "today's drill is available", beside what else is open now.
-  const drillAvailability = useDrillAvailability(true);
-  const drillSession = useDrillSession(useDrillDevice(), drillAvailability.shown);
-  const drill = drillAvailability.available ? (drillSession.data ?? null) : null;
+  const drill = useDrillAvailability(true).session;
 
   const polls = home.data?.polls ?? [];
   const open = home.data?.open ?? [];

@@ -15,27 +15,25 @@
  * one card at a time is all there is.
  */
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarCheck, Dumbbell, PartyPopper } from "lucide-react";
+import { CalendarCheck, Dumbbell } from "lucide-react";
 import { useState } from "react";
 
 import type { DrillSessionCard } from "@quiz/contracts";
 
 import { useT } from "../i18n";
+import { drillRootKey } from "../queryKeys";
 import type { Route } from "../router";
-import {
-  Button,
-  Card,
-  EmptyState,
-  isoDateParts,
-  PageHeader,
-  QueryError,
-  SegmentedBar,
-  Skeleton,
-} from "../ui";
+import { Button, Card, EmptyState, isoDateParts, PageHeader, QueryError, Skeleton } from "../ui";
 import { useDrillClassrooms, useDrillDevice, useDrillSession } from "./api";
 import { DrillClassrooms } from "./DrillClassrooms";
-import { DrillRun, type DrillOutcome } from "./DrillRun";
+import { DrillRun, DrillSummary, type DrillOutcome } from "./DrillRun";
 import { sessionCourses, sessionLine } from "./format";
+
+/** Where the page is: the day as the server has it, a session running, or one just finished. */
+type Step =
+  | { step: "day" }
+  | { step: "run"; cards: readonly DrillSessionCard[] }
+  | { step: "done"; outcomes: DrillOutcome[] };
 
 export function DrillPage({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
@@ -44,25 +42,28 @@ export function DrillPage({ navigate }: { navigate: (r: Route) => void }) {
   const rooms = useDrillClassrooms();
   const hasRooms = (rooms.data?.length ?? 0) > 0;
   const session = useDrillSession(device, hasRooms);
-  const [run, setRun] = useState<readonly DrillSessionCard[] | null>(null);
-  const [done, setDone] = useState<DrillOutcome[] | null>(null);
+  const [state, setState] = useState<Step>({ step: "day" });
 
-  if (run) {
+  if (state.step === "run") {
     return (
       <DrillRun
-        cards={run}
+        cards={state.cards}
         device={device}
         onFinish={(outcomes) => {
-          setRun(null);
-          setDone(outcomes);
+          setState({ step: "done", outcomes });
           // The badge and the empty day read the session again.
-          void qc.invalidateQueries({ queryKey: ["student", "drill"] });
+          void qc.invalidateQueries({ queryKey: drillRootKey });
         }}
       />
     );
   }
 
   const day = () => {
+    // The end of the session is the page's own state: the refetch it
+    // started must not blank it out.
+    if (state.step === "done") {
+      return <DrillSummary outcomes={state.outcomes} onHome={() => navigate({ view: "home" })} />;
+    }
     if (rooms.isLoading || (hasRooms && session.isLoading)) {
       return <Skeleton className="h-32 w-full" />;
     }
@@ -86,7 +87,6 @@ export function DrillPage({ navigate }: { navigate: (r: Route) => void }) {
         </Card>
       );
     }
-    if (done) return <Summary outcomes={done} onHome={() => navigate({ view: "home" })} />;
     const today = session.data!;
     if (today.cards.length === 0) {
       return (
@@ -106,59 +106,16 @@ export function DrillPage({ navigate }: { navigate: (r: Route) => void }) {
           <p className="mt-0.5 text-sm text-fg-muted">{sessionCourses(today.cards)}</p>
           <p className="mt-1 text-[13px] text-fg-faint">{sessionLine(today, t)}</p>
         </div>
-        <Button onClick={() => setRun(today.cards)}>{t("drill.start")}</Button>
+        <Button onClick={() => setState({ step: "run", cards: today.cards })}>{t("drill.start")}</Button>
       </Card>
     );
   };
 
   return (
     <div className="space-y-8">
-      <PageHeader title={t("drill.title")} description={t("drill.subtitle")} />
+      <PageHeader title={t("nav.drill")} description={t("drill.subtitle")} />
       {day()}
       {hasRooms ? <DrillClassrooms rooms={rooms.data!} /> : null}
     </div>
-  );
-}
-
-/** The end of today's session: how it went, and the way back. */
-function Summary({ outcomes, onHome }: { outcomes: DrillOutcome[]; onHome: () => void }) {
-  const t = useT();
-  const reviews = outcomes.filter((o) => o !== "skipped");
-  const count = (c: "right" | "partial" | "wrong") => reviews.filter((r) => r.correctness === c).length;
-  return (
-    <Card className="space-y-5 p-5 sm:p-6">
-      <div className="flex items-start gap-3">
-        <PartyPopper aria-hidden className="mt-0.5 size-5 shrink-0 text-fg-faint" />
-        <div className="min-w-0 flex-1">
-          <p className="text-[17px] font-bold leading-snug tracking-tight">{t("drill.done.title")}</p>
-          <p className="mt-0.5 text-sm text-fg-muted">
-            {reviews.length === 1
-              ? t("drill.done.body.one")
-              : t("drill.done.body", { n: reviews.length })}
-          </p>
-        </div>
-      </div>
-      {reviews.length > 0 ? (
-        <div className="space-y-2">
-          <SegmentedBar
-            parts={[
-              { tone: "success", value: count("right"), label: t("drill.result.right") },
-              { tone: "partial", value: count("partial"), label: t("drill.result.partial") },
-              { tone: "danger", value: count("wrong"), label: t("drill.result.wrong") },
-            ]}
-          />
-          <p className="text-[13px] tabular-nums text-fg-muted">
-            {t("drill.done.counts", {
-              right: count("right"),
-              partial: count("partial"),
-              wrong: count("wrong"),
-            })}
-          </p>
-        </div>
-      ) : null}
-      <div className="flex justify-end">
-        <Button onClick={onHome}>{t("drill.done.home")}</Button>
-      </div>
-    </Card>
   );
 }

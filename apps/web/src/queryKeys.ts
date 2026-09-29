@@ -178,10 +178,12 @@ export const resultsByQuestionKey = (evaluationId: string) =>
 
 export const studentHomeKey = ["student", "home"] as const;
 export const studentClassroomsKey = ["student", "classrooms"] as const;
-/** The classrooms whose drill the student is in or opted out of (ADR-041). */
-export const drillClassroomsKey = ["student", "drill", "classrooms"] as const;
+/** Every drill read of the student (ADR-041): what an opt-out or a finished session invalidates. */
+export const drillRootKey = ["student", "drill"] as const;
+/** The classrooms whose drill the student is in or opted out of. */
+export const drillClassroomsKey = [...drillRootKey, "classrooms"] as const;
 /** Today's drill session, for one device class (its reference times are that class's). */
-export const drillSessionKey = (device: string) => ["student", "drill", "session", device] as const;
+export const drillSessionKey = (device: string) => [...drillRootKey, "session", device] as const;
 /**
  * One card served (`POST /drill/cards/:id/serve`). Outside the `student`
  * root on purpose: a hint must not re-serve a card the student already

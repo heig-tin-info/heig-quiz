@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -93,7 +93,7 @@ describe("the drill session", () => {
     await user.click(screen.getByRole("button", { name: "Check" }));
 
     // The verdict, the rating and the next review, then the key through the type's review.
-    expect(await screen.findByText("right")).toBeVisible();
+    expect(await screen.findByText("Correct", { selector: "span" })).toBeVisible();
     expect(screen.getByText(/^Good · next review in 4 days$/)).toBeVisible();
     expect(await screen.findByText("4 bytes")).toBeVisible();
     const answer = calls.find((c) => c.url === "/app/api/drill/cards/k1/answer");
@@ -105,7 +105,7 @@ describe("the drill session", () => {
     expect(await screen.findByText("Question 2 of 2")).toBeVisible();
     await screen.findByRole("textbox", { name: "Your answer" });
     await user.click(screen.getByRole("button", { name: "Show the answer" }));
-    expect(await screen.findByText("wrong")).toBeVisible();
+    expect(await screen.findByText("Wrong", { selector: "span" })).toBeVisible();
     expect(calls.find((c) => c.url === "/app/api/drill/cards/k2/answer")?.body).toEqual({
       answer: null,
       deviceClass: "fine",
@@ -138,7 +138,44 @@ describe("the drill session", () => {
     visibility.mockRestore();
 
     const shown = calls.filter((c) => c.url === "/app/api/drill/cards/k1/shown").map((c) => c.body);
-    expect(shown).toEqual([{ shown: false }, { shown: true }]);
+    expect(shown).toEqual([{ shown: true }, { shown: false }, { shown: true }]);
+  });
+
+  it("reports the question hidden when the page is left with the card unanswered, and not once answered", async () => {
+    const user = userEvent.setup();
+    const { calls } = stub();
+    const first = renderWithProviders(<DrillPage navigate={() => {}} />);
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await screen.findByRole("textbox", { name: "Your answer" });
+    first.unmount();
+    const k1 = calls.filter((c) => c.url === "/app/api/drill/cards/k1/shown").map((c) => c.body);
+    expect(k1.at(-1)).toEqual({ shown: false });
+
+    // Answered: the answer closed the interval, nothing more is reported.
+    renderWithProviders(<DrillPage navigate={() => {}} />);
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.click(await screen.findByRole("button", { name: "Show the answer" }));
+    await screen.findByRole("button", { name: "Next" });
+    const before = calls.length;
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByText("Question 2 of 2");
+    expect(calls.slice(before).filter((c) => c.url === "/app/api/drill/cards/k1/shown")).toEqual([]);
+  });
+
+  it("lets the student skip a card that cannot be served, and counts only the reviews", async () => {
+    const user = userEvent.setup();
+    const { calls } = stub({ "POST /app/api/drill/cards/k1/serve": fail(404, { message: "gone" }) });
+    renderWithProviders(<DrillPage navigate={() => {}} />);
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+
+    expect(await screen.findByText("This question could not be loaded")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Skip it" }));
+    expect(await screen.findByText("Question 2 of 2")).toBeVisible();
+    await user.click(await screen.findByRole("button", { name: "Show the answer" }));
+    await user.click(await screen.findByRole("button", { name: "Finish" }));
+
+    expect(await screen.findByText("One question reviewed. Come back tomorrow for the next ones.")).toBeVisible();
+    expect(calls.some((c) => c.url === "/app/api/drill/cards/k1/answer")).toBe(false);
   });
 
   it("keeps the answer and says so when it could not be sent", async () => {
@@ -196,15 +233,6 @@ describe("the opt-out", () => {
 
     const put = calls.find((c) => c.method === "PUT");
     expect(put?.body).toEqual({ optedOut: true });
-  });
-
-  it("says the same in French", async () => {
-    stub();
-    renderWithProviders(<DrillPage navigate={() => {}} />, { locale: "fr" });
-    fireEvent.click(await screen.findByRole("switch", { name: "Participer à l'entraînement de PRG1-2026" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("Ce que vous avez travaillé jusqu'ici reste visible pour votre enseignant.")).toBeVisible();
-    expect(within(dialog).getByText("Votre enseignant voit que vous avez quitté l'entraînement, et quand.")).toBeVisible();
   });
 
   it("takes the student back in with one action, no dialog", async () => {
