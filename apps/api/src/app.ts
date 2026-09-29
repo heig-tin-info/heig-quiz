@@ -25,6 +25,7 @@ import { adminPlugin } from "./modules/admin/routes.js";
 import { adminGuard } from "./modules/guards.js";
 import { avatarPlugin } from "./modules/avatar.js";
 import { drillPlugin } from "./modules/drill/routes.js";
+import { registerDrillHooks } from "./modules/drill/service.js";
 import { evaluationPlugin } from "./modules/evaluation/routes.js";
 import { gradingPlugin } from "./modules/grading/routes.js";
 import { registerGradingJobs } from "./modules/grading/jobs.js";
@@ -176,6 +177,9 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(resultsPlugin);
   await app.register(statsPlugin);
   await app.register(drillPlugin);
+  // The drill listens to the release and to the end of an attempt (ADR-041
+  // §1): wired here, once, never by an import's side effect.
+  registerDrillHooks();
   await app.register(notificationsPlugin, { config });
   await app.register(mcpPlugin, { config });
 

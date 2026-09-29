@@ -20,14 +20,21 @@ import { onAttemptsEnded } from "../live/service.js";
 import { onResultsReleased } from "../results/service.js";
 import { cardsAtHandIn, cardsAtRelease } from "./lifecycle.js";
 
-// ADR-041 §1: an exam enters the drill at the release of its results, an
-// exercise at the hand-in. `results` and `live` call their listeners after
-// the commit and log one that throws; neither imports this module, the
-// dependency goes one way. Registered once, when this module is first
-// loaded: `app.ts` loads it through the drill routes and the ticker's
-// `drill.purge` task.
-onResultsReleased(cardsAtRelease);
-onAttemptsEnded(cardsAtHandIn);
+/**
+ * ADR-041 §1: an exam enters the drill at the release of its results, an
+ * exercise at the hand-in. `results` and `live` call their listeners after
+ * the commit and log one that throws; neither imports this module, the
+ * dependency goes one way.
+ *
+ * Called EXPLICITLY where the application is built (`buildApp`), and by the
+ * database test helper so that every db test runs the production wiring —
+ * never as a side effect of an import. Idempotent: a listener is a set
+ * member, so a second call adds nothing.
+ */
+export function registerDrillHooks(): void {
+  onResultsReleased(cardsAtRelease);
+  onAttemptsEnded(cardsAtHandIn);
+}
 
 export {
   DRILL_RETENTION,

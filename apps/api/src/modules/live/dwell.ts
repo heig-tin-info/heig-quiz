@@ -54,6 +54,11 @@ export function onAttemptsEnded(listener: EndedListener): void {
   endedListeners.add(listener);
 }
 
+/** Whether `listener` is registered: what the wiring test of `buildApp` asserts. */
+export function hasAttemptsEndedListener(listener: EndedListener): boolean {
+  return endedListeners.has(listener);
+}
+
 /** The attempts of an evaluation still being taken. */
 export function openAttemptsOf(evaluationId: string): SQL {
   return and(eq(attempts.evaluationId, evaluationId), eq(attempts.state, "in_progress"))!;
