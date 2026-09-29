@@ -1,16 +1,20 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PoolDetail, QuestionPage } from "@quiz/contracts";
 
-import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
+import { fail, mockFetch, ok, renderWithProviders, type RecordedCall } from "../test/render";
 import { PoolView } from "./PoolView";
 
 /*
  * The pool screen against a stubbed API: what the table shows, what the
  * filter bar sends, the three actions each row carries, and the bulk bar
  * that only exists once something is ticked.
+ *
+ * A click on a row SHOWS the question (a pane beside the list on a wide
+ * window, in its place on a narrow one); Enter, a double-click and the
+ * pencil open the editor; Space is kept for the favourite star to come.
  *
  * The category tree is NOT part of this screen any more: it lives in the app
  * sidebar and hands its selection over through the `category` query-string
@@ -81,6 +85,26 @@ const PAGE: QuestionPage = {
   total: 2,
 };
 
+/** The student view of either question, as `POST /questions/:id/preview` builds it. */
+const VIEW = {
+  type: "mcq",
+  student: {
+    prompt: "Que vaut un pointeur non initialisé ?",
+    choices: [
+      { id: 0, text: "NULL" },
+      { id: 1, text: "Une valeur indéterminée" },
+    ],
+    mode: "single",
+  },
+  itemPoints: 2,
+};
+
+const previewCalls = (calls: RecordedCall[]) =>
+  calls.filter((c) => c.method === "POST" && c.url.endsWith("/preview"));
+
+/** The table row that carries a question's name. */
+const rowOf = (name: string) => within(screen.getByRole("table")).getByText(name).closest("tr")!;
+
 const EMPTY_PAGE: QuestionPage = { items: [], nextCursor: null, total: 0 };
 
 function routes(over: Record<string, ReturnType<typeof ok>> = {}) {
@@ -90,6 +114,12 @@ function routes(over: Record<string, ReturnType<typeof ok>> = {}) {
     ...over,
   };
 }
+
+const previews = () =>
+  routes({
+    "POST /app/api/questions/q1/preview": ok(VIEW),
+    "POST /app/api/questions/q2/preview": ok(VIEW),
+  });
 
 describe("PoolView", () => {
   it("lists the questions across the full width, without a category tree", async () => {
@@ -204,15 +234,163 @@ describe("PoolView", () => {
     );
   });
 
-  it("opens the editor when the row is clicked", async () => {
+  it("shows the question on a row click, and opens the editor only on Enter", async () => {
     const user = userEvent.setup();
     const navigate = vi.fn();
-    mockFetch(routes());
+    const { calls } = mockFetch(previews());
+    renderWithProviders(<PoolView id="p1" navigate={navigate} />);
+    // A narrow window (jsdom has no width): the preview takes the list's place.
+    await user.click(await screen.findByText("ptr-arith-01"));
+    expect(await screen.findByText("Que vaut un pointeur non initialisé ?")).toBeVisible();
+    expect(navigate).not.toHaveBeenCalled();
+    // The latest PUBLISHED version, and a word about the draft that moved since.
+    expect(previewCalls(calls)).toEqual([
+      expect.objectContaining({ url: "/app/api/questions/q1/preview", body: { source: 3 } }),
+    ]);
+    expect(screen.getByText(/Its draft has unpublished changes/)).toBeVisible();
+    expect(screen.queryByText("ptr-null-check")).toBeNull();
+
+    // Back returns to the list, the focus on the row it came from.
+    expect(screen.getByRole("button", { name: "Back to the list" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(rowOf("ptr-arith-01")).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q1" });
+  });
+
+  it("previews the draft of a question never published, and opens the editor from there", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    const { calls } = mockFetch(previews());
     renderWithProviders(<PoolView id="p1" navigate={navigate} />);
     await user.click(await screen.findByText("ptr-null-check"));
+    expect(await screen.findByText("Never published — this is its draft")).toBeVisible();
+    expect(previewCalls(calls)[0]).toMatchObject({ body: { source: "draft" } });
+    // Same tab: the anchor keeps its href for a middle-click, a plain click navigates.
+    const link = screen.getByRole("link", { name: /Open in the editor/ });
+    expect(link).not.toHaveAttribute("target");
+    await user.click(link);
     expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q2" });
-    // The inspection panel is gone with the click that used to open it.
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("opens the editor on a double-click", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    mockFetch(previews());
+    renderWithProviders(<PoolView id="p1" navigate={navigate} />);
+    // Two quick clicks on the tick box are two ticks, not a way into the editor.
+    await user.dblClick(await screen.findByLabelText("Select ptr-null-check"));
+    expect(navigate).not.toHaveBeenCalled();
+    await user.dblClick(screen.getByText("ptr-null-check"));
+    expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q2" });
+  });
+
+  it("keeps Space for later: it neither opens nor ticks a row", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    const { calls } = mockFetch(previews());
+    renderWithProviders(<PoolView id="p1" navigate={navigate} />);
+    await screen.findByText("ptr-arith-01");
+    rowOf("ptr-arith-01").focus();
+    await user.keyboard(" ");
+    expect(navigate).not.toHaveBeenCalled();
+    expect(previewCalls(calls)).toEqual([]);
+    expect(screen.getByLabelText("Select ptr-arith-01")).not.toBeChecked();
+    // The tick box keeps its own Space.
+    screen.getByLabelText("Select ptr-arith-01").focus();
+    await user.keyboard(" ");
+    expect(screen.getByLabelText("Select ptr-arith-01")).toBeChecked();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("walks the rows with the arrows in the order they are drawn, and stops at the last", async () => {
+    const user = userEvent.setup();
+    mockFetch(previews());
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    // One row in the Tab order.
+    expect(rowOf("ptr-arith-01")).toHaveAttribute("tabindex", "0");
+    expect(rowOf("ptr-null-check")).toHaveAttribute("tabindex", "-1");
+    rowOf("ptr-arith-01").focus();
+    await user.keyboard("{ArrowDown}");
+    expect(rowOf("ptr-null-check")).toHaveFocus();
+    expect(rowOf("ptr-null-check")).toHaveAttribute("tabindex", "0");
+    await user.keyboard("{ArrowDown}");
+    expect(rowOf("ptr-null-check")).toHaveFocus();
+    await user.keyboard("{ArrowUp}");
+    expect(rowOf("ptr-arith-01")).toHaveFocus();
+  });
+
+  it("walks the cards section by section, not in the order the server sent", async () => {
+    const user = userEvent.setup();
+    // By category, the tree's order puts Pointeurs (q2) before its child
+    // Arithmétique (q1): the reverse of the page.
+    localStorage.setItem("quiz-pool-view", "cards");
+    localStorage.setItem("quiz-pool-group", "category");
+    mockFetch(previews());
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    const cardOf = (name: string) =>
+      screen.getByText(name, { selector: "span" }).closest<HTMLElement>("[tabindex]")!;
+    await screen.findByText("ptr-null-check");
+    expect(cardOf("ptr-null-check")).toHaveAttribute("tabindex", "0");
+    cardOf("ptr-null-check").focus();
+    await user.keyboard("{ArrowDown}");
+    expect(cardOf("ptr-arith-01")).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(cardOf("ptr-null-check")).toHaveFocus();
+  });
+
+  describe("on a wide window", () => {
+    const matchMedia = window.matchMedia;
+    beforeEach(() => {
+      vi.stubGlobal("matchMedia", (query: string) => ({
+        ...matchMedia(query),
+        matches: query === "(min-width: 1280px)",
+      }));
+    });
+    afterEach(() => {
+      vi.stubGlobal("matchMedia", matchMedia);
+    });
+
+    it("docks the preview beside the list, follows the arrows, and closes on Escape", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch(previews());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-arith-01");
+      // No empty pane before the first look.
+      expect(screen.queryByRole("complementary")).toBeNull();
+
+      await user.click(screen.getByText("ptr-arith-01"));
+      const pane = await screen.findByRole("complementary", { name: "Preview of ptr-arith-01" });
+      expect(await within(pane).findByText("Que vaut un pointeur non initialisé ?")).toBeVisible();
+      // The list stays, the row marked as the one shown.
+      expect(rowOf("ptr-arith-01")).toHaveAttribute("aria-current", "true");
+
+      await user.keyboard("{ArrowDown}");
+      expect(rowOf("ptr-null-check")).toHaveFocus();
+      expect(
+        await screen.findByRole("complementary", { name: "Preview of ptr-null-check" }),
+      ).toBeVisible();
+      expect(rowOf("ptr-arith-01")).not.toHaveAttribute("aria-current");
+      expect(previewCalls(calls).map((c) => c.url)).toEqual([
+        "/app/api/questions/q1/preview",
+        "/app/api/questions/q2/preview",
+      ]);
+
+      await user.keyboard("{Escape}");
+      expect(screen.queryByRole("complementary")).toBeNull();
+      expect(rowOf("ptr-null-check")).toHaveFocus();
+    });
+
+    it("closes with its X and hands the focus back to the row", async () => {
+      const user = userEvent.setup();
+      mockFetch(previews());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await user.click(await screen.findByText("ptr-arith-01"));
+      await user.click(await screen.findByRole("button", { name: "Close the preview" }));
+      expect(screen.queryByRole("complementary")).toBeNull();
+      expect(rowOf("ptr-arith-01")).toHaveFocus();
+    });
   });
 
   it("carries edit, duplicate and delete on every row", async () => {
@@ -223,7 +401,7 @@ describe("PoolView", () => {
     );
     renderWithProviders(<PoolView id="p1" navigate={navigate} />);
     await screen.findByText("ptr-arith-01");
-    // The pencil opens the editor, like the row itself.
+    // The pencil opens the editor, like Enter on the row.
     await user.click(screen.getByRole("button", { name: "Edit ptr-arith-01" }));
     expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q1" });
     // The copy button copies, and does not navigate anywhere on its own.

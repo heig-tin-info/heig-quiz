@@ -811,6 +811,11 @@ export const en = {
   "question.try.invalid": "Finish the draft before trying it.",
   "question.preview": "Student preview",
   "question.previewFailed": "The preview could not be built.",
+  "question.preview.version": "{type} · version {n}",
+  "question.preview.draftBody": "Publish it from the editor to use it in an evaluation.",
+  "question.preview.newerDraft": "Its draft has unpublished changes; this is the published version.",
+  "question.preview.close": "Close the preview",
+  "question.preview.region": "Preview of {name}",
   // The full-page student preview, opened in a tab of its own
   // (`/questions/:id/preview`).
   "question.preview.pageTitle": "Student preview",

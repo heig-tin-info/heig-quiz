@@ -127,7 +127,8 @@ Two pairs stay below their target, on purpose:
 - Rhythm: tight inside a group (4–8), comfortable inside a card (16–20),
   generous between sections (32) and between the page header and its body
   (24). A screen that is all 16 px gaps has made no decision.
-- Content column: 1120 px max, 24 px side gutter (16 on phones).
+- Content column: 1120 px max, 24 px side gutter (16 on phones); the pool
+  widens past it by the width of its docked question pane (below).
 - A navigation list is capped, not scrolled: the sidebar shows twelve
   classrooms and a "Show all (N)" row, always including the one being read.
   Thirty names in a column is a wall, and it pushes the account row off.
@@ -215,7 +216,9 @@ lists and two strips each wrote that arithmetic out by hand.
 An element made clickable without being a button (a card, a table row) takes
 `pressable()` from `ui/layers.tsx`: `tabIndex={0}` plus Enter and Space, with Space
 prevented from scrolling the page. A row keeps `role="row"`; announcing it as
-a button would cost the reader the table around it.
+a button would cost the reader the table around it. The pool's rows and cards
+are the exception, because there a click LOOKS and Enter EDITS: they answer
+their own keys (`useQuestionBrowse`, below) and Space is not a click.
 
 Ctrl+K (⌘+K on Apple keyboards) opens and closes the command palette, from
 anywhere, including from inside a field: that is the convention wherever the
@@ -844,6 +847,28 @@ live in `ui/state.ts`, each written once.
   keeps its place instead (the batch banner says "nothing left" rather than
   disappearing). Below `lg` the list becomes a `Select` above the answer and
   the same alignment happens under the phone's top bar.
+- Master and detail (the pool, browse to choose): a click on a question row
+  or card shows the question as a student reads it (`QuestionPreview`, the
+  picker's reading pane too, one request and one cache entry) in an in-page
+  pane, never a `Sheet` — the list stays live beside it. Look and edit are
+  two gestures (`pool/useQuestionBrowse.ts`): a click and ↑/↓/Home/End look,
+  walking the rows in the order they are DRAWN (sections included) and
+  stopping at the last loaded one; Enter, a double-click and the pencil
+  edit, in the same tab; Space does nothing yet, kept for the favourite
+  star; Escape and the ✕ close and hand the focus back to the row. One row
+  is in the Tab order (roving tabindex), the shown one wears `aria-current`
+  and the grading panel's `accent-soft` with its name in `accent`. From
+  `ASIDE_MIN_WIDTH` the pane (480 px, `surface-2`, hairline, `card` radius,
+  sticky and scrolling on its own) docks right, and the page widens past the
+  1120 px cap by exactly the pane and its gap (`max-w-390`, against the
+  `max-w-264` of content the shell's cap leaves inside its padding), so a very wide
+  screen keeps every column and a narrower one gives them up by `T`'s
+  priorities — the table measures its own container. Below it the pane
+  replaces the list with a Back button, as in the picker; on that width a
+  click waits 300 ms for a second one, or the double-click would lose its row
+  under the pointer. No empty pane: it appears on the first look, and which
+  question it shows is screen state, never the URL. The cards count their
+  columns on their own container for the same reason as the table.
 - SyncBadge: whether the student's work is safe — `saved`, `saving`,
   `offline`, `closed` — icon plus word, in a polite live region, since it is
   the answer to "did that save?". The word hides under `sm` where the zen bar

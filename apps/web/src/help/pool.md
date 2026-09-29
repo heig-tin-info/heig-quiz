@@ -39,9 +39,13 @@ narrow it, arrows to move, Enter to insert, Escape to close.
 
 One row per question: the type as an icon in front of the internal name
 (hover it for its name), tags, difficulty as five dots, the published
-version, the last change as a distance — hover it for the exact date. A
-click opens the editor. Every row carries edit, duplicate and delete at its
-end.
+version, the last change as a distance — hover it for the exact date. Every
+row carries edit, duplicate and delete at its end.
+
+A click shows the question as a student reads it, in a panel beside the
+list (in its place on a narrow window, with **Back to the list**). ↑ and ↓
+move from row to row and the panel follows; Escape or the × closes it. Enter,
+a double-click, the pencil or **Open in the editor** opens the editor.
 
 Clicking a column header sorts the whole pool by it, not just the questions
 already loaded; clicking it again reverses the order. The default is the

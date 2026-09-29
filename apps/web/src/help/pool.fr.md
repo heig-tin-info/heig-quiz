@@ -41,9 +41,14 @@ déplacer, Entrée pour insérer, Échap pour fermer.
 
 Une ligne par question : le type en icône devant le nom interne (survolez-la
 pour son nom), les tags, la difficulté en cinq points, la version publiée, la
-dernière modification en distance — survolez-la pour la date exacte. Un clic
-ouvre l'éditeur. Chaque ligne porte modifier, dupliquer et supprimer à son
-extrémité.
+dernière modification en distance — survolez-la pour la date exacte. Chaque
+ligne porte modifier, dupliquer et supprimer à son extrémité.
+
+Un clic montre la question telle qu'un étudiant la lira, dans un panneau à
+côté de la liste (à sa place sur une fenêtre étroite, avec **Retour à la
+liste**). ↑ et ↓ passent d'une ligne à l'autre et le panneau suit ; Échap ou
+le × le ferme. Entrée, un double-clic, le crayon ou **Ouvrir dans l'éditeur**
+ouvre l'éditeur.
 
 Cliquer un en-tête de colonne trie toute la banque, pas seulement les
 questions déjà chargées ; recliquer inverse l'ordre. Par défaut : la dernière

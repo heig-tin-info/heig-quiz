@@ -24,12 +24,11 @@ export function Card({
   interactive,
   onClick,
   ...rest
-}: Omit<React.HTMLAttributes<HTMLDivElement>, "onClick"> & {
+}: React.ComponentProps<"div"> & {
   children: ReactNode;
   className?: string;
   /** Clickable surface: hairline darkens on hover, no movement. */
   interactive?: boolean;
-  onClick?: () => void;
 }) {
   return (
     <div
