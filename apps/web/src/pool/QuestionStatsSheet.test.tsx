@@ -12,7 +12,7 @@ import { QuestionStatsSheet } from "./QuestionStatsSheet";
  */
 
 const ROW = { id: "q1", internalName: "ptr-arith-01" };
-const STATS = { n: 24, p: 0.73, since: null, time: null };
+const STATS = { n: 24, p: 0.73, since: null, time: null, discrimination: null };
 const TIME = { n: 21, meanS: 95, medianS: 80, p25S: 52, p75S: 121 };
 
 describe("QuestionStatsSheet", () => {
@@ -67,6 +67,50 @@ describe("QuestionStatsSheet", () => {
     renderWithProviders(<QuestionStatsSheet poolId="p1" row={ROW} stats={STATS} canReset onClose={vi.fn()} />);
     expect(screen.getByText("The time shows from 10 timed exam answers.")).toBeInTheDocument();
     expect(screen.queryByText("Median time")).not.toBeInTheDocument();
+  });
+
+  it("shows the discrimination to two decimals, its reading and what it rests on", () => {
+    mockFetch({});
+    renderWithProviders(
+      <QuestionStatsSheet
+        poolId="p1"
+        row={ROW}
+        stats={{ ...STATS, discrimination: { r: 0.4, evaluations: 2, n: 21 } }}
+        canReset
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("0.40")).toBeInTheDocument();
+    expect(screen.getByText("Good")).toBeInTheDocument();
+    expect(screen.getByText("Over 2 exams, 21 attempts")).toBeInTheDocument();
+    expect(screen.getByText(/did well on the rest of the exam/)).toBeInTheDocument();
+    expect(screen.queryByText(/stronger students do worse/)).not.toBeInTheDocument();
+  });
+
+  it("flags an inverse question", () => {
+    mockFetch({});
+    renderWithProviders(
+      <QuestionStatsSheet
+        poolId="p1"
+        row={ROW}
+        stats={{ ...STATS, discrimination: { r: -0.18, evaluations: 1, n: 12 } }}
+        canReset
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("-0.18")).toBeInTheDocument();
+    expect(screen.getByText("Inverse")).toBeInTheDocument();
+    expect(screen.getByText("Over 1 exam, 12 attempts")).toBeInTheDocument();
+    expect(screen.getByText(/stronger students do worse/)).toBeInTheDocument();
+  });
+
+  it("says when the discrimination will show", () => {
+    mockFetch({});
+    renderWithProviders(<QuestionStatsSheet poolId="p1" row={ROW} stats={STATS} canReset onClose={vi.fn()} />);
+    expect(
+      screen.getByText("The discrimination shows once an exam with at least 5 other questions has 10 attempts graded in full."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Discrimination index")).not.toBeInTheDocument();
   });
 
   it("offers no reset to a reader", () => {

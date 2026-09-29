@@ -685,6 +685,20 @@ export const en = {
   "pool.stats.timeScope":
     "Exams only. Time a question is on screen, measured by the server; a stretch without activity counts {cap} minutes at most.",
   "pool.stats.timeNone": "The time shows from {min} timed exam answers.",
+  "pool.stats.discrimination": "Discrimination",
+  "pool.stats.discriminationIndex": "Discrimination index",
+  "pool.stats.discriminationBand.good": "Good",
+  "pool.stats.discriminationBand.fair": "Fair",
+  "pool.stats.discriminationBand.weak": "Weak",
+  "pool.stats.discriminationBand.inverse": "Inverse",
+  "pool.stats.discriminationBasisOne": "Over 1 exam, {n} attempts",
+  "pool.stats.discriminationBasis": "Over {evaluations} exams, {n} attempts",
+  "pool.stats.discriminationScope":
+    "Whether students who did well on the rest of the exam also did well on this question: from −1 to 1, good from 0.3, weak below 0.2.",
+  "pool.stats.discriminationInverse":
+    "Below zero: stronger students do worse on this question than weaker ones. Check the answer key and the wording.",
+  "pool.stats.discriminationNone":
+    "The discrimination shows once an exam with at least {items} other questions has {min} attempts graded in full.",
   "pool.stats.reset": "Reset statistics",
   "pool.stats.resetTitle": "Reset the statistics of {name}?",
   "pool.stats.resetBody":
