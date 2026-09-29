@@ -104,6 +104,9 @@ export type RouteOf<V extends Route["view"]> = Extract<Route, { view: V }>;
 /** The sidebar sections (`Shell`'s `Nav`): the row that stays lit while a view is up. */
 export type NavSection = "home" | "activities" | "pools" | "polls" | "admin";
 
+/** The slots of the student's bottom bar on a phone (`student/bottomNavSlots.ts`, #191). */
+export type BottomSlotId = "activities" | "courses" | "grades" | "profile";
+
 /**
  * Everything the app knows about one view, in one place: how it is written
  * as a path, how a path is recognized as it, whether a student has a screen
@@ -121,6 +124,11 @@ export interface RouteSpec<V extends Route["view"]> {
   studentSafe: boolean;
   /** The sidebar row lit while this view is up; absent when none is. */
   section?: NavSection;
+  /**
+   * The student bottom bar's slot lit while this view is up. A view without
+   * one has no bar (DESIGN.md, "The student's bottom bar").
+   */
+  bottomSlot?: BottomSlotId;
   /**
    * Present on the teacher screens of ONE evaluation that link to each other
    * (the palette's "grading" and "results" entries): the evaluation's id.
@@ -181,8 +189,14 @@ function evaluationIdOf(route: RouteOf<EvaluationTailView | "evaluation">): stri
  * `results` and `evaluationPreview`. `home` matches nothing: it is the fallback.
  */
 export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
-  home: { path: () => "/", match: () => null, studentSafe: true, section: "home" },
-  settings: fixed("settings", { view: "settings" }, true),
+  home: {
+    path: () => "/",
+    match: () => null,
+    studentSafe: true,
+    section: "home",
+    bottomSlot: "activities",
+  },
+  settings: { ...fixed("settings", { view: "settings" }, true), bottomSlot: "profile" },
   admin: { ...fixed("admin", { view: "admin" }), section: "admin" },
   course: {
     path: (r) => `/courses/${r.id}`,
@@ -289,6 +303,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
         ? { view: "feedback", attemptId }
         : null,
     studentSafe: true,
+    bottomSlot: "grades",
   },
   // WP8 + WP10: ONE place decides what follows an evaluation id, so a new
   // tail is an entry here and nowhere else.
@@ -334,6 +349,11 @@ function specOf(view: Route["view"]): RouteSpec<Route["view"]> {
 
 export function routeToPath(r: Route): string {
   return specOf(r.view).path(r);
+}
+
+/** The bottom bar's slot `route` lights, or `null` when the view has no bar. */
+export function bottomSlotOf(route: Route): BottomSlotId | null {
+  return specOf(route.view).bottomSlot ?? null;
 }
 
 /** The sidebar section `route` belongs to, or `null` when it lights no row. */

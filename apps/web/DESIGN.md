@@ -288,6 +288,13 @@ over it, not as one more card in it.
   with the same gradient, the overlay shadow plus a faint accent halo. The
   target wears a 2 px accent ring 6 px out, with two ripples. `Z.coach` sits
   over the page and its sticky bars, under every dialog.
+- Bottom docks: a bar docked on the window's bottom edge and marked
+  `data-bottom-dock` (the student's bottom bar, the launch step's phone dock)
+  takes its height out of the window the coach places in (`visibleBottom`).
+  The bubble stays above it, the target is scrolled to the middle of what is
+  left, the ring is clipped where the bar starts, and a target wholly behind
+  the bar hides the bubble until it is scrolled back: a bubble never covers
+  the navigation a thumb is reaching for, nor points into it.
 - Motion: pops out of its own tail (scale 0.35 → 1.06 → 1, a degree of
   rotation, 620 ms), floats (4 px, 3.2 s), glides to the next target with an
   overshooting ease (500 ms) while its content cross-fades, and ends a walk
@@ -602,7 +609,8 @@ live in `ui/state.ts`, each written once.
   What a pick does — close, stay open for another tag — is the call site's.
   It exists because three comboboxes wrote the pattern out by hand and had
   started to disagree on the panel and the highlighted row.
-- Toast: bottom-right, `surface` + hairline + overlay shadow. Tones
+- Toast: bottom-right, above the student's bottom bar when it is up
+  (`--bottom-nav-h`), `surface` + hairline + overlay shadow. Tones
   `success` / `error` / `warning`, plus `progress` (a neutral spinner) for
   "this has started", which is the only report an action taken from a menu
   can get. A failed mutation reports through `useErrorToast()` (`notify.tsx`):
@@ -1205,6 +1213,52 @@ the Results "Questions" tab on the wall. It takes the projection's
 Sentence case everywhere. Buttons start with a verb ("Create question",
 "Publish"). Status words are lowercase in badges. Every surface, teacher and
 student alike, goes through `t()` with an `en` and an `fr` entry (N-I18N-01).
+
+## The student's bottom bar (phone)
+
+A student opens the app on a phone far more often than a teacher does, and
+reaches for it with a thumb (#191, the product owner's decision of
+2026-09-29). So under `lg` — the frame's own breakpoint, where the sidebar
+gives way to the top bar; there is no second one — the STUDENT UI gets a bar
+at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
+
+- **Student UI only.** A student, or a teacher in student view, who is looking
+  at exactly what a student gets. The teacher UI is desktop first and keeps its
+  top bar and drawer on a phone.
+- **Navigation, never an action.** No slot wears the accent fill; the current
+  one is the sidebar's selection (`accent` label in semibold, an `accent-soft`
+  pill behind its icon), so the screen's one primary button is still the one
+  red FILL on it (invariant 2).
+- **Slots**, each an icon over a visible 11 px label, sharing the width
+  equally: Activities (the home, "Open now"), Courses (the home's "My
+  classrooms", `/#classrooms`), Grades (the home's "Past evaluations",
+  `/#past`, and lit on a feedback page), Profile (the settings). Drill (#317)
+  takes the MIDDLE when it lands: one more entry in `BOTTOM_SLOTS`, no
+  redesign. A slot that leads to a section of the home is an anchor on it,
+  not a page of its own: the home already is those lists.
+- **Shape.** Fixed to the bottom, 56 px plus the iOS home-indicator inset
+  (`env(safe-area-inset-bottom)`), `canvas` at 90 % with a blur and a
+  hairline over it — the phone top bar, mirrored. `--bottom-nav-h` is its
+  whole height while it is in the page (pure CSS, `:root:has(nav[data-bottom-dock])`
+  under `lg`; zero otherwise): a spacer under the page and the toast stack
+  read it, so neither the end of a page nor a toast is ever behind the bar.
+  An anchored section lands under the sticky top bar through one
+  `scroll-padding-top` on the root, from `--topbar-h`.
+- **Where it is drawn: an allowlist**, the views the route table gives a
+  `bottomSlot` (`router.ts`: the home, a feedback page, the settings) and
+  nothing else. Hidden on the
+  attempt (lobby and player), the poll join page, every projection and
+  preview, a SEB-confined page, and any screen with a sticky bottom bar of its
+  own (the player's, PollJoin's "Send", the launch step's dock): two bars at
+  the bottom fight for the thumb, and the one that is the screen's action must
+  win. A new student page does not get the bar until its route has a slot.
+- **No repeats.** Where the bar shows, the top bar loses the drawer's trigger
+  (the drawer held the home, which the bar and the wordmark both reach) and
+  the avatar menu loses Settings (the Profile slot). The avatar stays, for
+  what is about the person: the inbox, the theme, signing out.
+- A `<nav>` named "Main navigation", `aria-current="page"` on the lit slot,
+  real links (a long press or a modified click opens the address, section
+  included).
 
 ## The participant's poll page (`/p/:CODE`)
 

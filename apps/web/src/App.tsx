@@ -455,7 +455,9 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
     <ImpersonationBanner me={me.data}>
     <Shell
       me={me.data}
-      route={route}
+      // The page on screen: a student on a teacher's address reads the home,
+      // and the navigation must say so (the sidebar's row, the bottom bar).
+      route={shown}
       navigate={navigate}
       teacherUi={teacherUi}
       studentView={inStudentView}

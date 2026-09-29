@@ -49,6 +49,8 @@ import {
   type IconType,
 } from "./ui";
 import { coursesKey, poolsKey } from "./queryKeys";
+import { BottomNav } from "./student/BottomNav";
+import { bottomNavShown } from "./student/bottomNavSlots";
 
 /**
  * Application frame: a 240 px sidebar on desktop (navigation, the teacher's
@@ -469,11 +471,14 @@ export function Shell({
       <Logo id={titleId} className={width} />
     </button>
   );
+  // Where the student's bottom bar shows, the top bar does not repeat it:
+  // DESIGN.md, "The student's bottom bar" (#191).
+  const bottomNav = bottomNavShown(route, teacherUi);
   const userMenu = (compact: boolean) => (
     <UserMenu
       me={me}
       compact={compact}
-      onOpenSettings={() => navigate({ view: "settings" })}
+      {...(compact && bottomNav ? {} : { onOpenSettings: () => navigate({ view: "settings" }) })}
       studentView={studentView}
       onToggleStudentView={onToggleStudentView}
       notifications={{ navigate }}
@@ -574,15 +579,17 @@ export function Shell({
 
       <div className="min-w-0 flex-1">
         {/* Mobile top bar */}
-        <div className="sticky top-(--banner-h) z-20 flex h-14 items-center gap-2 border-b border-line bg-canvas/90 px-3 backdrop-blur lg:hidden">
-          <IconButton
-            label={t("menu.openMenu")}
-            aria-haspopup="dialog"
-            aria-expanded={drawer}
-            onClick={() => setDrawer(true)}
-          >
-            <MenuIcon />
-          </IconButton>
+        <div className="sticky top-(--banner-h) z-20 flex h-(--topbar-h) items-center gap-2 border-b border-line bg-canvas/90 px-3 backdrop-blur lg:hidden">
+          {bottomNav ? null : (
+            <IconButton
+              label={t("menu.openMenu")}
+              aria-haspopup="dialog"
+              aria-expanded={drawer}
+              onClick={() => setDrawer(true)}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
           {brand()}
           <span className="flex-1" />
           {viewToggle(true)}
@@ -600,6 +607,7 @@ export function Shell({
         >
           {children}
         </main>
+        {bottomNav ? <BottomNav route={route} navigate={navigate} /> : null}
       </div>
 
       {/* Mounted only while open: nothing of it — the key listener of its

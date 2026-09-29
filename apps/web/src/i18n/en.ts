@@ -85,6 +85,9 @@ export const en = {
   "nav.activities": "Activities",
   "nav.classroomCourse": "{code} · {name}",
   "nav.classroomTip": "{name} — {course}",
+  "bnav.label": "Main navigation",
+  "bnav.grades": "Grades",
+  "bnav.profile": "Profile",
 
   "courses.title": "Courses",
   "courses.subtitle": "A course holds its staff, its classrooms and its question pool.",

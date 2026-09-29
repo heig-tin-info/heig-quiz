@@ -82,6 +82,9 @@ export const fr: Record<keyof Dict, string> = {
   "nav.activities": "Activités",
   "nav.classroomCourse": "{code} · {name}",
   "nav.classroomTip": "{name} — {course}",
+  "bnav.label": "Navigation principale",
+  "bnav.grades": "Notes",
+  "bnav.profile": "Profil",
 
   "courses.title": "Cours",
   "courses.subtitle": "Un cours porte son équipe, ses classes et sa banque de questions.",

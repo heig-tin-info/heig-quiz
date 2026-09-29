@@ -178,7 +178,8 @@ export function UserMenu({
   me: Me;
   /** Avatar-only trigger (mobile top bar). */
   compact?: boolean;
-  onOpenSettings: () => void;
+  /** Absent where Settings is reached otherwise (the student's bottom bar, #191). */
+  onOpenSettings?: () => void;
   studentView?: boolean;
   onToggleStudentView?: () => void;
   /**
@@ -215,7 +216,9 @@ export function UserMenu({
           },
         ]
       : []),
-    { label: t("menu.settings"), icon: SettingsIcon, onSelect: onOpenSettings },
+    ...(onOpenSettings
+      ? [{ label: t("menu.settings"), icon: SettingsIcon, onSelect: onOpenSettings }]
+      : []),
     ...(onToggleStudentView
       ? [
           {
