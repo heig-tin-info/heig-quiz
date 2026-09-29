@@ -208,7 +208,7 @@ For a program or a function the student writes, compiled and run against test ca
 
 **Starting code** is the template the student receives. The lines between a `@@lock` and an `@@endlock` comment are read-only; everything else is an editable region, and there can be several, one per function to complete. The badge counts the locked regions, and **What the student can edit** shows the split as the player will.
 
-The **Reference solution** is your own answer to the editable regions, in their order, separated by a `@@next` comment line when there are several. It serves one button, **Try the reference solution**, which runs it against every case and reports how many pass. A student never sees it.
+The **Reference solution** is your own answer to the editable regions, in their order, separated by a `@@next` comment line when there are several. **Try the reference solution** runs it against every case and reports how many pass, and the [grading panel](grading.md) shows it beside every answer. A student sees it only if the evaluation has **Show the expected answer** on: at release, or right away in an exercise with immediate feedback.
 
 **Test cases** is the list the program is checked against. Each case has:
 

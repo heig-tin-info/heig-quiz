@@ -1081,7 +1081,7 @@ export const fr: Record<keyof Dict, string> = {
   "qt.code.e.markerNested": "Ligne {line} : {marker} dans une région déjà verrouillée.",
   "qt.code.e.referenceSolution": "Solution de référence",
   "qt.code.e.referenceSolutionHint":
-    "Votre propre réponse, dans l'éditeur de l'étudiant. Utilisée seulement par le bouton ci-dessous, pour vérifier que les cas passent. Jamais montrée à un étudiant.",
+    "Votre propre réponse, dans l'éditeur de l'étudiant. Le bouton ci-dessous vérifie que les cas passent avec elle. Les étudiants la voient quand l'évaluation montre la réponse attendue.",
   "qt.code.e.referenceRegion": "Solution de référence, région {n}",
   "qt.code.e.referenceLocked": "Verrouillé — fait partie du code de départ",
   "qt.code.e.referenceExtraPieces":
@@ -1240,7 +1240,7 @@ export const fr: Record<keyof Dict, string> = {
 
   // --- qt-code : codeimage (ADR-021) ---
   "qt.codeimage.e.referenceSolutionHint":
-    "Votre propre réponse, dans l'éditeur de l'étudiant. Le bouton ci-dessous l'exécute et dessine son image, que vous pouvez ensuite utiliser comme cible. Jamais montrée à un étudiant.",
+    "Votre propre réponse, dans l'éditeur de l'étudiant. Le bouton ci-dessous l'exécute et dessine son image, que vous pouvez ensuite utiliser comme cible. Les étudiants la voient quand l'évaluation montre la réponse attendue.",
   "qt.codeimage.e.imageSection": "Image",
   "qt.codeimage.e.imageHint":
     "Le programme écrit largeur × hauteur entiers sur sa sortie standard, séparés par des espaces, des tabulations ou des retours à la ligne, ligne par ligne depuis le coin supérieur gauche. Ce sont les pixels.",

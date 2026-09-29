@@ -31,7 +31,8 @@ listed here so the choice is visible, and it does not run yet.
 
 ## Hidden stimuli
 
-A hidden stimulus is graded like any other, but a student never sees its
-name, its parameters or its waveform — before or after the results. They are
-told how many there are and what they are worth, exactly as for the hidden
-test cases of a code question.
+A hidden stimulus is graded like any other, but a student does not see its
+name, its parameters or its waveform: they are told how many there are and
+what they are worth, exactly as for the hidden test cases of a code question.
+The one exception is an evaluation that shows the expected answer: its
+feedback then shows every stimulus, hidden ones included.

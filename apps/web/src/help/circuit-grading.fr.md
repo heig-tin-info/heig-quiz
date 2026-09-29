@@ -34,6 +34,7 @@ encore.
 ## Stimuli cachés
 
 Un stimulus caché est corrigé comme les autres, mais l'étudiant n'en voit
-jamais le nom, les paramètres ni le signal — ni avant, ni après les
-résultats. Il sait seulement combien il y en a et ce qu'ils valent, comme
-pour les cas de test cachés d'une question de code.
+ni le nom, ni les paramètres, ni le signal : il sait seulement combien il y
+en a et ce qu'ils valent, comme pour les cas de test cachés d'une question
+de code. Seule exception : une évaluation qui montre la réponse attendue ;
+son retour montre alors tous les stimuli, cachés compris.

@@ -110,7 +110,7 @@ export const EDITOR_STRINGS: CodeEditorStrings = {
   markerNested: "Line {line}: {marker} inside a region that is already locked.",
   referenceSolution: "Reference solution",
   referenceSolutionHint:
-    "Your own answer, in the student's editor. Used only by the button below, to check that the cases pass. Never shown to a student.",
+    "Your own answer, in the student's editor. The button below checks that the cases pass with it. Students see it when the evaluation shows the expected answer.",
   referenceRegion: "Reference solution, region {n}",
   referenceLocked: "Locked — part of the starting code",
   referenceExtraPieces:

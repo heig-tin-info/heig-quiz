@@ -1094,7 +1094,7 @@ export const en = {
   "qt.code.e.markerNested": "Line {line}: {marker} inside a region that is already locked.",
   "qt.code.e.referenceSolution": "Reference solution",
   "qt.code.e.referenceSolutionHint":
-    "Your own answer, in the student's editor. Used only by the button below, to check that the cases pass. Never shown to a student.",
+    "Your own answer, in the student's editor. The button below checks that the cases pass with it. Students see it when the evaluation shows the expected answer.",
   "qt.code.e.referenceRegion": "Reference solution, region {n}",
   "qt.code.e.referenceLocked": "Locked — part of the starting code",
   "qt.code.e.referenceExtraPieces":
@@ -1250,7 +1250,7 @@ export const en = {
   // --- qt-code: codeimage (ADR-021) — only what a picture adds; the program
   // half reads the qt.code.* sentences above ---
   "qt.codeimage.e.referenceSolutionHint":
-    "Your own answer, in the student's editor. The button below runs it and draws its image, which you can then use as the target. Never shown to a student.",
+    "Your own answer, in the student's editor. The button below runs it and draws its image, which you can then use as the target. Students see it when the evaluation shows the expected answer.",
   "qt.codeimage.e.imageSection": "Image",
   "qt.codeimage.e.imageHint":
     "The program prints width × height integers on its standard output, separated by spaces, tabs or newlines, row by row from the top left. They are the pixels.",
