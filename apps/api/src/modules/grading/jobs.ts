@@ -29,6 +29,7 @@ import type { FastifyInstance } from "fastify";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { GradeContext, GradeResult, RunnerRequest } from "@quiz/core/server";
+import type { PassReason } from "@quiz/contracts";
 import { RunnerBusy, RunnerUnavailable, isGraded, isPendingRunner } from "@quiz/core/server";
 import { round2 } from "@quiz/domain";
 
@@ -68,18 +69,10 @@ const RUNNER_PRIORITY = -10;
 
 /**
  * Every machine reason a pass leaves on a grading it could not settle. They
- * are wire values: `reasonOf` / `progressOf` (`service.ts`) and the web panel
- * read them back, so the set is closed here rather than spelled at each site.
+ * are wire values, closed once in `@quiz/contracts` (`PASS_REASONS`): the
+ * web translates each of them, and `progressOf` counts them.
  */
-type ProposalReason =
-  | "config_unreadable"
-  | "answer_invalid"
-  | "grader_error"
-  | "llm_not_configured"
-  | "not_finalizable"
-  | "runner_unavailable"
-  | "runner_error"
-  | "finalize_error";
+type ProposalReason = PassReason;
 
 /**
  * A proposal worth zero that says why no grader settled the cell — never a

@@ -6,54 +6,58 @@ Closing an evaluation starts the grading. Most of it is automatic; your part is 
 
 The moment an evaluation is closed, by you or by the server at the last deadline, every answer of a deterministic type is graded: multiple choice, short answer and fill in the blanks are scored on the spot and come back already validated. Code answers are sent to the runner, which compiles and runs each one against the question's test cases in an isolated container; their gradings come back as validated too once the runner has spoken. A missing answer is worth 0 and the entry says so (**No answer**, graded zero).
 
-The card at the top of the grading panel tracks the pass: `Automatic grading · 25 of 25 answers graded`. While it is incomplete it also says what is still `waiting for the runner` and what `failed`, and offers **Run grading**, which starts the pass again on whatever has not been graded yet.
+While some answers of the question you are on have not been graded — still at the runner, or left by a grader that could not decide — a banner above the table counts them and offers **Run grading**, which starts the pass again on that question. The command palette runs it on the whole evaluation.
 
 ## The grading panel
 
 <figure markdown="span">
-  ![The grading panel by question, on a multiple-choice item](../assets/screenshots/grading-light.png#only-light)
-  ![The grading panel by question, on a multiple-choice item](../assets/screenshots/grading-dark.png#only-dark)
-  <figcaption>By question: one item at a time, every student's answer to it, the first one open.</figcaption>
+  ![The grading table of a multiple-choice question](../assets/screenshots/grading-light.png#only-light)
+  ![The grading table of a multiple-choice question](../assets/screenshots/grading-dark.png#only-dark)
+  <figcaption>One question at a time: the expected answer on top, then every student's answer as a row.</figcaption>
 </figure>
 
 Open it from the classroom row of a closed evaluation, from **Go to grading** on the dashboard, or from the **Grading panel** button on the results page. The subtitle states the job: **Validate the proposals, adjust what needs it, then publish.**
 
-### By question or by student
+### One question at a time
 
-The panel is **By question** by default: one item across the whole class. Grading twenty answers to the same question in a row is how you stay consistent, and it is the order in which an odd answer key becomes obvious. **By student** walks one attempt in quiz order instead, which is the order you want when a student comes to discuss their paper.
+You grade question by question: one item across the whole class. Grading twenty answers to the same question in a row is how you stay consistent, and it is the order in which an odd answer key becomes obvious. To look at one student's whole paper, open the results page.
 
-<figure markdown="span">
-  ![The same panel by student](../assets/screenshots/grading-by-student-light.png#only-light)
-  ![The same panel by student](../assets/screenshots/grading-by-student-dark.png#only-dark)
-  <figcaption>By student: the five answers of one attempt, in quiz order.</figcaption>
-</figure>
+The card at the top says which question you are on, **Question 1 of 5**, with its type, its points, its internal name and how many answers are still **to validate** (or **All validated**). **Question 1 of 5** opens the list of every question with what each one still asks for; the chevrons at the card's edges move to the previous or next question. Under it, a stepper shows every question of the evaluation: a filled circle is a question whose answers are all validated, and a click jumps to it.
 
-The card at the top says where you are, **Question 1 of 5** or **Student 1 of 5**, and how many answers are left to validate; the chevrons at its edges move to the previous or next question or student, and the segmented bar under it shows the progress on each. The left card names the current question with its type, its points and its number of answers, or the current student with their number of answers.
+### The table
 
-### Filters and names
+Each row is one student's answer. It starts with a verdict square: a solid green check for full marks, a striped green square for partial credit, a red cross for no credit (a missing answer or a negative score included), and a dashed **?** for an answer nothing has judged yet — still at the runner, or an essay waiting for a grade by hand; its tooltip says which. Then come the answer's own columns, the **Points** and the row's actions.
 
-The row of filters narrows the list: **All**, **To validate** or **Validated**; a **Source** selector (`automatic`, `manual`, or `model` for the assistance planned in a later phase and not available yet); and a **Confidence** selector, which only matters for proposals that carry one.
+The columns depend on the question type. A multiple choice gets one column per choice, lettered as in the editor: a ticked choice is filled green when it is correct and red when it is not, and a correct choice left out is drawn dashed. A short answer gets one column with the text typed, tinted by its verdict. A fill-in-the-blanks question gets one column per blank. The other types show their answer as text in one column; open the row to see it in full.
 
-Names are hidden by default: each student wears a stable pseudonym such as `Brave Jaguar`, and the note under the filters says why: **Names are hidden by default: a pseudonym keeps the grading about the answer.** The **Show names** switch reveals them when you need to.
+The first row, on a blue background, is the **Expected answer**: the correct choices, the accepted answers, the key of each blank. Its two buttons **Edit question** and **Re-grade** are there for the moment you notice the key is wrong.
+
+Click any column header to sort by it, click again to reverse the order, a third time to go back to the table's own order. Rows with the same value keep their relative order.
+
+### Filters and anonymity
+
+The row under the question card narrows the table: **All** or **To validate** (with its count); **Graded by** **Any**, **Rules**, **AI** or **Teacher**; and, once **AI** is picked, a **Confidence** filter. These filters are remembered by your browser from one visit to the next.
+
+**Anonymise** is on every time you open the panel. The student's name is not even sent to your browser: the Student column is simply absent, and the rows are shuffled in an order drawn for this visit, which stays the same while you work — a validation never makes a row jump. Two things still show on a row, because they are not names: the attempt number of an exercise a student retook (`#2`, in green for the attempt that counts), and a **Teacher** badge on a teacher's own test run. Switch **Anonymise** off to see a **Student** column, sorted by name.
 
 ## What each type shows
 
-Every entry opens on the statement, the student's answer, the score with how it was computed, and the question's explanation, the same one a student reads if the feedback policy allows it.
+Clicking a row, or pressing **Enter** on it, opens the answer on the right: the statement as the student saw it, their answer with the score and how it was computed, the question's explanation (the same one a student reads if the feedback policy allows it), and the history of its gradings. **↑** and **↓** move to the previous or next row without closing it.
 
 A multiple choice lists the choices with the ticked ones highlighted and the correct ones flagged `Correct`, then the score with its breakdown: `Score 1 / 1 · Correct choices ticked 1/1 · Wrong choices ticked 0/3`. A question with several correct answers is scored by the policy of the evaluation or of the question, described in [Question types](question-types.md).
 
 <figure markdown="span">
   ![Grading a short-answer question](../assets/screenshots/grading-short-light.png#only-light)
   ![Grading a short-answer question](../assets/screenshots/grading-short-dark.png#only-dark)
-  <figcaption>A short answer: the text typed, which matcher accepted it, and the accepted answers.</figcaption>
+  <figcaption>A short answer: the text typed, tinted by its verdict, and the accepted answers on the expected row.</figcaption>
 </figure>
 
-A short answer shows **Your answer** with an `Accepted` or rejected flag, which matcher accepted it (`Matched by #1 · exact`), and the list of **Accepted answers**. When the automatic pass rejected a spelling you would accept, this is the view where you see it and adjust.
+A short answer shows **Your answer** with an `Accepted` or rejected flag, which matcher accepted it (`Matched by #1 · exact`), and the list of **Accepted answers**. Sort the table by the answer column to bring identical spellings together: when the automatic pass rejected one you would accept, you see all of them at once.
 
 <figure markdown="span">
   ![Grading a fill-in-the-blanks question](../assets/screenshots/grading-cloze-light.png#only-light)
   ![Grading a fill-in-the-blanks question](../assets/screenshots/grading-cloze-dark.png#only-dark)
-  <figcaption>Fill in the blanks: the text with the student's words in place, then a table per blank.</figcaption>
+  <figcaption>Fill in the blanks: one column per blank in the table, the text with the student's words in the answer.</figcaption>
 </figure>
 
 A fill-in-the-blanks question renders the text with the student's words in the blanks, then a table with one row per blank: **Blank**, **Your answer** with its verdict, **Expected**. The score line adds `Weighted blanks 3/3`, since a blank may weigh more than another.
@@ -68,41 +72,44 @@ A code question shows the points earned, then one row per test case: **Case**, *
 
 ## Acting on an answer
 
-**Validate** takes the proposal as it stands and moves to the next entry. Automatic gradings are already validated, so the button only appears on proposals still waiting for you.
+**Validate** takes a proposal as it stands. It appears on the rows still waiting for you, and at the foot of the open answer; automatic gradings are already validated.
 
 <figure markdown="span">
-  ![The Adjust sheet with points and a comment](../assets/screenshots/grading-override-light.png#only-light)
-  ![The Adjust sheet with points and a comment](../assets/screenshots/grading-override-dark.png#only-dark)
-  <figcaption>Adjusting a grading: the points and a mandatory comment the student will read.</figcaption>
+  ![Adjusting a grading: points and a comment](../assets/screenshots/grading-override-light.png#only-light)
+  ![Adjusting a grading: points and a comment](../assets/screenshots/grading-override-dark.png#only-dark)
+  <figcaption>Adjusting a grading: the points and a mandatory comment the student may read.</figcaption>
 </figure>
 
-**Adjust** opens the sheet **Adjust this grading** for any grading, automatic or not. Enter the **Points** (between 0 and the item's maximum) and a **Comment, visible to the student**. The comment is mandatory: a student who reads a grade different from the machine's deserves to know why. **Save and validate** stores it as a manual grading and validates it. The grading it replaces is never deleted; **History (2)** on the entry opens every earlier grading with its points, its source and its note.
+**Adjust**, on a row or at the foot of the open answer, opens **Adjust this grading** under the answer. Enter the **Points** (between 0 and the item's maximum) and a **Comment**. The comment is mandatory, and it is the one comment the student may read with their result if the feedback policy shows comments: a student who reads a grade different from the machine's deserves to know why. **Save and validate** stores it as a manual grading and validates it. The grading it replaces is never deleted: it stays in the answer's **Grading history**.
 
 <figure markdown="span">
-  ![The batch bar offering to validate every proposal of a question](../assets/screenshots/grading-batch-light.png#only-light)
-  ![The batch bar offering to validate every proposal of a question](../assets/screenshots/grading-batch-dark.png#only-dark)
-  <figcaption>The batch bar validates every proposal of the current question, or of the filtered selection, in one click.</figcaption>
+  ![The primary button offering to validate every proposal of a question](../assets/screenshots/grading-batch-light.png#only-light)
+  ![The primary button offering to validate every proposal of a question](../assets/screenshots/grading-batch-dark.png#only-dark)
+  <figcaption>One button validates every proposal the table shows, in one click.</figcaption>
 </figure>
 
-When a question still has proposals, a bar above the list offers **Validate the 4 proposals of this question**, or **Validate the 4 proposals of this selection** when a filter is active, with the reminder **Each grading stays editable after validation.** The confirmation says the same, and a toast counts what was validated.
+The one red button of the screen, at the end of the filter row, says what comes next. While the table shows proposals it reads **Validate 4**: it validates the proposals shown, those of the filters you picked included (above ten, it asks first), and a toast counts what was validated; each grading stays editable. An essay proposed at 0 points is never validated in a batch: read it and grade it. Once every answer of the question is validated, the button becomes **Next question**, and on the last question **Results**. While what is left can only be graded by hand, it stays in place, greyed out, and its tooltip says why.
 
 ### Re-grade a question
 
-**Re-grade this question**, in the left card, runs the automatic grading again on every attempt of this item. The sheet asks for a **Published version**, left empty to keep the version the evaluation froze, or set to a newer one after you fixed the key in the pool, and a **Note, kept with every new grading**, which is mandatory and travels with each grading it produces. The gradings it replaces stay in the history, marked `Re-graded` with your note. The results page and, if they were published, the students' grades follow.
+**Re-grade**, on the expected row, runs the automatic grading again on every attempt of this item. The sheet asks for a **Published version**, left empty to keep the version the evaluation froze, or set to a newer one after you fixed the key with **Edit question**, and a **Note, kept with every new grading**, which is mandatory and travels with each grading it produces. The gradings it replaces stay in the history, marked `Re-graded` with your note. The results page and, if they were published, the students' grades follow.
 
 ### When the runner is unavailable
 
-If the runner cannot be reached when the evaluation closes, the code answers are not lost: each one comes back as a proposal worth `0 / 5` with the message **The answer could not be run automatically; it is waiting for a manual grade.** and a **Grading note** reading `runner_unavailable`. The progress card counts them as `4 waiting for the runner` and shows **Run grading**. Once the runner is back, **Run grading** sends them again and the proposals are replaced by real verdicts. If it will not be back in time, **Adjust** each one by hand, or accept the zero with the batch bar. The same happens, with the note `runner_busy`, when the runner was saturated.
+If the runner cannot be reached when the evaluation closes, the code answers are not lost: each one comes back as a proposal worth `0 / 5` with the message **The answer could not be run automatically; it is waiting for a manual grade.** and a **Grading note** that says the runner was unavailable (never a raw code). The banner above the table counts them and offers **Run grading**. Once the runner is back, **Run grading** sends them again and the proposals are replaced by real verdicts. If it will not be back in time, **Adjust** each one by hand, or accept the zero with **Validate**. The same happens, with a note saying so, when the runner was saturated.
 
 ### Shortcuts
 
+The keys of the grading panel are listed in the sidebar while you are on it.
+
 | Key | Action |
 | --- | --- |
-| `V` | Validate the open entry and move on |
-| `←` `→` | Previous or next entry |
-| `O` | Adjust the open entry |
-
-When the filter **To validate** shows **Nothing left to grade**, the **Results** button in the header is the next step.
+| `←` `→` | Previous or next question |
+| `↑` `↓` | Previous or next row, the expected row first; moves the open answer too |
+| `Enter` | Open the selected row |
+| `V` | Validate the selected row's proposal |
+| `A` | Adjust the selected row |
+| `Esc` | Close the open answer |
 
 ## The results page
 

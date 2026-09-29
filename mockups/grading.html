@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grading mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --canvas:#f6f5f2; --surface:#ffffff; --surface-2:#f3f1ed; --surface-3:#eae7e1;
+  --line:#e7e4de; --line-strong:#d3cfc7; --fg:#1a1917; --fg-muted:#67635b; --fg-faint:#726d64;
+  --accent:#b41f24; --accent-hover:#9a1b1f; --accent-soft:#fbebeb; --on-fill:#ffffff;
+  --success:#1f7a4d; --success-soft:#e7f4ec; --warning:#a35810; --warning-soft:#fdf1e2;
+  --danger:#c2242a; --danger-soft:#fbe9e9; --info:#1268a0; --info-soft:#e8f2f9;
+  --shadow: 0 1px 2px rgb(0 0 0 / .04), 0 8px 24px rgb(0 0 0 / .06);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --canvas:#131211; --surface:#1b1a18; --surface-2:#232220; --surface-3:#2c2a27;
+  --line:#2a2825; --line-strong:#3a3733; --fg:#ecebe7; --fg-muted:#a39e94; --fg-faint:#8d887f;
+  --accent:#e85f64; --accent-hover:#f0787c; --accent-soft:rgb(232 95 100 / .10); --on-fill:#131211;
+  --success:#4cc38a; --success-soft:rgb(76 195 138 / .14); --warning:#f0a04b; --warning-soft:rgb(240 160 75 / .14);
+  --danger:#f26d72; --danger-soft:rgb(242 109 114 / .14); --info:#58a9e0; --info-soft:rgb(88 169 224 / .14);
+  --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 8px 24px rgb(0 0 0 / .4);
+}}
+:root[data-theme="dark"] {
+  --canvas:#131211; --surface:#1b1a18; --surface-2:#232220; --surface-3:#2c2a27;
+  --line:#2a2825; --line-strong:#3a3733; --fg:#ecebe7; --fg-muted:#a39e94; --fg-faint:#8d887f;
+  --accent:#e85f64; --accent-hover:#f0787c; --accent-soft:rgb(232 95 100 / .10); --on-fill:#131211;
+  --success:#4cc38a; --success-soft:rgb(76 195 138 / .14); --warning:#f0a04b; --warning-soft:rgb(240 160 75 / .14);
+  --danger:#f26d72; --danger-soft:rgb(242 109 114 / .14); --info:#58a9e0; --info-soft:rgb(88 169 224 / .14);
+  --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 8px 24px rgb(0 0 0 / .4);
+}
+* { box-sizing: border-box; }
+html, body { margin:0; }
+body { background:var(--canvas); color:var(--fg); font:400 14px/1.5 Manrope, system-ui, sans-serif; }
+button { font:inherit; color:inherit; }
+.mono { font-family:"JetBrains Mono", ui-monospace, monospace; font-size:12.5px; }
+.app { display:flex; min-height:100vh; }
+.side { width:240px; flex-shrink:0; border-right:1px solid var(--line); padding:24px 12px; display:flex; flex-direction:column; gap:4px; }
+.logo { font-weight:800; font-size:22px; letter-spacing:-.02em; padding:0 10px 20px; }
+.logo span { color:var(--accent); }
+.nav { padding:6px 10px; border-radius:999px; color:var(--fg-muted); }
+.nav.on { background:var(--accent-soft); color:var(--accent); font-weight:500; }
+.side h6 { margin:16px 10px 4px; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--fg-faint); font-weight:600; }
+.main { flex:1; min-width:0; padding:32px 24px 64px; }
+.col { max-width:1120px; margin:0 auto; }
+.eyebrow { font-size:13px; color:var(--fg-muted); }
+.ph { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:24px; }
+h1 { font-size:28px; font-weight:700; letter-spacing:-.02em; margin:2px 0 4px; }
+.sub { color:var(--fg-muted); margin:0; }
+.btn { display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 14px; border-radius:999px; border:1px solid var(--line-strong); background:var(--surface); cursor:pointer; font-weight:500; font-size:13px; white-space:nowrap; }
+.btn:hover { background:var(--surface-2); }
+.btn.primary { background:var(--accent); border-color:var(--accent); color:var(--on-fill); }
+.btn.primary:hover { background:var(--accent-hover); }
+.btn.primary:disabled { opacity:.45; cursor:default; }
+.btn.ghost { border-color:transparent; background:transparent; color:var(--fg-muted); }
+.btn.ghost:hover { background:var(--surface-2); color:var(--fg); }
+.btn.sm { height:28px; padding:0 10px; font-size:12.5px; }
+.card { background:var(--surface); border:1px solid var(--line); border-radius:12px; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+/* question switcher */
+.qbar { padding:14px 16px 12px; position:sticky; top:0; z-index:5; }
+.qrow { display:flex; align-items:center; gap:12px; }
+.qtitle { font-size:16px; font-weight:700; display:flex; align-items:center; gap:6px; cursor:pointer; padding:4px 8px; border-radius:999px; border:none; background:transparent; }
+.qtitle:hover { background:var(--surface-2); }
+.chip { font-size:12px; padding:2px 8px; border-radius:999px; background:var(--surface-3); color:var(--fg-muted); white-space:nowrap; }
+.chip.warn { background:var(--warning-soft); color:var(--warning); }
+.chip.ok { background:var(--success-soft); color:var(--success); }
+.chip.info { background:var(--info-soft); color:var(--info); }
+.qname { color:var(--fg-muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.spacer { flex:1; }
+.steps { display:flex; margin-top:10px; }
+.step { flex:1 1 0; min-width:0; position:relative; display:flex; flex-direction:column; align-items:center; border:none; background:transparent; padding:6px 0; cursor:pointer; border-radius:999px; }
+.step .dot { width:20px; height:20px; border-radius:50%; border:2px solid var(--fg-faint); background:var(--surface); display:grid; place-items:center; font-size:11px; font-weight:800; color:var(--surface); position:relative; z-index:1; }
+.step.done .dot { background:var(--fg); border-color:var(--fg); }
+.step.cur .dot { border-color:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); }
+.step.cur:not(.done) .dot::after { content:""; width:8px; height:8px; border-radius:50%; background:var(--accent); }
+.step .n { margin-top:4px; font-size:11px; font-weight:500; color:var(--fg-faint); font-variant-numeric:tabular-nums; }
+.step.cur .n { color:var(--accent); font-weight:600; }
+.step .link { position:absolute; top:16px; left:calc(50% + 10px); width:calc(100% - 20px); height:1px; background:var(--line-strong); }
+.step .link.covered { height:2px; background:var(--fg); }
+.seg { flex:1; height:6px; border-radius:3px; background:var(--surface-3); cursor:pointer; position:relative; overflow:hidden; border:none; padding:0; }
+.seg i { position:absolute; inset:0 auto 0 0; background:var(--fg-muted); }
+.seg.cur { outline:2px solid var(--fg); outline-offset:1px; }
+.seg.done i { background:var(--success); }
+.menu { position:absolute; margin-top:6px; background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); padding:6px; z-index:20; min-width:340px; }
+.menu button { display:flex; width:100%; gap:10px; align-items:center; padding:7px 10px; border:none; background:transparent; border-radius:8px; cursor:pointer; text-align:left; }
+.menu button:hover { background:var(--surface-2); }
+
+/* toolbar */
+.tools { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:20px 0 12px; }
+.sc { display:inline-flex; background:var(--surface-3); border-radius:999px; padding:3px; }
+.sc button { border:none; background:transparent; padding:4px 12px; border-radius:999px; font-size:13px; color:var(--fg-muted); cursor:pointer; white-space:nowrap; }
+.sc button.on { background:var(--surface); color:var(--fg); font-weight:500; box-shadow:0 1px 2px rgb(0 0 0 /.08); }
+.lbl { font-size:12.5px; color:var(--fg-faint); margin-right:-4px; }
+.switch { display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--fg-muted); user-select:none; }
+.switch .t { width:32px; height:18px; border-radius:9px; background:var(--line-strong); position:relative; transition:.15s; }
+.switch .t::after { content:""; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#fff; transition:.15s; }
+.switch.on .t { background:var(--success); }
+.switch.on .t::after { left:16px; }
+.banner { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--info-soft); color:var(--info); border-radius:12px; font-size:13px; margin-bottom:12px; }
+
+/* table */
+.tw { overflow-x:auto; }
+table { border-collapse:separate; border-spacing:0; width:100%; font-size:13px; }
+th { text-align:left; font-weight:500; color:var(--fg-faint); font-size:12px; padding:10px 10px; border-bottom:1px solid var(--line); white-space:nowrap; background:var(--surface); position:sticky; top:0; }
+th.sortable { cursor:pointer; user-select:none; }
+th.sortable:hover { color:var(--fg); }
+th .arr { font-size:10px; margin-left:3px; }
+td { padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; background:var(--surface); }
+tr:last-child td { border-bottom:none; }
+tbody tr { cursor:pointer; }
+tbody tr:hover td { background:var(--surface-2); }
+tbody tr.sel td { background:var(--surface-2); }
+tbody tr.sel td:first-child { box-shadow:inset 3px 0 0 var(--fg); }
+tr.expected td { background:var(--info-soft); border-bottom:2px solid var(--line-strong); cursor:default; }
+tr.expected:hover td { background:var(--info-soft); }
+tr.expected.sel td { background:var(--info-soft); }
+.stick1 { position:sticky; left:0; z-index:1; width:44px; }
+.stick2 { position:sticky; left:44px; z-index:1; }
+th.stick1, th.stick2 { z-index:2; }
+th.ans { max-width:0; overflow:hidden; text-overflow:ellipsis; }
+th.fit, th.stick1, th.stick2, th.num { width:1%; }
+.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.center { text-align:center; }
+.who { font-weight:500; white-space:nowrap; }
+.who small { display:block; font-weight:400; color:var(--fg-faint); font-size:11.5px; }
+.acts { white-space:nowrap; text-align:right; }
+.acts .btn { visibility:hidden; }
+tr:hover .acts .btn, tr.sel .acts .btn, tr.todo .acts .btn, tr.expected .acts .btn { visibility:visible; }
+
+/* verdict glyph */
+.vd { width:22px; height:22px; border-radius:6px; display:inline-grid; place-items:center; font-size:13px; font-weight:700; }
+.vd.correct { background:var(--success); color:var(--on-fill); }
+.vd.wrong { background:var(--danger); color:var(--on-fill); }
+.vd.partial { color:var(--on-fill); font-weight:900; background: repeating-linear-gradient(135deg, var(--success) 0 2.5px, color-mix(in srgb, var(--success) 40%, var(--surface)) 2.5px 5px); }
+.vd.partial i { font-style:normal; width:14px; height:14px; border-radius:4px; background:var(--success); display:grid; place-items:center; font-size:11px; }
+.vd.pending { border:1.5px dashed var(--fg-faint); color:var(--fg-faint); }
+.vd.star { background:var(--info); color:var(--on-fill); }
+
+/* cells */
+.box { width:16px; height:16px; border-radius:4px; display:inline-block; border:1.5px solid var(--line-strong); vertical-align:middle; }
+.box.on { border-color:transparent; }
+.box.on.good { background:var(--success); }
+.box.on.bad { background:var(--danger); }
+.box.on.exp { background:var(--info); }
+.box.missed { border:1.5px dashed var(--success); }
+.tx { display:inline-block; padding:1px 7px; border-radius:6px; font-family:"JetBrains Mono", monospace; font-size:12.5px; }
+.tx.good { background:var(--success-soft); color:var(--success); }
+.tx.bad { background:var(--danger-soft); color:var(--danger); }
+.tx.exp { background:transparent; color:var(--info); font-weight:500; }
+.tx.none { color:var(--fg-faint); font-family:inherit; font-style:italic; }
+.essay { max-width:110ch; color:var(--fg-muted); display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; line-height:1.45; }
+.ci { display:flex; gap:10px; align-items:center; }
+.ci { align-items:flex-start; gap:14px; width:100%; }
+.ci svg { flex-shrink:0; border-radius:6px; border:1px solid var(--line); background:#fff; }
+
+.src { font-size:11px; color:var(--fg-faint); white-space:nowrap; }
+.src.ai { color:var(--info); }
+
+/* side panel */
+.scrim { position:fixed; inset:0; background:rgb(0 0 0 / .18); opacity:0; pointer-events:none; transition:.15s; z-index:30; }
+.scrim.open { opacity:1; pointer-events:auto; }
+.panel { position:fixed; top:0; right:0; bottom:0; width:min(560px, 100vw); background:var(--surface); border-left:1px solid var(--line); box-shadow:var(--shadow); transform:translateX(100%); transition:transform .18s ease; z-index:31; display:flex; flex-direction:column; }
+.panel.open { transform:none; }
+.ph2 { padding:18px 20px 14px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:flex-start; }
+.ph2 h2 { font-size:20px; margin:0; font-weight:700; letter-spacing:-.01em; }
+.ph2 p { margin:2px 0 0; color:var(--fg-muted); font-size:13px; }
+.pb { padding:18px 20px; overflow:auto; flex:1; display:flex; flex-direction:column; gap:18px; }
+.pf { padding:14px 20px; border-top:1px solid var(--line); display:flex; gap:8px; align-items:center; }
+.sec h4 { margin:0 0 6px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--fg-faint); font-weight:600; }
+.prompt { font-size:14.5px; }
+.choice { display:flex; align-items:center; gap:10px; padding:9px 12px; border:1px solid var(--line); border-radius:10px; margin-top:6px; }
+.choice .tag { margin-left:auto; font-size:12px; }
+.expl { background:var(--surface-2); border-radius:10px; padding:12px 14px; color:var(--fg-muted); }
+.field { width:100%; border:1px solid var(--line-strong); border-radius:10px; background:var(--surface); padding:8px 10px; font:inherit; color:var(--fg); }
+textarea.field { min-height:72px; resize:vertical; }
+.pts { display:flex; align-items:center; gap:8px; }
+.pts input { width:80px; text-align:right; font-variant-numeric:tabular-nums; }
+.hist { font-size:12.5px; color:var(--fg-muted); display:flex; flex-direction:column; gap:4px; }
+.help { color:var(--fg-faint); font-size:12px; }
+.keys { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--fg-faint); margin-top:14px; }
+kbd { font:500 11px "JetBrains Mono", monospace; border:1px solid var(--line-strong); border-bottom-width:2px; border-radius:5px; padding:0 5px; margin-right:4px; background:var(--surface); color:var(--fg-muted); }
+.ib { width:30px; height:30px; padding:0; justify-content:center; position:relative; }
+[data-tip]:hover::after, [data-tip]:focus-visible::after { content:attr(data-tip); position:absolute; bottom:calc(100% + 6px); right:0; background:var(--fg); color:var(--canvas); font-size:12px; font-weight:500; padding:5px 9px; border-radius:8px; white-space:nowrap; z-index:10; pointer-events:none; }
+.code { margin:0; padding:8px 10px; background:var(--surface-2); border-radius:8px; font:12px/1.45 "JetBrains Mono", monospace; color:var(--fg); white-space:pre; overflow:hidden; position:relative; cursor:zoom-in; flex:1; min-width:0; width:100%; }
+.code.clamped { max-height:calc(5 * 1.45em + 16px); }
+.code.clamped.more::after { content:"⋯ " attr(data-more); position:absolute; left:0; right:0; bottom:0; padding:10px 10px 4px; font-size:11px; color:var(--fg-muted); background:linear-gradient(transparent, var(--surface-2) 55%); }
+.code.open { cursor:zoom-out; max-height:none; }
+.sk { display:flex; flex-direction:column; gap:6px; padding:0 10px; font-size:12px; color:var(--fg-muted); }
+.sk div { display:flex; align-items:center; gap:4px; }
+.toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--fg); color:var(--canvas); padding:10px 16px; border-radius:999px; font-size:13px; opacity:0; transition:.2s; z-index:50; pointer-events:none; }
+.toast.show { opacity:1; }
+.empty { padding:40px; text-align:center; color:var(--fg-muted); }
+.note { position:fixed; bottom:12px; right:12px; font-size:11px; color:var(--fg-faint); }
+@media (max-width: 800px) { .side { display:none; } .main { padding:20px 16px 48px; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="side">
+    <div class="logo">Q<span>U</span>IZ</div>
+    <div class="nav">Activities</div>
+    <div class="nav">Courses</div>
+    <div class="nav">Question pools</div>
+    <div class="nav">Poll</div>
+    <h6>Classrooms</h6>
+    <div class="nav on">PRG1-2026</div>
+    <div class="spacer"></div>
+    <h6>Shortcuts</h6>
+    <div class="sk">
+      <div><kbd>Ctrl</kbd><kbd>K</kbd> Command palette</div>
+      <div><kbd>←</kbd><kbd>→</kbd> Question</div>
+      <div><kbd>↑</kbd><kbd>↓</kbd> Answer</div>
+      <div><kbd>Enter</kbd> Open</div>
+      <div><kbd>V</kbd> Validate</div>
+      <div><kbd>A</kbd> Adjust</div>
+    </div>
+    <button class="btn ghost sm" id="themeBtn" style="margin-top:12px;align-self:flex-start" >◐ Theme</button>
+  </nav>
+  <main class="main"><div class="col" id="root"></div></main>
+</div>
+<div class="scrim" id="scrim"></div>
+<aside class="panel" id="panel" aria-label="Answer"></aside>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ------------------------------------------------------------------ data */
+const STUDENTS = ["Alice Dupont","Bastien Morel","Chloé Favre","David Rochat","Emma Bonvin","Félix Aebi","Gaëlle Pittet","Hugo Rey"];
+
+const QUESTIONS = [
+  { id:"q1", type:"mcq", typeLabel:"Multiple choice", points:1, name:"prg1-pointeur-non-initialise",
+    prompt:"Que vaut un pointeur non initialisé déclaré à l'intérieur d'une fonction ?",
+    choices:[
+      {l:"A", t:"Une adresse indéterminée : le déréférencer est un comportement indéfini.", ok:true},
+      {l:"B", t:"NULL : la norme C garantit l'initialisation à zéro.", ok:false},
+      {l:"C", t:"L'adresse du dernier bloc libéré par free.", ok:false},
+      {l:"D", t:"Toujours 0x0, comme une variable globale.", ok:false}],
+    explanation:"Seules les variables statiques et globales sont mises à zéro au démarrage.",
+    answers:[["A"],["B"],["A"],["A"],["D"],["A"],["B"],null] },
+  { id:"q2", type:"mcq", typeLabel:"Multiple choice", points:2, multi:true, name:"prg1-types-entiers",
+    prompt:"Lesquels de ces types sont des types entiers en C ?",
+    choices:[{l:"A",t:"char",ok:true},{l:"B",t:"float",ok:false},{l:"C",t:"long",ok:true},{l:"D",t:"double",ok:false},{l:"E",t:"_Bool",ok:true}],
+    explanation:"char et _Bool sont des types entiers au sens de la norme.",
+    answers:[["A","C","E"],["C"],["A","C"],["A","B","C"],["A","C","E"],["C","E"],["A","C","D"],["A","C","E"]] },
+  { id:"q3", type:"short", typeLabel:"Short answer", points:1, name:"prg1-alloc-tas",
+    prompt:"Quelle fonction de la bibliothèque standard alloue un bloc sur le tas ?",
+    expected:["malloc","calloc"], explanation:"malloc, ou calloc qui met en plus à zéro.",
+    answers:["malloc","malloc","Malloc","new","calloc","malloc()","alloc",null] },
+  { id:"q4", type:"cloze", typeLabel:"Fill in the blanks", points:3, name:"prg1-boucle-for",
+    prompt:"Complétez la boucle qui affiche les entiers de 0 à 9 :\n\nfor (int i = [1]; i [2] 10; i[3]) { printf(\"%d\\n\", i); }",
+    blanks:[{n:1,exp:["0"]},{n:2,exp:["<","!="]},{n:3,exp:["++","+=1"]}],
+    explanation:"La condition doit être stricte : avec <= la boucle afficherait aussi 10.",
+    answers:[["0","<","++"],["0","<=","++"],["1","<","++"],["0","<","++"],["0","!=","+=1"],["0","<=","--"],["0","<","++"],["","<","++"]] },
+  { id:"q5", type:"categorize", typeLabel:"Categorize", points:4, name:"prg1-classes-stockage",
+    prompt:"Rangez chaque déclaration dans sa zone mémoire.",
+    columns:["Stack","Heap","Static"],
+    cards:[{c:"int x; (local)",ok:"Stack"},{c:"malloc(8)",ok:"Heap"},{c:"static int n;",ok:"Static"},{c:"int g; (global)",ok:"Static"},{c:"char buf[16]; (local)",ok:"Stack"},{c:"calloc(4, 2)",ok:"Heap"},{c:"const char *s = \"a\"",ok:"Static"}],
+    explanation:"Les littéraux de chaînes vivent en zone statique, pas sur la pile.",
+    answers:[
+      ["Stack","Heap","Static","Static","Stack","Heap","Static"],
+      ["Stack","Heap","Stack","Static","Stack","Heap","Stack"],
+      ["Stack","Heap","Static","Static","Stack","Heap","Stack"],
+      ["Heap","Heap","Static","Stack","Stack","Heap","Static"],
+      ["Stack","Heap","Static","Static","Stack","Heap","Static"],
+      ["Stack","Stack","Static","Static","Heap","Heap","Stack"],
+      ["Stack","Heap","Static","Static","Stack","Heap","Static"],
+      ["Stack","Heap",null,null,null,null,null]] },
+  { id:"q6", type:"codeimage", typeLabel:"Code → image", points:3, name:"prg1-damier",
+    prompt:"Écrivez le corps de la boucle qui dessine un damier 4×4 (# pour une case noire).",
+    explanation:"La couleur dépend de la parité de i + j.",
+    expectedCode:"for (int i = 0; i < 4; i++) {\n  for (int j = 0; j < 4; j++)\n    putchar((i + j) % 2 ? '.' : '#');\n  putchar('\\n');\n}",
+    answers:[
+      {code:"for (int i = 0; i < 4; i++) {\n  for (int j = 0; j < 4; j++)\n    putchar((i + j) % 2 ? '.' : '#');\n  putchar('\\n');\n}", img:"checker"},
+      {code:"for (int i = 0; i < 4; i++) {\n  for (int j = 0; j < 4; j++)\n    putchar(i % 2 ? '.' : '#');\n  putchar('\\n');\n}", img:"stripes"},
+      {code:"for (int i = 0; i < 4; i++) {\n  for (int j = 0; j < 4; j++) {\n    if ((i + j) % 2 == 0)\n      putchar('#');\n    else\n      putchar('.');\n  }\n  putchar('\\n');\n}", img:"checker"},
+      {code:"for (int i = 0; i < 16; i++)\n  printf(\"#\");", img:"full"},
+      {code:"for (int i = 0; i < 4; i++) {\n  for (int j = 0; j < 4; j++)\n    putchar((i * j) % 2 ? '.' : '#');\n  putchar('\\n');\n}", img:"odd"},
+      {code:"for (int i = 0; i < 4; i++) {\n  for (int j = 0; j < 4; j++)\n    putchar((i + j) & 1 ? '.' : '#');\n  puts(\"\");\n}", img:"checker"},
+      {code:"", img:null},
+      {code:"for (int i = 0; i < 4; i++) {\n  for (int j = 0; j < 4; j++) putchar((j + i) % 2 ? '.' : '#');\n  putchar('\\n');\n}", img:"checker"}],
+    pendingRunner:2 },
+  { id:"q7", type:"rich", typeLabel:"Essay", points:4, name:"prg1-essai-pile-tas",
+    prompt:"Expliquez en quelques phrases la différence entre la pile et le tas, et quand utiliser l'un ou l'autre.",
+    explanation:"Critères : durée de vie (2 pts), taille / coût (1 pt), un exemple juste (1 pt).",
+    expectedText:"La pile stocke les variables locales, sa durée de vie suit l'appel de fonction et son allocation est gratuite mais limitée en taille. Le tas est alloué explicitement (malloc/free), vit jusqu'à sa libération et convient aux données de taille inconnue à la compilation ou qui doivent survivre à la fonction.",
+    answers:[
+      "La pile contient les variables locales et se libère automatiquement à la fin de la fonction. Le tas est géré à la main avec malloc et free, on l'utilise quand la taille n'est connue qu'à l'exécution, par exemple un tableau lu depuis un fichier.",
+      "La pile c'est plus rapide que le tas.",
+      "Sur la pile on met les variables de la fonction, elles disparaissent après le return. Sur le tas les données restent tant qu'on ne fait pas free, mais il faut faire attention aux fuites mémoire.",
+      "Le tas est une structure de données où le plus grand élément est à la racine, la pile est LIFO.",
+      "Pile : automatique, taille limitée (quelques Mo), durée de vie de l'appel. Tas : malloc/free, grande taille, durée de vie choisie. Exemple : retourner un tableau créé dans une fonction impose le tas.",
+      "Je ne sais pas trop, la pile est en haut de la mémoire.",
+      "Les variables locales vont sur la pile. Le reste sur le tas.",
+      null],
+    ai:[{p:4,c:"high"},{p:1,c:"medium"},{p:3,c:"high"},{p:0,c:"high"},{p:4,c:"high"},{p:0,c:"low"},{p:1.5,c:"low"},null] },
+];
+
+/* ------------------------------------------------------------ grading model */
+function norm(s){ return (s??"").trim(); }
+function buildEntries(q){
+  return STUDENTS.map((name, i) => {
+    const a = q.answers[i];
+    let pts = 0, parts = null, source = "auto", state = "validated", confidence = null;
+    if (q.type === "mcq") {
+      if (a) {
+        const correct = q.choices.filter(c=>c.ok).map(c=>c.l);
+        if (!q.multi) pts = a.length===1 && correct.includes(a[0]) ? q.points : 0;
+        else {
+          const c = a.filter(x=>correct.includes(x)).length, w = a.length - c;
+          const W = q.choices.length - correct.length;
+          pts = Math.max(0, Math.round(q.points * (c/correct.length - w/W) * 2)/2);
+        }
+      }
+    } else if (q.type === "short") {
+      pts = a && q.expected.includes(norm(a)) ? q.points : 0;
+    } else if (q.type === "cloze") {
+      parts = q.blanks.map((b,k)=> a ? b.exp.includes(norm(a[k])) : false);
+      pts = parts.filter(Boolean).length * q.points / q.blanks.length;
+    } else if (q.type === "categorize") {
+      parts = q.cards.map((c,k)=> a ? a[k] === c.ok : false);
+      pts = Math.round(parts.filter(Boolean).length / q.cards.length * q.points * 2)/2;
+    } else if (q.type === "codeimage") {
+      pts = a && a.img === "checker" ? q.points : a && a.img ? (a.img==="odd"||a.img==="stripes" ? 1 : 0) : 0;
+      if (a && (i===3||i===4)) { state = "pending"; pts = null; }
+    } else if (q.type === "rich") {
+      const ai = q.ai[i];
+      if (ai) { source = "llm"; state = "proposed"; confidence = ai.c; pts = ai.p; }
+    }
+    return { i, name, answer:a, pts, max:q.points, parts, source, state, confidence,
+      comment:null, history:[] };
+  });
+}
+const STATE = {
+  qi: 0,
+  entries: Object.fromEntries(QUESTIONS.map(q=>[q.id, buildEntries(q)])),
+  stateFilter: "all",       // all | todo
+  source: "any",            // any | auto | llm | manual
+  confidence: "any",
+  anonymise: true,
+  seed: Math.floor(Math.random()*1e9),
+  sort: null,               // {key, dir}
+  selected: null,           // entry id (student index); -1 = expected row
+  panel: null,              // {kind:"entry", id} | {kind:"expected"}
+  adjusting: false,
+  menu: false,
+  newVersion: {},           // qid -> version number published from the editor
+  openCode: new Set(),
+};
+const q = () => QUESTIONS[STATE.qi];
+const isDone = (x) => STATE.entries[x.id].every(r=>r.state==="validated");
+
+function verdict(e){
+  if (e.state === "pending" || e.pts === null) return "pending";
+  if (e.state === "proposed" && e.max && e.pts === 0 && e.source !== "llm") return "pending";
+  if (e.pts >= e.max) return "correct";
+  if (e.pts <= 0) return "wrong";
+  return "partial";
+}
+const VERDICT_RANK = { wrong:0, partial:1, pending:2, correct:3 };
+
+/* seeded shuffle, stable for the whole visit */
+function mulberry(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function shuffled(list, salt){
+  const r = mulberry(STATE.seed ^ salt); const out = list.slice();
+  for (let k=out.length-1;k>0;k--){ const j=Math.floor(r()*(k+1)); [out[k],out[j]]=[out[j],out[k]]; }
+  return out;
+}
+
+/* ------------------------------------------------------------- columns */
+/* This is the contract piece the real thing needs from each question type:
+   the columns (from the question and its solution), a cell, and a sort key. */
+function columnsOf(qq){
+  switch (qq.type) {
+    case "mcq": return qq.choices.map(c=>({ key:c.l, label:c.l+" · "+c.t, title:c.t, center:true, narrow:true,
+      cell:(e)=>{ const on = e.answer?.includes(c.l); if (on) return `<span class="box on ${c.ok?"good":"bad"}"></span>`;
+        return c.ok && e.answer ? `<span class="box missed" title="missed"></span>` : `<span class="box"></span>`; },
+      exp:()=> c.ok ? `<span class="box on exp"></span>` : `<span class="box"></span>`,
+      sort:(e)=> e.answer?.includes(c.l) ? 1 : 0 }));
+    case "short": return [{ key:"text", label:"Answer",
+      cell:(e)=> e.answer==null ? `<span class="tx none">no answer</span>` : `<span class="tx ${e.pts>0?"good":"bad"}">${esc(e.answer)}</span>`,
+      exp:()=> qq.expected.map(x=>`<span class="tx exp">${esc(x)}</span>`).join(" "),
+      sort:(e)=> norm(e.answer).toLowerCase() }];
+    case "cloze": return qq.blanks.map((b,k)=>({ key:"b"+b.n, label:"Blank "+b.n,
+      cell:(e)=>{ const v = e.answer?.[k]; if (!v) return `<span class="tx none">—</span>`; return `<span class="tx ${e.parts[k]?"good":"bad"}">${esc(v)}</span>`; },
+      exp:()=> b.exp.map(x=>`<span class="tx exp">${esc(x)}</span>`).join(" "),
+      sort:(e)=> e.answer?.[k] ?? "" }));
+    case "categorize": return qq.cards.map((c,k)=>({ key:"c"+k, label:c.c, mono:true,
+      cell:(e)=>{ const v = e.answer?.[k]; if (!v) return `<span class="tx none">—</span>`; return `<span class="tx ${e.parts[k]?"good":"bad"}" style="font-family:inherit">${v}</span>`; },
+      exp:()=> `<span class="tx exp" style="font-family:inherit">${c.ok}</span>`,
+      sort:(e)=> e.answer?.[k] ?? "" }));
+    case "codeimage": return [{ key:"code", label:"Picture · program", wide:true,
+      cell:(e)=> !e.answer?.code ? `<span class="tx none">no answer</span>` :
+        `<div class="ci">${e.answer.img ? pic(e.answer.img, 14) : `<span class="chip info" style="width:56px;text-align:center">runner…</span>`}${codeBlock(e.answer.code, "e"+e.i)}</div>`,
+      exp:()=> `<div class="ci">${pic("checker", 14)}${codeBlock(qq.expectedCode, "x", "color:var(--info)")}</div>`,
+      sort:(e)=> e.answer?.code ?? "" }];
+    case "rich": return [{ key:"text", label:"Essay", wide:true,
+      cell:(e)=> e.answer==null ? `<span class="tx none">no answer</span>` : `<div class="essay">${esc(e.answer)}</div>`,
+      exp:()=> `<div class="essay" style="color:var(--info)">${esc(qq.expectedText)}</div>`,
+      sort:(e)=> (e.answer??"").length }];
+  }
+}
+function codeBlock(code, id, style=""){
+  const lines = code.split("\n").length; const open = STATE.openCode.has(id);
+  return `<pre class="code ${open?"open":"clamped"} ${lines>5?"more":""}" data-code="${id}" data-more="${lines-5} more lines" style="${style}">${esc(code)}</pre>`;
+}
+function pic(kind, s=12){
+  const n=4; let r="";
+  for (let i=0;i<n;i++) for (let j=0;j<n;j++){
+    const black = kind==="checker" ? (i+j)%2===0 : kind==="stripes" ? i%2===0 : kind==="full" ? true : (i*j)%2===0;
+    if (black) r += `<rect x="${j*s}" y="${i*s}" width="${s}" height="${s}" fill="#1a1917"/>`;
+  }
+  return `<svg width="${n*s}" height="${n*s}" viewBox="0 0 ${n*s} ${n*s}">${r}</svg>`;
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function fmt(n){ return n==null ? "—" : Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/,""); }
+
+/* ------------------------------------------------------------- the rows */
+function visibleRows(){
+  const qq = q(); let rows = STATE.entries[qq.id].slice();
+  rows = STATE.anonymise ? shuffled(rows, STATE.qi+1) : rows.sort((a,b)=>a.name.localeCompare(b.name));
+  if (STATE.stateFilter === "todo") rows = rows.filter(e=>e.state!=="validated");
+  if (STATE.source !== "any") rows = rows.filter(e=>e.source===STATE.source);
+  if (STATE.source === "llm" && STATE.confidence !== "any") rows = rows.filter(e=>e.confidence===STATE.confidence);
+  if (STATE.sort) {
+    const { key, dir } = STATE.sort; const cols = columnsOf(qq);
+    const val = key==="verdict" ? (e)=>VERDICT_RANK[verdict(e)] : key==="pts" ? (e)=>e.pts??-1 : key==="name" ? (e)=>e.name : cols.find(c=>c.key===key).sort;
+    rows = rows.map((e,k)=>[e,k]).sort((x,y)=>{ const a=val(x[0]), b=val(y[0]); return (a<b?-1:a>b?1:x[1]-y[1]) * (a===b?1:dir); }).map(x=>x[0]);
+  }
+  return rows;
+}
+const batchable = () => visibleRows().filter(e=>e.state==="proposed");
+
+/* ------------------------------------------------------------- render */
+function render(){
+  const qq = q(), all = STATE.entries[qq.id], rows = visibleRows(), cols = columnsOf(qq);
+  const todo = all.filter(e=>e.state!=="validated").length;
+  const batch = batchable().length;
+  const root = document.getElementById("root");
+  root.innerHTML = `
+    <div class="ph">
+      <div><div class="eyebrow">Test 0 — bases du C</div><h1>Grading</h1>
+      <p class="sub">Review the automatic grades, validate what needs it.</p></div>
+      <button class="btn">▥ Results</button>
+    </div>
+
+    <div class="card qbar">
+      <div class="qrow">
+        <button class="btn ghost sm" data-act="prev" title="Previous question (←)" ${STATE.qi===0?"disabled":""}>‹</button>
+        <div style="position:relative">
+          <button class="qtitle" data-act="menu">Question ${STATE.qi+1} of ${QUESTIONS.length} <span style="font-size:11px">▾</span></button>
+          ${STATE.menu ? `<div class="menu">${QUESTIONS.map((x,k)=>{ const e=STATE.entries[x.id]; const t=e.filter(r=>r.state!=="validated").length;
+            return `<button data-jump="${k}"><b style="width:18px">${k+1}</b><span style="flex:1">${x.name}</span>${t?`<span class="chip warn">${t} to validate</span>`:`<span class="chip ok">done</span>`}</button>`; }).join("")}</div>` : ""}
+        </div>
+        <span class="chip">${qq.typeLabel}</span><span class="chip">${qq.points} pts</span>
+        <span class="qname mono">${qq.name}</span>
+        <span class="spacer"></span>
+        ${todo ? `<span class="chip warn">${todo} to validate</span>` : `<span class="chip ok">✓ all validated</span>`}
+        <button class="btn ghost sm" data-act="next" title="Next question (→)" ${STATE.qi===QUESTIONS.length-1?"disabled":""}>›</button>
+      </div>
+      <nav class="steps" aria-label="Questions">${QUESTIONS.map((x,k)=>{ const done=isDone(x); const next=QUESTIONS[k+1];
+        return `<button class="step ${k===STATE.qi?"cur":""} ${done?"done":""}" data-jump="${k}" title="Question ${k+1} — ${done?"all validated":"to validate"}"><span class="dot">${done?"✓":""}</span>${next?`<span class="link ${done&&isDone(next)?"covered":""}"></span>`:""}<span class="n">${k+1}</span></button>`; }).join("")}</nav>
+    </div>
+
+    <div class="tools">
+      <div class="sc" role="group" aria-label="State">
+        ${[["all","All"],["todo",`To validate${todo?` · ${todo}`:""}`]].map(([v,l])=>`<button class="${STATE.stateFilter===v?"on":""}" data-state="${v}">${l}</button>`).join("")}
+      </div>
+      <span class="lbl">Graded by</span>
+      <div class="sc" role="group" aria-label="Graded by">
+        ${[["any","Any"],["auto","Rules"],["llm","AI"],["manual","Teacher"]].map(([v,l])=>`<button class="${STATE.source===v?"on":""}" data-source="${v}">${l}</button>`).join("")}
+      </div>
+      ${STATE.source==="llm" ? `<span class="lbl">Confidence</span><div class="sc" role="group" aria-label="Confidence">
+        ${[["any","Any"],["high","High"],["medium","Medium"],["low","Low"]].map(([v,l])=>`<button class="${STATE.confidence===v?"on":""}" data-conf="${v}">${l}</button>`).join("")}</div>` : ""}
+      <span class="spacer"></span>
+      <span class="switch ${STATE.anonymise?"on":""}" data-act="anon" role="switch" aria-checked="${STATE.anonymise}" tabindex="0"><span class="t"></span>Anonymise</span>
+      ${batch ? `<button class="btn primary" data-act="batch">✓ Validate ${batch}</button>`
+        : todo ? `<button class="btn primary" disabled title="What is left needs a grade by hand">✓ Validate</button>`
+        : STATE.qi < QUESTIONS.length-1 ? `<button class="btn primary" data-act="next">Next question ›</button>`
+        : `<button class="btn primary">▥ Results</button>`}
+    </div>
+
+    ${qq.pendingRunner ? `<div class="banner">⟳ ${qq.pendingRunner} answers still at the runner — their pictures appear here when it has spoken.</div>` : ""}
+
+    <div class="card tw">
+      <table>
+        <thead><tr>
+          ${th("verdict","", "stick1 center")}
+          ${STATE.anonymise ? "" : th("name","Student","stick2")}
+          ${cols.map(c=>th(c.key, c.label, (c.center?"center ":"")+"ans", c.title, `width:${(100/cols.length).toFixed(2)}%`)).join("")}
+          ${th("pts","Points","num")}
+          <th class="fit"></th>
+        </tr></thead>
+        <tbody>
+          <tr class="expected ${STATE.selected===-1?"sel":""}" data-row="-1">
+            <td class="stick1 center"><span class="vd star" title="Expected answer">★</span></td>
+            ${STATE.anonymise ? "" : `<td class="stick2 who">Expected</td>`}
+            ${cols.map(c=>`<td class="${c.center?"center":""}">${c.exp()}</td>`).join("")}
+            <td class="num"><b>${qq.points}</b></td>
+            <td class="acts">
+              ${STATE.newVersion[qq.id] ? `<span class="chip info" style="margin-right:6px">v${STATE.newVersion[qq.id]} published</span>` : ""}
+              <button class="btn ghost ib" data-act="edit" data-tip="Edit the question" aria-label="Edit the question">✎</button>
+              <button class="btn ib ${STATE.newVersion[qq.id]?"":"ghost"}" data-act="regrade" data-tip="${STATE.newVersion[qq.id]?`Re-grade with version ${STATE.newVersion[qq.id]}`:"Re-grade every answer"}" aria-label="Re-grade">⟳</button>
+            </td>
+          </tr>
+          ${rows.length ? rows.map((e)=>row(e,cols)).join("") :
+            `<tr><td colspan="99" class="empty">Nothing ${STATE.stateFilter==="todo"?"left to validate":"matches"} here.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+  renderPanel();
+}
+function th(key, label, cls="", title, style=""){
+  const s = STATE.sort?.key===key ? `<span class="arr">${STATE.sort.dir>0?"▲":"▼"}</span>` : "";
+  return `<th class="sortable ${cls}" data-sort="${key}" ${title?`title="${esc(title)}"`:""} ${style?`style="${style}"`:""}>${esc(label)}${s}</th>`;
+}
+function row(e,cols){ const k = e.i;
+  const v = verdict(e); const glyph = {correct:"✓",wrong:"✕",partial:"<i>✓</i>",pending:"?"}[v];
+  const label = STATE.anonymise ? "" : `<td class="stick2 who">${esc(e.name)}${e.source==="llm"?`<small>AI · ${e.confidence}</small>`:""}</td>`;
+  return `<tr class="${e.state!=="validated"?"todo":""} ${STATE.selected===k?"sel":""}" data-row="${k}">
+    <td class="stick1 center"><span class="vd ${v}" title="${v}">${glyph}</span></td>
+    ${label}
+    ${cols.map(c=>`<td class="${c.center?"center":""}">${c.cell(e)}</td>`).join("")}
+    <td class="num">${fmt(e.pts)} <span style="color:var(--fg-faint)">/ ${e.max}</span>${STATE.anonymise && e.source==="llm" ? `<div class="src ai">AI · ${e.confidence}</div>` : e.source==="manual" ? `<div class="src">teacher</div>` : ""}</td>
+    <td class="acts">
+      ${e.state==="proposed" ? `<button class="btn sm" data-validate="${k}">✓ Validate</button>` : ""}
+      <button class="btn sm ghost" data-adjust="${k}">Adjust</button>
+    </td></tr>`;
+}
+
+/* ------------------------------------------------------------- panel */
+const entryById = (id) => STATE.entries[q().id][id];
+function renderPanel(){
+  const p = document.getElementById("panel"), scrim = document.getElementById("scrim");
+  const open = !!STATE.panel; p.classList.toggle("open", open); scrim.classList.toggle("open", open);
+  if (!open) return;
+  const qq = q();
+  if (STATE.panel.kind === "expected") {
+    p.innerHTML = `
+      <div class="ph2"><div style="flex:1"><h2>Question ${STATE.qi+1}</h2><p class="mono">${qq.name} · ${qq.typeLabel} · ${qq.points} pts</p></div><button class="btn ghost sm" data-act="close">✕</button></div>
+      <div class="pb">
+        <div class="sec"><h4>Statement</h4><div class="prompt">${esc(qq.prompt).replace(/\n/g,"<br>")}</div></div>
+        <div class="sec"><h4>Expected answer</h4>${fullAnswer(qq, null, true)}</div>
+        <div class="sec"><h4>Explanation</h4><div class="expl">${esc(qq.explanation)}</div></div>
+        <p class="help">Wrong key? Edit the question, publish a new version, come back here and re-grade: every answer is graded again, the previous grading kept in its history.</p>
+      </div>
+      <div class="pf"><button class="btn" data-act="edit">✎ Edit question</button><button class="btn" data-act="regrade">⟳ Re-grade</button></div>`;
+    return;
+  }
+  const e = entryById(STATE.panel.id);
+  const who = STATE.anonymise ? "Anonymous answer" : e.name;
+  p.innerHTML = `
+    <div class="ph2"><span class="vd ${verdict(e)}">${{correct:"✓",wrong:"✕",partial:"<i>✓</i>",pending:"?"}[verdict(e)]}</span>
+      <div style="flex:1"><h2>${esc(who)}</h2><p>${fmt(e.pts)} / ${e.max} pts · ${e.source==="llm"?`proposed by AI, ${e.confidence} confidence`:e.source==="manual"?"graded by a teacher":"graded by the question's rules"} · ${e.state}</p></div>
+      <button class="btn ghost sm" data-act="up" title="Previous (↑)">↑</button><button class="btn ghost sm" data-act="down" title="Next (↓)">↓</button>
+      <button class="btn ghost sm" data-act="close">✕</button></div>
+    <div class="pb">
+      <div class="sec"><h4>Statement</h4><div class="prompt">${esc(qq.prompt).replace(/\n/g,"<br>")}</div></div>
+      <div class="sec"><h4>Answer</h4>${fullAnswer(qq, e, false)}</div>
+      <div class="sec"><h4>Explanation</h4><div class="expl">${esc(qq.explanation)}</div></div>
+      ${e.history.length ? `<div class="sec"><h4>History</h4><div class="hist">${e.history.map(h=>`<div>${h}</div>`).join("")}</div></div>` : ""}
+      ${STATE.adjusting ? `<div class="sec" id="adj"><h4>Adjust</h4>
+        <div class="pts"><input class="field" id="adjPts" type="number" step="0.5" min="0" max="${e.max}" value="${e.pts??0}"><span style="color:var(--fg-muted)">/ ${e.max} pts</span></div>
+        <textarea class="field" id="adjCom" placeholder="Comment (required, the student may see it)" style="margin-top:8px">${esc(e.comment??"")}</textarea></div>` : ""}
+    </div>
+    <div class="pf">
+      ${STATE.adjusting
+        ? `<button class="btn primary" data-act="saveAdj">Save and validate</button><button class="btn ghost" data-act="cancelAdj">Cancel</button>`
+        : `${e.state==="proposed"?`<button class="btn primary" data-act="valOne">✓ Validate</button>`:""}<button class="btn" data-act="adj">Adjust</button>`}
+    </div>`;
+  if (STATE.adjusting) setTimeout(()=>document.getElementById("adjPts")?.focus(), 0);
+}
+function fullAnswer(qq, e, expected){
+  const a = e?.answer;
+  if (!expected && a == null || (qq.type==="codeimage" && !expected && !a?.code)) return `<p class="tx none">No answer — graded 0.</p>`;
+  switch (qq.type) {
+    case "mcq": return qq.choices.map(c=>{ const on = expected ? c.ok : a.includes(c.l);
+      const tag = expected ? (c.ok?`<span class="tag" style="color:var(--info)">expected</span>`:"") : on ? (c.ok?`<span class="tag" style="color:var(--success)">correct</span>`:`<span class="tag" style="color:var(--danger)">wrong</span>`) : c.ok ? `<span class="tag" style="color:var(--fg-faint)">missed</span>` : "";
+      return `<div class="choice"><span class="box ${on?`on ${expected?"exp":c.ok?"good":"bad"}`:""}"></span><b>${c.l}</b> ${esc(c.t)}${tag}</div>`; }).join("");
+    case "short": return expected ? qq.expected.map(x=>`<span class="tx exp">${esc(x)}</span>`).join(" ") : `<span class="tx ${e.pts>0?"good":"bad"}">${esc(a)}</span>`;
+    case "cloze": return `<table><tr><th>Blank</th><th>${expected?"Accepted":"Answer"}</th>${expected?"":"<th>Accepted</th>"}</tr>${qq.blanks.map((b,k)=>`<tr><td>${b.n}</td><td>${expected?b.exp.map(x=>`<span class="tx exp">${esc(x)}</span>`).join(" "):`<span class="tx ${e.parts[k]?"good":"bad"}">${esc(a[k]||"—")}</span>`}</td>${expected?"":`<td class="mono">${b.exp.join(" · ")}</td>`}</tr>`).join("")}</table>`;
+    case "categorize": return `<table><tr><th>Card</th><th>${expected?"Column":"Placed in"}</th>${expected?"":"<th>Expected</th>"}</tr>${qq.cards.map((c,k)=>`<tr><td class="mono">${esc(c.c)}</td><td>${expected?`<span class="tx exp" style="font-family:inherit">${c.ok}</span>`:a[k]?`<span class="tx ${e.parts[k]?"good":"bad"}" style="font-family:inherit">${a[k]}</span>`:"—"}</td>${expected?"":`<td>${c.ok}</td>`}</tr>`).join("")}</table>`;
+    case "codeimage": { const img = expected ? "checker" : a.img; const code = expected ? qq.expectedCode : a.code;
+      return `<div style="display:flex;gap:16px;align-items:flex-start">${img?pic(img, 28):`<span class="chip info">at the runner</span>`}<pre class="code open" style="flex:1;max-width:none;cursor:default">${esc(code)}</pre></div>`; }
+    case "rich": return `<div style="line-height:1.6">${esc(expected ? qq.expectedText : a)}</div>`;
+  }
+}
+
+/* ------------------------------------------------------------- actions */
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toast.h); toast.h=setTimeout(()=>t.classList.remove("show"),2200); }
+function go(qi){ if (qi<0||qi>=QUESTIONS.length) return; STATE.qi=qi; STATE.sort=null; STATE.selected=null; STATE.panel=null; STATE.adjusting=false; STATE.menu=false; render(); }
+function validate(e){ e.state="validated"; e.history.unshift(`${new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})} · validated at ${fmt(e.pts)} pts`); }
+function moveSel(dir, keepPanel){
+  const ids = [-1, ...visibleRows().map(e=>e.i)]; const at = ids.indexOf(STATE.selected);
+  const next = ids[Math.max(0, Math.min(ids.length-1, (at<0 ? (dir>0?1:0) : at+dir)))];
+  STATE.selected = next; if (keepPanel || STATE.panel) return openRow(next); render();
+}
+function openRow(k, adjust=false){ STATE.selected=k; STATE.panel = k===-1 ? {kind:"expected"} : {kind:"entry", id:k}; STATE.adjusting = adjust && k!==-1; render(); }
+
+document.addEventListener("click", ev => {
+  const c = ev.target.closest("[data-code]");
+  if (c) { const id=c.dataset.code; STATE.openCode.has(id) ? STATE.openCode.delete(id) : STATE.openCode.add(id); return render(); }
+  const t = ev.target.closest("[data-act],[data-jump],[data-state],[data-source],[data-conf],[data-sort],[data-validate],[data-adjust],[data-row]");
+  if (!t) { if (STATE.menu) { STATE.menu=false; render(); } return; }
+  const d = t.dataset;
+  if (d.jump) return go(+d.jump);
+  if (d.state) { STATE.stateFilter=d.state; STATE.selected=null; return render(); }
+  if (d.source) { STATE.source=d.source; if (d.source!=="llm") STATE.confidence="any"; STATE.selected=null; return render(); }
+  if (d.conf) { STATE.confidence=d.conf; return render(); }
+  if (d.sort) { const s=STATE.sort; STATE.sort = s?.key===d.sort ? (s.dir>0?{key:d.sort,dir:-1}:null) : {key:d.sort,dir:1}; STATE.selected=null; return render(); }
+  if (d.validate) { validate(entryById(+d.validate)); toast("Validated"); ev.stopPropagation(); return render(); }
+  if (d.adjust) { ev.stopPropagation(); return openRow(+d.adjust, true); }
+  switch (d.act) {
+    case "prev": return go(STATE.qi-1);
+    case "next": return go(STATE.qi+1);
+    case "menu": STATE.menu=!STATE.menu; ev.stopPropagation(); return render();
+    case "anon": STATE.anonymise=!STATE.anonymise; STATE.selected=null; STATE.panel=null; if (STATE.anonymise && STATE.sort?.key==="name") STATE.sort=null; return render();
+    case "batch": { const b=batchable(); b.forEach(validate); toast(`${b.length} proposals validated`); return render(); }
+    case "edit": ev.stopPropagation(); STATE.newVersion[q().id]=(STATE.newVersion[q().id]||1)+1; toast("→ opens the editor; publishing brings you back here, on this question"); return render();
+    case "regrade": ev.stopPropagation(); if (confirm(`Re-grade every answer to question ${STATE.qi+1}${STATE.newVersion[q().id]?` with version ${STATE.newVersion[q().id]}`:""}? The previous gradings stay in each answer's history.`)) { delete STATE.newVersion[q().id]; toast("Re-grading queued"); render(); } return;
+    case "close": STATE.panel=null; STATE.adjusting=false; return render();
+    case "up": case "down": return moveSel(d.act==="up"?-1:1, true);
+    case "adj": STATE.adjusting=true; return renderPanel();
+    case "cancelAdj": STATE.adjusting=false; return renderPanel();
+    case "valOne": { const e=entryById(STATE.panel.id); validate(e); toast("Validated"); return render(); }
+    case "saveAdj": { const e=entryById(STATE.panel.id); const pts=+document.getElementById("adjPts").value; const com=document.getElementById("adjCom").value.trim();
+      if (!com) { document.getElementById("adjCom").focus(); return toast("A comment is required to change a grade"); }
+      e.history.unshift(`was ${fmt(e.pts)} pts (${e.source})`); e.pts=Math.max(0,Math.min(e.max,pts)); e.comment=com; e.source="manual"; validate(e); STATE.adjusting=false; toast("Saved and validated"); return render(); }
+  }
+  if (d.row !== undefined) openRow(+d.row);
+});
+document.getElementById("scrim").addEventListener("click", ()=>{ STATE.panel=null; STATE.adjusting=false; render(); });
+document.addEventListener("keydown", ev => {
+  if (ev.target.matches("input,textarea")) { if (ev.key==="Escape") { STATE.adjusting=false; renderPanel(); } return; }
+  const n = visibleRows().length;
+  switch (ev.key) {
+    case "ArrowLeft": return go(STATE.qi-1);
+    case "ArrowRight": return go(STATE.qi+1);
+    case "ArrowDown": ev.preventDefault(); return moveSel(1);
+    case "ArrowUp": ev.preventDefault(); return moveSel(-1);
+    case "Enter": if (STATE.selected!=null) openRow(STATE.selected); return;
+    case "Escape": STATE.panel=null; STATE.adjusting=false; STATE.menu=false; return render();
+    case "v": case "V": { const e = STATE.selected>=0 ? entryById(STATE.selected) : null; if (e?.state==="proposed") { validate(e); toast("Validated"); render(); } return; }
+    case "a": case "A": if (STATE.selected>=0) { ev.preventDefault(); openRow(STATE.selected, true); } return;
+  }
+});
+document.getElementById("themeBtn").addEventListener("click", ()=>{
+  const r=document.documentElement; const dark = r.dataset.theme ? r.dataset.theme==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  r.dataset.theme = dark ? "light" : "dark";
+});
+render();
+</script>
+</body>
+</html>

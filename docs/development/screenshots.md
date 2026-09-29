@@ -103,7 +103,8 @@ scenes were retaken on their own (`--only`) on 2026-09-28, the
 `join-*` scenes later on 2026-09-29, and the four classroom scenes
 (`classroom-evaluations`, `classroom-roster`, `roster-import`,
 `help-drawer`) together on 2026-09-29 (#295), each time on a fresh seed,
-which is why their ids differ from the other rows.
+which is why their ids differ from the other rows. The `grading*` scenes
+describe the grading table (ADR-040); their images are retaken with it.
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |
@@ -139,9 +140,8 @@ which is why their ids differ from the other rows.
 | `grading-short` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Moved to the next question (the short answer). | 1440×900, full page |
 | `grading-cloze` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Moved three questions forward (the cloze). | 1440×900, full page |
 | `grading-code` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Moved four questions forward (the code question). | 1440×900, full page |
-| `grading-by-student` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Switched the order to “By student”. | 1440×900, full page |
-| `grading-override` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Clicked “Adjust” on the first grading. | 1440×900 |
-| `grading-batch` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | seeded | Moved to the code question; the batch bar offers to validate its proposals. | 1440×900 |
+| `grading-override` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Opened the first answer and clicked “Adjust” in its panel. | 1440×900 |
+| `grading-batch` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | seeded | Moved to the code question; the primary button offers to validate its proposals. | 1440×900 |
 | `results` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results` | graded | Nothing: the page as it loads. | 1440×900, full page |
 | `results-questions` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results?tab=questions` | graded | Nothing: the page as it loads. | 1440×900, full page |
 | `results-release-confirm` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results` | graded | Clicked “Publish results”. | 1440×900 |

@@ -422,7 +422,7 @@ const scenes = [
   // Grading and results (before the release)
   {
     name: "grading",
-    caption: "The grading panel, by question: the automatic gradings, validated or waiting for the teacher.",
+    caption: "The grading table, one question at a time: the automatic gradings, validated or waiting for the teacher.",
     phase: "graded",
     persona: "teacher",
     path: (w) => `/evaluations/${w.evals.closed.id}/grading`,
@@ -463,24 +463,16 @@ const scenes = [
     state: "“Test 0” graded by the real runner, unreleased.",
   },
   {
-    name: "grading-by-student",
-    caption: "The same panel, by student.",
-    phase: "graded",
-    persona: "teacher",
-    path: (w) => `/evaluations/${w.evals.closed.id}/grading`,
-    fullPage: true,
-    act: (p) => p.locator("label").filter({ hasText: /^By student$/ }).first().click(),
-    action: "Switched the order to “By student”.",
-    state: "“Test 0” graded by the real runner, unreleased.",
-  },
-  {
     name: "grading-override",
     caption: "Adjusting a grading by hand: points and a comment the student will read.",
     phase: "graded",
     persona: "teacher",
     path: (w) => `/evaluations/${w.evals.closed.id}/grading`,
-    act: (p) => p.getByRole("button", { name: /^adjust$/i }).first().click(),
-    action: "Clicked “Adjust” on the first grading.",
+    act: async (p) => {
+      await p.locator("tbody tr").nth(1).click();
+      await p.getByRole("dialog").getByRole("button", { name: /^adjust$/i }).click();
+    },
+    action: "Opened the first answer and clicked “Adjust” in its panel.",
     state: "“Test 0” graded by the real runner, unreleased.",
   },
   {
@@ -490,10 +482,10 @@ const scenes = [
     path: (w) => `/evaluations/${w.evals.closed.id}/grading`,
     act: (p) => nextQuestion(p, 4),
     // The click is NOT made: under eleven proposals the button validates on
-    // the spot (BatchBar.BATCH_CONFIRM_THRESHOLD), and the seed never holds
+    // the spot (useGradingActions.BATCH_CONFIRM_THRESHOLD), and the seed never holds
     // more than the four code answers. The confirm dialog itself is out of
     // reach of the demo world.
-    action: "Moved to the code question; the batch bar offers to validate its proposals.",
+    action: "Moved to the code question; the primary button offers to validate its proposals.",
     state: "As seeded: the four code answers of “Test 0” are proposals waiting for a runner (reason runner_unavailable), the rest is validated.",
   },
   {

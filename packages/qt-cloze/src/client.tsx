@@ -7,6 +7,7 @@
 import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
 import { typeIcon } from "@quiz/ui";
+import { clozeGrading } from "./grading.js";
 import { isClozeAnswered } from "./schema.js";
 import type {
   ClozeAnswer,
@@ -45,6 +46,7 @@ export const clozeClient: ClozeClient = {
 
   emptyAnswer: (student) => ({ blanks: student.blanks.map(() => null) }),
   isAnswered: isClozeAnswered,
+  grading: clozeGrading,
 };
 
 /*
@@ -54,7 +56,12 @@ export const clozeClient: ClozeClient = {
  * A host that genuinely needs one imports the file directly. Types only here.
  */
 export type { ClozeTextRenderer } from "./text.js";
-export { clozeEditorStrings, clozePlayerStrings, clozeReviewStrings } from "./strings.js";
+export {
+  clozeEditorStrings,
+  clozeGradingStrings,
+  clozePlayerStrings,
+  clozeReviewStrings,
+} from "./strings.js";
 export type {
   ClozeAnswer,
   ClozeConfig,

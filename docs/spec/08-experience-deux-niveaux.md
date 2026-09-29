@@ -73,7 +73,7 @@ The actions are provided by the mounted screens, through a command registry in `
 | Student player | `Ctrl+Enter` | "Validate and continue", where the navigation has one (`forward_only`, a checkpoint question in `milestones`); it opens the same confirmation as the button. Nothing in `free`, where a question is answered as soon as it holds an answer (issue #89) |
 | Dashboard | `n` `r` `s` | Toggle names / answers / results |
 | Dashboard | `Space` | Pause / resume |
-| Grading | `v` `→` | Validate and move on to the next |
+| Grading | `←` `→` · `↑` `↓` · `Enter` · `V` · `A` | Previous / next question · previous / next answer · open it · validate it · adjust it (ADR-040) |
 
 ## 8.6 Features that make the difference
 

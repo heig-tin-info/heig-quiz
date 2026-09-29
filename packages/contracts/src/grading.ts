@@ -2,9 +2,9 @@
  * `grading` route schemas (PLAN-MVP §4.5 and §3.5).
  *
  * The grading panel is a read model over `gradings`: one entry per
- * (attempt, item) pair, ordered by question or by student, with the student's
- * name replaced by a stable pseudonym unless the teacher asks for the names
- * (F-GRADE-03, decision D20).
+ * (attempt, item) pair, one question at a time, and anonymous unless the
+ * teacher asks for the names — an anonymous entry carries NO label at all,
+ * not a pseudonym (F-GRADE-03, ADR-040).
  *
  * `answerId` is NULLABLE here for the same reason it is nullable in the
  * table: an absent answer is still graded — zero points, validated, `auto`
@@ -28,6 +28,66 @@ export type GradingState = z.infer<typeof GradingState>;
 
 export const GradingConfidence = z.enum(["low", "medium", "high"]);
 export type GradingConfidence = z.infer<typeof GradingConfidence>;
+
+/**
+ * Why a machine PROPOSED instead of grading: the `details.reason` (and the
+ * `comment`) of a grading no grader could settle. Wire values, closed here
+ * once: the grading pass writes the first eight (`jobs.ts`), question types
+ * the next four (a circuit's or a program's own fault, issue #267), and the
+ * runner's saturation the last. The web translates every one of them.
+ */
+export const PASS_REASONS = [
+  "config_unreadable",
+  "answer_invalid",
+  "grader_error",
+  "llm_not_configured",
+  "not_finalizable",
+  "runner_unavailable",
+  "runner_error",
+  "finalize_error",
+] as const;
+export type PassReason = (typeof PASS_REASONS)[number];
+
+export const MACHINE_REASONS = [
+  ...PASS_REASONS,
+  "reference_failed",
+  "palette_violation",
+  "runner_request_invalid",
+  "template_region_mismatch",
+  "runner_busy",
+] as const;
+export type MachineReason = (typeof MACHINE_REASONS)[number];
+
+export const isMachineReason = (value: unknown): value is MachineReason =>
+  typeof value === "string" && (MACHINE_REASONS as readonly string[]).includes(value);
+
+/**
+ * The reasons a new pass may clear: the runner or a grader was away or
+ * failed. The others are the question's own fault (a reference that fails,
+ * an unreadable configuration, no model configured) and only an edit of the
+ * question or of the platform settles them, so the panel does not offer a
+ * pass for them.
+ */
+export const RETRYABLE_REASONS = [
+  "runner_unavailable",
+  "runner_error",
+  "runner_busy",
+  "grader_error",
+  "finalize_error",
+  "not_finalizable",
+] as const satisfies readonly MachineReason[];
+
+export const isRetryableReason = (value: unknown): boolean =>
+  typeof value === "string" && (RETRYABLE_REASONS as readonly string[]).includes(value);
+
+/** `details.reason`, the one field every machine-written grading carries. */
+export function reasonOf(details: unknown): string | null {
+  if (details && typeof details === "object" && "reason" in details) {
+    const reason = (details as { reason: unknown }).reason;
+    return typeof reason === "string" ? reason : null;
+  }
+  return null;
+}
 
 /** The verdict a cell of the dashboard and of the results grid shows. */
 export const Verdict = z.enum(["correct", "partial", "wrong", "pending"]);
@@ -92,10 +152,35 @@ export const GradingEntry = z.object({
   answerId: z.uuid().nullable(),
   attemptId: z.uuid(),
   itemId: z.uuid(),
-  /** Pseudonym by default, display name when `?anonymous=0` (F-GRADE-03). */
-  label: z.string(),
-  /** The attempt is a teacher's own staff test (ADR-018), badged as such. */
+  /**
+   * The student's display name when `?anonymous=0`; `null` by default, and
+   * then nothing else in the entry names the student either (F-GRADE-03,
+   * ADR-040).
+   */
+  label: z.string().nullable(),
+  /**
+   * A GUEST's number among the evaluation's guests (ADR-014), when names
+   * are asked for: a guest has no name, and the web words it ("Guest 2")
+   * in the reader's language. `null` anonymised, and for an account.
+   */
+  guest: z.number().int().positive().nullable(),
+  /**
+   * The attempt is a teacher's own staff test (ADR-018). Sent anonymous or
+   * not: it says whose answer this is not, rather than whose it is.
+   */
   staff: z.boolean(),
+  /**
+   * Which of a student's attempts this is (ADR-025), `null` when the student
+   * holds only one — every exam. A number, never a name, so it is sent
+   * anonymous too: two answers of one student to one question must not read
+   * as two students.
+   */
+  attemptNumber: z.number().int().positive().nullable(),
+  /**
+   * The attempt is the one that counts for its student (ADR-025, `best` or
+   * `last`); always true for a student with one attempt.
+   */
+  kept: z.boolean(),
   answer: z.unknown().nullable(),
   /** The question as the student saw it, through `studentView()`. */
   student: z.unknown(),
@@ -106,7 +191,6 @@ export const GradingEntry = z.object({
 export type GradingEntry = z.infer<typeof GradingEntry>;
 
 export const GradingQueue = z.object({
-  order: z.enum(["question", "student"]),
   items: z.array(GradingQueueItem),
   entries: z.array(GradingEntry),
   counts: z.object({
@@ -118,12 +202,13 @@ export const GradingQueue = z.object({
 });
 export type GradingQueue = z.infer<typeof GradingQueue>;
 
-/** `?by=question|student&itemId=&attemptId=&state=&anonymous=1` */
+/**
+ * `?itemId=&anonymous=1`. Grading is by question (ADR-040): the panel reads
+ * one item's answers at a time, every state, and filters them itself;
+ * without `itemId`, every item's.
+ */
 export const GradingQuery = z.object({
-  by: z.enum(["question", "student"]).default("question"),
   itemId: z.uuid().optional(),
-  attemptId: z.uuid().optional(),
-  state: GradingState.optional(),
   anonymous: z
     .union([z.string(), z.boolean()])
     .default(true)
@@ -132,33 +217,20 @@ export const GradingQuery = z.object({
 export type GradingQuery = z.infer<typeof GradingQuery>;
 
 /**
- * `GET /evaluations/:id/grading/steps?by=&anonymous=` — the path of a
- * traversal, one step per question or per student, each with the state of
- * its cells (#107). The step picker lists them without downloading a single
- * answer: the queue carries whole answers and solutions, this carries three
- * counters per step.
+ * `GET /evaluations/:id/grading/steps` — one step per question, in the
+ * order of the evaluation, each with the state of its cells (#107): the
+ * question selector and its stepper are drawn without downloading a single
+ * answer. The queue carries whole answers and solutions, this carries two
+ * counters per question.
  */
-export const GradingStepsQuery = GradingQuery.pick({ by: true, anonymous: true });
-export type GradingStepsQuery = z.infer<typeof GradingStepsQuery>;
-
 const GradingStepSummary = z.object({
-  /** The item id by question, the attempt id by student. */
+  /** The item id. */
   key: z.uuid(),
-  /**
-   * By question, the item's internal name; by student, the pseudonym or the
-   * display name, by the same rule as `GradingEntry.label` (F-GRADE-03).
-   */
-  label: z.string(),
-  /** By student only: the attempt is a teacher's own staff test (ADR-018). */
-  staff: z.boolean(),
   total: z.number().int(),
   validated: z.number().int(),
-  proposed: z.number().int(),
 });
-type GradingStepSummary = z.infer<typeof GradingStepSummary>;
 
 export const GradingSteps = z.object({
-  order: z.enum(["question", "student"]),
   steps: z.array(GradingStepSummary),
 });
 export type GradingSteps = z.infer<typeof GradingSteps>;

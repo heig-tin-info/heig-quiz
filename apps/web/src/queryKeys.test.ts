@@ -76,15 +76,11 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["attemptInspectKey", keys.attemptInspectKey("e1", "a1"), ["attempt-inspect", "e1", "a1"]],
     ["attemptInspectPrefix", keys.attemptInspectPrefix("e1"), ["attempt-inspect", "e1"]],
     ["gradingKey", keys.gradingKey("e1"), ["grading", "e1"]],
-    [
-      "gradingStepsKey",
-      keys.gradingStepsKey("e1", "student", "1"),
-      ["grading", "e1", "steps", "student", "1"],
-    ],
+    ["gradingStepsKey", keys.gradingStepsKey("e1"), ["grading", "e1", "steps"]],
     [
       "gradingQueueKey",
-      keys.gradingQueueKey("e1", "by=question&itemId=i1", "proposed", "0"),
-      ["grading", "e1", "queue", "by=question&itemId=i1", "proposed", "0"],
+      keys.gradingQueueKey("e1", "i1", "0"),
+      ["grading", "e1", "queue", "i1", "0"],
     ],
     ["gradingProgressKey", keys.gradingProgressKey("e1"), ["grading", "e1", "progress"]],
     [
@@ -174,13 +170,9 @@ describe("queryKeys — the prefixes invalidations rely on", () => {
     [
       "gradingKey ⊂ gradingQueueKey",
       keys.gradingKey("e1"),
-      keys.gradingQueueKey("e1", null, "all", "1"),
+      keys.gradingQueueKey("e1", null, "1"),
     ],
-    [
-      "gradingKey ⊂ gradingStepsKey",
-      keys.gradingKey("e1"),
-      keys.gradingStepsKey("e1", "student", "1"),
-    ],
+    ["gradingKey ⊂ gradingStepsKey", keys.gradingKey("e1"), keys.gradingStepsKey("e1")],
     ["gradingKey ⊂ gradingProgressKey", keys.gradingKey("e1"), keys.gradingProgressKey("e1")],
     ["resultsKey ⊂ resultsViewKey", keys.resultsKey("e1"), keys.resultsViewKey("e1")],
     ["resultsKey ⊂ resultsByQuestionKey", keys.resultsKey("e1"), keys.resultsByQuestionKey("e1")],

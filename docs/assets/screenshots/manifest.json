@@ -668,7 +668,7 @@
     },
     {
       "name": "grading",
-      "caption": "The grading panel, by question: the automatic gradings, validated or waiting for the teacher.",
+      "caption": "The grading table, one question at a time: the automatic gradings, validated or waiting for the teacher.",
       "persona": "teacher",
       "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
       "width": 1440,
@@ -759,29 +759,6 @@
       "base": "http://localhost:3100"
     },
     {
-      "name": "grading-by-student",
-      "caption": "The same panel, by student.",
-      "persona": "teacher",
-      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
-      "width": 1440,
-      "height": 900,
-      "fullPage": true,
-      "theme": [
-        "light",
-        "dark"
-      ],
-      "action": "Switched the order to “By student”.",
-      "state": "“Test 0” graded by the real runner, unreleased.",
-      "phase": "graded",
-      "files": {
-        "light": "grading-by-student-light.png",
-        "dark": "grading-by-student-dark.png"
-      },
-      "takenAt": "2026-09-28T14:45:46.796Z",
-      "commit": "9bd6b57",
-      "base": "http://localhost:3100"
-    },
-    {
       "name": "grading-override",
       "caption": "Adjusting a grading by hand: points and a comment the student will read.",
       "persona": "teacher",
@@ -793,7 +770,7 @@
         "light",
         "dark"
       ],
-      "action": "Clicked “Adjust” on the first grading.",
+      "action": "Opened the first answer and clicked “Adjust” in its panel.",
       "state": "“Test 0” graded by the real runner, unreleased.",
       "phase": "graded",
       "files": {
@@ -816,7 +793,7 @@
         "light",
         "dark"
       ],
-      "action": "Moved to the code question; the batch bar offers to validate its proposals.",
+      "action": "Moved to the code question; the primary button offers to validate its proposals.",
       "state": "As seeded: the four code answers of “Test 0” are proposals waiting for a runner (reason runner_unavailable), the rest is validated.",
       "phase": "seeded",
       "files": {

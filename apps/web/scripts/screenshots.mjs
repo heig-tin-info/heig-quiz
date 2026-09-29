@@ -68,10 +68,10 @@ const TEMPLATE_INSTANCE = "eeeeeeee-0000-4000-8000-000000000026";
 
 const scenes = [
   // The Activities section (#190): the three views, the states.
-  { name: "activities", role: "teacher", path: "/activities", act: skipCoach },
-  { name: "activities-cards", role: "teacher", path: "/activities", ls: { "quiz-activities-view": "cards" }, act: skipCoach },
-  { name: "activities-schedule", role: "teacher", path: "/activities", ls: { "quiz-activities-view": "schedule" }, act: skipCoach },
-  { name: "activities-empty", role: "teacher", path: "/activities?empty=1", act: skipCoach },
+  { name: "activities", role: "teacher", path: "/activities" },
+  { name: "activities-cards", role: "teacher", path: "/activities", ls: { "quiz-activities-view": "cards" } },
+  { name: "activities-schedule", role: "teacher", path: "/activities", ls: { "quiz-activities-view": "schedule" } },
+  { name: "activities-empty", role: "teacher", path: "/activities?empty=1" },
   { name: "activities-error", role: "teacher", path: "/activities?fail=1", settle: 2500 },
   // Teacher home (the courses)
   { name: "teacher-home", role: "teacher", path: "/" },
@@ -91,9 +91,9 @@ const scenes = [
   // F-ORG-12: the page of one course — classrooms, pools, templates. PRG1
   // holds the mock's two templates, EMB none (the empty state), and an id
   // nobody reaches is the not-found state.
-  { name: "course-page", role: "teacher", path: "/courses/c1", act: skipCoach },
-  { name: "course-page-no-templates", role: "teacher", path: "/courses/c2", act: skipCoach },
-  { name: "course-page-actions", role: "teacher", path: "/courses/c1", fold: true, act: async (p) => { await skipCoach(p); await p.getByRole("button", { name: /^actions$/i }).first().click(); } },
+  { name: "course-page", role: "teacher", path: "/courses/c1" },
+  { name: "course-page-no-templates", role: "teacher", path: "/courses/c2" },
+  { name: "course-page-actions", role: "teacher", path: "/courses/c1", fold: true, act: async (p) => { await p.getByRole("button", { name: /^actions$/i }).first().click(); } },
   { name: "course-page-not-found", role: "teacher", path: "/courses/nope" },
   { name: "course-page-error", role: "teacher", path: "/courses/c1?fail=1", settle: 2500 },
   { name: "course-page-loading", role: "teacher", path: "/courses/c1?slow=1", settle: 300 },
@@ -104,7 +104,7 @@ const scenes = [
   // template's editor — the mock's exam template carries a stale item, and a
   // circuit question from a pool the course does not link — its settings tab
   // with the advanced options open, a new (empty) one, and an unknown id.
-  { name: "template-new", role: "teacher", path: "/courses/c1", fold: true, act: async (p) => { await skipCoach(p); await p.getByRole("button", { name: /^(new template|nouveau modèle)$/i }).first().click(); } },
+  { name: "template-new", role: "teacher", path: "/courses/c1", fold: true, act: async (p) => { await p.getByRole("button", { name: /^(new template|nouveau modèle)$/i }).first().click(); } },
   { name: "template-editor", role: "teacher", path: "/courses/c1", act: openTemplate },
   { name: "template-editor-settings", role: "teacher", path: "/courses/c1", act: async (p) => {
       await openTemplate(p);
@@ -119,22 +119,20 @@ const scenes = [
       await p.waitForTimeout(800);
     } },
   { name: "template-editor-empty", role: "teacher", path: "/courses/c1", act: async (p) => {
-      await skipCoach(p);
       await p.getByRole("button", { name: /^(new template|nouveau modèle)$/i }).first().click();
       await p.getByRole("dialog").getByRole("textbox").first().fill("Examen de rattrapage");
       await p.getByRole("button", { name: /^(create template|créer le modèle)$/i }).click();
       await p.waitForURL(/\/templates\//);
       await p.waitForTimeout(600);
-      await skipCoach(p);
     } },
-  { name: "template-editor-not-found", role: "teacher", path: "/templates/nope", act: skipCoach },
+  { name: "template-editor-not-found", role: "teacher", path: "/templates/nope" },
   { name: "eval-new-from-template", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /new evaluation|nouvelle évaluation/i }).first().click() },
   // F-EVAL-26: an instance behind its template — the list's badge, the
   // confirmation it opens, and the launch checklist's warning.
-  { name: "classroom-template-behind", role: "teacher", path: "/classrooms/r1", act: skipCoach },
-  { name: "template-pull-confirm", role: "teacher", path: "/classrooms/r1", fold: true, act: async (p) => { await skipCoach(p); await p.getByRole("button", { name: /from its template|depuis son modèle/i }).first().click(); } },
-  { name: "launch-template-behind", role: "teacher", path: `/evaluations/${TEMPLATE_INSTANCE}?step=launch`, act: skipCoach },
-  { name: "launch-template-pull-confirm", role: "teacher", path: `/evaluations/${TEMPLATE_INSTANCE}?step=launch`, fold: true, act: async (p) => { await skipCoach(p); await p.getByRole("button", { name: /^(update…|mettre à jour…)$/i }).first().click(); } },
+  { name: "classroom-template-behind", role: "teacher", path: "/classrooms/r1" },
+  { name: "template-pull-confirm", role: "teacher", path: "/classrooms/r1", fold: true, act: async (p) => { await p.getByRole("button", { name: /from its template|depuis son modèle/i }).first().click(); } },
+  { name: "launch-template-behind", role: "teacher", path: `/evaluations/${TEMPLATE_INSTANCE}?step=launch` },
+  { name: "launch-template-pull-confirm", role: "teacher", path: `/evaluations/${TEMPLATE_INSTANCE}?step=launch`, fold: true, act: async (p) => { await p.getByRole("button", { name: /^(update…|mettre à jour…)$/i }).first().click(); } },
   { name: "eval-save-template", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /^actions$/i }).first().click(); await p.getByRole("menuitem", { name: /save as template|enregistrer comme modèle/i }).click(); } },
   // #155: a hidden course brought back by "Show hidden", the course menu with
   // "Hide for me", and a course's archived classrooms behind "Show archived".
@@ -148,9 +146,8 @@ const scenes = [
   { name: "classroom", role: "teacher", path: "/classrooms/r1" },
   // #153: the sidebar's Classrooms section, one label per row, on the
   // classroom whose name outgrows 240 px — and that row's tip.
-  { name: "sidebar-classrooms", role: "teacher", path: "/classrooms/r4", fold: true, act: skipCoach },
+  { name: "sidebar-classrooms", role: "teacher", path: "/classrooms/r4", fold: true },
   { name: "sidebar-classroom-tip", role: "teacher", path: "/classrooms/r4", fold: true, act: async (p) => {
-      await skipCoach(p);
       await p.getByRole("button", { name: "Prog-C-2026-2027-test", exact: true }).first().hover();
       await p.waitForTimeout(400);
     } },
@@ -159,10 +156,9 @@ const scenes = [
   // course page (F-ORG-12), so the tip is hovered, not clicked.
   ...["collapsed", "active", "all"].map((state) => ({
     name: `sidebar-courses-${state}`, role: "teacher", path: "/classrooms/r4", fold: true,
-    ls: { "quiz-courses-nav": state }, act: skipCoach,
+    ls: { "quiz-courses-nav": state },
   })),
   { name: "sidebar-courses-all-tip", role: "teacher", path: "/classrooms/r4", fold: true, ls: { "quiz-courses-nav": "all" }, act: async (p) => {
-      await skipCoach(p);
       await p.getByRole("button", { name: "EMB", exact: true }).first().hover();
       await p.waitForTimeout(400);
     } },
@@ -188,7 +184,6 @@ const scenes = [
   // window it opens shows the student's portal under the mode banner.
   { name: "classroom-row-menu-admin", role: "admin", path: "/classrooms/r1?tab=roster", fold: true, act: (p) => openRowMenu(p, /^Actions for /) },
   { name: "impersonation-link", role: "admin", path: "/classrooms/r1?tab=roster", fold: true, act: async (p) => {
-      await skipCoach(p);
       await openRowMenu(p, /^Actions for /);
       await p.getByRole("menuitem", { name: /as this student|en tant que cet étudiant/ }).first().click();
       await p.getByRole("dialog").waitFor();
@@ -229,17 +224,17 @@ const scenes = [
   // `running`), blocked (an empty classroom has no question), and the
   // one-field Schedule dialog. `fold`: on a phone the dock is sticky, and a
   // full-page capture would pin it to the very bottom of the page.
-  { name: "eval-config-launch", role: "teacher", path: "/evaluations/draft?step=launch", act: skipCoachTwice },
-  { name: "eval-config-launch-fold", role: "teacher", path: "/evaluations/draft?step=launch", fold: true, act: skipCoachTwice },
-  { name: "eval-config-launch-scheduled", role: "teacher", path: "/evaluations/scheduled?step=launch", act: skipCoachTwice },
-  { name: "eval-config-launch-skip", role: "teacher", path: "/evaluations/eeeeeeee-0000-4000-8000-000000000015?step=launch", act: skipCoachTwice },
+  { name: "eval-config-launch", role: "teacher", path: "/evaluations/draft?step=launch" },
+  { name: "eval-config-launch-fold", role: "teacher", path: "/evaluations/draft?step=launch", fold: true },
+  { name: "eval-config-launch-scheduled", role: "teacher", path: "/evaluations/scheduled?step=launch" },
+  { name: "eval-config-launch-skip", role: "teacher", path: "/evaluations/eeeeeeee-0000-4000-8000-000000000015?step=launch" },
   {
     name: "eval-config-launch-blocked", role: "teacher", path: "/evaluations/eeeeeeee-0000-4000-8000-000000000015?step=questions", fold: true,
     act: async (p) => {
       // A draft emptied of its questions: the one blocker a click can make.
       // By its id, not the `draft` alias: the item routes invalidate the
       // query of the real id, which an alias-keyed page never refetches.
-      await skipCoachTwice(p);
+      await skipCoach(p);
       const remove = p.getByRole("button", { name: /^remove .* from the evaluation$|^retirer .* de l'évaluation$/i });
       await remove.first().waitFor({ timeout: 5000 });
       for (let i = 0; i < 20 && (await remove.count()) > 0; i++) {
@@ -251,13 +246,13 @@ const scenes = [
     },
   },
   { name: "eval-config-launch-schedule", role: "teacher", path: "/evaluations/draft?step=launch", fold: true, act: async (p) => {
-      await skipCoachTwice(p);
+      await skipCoach(p);
       await p.getByRole("button", { name: /^schedule…$|^planifier…$/i }).first().click();
     } },
   // The waiting-room preview: a side column from `lg` up (in the scenes
   // above), a row opening a sheet on a phone.
   { name: "eval-config-launch-preview-sheet", role: "teacher", path: "/evaluations/draft?step=launch", fold: true, act: async (p) => {
-      await skipCoachTwice(p);
+      await skipCoach(p);
       await p.getByRole("button", { name: /^what students will see|^ce que verront les étudiants/i }).first().click();
     } },
   { name: "eval-config-loading", role: "teacher", path: "/evaluations/draft?slow=1", settle: 300 },
@@ -392,9 +387,9 @@ const scenes = [
 
   // Pools, the question editors and the try panel (WP7). The mock question
   // ids are stable: q1 code, q2 mcq, q3 short, q4 cloze.
-  { name: "pools", role: "teacher", path: "/pools", act: skipCoach },
+  { name: "pools", role: "teacher", path: "/pools" },
   { name: "pools-admin-all", role: "admin", path: "/pools", act: (p) => p.getByRole("switch", { name: /other teachers/i }).click() },
-  { name: "pools-list", role: "teacher", path: "/pools", ls: { "quiz-pools-view": "list" }, act: skipCoach },
+  { name: "pools-list", role: "teacher", path: "/pools", ls: { "quiz-pools-view": "list" } },
   { name: "pools-empty", role: "teacher", path: "/pools?empty=1" },
   { name: "pools-error", role: "teacher", path: "/pools?fail=1", settle: 2500 },
   // The icon picker, reached the way a teacher reaches it: the New pool form
@@ -520,13 +515,11 @@ const scenes = [
   // the list from 1280 px (the table drops its low-priority columns), in the
   // list's place below. Run at 1920, 1440 and 1024 to see all three.
   { name: "pool-preview", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
-      await skipCoach(p);
       await p.getByRole("table").getByText("ptr-arith-01", { exact: true }).click();
       // The code player loads its editor lazily.
       await p.waitForTimeout(1500);
     } },
   { name: "pool-preview-cards", role: "teacher", path: "/pools/p1", ls: { "quiz-pool-view": "cards" }, fold: true, act: async (p) => {
-      await skipCoach(p);
       await p.getByText("ptr-arith-01", { exact: true }).first().click();
       await p.waitForTimeout(1500);
     } },
@@ -678,80 +671,42 @@ const scenes = [
   { name: "grading-code", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 3) },
   { name: "grading-rich", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 4) },
   { name: "grading-categorize", role: "teacher", path: "/evaluations/released/grading", settle: 3000, act: async (p) => { await nextQuestion(p, 5); await p.getByText("vif martre").first().click({ timeout: 3000 }).catch(() => {}); await p.waitForTimeout(400); } },
-  { name: "grading-by-student", role: "teacher", path: "/evaluations/closed/grading", act: (p) => p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click() },
-  // #102 / #107: one answer at a fixed place, walked in place, and the step
-  // picker open — by question, and by student with its filter typed in.
-  { name: "grading-next-answer", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
-      await p.getByRole("button", { name: /^(Next answer|Réponse suivante)$/ }).first().click();
-      await p.waitForTimeout(300);
-    } },
-  // Three answers further: the answer's top sits under the sticky step header.
-  { name: "grading-walk", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
-      await skipCoach(p);
-      for (let i = 0; i < 3; i += 1) {
-        await p.getByRole("button", { name: /^(Next answer|Réponse suivante)$/ }).first().click();
-        await p.waitForTimeout(250);
-      }
-    } },
-  { name: "grading-step-picker", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
-      await skipCoach(p);
+  // ADR-040: the table and its layers — the question menu, the answer
+  // panel (an answer, the key, the adjustment), the filters, a sort, names.
+  { name: "grading-menu", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
       await p.getByRole("button", { name: /^Question 1 (of|sur) / }).first().click();
     } },
-  { name: "grading-step-picker-student", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
-      await skipCoach(p);
-      await p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click();
-      await p.waitForTimeout(500);
-      await p.getByRole("button", { name: /^(Student 1 of|Étudiant 1 sur) / }).first().click();
-      await p.keyboard.type("a");
+  { name: "grading-panel", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await openRow(p, 1);
     } },
-  { name: "grading-override", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: (p) => p.getByRole("button", { name: /^(Adjust|Modifier)$/ }).first().click() },
+  { name: "grading-panel-expected", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await openRow(p, 0);
+    } },
+  { name: "grading-override", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await openRow(p, 1);
+      await p.getByRole("dialog").getByRole("button", { name: /^(Adjust|Modifier)$/ }).click();
+    } },
   { name: "grading-batch-confirm", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
       await nextQuestion(p, 3);
       await p.getByRole("button", { name: /^(Validate|Valider) \d+/ }).first().click();
     } },
-  // The filter row with a source chosen: the help line under it explains the choice (#98).
-  { name: "grading-filtered", role: "teacher", path: "/evaluations/closed/grading", act: (p) => p.getByLabel(/^(Graded by|Corrigé par)$/).selectOption("llm") },
-  // #108: re-grading is on the answer, beside the question's title — by
-  // question, and by student on the open answer's question.
+  { name: "grading-todo", role: "teacher", path: "/evaluations/closed/grading", act: async (p) => {
+      await nextQuestion(p, 3);
+      await p.locator("label").filter({ hasText: /^(To validate|À valider)/ }).first().click();
+    } },
+  { name: "grading-ai", role: "teacher", path: "/evaluations/closed/grading", act: async (p) => {
+      await nextQuestion(p, 3);
+      await p.locator("label").filter({ hasText: /^(AI|IA)$/ }).first().click();
+    } },
+  { name: "grading-sorted", role: "teacher", path: "/evaluations/closed/grading", act: async (p) => {
+      await p.getByRole("button", { name: /^(Points)$/ }).first().click();
+    } },
+  { name: "grading-names", role: "teacher", path: "/evaluations/closed/grading", act: async (p) => {
+      await p.getByRole("switch", { name: /^(Anonymise|Anonymiser)$/ }).click();
+      await p.waitForTimeout(500);
+    } },
   { name: "grading-regrade", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
-      await skipCoach(p);
-      await p.getByRole("button", { name: /^(Re-grade|Re-corriger)$/ }).first().click();
-    } },
-  { name: "grading-regrade-tip", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
-      await skipCoach(p);
-      await p.getByRole("button", { name: /^(Re-grade|Re-corriger)$/ }).first().hover();
-      await p.waitForTimeout(400);
-    } },
-  // #109: the "Show" menu open, then the answers alone (everything unticked).
-  { name: "grading-parts-menu", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
-      await skipCoach(p);
-      await p.getByRole("button", { name: /^(Show|Afficher)/ }).first().click();
-    } },
-  { name: "grading-parts-answer-only", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
-      await skipCoach(p);
-      await p.getByRole("button", { name: /^(Show|Afficher)/ }).first().click();
-      for (const name of [/^(Prompt|Énoncé)$/, /^(Explanation|Explication)$/, /^(Expected answer|Réponse attendue)/, /^(Grading comment|Commentaire de correction)$/]) {
-        await p.getByRole("checkbox", { name }).click();
-      }
-      await p.keyboard.press("Escape");
-      await p.waitForTimeout(200);
-    } },
-  { name: "grading-by-student-fold", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
-      await skipCoach(p);
-      await p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click();
-      await p.waitForTimeout(500);
-    } },
-  // #119: the names shown — in the list, the step line and the answer's header.
-  { name: "grading-names", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
-      await skipCoach(p);
-      await p.getByRole("switch", { name: /^(Show names|Afficher les noms)$/ }).click();
-      await p.waitForTimeout(500);
-    } },
-  { name: "grading-by-student-names", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
-      await skipCoach(p);
-      await p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click();
-      await p.getByRole("switch", { name: /^(Show names|Afficher les noms)$/ }).click();
-      await p.waitForTimeout(500);
+      await p.getByRole("button", { name: /^(Re-grade|Re-corriger)/ }).first().click();
     } },
   { name: "grading-empty", role: "teacher", path: "/evaluations/closed/grading?empty=1", settle: 800 },
   { name: "grading-error", role: "teacher", path: "/evaluations/closed/grading?fail=1", settle: 2500 },
@@ -770,8 +725,7 @@ const scenes = [
   { name: "negative-lobby", role: "student", path: `${TAKE}?scene=lobby&negative=1` },
   { name: "negative-player-mcq", role: "student", path: `${TAKE}?scene=running&negative=1` },
   { name: "negative-grading", role: "teacher", path: "/evaluations/closed/grading?negative=1", act: (p) => nextQuestion(p, 1) },
-  { name: "negative-grading-by-student", role: "teacher", path: "/evaluations/closed/grading?negative=1", act: (p) => p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click() },
-  { name: "negative-grading-override", role: "teacher", path: "/evaluations/closed/grading?negative=1", fold: true, act: async (p) => { await nextQuestion(p, 1); await p.getByRole("button", { name: /^(Adjust|Modifier)$/ }).first().click(); } },
+  { name: "negative-grading-override", role: "teacher", path: "/evaluations/closed/grading?negative=1", fold: true, act: async (p) => { await openRow(p, 1); await p.getByRole("dialog").getByRole("button", { name: /^(Adjust|Modifier)$/ }).click(); } },
   { name: "negative-results", role: "teacher", path: "/evaluations/released/results?negative=1" },
   { name: "negative-feedback", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback?negative=1` },
   { name: "feedback-pending", role: "student", path: `/attempts/${ATTEMPT_OPEN}/feedback` },
@@ -870,27 +824,24 @@ async function skipCoach(page) {
 
 /** The course page's first template (the mock's exam), opened from its row. */
 async function openTemplate(page) {
-  await skipCoach(page);
   await page.getByRole("button", { name: /Examen final/ }).first().click();
   await page.waitForURL(/\/templates\//);
   await page.waitForTimeout(600);
-  await skipCoach(page);
 }
 
-/** The evaluation page can queue a second walk behind the first one. */
-async function skipCoachTwice(page) {
-  await skipCoach(page);
-  await skipCoach(page);
+/** Opens a row of the grading table in its panel: 0 is the expected row. */
+async function openRow(page, n) {
+  await page.locator("tbody tr").nth(n).click();
+  await page.waitForTimeout(400);
 }
 
 /**
- * Walks the grading panel forward `n` questions. The traversal is the
- * screen's own "next question" control, so the scene exercises the same path
- * a teacher does.
+ * Walks the grading panel forward `n` questions, with the screen's own "next
+ * question" control, so the scene exercises the path a teacher takes.
  */
 async function nextQuestion(page, n) {
   for (let i = 0; i < n; i += 1) {
-    await page.getByRole("button", { name: /next question|question suivante/i }).first().click();
+    await page.getByRole("button", { name: /^(next question|question suivante)$/i }).first().click();
     await page.waitForTimeout(400);
   }
 }
@@ -939,6 +890,9 @@ for (const width of widths.length ? widths : [1440]) {
     try {
       await page.goto(BASE + scene.path, { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(scene.settle ?? 1500);
+      // The coach's first-visit tour would sit over every screen: dismissed
+      // here once, for every scene, as docs-screenshots.mjs does.
+      await skipCoach(page);
       if (scene.act) {
         await scene.act(page);
         await page.waitForTimeout(700);

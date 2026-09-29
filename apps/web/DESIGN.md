@@ -1192,6 +1192,45 @@ or EDIT them?". A list you scan stays a table however many columns it has to
 drop. A list you edit field by field becomes panels as soon as a row needs
 more than one line.
 
+## The grading table (ADR-040)
+
+One question's answers as a table (`src/grading/`, origin
+`mockups/grading.html`). What is particular to it:
+
+- **Widths.** The answer columns share the width equally (a `<colgroup>`
+  of `100% / n`); the verdict, the student, the points and the actions are
+  `w-px whitespace-nowrap`. A wide empty last column is the one layout this
+  table must never show. Past the page's width it scrolls sideways under
+  its sticky verdict (and student) column; every `<td>` carries its own fill
+  so a sticky cell never lets the scrolled ones show through.
+- **Verdict glyph.** A 22 px `rounded-md` square: correct = solid `success`
+  and an `on-fill` check; partial = HATCHED, `success` stripes over
+  `success` at 40 % on `surface` (`color-mix`), a small solid check square
+  inside — "some of it" before the eye reaches the check; wrong = solid
+  `danger` and a cross; not judged = a dashed `fg-faint` outline and "?",
+  its reason in the tooltip. The expected row's mark is a star on `info`.
+  It is NOT the live grid's `VerdictCell` (`ui/live.tsx`), on purpose: that
+  cell is a tinted tile of a grid where partial reads AMBER beside the blue
+  of progress, one of nine states; here there is no progress to tell apart,
+  and the owner wanted partial credit to read as green in part — so the
+  stripes. The grid keeps its scale, the table its own.
+- **The key's row** is `info-soft` (laid as a flat gradient over `surface`,
+  so it stays opaque in dark mode where `info-soft` is translucent), with a
+  2 px `line-strong` rule under it. `info` because the key is "a set of
+  possibilities", never a verdict.
+- **Cells** come from the question type (`@quiz/ui` `AnswerChip`,
+  `ChoiceMark`, `NoAnswer`): a mono chip on `success-soft` / `danger-soft`,
+  the key in `info` without a fill; a 16 px tick box filled `success` or
+  `danger`, dashed `success` for a correct choice left out.
+- **No fill for a row waiting for a decision** (owner decision): its glyph
+  and its visible Validate say it. The selected row is `surface-2` with a
+  3 px inset bar on its left (`fg`; `info` on the key's row). Adjust stays
+  invisible on a validated row until hover, focus or selection — hidden,
+  not removed, so the column keeps its width.
+- **The answer panel** is a `Sheet` with two optional slots added for it:
+  `leading` (the verdict glyph before the title) and `actions` (↑ / ↓
+  before the close button).
+
 ## Poll outcome donut (launcher, "Recent polls")
 
 A 36 px ring beside each row of the launcher's "Recent polls" (issue #161,

@@ -34,11 +34,13 @@ import {
 } from "@quiz/registry/client";
 import {
   mcqEditorStrings,
+  mcqGradingStrings,
   mcqPlayerStrings,
   mcqReviewStrings,
 } from "@quiz/qt-mcq/client";
 import {
   shortEditorStrings,
+  shortGradingStrings,
   shortPlayerStrings,
   shortReviewStrings,
 } from "@quiz/qt-short/client";
@@ -50,6 +52,7 @@ import {
 } from "@quiz/qt-categorize/client";
 import {
   clozeEditorStrings,
+  clozeGradingStrings,
   clozePlayerStrings,
   clozeReviewStrings,
   type ClozeTextRenderer,
@@ -262,6 +265,17 @@ export const reviewStrings = {
   }),
   rich: (t: TFunction) => translated(t, richReviewStrings, "qt.rich.r"),
   categorize: (t: TFunction) => translated(t, categorizeReviewStrings, "qt.categorize.r"),
+};
+
+/**
+ * The words of the grading table's columns (`QuestionTypeClient.grading`,
+ * ADR-040), for the types that give columns; the others fall back on the
+ * host's one column and have no words of their own to translate.
+ */
+export const gradingStrings: Partial<Record<QuestionTypeId, (t: TFunction) => Record<string, string>>> = {
+  mcq: (t) => translated(t, mcqGradingStrings, "qt.mcq.g"),
+  short: (t) => translated(t, shortGradingStrings, "qt.short.g"),
+  cloze: (t) => translated(t, clozeGradingStrings, "qt.cloze.g"),
 };
 
 // --- Hosts -----------------------------------------------------------------
