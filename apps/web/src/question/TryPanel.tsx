@@ -13,6 +13,7 @@ import type {
 } from "@quiz/qt-code/client";
 
 import { api, apiErrorMessage } from "../api";
+import { machineReason } from "../grading/labels";
 import { canRunManually, runCode, runCodeImage } from "../runner/codeRun";
 import { useT } from "../i18n";
 import { emptyAnswerOf, QuestionPlayerHost, QuestionReviewHost } from "../questionTypes";
@@ -204,6 +205,10 @@ export function TryPanel({
                 : t("question.try.score", { points: result.points, max: result.maxPoints })
             }
           />
+          {/* Why the grader only proposed: usually the question's fault (#267). */}
+          {result.manual && result.comment ? (
+            <p className="text-[13px] text-warning">{machineReason(t, result.comment)}</p>
+          ) : null}
           <QuestionReviewHost
             t={t}
             type={type}

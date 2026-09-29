@@ -11,11 +11,12 @@
  * "Restart the preview" — the thing a teacher checking their quiz does next;
  * the way back to the evaluation is secondary.
  */
-import { AlertTriangle, ArrowLeft, Eye, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Eye, PenLine, RotateCcw } from "lucide-react";
 
 import type { PreviewCorrection, PreviewItemStatus } from "@quiz/contracts";
 import { formatGrade, formatPoints } from "@quiz/domain";
 
+import { machineReason } from "../grading/labels";
 import { useT, type Dict } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { QuestionReviewHost } from "../questionTypes";
@@ -45,6 +46,7 @@ export function PreviewCorrectionView({
   onBack: () => void;
 }) {
   const t = useT();
+  const manual = correction.items.filter((i) => i.status === "manual").length;
   return (
     <main className="mx-auto w-full max-w-180 space-y-8 px-4 py-8 sm:px-6">
       <header className="space-y-4">
@@ -80,6 +82,12 @@ export function PreviewCorrectionView({
             : t("preview.ungraded.body", { n: correction.ungraded })}
         </Alert>
       ) : null}
+      {/* Expected, not a failure: a neutral line, not the warning above. */}
+      {manual > 0 ? (
+        <Alert icon={PenLine}>
+          {manual === 1 ? t("preview.manual.one") : t("preview.manual.many", { n: manual })}
+        </Alert>
+      ) : null}
 
       <div className="space-y-5">
         {correction.items.map((item) => (
@@ -95,11 +103,21 @@ export function PreviewCorrectionView({
                 </span>
               ) : (
                 // Neutral where nothing went wrong: an opinion question, an essay.
-                <Badge tone={item.status === "no_key" || item.status === "manual" ? "zinc" : "amber"}>
+                <Badge
+                  tone={
+                    item.status === "no_key" || (item.status === "manual" && !item.comment)
+                      ? "zinc"
+                      : "amber"
+                  }
+                >
                   {t(STATUS_LABEL[item.status as Exclude<PreviewItemStatus, "graded">])}
                 </Badge>
               )}
             </div>
+
+            {item.comment ? (
+              <p className="text-[13px] text-warning">{machineReason(t, item.comment)}</p>
+            ) : null}
 
             <QuestionReviewHost
               t={t}

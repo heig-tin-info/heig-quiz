@@ -166,7 +166,6 @@ on("POST", "/app/api/evaluations/:id/preview/grade", (m, body): PreviewCorrectio
     } else if (tried?.manual) {
       status = "manual";
       itemPoints = null;
-      ungraded += 1;
     } else if (tried) {
       // `tryAnswer` scores on the question's own scale; the item has its own.
       itemPoints = round2(((tried.points ?? 0) / (tried.maxPoints || 1)) * item.points);

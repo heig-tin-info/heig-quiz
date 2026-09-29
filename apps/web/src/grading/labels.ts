@@ -40,6 +40,24 @@ export const gradingStateLabel = (t: TFunction, s: GradingState) => t(STATE_KEYS
 export const confidenceTone = (c: GradingConfidence): Tone =>
   c === "low" ? "amber" : c === "high" ? "green" : "zinc";
 
+/**
+ * Why a grader PROPOSED instead of grading (`GradedResult.comment`), in the
+ * author's words: most of these are a fault of the question, not of the
+ * answer (issue #267). An unknown code reads as itself, as the grading
+ * panel's note does.
+ */
+const REASON_KEYS: Partial<Record<string, keyof Dict>> = {
+  reference_failed: "grading.reason.reference_failed",
+  palette_violation: "grading.reason.palette_violation",
+  runner_request_invalid: "grading.reason.runner_request_invalid",
+  template_region_mismatch: "grading.reason.template_region_mismatch",
+};
+
+export const machineReason = (t: TFunction, comment: string): string => {
+  const key = REASON_KEYS[comment];
+  return key === undefined ? comment : t(key);
+};
+
 /** A manual grading is the teacher's own: it wears the accent, never a status colour. */
 export const sourceTone = (s: GradingSource): Tone => (s === "manual" ? "accent" : "zinc");
 

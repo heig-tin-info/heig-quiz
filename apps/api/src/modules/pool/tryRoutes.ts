@@ -149,5 +149,6 @@ function graded(result: GradedResult, solution: unknown): TryResult {
     solution,
     // A proposal is not a grade: a person decides it (issue #267).
     ...(result.state === "proposed" ? { manual: true as const } : {}),
+    ...(result.state === "proposed" && result.comment ? { comment: result.comment } : {}),
   };
 }

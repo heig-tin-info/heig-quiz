@@ -569,7 +569,9 @@ describe("grading a preview", () => {
     expect(item).toMatchObject({ status: "manual", points: null, verdict: null, maxPoints: 3 });
     // The review still gets what the grader wrote down.
     expect(item!.details).toMatchObject({ reason: "manual" });
-    expect(correction.ungraded).toBe(1);
+    expect(item).not.toHaveProperty("comment");
+    // Expected, not a failure: not in the "could not be graded" count.
+    expect(correction.ungraded).toBe(0);
     expect(correction.points).toBe(1);
   });
 

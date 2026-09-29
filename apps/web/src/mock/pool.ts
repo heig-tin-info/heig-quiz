@@ -1679,7 +1679,11 @@ export function tryAnswer(
       details: built.details,
       solution: solutionOf(q),
       // The server's `manual` mode proposes, and a person decides (issue #267).
-      ...(((config.grading as { mode?: string } | undefined)?.mode ?? "manual") === "manual" ? { manual: true } : {}),
+      // An empty schematic is a settled 0 there, as it is here.
+      ...(((config.grading as { mode?: string } | undefined)?.mode ?? "manual") === "manual" &&
+      schematic.components.length > 0
+        ? { manual: true }
+        : {}),
     };
   }
   if (q.type === "mcq") {

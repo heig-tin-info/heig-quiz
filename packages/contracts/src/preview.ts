@@ -128,6 +128,12 @@ export const PreviewCorrectionItem = z.object({
   explanation: z.string().nullable(),
   /** The grader's full breakdown, hidden cases included. */
   details: z.unknown().nullable(),
+  /**
+   * `manual` only: the grader's machine reason for proposing rather than
+   * grading (`GradedResult.comment`: `reference_failed`, …), when it gave
+   * one. Absent for a plain hand-graded answer such as an essay.
+   */
+  comment: z.string().optional(),
 });
 export type PreviewCorrectionItem = z.infer<typeof PreviewCorrectionItem>;
 
@@ -138,7 +144,10 @@ export const PreviewCorrection = z.object({
   /** `gradeFromPoints` under the evaluation's own scale. */
   grade: z.number(),
   scale: GradingScale,
-  /** Items that are not `graded` (and not `no_key`): the grade would move once a teacher settles them. */
+  /**
+   * Items that could not be graded: neither `graded`, `no_key` nor `manual`.
+   * An answer to grade by hand is not a failure; the page counts those itself.
+   */
   ungraded: z.number().int(),
   items: z.array(PreviewCorrectionItem),
 });
