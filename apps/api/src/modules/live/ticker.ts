@@ -11,7 +11,7 @@ import { GRACE_MS } from "@quiz/domain";
 import type { Db } from "../../db/client.js";
 import { attempts, evaluations } from "../../db/schema.js";
 import { applyState, byId, pastTimingOf, settingsOf, type EvaluationRecord } from "../evaluation/service.js";
-import { closeShown } from "./dwell.js";
+import { endAttempts } from "./dwell.js";
 import * as events from "./events.js";
 import { presence } from "../realtime/presence.js";
 import { type AttemptRecord, enrolledCounts, gradeFinishedRetakes } from "./attempt.js";
@@ -36,29 +36,21 @@ export async function expireDueAttempts(
   app?: FastifyInstance,
 ): Promise<{ id: string; evaluationId: string }[]> {
   const cutoff = new Date(now.getTime() - GRACE_MS);
-  const closed = await db.transaction(async (tx) => {
-    const expired = await tx
-      .update(attempts)
-      .set({ state: "expired", closedAt: now, closedBy: "server", updatedAt: now })
-      .where(
-        and(
-          eq(attempts.state, "in_progress"),
-          isNotNull(attempts.deadlineAt),
-          lte(attempts.deadlineAt, cutoff),
-          notInArray(
-            attempts.evaluationId,
-            tx.select({ id: evaluations.id }).from(evaluations).where(eq(evaluations.state, "paused")),
-          ),
-        ),
-      )
-      .returning({ id: attempts.id, evaluationId: attempts.evaluationId });
-    // The rows are this transaction's already; their question on screen is
-    // credited up to the deadline, which the flush clamps at (ADR-039).
-    if (expired.length > 0) {
-      await closeShown(tx, inArray(attempts.id, expired.map((row) => row.id)), now);
-    }
-    return expired;
-  });
+  // Their question on screen is credited up to the deadline, which the
+  // flush clamps at (ADR-039).
+  const closed = await endAttempts(
+    db,
+    and(
+      isNotNull(attempts.deadlineAt),
+      lte(attempts.deadlineAt, cutoff),
+      notInArray(
+        attempts.evaluationId,
+        db.select({ id: evaluations.id }).from(evaluations).where(eq(evaluations.state, "paused")),
+      ),
+    )!,
+    { state: "expired", closedBy: "server" },
+    now,
+  );
   for (const row of closed) {
     events.attemptClosed(
       row.evaluationId,

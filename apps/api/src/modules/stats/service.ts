@@ -30,8 +30,8 @@
  */
 import { and, eq, gt, gte, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 
-import type { PoolQuestionStats } from "@quiz/contracts";
-import { itemStats, shownItemStats, shownTimeStats, timeStats, type ScoredAnswer } from "@quiz/domain";
+import type { PoolQuestionStats, TimeStats } from "@quiz/contracts";
+import { itemStats, shownItemStats, shownTimeSpread, spread, type ScoredAnswer, type Spread } from "@quiz/domain";
 
 import { isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -132,26 +132,16 @@ export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQue
   for (const [questionId, { since, list }] of scored) {
     const shown = shownItemStats(itemStats(list));
     if (!shown) continue;
-    const time = shownTimeStats(timeStats(dwells.get(questionId) ?? []));
-    items.push({
-      questionId,
-      since: isoOrNull(since),
-      ...shown,
-      time: time && {
-        n: time.n,
-        meanS: seconds(time.meanMs),
-        medianS: seconds(time.medianMs),
-        p25S: seconds(time.p25Ms),
-        p75S: seconds(time.p75Ms),
-      },
-    });
+    const time = shownTimeSpread(spread(dwells.get(questionId) ?? []));
+    items.push({ questionId, since: isoOrNull(since), ...shown, time: time && inSeconds(time) });
   }
   return { items };
 }
 
-/** Whole seconds, as the contract carries them. */
-function seconds(ms: number): number {
-  return Math.round(ms / 1000);
+/** A spread of milliseconds in whole seconds, as the contract carries it. */
+function inSeconds(ms: Spread): TimeStats {
+  const s = (v: number) => Math.round(v / 1000);
+  return { n: ms.n, meanS: s(ms.mean), medianS: s(ms.median), p25S: s(ms.p25), p75S: s(ms.p75) };
 }
 
 /** The timed exam answers of every question of the pool (ADR-039), by question. */
@@ -170,7 +160,7 @@ async function dwellsOf(db: Db, poolId: string): Promise<Map<string, number[]>> 
         eq(evaluations.mode, "exam"),
         countedAttempt(),
         eq(attempts.displayTracked, true),
-        isNotNull(answers.firstShownAt),
+        // A positive dwell: the question was on screen (the series' one filter).
         gt(answers.dwellMs, 0),
       ),
     );

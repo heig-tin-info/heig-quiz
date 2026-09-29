@@ -7,7 +7,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, count, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, count, eq, getTableColumns, gte, isNull, sql } from "drizzle-orm";
 
 import type { AutosaveResponse, CellStatus, Verdict } from "@quiz/contracts";
 import { ANSWER_SUMMARY_MAX, isGraded, type AnyQuestionTypeServer } from "@quiz/core/server";
@@ -427,6 +427,24 @@ export async function markDone(
 }
 
 /**
+ * A row for a question with nothing in it yet: "seen, nothing typed", and on
+ * screen from `now` (ADR-039). `payload` is NOT NULL, so it holds the JSON
+ * value `null`.
+ */
+function blankAnswerRow(attemptId: string, itemId: string, now: Date) {
+  return {
+    id: randomUUID(),
+    attemptId,
+    itemId,
+    payload: sql`'null'::jsonb`,
+    revision: 0,
+    firstSeenAt: now,
+    firstShownAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
  * The state columns of one answer row, written whether or not the row exists
  * yet. "Seen, nothing typed": the row has to exist for a flag to, and
  * `payload` is NOT NULL, so it holds the JSON value `null` — which is what a
@@ -452,17 +470,7 @@ async function writeState(
   }
   const [row] = await db
     .insert(answers)
-    .values({
-      id: randomUUID(),
-      attemptId: attempt.id,
-      itemId,
-      payload: sql`'null'::jsonb`,
-      revision: 0,
-      ...set,
-      firstSeenAt: now,
-      firstShownAt: now,
-      updatedAt: now,
-    })
+    .values({ ...blankAnswerRow(attempt.id, itemId, now), ...set })
     // Two tabs racing on a never-opened question: the second one updates.
     .onConflictDoUpdate({
       target: [answers.attemptId, answers.itemId],
@@ -596,55 +604,53 @@ export async function reportShown(
   if (itemId !== null && !item) throw new LiveError("not_found", 404);
 
   const created = await db.transaction(async (tx) => {
-    // The states read WITH the lock, not from the request's scope: a pause or
-    // a close that committed since then flushed this attempt, and must not
-    // find an interval opened behind it.
+    // The states read AFTER the lock, not from the request's scope: a pause
+    // or a close that committed since then flushed this attempt, and must
+    // not find an interval opened behind it.
     const [locked] = await tx
-      .select({
-        shownItemId: attempts.shownItemId,
-        state: attempts.state,
-        running: sql<boolean>`${evaluations.state} = 'running'`,
-      })
+      .select({ shownItemId: attempts.shownItemId, state: attempts.state })
       .from(attempts)
-      .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
       .where(eq(attempts.id, attempt.id))
-      .for("update", { of: attempts });
+      .for("update");
     if (!locked) throw new LiveError("not_found", 404);
-    const shows = track && itemId !== null && locked.running && locked.state === "in_progress";
-    // The item already open: the interval goes on.
-    const opens = shows && locked.shownItemId !== itemId;
-    if (track && (opens || !shows)) await closeShown(tx, eq(attempts.id, attempt.id), now);
+    // A statement of its own, so its snapshot is taken once the lock is held
+    // (READ COMMITTED): a pause committed before `closeShown` queued on this
+    // row is seen. Not locked: the resume locks the evaluation, then the
+    // attempts — the reverse order would deadlock. A resume not committed
+    // yet reads `paused`, and its players report their question again.
+    const [owner] = await tx
+      .select({ state: evaluations.state })
+      .from(evaluations)
+      .where(eq(evaluations.id, evaluation.id));
+    const shows =
+      track && itemId !== null && owner?.state === "running" && locked.state === "in_progress";
+    const continues = shows && locked.shownItemId === itemId;
+    if (track && !continues) await closeShown(tx, eq(attempts.id, attempt.id), now);
     let row: AnswerRecord | null = null;
-    if (opens) {
-      [row = null] = await tx
+    if (shows && !continues) {
+      // One upsert: a new row is created shown; an older one (before
+      // migration 0033, or written by nothing but a flag) gets its first
+      // display. `xmax = 0` is PostgreSQL's mark of a row this statement
+      // INSERTED.
+      const [written] = await tx
         .insert(answers)
-        .values({
-          id: randomUUID(),
-          attemptId: attempt.id,
-          itemId,
-          payload: sql`'null'::jsonb`,
-          revision: 0,
-          firstSeenAt: now,
-          firstShownAt: now,
-          updatedAt: now,
+        .values(blankAnswerRow(attempt.id, itemId, now))
+        .onConflictDoUpdate({
+          target: [answers.attemptId, answers.itemId],
+          set: { firstShownAt: now },
+          setWhere: isNull(answers.firstShownAt),
         })
-        .onConflictDoNothing({ target: [answers.attemptId, answers.itemId] })
-        .returning();
-      // A row written before migration 0033: displayed from now on.
-      if (!row) {
-        await tx
-          .update(answers)
-          .set({ firstShownAt: now })
-          .where(
-            and(eq(answers.attemptId, attempt.id), eq(answers.itemId, itemId), isNull(answers.firstShownAt)),
-          );
+        .returning({ ...getTableColumns(answers), inserted: sql<boolean>`xmax = 0` });
+      if (written?.inserted) {
+        const { inserted: _, ...fresh } = written;
+        row = fresh;
       }
     }
     await tx
       .update(attempts)
       .set({
         ...(itemId !== null ? { lastItemId: itemId } : {}),
-        ...(opens ? { shownItemId: itemId, shownSince: now } : {}),
+        ...(shows && !continues ? { shownItemId: itemId, shownSince: now } : {}),
         ...(track ? { presentAt: now } : {}),
         updatedAt: now,
       })

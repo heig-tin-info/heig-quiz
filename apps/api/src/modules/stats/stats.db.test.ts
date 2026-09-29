@@ -406,6 +406,8 @@ describe("the time spent (ADR-039)", () => {
     expect(await timeOf(seed)).toBeNull();
   });
 
+  // A row never shown carries no dwell by construction (only an interval on
+  // screen credits one), so the positive dwell is the one filter.
   it("leaves out legacy attempts, a zero dwell and a row never shown", async () => {
     const seed = await seedLive(db, { students: 12 });
     await timed(seed, minutes.slice(0, 9));
@@ -416,7 +418,7 @@ describe("the time spent (ADR-039)", () => {
     await shown(zero, seed.itemIds[0]!, 0);
     await grade(zero, seed.itemIds[0]!, 1);
     const unshown = await attempt(seed.evaluationId, seed.studentIds[11]!, { tracked: true });
-    await shown(unshown, seed.itemIds[0]!, 5000, { shown: false });
+    await shown(unshown, seed.itemIds[0]!, 0, { shown: false });
     expect(await timeOf(seed)).toBeNull();
   });
 

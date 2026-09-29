@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { AttemptEventBody } from "@quiz/contracts";
+import type { AttemptEventBody, PositionBody } from "@quiz/contracts";
 
 import { api } from "../api";
 import type { Autosave } from "./autosave";
@@ -72,69 +72,49 @@ export interface PositionState {
 }
 
 /**
- * F-LIVE-06 and ADR-039: the question on the student's screen, once per move
- * — and `null` when none is (the tab hidden, the player left), so the server,
- * which keeps the time, stops counting. The server's clock times every
- * report; nothing here measures anything.
+ * F-LIVE-06 and ADR-039: the question on the student's screen, whenever it
+ * changes — and `null` when none is (the tab hidden, the player left), so
+ * the server, which keeps the time, stops counting. The server's clock times
+ * every report; nothing here measures anything, and nothing is deduplicated:
+ * the server takes a re-reported question as the interval going on, and a
+ * `null` with nothing open as nothing.
  *
  * A pause or a close ends the interval on the server by itself, so neither
  * sends `null`; the question is reported again when the attempt resumes, the
- * tab comes back or the stream reopens. A report that failed is forgotten, so
- * the next occasion sends it again.
+ * tab comes back or the stream reopens (`resend`).
  */
 export function usePosition(attemptId: string, current: string | null, state: PositionState): void {
   const { live, visible, resend } = state;
-  const lastPosted = useRef<string | null>(null);
-  const lastResend = useRef(resend);
-  const liveNow = useRef(live);
-
   const post = useCallback(
-    (itemId: string | null) =>
-      api(`/app/api/attempts/${attemptId}/position`, {
+    (itemId: string | null) => {
+      void api(`/app/api/attempts/${attemptId}/position`, {
         method: "POST",
-        body: JSON.stringify({ itemId }),
+        // Typed by the contract; not parsed: the id is the server's own, and a
+        // throw here would take the player down with a report.
+        body: JSON.stringify({ itemId } satisfies PositionBody),
         // `null` is sent as the page hides or goes away: let it outlive it.
         keepalive: itemId === null,
-      }),
+      }).catch(() => {
+        // Losing the bookmark costs a student one click after a reload; a
+        // lost `null` is bounded by the idle cap (ADR-039).
+      });
+    },
     [attemptId],
   );
 
+  const shown = live && visible ? current : null;
   useEffect(() => {
-    liveNow.current = live;
-    if (lastResend.current !== resend) {
-      lastResend.current = resend;
-      lastPosted.current = null;
-    }
-    if (!live) {
-      // The server closed the interval itself (the pause, the end).
-      lastPosted.current = null;
-      return;
-    }
-    if (!visible) {
-      if (lastPosted.current === null) return;
-      lastPosted.current = null;
-      void post(null).catch(() => {
-        // The idle cap bounds what a lost `null` can cost (ADR-039).
-      });
-      return;
-    }
-    if (current === null || lastPosted.current === current) return;
-    lastPosted.current = current;
-    void post(current).catch(() => {
-      // Losing the bookmark costs a student one click after a reload; the
-      // next move, return or reconnection sends it again.
-      if (lastPosted.current === current) lastPosted.current = null;
-    });
-  }, [post, current, live, visible, resend]);
+    if (live) post(shown);
+  }, [post, shown, live, resend]);
 
   // Leaving the player while the attempt runs (Home, another page).
+  const liveNow = useRef(live);
+  useEffect(() => {
+    liveNow.current = live;
+  }, [live]);
   useEffect(
     () => () => {
-      if (!liveNow.current || lastPosted.current === null) return;
-      lastPosted.current = null;
-      void post(null).catch(() => {
-        // As above: the idle cap bounds it.
-      });
+      if (liveNow.current) post(null);
     },
     [post],
   );

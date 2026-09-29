@@ -59,7 +59,7 @@ import {
   totalPointsByEvaluation,
   totalPointsOf,
 } from "../evaluation/service.js";
-import { closeShown } from "./dwell.js";
+import { endAttempts } from "./dwell.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import { scoreOf, studentAttempts, tallyByAttempt } from "../grading/service.js";
@@ -1220,20 +1220,12 @@ export async function submitAttempt(
 ): Promise<AttemptRecord> {
   assertGate(evaluation, attempt, now, "submit");
   // The question on screen stops counting where the attempt ends (ADR-039).
-  const finished = await db.transaction(async (tx) => {
-    await closeShown(tx, eq(attempts.id, attempt.id), now);
-    return tx
-      .update(attempts)
-      .set({
-        state: "submitted",
-        submittedAt: now,
-        closedAt: now,
-        closedBy: "student",
-        updatedAt: now,
-      })
-      .where(and(eq(attempts.id, attempt.id), eq(attempts.state, "in_progress")))
-      .returning({ id: attempts.id });
-  });
+  const finished = await endAttempts(
+    db,
+    eq(attempts.id, attempt.id),
+    { state: "submitted", closedBy: "student", submittedAt: now },
+    now,
+  );
   const row = (await attemptById(db, attempt.id))!;
   events.attemptClosed(evaluation.id, row, "student", now);
   if (app && finished.length > 0) await gradeFinishedRetakes(app, evaluation, [row.id]);
@@ -1254,14 +1246,12 @@ export async function closeAttempt(
   now: Date,
   app?: FastifyInstance,
 ): Promise<AttemptRecord> {
-  const closed = await db.transaction(async (tx) => {
-    await closeShown(tx, eq(attempts.id, attempt.id), now);
-    return tx
-      .update(attempts)
-      .set({ state: "expired", closedAt: now, closedBy: "teacher", updatedAt: now })
-      .where(and(eq(attempts.id, attempt.id), eq(attempts.state, "in_progress")))
-      .returning({ id: attempts.id });
-  });
+  const closed = await endAttempts(
+    db,
+    eq(attempts.id, attempt.id),
+    { state: "expired", closedBy: "teacher" },
+    now,
+  );
   const row = (await attemptById(db, attempt.id))!;
   events.attemptClosed(evaluation.id, row, "teacher", now);
   // The pass of the evaluation's close has already run, and it ran while this

@@ -95,34 +95,37 @@ export const QUESTION_TIME_MIN_N = 10;
 export const DWELL_IDLE_CAP_MS = 600_000;
 
 /**
- * The time spent on a question, over `n` timed answers: centre and middle
- * half. No extremes, no spread (N-DATA-06).
+ * A series' centre and middle half, in the unit of its values, unrounded:
+ * what the time spent on a question shows (ADR-039). No extremes, no
+ * standard deviation (N-DATA-06).
  */
-export interface TimeStats {
+export interface Spread {
   n: number;
-  meanMs: number;
-  medianMs: number;
-  p25Ms: number;
-  p75Ms: number;
+  mean: number;
+  median: number;
+  p25: number;
+  p75: number;
 }
 
-/** Only a positive, finite dwell is a timed answer; anything else is left out. */
-export function timeStats(dwellMs: Iterable<number>): TimeStats {
-  const values: number[] = [];
-  for (const v of dwellMs) if (Number.isFinite(v) && v > 0) values.push(v);
-  const { count, mean, median } = describe(values);
-  const sorted = values.sort((a, b) => a - b);
+/**
+ * The {@link Spread} of the finite values; anything else is left out. Which
+ * values belong in the series is the caller's call (the time: a positive
+ * dwell, filtered in the query).
+ */
+export function spread(values: Iterable<number>): Spread {
+  const sorted = [...values].filter(Number.isFinite).sort((a, b) => a - b);
+  const n = sorted.length;
   return {
-    n: count,
-    meanMs: mean,
-    medianMs: median,
-    p25Ms: quantile(sorted, 0.25),
-    p75Ms: quantile(sorted, 0.75),
+    n,
+    mean: n === 0 ? 0 : sorted.reduce((s, v) => s + v, 0) / n,
+    median: quantile(sorted, 0.5),
+    p25: quantile(sorted, 0.25),
+    p75: quantile(sorted, 0.75),
   };
 }
 
 /** The time as it may be shown: `null` below `QUESTION_TIME_MIN_N` timed answers. */
-export function shownTimeStats(stats: TimeStats): TimeStats | null {
+export function shownTimeSpread(stats: Spread): Spread | null {
   return stats.n >= QUESTION_TIME_MIN_N ? stats : null;
 }
 

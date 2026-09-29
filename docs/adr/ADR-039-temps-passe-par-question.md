@@ -3,9 +3,10 @@
 ## Status
 
 Accepted (2026-09-29, decided by the teacher who owns the product, who
-delegated the choice of the metrics; with `closeShown` in
-`apps/api/src/modules/live/dwell.ts`, `reportShown` in `live/autosave.ts`,
-`quantile` / `timeStats` / `shownTimeStats` / `DWELL_IDLE_CAP_MS` in
+delegated the choice of the metrics; with `closeShown` and `endAttempts`
+in `apps/api/src/modules/live/dwell.ts`, `reportShown` in
+`live/autosave.ts`, `quantile` / `spread` / `shownTimeSpread` /
+`DWELL_IDLE_CAP_MS` in
 `@quiz/domain/stats`, `TimeStats` in `@quiz/contracts/stats`, and the
 columns of migration `0033_answer_dwell`). Amends ADR-038 (§2, the "not
 reached" bias; §8, the step it announced). Revises F-STAT-01 (docs/spec/02).
@@ -45,8 +46,9 @@ The player sends the item on every move, `null` (with `keepalive`) when the
 tab hides and when the player unmounts while the attempt runs, the item
 again when the tab comes back, when the attempt resumes and when the event
 stream reopens. A pause or a close sends nothing: the server ends the
-interval by itself (§4). A report that failed is forgotten, so the next
-occasion sends it again.
+interval by itself (§4). The client deduplicates nothing: a re-reported
+question is a no-op on the server (§2), and a `null` with nothing open
+changes nothing.
 
 ### 2. Intervals on the server's clock, summed in the answer row
 
@@ -63,7 +65,13 @@ evaluation, or it is a `404` that writes nothing — which also closes a hole
 the bookmark had: any `evaluation_items` id used to pass.
 
 The report takes the same gate as the journal (`assertOpen`): it is
-accepted during a pause, refused with `410` past `deadline + 3 s`.
+accepted during a pause, refused with `410` past `deadline + 3 s`. Inside
+its transaction it locks the attempt row, then reads the attempt's and the
+evaluation's states in statements of their own — under READ COMMITTED their
+snapshot is taken once the lock is held, so a pause or a close that
+committed while the report waited is seen, and no interval is opened behind
+it. The evaluation row is read, not locked: the resume locks the evaluation
+and then the attempts, and the reverse order would deadlock.
 
 ### 3. The idle cap, not a flat cap
 
@@ -85,10 +93,13 @@ seconds per student to measure the same thing.
 
 `closeShown` is the only place an interval ends: one statement that locks
 the attempt rows (in id order), clears the pair and credits the answer
-rows. It runs at the next report, and inside the transaction of every end
-of an attempt — the submission, the teacher's close of one attempt, the
-close of the evaluation (before the bulk expiry), the pause (every open
-attempt), and the ticker's expiry (the rows it expired). A resume, a reopen
+rows. It runs at the next report, at the pause (every open attempt), and
+inside `endAttempts`, the one way an attempt ends — the submission, the
+teacher's close of one attempt, the close of the evaluation and the
+ticker's expiry. `endAttempts` locks the `in_progress` rows it targets in
+id order, flushes their intervals, then writes their state, in one
+transaction: the ticker and a teacher's close lock in the same order and
+cannot deadlock each other. A resume, a reopen
 and a staff reset do nothing: the players report again.
 
 The DEADLINE clamps the credit: the grace window is for the network, not

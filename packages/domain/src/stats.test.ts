@@ -7,8 +7,8 @@ import {
   QUESTION_STATS_MIN_N,
   QUESTION_TIME_MIN_N,
   shownItemStats,
-  shownTimeStats,
-  timeStats,
+  shownTimeSpread,
+  spread,
 } from "./stats.js";
 
 describe("describe", () => {
@@ -114,26 +114,28 @@ describe("quantile", () => {
   });
 });
 
-describe("timeStats", () => {
-  it("summarises the positive, finite dwells only", () => {
-    expect(timeStats([4000, 1000, 0, -5, Number.NaN, Number.POSITIVE_INFINITY, 3000, 2000])).toEqual({
+describe("spread", () => {
+  it("summarises the finite values only, unrounded", () => {
+    expect(spread([4000, 1000, Number.NaN, Number.POSITIVE_INFINITY, 3000, 2000])).toEqual({
       n: 4,
-      meanMs: 2500,
-      medianMs: 2500,
-      p25Ms: 1750,
-      p75Ms: 3250,
+      mean: 2500,
+      median: 2500,
+      p25: 1750,
+      p75: 3250,
     });
+    expect(spread([1, 2]).mean).toBe(1.5);
+    expect(spread([1, 1, 2]).mean).toBeCloseTo(4 / 3);
   });
 
   it("is all zeroes on nothing", () => {
-    expect(timeStats([])).toEqual({ n: 0, meanMs: 0, medianMs: 0, p25Ms: 0, p75Ms: 0 });
+    expect(spread([])).toEqual({ n: 0, mean: 0, median: 0, p25: 0, p75: 0 });
   });
 });
 
-describe("shownTimeStats", () => {
+describe("shownTimeSpread", () => {
   it("hides the time below the threshold, shows it from it", () => {
     expect(QUESTION_TIME_MIN_N).toBe(10);
-    expect(shownTimeStats(timeStats([1, 2, 3, 4, 5, 6, 7, 8, 9]))).toBeNull();
-    expect(shownTimeStats(timeStats([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))?.n).toBe(10);
+    expect(shownTimeSpread(spread([1, 2, 3, 4, 5, 6, 7, 8, 9]))).toBeNull();
+    expect(shownTimeSpread(spread([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))?.n).toBe(10);
   });
 });
