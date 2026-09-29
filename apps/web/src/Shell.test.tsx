@@ -7,7 +7,7 @@ import type { CourseSummary, PoolDetail, PoolSummary } from "@quiz/contracts";
 
 import { ModeBanner, Shell } from "./Shell";
 import { resetShortcuts, useShortcuts } from "./shortcuts";
-import { modKey } from "./ui";
+import { modKey, PAGE_COLUMN } from "./ui";
 import { makeClassroomSummary, makeCourseSummary, makeMe } from "./test/fixtures";
 import { makeQueryClient, renderWithProviders } from "./test/render";
 import type { Route } from "./router";
@@ -122,13 +122,15 @@ const classroomsSection = () => within(sidebar()).getByText("Classrooms").parent
 describe("Shell content width (#93)", () => {
   it("caps the page at the reading width by default", () => {
     renderShell();
-    expect(screen.getByRole("main")).toHaveClass("max-w-280");
+    const main = screen.getByRole("main");
+    expect(main).toHaveClass("max-w-(--page-cap)");
+    expect(main.style.getPropertyValue("--page-cap")).toBe(PAGE_COLUMN.cap);
   });
 
   it("lets a wide route take the whole content area", () => {
     renderShell({ route: { view: "live", id: "e1" }, wide: true });
     const main = screen.getByRole("main");
-    expect(main).not.toHaveClass("max-w-280");
+    expect(main).not.toHaveClass("max-w-(--page-cap)");
     expect(main).toHaveClass("max-w-none");
   });
 });

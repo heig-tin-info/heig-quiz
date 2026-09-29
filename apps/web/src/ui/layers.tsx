@@ -68,6 +68,10 @@ export const Z = {
  *
  * A key press that started on a nested control (a link, a menu trigger) is
  * that control's business, so only the element itself answers.
+ *
+ * Not for an element whose click and Enter do different things: the pool's
+ * rows look on a click and edit on Enter, and answer their own keys
+ * (`pool/useQuestionBrowse.ts`).
  */
 export function pressable(onActivate: () => void, role: string = "button") {
   return {

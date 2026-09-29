@@ -66,7 +66,9 @@ Anything else is free text. Several `tag:` words add up, and two `version:` boun
 
 ### Row actions and bulk actions
 
-Each row shows the type as an icon, the internal name, the tags, the difficulty as five dots, the published version and the last change. A click opens the editor; the three icons at the end of the row are **Edit**, **Duplicate** and **Delete**.
+Each row shows the type as an icon, the internal name, the tags, the difficulty as five dots, the published version and the last change. The three icons at the end of the row are **Edit**, **Duplicate** and **Delete**.
+
+A click on a row shows the question as a student will read it, in a panel beside the list; on a narrower window the panel takes the list's place, and **Back to the list** returns to the row you left. The version shown is the latest published one, the one an evaluation would take, or the draft of a question never published; a line says so when the draft has changes not yet published. From the keyboard, P shows the focused row; on a wide window ↑ and ↓ move from row to row and show each one, opening the panel if it was closed. Escape or the **×** closes it. With the panel open, the table drops the columns it has no room for (version, last change, tags), and gets them back when it closes. To edit, press Enter on the row, double-click it, click its pencil or **Open in the editor** in the panel.
 
 Tick several rows and a bar appears at the bottom: **Add a tag**, **Move to a category**, **Delete**. Deleting hides the questions from the lists; the results already recorded are kept.
 

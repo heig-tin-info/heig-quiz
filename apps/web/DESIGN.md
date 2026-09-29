@@ -127,7 +127,9 @@ Two pairs stay below their target, on purpose:
 - Rhythm: tight inside a group (4–8), comfortable inside a card (16–20),
   generous between sections (32) and between the page header and its body
   (24). A screen that is all 16 px gaps has made no decision.
-- Content column: 1120 px max, 24 px side gutter (16 on phones).
+- Content column: 1120 px max, 32 px side gutter from `sm` (16 on phones), written
+  once as `PAGE_COLUMN` (`ui/page.tsx`); the pool widens past it by the
+  width of its docked question pane (below).
 - A navigation list is capped, not scrolled: the sidebar shows twelve
   classrooms and a "Show all (N)" row, always including the one being read.
   Thirty names in a column is a wall, and it pushes the account row off.
@@ -215,7 +217,10 @@ lists and two strips each wrote that arithmetic out by hand.
 An element made clickable without being a button (a card, a table row) takes
 `pressable()` from `ui/layers.tsx`: `tabIndex={0}` plus Enter and Space, with Space
 prevented from scrolling the page. A row keeps `role="row"`; announcing it as
-a button would cost the reader the table around it.
+a button would cost the reader the table around it. The pool's rows and cards
+are the exception, because there a click LOOKS and Enter EDITS: they answer
+their own keys (`useQuestionBrowse`, below), P is the keyboard's click and
+Space is not one.
 
 Ctrl+K (⌘+K on Apple keyboards) opens and closes the command palette, from
 anywhere, including from inside a field: that is the convention wherever the
@@ -852,6 +857,39 @@ live in `ui/state.ts`, each written once.
   keeps its place instead (the batch banner says "nothing left" rather than
   disappearing). Below `lg` the list becomes a `Select` above the answer and
   the same alignment happens under the phone's top bar.
+- Master and detail (the pool, browse to choose): a click on a question row
+  or card shows the question as a student reads it (`QuestionPreview`, the
+  picker's reading pane too, one request and one cache entry) in an in-page
+  pane, never a `Sheet` — the list stays live beside it. Look and edit are
+  two gestures (`pool/useQuestionBrowse.ts`). A click and P look; ↑/↓/Home/End
+  walk the rows in the order they are DRAWN (sections included), stop at the
+  last loaded one (`listboxIndex` with `wrap: false`) and, where the pane can
+  dock, show the row they reach — opening the pane if it was closed, since
+  browsing with the arrows is the point; on a narrow window they only move,
+  and P is the keyboard's way in (`aria-keyshortcuts`, and in the shortcut
+  strip). Enter, a double-click and the pencil edit, in the same tab; Space
+  does nothing yet, kept for the favourite star; Escape (handled once, on the
+  wrapper of list and pane) and the ✕ close and hand the focus back to the
+  row. One row is in the Tab order (roving tabindex), the shown one wears
+  `aria-current` and the grading panel's `accent-soft` with its name in
+  `accent`; a card is a focusable `listitem`, not a button, since its click
+  is not its Enter. The pane is a named `aside` whose heading is a polite
+  live region: walking the list announces the name, not the body. From
+  `ASIDE_MIN_WIDTH` the pane (30 rem, `surface-2`, hairline, `card` radius,
+  sticky and scrolling on its own) docks right, and the page widens past the
+  shell's cap by exactly the pane and its gap, computed from `PAGE_COLUMN`
+  (`ui/page.tsx`, the one source of the cap and gutter the shell uses too).
+  The widened page keeps the list's left edge and grows right, moving left
+  only by what the window lacks, so a clicked row stays under the pointer on
+  a very wide screen; there every column stays, and a narrower one gives
+  them up by `T`'s priorities — the table measures its own container. Below
+  `ASIDE_MIN_WIDTH` the pane replaces the list with a Back button, as in the
+  picker; on that width a click waits 300 ms for a second one (not under a
+  coarse pointer, which has no double-click), or the double-click would lose
+  its row under the pointer. No empty pane: it appears on the first look,
+  and which question it shows is screen state, never the URL. The cards
+  count their columns on their own container for the same reason as the
+  table.
 - SyncBadge: whether the student's work is safe — `saved`, `saving`,
   `offline`, `closed` — icon plus word, in a polite live region, since it is
   the answer to "did that save?". The word hides under `sm` where the zen bar

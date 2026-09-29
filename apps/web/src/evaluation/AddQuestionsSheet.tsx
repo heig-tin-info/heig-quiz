@@ -1,22 +1,15 @@
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink, Eye, Library, Search } from "lucide-react";
+import { ArrowLeft, Library, Search } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
-import type {
-  PoolSummary,
-  PreviewResult,
-  QuestionPage,
-  QuestionRow,
-} from "@quiz/contracts";
+import type { PoolSummary, QuestionPage, QuestionRow } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
 import { EMPTY_FILTERS, questionQuery, type QuestionFilters } from "../pool/filters";
 import { DifficultyDots } from "../pool/QuestionTable";
 import { QUESTION_TYPE_IDS, typeLabel } from "../questionTypes";
-import { routeToPath } from "../router";
 import {
-  Alert,
   ASIDE_MIN_WIDTH,
   Badge,
   Button,
@@ -24,7 +17,6 @@ import {
   cx,
   EmptyState,
   FormError,
-  LinkButton,
   listboxIndex,
   QueryError,
   SearchInput,
@@ -36,8 +28,7 @@ import {
 } from "../ui";
 import { poolQuestionsKey } from "../queryKeys";
 import { useTargetRefresh, type EditTarget } from "./editTarget";
-import { questionPreviewQuery } from "../question/previewQuery";
-import { PreviewedQuestion, type StudentQuestion } from "./PreviewedQuestion";
+import { QuestionPreview } from "../question/QuestionPreview";
 
 /**
  * The question picker (F-EVAL-01): a pool on the left of the filter bar, a
@@ -162,7 +153,7 @@ export function AddQuestionsSheet({
     rowButtons.current[next]?.focus();
   };
 
-  const preview = shown ? <QuestionPreview row={shown} /> : null;
+  const preview = shown ? <QuestionPreview row={shown} mode="pick" /> : null;
   const back = () => {
     backTo.current = shown?.id ?? null;
     setShown(null);
@@ -202,7 +193,7 @@ export function AddQuestionsSheet({
       {preview && !docked ? (
         <div className="space-y-4">
           <Button variant="secondary" size="sm" onClick={back} autoFocus>
-            <ArrowLeft /> {t("picker.preview.back")}
+            <ArrowLeft /> {t("question.preview.back")}
           </Button>
           {preview}
         </div>
@@ -317,7 +308,7 @@ export function AddQuestionsSheet({
                           rowButtons.current[index] = el;
                         }}
                         aria-pressed={looked}
-                        aria-label={t("picker.preview.show", {
+                        aria-label={t("question.preview.show", {
                           name: row.internalName,
                         })}
                         onClick={() => setShown(row)}
@@ -367,58 +358,5 @@ export function AddQuestionsSheet({
         </div>
       )}
     </Sheet>
-  );
-}
-
-/**
- * One question of the picker as a student will read it: the latest PUBLISHED
- * version — the one "Add" would freeze into the list — or the draft of
- * a question never published, said so. Same request and cache entry as the
- * editor's own preview (`questionPreviewKey`), through `studentView` on the
- * server (invariant 4). The editor opens in a new tab: leaving would close
- * the sheet and drop the ticks.
- */
-function QuestionPreview({ row }: { row: QuestionRow }) {
-  const t = useT();
-  const source = row.latestNumber ?? "draft";
-  const query = useQuery<PreviewResult, Error, StudentQuestion>({
-    ...questionPreviewQuery(row.id, source),
-    select: (r) => ({ type: r.type, student: r.student, points: r.itemPoints }),
-    // A published version never changes; a draft may, in another tab.
-    staleTime: source === "draft" ? 0 : Infinity,
-  });
-  return (
-    <div className="space-y-4">
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate font-semibold">{row.internalName}</h3>
-          <p className="mt-0.5 text-sm text-fg-muted">
-            {source === "draft"
-              ? typeLabel(t, row.type)
-              : t("picker.preview.version", {
-                  type: typeLabel(t, row.type),
-                  n: source,
-                })}
-          </p>
-        </div>
-        {/* An anchor, not a button: middle-click and "open in a new window"
-            must work too, and `noopener` keeps the editor tab detached. */}
-        <LinkButton
-          variant="ghost"
-          size="sm"
-          href={routeToPath({ view: "question", id: row.id })}
-          target="_blank"
-          rel="noopener"
-        >
-          {t("picker.preview.openEditor")} <ExternalLink />
-        </LinkButton>
-      </div>
-      {source === "draft" ? (
-        <Alert icon={Eye} title={t("picker.preview.draftTitle")}>
-          {t("picker.preview.draftBody")}
-        </Alert>
-      ) : null}
-      <PreviewedQuestion query={query} />
-    </div>
   );
 }

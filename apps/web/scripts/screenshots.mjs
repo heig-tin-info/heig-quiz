@@ -516,9 +516,21 @@ const scenes = [
   { name: "pool-loading", role: "teacher", path: "/pools/p1?slow=1", settle: 300 },
   { name: "pool-many", role: "teacher", path: "/pools/p1?many=1" },
   { name: "pool-filters", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /^filtres|^filters/i }).first().click() },
-  // The row no longer opens an inspection panel: it opens the question. What
-  // is worth a scene here is the row's own three actions, and the confirm
-  // dialog the last one goes through.
+  // A click on a row shows the question as a student reads it: docked beside
+  // the list from 1280 px (the table drops its low-priority columns), in the
+  // list's place below. Run at 1920, 1440 and 1024 to see all three.
+  { name: "pool-preview", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("table").getByText("ptr-arith-01", { exact: true }).click();
+      // The code player loads its editor lazily.
+      await p.waitForTimeout(1500);
+    } },
+  { name: "pool-preview-cards", role: "teacher", path: "/pools/p1", ls: { "quiz-pool-view": "cards" }, fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByText("ptr-arith-01", { exact: true }).first().click();
+      await p.waitForTimeout(1500);
+    } },
+  // The row's own three actions, and the confirm dialog the last one goes through.
   { name: "pool-row-delete", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /^(Delete|Supprimer) ptr-arith-01$/ }).first().click() },
   // A question's statistics (ADR-038): the panel with its reset, the reset's
   // confirmation, and a pool this browser only reads (no reset).

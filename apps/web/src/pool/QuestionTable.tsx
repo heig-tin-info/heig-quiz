@@ -10,7 +10,6 @@ import {
   Checkbox,
   cx,
   IconButton,
-  pressable,
   RelativeTime,
   Skeleton,
   T,
@@ -21,16 +20,21 @@ import {
 } from "../ui";
 import type { QuestionGroup } from "./QuestionGroups";
 import type { QuestionSort, SortDir } from "./filters";
+import { entryKey, type RowProps } from "./useQuestionBrowse";
 
 /**
  * The questions of a pool, as the table of the pool screen.
  *
  * The internal name is dominant and monospaced (it is what a teacher types in
  * the palette), the type is the ICON in front of it, the difficulty is five
- * dots — a shape, never a colour — and the actions are last. A click on the
- * row opens the EDITOR: reading a question means opening it, and the
- * inspection panel that used to intercept the click was one step between the
- * teacher and the only thing they came for.
+ * dots — a shape, never a colour — and the actions are last.
+ *
+ * A pool is BROWSED to choose a question — a colleague's, a public one — and
+ * a name alone does not say what a question asks. So a row has two gestures
+ * (`useQuestionBrowse`): a click, ↑/↓ and P LOOK, showing the question as a
+ * student reads it in a pane beside the list (`PoolView`); Enter, a
+ * double-click and the pencil EDIT. Space is kept for the favourite star that
+ * comes next, and does nothing until then.
  *
  * The type lost its column and became a 20 px glyph at the left of the name.
  * A badge repeating "Multiple choice" on forty rows is forty copies of a word
@@ -157,6 +161,7 @@ export function QuestionTable({
   checked,
   onToggleCheck,
   onToggleAll,
+  rowProps,
   onEdit,
   onDuplicate,
   onDelete,
@@ -173,7 +178,9 @@ export function QuestionTable({
   checked: ReadonlySet<string>;
   onToggleCheck: (id: string) => void;
   onToggleAll: () => void;
-  /** Opening the question: the row itself, and the pencil. */
+  /** Looking and walking: the click, the keys, the roving focus (`useQuestionBrowse`). */
+  rowProps: (key: string, row: QuestionRow) => RowProps;
+  /** Opening the editor: the pencil (the row's Enter and double-click go through `rowProps`). */
   onEdit: (row: QuestionRow) => void;
   onDuplicate: (row: QuestionRow) => void;
   onDelete: (row: QuestionRow) => void;
@@ -252,12 +259,11 @@ export function QuestionTable({
             )}
             {group.rows.map((row) => (
               <tr
-                key={`${group.key}:${row.id}`}
-                onClick={() => onEdit(row)}
-                {...pressable(() => onEdit(row), "row")}
+                key={entryKey(group, row)}
+                {...rowProps(entryKey(group, row), row)}
                 draggable={onDragStart !== undefined}
                 onDragStart={onDragStart ? (event) => onDragStart(event, row) : undefined}
-                className={cx(T.row, T.rowHover, "cursor-pointer")}
+                className={cx(T.row, T.rowHover, "cursor-pointer aria-[current=true]:bg-accent-soft")}
               >
                 {readOnly ? null : (
                   <td className={T.td} onClick={(e) => e.stopPropagation()}>
@@ -273,7 +279,9 @@ export function QuestionTable({
                 <td className={cx(T.td, "whitespace-nowrap")}>
                   <span className="flex items-center gap-2">
                     <TypeGlyph type={row.type} />
-                    <span className="font-mono font-bold">{row.internalName}</span>
+                    <span className="font-mono font-bold group-aria-[current=true]:text-accent">
+                      {row.internalName}
+                    </span>
                     {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
                     <RowStatsButton row={row} statsFor={statsFor} />
                   </span>
@@ -302,7 +310,15 @@ export function QuestionTable({
                 </td>
                 {readOnly ? null : (
                   <td
-                    className={cx(T.td, "text-right", T.stickyEnd)}
+                    className={cx(
+                      T.td,
+                      "text-right",
+                      T.stickyEnd,
+                      // The row's tint laid OVER an opaque fill, hovered or not:
+                      // in dark mode `accent-soft` is translucent, and as the
+                      // fill it would let the scrolled cells show through.
+                      "group-aria-[current=true]:bg-surface group-aria-[current=true]:bg-[linear-gradient(var(--accent-soft),var(--accent-soft))]",
+                    )}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <span className="inline-flex items-center gap-0.5">

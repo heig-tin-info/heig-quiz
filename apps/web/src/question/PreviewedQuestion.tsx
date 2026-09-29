@@ -18,7 +18,8 @@ export interface StudentQuestion {
  * The body of a teacher's preview of ONE question: its points, then the
  * student's rendering through the player's own `QuestionHost` — never a
  * second rendering. Shared by the preview of an item of the evaluation
- * (`ItemPreviewSheet`) and by the picker's reading pane (`AddQuestionsSheet`).
+ * (`ItemPreviewSheet`) and by `QuestionPreview`, the reading pane of the
+ * question picker and of the pool screen.
  *
  * The teacher may type in the fields — a preview one cannot touch does not
  * answer "does this read right?" — and the answer lives here and dies with
