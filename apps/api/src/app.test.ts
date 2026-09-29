@@ -4,8 +4,11 @@ import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { MONACO_VS } from "@quiz/qt-code/server";
+
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { CSP, TEAMS_TAB_CSP } from "./csp.js";
 
 // M1 foundation: the server must start and respond even without a reachable
 // database (healthz "degraded", never a crash), a precondition for the 11 pm
@@ -182,5 +185,56 @@ describe("app (serving the built SPA)", () => {
     const res = await app.inject({ method: "POST", url: "/whatever" });
     expect(res.statusCode).toBe(404);
     expect(res.json()).toEqual({ error: "not_found" });
+  });
+
+  // N-SEC-02 (#319): the application, not Caddy, sends the policy.
+  it("sends the CSP and SAMEORIGIN framing with the SPA, its assets and the API", async () => {
+    for (const url of ["/", "/classrooms/c1", "/app.js", "/app/api/nope", "/healthz"]) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.headers["content-security-policy"], url).toBe(CSP);
+      expect(res.headers["x-frame-options"], url).toBe("SAMEORIGIN");
+    }
+  });
+
+  it("lets Teams frame the tab, and that page only", async () => {
+    const tab = await app.inject({ method: "GET", url: "/teams?x=1" });
+    expect(tab.headers["content-security-policy"]).toBe(TEAMS_TAB_CSP);
+    expect(tab.headers["x-frame-options"]).toBeUndefined();
+    const link = await app.inject({ method: "GET", url: "/teams/link" });
+    expect(link.headers["content-security-policy"]).toBe(CSP);
+  });
+});
+
+describe("the content security policy", () => {
+  const directives = (policy: string) =>
+    new Map(policy.split("; ").map((d) => [d.split(" ")[0], d.split(" ").slice(1)] as const));
+
+  it("admits no inline script and no eval, and falls back to self", () => {
+    const csp = directives(CSP);
+    expect(csp.get("default-src")).toEqual(["'self'"]);
+    const scripts = csp.get("script-src") ?? [];
+    expect(scripts[0]).toBe("'self'");
+    expect(scripts).not.toContain("'unsafe-inline'");
+    expect(scripts).not.toContain("'unsafe-eval'");
+    expect(csp.get("object-src")).toEqual(["'none'"]);
+    expect(csp.get("frame-ancestors")).toEqual(["'self'"]);
+  });
+
+  it("admits the one Monaco directory the editor loads, not the whole CDN", () => {
+    expect(directives(CSP).get("script-src")).toContain(`${MONACO_VS}/`);
+    // No bare host, no `/npm/` prefix: the pinned directory or nothing.
+    for (const source of CSP.split(/[ ;]+/).filter((s) => s.includes("jsdelivr"))) {
+      expect(source).toBe(`${MONACO_VS}/`);
+    }
+  });
+
+  it("differs on the Teams tab by its framing and teams-js's fetch only", () => {
+    const tab = directives(TEAMS_TAB_CSP);
+    const rest = directives(CSP);
+    expect(tab.get("frame-ancestors")).toContain("https://teams.microsoft.com");
+    expect(tab.get("connect-src")).toContain("https://res.cdn.office.net");
+    for (const [name, sources] of rest) {
+      if (name !== "frame-ancestors" && name !== "connect-src") expect(tab.get(name), name).toEqual(sources);
+    }
   });
 });

@@ -29,6 +29,7 @@ import type { OnMount } from "@monaco-editor/react";
 
 import type { CodeLanguage } from "./schema.js";
 import { codeArea, cx } from "@quiz/ui";
+import { MONACO_VS } from "./monacoCdn.js";
 
 /** The Monaco language ids, which differ from ours for JavaScript. */
 export const MONACO_LANGUAGE: Record<CodeLanguage, string> = {
@@ -42,7 +43,9 @@ export const MONACO_LANGUAGE: Record<CodeLanguage, string> = {
 export const LazyMonaco = lazy(async () => {
   // The named export, not the default one: `@monaco-editor/react` ships both
   // and only the named one is typed as a component under NodeNext resolution.
-  const { Editor } = await import("@monaco-editor/react");
+  const { Editor, loader } = await import("@monaco-editor/react");
+  // The directory the CSP admits (`./monacoCdn.ts`), not the loader's default.
+  loader.config({ paths: { vs: MONACO_VS } });
   return { default: Editor };
 });
 
