@@ -1,4 +1,3 @@
-import { hasLlmMatcher } from "@quiz/domain/short";
 import { describe, expect, it } from "vitest";
 import {
   emptyShortDraft,
@@ -105,12 +104,12 @@ describe("ShortConfigSchema", () => {
     expect(config.matchers[0]).toEqual({ kind: "exact", value: "const", points: 1 });
   });
 
-  it("stores an llm matcher but flags it for the publication guard", () => {
+  it("stores an llm matcher: only publication refuses it (`publicationIssues`)", () => {
     const config = ShortConfigSchema.parse({
       ...base(),
       matchers: [{ kind: "llm", rubric: "Explains the tri-state." }],
     });
-    expect(hasLlmMatcher(config.matchers)).toBe(true);
+    expect(config.matchers[0]!.kind).toBe("llm");
   });
 });
 
