@@ -2426,9 +2426,9 @@ on("POST", "/app/api/questions/:id/versions/:number/deprecate", (m, body) => {
  * browser only reads — one more, so the reader's panel (no reset) is on
  * screen too. Every other question is below the threshold. The time spent
  * (ADR-039) shows on the first and the third; the second and `p3`'s have too
- * few timed exam answers for it. The discrimination (ADR-040) is good on the
+ * few timed exam answers for it. The discrimination (ADR-041) is good on the
  * first, INVERSE on the second, weak on the third and absent on `p3`'s.
- * The distractors (ADR-041) of the second, a single-choice question: a
+ * The distractors (ADR-042) of the second, a single-choice question: a
  * wrong option picked more than the key, and one nobody picks; `fopen-modes`
  * shows a multiple-choice question's (the shares add up past 100), and
  * `array-decay` an mcq with too few answers on its current choices.

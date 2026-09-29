@@ -1,4 +1,4 @@
-# ADR-041 — The distractors of a multiple-choice question
+# ADR-042 — The distractors of a multiple-choice question
 
 ## Status
 
@@ -41,7 +41,7 @@ a staff seat, on a finished and started attempt, at or after the question's
 `stats_since`, the kept attempt of an exercise. **Exams and exercises
 alike**, like `p`: which option a student picks is a property of the
 options, not of the conditions of the test — unlike the discrimination
-(ADR-040), which needs a whole exam's total.
+(ADR-041), which needs a whole exam's total.
 
 Then one narrowing: only the answers given to the published versions whose
 options are **identical** to the latest published version's, wherever they

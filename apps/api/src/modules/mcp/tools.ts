@@ -175,7 +175,10 @@ export const TOOLS: Tool[] = [
       "and exercises of EVERY class that used the question (not only the teacher's own); `p` is the mean " +
       "share of the points earned, from 0 to 1, and may be NEGATIVE under negative marking; `since` is the " +
       "last reset (null: never). `time` is the time spent on the question in exams, in whole seconds " +
-      "(median, P25, P75, mean, over `time.n` answers), or null below ten timed answers. `distractors`, on an " +
+      "(median, P25, P75, mean, over `time.n` answers), or null below ten timed answers. `discrimination` is " +
+      "the corrected point-biserial over exams (`r` from -1 to 1, weak below 0.2, good from 0.3, negative: the " +
+      "stronger students do worse, check the key), with the exams and attempts behind it, or null when no exam " +
+      "qualifies (ADR-041). `distractors`, on an " +
       "mcq question only, is the whole-percent share of students who picked each option (`correct` marks the " +
       "key) and of `none` (picked nothing), over `distractors.n` answers to the versions whose options are " +
       "the current ones; null below ten such answers (ADR-042). Aggregates only: " +

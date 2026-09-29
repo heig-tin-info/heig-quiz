@@ -1,4 +1,4 @@
-# ADR-040 — The discrimination index of a question
+# ADR-041 — The discrimination index of a question
 
 ## Status
 

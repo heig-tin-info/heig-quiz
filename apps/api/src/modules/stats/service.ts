@@ -22,13 +22,13 @@
  * attempt, so there is no kept attempt to pick; a grading is not needed —
  * the time was spent whatever the points.
  *
- * The DISCRIMINATION index (ADR-040) reads the same counted answers, exams
+ * The DISCRIMINATION index (ADR-041) reads the same counted answers, exams
  * only, and keeps an attempt only when every OTHER item of the exam has a
  * validated grading too: the rest of the test must be a grade, not a
  * proposal. Per exam, the corrected point-biserial of `@quiz/domain`; over
  * the exams, Fisher's z. Null when no exam qualifies.
  *
- * The DISTRACTORS of a multiple-choice question (ADR-041) read the same
+ * The DISTRACTORS of a multiple-choice question (ADR-042) read the same
  * counted answers too, narrowed to the versions that carry the latest
  * version's options: which option they picked, in whole percents, from ten
  * of them on.
@@ -219,7 +219,7 @@ interface CountedExamAnswer extends ScoredAnswer {
 }
 
 /**
- * The per-exam samples of the discrimination index (ADR-040), by question.
+ * The per-exam samples of the discrimination index (ADR-041), by question.
  *
  * `counted` are the answers the success rate counts, of exams only: the
  * population rules live in {@link countedAttempt}, the not-reached rule and
@@ -312,7 +312,7 @@ interface Version {
 }
 
 /**
- * The distractor analysis (ADR-041) of every question of `counted`, which
+ * The distractor analysis (ADR-042) of every question of `counted`, which
  * are all of type {@link DISTRACTOR_TYPE}: an entry per question, null below
  * the threshold.
  *

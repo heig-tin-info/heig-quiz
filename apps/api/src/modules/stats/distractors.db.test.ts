@@ -1,5 +1,5 @@
 /**
- * The distractor analysis of a multiple-choice question (ADR-041): the
+ * The distractor analysis of a multiple-choice question (ADR-042): the
  * success rate's counted answers, narrowed to the versions that carry the
  * latest version's options, as whole-percent shares from ten answers on.
  */
@@ -147,7 +147,7 @@ async function distractorsOf(seed: Seeded, questionId: string) {
 /** Ten picks: A seven times, B twice, C once. */
 const SEVEN_TWO_ONE = [[0], [0], [0], [0], [0], [0], [0], [1], [1], [2]];
 
-describe("the distractor analysis (ADR-041)", () => {
+describe("the distractor analysis (ADR-042)", () => {
   it("gives each option's share, the key marked, in the options' order", async () => {
     const seed = await seedLive(db, { students: 10, questions: 0 });
     const q = await mcqQuestion(seed, mcq(SINGLE));
