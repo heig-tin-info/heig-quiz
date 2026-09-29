@@ -12,10 +12,10 @@
  * `QUESTION_TIME_MIN_N` timed exam answers: below it `time` is null while
  * `n` and `p` show. Whole seconds.
  *
- * The discrimination index (ADR-041) is null when no exam qualifies for it
+ * The discrimination index (ADR-042) is null when no exam qualifies for it
  * (five other items, ten attempts whose every item is validated).
  *
- * The distractor analysis (ADR-042) exists for a multiple-choice question
+ * The distractor analysis (ADR-043) exists for a multiple-choice question
  * only: absent for any other type, null while the versions carrying the
  * latest version's options have fewer than `QUESTION_STATS_MIN_N` counted
  * answers. Whole-percent shares, never a count.
@@ -39,7 +39,7 @@ export const TimeStats = z.object({
 export type TimeStats = z.infer<typeof TimeStats>;
 
 /**
- * A question's discrimination index (ADR-041): the corrected point-biserial,
+ * A question's discrimination index (ADR-042): the corrected point-biserial,
  * combined over `evaluations` exams and `n` attempts, to two decimals. Signed.
  */
 export const DiscriminationStats = z.object({
@@ -50,7 +50,7 @@ export const DiscriminationStats = z.object({
 export type DiscriminationStats = z.infer<typeof DiscriminationStats>;
 
 /**
- * What the counted answers picked on a multiple-choice question (ADR-042),
+ * What the counted answers picked on a multiple-choice question (ADR-043),
  * over the `n` answers given to the versions whose options are the latest's
  * (wherever they stand in the history). One entry per option in the question's order,
  * with its text and whether it is in the key; `none` is the share of the

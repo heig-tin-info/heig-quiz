@@ -14,7 +14,7 @@ export const BAR_TONES: Record<BarTone, string> = {
   danger: "bg-danger",
   warning: "bg-warning",
   muted: "bg-fg-faint/50",
-  // A share with no verdict: the choices picked on a question of the pool (ADR-042).
+  // A share with no verdict: the choices picked on a question of the pool (ADR-043).
   info: "bg-info",
 };
 

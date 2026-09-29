@@ -436,7 +436,7 @@ describe("the time spent (ADR-039)", () => {
   });
 });
 
-describe("the discrimination index (ADR-041)", () => {
+describe("the discrimination index (ADR-042)", () => {
   /*
    * Ten students: how many of the five other items each earned, and what
    * they earned on the question. The expected indexes are worked out by hand

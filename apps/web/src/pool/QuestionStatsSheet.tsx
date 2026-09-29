@@ -166,7 +166,7 @@ const BAND_TONE: Record<DiscriminationBand, Tone> = {
 };
 
 /**
- * The discrimination index (ADR-041), a third block: the value to two
+ * The discrimination index (ADR-042), a third block: the value to two
  * decimals with its reading, what it rests on, and one sentence on what it
  * means. Like the time, it has its own conditions, so a question may show
  * its rate without it; the block then says when it will show.
@@ -225,7 +225,7 @@ function DiscriminationValue({ discrimination }: { discrimination: Discriminatio
 }
 
 /**
- * The distractor analysis of a multiple-choice question (ADR-042), a fourth
+ * The distractor analysis of a multiple-choice question (ADR-043), a fourth
  * block, drawn only for a type that has it: one row per option in the
  * question's order — its letter, its text, its share and a bar — then the
  * answers that picked nothing, drawn like the class debrief's distribution

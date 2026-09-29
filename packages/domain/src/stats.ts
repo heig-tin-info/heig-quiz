@@ -3,7 +3,7 @@
  * item analysis of a question in its pool (ADR-038): the mean success rate
  * over the answers counted, reported with their number and shown only from
  * `QUESTION_STATS_MIN_N` answers on — the time spent on it (ADR-039) and
- * its discrimination index (ADR-041).
+ * its discrimination index (ADR-042).
  */
 import { MAX_GRADE, MIN_GRADE } from "./grade.js";
 import { clamp, round2 } from "./round.js";
@@ -131,7 +131,7 @@ export function shownTimeSpread(stats: Spread): Spread | null {
 }
 
 /**
- * The discrimination index of a question (ADR-041): does it separate the
+ * The discrimination index of a question (ADR-042): does it separate the
  * students who did well on the rest of the test from those who did not? A
  * corrected point-biserial — the Pearson correlation between the item's
  * score and the rest of the test WITHOUT it — per exam, combined over the
@@ -258,10 +258,10 @@ export function discrimination(samples: Iterable<DiscriminationSample | null>): 
   };
 }
 
-/** From this index on, a question discriminates fairly (ADR-041). */
+/** From this index on, a question discriminates fairly (ADR-042). */
 export const DISCRIMINATION_FAIR = 0.2;
 
-/** From this index on, a question discriminates well (ADR-041). */
+/** From this index on, a question discriminates well (ADR-042). */
 export const DISCRIMINATION_GOOD = 0.3;
 
 /**
@@ -280,7 +280,7 @@ export function discriminationBand(r: number): DiscriminationBand {
 }
 
 /**
- * The distractor analysis of a choice question (ADR-042): which option the
+ * The distractor analysis of a choice question (ADR-043): which option the
  * counted answers picked, as whole-percent shares. It reads only the answers
  * given to the versions whose options are the latest version's own.
  */
@@ -310,7 +310,7 @@ export interface OptionShares {
  * percent on its own — so a single-choice question may sum to 99 or 101,
  * and a multiple-choice one well above 100, since an answer may pick several
  * options. `null` below {@link QUESTION_STATS_MIN_N} answers: the threshold
- * of the success rate, applied to this analysis's own `n` (ADR-042). Never a
+ * of the success rate, applied to this analysis's own `n` (ADR-043). Never a
  * count, only a share (N-DATA-06).
  */
 export function optionShares(counts: readonly number[], none: number, n: number): OptionShares | null {

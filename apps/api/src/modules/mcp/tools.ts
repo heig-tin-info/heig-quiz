@@ -178,10 +178,10 @@ export const TOOLS: Tool[] = [
       "(median, P25, P75, mean, over `time.n` answers), or null below ten timed answers. `discrimination` is " +
       "the corrected point-biserial over exams (`r` from -1 to 1, weak below 0.2, good from 0.3, negative: the " +
       "stronger students do worse, check the key), with the exams and attempts behind it, or null when no exam " +
-      "qualifies (ADR-041). `distractors`, on an " +
+      "qualifies (ADR-042). `distractors`, on an " +
       "mcq question only, is the whole-percent share of students who picked each option (`correct` marks the " +
       "key) and of `none` (picked nothing), over `distractors.n` answers to the versions whose options are " +
-      "the current ones; null below ten such answers (ADR-042). Aggregates only: " +
+      "the current ones; null below ten such answers (ADR-043). Aggregates only: " +
       "no student, no individual grade.",
     input: z.object({ poolId: Id }),
     annotations: READ,

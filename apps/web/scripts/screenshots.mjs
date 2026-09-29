@@ -556,7 +556,7 @@ const scenes = [
   { name: "pool-stats-reader", role: "teacher", path: "/pools/p3", fold: true, act: (p) => p.getByRole("button", { name: /^(Statistics of|Statistiques de) / }).first().click() },
   // The cards, and the question the mock gives a NEGATIVE rate (ADR-026).
   { name: "pool-stats-negative", role: "teacher", path: "/pools/p1", ls: { "quiz-pool-view": "cards" }, fold: true, act: (p) => p.getByRole("button", { name: /^(Statistics of|Statistiques de) / }).nth(1).click() },
-  // The choices picked on a multiple-choice question (ADR-042): a strong
+  // The choices picked on a multiple-choice question (ADR-043): a strong
   // distractor, a multiple-answer question, and too few answers yet.
   ...[
     ["pool-stats-choices", "ptr-null-check"],
