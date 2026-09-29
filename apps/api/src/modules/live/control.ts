@@ -175,7 +175,7 @@ export async function resumeEvaluation(
  *
  * Closing is also what starts the automatic correction (§5.4): when the
  * caller hands over the Fastify instance — the route and the ticker both do —
- * the `grading.evaluation` singleton is enqueued here, so the two entry
+ * the whole-evaluation `grading.evaluation` pass is enqueued here, so the two entry
  * points cannot drift apart. A caller that passes nothing (a unit test on the
  * transition alone) closes without grading.
  */

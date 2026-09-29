@@ -12,14 +12,23 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import { answers, courseStaff, evaluations, notifications, users } from "../../db/schema.js";
+import {
+  answers,
+  attempts,
+  courseStaff,
+  evaluations,
+  gradings,
+  notifications,
+  users,
+} from "../../db/schema.js";
+import { InProcessQueue } from "../../jobs.js";
 import { testApp, testDb } from "../../test/db.js";
 import { seedCodeEvaluation } from "../../test/codeFixture.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { applyState, joinedItems } from "../evaluation/service.js";
 import * as live from "../live/service.js";
-import { runEvaluationGrading } from "./jobs.js";
+import { enqueueEvaluationGrading, registerGradingJobs, runEvaluationGrading } from "./jobs.js";
 import { announceGradingReady } from "./ready.js";
 import { regradeItem } from "./service.js";
 
@@ -186,5 +195,68 @@ describe("grading_ready", () => {
     // The row a runner job picked up before the close.
     await announceGradingReady(app, { ...evaluation, state: "running" });
     expect((await readyRows(evaluation.id)).map((r) => r.userId)).toContain(seed.teacherId);
+  });
+
+  describe("through the in-process queue (#273)", () => {
+    /** The closed evaluation, its two attempts, and an app whose passes go through a real queue. */
+    async function queuedFixture() {
+      const fixture = await closedEvaluation(true);
+      const queue = new InProcessQueue(true, fixture.app.log);
+      const queued = Object.assign(Object.create(fixture.app), { boss: queue }) as typeof fixture.app;
+      await registerGradingJobs(queued, queue);
+      // A job on its own queue, sent last: the queue is FIFO, so once it has
+      // run, every pass sent before it has run too.
+      const drained = () =>
+        new Promise<void>((resolve) => {
+          void queue.work("test.drained", async () => resolve());
+          void queue.send("test.drained", {});
+        });
+      const [first, second] = await db
+        .select()
+        .from(attempts)
+        .where(eq(attempts.evaluationId, fixture.evaluation.id));
+      return { ...fixture, queued, drained, first: first!, second: second! };
+    }
+
+    it("never loses the close's pass behind a retake pass still waiting", async () => {
+      const { seed, evaluation, colleague, queued, drained, second, first } = await queuedFixture();
+      // A retake pass running, the same one sent again and still waiting, then
+      // the close's whole-evaluation pass: the last one used to be dropped,
+      // leaving the other attempt ungraded and the staff untold.
+      const retake = { evaluationId: evaluation.id, attemptIds: [first.id], retake: true };
+      await enqueueEvaluationGrading(queued, retake);
+      await enqueueEvaluationGrading(queued, retake);
+      await enqueueEvaluationGrading(queued, { evaluationId: evaluation.id, announce: true });
+      await drained();
+
+      const graded = await db.select().from(gradings).where(eq(gradings.attemptId, second.id));
+      expect(graded.length).toBeGreaterThan(0);
+      expect((await readyRows(evaluation.id)).map((r) => r.userId).sort()).toEqual(
+        [seed.teacherId, colleague].sort(),
+      );
+    });
+
+    it("tells once when a retake pass completes the grid after the close, ahead of the close's pass", async () => {
+      const { app, seed, evaluation, colleague, queued, drained, first, second } =
+        await queuedFixture();
+      // Student A's retake was graded while the evaluation ran; student B's
+      // retake pass was sent then too, but runs only after the close.
+      await runEvaluationGrading(app, {
+        evaluationId: evaluation.id,
+        attemptIds: [first.id],
+        retake: true,
+      });
+      await enqueueEvaluationGrading(queued, {
+        evaluationId: evaluation.id,
+        attemptIds: [second.id],
+        retake: true,
+      });
+      await enqueueEvaluationGrading(queued, { evaluationId: evaluation.id, announce: true });
+      await drained();
+
+      expect((await readyRows(evaluation.id)).map((r) => r.userId).sort()).toEqual(
+        [seed.teacherId, colleague].sort(),
+      );
+    });
   });
 });

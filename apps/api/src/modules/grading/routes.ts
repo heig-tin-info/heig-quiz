@@ -53,9 +53,10 @@ export async function gradingPlugin(app: FastifyInstance) {
   // --- The automatic pass ------------------------------------------------
 
   /**
-   * `POST /evaluations/:id/grading/run`. The job is a singleton per evaluation
-   * and skips every cell that already has a validated grading, so pressing the
-   * button twice costs one pass and changes nothing that a teacher settled.
+   * `POST /evaluations/:id/grading/run`. The pass skips every cell that
+   * already has a validated grading, so pressing the button twice costs a
+   * second pass and changes nothing that a teacher settled (#273: never
+   * deduplicated, see `enqueueEvaluationGrading`).
    */
   app.post(
     "/app/api/evaluations/:id/grading/run",

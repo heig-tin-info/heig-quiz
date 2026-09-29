@@ -269,7 +269,7 @@ what the machine could only propose, and the release freezes the grades.
 
 ```mermaid
 flowchart TB
-  CLOSE["closed, by the teacher or the ticker"] --> JOB["job grading.evaluation, singleton per evaluation"]
+  CLOSE["closed, by the teacher or the ticker"] --> JOB["job grading.evaluation, idempotent, one per request"]
   JOB --> CELL{"for each attempt and item"}
   CELL -- "a validated grading stands" --> SKIP["skip"]
   CELL -- "no answer" --> ZERO["0 points, validated"]

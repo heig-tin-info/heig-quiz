@@ -3,8 +3,8 @@
  * re-reads the database and does whatever is due. Rescheduling is free (the
  * condition is re-read), catch-up after an outage is free (the condition
  * stays true). Multi-process safety does not rest on the ticker: every
- * action performs an atomic claim (conditional UPDATE) or goes through a
- * queue singleton.
+ * action performs an atomic claim (conditional UPDATE or insert on a unique
+ * key), and what it enqueues is idempotent (no queue dedupes, #273).
  *
  * The period is one second by default because that is what the live
  * evaluation clock needs (docs/spec/05-architecture.md, 5.4): a tentative
