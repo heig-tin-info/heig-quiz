@@ -7,7 +7,7 @@ import { api } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { tryAdapterFor } from "../questionTypes";
-import { routeToPath, useSearchParam, type Route } from "../router";
+import { QUESTION_ORIGIN_PARAMS, routeToPath, useSearchParam, type Route } from "../router";
 import { PageError, PageSkeleton, TabPanel, Tabs } from "../ui";
 import { PublishDialog } from "./PublishDialog";
 import { QuestionEditTab } from "./QuestionEditTab";
@@ -17,44 +17,113 @@ import { useEditorShortcuts } from "./useEditorShortcuts";
 import { useQuestionActions } from "./useQuestionActions";
 import { useQuestionDraft } from "./useQuestionDraft";
 import { VersionHistory } from "./VersionHistory";
-import { evaluationKey, poolKey, questionKey, templateKey } from "../queryKeys";
+import { evaluationKey, gradingKey, poolKey, questionKey, templateKey } from "../queryKeys";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * What the editor was opened from — an evaluation (`?from=`, issue #127) or
- * a template (`?fromTemplate=`, F-EVAL-25) — with its title and the route
- * back. The query is that page's own, under its key and read whole, so
- * coming from there costs no request; after a reload it costs one. Anything
- * that is not an id this reader reaches is ignored, and the header falls
- * back to the pool.
+ * The pages the editor may have been opened from, in the order they win,
+ * each keyed by the query parameter that names it (`QUESTION_ORIGIN_PARAMS`):
+ *
+ * - `fromGrading` (+ `item`): the grading screen of an evaluation, on one of
+ *   its questions (ADR-044, addendum). Its words need nothing fetched, and
+ *   publishing leads back there at once — the fix was made to re-grade.
+ * - `fromTemplate`: a template (F-EVAL-25), by its title.
+ * - `from`: an evaluation (issue #127), by its title.
+ *
+ * A title is read from that page's own query, under its key and read whole,
+ * so coming from there costs no request; after a reload it costs one.
  */
-function useOrigin(): { title: string; back: Route } | null {
-  const [fromEvaluation] = useSearchParam("from", "");
+interface OriginSpec {
+  param: Exclude<(typeof QUESTION_ORIGIN_PARAMS)[number], "item">;
+  back: (id: string, item: string | null) => Route;
+  /** The page whose title the way back names; absent: fixed words. */
+  titled?: { key: (id: string) => readonly unknown[]; url: (id: string) => string; title: (d: unknown) => string };
+  label: (t: ReturnType<typeof useT>, title: string) => string;
+  /** The evaluation a publication makes stale, when the origin is one. */
+  evaluation: boolean;
+  /** Publishing is the way back (only from the grading screen). */
+  returnOnPublish: boolean;
+}
+
+const ORIGINS: readonly OriginSpec[] = [
+  {
+    param: "fromGrading",
+    back: (id, item) => ({ view: "grading", evaluationId: id, ...(item ? { item } : {}) }),
+    label: (t) => t("question.backToGrading"),
+    evaluation: true,
+    returnOnPublish: true,
+  },
+  {
+    param: "fromTemplate",
+    back: (id) => ({ view: "template", id }),
+    titled: {
+      key: templateKey,
+      url: (id) => `/app/api/templates/${id}`,
+      title: (d) => (d as TemplateDetail).template.title,
+    },
+    label: (t, title) => t("question.backToEvaluation", { title }),
+    evaluation: false,
+    returnOnPublish: false,
+  },
+  {
+    param: "from",
+    back: (id) => ({ view: "evaluation", id }),
+    titled: {
+      key: evaluationKey,
+      url: (id) => `/app/api/evaluations/${id}`,
+      title: (d) => (d as EvaluationDetail).evaluation.title,
+    },
+    label: (t, title) => t("question.backToEvaluation", { title }),
+    evaluation: true,
+    returnOnPublish: false,
+  },
+];
+
+interface Origin {
+  label: string;
+  back: Route;
+  /** The evaluation to refresh after a publication, or null. */
+  evaluationId: string | null;
+  returnOnPublish: boolean;
+}
+
+/**
+ * The origin the query string names, or `null`: anything that is not an id
+ * (or, for a titled page, not one this reader reaches) is ignored, and the
+ * header falls back to the pool.
+ */
+function useOrigin(): Origin | null {
+  const t = useT();
+  // One hook per param, spelled out: a hook in a loop is the rules of hooks
+  // broken, however constant the list.
+  const [from] = useSearchParam("from", "");
   const [fromTemplate] = useSearchParam("fromTemplate", "");
-  const source = UUID.test(fromTemplate)
-    ? {
-        key: templateKey(fromTemplate),
-        url: `/app/api/templates/${fromTemplate}`,
-        title: (d: unknown) => (d as TemplateDetail).template.title,
-        back: { view: "template", id: fromTemplate } as const,
-      }
-    : UUID.test(fromEvaluation)
-      ? {
-          key: evaluationKey(fromEvaluation),
-          url: `/app/api/evaluations/${fromEvaluation}`,
-          title: (d: unknown) => (d as EvaluationDetail).evaluation.title,
-          back: { view: "evaluation", id: fromEvaluation } as const,
-        }
-      : null;
-  const origin = useQuery<unknown>({
-    queryKey: source?.key ?? evaluationKey(""),
-    enabled: source !== null,
-    queryFn: () => api(source!.url),
+  const [fromGrading] = useSearchParam("fromGrading", "");
+  const [item] = useSearchParam("item", "");
+  const params: Record<(typeof QUESTION_ORIGIN_PARAMS)[number], string> = {
+    from,
+    fromTemplate,
+    fromGrading,
+    item,
+  };
+  const spec = ORIGINS.find((o) => UUID.test(params[o.param]));
+  const id = spec ? params[spec.param] : "";
+  const titled = spec?.titled;
+  const page = useQuery<unknown>({
+    queryKey: titled ? titled.key(id) : evaluationKey(""),
+    enabled: titled !== undefined,
+    queryFn: () => api(titled!.url(id)),
     retry: false,
   });
-  if (!source || !origin.data) return null;
-  return { title: source.title(origin.data), back: source.back };
+  if (!spec) return null;
+  if (titled && !page.data) return null;
+  return {
+    label: spec.label(t, titled ? titled.title(page.data) : ""),
+    back: spec.back(id, UUID.test(params.item) ? params.item : null),
+    evaluationId: spec.evaluation ? id : null,
+    returnOnPublish: spec.returnOnPublish,
+  };
 }
 
 /**
@@ -169,7 +238,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         poolName={pool.data?.pool.name}
         readOnly={readOnly}
         autosave={autosave}
-        origin={origin?.title}
+        origin={origin?.label}
         onBack={() =>
           navigate(
             origin ? origin.back : { view: "pool", id: data.meta.poolId },
@@ -221,6 +290,15 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
             toast(t("question.published.toast", { n: version.number }), "success");
             await qc.invalidateQueries({ queryKey: questionKey(id) });
             await qc.invalidateQueries({ queryKey: poolKey(poolId) });
+            // The evaluation it came from now has a newer version to offer
+            // (its stale badge, the grading screen's Re-grade).
+            if (origin?.evaluationId) {
+              void qc.invalidateQueries({ queryKey: evaluationKey(origin.evaluationId) });
+              void qc.invalidateQueries({ queryKey: gradingKey(origin.evaluationId) });
+            }
+            // Opened from the grading screen, publishing IS the way back: the
+            // fix was made to re-grade with it (ADR-044, addendum).
+            if (origin?.returnOnPublish) navigate(origin.back);
           }}
         />
       ) : null}

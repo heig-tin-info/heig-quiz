@@ -276,7 +276,84 @@ describe("GradingPanel — the answer panel", () => {
     await userEvent.click(expected!);
     const panel = await screen.findByRole("dialog", { name: "Question 1" });
     await userEvent.click(within(panel).getByRole("button", { name: /Edit question/ }));
-    expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q1", from: "e1" });
+    expect(navigate).toHaveBeenCalledWith({
+      view: "question",
+      id: "q1",
+      fromGrading: "e1",
+      item: "i1",
+    });
+  });
+});
+
+/*
+ * The round trip of ADR-044's addendum: Edit question → the editor → back
+ * on the same question → Re-grade, emphasised while a newer version waits.
+ */
+describe("GradingPanel — edit, come back, re-grade", () => {
+  const VERSIONS = `${EVAL}/items/i1/versions`;
+  const version = (number: number) => ({
+    number,
+    publishedAt: `2026-09-0${number}T08:00:00.000Z`,
+    publishedBy: null,
+    changeNote: number === 2 ? "Fixed the key." : null,
+    deprecatedAt: null,
+    deprecationNote: null,
+  });
+  const expectedRow = async () => within(await table()).getAllByRole("row")[1]!;
+
+  it("opens on the question named in ?item=, and keeps it there as the teacher moves", async () => {
+    mockFetch(routes([proposal("a1", 2)]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />, {
+      route: "/evaluations/e1/grading?item=i2",
+    });
+    expect(await screen.findByRole("table", { name: "Answers to question 2" })).toBeVisible();
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(await table()).toBeVisible();
+    expect(window.location.search).toBe("?item=i1");
+  });
+
+  it("offers no Edit question to whoever may not write the pool, and a plain Re-grade while up to date", async () => {
+    mockFetch(
+      routes([proposal("a1", 2)], {
+        [`GET ${EVAL}`]: ok(makeEvaluationDetail({ editableQuestionIds: [] })),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    const expected = await expectedRow();
+    expect(within(expected).getByRole("button", { name: "Re-grade" })).toBeVisible();
+    expect(within(expected).queryByRole("button", { name: /newer version/ })).toBeNull();
+    expect(within(expected).queryByRole("button", { name: /Edit question/ })).toBeNull();
+
+    await userEvent.click(expected);
+    const panel = await screen.findByRole("dialog", { name: "Question 1" });
+    expect(within(panel).queryByRole("button", { name: /Edit question/ })).toBeNull();
+  });
+
+  it("emphasises Re-grade for a stale item, and the sheet starts on the newest version", async () => {
+    const base = makeEvaluationDetail();
+    mockFetch(
+      routes([proposal("a1", 2)], {
+        // The server's `staleItems` is the one source: no version number is compared here.
+        [`GET ${EVAL}`]: ok(
+          makeEvaluationDetail({
+            staleItems: ["i1"],
+            evaluation: { ...base.evaluation, state: "released", releasedAt: "2026-09-02T08:00:00.000Z" },
+          }),
+        ),
+        [`GET ${VERSIONS}`]: ok({ frozenNumber: 1, versions: [version(2), version(1)] }),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    const regrade = within(await expectedRow()).getByRole("button", {
+      name: "New version",
+    });
+    expect(regrade).toHaveTextContent("New version");
+
+    await userEvent.click(regrade);
+    const sheet = await screen.findByRole("dialog", { name: "Re-grade a question" });
+    expect(await within(sheet).findByRole("radio", { name: /v2/ })).toBeChecked();
+    // The evaluation's release reaches the sheet (its wording: RegradeSheet.test.tsx).
+    expect(within(sheet).getByText("The results are released")).toBeVisible();
   });
 });
 

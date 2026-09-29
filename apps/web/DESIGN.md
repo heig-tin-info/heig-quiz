@@ -1256,6 +1256,12 @@ One question's answers as a table (`src/grading/`, origin
   3 px inset bar on its left (`fg`; `info` on the key's row). Adjust stays
   invisible on a validated row until hover, focus or selection — hidden,
   not removed, so the column keeps its width.
+- **The key's actions.** Edit question (only for whoever may write the
+  pool) and Re-grade are `IconButton`s. While a newer version of the
+  question is published, Re-grade becomes a `secondary` `sm` Button — icon
+  and "New version", no number — with "A newer version is published —
+  re-grade" as its tooltip and name: a filled secondary, never the accent,
+  which stays Validate N.
 - **The answer panel** is a `Sheet` with two optional slots added for it:
   `leading` (the verdict glyph before the title) and `actions` (↑ / ↓
   before the close button).

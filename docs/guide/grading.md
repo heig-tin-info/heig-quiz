@@ -94,7 +94,17 @@ The one red button of the screen, at the end of the filter row, says what comes 
 
 ### Re-grade a question
 
-**Re-grade**, on the expected row, runs the automatic grading again on every attempt of this item. The sheet asks for a **Published version**, left empty to keep the version the evaluation froze, or set to a newer one after you fixed the key with **Edit question**, and a **Note, kept with every new grading**, which is mandatory and travels with each grading it produces. The gradings it replaces stay in the history, marked `Re-graded` with your note. The results page and, if they were published, the students' grades follow.
+**Re-grade**, on the expected row, runs the automatic grading again on every attempt of this item. The sheet lists the question's published versions, each with its change note, and a **Note, kept with every new grading**, which is mandatory and travels with each grading it produces. The gradings it replaces stay in the history, marked `Re-graded` with your note. The results page and, if they were published, the students' grades follow.
+
+When the key itself is wrong, the round trip is short:
+
+1. **Edit question** (the pencil on the expected row) opens the question editor. The header's way back reads **Back to grading**.
+2. Fix the question and **Publish** it. Publishing takes you straight back to the grading table, on the same question.
+3. The expected row now shows **Re-grade** as a **New version** button, with the tooltip **A newer version is published — re-grade**. Click it: the sheet already has the newest version selected. Write the note and confirm.
+
+**Edit question** is offered only to someone who may edit the question's pool (a contributor or its owner). A teaching assistant on the course staff who may not write the pool sees **Re-grade** alone, and asks the pool's owner for the fix.
+
+If the results are already published, the sheet says so before you confirm: re-grading updates the grades the students already see, and marks the results **Modified after publication**.
 
 ### When the runner is unavailable
 
@@ -167,7 +177,7 @@ What a student sees then follows the feedback policy of the evaluation: their po
   <figcaption>After publication, the page says when, and offers to publish again or to withdraw.</figcaption>
 </figure>
 
-Once published, the subtitle reads **Published just now** and the primary button becomes **Publish again**. If a grading changes after that, through **Adjust** or a re-grade, a banner says **Modified after publication**: the students still read the grades of the last publication, and **Publish again** updates them. The menu beside the button offers **Withdraw the publication**, which takes the grades back out of sight until you publish again; the gradings themselves are untouched.
+Once published, the subtitle reads **Published just now** and the primary button becomes **Publish again**. If a grading changes after that, through **Adjust** or a re-grade, a banner says **Modified after publication**: the students already read the recomputed grades (F-GRADE-09), and the banner reminds you that they changed since you published. **Publish again** takes the new grades as the published ones and removes the banner. The menu beside the button offers **Withdraw the publication**, which takes the grades back out of sight until you publish again; the gradings themselves are untouched.
 
 ### A grade in two steps
 

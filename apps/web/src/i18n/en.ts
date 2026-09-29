@@ -792,6 +792,7 @@ export const en = {
   "question.unpublished": "unpublished changes",
   "question.readOnly": "Read-only — shared with you as reader",
   "question.backToEvaluation": "Back to {title}",
+  "question.backToGrading": "Back to grading",
   "question.publish": "Publish",
   "question.publishTitle": "Publish this question",
   "question.publishAction": "Publish",
@@ -2494,6 +2495,11 @@ export const en = {
   "grading.batch.failed": "Could not validate the batch.",
   "grading.regrade": "Re-grade this question",
   "grading.regrade.open": "Re-grade",
+  "grading.regrade.newer": "A newer version is published — re-grade",
+  "grading.regrade.newVersion": "New version",
+  "grading.regrade.releasedTitle": "The results are released",
+  "grading.regrade.releasedBody":
+    "Re-grading updates the grades the students already see, and marks the results “Modified after publication”.",
   "grading.regrade.title": "Re-grade a question",
   "grading.regrade.subtitle":
     "Every attempt is graded again for this question; the gradings it replaces are kept as history.",
@@ -2501,7 +2507,7 @@ export const en = {
   "grading.regrade.notePlaceholder": "Typo in the expected output.",
   "grading.regrade.noteRequired": "A note is required.",
   "grading.regrade.version": "Question version to grade against",
-  "grading.regrade.versionHint": "By default, the version frozen by the evaluation.",
+  "grading.regrade.versionHint": "By default, the newest published version.",
   "grading.regrade.frozen": "frozen by the evaluation",
   "grading.regrade.noChangeNote": "No change note.",
   "grading.regrade.versionsFailed": "The versions of this question could not be loaded.",
@@ -2578,7 +2584,7 @@ export const en = {
   "results.notReleased": "Not published",
   "results.modified": "Modified after publication",
   "results.modifiedBody":
-    "A grading changed since the results were published. Publish again to update the grades the students read.",
+    "A grading changed since the results were published: the students already see the new grades. Publish again to take them as published.",
   "results.release": "Publish results",
   "results.release.again": "Publish again",
   "results.release.confirm.title": "Publish the results of “{title}”?",

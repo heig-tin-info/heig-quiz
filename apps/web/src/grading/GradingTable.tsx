@@ -51,7 +51,13 @@ export interface GradingTableProps {
   onValidate: (entry: GradingEntry) => void;
   validating: boolean;
   onRegrade: () => void;
-  /** Absent when the question cannot be opened from here. */
+  /**
+   * A published version newer than the frozen one exists: Re-grade is then a
+   * filled secondary button, "New version" — never the accent, which stays
+   * the batch. It names no number: the sheet's preselection decides which.
+   */
+  newVersion?: boolean;
+  /** Absent when the reader may not edit the question (its pool's decision). */
   onEdit?: () => void;
   /** What an empty table says, under the expected row. */
   empty: string;
@@ -168,6 +174,7 @@ function ExpectedRow({
   selected,
   onOpen,
   onRegrade,
+  newVersion,
   onEdit,
 }: GradingTableProps) {
   const t = useT();
@@ -210,9 +217,21 @@ function ExpectedRow({
               <PencilLine />
             </IconButton>
           ) : null}
-          <IconButton label={t("grading.regrade.open")} onClick={onRegrade}>
-            <RefreshCcw />
-          </IconButton>
+          {newVersion ? (
+            <Tip label={t("grading.regrade.newer")}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={onRegrade}
+              >
+                <RefreshCcw /> {t("grading.regrade.newVersion")}
+              </Button>
+            </Tip>
+          ) : (
+            <IconButton label={t("grading.regrade.open")} onClick={onRegrade}>
+              <RefreshCcw />
+            </IconButton>
+          )}
         </span>
       </td>
     </tr>

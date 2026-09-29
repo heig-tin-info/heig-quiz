@@ -2,7 +2,7 @@ import { BarChart3, CheckCheck, Play } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useT } from "../i18n";
-import type { Route } from "../router";
+import { useSearchParam, type Route } from "../router";
 import {
   Alert,
   Button,
@@ -56,6 +56,9 @@ import { useGradingView } from "./view";
  * no name at all, and the rows stand in an order drawn once per visit, so
  * neither a label nor a position gives a student away. The names are a
  * request (`?anonymous=0`), never a client-side unmasking.
+ *
+ * The question on screen lives in `?item=`, so a reload, and the question
+ * editor's way back (ADR-044, addendum), land on the same question.
  */
 export function GradingPanel({
   evaluationId,
@@ -66,7 +69,7 @@ export function GradingPanel({
 }) {
   const t = useT();
   const [view, setView] = useGradingView();
-  const [index, setIndex] = useState(0);
+  const [itemParam, setItemParam] = useSearchParam("item", "");
   const [anonymise, setAnonymise] = useState(true);
   /** The visit's shuffle: drawn once, so no row moves until the page is left. */
   const [seed] = useState(() => Math.floor(Math.random() * 0x100000000));
@@ -78,8 +81,8 @@ export function GradingPanel({
   /** Where the selection last stood in the table, for a row that just left it. */
   const lastIndex = useRef(-1);
 
-  const data = useGradingData(evaluationId, index, !anonymise);
-  const { items, item, entries } = data;
+  const data = useGradingData(evaluationId, itemParam || null, !anonymise);
+  const { items, item, index, entries } = data;
   const actions = useGradingActions({
     evaluationId,
     navigate,
@@ -122,12 +125,12 @@ export function GradingPanel({
   const goTo = useCallback(
     (i: number) => {
       if (i < 0 || i >= items.length) return;
-      setIndex(i);
+      setItemParam(items[i]!.id);
       setSort(null);
       setSelected(null);
       setPanel(null);
     },
-    [items.length],
+    [items, setItemParam],
   );
   // A placeholder to grade by hand (an essay) opens on the grading form:
   // reading it and giving it points is the only thing to do with it.
@@ -210,7 +213,12 @@ export function GradingPanel({
     ...(view.source === "llm" && view.confidence !== ANY ? { confidence: view.confidence } : {}),
   };
   const target = panelTarget(panel, entries);
-  const onEdit = () => navigate({ view: "question", id: item.questionId, from: evaluationId });
+  // Offered only to whoever may write the question's pool; the editor then
+  // leads back HERE, on this question (ADR-044, addendum).
+  const onEdit = item.canEdit
+    ? () =>
+        navigate({ view: "question", id: item.questionId, fromGrading: evaluationId, item: item.id })
+    : undefined;
   // What the automatic pass still owes THIS question: the banner and its
   // run are the question's, never the whole evaluation's (the palette's).
   const waiting = entries.filter(needsPass).length;
@@ -285,6 +293,7 @@ export function GradingPanel({
             onValidate={validateOne}
             validating={actions.validate.isPending}
             onRegrade={() => setRegrading(true)}
+            newVersion={item.stale}
             onEdit={onEdit}
             empty={
               view.stateFilter === "todo" && view.source === ANY
@@ -319,7 +328,12 @@ export function GradingPanel({
         />
       ) : null}
       {regrading ? (
-        <RegradeSheet evaluationId={evaluationId} item={item} onClose={() => setRegrading(false)} />
+        <RegradeSheet
+          evaluationId={evaluationId}
+          item={item}
+          released={data.evaluation.data?.evaluation.releasedAt != null}
+          onClose={() => setRegrading(false)}
+        />
       ) : null}
     </div>
   );

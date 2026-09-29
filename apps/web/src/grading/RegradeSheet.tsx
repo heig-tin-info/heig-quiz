@@ -1,4 +1,5 @@
 import { useMutation, useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { AlertTriangle } from "lucide-react";
 import { useId, useState } from "react";
 
 import type { GradingQueueItem, ItemVersions, VersionRow } from "@quiz/contracts";
@@ -7,7 +8,7 @@ import { api } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { gradingItemVersionsKey } from "../queryKeys";
-import { Badge, FormError, QueryError, Skeleton, Textarea, cx, isoDateTime } from "../ui";
+import { Alert, Badge, FormError, QueryError, Skeleton, Textarea, cx, isoDateTime } from "../ui";
 import { useGradingInvalidate } from "./useGradingInvalidate";
 import { ValidatedSheet } from "./ValidatedSheet";
 
@@ -32,14 +33,21 @@ export function defaultVersion(data: ItemVersions): number {
  * each with its change note — the teacher reads WHAT changed and never has to
  * know a number. The list comes through the evaluation item, not the pool:
  * whoever may grade may always see what they grade against.
+ *
+ * Once the results are released, the sheet says before anything is sent what
+ * the re-grade will do to them (F-GRADE-09): the students' grades change, and
+ * the results are marked "modified after publication".
  */
 export function RegradeSheet({
   evaluationId,
   item,
+  released,
   onClose,
 }: {
   evaluationId: string;
   item: GradingQueueItem;
+  /** The evaluation's results are released: the re-grade will change them. */
+  released: boolean;
   onClose: () => void;
 }) {
   const t = useT();
@@ -95,6 +103,11 @@ export function RegradeSheet({
             {/* 0-based on the wire; every screen numbers questions from 1. */}
             {item.position + 1}. {item.internalName}
           </p>
+          {released ? (
+            <Alert tone="warning" icon={AlertTriangle} title={t("grading.regrade.releasedTitle")}>
+              {t("grading.regrade.releasedBody")}
+            </Alert>
+          ) : null}
           <div className="space-y-1.5">
             <Textarea
               label={t("grading.regrade.note")}
