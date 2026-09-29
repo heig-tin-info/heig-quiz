@@ -78,9 +78,11 @@ import { chip, selectSm } from "./styles.js";
  * `POST /questions/:id/try` grades the reference AS AN ANSWER and returns
  * this type's own breakdown, so what comes back is the grading details and
  * not a raw runner outcome — the waveforms are already decimated and already
- * paired with their stimulus. `"unavailable"` is the graceful path.
+ * paired with their stimulus. `"unavailable"` is the graceful path;
+ * `"invalid"` says the STORED draft does not validate, which the issues on
+ * this page already name.
  */
-export type CircuitTryOutcome = { details: CircuitDetails } | "unavailable";
+export type CircuitTryOutcome = { details: CircuitDetails } | "unavailable" | "invalid";
 
 export interface CircuitEditorProps extends EditorProps<CircuitConfig> {
   /**
@@ -110,7 +112,7 @@ export interface CircuitEditorProps extends EditorProps<CircuitConfig> {
 }
 
 type TryDone = { details: CircuitDetails };
-type TryReason = "runner" | "reference" | "stimulus";
+type TryReason = "runner" | "reference" | "stimulus" | "draft";
 type TryState = UiTryState<TryDone, TryReason>;
 
 /**
@@ -168,6 +170,7 @@ async function simulate(
 ): Promise<TryState> {
   const outcome = await onTry(config);
   if (outcome === "unavailable") return { status: "unavailable" };
+  if (outcome === "invalid") return { status: "failed", reason: "draft" };
   return outcome.details.runner === "ok"
     ? { status: "done", details: outcome.details }
     : outcome.details.runner === "unavailable" || outcome.details.runner === "none"
@@ -392,7 +395,9 @@ export function CircuitEditor({
                   ? s.tryNeedsReference
                   : reason === "stimulus"
                     ? s.tryNeedsStimulus
-                    : s.tryFailed,
+                    : reason === "draft"
+                      ? s.tryInvalidDraft
+                      : s.tryFailed,
               // The stimuli that produced a WAVEFORM, not the ones that were
               // sent: a count the plots below do not back up is a count the
               // teacher has to distrust.

@@ -209,6 +209,20 @@ describe("CircuitEditor", () => {
     ).toBeInTheDocument();
   });
 
+  it("blames the draft, not the wiring, when the stored draft does not validate", async () => {
+    setup({
+      config: config({
+        reference: { components: [], wires: [] },
+        stimuli: [Stimulus.parse({ name: "dc", source: { kind: "dc", volts: 1 }, load: { kind: "open" } })],
+      }),
+      onTry: async () => "invalid" as const,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Simulate the reference" }));
+    expect(
+      await screen.findByText("The question has errors, flagged on this page. Fix them, then simulate."),
+    ).toBeInTheDocument();
+  });
+
   it("plots one waveform per simulated stimulus", async () => {
     const details: CircuitDetails = {
       mode: "simulation",

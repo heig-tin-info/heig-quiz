@@ -1585,6 +1585,8 @@ export const en = {
   "qt.circuit.e.tryNeedsReference": "Draw the reference circuit first.",
   "qt.circuit.e.tryNeedsStimulus":
     "Add a stimulus first: there is nothing to simulate the circuit with.",
+  "qt.circuit.e.tryInvalidDraft":
+    "The question has errors, flagged on this page. Fix them, then simulate.",
   "qt.circuit.e.tryDone": "{n} stimuli simulated.",
   "qt.circuit.e.tryDone.one": "1 stimulus simulated.",
   "qt.circuit.e.grading": "Grading",
