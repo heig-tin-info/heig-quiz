@@ -144,11 +144,11 @@ their ids differ from the other rows.
 | `results-questions` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results?tab=questions` | graded | Nothing: the page as it loads. | 1440×900, full page |
 | `results-release-confirm` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results` | graded | Clicked “Publish results”. | 1440×900 |
 | `poll-launcher` | teacher | `/polls` | running | Nothing: the page as it loads. | 1440×900 |
-| `poll-projection` | teacher | `/evaluations/5f42ee0c-fc4c-4512-8993-ca5724bbd4c2/poll` | poll-open | Nothing: the page as it loads. | 1440×900 |
-| `join-mcq-phone` | guest | `/p/74M4WC` | poll-open | Nothing: the page as it loads. | 390×844 |
-| `poll-revealed` | teacher | `/evaluations/5f42ee0c-fc4c-4512-8993-ca5724bbd4c2/poll` | poll-revealed | Nothing: the page as it loads. | 1440×900 |
-| `join-revealed-phone` | guest | `/p/74M4WC` | poll-revealed | Nothing: the page as it loads. | 390×844 |
-| `poll-ended` | teacher | `/evaluations/5f42ee0c-fc4c-4512-8993-ca5724bbd4c2/poll` | poll-ended | Nothing: the page as it loads. | 1440×900 |
+| `poll-projection` | teacher | `/evaluations/36e15847-ce4d-47c8-b577-39017a776034/poll` | poll-open | Nothing: the page as it loads. | 1440×900 |
+| `join-mcq-phone` | guest | `/p/VSLAQA` | poll-open | Nothing: the page as it loads. | 390×844 |
+| `poll-revealed` | teacher | `/evaluations/36e15847-ce4d-47c8-b577-39017a776034/poll` | poll-revealed | Nothing: the page as it loads. | 1440×900 |
+| `join-revealed-phone` | guest | `/p/VSLAQA` | poll-revealed | Nothing: the page as it loads. | 390×844 |
+| `poll-ended` | teacher | `/evaluations/36e15847-ce4d-47c8-b577-39017a776034/poll` | poll-ended | Nothing: the page as it loads. | 1440×900 |
 | `notifications` | teacher | `/` | running | Clicked the bell in the header. | 1440×900 |
 | `palette` | teacher | `/` | seeded | Pressed Ctrl+K. | 1440×900 |
 | `palette-query` | teacher | `/` | seeded | Pressed Ctrl+K and typed “grad”. | 1440×900 |

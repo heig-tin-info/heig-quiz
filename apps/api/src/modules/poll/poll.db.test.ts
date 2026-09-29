@@ -381,6 +381,10 @@ describe("the public page (F-AUTH-05)", () => {
     for (const forbidden of FORBIDDEN_STUDENT_KEYS) {
       expect(serialized, `public view leaked "${forbidden}"`).not.toContain(`"${forbidden}"`);
     }
+    // Nor by another road: the poll's title is the question's internal name,
+    // and the public view carries no title at all (#305).
+    expect(body).not.toHaveProperty("title");
+    expect(view.body).not.toContain("Capitale VD");
   });
 
   it("is a 404 on an unknown code, exactly like a missing one", async () => {

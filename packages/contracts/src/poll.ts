@@ -263,11 +263,11 @@ export type PollTeacherView = z.infer<typeof PollTeacherView>;
  * `solution` is null while the key is not revealed; `me` says where THIS
  * browser stands. Neither switch closes the vote: while `state` is
  * `running`, the phone keeps its answer control (ADR-014, addendum
- * 2026-09-29).
+ * 2026-09-29). It carries no title: a poll's title is its question's
+ * internal name, which never reaches a student (invariant 4, #305).
  */
 export const PollPublicView = z.object({
   code: z.string(),
-  title: z.string(),
   state: z.enum(["running", "ended"]),
   settings: PollSettings,
   question: z.object({
