@@ -300,7 +300,9 @@ export function issuesAt(
   issues: readonly ConfigIssue[],
   ...path: (string | number)[]
 ): ConfigIssue[] {
-  return issues.filter((issue) => path.every((part, i) => issue.path[i] === part));
+  // The wire carries every segment as a string (`ZodIssueLite`), an editor
+  // asks with the index it holds: `"2"` and `2` name the same row.
+  return issues.filter((issue) => path.every((part, i) => String(issue.path[i]) === String(part)));
 }
 
 /** The issues that belong to the config as a whole (an empty zod path). */

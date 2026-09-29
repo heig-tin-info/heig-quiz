@@ -62,7 +62,7 @@ export function PublishDialog({
                 {issue.path.length > 0 ? (
                   <span className="font-mono text-fg">{issue.path.join(".")} — </span>
                 ) : null}
-                {issueMessage(t, issue.message)}
+                {issueMessage(t, issue)}
               </li>
             ))}
           </ul>

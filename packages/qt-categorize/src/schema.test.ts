@@ -55,6 +55,9 @@ describe("CategorizeConfigSchema", () => {
   it("refuses a question made of distractors only", () => {
     const columns = valid.columns.map((c) => ({ ...c, cards: [] }));
     expect(issues({ ...valid, columns })).toContain("categorize.no_target");
+    // Under the board, where the editor looks for it, not above the whole form.
+    const refused = CategorizeConfigSchema.safeParse({ ...valid, columns }).error!.issues;
+    expect(refused.find((i) => i.message === "categorize.no_target")?.path).toEqual(["columns"]);
   });
 
   it("holds between two and six columns", () => {

@@ -9,8 +9,7 @@
  * board. Every card starts in the tray; dragging it into a column puts it in
  * that column's key, and a card left in the tray IS a distractor — there is
  * no "distractor" checkbox to disagree with where the card sits. The same
- * holds for a removed column: its cards fall back into the tray, and the hint
- * says so before the teacher finds out.
+ * holds for a removed column: its cards fall back into the tray, in sight.
  */
 import { useId, useState } from "react";
 
@@ -21,7 +20,7 @@ import type {
   RichTextComponent,
   StringOverrides,
 } from "@quiz/core/client";
-import { issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
+import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
 import {
   AsideSection,
   buttonClass,
@@ -124,6 +123,23 @@ export function CategorizeEditor({
   const setCardText = (card: string, value: string) =>
     patch({ cards: config.cards.map((c) => (c.id === card ? { ...c, text: value } : c)) });
 
+  /**
+   * Under the board: its own issues, then those of one column or one card,
+   * each prefixed with the field's accessible name ("Column name 2"), since
+   * the numbers are nowhere else on screen. The field itself turns red.
+   */
+  const located = (field: string) => (issue: ConfigIssue): ConfigIssue =>
+    issue.path.length < 2
+      ? issue
+      : { ...issue, message: fmt(s.issueAt, { field, n: Number(issue.path[1]) + 1, message: issue.message }) };
+  const columnIssues = issuesAt(issues, "columns");
+  const cardIssues = issuesAt(issues, "cards");
+  const boardIssues = [...columnIssues.map(located(s.columnLabel)), ...cardIssues.map(located(s.cardText))];
+  /** The indexes of the columns and cards the last save refused, as the wire spells them. */
+  const refused = (list: readonly ConfigIssue[]) => new Set(list.flatMap((i) => (i.path.length < 2 ? [] : [String(i.path[1])])));
+  const badColumns = refused(columnIssues);
+  const badCards = refused(cardIssues);
+
   const policy = POLICY_OPTIONS.find((o) => o.value === config.policy) ?? POLICY_OPTIONS[0]!;
 
   const options = (
@@ -184,21 +200,9 @@ export function CategorizeEditor({
       </section>
 
       <section className={sectionClass}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <h3 className={label}>{s.expected}</h3>
-            <p className={hint}>{s.expectedHint}</p>
-          </div>
-          <button
-            type="button"
-            className={buttonClass("secondary", "sm")}
-            aria-label={s.addColumnLabel}
-            disabled={locked || config.columns.length >= CATEGORIZE_MAX_COLUMNS}
-            onClick={() => patch({ columns: [...config.columns, { id: newId(), label: "", cards: [] }] })}
-          >
-            <PlusIcon />
-            {s.addColumn}
-          </button>
+        <div className="flex flex-col gap-1">
+          <h3 className={label}>{s.expected}</h3>
+          <p className={hint}>{s.expectedHint}</p>
         </div>
 
         <Board
@@ -214,7 +218,9 @@ export function CategorizeEditor({
           trayHead={
             <div className="flex items-baseline justify-between gap-2">
               <h4 className="text-[13px] font-semibold text-fg">{s.tray}</h4>
-              <span className="text-xs text-fg-faint">{plural(s, "distractors", tray.length)}</span>
+              {tray.length === 0 ? null : (
+                <span className="text-xs text-fg-faint">{plural(s, "distractors", tray.length)}</span>
+              )}
             </div>
           }
           trayFoot={
@@ -246,6 +252,7 @@ export function CategorizeEditor({
           columnHead={(column, count) => (
             <ColumnHeader
               number={columnNumber.get(column.id) ?? 0}
+              invalid={badColumns.has(String(config.columns.findIndex((c) => c.id === column.id)))}
               label={labelOf.get(column.id) ?? ""}
               count={count}
               s={s}
@@ -261,6 +268,7 @@ export function CategorizeEditor({
             <CardField
               slot={slot}
               number={cardNumber.get(slot.id) ?? 0}
+              invalid={badCards.has(String(config.cards.findIndex((c) => c.id === slot.id)))}
               value={text.get(slot.id) ?? ""}
               s={s}
               locked={locked}
@@ -276,13 +284,25 @@ export function CategorizeEditor({
             </OverlayCard>
           )}
           emptyColumn={s.dropHere}
-          emptyTray={s.emptyTray}
           dropHere={s.moveHere}
           dropInto={s.dropInto}
           dropIntoTray={s.dropIntoTray}
         />
-        <p className={hint}>{s.columnHint}</p>
-        <IssueList issues={[...issuesAt(issues, "columns"), ...issuesAt(issues, "cards")]} />
+        {locked || config.columns.length >= CATEGORIZE_MAX_COLUMNS ? null : (
+          <button
+            type="button"
+            className={cx(
+              "flex h-10 items-center justify-center gap-1.5 rounded-card border border-dashed border-line-strong",
+              "text-sm font-medium text-fg-muted transition-colors hover:border-fg-faint hover:bg-surface-2 hover:text-fg",
+              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+            )}
+            onClick={() => patch({ columns: [...config.columns, { id: newId(), label: "", cards: [] }] })}
+          >
+            <PlusIcon />
+            {s.addColumn}
+          </button>
+        )}
+        <IssueList issues={boardIssues} />
       </section>
 
       {options}
@@ -295,6 +315,7 @@ type Strings = Readonly<Record<CategorizeEditorStringKey, string>>;
 /** A column's header: its name as an in-place field, its count, its bin. */
 function ColumnHeader({
   number,
+  invalid,
   label: value,
   count,
   s,
@@ -304,6 +325,8 @@ function ColumnHeader({
   onRemove,
 }: {
   number: number;
+  /** The last save refused this column (its name, in practice). */
+  invalid: boolean;
   label: string;
   count: number;
   s: Strings;
@@ -317,9 +340,11 @@ function ColumnHeader({
     <>
       <input
         className={cx(
-          "-ml-1.5 min-w-0 flex-1 rounded-field border border-transparent bg-transparent px-1.5 py-0.5 text-sm font-semibold text-fg",
-          "placeholder:font-normal placeholder:text-fg-faint hover:border-line focus:border-line-strong focus:bg-surface focus:outline-none",
+          "-ml-1.5 min-w-0 flex-1 rounded-field border bg-transparent px-1.5 py-0.5 text-sm font-semibold text-fg",
+          "placeholder:font-normal placeholder:text-fg-faint focus:bg-surface focus:outline-none",
+          invalid ? "border-danger" : "border-transparent hover:border-line focus:border-line-strong",
         )}
+        aria-invalid={invalid || undefined}
         aria-label={`${s.columnLabel} ${number}`}
         placeholder={s.columnLabel}
         value={value}
@@ -351,6 +376,7 @@ function ColumnHeader({
 function CardField({
   slot,
   number,
+  invalid,
   value,
   s,
   locked,
@@ -360,6 +386,8 @@ function CardField({
 }: {
   slot: CardSlot;
   number: number;
+  /** The last save refused this card (an empty text, in practice). */
+  invalid: boolean;
   value: string;
   s: Strings;
   locked: boolean;
@@ -372,7 +400,7 @@ function CardField({
     <div
       className={cx(
         "group/grip flex w-full min-w-0 items-center gap-1 rounded-field p-0.5 transition-colors",
-        slot.selected && "bg-info-soft ring-2 ring-info",
+        slot.selected ? "bg-info-soft ring-2 ring-info" : invalid && "ring-1 ring-danger",
       )}
     >
       <button
@@ -393,6 +421,7 @@ function CardField({
           inline
           toolbar="focus"
           aria-label={`${s.cardText} ${number}`}
+          aria-invalid={invalid || undefined}
           value={value}
           onChange={onText}
           disabled={locked}
@@ -402,6 +431,7 @@ function CardField({
         <input
           className={cx(inputClass, inputSize.sm, "min-w-24 flex-1 text-[13px]")}
           aria-label={`${s.cardText} ${number}`}
+          aria-invalid={invalid || undefined}
           value={value}
           maxLength={CATEGORIZE_CARD_MAX}
           disabled={locked}

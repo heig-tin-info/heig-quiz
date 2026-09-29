@@ -77,6 +77,11 @@ describe("issuesAt / rootIssues", () => {
     expect(issuesAt(issues, "choices", 1)).toEqual([]);
   });
 
+  it("reads an index sent as a string, the way the wire carries it", () => {
+    const wire = [{ path: ["choices", "2", "text"], message: "row" }];
+    expect(issuesAt(wire, "choices", 2).map((i) => i.message)).toEqual(["row"]);
+  });
+
   it("keeps the issues of the config as a whole", () => {
     expect(rootIssues(issues).map((i) => i.message)).toEqual(["root"]);
   });

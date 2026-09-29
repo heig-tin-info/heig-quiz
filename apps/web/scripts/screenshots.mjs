@@ -599,6 +599,8 @@ const scenes = [
   { name: "editor-circuit", role: "teacher", path: "/questions/q8" },
   { name: "editor-rich", role: "teacher", path: "/questions/q17", settle: 3000 },
   { name: "editor-categorize", role: "teacher", path: "/questions/q18", settle: 3000 },
+  // A column left unnamed and a card emptied: the autosave's issues, on the fields and under the board.
+  { name: "editor-categorize-issues", role: "teacher", path: "/questions/q18", settle: 3000, act: async (p) => { await p.getByRole("textbox", { name: "Column name 2" }).fill(""); await p.getByRole("textbox", { name: "Text of card 1" }).fill(""); await p.waitForTimeout(2500); } },
   { name: "editor-codeimage-try", role: "teacher", path: "/questions/q16", settle: 5000, act: async (p) => { await p.getByRole("button", { name: /try the reference solution|essayer la solution de référence/i }).click(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).waitFor(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).scrollIntoViewIfNeeded(); } },
   // "Student preview": a page of its own, opened by the editor in a new tab.
   { name: "question-preview", role: "teacher", path: "/questions/q2/preview", settle: 3000 },
