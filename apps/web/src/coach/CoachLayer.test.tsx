@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeMe } from "../test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
-import { CoachLayer } from "./CoachLayer";
+import { CoachLayer, visibleBottom } from "./CoachLayer";
 
 /*
  * The layer over a real target. jsdom lays nothing out, so every element
@@ -99,5 +99,31 @@ describe("CoachLayer", () => {
       </>,
     );
     expect(await screen.findByText("Write a question", undefined, slow)).toBeInTheDocument();
+  });
+});
+
+describe("visibleBottom (#191)", () => {
+  const dock = (top: number, height: number) => {
+    const el = document.createElement("nav");
+    el.setAttribute("data-bottom-dock", "");
+    el.getBoundingClientRect = () =>
+      ({ top, height, bottom: top + height, left: 0, right: 390, width: 390, x: 0, y: top }) as DOMRect;
+    document.body.append(el);
+  };
+  afterEach(() => document.querySelectorAll("[data-bottom-dock]").forEach((el) => el.remove()));
+
+  it("is the window's bottom without a dock", () => {
+    expect(visibleBottom()).toBe(window.innerHeight);
+  });
+
+  it("stops at the top of a bar docked on the window's bottom edge", () => {
+    dock(window.innerHeight - 56, 56);
+    expect(visibleBottom()).toBe(window.innerHeight - 56);
+  });
+
+  it("ignores a dock in the flow away from the edge, and one not drawn", () => {
+    dock(200, 56);
+    dock(window.innerHeight, 0);
+    expect(visibleBottom()).toBe(window.innerHeight);
   });
 });

@@ -288,6 +288,13 @@ over it, not as one more card in it.
   with the same gradient, the overlay shadow plus a faint accent halo. The
   target wears a 2 px accent ring 6 px out, with two ripples. `Z.coach` sits
   over the page and its sticky bars, under every dialog.
+- Bottom docks: a bar docked on the window's bottom edge and marked
+  `data-bottom-dock` (the student's bottom bar, the launch step's phone dock)
+  takes its height out of the window the coach places in (`visibleBottom`).
+  The bubble stays above it, the target is scrolled to the middle of what is
+  left, the ring is clipped where the bar starts, and a target wholly behind
+  the bar hides the bubble until it is scrolled back: a bubble never covers
+  the navigation a thumb is reaching for, nor points into it.
 - Motion: pops out of its own tail (scale 0.35 → 1.06 → 1, a degree of
   rotation, 620 ms), floats (4 px, 3.2 s), glides to the next target with an
   overshooting ease (500 ms) while its content cross-fades, and ends a walk

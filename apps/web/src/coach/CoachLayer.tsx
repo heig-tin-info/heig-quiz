@@ -42,6 +42,23 @@ export function findTarget(selector: string): HTMLElement | null {
 
 const modalOpen = () => document.querySelector('[aria-modal="true"]') != null;
 
+/**
+ * The bottom of the part of the window the page is readable in: the window's
+ * own bottom, or the top of a bar docked on it (`data-bottom-dock`: the
+ * student's bottom navigation, the launch step's phone dock). A dock that is
+ * in the flow and not at the window's edge takes nothing away. The bubble is
+ * placed, and the ring clipped, above that line, so neither is drawn over the
+ * bar a thumb is reaching for.
+ */
+export function visibleBottom(): number {
+  let bottom = window.innerHeight;
+  for (const el of document.querySelectorAll<HTMLElement>("[data-bottom-dock]")) {
+    const r = el.getBoundingClientRect();
+    if (r.height > 0 && r.bottom >= window.innerHeight - 1) bottom = Math.min(bottom, r.top);
+  }
+  return bottom;
+}
+
 const reducedMotion = () =>
   typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -295,8 +312,15 @@ function Bubble({
     const first = findTarget(step.target);
     if (first) {
       const r = first.getBoundingClientRect();
-      if (r.top < 64 || r.bottom > window.innerHeight - 64) {
-        first.scrollIntoView({ block: "center", behavior: reducedMotion() ? "auto" : "smooth" });
+      const bottom = visibleBottom();
+      if (r.top < 64 || r.bottom > bottom - 64) {
+        // Centred in what is left above a bottom dock, not in the window:
+        // `scrollIntoView` knows nothing of a fixed bar over the page.
+        const behavior = reducedMotion() ? "auto" : "smooth";
+        const dock = window.innerHeight - bottom;
+        if (dock > 0) {
+          window.scrollBy({ top: r.top + r.height / 2 - bottom / 2, behavior });
+        } else first.scrollIntoView({ block: "center", behavior });
       }
     }
     let raf = 0;
@@ -309,18 +333,22 @@ function Bubble({
       const tailEl = tail.current;
       if (!a || !b || !ringEl || !tailEl) return;
       const el = findTarget(step.target);
-      const hide = !el || modalOpen();
+      const r = el?.getBoundingClientRect();
+      const bottom = visibleBottom();
+      // A target wholly behind a bottom dock is not on screen: the bubble
+      // would point into the bar. It waits, as for a target not drawn yet,
+      // and comes back once the reader scrolls it into the readable band.
+      const hide = !el || !r || r.top >= bottom || modalOpen();
       a.style.visibility = hide ? "hidden" : "visible";
       ringEl.style.opacity = hide ? "0" : "1";
-      if (!el || hide) return;
-      const r = el.getBoundingClientRect();
+      if (!el || !r || hide) return;
       const p = place(
         r,
         { width: b.offsetWidth, height: b.offsetHeight },
-        { width: window.innerWidth, height: window.innerHeight },
+        { width: window.innerWidth, height: bottom },
         step.placement,
       );
-      const key = `${p.side}:${[p.x, p.y, p.tail, r.left, r.top, r.width, r.height].map(Math.round).join()}`;
+      const key = `${p.side}:${[p.x, p.y, p.tail, r.left, r.top, r.width, r.height, bottom].map(Math.round).join()}`;
       if (key === lastKey) return;
       lastKey = key;
 
@@ -344,14 +372,21 @@ function Bubble({
 
       const pad = 6;
       const radius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 8;
-      // Kept inside the viewport: a sidebar row touches its left edge.
+      // Kept inside the viewport: a sidebar row touches its left edge. And
+      // above a bottom dock: a target partly behind it is ringed where it
+      // shows, never across the bar.
       const left = Math.max(2, r.left - pad);
       const right = Math.min(window.innerWidth - 2, r.right + pad);
+      const top = r.top - pad;
+      const height = Math.max(0, Math.min(r.bottom + pad, bottom - 2) - top);
       Object.assign(ringEl.style, {
-        transform: `translate3d(${Math.round(left)}px, ${Math.round(r.top - pad)}px, 0)`,
+        transform: `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`,
         width: `${Math.round(right - left)}px`,
-        height: `${Math.round(r.height + pad * 2)}px`,
-        borderRadius: `${Math.min(radius + pad, (r.height + pad * 2) / 2)}px`,
+        height: `${Math.round(height)}px`,
+        borderRadius: `${Math.min(radius + pad, height / 2)}px`,
+        // Visibility, not opacity: the frame loop owns the opacity (hidden
+        // under a dialog) and resets it on every frame.
+        visibility: height > 0 ? "" : "hidden",
       });
 
       // The very first placement lands; only the later ones glide.

@@ -64,6 +64,7 @@ export function BottomNav({ route, navigate }: { route: Route; navigate: (r: Rou
     <>
       <div aria-hidden className="h-(--bottom-nav-h) lg:hidden" />
       <nav
+        data-bottom-dock=""
         aria-label={t("bnav.label")}
         className="fixed inset-x-0 bottom-0 z-20 h-(--bottom-nav-h) border-t border-line bg-canvas/90 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
       >
