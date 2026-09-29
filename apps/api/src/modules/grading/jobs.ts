@@ -3,7 +3,7 @@
  *
  * ```
  * POST /close  or  ticker auto-close
- *       └─▶ grading.evaluation { evaluationId }        (singletonKey = evaluationId)
+ *       └─▶ grading.evaluation { evaluationId, announce }   (one job per request, #273)
  *
  * grading.evaluation, for each (attempt × item):
  *    a validated grading already stands           → skip          (idempotent)
@@ -127,6 +127,25 @@ interface RunnerGradingJob {
  * test), not a failure: the honest behaviour there is to do the work rather
  * than to drop it silently. The queue is what makes it durable, not what
  * makes it happen.
+ *
+ * Every request is its own job, never deduplicated (#273). The payloads are
+ * not interchangeable — a retake's pass covers one attempt, a re-grade one
+ * item with its note, the close's the whole evaluation with `announce` — so
+ * collapsing two of them loses the scope of one; that is how a pending retake
+ * pass used to swallow the close's pass and leave attempts ungraded. Nothing
+ * needs the dedupe either:
+ *
+ *   - a pass is idempotent: a validated cell is skipped, a proposal is
+ *     rewritten identical, and `announce` tells only a complete grid;
+ *   - passes do not overlap: pg-boss takes the jobs of a queue one at a time
+ *     per process (`localConcurrency` 1), and so does the in-process queue;
+ *   - were two processes ever to work the queue (`WORKER_MODE` split), two
+ *     passes racing on one cell either rewrite the same automatic grade or
+ *     collide on `gradings_pair_validated_uq`; the loser throws, and its
+ *     retry (`retryLimit: 1`) skips what the winner validated.
+ *
+ * The cost is a redundant pass when a button is pressed twice: bounded, and
+ * cheap next to losing one.
  */
 export async function enqueueEvaluationGrading(
   app: FastifyInstance,
@@ -137,7 +156,7 @@ export async function enqueueEvaluationGrading(
     await runEvaluationGrading(app, job);
     return false;
   }
-  await queue.send(GRADING_EVALUATION_QUEUE, job, { singletonKey: job.evaluationId });
+  await queue.send(GRADING_EVALUATION_QUEUE, job);
   return true;
 }
 

@@ -19,18 +19,25 @@ import type { FastifyInstance } from "fastify";
  * queue itself, so that `grep QUEUE jobs.ts` lists everything this process
  * can be asked to do in the background.
  *
- * `grading.evaluation` is a SINGLETON per evaluation: closing an evaluation
- * twice, or pressing "re-grade" while a pass is already pending, enqueues one
- * job. `grading.runner` is one job per answer, at low priority, because a
+ * `grading.evaluation` is one job per REQUEST, never deduplicated (#273):
+ * a pass is idempotent, and every pass sent runs in full, so the close's
+ * whole-evaluation pass can never be swallowed by a narrower one already
+ * waiting. The reasoning is in `modules/grading/jobs.ts`.
+ * `grading.runner` is one job per answer, at low priority, because a
  * container run is the slow half and must never hold up the deterministic
  * grading of the other questions.
  */
 export const GRADING_EVALUATION_QUEUE = "grading.evaluation";
 export const GRADING_RUNNER_QUEUE = "grading.runner";
 
+/**
+ * No `singletonKey`, on purpose (#273). Our queues are pg-boss `standard`
+ * queues (`createQueue` passes no policy, and pg-boss 12 refuses to change a
+ * policy after creation), on which a key without `singletonSeconds` dedupes
+ * nothing — while the in-process queue below used to drop the later job. A
+ * dedupe that exists in only one of the two is worse than none.
+ */
 interface SendOptions {
-  /** At most one pending job per key, as pg-boss defines it. */
-  singletonKey?: string;
   retryLimit?: number;
   retryBackoff?: boolean;
   retryDelay?: number;
@@ -74,13 +81,13 @@ class PgBossQueue implements JobQueue {
 
 /**
  * In-process replacement: jobs run on the next tick of the event loop, in
- * order, one at a time. `singletonKey` collapses duplicates that have not
- * started yet, which is the property the callers rely on.
+ * order, one at a time, and every job sent runs — none is collapsed, exactly
+ * as on a pg-boss `standard` queue worked by one worker (`localConcurrency`
+ * 1, the default). Exported for its tests.
  */
-class InProcessQueue implements JobQueue {
+export class InProcessQueue implements JobQueue {
   private readonly handlers = new Map<string, JobHandler<never>>();
-  private readonly pending: { name: string; data: object; key?: string | undefined }[] = [];
-  private readonly keys = new Set<string>();
+  private readonly pending: { name: string; data: object }[] = [];
   private draining = false;
   private stopped = false;
 
@@ -93,14 +100,9 @@ class InProcessQueue implements JobQueue {
     /* nothing to create: the queue is an array */
   }
 
-  async send<T extends object>(name: string, data: T, options?: SendOptions) {
+  async send<T extends object>(name: string, data: T) {
     if (this.stopped) return;
-    const key = options?.singletonKey ? `${name}:${options.singletonKey}` : undefined;
-    if (key) {
-      if (this.keys.has(key)) return;
-      this.keys.add(key);
-    }
-    this.pending.push({ name, data, key });
+    this.pending.push({ name, data });
     void this.drain();
   }
 
@@ -116,7 +118,6 @@ class InProcessQueue implements JobQueue {
     try {
       let job = this.pending.shift();
       while (job) {
-        if (job.key) this.keys.delete(job.key);
         const handler = this.handlers.get(job.name);
         if (handler) {
           try {
@@ -137,7 +138,6 @@ class InProcessQueue implements JobQueue {
   async stop() {
     this.stopped = true;
     this.pending.length = 0;
-    this.keys.clear();
   }
 }
 

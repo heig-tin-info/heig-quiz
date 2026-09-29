@@ -7,19 +7,28 @@
 import { randomUUID } from "node:crypto";
 
 import { and, eq, sql } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import { answers, courseStaff, evaluations, notifications, users } from "../../db/schema.js";
+import {
+  answers,
+  attempts,
+  courseStaff,
+  evaluations,
+  gradings,
+  notifications,
+  users,
+} from "../../db/schema.js";
+import { InProcessQueue } from "../../jobs.js";
 import { testApp, testDb } from "../../test/db.js";
 import { seedCodeEvaluation } from "../../test/codeFixture.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { applyState, joinedItems } from "../evaluation/service.js";
 import * as live from "../live/service.js";
-import { runEvaluationGrading } from "./jobs.js";
+import { enqueueEvaluationGrading, registerGradingJobs, runEvaluationGrading } from "./jobs.js";
 import { announceGradingReady } from "./ready.js";
 import { regradeItem } from "./service.js";
 
@@ -186,5 +195,30 @@ describe("grading_ready", () => {
     // The row a runner job picked up before the close.
     await announceGradingReady(app, { ...evaluation, state: "running" });
     expect((await readyRows(evaluation.id)).map((r) => r.userId)).toContain(seed.teacherId);
+  });
+
+  it("never loses the close's pass behind a retake pass still waiting in the queue (#273)", async () => {
+    const { app, seed, evaluation, colleague } = await closedEvaluation(true);
+    const queue = new InProcessQueue(true, app.log);
+    const queued = Object.assign(Object.create(app), { boss: queue }) as typeof app;
+    await registerGradingJobs(queued, queue);
+    const [first, second] = await db
+      .select()
+      .from(attempts)
+      .where(eq(attempts.evaluationId, evaluation.id));
+    // A retake pass running, the same one sent again and still waiting, then
+    // the close's whole-evaluation pass: the last one used to be dropped,
+    // leaving the other attempt ungraded and the staff untold.
+    await enqueueEvaluationGrading(queued, { evaluationId: evaluation.id, attemptIds: [first!.id] });
+    await enqueueEvaluationGrading(queued, { evaluationId: evaluation.id, attemptIds: [first!.id] });
+    await enqueueEvaluationGrading(queued, { evaluationId: evaluation.id, announce: true });
+
+    await vi.waitFor(async () => {
+      expect((await readyRows(evaluation.id)).map((r) => r.userId).sort()).toEqual(
+        [seed.teacherId, colleague].sort(),
+      );
+    }, { timeout: 5000 });
+    const graded = await db.select().from(gradings).where(eq(gradings.attemptId, second!.id));
+    expect(graded.length).toBeGreaterThan(0);
   });
 });
