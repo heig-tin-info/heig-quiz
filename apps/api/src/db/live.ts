@@ -115,7 +115,7 @@ export const attempts = pgTable(
     shownSince: timestamp("shown_since", { withTimezone: true }),
     /**
      * The attempt reports what is on screen (ADR-039). False for every attempt
-     * of before migration 0033, whose items were never reported shown: the
+     * of before migration 0034, whose items were never reported shown: the
      * statistics keep their old rule for them.
      */
     displayTracked: boolean("display_tracked").notNull().default(true),

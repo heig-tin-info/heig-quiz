@@ -8,7 +8,7 @@ in `apps/api/src/modules/live/dwell.ts`, `reportShown` in
 `live/autosave.ts`, `quantile` / `spread` / `shownTimeSpread` /
 `DWELL_IDLE_CAP_MS` in
 `@quiz/domain/stats`, `TimeStats` in `@quiz/contracts/stats`, and the
-columns of migration `0033_answer_dwell`). Amends ADR-038 (§2, the "not
+columns of migration `0034_answer_dwell`). Amends ADR-038 (§2, the "not
 reached" bias; §8, the step it announced). Revises F-STAT-01 (docs/spec/02).
 
 ## Context
@@ -120,7 +120,7 @@ reported. A row created by a report publishes its cell: the live grid's
 1) still wins over the revision-0 row.
 
 `attempts.display_tracked` says the attempt reported what was on screen:
-false for every attempt that existed before migration 0033 (the column is
+false for every attempt that existed before migration 0034 (the column is
 added with default false, then the default becomes true).
 
 In the success rate of ADR-038, on a TRACKED attempt, a question whose row

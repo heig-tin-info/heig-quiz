@@ -629,7 +629,7 @@ export async function reportShown(
     let row: AnswerRecord | null = null;
     if (shows && !continues) {
       // One upsert: a new row is created shown; an older one (before
-      // migration 0033, or written by nothing but a flag) gets its first
+      // migration 0034, or written by nothing but a flag) gets its first
       // display. `xmax = 0` is PostgreSQL's mark of a row this statement
       // INSERTED.
       const [written] = await tx
