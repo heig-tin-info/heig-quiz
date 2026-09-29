@@ -2,7 +2,14 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import { Eye, Plus } from "lucide-react";
 import { useMemo, useState, type DragEvent } from "react";
 
-import type { CategoryNode, PoolDetail, QuestionPage, QuestionRow } from "@quiz/contracts";
+import type {
+  CategoryNode,
+  ItemStats,
+  PoolDetail,
+  PoolQuestionStats,
+  QuestionPage,
+  QuestionRow,
+} from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
@@ -34,9 +41,10 @@ import { NewQuestionModal } from "./NewQuestionModal";
 import { PoolEmpty, PoolListSkeleton, PoolListTail } from "./PoolListStates";
 import { QuestionCards } from "./QuestionCards";
 import { groupQuestions, isGroupBy, type GroupBy } from "./QuestionGroups";
-import { QuestionTable } from "./QuestionTable";
+import { QuestionStatsSheet } from "./QuestionStatsSheet";
+import { QuestionTable, type RowStats } from "./QuestionTable";
 import { useQuestionActions } from "../question/useQuestionActions";
-import { poolKey, poolQuestionsKey } from "../queryKeys";
+import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
 
 /**
  * The pool screen: the questions across the full
@@ -78,6 +86,12 @@ import { poolKey, poolQuestionsKey } from "../queryKeys";
  * boxes that feed them: what is not permitted is not drawn greyed out, it is
  * absent. Opening a question still works — the editor is where a question is
  * read — and it is the editor's own business to refuse a save.
+ *
+ * The item analysis (ADR-038) is fetched apart from the rows, in one call for
+ * the whole pool: a question with ten answers or more gets a chart icon after
+ * its name, which opens its statistics in a side panel — for a reader too;
+ * only the reset is kept from them. Statistics that fail to load draw no
+ * icon and never hold the list back.
  */
 
 const VIEW_KEY = "quiz-pool-view";
@@ -136,6 +150,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [creating, setCreating] = useState<string | null>(null);
   const [view, setView] = usePersistentChoice(VIEW_KEY, VIEWS, "list");
+  const [statsRow, setStatsRow] = useState<QuestionRow | null>(null);
   const [group, setGroup] = usePersistentChoice<GroupBy>(GROUP_KEY, isGroupBy, "none");
 
   const pool = useQuery<PoolDetail>({
@@ -169,6 +184,16 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
   });
+
+  const questionStats = useQuery<PoolQuestionStats>({
+    queryKey: poolQuestionStatsKey(id),
+    queryFn: () => api(`/app/api/pools/${id}/question-stats`),
+  });
+  const statsById = useMemo(
+    () => new Map<string, ItemStats>((questionStats.data?.items ?? []).map((s) => [s.questionId, s])),
+    [questionStats.data],
+  );
+  const rowStats: RowStats = { has: (questionId) => statsById.has(questionId), open: setStatsRow };
 
   const rows = useMemo(
     () => (questions.data?.pages ?? []).flatMap((page) => page.items),
@@ -311,6 +336,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 onDelete={(row) => void askDelete(row)}
                 onDragStart={readOnly ? undefined : startDrag}
                 readOnly={readOnly}
+                stats={rowStats}
               />
             ) : (
               <QuestionTable
@@ -330,6 +356,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 onSort={sortBy}
                 onDragStart={readOnly ? undefined : startDrag}
                 readOnly={readOnly}
+                stats={rowStats}
               />
             )}
             <PoolListTail
@@ -349,6 +376,16 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           rows={rows}
           categories={detail.categories}
           onClear={() => setChecked(new Set())}
+        />
+      ) : null}
+
+      {statsRow !== null ? (
+        <QuestionStatsSheet
+          poolId={id}
+          row={statsRow}
+          seed={statsById.get(statsRow.id)}
+          canReset={!readOnly}
+          onClose={() => setStatsRow(null)}
         />
       ) : null}
 

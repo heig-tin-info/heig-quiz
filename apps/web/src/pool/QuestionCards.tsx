@@ -5,7 +5,7 @@ import type { QuestionRow } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { Badge, Card, Checkbox, cx, IconButton, pressable, RelativeTime, Skeleton } from "../ui";
-import { DifficultyDots, TypeGlyph, VersionCell } from "./QuestionTable";
+import { DifficultyDots, StatsButton, TypeGlyph, VersionCell, type RowStats } from "./QuestionTable";
 import type { QuestionGroup } from "./QuestionGroups";
 
 /**
@@ -35,6 +35,7 @@ function QuestionCard({
   onDelete,
   onDragStart,
   readOnly,
+  onStats,
 }: {
   row: QuestionRow;
   checked: boolean;
@@ -44,6 +45,8 @@ function QuestionCard({
   onDelete: () => void;
   onDragStart?: (event: DragEvent) => void;
   readOnly: boolean;
+  /** Opens the question's statistics; absent when it has none to show. */
+  onStats?: (() => void) | undefined;
 }) {
   const t = useT();
   return (
@@ -63,6 +66,7 @@ function QuestionCard({
           {row.internalName}
         </span>
         {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
+        {onStats ? <StatsButton row={row} onOpen={onStats} /> : null}
         {readOnly ? null : (
           <span onClick={(e) => e.stopPropagation()}>
             <Checkbox
@@ -143,6 +147,7 @@ export function QuestionCards({
   onDelete,
   onDragStart,
   readOnly = false,
+  stats,
 }: {
   groups: QuestionGroup[];
   checked: ReadonlySet<string>;
@@ -153,6 +158,7 @@ export function QuestionCards({
   /** Dragging a card onto a sidebar pool moves the question there (ADR-017). */
   onDragStart?: (event: DragEvent, row: QuestionRow) => void;
   readOnly?: boolean;
+  stats?: RowStats | undefined;
 }) {
   return (
     <div className="space-y-6">
@@ -176,6 +182,7 @@ export function QuestionCards({
                 onDelete={() => onDelete(row)}
                 onDragStart={onDragStart ? (event) => onDragStart(event, row) : undefined}
                 readOnly={readOnly}
+                onStats={stats?.has(row.id) ? () => stats.open(row) : undefined}
               />
             ))}
           </div>
