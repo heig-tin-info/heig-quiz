@@ -20,6 +20,7 @@ The session lasts thirty days. **Sign out**, in the account menu described below
 
 A teacher lands on **Courses**: one card per course, with its classrooms, its staff and the pools linked to it. The sidebar on the left is the same on every page:
 
+- **Activities**: every exam, exercise and poll of your classrooms, in one place.
 - **Courses**: the home page.
 - **Question pools**: your pools and their questions. While a pool is open, its categories unfold under this entry.
 - **Poll**: the launcher of a live poll.
