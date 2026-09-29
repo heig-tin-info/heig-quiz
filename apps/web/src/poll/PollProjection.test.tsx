@@ -202,6 +202,10 @@ describe("PollProjection", () => {
     expect(screen.getByText("eight")).toBeVisible();
     expect(screen.queryByText("75%")).toBeNull();
     expect(screen.queryByText("6 votes")).toBeNull();
+    // ...but the bar and the figures keep their place, so showing the votes
+    // fills the rows in without pushing them apart.
+    const row = screen.getByText("four").closest("li")!;
+    expect(row.querySelectorAll(".invisible[aria-hidden]")).toHaveLength(3);
     expect(screen.getByRole("switch", { name: "Show votes" })).not.toBeChecked();
     // The footer still says how many answered: that is when to move on.
     expect(screen.getByText("8 answers received")).toBeVisible();
