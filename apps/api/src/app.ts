@@ -24,6 +24,7 @@ import { publish } from "./events.js";
 import { adminPlugin } from "./modules/admin/routes.js";
 import { adminGuard } from "./modules/guards.js";
 import { avatarPlugin } from "./modules/avatar.js";
+import { drillPlugin } from "./modules/drill/routes.js";
 import { evaluationPlugin } from "./modules/evaluation/routes.js";
 import { gradingPlugin } from "./modules/grading/routes.js";
 import { registerGradingJobs } from "./modules/grading/jobs.js";
@@ -174,6 +175,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(gradingPlugin);
   await app.register(resultsPlugin);
   await app.register(statsPlugin);
+  await app.register(drillPlugin);
   await app.register(notificationsPlugin, { config });
   await app.register(mcpPlugin, { config });
 

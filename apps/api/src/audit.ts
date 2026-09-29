@@ -38,6 +38,12 @@ export type AuditAction =
   | "course.pools_update"
   | "course.staff_remove"
   | "course.update"
+  /** The teacher enabled the drill for a classroom (ADR-041 §6). */
+  | "drill.enable"
+  /** …and disabled it: its cards leave the sessions, their data is kept. */
+  | "drill.disable"
+  /** "Remove these questions from the drill": an evaluation's cards deleted (ADR-041 §10). */
+  | "drill.cards_remove"
   /** A wrong access code typed by a student (F-EVAL-12), counted for the lockout. */
   | "evaluation.access_code_failed"
   | "evaluation.close"

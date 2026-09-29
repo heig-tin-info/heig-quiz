@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { composeDrillSession, DRILL_UNKNOWN_REFERENCE_MS, type DrillCandidate } from "./drillSession.js";
+import { composeDrillSession, drillDayBounds, DRILL_UNKNOWN_REFERENCE_MS, type DrillCandidate } from "./drillSession.js";
 
 const now = new Date("2026-10-10T08:00:00Z");
 const day = (d: number) => new Date(now.getTime() + d * 86_400_000);
@@ -86,5 +86,25 @@ describe("composeDrillSession", () => {
     // round-robin in the order the groups first appear, each keeping its own order
     const mixed = ["x1", "y1", "x2", "x3", "z1", "y2"].map((id, i) => card(id, { retrievability: i / 10, group: id[0]! }));
     expect(compose(mixed)).toEqual(["x1", "y1", "z1", "x2", "y2", "x3"]);
+  });
+});
+
+describe("drillDayBounds", () => {
+  it("cuts the day at midnight in Zurich, summer time", () => {
+    const { start, end } = drillDayBounds(new Date("2026-09-29T21:30:00Z"));
+    expect(start.toISOString()).toBe("2026-09-28T22:00:00.000Z");
+    expect(end.toISOString()).toBe("2026-09-29T22:00:00.000Z");
+  });
+
+  it("moves to the next day after local midnight", () => {
+    const { start } = drillDayBounds(new Date("2026-09-29T22:30:00Z"));
+    expect(start.toISOString()).toBe("2026-09-29T22:00:00.000Z");
+  });
+
+  it("uses winter time in winter, and a 23-hour day at the spring change", () => {
+    expect(drillDayBounds(new Date("2026-01-15T12:00:00Z")).start.toISOString()).toBe("2026-01-14T23:00:00.000Z");
+    const change = drillDayBounds(new Date("2026-03-29T12:00:00Z"));
+    expect(change.start.toISOString()).toBe("2026-03-28T23:00:00.000Z");
+    expect(change.end.toISOString()).toBe("2026-03-29T22:00:00.000Z");
   });
 });
