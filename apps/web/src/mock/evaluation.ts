@@ -115,7 +115,7 @@ function itemSource(): MockQuestion[] {
   const essay = published.filter((q) => q.type === "rich");
   // The categorize question follows the essay, sixth (docs/04 §4.13), and
   // the code-to-picture one comes seventh, so the two finished evaluations
-  // give the grading table every type of question (ADR-040).
+  // give the grading table every type of question (ADR-044).
   const categorize = published.filter((q) => q.type === "categorize");
   const codeimage = published.filter((q) => q.type === "codeimage");
   const rest = primary.filter((q) => !["rich", "categorize", "codeimage"].includes(q.type));

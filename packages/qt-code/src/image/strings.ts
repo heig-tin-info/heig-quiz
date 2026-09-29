@@ -181,7 +181,7 @@ export const CODEIMAGE_REVIEW_DEFAULTS: CodeImageReviewStrings = {
   ...IMAGE_REVIEW_STRINGS,
 };
 
-/** What the grading table's picture column adds to `code`'s program column (ADR-040). */
+/** What the grading table's picture column adds to `code`'s program column (ADR-044). */
 export type ImageGradingStrings = {
   column: string;
   /** The accessible name of a student's thumbnail, and of the key's. */

@@ -1,4 +1,4 @@
-# ADR-040 — The grading table: one question at a time, anonymous by default
+# ADR-044 — The grading table: one question at a time, anonymous by default
 
 ## Status
 

@@ -6,7 +6,7 @@
  *
  * Hidden by default, the name on request: the real name travels only when
  * `anonymous=0` is asked for, and never, anywhere in the body, otherwise —
- * not even as a pseudonym: an anonymous entry has no label (ADR-040).
+ * not even as a pseudonym: an anonymous entry has no label (ADR-044).
  */
 import { randomUUID } from "node:crypto";
 

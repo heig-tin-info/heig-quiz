@@ -1,5 +1,5 @@
 /**
- * The `codeimage` column of the grading table (ADR-040): the picture the
+ * The `codeimage` column of the grading table (ADR-044): the picture the
  * program drew, as a thumbnail drawn only once its row is near the viewport,
  * beside the program in `code`'s clamped box.
  */

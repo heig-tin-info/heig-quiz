@@ -26,7 +26,7 @@ const WORDS: Record<Exclude<RowVerdict, "pending">, keyof Dict> = {
 const BOX = "inline-flex size-5.5 shrink-0 items-center justify-center rounded-md";
 
 /**
- * The verdict of one answer, as the first cell of its row (ADR-040): a
+ * The verdict of one answer, as the first cell of its row (ADR-044): a
  * 22 px square that says correct (solid success, a check), partly correct
  * (hatched, a small solid check inside), wrong (solid danger, a cross) or
  * not judged yet (a dashed outline and a "?", its reason in the tooltip).

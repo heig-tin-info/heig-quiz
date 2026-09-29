@@ -1,5 +1,5 @@
 /**
- * The `rich` column of the grading table (ADR-040): ONE wide column, the
+ * The `rich` column of the grading table (ADR-044): ONE wide column, the
  * essay as plain text clamped to three lines — enough to tell a paragraph
  * from a sentence and a sentence from nothing; the answer panel has the
  * rest. The expected row holds the model answer, else the rubric: both are

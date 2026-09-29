@@ -1,5 +1,5 @@
 /**
- * The `cloze` columns of the grading table (ADR-040): one column per blank,
+ * The `cloze` columns of the grading table (ADR-044): one column per blank,
  * in the order of the text, each cell what the student put in that blank —
  * the option's label for a dropdown, never its stored index — tinted by the
  * blank's own verdict from the grading's breakdown. The expected row lists

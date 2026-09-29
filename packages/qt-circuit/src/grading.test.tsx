@@ -1,5 +1,5 @@
 /**
- * The `circuit` column of the grading table (ADR-040): what the schematic
+ * The `circuit` column of the grading table (ADR-044): what the schematic
  * holds and how its simulation went — never the drawing, which stays in the
  * answer panel.
  */

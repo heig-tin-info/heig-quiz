@@ -1,5 +1,5 @@
 /**
- * The `codeimage` column of the grading table (ADR-040): ONE wide column,
+ * The `codeimage` column of the grading table (ADR-044): ONE wide column,
  * the PICTURE the student's program drew as a thumbnail, beside the program
  * itself in `code`'s clamped box. The picture is the grading's own
  * (`details.image`, parsed from stdout on the server — the field the review

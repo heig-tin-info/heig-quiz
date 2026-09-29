@@ -7,7 +7,7 @@
  * were in a given evaluation (the question, the open answer, a sort) is not
  * remembered: a new visit starts at the first question.
  *
- * "Anonymise" is deliberately NOT part of it (F-GRADE-03, ADR-040): it is on
+ * "Anonymise" is deliberately NOT part of it (F-GRADE-03, ADR-044): it is on
  * at every visit, and a switch that stayed off by itself would show names on
  * every visit without the teacher choosing it that time.
  *

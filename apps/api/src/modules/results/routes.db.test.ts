@@ -85,7 +85,7 @@ describe("the grading panel (§4.5)", () => {
     const queue = anonymous.json();
     expect(queue.entries).toHaveLength(1);
     expect(queue.counts).toMatchObject({ total: 1, validated: 1, proposed: 0, missing: 0 });
-    // No label at all, never the name (F-GRADE-03, ADR-040).
+    // No label at all, never the name (F-GRADE-03, ADR-044).
     expect(queue.entries[0].label).toBeNull();
 
     const named = await get(

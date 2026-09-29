@@ -43,7 +43,7 @@ export const clozeReviewStrings = {
 
 export type ClozeReviewStringKey = keyof typeof clozeReviewStrings;
 
-/** The words of the grading table's columns (ADR-040), one column per blank. */
+/** The words of the grading table's columns (ADR-044), one column per blank. */
 export const clozeGradingStrings = {
   /** A column's header: "Blank 2", numbered from 1 in the order of the text. */
   blank: "Blank {n}",

@@ -1,5 +1,5 @@
 /**
- * The `code` column of the grading table (ADR-040): the program as the
+ * The `code` column of the grading table (ADR-044): the program as the
  * student wrote it in a clamped box as wide as the column, and a chip that
  * says how its run went, read from the grading's breakdown.
  */

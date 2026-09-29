@@ -1,5 +1,5 @@
 /**
- * The `circuit` column of the grading table (ADR-040): ONE column, what the
+ * The `circuit` column of the grading table (ADR-044): ONE column, what the
  * schematic holds ("3 parts · 4 wires", the parts the student placed — the
  * ports are the box's) beside a chip counting the stimuli it passed, read
  * from the grading's breakdown; its tooltip names the ones that failed. The

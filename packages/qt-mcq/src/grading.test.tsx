@@ -1,5 +1,5 @@
 /**
- * The `mcq` columns of the grading table (ADR-040): one per choice, keyed and
+ * The `mcq` columns of the grading table (ADR-044): one per choice, keyed and
  * lettered canonically, a tick box per cell that says right, wrong or missed.
  */
 import { render, screen } from "@testing-library/react";

@@ -64,7 +64,7 @@ export function makeEntry(over: Partial<GradingEntry> = {}): GradingEntry {
     answerId: "ans1",
     attemptId: "a1",
     itemId: "i1",
-    // Anonymous, as the server sends it by default (ADR-040).
+    // Anonymous, as the server sends it by default (ADR-044).
     label: null,
     guest: null,
     staff: false,

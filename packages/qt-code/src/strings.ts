@@ -343,7 +343,7 @@ export const REVIEW_STRINGS: CodeReviewStrings = {
 };
 
 /**
- * The words of the grading table's program column (ADR-040), `code`'s and
+ * The words of the grading table's program column (ADR-044), `code`'s and
  * `codeimage`'s alike: the program clamped to five lines, and the chip that
  * says how its run went.
  */

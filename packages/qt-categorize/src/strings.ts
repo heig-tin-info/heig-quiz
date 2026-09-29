@@ -95,7 +95,7 @@ export const categorizeReviewStrings = {
 export type CategorizeReviewStringKey = keyof typeof categorizeReviewStrings;
 
 /**
- * The words of the grading table's columns (ADR-040). A column per card is
+ * The words of the grading table's columns (ADR-044). A column per card is
  * headed by the card itself; past {@link CATEGORIZE_GRADING_MAX_COLUMNS}
  * cards the question gets ONE summary column instead, and these are its words.
  */

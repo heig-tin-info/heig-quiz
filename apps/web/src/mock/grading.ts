@@ -518,7 +518,7 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
     answerId: answer === null ? null : `${key}-ans`,
     attemptId: attempt.id,
     itemId: item.id,
-    // Anonymous, no label at all (ADR-040); the names only on request.
+    // Anonymous, no label at all (ADR-044); the names only on request.
     label: anonymous ? null : attempt.displayName,
     guest: null,
     staff: attempt.staff,

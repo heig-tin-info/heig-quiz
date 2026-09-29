@@ -1196,7 +1196,7 @@ or EDIT them?". A list you scan stays a table however many columns it has to
 drop. A list you edit field by field becomes panels as soon as a row needs
 more than one line.
 
-## The grading table (ADR-040)
+## The grading table (ADR-044)
 
 One question's answers as a table (`src/grading/`, origin
 `mockups/grading.html`). What is particular to it:

@@ -1,5 +1,5 @@
 /**
- * The `categorize` columns of the grading table (ADR-040): one per card, the
+ * The `categorize` columns of the grading table (ADR-044): one per card, the
  * column the student put it in tinted by the card's own verdict — and ONE
  * summary column once the question has more cards than a table can hold.
  */

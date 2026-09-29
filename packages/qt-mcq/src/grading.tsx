@@ -1,5 +1,5 @@
 /**
- * The `mcq` columns of the grading table (ADR-040): one column per choice,
+ * The `mcq` columns of the grading table (ADR-044): one column per choice,
  * in CANONICAL order and lettered canonically — the grading queue sends the
  * views with `shuffle: false`, so column C is choice C on every row, however
  * each student saw the choices.

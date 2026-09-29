@@ -4,7 +4,7 @@
  * The grading panel is a read model over `gradings`: one entry per
  * (attempt, item) pair, one question at a time, and anonymous unless the
  * teacher asks for the names — an anonymous entry carries NO label at all,
- * not a pseudonym (F-GRADE-03, ADR-040).
+ * not a pseudonym (F-GRADE-03, ADR-044).
  *
  * `answerId` is NULLABLE here for the same reason it is nullable in the
  * table: an absent answer is still graded — zero points, validated, `auto`
@@ -112,7 +112,7 @@ export const GradingEntry = z.object({
   /**
    * The student's display name when `?anonymous=0`; `null` by default, and
    * then nothing else in the entry names the student either (F-GRADE-03,
-   * ADR-040).
+   * ADR-044).
    */
   label: z.string().nullable(),
   /**
@@ -160,7 +160,7 @@ export const GradingQueue = z.object({
 export type GradingQueue = z.infer<typeof GradingQueue>;
 
 /**
- * `?itemId=&anonymous=1`. Grading is by question (ADR-040): the panel reads
+ * `?itemId=&anonymous=1`. Grading is by question (ADR-044): the panel reads
  * one item's answers at a time, every state, and filters them itself;
  * without `itemId`, every item's.
  */

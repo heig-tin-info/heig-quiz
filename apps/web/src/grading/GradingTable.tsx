@@ -58,7 +58,7 @@ export interface GradingTableProps {
 }
 
 /**
- * One question's answers as a table (ADR-040): the verdict, the student
+ * One question's answers as a table (ADR-044): the verdict, the student
  * (only when names are shown), the question type's own answer columns, the
  * points and the row's actions; the key pinned as the first row. A row is
  * one answer: clicking it opens the answer panel.

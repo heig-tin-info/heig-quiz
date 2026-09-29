@@ -1,5 +1,5 @@
 /**
- * The `rich` column of the grading table (ADR-040): the essay as plain text,
+ * The `rich` column of the grading table (ADR-044): the essay as plain text,
  * clamped to three lines, and the grader's guide on the expected row.
  */
 import { render } from "@testing-library/react";

@@ -1,4 +1,4 @@
-/** The `short` column of the grading table (ADR-040). */
+/** The `short` column of the grading table (ADR-044). */
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 

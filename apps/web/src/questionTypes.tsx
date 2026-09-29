@@ -278,7 +278,7 @@ export const reviewStrings = {
 
 /**
  * The words of the grading table's columns (`QuestionTypeClient.grading`,
- * ADR-040): every type gives columns, so every type has words here — a
+ * ADR-044): every type gives columns, so every type has words here — a
  * type added to the registry without them is a compile error.
  */
 export const gradingStrings: Record<QuestionTypeId, (t: TFunction) => Record<string, string>> = {

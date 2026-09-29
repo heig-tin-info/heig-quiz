@@ -1,5 +1,5 @@
 /**
- * The `categorize` columns of the grading table (ADR-040): one column per
+ * The `categorize` columns of the grading table (ADR-044): one column per
  * CARD, headed by the card, each cell the column the student put it in —
  * a chip tinted by that card's own verdict, read from the grading's
  * breakdown (`details.cards[].right`, `@quiz/domain/categorizeScore`), never

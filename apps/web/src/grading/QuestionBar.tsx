@@ -11,7 +11,7 @@ const leftOf = (state: StepState | undefined) =>
 
 /**
  * Which question is being graded, and where every question stands
- * (ADR-040). The counter is a menu of every question with what it still
+ * (ADR-044). The counter is a menu of every question with what it still
  * asks for; the chevrons walk one question at a time, the same move as ←
  * and →. Under them, the evaluation's questions as the student player's
  * stepper (`ProgressSegments`, reused as it is): a question is "done" once

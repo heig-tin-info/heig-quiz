@@ -1,5 +1,5 @@
 /**
- * The marks of a grading-table cell (ADR-040), the same in every question
+ * The marks of a grading-table cell (ADR-044), the same in every question
  * type that gives the table columns (`QuestionTypeClient.grading`).
  *
  * A cell is read at a glance across thirty rows, so it says right, wrong,

@@ -384,7 +384,7 @@ interface Roster {
  * them: the guests' numbers and whether a student retook the exercise depend
  * on all of them, whatever the panel shows.
  *
- * No pseudonym any more (ADR-040): an anonymous panel carries no label at
+ * No pseudonym any more (ADR-044): an anonymous panel carries no label at
  * all, and the retake number travels on its own (`GradingEntry.attemptNumber`)
  * instead of as a " · #2" suffix of a name it would outlive.
  */
@@ -581,7 +581,7 @@ function entryOf(
 /**
  * `GET /evaluations/:id/grading` (§4.5): every student's answer to one
  * question — which is how a teacher actually corrects, and the only way
- * through the panel since ADR-040 — or to every question, item after item.
+ * through the panel since ADR-044 — or to every question, item after item.
  *
  * The counts are those of the SELECTION (the item): every state is sent,
  * and the panel filters in the browser.

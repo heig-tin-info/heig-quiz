@@ -473,7 +473,7 @@ export const REVIEW_STRINGS: CircuitReviewStrings = {
 };
 
 /**
- * The words of the grading table's one circuit column (ADR-040): what the
+ * The words of the grading table's one circuit column (ADR-044): what the
  * schematic holds, and how its simulation went. The drawing itself stays
  * in the answer panel.
  */

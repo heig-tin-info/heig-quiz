@@ -6,7 +6,7 @@ import { gradingStrings, questionType } from "../questionTypes";
 import { isMissing, verdictRank } from "./rows";
 
 /**
- * The answer columns of one question in the grading table (ADR-040): the
+ * The answer columns of one question in the grading table (ADR-044): the
  * question type's own (`QuestionTypeClient.grading`, required), with its
  * words translated here (N-I18N-01). There is no fallback column: a type
  * without columns does not compile. A type this build does not carry has

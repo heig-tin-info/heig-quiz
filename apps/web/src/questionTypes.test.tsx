@@ -131,7 +131,7 @@ const DICTIONARIES: [string, object][] = [
  */
 const MAPPED_ELSEWHERE: Record<string, readonly string[]> = { "qt.mcq.e": MCQ_HOST_MAPPED_KEYS };
 
-describe("grading columns (ADR-040)", () => {
+describe("grading columns (ADR-044)", () => {
   // Every registered type gives the grading table its columns (there is no
   // host fallback) and its words, translated: a French teacher never reads
   // an English header or chip.

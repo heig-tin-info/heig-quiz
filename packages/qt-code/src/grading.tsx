@@ -1,5 +1,5 @@
 /**
- * The `code` column of the grading table (ADR-040): ONE wide column, the
+ * The `code` column of the grading table (ADR-044): ONE wide column, the
  * program the student wrote in a box as wide as the column, clamped to five
  * lines (`ClampedCode`, `@quiz/ui`), beside a chip that says how its run
  * went — the cases passed out of all of them, read from the grading's

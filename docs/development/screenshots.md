@@ -104,7 +104,7 @@ scenes were retaken on their own (`--only`) on 2026-09-28, the
 (`classroom-evaluations`, `classroom-roster`, `roster-import`,
 `help-drawer`) together on 2026-09-29 (#295), each time on a fresh seed,
 which is why their ids differ from the other rows. The `grading*` scenes
-describe the grading table (ADR-040); their images were retaken again on
+describe the grading table (ADR-044); their images were retaken again on
 2026-09-29 with the columns of every question type, on a fresh seed and
 without a runner (so the code answers wait for it).
 

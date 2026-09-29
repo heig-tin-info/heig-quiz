@@ -1,5 +1,5 @@
 /**
- * `@quiz/core/reasons` — the machine reasons of a grading (ADR-040): why a
+ * `@quiz/core/reasons` — the machine reasons of a grading (ADR-044): why a
  * machine PROPOSED instead of grading, the `details.reason` (and the
  * `comment`) of a grading no grader could settle. Wire values, closed here
  * once for the API (through `@quiz/contracts`, which re-exports them), the
