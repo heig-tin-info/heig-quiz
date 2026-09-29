@@ -1,5 +1,5 @@
 /** Section 2 of the mock — see `index.ts` for the layout. */
-import { PoolColor, type ZodIssueLite } from "@quiz/contracts";
+import { PoolColor, type QuestionStats, type ZodIssueLite } from "@quiz/contracts";
 import {
   clozeStudentTemplate,
   describeBlank,
@@ -2384,19 +2384,21 @@ on("POST", "/app/api/questions/:id/versions/:number/deprecate", (m, body) => {
  * with ten answers or more appear. The first three questions of `p1` carry
  * a high, a NEGATIVE and a middling rate; the first of `p3` — the pool this
  * browser only reads — one more, so the reader's panel (no reset) is on
- * screen too. Every other question is below the threshold.
+ * screen too. Every other question is below the threshold. The time spent
+ * (ADR-039) shows on the first and the third; the second and `p3`'s have too
+ * few timed exam answers for it.
  */
-const questionStats = new Map<string, { n: number; p: number; since: string | null }>([
+const questionStats = new Map<string, QuestionStats>([
   ...liveQuestions("p1")
     .slice(0, 3)
     .map((q, i) => [q.id, [
-      { n: 24, p: 0.73, since: null },
-      { n: 12, p: -0.08, since: null },
-      { n: 31, p: 0.41, since: iso(-40 * D) },
+      { n: 24, p: 0.73, since: null, time: { n: 21, meanS: 95, medianS: 80, p25S: 52, p75S: 121 } },
+      { n: 12, p: -0.08, since: null, time: null },
+      { n: 31, p: 0.41, since: iso(-40 * D), time: { n: 30, meanS: 540, medianS: 412, p25S: 260, p75S: 700 } },
     ][i]!] as const),
   ...liveQuestions("p3")
     .slice(0, 1)
-    .map((q) => [q.id, { n: 18, p: 0.56, since: null }] as const),
+    .map((q) => [q.id, { n: 18, p: 0.56, since: null, time: null }] as const),
 ]);
 
 on("GET", "/app/api/pools/:id/question-stats", (m) => {

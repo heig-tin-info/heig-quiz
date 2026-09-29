@@ -453,6 +453,9 @@ export const en = {
   "dur.minutes": "{n} minutes",
   "dur.and": "and",
   "dur.soon": "less than a minute",
+  "dur.s": "{n} s",
+  "dur.minSec": "{m} min {s} s",
+  "dur.hourMin": "{h} h {m} min",
   "time.now": "just now",
 
   // --- Live primitives (ui/live.tsx) ---
@@ -667,10 +670,18 @@ export const en = {
   "pool.stats.successRate": "Success rate",
   "pool.stats.answers": "Answers counted",
   "pool.stats.scope":
-    "Kept attempts of exams and exercises, every version of the question, teachers' test attempts left out. A blank or unanswered question counts as 0.",
+    "Kept attempts of exams and exercises, every version of the question, teachers' test attempts left out. A blank answer counts as 0; a question never opened is left out.",
   "pool.stats.negative": "Below zero: negative marking took away more than it gave.",
   "pool.stats.since": "Since {date}",
   "pool.stats.sinceAlways": "Since the question was first used",
+  "pool.stats.time": "Time spent",
+  "pool.stats.timeMedian": "Median time",
+  "pool.stats.timeMean": "Mean time",
+  "pool.stats.timeRange": "Middle half: {p25} to {p75}",
+  "pool.stats.timeAnswers": "Timed answers",
+  "pool.stats.timeScope":
+    "Exams only. Time a question is on screen, measured by the server; a stretch without activity counts {cap} minutes at most.",
+  "pool.stats.timeNone": "The time shows from {min} timed exam answers.",
   "pool.stats.reset": "Reset statistics",
   "pool.stats.resetTitle": "Reset the statistics of {name}?",
   "pool.stats.resetBody":

@@ -2,7 +2,7 @@
  * Descriptive statistics for the results screens (PLAN-MVP §7.6), and the
  * item analysis of a question in its pool (ADR-038): the mean success rate
  * over the answers counted, reported with their number and shown only from
- * `QUESTION_STATS_MIN_N` answers on.
+ * `QUESTION_STATS_MIN_N` answers on — and the time spent on it (ADR-039).
  */
 import { MAX_GRADE, MIN_GRADE } from "./grade.js";
 import { round2 } from "./round.js";
@@ -66,6 +66,64 @@ export function itemStats(answers: Iterable<ScoredAnswer>): ItemStats {
 /** The statistics as they may be shown: `null` below `QUESTION_STATS_MIN_N` answers. */
 export function shownItemStats(stats: ItemStats): ItemStats | null {
   return stats.n >= QUESTION_STATS_MIN_N ? stats : null;
+}
+
+/**
+ * The `q`-quantile of an ascending series, by linear interpolation between
+ * the closest ranks (type 7 of Hyndman & Fan, the default of R and NumPy):
+ * `h = (n - 1) q`. `quantile(sorted, 0.5)` is the median of {@link describe},
+ * unrounded. An empty series answers 0, like `describe`.
+ */
+export function quantile(sorted: readonly number[], q: number): number {
+  const n = sorted.length;
+  if (n === 0) return 0;
+  const h = (n - 1) * q;
+  const low = Math.floor(h);
+  const high = Math.min(low + 1, n - 1);
+  return sorted[low]! + (h - low) * (sorted[high]! - sorted[low]!);
+}
+
+/** Below this many timed answers, a question's time is not shown (ADR-039). */
+export const QUESTION_TIME_MIN_N = 10;
+
+/**
+ * The idle cap of the dwell (ADR-039): an interval on screen is credited up
+ * to this long after the later of its start and the student's last write to
+ * the question. The SQL flush of the `live` module and the sentence of the
+ * statistics sheet both read it.
+ */
+export const DWELL_IDLE_CAP_MS = 600_000;
+
+/**
+ * The time spent on a question, over `n` timed answers: centre and middle
+ * half. No extremes, no spread (N-DATA-06).
+ */
+export interface TimeStats {
+  n: number;
+  meanMs: number;
+  medianMs: number;
+  p25Ms: number;
+  p75Ms: number;
+}
+
+/** Only a positive, finite dwell is a timed answer; anything else is left out. */
+export function timeStats(dwellMs: Iterable<number>): TimeStats {
+  const values: number[] = [];
+  for (const v of dwellMs) if (Number.isFinite(v) && v > 0) values.push(v);
+  const { count, mean, median } = describe(values);
+  const sorted = values.sort((a, b) => a - b);
+  return {
+    n: count,
+    meanMs: mean,
+    medianMs: median,
+    p25Ms: quantile(sorted, 0.25),
+    p75Ms: quantile(sorted, 0.75),
+  };
+}
+
+/** The time as it may be shown: `null` below `QUESTION_TIME_MIN_N` timed answers. */
+export function shownTimeStats(stats: TimeStats): TimeStats | null {
+  return stats.n >= QUESTION_TIME_MIN_N ? stats : null;
 }
 
 export interface HistogramBucket {

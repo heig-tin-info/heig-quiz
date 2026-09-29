@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { describe as describeSeries, histogram, itemStats, QUESTION_STATS_MIN_N, shownItemStats } from "./stats.js";
+import {
+  describe as describeSeries,
+  histogram,
+  itemStats,
+  quantile,
+  QUESTION_STATS_MIN_N,
+  QUESTION_TIME_MIN_N,
+  shownItemStats,
+  shownTimeStats,
+  timeStats,
+} from "./stats.js";
 
 describe("describe", () => {
   it("summarises a series", () => {
@@ -74,5 +84,56 @@ describe("shownItemStats", () => {
     expect(QUESTION_STATS_MIN_N).toBe(10);
     expect(shownItemStats({ n: 9, p: 0.5 })).toBeNull();
     expect(shownItemStats({ n: 10, p: 0.5 })).toEqual({ n: 10, p: 0.5 });
+  });
+});
+
+describe("quantile", () => {
+  it("interpolates between the closest ranks (type 7)", () => {
+    expect(quantile([1, 2, 3, 4], 0.25)).toBe(1.75);
+    expect(quantile([1, 2, 3, 4], 0.5)).toBe(2.5);
+    expect(quantile([1, 2, 3, 4], 0.75)).toBe(3.25);
+  });
+
+  it("answers the value itself for a single one, 0 for none", () => {
+    expect(quantile([7], 0.25)).toBe(7);
+    expect(quantile([7], 0.75)).toBe(7);
+    expect(quantile([], 0.5)).toBe(0);
+  });
+
+  it("gives the known quartiles of ten values", () => {
+    const ten = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    expect(quantile(ten, 0.25)).toBe(3.25);
+    expect(quantile(ten, 0.75)).toBe(7.75);
+  });
+
+  it("agrees with the median of describe", () => {
+    for (const series of [[3, 1, 2], [4, 1, 3, 2], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110]]) {
+      const sorted = [...series].sort((a, b) => a - b);
+      expect(quantile(sorted, 0.5)).toBe(describeSeries(series).median);
+    }
+  });
+});
+
+describe("timeStats", () => {
+  it("summarises the positive, finite dwells only", () => {
+    expect(timeStats([4000, 1000, 0, -5, Number.NaN, Number.POSITIVE_INFINITY, 3000, 2000])).toEqual({
+      n: 4,
+      meanMs: 2500,
+      medianMs: 2500,
+      p25Ms: 1750,
+      p75Ms: 3250,
+    });
+  });
+
+  it("is all zeroes on nothing", () => {
+    expect(timeStats([])).toEqual({ n: 0, meanMs: 0, medianMs: 0, p25Ms: 0, p75Ms: 0 });
+  });
+});
+
+describe("shownTimeStats", () => {
+  it("hides the time below the threshold, shows it from it", () => {
+    expect(QUESTION_TIME_MIN_N).toBe(10);
+    expect(shownTimeStats(timeStats([1, 2, 3, 4, 5, 6, 7, 8, 9]))).toBeNull();
+    expect(shownTimeStats(timeStats([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))?.n).toBe(10);
   });
 });

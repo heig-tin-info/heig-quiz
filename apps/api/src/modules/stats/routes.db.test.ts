@@ -4,12 +4,12 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
-import { attempts, auditLog, poolMembers } from "../../db/schema.js";
+import { answers, attempts, auditLog, poolMembers } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive, type Seeded } from "../../test/live.js";
@@ -39,7 +39,8 @@ beforeAll(async () => {
     { poolId: seed.poolId, userId: reader.id, role: "reader" },
     { poolId: seed.poolId, userId: contributor.id, role: "contributor" },
   ]);
-  // Ten answers started before the reset: enough to be shown.
+  // Ten answers started before the reset, each a minute on screen: enough
+  // to be shown, the time included.
   for (const userId of seed.studentIds) {
     const attemptId = randomUUID();
     await server.app.db.insert(attempts).values({
@@ -49,6 +50,14 @@ beforeAll(async () => {
       seed: 1,
       state: "submitted",
       startedAt: new Date(server.clock.now().getTime() - 3_600_000),
+    });
+    await server.app.db.insert(answers).values({
+      id: randomUUID(),
+      attemptId,
+      itemId: seed.itemIds[0]!,
+      payload: sql`'null'::jsonb`,
+      firstShownAt: server.clock.now(),
+      dwellMs: 60_000,
     });
     await writeGrading(server.app.db, {
       attemptId,
@@ -83,7 +92,17 @@ describe("reading the statistics", () => {
     expect((await get(url, student)).statusCode).toBe(403);
     const res = await get(url, reader);
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ items: [{ questionId: seed.questionIds[0], n: 10, p: 1, since: null }] });
+    expect(res.json()).toEqual({
+      items: [
+        {
+          questionId: seed.questionIds[0],
+          n: 10,
+          p: 1,
+          since: null,
+          time: { n: 10, meanS: 60, medianS: 60, p25S: 60, p75S: 60 },
+        },
+      ],
+    });
   });
 });
 

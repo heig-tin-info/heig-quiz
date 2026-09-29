@@ -1,16 +1,17 @@
 /**
  * The item analysis of a question (ADR-038): which answers are counted, the
- * threshold, the reset.
+ * threshold, the reset — and the time spent on it (ADR-039).
  */
 import { randomUUID } from "node:crypto";
 
-import { count, eq } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
 import {
+  answers,
   attempts,
   enrollments,
   evaluations,
@@ -44,6 +45,8 @@ interface AttemptOptions {
   state?: "in_progress" | "submitted" | "expired";
   startedAt?: Date | null;
   number?: number;
+  /** False by default: an attempt of before ADR-039, the rule ADR-038 was written for. */
+  tracked?: boolean;
 }
 
 async function attempt(evaluationId: string, userId: string, o: AttemptOptions = {}) {
@@ -56,8 +59,21 @@ async function attempt(evaluationId: string, userId: string, o: AttemptOptions =
     state: o.state ?? "submitted",
     attemptNumber: o.number ?? 1,
     startedAt: o.startedAt === undefined ? BEFORE : o.startedAt,
+    displayTracked: o.tracked ?? false,
   });
   return id;
+}
+
+/** The answer row of an item as the player leaves it: shown (or not), and for how long. */
+async function shown(attemptId: string, itemId: string, dwellMs: number, o: { shown?: boolean } = {}) {
+  await db.insert(answers).values({
+    id: randomUUID(),
+    attemptId,
+    itemId,
+    payload: sql`'null'::jsonb`,
+    firstShownAt: o.shown === false ? null : BEFORE,
+    dwellMs,
+  });
 }
 
 async function grade(
@@ -96,6 +112,12 @@ async function entryOf(seed: Seeded, index = 0) {
   return entry ? { n: entry.n, p: entry.p, since: entry.since } : null;
 }
 
+/** Its time alone; undefined when the question is absent. */
+async function timeOf(seed: Seeded, index = 0) {
+  const { items } = await poolQuestionStats(db, seed.poolId);
+  return items.find((i) => i.questionId === seed.questionIds[index])?.time;
+}
+
 /** Its numbers alone. */
 async function statsOf(seed: Seeded, index = 0) {
   const entry = await entryOf(seed, index);
@@ -129,7 +151,7 @@ describe("what a question's statistics count (ADR-038)", () => {
     await sitAll(seed, [1, 1, 1, 1, 1, 1, 0, 0, 0.5, 0.5, 1, 0]);
 
     expect(await poolQuestionStats(db, seed.poolId)).toEqual({
-      items: [{ questionId: seed.questionIds[0], n: 12, p: 0.67, since: null }],
+      items: [{ questionId: seed.questionIds[0], n: 12, p: 0.67, since: null, time: null }],
     });
   });
 
@@ -288,5 +310,126 @@ describe("the reset (F-STAT-05)", () => {
       await grade(await attempt(second.evaluationId, userId, { startedAt: AFTER }), second.itemId, 0.5);
     }
     expect(await entryOf(seed)).toEqual({ n: 10, p: 0.5, since: reset.toISOString() });
+  });
+});
+
+describe("not reached (ADR-039)", () => {
+  it("leaves out a tracked question never on screen, counts a shown blank 0, and keeps the old rule before tracking", async () => {
+    const seed = await seedLive(db, { students: 12 });
+    // Ten tracked students saw the question: nine earned 1, one left it blank.
+    for (const [i, userId] of seed.studentIds.slice(0, 10).entries()) {
+      const id = await attempt(seed.evaluationId, userId, { tracked: true });
+      await shown(id, seed.itemIds[0]!, 1000);
+      await grade(id, seed.itemIds[0]!, i === 9 ? 0 : 1);
+    }
+    // A tracked student who never reached it: no row, then a row never shown.
+    const unreached = await attempt(seed.evaluationId, seed.studentIds[10]!, { tracked: true });
+    await grade(unreached, seed.itemIds[0]!, 0);
+    expect(await statsOf(seed)).toEqual({ n: 10, p: 0.9 });
+    // A legacy attempt still counts its unanswered question 0.
+    await grade(await attempt(seed.evaluationId, seed.studentIds[11]!), seed.itemIds[0]!, 0);
+    expect(await statsOf(seed)).toEqual({ n: 11, p: 0.82 });
+  });
+
+  it("leaves out a row the player wrote but never showed", async () => {
+    const seed = await seedLive(db, { students: 11 });
+    await sitAll(seed, ten);
+    const id = await attempt(seed.evaluationId, seed.studentIds[10]!, { tracked: true });
+    await shown(id, seed.itemIds[0]!, 0, { shown: false });
+    await grade(id, seed.itemIds[0]!, 0);
+    expect(await statsOf(seed)).toEqual({ n: 10, p: 1 });
+  });
+});
+
+describe("the time spent (ADR-039)", () => {
+  /** `dwells.length` tracked students sit the seed's exam, earn 1 and spent `dwells[i]` on the first item. */
+  async function timed(seed: Seeded, dwells: readonly number[], evaluationId = seed.evaluationId, itemId = seed.itemIds[0]!) {
+    for (const [i, dwell] of dwells.entries()) {
+      const id = await attempt(evaluationId, seed.studentIds[i]!, { tracked: true });
+      await shown(id, itemId, dwell);
+      await grade(id, itemId, 1);
+    }
+  }
+
+  const minutes = [60, 70, 80, 90, 100, 110, 120, 130, 140, 150].map((s) => s * 1000);
+
+  it("shows from ten timed answers, in whole seconds", async () => {
+    const seed = await seedLive(db, { students: 10 });
+    await timed(seed, minutes);
+    expect(await timeOf(seed)).toEqual({ n: 10, meanS: 105, medianS: 105, p25S: 83, p75S: 128 });
+  });
+
+  it("stays null at nine timed answers while n and p show", async () => {
+    const seed = await seedLive(db, { students: 10 });
+    await timed(seed, [...minutes.slice(0, 9), 0]);
+    expect(await statsOf(seed)).toEqual({ n: 10, p: 1 });
+    expect(await timeOf(seed)).toBeNull();
+  });
+
+  it("counts exams only, never an exercise", async () => {
+    const seed = await seedLive(db, { students: 10, mode: "exercise" });
+    await timed(seed, minutes);
+    expect(await statsOf(seed)).toEqual({ n: 10, p: 1 });
+    expect(await timeOf(seed)).toBeNull();
+  });
+
+  it("leaves out staff seats, guests and unfinished attempts", async () => {
+    const seed = await seedLive(db, { students: 11 });
+    await timed(seed, minutes.slice(0, 9));
+    const running = await attempt(seed.evaluationId, seed.studentIds[9]!, { tracked: true, state: "in_progress" });
+    await shown(running, seed.itemIds[0]!, 5000);
+    await db.insert(enrollments).values({
+      id: randomUUID(),
+      classroomId: seed.classroomId,
+      nom: "Staff",
+      prenom: "Teacher",
+      email: `staff-${seed.classroomId.slice(0, 6)}@heig.test`,
+      userId: seed.teacherId,
+      staff: true,
+    });
+    await shown(await attempt(seed.evaluationId, seed.teacherId, { tracked: true }), seed.itemIds[0]!, 5000);
+    const guestId = randomUUID();
+    await db.insert(guestParticipants).values({ id: guestId, evaluationId: seed.evaluationId, tokenHash: guestId });
+    const guestAttempt = randomUUID();
+    await db.insert(attempts).values({
+      id: guestAttempt,
+      evaluationId: seed.evaluationId,
+      guestId,
+      seed: 1,
+      state: "submitted",
+      startedAt: BEFORE,
+    });
+    await shown(guestAttempt, seed.itemIds[0]!, 5000);
+    // One more real student for n, untimed, keeps the question listed.
+    await grade(await attempt(seed.evaluationId, seed.studentIds[10]!), seed.itemIds[0]!, 1);
+    expect(await statsOf(seed)).toEqual({ n: 10, p: 1 });
+    expect(await timeOf(seed)).toBeNull();
+  });
+
+  it("leaves out legacy attempts, a zero dwell and a row never shown", async () => {
+    const seed = await seedLive(db, { students: 12 });
+    await timed(seed, minutes.slice(0, 9));
+    const legacy = await attempt(seed.evaluationId, seed.studentIds[9]!);
+    await shown(legacy, seed.itemIds[0]!, 5000);
+    await grade(legacy, seed.itemIds[0]!, 1);
+    const zero = await attempt(seed.evaluationId, seed.studentIds[10]!, { tracked: true });
+    await shown(zero, seed.itemIds[0]!, 0);
+    await grade(zero, seed.itemIds[0]!, 1);
+    const unshown = await attempt(seed.evaluationId, seed.studentIds[11]!, { tracked: true });
+    await shown(unshown, seed.itemIds[0]!, 5000, { shown: false });
+    expect(await timeOf(seed)).toBeNull();
+  });
+
+  it("counts only attempts started since the reset", async () => {
+    const seed = await seedLive(db, { students: 10 });
+    await timed(seed, minutes);
+    await poolService.resetQuestionStats(db, seed.questionIds[0]!, new Date("2026-09-05T08:00:00.000Z"));
+    const second = await anotherEvaluation(seed);
+    for (const [i, userId] of seed.studentIds.entries()) {
+      const id = await attempt(second.evaluationId, userId, { tracked: true, startedAt: AFTER });
+      await shown(id, second.itemId, 30_000 + i * 1000);
+      await grade(id, second.itemId, 1);
+    }
+    expect(await timeOf(seed)).toMatchObject({ n: 10, medianS: 35 });
   });
 });

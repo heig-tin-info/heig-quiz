@@ -1,12 +1,13 @@
 /**
  * The autosave path (PLAN-MVP §4.7): the answer summaries a cell shows, the
  * live grader, `saveAnswer`, `markDone` (validate), `setSkipped` and
- * `setFlagged` (issue #89), `setPosition`, and the attempt journal. Imported
+ * `setFlagged` (issue #89), `reportShown` (the position and the dwell,
+ * ADR-039), and the attempt journal. Imported
  * through `./service.ts`.
  */
 import { randomUUID } from "node:crypto";
 
-import { and, count, eq, gte, sql } from "drizzle-orm";
+import { and, count, eq, gte, isNull, sql } from "drizzle-orm";
 
 import type { AutosaveResponse, CellStatus, Verdict } from "@quiz/contracts";
 import { ANSWER_SUMMARY_MAX, isGraded, type AnyQuestionTypeServer } from "@quiz/core/server";
@@ -14,10 +15,11 @@ import { mayValidate, progressStatus, round2 } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attemptEvents, attempts } from "../../db/schema.js";
+import { answers, attemptEvents, attempts, evaluations } from "../../db/schema.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import { settingsOf, type EvaluationRecord, type JoinedItem } from "../evaluation/service.js";
 import { gradeDefaults, joinedItem, joinedItems } from "../evaluation/service.js";
+import { closeShown } from "./dwell.js";
 import * as events from "./events.js";
 import { verdictOf } from "../grading/service.js";
 import { UnavailableRunner } from "../runner/unavailable.js";
@@ -335,6 +337,7 @@ export async function saveAnswer(
       payload,
       revision,
       firstSeenAt: now,
+      firstShownAt: now,
       updatedAt: now,
     })
     .onConflictDoUpdate({
@@ -343,6 +346,8 @@ export async function saveAnswer(
         payload: sql`excluded.payload`,
         revision: sql`excluded.revision`,
         ...(answered ? { skipped: false } : {}),
+        // Written, therefore shown (ADR-039), whatever the player reported.
+        firstShownAt: sql`coalesce(${answers.firstShownAt}, excluded.first_shown_at)`,
         updatedAt: now,
       },
       setWhere: sql`${answers.revision} < excluded.revision`,
@@ -435,10 +440,12 @@ async function writeState(
   set: Partial<Pick<AnswerRecord, "markedDone" | "skipped" | "flagged">>,
   now: Date,
 ): Promise<AnswerRecord> {
+  // Written, therefore shown (ADR-039), whatever the player reported.
+  const shown = { firstShownAt: sql`coalesce(${answers.firstShownAt}, ${now.toISOString()}::timestamptz)` };
   if (current) {
     const [row] = await db
       .update(answers)
-      .set({ ...set, updatedAt: now })
+      .set({ ...set, ...shown, updatedAt: now })
       .where(eq(answers.id, current.id))
       .returning();
     return row!;
@@ -453,12 +460,13 @@ async function writeState(
       revision: 0,
       ...set,
       firstSeenAt: now,
+      firstShownAt: now,
       updatedAt: now,
     })
     // Two tabs racing on a never-opened question: the second one updates.
     .onConflictDoUpdate({
       target: [answers.attemptId, answers.itemId],
-      set: { ...set, updatedAt: now },
+      set: { ...set, ...shown, updatedAt: now },
     })
     .returning();
   return row!;
@@ -556,17 +564,95 @@ export async function setFlagged(
   return { flagged: row.flagged };
 }
 
-/** F-LIVE-06: where the student was, so a reload lands on the same question. */
-export async function setPosition(
+/**
+ * F-LIVE-06 and ADR-039: what is on the student's screen — an item, or
+ * `null` for nothing — reported by the player on every move, on hiding the
+ * tab and on leaving. Two uses of one signal:
+ *   - the BOOKMARK: an item becomes `last_item_id`, so a reload lands on the
+ *     same question; `null` keeps the last one;
+ *   - the DWELL: the report ends the open interval ({@link closeShown}) and,
+ *     for an item of a running evaluation, opens the next one at `now`. A
+ *     report of the item already open changes nothing, so a re-sent position
+ *     never cuts an interval in two.
+ *
+ * `track` is false for a delegated session (ADR-034): somebody acting as the
+ * student moves the bookmark and nothing else — no interval, no sign of
+ * life. One transaction, the attempt row locked first, like every flush.
+ */
+export async function reportShown(
   db: Db,
-  attempt: AttemptRecord,
-  itemId: string,
-  now: Date,
+  input: {
+    evaluation: EvaluationRecord;
+    attempt: AttemptRecord;
+    itemId: string | null;
+    now: Date;
+    track: boolean;
+  },
 ): Promise<void> {
-  await db
-    .update(attempts)
-    .set({ lastItemId: itemId, presentAt: now, updatedAt: now })
-    .where(eq(attempts.id, attempt.id));
+  const { evaluation, attempt, itemId, now, track } = input;
+  // An item of ANOTHER evaluation would pass the foreign key of `answers`;
+  // it must not become a bookmark nor a row.
+  const item = itemId === null ? null : await joinedItem(db, evaluation.id, itemId);
+  if (itemId !== null && !item) throw new LiveError("not_found", 404);
+
+  const created = await db.transaction(async (tx) => {
+    // The states read WITH the lock, not from the request's scope: a pause or
+    // a close that committed since then flushed this attempt, and must not
+    // find an interval opened behind it.
+    const [locked] = await tx
+      .select({
+        shownItemId: attempts.shownItemId,
+        state: attempts.state,
+        running: sql<boolean>`${evaluations.state} = 'running'`,
+      })
+      .from(attempts)
+      .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
+      .where(eq(attempts.id, attempt.id))
+      .for("update", { of: attempts });
+    if (!locked) throw new LiveError("not_found", 404);
+    const shows = track && itemId !== null && locked.running && locked.state === "in_progress";
+    // The item already open: the interval goes on.
+    const opens = shows && locked.shownItemId !== itemId;
+    if (track && (opens || !shows)) await closeShown(tx, eq(attempts.id, attempt.id), now);
+    let row: AnswerRecord | null = null;
+    if (opens) {
+      [row = null] = await tx
+        .insert(answers)
+        .values({
+          id: randomUUID(),
+          attemptId: attempt.id,
+          itemId,
+          payload: sql`'null'::jsonb`,
+          revision: 0,
+          firstSeenAt: now,
+          firstShownAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoNothing({ target: [answers.attemptId, answers.itemId] })
+        .returning();
+      // A row written before migration 0033: displayed from now on.
+      if (!row) {
+        await tx
+          .update(answers)
+          .set({ firstShownAt: now })
+          .where(
+            and(eq(answers.attemptId, attempt.id), eq(answers.itemId, itemId), isNull(answers.firstShownAt)),
+          );
+      }
+    }
+    await tx
+      .update(attempts)
+      .set({
+        ...(itemId !== null ? { lastItemId: itemId } : {}),
+        ...(opens ? { shownItemId: itemId, shownSince: now } : {}),
+        ...(track ? { presentAt: now } : {}),
+        updatedAt: now,
+      })
+      .where(eq(attempts.id, attempt.id));
+    return row;
+  });
+  // The grid's "seen" is now true to its word: the question was on screen.
+  if (created) await publishCell(evaluation, attempt, item, created, now);
 }
 
 /** F-EVAL-13. Journalled, never blocking. */

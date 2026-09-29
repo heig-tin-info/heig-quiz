@@ -637,7 +637,8 @@ on("POST", "/app/api/attempts/:id/answers/:itemId/flag", (m, body) => {
 });
 
 on("POST", "/app/api/attempts/:id/position", (_m, body) => {
-  studentPosition = String(body.itemId);
+  // `null`: no question on screen; the bookmark stays (ADR-039).
+  if (typeof body.itemId === "string") studentPosition = body.itemId;
   return undefined;
 });
 
