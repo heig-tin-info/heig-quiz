@@ -398,9 +398,13 @@ live in `ui/state.ts`, each written once.
   (`tip`), never a native `title`. It exists because six pages wrote that
   button with two different class lists.
 - Logo: the product's wordmark (`src/assets/quiz.svg`), four speech bubbles
-  spelling Q U I Z, as an `<img alt="Quiz">`. It is the file, not inline JSX:
-  the same mark is delivered elsewhere, and a retyped copy is a second
-  version to keep in step. Its four colours are its own and live outside the
+  spelling Q U I Z, inlined from the file as `role="img"` named "Quiz". It
+  is the file, not retyped JSX: the same mark is delivered elsewhere, and a
+  retyped copy is a second version to keep in step. Each bubble is a group
+  of the file, so under the pointer the four of them dance for fun (the Q
+  pecks, the U bounces, the i and the z squabble; 1.6 s rounds, ending on
+  the rest pose) — the one decoration allowed outside the motion rules
+  above, and off under `prefers-reduced-motion`. Its four colours are its own and live outside the
   token scale — nothing else on a screen may use them. `className` carries
   the WIDTH and the height follows, because it is a drawn word and is sized
   like a word: 100 % of the sidebar (about 200 px), 112 px in the phone top

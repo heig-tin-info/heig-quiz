@@ -461,7 +461,7 @@ export function Shell({
       type="button"
       onClick={() => navigate({ view: "home" })}
       aria-label={t("app.title")}
-      className="flex shrink-0 items-center rounded-field text-left transition-opacity hover:opacity-80"
+      className="flex shrink-0 items-center rounded-field text-left"
     >
       <Logo id={titleId} className={width} />
     </button>

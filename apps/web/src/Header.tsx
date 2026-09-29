@@ -16,7 +16,7 @@ import {
 import type { Me } from "@quiz/contracts";
 
 import { api } from "./api";
-import quizLogo from "./assets/quiz.svg";
+import quizLogo from "./assets/quiz.svg?raw";
 import { useT } from "./i18n";
 import {
   NotificationPanel,
@@ -30,18 +30,42 @@ import { meKey } from "./queryKeys";
 
 /**
  * The mark: the product's wordmark — four speech bubbles spelling Q U I Z,
- * the first of them the HEIG red. It is an <img>, not inline SVG: the file is
+ * the first of them the HEIG red. The file is inlined, not retyped: it stays
  * the identity as it is delivered elsewhere (slides, the intranet), and a
- * copy retyped into JSX is a second version to keep in step. Its four colours
- * are its own, outside the token scale, which is why nothing else on a screen
- * is allowed them.
+ * copy retyped into JSX would be a second version to keep in step. Its four
+ * colours are its own, outside the token scale, which is why nothing else on
+ * a screen is allowed them.
+ *
+ * Inlined so that each bubble can move: under the pointer the four of them
+ * dance (`.quiz-logo` in style.css). Leaving does not cut a step short — the
+ * dance ends when its current round does, on the rest pose.
  *
  * `className` carries the WIDTH; the height follows. It is a drawn word, so
  * it is sized like a word — about 200 px in the sidebar, 110 px in the phone
  * top bar, 220 px on the door — and never like a 20 px icon.
  */
 export function Logo({ className = "w-28", id }: { className?: string; id?: string }) {
-  return <img src={quizLogo} id={id} alt="Quiz" className={cx("h-auto", className)} />;
+  const [dancing, setDancing] = useState(false);
+  const leaving = useRef(false);
+  return (
+    <span
+      role="img"
+      aria-label="Quiz"
+      id={id}
+      className={cx("quiz-logo block", dancing && "is-dancing", className)}
+      onPointerEnter={() => {
+        leaving.current = false;
+        setDancing(true);
+      }}
+      onPointerLeave={() => {
+        leaving.current = true;
+      }}
+      onAnimationIteration={(e) => {
+        if (leaving.current && e.animationName === "logo-peck") setDancing(false);
+      }}
+      dangerouslySetInnerHTML={{ __html: quizLogo }}
+    />
+  );
 }
 
 /**
