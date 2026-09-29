@@ -30,6 +30,7 @@ import { evaluationPlugin } from "./modules/evaluation/routes.js";
 import { gradingPlugin } from "./modules/grading/routes.js";
 import { registerGradingJobs } from "./modules/grading/jobs.js";
 import { livePlugin } from "./modules/live/routes.js";
+import { createLlm } from "./modules/llm/index.js";
 import { previewPlugin } from "./modules/preview/routes.js";
 import { mcpPlugin } from "./modules/mcp/routes.js";
 import { registerNotificationJobs } from "./modules/notifications/jobs.js";
@@ -77,6 +78,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   // One runner for the whole process, chosen once by RUNNER_MODE. Everything
   // that grades code takes `app.runner` and never reads the configuration.
   app.decorate("runner", createRunner(config));
+  // At most one LLM service, chosen once by LLM_PROVIDER; null sends nothing.
+  app.decorate("llm", createLlm(config));
   app.addHook("onClose", async () => {
     // Anything still inside a coalescing window is emitted before the bus
     // goes away, so a shutdown never eats the last dashboard frame.

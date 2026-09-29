@@ -74,12 +74,12 @@ What gets built:
 - the course **PRG1** with the classroom **PRG1-2026**, a roster of six
   students already claimed, and Léa's time accommodation so the extra-time
   path is always exercised;
-- the pool **Programmation C**, attached to PRG1, three categories, eleven
-  published questions (multiple choice, short answer, cloze, code, code
-  image);
-- the pool **Électronique**, stand-alone, five published questions (a
-  circuit among them), shared with the admin persona as a contributor so the
-  demo shows a pool from the colleague's side too;
+- the pool **Programmation C**, attached to PRG1, three categories,
+  thirteen published questions (multiple choice, short answer, cloze, code,
+  code image, essay, categorize);
+- the pool **Électronique**, attached to PRG1 too, five published questions
+  (a circuit among them), shared with the admin persona as a contributor so
+  the demo shows a pool from the colleague's side too;
 - four evaluations in PRG1-2026:
 
 | Evaluation | Mode | State after the seed |
@@ -89,12 +89,19 @@ What gets built:
 | Quiz d'entraînement | exercise | `lobby`, waiting for students |
 | Test 0 — bases du C | exam, 45 min | `closed`, graded, **not released** |
 
-*Test 0* has already run: five of the six students answered it (Gabriel is
-absent, Chloé never handed in, so closing the evaluation expired one
-attempt), and the real grading pass produced a proposal for every answer.
-The results are deliberately left unreleased so that the grading panel has
-proposals to validate the moment you open it, which is the screen a teacher
-spends the most time on.
+*Test 0* has already run: nine questions, one or more of every type (multiple
+choice, short answer, cloze, code, categorize, code image, circuit, essay),
+answered by five of the six students (Gabriel is absent, Chloé never handed
+in, so closing the evaluation expired one attempt), right, partly right,
+wrong or left empty. The real grading pass graded every answer: the
+deterministic types (categorize included) are validated; the code, code image
+and circuit answers are proposals with the reason `runner_unavailable`, since
+the seed never has a runner; the essays are AI proposals with a confidence
+(high, medium, low) when `LLM_PROVIDER=stub`, as `.env.example` sets it, and
+0-point placeholders to grade by hand otherwise. The results are
+deliberately left unreleased so that the grading panel has proposals to
+validate the moment you open it, which is the screen a teacher spends the
+most time on.
 
 The seed content lives in `apps/api/src/seed/content.ts`; the way it is
 built through the services is `apps/api/src/seed/demo.ts`.
@@ -117,7 +124,9 @@ Two consequences:
   and one of the reasons `config.ts` refuses a `pglite://` URL in
   production.
 
-To start over, delete the directory:
+To start over, delete the directory. That is also how an existing database
+gets a newer demo world, such as the nine-question "Test 0": the seed only
+adds what is missing and never rewrites an evaluation that already exists.
 
 ```bash
 rm -rf apps/api/.data/pglite && pnpm seed
@@ -133,6 +142,7 @@ smoke test can use it.
 
 It never exists in production. Under `NODE_ENV=production`, `config.ts`
 throws on `AUTH_DEV_LOGIN=1` exactly as it throws on a `pglite://` database,
+on the stub LLM provider (`LLM_PROVIDER=stub`, below),
 on the placeholder `COOKIE_SECRET` of `.env.example`, or on its placeholder
 `OIDC_CLIENT_SECRET` when no private key is configured (with `private_key_jwt`
 the secret is never sent, so it is not checked): the process refuses to
@@ -228,6 +238,24 @@ invariants 10 to 14 of
 pnpm --filter @quiz/runner test                # unit: a fake engine, no container
 pnpm --filter @quiz/runner test:integration    # real containers; skips itself without Podman
 ```
+
+## LLM grading
+
+An essay is graded by hand unless the process has an LLM service, chosen
+once at boot by `LLM_PROVIDER` (`apps/api/src/modules/llm/`):
+
+| Provider | When | Behaviour |
+| --- | --- | --- |
+| `none` (default) | production, and any machine that does not set it | nothing is sent to any model; a written essay arrives in the grading table as a 0-point placeholder |
+| `stub` | development, the seed, the screenshots (`.env.example` sets it) | a DETERMINISTIC fake: the essay, its rubric and its model answer go through the real path (`pending: llm`, `app.llm.grade`), and the stub proposes points from the share of the rubric's words found in the answer, a confidence and a justification ("Development stub, not a model: …"); `config.ts` refuses to start with it under `NODE_ENV=production` |
+
+The request holds the rubric, the model answer, the essay and the item's
+points, nothing that names the student (F-LLM-04), and no model is asked
+while the evaluation runs (F-LLM-03). The justification is the teacher's:
+it is stored in the grading's details, shown in the grading panel, and
+stripped from every student payload (open question 27). No real provider
+exists yet (F-LLM-01); what one must add is listed in
+[ADR-045](../adr/ADR-045-service-llm-de-correction.md).
 
 ## The smoke test
 

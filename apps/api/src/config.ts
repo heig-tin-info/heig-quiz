@@ -146,6 +146,16 @@ const EnvSchema = z.object({
   RUNNER_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
 
   /**
+   * LLM grading (F-GRADE-02, ADR-045). `none` — the default — sends nothing
+   * to any model: an essay is graded by hand. `stub` is a DETERMINISTIC fake
+   * provider (a keyword count, `modules/llm/stub.ts`) that lets development,
+   * the seed and the tests show AI proposals with a confidence; like the
+   * development login, it is refused in production below. The network
+   * providers of F-LLM-01 are not implemented yet.
+   */
+  LLM_PROVIDER: z.enum(["none", "stub"]).default("none"),
+
+  /**
    * Bearer token for `GET /metrics` (Prometheus, N-OPS). Empty — the default
    * — means the endpoint is open to an ADMIN SESSION only; it is never
    * public, because the default metrics carry the process's command line,
@@ -263,6 +273,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     // given for turning it on: refuse to boot rather than serve it.
     if (parsed.data.AUTH_DEV_LOGIN) {
       throw new Error("Invalid configuration: dev AUTH_DEV_LOGIN forbidden in production");
+    }
+    // A grade no model produced must never reach a real student: the stub
+    // provider is a development fixture, whatever the reason given.
+    if (parsed.data.LLM_PROVIDER === "stub") {
+      throw new Error("Invalid configuration: dev LLM_PROVIDER (stub) forbidden in production");
     }
     // The embedded database is a single-process file store with no backup
     // path: it is a development convenience, never a deployment.

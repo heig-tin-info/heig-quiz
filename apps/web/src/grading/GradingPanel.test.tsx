@@ -267,6 +267,30 @@ describe("GradingPanel — the answer panel", () => {
     expect(within(panel).getByText(/2 \/ 2 pts/)).toBeInTheDocument();
   });
 
+  it("shows an AI proposal's justification to the teacher, marked as never shown to the student", async () => {
+    const ai = makeEntry({
+      attemptId: "a1",
+      grading: makeGrading({
+        id: "g-a1",
+        attemptId: "a1",
+        points: 2,
+        state: "proposed",
+        source: "llm",
+        confidence: "high",
+        comment: null,
+        details: { justification: "Covers the rubric." },
+      }),
+    });
+    mockFetch(routes([ai]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+
+    await userEvent.click(rowOf("a1"));
+    const panel = await screen.findByRole("dialog", { name: "Anonymous answer" });
+    expect(within(panel).getByText("The AI's justification, never shown to the student")).toBeInTheDocument();
+    expect(within(panel).getByText("Covers the rubric.")).toBeInTheDocument();
+  });
+
   it("opens the key from the expected row, with Re-grade and Edit question", async () => {
     const navigate = vi.fn();
     mockFetch(routes([proposal("a1", 2)]));

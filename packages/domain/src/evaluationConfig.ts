@@ -163,6 +163,10 @@ export type ConfigLock = "running" | "attempts";
 /** The states in which students are sitting the evaluation. */
 export const CONFIG_LIVE_STATES: readonly EvaluationStateName[] = ["running", "paused"];
 
+/** Whether students are sitting the evaluation ({@link CONFIG_LIVE_STATES}). */
+export const isLiveState = (state: string): boolean =>
+  (CONFIG_LIVE_STATES as readonly string[]).includes(state);
+
 /** The fields of `EvaluationPatch` each lock leaves writable. */
 const WRITABLE_UNDER: Record<ConfigLock, readonly string[]> = {
   running: ["title", "accessCode", "ipAllowlist", "feedbackPolicy"],

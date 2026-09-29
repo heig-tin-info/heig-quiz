@@ -124,8 +124,9 @@ cp Caddyfile /etc/caddy/conf.d/quiz.caddy && sudo caddy validate --config /etc/c
 The edu-ID client is registered with the redirect URI
 `https://quiz.chevallier.io/app/auth/callback` and authenticates with
 `private_key_jwt` (`OIDC_PRIVATE_KEY_PATH`, `OIDC_PRIVATE_KEY_KID`).
-`AUTH_DEV_LOGIN` and a `pglite://` database are both refused by `config.ts`
-under `NODE_ENV=production`: setting either in `.env.prod` stops the
+`AUTH_DEV_LOGIN`, a `pglite://` database and the stub LLM provider
+(`LLM_PROVIDER=stub`) are all refused by `config.ts` under
+`NODE_ENV=production`: setting any of them in `.env.prod` stops the
 container from starting, on purpose. The super administrator is
 `SUPER_ADMIN_EMAIL`; teachers are managed from the Admin screen.
 
@@ -762,6 +763,7 @@ configuration.
 | `RUNNER_MODE`, `RUNNER_URL` | `http`, `https://code.chevallier.io:8443` | `http` without a URL is refused; `stub` disables the runner, see below |
 | `RUNNER_TOKEN` | `openssl rand -hex 32`, the same value as `/etc/quiz-runner/env` on the runner VM | sent as `Authorization: Bearer` on every call; required when `RUNNER_MODE=http`, the process does not start without it |
 | `RUNNER_TIMEOUT_MS` | default `30000` | wall-clock budget of one runner call |
+| `LLM_PROVIDER` | unset (`none`) | essays are graded by hand; `stub`, the development fake, makes the process refuse to start |
 | `LOG_LEVEL`, `WORKER_MODE` | `info`, `all` | `web`/`worker` would split the roles without a code change ([ADR-001](../adr/ADR-001-monolithe-modulaire.md)) |
 
 The uploaded question images live in `./assets` on the host, mounted at

@@ -529,7 +529,16 @@ describe("the blind strip of `details` (layer 2, H1)", () => {
   });
 
   it("lets the details through whole when the teacher published the key", () => {
-    expect(service.filterDetails("short", leaky, policy(true))).toBe(leaky);
+    expect(service.filterDetails("short", leaky, policy(true))).toEqual(leaky);
+  });
+
+  it("strips an LLM's justification under every policy, the published key included (ADR-045)", () => {
+    const withJustification = { ...leaky, justification: "why, for the teacher" };
+    for (const showKey of [false, true]) {
+      expect(service.filterDetails("short", withJustification, policy(showKey))).not.toHaveProperty(
+        "justification",
+      );
+    }
   });
 
   it("strips nothing but a breakdown's key fields: its own list, not the question-payload one", () => {

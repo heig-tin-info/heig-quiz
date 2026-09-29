@@ -71,6 +71,8 @@ export async function testApp(existing?: Db): Promise<FastifyInstance & { clock:
     // The default runner everywhere (decision D14). A test that wants
     // outcomes assigns its own double to `app.runner`.
     runner: new UnavailableRunner("test"),
+    // No LLM provider, as in production; a test that wants one assigns it.
+    llm: null,
     log: { info: silent, warn: silent, error: silent, debug: silent },
   } as unknown as FastifyInstance & { clock: TestClock };
 }

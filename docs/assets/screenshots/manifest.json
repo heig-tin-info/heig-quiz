@@ -64,15 +64,15 @@
         "light": "teacher-home-light.png",
         "dark": "teacher-home-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
       "base": "http://localhost:3100"
     },
     {
       "name": "classroom-evaluations",
       "caption": "A classroom, on its evaluations tab.",
       "persona": "teacher",
-      "path": "/classrooms/54ec9983-d122-46b6-9f64-a0b38725b535",
+      "path": "/classrooms/95c36730-afe8-49c0-8275-ff5eff2b1aa3",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -87,8 +87,8 @@
         "light": "classroom-evaluations-light.png",
         "dark": "classroom-evaluations-dark.png"
       },
-      "takenAt": "2026-09-29T13:30:51.372Z",
-      "commit": "a6a2f17",
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
       "base": "http://localhost:3100"
     },
     {
@@ -647,7 +647,7 @@
       "name": "live-closed",
       "caption": "The dashboard of a closed evaluation: verdicts and scores.",
       "persona": "teacher",
-      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/live",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -662,15 +662,15 @@
         "light": "live-closed-light.png",
         "dark": "live-closed-dark.png"
       },
-      "takenAt": "2026-09-28T14:45:46.796Z",
-      "commit": "9bd6b57",
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading",
       "caption": "The grading table, one question at a time: the automatic gradings, validated or waiting for the teacher.",
       "persona": "teacher",
-      "path": "/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -679,21 +679,21 @@
         "dark"
       ],
       "action": "Nothing: the page as it loads.",
-      "state": "“Test 0” graded by the real runner, results unreleased.",
+      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
       "phase": "graded",
       "files": {
         "light": "grading-light.png",
         "dark": "grading-dark.png"
       },
-      "takenAt": "2026-09-29T20:37:15.902Z",
-      "commit": "ca8c0d3",
-      "base": "http://localhost:3147"
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
+      "base": "http://localhost:3100"
     },
     {
       "name": "grading-short",
       "caption": "Grading a short-answer question.",
       "persona": "teacher",
-      "path": "/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -702,21 +702,21 @@
         "dark"
       ],
       "action": "Moved to the next question (the short answer).",
-      "state": "“Test 0” graded by the real runner, unreleased.",
+      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
       "phase": "graded",
       "files": {
         "light": "grading-short-light.png",
         "dark": "grading-short-dark.png"
       },
-      "takenAt": "2026-09-29T20:37:15.902Z",
-      "commit": "ca8c0d3",
-      "base": "http://localhost:3147"
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
+      "base": "http://localhost:3100"
     },
     {
       "name": "grading-cloze",
       "caption": "Grading a fill-in-the-blanks question.",
       "persona": "teacher",
-      "path": "/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -725,21 +725,21 @@
         "dark"
       ],
       "action": "Moved three questions forward (the cloze).",
-      "state": "“Test 0” graded by the real runner, unreleased.",
+      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
       "phase": "graded",
       "files": {
         "light": "grading-cloze-light.png",
         "dark": "grading-cloze-dark.png"
       },
-      "takenAt": "2026-09-29T20:37:15.902Z",
-      "commit": "ca8c0d3",
-      "base": "http://localhost:3147"
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
+      "base": "http://localhost:3100"
     },
     {
       "name": "grading-code",
       "caption": "Grading a code question: each program in one wide column, folded after five lines, beside the tests it passed.",
       "persona": "teacher",
-      "path": "/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -748,21 +748,136 @@
         "dark"
       ],
       "action": "Moved four questions forward (the code question).",
-      "state": "“Test 0” graded by the real runner, unreleased.",
+      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
       "phase": "graded",
       "files": {
         "light": "grading-code-light.png",
         "dark": "grading-code-dark.png"
       },
-      "takenAt": "2026-09-29T20:37:15.902Z",
-      "commit": "ca8c0d3",
-      "base": "http://localhost:3147"
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "grading-categorize",
+      "caption": "Grading a categorize question: one column per card, naming the column the student chose.",
+      "persona": "teacher",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Moved five questions forward (the categorize question).",
+      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "grading-categorize-light.png",
+        "dark": "grading-categorize-dark.png"
+      },
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "grading-codeimage",
+      "caption": "Grading a code-to-picture question: the program, and the picture once the runner has drawn it.",
+      "persona": "teacher",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Moved six questions forward (the code-to-picture question).",
+      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "grading-codeimage-light.png",
+        "dark": "grading-codeimage-dark.png"
+      },
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "grading-circuit",
+      "caption": "Grading a circuit: what each schematic holds, and the stimuli it passed once simulated.",
+      "persona": "teacher",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Moved seven questions forward (the circuit).",
+      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "grading-circuit-light.png",
+        "dark": "grading-circuit-dark.png"
+      },
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "grading-essay",
+      "caption": "Grading an essay: the first lines of each answer, and the AI's proposal with its confidence.",
+      "persona": "teacher",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Moved eight questions forward (the essay).",
+      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "grading-essay-light.png",
+        "dark": "grading-essay-dark.png"
+      },
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "grading-ai-justification",
+      "caption": "An AI proposal opened: the model's justification, for the teacher only.",
+      "persona": "teacher",
+      "path": "/evaluations/91add22f-aa91-4693-bbef-7346a38daa89/grading",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Moved to the essay and opened the first AI proposal.",
+      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "grading-ai-justification-light.png",
+        "dark": "grading-ai-justification-dark.png"
+      },
+      "takenAt": "2026-09-29T22:12:45.552Z",
+      "commit": "a1c9c76",
+      "base": "http://localhost:3100"
     },
     {
       "name": "grading-override",
       "caption": "Adjusting a grading by hand: points and a comment the student will read.",
       "persona": "teacher",
-      "path": "/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -771,21 +886,21 @@
         "dark"
       ],
       "action": "Opened the first answer and clicked “Adjust” in its panel.",
-      "state": "“Test 0” graded by the real runner, unreleased.",
+      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
       "phase": "graded",
       "files": {
         "light": "grading-override-light.png",
         "dark": "grading-override-dark.png"
       },
-      "takenAt": "2026-09-29T20:37:15.902Z",
-      "commit": "ca8c0d3",
-      "base": "http://localhost:3147"
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
+      "base": "http://localhost:3100"
     },
     {
       "name": "grading-batch",
-      "caption": "Validating every proposal of a question at once (here the code answers the seed could not run).",
+      "caption": "Validating the AI's proposals of an essay in one click: the primary button counts them.",
       "persona": "teacher",
-      "path": "/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -793,22 +908,22 @@
         "light",
         "dark"
       ],
-      "action": "Moved to the code question; the primary button offers to validate its proposals.",
-      "state": "As seeded: the four code answers of “Test 0” are proposals waiting for a runner (reason runner_unavailable), the rest is validated.",
+      "action": "Moved to the essay and hovered the primary button, which offers to validate its four proposals.",
+      "state": "As seeded with LLM_PROVIDER=stub: the four written essays of “Test 0” are AI proposals with a confidence (high, medium, low), Chloé's empty one is a validated zero.",
       "phase": "seeded",
       "files": {
         "light": "grading-batch-light.png",
         "dark": "grading-batch-dark.png"
       },
-      "takenAt": "2026-09-29T20:37:15.902Z",
-      "commit": "ca8c0d3",
-      "base": "http://localhost:3147"
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
+      "base": "http://localhost:3100"
     },
     {
       "name": "results",
       "caption": "The results of an evaluation, by student, before they are published.",
       "persona": "teacher",
-      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -823,15 +938,15 @@
         "light": "results-light.png",
         "dark": "results-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
       "base": "http://localhost:3100"
     },
     {
       "name": "results-questions",
       "caption": "The results by question: success rate and discrimination.",
       "persona": "teacher",
-      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results?tab=questions",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results?tab=questions",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -840,21 +955,21 @@
         "dark"
       ],
       "action": "Nothing: the page as it loads.",
-      "state": "“Test 0” graded by the real runner, unreleased.",
+      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
       "phase": "graded",
       "files": {
         "light": "results-questions-light.png",
         "dark": "results-questions-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
       "base": "http://localhost:3100"
     },
     {
       "name": "results-release-confirm",
       "caption": "Publishing the results: the students see their feedback from then on.",
       "persona": "teacher",
-      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -863,14 +978,14 @@
         "dark"
       ],
       "action": "Clicked “Publish results”.",
-      "state": "“Test 0” graded by the real runner, unreleased.",
+      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
       "phase": "graded",
       "files": {
         "light": "results-release-confirm-light.png",
         "dark": "results-release-confirm-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
       "base": "http://localhost:3100"
     },
     {
@@ -1406,7 +1521,7 @@
       "name": "player-done",
       "caption": "After handing in.",
       "persona": "lea",
-      "path": "/take/f7905f9d-aa9d-4790-b441-5bfa227f6b12",
+      "path": "/take/39e9fb59-2ddb-43a1-ad68-e2eea5efc518",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1421,15 +1536,15 @@
         "light": "player-done-light.png",
         "dark": "player-done-dark.png"
       },
-      "takenAt": "2026-09-29T06:27:13.806Z",
-      "commit": "3f472ba",
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
       "base": "http://localhost:3100"
     },
     {
       "name": "feedback-pending",
       "caption": "The student's results page while the teacher has not published yet.",
       "persona": "lea",
-      "path": "/attempts/3f4538b5-1a06-4271-8d98-735ab8b03c8f/feedback",
+      "path": "/attempts/a7085a9f-8dd7-45ad-9dff-75fd4753b558/feedback",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1438,21 +1553,21 @@
         "dark"
       ],
       "action": "Nothing: the page as it loads.",
-      "state": "“Test 0” graded by the real runner, unreleased.",
+      "state": "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.",
       "phase": "graded",
       "files": {
         "light": "feedback-pending-light.png",
         "dark": "feedback-pending-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
       "base": "http://localhost:3100"
     },
     {
       "name": "results-released",
       "caption": "The results after publication.",
       "persona": "teacher",
-      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results",
+      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -1467,15 +1582,15 @@
         "light": "results-released-light.png",
         "dark": "results-released-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
       "base": "http://localhost:3100"
     },
     {
       "name": "feedback",
       "caption": "The student's feedback: points, verdicts, explanations and the teacher's comments.",
       "persona": "lea",
-      "path": "/attempts/3f4538b5-1a06-4271-8d98-735ab8b03c8f/feedback",
+      "path": "/attempts/a7085a9f-8dd7-45ad-9dff-75fd4753b558/feedback",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -1490,15 +1605,15 @@
         "light": "feedback-light.png",
         "dark": "feedback-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
       "base": "http://localhost:3100"
     },
     {
       "name": "feedback-phone",
       "caption": "The student's feedback: points, verdicts, explanations and the teacher's comments.",
       "persona": "lea",
-      "path": "/attempts/3f4538b5-1a06-4271-8d98-735ab8b03c8f/feedback",
+      "path": "/attempts/a7085a9f-8dd7-45ad-9dff-75fd4753b558/feedback",
       "width": 390,
       "height": 844,
       "fullPage": true,
@@ -1513,8 +1628,8 @@
         "light": "feedback-phone-light.png",
         "dark": "feedback-phone-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-29T21:46:10.647Z",
+      "commit": "a1c9c76",
       "base": "http://localhost:3100"
     },
     {

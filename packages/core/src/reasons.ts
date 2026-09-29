@@ -66,3 +66,20 @@ export function reasonOf(details: unknown): string | null {
   }
   return null;
 }
+
+/**
+ * Where a grading's `details` keep an LLM's justification (ADR-045): written
+ * by the grading pass beside the type's own fields, read by the teacher's
+ * grading panel, and stripped from every student payload whatever the
+ * feedback policy (`filterDetails`), pending open question 27.
+ */
+export const JUSTIFICATION_KEY = "justification";
+
+/** `details.justification`, when an LLM wrote one. */
+export function justificationOf(details: unknown): string | null {
+  if (details && typeof details === "object" && JUSTIFICATION_KEY in details) {
+    const text = (details as Record<string, unknown>)[JUSTIFICATION_KEY];
+    return typeof text === "string" ? text : null;
+  }
+  return null;
+}

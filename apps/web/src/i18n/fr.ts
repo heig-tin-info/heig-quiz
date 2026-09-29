@@ -2457,6 +2457,7 @@ export const fr: Record<keyof Dict, string> = {
   "grading.history.regrade": "Re-corrigée — {note}",
   "grading.comment": "Votre commentaire, visible de l'étudiant",
   "grading.machineComment": "Note de correction",
+  "grading.aiJustification": "Justification de l'IA, jamais montrée à l'étudiant",
   "grading.reason.reference_failed": "Votre circuit de référence n'a pas pu être simulé : vérifiez-le, cette réponse n'a pas pu être comparée.",
   "grading.reason.palette_violation": "Le schéma utilise des composants que la palette n'offre pas.",
   "grading.reason.runner_request_invalid": "Le programme ou le circuit est trop grand pour être exécuté.",

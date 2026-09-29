@@ -242,6 +242,8 @@ Shown as **Essay** / « Rédaction » in the interface; the id `rich` is the one
 
 **Scoring, later**: `grade` returns `pending: 'llm'`. The LLM service receives the statement, the rubric, the reference, the anonymised answer, and must reply in JSON: points per criterion, short justification per criterion, confidence `low` / `medium` / `high`. The teacher validates in the grading panel (F-LLM-01..04). A rubric of criteria with `label`, `points` and `description`, used as the grading form, comes with it.
 
+*Amendment (ADR-045): the path exists, with a development stub as its only provider. `grade` returns `pending: 'llm'` when the process has an LLM service (`GradeContext.llm`, `LLM_PROVIDER`) and the question has a rubric or a model answer; the request holds the rubric, the model answer, the answer text and the item's points, not yet the statement nor a per-criterion reply. The pass writes the reply as an `llm` proposal with its confidence, the justification in its details for the teacher only (open question 27). Without a service, v1's manual scoring above is unchanged.*
+
 ## 4.9 Code image `codeimage`
 
 A variant of `code` (ADR-021): the same program, judged by the **picture it prints** instead of by test cases. It lives inside `packages/qt-code` (`src/image/`), registered as its own type beside `code`. Brought forward from phase 3.

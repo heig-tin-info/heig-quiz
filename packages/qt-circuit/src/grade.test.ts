@@ -17,7 +17,7 @@ import {
   wrapDegrees,
 } from "./grade.js";
 import { circuitServer } from "./server.js";
-import { EMPTY_SCHEMATIC, type CircuitAnswer, type CircuitConfig } from "./schema.js";
+import { CircuitDetails, EMPTY_SCHEMATIC, type CircuitAnswer, type CircuitConfig } from "./schema.js";
 import {
   SECRET_HIDDEN_STIMULUS,
   SECRET_RUBRIC,
@@ -305,6 +305,9 @@ describe("gradeCircuit", () => {
     expect(result.request.maxPoints).toBe(8);
     expect(result.request.answer).toContain("R1 in out 1.59e+3");
     expect(result.request.reference).toContain("Rsecret");
+    // The details every circuit review reads, not null (ADR-045).
+    expect(CircuitDetails.safeParse(result.details).success).toBe(true);
+    expect(result.details).toMatchObject({ mode: "llm", runner: "none", reason: "llm", stimuli: [] });
   });
 
   it("falls back to a bare netlist for an `llm` question with no stimulus", () => {
