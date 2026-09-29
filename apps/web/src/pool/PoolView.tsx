@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Eye, Plus, StarOff } from "lucide-react";
-import { useMemo, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from "react";
 
 import type {
   CategoryNode,
@@ -39,6 +39,8 @@ import { categoryPaths, findCategory } from "./categories";
 import { setQuestionDrag } from "./move";
 import {
   EMPTY_FILTERS,
+  hasStatsFilter,
+  matchesStats,
   questionQuery,
   type QuestionFilters,
   type QuestionSort,
@@ -51,6 +53,7 @@ import { groupQuestions, isGroupBy, type GroupBy } from "./QuestionGroups";
 import { QuestionStatsSheet } from "./QuestionStatsSheet";
 import { QuestionTable, type StatsFor } from "./QuestionTable";
 import { useSetStars, useStarredQuestions } from "./stars";
+import type { StatsOffer } from "./StatsFilterFields";
 import { useQuestionBrowse } from "./useQuestionBrowse";
 import { QuestionPreview } from "../question/QuestionPreview";
 import { useQuestionActions } from "../question/useQuestionActions";
@@ -121,6 +124,13 @@ import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
  * its name, which opens its statistics in a side panel — for a reader too;
  * only the reset is kept from them. Statistics that fail to load draw no
  * icon and never hold the list back.
+ *
+ * The same statistics FILTER the list (F-STAT-03), in the page: the filter
+ * sheet's last block bounds the success rate and the median time. A bound
+ * can only be judged on every row, so while one is set the screen asks for
+ * pages of `STATS_PAGE_SIZE` and follows the cursor to the end by itself —
+ * no "Load more" — then counts the rows that pass rather than the API's
+ * `total`, which knows nothing of the bounds.
  */
 
 /**
@@ -247,10 +257,28 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const statsFor: StatsFor = (row) => (statsById.has(row.id) ? () => setStatsRow(row) : undefined);
   const shownStats = statsRow ? statsById.get(statsRow.id) : undefined;
 
-  const rows = useMemo(
-    () => (questions.data?.pages ?? []).flatMap((page) => page.items),
-    [questions.data],
-  );
+  const byStats = hasStatsFilter(filters);
+  const rows = useMemo(() => {
+    const loaded = (questions.data?.pages ?? []).flatMap((page) => page.items);
+    return byStats ? loaded.filter((row) => matchesStats(statsById.get(row.id), filters)) : loaded;
+  }, [questions.data, byStats, statsById, filters]);
+  const statsOffer: StatsOffer = questionStats.isPending
+    ? { status: "loading" }
+    : questionStats.isError
+      ? { status: "error" }
+      : {
+          status: "ready",
+          rate: statsById.size > 0,
+          time: (questionStats.data?.items ?? []).some((s) => s.time !== null),
+        };
+
+  // A statistics bound judges every row: follow the cursor to the end.
+  const { hasNextPage, isFetchingNextPage, isError: listFailed, fetchNextPage } = questions;
+  useEffect(() => {
+    if (byStats && hasNextPage && !isFetchingNextPage && !listFailed) void fetchNextPage();
+  }, [byStats, hasNextPage, isFetchingNextPage, listFailed, fetchNextPage]);
+  // Rows filtered by bounds still missing a page or the statistics are not an answer yet.
+  const gathering = byStats && (hasNextPage || questionStats.isPending);
   const checkedIds = rows.filter((r) => checked.has(r.id)).map((r) => r.id);
 
   /**
@@ -395,7 +423,14 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                   setFilters(next);
                 }}
                 tags={detail.tags}
-                total={questions.data?.pages[0]?.total ?? null}
+                stats={statsOffer}
+                total={
+                  byStats
+                    ? gathering || !questions.data
+                      ? null
+                      : rows.length
+                    : (questions.data?.pages[0]?.total ?? null)
+                }
                 view={view}
                 onView={setView}
                 group={group}
@@ -418,7 +453,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 }
               />
 
-              {questions.isLoading ? (
+              {questions.isLoading || (gathering && rows.length === 0 && !questions.isError) ? (
                 <PoolListSkeleton view={view} />
               ) : questions.isError ? (
                 <QueryError
@@ -481,9 +516,11 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                     />
                   )}
                   <PoolListTail
-                    hasNextPage={questions.hasNextPage}
-                    fetchingNext={questions.isFetchingNextPage}
-                    refetching={questions.isFetching && !questions.isFetchingNextPage}
+                    hasNextPage={hasNextPage && !byStats}
+                    fetchingNext={isFetchingNextPage}
+                    refetching={
+                      (questions.isFetching && !isFetchingNextPage) || (gathering && !listFailed)
+                    }
                     onLoadMore={() => void questions.fetchNextPage()}
                   />
                 </>

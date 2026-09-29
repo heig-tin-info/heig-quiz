@@ -90,6 +90,8 @@ Last, **Discrimination** says whether the question separates the students: do th
 
 **Reset statistics** (contributors and owners) starts the count again: only attempts started afterwards count. Nothing is deleted; grades and results stay as they are.
 
+The statistics also filter the list. At the bottom of **Filters**, **Statistics** takes a range of **Success rate** in percent (a bound below zero finds the questions that take points away under negative marking) and, once some question has a time, a range of **Median time** in seconds. Leave a box empty for no bound on that side. Each range becomes a chip under the search, like the other filters. While a bound is set, a question without the figure it reads (fewer than ten answers, or no time yet) is hidden; switch on **Include questions without statistics** to keep them. The list then loads the whole pool at once, and the count says how many questions pass.
+
 ## Creating a question
 
 **New question** asks for the **Question type** and the **Internal name**, then **Create question** opens the editor. The name is yours alone, a student never sees it; a stable convention such as `prg1-boucle-for` is what you will search for later.

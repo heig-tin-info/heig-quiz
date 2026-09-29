@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import type { QuestionStats } from "@quiz/contracts";
+
 import {
   activeFilterCount,
   EMPTY_FILTERS,
+  hasStatsFilter,
+  matchesStats,
   questionQuery,
   resolveFilters,
   toggle,
@@ -145,5 +149,71 @@ describe("resolveFilters", () => {
   it("counts a token of the field as an active filter", () => {
     expect(activeFilterCount({ ...EMPTY_FILTERS, q: "tag:a tag:b" })).toBe(2);
     expect(activeFilterCount({ ...EMPTY_FILTERS, q: "version:>2" })).toBe(1);
+  });
+});
+
+describe("the statistics bounds (F-STAT-03)", () => {
+  const TIME = { n: 12, meanS: 95, medianS: 80, p25S: 52, p75S: 121 };
+  const stats = (p: number, time: QuestionStats["time"] = null): QuestionStats => ({
+    n: 20,
+    p,
+    since: null,
+    time,
+  });
+
+  it("lets everything through while no bound is set", () => {
+    expect(hasStatsFilter(EMPTY_FILTERS)).toBe(false);
+    expect(matchesStats(undefined, EMPTY_FILTERS)).toBe(true);
+    expect(matchesStats(stats(-0.3), EMPTY_FILTERS)).toBe(true);
+  });
+
+  it("bounds the rate in whole percent, inclusive, as the panel shows it", () => {
+    const f = { ...EMPTY_FILTERS, rateMin: 40, rateMax: 73 };
+    expect(matchesStats(stats(0.4), f)).toBe(true);
+    expect(matchesStats(stats(0.73), f)).toBe(true);
+    expect(matchesStats(stats(0.39), f)).toBe(false);
+    expect(matchesStats(stats(0.74), f)).toBe(false);
+    // 0.725 rounds to 73 %, what the panel reads.
+    expect(matchesStats(stats(0.725), { ...EMPTY_FILTERS, rateMin: 73 })).toBe(true);
+  });
+
+  it("reads a signed rate: a bound below zero finds the questions that take points away", () => {
+    const f = { ...EMPTY_FILTERS, rateMax: -1 };
+    expect(matchesStats(stats(-0.08), f)).toBe(true);
+    expect(matchesStats(stats(0), f)).toBe(false);
+  });
+
+  it("bounds the median time in seconds", () => {
+    const f = { ...EMPTY_FILTERS, timeMin: 60, timeMax: 90 };
+    expect(matchesStats(stats(0.5, TIME), f)).toBe(true);
+    expect(matchesStats(stats(0.5, { ...TIME, medianS: 91 }), f)).toBe(false);
+    expect(matchesStats(stats(0.5, { ...TIME, medianS: 59 }), f)).toBe(false);
+  });
+
+  it("hides a question without the figure a bound reads, unless asked to keep it", () => {
+    const rate = { ...EMPTY_FILTERS, rateMin: 50 };
+    expect(matchesStats(undefined, rate)).toBe(false);
+    expect(matchesStats(undefined, { ...rate, withoutStats: true })).toBe(true);
+    // A rate but no time yet: missing for a time bound, not for a rate bound.
+    const time = { ...EMPTY_FILTERS, timeMax: 120 };
+    expect(matchesStats(stats(0.9), time)).toBe(false);
+    expect(matchesStats(stats(0.9), { ...time, withoutStats: true })).toBe(true);
+    expect(matchesStats(stats(0.9), rate)).toBe(true);
+  });
+
+  it("never keeps a figure that falls outside a bound, even with the questions without one", () => {
+    const f = { ...EMPTY_FILTERS, rateMin: 50, timeMax: 120, withoutStats: true };
+    expect(matchesStats(stats(0.2, TIME), f)).toBe(false);
+    // The rate passes and the time is missing: kept.
+    expect(matchesStats(stats(0.6), f)).toBe(true);
+  });
+
+  it("counts each range as one filter, never sends one, and asks for the largest page", () => {
+    const f = { ...EMPTY_FILTERS, rateMin: 20, rateMax: 60, timeMin: 30, withoutStats: true };
+    expect(hasStatsFilter(f)).toBe(true);
+    expect(activeFilterCount(f)).toBe(2);
+    expect(activeFilterCount({ ...EMPTY_FILTERS, withoutStats: true })).toBe(0);
+    expect(questionQuery(f)).toBe("?limit=200");
+    expect(questionQuery({ ...EMPTY_FILTERS, withoutStats: true })).toBe("?limit=25");
   });
 });

@@ -615,6 +615,94 @@ describe("PoolView", () => {
     expect(screen.queryByRole("button", { name: /^Statistics of/ })).not.toBeInTheDocument();
   });
 
+  describe("the statistics filters (F-STAT-03)", () => {
+    const STATS = {
+      items: [
+        {
+          questionId: "q1",
+          n: 24,
+          p: 0.73,
+          since: null,
+          time: { n: 21, meanS: 95, medianS: 80, p25S: 52, p75S: 121 },
+        },
+      ],
+    };
+    const openSheet = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.click(screen.getByRole("button", { name: /Filters/ }));
+      return screen.findByRole("dialog");
+    };
+
+    it("bounds the rate in the page, hides the questions without statistics until asked", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch(
+        routes({
+          "GET /app/api/pools/p1/question-stats": ok(STATS),
+          "GET /app/api/pools/p1/questions?limit=200": ok(PAGE),
+        }),
+      );
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-null-check");
+      const sheet = await openSheet(user);
+      await user.type(within(sheet).getByLabelText("Success rate, from"), "50");
+      await user.click(within(sheet).getByRole("button", { name: "Done" }));
+
+      await waitFor(() => expect(screen.queryByText("ptr-null-check")).not.toBeInTheDocument());
+      expect(screen.getByText("ptr-arith-01")).toBeInTheDocument();
+      expect(screen.getByText("1 question")).toBeInTheDocument();
+      expect(screen.getByText("Success 50% and up")).toBeInTheDocument();
+      // The bound never travels: the API is asked for the whole search, nothing more.
+      expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?limit=200")).toBe(true);
+      expect(calls.some((c) => /rate|time/.test(c.url))).toBe(false);
+
+      await user.click(within(await openSheet(user)).getByRole("switch", {
+        name: "Include questions without statistics",
+      }));
+      expect(await screen.findByText("ptr-null-check")).toBeInTheDocument();
+    });
+
+    it("follows the cursor to the end by itself while a bound is set", async () => {
+      const user = userEvent.setup();
+      const [first, second] = PAGE.items;
+      const { calls } = mockFetch(
+        routes({
+          "GET /app/api/pools/p1/question-stats": ok({
+            items: [...STATS.items, { ...STATS.items[0]!, questionId: "q2", p: 0.2 }],
+          }),
+          "GET /app/api/pools/p1/questions?limit=200": ok({ items: [first], nextCursor: "c2", total: 2 }),
+          "GET /app/api/pools/p1/questions?limit=200&cursor=c2": ok({
+            items: [second],
+            nextCursor: null,
+            total: 2,
+          }),
+        }),
+      );
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-null-check");
+      const sheet = await openSheet(user);
+      await user.type(within(sheet).getByLabelText("Median time, up to"), "100");
+      await user.click(within(sheet).getByRole("button", { name: "Done" }));
+
+      // The second page arrives without a click; the count is of the rows that pass.
+      await waitFor(() =>
+        expect(calls.some((c) => c.url.endsWith("?limit=200&cursor=c2"))).toBe(true),
+      );
+      expect(await screen.findByText("ptr-null-check")).toBeInTheDocument();
+      expect(screen.getByText("ptr-arith-01")).toBeInTheDocument();
+      expect(screen.getAllByText("2 questions")).toHaveLength(2);
+      expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+    });
+
+    it("says so in the sheet when no question has statistics yet", async () => {
+      const user = userEvent.setup();
+      mockFetch(routes({ "GET /app/api/pools/p1/question-stats": ok({ items: [] }) }));
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-arith-01");
+      const sheet = await openSheet(user);
+      expect(within(sheet).getByText(/No question of this pool has statistics yet/)).toBeInTheDocument();
+      expect(within(sheet).queryByLabelText("Success rate, from")).not.toBeInTheDocument();
+    });
+  });
+
   it("reports a failed listing with a retry", async () => {
     mockFetch({ "GET /app/api/pools/p1": ok(POOL) });
     renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
