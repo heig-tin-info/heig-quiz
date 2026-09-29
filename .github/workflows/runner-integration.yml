@@ -7,9 +7,12 @@ name: Runner integration
 # (image → deploy-staging → deploy-production) waits for it or shares its
 # concurrency group.
 #
-# A PR that touches the runner (profile, engine, images) runs it; so does a
-# weekly run, which also rebuilds the images from Alpine's current packages
-# (a new rustc, a new ngspice) and seeds the week's image cache on main.
+# A PR that touches the runner (profile, engine, images) runs it, and so does
+# a weekly run, which catches Alpine's package updates (a new rustc, a new
+# ngspice). The images are built cold every time: no GitHub Actions cache,
+# which this repository shares with the deploy's buildx layers and which a
+# 1+ GB archive per PR would evict. A cache saved by the scheduled run only
+# can come back if the cold build proves slow on GitHub.
 
 on:
   pull_request:
@@ -26,7 +29,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: runner-integration-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  group: runner-integration-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -69,49 +72,12 @@ jobs:
           sudo chown "$(id -u)" "$PODMAN_SOCKET"
           podman --remote --url "$PODMAN_REMOTE_URL" info --format '{{.Host.Security.Rootless}} {{.Host.CgroupsVersion}} {{.Host.OCIRuntime.Name}}'
 
-      # The language images, cached as ONE `podman save -m` archive (the
-      # Alpine layer is stored once) in the GitHub Actions cache. The key is
-      # the image sources plus the ISO week: a PR that changes a Containerfile
-      # or build.sh misses and builds; otherwise the week's archive is reused,
-      # and the weekly run, on a fresh key, rebuilds from Alpine's current
-      # packages. rust (~820 MB) is most of it; the archive is ~1.5 GB before
-      # the cache's own compression, well inside the 10 GB a repository gets.
-      - id: week
-        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
-      # Restore and save are separate steps so that the archive is saved as
-      # soon as it is built: a red suite (the very case this job exists for)
-      # does not throw the build away.
-      - id: images-cache
-        uses: actions/cache/restore@v6
-        with:
-          path: ${{ runner.temp }}/runner-images.tar
-          key: runner-images-${{ hashFiles('apps/runner/images/**') }}-${{ steps.week.outputs.week }}
-      - name: Load the cached language images
-        if: steps.images-cache.outputs.cache-hit == 'true'
-        run: podman --remote --url "$PODMAN_REMOTE_URL" load -i "$RUNNER_TEMP/runner-images.tar"
-      - name: Build the language images, rust included
-        if: steps.images-cache.outputs.cache-hit != 'true'
-        run: |
-          apps/runner/images/build.sh c cpp python js spice rust
-          podman --remote --url "$PODMAN_REMOTE_URL" save -m -o "$RUNNER_TEMP/runner-images.tar" \
-            quiz-runner-c:latest quiz-runner-cpp:latest quiz-runner-python:latest \
-            quiz-runner-js:latest quiz-runner-spice:latest quiz-runner-rust:latest
-      - if: steps.images-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: ${{ runner.temp }}/runner-images.tar
-          key: ${{ steps.images-cache.outputs.cache-primary-key }}
-      - run: podman --remote --url "$PODMAN_REMOTE_URL" images
+      # Every language, rust included: build.sh's default list.
+      - name: Build the language images
+        run: apps/runner/images/build.sh
 
-      # The suite SKIPS a language whose image is missing, and falls back to no
-      # `--userns=auto` on a rootless engine: both would turn this job green
-      # while testing less. So the engine line it prints is checked — rootful,
-      # remote, userns=auto, every language — and so is the skip count.
+      # Strict: the suite fails, instead of skipping, when Podman is not
+      # reachable, when a language of the contract has no image, or when the
+      # engine is rootless or without --userns=auto (src/test/integration.ts).
       - name: Integration suite
-        run: |
-          pnpm --filter @quiz/runner test:integration 2>&1 | tee "$RUNNER_TEMP/integration.log"
-          grep -q 'rootless=false, remote=true, userns=auto:true, .*languages=c,cpp,python,js,rust,spice$' "$RUNNER_TEMP/integration.log" \
-            || { echo "::error::the suite did not run on a rootful engine with userns=auto and all six images"; exit 1; }
-          if grep -Eq 'Tests .*[0-9]+ skipped' "$RUNNER_TEMP/integration.log"; then
-            echo "::error::some integration tests were skipped"; exit 1
-          fi
+        run: RUNNER_INTEGRATION_STRICT=1 pnpm --filter @quiz/runner test:integration

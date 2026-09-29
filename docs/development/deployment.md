@@ -200,57 +200,41 @@ grep -q 'conf.d/\*.caddy' /etc/caddy/Caddyfile || sed -i '1i import /etc/caddy/c
 mkdir -p /etc/caddy/conf.d && cp apps/runner/deploy/Caddyfile /etc/caddy/conf.d/quiz-runner.caddy
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && systemctl reload caddy
 # The language images: the runner's only supply chain, built HERE, never pulled.
-# `spice` is ngspice, for the `circuit` question type (ADR-019): without it
-# `GET /health` does not list `spice` and every circuit grading degrades to a
-# PROPOSED grade. `rust` is the large one (below). All six are the default
-# list, so passing no argument builds the same set.
-PODMAN_REMOTE_URL=unix:///run/podman/podman.sock apps/runner/images/build.sh c cpp python js spice rust
+# All six by default: c, cpp, python, js, spice (ngspice, for `circuit`,
+# ADR-019) and rust. A missing one is not listed by `GET /health`, and every
+# question in that language degrades to a PROPOSED grade. rust is the large
+# one (~820 MB): check the disk first and keep 2 GB free for the build.
+df -h /var/lib/containers
+PODMAN_REMOTE_URL=unix:///run/podman/podman.sock apps/runner/images/build.sh
+podman image prune -f
 podman images | grep quiz-runner
 ```
 
-**Rust.** A teacher may write a `code` question in Rust, so the code VM must
-build `quiz-runner-rust` too; without it `GET /health` does not list `rust`
-and every Rust question degrades to a proposed grade. It is Alpine's `rust`
-package (rustc 1.78 and gcc as its linker, no cargo registry): about 820 MB
-on disk once built, against 50 to 220 MB for the others, and about 30 s to
-build on a good link (measured on 2026-09-29). Check `df -h /var/lib/containers`
-before the first build and keep 2 GB free; the build's intermediate layers go
-with `podman image prune -f`. On a VM that had the five others only:
-
-```bash
-cd /opt/quiz-runner
-df -h /var/lib/containers
-PODMAN_REMOTE_URL=unix:///run/podman/podman.sock apps/runner/images/build.sh rust
-podman image prune -f
-```
-
-`GET /health` notices the new image within five seconds; no restart is needed.
+On a VM built before #234, which has the five others only, build rust alone
+the same way (`… images/build.sh rust`); `GET /health` notices it within five
+seconds, no restart needed. The sizes and build times are in
+[`apps/runner/README.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/runner/README.md#the-images).
 
 After an upgrade that adds or changes an image (a new language, a new
 ngspice), rebuild it on the VM; nothing else does: `deploy.sh` ships the
-runner's own image, never the sandbox ones. The CI job **Runner integration**
-(`.github/workflows/runner-integration.yml`) builds the same six images from
-the same files every week and runs the whole integration suite on them under
-the rootful socket, so a change that breaks a language under the seccomp
-profile turns red there before it reaches this VM.
+runner's own image, never the sandbox ones. The CI workflow **Runner
+integration** builds the same six images every week and runs the integration
+suite on them under a rootful socket, so a change that breaks a language
+under the seccomp profile turns red there first.
 
 ### Checking the runner end to end
 
-`apps/runner/scripts/smoke.sh` posts a tiny program per language that
-`/health` advertises and prints one line each (`ok`, compile error, killed,
-timing); it exits non-zero if any fails. Run it from the application VM (the
-only address the code VM's Caddy admits), with the token of `.env.prod`, after
-an image rebuild or whenever a code question misbehaves:
+After an image rebuild, or whenever a code question misbehaves, run the
+smoke test from the application VM (the only address the code VM's Caddy
+admits); what it prints and checks is in
+[`apps/runner/README.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/runner/README.md#the-smoke-test-against-a-live-runner):
 
 ```bash
 # application VM, as srv
 cd /srv/quiz
 RUNNER_TOKEN="$(sed -n 's/^RUNNER_TOKEN=//p' .env.prod)" \
-  apps/runner/scripts/smoke.sh https://code.chevallier.io:8443
+  apps/runner/scripts/smoke.py https://code.chevallier.io:8443
 ```
-
-The token goes to curl on a file descriptor, never on its command line, and
-is never printed. The script needs `curl` and `python3`.
 
 ## 4. Continuous deployment
 

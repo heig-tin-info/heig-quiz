@@ -296,21 +296,22 @@ only if a Podman socket is there. Point the API at it with
 
 `PODMAN_SOCKET`, when set, is the socket the integration suite uses;
 otherwise it detects one (the user socket first, then the rootful one).
+`RUNNER_INTEGRATION_STRICT=1` turns every skip into an error: the suite then
+fails when Podman is not reachable, when a language of the contract has no
+image, or when the engine is rootless or without `--userns=auto`
+(`src/test/integration.ts`).
 
 ### On CI
 
-`.github/workflows/runner-integration.yml` runs the integration suite on
-`ubuntu-latest` against the ROOTFUL socket (`/run/podman/podman.sock`), so
+`.github/workflows/runner-integration.yml` runs the integration suite, strict,
+on `ubuntu-latest` against the ROOTFUL socket (`/run/podman/podman.sock`), so
 `--userns=auto` is the production one. It runs on a pull request that touches
 `apps/runner/**`, every Monday, and on demand (*Actions → Runner integration →
 Run workflow*); it is a workflow of its own, so it never holds up `checks` nor
-the deploy chain. It builds all six images, rust included, and caches them as
-one `podman save -m` archive in the GitHub Actions cache, keyed on
-`images/**` and the ISO week: a PR that changes an image rebuilds it, and the
-weekly run rebuilds from Alpine's current packages. The job fails if the
-suite ran rootless, without `--userns=auto`, without one of the six images,
-or with any test skipped — each of which would otherwise be a green job that
-tested less.
+the deploy chain. It builds all six images cold with `images/build.sh`, every
+time: no GitHub Actions cache, which the repository shares with the deploy's
+buildx layers. A cache saved by the weekly run only can come back if the cold
+build proves slow.
 
 What the job relaxes is the HOST, never the sandbox: it adds the
 `containers` range to `/etc/subuid` and `/etc/subgid` (which rootful
@@ -321,8 +322,8 @@ hands the rootful socket to the job's user. The containers get the flags of
 ### The smoke test, against a live runner
 
 ```bash
-RUNNER_TOKEN=… apps/runner/scripts/smoke.sh https://code.chevallier.io:8443
-apps/runner/scripts/smoke.sh http://localhost:3200     # a dev runner: no token
+RUNNER_TOKEN=… apps/runner/scripts/smoke.py https://code.chevallier.io:8443
+apps/runner/scripts/smoke.py http://localhost:3200     # a dev runner: no token
 ```
 
 It asks `GET /health` for the languages the runner advertises, posts one tiny
@@ -331,18 +332,26 @@ prints the node voltage of a 42 V source), and prints one line per language:
 
 ```
 health  ok   languages: c cpp python js rust spice
-c       ok   compile 231 ms, run 214 ms, total 2060 ms
+c       ok   compile 170 ms, run 157 ms, total 788 ms
 rust    FAIL compile error: error: linking with `cc` failed …
-python  FAIL killed: timed out  (compile 296 ms, run 5000 ms, total 5400 ms)
+python  FAIL killed: timed out  (compile 176 ms, run 5000 ms, total 5400 ms)
 ```
 
-It exits non-zero when `/health` does not answer 200, when it advertises no
+It exits 1 when `/health` does not answer 200, when it advertises no
 language, or when any language fails (an HTTP error, a compile error, a
-kill, a wrong output). The token is read from `RUNNER_TOKEN` and handed to
-curl on a file descriptor: it is never on a command line nor in the output.
-It needs `curl` and `python3`. In production it runs from the application VM,
-the only address the code VM's Caddy lets through
-(`docs/development/deployment.md` §3).
+kill, a wrong output). The token is read from `RUNNER_TOKEN` and stays in
+the process: it is never on a command line nor in the output. Python 3's
+standard library is all it needs.
+
+In production it runs from the application VM, the only address the code
+VM's Caddy lets through, with the token of `.env.prod`:
+
+```bash
+# application VM, as srv
+cd /srv/quiz
+RUNNER_TOKEN="$(sed -n 's/^RUNNER_TOKEN=//p' .env.prod)" \
+  apps/runner/scripts/smoke.py https://code.chevallier.io:8443
+```
 
 ## Configuration
 

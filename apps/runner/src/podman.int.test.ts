@@ -74,7 +74,10 @@ const run = (req: RunnerRequest): Promise<RunnerOutcome> => executeRequest(req, 
  */
 const PROGRAMMING = ["c", "cpp", "python", "js", "rust"] as const;
 
-/** Reads a number on stdin and prints its double: the toolchain, end to end. */
+/**
+ * Reads a number on stdin and prints its double: the toolchain, end to end.
+ * Same programs as `PROGRAMS` in `scripts/smoke.py` (a script cannot import a test).
+ */
 const HELLO = {
   c: '#include <stdio.h>\nint main(void){int n;if(scanf("%d",&n)!=1)n=0;printf("%d\\n",n*2);return 0;}\n',
   cpp: '#include <iostream>\nint main(){int n=0;std::cin>>n;std::cout<<n*2<<"\\n";return 0;}\n',
@@ -328,18 +331,16 @@ const NAMESPACES =
 
 /**
  * The syscall numbers the Python and Rust probes need, which neither language
- * names without a crate or a module the images do not ship. Order:
- * unshare, clone, clone3, setns, mount, fsopen, keyctl, ptrace.
+ * names without a crate or a module the images do not ship. x86_64 only: the
+ * code VM and the CI runner both are. Order: unshare, clone, clone3, setns,
+ * mount, fsopen, keyctl, ptrace.
  */
-const SYSCALLS = {
-  x86_64: [272, 56, 435, 308, 165, 430, 250, 101],
-  aarch64: [97, 220, 435, 268, 40, 430, 219, 117],
-} as const;
+const SYSCALLS = [272, 56, 435, 308, 165, 430, 250, 101] as const;
 
 /** CPython, through `ctypes` on musl's own `syscall()`. */
 const NAMESPACES_PY =
-  "import ctypes, os, platform, threading\n" +
-  `NR = dict(zip(["unshare","clone","clone3","setns","mount","fsopen","keyctl","ptrace"], ${JSON.stringify(SYSCALLS)}[platform.machine()]))\n` +
+  "import ctypes, os, threading\n" +
+  `NR = dict(zip(["unshare","clone","clone3","setns","mount","fsopen","keyctl","ptrace"], ${JSON.stringify(SYSCALLS)}))\n` +
   "libc = ctypes.CDLL(None, use_errno=True)\n" +
   "libc.syscall.restype = ctypes.c_long\n" +
   "def TRY(name, nr, *args):\n" +
@@ -377,8 +378,7 @@ const NAMESPACES_RS =
   "  fn waitpid(pid: c_int, status: *mut c_int, options: c_int) -> c_int;\n" +
   "  fn _exit(code: c_int) -> !;\n" +
   "}\n" +
-  `#[cfg(target_arch = "x86_64")] const NR: [c_long; 8] = [${SYSCALLS.x86_64.join(", ")}];\n` +
-  `#[cfg(target_arch = "aarch64")] const NR: [c_long; 8] = [${SYSCALLS.aarch64.join(", ")}];\n` +
+  `const NR: [c_long; 8] = [${SYSCALLS.join(", ")}];\n` +
   "const NEWUSER: c_long = 0x10000000; const NEWNET: c_long = 0x40000000; const SIGCHLD: c_long = 17;\n" +
   "fn attempt(name: &str, call: impl FnOnce() -> c_long) {\n" +
   "  unsafe { *__errno_location() = 0; }\n" +
@@ -438,12 +438,15 @@ const DENIED = [
   "unshare-user", "unshare-net", "clone-user", "setns", "mount", "fsopen", "keyctl", "ptrace",
 ] as const;
 
-const ISOLATION: Record<(typeof PROGRAMMING)[number], { source: string; denied: readonly string[] }> = {
-  c: { source: NAMESPACES, denied: DENIED },
-  cpp: { source: NAMESPACES, denied: DENIED },
-  python: { source: NAMESPACES_PY, denied: DENIED },
-  rust: { source: NAMESPACES_RS, denied: DENIED },
-  js: { source: NAMESPACES_JS, denied: ["unshare-user", "unshare-net", "mount"] },
+const ISOLATION: Record<
+  (typeof PROGRAMMING)[number],
+  { source: string; denied: readonly string[]; rawSyscalls: boolean }
+> = {
+  c: { source: NAMESPACES, denied: DENIED, rawSyscalls: true },
+  cpp: { source: NAMESPACES, denied: DENIED, rawSyscalls: true },
+  python: { source: NAMESPACES_PY, denied: DENIED, rawSyscalls: true },
+  rust: { source: NAMESPACES_RS, denied: DENIED, rawSyscalls: true },
+  js: { source: NAMESPACES_JS, denied: ["unshare-user", "unshare-net", "mount"], rawSyscalls: false },
 };
 
 for (const language of PROGRAMMING) {
@@ -467,7 +470,7 @@ for (const language of PROGRAMMING) {
         expect(results[name], `${name}\n${stdout}${outcome.cases[0]!.stderr}`).toMatchObject({ rc: -1 });
         expect([1, 38], name).toContain(results[name]!.errno);
       }
-      if (probe.denied.includes("clone-user")) {
+      if (probe.rawSyscalls) {
         expect(results.clone3).toEqual({ rc: -1, errno: 38 });
       }
       expect(results.pthread, stdout).toEqual({ rc: 0, errno: 0 });
