@@ -22,11 +22,16 @@
  * attempt, so there is no kept attempt to pick; a grading is not needed —
  * the time was spent whatever the points.
  *
- * The DISCRIMINATION index (ADR-040) reads the same counted answers, exams
+ * The DISCRIMINATION index (ADR-042) reads the same counted answers, exams
  * only, and keeps an attempt only when every OTHER item of the exam has a
  * validated grading too: the rest of the test must be a grade, not a
  * proposal. Per exam, the corrected point-biserial of `@quiz/domain`; over
  * the exams, Fisher's z. Null when no exam qualifies.
+ *
+ * The DISTRACTORS of a multiple-choice question (ADR-043) read the same
+ * counted answers too, narrowed to the versions that carry the latest
+ * version's options: which option they picked, in whole percents, from ten
+ * of them on.
  *
  * Reads only: `questions` and `question_versions` (the `pool` module's),
  * `evaluation_items` and `evaluations` (the `evaluation` module's),
@@ -34,13 +39,15 @@
  * `grading` module's), all by join. The reset, a write to `questions`,
  * lives in the `pool` module.
  */
-import { and, eq, gt, gte, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 
-import type { PoolQuestionStats, TimeStats } from "@quiz/contracts";
+import type { DistractorStats, PoolQuestionStats, TimeStats } from "@quiz/contracts";
 import {
   discrimination,
   evaluationDiscrimination,
   itemStats,
+  optionShares,
+  sameAsLatest,
   shownItemStats,
   shownTimeSpread,
   spread,
@@ -63,6 +70,8 @@ import {
 } from "../../db/schema.js";
 import { isStaffAttempt } from "../evaluation/service.js";
 import { keptAttemptsOf, pairKey, type PairKey } from "../grading/service.js";
+import { answeredBy } from "../live/service.js";
+import { tryLoadConfig, typeOf } from "../pool/config.js";
 
 /**
  * What makes an attempt count, whatever the series: a finished attempt of a
@@ -86,7 +95,9 @@ function countedAttempt(): SQL {
  * statistics start from and its time; the others are absent.
  *
  * Three queries for the candidates and the evaluations they come from, two
- * for the kept attempts, one for the time, two for the discrimination. Every answer travels to the process; should a
+ * for the kept attempts, one for the time, two for the discrimination, one
+ * for the versions of the multiple-choice questions (their answers come with
+ * the candidates). Every answer travels to the process; should a
  * pool's history grow too large for that, the same filters pre-aggregate in
  * SQL (`count`, `avg(points / max_points)` by question) and only the
  * attempts of students who retook an exercise are fetched one by one.
@@ -95,6 +106,8 @@ export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQue
   const rows = await db
     .select({
       questionId: questions.id,
+      type: questions.type,
+      versionId: questionVersions.id,
       since: questions.statsSince,
       attemptId: attempts.id,
       evaluationId: evaluations.id,
@@ -102,6 +115,10 @@ export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQue
       itemId: evaluationItems.id,
       points: gradings.points,
       maxPoints: gradings.maxPoints,
+      // What the student picked, for the distractors (ADR-043): mcq only, so
+      // no other type's payload — a program, an essay — travels for nothing.
+      skipped: answers.skipped,
+      payload: sql<unknown>`case when ${questions.type} = ${DISTRACTOR_TYPE} then ${answers.payload} end`,
     })
     .from(questions)
     .innerJoin(questionVersions, eq(questionVersions.questionId, questions.id))
@@ -148,6 +165,7 @@ export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQue
 
   const dwells = await dwellsOf(db, poolId);
   const discriminations = await discriminationsOf(db, counted.filter((row) => row.mode === "exam"));
+  const distractors = await distractorsOf(db, counted.filter((row) => row.type === DISTRACTOR_TYPE));
   const items: PoolQuestionStats["items"] = [];
   for (const [questionId, list] of scored) {
     const shown = shownItemStats(itemStats(list));
@@ -159,6 +177,8 @@ export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQue
       ...shown,
       time: time && inSeconds(time),
       discrimination: discrimination(discriminations.get(questionId) ?? []),
+      // Absent for a type without the analysis; null below its threshold.
+      ...(distractors.has(questionId) ? { distractors: distractors.get(questionId)! } : {}),
     });
   }
   return { items };
@@ -204,7 +224,7 @@ interface CountedExamAnswer extends ScoredAnswer {
 }
 
 /**
- * The per-exam samples of the discrimination index (ADR-040), by question.
+ * The per-exam samples of the discrimination index (ADR-042), by question.
  *
  * `counted` are the answers the success rate counts, of exams only: the
  * population rules live in {@link countedAttempt}, the not-reached rule and
@@ -272,6 +292,99 @@ function restOfTest(
     rest.maxPoints += g.maxPoints;
   }
   return rest;
+}
+
+/** The one type with a distractor analysis. */
+const DISTRACTOR_TYPE = "mcq";
+
+/** One counted answer of the success rate, with what it stored: its question, version and payload. */
+interface CountedAnswer {
+  questionId: string;
+  versionId: string;
+  skipped: boolean | null;
+  payload: unknown;
+}
+
+/** What an mcq config holds that this analysis reads. */
+interface Choices {
+  mode: "single" | "multiple";
+  choices: { text: string; correct: boolean }[];
+}
+
+/**
+ * The distractor analysis (ADR-043) of every question of `counted`, which
+ * are all of type {@link DISTRACTOR_TYPE}: an entry per question, null below
+ * the threshold.
+ *
+ * `counted` are the answers the success rate counts — the same rows, kept
+ * attempts and not-reached rule, exams and exercises alike —, narrowed here
+ * to the published versions whose options (text and key, in order) are
+ * the LATEST published version's, wherever they stand (`sameAsLatest`).
+ * The counting is the type's own `aggregate` (ADR-033), through the
+ * registry, and "picked nothing" is `answeredBy`, both as the class debrief
+ * of the results module reads them; the options are read through the one
+ * config pipeline, as the poll module reads them.
+ */
+async function distractorsOf(
+  db: Db,
+  counted: readonly CountedAnswer[],
+): Promise<Map<string, DistractorStats | null>> {
+  const result = new Map<string, DistractorStats | null>();
+  const countedOf = new Map<string, CountedAnswer[]>();
+  for (const answer of counted) push(countedOf, answer.questionId, answer);
+  if (countedOf.size === 0) return result;
+
+  const versionsOf = new Map<string, { id: string; choices: Choices | null }[]>();
+  const rows = await db
+    .select({
+      id: questionVersions.id,
+      questionId: questionVersions.questionId,
+      config: questionVersions.config,
+      configVersion: questionVersions.configVersion,
+    })
+    .from(questionVersions)
+    .where(and(inArray(questionVersions.questionId, [...countedOf.keys()]), isNotNull(questionVersions.number)))
+    .orderBy(asc(questionVersions.number));
+  for (const row of rows) {
+    // A version whose config cannot be read matches nothing.
+    const loaded = tryLoadConfig(DISTRACTOR_TYPE, row);
+    push(versionsOf, row.questionId, { id: row.id, choices: loaded.ok ? (loaded.config as Choices) : null });
+  }
+
+  const type = typeOf(DISTRACTOR_TYPE);
+  const answered = answeredBy({ question: { type: DISTRACTOR_TYPE } });
+  for (const [questionId, given] of countedOf) {
+    const same = sameAsLatest(versionsOf.get(questionId) ?? [], (v) => v.choices && keyOf(v.choices));
+    const latest = same.at(-1)?.choices;
+    const ids = new Set(same.map((v) => v.id));
+    // A skipped question is no answer, whatever it stored: the class debrief's rule.
+    const payloads = given
+      .filter((a) => ids.has(a.versionId))
+      .map((a) => (a.skipped || !answered(a.payload) ? null : a.payload));
+    const tally = new Map(
+      (type.aggregate?.({ answers: payloads, details: [] }).distribution ?? []).map((e) => [e.key, e.count]),
+    );
+    const counts = (latest?.choices ?? []).map((_, index) => tally.get(String(index)) ?? 0);
+    const shares = latest ? optionShares(counts, payloads.filter((p) => p === null).length, payloads.length) : null;
+    result.set(
+      questionId,
+      latest && shares
+        ? {
+            n: payloads.length,
+            // Any matching version that let several choices be ticked lets the shares pass 100.
+            multiple: same.some((v) => v.choices!.mode === "multiple"),
+            options: latest.choices.map(({ text, correct }, i) => ({ text, correct, share: shares.options[i]! })),
+            none: shares.none,
+          }
+        : null,
+    );
+  }
+  return result;
+}
+
+/** Two versions have the same options when their texts and their key are the same, in order. */
+function keyOf(choices: Choices): string {
+  return JSON.stringify(choices.choices.map((c) => [c.text, c.correct]));
 }
 
 /** Appends `value` to the list of `key`, the one grouping idiom of this module. */

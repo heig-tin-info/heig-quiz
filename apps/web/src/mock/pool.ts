@@ -2419,6 +2419,10 @@ on("POST", "/app/api/questions/:id/versions/:number/deprecate", (m, body) => {
   version.deprecationNote = String(body.note ?? "");
   return versionRow(version);
 });
+/** The id of a mock question, by its pool and internal name. */
+const mockQuestionId = (poolId: string, name: string) =>
+  liveQuestions(poolId).find((q) => q.internalName === name)!.id;
+
 /**
  * The item analysis of ADR-038, as the server shapes it: only the questions
  * with ten answers or more appear. The first three questions of `p1` carry
@@ -2426,8 +2430,12 @@ on("POST", "/app/api/questions/:id/versions/:number/deprecate", (m, body) => {
  * browser only reads — one more, so the reader's panel (no reset) is on
  * screen too. Every other question is below the threshold. The time spent
  * (ADR-039) shows on the first and the third; the second and `p3`'s have too
- * few timed exam answers for it. The discrimination (ADR-040) is good on the
+ * few timed exam answers for it. The discrimination (ADR-042) is good on the
  * first, INVERSE on the second, weak on the third and absent on `p3`'s.
+ * The distractors (ADR-043) of the second, a single-choice question: a
+ * wrong option picked more than the key, and one nobody picks; `fopen-modes`
+ * shows a multiple-choice question's (the shares add up past 100), and
+ * `array-decay` an mcq with too few answers on its current choices.
  */
 const questionStats = new Map<string, QuestionStats>([
   ...liveQuestions("p1")
@@ -2440,7 +2448,24 @@ const questionStats = new Map<string, QuestionStats>([
         time: { n: 21, meanS: 95, medianS: 80, p25S: 52, p75S: 121 },
         discrimination: { r: 0.46, evaluations: 2, n: 21 },
       },
-      { n: 12, p: -0.08, since: null, time: null, discrimination: { r: -0.18, evaluations: 1, n: 12 } },
+      {
+        n: 12,
+        p: -0.08,
+        since: null,
+        time: null,
+        discrimination: { r: -0.18, evaluations: 1, n: 12 },
+        distractors: {
+          n: 12,
+          multiple: false,
+          options: [
+            { text: "`NULL`", correct: false, share: 50 },
+            { text: "Une valeur indéterminée : le lire est un comportement indéfini", correct: true, share: 33 },
+            { text: "`0` sur toute machine conforme à C17", correct: false, share: 8 },
+            { text: "L'adresse de la fonction englobante", correct: false, share: 0 },
+          ],
+          none: 8,
+        },
+      },
       {
         n: 31,
         p: 0.41,
@@ -2449,6 +2474,31 @@ const questionStats = new Map<string, QuestionStats>([
         discrimination: { r: 0.12, evaluations: 3, n: 30 },
       },
     ][i]!] as const),
+  [
+    mockQuestionId("p1", "fopen-modes"),
+    {
+      n: 20,
+      p: 0.62,
+      since: null,
+      time: null,
+      discrimination: null,
+      distractors: {
+        n: 20,
+        multiple: true,
+        options: [
+          { text: '`"a"`', correct: true, share: 85 },
+          { text: '`"a+"`', correct: true, share: 70 },
+          { text: '`"w"`', correct: false, share: 15 },
+          { text: '`"w+"`', correct: false, share: 5 },
+        ],
+        none: 5,
+      },
+    },
+  ],
+  [
+    mockQuestionId("p1", "array-decay"),
+    { n: 15, p: 0.6, since: null, time: null, discrimination: null, distractors: null },
+  ],
   ...liveQuestions("p3")
     .slice(0, 1)
     .map((q) => [q.id, { n: 18, p: 0.56, since: null, time: null, discrimination: null }] as const),

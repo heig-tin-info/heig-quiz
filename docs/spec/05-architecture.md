@@ -71,7 +71,7 @@ Each module lives in `apps/api/src/modules/<name>/` with `routes.ts` the HTTP ha
 | `preview` | The teacher's stateless preview of an evaluation: seed, student view, runs and grading, nothing stored (ADR-018) | `live`, `grading`, `runner` |
 | `grading` | Automatic grading, runner, LLM, validation panel, regrading, release | `live`, `runner`, `llm` |
 | `results` | Grades, grade scale, CSV exports, statistical views of an evaluation, student feedback | `grading` |
-| `stats` | Item analysis per question (ADR-038), the time spent on it (ADR-039) and its discrimination index (ADR-040), aggregates for the pool | `grading`, `evaluation`, `pool` |
+| `stats` | Item analysis per question (ADR-038), the time spent on it (ADR-039) and its discrimination index (ADR-042) and the distractors of a multiple-choice question (ADR-043), aggregates for the pool | `grading`, `evaluation`, `pool` |
 | `llm` | Providers, keys, prompt templates, call log, generation | `auth` |
 | `runner` | HTTP client of the runner service, queue and priorities | |
 | `drill` | Cards, FSRS, sessions, phase 2 | `pool`, `results` |

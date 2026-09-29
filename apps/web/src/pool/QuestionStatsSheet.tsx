@@ -1,7 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 
-import type { DiscriminationStats, QuestionRow, QuestionStats, StatsReset } from "@quiz/contracts";
+import type {
+  DiscriminationStats,
+  DistractorStats,
+  QuestionRow,
+  QuestionStats,
+  StatsReset,
+} from "@quiz/contracts";
 import {
   DISCRIMINATION_FAIR,
   DISCRIMINATION_GOOD,
@@ -9,16 +15,19 @@ import {
   DISCRIMINATION_MIN_N,
   discriminationBand,
   DWELL_IDLE_CAP_MS,
+  QUESTION_STATS_MIN_N,
   QUESTION_TIME_MIN_N,
   type DiscriminationBand,
 } from "@quiz/domain";
+import { choiceLetter } from "@quiz/qt-mcq/client";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { formatDecimal, formatSpan, useI18n, useT } from "../i18n";
+import { MarkdownView } from "../markdown/MarkdownView";
 import { useErrorToast, useToast } from "../notify";
 import { poolQuestionStatsKey } from "../queryKeys";
-import { Alert, Badge, Button, isoDateParts, SectionHeading, Sheet, Stat, type Tone } from "../ui";
+import { Alert, Badge, Button, isoDateParts, SectionHeading, SegmentedBar, Sheet, Stat, type Tone } from "../ui";
 import { ratePercent } from "./filters";
 
 /**
@@ -142,6 +151,7 @@ export function QuestionStatsSheet({
           )}
         </section>
         <DiscriminationBlock discrimination={stats.discrimination} />
+        {stats.distractors === undefined ? null : <DistractorBlock distractors={stats.distractors} />}
       </div>
     </Sheet>
   );
@@ -156,7 +166,7 @@ const BAND_TONE: Record<DiscriminationBand, Tone> = {
 };
 
 /**
- * The discrimination index (ADR-040), a third block: the value to two
+ * The discrimination index (ADR-042), a third block: the value to two
  * decimals with its reading, what it rests on, and one sentence on what it
  * means. Like the time, it has its own conditions, so a question may show
  * its rate without it; the block then says when it will show.
@@ -210,6 +220,70 @@ function DiscriminationValue({ discrimination }: { discrimination: Discriminatio
           good: formatDecimal(DISCRIMINATION_GOOD, 1, locale),
         })}
       </p>
+    </>
+  );
+}
+
+/**
+ * The distractor analysis of a multiple-choice question (ADR-043), a fourth
+ * block, drawn only for a type that has it: one row per option in the
+ * question's order — its letter, its text, its share and a bar — then the
+ * answers that picked nothing, drawn like the class debrief's distribution
+ * (results/ByQuestionView). The key says so in words, the debrief's green
+ * badge. The bar is `info`, never a verdict colour: a share is a datum. Only
+ * shares, never counts: the server sends nothing else (N-DATA-06).
+ *
+ * It rests on its own `n` — the answers to the versions that carry the
+ * current options —, which the basis line says.
+ */
+function DistractorBlock({ distractors }: { distractors: DistractorStats | null }) {
+  const t = useT();
+  return (
+    <section className="space-y-3">
+      <SectionHeading title={t("pool.stats.choices")} />
+      {distractors ? (
+        <DistractorRows distractors={distractors} />
+      ) : (
+        <p className="text-sm text-fg-muted">{t("pool.stats.choicesNone", { min: QUESTION_STATS_MIN_N })}</p>
+      )}
+    </section>
+  );
+}
+
+function DistractorRows({ distractors }: { distractors: DistractorStats }) {
+  const t = useT();
+  const rows = [
+    ...distractors.options.map((option, index) => ({ ...option, letter: choiceLetter(index) })),
+    { text: null, correct: false, share: distractors.none, letter: null },
+  ];
+  return (
+    <>
+      <ul className="flex flex-col gap-3">
+        {rows.map((row) => (
+          <li key={row.letter ?? "none"} className="flex flex-col gap-1.5 text-sm">
+            <div className="flex items-start gap-2">
+              {row.letter === null ? null : (
+                <span className="w-4 shrink-0 font-semibold text-fg-muted">{row.letter}</span>
+              )}
+              {row.text === null ? (
+                <span className="min-w-0 flex-1 text-fg-muted">{t("pool.stats.choicesNoAnswer")}</span>
+              ) : (
+                <MarkdownView as="span" source={row.text} inline className="min-w-0 flex-1" />
+              )}
+              {row.correct ? <Badge tone="green">{t("results.byQuestion.correct")}</Badge> : null}
+              <span className="shrink-0 font-mono text-[13px] font-semibold tabular-nums">
+                {t("poll.percent", { n: row.share })}
+              </span>
+            </div>
+            <SegmentedBar parts={[{ tone: row.letter === null ? "muted" : "info", value: row.share }]} total={100} />
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-fg-faint">
+        {t("pool.stats.choicesBasis", { n: distractors.n })}
+        {distractors.multiple ? ` ${t("pool.stats.choicesMultiple")}` : null}
+      </p>
+      <p className="text-sm text-fg-muted">{t("pool.stats.choicesScope")}</p>
     </>
   );
 }

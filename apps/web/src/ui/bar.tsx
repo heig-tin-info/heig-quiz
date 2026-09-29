@@ -4,7 +4,7 @@ import { cx, Tip } from "./layers";
 // Bar: one horizontal bar cut into parts, for counts that add up to a whole.
 
 /** The meaning of a part, never a raw colour (DESIGN.md, "Correction projection"). */
-export type BarTone = "success" | "partial" | "danger" | "warning" | "muted";
+export type BarTone = "success" | "partial" | "danger" | "warning" | "muted" | "info";
 
 export const BAR_TONES: Record<BarTone, string> = {
   success: "bg-success",
@@ -14,6 +14,8 @@ export const BAR_TONES: Record<BarTone, string> = {
   danger: "bg-danger",
   warning: "bg-warning",
   muted: "bg-fg-faint/50",
+  // A share with no verdict: the choices picked on a question of the pool (ADR-043).
+  info: "bg-info",
 };
 
 export interface BarPart {

@@ -233,7 +233,7 @@ async function previewVerdict(
  * autosave and on every cell of the grid, and an unknown type or a payload
  * stored under an older schema falls back to "anything at all".
  */
-export function answeredBy(item: JoinedItem): (payload: unknown) => boolean {
+export function answeredBy(item: { question: Pick<JoinedItem["question"], "type"> }): (payload: unknown) => boolean {
   let type: AnyQuestionTypeServer | null = null;
   try {
     type = typeOf(item.question.type);
