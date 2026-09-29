@@ -151,10 +151,10 @@ describe("RichReview", () => {
       audience: "student" as const,
     };
     const { unmount } = render(<RichReview {...props} solution={null} />);
-    expect(screen.queryByText("Rubric")).toBeNull();
+    expect(screen.queryByText("Grading criteria")).toBeNull();
     unmount();
     render(<RichReview {...props} solution={solution} sections={{ solution: false }} />);
-    expect(screen.queryByText("Rubric")).toBeNull();
+    expect(screen.queryByText("Grading criteria")).toBeNull();
   });
 
   it("says when nothing was written", () => {
@@ -169,7 +169,7 @@ describe("RichEditor", () => {
   it("reports a typed rubric without keeping it", async () => {
     const onChange = vi.fn();
     render(<RichEditor config={emptyRichDraft()} onChange={onChange} />);
-    await userEvent.type(screen.getByLabelText("Rubric"), "?");
+    await userEvent.type(screen.getByLabelText("Grading criteria"), "?");
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ rubric: "?" }));
   });
 

@@ -967,9 +967,9 @@ export const en = {
   "qt.rich.e.maxChars": "Character limit",
   "qt.rich.e.maxCharsHint": "Empty: up to {cap} characters. About {perPage} characters fill an A4 page.",
   "qt.rich.e.maxCharsPages": "About {pages} A4 page(s).",
-  "qt.rich.e.rubric": "Rubric",
+  "qt.rich.e.rubric": "Grading criteria",
   "qt.rich.e.rubricHint":
-    "What earns the points. The grader reads it beside every answer; a student never sees it before release.",
+    "How you will award the points, for yourself or another grader: shown beside every answer in the grading panel. Example: \"2 pts: names the complexity. 1 pt: gives an example.\" Students do not see it before release.",
   "qt.rich.e.reference": "Model answer",
   "qt.rich.e.referenceHint": "Optional. Shown to the grader beside every answer.",
   "qt.rich.e.manualGrading":
@@ -985,8 +985,8 @@ export const en = {
   "qt.rich.r.answer": "Answer",
   "qt.rich.r.noAnswer": "No answer",
   "qt.rich.r.count": "{count} characters",
-  "qt.rich.r.rubric": "Rubric",
-  "qt.rich.r.noRubric": "No rubric.",
+  "qt.rich.r.rubric": "Grading criteria",
+  "qt.rich.r.noRubric": "No grading criteria.",
   "qt.rich.r.reference": "Model answer",
   "qt.rich.r.score": "Score",
 
