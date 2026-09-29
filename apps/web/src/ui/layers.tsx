@@ -527,15 +527,18 @@ export function IconButton({
   /** Pressed state (view toggles, filters): accent-soft chip. */
   active?: boolean;
   /**
-   * The key that does the same thing, a single letter the screen listens to:
-   * the tooltip names it in parentheses ("Full screen (F)"), and assistive
-   * technology reads it from `aria-keyshortcuts` rather than from the name.
+   * The key that does the same thing, as `aria-keyshortcuts` spells it: a
+   * letter ("F") or "Space". The tooltip names it in parentheses ("Full
+   * screen (F)", "… (Espace)" in French), and assistive technology reads it
+   * from the attribute rather than from the name.
    */
   shortcut?: string;
   size?: "sm" | "md";
 }) {
+  const t = useT();
+  const key = shortcut === "Space" ? t("key.space") : shortcut;
   return (
-    <Tip label={shortcut ? `${label} (${shortcut})` : label}>
+    <Tip label={key ? `${label} (${key})` : label}>
       <button
         type="button"
         {...props}

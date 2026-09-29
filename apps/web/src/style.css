@@ -72,6 +72,17 @@
   --pool-violet: #8a3ce6;
   --pool-purple: #b0209e;
   --pool-pink: #e0306e;
+  /* The categorical slots of the poll projection's donut (DESIGN.md,
+     "Projection", the donut), in their fixed order: the dataviz reference
+     palette, validated against `canvas` in both themes. */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
+  --chart-6: #008300;
+  --chart-7: #4a3aa7;
+  --chart-8: #e34948;
   --shadow-overlay: 0 16px 48px -16px rgb(28 25 20 / 0.28), 0 1px 3px rgb(0 0 0 / 0.06);
   --shadow-popover: 0 10px 32px -12px rgb(28 25 20 / 0.24), 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-sheet: -12px 0 48px -16px rgb(28 25 20 / 0.3);
@@ -123,6 +134,15 @@ html.dark {
   --pool-violet: #c490f0;
   --pool-purple: #e070d8;
   --pool-pink: #f472b6;
+  /* The same eight hues, stepped for the dark surface (≥ 3:1 on it). */
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-6: #008300;
+  --chart-7: #9085e9;
+  --chart-8: #e66767;
   --shadow-overlay: 0 16px 48px -16px rgb(0 0 0 / 0.7), 0 1px 3px rgb(0 0 0 / 0.4);
   --shadow-popover: 0 10px 32px -12px rgb(0 0 0 / 0.65), 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-sheet: -12px 0 48px -16px rgb(0 0 0 / 0.7);
