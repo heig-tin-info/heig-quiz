@@ -1,30 +1,11 @@
 /**
- * The Content-Security-Policy of the application (N-SEC-02, #319), and the
- * framing header that goes with it.
- *
- * ONE source of truth: the API sets both on every response it sends, the SPA
- * it serves included (ADR-009), and the Caddy vhosts no longer carry either.
- * Production and staging run the same image, so they send the same policy
- * and a breakage shows on staging first. A route that set its own policy
- * keeps it: the uploaded images are served with `default-src 'none'; sandbox`
- * (`INERT_IMAGE_HEADERS`), which is stricter than this one.
- *
- * Each source beyond `'self'` is there because a feature needs it, and says
- * which. What is NOT here matters as much: no `'unsafe-inline'` and no
- * `'unsafe-eval'` for scripts. `index.html` has no inline script, the server
- * renders no page with one, and Zod runs without its `new Function` JIT
- * (`apps/web/src/jitless.ts`).
+ * The Content-Security-Policy (N-SEC-02, #319) and the framing header, set by
+ * the API on every response that did not choose its own policy (uploaded
+ * images keep `default-src 'none'; sandbox`). The one source: Caddy sets
+ * neither. Every source beyond `'self'` says which feature needs it; scripts
+ * get no `'unsafe-inline'` and no `'unsafe-eval'`.
  */
 import type { FastifyInstance } from "fastify";
-
-import { MONACO_VS } from "@quiz/qt-code/server";
-
-/**
- * The directory of the pinned Monaco build (`@quiz/qt-code`'s `MONACO_VS`).
- * The trailing slash makes the source a path PREFIX: that directory of that
- * version on jsDelivr, not the whole CDN.
- */
-const MONACO = `${MONACO_VS}/`;
 
 /**
  * The Teams tab (ADR-030): Teams frames `/teams` on its own origins, so that
@@ -42,8 +23,8 @@ const TEAMS_HOSTS = [
   "https://outlook.office365.com",
 ];
 
-/** The one path Teams may frame, exactly: the manifest's `contentUrl`. */
-export const TEAMS_TAB_PATH = "/teams";
+/** The one path Teams may frame, exactly: the manifest's `contentUrl` (`router.ts`). */
+const TEAMS_TAB_PATH = "/teams";
 
 /**
  * `@microsoft/teams-js` fetches the list of valid Teams host origins from
@@ -63,27 +44,24 @@ function policy({ frameAncestors, connect }: PageSources): string {
     "default-src": ["'self'"],
     // `wasm-unsafe-eval`: the browser runner compiles clang, wasm-ld, Python
     // and the student's program with `WebAssembly.compile*` (ADR-015); it
-    // allows WebAssembly compilation and nothing of JavaScript's eval.
-    // MONACO: the code editor's loader injects its scripts from there.
-    "script-src": ["'self'", "'wasm-unsafe-eval'", MONACO],
-    // The runner's worker is a bundled file of ours (`new Worker(new URL(...))`).
-    // `blob:`: Monaco, loaded cross-origin, cannot start a worker from the
-    // CDN URL and wraps an `importScripts` of it in a blob instead.
-    "worker-src": ["'self'", "blob:"],
+    // allows WebAssembly compilation and nothing of JavaScript's eval. Zod
+    // runs without its `new Function` JIT (`apps/web/src/jitless.ts`).
+    "script-src": ["'self'", "'wasm-unsafe-eval'"],
     // `'unsafe-inline'`: style ATTRIBUTES and injected `<style>` elements,
     // which the app cannot avoid — KaTeX's HTML carries `style="…"`, Monaco,
     // Tiptap and MathLive inject their stylesheets at run time, and the dev
     // login page is one inline sheet. CSS cannot run script; the XSS surface
-    // is `script-src`, which admits no inline code. MONACO: `editor.main.css`.
-    "style-src": ["'self'", "'unsafe-inline'", MONACO],
-    // `data:`: the fonts the bundler inlines into our CSS (KaTeX's smallest)
-    // and Monaco's codicon font, which its CSS carries as a data URL.
+    // is `script-src`, which admits no inline code.
+    "style-src": ["'self'", "'unsafe-inline'"],
+    // `data:`: the fonts the bundler inlines into our CSS (KaTeX's smallest,
+    // Monaco's codicon font).
     "font-src": ["'self'", "data:"],
     // `https:`: the OIDC `picture` claim is a URL on whatever host the IdP
     // chose (the avatar fallback, `modules/avatar.ts`). `blob:`: the avatar
-    // editor previews the picked file (`URL.createObjectURL`). An image
+    // editor previews the picked file (`URL.createObjectURL`). `data:`:
+    // Monaco's CSS draws its squiggles and glyphs as data-URL SVGs. An image
     // cannot run script.
-    "img-src": ["'self'", "blob:", "https:"],
+    "img-src": ["'self'", "data:", "blob:", "https:"],
     // Our API and its SSE stream (ADR-005), plus what one page needs.
     "connect-src": ["'self'", ...connect],
     "object-src": ["'none'"],
@@ -107,7 +85,7 @@ export const TEAMS_TAB_CSP = policy({
 });
 
 /** The CSP and the legacy framing header for a request path (query stripped). */
-export function securityHeaders(path: string): Record<string, string> {
+function securityHeaders(path: string): Record<string, string> {
   if (path === TEAMS_TAB_PATH) return { "content-security-policy": TEAMS_TAB_CSP };
   // `X-Frame-Options` for the browsers that predate `frame-ancestors`; it is
   // left off the Teams tab, where it would override the list above.

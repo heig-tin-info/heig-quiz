@@ -275,6 +275,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: true,
   },
   // ADR-030: the tab itself, `/teams` exactly — the manifest's `contentUrl`.
+  // `apps/api/src/csp.ts` keys the Teams framing on this exact path.
   teamsTab: {
     path: () => "/teams",
     match: (parts) => (parts.length === 1 && parts[0] === "teams" ? { view: "teamsTab" } : null),

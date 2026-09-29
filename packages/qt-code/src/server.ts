@@ -202,6 +202,3 @@ export { caseVerdict } from "./verdict.js";
  * cases. The registry wires it beside `codeServer`.
  */
 export { codeimageServer } from "./image/server.js";
-
-/** The Monaco directory the client loads and the API's CSP admits. */
-export { MONACO_VS } from "./monacoCdn.js";

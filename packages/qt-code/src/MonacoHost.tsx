@@ -4,12 +4,12 @@
  *
  * Two decisions live here.
  *
- * 1. **Monaco is lazy** (`React.lazy` on `@monaco-editor/react`, itself loading
- *    the editor from its CDN), so it never enters the initial bundle
- *    (N-PERF-05). Until it resolves — and forever, if it fails to resolve —
- *    the same `<textarea>` is rendered, with the same value and the same
- *    `onChange`. A student whose network blocks the CDN keeps a usable editor
- *    and loses only the syntax colours.
+ * 1. **Monaco is lazy** (`React.lazy` on `@monaco-editor/react` and our own
+ *    Monaco bundle, `./monacoBundle.ts`, served from our origin), so it never
+ *    enters the initial bundle (N-PERF-05). Until it resolves — and forever,
+ *    if it fails to resolve — the same `<textarea>` is rendered, with the
+ *    same value and the same `onChange`. A student whose chunk fails to load
+ *    keeps a usable editor and loses only the syntax colours.
  *
  * 2. **Locked regions are DISPLAY, not a guarantee.** A template with locked
  *    regions is not edited here but in `./LockedEditor.tsx`: one Monaco model
@@ -29,7 +29,6 @@ import type { OnMount } from "@monaco-editor/react";
 
 import type { CodeLanguage } from "./schema.js";
 import { codeArea, cx } from "@quiz/ui";
-import { MONACO_VS } from "./monacoCdn.js";
 
 /** The Monaco language ids, which differ from ours for JavaScript. */
 export const MONACO_LANGUAGE: Record<CodeLanguage, string> = {
@@ -43,9 +42,12 @@ export const MONACO_LANGUAGE: Record<CodeLanguage, string> = {
 export const LazyMonaco = lazy(async () => {
   // The named export, not the default one: `@monaco-editor/react` ships both
   // and only the named one is typed as a component under NodeNext resolution.
-  const { Editor, loader } = await import("@monaco-editor/react");
-  // The directory the CSP admits (`./monacoCdn.ts`), not the loader's default.
-  loader.config({ paths: { vs: MONACO_VS } });
+  const [{ Editor, loader }, { monaco }] = await Promise.all([
+    import("@monaco-editor/react"),
+    import("./monacoBundle.js"),
+  ]);
+  // Our own bundle (`./monacoBundle.ts`): the loader then fetches nothing.
+  loader.config({ monaco });
   return { default: Editor };
 });
 
