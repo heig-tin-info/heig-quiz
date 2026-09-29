@@ -50,28 +50,35 @@ export type PollAudience = z.infer<typeof PollAudience>;
 export const PollSettings = z.object({
   /** No classroom: anyone with the code may answer, without an account. */
   anonymous: z.boolean(),
-  /** The teacher pressed "Reveal": the key is shown on every screen. */
+  /**
+   * "Reveal the answer": the key is shown — on the wall and on every phone.
+   * An independent, reversible switch (ADR-014, addendum 2026-09-29): it
+   * never closes the vote (only End does) and never implies `votes`. A poll
+   * without a key refuses it; a row that holds it anyway (written before
+   * that addendum) shows its distribution instead ({@link pollVotesShown}).
+   */
   revealed: z.boolean().default(false),
   /**
-   * The distribution is on the wall (#157). Off by default: a room that
-   * reads the bars while it votes votes like the longest one. The phones
-   * never see it before the reveal, whatever this says.
+   * "Show votes": the distribution is shown — on the wall AND on the phones
+   * (addendum 2026-09-29; the wall only, before it). Off by default: a room
+   * that reads the bars while it votes votes like the longest one.
    */
   votes: z.boolean().default(false),
 });
 export type PollSettings = z.infer<typeof PollSettings>;
 
 /**
- * What the projection shows, as the three steps of one progression: the
- * choices alone, then the distribution, then the key. Revealing implies
- * showing the votes, so `revealed` wins over `votes`.
+ * Whether the distribution is shown, on the wall and on the phones: the ONE
+ * rule both the server (`PollPublicView.tally`) and the projection read.
+ * `votes` says so; for a question without a key, a stored `revealed` does
+ * too — the reveal of an opinion poll was its results before the addendum
+ * of 2026-09-29, and such rows are kept as they are, not migrated.
  */
-export const PollDisplay = z.enum(["hidden", "votes", "answer"]);
-export type PollDisplay = z.infer<typeof PollDisplay>;
-
-export function pollDisplayOf(settings: Pick<PollSettings, "revealed" | "votes">): PollDisplay {
-  if (settings.revealed) return "answer";
-  return settings.votes ? "votes" : "hidden";
+export function pollVotesShown(
+  settings: Pick<PollSettings, "revealed" | "votes">,
+  keyed: boolean,
+): boolean {
+  return settings.votes || (!keyed && settings.revealed);
 }
 
 /** `POST /app/api/polls`: creates the evaluation AND starts it. */
@@ -267,8 +274,10 @@ export type PollTeacherView = z.infer<typeof PollTeacherView>;
 
 /**
  * What a participant reads at `/p/:code` — with or without a session.
- * `solution` is null until the teacher reveals; `me` says where THIS
- * browser stands.
+ * `solution` is null while the key is not revealed; `me` says where THIS
+ * browser stands. Neither switch closes the vote: while `state` is
+ * `running`, the phone keeps its answer control (ADR-014, addendum
+ * 2026-09-29).
  */
 export const PollPublicView = z.object({
   code: z.string(),
@@ -281,9 +290,10 @@ export const PollPublicView = z.object({
   }),
   solution: z.unknown().nullable(),
   /**
-   * The distribution, once the teacher revealed — what the wall shows. It is
-   * all a phone has to show when the question has no key (an opinion poll,
-   * ADR-014 addendum 2026-09-23); null before the reveal.
+   * The distribution, exactly while the teacher shows it
+   * ({@link pollVotesShown}); null otherwise. It is all a phone has to show
+   * when the question has no key (an opinion poll, ADR-014 addendum
+   * 2026-09-23).
    */
   tally: PollTally.nullable(),
   me: z.object({
@@ -308,10 +318,15 @@ export const PollCodeParam = z.object({
 export type PollCodeParam = z.infer<typeof PollCodeParam>;
 
 /**
- * `POST /app/api/evaluations/:id/poll/reveal`. `votes` omitted leaves the
- * distribution as it was; a reveal shows it whatever `votes` says.
+ * `POST /app/api/evaluations/:id/poll/reveal`: the two display switches,
+ * independent (ADR-014, addendum 2026-09-29). A switch omitted stays where it
+ * was. `revealed: true` on a poll whose question has no key is refused
+ * (`422 poll_keyless`): there is nothing to reveal.
  */
-export const PollRevealBody = z.object({ revealed: z.boolean(), votes: z.boolean().optional() });
+export const PollRevealBody = z.object({
+  revealed: z.boolean().optional(),
+  votes: z.boolean().optional(),
+});
 export type PollRevealBody = z.infer<typeof PollRevealBody>;
 
 /** `POST /app/api/p/:code/answer`: the whole answer, validated by the type's schema. */

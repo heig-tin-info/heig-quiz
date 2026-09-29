@@ -724,7 +724,12 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
       expect(await reload(db, seed.evaluationId), state).toEqual(row);
 
       // The reveal route still moves both halves together.
-      const revealed = await pollService.setRevealed(db, row, true, new Date());
+      const revealed = await pollService.setDisplay(
+        db,
+        (await pollService.scopeOf(db, row))!,
+        { revealed: true },
+        new Date(),
+      );
       expect(service.feedbackOf(revealed), state).toMatchObject({ showKey: true, showExplanation: true });
       expect(pollService.pollSettingsOf(revealed).revealed, state).toBe(true);
     }

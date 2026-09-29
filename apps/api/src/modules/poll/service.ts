@@ -41,6 +41,7 @@ import {
   type PollSummary,
   type PollTally,
   type PollTeacherView,
+  pollVotesShown,
 } from "@quiz/contracts";
 import { pollOutcome, pollTally, type PollRunCounts, type PollType } from "@quiz/domain";
 
@@ -326,25 +327,50 @@ export async function createInlinePoll(
   });
 }
 
+/** "Reveal the answer" on a poll whose question has no key: there is none. */
+export class PollKeyless extends PollError {
+  constructor() {
+    super("poll_keyless", 422, "this poll's question has no key to reveal");
+  }
+}
+
+/** Whether the poll's frozen question names a right answer. */
+export function isKeyed(item: JoinedItem): boolean {
+  return hasKey(
+    item.question.type,
+    loadConfig(item.question.type, {
+      config: item.version.config,
+      configVersion: item.version.configVersion,
+    }),
+  );
+}
+
 /**
- * The reveal (F-LIVE-13). ONE fact, written in two places on purpose:
+ * The two display switches of a poll (F-LIVE-13), independent and reversible
+ * (ADR-014, addendum 2026-09-29): a switch omitted stays where it was, and
+ * NEITHER closes the vote — only End does.
+ *
+ * `revealed` is ONE fact written in two places on purpose:
  * `settings.poll.revealed` is what the projection and the phones read, and
  * `feedbackPolicy.showKey` is what the ordinary feedback route of a signed-in
  * participant obeys. Leaving the second one behind would publish the key to
- * `GET /attempts/:id/feedback` before the teacher revealed anything.
+ * `GET /attempts/:id/feedback` before the teacher revealed anything. A
+ * question with no key has nothing to reveal: `revealed: true` is refused.
  *
- * `votes` is the projection's own switch (#157): the distribution on the
- * wall. Omitted, it stays as it was. It never reaches a phone — only the
- * reveal does (`publicView`).
+ * `votes` puts the distribution on the wall and on the phones
+ * (`pollVotesShown`, read by `publicView`).
  */
-export async function setRevealed(
+export async function setDisplay(
   db: Db,
-  evaluation: EvaluationRecord,
-  revealed: boolean,
+  scope: PollScope,
+  change: { revealed?: boolean | undefined; votes?: boolean | undefined },
   now: Date,
-  votes?: boolean,
 ): Promise<EvaluationRecord> {
-  const settings = settingsOf(evaluation);
+  const { evaluation, item } = scope;
+  if (change.revealed === true && !isKeyed(item)) throw new PollKeyless();
+  const current = pollSettingsOf(evaluation);
+  const revealed = change.revealed ?? current.revealed;
+  const votes = change.votes ?? current.votes;
   const feedbackPolicy = {
     ...(evaluation.feedbackPolicy as Record<string, unknown>),
     showKey: revealed,
@@ -353,16 +379,7 @@ export async function setRevealed(
   await setPollSettings(
     db,
     evaluation.id,
-    {
-      settings: {
-        ...settings,
-        poll: {
-          revealed,
-          votes: votes === undefined ? pollSettingsOf(evaluation).votes : votes,
-        },
-      },
-      feedbackPolicy,
-    },
+    { settings: { ...settingsOf(evaluation), poll: { revealed, votes } }, feedbackPolicy },
     now,
   );
   const row = (await byId(db, evaluation.id))!;
@@ -671,8 +688,9 @@ export function joinUrl(webUrl: string, code: string): string {
 
 /**
  * What a phone reads at `/p/:code`. The question travels through
- * `studentView` like every other student payload (invariant 4), and the
- * solution only once the teacher revealed it.
+ * `studentView` like every other student payload (invariant 4), the
+ * solution only while the teacher reveals it, and the distribution only while
+ * the teacher shows it (ADR-014, addendum 2026-09-29).
  */
 export async function publicView(
   db: Db,
@@ -700,7 +718,7 @@ export async function publicView(
     settings,
     question: { type: item.question.type as PollType, student: studentOf(item) },
     solution: settings.revealed ? solutionOf(item) : null,
-    tally: settings.revealed ? await tallyOf(db, evaluation) : null,
+    tally: pollVotesShown(settings, isKeyed(item)) ? await tallyOf(db, evaluation) : null,
     me: {
       identified: viewer.userId !== null || viewer.guestId !== null,
       loginRequired: !viewer.loggedIn && !settings.anonymous,

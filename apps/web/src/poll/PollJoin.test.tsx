@@ -148,11 +148,52 @@ describe("the poll participant page", () => {
     expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
   });
 
-  it("draws the key, and no answer control, once the teacher reveals", async () => {
+  // Incident of 2026-09-29 (poll KUFE5R): a reveal hid the question and the
+  // Send button, and the students who joined afterwards read "not allowed".
+  // Only End closes the vote (ADR-014, addendum 2026-09-29).
+  it("keeps the question and Send under a revealed key while the poll runs, with no verdict", async () => {
     render({
       [`GET ${URL}`]: ok(
         view({
-          settings: { anonymous: true, revealed: true, votes: true },
+          settings: { anonymous: true, revealed: true, votes: false },
+          solution: { correct: [0] },
+          me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },
+        }),
+      ),
+    });
+
+    expect(await screen.findByText("Correct answer")).toBeVisible();
+    // Still answerable: the choices and the button are there.
+    expect(screen.getByRole("radio", { name: "1" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Update/ })).toBeInTheDocument();
+    // No verdict while the answer may still change.
+    expect(screen.queryByText(/— wrong|— correct/)).not.toBeInTheDocument();
+    expect(screen.queryByText("You did not answer this poll.")).not.toBeInTheDocument();
+  });
+
+  it("lets a latecomer answer after the reveal, and says nothing about not having answered", async () => {
+    render({
+      [`GET ${URL}`]: ok(
+        view({
+          question: { type: "short", student: { prompt: "Complexité de la recherche binaire ?" } },
+          settings: { anonymous: true, revealed: true, votes: false },
+          solution: { expected: ["O(log n)"] },
+        }),
+      ),
+    });
+
+    expect(await screen.findByText("Accepted answers")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Send" })).toBeInTheDocument();
+    expect(screen.queryByText("You did not answer this poll.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Your answer")).not.toBeInTheDocument();
+  });
+
+  it("names the verdict once the poll has ended", async () => {
+    render({
+      [`GET ${URL}`]: ok(
+        view({
+          state: "ended",
+          settings: { anonymous: true, revealed: true, votes: false },
           solution: { correct: [0] },
           me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },
         }),
@@ -164,10 +205,44 @@ describe("the poll participant page", () => {
     expect(screen.queryByRole("button", { name: /Send|Update/ })).not.toBeInTheDocument();
   });
 
+  it("says an ended short poll went unanswered, and only then", async () => {
+    render({
+      [`GET ${URL}`]: ok(
+        view({
+          state: "ended",
+          question: { type: "short", student: { prompt: "Complexité de la recherche binaire ?" } },
+          settings: { anonymous: true, revealed: true, votes: false },
+          solution: { expected: ["O(log n)"] },
+        }),
+      ),
+    });
+    expect(await screen.findByText("You did not answer this poll.")).toBeVisible();
+  });
+
+  it("shows the live distribution while the votes are shown, beside a question still open", async () => {
+    render({
+      [`GET ${URL}`]: ok(
+        view({
+          settings: { anonymous: true, revealed: false, votes: true },
+          tally: { joined: 5, answered: 4, choices: [{ index: 0, count: 1 }, { index: 1, count: 3 }], answers: [] },
+          me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },
+        }),
+      ),
+    });
+
+    expect(await screen.findByText("The results")).toBeVisible();
+    expect(screen.getByText("25%")).toBeVisible();
+    expect(screen.getByText("75%")).toBeVisible();
+    // Votes are not the key: nothing is marked right.
+    expect(screen.queryByText("Correct answer")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Update/ })).toBeInTheDocument();
+  });
+
   it("reveals the distribution, and no verdict, when the poll has no key", async () => {
     render({
       [`GET ${URL}`]: ok(
         view({
+          state: "ended",
           settings: { anonymous: true, revealed: true, votes: true },
           solution: { correct: [] },
           tally: { joined: 5, answered: 4, choices: [{ index: 0, count: 1 }, { index: 1, count: 3 }], answers: [] },

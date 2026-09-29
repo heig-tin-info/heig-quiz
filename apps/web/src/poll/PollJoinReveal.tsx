@@ -1,9 +1,13 @@
 /**
- * The key of a poll, on the participant's phone (F-LIVE-13).
+ * What the teacher shows of a poll, on the participant's phone (F-LIVE-13):
+ * the key once revealed, the distribution while the votes are shown.
  *
- * It REPLACES the answer control rather than sitting under it: once the
- * teacher has revealed, an answer field is a trap — it still accepts a tap
- * that changes nothing about what the room just read on the beamer.
+ * Neither closes the vote — only End does (ADR-014, addendum 2026-09-29, after
+ * the incident of poll KUFE5R where a reveal read as "you may not answer").
+ * So while the poll RUNS, this sits UNDER the still-editable question and
+ * names no verdict (`verdict` false): no "your answer — wrong" beside a field
+ * the reader may still change. Once the poll has ENDED it replaces the
+ * question, and the verdict joins it.
  *
  * Why not `QuestionReviewHost` and the type's own `Review`: that component is
  * a GRADED surface. It always prints a `Score — / N` line, and `short` derives
@@ -17,9 +21,11 @@
  * lecture-hall projector and a red-green reader both lose the tint alone).
  *
  * An opinion poll has NO key (ADR-014, addendum 2026-09-23), so there is
- * nothing right and nothing wrong to show: the reveal is the distribution the
- * wall shows, with this browser's own answer marked by a word, in no tone.
+ * nothing right and nothing wrong to show and no reveal to press: what the
+ * phone gets is the distribution, while the votes are shown, with this
+ * browser's own answer marked by a word, in no tone, once the poll is over.
  */
+import type { ReactNode } from "react";
 import { Check, X } from "lucide-react";
 
 import type { PollQuestionType, PollTally } from "@quiz/contracts";
@@ -68,13 +74,15 @@ function McqReveal({
   student,
   solution,
   answer,
+  verdict,
 }: {
   student: McqStudent;
   solution: McqSolution;
   answer: unknown;
+  verdict: boolean;
 }) {
   const t = useT();
-  const selected = new Set(selectedOf(answer));
+  const selected = new Set(verdict ? selectedOf(answer) : []);
   const key = new Set(solution.correct);
   return (
     <ul className="flex flex-col gap-2">
@@ -119,15 +127,18 @@ function McqReveal({
 function ShortReveal({
   solution,
   answer,
+  verdict,
 }: {
   solution: ShortSolution;
   answer: unknown;
+  verdict: boolean;
 }) {
   const t = useT();
   const text = textOf(answer);
   const matched = matchesExpected(text, solution.expected);
   return (
     <div className="flex flex-col gap-4">
+      {verdict ? (
       <div className="flex flex-col gap-1.5">
         <span className="text-[13px] font-medium text-fg">{t("join.reveal.yours")}</span>
         {text.trim() === "" ? (
@@ -149,6 +160,7 @@ function ShortReveal({
           </div>
         )}
       </div>
+      ) : null}
       <div className="flex flex-col gap-1.5">
         <span className="text-[13px] font-medium text-fg">{t("join.reveal.accepted")}</span>
         <ul className="flex flex-wrap gap-1.5">
@@ -167,10 +179,10 @@ function ShortReveal({
 }
 
 /**
- * The reveal of a poll without a key: the share of the room behind each
- * answer, in the order the wall draws them, and which one was this
- * browser's. The bars wear the wall's `info`; the rows no tone at all —
- * nobody is being marked.
+ * The distribution, in the order the wall draws it. A revealed key ticks its
+ * rows (`success`, with the word); with the verdict on, this browser's own
+ * answer is named too — right, wrong, or simply "yours" when there is no key.
+ * The bars wear the wall's `info`; an untouched row no tone at all.
  */
 function ResultsReveal({
   type,
@@ -178,73 +190,104 @@ function ResultsReveal({
   solution,
   tally,
   answer,
+  keyShown,
+  verdict,
 }: {
   type: PollQuestionType;
   student: unknown;
   solution: unknown;
   tally: PollTally;
   answer: unknown;
+  keyShown: boolean;
+  verdict: boolean;
 }) {
   const t = useT();
   const rows = pollRows({ type, student, solution }, tally).slice(0, PROJECTION_ROW_CAP);
   const selected = new Set(selectedOf(answer).map((i) => `c${i}`));
   const text = textOf(answer);
   const mine = (key: string) =>
-    type === "mcq" ? selected.has(key) : text.trim() !== "" && key === `a${foldPollAnswer(text)}`;
+    verdict &&
+    (type === "mcq" ? selected.has(key) : text.trim() !== "" && key === `a${foldPollAnswer(text)}`);
+  if (rows.length === 0) return <p className="text-[13px] text-fg-muted">{t("poll.noAnswersYet")}</p>;
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-[13px] text-fg-muted">{t("join.reveal.noKey")}</p>
-      {rows.length === 0 ? (
-        <p className="text-[13px] text-fg-muted">{t("poll.noAnswersYet")}</p>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {rows.map((row) => {
-            const own = mine(row.key);
-            return (
-              <li
-                key={row.key}
-                className={cx(
-                  "flex flex-col gap-2 rounded-card border px-3 py-2.5 text-sm",
-                  // Neutral, never the accent: on this page red already
-                  // means "wrong", and nothing here is.
-                  own ? "border-line-strong bg-surface-2" : "border-line bg-surface",
-                )}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  {row.markdown ? (
-                    <MarkdownView as="span" source={row.label} inline className="min-w-0" />
-                  ) : (
-                    <span className="min-w-0 break-words">{row.label}</span>
-                  )}
-                  <span className="flex shrink-0 items-center gap-2">
-                    {own ? (
-                      <span className={cx(tagClass, "font-semibold text-fg")}>{t("join.reveal.yours")}</span>
-                    ) : null}
-                    <span className="font-mono text-[13px] font-semibold tabular-nums">
-                      {t("poll.percent", { n: row.percent })}
-                    </span>
+    <ul className="flex flex-col gap-2">
+      {rows.map((row) => {
+        const own = mine(row.key);
+        const right = keyShown && row.correct;
+        const wrong = own && keyShown && !row.correct;
+        const tag = right
+          ? { tone: "text-success", icon: <Check aria-hidden />, label: t(own ? "join.reveal.yoursCorrect" : "join.reveal.correct") }
+          : wrong
+            ? { tone: "text-danger", icon: <X aria-hidden />, label: t("join.reveal.yoursWrong") }
+            : own
+              ? { tone: "font-semibold text-fg", icon: null, label: t("join.reveal.yours") }
+              : null;
+        return (
+          <li
+            key={row.key}
+            className={cx(
+              "flex flex-col gap-2 rounded-card border px-3 py-2.5 text-sm",
+              right
+                ? "border-success/40 bg-success-soft"
+                : wrong
+                  ? "border-danger/40 bg-danger-soft"
+                  : // Neutral, never the accent: red already means "wrong".
+                    own
+                    ? "border-line-strong bg-surface-2"
+                    : "border-line bg-surface",
+            )}
+          >
+            <div className="flex items-start justify-between gap-3">
+              {row.markdown ? (
+                <MarkdownView as="span" source={row.label} inline className="min-w-0" />
+              ) : (
+                <span className="min-w-0 break-words">{row.label}</span>
+              )}
+              <span className="flex shrink-0 items-center gap-2">
+                {tag ? (
+                  <span className={cx(tagClass, tag.tone)}>
+                    {tag.icon}
+                    {tag.label}
                   </span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
-                  <span
-                    className="block h-full rounded-full bg-info"
-                    style={{ width: `${Math.min(100, row.percent)}%` }}
-                  />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+                ) : null}
+                <span className="font-mono text-[13px] font-semibold tabular-nums">
+                  {t("poll.percent", { n: row.percent })}
+                </span>
+              </span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
+              <span
+                className="block h-full rounded-full bg-info"
+                style={{ width: `${Math.min(100, row.percent)}%` }}
+              />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** A heading and what it heads: one block of what the teacher shows. */
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-[13px] font-medium text-fg-muted">{title}</h2>
+      {children}
+    </section>
   );
 }
 
 /**
- * The prompt, then the key. `solution` arrives as `unknown` (the contract
- * cannot name a type's shape), so each branch narrows it structurally: a
- * payload that is not the shape this type publishes renders nothing rather
- * than throwing on a phone in the middle of a lecture.
+ * The key and the distribution, each only when the server sent it: the
+ * `solution` while the key is revealed, the `tally` while the votes are
+ * shown. `solution` arrives as `unknown` (the contract cannot name a type's
+ * shape), so each branch narrows it structurally: a payload that is not the
+ * shape this type publishes renders nothing rather than throwing on a phone
+ * in the middle of a lecture.
+ *
+ * An mcq whose key AND votes are both shown draws one list, the distribution
+ * with the key ticked in it — never the same choices twice.
  */
 export function PollJoinReveal({
   type,
@@ -252,39 +295,65 @@ export function PollJoinReveal({
   solution,
   tally = null,
   answer,
+  verdict,
+  withPrompt,
 }: {
   type: PollQuestionType;
   student: unknown;
   solution: unknown;
-  /** The distribution: what an opinion poll, which has no key, reveals. */
+  /** The distribution, while the teacher shows the votes. */
   tally?: PollTally | null;
   answer: unknown;
+  /** Name this browser's answer, right or wrong: once the poll has ended only. */
+  verdict: boolean;
+  /** Draw the prompt: this block replaces the question (the poll has ended). */
+  withPrompt: boolean;
 }) {
   const t = useT();
   const prompt = (student as { prompt?: unknown } | null)?.prompt;
-  const keyed = hasKey({ type, solution });
-  const body = !keyed ? (
-    tally ? (
-      <ResultsReveal type={type} student={student} solution={solution} tally={tally} answer={answer} />
-    ) : null
-  ) : type === "mcq" && Array.isArray((solution as McqSolution | null)?.correct) ? (
-      <McqReveal
-        student={student as McqStudent}
-        solution={solution as McqSolution}
-        answer={answer}
-      />
-    ) : type === "short" && Array.isArray((solution as ShortSolution | null)?.expected) ? (
-      <ShortReveal solution={solution as ShortSolution} answer={answer} />
-    ) : null;
+  const keyShown = solution !== null && hasKey({ type, solution });
+  const mcqKey =
+    keyShown && type === "mcq" && Array.isArray((solution as McqSolution | null)?.correct);
+  const shortKey =
+    keyShown && type === "short" && Array.isArray((solution as ShortSolution | null)?.expected);
+  // A reveal stored on a question with no key (before ADR-014's addendum of
+  // 2026-09-29) is what hands this phone the distribution: say why nothing
+  // in it is marked.
+  const keyless = solution !== null && !keyShown;
   return (
-    <div className="flex flex-col gap-4">
-      {typeof prompt === "string" ? (
+    <div className="flex flex-col gap-5">
+      {withPrompt && typeof prompt === "string" ? (
         <MarkdownView source={prompt} className="text-lg leading-relaxed text-fg" />
       ) : null}
-      <p className="text-[13px] font-medium text-fg-muted">
-        {t(keyed ? "join.reveal.title" : "join.reveal.results")}
-      </p>
-      {body}
+      {mcqKey && !tally ? (
+        <Section title={t("join.reveal.title")}>
+          <McqReveal
+            student={student as McqStudent}
+            solution={solution as McqSolution}
+            answer={answer}
+            verdict={verdict}
+          />
+        </Section>
+      ) : null}
+      {shortKey ? (
+        <Section title={t("join.reveal.title")}>
+          <ShortReveal solution={solution as ShortSolution} answer={answer} verdict={verdict} />
+        </Section>
+      ) : null}
+      {tally ? (
+        <Section title={t(mcqKey ? "join.reveal.title" : "join.reveal.results")}>
+          {keyless ? <p className="text-[13px] text-fg-muted">{t("join.reveal.noKey")}</p> : null}
+          <ResultsReveal
+            type={type}
+            student={student}
+            solution={solution}
+            tally={tally}
+            answer={answer}
+            keyShown={keyShown}
+            verdict={verdict}
+          />
+        </Section>
+      ) : null}
     </div>
   );
 }

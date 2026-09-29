@@ -202,7 +202,7 @@ describe("PollProjection", () => {
     expect(screen.getByText("eight")).toBeVisible();
     expect(screen.queryByText("75%")).toBeNull();
     expect(screen.queryByText("6 votes")).toBeNull();
-    expect(screen.getByRole("radio", { name: "Hide votes" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "Show votes" })).not.toBeChecked();
     // The footer still says how many answered: that is when to move on.
     expect(screen.getByText("8 answers received · 2 waiting")).toBeVisible();
 
@@ -210,6 +210,53 @@ describe("PollProjection", () => {
     expect(await screen.findByText("75%")).toBeVisible();
     expect(calls.find((c) => c.url === `${POLL}/reveal`)?.body).toEqual({
       revealed: false,
+      votes: true,
+    });
+  });
+
+  it("makes End the primary action and says who it would leave out", async () => {
+    mockFetch({ [`GET ${POLL}`]: ok(view()) });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    await screen.findByRole("heading", { name: /How many bytes/ });
+
+    const end = screen.getByRole("button", { name: "End poll" });
+    expect(end.className).toContain("bg-accent");
+    // tally.joined − tally.answered, nothing else: no roster count.
+    expect(screen.getByText("2 joined have not answered yet")).toBeVisible();
+    // The two switches are secondary, and independent.
+    expect(screen.getByRole("switch", { name: "Show votes" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "Reveal answer" })).not.toBeChecked();
+  });
+
+  it("toggles the votes with v and the key with r, one switch each", async () => {
+    const { calls } = mockFetch({
+      [`GET ${POLL}`]: ok(view()),
+      [`POST ${POLL}/reveal`]: ok(view()),
+    });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    await screen.findByRole("heading", { name: /How many bytes/ });
+
+    await userEvent.keyboard("r");
+    await userEvent.keyboard("v");
+    const bodies = calls.filter((c) => c.url === `${POLL}/reveal`).map((c) => c.body);
+    expect(bodies).toEqual([{ revealed: true }, { votes: false }]);
+  });
+
+  it("shows the key without the votes, and the remote adds the votes from there", async () => {
+    const keyOnly = view({ settings: { anonymous: true, revealed: true, votes: false } });
+    const { calls } = mockFetch({
+      [`GET ${POLL}`]: ok(keyOnly),
+      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: true, votes: true } })),
+    });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    await screen.findByRole("heading", { name: /How many bytes/ });
+
+    expect(screen.getByText("Correct answer")).toBeVisible();
+    expect(screen.queryByText("75%")).toBeNull();
+    await userEvent.keyboard("{PageDown}");
+    expect(await screen.findByText("75%")).toBeVisible();
+    expect(calls.find((c) => c.url === `${POLL}/reveal`)?.body).toEqual({
+      revealed: true,
       votes: true,
     });
   });
@@ -258,32 +305,40 @@ describe("PollProjection", () => {
     expect(await screen.findByText("Correct answer")).toBeVisible();
   });
 
-  it("marks nothing right when the poll has no key, and says results instead", async () => {
+  it("offers no reveal when the poll has no key, only the votes", async () => {
+    const keyless = { id: "q1", type: "mcq" as const, student: view().question.student, solution: { correct: [] }, saved: false, pool: null };
     const { calls } = mockFetch({
-      [`GET ${POLL}`]: ok(view({ question: { id: "q1", type: "mcq", student: view().question.student, solution: { correct: [] }, saved: false, pool: null } })),
-      [`POST ${POLL}/reveal`]: ok(
-        view({
-          settings: { anonymous: true, revealed: true, votes: true },
-          question: { id: "q1", type: "mcq", student: view().question.student, solution: { correct: [] }, saved: false, pool: null },
-        }),
-      ),
+      [`GET ${POLL}`]: ok(view({ settings: { anonymous: true, revealed: false, votes: false }, question: keyless })),
+      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: false, votes: true }, question: keyless })),
     });
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
     await screen.findByRole("heading", { name: /How many bytes/ });
 
-    // No key, no "Show votes" step: the second step is the results.
-    expect(screen.queryByRole("radio", { name: "Show votes" })).toBeNull();
-    await userEvent.click(screen.getByRole("radio", { name: "Show results" }));
-    expect(await screen.findByText("Results shown", { selector: "span" })).toBeVisible();
-    expect(calls.find((c) => c.url === `${POLL}/reveal`)?.body).toEqual({
-      revealed: true,
-      votes: true,
-    });
+    expect(screen.queryByRole("switch", { name: "Reveal answer" })).toBeNull();
+    await userEvent.keyboard("r");
+    expect(calls.some((c) => c.url === `${POLL}/reveal`)).toBe(false);
+    await userEvent.click(screen.getByRole("switch", { name: "Show votes" }));
+    expect(calls.find((c) => c.url === `${POLL}/reveal`)?.body).toEqual({ votes: true });
     // The distribution stays whole: no tick, no word, no faded row.
-    expect(screen.getByText("75%")).toBeVisible();
+    expect(await screen.findByText("75%")).toBeVisible();
     expect(screen.queryByText("Correct answer")).toBeNull();
-    expect(screen.queryByText("Answer revealed")).toBeNull();
     expect(screen.getByText("25%").className).not.toContain("text-fg-faint");
+  });
+
+  it("shows the votes of a keyless poll revealed before the switches were split", async () => {
+    const keyless = { id: "q1", type: "mcq" as const, student: view().question.student, solution: { correct: [] }, saved: false, pool: null };
+    const { calls } = mockFetch({
+      [`GET ${POLL}`]: ok(view({ settings: { anonymous: true, revealed: true, votes: false }, question: keyless })),
+      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: false, votes: false }, question: keyless })),
+    });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    await screen.findByRole("heading", { name: /How many bytes/ });
+
+    expect(screen.getByText("75%")).toBeVisible();
+    expect(screen.getByRole("switch", { name: "Show votes" })).toBeChecked();
+    await userEvent.click(screen.getByRole("switch", { name: "Show votes" }));
+    // Hiding clears the stored reveal too, or the votes would stay on.
+    expect(calls.find((c) => c.url === `${POLL}/reveal`)?.body).toEqual({ votes: false, revealed: false });
   });
 
   it("reveals through the server, never locally", async () => {
@@ -294,12 +349,10 @@ describe("PollProjection", () => {
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
     await screen.findByRole("heading", { name: /How many bytes/ });
 
-    await userEvent.click(screen.getByRole("radio", { name: "Reveal answer" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Reveal answer" }));
     expect(await screen.findByText("Correct answer")).toBeVisible();
-    expect(calls.find((c) => c.url === `${POLL}/reveal`)?.body).toEqual({
-      revealed: true,
-      votes: true,
-    });
+    // The reveal says nothing of the votes: they stay where they were.
+    expect(calls.find((c) => c.url === `${POLL}/reveal`)?.body).toEqual({ revealed: true });
   });
 
   it("offers Run again, and only that, once the poll is over", async () => {

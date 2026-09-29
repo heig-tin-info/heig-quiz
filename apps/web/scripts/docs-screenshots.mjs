@@ -1170,7 +1170,10 @@ const prepare = {
   "poll-revealed": async (world) => {
     console.log("== phase poll-revealed");
     await tolerant("the teacher reveals the answer", () =>
-      world.api.teacher.post(`/app/api/evaluations/${world.poll.id}/poll/reveal`, { revealed: true }),
+      world.api.teacher.post(`/app/api/evaluations/${world.poll.id}/poll/reveal`, {
+        revealed: true,
+        votes: true,
+      }),
     );
   },
 

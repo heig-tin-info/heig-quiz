@@ -77,8 +77,8 @@ export function PollJoin({
     // retry: the reader mistyped six characters and the page says so.
     retry: false,
     queryFn: () => api<PollPublicView>(`/app/api/p/${encodeURIComponent(code)}`),
-    // The teacher's "Reveal" and the end of the poll are the two things that
-    // must reach a phone nobody is touching. A poll runs for a minute or two,
+    // The teacher's two switches (the key, the votes) and the end of the poll
+    // are what must reach a phone nobody is touching. A poll runs for a minute or two,
     // so three seconds of polling is cheaper in every sense than a socket per
     // participant — and it stops by itself once the poll has ended.
     refetchInterval: (query) => (query.state.data?.state === "running" ? POLL_MS : false),
@@ -188,7 +188,10 @@ export function PollJoin({
   if (view.me.loginRequired) return <LoginGate code={code} title={view.title} />;
 
   const ended = view.state === "ended";
-  const revealed = view.settings.revealed && view.solution !== null;
+  // What the teacher shows — the key, the votes — never closes the vote:
+  // only End does (ADR-014, addendum 2026-09-29). While the poll runs, the
+  // question and its Send button stay, and what is shown sits under them.
+  const shown = view.solution !== null || view.tally !== null;
   const dirty = !same(answer, stored);
   const sent = stored !== null && !dirty;
   const closedByServer = errorCode(send.error) === "attempt_closed";
@@ -210,13 +213,15 @@ export function PollJoin({
         ) : null}
 
         <Card className="mt-6 px-4 py-5 sm:px-6">
-          {revealed ? (
+          {ended && shown ? (
             <PollJoinReveal
               type={view.question.type}
               student={view.question.student}
               solution={view.solution}
               tally={view.tally}
               answer={stored}
+              verdict
+              withPrompt
             />
           ) : (
             <QuestionHost
@@ -228,6 +233,20 @@ export function PollJoin({
             />
           )}
         </Card>
+
+        {!ended && shown ? (
+          <Card className="mt-4 px-4 py-5 sm:px-6">
+            <PollJoinReveal
+              type={view.question.type}
+              student={view.question.student}
+              solution={view.solution}
+              tally={view.tally}
+              answer={stored}
+              verdict={false}
+              withPrompt={false}
+            />
+          </Card>
+        ) : null}
 
         {join.isError ? (
           <div className="mt-4">
@@ -264,7 +283,7 @@ export function PollJoin({
         </p>
       </main>
 
-      {ended || revealed ? null : (
+      {ended ? null : (
         <footer className="sticky bottom-0 border-t border-line bg-surface">
           <div className="mx-auto flex w-full max-w-140 items-center gap-3 px-4 py-3 sm:px-6">
             {/* The whole sync report: a check and a word, in a polite live

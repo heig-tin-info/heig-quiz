@@ -332,15 +332,9 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     teacher(
       { params: IdParam, body: PollRevealBody, optionalBody: true, load: staffPoll },
       async ({ req, now, body, scope }) => {
-        const updated = await service.setRevealed(
-          app.db,
-          scope.evaluation,
-          body.revealed,
-          now,
-          body.votes,
-        );
+        const updated = await service.setDisplay(app.db, scope, body, now);
         await trace(req, "poll.reveal", "evaluation", updated.id, {
-          revealed: body.revealed,
+          ...(body.revealed === undefined ? {} : { revealed: body.revealed }),
           ...(body.votes === undefined ? {} : { votes: body.votes }),
         });
         return view(req, { ...scope, evaluation: updated });

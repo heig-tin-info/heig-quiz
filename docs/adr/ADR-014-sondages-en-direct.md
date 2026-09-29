@@ -216,7 +216,9 @@ written, without saving anything a teacher would find again:
      instead of "Answer revealed". `PollPublicView` carries the `tally` once revealed
      (null before), and a phone whose key is empty shows the distribution with its own
      answer named — no "correct", no "wrong", no score. The question itself still leaves
-     only through `toStudent` (invariant 4).
+     only through `toStudent` (invariant 4). *Amended by the addendum of 2026-09-29: a
+     keyless poll has no reveal; its votes switch is what hands the phones the
+     distribution.*
    - *Launcher.* The blank question starts WITHOUT a key (no choice ticked, no accepted
      answer), one muted line says marking one is optional, and the `short` editor lets its
      last accepted answer go when `ungraded`.
@@ -279,13 +281,15 @@ came back through the beamer.
 - *Three steps, one progression.* What the wall shows is `hidden` → `votes` → `answer`
   (`PollDisplay`, derived by `pollDisplayOf` from `settings.poll`). A reveal implies the
   votes. An opinion poll has two steps, `hidden` → `answer`: its reveal is what hands the
-  phones the results, so a wall-only step would say nothing more.
+  phones the results, so a wall-only step would say nothing more. *Superseded by the
+  addendum of 2026-09-29: two independent switches.*
 - *Server state.* `settings.poll.votes` (default `false`) sits beside `revealed` and moves
   through the same route, `POST …/poll/reveal { revealed, votes? }`; `votes` omitted leaves
   it where it was. A reload, or a second screen on the same poll, shows the same step.
 - *Wall only.* `votes` never reaches a phone: `PollPublicView.tally` stays null until the
   reveal, and the `poll.tally` frames stay staff-only. Hidden, an mcq keeps its choices on
-  the wall without bar or figure; a short-answer poll lists no answer.
+  the wall without bar or figure; a short-answer poll lists no answer. *Amended by the
+  addendum of 2026-09-29: `votes` reaches the phones too; the frames stay staff-only.*
 - *No menu.* The projection's `…` menu is gone: the way back is an arrow before the context
   line, "Keep this question" a bookmark icon, "End poll" a named ghost button, still
   confirmed. The arrow keys and Page Up / Page Down (a presenter clicker) walk the steps.
@@ -517,3 +521,64 @@ Rejected: counting from the start alone — a long poll still being answered wou
 its teacher; counting joins as activity — the one phone that reloads the page keeps a
 forgotten poll alive; a shorter threshold — a poll paused over lunch while the teacher
 comments must not vanish.
+
+## Addendum (2026-09-29): only End closes the vote; votes and reveal are independent switches
+
+Incident of 2026-09-29, poll KUFE5R (classroom PythonGE2-A). The teacher pressed "Reveal
+answer" at 08:30:57 on an opinion-like mcq. Eight students joined AFTER that moment: their
+phones showed the results and "You did not answer this poll." with no Send button — the
+participant page (`PollJoin`) replaced the question with the key once `revealed` — and they
+read it as "not allowed". The server, meanwhile, still took answers: `answerPoll` checks
+the deadline only. The screen had closed a vote the server had not. Decided by the product
+owner the same day:
+
+1. **Only End closes the vote.** While a poll runs, every phone keeps the question and its
+   Send/Update button, whatever the wall shows. `answerPoll` is unchanged: it refuses only
+   past the close (`410 attempt_closed`), as it always did.
+2. **Votes: on the wall AND on the phones.** `settings.poll.votes` stays a switch, off by
+   default. On, the live distribution reaches the phones too: `PollPublicView.tally` is
+   non-null exactly while it is shown. This amends the "Wall only" point of the addendum of
+   2026-09-27 (#157). The `poll.tally` frames stay staff-only (decision 9): a phone reads
+   the tally through its 3 s refetch.
+3. **Reveal: independent and reversible.** `settings.poll.revealed` shows the key and
+   nothing else: it never closes the vote and no longer implies `votes`. The display has
+   four states — nothing, votes only, key only, both — and a phone receives `tally` iff the
+   votes are shown and `solution` iff the key is revealed. `POST …/poll/reveal` takes
+   `{ revealed?, votes? }`, a switch omitted staying where it was. This supersedes "Three
+   steps, one progression" of the addendum of 2026-09-27: `PollDisplay` and `pollDisplayOf`
+   leave the contract, and ONE rule, `pollVotesShown(settings, keyed)` in
+   `@quiz/contracts`, decides whether the distribution is shown, for the server and the
+   projection alike. Decision 7 stands: `feedbackPolicy.showKey`/`showExplanation` still
+   move with `revealed`.
+4. **No reveal without a key.** A question with no key (addendum 2026-09-23, 5) has no
+   reveal switch on the projection, and the server refuses `revealed: true` for it with
+   `422 poll_keyless`; `revealed: false` is always accepted. A row stored `revealed: true`
+   on a keyless poll before this addendum is not migrated: for a keyless poll
+   `votes || revealed` shows the distribution (`pollVotesShown`), and switching the votes
+   off from the projection clears both. This amends the "Reveal" bullet of the addendum of
+   2026-09-23, 5.
+5. **Late answers count.** An answer given after the reveal counts like any other, in the
+   tally and in "Recent polls" (`pollOutcome`). A keyed poll whose key was on the wall
+   before the vote closed therefore flatters its correct rate. Accepted distortion; nothing
+   is recorded to correct it.
+6. **No verdict while the vote is open.** While the poll runs and the key is revealed, the
+   phone shows the key UNDER the still-editable question and no personal verdict ("your
+   answer — wrong"): a verdict beside a field the reader may still change is noise. The
+   personal verdict, and "You did not answer this poll.", appear only after End, where the
+   key replaces the question as before.
+7. **The projection.** Its primary action while the poll runs is "End poll", with "N joined
+   have not answered yet" beside it (`tally.joined − tally.answered`, no roster count). The
+   two switches are secondary. `V` and `R` flip them independently; the arrow keys and Page
+   Down / Page Up (a presentation remote) still walk hidden → votes → votes and key, and a
+   keyless poll hidden → votes. The phase label has two values, Live and Poll ended: a
+   reveal is no longer a phase.
+8. **Load.** Each phone keeps its 3 s refetch, and a shown distribution is now computed for
+   each of those reads (`tallyOf`). No tally cache is added. Follow-up if a large room makes
+   it a concern: cache the tally per evaluation for the refetch period, invalidated by the
+   answer write.
+
+Rejected: closing the vote on reveal (making the screen right and the server wrong) — the
+product owner wants a latecomer to still answer, and the key on the wall is the teacher's
+own call; keeping "reveal implies votes" — an opinion-like question then had no way to show
+the key without the distribution, nor a keyed one the distribution on the phones without
+the key.

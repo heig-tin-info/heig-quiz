@@ -5,8 +5,10 @@ import {
   type PollPoolPage,
   type PollPublicView,
   type PollQuestionPick,
+  pollVotesShown,
 } from "@quiz/contracts";
 import { pollOutcome, type PollRunCounts } from "@quiz/domain";
+import { hasKey } from "../poll/pollTally";
 import {
   D,
   MockError,
@@ -269,7 +271,7 @@ const pollOr404 = (code: string): MockPoll => {
   return poll;
 };
 
-/** The wall's distribution switch, `?votes=1` turning it on for a running poll. */
+/** The distribution switch (wall and phones), `?votes=1` turning it on for a running poll. */
 function votesOn(poll: MockPoll): boolean {
   return poll.votes === true || (poll.state === "running" && pollFlag("votes"));
 }
@@ -286,7 +288,9 @@ function pollPublicView(poll: MockPoll): PollPublicView {
     // Never before the teacher says so: the key is the one thing on this
     // payload a participant must not be able to read early (invariant 4).
     solution: revealed ? poll.solution : null,
-    tally: revealed ? publicTally(poll) : null,
+    tally: pollVotesShown({ revealed, votes: votesOn(poll) }, hasKey(poll))
+      ? publicTally(poll)
+      : null,
     me: {
       identified: !loginRequired,
       loginRequired,
@@ -1026,7 +1030,12 @@ on("GET", "/app/api/evaluations/:id/poll", (m) => pollTeacherView(teacherPollOr4
 on("POST", "/app/api/evaluations/:id/poll/reveal", (m, body) => {
   const tp = teacherPollOr404(m.groups!.id!);
   const poll = pollOfTeacher(tp)!;
-  poll.revealed = body.revealed === true;
+  // The two switches are independent; one omitted stays where it was, and a
+  // question with no key has nothing to reveal (ADR-014, addendum 2026-09-29).
+  if (body.revealed === true && !hasKey(poll)) {
+    throw new MockError(422, "this poll's question has no key to reveal");
+  }
+  if (typeof body.revealed === "boolean") poll.revealed = body.revealed;
   if (typeof body.votes === "boolean") poll.votes = body.votes;
   return pollTeacherView(tp);
 });
