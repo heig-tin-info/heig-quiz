@@ -25,7 +25,7 @@ Rules:
 
 - A type has no tables. Its configuration and its answers live in JSONB in the core tables.
 - A type makes no direct network call. It goes through `ctx.runner` and `ctx.llm`.
-- A type has no drill hook. The drill (F-DRILL) takes its correctness from `grade`'s points — all of them right, none (or fewer than none) wrong, the rest partial — and the time from the review, and the drill types are one list, `DRILL_TYPES` in `@quiz/domain` (ADR-041 §3–4, which dropped the former `toDrillGrade`).
+- A type has no drill hook (ADR-041 §4). A question is drillable when its type is in the drill's scope — `mcq`, `short`, `cloze` and `categorize` in v1, `DRILL_TYPES` in `@quiz/domain` — and `grade` settles its answer automatically and finally: graded at once, not pending a runner or an LLM, not a proposal for the teacher. The drill takes its correctness from `grade`'s points and its time from the review.
 - The phase 1 types live in the monorepo under `packages/qt-*`, with two entry points `server` and `client`, see 5.2. Loading is static, through two registries.
 
 ## 4.2 Canonical format

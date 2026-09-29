@@ -181,8 +181,8 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `drill_cards` | `user_id`, `question_id`, `classroom_id` and `evaluation_id` (where it was met first), `stability`, `difficulty`, `due_at`, `reps`, `lapses`, `last_review_at` null for a new card, `key_hash` (the answer key it was last reviewed on) | unique (user, question). Created at the release of an exam, at the hand-in of an exercise (ADR-041 §1). A different `key_hash` at a review resets the card (§7). Purged five years after `coalesce(last_review_at, created_at)` (N-DATA-03) |
-| `drill_reviews` | `card_id`, `rating` 1 to 4, `correctness` right / partial / wrong, `elapsed_ms` the ACTIVE time summed by the server, `device_class` coarse / fine, `reference_ms` nullable (the reference the rating used), `reviewed_at`, `answer_payload` jsonb | History for the reference times (same device class), the teacher's view, and recomputing the parameters. Purged five years after `reviewed_at` |
+| `drill_cards` | `user_id`, `question_id`, `classroom_id` and `evaluation_id` (where it was met first), `stability`, `difficulty`, `due_at`, `reps`, `lapses`, `last_review_at` null for a new card, `key_hash` (the answer key it was last reviewed on) | unique (user, question). Created at the release of an exam, at the hand-in of an exercise (ADR-041 §1). A different `key_hash` at a review resets the card (§7). Kept five years (N-DATA-03) |
+| `drill_reviews` | `card_id`, `rating` 1 to 4, `elapsed_ms` the ACTIVE time summed by the server, `device_class` coarse / fine, `reviewed_at`, `answer_payload` jsonb | History for the reference times (same device class), the teacher's view, and recomputing the parameters. Kept five years (N-DATA-03) |
 
 The drill's switches live on the rows they qualify: `classrooms.drill_enabled_at` (the teacher enabled it, null otherwise), `enrollments.drill_opted_out_at` (the student opted out of that classroom's drill), and `allowDrill` in the evaluation's `settings` (ADR-041 §2, §6).
 

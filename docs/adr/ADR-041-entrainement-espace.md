@@ -2,247 +2,185 @@
 
 ## Status
 
-Accepted (2026-09-29, decided by the product owner in issue #317, last
-comment; with slice 1 of that issue: `drillSchedule`, `drillRating`,
-`drillSession` and `drillProgress` in `@quiz/domain`, and the `ts-fsrs`
-dependency of that package). Amends F-DRILL-01 to F-DRILL-04 and adds
-F-DRILL-06 (docs/spec/02),
-N-DATA-02 and N-DATA-03 (docs/spec/03), the `toDrillGrade` row of the
-question-type contract (docs/spec/04 §4.1) and the drill tables of
-docs/spec/05 §5.4. Slices 2 to 4 (the `drill` module, the student's tab,
-the teacher's view) implement the rest and will add their files here.
+Accepted (2026-09-29). §1 to §8 record the decisions of the product owner
+in issue #317 (last comment). What this ADR adds on its own is listed apart,
+under "Proposed in this ADR, to be confirmed by the product owner". Slice 1
+of #317 implements the pure rules in `@quiz/domain`, with the `ts-fsrs`
+dependency. Amends F-DRILL-01 to F-DRILL-04 and adds F-DRILL-06
+(docs/spec/02); amends N-DATA-02, N-DATA-03 and N-DATA-07 (docs/spec/03),
+the question-type contract (docs/spec/04 §4.1) and the drill tables
+(docs/spec/05 §5.4).
 
 ## Context
 
-The spec reserved a phase-2 drill in five lines (F-DRILL-01..05): every
-question a student meets becomes a card, FSRS schedules it, the student has
-a drill tab, the teacher sees aggregates only. Issue #317 turned it into a
-product: a daily practice of about ten minutes, on a phone or a computer,
-over the questions of the evaluations of the student's current classrooms,
-where a question often failed comes back sooner and an old one comes back
-now and then to check it is still remembered.
+The spec reserved a phase-2 drill in five lines: every question a student
+meets becomes a card, FSRS schedules it, the teacher sees aggregates only.
+Issue #317 made it a product: a daily practice of about ten minutes, on a
+phone or a computer, over the questions of the student's evaluations of the
+year, where a question often failed comes back sooner and an old one comes
+back now and then.
 
-Five facts shape the design:
-
-- an exam question drilled before its results are released would reveal
-  its correctness early: a leak of the grade;
-- a teacher who reuses exam questions year after year may not want them
-  practised forever;
-- the same question takes longer on a phone, and time is part of mastery
-  (a right answer found after a long search is not a known one);
-- the scheduler needs a history to be re-tuned later, which is personal
-  data held for years;
-- `@quiz/domain` is pure (invariant 8) and imported by the web app too.
+Four facts shape it: an exam question drilled before the release would leak
+its grade; a teacher may not want reused exam questions practised forever;
+the same question takes longer on a phone, and time is part of mastery; and
+re-tuning the scheduler later needs a history, which is personal data.
 
 ## Decision
 
 ### 1. When a question becomes a card
 
-A card is `(student, question)`, one per pair, created **at the release of
-an exam's results**, never before, and **at the hand-in of an exercise**
-(its submission; a later attempt of the same exercise creates nothing new).
-A poll creates no card. A card is created only for a question of a drill
-type (§3), for an evaluation that allows drill (§2), in a classroom where
-drill is enabled (§6).
-
-The answer given in the evaluation is NOT the card's first review: its time
-was taken under other conditions (an exam's pace, no feedback). The card
-enters as **new**, and the day's cap on new cards (§6) spreads a large exam
-over several days.
+A card is one per student and question. It is created at the **release of
+an exam's results**, never before, and at the **hand-in of an exercise**.
 
 ### 2. "Allow drill", per evaluation
 
-`settings.allowDrill`, a boolean of the evaluation's settings: **on by
-default for an exercise, off by default for an exam**, where the teacher
-chooses it at creation (and in the settings, like any other setting until
-the release). It is copied into a template and from it (F-EVAL-18) like the
-other settings. It only gates the creation of cards: turning it off later
-leaves the cards already created (the student has met the question).
+An evaluation setting: **on by default for an exercise, off by default for
+an exam**, where the teacher chooses at creation.
 
 ### 3. The types of v1
 
-`mcq`, `short`, `cloze` and `categorize` — `DRILL_TYPES`. They are graded
-at once, without a runner. `rich` (graded by hand) and `circuit` (an
-ngspice run per review is too slow for a drill) are out. `code` and
-`codeimage` come later, through the browser runner (ADR-015), on a computer
-only. A `short` question whose matcher is `llm` is not graded at once and
-takes no card either.
+`mcq`, `short`, `cloze`, `categorize`. `rich` and `circuit` are out; `code`
+and `codeimage` come later, through the browser runner, on a computer only.
+Within that scope, a question takes a card only when the type grades its
+answer **automatically and finally** — graded at once, not pending a runner
+or an LLM, not a proposal for the teacher. A review has nobody to wait for.
 
 ### 4. The rating: strategy A, correctness and time
 
-The FSRS rating (1 Again, 2 Hard, 3 Good, 4 Easy) is computed, never asked
-(`drillRating`):
-
-| Correctness | Time `t` against the reference `ref` | Rating |
+| Correctness | Active time `t` against the reference `ref` | Rating |
 |---|---|---|
 | wrong or empty | any | 1 Again |
 | partial | any | 2 Hard |
 | right | `t > 1.5 × ref` | 2 Hard |
 | right | `0.6 × ref < t ≤ 1.5 × ref` | 3 Good |
 | right | `t ≤ 0.6 × ref` | 4 Easy |
-| right | no reference yet | 3 Good |
 
-The factors are `DRILL_SLOW_FACTOR` and `DRILL_FAST_FACTOR`, named
-constants to retune from `drill_reviews`.
+- **Correctness** comes from the type's ordinary `grade`: every point is
+  right, none (or a negative score, ADR-026) is wrong, the rest partial.
+- **The time is active**: the clock pauses while the tab is hidden. It is
+  summed by the server from what the client reports on screen, as ADR-039
+  does, with the same idle cap (`DWELL_IDLE_CAP_MS`) — never taken from the
+  browser (invariant 5).
+- **The reference** is the median time of the correct answers on the
+  question, on the **same device class**, once about ten exist; before that,
+  the student's own previous time; failing that, an estimate per type.
+- **The device class** (`coarse` / `fine` pointer) is recorded on each
+  review; times are compared only within one class.
+- Strategy C (a proposed rating the student moves by one step) may come
+  later.
 
-**Correctness** comes from the type's ordinary `grade`, the one of the
-evaluation, through its points (`drillCorrectness`): every point is right,
-none (or a negative score under negative marking, ADR-026) is wrong, the
-rest is partial. So the contract's `toDrillGrade(grading)` hook is not
-needed and is dropped from docs/spec/04 §4.1: strategy A needs correctness,
-not a rating, and correctness is the same function of the points for the
-four v1 types — `mcq` (with its policy), `short` (its matcher), `cloze`
-(per blank) and `categorize` (its policy). A later type whose points do not
-say "right" (a code question with a partial test suite, say) may add a
-hook then.
+### 5. The scheduler
 
-**The time** is the question's ACTIVE time: the clock pauses while the tab
-is hidden. It is measured by the server, as the dwell of ADR-039 is (the
-client reports what is on screen and when it hides; the server's clock
-sums the intervals), never taken from the browser (invariant 5).
+**FSRS-5, default weights, target retention 0.9**, through the `ts-fsrs`
+library (MIT, no dependency, ESM), wrapped so that no type of it leaves
+`packages/domain`. `ts-fsrs` 5 implements FSRS-6; it is given FSRS-5's 19
+weights plus the two values that make FSRS-6 compute FSRS-5 exactly. Only
+the long-term scheduler is used — no learning steps, since a drill reviews a
+card at most once a day — and no fuzz, so a review is deterministic.
 
-**The reference time** (`drillReferenceMs`): the **median** of the correct
-times on this question, by every student, **on the same device class**,
-once there are `DRILL_REFERENCE_MIN_N` = 10 of them; before that, the
-student's own previous correct time on it (same class); failing that, an
-estimate per question type; failing that, none, and time is not judged.
+The web app imports `@quiz/domain`; a web build with the scheduler in the
+package's index carried part of the library, so the scheduler is reached by
+its own subpath, `@quiz/domain/drillSchedule`, and the index does not
+re-export it. The web build then contains none of it.
 
-**The device class** is recorded on each review: `coarse` (a touch screen,
-the test of `useCoarsePointer`) or `fine`. Times are compared only within
-one class.
+### 6. Opt-in and the session
 
-Strategy C (the rating proposed, adjustable by one step by the student) can
-come later; strategy B (self-rating alone) is not taken.
-
-### 5. The scheduler: FSRS-5, target retention 0.9
-
-`drillSchedule` wraps the **`ts-fsrs`** library (MIT, no dependency, ESM,
-Open Spaced Repetition) behind four functions: `newDrillCard`,
-`reviewDrillCard(card, rating, now)`, `drillRetrievability(card, now)`,
-`isNewDrillCard`. The card is exactly the columns of `drill_cards`
-(stability, difficulty, due date, last review, reps, lapses); no type of the
-library leaves the file.
-
-- **FSRS-5 with its default weights**, and a **target retention of 0.9**
-  (`DRILL_TARGET_RETENTION`). `ts-fsrs` 5 implements FSRS-6; the 21 weights
-  passed are FSRS-5's 19 followed by `0, 0.5`, which is exactly FSRS-5
-  (no same-day stability term, decay 0.5). Re-optimised weights (slice 4)
-  replace that one array.
-- **The long-term scheduler only**: no learning steps (a drill reviews a
-  card at most once a day, so minute-scale steps have no session to land
-  in), and **no fuzz**: the same review gives the same due date, which
-  keeps the function deterministic and testable.
-- The scheduler is built on first use, not at import, so the web bundle,
-  which imports `@quiz/domain`, does not carry the library.
-
-A port of FSRS-5 into the package was the alternative: some hundred lines,
-but our own to maintain and to keep in step with the reference
-implementation that the re-optimisation of slice 4 will use.
-
-### 6. Opt-in, and composing a session
-
-The **teacher enables** the drill for a classroom. Its students are then
-**in by default and may opt out**, for that classroom. A classroom without
-the drill creates no card and shows nothing.
-
-A session is composed by `composeDrillSession` from the student's cards at
-the server's `now`:
-
-1. the **due** cards first, the lowest retrievability ahead (the nearest to
-   being forgotten), then the oldest due;
-2. then the **new** cards, oldest first, at most what today still allows
-   (`DRILL_NEW_PER_DAY` = 10 minus those introduced today);
-3. taken in that order while the sum of their reference times fits the
-   **time budget** (`DRILL_SESSION_BUDGET_MS`, 10 minutes, until F-ADMIN-03
-   sets another); the first card that overruns it ends the session, which
-   may end early. A session is never empty while a card is available: a
-   card longer than the whole budget is still served alone;
-4. the due block, then the new block, each **interleaved** by group — a
-   course or a tag, the caller's key — round-robin, rather than in blocks.
-
-Nothing due and nothing new: an empty session.
-
-**No reminders and no streaks in v1.** Only a "today's drill is available"
-badge, on the home and on the centre slot of the student's bottom bar.
+- The **teacher enables** the drill for a classroom; its students are **in
+  by default and may opt out**.
+- A session holds the **due cards first**, the lowest retrievability ahead,
+  then **new cards capped per day**, until a **time budget of about ten
+  minutes** counted from the cards' reference times; it may end early.
+  Courses and tags are **interleaved**, not in blocks.
+- **No reminders and no streaks in v1**: a "today's drill is available"
+  badge on the home and on the centre slot of the bottom bar.
 
 ### 7. Question edits
 
-A card is on the QUESTION, not a version, and a review uses its latest
-published version. An edit keeps the card's FSRS state, **unless the answer
-key changed**: then the card is reset to new. The card stores a hash of the
-key it was last reviewed on (`toSolution` under a fixed view); a different
-hash at the next review resets it.
+A question edited after its card exists keeps the card's FSRS state, unless
+its **answer key changed**: then the card is reset.
 
-### 8. Data: five years, and the teacher sees each student
+### 8. Data
 
-This deliberately **amends F-DRILL-04**, which said "never the individual
-detail by default":
+This deliberately **amends F-DRILL-04** ("never the individual detail by
+default"):
 
-- **Retention: five years** for a student's drill data (cards and reviews):
-  three years of studies, four part-time, one repeated. A review is deleted
-  five years after it was made; a card five years after its last review, or
-  its creation if it was never reviewed.
-- **The teacher sees each student's individual activity** in a classroom
-  with the drill: whether they practise — questions seen, reviews, sessions —
-  and a measure of improvement over time (`drillProgress`, below), for
-  instance to see the progression at the end of the semester. Mastery per
-  tag is also shown per classroom.
-- **The student is told**, in the drill tab, that their teacher sees this
+- **Retention: five years** for a student's drill data — three years of
+  studies, four part-time, one repeated.
+- **The teacher sees each student's individual activity** — whether they
+  practise (questions seen, sessions) and a measure of improvement over
+  time. No minimum group size applies to this per-student view: the product
+  owner chose individual visibility.
+- **The student is told** in the drill tab that their teacher sees this
   activity; the data-protection page (N-DATA-07, #274) says so too.
 
-**The improvement metric** is the **recall rate**, per time window (a week,
-say): among the reviews of a question the student had ALREADY drilled
-before, the share not rated Again. The first drill review of a question is
-left out: it measures what the evaluation left, not what the practice kept.
-It is FSRS's "true retention", so a student whose schedule works sits near
-the target (0.9); its rise across windows is the progression. With it,
-per window: reviews, distinct questions, and sessions started (a pause of
-more than 30 minutes, `DRILL_SESSION_GAP_MS`, starts a new one). A window
-with no repeated review has no rate (`null`), not a zero.
+### 9. The invariants the drill keeps
+
+- **Invariant 4.** A drill question reaches the student only through the
+  `studentView` service (`toStudent`), and its key only through
+  `studentSolutionView`, like any attempt's.
+- **Invariant 5.** Review times and due dates are the server's.
+- **Invariant 6.** The teacher's per-student view is loaded through
+  `staffAccess` on the classroom; otherwise a 404.
+
+## Proposed in this ADR, to be confirmed by the product owner
+
+- A card enters as **new**: the evaluation's answer is not its first review
+  (its time was an exam's pace), and a later attempt of an exercise creates
+  nothing. A poll creates no card.
+- Turning "Allow drill" off leaves the cards already created. The setting is
+  editable until the release and copied into and from templates (F-EVAL-18).
+- Opting out is **per classroom**, not global.
+- The eligibility rule of §3 (automatic and final grading) rather than a
+  list of exceptions: it excludes a `short` question with an `llm` matcher.
+- The `toDrillGrade` hook is **removed from the contract** (docs/spec/04
+  §4.1): strategy A needs correctness, and correctness is the same function
+  of the points for the four v1 types. A later type may bring a hook back.
+- The answer-key change of §7 is detected by a hash of the type's
+  `toSolution` under a fixed view, stored on the card.
+- Retention anchors: a review is purged five years after it was made, a card
+  five years after its last review (or its creation if never reviewed).
+- A right answer with no reference at all is rated Good; a card with no
+  reference time counts a fixed fallback in the session budget.
+- New cards are capped at **10 per day**; a card longer than the whole
+  budget is still served alone, so a session is never empty while a card is
+  available.
+- **The improvement metric** (slice 4): the **recall rate** per time window
+  — among the reviews of a question the student had already drilled, the
+  share not rated Again; a question's first drill review is left out, since
+  it measures the evaluation, not the practice. It is FSRS's "true
+  retention": near the target when the schedule works, rising with
+  progress.
+- Mastery per tag is shown to the teacher per classroom.
 
 ## Consequences
 
-- The domain rules exist before any table: slice 2 wires them to the
-  `drill` module without deciding anything of this ADR again.
-- `@quiz/domain` gains its first third-party dependency, `ts-fsrs`, used by
-  the server only.
-- A card's first review is often rated on the student's own time or a type
-  estimate: the median needs ten correct answers on the same device class.
-  Early ratings are therefore coarse, and improve on their own.
-- Five years of reviews per student: tens of thousands of short rows for a
-  diligent student over a programme, well within one PostgreSQL.
-- The teacher's view is individual: the drill tab's notice and the
-  data-protection page are part of the feature, not an afterthought.
+- The domain rules exist before any table; slice 2 wires them to the
+  `drill` module.
+- `@quiz/domain` has its first third-party dependency, server-side only.
+- Early ratings lean on the student's own time or a type estimate, until a
+  question has enough correct answers on a device class.
+- Five years of reviews per student: small rows, well within one database.
+- The teacher's view is individual; the tab's notice and the data page are
+  part of the feature.
 
 ### Rollback
 
-Everything of slice 1 is additive: four files of `@quiz/domain`, unused
-until slice 2. Removing them and the dependency restores the package.
+Slice 1 is additive and unused until slice 2: removing its files and the
+dependency restores the package.
 
 ## Alternatives considered
 
 - **Self-rating (strategy B).** One more tap per card, and easily gamed.
 - **A fixed number of questions per session.** Ten `mcq` and ten `cloze`
-  are not the same effort; a budget in time is what the student sees.
-- **The evaluation's answer as the first review.** Its time is an exam's,
-  and an exam's correctness would be shown before the release.
+  are not the same effort; a time budget is.
 - **Aggregates only for the teacher (F-DRILL-04 as written).** The product
   owner wants to see who practises and who progresses; the student is told.
-- **FSRS-6 default weights.** Newer, but FSRS-5 is what #317 proposed and
-  its weights are widely reported; the switch is one array once slice 4
-  optimises on our own reviews.
-- **A per-type `toDrillGrade` hook.** Four identical implementations of
-  "points out of the maximum".
+- **A port of FSRS-5 into the package.** Some hundred lines of our own to
+  keep in step with the reference implementation that re-optimising the
+  weights will use.
+- **FSRS-6 default weights.** Newer; switching is one array once the
+  weights are re-optimised on our own reviews.
 
 ## Left open
 
-Recorded in docs/spec/06, question 28: whether the deletion of a classroom
-or a question deletes the drill data it gave rise to (assumed: no, the
-five-year clock governs); the "extra practice" on the weakest tags when
-nothing is due; a shorter budget, or types left out, on a phone; damping
-Easy on questions without variants; the settings that grade a review when
-a question was met in evaluations with different policies (negative
-marking, categorize policy); opening a whole pool to drill (F-DRILL-01,
-second sentence); and what "the current year" is when a card's classroom is
-archived. Each has an assumed answer there, to be confirmed before slice 2
-relies on it.
+docs/spec/06, question 28, each with an assumed answer.
