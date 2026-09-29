@@ -1041,6 +1041,34 @@ tick AND the word "Correct answer" (never a tint alone — a projector eats half
 the saturation), and the rows that are not the key FADE to `fg-faint` rather
 than turning red. Nobody in the room is being marked wrong.
 
+Votes hidden, a row keeps the PLACE of its count, its percentage and its bar
+track, empty and `invisible`: showing the votes fills the rows in without
+moving them apart or re-wrapping a label.
+
+**The donut (an ended mcq, Space).** Once the vote is over and the votes are
+shown, the chart button of the control strip (or Space) swaps the bars for one
+large ring beside its legend (`poll/PollDonut.tsx`). It is the wall's own
+choice — local state, never sent to the phones — and it is not offered while
+the room votes: a pie growing live is a race to the biggest slice. The ring is
+`clamp(240px, 42vh, 520px)`, 22 % thick, with the total of the votes in the
+hole in the mono figure style.
+
+- **Colour is categorical, by choice, in the served order** — never by rank,
+  so a choice keeps its colour: `--chart-1` to `--chart-8` in `style.css`,
+  the dataviz reference palette (blue, orange, aqua, yellow, magenta, green,
+  violet, red), a light and a dark step each, validated against `canvas` in
+  both themes. Past eight choices the rest share `fg-faint`. This is the only
+  categorical palette of the product; the `pool-*` hues are tuned for text
+  and are too light for a filled mark on the dark surface.
+- **Never colour alone.** A choice nobody picked draws no slice, so ANY two
+  slots may meet on the ring, and with all pairs in play no eight-hue palette
+  clears the colour-blind floor (at seven slices, violet next to blue in
+  dark is the measured worst case). So: a 2 px surface gap between slices,
+  each slice carries its letter on a `surface` chip (from 5 % up), and the
+  legend spells every choice and its percentage.
+- **Revealed**, the slices outside the key fade to a quarter and the key's
+  legend line turns `success` with a tick, as on the bars.
+
 ## Tables
 
 At most seven visible columns, one dominant identity column, numbers right
@@ -1122,7 +1150,8 @@ more than one line.
 
 A 36 px ring beside each row of the launcher's "Recent polls" (issue #161,
 `poll/OutcomeDonut.tsx`): how the question fared over its last five runs.
-The only chart of the teacher's surfaces, so its rules are written here.
+With the projection's donut, one of the two charts of the teacher's
+surfaces, so its rules are written here.
 
 - **Three parts, fixed order**, clockwise from twelve o'clock: correct,
   incorrect, no answer. The order never follows the size of a share.

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check } from "lucide-react";
 
 import type { PollRevealBody, PollTeacherView, WatchSubject } from "@quiz/contracts";
@@ -14,6 +14,7 @@ import type { Route } from "../router";
 import { useProjectionTheme } from "../theme";
 import { cx, isTyping, PageError, Skeleton, useFullscreen } from "../ui";
 import { PollBars } from "./PollBars";
+import { PollDonut } from "./PollDonut";
 import { ProjectionFooter } from "./ProjectionFooter";
 import { ProjectionHeader, projectionPhase, stepFrom } from "./ProjectionHeader";
 import { hasKey, pollRows, PROJECTION_ROW_CAP, promptOf, questionScale } from "./pollTally";
@@ -74,9 +75,10 @@ import { anyPoolKey, pollKey, pollQuestionsKey, poolsKey } from "../queryKeys";
  * counting the rest. Votes hidden, an mcq keeps its choices on the wall — the
  * room has to read them — without a bar or a figure, the key ticked if it is
  * revealed; a short answer's rows ARE the votes, so none is drawn, and a
- * revealed key is its accepted answers.
+ * revealed key is its accepted answers. `donut`: every choice of an ended
+ * mcq in one large ring instead of the bars (`PollDonut`).
  */
-function ProjectionQuestion({ view }: { view: PollTeacherView }) {
+function ProjectionQuestion({ view, donut }: { view: PollTeacherView; donut: boolean }) {
   const t = useT();
   const allRows = useMemo(() => pollRows(view.question, view.tally), [view]);
   // The switches as the server normalised them (`pollSettingsOf`).
@@ -125,6 +127,8 @@ function ProjectionQuestion({ view }: { view: PollTeacherView }) {
       </h1>
       {rows.length === 0 ? (
         <p className="text-[clamp(16px,1.6vw,22px)] text-fg-muted">{t("poll.noAnswersYet")}</p>
+      ) : donut ? (
+        <PollDonut rows={allRows} revealed={marked} />
       ) : (
         <>
           <PollBars rows={rows} revealed={marked} hideVotes={hidden} />
@@ -217,6 +221,20 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
   // Only which switches exist and where the remote walks: a poll without a
   // key has no reveal.
   const keyed = view ? hasKey(view.question) : true;
+  /*
+   * The donut is the wall's own choice, never the server's: the phones keep
+   * what the switches give them. It is offered for an mcq whose vote is over
+   * and whose votes are shown — a ring that grows while the room votes is a
+   * race to the biggest slice.
+   */
+  const [donutOn, setDonut] = useState(false);
+  const donutOffered =
+    view !== null &&
+    view.question.type === "mcq" &&
+    projectionPhase(view) === "ended" &&
+    view.settings.votes;
+  const donut = donutOffered && donutOn;
+  const toggleDonut = useCallback(() => setDonut((on) => !on), []);
   const setDisplay = useCallback(
     (body: PollRevealBody) => act.mutate({ path: "reveal", body }),
     // `act` is rebuilt on every render; `mutate` itself is stable.
@@ -265,13 +283,19 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
       } else if (k === "t") {
         e.preventDefault();
         toggleTheme();
+      } else if (k === " " && donutOffered) {
+        // A focused button or switch answers Space itself; the wall's
+        // shortcut must not flip the donut a second time.
+        if ((e.target as HTMLElement | null)?.closest?.("button, a, [role='switch']")) return;
+        e.preventDefault();
+        toggleDonut();
       }
       // Escape is the browser's while it owns the full screen, and
       // `fullscreenchange` above is what tells us it left.
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [keyed, view, setDisplay, toggleFullscreen, toggleTheme]);
+  }, [keyed, view, setDisplay, toggleFullscreen, toggleTheme, donutOffered, toggleDonut]);
 
   const fit = useStageFit(view !== null);
 
@@ -338,6 +362,8 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
         onKeep={() => keep.mutate()}
         keepPending={keep.isPending}
         onOpenQuestion={() => navigate({ view: "question", id: view.question.id })}
+        donut={donutOffered ? donut : null}
+        onToggleDonut={toggleDonut}
       />
 
       {/* Band 2 — the question and its distribution: the whole point. The
@@ -376,7 +402,7 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
                 : null),
             }}
           >
-            <ProjectionQuestion view={view} />
+            <ProjectionQuestion view={view} donut={donut} />
           </div>
         </div>
       </div>

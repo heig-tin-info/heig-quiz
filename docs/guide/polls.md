@@ -94,6 +94,8 @@ Revealing is reversible: switch **Reveal answer** off and the key is hidden agai
 
 **End poll**, at the top right, asks for confirmation and stops the poll: no further answer is accepted, and a phone whose answer arrives too late is told so. The header reads **Poll ended** and the primary action becomes **Run again**, which starts a fresh poll on the same question in the same classroom, with an empty tally and a new code.
 
+Once a multiple-choice poll has ended and its votes are shown, the chart button beside the theme toggle, or the `Space` key, swaps the bars for one large donut: each choice in its own colour with its letter on its slice, the total of the votes in the middle, and a legend with every percentage. Press `Space` again for the bars. It changes only the wall; the phones keep what the switches give them.
+
 <figure markdown="span">
   ![The projection after the end: Poll ended in the header, the whole tally with the correct answer marked, and Run again as the primary action](../assets/screenshots/poll-ended-light.png#only-light)
   ![The projection after the end: Poll ended in the header, the whole tally with the correct answer marked, and Run again as the primary action](../assets/screenshots/poll-ended-dark.png#only-dark)

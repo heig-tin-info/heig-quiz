@@ -98,6 +98,35 @@ describe("PollProjection", () => {
     expect(document.documentElement).not.toHaveClass("dark");
   });
 
+  it("turns an ended mcq into a donut with Space, and only then", async () => {
+    mockFetch({ [`GET ${POLL}`]: ok(view({ evaluation: { state: "closed" } as never })) });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    await screen.findByText("75%");
+    expect(screen.queryByRole("list", { name: "Donut chart" })).toBeNull();
+
+    await userEvent.keyboard(" ");
+    const legend = await screen.findByRole("list", { name: "Donut chart" });
+    // Every choice in the legend, with its share; the total in the hole.
+    expect(within(legend).getByText("four")).toBeVisible();
+    expect(within(legend).getByText("75%")).toBeVisible();
+    expect(screen.getByText("8")).toBeVisible();
+    const toggle = screen.getByRole("button", { name: "Donut chart" });
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(toggle).toHaveAttribute("aria-keyshortcuts", "Space");
+
+    await userEvent.keyboard(" ");
+    expect(screen.queryByRole("list", { name: "Donut chart" })).toBeNull();
+  });
+
+  it("offers no donut while the room is still voting", async () => {
+    mockFetch({ [`GET ${POLL}`]: ok(view()) });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    await screen.findByText("75%");
+    expect(screen.queryByRole("button", { name: "Donut chart" })).toBeNull();
+    await userEvent.keyboard(" ");
+    expect(screen.queryByRole("list", { name: "Donut chart" })).toBeNull();
+  });
+
   it("writes where the poll is held without a second request", async () => {
     const { calls } = mockFetch({ [`GET ${POLL}`]: ok(view()) });
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
