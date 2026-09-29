@@ -36,6 +36,7 @@ raw values live in `src/style.css` and swap in dark mode without any
 | `warning` / `warning-soft` | `#a35810` / `#fdf1e2` | `#f0a04b` / `rgb(240 160 75 / 0.14)` | semantic only |
 | `danger` / `danger-soft` | `#c2242a` / `#fbe9e9` | `#f26d72` / `rgb(242 109 114 / 0.14)` | destructive actions, failures |
 | `info` / `info-soft` | `#1268a0` / `#e8f2f9` | `#58a9e0` / `rgb(88 169 224 / 0.14)` | "a set of possibilities", and the progress half of a cell state |
+| `info-mid` / `on-info-mid` | `#b8d7f0` / `#0d5286` | `rgb(88 169 224 / 0.35)` / `#a6d3f3` | the ANSWERED cell of the live grid only |
 
 Rule: strip the accent and every screen must still read. Hierarchy comes
 from size, weight and position, never from red.
@@ -48,8 +49,9 @@ accent, and one standing for a SET of possibilities (several answers, or a
 dropdown) wears this. A teacher scanning a paragraph of holes tells the two
 apart without reading a word of them.
 
-Its second job is the PROGRESS half of a `VerdictCell` — `info-soft` for a
-question that holds an answer, the `info` fill for one they have validated
+Its second job is the PROGRESS half of a `VerdictCell` — `info-mid` for a
+question that holds an answer (`info-soft` was a tint that vanished on a
+projector and against the dark surface), the `info` fill for one they have validated
 (`forward_only`, a crossed checkpoint) — and it is the same job seen from another side: green, amber and red on
 that grid mean "right, partly, wrong", so progress cannot borrow any of them,
 and a blue that is not a link colour is exactly what is left. The two
@@ -88,6 +90,7 @@ belongs in `fg-muted` anyway; `fg-faint` is for the ones that only support it.
 | `danger` on `danger-soft` | 5.01 | 5.01 | 4.88 | 4.88 |
 | `info` on `info-soft` | — | **5.27** | — | **5.39** |
 | `info` on `surface` | — | **5.98** | — | **6.76** |
+| `on-info-mid` on `info-mid` | — | **5.46** | — | **5.70** |
 | `accent` on `accent-soft` | 5.75 | 5.75 | 3.75 ✗ | **4.58** |
 | `accent` on `surface` | 6.64 | 6.64 | 4.31 ✗ | **5.18** |
 | `on-fill` on `accent` | 6.64 | 6.64 | 4.03 ✗ (white) | **5.57** |
@@ -788,7 +791,7 @@ live in `ui/state.ts`, each written once.
   (#227) — `blank` (never opened: a faint 10 px hollow square glyph,
   `line-strong`), `inProgress` (opened, nothing written: the cell itself an
   empty box, a `line-strong` edge and no fill), `answered` (holds an answer:
-  the box filled `info-soft`, no icon), `done` (validated in a locking
+  the box filled `info-mid`, no icon), `done` (validated in a locking
   navigation: the `info` fill AND a check, because two blues alone would be
   colour alone), `skipped` ("I won't answer", issue #89: `surface-2` with a
   DASHED `fg-faint` edge and a dash — a decision to leave the question, not

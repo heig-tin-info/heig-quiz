@@ -52,7 +52,7 @@ const heightOpt = opt("height").map(Number).find(Boolean);
  * a user guide: the scenes about what the grid shows turn them on, as a
  * teacher who flipped the switches would have.
  */
-const LIVE_ALL_ON = { "quiz-live-toggles": JSON.stringify({ names: true, answers: true, results: true }) };
+const LIVE_ALL_ON = { "quiz-live-toggles-v2": JSON.stringify({ names: true, answers: true, results: true }) };
 
 /** The mock's evaluation, taken by the student persona (WP9). */
 const TAKE = "/take/11111111-1111-4111-8111-111111111111";

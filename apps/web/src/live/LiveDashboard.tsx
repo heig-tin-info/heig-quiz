@@ -24,7 +24,7 @@ import {
   Switch,
   useFullscreen,
 } from "../ui";
-import { anonymousNumbers } from "./cells";
+import { anonymousNumbers, commonDeadline } from "./cells";
 import { InspectModal } from "./InspectModal";
 import { Legend } from "./Legend";
 import { LobbyPanel } from "./LobbyPanel";
@@ -299,6 +299,9 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   const selectedRow =
     selected === null ? null : (view.rows.find((r) => r.seatId === selected.seatId) ?? null);
   const lobby = evaluationState === "lobby" || evaluationState === "scheduled";
+  // The one clock of the screen, for the header and for every row that
+  // compares its own deadline against it.
+  const deadline = commonDeadline(view.evaluation.closesAt, view.rows);
 
   const body = (
     <div className="space-y-5">
@@ -310,7 +313,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
           </ParentLink>
         }
         state={evaluationState}
-        closesAt={view.evaluation.closesAt}
+        deadlineAt={deadline}
         endPassed={
           lobby &&
           detail.data?.evaluation.settings.timing === "deadline" &&
@@ -369,6 +372,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
               <StudentGrid
                 state={state}
                 clock={serverNow}
+                commonDeadline={deadline}
                 paused={evaluationState === "paused"}
                 nameOf={nameOf}
                 showAnswers={toggles.answers}

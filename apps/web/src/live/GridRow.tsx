@@ -20,12 +20,12 @@ export const COL = "w-16 min-w-16";
 export const ACTIONS = "w-26 min-w-26";
 
 /**
- * The progress column (#227): "12/12" and a muted "100 %", right-aligned.
- * It used to be a meta line under the name, which made every row two lines
- * tall; as a column it costs 88 px and the whole class fits on one screen.
- * On a phone only the fraction stays, and the column narrows with it.
+ * The progress column (#227): "75 %", right-aligned. It used to be a meta
+ * line under the name, which made every row two lines tall. The fraction
+ * "9/12" beside it said the same thing twice, so it lives in the tooltip
+ * only, and the column is the width of "100 %".
  */
-export const PROGRESS = "w-14 min-w-14 sm:w-22 sm:min-w-22";
+export const PROGRESS = "w-16 min-w-16";
 
 /**
  * A body cell of the grid. `T.td` without its padding: the row's height is
@@ -93,7 +93,7 @@ export const GridRow = memo(function GridRow({
   active,
   inspectItemId,
   evaluationId,
-  closesAt,
+  commonDeadline,
   showScore,
   live,
   retakes,
@@ -115,8 +115,8 @@ export const GridRow = memo(function GridRow({
   /** The question the row's inspect button opens on. */
   inspectItemId: string;
   evaluationId: string;
-  /** The common deadline; the row shows its own only when it differs. */
-  closesAt: string | null;
+  /** The header's one clock; the row shows its own only when it differs. */
+  commonDeadline: string | null;
   /** Some row has points: the Score column exists (#227). */
   showScore: boolean;
   /** The evaluation is running or paused. */
@@ -183,11 +183,6 @@ export const GridRow = memo(function GridRow({
               <WifiOff className="size-3.5" aria-hidden />
             </span>
           ) : null}
-          {row.state === "submitted" ? (
-            <Badge tone="green">{t("live.row.submitted")}</Badge>
-          ) : row.state === "expired" ? (
-            <Badge tone="zinc">{t("live.row.expired")}</Badge>
-          ) : null}
           {/* F-EVAL-15: the row is the LATEST attempt; the
               earlier ones are in the grading panel. */}
           {row.attemptCount > 1 ? (
@@ -205,10 +200,21 @@ export const GridRow = memo(function GridRow({
               {t("roster.status.staff")}
             </Badge>
           ) : null}
-          {/* The row's own time left, and only when it is not the header's
-              (#227, F-DASH-03): an extension, a bonus, a late start. Pushed
-              to the end of the line, so the few that exist line up. */}
-          {running && ownDeadline(row.deadlineAt, closesAt) ? (
+          {/* Where the row stands, pushed to the end of the line so the
+              pills line up in one column instead of trailing names of every
+              length: handed in or closed once it is over, and while it runs
+              its own time left, only when it is not the header's (#227,
+              F-DASH-03) — an extension, a bonus, a late start. */}
+          {row.state === "submitted" ? (
+            <Badge tone="green" className="ml-auto">
+              {t("live.row.submitted")}
+            </Badge>
+          ) : row.state === "expired" ? (
+            <Badge tone="zinc" className="ml-auto">
+              {t("live.row.expired")}
+            </Badge>
+          ) : null}
+          {running && ownDeadline(row.deadlineAt, commonDeadline) ? (
             <span className="ml-auto shrink-0 pl-1" title={t("live.row.ownDeadline")}>
               {/* Said, not only hovered: the timer's own name is "12:00
                   remaining", and why this row has one is the point. */}
@@ -231,10 +237,7 @@ export const GridRow = memo(function GridRow({
           <span
             title={t("live.row.progressLabel", { done: progress.done, total: progress.total })}
           >
-            {t("live.row.progress", { done: progress.done, total: progress.total })}
-            <span className="ml-1.5 hidden text-[11px] text-fg-faint sm:inline">
-              {progress.percent} %
-            </span>
+            {progress.percent} %
           </span>
         )}
       </td>

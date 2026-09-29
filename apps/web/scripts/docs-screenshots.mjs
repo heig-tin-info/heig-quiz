@@ -145,7 +145,7 @@ int somme(const int *t, int n) {
  * first visit (#227), which is right in front of a class and shows a guide
  * reader nothing: the dashboard scenes turn them on, as a teacher would.
  */
-const LIVE_ALL_ON = { "quiz-live-toggles": JSON.stringify({ names: true, answers: true, results: true }) };
+const LIVE_ALL_ON = { "quiz-live-toggles-v2": JSON.stringify({ names: true, answers: true, results: true }) };
 
 const scenes = [
   // Sign-in
