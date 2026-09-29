@@ -207,7 +207,7 @@ export const EDITOR_STRINGS: CircuitEditorStrings = {
 
   reference: "Reference circuit",
   referenceHint:
-    "Your own answer, inside the same box. It is what a simulated grade compares against, and a student never sees it — in any view.",
+    "Your own answer, inside the same box: what a simulated grade compares against. Students may receive it when the evaluation shows the expected answer.",
   tryReference: "Simulate the reference",
   trying: "Simulating…",
   tryUnavailable: "The runner is unavailable, so the reference cannot be simulated right now.",

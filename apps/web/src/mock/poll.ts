@@ -44,6 +44,7 @@ import {
   questions,
   searchQuestions,
   solutionOf,
+  studentSolutionOf,
   studentView,
 } from "./pool";
 
@@ -1098,7 +1099,8 @@ function startPoll(
     revealed: false,
     type: q.type === "short" ? "short" : "mcq",
     student: studentView(q, config),
-    solution: solutionOf(q),
+    // The room's key, as the API serves it to the phones and the beamer (ADR-037).
+    solution: studentSolutionOf(q, solutionOf(q)),
     joined: false,
     answer: null,
   });

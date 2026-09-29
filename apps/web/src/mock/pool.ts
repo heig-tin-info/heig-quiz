@@ -71,11 +71,12 @@ import { codeimageConfig, codeimageStudentView, codeimageTryDetails } from "./co
  * so the mock calls it rather than restating it.
  */
 import { richServer } from "@quiz/qt-rich/server";
-import type { RichConfig, RichSolution } from "@quiz/qt-rich/client";
+import type { RichConfig } from "@quiz/qt-rich/client";
 /* `categorize` likewise: its `toStudent` drops the key, its grade is the real one. */
 import { categorizeServer } from "@quiz/qt-categorize/server";
 import type { CategorizeAnswer, CategorizeConfig } from "@quiz/qt-categorize/client";
-import type { RunnerService } from "@quiz/core/server";
+import type { AnyQuestionTypeServer, RunnerService } from "@quiz/core/server";
+import { shortServer } from "@quiz/qt-short/server";
 
 /** `rich` never runs anything; its grade context still names a runner. */
 const NO_RUNNER: RunnerService = {
@@ -1670,11 +1671,7 @@ export function solutionOf(q: MockQuestion): unknown {
         target: config.target,
       };
     case "circuit":
-      return {
-        reference: config.reference ?? null,
-        stimuli: config.stimuli ?? [],
-        grading: config.grading ?? { mode: "manual", tolerance: 0.05, rubric: "" },
-      };
+      return { reference: config.reference ?? null };
     case "rich":
       return richServer.toSolution(config as RichConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "categorize":
@@ -1682,20 +1679,20 @@ export function solutionOf(q: MockQuestion): unknown {
   }
 }
 
+/** The types whose key holds teacher-only material: their own `studentSolution` hook. */
+const STUDENT_SOLUTION_HOOKS: Partial<Record<string, AnyQuestionTypeServer>> = {
+  rich: richServer,
+  short: shortServer,
+};
+
 /**
  * The key as a STUDENT reads it, the API's `studentSolutionView` (ADR-037):
- * an essay's rubric and a circuit's stimuli and grading stay the teacher's.
+ * the type's own hook, when it has one.
  */
 export function studentSolutionOf(q: MockQuestion, solution: unknown): unknown {
   if (solution === null || solution === undefined) return null;
-  switch (q.type) {
-    case "rich":
-      return richServer.studentSolution!(solution as RichSolution, frozenConfig(q) as RichConfig);
-    case "circuit":
-      return { reference: (solution as { reference?: unknown }).reference ?? null };
-    default:
-      return solution;
-  }
+  const server = STUDENT_SOLUTION_HOOKS[q.type];
+  return server?.studentSolution ? server.studentSolution(solution, frozenConfig(q)) : solution;
 }
 
 export function tryAnswer(

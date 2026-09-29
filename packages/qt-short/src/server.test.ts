@@ -63,6 +63,12 @@ describe("the contract", () => {
     expect(teacher).toHaveLength(6);
   });
 
+  it("refuses an llm matcher at publication, one issue per matcher", () => {
+    expect(shortServer.publicationIssues!(config())).toEqual([]);
+    const issues = shortServer.publicationIssues!(SECRET_CONFIG);
+    expect(issues).toEqual([{ path: ["matchers", 5], message: "short.llm_not_available" }]);
+  });
+
   it("indexes the prompt and the expected answers for the teacher's search", () => {
     const text = shortServer.searchText(SECRET_CONFIG);
     expect(text).toContain("32-bit");

@@ -1431,7 +1431,7 @@ export const fr: Record<keyof Dict, string> = {
   "qt.circuit.e.points": "Points",
   "qt.circuit.e.reference": "Circuit de référence",
   "qt.circuit.e.referenceHint":
-    "Votre propre réponse, dans la même boîte. C'est la comparaison d'une correction par simulation, et un étudiant ne la voit jamais, dans aucune vue.",
+    "Votre propre réponse, dans la même boîte : la comparaison d'une correction par simulation. Les étudiants peuvent la recevoir quand l'évaluation montre la réponse attendue.",
   "qt.circuit.e.tryReference": "Simuler la référence",
   "qt.circuit.e.trying": "Simulation…",
   "qt.circuit.e.tryUnavailable":
@@ -1573,6 +1573,7 @@ export const fr: Record<keyof Dict, string> = {
   "issue.short.length_range": "La longueur maximale est inférieure à la longueur minimale.",
   "issue.short.number_range": "Le maximum est inférieur au minimum.",
   "issue.short.date_range": "Le dernier jour précède le premier.",
+  "issue.short.llm_not_available": "Un critère IA ne peut pas encore être publié : retirez-le pour publier.",
   "issue.codeimage.target_missing":
     "Pas encore de cible : essayez la solution de référence et utilisez son image comme cible.",
   "issue.codeimage.target_size":

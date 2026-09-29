@@ -248,6 +248,13 @@ function keysOf(value: unknown, out = new Set<string>()): Set<string> {
   return out;
 }
 
+/**
+ * Types whose sown strings are no part of their key: `circuit`'s is its
+ * grading rubric, and its solution is the reference alone (ADR-037). Their
+ * draft has no reference, so nothing sown is expected in the solution.
+ */
+const KEYLESS_SECRETS = new Set(["circuit"]);
+
 function checkType(id: string, type: AnyQuestionTypeServer): void {
   const { config, markers } = sowSecrets(type);
   const version = { config, configVersion: type.configVersion };
@@ -282,14 +289,25 @@ function checkType(id: string, type: AnyQuestionTypeServer): void {
     }
   }
 
-  // The sowing must have reached the key, or the search above proved nothing.
-  if (markers.length > 0) {
-    const solution = JSON.stringify(type.toSolution(config, { seed: 0, itemId, shuffle: false }));
-    expect(
-      markers.some((marker) => solution.includes(marker)),
-      `${id}: the markers never reached the solution — the fixture is wrong`,
-    ).toBe(true);
+  if (markers.length === 0) return;
+  const solution = JSON.stringify(type.toSolution(config, { seed: 0, itemId, shuffle: false }));
+  if (KEYLESS_SECRETS.has(id)) {
+    // What is sown here is no part of the key (ADR-037): neither the
+    // teacher's solution nor a student's may carry it.
+    const student = JSON.stringify(
+      studentSolutionView({ type: id, version, seed: 0, itemId }) ?? null,
+    );
+    for (const marker of markers) {
+      expect(solution, `${id}: teacher-only material in the solution (${marker})`).not.toContain(marker);
+      expect(student, `${id}: teacher-only material in a student's key (${marker})`).not.toContain(marker);
+    }
+    return;
   }
+  // The sowing must have reached the key, or the search above proved nothing.
+  expect(
+    markers.some((marker) => solution.includes(marker)),
+    `${id}: the markers never reached the solution — the fixture is wrong`,
+  ).toBe(true);
 }
 
 /**
@@ -445,8 +463,8 @@ describe("studentView never leaks the key (invariant 4)", () => {
  * ADR-037: grading criteria are the teacher's even under a shown key. The
  * student's key (`studentSolutionView`, the one exit every student-facing
  * reader of a key uses) must carry no sown `rubric`, for every registered
- * type — while the model answer an essay publishes, and a circuit's
- * reference, still travel.
+ * type. That the essay's model answer still travels is the feedback route's
+ * test (`results/feedback.db.test.ts`).
  */
 describe("studentSolutionView keeps the teacher's material home (ADR-037)", () => {
   const itemId = "66666666-6666-4666-8666-666666666666";
@@ -474,59 +492,6 @@ describe("studentSolutionView keeps the teacher's material home (ADR-037)", () =
   it("really sowed a rubric into the essay and the circuit", () => {
     // Runs after the loop above: without a sown rubric it proved nothing.
     expect(rubricTypes).toEqual(expect.arrayContaining(["rich", "circuit"]));
-  });
-
-  it("gives a student the essay's model answer, alone", () => {
-    const { config, markers, paths } = sowSecrets(questionType("rich"));
-    const reference = markers[paths.findIndex((p) => p.at(-1) === "reference")]!;
-    const key = studentKeyOf("rich", config) as Record<string, unknown>;
-    expect(Object.keys(key)).toEqual(["reference"]);
-    expect(JSON.stringify(key)).toContain(reference);
-  });
-
-  it("gives a student the circuit's reference, and no stimulus, mode or tolerance", () => {
-    const type = questionType("circuit");
-    const reference = {
-      components: [{ id: "c1", kind: "R", x: 0, y: 0, name: "RSECRETREF", value: "4.7k" }],
-      wires: [],
-    };
-    const config = type.configSchema.parse({
-      ...(filledDraft(type) as object),
-      reference,
-      stimuli: [
-        {
-          name: "S3CR3THIDDEN",
-          source: { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 },
-          load: { kind: "open" },
-          visible: false,
-        },
-      ],
-      grading: { mode: "simulation", tolerance: 0.0137, rubric: "S3CR3TRUBRIC" },
-    });
-    // The teacher's key has it all: the fixture is not empty.
-    const teacher = JSON.stringify(type.toSolution(config, { seed: 0, itemId, shuffle: false }));
-    for (const secret of ["S3CR3THIDDEN", "0.0137", "S3CR3TRUBRIC", "simulation"]) {
-      expect(teacher).toContain(secret);
-    }
-    const key = studentKeyOf("circuit", config) as Record<string, unknown>;
-    expect(Object.keys(key)).toEqual(["reference"]);
-    const serialized = JSON.stringify(key);
-    expect(serialized).toContain("RSECRETREF");
-    for (const secret of ["S3CR3THIDDEN", "0.0137", "S3CR3TRUBRIC", "simulation"]) {
-      expect(serialized).not.toContain(secret);
-    }
-  });
-
-  it("leaves out an llm matcher's rubric from a short answer's key", () => {
-    const type = questionType("short");
-    const config = type.configSchema.parse({
-      ...(filledDraft(type) as object),
-      matchers: [
-        { kind: "exact", value: "shown" },
-        { kind: "llm", rubric: "S3CR3TRUBRIC" },
-      ],
-    });
-    expect(studentKeyOf("short", config)).toEqual({ expected: ["shown"] });
   });
 });
 

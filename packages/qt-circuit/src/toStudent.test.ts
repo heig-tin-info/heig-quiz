@@ -121,33 +121,17 @@ describe("circuitServer.toStudent", () => {
 });
 
 describe("circuitServer.toSolution", () => {
-  it("carries the key, which is why the feedback policy gates it", () => {
+  it("carries the reference, which is why the feedback policy gates it", () => {
     const solution = circuitServer.toSolution(circuitConfig(), view);
     expect(JSON.stringify(solution)).toContain(SECRET_REFERENCE_NAME);
-    expect(solution.grading?.rubric).toBe(SECRET_RUBRIC);
-    expect(solution.grading?.tolerance).toBe(SECRET_TOLERANCE);
-    expect(solution.stimuli?.map((s) => s.name)).toContain(SECRET_HIDDEN_STIMULUS);
   });
-});
 
-describe("circuitServer.studentSolution", () => {
-  it("keeps the reference and drops the stimuli and the grading (ADR-037)", () => {
-    const config = circuitConfig();
-    const solution = circuitServer.toSolution(config, view);
-    const student = circuitServer.studentSolution!(solution, config);
-    expect(student).toEqual({ reference: solution.reference });
-    const serialized = JSON.stringify(student);
-    expect(serialized).toContain(SECRET_REFERENCE_NAME);
+  it("does not carry the stimuli nor the grading block (ADR-037)", () => {
+    const solution = circuitServer.toSolution(circuitConfig(), view);
+    expect(Object.keys(solution)).toEqual(["reference"]);
+    const serialized = JSON.stringify(solution);
     expect(serialized).not.toContain(SECRET_RUBRIC);
     expect(serialized).not.toContain(SECRET_HIDDEN_STIMULUS);
-    expect(serialized).not.toContain(`"tolerance"`);
-    expect(serialized).not.toContain(`"mode"`);
-  });
-
-  it("passes a missing reference through as null", () => {
-    const config = { ...circuitConfig(), reference: null };
-    expect(circuitServer.studentSolution!(circuitServer.toSolution(config, view), config)).toEqual({
-      reference: null,
-    });
+    expect(serialized).not.toContain(String(SECRET_TOLERANCE));
   });
 });

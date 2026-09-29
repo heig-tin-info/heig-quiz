@@ -341,8 +341,8 @@ export interface QuestionTypeServer<
    * The part of the solution a STUDENT may read once the key is shown
    * (docs/05 §5.7, ADR-037). Some material in a solution is the teacher's
    * alone whatever the policy says — the grading criteria of an essay, the
-   * tolerance and the hidden stimuli of a circuit — and this hook is where
-   * it comes back out. `solution` is what {@link toSolution} returned for
+   * rubric of a short answer's `llm` matcher — and this hook is where it
+   * comes back out. `solution` is what {@link toSolution} returned for
    * `config`; the result is served as the student's key, `null` meaning
    * "nothing left to show". Pure. Omitting it means the whole solution is
    * fit for a student.

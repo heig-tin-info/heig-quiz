@@ -92,21 +92,15 @@ export const circuitServer: QuestionTypeServer<
     };
   },
 
-  toSolution(config) {
-    return {
-      reference: config.reference,
-      stimuli: config.stimuli,
-      grading: { ...config.grading },
-    };
-  },
-
   /**
-   * A student under a shown key gets the reference, and nothing that says
-   * how it was compared: no stimuli (the hidden ones least of all), no
-   * grading mode, tolerance or rubric (ADR-037).
+   * The key is the reference schematic, and nothing else: the stimuli (the
+   * hidden ones included) and the grading block (mode, tolerance, rubric)
+   * are no part of it. The teacher reads the stimuli and the rubric in the
+   * editor and the grading details; a student under a shown key gets the
+   * reference alone (ADR-037).
    */
-  studentSolution(solution: CircuitSolution): CircuitSolution {
-    return { reference: solution.reference };
+  toSolution(config) {
+    return { reference: config.reference };
   },
 
   studentDetails(details: CircuitDetails, policy): unknown {

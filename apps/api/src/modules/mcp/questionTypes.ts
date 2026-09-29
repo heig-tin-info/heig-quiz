@@ -91,7 +91,7 @@ const GUIDES: Record<string, TypeGuide> = {
   rich: {
     summary: "Essay: the student writes a text, graded by hand by the teacher against a rubric.",
     rules: [
-      "`prompt`, `rubric` and `reference` are Markdown; `rubric` and `reference` are never shown to the student.",
+      "`prompt`, `rubric` and `reference` are Markdown. `rubric` is never shown to the student; `reference` is shown when the evaluation shows the expected answer.",
       "Write the rubric as a list of criteria, each with its points, so the grader can apply it.",
       '`format: "markdown"` gives the student a formatted editor, `"plain"` a bare text field.',
       "`maxChars` limits the answer in characters (markdown marks included); about 3000 fill an A4 page. Omit it for no limit.",

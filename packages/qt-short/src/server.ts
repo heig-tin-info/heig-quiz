@@ -147,8 +147,18 @@ export const shortServer: QuestionTypeServer<
    * empty list stays a list, as `toSolution` gives it for a keyless poll.
    */
   studentSolution: (_solution, config): ShortSolution => ({
-    expected: config.matchers.filter((m) => m.kind !== "llm").map(describeMatcher),
+    expected: expectedAnswers({ ...config, matchers: config.matchers.filter((m) => m.kind !== "llm") }),
   }),
+
+  /**
+   * Phase 2 is not here: an `llm` matcher round-trips through a draft and an
+   * import, but a question holding one is refused at publication, one issue
+   * per matcher so the editor points at it (`matchShort` never matches it).
+   */
+  publicationIssues: (config) =>
+    config.matchers.flatMap((matcher, index) =>
+      matcher.kind === "llm" ? [{ path: ["matchers", index], message: "short.llm_not_available" }] : [],
+    ),
 
   hasKey: (config) => config.matchers.length > 0,
 

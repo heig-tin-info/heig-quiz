@@ -150,9 +150,9 @@ export function solutionViewOf(type: string, config: unknown, view: StudentView)
 
 /**
  * THE single exit of a key toward a student (ADR-037): the solution passed
- * through the type's `studentSolution` hook, which drops what stays the
- * teacher's whatever the feedback policy says — an essay's grading criteria,
- * a circuit's tolerance and hidden stimuli. `null` when nothing is left.
+ * through the type's `studentSolution` hook, which drops from the solution
+ * what stays the teacher's even under a shown key — an essay's grading
+ * criteria, a short answer's `llm` rubric. `null` when nothing is left.
  *
  * Every student-facing reader of a key comes through here: the feedback
  * page (and a teacher acting as a student, ADR-034), a poll's reveal, and the

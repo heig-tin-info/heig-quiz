@@ -4,8 +4,9 @@
  * The answer, rendered as the student saw it while writing, and — when the
  * feedback policy lets the key through, which the teacher's panel always
  * does — the rubric and the model answer BESIDE it on a wide pane, under it on
- * a narrow one. A student's key holds the model answer alone (ADR-037). There is no verdict: the points are the teacher's, and the
- * score line under the review says them once set.
+ * a narrow one. A student's key holds the model answer alone (ADR-037).
+ * There is no verdict: the points are the teacher's, and the score line
+ * under the review says them once set.
  */
 import type { ReactNode } from "react";
 
