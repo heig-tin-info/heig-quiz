@@ -36,6 +36,8 @@ import {
   questionVersions,
   questions,
   ownedPollSql,
+  STAFF_ROLES,
+  users,
 } from "../db/schema.js";
 import { sebRequired } from "./evaluation/service.js";
 
@@ -86,11 +88,19 @@ function qualified(column: AnyColumn): SQL {
  * caller may DO once they are in is `poolRoleOf` below, and failing THAT is a
  * 403: they already know the pool exists.
  *
- * `teacherGuard` runs before every pool route, so the `public` branch cannot
- * hand a pool to a student.
+ * And the caller's STORED role is staff (`STAFF_ROLES`), whatever branch lets
+ * them in: a seat or an ownership kept by an account demoted to student (a
+ * login never takes them away, ADR-013 rule 5) opens nothing, nor does a
+ * `public` pool — the predicate holds by itself, without `teacherGuard`
+ * (invariant 6). That EXISTS is uncorrelated, a primary-key lookup on
+ * `users`: PostgreSQL evaluates it once per statement, not per pool row.
  */
 export function poolAccess(userId: string): SQL {
-  return sql`(${qualified(pools.ownerId)} = ${userId} OR ${qualified(pools.visibility)} = 'public' OR EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)} AND ${qualified(poolMembers.userId)} = ${userId}) OR EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)} WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${qualified(courseStaff.userId)} = ${userId}))`;
+  const staff = sql.join(
+    STAFF_ROLES.map((role) => sql`${role}`),
+    sql`, `,
+  );
+  return sql`(EXISTS (SELECT 1 FROM ${users} WHERE ${qualified(users.id)} = ${userId} AND ${qualified(users.role)} IN (${staff})) AND (${qualified(pools.ownerId)} = ${userId} OR ${qualified(pools.visibility)} = 'public' OR EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)} AND ${qualified(poolMembers.userId)} = ${userId}) OR EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)} WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${qualified(courseStaff.userId)} = ${userId})))`;
 }
 
 /**

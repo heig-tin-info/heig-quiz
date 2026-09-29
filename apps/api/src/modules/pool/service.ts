@@ -53,6 +53,7 @@ export {
   removeMember,
   poolAudience,
   transferOnLoss,
+  vacateSeats,
 } from "./members.js";
 export { poolTagNames, poolTags, describeTag } from "./tags.js";
 export { poolsOfCourse, PoolLinkForbidden, setCoursePools } from "./coursePools.js";

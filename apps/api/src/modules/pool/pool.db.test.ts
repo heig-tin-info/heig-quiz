@@ -19,11 +19,14 @@ import {
   questionTags,
   questionVersions,
   questions,
+  teacherGrants,
+  userEmails,
   users,
 } from "../../db/schema.js";
 import { loadConfig as loadAppConfig } from "../../config.js";
 import { subscribe, type BusMessage } from "../../events.js";
-import { syncRoleOfUser } from "../../roles.js";
+import { syncRoleOfUser, syncUserRole } from "../../roles.js";
+import { poolAccess } from "../guards.js";
 import { testDb } from "../../test/db.js";
 import { fakeShort, fakeV1Config } from "../../test/fakeType.js";
 import { notify } from "../notifications/service.js";
@@ -830,6 +833,70 @@ describe("succession when the owner loses the teacher role (F-POOL-05)", () => {
     expect(account!.role).toBe("student");
     const [after] = await db.select().from(pools).where(eq(pools.id, id));
     expect(after!.ownerId).toBe(heir);
+  });
+});
+
+describe("a member demoted to student loses their seat (ADR-013, rule 5)", () => {
+  const config = loadAppConfig({
+    NODE_ENV: "test",
+    DATABASE_URL: "pglite://./.data/never-opened",
+    LOG_LEVEL: "fatal",
+  });
+  const reaches = async (poolId: string, userId: string) =>
+    (await db.select({ id: pools.id }).from(pools).where(and(eq(pools.id, poolId), poolAccess(userId))))
+      .length === 1;
+  const seatsOf = async (userId: string) =>
+    db.select().from(poolMembers).where(eq(poolMembers.userId, userId));
+
+  it("vacates every seat on demotion, hands the owned pools on, and gives nothing back on promotion", async () => {
+    const demoted = await seedTeacher(`vacate-${randomUUID().slice(0, 6)}@heig.test`);
+    const colleague = await seedTeacher(`colleague-${randomUUID().slice(0, 6)}@heig.test`);
+    const email = `vacate-back-${randomUUID().slice(0, 6)}@heig.test`;
+    await db.insert(userEmails).values({ userId: demoted, email, source: "login", verified: true });
+    const owned = randomUUID();
+    const seated = randomUUID();
+    await db.insert(pools).values([
+      { id: owned, name: `Owned ${owned.slice(0, 8)}`, ownerId: demoted },
+      { id: seated, name: `Seated ${seated.slice(0, 8)}`, ownerId: colleague },
+    ]);
+    const [ownedPool] = await db.select().from(pools).where(eq(pools.id, owned));
+    const [seatedPool] = await db.select().from(pools).where(eq(pools.id, seated));
+    await service.addMember(db, ownedPool!, colleague, "contributor");
+    await service.addMember(db, seatedPool!, demoted, "owner");
+
+    // No grant, no course seat, no `staff` affiliation: `student`.
+    await syncRoleOfUser(db, config, demoted);
+    const [account] = await db.select().from(users).where(eq(users.id, demoted));
+    expect(account!.role).toBe("student");
+    expect(await seatsOf(demoted)).toEqual([]);
+    // The succession still runs: the owned pool went to the colleague.
+    const [after] = await db.select().from(pools).where(eq(pools.id, owned));
+    expect(after!.ownerId).toBe(colleague);
+
+    // Promoted back by a grant: the role returns, the seat does not.
+    await db.insert(teacherGrants).values({ id: randomUUID(), email, createdBy: colleague });
+    await syncUserRole(db, config, email);
+    const [again] = await db.select().from(users).where(eq(users.id, demoted));
+    expect(again!.role).toBe("teacher");
+    expect(await seatsOf(demoted)).toEqual([]);
+    expect(await reaches(seated, demoted)).toBe(false);
+  });
+
+  it("keeps the seat on a login, but a student account reaches no pool through it", async () => {
+    const member = await seedTeacher(`login-${randomUUID().slice(0, 6)}@heig.test`);
+    const owner = await seedTeacher(`login-owner-${randomUUID().slice(0, 6)}@heig.test`);
+    const id = randomUUID();
+    await db.insert(pools).values({ id, name: `Login ${id.slice(0, 8)}`, ownerId: owner });
+    const [pool] = await db.select().from(pools).where(eq(pools.id, id));
+    await service.addMember(db, pool!, member, "reader");
+
+    await syncRoleOfUser(db, config, member, { succession: false });
+    expect(await seatsOf(member)).toHaveLength(1);
+    expect(await reaches(id, member)).toBe(false);
+    // Nor through a public pool, whatever guard runs before.
+    await db.update(pools).set({ visibility: "public" }).where(eq(pools.id, id));
+    expect(await reaches(id, member)).toBe(false);
+    expect(await reaches(id, owner)).toBe(true);
   });
 });
 

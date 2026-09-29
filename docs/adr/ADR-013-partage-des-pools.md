@@ -61,6 +61,20 @@ every teacher. Two facts shape the design:
    nothing is ever orphaned to nobody. One transaction per pool, idempotent, audited as
    `pool.transfer` with `actorType: "system"`.
 
+   **A demoted member loses their seat, for good** (product decision, 2026-09-29). When a
+   deliberate action — a revoked grant, the last course seat removed — demotes an account to
+   student, the same hook, right after the succession, deletes every `pool_members` row it
+   holds (`vacateSeats`); both run before the role is stored, so a failure leaves the account
+   unchanged and a later deliberate sync runs them again. A revoked grant whose follow-up failed is
+   not retried by itself, and a login never vacates; such a case waits for an admin (accepted: a
+   single transaction cannot hold the notifications the succession sends). A later promotion gives nothing back: a colleague invites them again. A login
+   that computes `student` keeps the seat, for the reason it never transfers — what the IdP
+   releases varies — but the seat opens nothing: `poolAccess` also requires the stored role to
+   be staff, and the pool audience and the succession skip non-staff accounts. There is no
+   data migration: seats kept from demotions before this decision are not swept, since a
+   stored `student` cannot tell a deliberate demotion from a login that did not release the
+   staff affiliation.
+
 6. **A notification is a ROW, plus a hint.** `notifications` (`user_id`, `payload` jsonb,
    `read_at`) is written by one function, `notify`, which also publishes a `notifications`
    hint on `user:<id>`. The stream carries no data (ADR-005) and the client re-reads its own
