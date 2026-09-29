@@ -38,7 +38,10 @@ let cached: IntegrationHost | null = null;
  */
 export function integrationHost(): IntegrationHost {
   if (cached !== null) return cached;
-  const socket = detectSocket();
+  // PODMAN_SOCKET, when set, wins over detection: the CI job points the suite
+  // at the ROOTFUL socket (so `--userns=auto` is the production one) even if
+  // the runner user also has a socket of its own.
+  const socket = process.env.PODMAN_SOCKET || detectSocket();
   const config = loadConfig({
     LOG_LEVEL: "fatal",
     ...(socket === null ? {} : { PODMAN_SOCKET: socket }),

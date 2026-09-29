@@ -201,7 +201,7 @@ podman.socket` on most distributions). Then build the language images once
 and point the API at the runner:
 
 ```bash
-pnpm --filter @quiz/runner images        # apps/runner/images/build.sh: c cpp python js spice
+pnpm --filter @quiz/runner images        # apps/runner/images/build.sh: c cpp python js spice rust
 # in .env
 RUNNER_MODE=http
 RUNNER_URL=http://localhost:3200
@@ -216,7 +216,8 @@ moves it). On a rootless workstation `--userns=auto` is probed once at
 startup and dropped with a log line when `/etc/subuid` gives the user no
 range; in production the socket is the rootful one and the flag is always
 on. The images are Alpine-based, one toolchain each, no network client;
-`images/build.sh rust` builds the large one that is never built by default.
+`images/build.sh c python` builds only the ones named (rust, ~820 MB, is the
+large one a workstation may leave out: `GET /health` then simply omits it).
 
 The hardening flags, the closed environment list and the request lifecycle
 are in `apps/runner/README.md`; the invariants they implement are

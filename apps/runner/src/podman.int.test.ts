@@ -66,14 +66,32 @@ const run = (req: RunnerRequest): Promise<RunnerOutcome> => executeRequest(req, 
 // One language, one shape of program: what the platform actually asks of it.
 // ===========================================================================
 
+/**
+ * The programming languages of the contract, `spice` aside (its own suite,
+ * `spice.int.test.ts`). A loop over this list exercises every image the host
+ * has and skips the others, so the CI job — which builds all of them, rust
+ * included — runs every language through it.
+ */
+const PROGRAMMING = ["c", "cpp", "python", "js", "rust"] as const;
+
+/** Reads a number on stdin and prints its double: the toolchain, end to end. */
 const HELLO = {
   c: '#include <stdio.h>\nint main(void){int n;if(scanf("%d",&n)!=1)n=0;printf("%d\\n",n*2);return 0;}\n',
+  cpp: '#include <iostream>\nint main(){int n=0;std::cin>>n;std::cout<<n*2<<"\\n";return 0;}\n',
   python: "n = int(input())\nprint(n * 2)\n",
+  js: 'const n = parseInt(require("node:fs").readFileSync(0, "utf8"), 10) || 0;\nconsole.log(n * 2);\n',
+  rust:
+    "use std::io::Read;\n" +
+    "fn main(){let mut s=String::new();std::io::stdin().read_to_string(&mut s).unwrap();" +
+    'let n:i64=s.trim().parse().unwrap_or(0);println!("{}",n*2);}\n',
 } as const;
 
 const BROKEN = {
   c: '#include <stdio.h>\nint main(void){printf("oops")\nreturn 0;}\n',
+  cpp: '#include <cstdio>\nint main(){std::printf("oops")\nreturn 0;}\n',
   python: "def f(:\n    pass\n",
+  js: "function f( {\n",
+  rust: 'fn main(){ let _x: i32 = "oops"; }\n',
 } as const;
 
 const LOOP = {
@@ -120,13 +138,13 @@ const PASSWD = {
     "try:\n    open('/etc/passwd', 'w')\n    print('written')\nexcept OSError:\n    print('denied')\n",
 } as const;
 
-for (const language of ["c", "python"] as const) {
-  describe.skipIf(!has(language))(`${language} in a real container`, () => {
+for (const language of PROGRAMMING) {
+  describe.skipIf(!has(language))(`the ${language} toolchain in a real container`, () => {
     it("builds and runs a hello world", async () => {
       const outcome = await run(
         request(language, HELLO[language], { cases: [{ name: "twice", args: [], stdin: "21\n" }] }),
       );
-      expect(outcome.compile.ok).toBe(true);
+      expect(outcome.compile.ok, outcome.compile.stderr).toBe(true);
       expect(outcome.cases[0]).toMatchObject({
         exitCode: 0,
         stdout: "42\n",
@@ -142,7 +160,11 @@ for (const language of ["c", "python"] as const) {
       expect(outcome.compile.stderr.length).toBeGreaterThan(0);
       expect(outcome.cases).toEqual([]);
     });
+  });
+}
 
+for (const language of ["c", "python"] as const) {
+  describe.skipIf(!has(language))(`${language} in a real container`, () => {
     it("kills an infinite loop at its deadline", async () => {
       const outcome = await run(
         request(language, LOOP[language], {
@@ -275,9 +297,15 @@ const PERF_EVENT_OPEN =
  * glibc falls back to `clone` — which the `pthread_create` line proves.
  * Each line is `<name> <rc> <errno>`; a raw `syscall()` keeps glibc's own
  * wrappers and fallbacks out of the measure.
+ *
+ * The profile is the same for every image, but what a toolchain needs from it
+ * is not: rustc runs a thread pool and a linker, Node a worker pool, CPython
+ * forks. So the probe runs in EVERY language (`ISOLATION` below), each asking
+ * the same questions in its own words, and each proving that its own threads
+ * and its own `fork` still work under the filter.
  */
 const NAMESPACES =
-  "#define _GNU_SOURCE\n" +
+  "#ifndef _GNU_SOURCE\n#define _GNU_SOURCE\n#endif\n" +
   "#include <stdio.h>\n#include <errno.h>\n#include <sched.h>\n#include <signal.h>\n" +
   "#include <pthread.h>\n#include <unistd.h>\n#include <sys/syscall.h>\n#include <sys/wait.h>\n" +
   "#define TRY(n,e) do{errno=0;long rc=(e);printf(\"%s %ld %d\\n\",n,rc,errno);}while(0)\n" +
@@ -299,6 +327,156 @@ const NAMESPACES =
   " return 0;}\n";
 
 /**
+ * The syscall numbers the Python and Rust probes need, which neither language
+ * names without a crate or a module the images do not ship. Order:
+ * unshare, clone, clone3, setns, mount, fsopen, keyctl, ptrace.
+ */
+const SYSCALLS = {
+  x86_64: [272, 56, 435, 308, 165, 430, 250, 101],
+  aarch64: [97, 220, 435, 268, 40, 430, 219, 117],
+} as const;
+
+/** CPython, through `ctypes` on musl's own `syscall()`. */
+const NAMESPACES_PY =
+  "import ctypes, os, platform, threading\n" +
+  `NR = dict(zip(["unshare","clone","clone3","setns","mount","fsopen","keyctl","ptrace"], ${JSON.stringify(SYSCALLS)}[platform.machine()]))\n` +
+  "libc = ctypes.CDLL(None, use_errno=True)\n" +
+  "libc.syscall.restype = ctypes.c_long\n" +
+  "def TRY(name, nr, *args):\n" +
+  "    ctypes.set_errno(0)\n" +
+  "    rc = libc.syscall(ctypes.c_long(nr), *[ctypes.c_long(a) if isinstance(a, int) else a for a in args])\n" +
+  "    print(name, rc, ctypes.get_errno(), flush=True)\n" +
+  "NEWUSER, NEWNET, SIGCHLD = 0x10000000, 0x40000000, 17\n" +
+  'TRY("unshare-user", NR["unshare"], NEWUSER)\n' +
+  'TRY("unshare-net", NR["unshare"], NEWUSER | NEWNET)\n' +
+  'TRY("clone-user", NR["clone"], NEWUSER | SIGCHLD, 0, 0, 0, 0)\n' +
+  'TRY("clone3", NR["clone3"], 0, 0)\n' +
+  'TRY("setns", NR["setns"], 0, 0)\n' +
+  'TRY("mount", NR["mount"], b"none", b"/tmp", b"tmpfs", 0, 0)\n' +
+  'TRY("fsopen", NR["fsopen"], b"tmpfs", 0)\n' +
+  'TRY("keyctl", NR["keyctl"], 0, 0, 0, 0, 0)\n' +
+  'TRY("ptrace", NR["ptrace"], 0, 0, 0, 0)\n' +
+  "t = threading.Thread(target=lambda: None); t.start(); t.join()\n" +
+  'print("pthread 0 0", flush=True)\n' +
+  "pid = os.fork()\n" +
+  "if pid == 0:\n    os._exit(0)\n" +
+  "_, status = os.waitpid(pid, 0)\n" +
+  'print("fork", 0 if os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0 else -1, 0)\n';
+
+/**
+ * Rust, with no `libc` crate: musl's `syscall()` and `__errno_location()`
+ * declared by hand, as the uid probe below declares `getuid`. `std::thread` is
+ * rustc's own path to `pthread_create`.
+ */
+const NAMESPACES_RS =
+  "use std::os::raw::{c_int, c_long};\n" +
+  'extern "C" {\n' +
+  "  fn syscall(n: c_long, ...) -> c_long;\n" +
+  "  fn __errno_location() -> *mut c_int;\n" +
+  "  fn fork() -> c_int;\n" +
+  "  fn waitpid(pid: c_int, status: *mut c_int, options: c_int) -> c_int;\n" +
+  "  fn _exit(code: c_int) -> !;\n" +
+  "}\n" +
+  `#[cfg(target_arch = "x86_64")] const NR: [c_long; 8] = [${SYSCALLS.x86_64.join(", ")}];\n` +
+  `#[cfg(target_arch = "aarch64")] const NR: [c_long; 8] = [${SYSCALLS.aarch64.join(", ")}];\n` +
+  "const NEWUSER: c_long = 0x10000000; const NEWNET: c_long = 0x40000000; const SIGCHLD: c_long = 17;\n" +
+  "fn attempt(name: &str, call: impl FnOnce() -> c_long) {\n" +
+  "  unsafe { *__errno_location() = 0; }\n" +
+  "  let rc = call();\n" +
+  "  let errno = unsafe { *__errno_location() };\n" +
+  '  println!("{} {} {}", name, rc, errno);\n' +
+  "}\n" +
+  "fn main() {\n" +
+  '  let none = b"none\\0".as_ptr() as c_long; let tmp = b"/tmp\\0".as_ptr() as c_long;\n' +
+  '  let tmpfs = b"tmpfs\\0".as_ptr() as c_long;\n' +
+  "  unsafe {\n" +
+  '    attempt("unshare-user", || syscall(NR[0], NEWUSER));\n' +
+  '    attempt("unshare-net", || syscall(NR[0], NEWUSER | NEWNET));\n' +
+  '    attempt("clone-user", || syscall(NR[1], NEWUSER | SIGCHLD, 0 as c_long, 0 as c_long, 0 as c_long, 0 as c_long));\n' +
+  '    attempt("clone3", || syscall(NR[2], 0 as c_long, 0 as c_long));\n' +
+  '    attempt("setns", || syscall(NR[3], 0 as c_long, 0 as c_long));\n' +
+  '    attempt("mount", || syscall(NR[4], none, tmp, tmpfs, 0 as c_long, 0 as c_long));\n' +
+  '    attempt("fsopen", || syscall(NR[5], tmpfs, 0 as c_long));\n' +
+  '    attempt("keyctl", || syscall(NR[6], 0 as c_long, 0 as c_long, 0 as c_long, 0 as c_long, 0 as c_long));\n' +
+  '    attempt("ptrace", || syscall(NR[7], 0 as c_long, 0 as c_long, 0 as c_long, 0 as c_long));\n' +
+  "  }\n" +
+  '  println!("pthread {} 0", if std::thread::spawn(|| ()).join().is_ok() { 0 } else { -1 });\n' +
+  "  let ok = unsafe {\n" +
+  "    let p = fork(); if p == 0 { _exit(0); }\n" +
+  "    let mut st: c_int = 0; waitpid(p, &mut st, 0);\n" +
+  "    p > 0 && (st & 0x7f) == 0 && ((st >> 8) & 0xff) == 0\n" +
+  "  };\n" +
+  '  println!("fork {} 0", if ok { 0 } else { -1 });\n' +
+  "}\n";
+
+/**
+ * Node has no raw syscall, so the probe asks through busybox's `unshare` and
+ * `mount` (both in the Alpine base of the image) and reads the reason off
+ * their message: a program in the image is exactly what a student's
+ * `child_process` would reach for. `keyctl`, `ptrace`, `clone3` and `fsopen`
+ * have no such door from JavaScript; the C probe covers them, under the same
+ * profile. The `worker_threads` Worker is libuv's `pthread_create`, and
+ * `spawnSync` its `fork`.
+ */
+const NAMESPACES_JS =
+  'const { spawnSync } = require("node:child_process");\n' +
+  'const { Worker } = require("node:worker_threads");\n' +
+  "function attempt(name, argv) {\n" +
+  '  const r = spawnSync(argv[0], argv.slice(1), { encoding: "utf8" });\n' +
+  '  const said = `${r.stderr ?? ""}${r.error ?? ""}`;\n' +
+  "  const errno = /not implemented/i.test(said) ? 38 : /not permitted/i.test(said) ? 1 : 0;\n" +
+  "  console.log(`${name} ${r.status === 0 ? 0 : -1} ${errno}`);\n" +
+  "}\n" +
+  'attempt("unshare-user", ["unshare", "-U", "true"]);\n' +
+  'attempt("unshare-net", ["unshare", "-U", "-n", "true"]);\n' +
+  'attempt("mount", ["mount", "-t", "tmpfs", "none", "/tmp"]);\n' +
+  'console.log(`fork ${spawnSync("true").status === 0 ? 0 : -1} 0`);\n' +
+  'new Worker("", { eval: true }).on("exit", (code) => console.log(`pthread ${code === 0 ? 0 : -1} 0`));\n';
+
+/** Every name a raw-syscall probe prints, and must see refused. */
+const DENIED = [
+  "unshare-user", "unshare-net", "clone-user", "setns", "mount", "fsopen", "keyctl", "ptrace",
+] as const;
+
+const ISOLATION: Record<(typeof PROGRAMMING)[number], { source: string; denied: readonly string[] }> = {
+  c: { source: NAMESPACES, denied: DENIED },
+  cpp: { source: NAMESPACES, denied: DENIED },
+  python: { source: NAMESPACES_PY, denied: DENIED },
+  rust: { source: NAMESPACES_RS, denied: DENIED },
+  js: { source: NAMESPACES_JS, denied: ["unshare-user", "unshare-net", "mount"] },
+};
+
+for (const language of PROGRAMMING) {
+  describe.skipIf(!has(language))(`the ${language} program under the seccomp profile`, () => {
+    it("cannot create a namespace, mount, use a keyring or ptrace — and still runs threads and fork", async () => {
+      const probe = ISOLATION[language];
+      const outcome = await run(request(language, probe.source));
+      expect(outcome.compile.ok, outcome.compile.stderr).toBe(true);
+      const stdout = outcome.cases[0]!.stdout;
+      const results = Object.fromEntries(
+        stdout
+          .trim()
+          .split("\n")
+          .map((line) => {
+            const [name, rc, errno] = line.split(" ");
+            return [name, { rc: Number(rc), errno: Number(errno) }];
+          }),
+      );
+      for (const name of probe.denied) {
+        // EPERM or ENOSYS: the filter answered; the kernel never saw the call.
+        expect(results[name], `${name}\n${stdout}${outcome.cases[0]!.stderr}`).toMatchObject({ rc: -1 });
+        expect([1, 38], name).toContain(results[name]!.errno);
+      }
+      if (probe.denied.includes("clone-user")) {
+        expect(results.clone3).toEqual({ rc: -1, errno: 38 });
+      }
+      expect(results.pthread, stdout).toEqual({ rc: 0, errno: 0 });
+      expect(results.fork, stdout).toEqual({ rc: 0, errno: 0 });
+    });
+  });
+}
+
+/**
  * The uid the program runs under, asked of the program itself.
  *
  * The `adduser` stanza lives in two files (`images/Containerfile` for the
@@ -316,7 +494,7 @@ const UID = {
   rust: 'extern "C" { fn getuid() -> u32; }\nfn main(){ println!("{}", unsafe { getuid() }); }\n',
 } as const;
 
-for (const language of ["c", "cpp", "python", "js", "rust"] as const) {
+for (const language of PROGRAMMING) {
   describe.skipIf(!has(language))(`the ${language} image`, () => {
     it("runs the student's program as a user that is not root", async () => {
       const outcome = await run(request(language, UID[language]));
@@ -343,30 +521,6 @@ describe.skipIf(!has("c"))("the container itself", () => {
     // removes the syscall outright answers. Anything else — EFAULT above all
     // — means the call reached the kernel and no profile was in the way.
     expect([1, 38]).toContain(errno);
-  });
-
-  it("cannot create a namespace, mount, use a keyring or ptrace — and still runs threads", async () => {
-    const outcome = await run(request("c", NAMESPACES));
-    expect(outcome.compile.ok, outcome.compile.stderr).toBe(true);
-    const results = Object.fromEntries(
-      outcome.cases[0]!.stdout
-        .trim()
-        .split("\n")
-        .map((line) => {
-          const [name, rc, errno] = line.split(" ");
-          return [name, { rc: Number(rc), errno: Number(errno) }];
-        }),
-    );
-    for (const name of [
-      "unshare-user", "unshare-net", "clone-user", "setns", "mount", "fsopen", "keyctl", "ptrace",
-    ]) {
-      // EPERM or ENOSYS: the filter answered; the kernel never saw the call.
-      expect(results[name], name).toMatchObject({ rc: -1 });
-      expect([1, 38], name).toContain(results[name]!.errno);
-    }
-    expect(results.clone3).toEqual({ rc: -1, errno: 38 });
-    expect(results.pthread).toEqual({ rc: 0, errno: 0 });
-    expect(results.fork).toEqual({ rc: 0, errno: 0 });
   });
 
   it("carries the closed list of environment variables and nothing else", async () => {

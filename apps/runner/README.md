@@ -59,10 +59,14 @@ like Docker's default profile:
 - `clone3` answers `ENOSYS`: its flags sit in a struct seccomp cannot read,
   and glibc (threads, `fork`) falls back to `clone` on that answer.
 
-`src/podman.int.test.ts` asserts it from a C program: `unshare`,
+`src/podman.int.test.ts` asserts it from a program in EVERY language: in C,
+C++, Python (`ctypes`) and Rust (`extern "C"`), `unshare`,
 `clone(CLONE_NEWUSER)`, `setns`, `mount`, `fsopen`, `keyctl` and `ptrace` fail,
-`clone3` is `ENOSYS`, and `pthread_create` and `fork` still work. The whole
-integration suite (C, C++, Python, Node, ngspice) passes under it.
+`clone3` is `ENOSYS`, and the language's own threads and `fork` still work;
+Node, which has no raw syscall, asks through busybox's `unshare` and `mount`
+(a `Worker` and `spawnSync` for threads and fork), and ngspice through a
+`.control` `shell` (`src/spice.int.test.ts`). The whole integration suite (C,
+C++, Python, Node, Rust, ngspice) passes under it, and CI runs it (below).
 
 What was deliberately *not* carried over:
 
@@ -198,8 +202,8 @@ is not a useful thing for a teacher to write.
 ## The images
 
 ```bash
-images/build.sh                 # c cpp python js spice
-images/build.sh rust            # ~700 MB, never built by default
+images/build.sh                 # c cpp python js spice rust: all six
+images/build.sh c python        # only the ones named
 ```
 
 | Image | Base | What is in it | Size |
@@ -208,7 +212,7 @@ images/build.sh rust            # ~700 MB, never built by default
 | `quiz-runner-cpp` | alpine 3.20 | `g++`, `musl-dev` | ~220 MB |
 | `quiz-runner-python` | alpine 3.20 | `python3` | ~50 MB |
 | `quiz-runner-js` | alpine 3.20 | `nodejs` | ~170 MB |
-| `quiz-runner-rust` | alpine 3.20 | `rust`, `cargo` | ~700 MB, on demand |
+| `quiz-runner-rust` | alpine 3.20 | `rust` (rustc 1.78, gcc as its linker; no cargo registry) | ~820 MB |
 | `quiz-runner-spice` | alpine 3.20 | `ngspice` (42) | ~65 MB |
 
 Alpine-based, one toolchain each — the Alpine five share `images/Containerfile`
@@ -289,6 +293,56 @@ pnpm --filter @quiz/runner test:integration   # real containers, skipped without
 `pnpm dev` at the root starts the API, the SPA **and** the runner, the last one
 only if a Podman socket is there. Point the API at it with
 `RUNNER_MODE=http` and `RUNNER_URL=http://localhost:3200` in `.env`.
+
+`PODMAN_SOCKET`, when set, is the socket the integration suite uses;
+otherwise it detects one (the user socket first, then the rootful one).
+
+### On CI
+
+`.github/workflows/runner-integration.yml` runs the integration suite on
+`ubuntu-latest` against the ROOTFUL socket (`/run/podman/podman.sock`), so
+`--userns=auto` is the production one. It runs on a pull request that touches
+`apps/runner/**`, every Monday, and on demand (*Actions → Runner integration →
+Run workflow*); it is a workflow of its own, so it never holds up `checks` nor
+the deploy chain. It builds all six images, rust included, and caches them as
+one `podman save -m` archive in the GitHub Actions cache, keyed on
+`images/**` and the ISO week: a PR that changes an image rebuilds it, and the
+weekly run rebuilds from Alpine's current packages. The job fails if the
+suite ran rootless, without `--userns=auto`, without one of the six images,
+or with any test skipped — each of which would otherwise be a green job that
+tested less.
+
+What the job relaxes is the HOST, never the sandbox: it adds the
+`containers` range to `/etc/subuid` and `/etc/subgid` (which rootful
+`--userns=auto` carves from, and which the Ubuntu package leaves out) and
+hands the rootful socket to the job's user. The containers get the flags of
+`containerArgs()`, unchanged.
+
+### The smoke test, against a live runner
+
+```bash
+RUNNER_TOKEN=… apps/runner/scripts/smoke.sh https://code.chevallier.io:8443
+apps/runner/scripts/smoke.sh http://localhost:3200     # a dev runner: no token
+```
+
+It asks `GET /health` for the languages the runner advertises, posts one tiny
+program per language to `POST /run` (each reads 21 and prints 42; spice
+prints the node voltage of a 42 V source), and prints one line per language:
+
+```
+health  ok   languages: c cpp python js rust spice
+c       ok   compile 231 ms, run 214 ms, total 2060 ms
+rust    FAIL compile error: error: linking with `cc` failed …
+python  FAIL killed: timed out  (compile 296 ms, run 5000 ms, total 5400 ms)
+```
+
+It exits non-zero when `/health` does not answer 200, when it advertises no
+language, or when any language fails (an HTTP error, a compile error, a
+kill, a wrong output). The token is read from `RUNNER_TOKEN` and handed to
+curl on a file descriptor: it is never on a command line nor in the output.
+It needs `curl` and `python3`. In production it runs from the application VM,
+the only address the code VM's Caddy lets through
+(`docs/development/deployment.md` §3).
 
 ## Configuration
 
