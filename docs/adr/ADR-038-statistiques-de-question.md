@@ -9,6 +9,8 @@ column `questions.stats_since`, migration `0032_question_stats_since`).
 Revises F-STAT-01 to F-STAT-03 and adds F-STAT-05 (docs/spec/02). The time
 spent on a question comes in a second step, announced in §8.
 
+Amended by ADR-039: the time spent (§8) and the "not reached" rule (§2).
+
 ## Context
 
 The specification promised item statistics per question VERSION in the
@@ -68,6 +70,11 @@ untouched, and one they never reached (a timed exam that ended first, a
 or flag, not on display, and there is no view event. Both count 0, which
 biases the last items of a long timed exam downwards. The remedy is the
 server-measured dwell of §8.
+
+*Amendment (ADR-039): on an attempt that reports what is on screen
+(`display_tracked`), a question never displayed is left out of `p`; a
+blank the student saw still counts 0, and older attempts keep the rule
+above.*
 
 ### 3. The success rate, signed, with its n
 
@@ -136,6 +143,8 @@ P75 and mean — the mean because F-STAT-04 adds durations up, and means add
 up where medians do not. Exams only (an exercise is done over days), and
 measured by the SERVER from a dwell the player reports, which does not
 exist today.
+
+*Done by ADR-039: the dwell, its idle cap and the time shown in the panel.*
 
 ## Consequences
 
