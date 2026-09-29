@@ -155,7 +155,6 @@ describe("the distractor analysis (ADR-041)", () => {
 
     expect(await distractorsOf(seed, q)).toEqual({
       n: 10,
-      sinceVersion: 1,
       multiple: false,
       options: [
         { text: "`p + 1`", correct: true, share: 70 },
@@ -212,7 +211,7 @@ describe("the distractor analysis (ADR-041)", () => {
     expect(shares?.options.map((o) => o.share)).toEqual([90, 80, 20]);
   });
 
-  it("reads only the versions whose options are the latest's, back to the last change", async () => {
+  it("reads only the versions whose options are the latest's", async () => {
     const seed = await seedLive(db, { students: 10, questions: 0 });
     const q = await mcqQuestion(seed, mcq(SINGLE));
     // v1: everybody picks C.
@@ -221,24 +220,29 @@ describe("the distractor analysis (ADR-041)", () => {
     const moved = SINGLE.map((c, i) => ({ ...c, correct: i === 2 }));
     await publish(seed, q, mcq(moved));
     await sit(await evaluationOf(seed, q), seed.studentIds, SEVEN_TWO_ONE);
-    // v3 rewrites the prompt only: the same options, the same run.
+    // v3 rewrites the prompt only: the same options, counted together.
     await publish(seed, q, mcq(moved, { prompt: "Rewritten prompt" }));
     await sit(await evaluationOf(seed, q), seed.studentIds, SEVEN_TWO_ONE);
 
     const shares = await distractorsOf(seed, q);
-    expect(shares).toMatchObject({ n: 20, sinceVersion: 2 });
+    expect(shares).toMatchObject({ n: 20 });
     expect(shares?.options.map((o) => [o.share, o.correct])).toEqual([[70, false], [20, false], [10, true]]);
   });
 
-  it("starts over when the options are put back after a change", async () => {
+  it("brings the older answers back when the options are put back after a change", async () => {
     const seed = await seedLive(db, { students: 10, questions: 0 });
     const q = await mcqQuestion(seed, mcq(SINGLE));
     await sit(await evaluationOf(seed, q), seed.studentIds, SEVEN_TWO_ONE);
-    await publish(seed, q, mcq(SINGLE.map((c) => ({ ...c, text: `${c.text} ` }))));
-    await publish(seed, q, mcq(SINGLE));
+    const edited = SINGLE.map((c) => ({ ...c, text: `${c.text} ` }));
+    await publish(seed, q, mcq(edited));
+    await sit(await evaluationOf(seed, q), seed.studentIds, Array.from({ length: 10 }, () => [2]));
 
-    // v1 and v3 carry the same options, but v2 came between: v3 alone, no answer yet.
-    expect(await distractorsOf(seed, q)).toBeNull();
+    // v2's options differ: v1's ten answers are left out, v2's ten counted.
+    expect(await distractorsOf(seed, q)).toMatchObject({ n: 10, options: [{ share: 0 }, { share: 0 }, { share: 100 }] });
+
+    // v3 puts v1's options back: v1's answers count again, v2's no longer.
+    await publish(seed, q, mcq(SINGLE));
+    expect(await distractorsOf(seed, q)).toMatchObject({ n: 10, options: [{ share: 70 }, { share: 20 }, { share: 10 }] });
   });
 
   it("counts what the success rate counts: exercises, not polls nor staff seats, since the reset", async () => {

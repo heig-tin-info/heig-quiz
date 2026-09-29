@@ -719,11 +719,10 @@ export const en = {
   "pool.stats.choices": "Choices picked",
   "pool.stats.choicesCorrect": "Correct",
   "pool.stats.choicesNoAnswer": "No answer",
-  "pool.stats.choicesBasis": "Share of {n} answers.",
-  "pool.stats.choicesBasisSince": "Share of {n} answers, from version {version}, when the choices last changed.",
+  "pool.stats.choicesBasis": "Share of {n} answers, on the versions whose choices are these ones.",
   "pool.stats.choicesMultiple": "Several choices may be ticked, so the shares add up to more than 100%.",
   "pool.stats.choicesScope": "A wrong choice nobody picks distracts no one: rewrite it or drop it. A wrong choice picked more often than the right one points to a misconception, or to a wrong key.",
-  "pool.stats.choicesNone": "The choices picked show from {min} answers given since the choices last changed.",
+  "pool.stats.choicesNone": "The choices picked show from {min} answers given to versions with the current choices.",
   "pool.stats.reset": "Reset statistics",
   "pool.stats.resetTitle": "Reset the statistics of {name}?",
   "pool.stats.resetBody":

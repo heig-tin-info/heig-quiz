@@ -2,11 +2,12 @@
 
 ## Status
 
-Accepted (2026-09-29, decided by the teacher who owns the product: the
-versions whose options equal the latest's, their own `n`, whole-percent
-shares only, from ten answers, through the type's `aggregate` hook, `mcq`
-only; the population, the "no answer" row, the multiple-choice reading and
-the run rule were delegated). With `latestRun` and `optionShares` in
+Accepted (2026-09-29, decided by the teacher who owns the product: every
+version whose options are identical to the latest's, their own `n`,
+whole-percent shares only, from ten answers, through the type's `aggregate`
+hook, `mcq` only; the population, the "no answer" row and the
+multiple-choice reading were delegated). With `sameAsLatest` and
+`optionShares` in
 `@quiz/domain/stats`, `distractorsOf` in the `stats` module and
 `DistractorStats` in `@quiz/contracts/stats`. No migration, no change to the
 `QuestionType` contract. Revises F-STAT-02 (docs/spec/02). Extends ADR-038
@@ -42,26 +43,25 @@ alike**, like `p`: which option a student picks is a property of the
 options, not of the conditions of the test — unlike the discrimination
 (ADR-040), which needs a whole exam's total.
 
-Then one narrowing: only the answers given to the versions in the **run** of
-the latest published version — the latest version and every version before
-it, going back, whose options are the same, up to the first that differs.
-Two versions have the same options when their `choices` are equal in order,
-text and `correct` flag alike, compared exactly after the config pipeline
-(`loadConfig`). The prompt, the mode, the policy, the shuffle and the
-explanation may change freely inside a run.
+Then one narrowing: only the answers given to the published versions whose
+options are **identical** to the latest published version's, wherever they
+stand in the history. Two versions have the same options when their
+`choices` are equal in order, text and `correct` flag alike, compared exactly
+after the config pipeline (`loadConfig`). The prompt, the mode, the policy,
+the shuffle and the explanation may change freely between them.
 
-The run is **contiguous**: options changed in v2 and put back in v3 start a
-new run at v3; v1's answers are not brought back. The owner's decision reads
-"the run of versions", and the contiguous rule is also the one a teacher can
-be told in one line — "since version N" — which the panel does. A reverted
-change is rare; its cost is some answers left out until new ones come.
+A change that is later undone costs nothing: options changed in v2 and put
+back in v3 count v1's answers again with v3's, and v2's are left out — v1
+and v3 ask the same options, so their answers read the same way. A typo
+fixed in one option, on the other hand, makes it another option: the answers
+before the fix are left out until it is undone.
 
-An unreadable version (a config that no longer parses) matches nothing and
-ends the run.
+An unreadable version (a config that no longer parses) matches nothing; an
+unreadable latest version gives no analysis.
 
 ### 2. What is computed
 
-Over the `n` answers of the run: for each option of the latest version, the
+Over the `n` answers of those versions: for each option of the latest version, the
 share of answers that picked it; and the share of answers that picked
 **nothing** — a blank, a skipped question, an empty selection, or no answer
 row at all on an attempt of before ADR-039 (a never-reached question on a
@@ -72,7 +72,7 @@ through the registry as the results module calls it, over the stored
 payloads — a choice ticked twice in one answer counts once. "Picked nothing"
 is the type's `isAnswered` predicate, the one the grid and the student list
 use. `details` are not passed: the key comes from the latest version's
-config, identical across the run by construction.
+config, identical across those versions by construction.
 
 Each share is a whole percent of `n`, rounded on its own. A single-choice
 question may therefore sum to 99 or 101; a largest-remainder rounding would
@@ -86,12 +86,11 @@ shares add up to more than 100 %, and the panel says so in one sentence.
 `QuestionStats.distractors` is:
 
 - **absent** for every type other than `mcq`: the panel draws no block;
-- **null** when the run has fewer than `QUESTION_STATS_MIN_N` (ten) answers —
+- **null** when those versions have fewer than `QUESTION_STATS_MIN_N` (ten) answers —
   decided by the server, like `p`; no share of a smaller population travels;
-- otherwise `{ n, sinceVersion, multiple, options: [{ text, correct, share }],
-  none }`.
+- otherwise `{ n, multiple, options: [{ text, correct, share }], none }`.
 
-No count per option ever goes on the wire (N-DATA-06). `n` is the run's own
+No count per option ever goes on the wire (N-DATA-06). `n` is the analysis's own
 and may be smaller than the success rate's. The entry itself exists only for
 a question with ten counted answers overall (ADR-038 §4).
 
@@ -104,16 +103,16 @@ is touched: invariant 4 is not involved.
 The panel's fourth block, **Choices picked**: one row per option — letter,
 text, share, a bar — the key marked by a filled letter AND the word
 "Correct" (never colour alone), then **No answer**. The bars are `info`: a
-share is a datum, not a verdict. Under the bars, the basis ("Share of 12
-answers", with "from version N, when the choices last changed" when the run
-does not start at version 1, and the multiple-choice sentence), then one
-sentence on how to read it: a wrong choice nobody picks distracts no one; a
-wrong choice picked more often than the right one points to a misconception,
-or to a wrong key. Below ten answers, one line says when the block will show.
+share is a datum, not a verdict. Under the bars, the basis ("Share of 12 answers, on the
+versions whose choices are these ones", and the multiple-choice sentence),
+then one sentence on how to read it: a wrong choice nobody picks distracts
+no one; a wrong choice picked more often than the right one points to a
+misconception, or to a wrong key. Below ten answers, one line says when the
+block will show.
 
 ### 4. Where the code lives
 
-- `latestRun` (the run rule, generic over a key) and `optionShares` (the
+- `sameAsLatest` (the version rule, generic over a key) and `optionShares` (the
   rounding and the threshold) are pure, in `@quiz/domain/stats`, beside the
   other rules of the item analysis — not in `qt-mcq`, because the threshold
   and the shares belong to the statistics, not to the type.
@@ -125,15 +124,15 @@ or to a wrong key. Below ten answers, one line says when the block will show.
 - `poolQuestionStats` selects the question's type and the item's version in
   its one query of counted answers; `distractorsOf` receives those rows,
   loads the published versions of the mcq questions (one query) and, for the
-  runs that reach ten answers only, their payloads (one query).
+  questions that reach ten matching answers only, their payloads (one query).
 
 ## Consequences
 
 - A teacher sees, per choice, whether it does its job, and a key picked less
   than a distractor stands out next to an inverse discrimination.
-- Fixing a typo in one option restarts the analysis at that version: the
+- Fixing a typo in one option restarts the analysis from that version: the
   options are what the shares are about, and a text that differs is another
-  option. The success rate keeps pooling every version.
+  option. Undoing the change brings the older answers back. The success rate keeps pooling every version.
 - The MCP tool `get_pool_question_stats` (ADR-022) carries the block as the
   route does.
 
@@ -157,9 +156,11 @@ nothing is stored.
 - **Stable choice ids in the mcq config.** Would let a share follow an
   option through a rewording, at the cost of a config migration and of
   deciding when a rewording is "the same option"; refused by the owner.
-- **Every version whose options equal the latest's, contiguous or not.**
-  Recovers the answers of a reverted change; rejected for the one-line
-  "since version N" and the owner's word "run" (§1).
+- **A contiguous run back from the latest version**, the first version that
+  differs ending it. It would say "since version N" in one line, but would
+  drop the answers of a version whose options a later edit put back, though
+  they ask exactly the same options; the owner chose identity, not
+  contiguity.
 - **Largest-remainder rounding.** Sums to exactly 100 on single choice, but
   moves a share by one point depending on the others, and does not apply to
   multiple choice.

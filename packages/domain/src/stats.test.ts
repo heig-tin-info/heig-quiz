@@ -11,7 +11,7 @@ import {
   describe as describeSeries,
   histogram,
   itemStats,
-  latestRun,
+  sameAsLatest,
   optionShares,
   quantile,
   QUESTION_STATS_MIN_N,
@@ -266,31 +266,31 @@ describe("discriminationBand", () => {
   });
 });
 
-describe("latestRun", () => {
+describe("sameAsLatest", () => {
   const v = (number: number, key: string | null) => ({ number, key });
-  const run = (versions: { number: number; key: string | null }[]) =>
-    latestRun(versions, (x) => x.key).map((x) => x.number);
+  const matching = (versions: { number: number; key: string | null }[]) =>
+    sameAsLatest(versions, (x) => x.key).map((x) => x.number);
 
   it("takes every version when the options never changed", () => {
-    expect(run([v(1, "a"), v(2, "a"), v(3, "a")])).toEqual([1, 2, 3]);
+    expect(matching([v(1, "a"), v(2, "a"), v(3, "a")])).toEqual([1, 2, 3]);
   });
 
-  it("stops at the last change", () => {
-    expect(run([v(1, "a"), v(2, "b"), v(3, "b")])).toEqual([2, 3]);
-    expect(run([v(1, "a"), v(2, "b")])).toEqual([2]);
+  it("leaves out the versions whose options differ", () => {
+    expect(matching([v(1, "a"), v(2, "b"), v(3, "b")])).toEqual([2, 3]);
+    expect(matching([v(1, "a"), v(2, "b")])).toEqual([2]);
   });
 
-  it("keeps a run contiguous: options put back after a change start a new run", () => {
-    expect(run([v(1, "a"), v(2, "b"), v(3, "a")])).toEqual([3]);
+  it("brings back an older version when the options are put back", () => {
+    expect(matching([v(1, "a"), v(2, "b"), v(3, "a")])).toEqual([1, 3]);
   });
 
   it("gives nothing without versions or with an unreadable latest one", () => {
-    expect(run([])).toEqual([]);
-    expect(run([v(1, "a"), v(2, null)])).toEqual([]);
+    expect(matching([])).toEqual([]);
+    expect(matching([v(1, "a"), v(2, null)])).toEqual([]);
   });
 
-  it("stops at an unreadable version", () => {
-    expect(run([v(1, "a"), v(2, null), v(3, "a")])).toEqual([3]);
+  it("skips an unreadable version", () => {
+    expect(matching([v(1, "a"), v(2, null), v(3, "a")])).toEqual([1, 3]);
   });
 });
 

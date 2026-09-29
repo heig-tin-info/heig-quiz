@@ -46,9 +46,9 @@ import {
   discrimination,
   evaluationDiscrimination,
   itemStats,
-  latestRun,
   optionShares,
   QUESTION_STATS_MIN_N,
+  sameAsLatest,
   shownItemStats,
   shownTimeSpread,
   spread,
@@ -308,7 +308,6 @@ interface Choices {
 
 interface Version {
   id: string;
-  number: number;
   choices: Choices | null;
 }
 
@@ -319,8 +318,8 @@ interface Version {
  *
  * `counted` are the answers the success rate counts — the same rows, kept
  * attempts and not-reached rule, exams and exercises alike —, narrowed here
- * to the versions whose options (text and key, in order) are the LATEST
- * published version's, back to the last change (`latestRun`). The counting
+ * to the published versions whose options (text and key, in order) are
+ * the LATEST published version's, wherever they stand (`sameAsLatest`). The counting
  * is the type's own `aggregate` (ADR-033), through the registry, as the
  * results module calls it; the options are read through the one config
  * pipeline, as the poll module reads them. Below `QUESTION_STATS_MIN_N`
@@ -349,22 +348,22 @@ async function distractorsOf(
     .where(and(inArray(questionVersions.questionId, questionIds), isNotNull(questionVersions.number)))
     .orderBy(asc(questionVersions.number));
   for (const row of rows) {
-    push(versionsOf, row.questionId, { id: row.id, number: row.number!, choices: choicesOf(row) });
+    push(versionsOf, row.questionId, { id: row.id, choices: choicesOf(row) });
   }
 
-  // Per question, the answers given to the run of versions sharing the latest's options.
-  const runs = new Map<string, { run: Version[]; answers: CountedAnswer[] }>();
+  // Per question, the answers given to the versions sharing the latest's options.
+  const matched = new Map<string, { latest: Choices; answers: CountedAnswer[] }>();
   for (const questionId of questionIds) {
-    const run = latestRun(versionsOf.get(questionId) ?? [], (v) => v.choices && keyOf(v.choices));
-    const ids = new Set(run.map((v) => v.id));
+    const same = sameAsLatest(versionsOf.get(questionId) ?? [], (v) => v.choices && keyOf(v.choices));
+    const ids = new Set(same.map((v) => v.id));
     const matching = countedOf.get(questionId)!.filter((a) => ids.has(a.versionId));
     // Below the threshold no answer is read: `optionShares` would refuse it anyway.
     if (matching.length < QUESTION_STATS_MIN_N) result.set(questionId, null);
-    else runs.set(questionId, { run, answers: matching });
+    else matched.set(questionId, { latest: same.at(-1)!.choices!, answers: matching });
   }
-  if (runs.size === 0) return result;
+  if (matched.size === 0) return result;
 
-  const wanted = [...runs.values()].flatMap((r) => r.answers);
+  const wanted = [...matched.values()].flatMap((r) => r.answers);
   const payloadOf = new Map<PairKey, unknown>();
   const stored = await db
     .select({
@@ -388,8 +387,7 @@ async function distractorsOf(
     const parsed = type.answerSchema.safeParse(payload);
     return parsed.success && type.isAnswered(parsed.data);
   };
-  for (const [questionId, { run, answers: given }] of runs) {
-    const latest = run.at(-1)!.choices!;
+  for (const [questionId, { latest, answers: given }] of matched) {
     const payloads = given.map((a) => payloadOf.get(pairKey(a.attemptId, a.itemId)) ?? null);
     const tally = new Map(
       (type.aggregate?.({ answers: payloads, details: [] }).distribution ?? []).map((e) => [e.key, e.count]),
@@ -399,7 +397,6 @@ async function distractorsOf(
     const shares = optionShares(counts, none, given.length)!;
     result.set(questionId, {
       n: given.length,
-      sinceVersion: run[0]!.number,
       multiple: latest.mode === "multiple",
       options: latest.choices.map((choice, index) => ({
         text: choice.text,

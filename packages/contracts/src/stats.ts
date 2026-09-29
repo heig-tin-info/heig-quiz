@@ -51,15 +51,14 @@ export type DiscriminationStats = z.infer<typeof DiscriminationStats>;
 
 /**
  * What the counted answers picked on a multiple-choice question (ADR-041),
- * over the `n` answers given to versions `sinceVersion` to the latest, whose
- * options are the latest's. One entry per option in the question's order,
+ * over the `n` answers given to the versions whose options are the latest's
+ * (wherever they stand in the history). One entry per option in the question's order,
  * with its text and whether it is in the key; `none` is the share of the
  * answers that picked nothing. Each share is a whole percent of `n`, rounded
  * on its own; under `multiple` an answer may pick several options.
  */
 export const DistractorStats = z.object({
   n: z.number().int().positive(),
-  sinceVersion: z.number().int().positive(),
   multiple: z.boolean(),
   options: z.array(
     z.object({

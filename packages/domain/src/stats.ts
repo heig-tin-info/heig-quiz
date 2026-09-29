@@ -286,19 +286,15 @@ export function discriminationBand(r: number): DiscriminationBand {
  */
 
 /**
- * The versions that share the LATEST one's key, going back from it until
- * the first one that differs: a contiguous run, never a version from before
- * a change, even when a later edit put the options back. `ascending` is in
- * version order; a `null` key (a version that cannot be read) matches
- * nothing and ends the run — and an unreadable latest version gives none.
+ * The versions that share the LATEST one's key, wherever they stand: a
+ * version changed and later put back counts again with the older ones.
+ * `ascending` is in version order; a `null` key (a version that cannot be
+ * read) matches nothing — and an unreadable latest version gives none.
  */
-export function latestRun<T>(ascending: readonly T[], keyOf: (version: T) => string | null): T[] {
+export function sameAsLatest<T>(ascending: readonly T[], keyOf: (version: T) => string | null): T[] {
   const latest = ascending.at(-1);
   const key = latest === undefined ? null : keyOf(latest);
-  if (key === null) return [];
-  let start = ascending.length - 1;
-  while (start > 0 && keyOf(ascending[start - 1]!) === key) start -= 1;
-  return ascending.slice(start);
+  return key === null ? [] : ascending.filter((version) => keyOf(version) === key);
 }
 
 /** What the counted answers picked, as whole percents of `n`. */

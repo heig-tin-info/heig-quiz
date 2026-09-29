@@ -2456,7 +2456,6 @@ const questionStats = new Map<string, QuestionStats>([
         discrimination: { r: -0.18, evaluations: 1, n: 12 },
         distractors: {
           n: 12,
-          sinceVersion: 1,
           multiple: false,
           options: [
             { text: "`NULL`", correct: false, share: 50 },
@@ -2485,7 +2484,6 @@ const questionStats = new Map<string, QuestionStats>([
       discrimination: null,
       distractors: {
         n: 20,
-        sinceVersion: 1,
         multiple: true,
         options: [
           { text: '`"a"`', correct: true, share: 85 },

@@ -714,11 +714,10 @@ export const fr: Record<keyof Dict, string> = {
   "pool.stats.choices": "Choix des étudiants",
   "pool.stats.choicesCorrect": "Correct",
   "pool.stats.choicesNoAnswer": "Sans réponse",
-  "pool.stats.choicesBasis": "Part de {n} réponses.",
-  "pool.stats.choicesBasisSince": "Part de {n} réponses, depuis la version {version}, où les choix ont changé pour la dernière fois.",
+  "pool.stats.choicesBasis": "Part de {n} réponses, sur les versions dont les choix sont ceux-ci.",
   "pool.stats.choicesMultiple": "Plusieurs choix peuvent être cochés : le total dépasse donc 100\u202f%.",
   "pool.stats.choicesScope": "Un mauvais choix que personne ne coche ne trompe personne : reformulez-le ou retirez-le. Un mauvais choix plus coché que la bonne réponse signale une idée fausse répandue, ou une erreur dans le corrigé.",
-  "pool.stats.choicesNone": "Les choix des étudiants s'affichent dès {min} réponses données depuis le dernier changement des choix.",
+  "pool.stats.choicesNone": "Les choix des étudiants s'affichent dès {min} réponses données à des versions aux choix actuels.",
   "pool.stats.reset": "Réinitialiser les statistiques",
   "pool.stats.resetTitle": "Réinitialiser les statistiques de {name} ?",
   "pool.stats.resetBody":

@@ -234,8 +234,7 @@ function DiscriminationValue({ discrimination }: { discrimination: Discriminatio
  * the server sends nothing else (N-DATA-06).
  *
  * It rests on its own `n` — the answers to the versions that carry the
- * current options — so the basis line says since which version when the
- * options changed along the way.
+ * current options —, which the basis line says.
  */
 function DistractorBlock({ distractors }: { distractors: DistractorStats | null }) {
   const t = useT();
@@ -303,9 +302,7 @@ function DistractorRows({ distractors }: { distractors: DistractorStats }) {
         ))}
       </ul>
       <p className="text-xs text-fg-faint">
-        {distractors.sinceVersion === 1
-          ? t("pool.stats.choicesBasis", { n: distractors.n })
-          : t("pool.stats.choicesBasisSince", { n: distractors.n, version: distractors.sinceVersion })}
+        {t("pool.stats.choicesBasis", { n: distractors.n })}
         {distractors.multiple ? ` ${t("pool.stats.choicesMultiple")}` : null}
       </p>
       <p className="text-sm text-fg-muted">{t("pool.stats.choicesScope")}</p>
