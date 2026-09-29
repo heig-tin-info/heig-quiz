@@ -2,7 +2,8 @@
  * Descriptive statistics for the results screens (PLAN-MVP §7.6), and the
  * item analysis of a question in its pool (ADR-038): the mean success rate
  * over the answers counted, reported with their number and shown only from
- * `QUESTION_STATS_MIN_N` answers on — and the time spent on it (ADR-039).
+ * `QUESTION_STATS_MIN_N` answers on — the time spent on it (ADR-039) and
+ * its discrimination index (ADR-040).
  */
 import { MAX_GRADE, MIN_GRADE } from "./grade.js";
 import { round2 } from "./round.js";
@@ -127,6 +128,144 @@ export function spread(values: Iterable<number>): Spread {
 /** The time as it may be shown: `null` below `QUESTION_TIME_MIN_N` timed answers. */
 export function shownTimeSpread(stats: Spread): Spread | null {
   return stats.n >= QUESTION_TIME_MIN_N ? stats : null;
+}
+
+/**
+ * The discrimination index of a question (ADR-040): does it separate the
+ * students who did well on the rest of the test from those who did not? A
+ * corrected point-biserial — the Pearson correlation between the item's
+ * score and the rest of the test WITHOUT it — per exam, combined over the
+ * exams by Fisher's z.
+ */
+
+/** An exam with fewer other items than this says too little about "the rest of the test". */
+export const DISCRIMINATION_MIN_ITEMS = 5;
+
+/** An exam with fewer counted attempts than this is left out of the index. */
+export const DISCRIMINATION_MIN_N = 10;
+
+/**
+ * The Pearson correlation of two paired series; `null` when it does not
+ * exist — fewer than two pairs, or no variance on either side.
+ */
+export function pearson(xs: readonly number[], ys: readonly number[]): number | null {
+  const n = Math.min(xs.length, ys.length);
+  if (n < 2) return null;
+  let mx = 0;
+  let my = 0;
+  for (let i = 0; i < n; i++) {
+    mx += xs[i]!;
+    my += ys[i]!;
+  }
+  mx /= n;
+  my /= n;
+  let sxy = 0;
+  let sxx = 0;
+  let syy = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = xs[i]! - mx;
+    const dy = ys[i]! - my;
+    sxy += dx * dy;
+    sxx += dx * dx;
+    syy += dy * dy;
+  }
+  // Below this, a "variance" is the rounding error of identical values.
+  if (sxx < 1e-12 || syy < 1e-12) return null;
+  return sxy / Math.sqrt(sxx * syy);
+}
+
+/** One exam's correlation, over its `n` attempts. */
+export interface DiscriminationSample {
+  r: number;
+  n: number;
+}
+
+/**
+ * One counted attempt of an exam: the question's own points, and the rest
+ * of the test — the points and the maximum of every OTHER item, summed.
+ */
+export interface DiscriminationAttempt {
+  item: ScoredAnswer;
+  rest: ScoredAnswer;
+}
+
+/**
+ * The corrected point-biserial of a question in ONE exam: the correlation
+ * of the item's ratio (signed, unclamped) with the rest-of-test ratio.
+ * `null` when the exam has fewer than {@link DISCRIMINATION_MIN_ITEMS}
+ * other items, fewer than {@link DISCRIMINATION_MIN_N} attempts with a
+ * positive maximum on both sides, or no variance on either side.
+ */
+export function evaluationDiscrimination(
+  attempts: Iterable<DiscriminationAttempt>,
+  otherItems: number,
+): DiscriminationSample | null {
+  if (otherItems < DISCRIMINATION_MIN_ITEMS) return null;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const { item, rest } of attempts) {
+    if (item.maxPoints <= 0 || rest.maxPoints <= 0) continue;
+    xs.push(item.points / item.maxPoints);
+    ys.push(rest.points / rest.maxPoints);
+  }
+  if (xs.length < DISCRIMINATION_MIN_N) return null;
+  const r = pearson(xs, ys);
+  return r === null ? null : { r, n: xs.length };
+}
+
+/** Keeps `atanh` finite on a perfect correlation. */
+const R_LIMIT = 0.9999;
+
+/**
+ * Several correlations combined by Fisher's z, each weighted by `n - 3`
+ * (the inverse of the variance of its z), back-transformed; unrounded.
+ * `null` when no sample carries weight.
+ */
+export function fisherCombine(samples: Iterable<DiscriminationSample>): number | null {
+  let weights = 0;
+  let sum = 0;
+  for (const { r, n } of samples) {
+    const w = n - 3;
+    if (w <= 0) continue;
+    sum += w * Math.atanh(Math.max(-R_LIMIT, Math.min(R_LIMIT, r)));
+    weights += w;
+  }
+  return weights === 0 ? null : Math.tanh(sum / weights);
+}
+
+/** A question's discrimination index, over `evaluations` exams and `n` attempts. */
+export interface Discrimination {
+  r: number;
+  evaluations: number;
+  n: number;
+}
+
+/**
+ * The index as it may be shown: the qualifying exams' correlations combined,
+ * rounded to two decimals; `null` when no exam qualifies (each `null` of
+ * {@link evaluationDiscrimination} is skipped).
+ */
+export function discrimination(
+  samples: Iterable<DiscriminationSample | null>,
+): Discrimination | null {
+  const kept = [...samples].filter((s): s is DiscriminationSample => s !== null);
+  const r = fisherCombine(kept);
+  if (r === null) return null;
+  return { r: round2(r), evaluations: kept.length, n: kept.reduce((s, x) => s + x.n, 0) };
+}
+
+/**
+ * The reading of an index: below 0.2 weak, from 0.2 fair, from 0.3 good —
+ * and `inverse` below zero, where the stronger students do WORSE on the
+ * question (a wrong key, an ambiguous wording).
+ */
+export type DiscriminationBand = "inverse" | "weak" | "fair" | "good";
+
+export function discriminationBand(r: number): DiscriminationBand {
+  if (r < 0) return "inverse";
+  if (r < 0.2) return "weak";
+  if (r < 0.3) return "fair";
+  return "good";
 }
 
 export interface HistogramBucket {

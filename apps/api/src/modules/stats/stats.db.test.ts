@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { count, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { fisherCombine, pearson, round2 } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
@@ -124,23 +125,23 @@ async function statsOf(seed: Seeded, index = 0) {
   return entry ? { n: entry.n, p: entry.p } : null;
 }
 
-/** A second evaluation of the seed's classroom on its first question, at its latest version. */
-async function anotherEvaluation(seed: Seeded) {
+/** A second exam of the seed's classroom on its first question (or `questionIds`), at their latest version. */
+async function anotherEvaluation(seed: Seeded, questionIds = [seed.questionIds[0]!]) {
   const evaluation = await evaluationService.createEvaluation(db, {
     classroomId: seed.classroomId,
     title: `Another ${randomUUID().slice(0, 4)}`,
     mode: "exam",
     createdBy: seed.teacherId,
   });
-  const [item] = await evaluationService.addItems(
+  const items = await evaluationService.addItems(
     db,
     evaluation,
-    [seed.questionIds[0]!],
+    questionIds,
     (type, version) =>
       typeOf(type).defaultPoints(loadConfig(type, { config: version.config, configVersion: version.configVersion })),
     { attemptCount: 0 },
   );
-  return { evaluationId: evaluation.id, itemId: item!.id };
+  return { evaluationId: evaluation.id, itemId: items[0]!.id, itemIds: items.map((i) => i.id) };
 }
 
 const ten = Array.from({ length: 10 }, () => 1);
@@ -151,7 +152,7 @@ describe("what a question's statistics count (ADR-038)", () => {
     await sitAll(seed, [1, 1, 1, 1, 1, 1, 0, 0, 0.5, 0.5, 1, 0]);
 
     expect(await poolQuestionStats(db, seed.poolId)).toEqual({
-      items: [{ questionId: seed.questionIds[0], n: 12, p: 0.67, since: null, time: null }],
+      items: [{ questionId: seed.questionIds[0], n: 12, p: 0.67, since: null, time: null, discrimination: null }],
     });
   });
 
@@ -433,5 +434,125 @@ describe("the time spent (ADR-039)", () => {
       await grade(id, second.itemId, 1);
     }
     expect(await timeOf(seed)).toMatchObject({ n: 10, medianS: 35 });
+  });
+});
+
+describe("the discrimination index (ADR-040)", () => {
+  /** How many of the five other items each of ten students earned, and what they earned on the question. */
+  const rests = [0, 1, 1, 2, 2, 3, 3, 4, 5, 5];
+  const good = [0, 0, 1, 0, 1, 0, 1, 1, 1, 1];
+  const inverse = good.map((x) => 1 - x);
+  const rOf = (item: readonly number[]) => pearson(item, rests.map((k) => k / 5))!;
+
+  interface ExamOptions {
+    evaluationId?: string;
+    itemIds?: readonly string[];
+    startedAt?: Date;
+    /** The student whose last other item is still a proposal. */
+    pending?: number;
+  }
+
+  /** Each student sits the exam once: `item[i]` on the question (item 0), 1 on the first `rests[i]` others. */
+  async function sitExam(seed: Seeded, item: readonly number[], o: ExamOptions = {}) {
+    const itemIds = o.itemIds ?? seed.itemIds;
+    for (const [i, points] of item.entries()) {
+      const id = await attempt(o.evaluationId ?? seed.evaluationId, seed.studentIds[i]!, { startedAt: o.startedAt ?? BEFORE });
+      await grade(id, itemIds[0]!, points);
+      for (const [k, other] of itemIds.slice(1).entries()) {
+        const state = o.pending === i && k === itemIds.length - 2 ? "proposed" : "validated";
+        await grade(id, other, k < (rests[i] ?? 0) ? 1 : 0, { state });
+      }
+    }
+  }
+
+  async function discriminationOf(seed: Seeded) {
+    const { items } = await poolQuestionStats(db, seed.poolId);
+    return items.find((i) => i.questionId === seed.questionIds[0])?.discrimination;
+  }
+
+  it("correlates the question with the rest of the exam, signed", async () => {
+    const seed = await seedLive(db, { students: 10, questions: 6 });
+    await sitExam(seed, good);
+    expect(await discriminationOf(seed)).toEqual({ r: round2(rOf(good)), evaluations: 1, n: 10 });
+    expect(rOf(good)).toBeGreaterThan(0.3);
+
+    const other = await seedLive(db, { students: 10, questions: 6 });
+    await sitExam(other, inverse);
+    expect(await discriminationOf(other)).toEqual({ r: round2(rOf(inverse)), evaluations: 1, n: 10 });
+    expect(rOf(inverse)).toBeLessThan(0);
+  });
+
+  it("counts exams only, never an exercise", async () => {
+    const seed = await seedLive(db, { students: 10, questions: 6, mode: "exercise" });
+    await sitExam(seed, good);
+    expect(await statsOf(seed)).toEqual({ n: 10, p: 0.6 });
+    expect(await discriminationOf(seed)).toBeNull();
+  });
+
+  it("drops an attempt whose other items are not all validated, then the exam below ten", async () => {
+    const seed = await seedLive(db, { students: 11, questions: 6 });
+    await sitExam(seed, [...good, 1], { pending: 10 });
+    // The student with a pending proposal counts in p, not in the index.
+    expect(await statsOf(seed)).toMatchObject({ n: 11 });
+    expect(await discriminationOf(seed)).toEqual({ r: round2(rOf(good)), evaluations: 1, n: 10 });
+
+    const short = await seedLive(db, { students: 10, questions: 6 });
+    await sitExam(short, good, { pending: 3 });
+    expect(await statsOf(short)).toMatchObject({ n: 10 });
+    expect(await discriminationOf(short)).toBeNull();
+  });
+
+  it("needs five other items", async () => {
+    const seed = await seedLive(db, { students: 10, questions: 5 });
+    await sitExam(seed, good);
+    expect(await statsOf(seed)).toMatchObject({ n: 10 });
+    expect(await discriminationOf(seed)).toBeNull();
+  });
+
+  it("leaves out staff seats and tracked attempts that never reached the question", async () => {
+    const seed = await seedLive(db, { students: 11, questions: 6 });
+    await sitExam(seed, good);
+    await db.insert(enrollments).values({
+      id: randomUUID(),
+      classroomId: seed.classroomId,
+      nom: "Staff",
+      prenom: "Teacher",
+      email: `staff-${seed.classroomId.slice(0, 6)}@heig.test`,
+      userId: seed.teacherId,
+      staff: true,
+    });
+    const staffWalk = await attempt(seed.evaluationId, seed.teacherId);
+    const unreached = await attempt(seed.evaluationId, seed.studentIds[10]!, { tracked: true });
+    await shown(unreached, seed.itemIds[1]!, 1000);
+    for (const id of [staffWalk, unreached]) {
+      for (const itemId of seed.itemIds) await grade(id, itemId, itemId === seed.itemIds[0] ? 0 : 1);
+    }
+
+    expect(await discriminationOf(seed)).toEqual({ r: round2(rOf(good)), evaluations: 1, n: 10 });
+  });
+
+  it("counts only the exams started since the reset", async () => {
+    const seed = await seedLive(db, { students: 10, questions: 6 });
+    await sitExam(seed, inverse);
+    await poolService.resetQuestionStats(db, seed.questionIds[0]!, new Date("2026-09-05T08:00:00.000Z"));
+    const second = await anotherEvaluation(seed, seed.questionIds);
+    await sitExam(seed, good, { ...second, startedAt: AFTER });
+    expect(await discriminationOf(seed)).toEqual({ r: round2(rOf(good)), evaluations: 1, n: 10 });
+  });
+
+  it("combines several exams by Fisher's z, and skips one with too few attempts", async () => {
+    const seed = await seedLive(db, { students: 10, questions: 6 });
+    const mixed = [0, 1, 0, 0, 1, 1, 0, 1, 1, 0];
+    await sitExam(seed, good);
+    const second = await anotherEvaluation(seed, seed.questionIds);
+    await sitExam(seed, mixed, second);
+    const third = await anotherEvaluation(seed, seed.questionIds);
+    await sitExam(seed, good.slice(0, 9), third);
+
+    expect(await discriminationOf(seed)).toEqual({
+      r: round2(fisherCombine([{ r: rOf(good), n: 10 }, { r: rOf(mixed), n: 10 }])!),
+      evaluations: 2,
+      n: 20,
+    });
   });
 });

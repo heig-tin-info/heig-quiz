@@ -11,6 +11,9 @@
  * The time spent on a question (ADR-039) has its own threshold,
  * `QUESTION_TIME_MIN_N` timed exam answers: below it `time` is null while
  * `n` and `p` show. Whole seconds.
+ *
+ * The discrimination index (ADR-040) is null when no exam qualifies for it
+ * (five other items, ten attempts whose every item is validated).
  */
 import { z } from "zod";
 
@@ -31,12 +34,25 @@ export const TimeStats = z.object({
 export type TimeStats = z.infer<typeof TimeStats>;
 
 /**
+ * A question's discrimination index (ADR-040): the corrected point-biserial,
+ * combined over `evaluations` exams and `n` attempts, to two decimals. Signed.
+ */
+export const DiscriminationStats = z.object({
+  r: z.number().min(-1).max(1),
+  evaluations: z.number().int().positive(),
+  n: z.number().int().positive(),
+});
+export type DiscriminationStats = z.infer<typeof DiscriminationStats>;
+
+/**
  * One question's statistics, where they start (the last reset, null when
- * there was none), and its time — null below its own threshold.
+ * there was none), its time — null below its own threshold — and its
+ * discrimination, null when no exam qualifies.
  */
 export const QuestionStats = ItemStats.extend({
   since: z.string().nullable(),
   time: TimeStats.nullable(),
+  discrimination: DiscriminationStats.nullable(),
 });
 export type QuestionStats = z.infer<typeof QuestionStats>;
 

@@ -100,6 +100,7 @@ describe("reading the statistics", () => {
           p: 1,
           since: null,
           time: { n: 10, meanS: 60, medianS: 60, p25S: 60, p75S: 60 },
+          discrimination: null,
         },
       ],
     });

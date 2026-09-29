@@ -22,6 +22,12 @@
  * attempt, so there is no kept attempt to pick; a grading is not needed —
  * the time was spent whatever the points.
  *
+ * The DISCRIMINATION index (ADR-040) reads the same counted answers, exams
+ * only, and keeps an attempt only when every OTHER item of the exam has a
+ * validated grading too: the rest of the test must be a grade, not a
+ * proposal. Per exam, the corrected point-biserial of `@quiz/domain`; over
+ * the exams, Fisher's z. Null when no exam qualifies.
+ *
  * Reads only: `questions` and `question_versions` (the `pool` module's),
  * `evaluation_items` and `evaluations` (the `evaluation` module's),
  * `attempts` and `answers` (the `live` module's) and `gradings` (the
@@ -31,7 +37,18 @@
 import { and, eq, gt, gte, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 
 import type { PoolQuestionStats, TimeStats } from "@quiz/contracts";
-import { itemStats, shownItemStats, shownTimeSpread, spread, type ScoredAnswer, type Spread } from "@quiz/domain";
+import {
+  discrimination,
+  evaluationDiscrimination,
+  itemStats,
+  shownItemStats,
+  shownTimeSpread,
+  spread,
+  type DiscriminationAttempt,
+  type DiscriminationSample,
+  type ScoredAnswer,
+  type Spread,
+} from "@quiz/domain";
 
 import { isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -69,7 +86,7 @@ function countedAttempt(): SQL {
  * statistics start from and its time; the others are absent.
  *
  * Three queries for the candidates and the evaluations they come from, two
- * for the kept attempts, one for the time. Every answer travels to the process; should a
+ * for the kept attempts, one for the time, two for the discrimination. Every answer travels to the process; should a
  * pool's history grow too large for that, the same filters pre-aggregate in
  * SQL (`count`, `avg(points / max_points)` by question) and only the
  * attempts of students who retook an exercise are fetched one by one.
@@ -81,6 +98,8 @@ export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQue
       since: questions.statsSince,
       attemptId: attempts.id,
       evaluationId: evaluations.id,
+      mode: evaluations.mode,
+      itemId: evaluationItems.id,
       points: gradings.points,
       maxPoints: gradings.maxPoints,
     })
@@ -120,20 +139,27 @@ export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQue
   // Only the kept attempt counts — never a fallback to another attempt when
   // the kept one's grading of the item is still a proposal.
   const scored = new Map<string, { since: Date | null; list: ScoredAnswer[] }>();
-  for (const row of rows) {
-    if (!kept.has(row.attemptId)) continue;
+  const counted = rows.filter((row) => kept.has(row.attemptId));
+  for (const row of counted) {
     const entry = scored.get(row.questionId) ?? { since: row.since, list: [] };
     entry.list.push({ points: row.points, maxPoints: row.maxPoints });
     scored.set(row.questionId, entry);
   }
 
   const dwells = await dwellsOf(db, poolId);
+  const discriminations = await discriminationsOf(db, counted.filter((row) => row.mode === "exam"));
   const items: PoolQuestionStats["items"] = [];
   for (const [questionId, { since, list }] of scored) {
     const shown = shownItemStats(itemStats(list));
     if (!shown) continue;
     const time = shownTimeSpread(spread(dwells.get(questionId) ?? []));
-    items.push({ questionId, since: isoOrNull(since), ...shown, time: time && inSeconds(time) });
+    items.push({
+      questionId,
+      since: isoOrNull(since),
+      ...shown,
+      time: time && inSeconds(time),
+      discrimination: discrimination(discriminations.get(questionId) ?? []),
+    });
   }
   return { items };
 }
@@ -171,4 +197,89 @@ async function dwellsOf(db: Db, poolId: string): Promise<Map<string, number[]>> 
     byQuestion.set(row.questionId, list);
   }
   return byQuestion;
+}
+
+/** One counted exam answer to a question: its item, its attempt and its points. */
+interface CountedExamAnswer extends ScoredAnswer {
+  questionId: string;
+  evaluationId: string;
+  itemId: string;
+  attemptId: string;
+}
+
+/**
+ * The per-exam samples of the discrimination index (ADR-040), by question.
+ *
+ * `counted` are the answers the success rate counts, of exams only: the
+ * population rules live in {@link countedAttempt}, the not-reached rule and
+ * the kept filter, once. An attempt enters an exam's sample only when every
+ * other item worth something has a VALIDATED grading on it; the rest of the
+ * test is the ratio of its points to its maximum, over those other items.
+ */
+async function discriminationsOf(
+  db: Db,
+  counted: readonly CountedExamAnswer[],
+): Promise<Map<string, (DiscriminationSample | null)[]>> {
+  const samples = new Map<string, (DiscriminationSample | null)[]>();
+  const evaluationIds = [...new Set(counted.map((a) => a.evaluationId))];
+  if (evaluationIds.length === 0) return samples;
+
+  // The items that make up each exam's total: those worth something.
+  const itemsOf = new Map<string, string[]>();
+  const items = await db
+    .select({ id: evaluationItems.id, evaluationId: evaluationItems.evaluationId })
+    .from(evaluationItems)
+    .where(and(inArray(evaluationItems.evaluationId, evaluationIds), gt(evaluationItems.points, 0)));
+  for (const item of items) push(itemsOf, item.evaluationId, item.id);
+
+  // Every validated grading of those exams, by attempt then item.
+  const graded = new Map<string, Map<string, ScoredAnswer>>();
+  const validated = await db
+    .select({
+      attemptId: gradings.attemptId,
+      itemId: gradings.itemId,
+      points: gradings.points,
+      maxPoints: gradings.maxPoints,
+    })
+    .from(gradings)
+    .innerJoin(evaluationItems, eq(evaluationItems.id, gradings.itemId))
+    .where(and(inArray(evaluationItems.evaluationId, evaluationIds), eq(gradings.state, "validated")));
+  for (const g of validated) {
+    const byItem = graded.get(g.attemptId) ?? new Map<string, ScoredAnswer>();
+    byItem.set(g.itemId, { points: g.points, maxPoints: g.maxPoints });
+    graded.set(g.attemptId, byItem);
+  }
+
+  // One sample per item of a pool question: its answers against the rest.
+  const byItem = new Map<string, CountedExamAnswer[]>();
+  for (const answer of counted) push(byItem, answer.itemId, answer);
+  for (const [itemId, answers] of byItem) {
+    const { questionId, evaluationId } = answers[0]!;
+    const others = (itemsOf.get(evaluationId) ?? []).filter((id) => id !== itemId);
+    const attempts: DiscriminationAttempt[] = [];
+    for (const answer of answers) {
+      const rest = restOfTest(graded.get(answer.attemptId), others);
+      if (rest) attempts.push({ item: answer, rest });
+    }
+    push(samples, questionId, evaluationDiscrimination(attempts, others.length));
+  }
+  return samples;
+}
+
+/** The points and the maximum of `others` on one attempt; null when one of them is not validated. */
+function restOfTest(graded: Map<string, ScoredAnswer> | undefined, others: readonly string[]): ScoredAnswer | null {
+  const rest = { points: 0, maxPoints: 0 };
+  for (const id of others) {
+    const g = graded?.get(id);
+    if (!g) return null;
+    rest.points += g.points;
+    rest.maxPoints += g.maxPoints;
+  }
+  return rest;
+}
+
+function push<K, V>(map: Map<K, V[]>, key: K, value: V) {
+  const list = map.get(key);
+  if (list) list.push(value);
+  else map.set(key, [value]);
 }
