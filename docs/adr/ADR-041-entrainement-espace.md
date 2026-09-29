@@ -202,6 +202,53 @@ implementation:
 The two sentences in bold under (h) and (k) are UI copy obligations of
 slice 3 (the student's tab) and of the evaluation settings screen.
 
+### 11. What the client can influence
+
+The server owns every instant of a review (invariant 5), but two inputs come
+from the browser:
+
+- **The visibility reports** (`POST /drill/cards/:id/shown`). A client that
+  reports the tab hidden while the student is thinking lowers the counted
+  time; it can never raise it, since each interval ends at the server's
+  instant of the next signal and is capped by `DWELL_IDLE_CAP_MS`.
+- **The declared device class.** A student may claim `coarse` on a
+  computer, to be compared with the slower phone times; like the reports,
+  this can only make a time look shorter against its reference.
+
+Both can turn a Good into an Easy. Before a question has ten correct times
+on a device class, the reference is the student's own previous time, which
+the same student produced. The damage is bounded by the serving rule: a
+card is served and answered only when **today's session would hand it
+out** — not reviewed yet today, and due before the day ends or new within
+the day's cap — so a student cannot re-answer a card at once to forge a
+rating or the recall rate, and there is no extra practice (06, question
+28 (b)). Anything else is the 404 of a missing card.
+
+### 12. Implementation choices of slice 2
+
+- **The drill day is the Europe/Zurich calendar day** (`drillDayBounds`).
+  A card is due today when it is due before the day ends: FSRS counts whole
+  days from the last review, and a card due at 14:00 belongs to the
+  morning's session. The cap of new cards resets at local midnight.
+- **A new card held back by the cap is announced for tomorrow**: an empty
+  day gives the start of the next day as its next due date.
+- **Interleaving** groups the session by course and the question's first
+  tag in alphabetical order.
+- **A review is scored on the type's `defaultPoints`**, not the points the
+  item had in its evaluation: correctness is a ratio, and a review has no
+  item.
+- **The review in progress lives on the card**: `serve_seed` (the seed of
+  this review, null when none is served), `shown_since` (the open interval
+  on screen) and `active_ms` (what was already credited), cleared by the
+  answer.
+- **Eligibility is a property of the question**, decided from the type's
+  grading of an empty answer under the evaluation's settings, at the
+  creation of the cards and again at each serve. A question that stops
+  being drillable keeps its card and its history; it is simply not served.
+- **The hooks go one way.** `results` (`onResultsReleased`) and `live`
+  (`onAttemptsEnded`) call their listeners after the commit; the `drill`
+  module registers them and neither module imports it.
+
 ## Consequences
 
 - The domain rules exist before any table; slice 2 wires them to the
