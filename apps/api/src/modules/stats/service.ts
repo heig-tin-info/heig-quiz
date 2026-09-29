@@ -17,7 +17,7 @@
  * `attempts` (the `live` module's) and `gradings` (the `grading` module's),
  * all by join. The reset, a write to `questions`, lives in the `pool` module.
  */
-import { and, eq, gt, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 
 import type { PoolQuestionStats, QuestionStats } from "@quiz/contracts";
 import { itemStats, shownItemStats, type ScoredAnswer } from "@quiz/domain";
@@ -38,7 +38,7 @@ import { keptAttemptIdsOf } from "../grading/service.js";
 type QuestionRecord = typeof questions.$inferSelect;
 
 /** Another attempt of the same student on the same evaluation: the kept rule decides. */
-const isRetaken = sql`exists (select 1 from ${attempts} as other where other.evaluation_id = ${attempts.evaluationId} and other.user_id = ${attempts.userId} and other.id <> ${attempts.id})`;
+const isRetaken = sql<boolean>`exists (select 1 from ${attempts} as other where other.evaluation_id = ${attempts.evaluationId} and other.user_id = ${attempts.userId} and other.id <> ${attempts.id})`;
 
 /**
  * The counted answers of the questions `scope` selects, by question id.
@@ -58,7 +58,7 @@ async function countedAnswers(db: Db, scope: SQL): Promise<Map<string, ScoredAns
       evaluationId: evaluations.id,
       points: gradings.points,
       maxPoints: gradings.maxPoints,
-      retaken: sql<boolean>`${isRetaken}`,
+      retaken: isRetaken,
     })
     .from(questions)
     .innerJoin(questionVersions, eq(questionVersions.questionId, questions.id))
@@ -78,7 +78,7 @@ async function countedAnswers(db: Db, scope: SQL): Promise<Map<string, ScoredAns
         isNotNull(attempts.startedAt),
         // The reset compares the START of the attempt: a grading moves on a
         // regrade or a late validation, a submission is null on an expiry.
-        or(isNull(questions.statsSince), sql`${attempts.startedAt} >= ${questions.statsSince}`),
+        or(isNull(questions.statsSince), gte(attempts.startedAt, questions.statsSince)),
         gt(gradings.maxPoints, 0),
         sql`not ${isStaffAttempt}`,
       ),
