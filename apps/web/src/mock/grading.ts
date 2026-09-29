@@ -98,7 +98,6 @@ interface MockAttempt {
   lastName: string;
   firstName: string;
   email: string;
-  pseudonym: string;
   state: "submitted" | "expired";
   durationS: number;
   ability: number;
@@ -287,7 +286,6 @@ function buildGradingWorld(
       lastName: row.lastName,
       firstName: row.firstName,
       email: row.email,
-      pseudonym: row.pseudonym,
       state: row.state === "submitted" ? "submitted" : "expired",
       durationS: 600 + Math.round(rand() * 1500),
       // A class, not a cloud: a few who have it, a few who do not, most in
@@ -493,8 +491,13 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
     answerId: answer === null ? null : `${key}-ans`,
     attemptId: attempt.id,
     itemId: item.id,
-    label: anonymous ? attempt.pseudonym : attempt.displayName,
+    // Anonymous, no label at all (ADR-040); the names only on request.
+    label: anonymous ? null : attempt.displayName,
+    guest: null,
     staff: attempt.staff,
+    // One attempt per student in this mock: no retake number, and it counts.
+    attemptNumber: null,
+    kept: true,
     answer,
     student: studentView(q, config),
     solution,
@@ -516,21 +519,12 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
 
 on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
   const e = gradingWorldOr404(m.groups!.id!);
-  const by = url.searchParams.get("by") === "student" ? "student" : "question";
   const itemId = url.searchParams.get("itemId");
-  const attemptId = url.searchParams.get("attemptId");
-  const state = url.searchParams.get("state");
   const anonymous = url.searchParams.get("anonymous") !== "0";
   const items = itemId ? e.items.filter((i) => i.id === itemId) : e.items;
-  const attempts = attemptId ? e.attempts.filter((a) => a.id === attemptId) : e.attempts;
-  const pairs =
-    by === "student"
-      ? attempts.flatMap((a) => items.map((i) => ({ a, i })))
-      : items.flatMap((i) => attempts.map((a) => ({ a, i })));
+  const pairs = items.flatMap((i) => e.attempts.map((a) => ({ a, i })));
 
-  const entries = pairs
-    .map(({ a, i }) => gradingEntry(e, a, i, anonymous))
-    .filter((entry) => !state || entry.grading?.state === state);
+  const entries = pairs.map(({ a, i }) => gradingEntry(e, a, i, anonymous));
 
   let validated = 0;
   let proposed = 0;
@@ -540,7 +534,6 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
     else if (g?.state === "proposed") proposed += 1;
   }
   return {
-    order: by,
     items: items.map((i) => ({
       id: i.id,
       position: i.position,
@@ -560,37 +553,16 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
   };
 });
 
-/** The path of a traversal with each step's state (#107): three counters per step. */
-on("GET", "/app/api/evaluations/:id/grading/steps", (m, _body, url) => {
+/** Every question with its state (#107): two counters per question. */
+on("GET", "/app/api/evaluations/:id/grading/steps", (m) => {
   const e = gradingWorldOr404(m.groups!.id!);
-  const by = url.searchParams.get("by") === "student" ? "student" : "question";
-  const anonymous = url.searchParams.get("anonymous") !== "0";
-  const tally = (cells: { a: MockAttempt; i: MockEvalItem }[]) => {
-    let validated = 0;
-    let proposed = 0;
-    for (const { a, i } of cells) {
-      const g = standingGrading(e, a.id, i.id);
-      if (g?.state === "validated") validated += 1;
-      else if (g?.state === "proposed") proposed += 1;
-    }
-    return { total: cells.length, validated, proposed };
-  };
   return {
-    order: by,
-    steps:
-      by === "question"
-        ? e.items.map((i) => ({
-            key: i.id,
-            label: i.internalName,
-            staff: false,
-            ...tally(e.attempts.map((a) => ({ a, i }))),
-          }))
-        : e.attempts.map((a) => ({
-            key: a.id,
-            label: anonymous ? a.pseudonym : a.displayName,
-            staff: a.staff,
-            ...tally(e.items.map((i) => ({ a, i }))),
-          })),
+    steps: e.items.map((i) => ({
+      key: i.id,
+      total: e.attempts.length,
+      validated: e.attempts.filter((a) => standingGrading(e, a.id, i.id)?.state === "validated")
+        .length,
+    })),
   };
 });
 

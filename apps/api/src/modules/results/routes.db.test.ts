@@ -83,36 +83,27 @@ describe("the grading panel (§4.5)", () => {
     );
     expect(anonymous.statusCode).toBe(200);
     const queue = anonymous.json();
-    expect(queue.order).toBe("question");
     expect(queue.entries).toHaveLength(1);
     expect(queue.counts).toMatchObject({ total: 1, validated: 1, proposed: 0, missing: 0 });
-    // A pseudonym, never the name (F-GRADE-03, decision D20).
-    expect(queue.entries[0].label).not.toContain("Test");
+    // No label at all, never the name (F-GRADE-03, ADR-040).
+    expect(queue.entries[0].label).toBeNull();
 
     const named = await get(
-      `/app/api/evaluations/${built.evaluationId}/grading?anonymous=0&by=student`,
+      `/app/api/evaluations/${built.evaluationId}/grading?anonymous=0`,
       teacher.headers,
     );
-    expect(named.json().order).toBe("student");
-    expect(named.json().entries[0].label).not.toBe(queue.entries[0].label);
+    expect(named.json().entries[0].label).toContain("Test");
   });
 
-  it("serves the steps of a traversal with their state (#107)", async () => {
+  it("serves each question with the state of its answers (#107)", async () => {
     const steps = await get(
-      `/app/api/evaluations/${built.evaluationId}/grading/steps?by=student`,
-      teacher.headers,
-    );
-    expect(steps.statusCode).toBe(200);
-    expect(steps.json()).toMatchObject({
-      order: "student",
-      steps: [{ key: built.attemptId, total: 1, validated: 1, proposed: 0, staff: false }],
-    });
-    expect(steps.json().steps[0].label).not.toContain("Test");
-    const byQuestion = await get(
       `/app/api/evaluations/${built.evaluationId}/grading/steps`,
       teacher.headers,
     );
-    expect(byQuestion.json().steps).toMatchObject([{ key: built.itemId, total: 1 }]);
+    expect(steps.statusCode).toBe(200);
+    expect(steps.json().steps).toMatchObject([
+      { key: built.itemId, total: 1, validated: 1 },
+    ]);
     expect(
       (await get(`/app/api/evaluations/${built.evaluationId}/grading/steps`, other.headers)).statusCode,
     ).toBe(404);

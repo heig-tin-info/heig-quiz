@@ -2,9 +2,24 @@ import { describe, expect, it } from "vitest";
 
 import { fmt, plural } from "@quiz/core/client";
 
-import { mcqEditorStrings, mcqPlayerStrings, mcqReviewStrings } from "@quiz/qt-mcq/client";
-import { shortEditorStrings, shortPlayerStrings, shortReviewStrings } from "@quiz/qt-short/client";
-import { clozeEditorStrings, clozePlayerStrings, clozeReviewStrings } from "@quiz/qt-cloze/client";
+import {
+  mcqEditorStrings,
+  mcqGradingStrings,
+  mcqPlayerStrings,
+  mcqReviewStrings,
+} from "@quiz/qt-mcq/client";
+import {
+  shortEditorStrings,
+  shortGradingStrings,
+  shortPlayerStrings,
+  shortReviewStrings,
+} from "@quiz/qt-short/client";
+import {
+  clozeEditorStrings,
+  clozeGradingStrings,
+  clozePlayerStrings,
+  clozeReviewStrings,
+} from "@quiz/qt-cloze/client";
 import { richEditorStrings, richPlayerStrings, richReviewStrings } from "@quiz/qt-rich/client";
 import {
   categorizeEditorStrings,
@@ -32,6 +47,7 @@ import {
   circuitCanvasStrings,
   circuitKindLabels,
   editorStrings,
+  gradingStrings,
   MCQ_HOST_MAPPED_KEYS,
   playerStrings,
   questionType,
@@ -60,12 +76,15 @@ const DICTIONARIES: [string, object][] = [
   ["qt.mcq.e", mcqEditorStrings],
   ["qt.mcq.p", mcqPlayerStrings],
   ["qt.mcq.r", mcqReviewStrings],
+  ["qt.mcq.g", mcqGradingStrings],
   ["qt.short.e", shortEditorStrings],
   ["qt.short.p", shortPlayerStrings],
   ["qt.short.r", shortReviewStrings],
+  ["qt.short.g", shortGradingStrings],
   ["qt.cloze.e", clozeEditorStrings],
   ["qt.cloze.p", clozePlayerStrings],
   ["qt.cloze.r", clozeReviewStrings],
+  ["qt.cloze.g", clozeGradingStrings],
   ["qt.code.e", EDITOR_STRINGS],
   ["qt.code.p", PLAYER_STRINGS],
   ["qt.code.r", REVIEW_STRINGS],
@@ -97,6 +116,15 @@ const DICTIONARIES: [string, object][] = [
  * their own case below.
  */
 const MAPPED_ELSEWHERE: Record<string, readonly string[]> = { "qt.mcq.e": MCQ_HOST_MAPPED_KEYS };
+
+describe("grading columns (ADR-040)", () => {
+  // A type that gives the grading table columns names them in words: the
+  // host must translate them, or a French teacher reads English headers.
+  it.each(QUESTION_TYPE_IDS)("%s: grading columns come with their translated words", (id) => {
+    if (questionType(id)?.grading) expect(gradingStrings[id]).toBeDefined();
+    else expect(gradingStrings[id]).toBeUndefined();
+  });
+});
 
 describe("question type strings", () => {
   it.each(DICTIONARIES)("%s is translated key by key", (prefix, defaults) => {

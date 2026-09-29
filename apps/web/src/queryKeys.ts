@@ -155,15 +155,11 @@ export const attemptInspectPrefix = (evaluationId: string) =>
 
 /** The prefix of every grading read of one evaluation. */
 export const gradingKey = (evaluationId: string) => ["grading", evaluationId] as const;
-/** The steps of a traversal and their state. `anonymous` is the `"0"`/`"1"` the request carries. */
-export const gradingStepsKey = (evaluationId: string, order: string, anonymous: string) =>
-  ["grading", evaluationId, "steps", order, anonymous] as const;
-export const gradingQueueKey = (
-  evaluationId: string,
-  scope: string | null,
-  state: string,
-  anonymous: string,
-) => ["grading", evaluationId, "queue", scope, state, anonymous] as const;
+/** The questions and the state of each (the question selector). */
+export const gradingStepsKey = (evaluationId: string) => ["grading", evaluationId, "steps"] as const;
+/** One question's answers. `anonymous` is the `"0"`/`"1"` the request carries. */
+export const gradingQueueKey = (evaluationId: string, itemId: string | null, anonymous: string) =>
+  ["grading", evaluationId, "queue", itemId, anonymous] as const;
 export const gradingProgressKey = (evaluationId: string) =>
   ["grading", evaluationId, "progress"] as const;
 /** The published versions a regrade of one item may target (issue #106). */

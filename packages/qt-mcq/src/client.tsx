@@ -8,6 +8,7 @@
 import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
 import { typeIcon } from "@quiz/ui";
+import { mcqGrading } from "./grading.js";
 import { isMcqAnswered } from "./schema.js";
 import type { McqAnswer, McqConfig, McqDetails, McqSolution, McqStudent } from "./schema.js";
 
@@ -28,6 +29,7 @@ export const mcqClient: McqClient = {
 
   emptyAnswer: () => ({ selected: [] }),
   isAnswered: isMcqAnswered,
+  grading: mcqGrading,
 };
 
 /*
@@ -38,6 +40,7 @@ export const mcqClient: McqClient = {
  */
 export {
   mcqEditorStrings,
+  mcqGradingStrings,
   mcqPlayerStrings,
   mcqReviewStrings,
 } from "./strings.js";

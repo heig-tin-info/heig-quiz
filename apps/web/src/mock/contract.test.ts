@@ -275,19 +275,10 @@ const CHECKED: Case[] = [
     one("/app/api/evaluations/:id/grading", `/app/api/evaluations/${id}/grading`, GradingQueue),
     one(
       "/app/api/evaluations/:id/grading",
-      `/app/api/evaluations/${id}/grading?by=student&anonymous=0`,
+      `/app/api/evaluations/${id}/grading?anonymous=0`,
       GradingQueue,
     ),
-    one(
-      "/app/api/evaluations/:id/grading/steps",
-      `/app/api/evaluations/${id}/grading/steps?by=question&anonymous=1`,
-      GradingSteps,
-    ),
-    one(
-      "/app/api/evaluations/:id/grading/steps",
-      `/app/api/evaluations/${id}/grading/steps?by=student&anonymous=0`,
-      GradingSteps,
-    ),
+    one("/app/api/evaluations/:id/grading/steps", `/app/api/evaluations/${id}/grading/steps`, GradingSteps),
     one(
       "/app/api/evaluations/:id/grading/progress",
       `/app/api/evaluations/${id}/grading/progress`,
@@ -369,5 +360,14 @@ describe("the mock answers what the contracts describe", () => {
       .map((s) => s.replace(/\(\?<(\w+)>\[\^\/\]\+\)/g, ":$1"));
     const classified = new Set([...CHECKED.map((c) => c.route), ...UNCHECKED]);
     expect(registered.filter((r) => !classified.has(r))).toEqual([]);
+  });
+});
+
+describe("the mock numbers what the API numbers", () => {
+  // `evaluation_items.position` is 0-based on the wire and every screen adds
+  // one; a mock counting from 1 titled question 1 "2." in the re-grade sheet.
+  it.each(evaluations.map((e) => [e.id] as const))("items of %s count from 0", async (id) => {
+    const body = (await get(`/app/api/evaluations/${id}`)) as { items: { position: number }[] };
+    expect(body.items.map((i) => i.position)).toEqual(body.items.map((_, i) => i));
   });
 });

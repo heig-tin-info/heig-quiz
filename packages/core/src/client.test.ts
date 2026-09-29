@@ -5,7 +5,15 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { fmt, issuesAt, plural, resolveStrings, rootIssues, showsSection } from "./client.js";
+import {
+  fmt,
+  gradingSortKey,
+  issuesAt,
+  plural,
+  resolveStrings,
+  rootIssues,
+  showsSection,
+} from "./client.js";
 
 const DEFAULTS = { title: "Answer", hint: "Pick one", count: (n: number) => `${n} left` };
 
@@ -101,5 +109,21 @@ describe("showsSection", () => {
   it("hides only a part explicitly set to false", () => {
     expect(showsSection({ prompt: false }, "prompt")).toBe(false);
     expect(showsSection({ prompt: false }, "solution")).toBe(true);
+  });
+});
+
+describe("gradingSortKey", () => {
+  it("folds case, collapses and trims whitespace", () => {
+    expect(gradingSortKey("  Malloc\t ( ) ")).toBe("malloc ( )");
+    expect(gradingSortKey("malloc ( )")).toBe(gradingSortKey("MALLOC  ( )"));
+  });
+
+  it("puts a composed and a decomposed accent on one key", () => {
+    expect(gradingSortKey("e\u0301té")).toBe(gradingSortKey("\u00e9té"));
+  });
+
+  it("reads a missing answer as the empty key", () => {
+    expect(gradingSortKey(null)).toBe("");
+    expect(gradingSortKey(undefined)).toBe("");
   });
 });

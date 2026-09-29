@@ -2,7 +2,10 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { GradingEntry } from "@quiz/contracts";
+
 import { GradingPanel } from "./GradingPanel";
+import { GRADING_VIEW_KEY } from "./view";
 import {
   makeEntry,
   makeEvaluationDetail,
@@ -13,43 +16,54 @@ import {
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 
 /*
- * The panel: traversal, keyboard and the one accent action.
- *
- * `v` validates and moves on, `o` opens the adjustment sheet, the arrows walk
- * the list — the three shortcuts docs/08 §8.5 promises the corrector. A batch
- * of more than ten goes through the confirmation dialog.
+ * The grading screen (ADR-040): one question as a table, the key pinned on
+ * top, the type's own columns, anonymised by default, one primary action,
+ * and the answer panel keyed on the ENTRY.
  */
 
 const EVAL = "/app/api/evaluations/e1";
-const QUEUE = (itemId: string) => `${EVAL}/grading?by=question&itemId=${itemId}&anonymous=1`;
+const QUEUE = (itemId: string, anonymous = "1") =>
+  `${EVAL}/grading?itemId=${itemId}&anonymous=${anonymous}`;
 
-/** The rows of the answer list, and the one marked current. */
-const findRows = () =>
-  screen.findAllByRole("button", { name: /^(Swift Otter|Calm Ibex|Golden Lynx|Marie Rochat), / });
-const currentRow = async () =>
-  (await findRows()).findIndex((r) => r.getAttribute("aria-current") === "true");
-
-const entries = [
-  makeEntry({ attemptId: "a1", label: "Swift Otter" }),
-  makeEntry({ attemptId: "a2", label: "Calm Ibex", grading: makeGrading({ id: "g2", attemptId: "a2" }) }),
+const proposal = (attemptId: string, points: number) =>
   makeEntry({
-    attemptId: "a3",
-    label: "Golden Lynx",
-    grading: makeGrading({ id: "g3", attemptId: "a3", state: "validated", points: 0, confidence: null }),
-  }),
-];
+    attemptId,
+    grading: makeGrading({
+      id: `g-${attemptId}`,
+      attemptId,
+      points,
+      state: "proposed",
+      confidence: "high",
+    }),
+  });
+const validated = (attemptId: string, points: number) =>
+  makeEntry({
+    attemptId,
+    answer: { selected: points > 0 ? [1] : [0] },
+    grading: makeGrading({
+      id: `g-${attemptId}`,
+      attemptId,
+      points,
+      state: "validated",
+      confidence: null,
+    }),
+  });
 
-function routes(over: Record<string, unknown> = {}) {
+function routes(
+  entries: GradingEntry[] | (() => GradingEntry[]),
+  over: Record<string, unknown> = {},
+) {
+  const read = typeof entries === "function" ? entries : () => entries;
   return {
     [`GET ${EVAL}`]: ok(makeEvaluationDetail()),
-    [`GET ${QUEUE("i1")}`]: ok(makeQueue(entries)),
-    [`GET ${QUEUE("i2")}`]: ok(makeQueue([])),
-    [`GET ${EVAL}/grading/steps?by=question&anonymous=1`]: ok(
-      makeSteps("question", [{ key: "i1", proposed: 2, validated: 1 }, { key: "i2" }]),
+    [`GET ${QUEUE("i1")}`]: () => ok(makeQueue(read())),
+    [`GET ${QUEUE("i2")}`]: ok(makeQueue([validated("a1", 3)])),
+    [`GET ${EVAL}/grading/steps`]: ok(
+      makeSteps([{ key: "i1", total: 3, validated: 1 }, { key: "i2" }]),
     ),
     [`GET ${EVAL}/grading/progress`]: ok({
-      done: 6,
-      total: 6,
+      done: 3,
+      total: 3,
       pending: { runner: 0, llm: 0 },
       failed: 0,
     }),
@@ -57,128 +71,340 @@ function routes(over: Record<string, unknown> = {}) {
   } as Parameters<typeof mockFetch>[0];
 }
 
+const table = () => screen.findByRole("table", { name: "Answers to question 1" });
+/** The answer rows, the header and the expected row left out. */
+const answerRows = async () => (await within(await table()).findAllByRole("row")).slice(2);
+const rowOf = (attemptId: string) =>
+  document.querySelector<HTMLElement>(`[data-row="${attemptId}:i1"]`)!;
+
 beforeEach(() => {
   // jsdom has no EventSource; `progress.ts` copes, and so must the test.
   vi.stubGlobal("EventSource", undefined);
+  localStorage.clear();
 });
 
-describe("GradingPanel", () => {
-  it("opens on the first question with the proposals first and the first one shown", async () => {
-    mockFetch(routes());
+describe("GradingPanel — the table", () => {
+  it("draws the type's columns under the key, anonymised: no Student column and no name", async () => {
+    mockFetch(routes([proposal("a1", 2), validated("a2", 0)].map((e) => ({ ...e, label: null }))));
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
 
-    expect(await screen.findByRole("heading", { name: "Grading" })).toBeVisible();
-    expect(screen.getByText("Question 1 of 2")).toBeVisible();
-    // `findAll`, not `getAll`: the heading and the step counter come from the
-    // EVALUATION query, the rows from the separate grading one. On a loaded
-    // runner the second lands a tick later, and a synchronous read here saw
-    // an empty list about one run in thirty.
-    const rows = await findRows();
-    // The validated one sits last: proposals are what the teacher came for.
-    expect(rows.map((r) => r.getAttribute("aria-label"))).toEqual([
-      "Swift Otter, to validate, 2 / 2",
-      "Calm Ibex, to validate, 2 / 2",
-      "Golden Lynx, validated, 0 / 2",
-    ]);
-    await waitFor(async () => expect(await currentRow()).toBe(0));
-    const detail = screen.getByRole("region", { name: "The open answer" });
-    expect(within(detail).getByText("Swift Otter")).toBeVisible();
+    const t = await table();
+    const heads = within(t)
+      .getAllByRole("columnheader")
+      .map((h) => h.textContent);
+    // mcq: one column per choice, lettered canonically.
+    expect(heads).toEqual(["Verdict", "A · 4", "B · 8", "Points", "Actions"]);
+    // The expected row is the first one, marking the correct choice.
+    const [, expected] = within(t).getAllByRole("row");
+    expect(within(expected!).getByRole("img", { name: "Expected answer" })).toBeInTheDocument();
+    expect(within(expected!).getByRole("img", { name: "Expected" })).toBeInTheDocument();
+    expect(await answerRows()).toHaveLength(2);
+    expect(screen.queryByText("Swift Otter")).toBeNull();
   });
 
-  it("walks the questions from the header", async () => {
-    mockFetch(routes());
-    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
-    await screen.findByText("Question 1 of 2");
-    await userEvent.click(screen.getByRole("button", { name: "Next question" }));
-    expect(await screen.findByText("Question 2 of 2")).toBeVisible();
-    expect(await screen.findByText("Nothing left to grade")).toBeVisible();
-  });
-
-  it("validates and advances on `v`", async () => {
-    const { calls } = mockFetch(routes({ [`POST /app/api/gradings/g1/validate`]: ok(makeGrading()) }));
-    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
-    // The rows, not just the step counter: `v` acts on the OPEN entry, and
-    // the entries come from the grading query.
-    await findRows();
-
-    await userEvent.keyboard("v");
-    await waitFor(() =>
-      expect(calls.some((c) => c.url === "/app/api/gradings/g1/validate")).toBe(true),
-    );
-    await waitFor(async () => expect(await currentRow()).toBe(1));
-  });
-
-  it("moves between answers with the arrows without grading anything", async () => {
-    const { calls } = mockFetch(routes());
-    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
-    // The arrows walk the entries, so they must exist before the keystrokes.
-    await findRows();
-
-    await userEvent.keyboard("{ArrowRight}{ArrowRight}");
-    expect(await currentRow()).toBe(2);
-    await userEvent.keyboard("{ArrowLeft}");
-    expect(await currentRow()).toBe(1);
-    expect(calls.every((c) => c.method === "GET")).toBe(true);
-  });
-
-  it("opens the adjustment sheet on `o`", async () => {
-    mockFetch(routes());
-    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
-    // `o` adjusts the OPEN entry, so wait for the entries and not the counter.
-    await findRows();
-
-    await userEvent.keyboard("o");
-    expect(await screen.findByRole("dialog")).toHaveAccessibleName("Adjust this grading");
-  });
-
-  it("validates a batch of more than ten behind a confirmation", async () => {
-    const many = Array.from({ length: 12 }, (_, i) =>
-      makeEntry({ attemptId: `a${i}`, label: `Student ${i}`, grading: makeGrading({ id: `g${i}` }) }),
-    );
+  it("shows the names on request, in their own column, from a named request", async () => {
+    const named = [
+      { ...proposal("a1", 2), label: "Zoe Blanc" },
+      { ...validated("a2", 0), label: "Adam Perret" },
+    ];
     const { calls } = mockFetch(
-      routes({
-        [`GET ${QUEUE("i1")}`]: ok(makeQueue(many)),
-        [`POST ${EVAL}/grading/validate-batch`]: ok({ validated: 12 }),
+      routes([proposal("a1", 2), validated("a2", 0)], {
+        [`GET ${QUEUE("i1", "0")}`]: ok(makeQueue(named)),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+
+    await userEvent.click(screen.getByRole("switch", { name: "Anonymise" }));
+    expect(await screen.findByRole("columnheader", { name: /Student/ })).toBeInTheDocument();
+    // By name, whatever order the server sent.
+    const names = (await answerRows()).map(
+      (r) => within(r).queryByText(/Blanc|Perret/)?.textContent,
+    );
+    expect(names).toEqual(["Adam Perret", "Zoe Blanc"]);
+    expect(calls.map((c) => c.url)).toContain(QUEUE("i1", "0"));
+  });
+
+  it("sorts by a column, then back to the base order on the third click", async () => {
+    mockFetch(routes([proposal("a1", 2), validated("a2", 0), validated("a3", 2)]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    const base = (await answerRows()).map((r) => r.dataset.row);
+
+    const points = screen.getByRole("button", { name: "Points" });
+    await userEvent.click(points);
+    expect((await answerRows())[0]!.dataset.row).toBe("a2:i1");
+    await userEvent.click(points);
+    await userEvent.click(points);
+    expect((await answerRows()).map((r) => r.dataset.row)).toEqual(base);
+  });
+});
+
+describe("GradingPanel — the one primary action", () => {
+  it("validates the visible proposals of the question in one call", async () => {
+    const { calls } = mockFetch(
+      routes([proposal("a1", 2), proposal("a2", 1), validated("a3", 2)], {
+        [`POST ${EVAL}/grading/validate-batch`]: ok({ validated: 2 }),
       }),
     );
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
 
-    await userEvent.click(await screen.findByRole("button", { name: "Validate 12 proposals" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveAccessibleName("Validate 12 proposals?");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Validate them" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Validate 2/ }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.url.endsWith("/validate-batch"))?.body).toEqual({
+        itemId: "i1",
+        state: "proposed",
+      }),
+    );
+  });
 
-    await waitFor(() => {
-      const call = calls.find((c) => c.url === `${EVAL}/grading/validate-batch`);
-      expect(call?.body).toEqual({ itemId: "i1", state: "proposed" });
+  it("becomes Next question once the question is validated, then Results on the last", async () => {
+    const navigate = vi.fn();
+    mockFetch(routes([validated("a1", 2)]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={navigate} />);
+
+    const next = await screen.findAllByRole("button", { name: /^Next question/ });
+    // The chevron and the primary: the primary is the one with words.
+    await userEvent.click(next.find((b) => b.textContent?.trim() === "Next question")!);
+    expect(await screen.findByText("Question 2 of 2")).toBeInTheDocument();
+    // On the last question the primary is the way to the results: the
+    // header's secondary button and it, the primary coming last.
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /Results/ })).toHaveLength(2));
+    await userEvent.click(screen.getAllByRole("button", { name: /Results/ }).at(-1)!);
+    expect(navigate).toHaveBeenCalledWith({ view: "results", evaluationId: "e1" });
+  });
+
+  it("stays, disabled, while what is left needs a grade by hand", async () => {
+    const placeholder = makeEntry({
+      attemptId: "a1",
+      grading: makeGrading({
+        attemptId: "a1",
+        points: 0,
+        state: "proposed",
+        confidence: null,
+      }),
     });
-  });
-
-  it("validates a small batch with no dialog at all", async () => {
-    const { calls } = mockFetch(
-      routes({ [`POST ${EVAL}/grading/validate-batch`]: ok({ validated: 2 }) }),
-    );
+    mockFetch(routes([placeholder]));
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
-    await userEvent.click(await screen.findByRole("button", { name: "Validate 2 proposals" }));
-    await waitFor(() =>
-      expect(calls.some((c) => c.url === `${EVAL}/grading/validate-batch`)).toBe(true),
-    );
-    expect(screen.queryByRole("dialog")).toBeNull();
+    await table();
+    // The primary Validate is disabled, and the row offers Grade, not Validate.
+    expect(screen.getByRole("button", { name: /^Validate$/ })).toBeDisabled();
+    expect(within(rowOf("a1")).queryByRole("button", { name: /^Validate$/ })).toBeNull();
+    expect(within(rowOf("a1")).getByRole("button", { name: "Grade" })).toBeInTheDocument();
+    // Its verdict is not judged yet.
+    expect(within(rowOf("a1")).getByRole("img", { name: "To grade by hand" })).toBeInTheDocument();
+  });
+});
+
+const placeholder = (attemptId: string) =>
+  makeEntry({
+    attemptId,
+    grading: makeGrading({
+      id: `g-${attemptId}`,
+      attemptId,
+      points: 0,
+      state: "proposed",
+      confidence: null,
+      details: { reason: "manual" },
+    }),
   });
 
-  it("asks the server again for the names instead of unmasking what it holds", async () => {
-    const { calls } = mockFetch(
-      routes({
-        [`GET ${EVAL}/grading?by=question&itemId=i1&anonymous=0`]: ok(
-          makeQueue([makeEntry({ label: "Marie Rochat" })]),
-        ),
+describe("GradingPanel — an essay to grade by hand", () => {
+  it("opens on the grading form, with no Validate in the panel", async () => {
+    mockFetch(routes([placeholder("a1")]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+    await userEvent.click(within(rowOf("a1")).getByRole("button", { name: "Grade" }));
+    const panel = await screen.findByRole("dialog");
+    expect(within(panel).getByRole("spinbutton", { name: /Points/ })).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Validate" })).toBeNull();
+  });
+
+  it("opens on the form from a click on the row too", async () => {
+    mockFetch(routes([placeholder("a1")]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+    await userEvent.click(rowOf("a1"));
+    const panel = await screen.findByRole("dialog");
+    expect(within(panel).getByRole("spinbutton", { name: /Points/ })).toBeInTheDocument();
+  });
+
+  it("is never validated by V", async () => {
+    const { calls } = mockFetch(routes([placeholder("a1")]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(rowOf("a1")).toHaveAttribute("aria-current", "true");
+    await userEvent.keyboard("v");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(calls.some((c) => c.url.endsWith("/validate"))).toBe(false);
+  });
+});
+
+describe("GradingPanel — the answer panel", () => {
+  it("stays on its entry after a validation under To validate", async () => {
+    localStorage.setItem(GRADING_VIEW_KEY, JSON.stringify({ stateFilter: "todo" }));
+    let state: GradingEntry[] = [proposal("a1", 2), proposal("a2", 1)];
+    mockFetch(
+      routes(() => state, {
+        [`POST /app/api/gradings/g-a1/validate`]: () => {
+          state = [validated("a1", 2), proposal("a2", 1)];
+          return ok({});
+        },
       }),
     );
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
-    await screen.findByText("Question 1 of 2");
-    await userEvent.click(screen.getByRole("switch", { name: "Show names" }));
-    const detail = await screen.findByRole("region", { name: "The open answer" });
-    expect(await within(detail).findByText("Marie Rochat")).toBeVisible();
-    expect(calls.some((c) => c.url.includes("anonymous=0"))).toBe(true);
+    await table();
+
+    await userEvent.click(rowOf("a1"));
+    const panel = await screen.findByRole("dialog", { name: "Anonymous answer" });
+    await userEvent.click(within(panel).getByRole("button", { name: "Validate" }));
+
+    // The row leaves the filtered table…
+    await waitFor(() => expect(rowOf("a1")).toBeNull());
+    // …and the panel still shows the answer it opened on, now validated —
+    // not the next student's, which took its place in the table.
+    await waitFor(() => expect(within(panel).getByText(/validated/)).toBeInTheDocument());
+    expect(within(panel).getByText(/2 \/ 2 pts/)).toBeInTheDocument();
+  });
+
+  it("opens the key from the expected row, with Re-grade and Edit question", async () => {
+    const navigate = vi.fn();
+    mockFetch(routes([proposal("a1", 2)]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={navigate} />);
+    const [, expected] = within(await table()).getAllByRole("row");
+
+    await userEvent.click(expected!);
+    const panel = await screen.findByRole("dialog", { name: "Question 1" });
+    await userEvent.click(within(panel).getByRole("button", { name: /Edit question/ }));
+    expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q1", from: "e1" });
+  });
+});
+
+describe("GradingPanel — the keyboard", () => {
+  it("walks the rows with ↑ ↓, opens with Enter, validates with V and changes question with →", async () => {
+    const { calls } = mockFetch(
+      routes([proposal("a1", 2)], { [`POST /app/api/gradings/g-a1/validate`]: ok({}) }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+
+    await userEvent.keyboard("{ArrowDown}");
+    expect(rowOf("a1")).toHaveAttribute("aria-current", "true");
+    await userEvent.keyboard("{ArrowUp}");
+    expect(document.querySelector('[data-row="expected"]')).toHaveAttribute("aria-current", "true");
+    await userEvent.keyboard("{ArrowDown}v");
+    await waitFor(() =>
+      expect(calls.some((c) => c.url === "/app/api/gradings/g-a1/validate")).toBe(true),
+    );
+
+    await userEvent.keyboard("{Enter}");
+    expect(await screen.findByRole("dialog", { name: "Anonymous answer" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    await userEvent.keyboard("{ArrowRight}");
+    expect(await screen.findByText("Question 2 of 2")).toBeInTheDocument();
+  });
+
+  it("ignores the keys while a field has the focus", async () => {
+    const { calls } = mockFetch(routes([proposal("a1", 2)]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    await table();
+    await userEvent.keyboard("{ArrowDown}a");
+    const points = await screen.findByRole("spinbutton", { name: /Points/ });
+    expect(points).toHaveFocus();
+    await userEvent.type(screen.getByRole("textbox", { name: /Comment/ }), "v");
+    expect(calls.some((c) => c.url.endsWith("/validate"))).toBe(false);
+  });
+});
+
+describe("GradingPanel — adjusting an answer (F-GRADE-05)", () => {
+  /** Opens the answer of `attemptId` in the panel, its adjustment form open. */
+  async function adjust(attemptId: string) {
+    await table();
+    await userEvent.click(rowOf(attemptId));
+    const panel = await screen.findByRole("dialog");
+    await userEvent.click(within(panel).getByRole("button", { name: "Adjust" }));
+    return panel;
+  }
+
+  it("refuses to save without a comment, and sends nothing", async () => {
+    const { calls } = mockFetch(routes([validated("a1", 2)]));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    const panel = await adjust("a1");
+
+    await userEvent.click(within(panel).getByRole("button", { name: "Save and validate" }));
+    expect(await within(panel).findByText("A comment is required.")).toBeInTheDocument();
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+  });
+
+  it("overrides a graded answer through its grading, points and comment", async () => {
+    const { calls } = mockFetch(
+      routes([validated("a1", 2)], { [`POST /app/api/gradings/g-a1/override`]: ok(makeGrading()) }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    const panel = await adjust("a1");
+
+    const points = within(panel).getByRole("spinbutton", { name: /Points/ });
+    await userEvent.clear(points);
+    await userEvent.type(points, "1.5");
+    await userEvent.type(within(panel).getByRole("textbox", { name: /Comment/ }), "Half the idea.");
+    await userEvent.click(within(panel).getByRole("button", { name: "Save and validate" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.url === "/app/api/gradings/g-a1/override")?.body).toEqual({
+        points: 1.5,
+        comment: "Half the idea.",
+      }),
+    );
+  });
+
+  it("grades an answer the pass never reached through the answer itself", async () => {
+    const { calls } = mockFetch(
+      routes([makeEntry({ attemptId: "a1", answerId: "ans-a1", grading: null })], {
+        [`POST /app/api/answers/ans-a1/gradings`]: ok(makeGrading()),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    const panel = await adjust("a1");
+
+    await userEvent.type(within(panel).getByRole("textbox", { name: /Comment/ }), "Read by hand.");
+    await userEvent.click(within(panel).getByRole("button", { name: "Save and validate" }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.url === "/app/api/answers/ans-a1/gradings")).toBe(true),
+    );
+  });
+
+  it("keeps the points within the item's range, below zero under negative marking (ADR-026)", async () => {
+    const detail = makeEvaluationDetail();
+    const negative = makeEvaluationDetail({
+      evaluation: { ...detail.evaluation, settings: { ...detail.evaluation.settings, negativeMarking: true } },
+    });
+    const { calls } = mockFetch(
+      routes([validated("a1", 2)], {
+        [`GET ${EVAL}`]: ok(negative),
+        [`POST /app/api/gradings/g-a1/override`]: ok(makeGrading()),
+      }),
+    );
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    const panel = await adjust("a1");
+    const points = within(panel).getByRole("spinbutton", { name: /Points/ });
+    await userEvent.type(within(panel).getByRole("textbox", { name: /Comment/ }), "Guessed.");
+
+    // Past the lower bound, refused and not sent.
+    await userEvent.clear(points);
+    await userEvent.type(points, "-3");
+    await userEvent.click(within(panel).getByRole("button", { name: "Save and validate" }));
+    expect(
+      await within(panel).findByText("Enter a number of points between -2 and 2."),
+    ).toBeInTheDocument();
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+
+    // Within it, a negative mark is a mark.
+    await userEvent.clear(points);
+    await userEvent.type(points, "-1");
+    await userEvent.click(within(panel).getByRole("button", { name: "Save and validate" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.url.endsWith("/override"))?.body).toMatchObject({ points: -1 }),
+    );
   });
 });

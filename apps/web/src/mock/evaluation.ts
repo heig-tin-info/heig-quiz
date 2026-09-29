@@ -389,7 +389,9 @@ function makeItems(count: number): MockItem[] {
     const frozen = i % 3 === 0 && latest.number > 1 ? latest.number - 1 : latest.number;
     return {
       id: uuid(),
-      position: i + 1,
+      // 0-based, as `evaluation_items.position` is on the wire: every screen
+      // numbers from 1 itself.
+      position: i,
       points: q.type === "code" ? 3 : 1 + (i % 3),
       // Two section breaks, the first early enough that the four-item draft
       // shows one: the milestone separator is a shape of the list and has to
@@ -1213,7 +1215,7 @@ if (!flags.empty) {
       durationS: 45 * 60,
     });
     series.shell.items = series.shell.items.filter((i) => inLinkedPool(i, room.courseId));
-    series.shell.items.forEach((i, index) => (i.position = index + 1));
+    series.shell.items.forEach((i, index) => (i.position = index));
     series.shell.items[0]!.points += 1;
     const stale = series.shell.items.find((i) => (i.latestVersionNumber ?? 0) > i.versionNumber);
     if (stale) stale.versionNumber = stale.latestVersionNumber!;
@@ -1406,7 +1408,7 @@ function addItemsTo(e: MockEvaluation, questionIds: string[]): void {
     }
     e.items.push({
       id: uuid(),
-      position: e.items.length + 1,
+      position: e.items.length,
       points: q.type === "code" ? 3 : 1,
       milestone: false,
       questionId: q.id,
@@ -1430,12 +1432,12 @@ function patchItemOf(e: MockEvaluation, itemId: string, body: Record<string, unk
 
 function reorderItemsOf(e: MockEvaluation, order: string[]): void {
   e.items.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
-  e.items.forEach((i, index) => (i.position = index + 1));
+  e.items.forEach((i, index) => (i.position = index));
 }
 
 function removeItemOf(e: MockEvaluation, itemId: string): void {
   e.items = e.items.filter((i) => i.id !== itemId);
-  e.items.forEach((i, index) => (i.position = index + 1));
+  e.items.forEach((i, index) => (i.position = index));
 }
 
 on("POST", "/app/api/evaluations/:id/items/update-versions", (m, body) => {

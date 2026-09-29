@@ -7,6 +7,7 @@
 import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
 import { typeIcon } from "@quiz/ui";
+import { shortGrading } from "./grading.js";
 import { isShortAnswered } from "./schema.js";
 import type {
   ShortAnswer,
@@ -42,6 +43,7 @@ export const shortClient: ShortClient = {
 
   emptyAnswer: () => ({ text: "" }),
   isAnswered: isShortAnswered,
+  grading: shortGrading,
 };
 
 /*
@@ -50,7 +52,12 @@ export const shortClient: ShortClient = {
  * this module, undoing the `lazy` above (rollup: INEFFECTIVE_DYNAMIC_IMPORT).
  * A host that genuinely needs one imports the file directly. Types only here.
  */
-export { shortEditorStrings, shortPlayerStrings, shortReviewStrings } from "./strings.js";
+export {
+  shortEditorStrings,
+  shortGradingStrings,
+  shortPlayerStrings,
+  shortReviewStrings,
+} from "./strings.js";
 /*
  * The empty configuration is a VALUE a host needs to write a question with no
  * draft behind it — the poll launcher's unsaved question. `schema.ts` holds no
