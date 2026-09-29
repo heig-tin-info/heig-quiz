@@ -223,3 +223,9 @@ already carried the rights and the stale items.
 - **Columns decided by the host** (a switch on the type id in `apps/web`).
   Every new type would edit the app; the contract keeps the knowledge of an
   answer's shape in the type, as `Review` already does.
+
+## Addendum (2026-09-30): AI proposals
+
+The AI proposals **Validate N** batches — the LLM grading service, its
+development stub and the teacher-only justification — are decided in
+[ADR-045](ADR-045-service-llm-de-correction.md).

@@ -36,6 +36,7 @@ import type {
   StudentFeedback,
   StudentResultItem,
 } from "@quiz/contracts";
+import { JUSTIFICATION_KEY } from "@quiz/contracts";
 import {
   attemptTotal,
   debrief,
@@ -731,7 +732,9 @@ export async function studentFeedback(
  *      key-bearing field and forgets the hook still cannot publish it.
  *
  * `showKey` means the teacher chose to publish the key: the details travel
- * whole, both layers off.
+ * whole, both layers off — but for an LLM's justification
+ * (`JUSTIFICATION_KEY`), which is the teacher's under every policy
+ * (ADR-045, open question 27) and is stripped first.
  *
  * The list is its OWN, not `FORBIDDEN_STUDENT_KEYS` (`live/studentView.ts`):
  * what carries a key in a grading breakdown is these five fields, and
@@ -749,7 +752,8 @@ export const FORBIDDEN_DETAIL_KEYS: readonly string[] = [
   "referenceSolution",
 ];
 
-const forbiddenDetailKeys = new Set(FORBIDDEN_DETAIL_KEYS);
+const forbiddenDetailKeys = new Set([...FORBIDDEN_DETAIL_KEYS, JUSTIFICATION_KEY]);
+const teacherOnlyDetailKeys = new Set([JUSTIFICATION_KEY]);
 
 /**
  * The one exception of layer 2, and it is the published half of a `code`
@@ -768,7 +772,7 @@ export function filterDetails(
   policy: FeedbackPolicy,
 ): unknown {
   if (details === null || details === undefined) return null;
-  if (policy.showKey) return details;
+  if (policy.showKey) return stripKeys(details, teacherOnlyDetailKeys);
   const hook = typeOf(type).studentDetails;
   const shaped = hook ? hook(details, policy) : details;
   return stripKeys(shaped, forbiddenDetailKeys, publishedExpected);

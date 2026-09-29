@@ -4,7 +4,7 @@ Closing an evaluation starts the grading. Most of it is automatic; your part is 
 
 ## What happens at the close
 
-The moment an evaluation is closed, by you or by the server at the last deadline, every answer of a deterministic type is graded: multiple choice, short answer and fill in the blanks are scored on the spot and come back already validated. Code answers are sent to the runner, which compiles and runs each one against the question's test cases in an isolated container; their gradings come back as validated too once the runner has spoken. A missing answer is worth 0 and the entry says so (**No answer**, graded zero).
+The moment an evaluation is closed, by you or by the server at the last deadline, every answer of a deterministic type is graded: multiple choice, short answer and fill in the blanks are scored on the spot and come back already validated. Code answers are sent to the runner, which compiles and runs each one against the question's test cases in an isolated container; their gradings come back as validated too once the runner has spoken. Code-to-picture and circuit answers go to the runner too, to draw the picture or simulate the schematic. A categorize question is scored on the spot. An essay waits for you, unless the platform has a language model to propose a grade (see [Essays and AI proposals](#essays-and-ai-proposals)). A missing answer is worth 0 and the entry says so (**No answer**, graded zero).
 
 While some answers of the question you are on have not been graded — still at the runner, or left by a grader that could not decide — a banner above the table counts them and offers **Run grading**, which starts the pass again on that question. The command palette runs it on the whole evaluation.
 
@@ -22,7 +22,7 @@ Open it from the classroom row of a closed evaluation, from **Go to grading** on
 
 You grade question by question: one item across the whole class. Grading twenty answers to the same question in a row is how you stay consistent, and it is the order in which an odd answer key becomes obvious. To look at one student's whole paper, open the results page.
 
-The card at the top says which question you are on, **Question 1 of 5**, with its type, its points, its internal name and how many answers are still **to validate** (or **All validated**). **Question 1 of 5** opens the list of every question with what each one still asks for; the chevrons at the card's edges move to the previous or next question. Under it, a stepper shows every question of the evaluation: a filled circle is a question whose answers are all validated, and a click jumps to it.
+The card at the top says which question you are on, **Question 1 of 9**, with its type, its points, its internal name and how many answers are still **to validate** (or **All validated**). **Question 1 of 9** opens the list of every question with what each one still asks for; the chevrons at the card's edges move to the previous or next question. Under it, a stepper shows every question of the evaluation: a filled circle is a question whose answers are all validated, and a click jumps to it.
 
 ### The table
 
@@ -72,6 +72,49 @@ A fill-in-the-blanks question renders the text with the student's words in the b
 
 Opened, a code question shows the points earned, then one row per test case: **Case**, **Arguments**, **Expected**, **Got**, **Verdict** (`Passed` or failed) and **Points**. A case marked `Hidden case` was never shown to the student. When the source did not compile, the view says **Compilation failed** and shows the **Compiler output** instead of the table; a program that died shows `Crashed`. The **Reference solution** is displayed underneath so you can compare without opening the question.
 
+<figure markdown="span">
+  ![Grading a categorize question, one column per card](../assets/screenshots/grading-categorize-light.png#only-light)
+  ![Grading a categorize question, one column per card](../assets/screenshots/grading-categorize-dark.png#only-dark)
+  <figcaption>A categorize question: one column per card, naming the column the student chose, green where it belongs and red where it does not.</figcaption>
+</figure>
+
+A categorize question is scored on the spot, card by card, and its gradings arrive validated: the striped squares are the partial scores. Opened, it shows the student's board, each card marked right or wrong, and the score line `Placed cards right 7/7`.
+
+<figure markdown="span">
+  ![Grading a code-to-picture question while the runner is away](../assets/screenshots/grading-codeimage-light.png#only-light)
+  ![Grading a code-to-picture question while the runner is away](../assets/screenshots/grading-codeimage-dark.png#only-dark)
+  <figcaption>A code-to-picture question: the program, and the picture it drew once the runner has run it; here the runner was away, so `runner…` stands in for it.</figcaption>
+</figure>
+
+A code-to-picture question draws the picture the program printed beside its source, the target picture on the expected row. Until the runner has run the program, the picture is `runner…` and the row is a **?**: that is what the screenshot shows, taken without a runner.
+
+<figure markdown="span">
+  ![Grading a circuit while the simulator is away](../assets/screenshots/grading-circuit-light.png#only-light)
+  ![Grading a circuit while the simulator is away](../assets/screenshots/grading-circuit-dark.png#only-dark)
+  <figcaption>A circuit: what each schematic holds; the chip counts the stimuli passed once the simulator has run, `simulator…` until then.</figcaption>
+</figure>
+
+A circuit shows what each schematic holds, and a chip that counts the stimuli it passed once the simulator (the runner's) has run it. Opened, it shows the drawing and, once simulated, the student's and the reference's curves side by side. A circuit graded by hand gets the curves too, for your eyes, and a 0-point proposal for you to settle.
+
+### Essays and AI proposals
+
+<figure markdown="span">
+  ![Grading essays with the AI's proposals](../assets/screenshots/grading-essay-light.png#only-light)
+  ![Grading essays with the AI's proposals](../assets/screenshots/grading-essay-dark.png#only-dark)
+  <figcaption>An essay: the first three lines of each answer, the model answer on the expected row, and under each score the AI's confidence.</figcaption>
+</figure>
+
+An essay is graded by you: without a language model, each written essay arrives as a 0-point proposal to read and grade, and an empty one as a validated zero. When the platform has a language model configured, the essay, your rubric and the model answer are sent to it, with nothing that names the student, and it proposes points, a confidence and a short justification. The justification is for you alone: it appears in the open answer as **The AI's justification, never shown to the student**, and a validation does not turn it into the comment a student reads; write your own through **Adjust** if the student should know why.
+
+<figure markdown="span">
+  ![An AI proposal opened, with its justification](../assets/screenshots/grading-ai-justification-light.png#only-light)
+  ![An AI proposal opened, with its justification](../assets/screenshots/grading-ai-justification-dark.png#only-dark)
+  <figcaption>An AI proposal opened: the answer beside the criteria and the model answer, then the model's justification, for your eyes only.</figcaption>
+</figure> Under the points the row then reads `AI · High`, `AI · Medium` or `AI · Low`; the **Graded by** filter set to **AI** adds a **Confidence** filter, so you can validate the confident proposals together and read the others one by one. A proposal is never final until you validate it. No model is called while an evaluation is running.
+
+!!! note
+    No language model is configured on the platform yet: your essays arrive as proposals to grade by hand. The screenshots on this page come from the demo world, graded by a development stand-in that proposes a grade from the rubric's words and says so in every justification.
+
 ## Acting on an answer
 
 **Validate** takes a proposal as it stands. It appears on the rows still waiting for you, and at the foot of the open answer; automatic gradings are already validated. A proposal worth 0 points that no grader stood behind — an essay waiting to be read, a program the runner never ran — is never validated as it stands: its row offers **Grade** instead, which opens the answer on the adjustment form, and **V** leaves it alone.
@@ -85,12 +128,12 @@ Opened, a code question shows the points earned, then one row per test case: **C
 **Adjust**, on a row or at the foot of the open answer, opens **Adjust this grading** under the answer. Enter the **Points** (between 0 and the item's maximum) and a **Comment**. The comment is mandatory, and it is the one comment the student may read with their result if the feedback policy shows comments: a student who reads a grade different from the machine's deserves to know why. **Save and validate** stores it as a manual grading and validates it. The grading it replaces is never deleted: it stays in the answer's **Grading history**.
 
 <figure markdown="span">
-  ![The primary button offering to validate every proposal of a question](../assets/screenshots/grading-batch-light.png#only-light)
-  ![The primary button offering to validate every proposal of a question](../assets/screenshots/grading-batch-dark.png#only-dark)
-  <figcaption>One button validates every proposal the table shows, in one click.</figcaption>
+  ![The primary button offering to validate the four AI proposals of an essay](../assets/screenshots/grading-batch-light.png#only-light)
+  ![The primary button offering to validate the four AI proposals of an essay](../assets/screenshots/grading-batch-dark.png#only-dark)
+  <figcaption>On an essay the AI has graded, <strong>Validate 4</strong> validates its four proposals in one click.</figcaption>
 </figure>
 
-The one red button of the screen, at the end of the filter row, says what comes next. While the table shows proposals it reads **Validate 4**: it validates the proposals shown, those of the filters you picked included (above ten, it asks first), and a toast counts what was validated; each grading stays editable. An essay proposed at 0 points is never validated in a batch: read it and grade it. Once every answer of the question is validated, the button becomes **Next question**, and on the last question **Results**. While what is left can only be graded by hand, it stays in place, greyed out, and its tooltip says why.
+The one red button of the screen, at the end of the filter row, says what comes next. While the table shows proposals it reads **Validate 4**: it validates the proposals shown, those of the filters you picked included (above ten, it asks first), and a toast counts what was validated; each grading stays editable. An essay or a program proposed at 0 points with nothing behind it (no grader could judge it) is never validated in a batch: read it and grade it. A proposal that states a confidence, an AI's zero included, is. Once every answer of the question is validated, the button becomes **Next question**, and on the last question **Results**. While what is left can only be graded by hand, it stays in place, greyed out, and its tooltip says why.
 
 ### Re-grade a question
 
@@ -108,7 +151,7 @@ If the results are already published, the sheet says so before you confirm: re-g
 
 ### When the runner is unavailable
 
-If the runner cannot be reached when the evaluation closes, the code answers are not lost: each one comes back as a proposal worth `0 / 5` with the message **The answer could not be run automatically; it is waiting for a manual grade.** and a **Grading note** that says the runner was unavailable (never a raw code). The banner above the table counts them and offers **Run grading**. Once the runner is back, **Run grading** sends them again and the proposals are replaced by real verdicts. If it will not be back in time, open each one and **Adjust** it by hand (a zero included, with its comment). The same happens, with a note saying so, when the runner was saturated.
+If the runner cannot be reached when the evaluation closes, the code answers are not lost, nor the code-to-picture and circuit ones: each one comes back as a proposal worth `0 / 5` with the message **The answer could not be run automatically; it is waiting for a manual grade.** and a **Grading note** that says the runner was unavailable (never a raw code). The banner above the table counts them and offers **Run grading**. Once the runner is back, **Run grading** sends them again and the proposals are replaced by real verdicts. If it will not be back in time, open each one and **Adjust** it by hand (a zero included, with its comment). The same happens, with a note saying so, when the runner was saturated.
 
 ### Shortcuts
 

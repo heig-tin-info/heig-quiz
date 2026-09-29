@@ -10,7 +10,9 @@
  *    no answer row at all                         → 0, validated, auto  (F-GRADE-01)
  *    type.grade() returns 'graded'                → validated (or proposed if it says so)
  *    type.grade() returns pending: 'runner'       → grading.runner, low priority
- *    type.grade() returns pending: 'llm'          → proposed, reason 'llm_not_configured'
+ *    type.grade() returns pending: 'llm'          → app.llm.grade() → proposed, source 'llm',
+ *                                                   with the model's confidence
+ *                                                   (no provider: reason 'llm_not_configured')
  *    then, the grid complete                      → grading_ready, once (`ready.ts`)
  *
  * grading.runner, for one answer:
@@ -28,10 +30,16 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { GradeContext, GradeResult, RunnerRequest } from "@quiz/core/server";
-import type { PassReason } from "@quiz/contracts";
+import type {
+  GradeContext,
+  GradeResult,
+  LlmGradeOutcome,
+  PendingLlmResult,
+  RunnerRequest,
+} from "@quiz/core/server";
+import { JUSTIFICATION_KEY, type PassReason } from "@quiz/contracts";
 import { RunnerBusy, RunnerUnavailable, isGraded, isPendingRunner } from "@quiz/core/server";
-import { round2 } from "@quiz/domain";
+import { isLiveState, round2 } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { answers, attempts, gradings } from "../../db/schema.js";
@@ -306,6 +314,9 @@ async function gradeCell(
       itemPoints: item.item.points,
       now: base.now,
       runner: app.runner,
+      // F-LLM-03: no model is consulted while the evaluation runs (a
+      // retake's own pass); the close's pass asks it.
+      ...(app.llm && !isLiveState(evaluation.state) ? { llm: app.llm } : {}),
       // The evaluation's per-type settings: what a question config
       // that says "inherit" defers to (an mcq's scoring policy).
       defaults: gradeDefaults(evaluation),
@@ -441,9 +452,47 @@ async function gradeOne(
   }
   if (isPendingRunner(result)) return { kind: "runner", request: result.request };
 
-  // `pending: llm` — phase 2. The MVP has no provider configured, so the
-  // answer arrives in the panel as a proposal worth zero (§5.4).
-  return { kind: "written", grading: failedProposal("llm_not_configured", "llm") };
+  return gradeWithLlm(app, result, input.ctx);
+}
+
+/**
+ * A `pending: llm` result through the service `gradeCell` offered: the
+ * model's points and confidence, as a PROPOSAL a teacher validates
+ * (F-GRADE-02). The request goes as the type built it — anonymous by
+ * construction, nothing is added here (F-LLM-04). The justification is the
+ * TEACHER's (ADR-045, open question 27): it goes in the details under
+ * `JUSTIFICATION_KEY`, which every student payload strips, and never in the
+ * comment, which a validation would hand to the student. No service: a
+ * proposal worth zero that says so (§5.4); a failed call: the same, with
+ * `grader_error`, so a new pass retries it.
+ */
+async function gradeWithLlm(
+  app: FastifyInstance,
+  pending: PendingLlmResult,
+  ctx: GradeContext,
+): Promise<GradeOutcome> {
+  // None without a provider, nor while the evaluation runs (F-LLM-03).
+  if (!ctx.llm) return { kind: "written", grading: failedProposal("llm_not_configured", "llm") };
+
+  let outcome: LlmGradeOutcome;
+  try {
+    outcome = await ctx.llm.grade(pending.request);
+  } catch (err) {
+    app.log.error({ err, itemId: ctx.itemId }, "grading: llm call failed");
+    return { kind: "written", grading: failedProposal("grader_error", "llm") };
+  }
+  const own = pending.details && typeof pending.details === "object" ? pending.details : {};
+  const max = pending.request.maxPoints;
+  return {
+    kind: "written",
+    grading: {
+      points: round2(Math.min(max, Math.max(0, outcome.points))),
+      source: "llm",
+      state: "proposed",
+      details: { ...own, [JUSTIFICATION_KEY]: outcome.justification },
+      confidence: outcome.confidence,
+    },
+  };
 }
 
 // --- The runner pass ------------------------------------------------------

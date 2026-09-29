@@ -431,7 +431,8 @@ export function gradeCircuit(
   }
 
   if (config.grading.mode === "llm") {
-    // Phase 2. The MVP grading worker rejects this with `llm_unavailable`.
+    // The grading pass hands it to the LLM service (ADR-045), or writes a
+    // proposal with reason `llm_not_configured` when the process has none.
     const harness = harnessOf(config);
     const first = config.stimuli[0];
     const studentText =
@@ -453,6 +454,9 @@ export function gradeCircuit(
         answer: studentText,
         maxPoints: ctx.itemPoints,
       },
+      // The shape every circuit review reads, so the panel draws the
+      // schematic beside the model's proposal (no stimulus was run).
+      details: { ...baseDetails(config, diagnosis, "none"), reason: "llm" },
     };
   }
 

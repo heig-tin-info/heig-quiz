@@ -10,6 +10,7 @@ import { registerForTests } from "@quiz/registry/server";
 import type { Db } from "../../db/client.js";
 import {
   auditLog,
+  coursePools,
   courseStaff,
   courses,
   notifications,
@@ -651,6 +652,22 @@ describe("question counts", () => {
     } finally {
       unsubscribe();
     }
+  });
+
+  it("writes nothing when the links already stand", async () => {
+    const linked = await seedPool();
+    const courseId = randomUUID();
+    await db
+      .insert(courses)
+      .values({ id: courseId, name: "Unchanged", code: `N-${courseId.slice(0, 8)}` });
+    await service.setCoursePools(db, courseId, [linked], undefined, viewer());
+    const before = await db.select().from(coursePools).where(eq(coursePools.courseId, courseId));
+
+    const again = await service.setCoursePools(db, courseId, [linked], undefined, viewer());
+
+    expect(again.map((p) => p.id)).toEqual([linked]);
+    // The same row, not a deleted and re-inserted one.
+    expect(await db.select().from(coursePools).where(eq(coursePools.courseId, courseId))).toEqual(before);
   });
 
   it("leaves a soft-deleted question out of the count", async () => {

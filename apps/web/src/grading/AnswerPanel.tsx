@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, Check, PencilLine, RefreshCcw } from "lucide-react"
 import { useId, useState, type ReactNode } from "react";
 
 import type { GradingColumn } from "@quiz/core/client";
-import type { Grading, GradingEntry } from "@quiz/contracts";
+import { justificationOf, type Grading, type GradingEntry } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
 import { api } from "../api";
@@ -166,6 +166,7 @@ function EntrySheet({
   const formId = useId();
   const { entry, adjust } = target;
   const grading = entry.grading;
+  const justification = justificationOf(grading?.details ?? null);
 
   // Two addresses for one correction (deviation W6-3): a graded cell by its
   // grading, an ungraded one by its answer. A cell with neither — an absent
@@ -258,6 +259,13 @@ function EntrySheet({
             <p className="text-[13px] text-fg">
               {grading.source === "manual" ? grading.comment : machineReason(t, grading.comment)}
             </p>
+          </NotePanel>
+        ) : null}
+        {/* An LLM's why: the teacher's alone, stripped from every student
+            payload (ADR-045, open question 27). */}
+        {justification ? (
+          <NotePanel tone="soft" eyebrow={t("grading.aiJustification")}>
+            <p className="text-[13px] text-fg">{justification}</p>
           </NotePanel>
         ) : null}
         {explanation ? (
