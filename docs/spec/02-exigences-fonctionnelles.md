@@ -189,11 +189,12 @@ What a user is told, and where (ADR-030 and its addendum of #198). A notificatio
 
 | Id | Requirement | Phase | Prio |
 |---|---|---|---|
-| F-DRILL-01 | Every question a student meets in an evaluation becomes a drill card. The teacher may also open a whole pool to drill for a classroom. | P2 | S |
-| F-DRILL-02 | Scheduling follows FSRS. The student rates their answer, or the automatic grading provides the recall rating. | P2 | S |
-| F-DRILL-03 | The student has a drill tab with the session of the day or of the week, of N questions, duration configured by the teacher or the admin. | P2 | S |
-| F-DRILL-04 | Drill is opt-in. The teacher sees aggregates per classroom and per tag, never the individual detail by default. | P2 | S |
+| F-DRILL-01 | A question a student meets in an evaluation becomes a drill card: at the release of the results of an exam, never before, and at the hand-in of an exercise; only when the evaluation allows drill (a setting, on by default for an exercise, off by default for an exam), the classroom has the drill enabled (F-DRILL-04), and the question is drillable (04 §4.1). Opening a whole pool to drill for a classroom is still open (06, question 28). ADR-041 §1–3. | P2 | S |
+| F-DRILL-02 | Scheduling follows FSRS-5 with its default weights. The recall rating is computed, never asked, from the correctness of the automatic grading and the active time against the question's reference time on the same device class, recorded on each review. ADR-041 §4–5. | P2 | S |
+| F-DRILL-03 | The student has a drill tab with the session of the day: due cards first, then new cards capped per day, up to a time budget of about ten minutes (configured by the teacher or the admin, F-ADMIN-03); courses and tags interleaved. No reminders and no streaks: a "today's drill is available" badge on the home and on the centre slot of the bottom bar. ADR-041 §6. | P2 | S |
+| F-DRILL-04 | The teacher enables the drill per classroom; its students are then in by default and may opt out. The teacher sees each student's individual activity — questions seen, sessions — and a measure of their improvement over time, besides the aggregates per classroom and per tag. The drill tab tells the student that their teacher sees this activity. Amended by ADR-041 §8, which replaced "never the individual detail by default". | P2 | S |
 | F-DRILL-05 | The student sees per tag a mastery indicator derived from the FSRS retention, and their strengths and weaknesses. | P2 | S |
+| F-DRILL-06 | A question edited after its card exists keeps the card's FSRS state, unless its answer key changed: then the card is reset. ADR-041 §7. | P2 | S |
 
 ## F-ADMIN Administration
 

@@ -12,6 +12,9 @@ export * from "./compareOutput.js";
 export * from "./cooldown.js";
 export * from "./debrief.js";
 export * from "./deadline.js";
+export * from "./drillEligibility.js";
+export * from "./drillRating.js";
+export * from "./drillSession.js";
 export * from "./evaluationConfig.js";
 export * from "./format.js";
 export * from "./grade.js";
@@ -31,6 +34,8 @@ export * from "./round.js";
 export * from "./short.js";
 export * from "./stats.js";
 export * from "./templatePull.js";
+// `./drillSchedule.js` is NOT re-exported: it pulls `ts-fsrs`, which the web
+// bundle would then carry. The server imports `@quiz/domain/drillSchedule`.
 
 /**
  * The seeded shuffle lives in `@quiz/core/rng` (the question types need it

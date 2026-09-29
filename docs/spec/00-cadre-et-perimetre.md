@@ -69,7 +69,7 @@ MoSCoW priority: M = must, S = should, C = could.
 | Evaluation | Open exercise mode with a deadline, one-question poll mode with a session code | M |
 | Pools | Pools shared between teachers, reader / contributor / owner roles, fork with provenance | S |
 | Statistics | Difficulty and discrimination indices per question (ADR-038), distractor analysis, answer time | S |
-| Drill | FSRS spaced practice, daily / weekly drill, strengths and weaknesses per tag | S |
+| Drill | FSRS spaced practice, a daily drill, strengths and weaknesses per tag | S |
 | Import | GIFT and Moodle XML | C |
 
 ### Phase 3: advanced types and extensibility
