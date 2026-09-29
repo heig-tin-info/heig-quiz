@@ -71,7 +71,7 @@ Each module lives in `apps/api/src/modules/<name>/` with `routes.ts` the HTTP ha
 | `preview` | The teacher's stateless preview of an evaluation: seed, student view, runs and grading, nothing stored (ADR-018) | `live`, `grading`, `runner` |
 | `grading` | Automatic grading, runner, LLM, validation panel, regrading, release | `live`, `runner`, `llm` |
 | `results` | Grades, grade scale, CSV exports, statistical views of an evaluation, student feedback | `grading` |
-| `stats` | Item analysis per version, aggregates for the pool, phase 2 | `results` |
+| `stats` | Item analysis per question (ADR-038), aggregates for the pool | `grading`, `evaluation`, `pool` |
 | `llm` | Providers, keys, prompt templates, call log, generation | `auth` |
 | `runner` | HTTP client of the runner service, queue and priorities | |
 | `drill` | Cards, FSRS, sessions, phase 2 | `pool`, `results` |
@@ -151,7 +151,7 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 | `pools` | `name`, `visibility` private / shared / public, `owner_id` | |
 | `pool_members` | `pool_id`, `user_id`, `role` reader / contributor / owner | Phase 2 |
 | `categories` | `pool_id`, `parent_id` nullable, `name`, `position` | Tree by parent |
-| `questions` | `pool_id` nullable (an unsaved poll question, ADR-014 addendum), `category_id` nullable, `type` text, `internal_name`, `difficulty` smallint 1 to 5, `shuffleable` bool, `randomizable` bool, `origin_question_id` nullable, `deleted_at` | Stable metadata |
+| `questions` | `pool_id` nullable (an unsaved poll question, ADR-014 addendum), `category_id` nullable, `type` text, `internal_name`, `difficulty` smallint 1 to 5, `shuffleable` bool, `randomizable` bool, `origin_question_id` nullable, `stats_since` nullable, `deleted_at` | Stable metadata. `stats_since`: written only by the statistics reset (ADR-038) |
 | `question_tags` | `question_id`, `tag` text | composite pk, index on `tag`. No `tags` table: tags are normalised strings, the distinct list comes from a query |
 | `question_versions` | `question_id`, `number` int nullable, `config` jsonb, `config_version` int, `explanation` text, `search` generated tsvector, `published_at`, `published_by`, `change_note`, `deprecated_at`, `deprecation_note` | unique (question_id, number). `number` null = draft, a single one per question thanks to a partial unique index `WHERE number IS NULL` |
 | `assets` | `owner_id`, `pool_id`, `sha256`, `mime`, `bytes`, `width`, `height`, `path` | Deduplicated by hash. Referenced in the markdown by `asset:<id>` |
@@ -194,7 +194,7 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 | Dashboard grid | join `attempts` × `evaluation_items` left `answers` left validated `gradings`, one evaluation | `answers(attempt_id)`, `gradings(answer_id) WHERE validated` |
 | Search in the pool | `tsvector` on `internal_name`, statement extracted from the config by the type, tags | GIN on `search`, index on `question_tags(tag)` |
 | Latest published version | `SELECT ... WHERE question_id = ? AND number IS NOT NULL ORDER BY number DESC LIMIT 1` | `(question_id, number desc)` |
-| Item statistics | aggregate on validated `gradings` joined to `evaluation_items` by `question_version_id` | `evaluation_items(question_version_id)` |
+| Item statistics | validated `gradings` joined to `evaluation_items`, then to the question through `question_versions.question_id` (ADR-038) | `evaluation_items(question_version_id)`, `gradings(item_id) WHERE validated` |
 
 ### Transactions
 

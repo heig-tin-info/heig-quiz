@@ -84,7 +84,7 @@ The actions are provided by the mounted screens, through a command registry in `
 - **Image difference** for `codeimage`: the target, the student's image and a green / red difference, one grid or two side by side, with the share of correct pixels.
 - **Attempt history** for support: reconstruction of the sequence of revisions of an answer with server timestamps.
 - **Preview of five instantiations** for a question with random values, with a "freeze" button.
-- **Statistics in the pool**: on a question's card, success rate and average time per version, to pick the right question at a glance.
+- **Statistics in the pool**: on a question's row or card, success rate (and, later, time spent) per question, to pick the right question at a glance (ADR-038).
 - **Paste from Moodle**: a GIFT file dropped on the pool is imported, the non-convertible questions are listed.
 - **Batch grading**: filter by confidence, by question, by gap between the LLM proposal and the average score.
 - **Zen mode** for the student, one question per screen, progress bar, no unnecessary chrome.

@@ -167,10 +167,11 @@ What a user is told, and where (ADR-030 and its addendum of #198). A notificatio
 
 | Id | Requirement | Phase | Prio |
 |---|---|---|---|
-| F-STAT-01 | For every question version: number of exposures, success rate, mean points, mean, min and max answer time, per year. | P2 | S |
-| F-STAT-02 | Difficulty index p, discrimination index by point-biserial correlation with the total, distractor analysis for multiple choice. | P2 | S |
-| F-STAT-03 | The statistics are visible in the pool on the question's card and serve as filters. | P2 | S |
+| F-STAT-01 | For every question, all its versions pooled: the number of answers counted `n` and the mean success rate `p` (signed under negative marking), shown from 10 answers on; the answer time follows (ADR-038). | P2 | S |
+| F-STAT-02 | Difficulty index p per question (ADR-038); discrimination index by point-biserial correlation with the total, distractor analysis for multiple choice. | P2 | S |
+| F-STAT-03 | The statistics are visible in the pool: an icon on the question's row or card opens them in a side panel. Serving as filters is still to do. | P2 | S |
 | F-STAT-04 | "Generate a quiz": target duration, tags, difficulty, number of questions, relying on the mean answer time. The result is an editable evaluation draft. | P3 | C |
+| F-STAT-05 | A contributor or an owner of the pool resets a question's statistics: only attempts started afterwards count. Nothing is deleted, the reset is audited (ADR-038). | P2 | S |
 
 ## F-LLM LLM assistance
 

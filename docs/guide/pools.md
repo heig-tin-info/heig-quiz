@@ -70,6 +70,12 @@ Each row shows the type as an icon, the internal name, the tags, the difficulty 
 
 Tick several rows and a bar appears at the bottom: **Add a tag**, **Move to a category**, **Delete**. Deleting hides the questions from the lists; the results already recorded are kept.
 
+### Question statistics
+
+A question answered at least ten times shows a chart icon after its name. It opens its **Statistics**: the **Success rate**, the mean share of the points students earned on it, and the number of **Answers counted**. Every version of the question counts, in exams and exercises (the attempt kept, when a student retook one); a teacher's own test attempt does not, and a blank or unanswered question counts 0. Under negative marking the rate can fall below zero.
+
+**Reset statistics** (contributors and owners) starts the count again: only attempts started afterwards count. Nothing is deleted; grades and results stay as they are.
+
 ## Creating a question
 
 **New question** asks for the **Question type** and the **Internal name**, then **Create question** opens the editor. The name is yours alone, a student never sees it; a stable convention such as `prg1-boucle-for` is what you will search for later.
