@@ -69,8 +69,9 @@ export const ShortMatcherSchema = z.discriminatedUnion("kind", [
   }),
   /**
    * Phase 2. The shape is accepted so that an imported question survives a
-   * round trip, but `hasLlmMatcher` (`@quiz/domain/short`) refuses it at
-   * publication with `llm_not_available`, and `matchShort` never matches it.
+   * round trip, but `publicationIssues` (`server.ts`) refuses it at
+   * publication with `short.llm_not_available`, and `matchShort` never
+   * matches it.
    */
   z.object({
     kind: z.literal("llm"),

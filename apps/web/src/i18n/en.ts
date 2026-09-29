@@ -969,9 +969,10 @@ export const en = {
   "qt.rich.e.maxCharsPages": "About {pages} A4 page(s).",
   "qt.rich.e.rubric": "Grading criteria",
   "qt.rich.e.rubricHint":
-    "How you will award the points, for yourself or another grader: shown beside every answer in the grading panel. Example: \"2 pts: names the complexity. 1 pt: gives an example.\" Students see it only if the evaluation shows the expected answer: at release, or right away in an exercise with immediate feedback.",
+    "How you will award the points, for yourself or another grader: shown beside every answer in the grading panel. Example: \"2 pts: names the complexity. 1 pt: gives an example.\" Students never see it.",
   "qt.rich.e.reference": "Model answer",
-  "qt.rich.e.referenceHint": "Optional. Shown to the grader beside every answer.",
+  "qt.rich.e.referenceHint":
+    "Optional. Shown to the grader beside every answer, and to students when the evaluation shows the expected answer.",
   "qt.rich.e.manualGrading":
     "Graded by hand: every written answer reaches the grading panel as a proposal of 0 points, to settle.",
   "qt.rich.e.decimal": ".",
@@ -1437,7 +1438,7 @@ export const en = {
   "qt.circuit.e.points": "Points",
   "qt.circuit.e.reference": "Reference circuit",
   "qt.circuit.e.referenceHint":
-    "Your own answer, inside the same box. It is what a simulated grade compares against, and a student never sees it — in any view.",
+    "Your own answer, inside the same box: what a simulated grade compares against. Students may receive it when the evaluation shows the expected answer.",
   "qt.circuit.e.tryReference": "Simulate the reference",
   "qt.circuit.e.trying": "Simulation…",
   "qt.circuit.e.tryUnavailable":
@@ -1577,6 +1578,7 @@ export const en = {
   "issue.short.length_range": "The maximum length is below the minimum length.",
   "issue.short.number_range": "The maximum is below the minimum.",
   "issue.short.date_range": "The last day is before the first one.",
+  "issue.short.llm_not_available": "An LLM matcher cannot be published yet: remove it to publish.",
   "issue.codeimage.target_missing":
     "No target yet: try the reference solution and use its image as the target.",
   "issue.codeimage.target_size":

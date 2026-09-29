@@ -953,9 +953,10 @@ export const fr: Record<keyof Dict, string> = {
   "qt.rich.e.maxCharsPages": "Environ {pages} page(s) A4.",
   "qt.rich.e.rubric": "Grille de correction",
   "qt.rich.e.rubricHint":
-    "Comment vous attribuerez les points, pour vous ou un autre correcteur : affichée à côté de chaque réponse dans le panneau de correction. Exemple : « 2 pts : nomme la complexité. 1 pt : donne un exemple. » Les étudiants ne la voient que si l'évaluation montre la réponse attendue : à la publication, ou tout de suite pour un exercice à retour immédiat.",
+    "Comment vous attribuerez les points, pour vous ou un autre correcteur : affichée à côté de chaque réponse dans le panneau de correction. Exemple : « 2 pts : nomme la complexité. 1 pt : donne un exemple. » Les étudiants ne la voient jamais.",
   "qt.rich.e.reference": "Réponse modèle",
-  "qt.rich.e.referenceHint": "Facultative. Montrée au correcteur à côté de chaque réponse.",
+  "qt.rich.e.referenceHint":
+    "Facultative. Montrée au correcteur à côté de chaque réponse, et aux étudiants quand l'évaluation montre la réponse attendue.",
   "qt.rich.e.manualGrading":
     "Corrigée à la main : chaque réponse rédigée arrive dans le panneau de correction comme une proposition de 0 point, à trancher.",
   "qt.rich.e.decimal": ",",
@@ -1430,7 +1431,7 @@ export const fr: Record<keyof Dict, string> = {
   "qt.circuit.e.points": "Points",
   "qt.circuit.e.reference": "Circuit de référence",
   "qt.circuit.e.referenceHint":
-    "Votre propre réponse, dans la même boîte. C'est la comparaison d'une correction par simulation, et un étudiant ne la voit jamais, dans aucune vue.",
+    "Votre propre réponse, dans la même boîte : la comparaison d'une correction par simulation. Les étudiants peuvent la recevoir quand l'évaluation montre la réponse attendue.",
   "qt.circuit.e.tryReference": "Simuler la référence",
   "qt.circuit.e.trying": "Simulation…",
   "qt.circuit.e.tryUnavailable":
@@ -1572,6 +1573,7 @@ export const fr: Record<keyof Dict, string> = {
   "issue.short.length_range": "La longueur maximale est inférieure à la longueur minimale.",
   "issue.short.number_range": "Le maximum est inférieur au minimum.",
   "issue.short.date_range": "Le dernier jour précède le premier.",
+  "issue.short.llm_not_available": "Un critère IA ne peut pas encore être publié : retirez-le pour publier.",
   "issue.codeimage.target_missing":
     "Pas encore de cible : essayez la solution de référence et utilisez son image comme cible.",
   "issue.codeimage.target_size":

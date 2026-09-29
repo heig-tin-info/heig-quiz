@@ -237,7 +237,7 @@ export const CircuitConfig = z
      */
     commonGround: z.boolean().default(true),
     stimuli: z.array(Stimulus).max(4).default([]),
-    /** The teacher's own circuit: the key. Never sent to a student, in any view. */
+    /** The teacher's own circuit: the key. Never in `toStudent`; a student receives it only under a shown key (ADR-037). */
     reference: Schematic.nullable().default(null),
     grading: Grading.default({ mode: "manual", tolerance: 0.05, rubric: "" }),
     /** Overlay the reference's output on the student's plot, for the visible stimuli. */
@@ -350,10 +350,9 @@ export type CircuitStudent = z.infer<typeof CircuitStudent>;
 // Solution
 // ---------------------------------------------------------------------------
 
+/** The key: the reference schematic alone (ADR-037). */
 export const CircuitSolution = z.object({
   reference: Schematic.nullable(),
-  stimuli: z.array(Stimulus),
-  grading: Grading,
 });
 export type CircuitSolution = z.infer<typeof CircuitSolution>;
 

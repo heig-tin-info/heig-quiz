@@ -306,11 +306,6 @@ export function matchShortAnswer(
   return { matchedIndex: null, matchedKind: null, normalized, fraction: 0 };
 }
 
-/** Phase 2 guard: a config holding an `llm` matcher is refused at publication. */
-export function hasLlmMatcher(matchers: readonly ShortMatcher[]): boolean {
-  return matchers.some((m) => m.kind === "llm");
-}
-
 /** Human rendering of a matcher, for the solution panel. */
 export function describeMatcher(matcher: ShortMatcher): string {
   switch (matcher.kind) {

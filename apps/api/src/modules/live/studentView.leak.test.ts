@@ -29,7 +29,7 @@ import {
 } from "@quiz/core/server";
 
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
-import { FORBIDDEN_STUDENT_KEYS, studentView, stripMetadata } from "./studentView.js";
+import { FORBIDDEN_STUDENT_KEYS, studentSolutionView, studentView, stripMetadata } from "./studentView.js";
 
 /**
  * Keys that name the answer key rather than the question. `expected` and
@@ -99,6 +99,8 @@ function setAt(root: unknown, path: Path, value: unknown): void {
 interface Sown {
   config: unknown;
   markers: string[];
+  /** Where each marker was sown, index for index. */
+  paths: Path[];
 }
 
 /**
@@ -216,6 +218,7 @@ function filledDraft(type: AnyQuestionTypeServer): unknown {
 function sowSecrets(type: AnyQuestionTypeServer): Sown {
   let config: unknown = filledDraft(type);
   const markers: string[] = [];
+  const paths: Path[] = [];
   for (const path of secretPaths(config)) {
     const original = getAt(config, path);
     if (typeof original !== "string") continue;
@@ -226,8 +229,9 @@ function sowSecrets(type: AnyQuestionTypeServer): Sown {
     if (!parsed.success) continue;
     config = parsed.data;
     markers.push(marker);
+    paths.push(path);
   }
-  return { config, markers };
+  return { config, markers, paths };
 }
 
 /** Every key name appearing anywhere in a serialised payload. */
@@ -243,6 +247,13 @@ function keysOf(value: unknown, out = new Set<string>()): Set<string> {
   }
   return out;
 }
+
+/**
+ * Types whose sown strings are no part of their key: `circuit`'s is its
+ * grading rubric, and its solution is the reference alone (ADR-037). Their
+ * draft has no reference, so nothing sown is expected in the solution.
+ */
+const KEYLESS_SECRETS = new Set(["circuit"]);
 
 function checkType(id: string, type: AnyQuestionTypeServer): void {
   const { config, markers } = sowSecrets(type);
@@ -278,14 +289,25 @@ function checkType(id: string, type: AnyQuestionTypeServer): void {
     }
   }
 
-  // The sowing must have reached the key, or the search above proved nothing.
-  if (markers.length > 0) {
-    const solution = JSON.stringify(type.toSolution(config, { seed: 0, itemId, shuffle: false }));
-    expect(
-      markers.some((marker) => solution.includes(marker)),
-      `${id}: the markers never reached the solution — the fixture is wrong`,
-    ).toBe(true);
+  if (markers.length === 0) return;
+  const solution = JSON.stringify(type.toSolution(config, { seed: 0, itemId, shuffle: false }));
+  if (KEYLESS_SECRETS.has(id)) {
+    // What is sown here is no part of the key (ADR-037): neither the
+    // teacher's solution nor a student's may carry it.
+    const student = JSON.stringify(
+      studentSolutionView({ type: id, version, seed: 0, itemId }) ?? null,
+    );
+    for (const marker of markers) {
+      expect(solution, `${id}: teacher-only material in the solution (${marker})`).not.toContain(marker);
+      expect(student, `${id}: teacher-only material in a student's key (${marker})`).not.toContain(marker);
+    }
+    return;
   }
+  // The sowing must have reached the key, or the search above proved nothing.
+  expect(
+    markers.some((marker) => solution.includes(marker)),
+    `${id}: the markers never reached the solution — the fixture is wrong`,
+  ).toBe(true);
 }
 
 /**
@@ -434,6 +456,42 @@ describe("studentView never leaks the key (invariant 4)", () => {
     } finally {
       restore();
     }
+  });
+});
+
+/**
+ * ADR-037: grading criteria are the teacher's even under a shown key. The
+ * student's key (`studentSolutionView`, the one exit every student-facing
+ * reader of a key uses) must carry no sown `rubric`, for every registered
+ * type. That the essay's model answer still travels is the feedback route's
+ * test (`results/feedback.db.test.ts`).
+ */
+describe("studentSolutionView keeps the teacher's material home (ADR-037)", () => {
+  const itemId = "66666666-6666-4666-8666-666666666666";
+  const studentKeyOf = (id: string, config: unknown) =>
+    studentSolutionView({
+      type: id,
+      version: { config, configVersion: questionType(id).configVersion },
+      seed: 0,
+      itemId,
+    });
+
+  const rubricTypes: string[] = [];
+  for (const id of registeredServerIds()) {
+    it(`serves no grading criteria of "${id}" to a student`, () => {
+      const { config, markers, paths } = sowSecrets(questionType(id));
+      const serialized = JSON.stringify(studentKeyOf(id, config) ?? null);
+      markers.forEach((marker, i) => {
+        if (paths[i]!.at(-1) !== "rubric") return;
+        rubricTypes.push(id);
+        expect(serialized, `${id}: the rubric reached a student (${marker})`).not.toContain(marker);
+      });
+    });
+  }
+
+  it("really sowed a rubric into the essay and the circuit", () => {
+    // Runs after the loop above: without a sown rubric it proved nothing.
+    expect(rubricTypes).toEqual(expect.arrayContaining(["rich", "circuit"]));
   });
 });
 

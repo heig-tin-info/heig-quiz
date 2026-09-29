@@ -60,7 +60,7 @@ import {
 } from "../evaluation/service.js";
 import { verdictOf } from "../grading/service.js";
 import * as live from "../live/service.js";
-import { solutionView, studentView } from "../live/studentView.js";
+import { studentSolutionView, studentView } from "../live/studentView.js";
 import {
   runButton,
   runnableView,
@@ -457,10 +457,11 @@ export async function gradePreview(
       // The very payload the player showed: the same builder, the same seed.
       student: shown.student,
       answer: payload ?? null,
-      // As the student's own feedback page builds it (`results/service.ts`).
+      // As the student's own feedback page builds it (`results/service.ts`):
+      // the student's key, without what stays the teacher's (ADR-037).
       solution: outcome.status === "no_key"
         ? null
-        : solutionView({ type: item.question.type, version, seed, itemId: shown.id }),
+        : studentSolutionView({ type: item.question.type, version, seed, itemId: shown.id }),
       explanation: item.version.explanation === "" ? null : item.version.explanation,
       details: outcome.details ?? null,
       ...(outcome.comment === undefined ? {} : { comment: outcome.comment }),

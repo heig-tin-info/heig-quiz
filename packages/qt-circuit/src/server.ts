@@ -92,12 +92,15 @@ export const circuitServer: QuestionTypeServer<
     };
   },
 
+  /**
+   * The key is the reference schematic, and nothing else: the stimuli (the
+   * hidden ones included) and the grading block (mode, tolerance, rubric)
+   * are no part of it. The teacher reads the stimuli and the rubric in the
+   * editor and the grading details; a student under a shown key gets the
+   * reference alone (ADR-037).
+   */
   toSolution(config) {
-    return {
-      reference: config.reference,
-      stimuli: config.stimuli,
-      grading: { ...config.grading },
-    };
+    return { reference: config.reference };
   },
 
   studentDetails(details: CircuitDetails, policy): unknown {

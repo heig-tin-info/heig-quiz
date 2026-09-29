@@ -28,6 +28,7 @@ const KNOWN: Record<string, keyof Dict> = {
   "short.length_range": "issue.short.length_range",
   "short.number_range": "issue.short.number_range",
   "short.date_range": "issue.short.date_range",
+  "short.llm_not_available": "issue.short.llm_not_available",
   "codeimage.target_missing": "issue.codeimage.target_missing",
   "codeimage.target_size": "issue.codeimage.target_size",
   "codeimage.target_value": "issue.codeimage.target_value",

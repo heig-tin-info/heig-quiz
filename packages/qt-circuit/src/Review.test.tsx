@@ -56,11 +56,7 @@ const student: CircuitStudent = {
   simulationsPerMinute: 10,
 };
 
-const solution: CircuitSolution = {
-  reference,
-  stimuli: [],
-  grading: { mode: "simulation", tolerance: 0.05, rubric: "" },
-};
+const solution: CircuitSolution = { reference };
 
 const details: CircuitDetails = {
   mode: "simulation",

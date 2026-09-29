@@ -37,6 +37,9 @@ const MCQ_CORRECT = 0;
 const CLOZE_EXPECTED = "Lutece";
 const HIDDEN_CASE_NAME = "hidden-limit";
 const HIDDEN_EXPECTED = "42";
+/** The essay of the exercise below (ADR-037): criteria the teacher's, a model answer published. */
+const ESSAY_RUBRIC = "RUBRIC-SECRET 2 pts: names the guard page";
+const ESSAY_REFERENCE = "The stack grows down into unmapped memory.";
 
 const CONFIGS: Record<string, unknown> = {
   mcq: {
@@ -73,6 +76,12 @@ const CONFIGS: Record<string, unknown> = {
         { name: HIDDEN_CASE_NAME, stdin: "", expected: HIDDEN_EXPECTED, visible: false, points: 1 },
       ],
     },
+  },
+  rich: {
+    configVersion: 1,
+    prompt: "Why does a stack overflow crash a C program?",
+    rubric: ESSAY_RUBRIC,
+    reference: ESSAY_REFERENCE,
   },
 };
 
@@ -297,5 +306,57 @@ describe("`showKey: true` publishes the key the teacher chose to publish", () =>
 
     // …and the solutions travel with it.
     expect((await feedbackOf("mcq"))["solution"]).toEqual({ correct: [MCQ_CORRECT] });
+  });
+});
+
+describe("an essay's grading criteria stay the teacher's (ADR-037)", () => {
+  it("shows a student the model answer right after hand-in, never the rubric", async () => {
+    const db = server.app.db;
+    // The `exercise` preset: immediate feedback WITH the key.
+    const seed = await seedLive(db, {
+      teacherId: teacher.id,
+      studentIds: [student.id],
+      questions: 0,
+      mode: "exercise",
+      durationS: null,
+    });
+    const exercise = (await byId(db, seed.evaluationId))!;
+    expect(exercise.feedbackPolicy).toMatchObject({ when: "immediate", showKey: true });
+    const [item] = await addItems(db, exercise, [await publish(seed.poolId, "rich")], () => 2, {
+      attemptCount: 0,
+    });
+
+    await post(`/app/api/evaluations/${seed.evaluationId}/start`, teacher.headers, { confirm: true });
+    const entered = await post(`/app/api/evaluations/${seed.evaluationId}/attempt`, student.headers, {});
+    const attemptId = entered.json().view.attempt.id as string;
+    const saved = await server.app.inject({
+      method: "PUT",
+      url: `/app/api/attempts/${attemptId}/answers/${item!.id}`,
+      headers: student.headers,
+      payload: {
+        payload: { text: "It runs into the guard page." },
+        revision: 1,
+        clientTs: server.clock.now().toISOString(),
+      },
+    });
+    expect(saved.statusCode).toBe(200);
+    const submitted = await post(`/app/api/attempts/${attemptId}/submit`, student.headers, { confirm: true });
+    expect(submitted.statusCode).toBe(200);
+
+    const feedback = await get(`/app/api/attempts/${attemptId}/feedback`, student.headers);
+    expect(feedback.statusCode).toBe(200);
+    expect(feedback.json().available).toBe(true);
+    const essay = (feedback.json().items as Record<string, unknown>[])[0]!;
+    expect(essay["solution"]).toEqual({ reference: ESSAY_REFERENCE });
+    expect(feedback.body).not.toContain("RUBRIC-SECRET");
+
+    // The grading panel keeps both: it is the teacher's.
+    const panel = await get(
+      `/app/api/evaluations/${seed.evaluationId}/grading?by=question&itemId=${item!.id}`,
+      teacher.headers,
+    );
+    expect(panel.statusCode).toBe(200);
+    const [entry] = panel.json().entries as { solution: unknown }[];
+    expect(entry!.solution).toEqual({ rubric: ESSAY_RUBRIC, reference: ESSAY_REFERENCE });
   });
 });

@@ -5,7 +5,6 @@ import {
   compileFullMatch,
   describeMatcher,
   foldCase,
-  hasLlmMatcher,
   InvalidMatcherPattern,
   isValidPattern,
   MAX_INPUT_LENGTH,
@@ -217,8 +216,6 @@ describe("matcher dispatch and rendering", () => {
     expect(matchShort("4 octets", all[2]!)).toBe(true);
     expect(matchShort("2026-09-20", all[5]!)).toBe(true);
     expect(matchShort("14h30", all[6]!)).toBe(true);
-    expect(hasLlmMatcher(all)).toBe(true);
-    expect(hasLlmMatcher(all.slice(0, 2))).toBe(false);
   });
 
   it("renders a matcher for the solution panel", () => {

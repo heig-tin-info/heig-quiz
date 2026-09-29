@@ -127,9 +127,10 @@ export function studentView(input: StudentViewInput): unknown {
 }
 
 /**
- * The key, for the teacher's inspector and for the feedback policy. It is NOT
- * a student payload: never serve it on a student route without checking
- * `feedbackPolicy.showKey` first.
+ * The key, WHOLE, for the teacher's surfaces (grading panel, dashboard
+ * inspector, results by question). It is NOT a student payload: a student
+ * route serves {@link studentSolutionView}, and only once
+ * `feedbackPolicy.showKey` allows it.
  */
 export function solutionView(input: Omit<StudentViewInput, "shuffle"> & { shuffle?: boolean }): unknown {
   return solutionViewOf(input.type, loadConfig(input.type, input.version), {
@@ -145,6 +146,30 @@ export function solutionView(input: Omit<StudentViewInput, "shuffle"> & { shuffl
  */
 export function solutionViewOf(type: string, config: unknown, view: StudentView): unknown {
   return typeOf(type).toSolution(config, view);
+}
+
+/**
+ * THE single exit of a key toward a student (ADR-037): the solution passed
+ * through the type's `studentSolution` hook, which drops from the solution
+ * what stays the teacher's even under a shown key — an essay's grading
+ * criteria, a short answer's `llm` rubric. `null` when nothing is left.
+ *
+ * Every student-facing reader of a key comes through here: the feedback
+ * page (and a teacher acting as a student, ADR-034), a poll's reveal, and the
+ * teacher's preview "as a student" (ADR-018). It does NOT check the policy:
+ * the caller serves it only when `showKey` holds.
+ */
+export function studentSolutionView(
+  input: Omit<StudentViewInput, "shuffle"> & { shuffle?: boolean },
+): unknown {
+  const config = loadConfig(input.type, input.version);
+  const type = typeOf(input.type);
+  const solution = type.toSolution(config, {
+    seed: input.seed,
+    itemId: input.itemId,
+    shuffle: input.shuffle ?? false,
+  });
+  return type.studentSolution ? type.studentSolution(solution, config) : solution;
 }
 
 /** `type.shuffleable(config)`: whether shuffling means anything for this one. */

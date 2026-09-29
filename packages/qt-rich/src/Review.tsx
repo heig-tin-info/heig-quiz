@@ -4,8 +4,9 @@
  * The answer, rendered as the student saw it while writing, and — when the
  * feedback policy lets the key through, which the teacher's panel always
  * does — the rubric and the model answer BESIDE it on a wide pane, under it on
- * a narrow one. There is no verdict: the points are the teacher's, and the
- * score line under the review says them once set.
+ * a narrow one. A student's key holds the model answer alone (ADR-037).
+ * There is no verdict: the points are the teacher's, and the score line
+ * under the review says them once set.
  */
 import type { ReactNode } from "react";
 
@@ -99,13 +100,16 @@ export function RichReview({
 
           {guide ? (
             <div className="flex flex-col gap-3">
-              <Panel title={s.rubric} tone="soft">
-                {guide.rubric.trim() === "" ? (
-                  <span className={caption}>{s.noRubric}</span>
-                ) : (
-                  markdown(renderMarkdown, guide.rubric)
-                )}
-              </Panel>
+              {/* Absent from a student's key (ADR-037): no panel at all. */}
+              {guide.rubric === undefined ? null : (
+                <Panel title={s.rubric} tone="soft">
+                  {guide.rubric.trim() === "" ? (
+                    <span className={caption}>{s.noRubric}</span>
+                  ) : (
+                    markdown(renderMarkdown, guide.rubric)
+                  )}
+                </Panel>
+              )}
               {guide.reference !== undefined && guide.reference.trim() !== "" ? (
                 <Panel title={s.reference} tone="soft">
                   {markdown(renderMarkdown, guide.reference)}

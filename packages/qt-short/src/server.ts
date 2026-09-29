@@ -140,6 +140,26 @@ export const shortServer: QuestionTypeServer<
 
   toSolution: (config) => ({ expected: expectedAnswers(config) }),
 
+  /**
+   * An `llm` matcher reads as its rubric (`describeMatcher`), and a rubric is
+   * the teacher's whatever the feedback policy (ADR-037): a student's key —
+   * the feedback page, a poll's reveal — lists the other matchers only. An
+   * empty list stays a list, as `toSolution` gives it for a keyless poll.
+   */
+  studentSolution: (_solution, config): ShortSolution => ({
+    expected: expectedAnswers({ ...config, matchers: config.matchers.filter((m) => m.kind !== "llm") }),
+  }),
+
+  /**
+   * Phase 2 is not here: an `llm` matcher round-trips through a draft and an
+   * import, but a question holding one is refused at publication, one issue
+   * per matcher so the editor points at it (`matchShort` never matches it).
+   */
+  publicationIssues: (config) =>
+    config.matchers.flatMap((matcher, index) =>
+      matcher.kind === "llm" ? [{ path: ["matchers", index], message: "short.llm_not_available" }] : [],
+    ),
+
   hasKey: (config) => config.matchers.length > 0,
 
   /**

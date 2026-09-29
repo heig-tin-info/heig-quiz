@@ -121,11 +121,17 @@ describe("circuitServer.toStudent", () => {
 });
 
 describe("circuitServer.toSolution", () => {
-  it("carries the key, which is why the feedback policy gates it", () => {
+  it("carries the reference, which is why the feedback policy gates it", () => {
     const solution = circuitServer.toSolution(circuitConfig(), view);
     expect(JSON.stringify(solution)).toContain(SECRET_REFERENCE_NAME);
-    expect(solution.grading.rubric).toBe(SECRET_RUBRIC);
-    expect(solution.grading.tolerance).toBe(SECRET_TOLERANCE);
-    expect(solution.stimuli.map((s) => s.name)).toContain(SECRET_HIDDEN_STIMULUS);
+  });
+
+  it("does not carry the stimuli nor the grading block (ADR-037)", () => {
+    const solution = circuitServer.toSolution(circuitConfig(), view);
+    expect(Object.keys(solution)).toEqual(["reference"]);
+    const serialized = JSON.stringify(solution);
+    expect(serialized).not.toContain(SECRET_RUBRIC);
+    expect(serialized).not.toContain(SECRET_HIDDEN_STIMULUS);
+    expect(serialized).not.toContain(String(SECRET_TOLERANCE));
   });
 });

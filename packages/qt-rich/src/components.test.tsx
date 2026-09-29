@@ -157,6 +157,25 @@ describe("RichReview", () => {
     expect(screen.queryByText("Grading criteria")).toBeNull();
   });
 
+  it("shows a student the model answer alone: the rubric is not in their key (ADR-037)", () => {
+    const studentKey = richServer.studentSolution!(solution, SECRET_CONFIG);
+    render(
+      <RichReview
+        student={student}
+        answer={{ text: "x" }}
+        solution={studentKey}
+        details={null}
+        points={1}
+        maxPoints={4}
+        audience="student"
+      />,
+    );
+    expect(screen.getByText(/REFERENCE-SECRET/)).toBeInTheDocument();
+    expect(screen.getByText("Model answer")).toBeInTheDocument();
+    expect(screen.queryByText("Grading criteria")).toBeNull();
+    expect(screen.queryByText("No grading criteria.")).toBeNull();
+  });
+
   it("says when nothing was written", () => {
     render(
       <RichReview student={student} answer={null} solution={null} details={null} points={0} maxPoints={4} audience="teacher" />,

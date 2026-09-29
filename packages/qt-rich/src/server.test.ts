@@ -63,6 +63,20 @@ describe("the key", () => {
     expect(richServer.toSolution(config(), { seed: 0, itemId: "i", shuffle: false })).toEqual({ rubric: "" });
   });
 
+  it("gives a student the model answer and never the rubric (ADR-037)", () => {
+    const view = { seed: 0, itemId: "i", shuffle: false };
+    const student = richServer.studentSolution!(richServer.toSolution(SECRET_CONFIG, view), SECRET_CONFIG);
+    expect(student).toEqual({ reference: SECRET_CONFIG.reference });
+    expect(JSON.stringify(student)).not.toContain("RUBRIC-SECRET");
+  });
+
+  it("gives a student nothing when there is no model answer", () => {
+    const view = { seed: 0, itemId: "i", shuffle: false };
+    for (const cfg of [config({ rubric: "criteria" }), config({ rubric: "criteria", reference: "  " })]) {
+      expect(richServer.studentSolution!(richServer.toSolution(cfg, view), cfg)).toBeNull();
+    }
+  });
+
   it("indexes the rubric and the model answer for the teacher's search", () => {
     const text = richServer.searchText(SECRET_CONFIG);
     expect(text).toContain("guard page");
