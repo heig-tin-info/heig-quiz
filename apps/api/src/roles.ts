@@ -20,6 +20,7 @@ import type { AppConfig } from "./config.js";
 import type { Db } from "./db/client.js";
 import { courseStaff, teacherGrants, userEmails, userIdpClaims, users } from "./db/schema.js";
 import { knownEmails, normalizeEmail, ownersOf } from "./identity.js";
+import { holdsCourseSeat } from "./modules/org/service.js";
 import { transferOnLoss } from "./modules/pool/service.js";
 import { accessRevoked } from "./modules/realtime/bus.js";
 
@@ -89,7 +90,7 @@ export async function roleForIdentity(
 ): Promise<RoleDecision> {
   const emails = normalizedSet(identity.emails);
   // Both lookups at once: this runs at every sign-in.
-  const [[grant], [seat]] = await Promise.all([
+  const [[grant], hasSeat] = await Promise.all([
     emails.length > 0
       ? db
           .select({ id: teacherGrants.id })
@@ -97,19 +98,13 @@ export async function roleForIdentity(
           .where(inArray(teacherGrants.email, emails))
           .limit(1)
       : [],
-    identity.userId
-      ? db
-          .select({ courseId: courseStaff.courseId })
-          .from(courseStaff)
-          .where(eq(courseStaff.userId, identity.userId))
-          .limit(1)
-      : [],
+    identity.userId ? holdsCourseSeat(db, identity.userId) : false,
   ]);
   return decideRole(config, {
     emails,
     affiliations: identity.affiliations ?? [],
     hasGrant: grant !== undefined,
-    hasSeat: seat !== undefined,
+    hasSeat,
   });
 }
 

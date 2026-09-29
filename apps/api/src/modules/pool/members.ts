@@ -221,6 +221,8 @@ export async function removeMember(db: Db, poolId: string, userId: string): Prom
  * The topics a change of the pool's people must reach: the owner and every
  * member (or only the members of `roles`), on their OWN topic — staff only
  * (`isStaff`): a demoted member has no settings row to silence the pool with.
+ * It is also the realtime audience of `topicsOf` (`routeContext.ts`), and
+ * dropping demoted accounts from those hints is intended.
  *
  * `pool:<id>` is not enough here — a connection subscribes to the pools it
  * could reach WHEN IT OPENED, so the colleague who has just been named is

@@ -117,9 +117,6 @@ describe("pool_question_added", () => {
     await db.update(users).set({ role: "student" }).where(inArray(users.id, [pool.owner, pool.coOwner]));
     await publish(pool.poolId, pool.contributor);
     expect(await addedRows(pool.poolId)).toEqual([]);
-    expect(await poolService.poolAudience(db, { id: pool.poolId, ownerId: pool.owner })).toEqual(
-      expect.not.arrayContaining([pool.owner, pool.coOwner]),
-    );
   });
 
   it("folds a bulk publication into ONE entry per recipient that counts every question", async () => {

@@ -60,22 +60,22 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
   const STAFF_KINDS = [...COURSE_KINDS, ...POOL_KINDS];
 
   it("gives a student the seat kinds, with or without a claimed seat", () => {
-    expect(notificationKindsFor("student", false, false)).toEqual(SEAT_KINDS);
-    expect(notificationKindsFor("student", true, false)).toEqual(SEAT_KINDS);
+    expect(notificationKindsFor({ role: "student", studentSeat: false, courseSeat: false })).toEqual(SEAT_KINDS);
+    expect(notificationKindsFor({ role: "student", studentSeat: true, courseSeat: false })).toEqual(SEAT_KINDS);
   });
 
   it("gives a teacher without a student seat the staff kinds, course seat or not", () => {
-    expect(notificationKindsFor("teacher", false, false)).toEqual(STAFF_KINDS);
-    expect(notificationKindsFor("teacher", false, true)).toEqual(STAFF_KINDS);
+    expect(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false })).toEqual(STAFF_KINDS);
+    expect(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: true })).toEqual(STAFF_KINDS);
   });
 
   it("gives an admin the course kinds only while holding a course seat (#287)", () => {
-    expect(notificationKindsFor("admin", false, false)).toEqual(POOL_KINDS);
-    expect(notificationKindsFor("admin", false, true)).toEqual(STAFF_KINDS);
+    expect(notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: false })).toEqual(POOL_KINDS);
+    expect(notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: true })).toEqual(STAFF_KINDS);
   });
 
   it("gives a teacher or an admin on a roster every kind, in the catalogue order", () => {
-    expect(notificationKindsFor("teacher", true, false)).toEqual([...NOTIFICATION_KINDS]);
-    expect(notificationKindsFor("admin", true, true)).toEqual([...NOTIFICATION_KINDS]);
+    expect(notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: false })).toEqual([...NOTIFICATION_KINDS]);
+    expect(notificationKindsFor({ role: "admin", studentSeat: true, courseSeat: true })).toEqual([...NOTIFICATION_KINDS]);
   });
 });

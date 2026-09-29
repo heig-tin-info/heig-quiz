@@ -181,6 +181,20 @@ export async function deleteCourse(db: Db, courseId: string): Promise<void> {
   await db.delete(courses).where(eq(courses.id, courseId));
 }
 
+/**
+ * The account holds a seat on at least one course staff: what makes a
+ * teacher (`decideRole`) and what the course kinds of notification are sent
+ * to (`tellStaff`, `staffOf`).
+ */
+export async function holdsCourseSeat(db: Db, userId: string): Promise<boolean> {
+  const [seat] = await db
+    .select({ courseId: courseStaff.courseId })
+    .from(courseStaff)
+    .where(eq(courseStaff.userId, userId))
+    .limit(1);
+  return seat !== undefined;
+}
+
 /** The course's staff, for the course detail. */
 export async function staffOfCourse(db: Db, courseId: string) {
   return db

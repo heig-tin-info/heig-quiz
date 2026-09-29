@@ -238,14 +238,20 @@ export const NOTIFICATION_AUDIENCE: Readonly<Record<NotificationKind, "seat" | "
  * and to an admin only while holding one: without it they are a row that
  * controls nothing (#287).
  */
-export function notificationKindsFor(
-  role: "student" | "teacher" | "admin",
-  holdsStudentSeat: boolean,
-  holdsCourseSeat: boolean,
-): NotificationKind[] {
+export function notificationKindsFor({
+  role,
+  studentSeat,
+  courseSeat,
+}: {
+  role: "student" | "teacher" | "admin";
+  /** A claimed student seat (`enrollments.staff = false`). */
+  studentSeat: boolean;
+  /** A seat on a course staff (`course_staff`). */
+  courseSeat: boolean;
+}): NotificationKind[] {
   const reaches = {
-    seat: role === "student" || holdsStudentSeat,
-    course: role === "teacher" || (role === "admin" && holdsCourseSeat),
+    seat: role === "student" || studentSeat,
+    course: role === "teacher" || (role === "admin" && courseSeat),
     pool: role !== "student",
   };
   return NOTIFICATION_KINDS.filter((kind) => reaches[NOTIFICATION_AUDIENCE[kind]]);

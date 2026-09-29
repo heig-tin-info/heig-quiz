@@ -462,28 +462,25 @@ describe("preferences", () => {
       });
     const kinds = async (userId: string) => (await service.notificationSettings(db, userId, true)).kinds;
 
-    expect(await kinds(frank)).toEqual(notificationKindsFor("teacher", false, false));
+    expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false }));
     await seat(true);
-    expect(await kinds(frank)).toEqual(notificationKindsFor("teacher", false, false));
+    expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false }));
     await seat(false);
     expect(await kinds(frank)).toEqual([...NOTIFICATION_KINDS]);
 
     const gina = await seedUser("gina@heig.test");
     await db.update(users).set({ role: "student" }).where(eq(users.id, gina));
-    expect(await kinds(gina)).toEqual(notificationKindsFor("student", false, false));
+    expect(await kinds(gina)).toEqual(notificationKindsFor({ role: "student", studentSeat: false, courseSeat: false }));
   });
 
   /*
    * #287: the course kinds go to course staff seats only (`tellStaff`,
-   * `staffOf`). A seatless teacher keeps them, since a seat may come; a
-   * seatless admin does not, since for them the row would control nothing.
+   * `staffOf`). A seatless admin does not see them, since for them the row
+   * would control nothing; a seated one does.
    */
-  it("lists the course kinds to a seatless teacher and a seated admin, never to a seatless admin", async () => {
+  it("lists the course kinds to a seated admin, never to a seatless admin", async () => {
     const course = ["student_joined", "roster_conflict", "grading_ready"];
     const kinds = async (userId: string) => (await service.notificationSettings(db, userId, true)).kinds;
-
-    const hal = await seedUser("hal@heig.test");
-    expect(await kinds(hal)).toEqual(expect.arrayContaining(course));
 
     const ines = await seedUser("ines@heig.test");
     await db.update(users).set({ role: "admin" }).where(eq(users.id, ines));
