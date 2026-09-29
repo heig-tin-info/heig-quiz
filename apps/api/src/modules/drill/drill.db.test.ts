@@ -31,7 +31,7 @@ import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import * as live from "../live/service.js";
-import { FORBIDDEN_STUDENT_KEYS } from "../live/studentView.js";
+
 import { loadConfig, typeOf } from "../pool/config.js";
 import * as org from "../org/service.js";
 import * as poolService from "../pool/service.js";
@@ -364,12 +364,12 @@ describe("a review (F-DRILL-02, ADR-041 §4)", () => {
     expect(served.student).toEqual({ statement: "Statement of q0" });
     const text = JSON.stringify(served);
     expect(text).not.toContain("answer-q0");
-    for (const key of [...COMMON_FORBIDDEN_STUDENT_KEYS, ...FORBIDDEN_STUDENT_KEYS]) {
+    for (const key of [...COMMON_FORBIDDEN_STUDENT_KEYS, ...live.FORBIDDEN_STUDENT_KEYS]) {
       expect(text).not.toContain(`"${key}"`);
     }
   });
 
-  it("stops serving a card whose question can no longer be drilled, and keeps its history", async () => {
+  it("refuses a review whose grading is not final, and writes nothing", async () => {
     const app = await appAt();
     const { userId, right } = await oneStudent(app);
     await drill.serveCard(db, userId, right.id, app.clock.now());
@@ -387,15 +387,15 @@ describe("a review (F-DRILL-02, ADR-041 §4)", () => {
       await expect(
         drill.answerCard(db, userId, right.id, { answer: "answer-q0", deviceClass: "fine" }, app.clock.now()),
       ).rejects.toBeInstanceOf(drill.DrillCardNotFound);
-      await expect(drill.serveCard(db, userId, right.id, app.clock.now())).rejects.toBeInstanceOf(
-        drill.DrillCardNotFound,
-      );
-      expect((await drill.drillSession(db, userId, "fine", app.clock.now())).cards).toEqual([]);
     } finally {
       proposing();
     }
-    expect(await cardsOf({ userId })).toHaveLength(2);
-    expect((await drill.drillSession(db, userId, "fine", app.clock.now())).cards).toHaveLength(2);
+    // No review, the card still served: the answer can come again.
+    expect(await db.select().from(drillReviews).where(eq(drillReviews.cardId, right.id))).toHaveLength(0);
+    const [card] = await db.select().from(drillCards).where(eq(drillCards.id, right.id));
+    expect(card!.serveSeed).not.toBeNull();
+    const result = await drill.answerCard(db, userId, right.id, { answer: "answer-q0", deviceClass: "fine" }, app.clock.now());
+    expect(result.correctness).toBe("right");
   });
 
   it("refuses an answer to a card that was not served, and another student's card", async () => {

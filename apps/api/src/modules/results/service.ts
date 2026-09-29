@@ -305,11 +305,6 @@ export function onResultsReleased(listener: ReleasedListener): void {
   releasedListeners.add(listener);
 }
 
-/** Whether `listener` is registered: what the wiring test of `buildApp` asserts. */
-export function hasResultsReleasedListener(listener: ReleasedListener): boolean {
-  return releasedListeners.has(listener);
-}
-
 /**
  * The release, in ONE transaction: the frozen snapshot and the instant are
  * written together, and the state moves to `released`. Idempotent — releasing

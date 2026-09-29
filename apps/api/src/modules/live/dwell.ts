@@ -37,7 +37,6 @@ export interface EndedAttempt {
   id: string;
   evaluationId: string;
   userId: string | null;
-  seed: number;
 }
 
 type EndedListener = (db: Db, ended: readonly EndedAttempt[], now: Date) => Promise<unknown>;
@@ -52,11 +51,6 @@ const endedListeners = new Set<EndedListener>();
  */
 export function onAttemptsEnded(listener: EndedListener): void {
   endedListeners.add(listener);
-}
-
-/** Whether `listener` is registered: what the wiring test of `buildApp` asserts. */
-export function hasAttemptsEndedListener(listener: EndedListener): boolean {
-  return endedListeners.has(listener);
 }
 
 /** The attempts of an evaluation still being taken. */
@@ -133,7 +127,6 @@ export async function endAttempts(
         id: attempts.id,
         evaluationId: attempts.evaluationId,
         userId: attempts.userId,
-        seed: attempts.seed,
       });
   });
   if (ended.length > 0) {

@@ -37,21 +37,14 @@ export function registerDrillHooks(): void {
 }
 
 export {
-  DRILL_RETENTION,
   backfillClassroom,
-  cardsAtHandIn,
-  cardsAtRelease,
   evaluationCardCount,
-  isDrillableQuestion,
-  keyHashOf,
   purgeExpiredDrill,
   removeEvaluationCards,
 } from "./lifecycle.js";
 export {
-  DrillError,
   DrillCardNotFound,
   DrillNotServed,
-  DrillAnswerInvalid,
   answerCard,
   drillSession,
   reportShown,

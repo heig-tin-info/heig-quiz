@@ -13,9 +13,9 @@
  *     classroom has the drill on and is not archived (06, question 28 (g)),
  *     the student still holds a student seat there and has not opted out,
  *     and the question is not deleted; and it is served or answered only
- *     when TODAY's session would hand it out ({@link servableToday}), its
- *     question can still be drilled and its evaluation lets the key reach
- *     the student ({@link keyReleased}). Anything else is the 404 of a missing
+ *     when TODAY's session would hand it out ({@link servableToday}) and its
+ *     evaluation lets the key reach the student ({@link keyReleased}).
+ *     Anything else is the 404 of a missing
  *     card (invariant 6) — which is also what closes answering a card twice
  *     in a day and the "extra practice" of 06, question 28 (b).
  */
@@ -33,6 +33,7 @@ import {
   drillRating,
   drillReferenceOf,
   DWELL_IDLE_CAP_MS,
+  isDrillEligible,
 } from "@quiz/domain";
 import {
   drillRetrievability,
@@ -50,15 +51,16 @@ import {
   drillCards,
   drillReviews,
   enrollments,
+  evaluations,
   questionTags,
   questions,
 } from "../../db/schema.js";
-import { byId, gradeDefaults, type DbOrTx, type EvaluationRecord } from "../evaluation/service.js";
+import { gradeDefaults, type DbOrTx, type EvaluationRecord } from "../evaluation/service.js";
 import { DomainError } from "../http.js";
 import { drawSeed, isShuffleable, studentSolutionView, studentView } from "../live/service.js";
 import { loadConfig, typeOf } from "../pool/service.js";
 import { keyShownTo } from "../results/service.js";
-import { currentVersions, drillGradeContext, isDrillableQuestion, keyHashOf } from "./lifecycle.js";
+import { currentVersions, drillGradeContext, keyHashOf } from "./lifecycle.js";
 
 export class DrillError extends DomainError {
   override name = "DrillError";
@@ -151,6 +153,11 @@ async function introducedToday(db: DbOrTx, userId: string, day: Day): Promise<nu
   return row?.n ?? 0;
 }
 
+/** Reviewed already today: a card is reviewed at most once a day. */
+function reviewedToday(card: CardRow, day: Day): boolean {
+  return card.lastReviewAt !== null && card.lastReviewAt >= day.start;
+}
+
 /**
  * Whether today's session may hand this card out (F-DRILL-03): not reviewed
  * yet today, and either due before the day ends or new while the day's cap
@@ -158,10 +165,37 @@ async function introducedToday(db: DbOrTx, userId: string, day: Day): Promise<nu
  * the budget aside: the budget orders a session, it does not forbid a card.
  */
 function servableToday(card: CardRow, day: Day, introduced: number): boolean {
-  if (card.lastReviewAt !== null && card.lastReviewAt >= day.start) return false;
+  if (reviewedToday(card, day)) return false;
   if (card.lastReviewAt === null) return introduced < DRILL_NEW_PER_DAY;
   return card.dueAt < day.end;
 }
+
+/**
+ * What serving a set of cards needs, loaded in three queries whatever their
+ * number: the question versions as they stand now, the evaluations the cards
+ * were met in, and the student's latest attempt of each.
+ */
+async function loadContext(db: DbOrTx, userId: string, rows: readonly ActiveRow[]) {
+  const evaluationIds = [...new Set(rows.map((r) => r.card.evaluationId))];
+  if (evaluationIds.length === 0) {
+    return { versions: new Map(), evaluations: new Map(), latest: new Map() } as const;
+  }
+  const [versions, found, latest] = await Promise.all([
+    currentVersions(db, [...new Set(rows.map((r) => r.card.questionId))]),
+    db.select().from(evaluations).where(inArray(evaluations.id, evaluationIds)),
+    db
+      .selectDistinctOn([attempts.evaluationId], { evaluationId: attempts.evaluationId, state: attempts.state })
+      .from(attempts)
+      .where(and(inArray(attempts.evaluationId, evaluationIds), eq(attempts.userId, userId)))
+      .orderBy(attempts.evaluationId, desc(attempts.attemptNumber)),
+  ]);
+  return {
+    versions,
+    evaluations: new Map(found.map((e) => [e.id, e])),
+    latest: new Map(latest.map((a) => [a.evaluationId, a.state])),
+  };
+}
+type Context = Awaited<ReturnType<typeof loadContext>>;
 
 /**
  * Whether the card's evaluation lets its key reach this student now (ADR-041
@@ -173,36 +207,28 @@ function servableToday(card: CardRow, day: Day, introduced: number): boolean {
  *     feedback page): at the hand-in under immediate feedback with the key,
  *     at the release under `on_release`, never when the key is not shown.
  */
-async function keyReleased(db: DbOrTx, evaluation: EvaluationRecord, userId: string): Promise<boolean> {
+function keyReleased(evaluation: EvaluationRecord, latestAttemptState: string | undefined): boolean {
   if (evaluation.mode === "exam") return evaluation.releasedAt !== null;
   if (evaluation.mode !== "exercise") return false;
-  const [latest] = await db
-    .select({ state: attempts.state })
-    .from(attempts)
-    .where(and(eq(attempts.evaluationId, evaluation.id), eq(attempts.userId, userId)))
-    .orderBy(desc(attempts.attemptNumber))
-    .limit(1);
-  return latest !== undefined && keyShownTo(evaluation, latest.state);
+  return latestAttemptState !== undefined && keyShownTo(evaluation, latestAttemptState);
 }
 
 /**
  * The question of a card as it stands now, the settings of the evaluation
  * where it was met first (06, question 28 (e)), and whether the card may be
- * served: its question can still be drilled (ADR-041 §3) and its
- * evaluation lets the key reach the student ({@link keyReleased}). Null when
- * the question has no published version or the evaluation is gone.
+ * served ({@link keyReleased}). Whether the question can be drilled at all
+ * was decided when the card was created (ADR-041 §3). Null when the
+ * question has no published version or the evaluation is gone.
  */
-async function questionOf(db: DbOrTx, row: ActiveRow, now: Date) {
-  const version = (await currentVersions(db, [row.card.questionId])).get(row.card.questionId);
-  const evaluation = await byId(db, row.card.evaluationId);
+function questionOf(row: ActiveRow, context: Context) {
+  const version = context.versions.get(row.card.questionId);
+  const evaluation = context.evaluations.get(row.card.evaluationId);
   if (!version || !evaluation) return null;
-  const stored = { config: version.config, configVersion: version.configVersion };
-  const defaults = gradeDefaults(evaluation);
-  const config = loadConfig(row.type, stored);
-  const open =
-    (await isDrillableQuestion(row.type, config, defaults, now)) &&
-    (await keyReleased(db, evaluation, row.card.userId));
-  return { version: stored, config, defaults, open };
+  return {
+    version: { config: version.config, configVersion: version.configVersion },
+    defaults: gradeDefaults(evaluation),
+    open: keyReleased(evaluation, context.latest.get(evaluation.id)),
+  };
 }
 
 /** The view of one review: the card is the item, so a new seed gives a new shuffle (06, question 28 (d)). */
@@ -217,16 +243,15 @@ function viewOf(row: ActiveRow, version: { config: unknown; configVersion: numbe
 }
 
 /**
- * The card, if today's session may hand it out, its question can still be
- * drilled and its key may reach the student; the 404 otherwise. A card
- * refused for either of the last two keeps its history: it is simply not
- * served, until it may be again.
+ * The card, if today's session may hand it out and its key may reach the
+ * student; the 404 otherwise. A card held back keeps its history: it is
+ * simply not served, until it may be again.
  */
 async function servable(db: DbOrTx, userId: string, cardId: string, now: Date) {
   const row = await ownActiveCard(db, userId, cardId);
   const day = drillDayBounds(now);
   if (!servableToday(row.card, day, await introducedToday(db, userId, day))) throw new DrillCardNotFound();
-  const question = await questionOf(db, row, now);
+  const question = questionOf(row, await loadContext(db, userId, [row]));
   if (!question?.open) throw new DrillCardNotFound();
   return { row, question };
 }
@@ -291,7 +316,7 @@ async function referenceTimes(
  * Today's session (F-DRILL-03, ADR-041 §6): the due cards — due before the
  * end of the day, Zurich time — then the new ones up to the day's cap, until
  * the budget is spent, courses and tags interleaved. A card reviewed today,
- * or whose question can no longer be drilled, is left out. An empty day
+ * or whose key may not reach the student yet, is left out. An empty day
  * gives the next due date (06, question 28 (b)).
  */
 export async function drillSession(
@@ -301,13 +326,9 @@ export async function drillSession(
   now: Date,
 ): Promise<DrillSession> {
   const day = drillDayBounds(now);
-  const open = new Map<string, boolean>();
-  const rows: ActiveRow[] = [];
-  for (const row of await activeCards(db, eq(drillCards.userId, userId))) {
-    const key = `${row.card.questionId}:${row.card.evaluationId}`;
-    if (!open.has(key)) open.set(key, (await questionOf(db, row, now))?.open ?? false);
-    if (open.get(key)) rows.push(row);
-  }
+  const active = await activeCards(db, eq(drillCards.userId, userId));
+  const context = await loadContext(db, userId, active);
+  const rows = active.filter((row) => questionOf(row, context)?.open === true);
   const questionIds = [...new Set(rows.map((r) => r.card.questionId))];
   const introduced = await introducedToday(db, userId, day);
   const tags =
@@ -320,12 +341,11 @@ export async function drillSession(
           .groupBy(questionTags.questionId);
   const tagOf = new Map(tags.map((t) => [t.questionId, t.tag]));
   const references = await referenceTimes(db, questionIds, device, userId);
-  const reviewedToday = (card: CardRow) => card.lastReviewAt !== null && card.lastReviewAt >= day.start;
 
   const rowOf = new Map(rows.map((r) => [r.card.id, r]));
   const ids = composeDrillSession({
     cards: rows
-      .filter(({ card }) => !reviewedToday(card))
+      .filter(({ card }) => !reviewedToday(card, day))
       .map(({ card, courseCode }) => ({
         id: card.id,
         isNew: card.lastReviewAt === null,
@@ -429,14 +449,6 @@ export async function answerCard(
   input: { answer: unknown; deviceClass: DrillDeviceClass },
   now: Date,
 ): Promise<DrillReviewResult> {
-  const type = typeOf((await ownActiveCard(db, userId, cardId)).type);
-  let answer: unknown = null;
-  if (input.answer !== null && input.answer !== undefined) {
-    const parsed = type.answerSchema.safeParse(input.answer);
-    if (!parsed.success) throw new DrillAnswerInvalid();
-    answer = parsed.data;
-  }
-
   return db.transaction(async (tx) => {
     // The card row is the lock: two answers at once rate the card once.
     const [locked] = await tx
@@ -448,23 +460,33 @@ export async function answerCard(
     // Under the lock: the card as it stands, still in today's session.
     const { row, question } = await servable(tx, userId, cardId, now);
     if (locked.serveSeed === null) throw new DrillNotServed();
+    const type = typeOf(row.type);
+    let answer: unknown = null;
+    if (input.answer !== null && input.answer !== undefined) {
+      const parsed = type.answerSchema.safeParse(input.answer);
+      if (!parsed.success) throw new DrillAnswerInvalid();
+      answer = parsed.data;
+    }
     const card = row.card;
     const seed = locked.serveSeed;
     const references = await referenceTimes(tx, [card.questionId], input.deviceClass, userId);
     const referenceMs = references.get(card.questionId) ?? null;
+    const config = loadConfig(row.type, question.version);
     const result = await type.grade(
-      question.config,
+      config,
       answer,
       drillGradeContext({
         seed,
         key: card.id,
-        itemPoints: type.defaultPoints(question.config),
+        itemPoints: type.defaultPoints(config),
         now,
         defaults: question.defaults,
       }),
     );
-    // `servable` checked the question is drillable: its grading is final.
-    if (result.kind !== "graded") throw new DrillCardNotFound();
+    // A review has nobody to wait for (ADR-041 §3): a grading that is not
+    // final — an edit that made the question wait for an LLM or a teacher —
+    // is refused, and nothing is written.
+    if (!isDrillEligible(row.type, result) || result.kind !== "graded") throw new DrillCardNotFound();
     const correctness = drillCorrectness(result.points, result.maxPoints);
     const activeMs = card.activeMs + Number(locked.credit);
     const rating = drillRating({ correctness, activeMs, referenceMs });

@@ -242,10 +242,11 @@ rating or the recall rate, and there is no extra practice (06, question
   this review, null when none is served), `shown_since` (the open interval
   on screen) and `active_ms` (what was already credited), cleared by the
   answer.
-- **Eligibility is a property of the question**, decided from the type's
-  grading of an empty answer under the evaluation's settings, at the
-  creation of the cards and again at each serve. A question that stops
-  being drillable keeps its card and its history; it is simply not served.
+- **Eligibility is a property of the question**, decided once, when the
+  cards are created, from the type's grading of an empty answer under the
+  evaluation's settings. A review whose grading is not final (an edit made
+  the question wait for an LLM or a teacher) is refused and writes nothing;
+  the card and its history stay.
 - **The hooks go one way.** `results` (`onResultsReleased`) and `live`
   (`onAttemptsEnded`) call their listeners after the commit; the `drill`
   module registers them and neither module imports it.
