@@ -18,8 +18,8 @@ export const richEditorStrings = {
   maxChars: "Character limit",
   maxCharsHint: "Empty: up to {cap} characters. About {perPage} characters fill an A4 page.",
   maxCharsPages: "About {pages} A4 page(s).",
-  rubric: "Rubric",
-  rubricHint: "What earns the points. The grader reads it beside every answer; a student never sees it before release.",
+  rubric: "Grading criteria",
+  rubricHint: "How you will award the points, for yourself or another grader: shown beside every answer in the grading panel. Example: \"2 pts: names the complexity. 1 pt: gives an example.\" Students see it only if the evaluation shows the expected answer: at release, or right away in an exercise with immediate feedback.",
   reference: "Model answer",
   referenceHint: "Optional. Shown to the grader beside every answer.",
   manualGrading:
@@ -45,8 +45,8 @@ export const richReviewStrings = {
   answer: "Answer",
   noAnswer: "No answer",
   count: "{count} characters",
-  rubric: "Rubric",
-  noRubric: "No rubric.",
+  rubric: "Grading criteria",
+  noRubric: "No grading criteria.",
   reference: "Model answer",
   score: "Score",
 } as const;
