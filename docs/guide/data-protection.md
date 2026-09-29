@@ -98,9 +98,9 @@ The platform runs at the hosting provider Hetzner, on two virtual machines (`doc
 - the application machine carries the application server, the PostgreSQL database and the daily database backups; it also hosts two other services (heig-classroom and evaluation-tb), whose files the other accounts cannot read;
 - a second machine runs the code submitted by students, in isolated containers (ADR-016). It receives the program to run and its test data, with no student name or identifier (`packages/core/src/runner.ts`).
 
-The specification says "a server in Europe" (`docs/spec/03-exigences-non-fonctionnelles.md`, N-DATA-01). The country and the datacenter of each machine: **To be confirmed**. An older decision (ADR-009) mentions hosting in Switzerland; it predates the move to Hetzner and no longer describes the situation.
+The specification says "a server in Europe" (`docs/spec/03-exigences-non-fonctionnelles.md`, N-DATA-01). Both machines are in Hetzner datacenters in Europe. An older decision (ADR-009) mentions hosting in Switzerland; it predates the move to Hetzner and no longer describes the situation.
 
-A staging environment runs on the same machine and receives a copy of the production data that is **not anonymised**, to test under real conditions (ADR-028). Its access is limited to a list of accounts, and its reference configuration turns off e-mail and Teams notifications (`.env.staging.example`).
+A staging environment runs on the same machine and receives a copy of the production data that is **not anonymised**, to test under real conditions (ADR-028). Only the platform's administrators can reach it, and its reference configuration turns off e-mail and Teams notifications (`.env.staging.example`).
 
 External services called:
 
@@ -218,6 +218,6 @@ Informing the student:
 Hosting and security:
 
 - the daily database copies sit on the machine they protect, unencrypted; the copy off the machine is not in place;
-- staging holds a copy of the real data that is not anonymised;
+- staging holds a copy of the real data that is not anonymised; only administrators reach it;
 - the site's content security policy (CSP) does not restrict where scripts come from;
-- the location of the machines, disk encryption and the retention of technical logs remain to be confirmed.
+- disk encryption and the retention of technical logs remain to be confirmed.
