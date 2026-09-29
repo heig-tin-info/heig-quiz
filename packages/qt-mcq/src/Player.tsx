@@ -76,14 +76,15 @@ export function McqPlayer({
                * The WHOLE row is the label: the pastille, the text and the
                * space between them all answer a click, and the accessible name
                * is the text of the choice — the letter is the teacher's index
-               * of the list, not a word the reader needs.
+               * of the list, not a word the reader needs. No frame: the
+               * pastille already says "this is a control", the fill on hover
+               * shows the area it answers, and a frame around each of six
+               * choices inside the question's card was a wall of lines.
                */}
               <label
                 className={cx(
-                  "relative flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors",
-                  checked
-                    ? "border-accent bg-accent-soft text-fg"
-                    : "border-line-strong bg-surface text-fg hover:bg-surface-2",
+                  "relative flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 text-sm text-fg transition-colors",
+                  checked ? "bg-accent-soft" : "hover:bg-surface-2",
                   locked && "cursor-default opacity-80",
                   !frozen && "group/opt",
                 )}
@@ -100,9 +101,11 @@ export function McqPlayer({
                 {/*
                  * The first line of the text, and not the block, is what the
                  * 40 px disc lines up with: half of what it is taller than one
-                 * line of `.md-body` at this size (40 − 22).
+                 * line of `.md-body` at this size (40 − 22). `flex-1`, so a code
+                 * block runs to the end of the row whatever its longest line:
+                 * blocks of six widths made a ragged column.
                  */}
-                <span className="mt-2.25 min-w-0">
+                <span className="mt-2.25 min-w-0 flex-1">
                   {markdown(renderMarkdown, choice.text)}
                 </span>
               </label>
