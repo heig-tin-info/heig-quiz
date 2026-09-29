@@ -39,10 +39,12 @@ export type Route =
   /**
    * `from`: the evaluation the editor was opened from (issue #127), carried
    * in `?from=` so the way back survives a reload; `fromTemplate`, likewise,
-   * a template (F-EVAL-25), in `?fromTemplate=`. The editor reads them off
-   * the query string (`useSearchParam`); `parsePath` never sees them.
+   * a template (F-EVAL-25), in `?fromTemplate=`; `fromGrading` and `item`,
+   * the grading screen of an evaluation and the question it was on (ADR-044,
+   * addendum). The editor reads them off the query string
+   * (`useSearchParam`); `parsePath` never sees them.
    */
-  | { view: "question"; id: string; from?: string; fromTemplate?: string }
+  | ({ view: "question"; id: string } & QuestionOrigin)
   /**
    * What a student would see for ONE question, in a page of its own
    * (docs/spec/08 §8.2, "See what the student sees"). The editor opens it in
@@ -87,8 +89,11 @@ export type Route =
    */
   | { view: "teamsTab" }
   // WP10: grading + results
-  /** The teacher's grading panel for one evaluation. */
-  | { view: "grading"; evaluationId: string }
+  /**
+   * The teacher's grading panel for one evaluation; `item`, the question it
+   * opens on, travels in `?item=` (the panel reads and keeps it there).
+   */
+  | { view: "grading"; evaluationId: string; item?: string }
   /** The teacher's results table for one evaluation. */
   | { view: "results"; evaluationId: string }
   /** The correction of a graded evaluation, projected in class (F-RES-03, ADR-033). */
@@ -97,6 +102,14 @@ export type Route =
   | { view: "feedback"; attemptId: string }
   /** Development only: the gallery of the shared primitives (App.tsx gates it). */
   | { view: "devUi" };
+
+/**
+ * The query parameters that tell the question editor where it was opened
+ * from, and on which item: one list, which the route writes in one loop and
+ * the editor reads (`QuestionEditor`'s `ORIGINS`).
+ */
+export const QUESTION_ORIGIN_PARAMS = ["from", "fromTemplate", "fromGrading", "item"] as const;
+export type QuestionOrigin = Partial<Record<(typeof QUESTION_ORIGIN_PARAMS)[number], string>>;
 
 /** The one member of `Route` whose `view` is `V`. */
 export type RouteOf<V extends Route["view"]> = Extract<Route, { view: V }>;
@@ -242,8 +255,10 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   question: {
     path: (r) => {
       const query = new URLSearchParams();
-      if (r.from) query.set("from", r.from);
-      if (r.fromTemplate) query.set("fromTemplate", r.fromTemplate);
+      for (const name of QUESTION_ORIGIN_PARAMS) {
+        const value = r[name];
+        if (value) query.set(name, value);
+      }
       const q = query.toString();
       return `/questions/${r.id}${q ? `?${q}` : ""}`;
     },
@@ -311,9 +326,13 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   evaluationPreview: evaluationTail("preview", (id) => ({ view: "evaluationPreview", id })),
   // The projection IS the poll: the launcher's row stays lit while it is up.
   poll: evaluationTail("poll", (id) => ({ view: "poll", id }), { section: "polls" }),
-  grading: evaluationTail("grading", (evaluationId) => ({ view: "grading", evaluationId }), {
-    evaluationId: evaluationIdOf,
-  }),
+  grading: {
+    ...evaluationTail("grading", (evaluationId) => ({ view: "grading", evaluationId }), {
+      evaluationId: evaluationIdOf,
+    }),
+    path: (r) =>
+      `/evaluations/${r.evaluationId}/grading${r.item ? `?item=${encodeURIComponent(r.item)}` : ""}`,
+  },
   results: evaluationTail("results", (evaluationId) => ({ view: "results", evaluationId }), {
     evaluationId: evaluationIdOf,
   }),

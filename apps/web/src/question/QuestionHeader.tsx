@@ -31,8 +31,9 @@ export function QuestionHeader({
   /** `undefined` while the pool is loading. */
   poolName: string | undefined;
   /**
-   * The title of the evaluation the editor was opened from (issue #127): the
-   * way back then leads there instead of to the pool.
+   * The words of the way back to the page the editor was opened from — an
+   * evaluation (issue #127), a template, the grading screen — which then
+   * leads there instead of to the pool.
    */
   origin?: string | undefined;
   readOnly: boolean;
@@ -59,7 +60,7 @@ export function QuestionHeader({
           <ParentLink onClick={onBack}>
             <span className="inline-flex items-center gap-1">
               <ArrowLeft aria-hidden className="size-3.5" />
-              {t("question.backToEvaluation", { title: origin })}
+              {origin}
             </span>
           </ParentLink>
         ) : (

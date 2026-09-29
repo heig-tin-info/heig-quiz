@@ -11,7 +11,7 @@ by `apps/web/src/grading/`, the optional `grading` member of
 every `qt-*` package (the mcq, short and cloze columns first, the other
 five in a second step), and the grading contracts
 (`packages/contracts/src/grading.ts`). The return from the question editor
-to the grading table comes in a third step.
+to the grading table came in a third step (addendum below).
 
 ## Context
 
@@ -167,6 +167,52 @@ registered in the app's shortcut strip, not drawn on the page.
 The queue of one question is still one unpaginated response (open question
 23); with the answers now sorted and filtered in the browser, pagination
 will have to take the sort over when it comes.
+
+## Addendum — fix the question, come back, re-grade (2026-09-29)
+
+The expected row's two buttons exist for one errand: the key is wrong, fix
+the question, grade again with the fix. It is now one round trip.
+
+- **The question on screen is in the URL.** `?item=<item id>` on
+  `/evaluations/:id/grading` (`Route` `{ view: "grading", evaluationId,
+  item? }`, the same name as the parameter and as the editor's `item`); the panel reads it, starts on that question (the first when
+  the id is not the evaluation's), and writes it back as the teacher moves,
+  so a reload stays on the question.
+- **Edit question opens the editor with its way back.** `?fromGrading=<evaluation>&item=<item>`,
+  like `?from=` (issue #127) and `?fromTemplate=`: the header reads **Back
+  to grading** and leads to that question's table. Opened from there,
+  **Publish is the way back**: the version published, the editor returns to
+  the table at once — the fix was made to re-grade with it. Opened from
+  anywhere else, publishing stays in the editor as before. The editor's
+  origins are one table keyed by their parameter (`ORIGINS` in
+  `QuestionEditor.tsx`: how the way back is worded and fetched, where it
+  leads, `returnOnPublish`), and the route writes the same parameter list
+  (`QUESTION_ORIGIN_PARAMS`) in one loop. The grading origin's words name no
+  title, so it fetches nothing.
+- **Edit question is the pool's decision.** Grading asks `staffAccess` on
+  the evaluation; editing asks `contributor` in the question's pool. An
+  assistant on the staff may grade without writing the pool, and then sees
+  no Edit. The rule is not re-derived: the grading screen reads
+  `EvaluationDetail.editableQuestionIds`, computed by the server with the
+  pool list's own role resolution (`editableQuestionIdsOf`, issue #127), the
+  evaluation page's own source.
+- **A newer version is said where it is acted on.** When the question has a
+  published version newer than the one the evaluation froze — the server's
+  `EvaluationDetail.staleItems` (`staleOf`), the evaluation page's own stale
+  badge, never re-derived — Re-grade becomes a filled SECONDARY button, "New
+  version" (tooltip "A newer version is published — re-grade"); never the
+  accent, which stays Validate N. It names NO number (owner decision): the
+  newest version may be deprecated, and the sheet's preselection
+  (`defaultVersion`, issue #106) is the one rule for which version a
+  re-grade starts on, so the button never names one the sheet would not
+  pick. Publishing invalidates the evaluation and its grading reads,
+  so the button is there on return without a reload.
+- **After release, the sheet warns first** (F-GRADE-09): re-grading updates
+  the grades the students see and marks the results modified after
+  publication.
+
+No field was added to the grading contracts: the evaluation's payload
+already carried the rights and the stale items.
 
 ## Alternatives considered
 

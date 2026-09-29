@@ -787,6 +787,7 @@ export const fr: Record<keyof Dict, string> = {
   "question.unpublished": "modifications non publiées",
   "question.readOnly": "Lecture seule — partagée avec vous en lecture",
   "question.backToEvaluation": "Retour à {title}",
+  "question.backToGrading": "Retour à la correction",
   "question.publish": "Publier",
   "question.publishTitle": "Publier cette question",
   "question.publishAction": "Publier",
@@ -2491,6 +2492,11 @@ export const fr: Record<keyof Dict, string> = {
   "grading.batch.failed": "Le lot n'a pas pu être validé.",
   "grading.regrade": "Re-corriger cette question",
   "grading.regrade.open": "Re-corriger",
+  "grading.regrade.newer": "Une version plus récente est publiée — re-corriger",
+  "grading.regrade.newVersion": "Nouvelle version",
+  "grading.regrade.releasedTitle": "Les résultats sont publiés",
+  "grading.regrade.releasedBody":
+    "La re-correction met à jour les notes que les étudiants voient déjà et marque les résultats « Modifiés après publication ».",
   "grading.regrade.title": "Re-corriger une question",
   "grading.regrade.subtitle":
     "Toutes les tentatives sont corrigées à nouveau pour cette question ; les corrections remplacées sont conservées.",
@@ -2498,7 +2504,7 @@ export const fr: Record<keyof Dict, string> = {
   "grading.regrade.notePlaceholder": "Coquille dans la sortie attendue.",
   "grading.regrade.noteRequired": "La note est obligatoire.",
   "grading.regrade.version": "Version de la question pour la nouvelle correction",
-  "grading.regrade.versionHint": "Par défaut, la version figée par l'évaluation.",
+  "grading.regrade.versionHint": "Par défaut, la dernière version publiée.",
   "grading.regrade.frozen": "figée par l'évaluation",
   "grading.regrade.noChangeNote": "Pas de note de modification.",
   "grading.regrade.versionsFailed": "Les versions de cette question n'ont pas pu être chargées.",
@@ -2576,7 +2582,7 @@ export const fr: Record<keyof Dict, string> = {
   "results.notReleased": "Non publiés",
   "results.modified": "Modifiés après publication",
   "results.modifiedBody":
-    "Une correction a changé depuis la publication. Publiez à nouveau pour mettre à jour les notes que lisent les étudiants.",
+    "Une correction a changé depuis la publication : les étudiants voient déjà les nouvelles notes. Publiez à nouveau pour les reprendre comme publiées.",
   "results.release": "Publier les résultats",
   "results.release.again": "Publier à nouveau",
   "results.release.confirm.title": "Publier les résultats de « {title} » ?",

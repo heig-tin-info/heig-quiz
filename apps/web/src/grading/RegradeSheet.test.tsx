@@ -47,11 +47,12 @@ function setup(
   over: Record<string, ReturnType<typeof ok>> = {},
   onClose = vi.fn(),
   versions: ItemVersions = FIXED,
+  released = false,
 ) {
   const queryClient = makeQueryClient();
   const stubs = mockFetch({ [`GET ${VERSIONS}`]: ok(versions), ...over });
   const rendered = renderWithProviders(
-    <RegradeSheet evaluationId="e1" item={ITEM} onClose={onClose} />,
+    <RegradeSheet evaluationId="e1" item={ITEM} released={released} onClose={onClose} />,
     { queryClient },
   );
   return {
@@ -118,7 +119,7 @@ describe("RegradeSheet", () => {
     ]);
     expect(
       screen.getByRole("group", { name: "Question version to grade against" }),
-    ).toHaveAccessibleDescription("By default, the version frozen by the evaluation.");
+    ).toHaveAccessibleDescription("By default, the newest published version.");
   });
 
   it("preselects the newest version when it is newer than the frozen one, and sends it", async () => {
@@ -219,6 +220,25 @@ describe("RegradeSheet", () => {
     expect(await screen.findByText("The results are already released.")).toBeVisible();
     expect(screen.getByRole("dialog")).toBeVisible();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  /*
+   * F-GRADE-09: after the release, a re-grade changes the grades the students
+   * already read. The sheet says so BEFORE anything is sent, and only then.
+   */
+  it("warns, once the results are released, that the re-grade changes them", async () => {
+    setup({}, vi.fn(), FIXED, true);
+    await radio(/v3/);
+    expect(screen.getByText("The results are released")).toBeVisible();
+    expect(screen.getByText(/updates the grades the students already see/)).toHaveTextContent(
+      "Modified after publication",
+    );
+  });
+
+  it("says nothing of a release before one", async () => {
+    setup();
+    await radio(/v3/);
+    expect(screen.queryByText("The results are released")).toBeNull();
   });
 
   it("closes on Cancel without asking the server anything", async () => {

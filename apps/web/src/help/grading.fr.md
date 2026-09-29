@@ -54,6 +54,13 @@ de la question sur toutes les tentatives, contre la version figée ou une
 version publiée plus récente ; une note est obligatoire et accompagne
 chaque nouvelle correction.
 
+Un corrigé faux ? **Modifier la question** (le crayon, proposé si vous
+pouvez modifier la banque), corrigez, **Publiez** : vous revenez ici sur la
+même question, et Re-corriger affiche **Nouvelle version** et part
+d'elle. Une fois les résultats publiés, la re-correction met à jour les
+notes que les étudiants voient et les marque modifiés après publication ;
+le panneau le dit d'abord.
+
 ## Raccourcis
 
 `←` `→` changent de question, `↑` `↓` de ligne, `Entrée` l'ouvre, `V` la

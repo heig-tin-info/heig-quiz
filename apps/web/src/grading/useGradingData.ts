@@ -18,6 +18,18 @@ import { useGradingProgress } from "./progress";
 export interface GradingItem extends GradingQueueItem {
   /** The pool question behind the item: what "Edit question" opens. */
   questionId: string;
+  /**
+   * The reader may edit that question: they hold `contributor` in its pool
+   * (`EvaluationDetail.editableQuestionIds`, the server's rule, issue #127).
+   * Whoever may grade may still not write the pool: an assistant, say.
+   */
+  canEdit: boolean;
+  /**
+   * The question has a published version newer than the one the evaluation
+   * froze: the server's `EvaluationDetail.staleItems`, the evaluation page's
+   * own stale badge. Re-grade is then emphasised.
+   */
+  stale: boolean;
 }
 
 /** Where a question stands: its answers, and how many are validated. */
@@ -39,7 +51,7 @@ export interface StepState {
  * Names are a REQUEST parameter (`?anonymous=0`), never a client-side
  * unmasking: anonymised, the server sends no label at all.
  */
-export function useGradingData(evaluationId: string, index: number, named: boolean) {
+export function useGradingData(evaluationId: string, itemId: string | null, named: boolean) {
   const evaluation = useQuery<EvaluationDetail>({
     queryKey: evaluationKey(evaluationId),
     queryFn: () => api(`/app/api/evaluations/${evaluationId}`),
@@ -52,6 +64,8 @@ export function useGradingData(evaluationId: string, index: number, named: boole
     const negative =
       detail !== undefined &&
       negativeMarkingOn(detail.evaluation.mode, negativeMarkingOf(detail.evaluation.settings));
+    const editable = new Set(detail?.editableQuestionIds ?? []);
+    const stale = new Set(detail?.staleItems ?? []);
     return (detail?.items ?? []).map((i) => ({
       id: i.id,
       position: i.position,
@@ -60,10 +74,16 @@ export function useGradingData(evaluationId: string, index: number, named: boole
       points: i.points,
       minPoints: overridePointsRange(i.points, scoresNegatively(i.type, negative)).min,
       questionId: i.questionId,
+      canEdit: editable.has(i.questionId),
+      stale: stale.has(i.id),
     }));
   }, [evaluation.data]);
 
-  const item: GradingItem | undefined = items[Math.min(index, Math.max(0, items.length - 1))];
+  // The question asked for, else the first: an id this evaluation does not
+  // hold (a stale link) is the first question, never an empty screen.
+  const found = items.findIndex((i) => i.id === itemId);
+  const index = Math.max(0, found);
+  const item: GradingItem | undefined = items[index];
 
   const steps = useQuery<GradingSteps>({
     queryKey: gradingStepsKey(evaluationId),
@@ -90,6 +110,8 @@ export function useGradingData(evaluationId: string, index: number, named: boole
     evaluation,
     items,
     item,
+    /** Where `item` stands among `items`. */
+    index,
     states,
     queue,
     entries: queue.data?.entries ?? [],

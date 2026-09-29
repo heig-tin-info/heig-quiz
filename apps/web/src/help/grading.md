@@ -48,6 +48,12 @@ offers **Grade**, which opens it on the adjustment form.
 question again on every attempt, against the frozen version or a newer
 published one; a note is mandatory and is carried by each new grading.
 
+A wrong key? **Edit question** (the pencil, offered if you may edit the
+pool), fix it, **Publish**: you come back here on the same question, and
+Re-grade reads **New version** and starts on it. Once the results
+are published, re-grading updates the grades the students see and marks
+them modified after publication; the sheet says so first.
+
 ## Shortcuts
 
 `←` `→` change the question, `↑` `↓` the row, `Enter` opens it, `V`
