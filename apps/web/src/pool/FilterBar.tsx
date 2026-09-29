@@ -6,6 +6,7 @@ import { Segmented } from "../ui";
 import type { QuestionFilters } from "./filters";
 import { GROUP_BY, type GroupBy } from "./QuestionGroups";
 import { QuestionSearchBar } from "./QuestionSearchBar";
+import type { StatsOffer } from "./StatsFilterFields";
 
 /**
  * The bar of the pool screen: the shared search field and its filter sheet
@@ -42,6 +43,7 @@ export function FilterBar({
   filters,
   onChange,
   tags,
+  stats,
   total,
   view,
   onView,
@@ -53,6 +55,8 @@ export function FilterBar({
   onChange: (next: QuestionFilters) => void;
   /** Every tag used in this pool, as the API reports them. */
   tags: string[];
+  /** The pool's statistics, which the sheet's last block filters on (F-STAT-03). */
+  stats?: StatsOffer;
   /** How many questions the search matches (the API's `total`); `null` while unknown. */
   total: number | null;
   view: ListView;
@@ -78,7 +82,13 @@ export function FilterBar({
   });
 
   return (
-    <QuestionSearchBar filters={filters} onChange={onChange} tags={tags} coach="pool.search">
+    <QuestionSearchBar
+      filters={filters}
+      onChange={onChange}
+      tags={tags}
+      stats={stats}
+      coach="pool.search"
+    >
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5">
           <span className="text-[11px] text-fg-faint">{t("pool.groupBy")}</span>

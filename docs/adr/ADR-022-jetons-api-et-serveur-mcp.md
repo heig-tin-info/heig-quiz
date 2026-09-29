@@ -8,6 +8,9 @@ the specification had placed later — the personal tokens of docs/08 §8.3
 (phase 2) and the MCP server of F-LLM-06 (phase 3) — and settles how they are
 built.
 
+Amended 2026-09-29 (F-STAT-03, the follow-up ADR-038 §7 announced): the
+reading tool `get_pool_question_stats` joins the closed list of §C.
+
 ## Context
 
 A teacher wants to ask an assistant — Claude Desktop, Claude Code, ChatGPT,
@@ -77,8 +80,8 @@ converted with `z.toJSONSchema`.
 ### C. What the tools are, and what they are not
 
 Reading: `list_courses`, `get_course`, `list_pools`, `get_pool`,
-`list_questions`, `get_question`, `list_evaluations`, `get_evaluation`,
-`describe_question_types`.
+`get_pool_question_stats`, `list_questions`, `get_question`,
+`list_evaluations`, `get_evaluation`, `describe_question_types`.
 
 Writing: `create_course`, `create_classroom`, `create_pool`,
 `link_pool_to_course`, `create_category`, `create_question`,
@@ -101,6 +104,18 @@ Writing: `create_course`, `create_classroom`, `create_pool`,
   call it only when the teacher wants to poll now.
 - Every write returns the web app's `url` of what it made, so the assistant
   can hand the teacher a link.
+- `get_pool_question_stats` (amendment of 2026-09-29) is one call to the
+  pool screen's `GET /pools/:id/question-stats` (ADR-038), whole pool at
+  once, like the screen. It returns what that route returns and nothing
+  more: the threshold of ten answers is the route's, so a question under it
+  is absent for the model as for the browser. Its figures are aggregates
+  over EVERY class that used the question, other teachers' included — the
+  reading ADR-038 §5 already grants anyone who can read the pool. It gives
+  no student, no individual grade and no count under the threshold, so it
+  stays within "no student data beyond what its owner can read": the
+  owner of the token reads the same figures in the side panel. A pool-level
+  tool rather than a per-question one, because the route is pool-level and
+  a model choosing questions compares them.
 
 ## Consequences
 
@@ -119,7 +134,9 @@ Writing: `create_course`, `create_classroom`, `create_pool`,
 - F-LLM-04 (anonymisation of what is sent to a provider) is not engaged: the
   platform sends nothing to a provider; the teacher's own client reads what
   its owner can read. The tools expose no student data beyond what
-  `get_course` (staff names) and `get_evaluation` return.
+  `get_course` (staff names) and `get_evaluation` return; the question
+  statistics of `get_pool_question_stats` are anonymous aggregates of ten
+  answers or more.
 
 ## Rejected alternatives
 

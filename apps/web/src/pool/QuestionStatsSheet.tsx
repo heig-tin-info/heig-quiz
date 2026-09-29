@@ -19,6 +19,7 @@ import { formatDecimal, formatSpan, useI18n, useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import { poolQuestionStatsKey } from "../queryKeys";
 import { Alert, Badge, Button, isoDateParts, SectionHeading, Sheet, Stat, type Tone } from "../ui";
+import { ratePercent } from "./filters";
 
 /**
  * The item analysis of one question (ADR-038), opened from the chart icon of
@@ -100,7 +101,7 @@ export function QuestionStatsSheet({
         <div className="grid grid-cols-2 gap-3">
           <Stat
             label={t("pool.stats.successRate")}
-            value={`${Math.round(stats.p * 100)}%`}
+            value={`${ratePercent(stats.p)}%`}
             hint={stats.p < 0 ? t("pool.stats.negative") : undefined}
           />
           <Stat label={t("pool.stats.answers")} value={stats.n} />

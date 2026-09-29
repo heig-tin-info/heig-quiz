@@ -2,7 +2,7 @@ import { SlidersHorizontal, X } from "lucide-react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 
 import { fuzzyFilter } from "../fuzzy";
-import { useT } from "../i18n";
+import { formatSpan, useT } from "../i18n";
 import { typeIcon, typeLabel, QUESTION_TYPE_IDS } from "../questionTypes";
 import {
   Badge,
@@ -15,7 +15,13 @@ import {
   ToggleChip,
   useCombobox,
 } from "../ui";
-import { activeFilterCount, resolveFilters, toggle, type QuestionFilters } from "./filters";
+import {
+  activeFilterCount,
+  NO_FILTERS,
+  resolveFilters,
+  toggle,
+  type QuestionFilters,
+} from "./filters";
 import {
   applyCompletion,
   completionAt,
@@ -23,6 +29,7 @@ import {
   withoutToken,
   type Completion,
 } from "./searchSyntax";
+import { StatsFilterFields, type StatsOffer } from "./StatsFilterFields";
 
 /**
  * Search, then the filters behind one button, over the pool's table: one
@@ -51,8 +58,20 @@ import {
  * SETS of values, and "Multiple choice" beside "Short answer" beside a box
  * each collide the moment the sheet is narrower than the labels. A pill
  * carries its own bounds and wraps.
+ *
+ * The pool screen alone passes `stats`: the sheet then ends on the
+ * statistics bounds (`StatsFilterFields`, F-STAT-03), and each range set
+ * there is one chip like the version bounds. The field has no token for
+ * them — they are read off a panel, not typed from memory.
  */
 const DIFFICULTIES = [1, 2, 3, 4, 5];
+
+/** The chip wording of each range the bar can hold, as literal keys. */
+const RANGE_KEYS = {
+  version: { between: "pool.version.between", from: "pool.version.from", upTo: "pool.version.upTo" },
+  rate: { between: "pool.filter.rate.between", from: "pool.filter.rate.from", upTo: "pool.filter.rate.upTo" },
+  time: { between: "pool.filter.time.between", from: "pool.filter.time.from", upTo: "pool.filter.time.upTo" },
+} as const;
 
 /** How many tag chips the sheet shows before "Show all (N)". */
 const TAG_LIMIT = 20;
@@ -260,6 +279,7 @@ export function QuestionSearchBar({
   tags,
   types = QUESTION_TYPE_IDS,
   deleted = true,
+  stats,
   coach,
   children,
 }: {
@@ -271,6 +291,8 @@ export function QuestionSearchBar({
   types?: readonly string[];
   /** Whether the sheet offers the soft-deleted questions (F-QST-11). */
   deleted?: boolean;
+  /** The statistics the sheet may filter on (the pool screen); absent, no such block. */
+  stats?: StatsOffer;
   /** The coach-mark anchor of the field, when the screen has a tour. */
   coach?: string;
   /** Between the grammar line and the chips: the caller's own row. */
@@ -299,14 +321,25 @@ export function QuestionSearchBar({
   const dropVersion = () =>
     set({ versionMin: null, versionMax: null, q: withoutToken(filters.q, "version") });
 
-  const versionLabel = () => {
-    const { versionMin: min, versionMax: max } = resolved;
-    if (min !== null && max !== null) {
-      return min === max
-        ? t("pool.version.is", { n: min })
-        : t("pool.version.between", { min, max });
+  /**
+   * One chip per range — "Versions 2 to 4", "Success 20% to 60%", "Median
+   * time 1 min 30 and up" — from `RANGE_KEYS`. A version range
+   * closed on one number reads "Version 3".
+   */
+  const rangeLabel = (
+    kind: keyof typeof RANGE_KEYS,
+    min: number | null,
+    max: number | null,
+    show: (v: number) => string = String,
+  ) => {
+    const keys = RANGE_KEYS[kind];
+    if (kind === "version" && min !== null && min === max) {
+      return t("pool.version.is", { n: min });
     }
-    return min !== null ? t("pool.version.from", { n: min }) : t("pool.version.upTo", { n: max! });
+    if (min !== null && max !== null) {
+      return t(keys.between, { min: show(min), max: show(max) });
+    }
+    return min !== null ? t(keys.from, { n: show(min) }) : t(keys.upTo, { n: show(max!) });
   };
 
   return (
@@ -351,25 +384,31 @@ export function QuestionSearchBar({
             />
           ))}
           {resolved.versionMin !== null || resolved.versionMax !== null ? (
-            <Chip label={versionLabel()} onRemove={dropVersion} />
+            <Chip
+              label={rangeLabel("version", resolved.versionMin, resolved.versionMax)}
+              onRemove={dropVersion}
+            />
+          ) : null}
+          {filters.rateMin !== null || filters.rateMax !== null ? (
+            <Chip
+              label={rangeLabel("rate", filters.rateMin, filters.rateMax)}
+              onRemove={() => set({ rateMin: null, rateMax: null })}
+            />
+          ) : null}
+          {filters.timeMin !== null || filters.timeMax !== null ? (
+            <Chip
+              label={rangeLabel("time", filters.timeMin, filters.timeMax, (s) =>
+                formatSpan(s, t),
+              )}
+              onRemove={() => set({ timeMin: null, timeMax: null })}
+            />
           ) : null}
           {resolved.includeDeleted ? (
             <Chip label={t("pool.filter.deleted")} onRemove={() => set({ includeDeleted: false })} />
           ) : null}
           <button
             type="button"
-            onClick={() =>
-              onChange({
-                ...filters,
-                q: "",
-                types: [],
-                tags: [],
-                difficulties: [],
-                includeDeleted: false,
-                versionMin: null,
-                versionMax: null,
-              })
-            }
+            onClick={() => onChange({ ...filters, ...NO_FILTERS, q: "" })}
             className="rounded-field px-1.5 py-0.5 text-xs text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
           >
             {t("pool.filter.clear")}
@@ -388,12 +427,7 @@ export function QuestionSearchBar({
                 onClick={() =>
                   onChange({
                     ...filters,
-                    types: [],
-                    tags: [],
-                    difficulties: [],
-                    includeDeleted: false,
-                    versionMin: null,
-                    versionMax: null,
+                    ...NO_FILTERS,
                     q: withoutToken(
                       withoutToken(withoutToken(withoutToken(filters.q, "tag"), "type"), "difficulty"),
                       "version",
@@ -461,6 +495,8 @@ export function QuestionSearchBar({
                 />
               )}
             </fieldset>
+
+            {stats ? <StatsFilterFields offer={stats} filters={filters} onChange={set} /> : null}
 
             {deleted ? (
               <div className="flex items-center justify-between gap-4 border-t border-line pt-4">

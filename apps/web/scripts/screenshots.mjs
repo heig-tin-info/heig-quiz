@@ -518,6 +518,14 @@ const scenes = [
   { name: "pool-loading", role: "teacher", path: "/pools/p1?slow=1", settle: 300 },
   { name: "pool-many", role: "teacher", path: "/pools/p1?many=1" },
   { name: "pool-filters", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /^filtres|^filters/i }).first().click() },
+  // F-STAT-03: the statistics block at the foot of the sheet, a bound typed,
+  // then the list it leaves behind (the three questions of `p1` with stats).
+  { name: "pool-filters-stats", role: "teacher", path: "/pools/p1", fold: true, act: statsBound },
+  { name: "pool-stats-filtered", role: "teacher", path: "/pools/p1", act: async (p) => {
+    await statsBound(p);
+    await p.getByRole("button", { name: /^(Done|Terminé|OK)$/ }).first().click();
+    await p.waitForTimeout(500);
+  } },
   // A click on a row shows the question as a student reads it: docked beside
   // the list from 1280 px (the table drops its low-priority columns), in the
   // list's place below. Run at 1920, 1440 and 1024 to see all three.
@@ -872,6 +880,16 @@ async function skipCoach(page) {
     await skip.click({ timeout: 3000, force: true }).catch(() => {});
     await page.waitForTimeout(300);
   }
+}
+
+/** The pool's filter sheet, scrolled to its statistics, with "success from 40 %" typed. */
+async function statsBound(page) {
+  await skipCoach(page);
+  await page.getByRole("button", { name: /^filtres|^filters/i }).first().click();
+  const from = page.getByLabel(/^(Success rate, from|Taux de réussite, à partir de)$/);
+  await from.fill("40");
+  await from.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
 }
 
 /** The course page's first template (the mock's exam), opened from its row. */
