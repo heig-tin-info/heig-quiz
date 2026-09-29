@@ -73,9 +73,10 @@ serialiser, on demand.
   answer cannot forge the structure of the text the server derives from it;
   and each field only on the types that use it. The editor refuses an edit
   that would break a limit rather than hand the host an answer the schema
-  would refuse, and every parser reads a line of at most 1 000 characters
-  with patterns free of nested ambiguity, so a pasted text cannot freeze
-  the teacher's tab.
+  would refuse. Every parser reads a line of at most 1 000 characters with
+  patterns that read a run of spaces one way only (linear on a failing
+  line), and the editor parses at most 200 000 characters, so a pasted text
+  cannot freeze the teacher's tab.
 - **The routed polyline is not stored.** Unlike `circuit`, where
   `wire.points` is the geometry the netlist is read from (ADR-019), a
   diagram's meaning is its elements and links; the lines are recomputed on

@@ -72,9 +72,13 @@ const ALIAS = String.raw`(?:\s+as\s+([\p{L}\w$]+))?`;
 /* a leading `o` only before a dash or a dot, a trailing one only before a space or a quote */
 const ARROW = String.raw`(?:<\|?|\*|o(?=[-.]))?[-.]+(?:(?:up|down|left|right|u|d|l|r)[-.]+)?(?:\|?>|\*|o(?=[\s"]))?`;
 const LINK_RE = new RegExp(`^(${NAME})\\s*(?:"([^"]*)"\\s*)?(${ARROW})\\s*(?:"([^"]*)"\\s*)?(${NAME})\\s*(?::\\s*(.*))?$`, "u");
-/* the stereotype is `<<…>>` with no `>` inside: one way to read it, whatever the spaces */
+/*
+ * One slot of spaces before each optional token, inside its group: a run of
+ * spaces then has one way to be read, and a line that fails, fails in time
+ * linear in its length. The stereotype is `<<…>>` with no `>` inside.
+ */
 const CLASS_RE =
-  /^(abstract\s+class|abstract|class|interface|enum)\s+("[^"]+"|[\p{L}\w$]+)(?:\s+as\s+[\p{L}\w$]+)?\s*(?:<<([^>]*)>>)?\s*(\{)?\s*(\})?$/u;
+  /^(abstract\s+class|abstract|class|interface|enum)\s+("[^"]+"|[\p{L}\w$]+)(?:\s+as\s+[\p{L}\w$]+)?(?:\s*<<([^>]*)>>)?(?:\s*(\{))?(?:\s*(\}))?$/u;
 const SYSTEM_RE = new RegExp(`^(?:rectangle|package)\\s+(${NAME})(?:\\s+as\\s+[\\p{L}\\w$]+)?\\s*\\{$`, "u");
 const IGNORED = /^(@startuml|@enduml|skinparam\b|hide\b|show\b|title\b|left to right direction|top to bottom direction)/i;
 

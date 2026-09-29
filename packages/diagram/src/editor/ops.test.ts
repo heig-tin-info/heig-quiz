@@ -47,6 +47,7 @@ describe("names and new elements", () => {
 
   it("turns points into a stroke boxed at its top left", () => {
     expect(addInk(empty, "free", "line", [[30, 50], [10, 10]]).nodes[0]).toMatchObject({ t: "line", x: 10, y: 10, w: 20, h: 40, pts: [[20, 40], [0, 0]] });
+    expect(addInk(empty, "free", "line", [[30, 50], [30, 50]])).toBe(empty);
   });
 });
 

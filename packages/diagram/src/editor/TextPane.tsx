@@ -9,6 +9,7 @@ import { useState, type JSX } from "react";
 
 import { applyParsed } from "../apply.js";
 import { CODECS } from "../codecs/index.js";
+import { MAX_SOURCE } from "../codecs/parsed.js";
 import type { Measure } from "../geometry.js";
 import { kindIssues, type DiagramKind } from "../kinds.js";
 import { SceneSchema, type Scene } from "../scene.js";
@@ -42,6 +43,10 @@ export function TextPane({ kind, scene, measure, onEdit, strings: s, height }: T
         value={codec.write(scene, measure)}
         onFocus={() => setSession(nextSession())}
         onValue={(text) => {
+          if (text.length > MAX_SOURCE) {
+            setStatus({ bad: true, text: s.codeTooLarge });
+            return;
+          }
           const parsed = codec.read(text);
           const first = parsed.errors[0];
           if (first) {

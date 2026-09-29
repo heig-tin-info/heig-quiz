@@ -78,6 +78,14 @@ export const emptyParsed = (): Parsed => ({ nodes: [], links: [], errors: [] });
  */
 export const MAX_LINE = 1_000;
 
+/**
+ * The longest text the editor parses: the text of the largest scene the
+ * schema allows (50 000 characters of names and bodies) with room for the
+ * keywords, quotes and arrows around them. A line is cheap to read; this
+ * bounds how many there are.
+ */
+export const MAX_SOURCE = 200_000;
+
 /** Records a line too long to read; `true` when it was. */
 export function tooLong(p: Parsed, raw: string, line: number): boolean {
   if (raw.length <= MAX_LINE) return false;

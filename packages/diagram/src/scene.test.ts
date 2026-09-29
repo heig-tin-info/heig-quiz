@@ -37,6 +37,8 @@ describe("the texts of a scene", () => {
     expect(SceneSchema.safeParse(withName("A")).success).toBe(true);
     expect(SceneSchema.safeParse(withName("A\nclass Fake {")).success).toBe(false);
     expect(SceneSchema.safeParse(withName("A\u0000")).success).toBe(false);
+    expect(SceneSchema.safeParse(withName("A\u2028B")).success).toBe(false);
+    expect(SceneSchema.safeParse(withName("A\u202Eevil")).success).toBe(false);
   });
 
   it("caps the characters of the whole scene, like an essay", () => {

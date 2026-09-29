@@ -9,7 +9,7 @@
  */
 import type { Parsed, ParsedNode } from "./codecs/parsed.js";
 import { GRID, holds, rectOf, snap, type Measure, type Rect } from "./geometry.js";
-import { DEFAULT_SIZE, KINDS, type DiagramKind } from "./kinds.js";
+import { CONTAINERS, DEFAULT_SIZE, KINDS, type DiagramKind } from "./kinds.js";
 import { newId, type DiagramLink, type DiagramNode, type Scene } from "./scene.js";
 
 const FIELDS = ["stereo", "abstract", "body", "accept", "initial"] as const;
@@ -90,7 +90,7 @@ function placeInRows(scene: Scene, fresh: readonly ParsedNode[], made: ReadonlyM
   }
   for (const [sys, list] of members) {
     const outer = rectOf(sys, measure);
-    const inside = scene.nodes.filter((n) => n.t !== "system" && !freshNodes.has(n) && holds(outer, rectOf(n, measure)));
+    const inside = scene.nodes.filter((n) => !CONTAINERS.has(n.t) && !freshNodes.has(n) && holds(outer, rectOf(n, measure)));
     /* 40 apart, never 20: two boxes one cell apart leave no free row for a line to leave by */
     let yy = inside.length > 0 ? Math.max(...inside.map((n) => rectOf(n, measure).y1)) + 40 : sys.y + 40;
     let maxX = outer.x1;

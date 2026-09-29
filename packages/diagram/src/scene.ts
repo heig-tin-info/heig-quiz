@@ -95,11 +95,13 @@ const IdSchema = z.string().regex(/^[a-z0-9]{4,40}$/);
 const Coord = z.number().int().min(-COORD_LIMIT).max(COORD_LIMIT);
 const Size = z.number().int().min(1).max(COORD_LIMIT);
 /**
- * A text on one line, without control characters: the text form is derived
- * from these fields, and a new line in a name would let an answer forge the
- * structure of the text the teacher (and later a grader) reads.
+ * A text on one line, without control or format characters: the text form
+ * is derived from these fields, and a new line in a name — or a line
+ * separator, or a bidi override that reorders what is shown — would let an
+ * answer forge the structure of the text the teacher (and later a grader)
+ * reads.
  */
-const Text = (max: number) => z.string().max(max).regex(/^[^\p{Cc}]*$/u);
+const Text = (max: number) => z.string().max(max).regex(/^[^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*$/u);
 /** A freehand point, relative to its element's corner: never left of it or above it. */
 const Offset = z.number().int().min(0).max(COORD_LIMIT);
 

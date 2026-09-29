@@ -5,10 +5,14 @@
  *
  * An edit that would break a limit of the schema returns the scene
  * unchanged: the answer schema would refuse it at the next autosave, and a
- * student must never lose work to a refusal they could not see coming.
+ * student must never lose work to a refusal they could not see coming. The
+ * editor's `commit` is the guarantee (it drops any edit that makes a valid
+ * scene invalid); the guards here are what lets the editor know before it
+ * acts — not select a copy that was not made, not focus an element that
+ * was not placed.
  */
 import { holds, rectOf, snap, type Bounds, type Measure, type Rect } from "../geometry.js";
-import { DEFAULT_SIZE, INK, KINDS, NAMELESS, SQUARE, TOOL_PRESET, minSize, typeOfTool, type DiagramKind, type PlaceTool } from "../kinds.js";
+import { CONTAINERS, DEFAULT_SIZE, INK, KINDS, NAMELESS, SQUARE, TOOL_PRESET, minSize, typeOfTool, type DiagramKind, type PlaceTool } from "../kinds.js";
 import type { Route } from "../layout.js";
 import {
   MAX_INK_POINTS,
@@ -55,7 +59,7 @@ export function elementAt(scene: Scene, rects: ReadonlyMap<string, Rect>, x: num
   const inner = (r: Rect): boolean => x > r.x0 + band && x < r.x1 - band && y > r.y0 + band && y < r.y1 - band;
   for (let i = scene.nodes.length - 1; i >= 0; i -= 1) {
     const n = scene.nodes[i] as DiagramNode;
-    if (n.t === "system") continue;
+    if (CONTAINERS.has(n.t)) continue;
     if (INK.has(n.t)) {
       if (nearInk(n, x, y, band + 2)) return { id: n.id, edge: false };
       continue;
@@ -66,7 +70,7 @@ export function elementAt(scene: Scene, rects: ReadonlyMap<string, Rect>, x: num
   if (withSystems)
     for (let i = scene.nodes.length - 1; i >= 0; i -= 1) {
       const n = scene.nodes[i] as DiagramNode;
-      const r = n.t === "system" ? rects.get(n.id) : undefined;
+      const r = CONTAINERS.has(n.t) ? rects.get(n.id) : undefined;
       if (!r || !inBox(r, band)) continue;
       const title = y >= r.y0 && y <= r.y0 + 28;
       if (!inner(r) || title) return { id: n.id, edge: false };
@@ -113,7 +117,7 @@ export function newElement(scene: Scene, tool: PlaceTool, at: Point, measure: Me
     ...(tool in TOOL_PRESET ? TOOL_PRESET[tool as keyof typeof TOOL_PRESET] : {}),
     ...(size ? { w: size[0], h: size[1] } : {}),
   };
-  const name = t === "system" || !size ? nextName(scene, t, s) : "";
+  const name = CONTAINERS.has(t) || !size ? nextName(scene, t, s) : "";
   if (name) n.name = name;
   if (t === "class") n.body = ["---"];
   if (t === "entity") n.body = ["id : int PK"];
@@ -131,7 +135,11 @@ export const addElement = (scene: Scene, kind: DiagramKind, n: DiagramNode): Sce
 /** A stroke or a line from points in canvas units, added when the scene has room for its points. */
 export function addInk(scene: Scene, kind: DiagramKind, t: "stroke" | "line", pts: readonly XY[]): Scene {
   const ink = scene.nodes.reduce((k, n) => k + (n.pts?.length ?? 0), 0);
-  if (pts.length < 2 || ink + pts.length > MAX_INK_POINTS) return scene;
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  /* a click without a drag draws nothing */
+  const drawn = first && last && (Math.hypot(last[0] - first[0], last[1] - first[1]) > 4 || pts.length > 3);
+  if (!drawn || ink + pts.length > MAX_INK_POINTS) return scene;
   const xs = pts.map((q) => q[0]);
   const ys = pts.map((q) => q[1]);
   const x = Math.floor(Math.min(...xs));
@@ -166,9 +174,9 @@ export function addLink(scene: Scene, type: LinkType, a: string, b: string, via:
 export function carried(scene: Scene, selection: ReadonlySet<string>, measure: Measure): Set<string> {
   const ids = new Set(scene.nodes.filter((n) => selection.has(n.id)).map((n) => n.id));
   for (const s of scene.nodes) {
-    if (s.t !== "system" || !ids.has(s.id)) continue;
+    if (!CONTAINERS.has(s.t) || !ids.has(s.id)) continue;
     const outer = rectOf(s, measure);
-    for (const n of scene.nodes) if (n.t !== "system" && holds(outer, rectOf(n, measure))) ids.add(n.id);
+    for (const n of scene.nodes) if (!CONTAINERS.has(n.t) && holds(outer, rectOf(n, measure))) ids.add(n.id);
   }
   return ids;
 }
@@ -293,7 +301,7 @@ export function inBand(scene: Scene, rects: ReadonlyMap<string, Rect>, routes: R
     const r = rects.get(n.id);
     if (!r) continue;
     const hit =
-      n.t === "system"
+      CONTAINERS.has(n.t)
         ? r.x0 >= band.x0 && r.x1 <= band.x1 && r.y0 >= band.y0 && r.y1 <= band.y1
         : r.x1 >= band.x0 && r.x0 <= band.x1 && r.y1 >= band.y0 && r.y0 <= band.y1;
     if (hit) out.add(n.id);

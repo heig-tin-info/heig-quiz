@@ -151,6 +151,7 @@ describe("a crafted text stays cheap to read", () => {
     ["graph", `${"a;".repeat(MAX_LINE / 2 - 1)}`],
     ["flow", `a -- ${"x ".repeat(MAX_LINE / 2 - 10)}`],
     ["class", `A ${"-".repeat(MAX_LINE - 10)} B`],
+    ["class", `${`class A${" ".repeat(MAX_LINE - 10)}!\n`.repeat(10)}`],
   ];
   it.each(cases)("%s", (kind, text) => {
     const start = performance.now();
