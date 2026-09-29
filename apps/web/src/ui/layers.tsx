@@ -290,23 +290,41 @@ export function useScrollLock() {
 /**
  * Instant tooltip (replaces the laggy native `title`): inverted bubble with an
  * arrow, rendered in a portal on hover/focus after 120 ms, flipped below the
- * anchor near the top edge and clamped to the viewport. Wraps any element;
- * keep the accessible name (`aria-label`) on the control itself — the bubble
- * is aria-hidden. A nullish label renders the child untouched.
+ * anchor when it would leave the top edge and clamped to the viewport. Wraps
+ * any element; keep the accessible name (`aria-label`) on the control itself —
+ * the bubble is aria-hidden. A nullish label and no `media` render the child
+ * untouched, and no bubble shows while both are empty.
+ * `media` is a picture shown in the SAME bubble, over the label (an avatar
+ * enlarged): one bubble, never two stacked ones. `null` means "a picture may
+ * come": the wrapper is there already, so the child is not remounted when
+ * it arrives.
  * The bubble never takes the focus (portal, `pointer-events-none`, no
- * tabindex) and Escape dismisses it (WCAG 1.4.13).
+ * tabindex) and Escape dismisses it (WCAG 1.4.13). A Tip INSIDE a popup
+ * trigger whose panel is open (an ancestor with `aria-haspopup` and
+ * `aria-expanded="true"`, a `Popover` or `Menu` trigger) stays shut: the
+ * panel says more, and the two would overlap. A plain disclosure row does not
+ * silence it, and neither does a Tip wrapped AROUND its trigger (`IconButton`):
+ * that gap is accepted, the click that opens the panel already dismisses it.
  */
 export function Tip({
   label,
+  media,
   children,
   className = "inline-flex",
 }: {
   label: string | null | undefined;
+  media?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
-  const [tip, setTip] = useState<{ x: number; y: number; below: boolean } | null>(null);
+  const [tip, setTip] = useState<{
+    x: number;
+    top: number;
+    bottom: number;
+    below: boolean;
+  } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bubble = useRef<HTMLSpanElement>(null);
   // Escape hides the bubble without moving the hover or the focus. Deliberately
   // not part of the layer stack: a tooltip never owns the Escape key.
   useEffect(() => {
@@ -323,16 +341,27 @@ export function Tip({
     },
     [],
   );
-  if (!label) return <>{children}</>;
+  // A bubble taller than the room above its anchor (a picture, a wrapped
+  // label) goes below instead, when there is more room there. Measured before
+  // the paint, so it never shows in the wrong place first.
+  useLayoutEffect(() => {
+    const el = bubble.current;
+    if (!tip || tip.below || !el) return;
+    if (tip.top - 7 - el.offsetHeight < 8 && window.innerHeight - tip.bottom > tip.top) {
+      setTip({ ...tip, below: true });
+    }
+  }, [tip]);
+  if (!label && media === undefined) return <>{children}</>;
   const arm = (el: HTMLElement) => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
+      if ((!label && !media) || el.closest('[aria-haspopup][aria-expanded="true"]')) return;
       const r = el.getBoundingClientRect();
-      const below = r.top < 44;
       setTip({
         x: Math.min(Math.max(r.left + r.width / 2, 16), window.innerWidth - 16),
-        y: below ? r.bottom + 7 : r.top - 7,
-        below,
+        top: r.top,
+        bottom: r.bottom,
+        below: r.top < 44,
       });
     }, 120);
   };
@@ -358,18 +387,21 @@ export function Tip({
               className={`pointer-events-none fixed ${Z.tooltip}`}
               style={{
                 left: tip.x,
-                top: tip.y,
+                top: tip.below ? tip.bottom + 7 : tip.top - 7,
                 transform: `translate(-50%, ${tip.below ? "0" : "-100%"})`,
               }}
             >
               <span
+                ref={bubble}
                 className={cx(
-                  "tip-bubble relative block rounded-lg bg-fg px-2.5 py-1.5 text-xs font-medium leading-snug text-canvas",
+                  "tip-bubble relative block rounded-lg bg-fg text-xs font-medium leading-snug text-canvas",
+                  media ? "p-1.5 text-center" : "px-2.5 py-1.5",
                   tip.below ? "origin-top" : "origin-bottom",
-                  label.length > 60 ? "max-w-xs whitespace-normal" : "whitespace-nowrap",
+                  label && label.length > 60 ? "max-w-xs whitespace-normal" : "whitespace-nowrap",
                 )}
               >
-                {label}
+                {media}
+                {label && media ? <span className="block px-1 pb-0.5 pt-1.5">{label}</span> : label}
                 <span
                   className={cx(
                     "absolute left-1/2 size-2 -translate-x-1/2 rotate-45 bg-fg",
