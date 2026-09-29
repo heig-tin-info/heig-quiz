@@ -26,6 +26,7 @@ import {
   users,
 } from "../../db/schema.js";
 import { emailIn, knownEmails } from "../../identity.js";
+import { avatarUrl } from "../avatar.js";
 import { accessRevoked } from "../realtime/bus.js";
 
 export { claimEnrollments } from "./roster.js";
@@ -132,9 +133,7 @@ export async function listCourses(db: Db, access: SQL | undefined, viewerId: str
         givenName: s.givenName,
         familyName: s.familyName,
         email: s.email,
-        avatarUrl: s.avatarAt
-          ? `/app/api/users/${s.userId}/avatar?v=${s.avatarAt.getTime()}`
-          : s.pictureUrl,
+        avatarUrl: s.avatarAt ? avatarUrl(s.userId, s.avatarAt) : s.pictureUrl,
       })),
   }));
 }
