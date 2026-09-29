@@ -1,5 +1,5 @@
 /**
- * Favourite stars (F-POOL-10, ADR-039): a teacher's own bookmarks on the
+ * Favourite stars (F-POOL-10, ADR-040): a teacher's own bookmarks on the
  * questions they can see.
  *
  * Starring is a PREFERENCE, not an edit: any role that reaches the pool may

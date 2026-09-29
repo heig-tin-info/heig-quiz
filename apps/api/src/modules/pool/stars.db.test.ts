@@ -1,5 +1,5 @@
 /**
- * Favourite stars (F-POOL-10, ADR-039): `PUT`/`DELETE /questions/star`,
+ * Favourite stars (F-POOL-10, ADR-040): `PUT`/`DELETE /questions/star`,
  * `DELETE /pools/:id/stars`, and the `starred` flag and filter of the list.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";

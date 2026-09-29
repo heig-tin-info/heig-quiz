@@ -1,9 +1,9 @@
-# ADR-039 — Favourite stars on questions: a second per-user preference table
+# ADR-040 — Favourite stars on questions: a second per-user preference table
 
 ## Status
 
 Accepted (2026-09-29, settled with the product owner; with the table
-`question_stars` (migration `0034_question_stars`), the routes
+`question_stars` (migration `0035_question_stars`), the routes
 `PUT`/`DELETE /questions/star` and `DELETE /pools/:id/stars` of the `pool`
 module, the `starred` flag and filter of `QuestionRow` / `QuestionSearch`,
 and F-POOL-10).

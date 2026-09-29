@@ -288,7 +288,7 @@ export const QuestionRow = z.object({
    */
   keyless: z.boolean(),
   /**
-   * The CALLER starred it (F-POOL-10, ADR-039): a personal bookmark, false
+   * The CALLER starred it (F-POOL-10, ADR-040): a personal bookmark, false
    * for everyone else and always false on a soft-deleted question.
    */
   starred: z.boolean(),
@@ -440,7 +440,7 @@ export const MoveBody = z.object({
 });
 export type MoveBody = z.infer<typeof MoveBody>;
 
-// --- Favourites (F-POOL-10, ADR-039) ---------------------------------------
+// --- Favourites (F-POOL-10, ADR-040) ---------------------------------------
 
 /**
  * `PUT` and `DELETE /questions/star`: star or unstar a batch, idempotently.

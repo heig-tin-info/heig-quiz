@@ -319,7 +319,7 @@ export const questionVersionAssets = pgTable(
 );
 
 /**
- * A question one teacher starred (F-POOL-10, ADR-039): a personal bookmark,
+ * A question one teacher starred (F-POOL-10, ADR-040): a personal bookmark,
  * never a state of the question. Nobody else sees it, a colleague cannot
  * clear it, and it records nothing in the audit log.
  *

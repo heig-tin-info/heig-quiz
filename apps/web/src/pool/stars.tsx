@@ -1,5 +1,5 @@
 /**
- * Favourite stars (F-POOL-10, ADR-039): the caller's own bookmarks on the
+ * Favourite stars (F-POOL-10, ADR-040): the caller's own bookmarks on the
  * questions of a pool. A star is personal — a colleague never sees it — so
  * it is a preference, not an edit, and a reader may star as well.
  *

@@ -1,5 +1,5 @@
 /**
- * Favourite stars on questions (F-POOL-10, ADR-039): one teacher's bookmarks.
+ * Favourite stars on questions (F-POOL-10, ADR-040): one teacher's bookmarks.
  * Every function takes the caller's id and touches that caller's rows only;
  * which questions the caller may star is the route's business (it loads them
  * under `poolAccess` first).
