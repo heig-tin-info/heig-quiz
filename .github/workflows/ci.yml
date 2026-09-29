@@ -39,8 +39,9 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
       # Every package's `test`, the runner's unit suite included. Its
-      # integration suite (`test:integration`, real containers) is deliberately
-      # NOT run on CI: it skips itself without a Podman socket anyway.
+      # integration suite (`test:integration`, real containers) is NOT run
+      # here, so that an image build never holds up every PR: it has its own
+      # workflow, runner-integration.yml (#234).
       - run: pnpm test
 
   # Production images, built HERE and pushed to GHCR: the VM must never build.

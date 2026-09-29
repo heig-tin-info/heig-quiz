@@ -200,16 +200,41 @@ grep -q 'conf.d/\*.caddy' /etc/caddy/Caddyfile || sed -i '1i import /etc/caddy/c
 mkdir -p /etc/caddy/conf.d && cp apps/runner/deploy/Caddyfile /etc/caddy/conf.d/quiz-runner.caddy
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && systemctl reload caddy
 # The language images: the runner's only supply chain, built HERE, never pulled.
-# `spice` is ngspice, for the `circuit` question type (ADR-019): without it
-# `GET /health` does not list `spice` and every circuit grading degrades to a
-# PROPOSED grade. It is in the default list, so passing no argument builds it.
-PODMAN_REMOTE_URL=unix:///run/podman/podman.sock apps/runner/images/build.sh c cpp python js spice
+# All six by default: c, cpp, python, js, spice (ngspice, for `circuit`,
+# ADR-019) and rust. A missing one is not listed by `GET /health`, and every
+# question in that language degrades to a PROPOSED grade. rust is the large
+# one (~820 MB): check the disk first and keep 2 GB free for the build.
+df -h /var/lib/containers
+PODMAN_REMOTE_URL=unix:///run/podman/podman.sock apps/runner/images/build.sh
+podman image prune -f
 podman images | grep quiz-runner
 ```
 
+On a VM built before #234, which has the five others only, build rust alone
+the same way (`… images/build.sh rust`); `GET /health` notices it within five
+seconds, no restart needed. The sizes and build times are in
+[`apps/runner/README.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/runner/README.md#the-images).
+
 After an upgrade that adds or changes an image (a new language, a new
 ngspice), rebuild it on the VM; nothing else does: `deploy.sh` ships the
-runner's own image, never the sandbox ones.
+runner's own image, never the sandbox ones. The CI workflow **Runner
+integration** builds the same six images every week and runs the integration
+suite on them under a rootful socket, so a change that breaks a language
+under the seccomp profile turns red there first.
+
+### Checking the runner end to end
+
+After an image rebuild, or whenever a code question misbehaves, run the
+smoke test from the application VM (the only address the code VM's Caddy
+admits); what it prints and checks is in
+[`apps/runner/README.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/runner/README.md#the-smoke-test-against-a-live-runner):
+
+```bash
+# application VM, as srv
+cd /srv/quiz
+RUNNER_TOKEN="$(sed -n 's/^RUNNER_TOKEN=//p' .env.prod)" \
+  apps/runner/scripts/smoke.py https://code.chevallier.io:8443
+```
 
 ## 4. Continuous deployment
 
@@ -433,7 +458,7 @@ the next approved promotion.
     The application VM is small (1 vCPU, 2 GB). A local build makes the host
     swap and strangles PostgreSQL (the classroom learned it on 2026-07-10, on
     the previous VM) and fills the disk with builder cache. `deploy.sh` only
-    pulls. The runner VM does build the small Alpine language images, on
+    pulls. The runner VM does build the Alpine language images (rust, ~820 MB, included), on
     purpose; the runner image itself still comes from CI, so that both VMs
     run the commit the checks passed on.
 
@@ -451,7 +476,7 @@ the next approved promotion.
   of what to copy: `rsync` is enough. `./secrets` goes through the vault,
   never through the backup directory.
 - The runner VM holds nothing to back up: the language images rebuild in a
-  minute from `apps/runner/images/`, and its environment file is one line,
+  few minutes from `apps/runner/images/`, and its environment file is one line,
   the token, which the vault copy of `.env.prod` also holds.
 - **Before any migration**, take a fresh dump rather than trusting the daily
   one:
