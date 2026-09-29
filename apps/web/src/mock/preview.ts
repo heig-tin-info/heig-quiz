@@ -94,10 +94,16 @@ function viewOf(e: MockEvaluation, seed: number): AttemptView {
   };
 }
 
-on("POST", "/app/api/evaluations/:id/preview", (m): EvaluationPreview => {
+on("POST", "/app/api/evaluations/:id/preview", (m, body): EvaluationPreview => {
   const e = evaluationOr404(m.groups!.id!);
-  seeds += 7;
-  return { seed: seeds, durationS: durationOf(e), view: viewOf(e, seeds) };
+  // A seed given back reloads that walk (ADR-018, sixth addendum).
+  const seed = typeof body.seed === "number" ? body.seed : (seeds += 7);
+  return {
+    seed,
+    durationS: durationOf(e),
+    view: viewOf(e, seed),
+    versions: Object.fromEntries(e.items.map((i) => [i.id, i.versionNumber])),
+  };
 });
 
 /**

@@ -2489,6 +2489,20 @@ export const fr: Record<keyof Dict, string> = {
   "preview.restart.title": "Recommencer l'aperçu ?",
   "preview.restart.message":
     "Vos réponses sont effacées et un nouvel ordre est tiré au hasard.",
+  "preview.edit": "Modifier la question",
+  "preview.edit.hint": "Ouvre le brouillon de la question dans un nouvel onglet. Publiez-la, puis revenez : cet aperçu garde vos réponses.",
+  "preview.newVersion.title": "La version {n} de cette question est publiée",
+  "preview.newVersion.body":
+    "L'évaluation utilise encore la version {n}. Utiliser la nouvelle version met à jour l'évaluation et recharge cette question, sans sa réponse ; vos autres réponses restent.",
+  "preview.newVersion.use": "Utiliser la nouvelle version",
+  "preview.newVersion.attempts":
+    "Des étudiants ont déjà passé cette évaluation : ses questions sont figées. Pour appliquer la nouvelle version à leurs réponses, re-corrigez la question depuis le panneau de correction.",
+  "preview.newVersion.opened":
+    "L'évaluation a été ouverte : ses questions sont figées et la nouvelle version ne peut pas remplacer celle-ci.",
+  "preview.newVersion.failed": "La question n'a pas pu passer à sa nouvelle version.",
+  "preview.changed.title": "L'évaluation a changé depuis le début de cet aperçu",
+  "preview.changed.body":
+    "Des questions ont été ajoutées, retirées ou changées de version. Recommencez l'aperçu pour parcourir l'évaluation telle qu'elle est maintenant.",
   "preview.gradeFailed": "La correction a échoué",
   "preview.gradeFailedBody": "Vos réponses sont toujours là. Rendez à nouveau la copie.",
   "preview.empty.title": "Cette évaluation n'a pas encore de question",

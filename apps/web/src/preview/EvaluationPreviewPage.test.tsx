@@ -1,9 +1,17 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import type { AttemptView, EvaluationPreview, PreviewCorrection } from "@quiz/contracts";
+import type {
+  AttemptView,
+  EvaluationDetail,
+  EvaluationPreview,
+  ItemRow,
+  PreviewCorrection,
+} from "@quiz/contracts";
+
+import { makeEvaluationDetail } from "../test/grading-fixtures";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { EvaluationPreviewPage } from "./EvaluationPreviewPage";
@@ -111,6 +119,7 @@ const preview = (seed: number, durationS: number | null = 1800): EvaluationPrevi
   seed,
   durationS,
   view: view(),
+  versions: { [I1]: 1, [I2]: 1 },
 });
 
 const correction = (seed: number): PreviewCorrection => ({
@@ -273,5 +282,122 @@ describe("EvaluationPreviewPage", () => {
     expect(
       await screen.findByRole("heading", { name: "This evaluation is not available to you" }),
     ).toBeInTheDocument();
+  });
+});
+
+/*
+ * Fixing a question from the walk (ADR-018, sixth addendum): the editor opens
+ * in another tab, and a newer version is swapped in for that one question,
+ * from the walk's own seed, without touching the other answers.
+ */
+describe("EvaluationPreviewPage — fixing a question", () => {
+  const row = (id: string, questionId: string, over: Partial<ItemRow> = {}): ItemRow => ({
+    id,
+    position: 0,
+    points: 1,
+    milestone: false,
+    questionId,
+    questionVersionId: "00000000-0000-4000-8000-00000000000" + questionId.slice(-1),
+    type: "mcq",
+    internalName: questionId,
+    versionNumber: 1,
+    latestVersionNumber: 1,
+    ...over,
+    deprecated: false,
+  });
+  const detailOf = (items: ItemRow[], over: Partial<EvaluationDetail> = {}) =>
+    makeEvaluationDetail({
+      evaluation: { ...makeEvaluationDetail().evaluation, id: EVAL, state: "draft" },
+      items,
+      attemptCount: 0,
+      editable: true,
+      editableQuestionIds: ["q1", "q2"],
+      ...over,
+    });
+  const DETAIL = `GET /app/api/evaluations/${EVAL}`;
+
+  it("opens the editor in a new tab and swaps in the new version, keeping the other answers", async () => {
+    const user = userEvent.setup();
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    let detail = detailOf([row(I1, "q1", { latestVersionNumber: 2 }), row(I2, "q2")]);
+    const updated = preview(42);
+    updated.view.items[0]!.student = {
+      prompt: "Quelle expression donne l'adresse de `y` ?",
+      mode: "single",
+      choices: [
+        { id: 0, text: "&y" },
+        { id: 1, text: "*y" },
+      ],
+    };
+    updated.versions = { [I1]: 2, [I2]: 1 };
+    const { calls } = mockFetch({
+      [`POST ${URL}`]: (call) => ok((call.body as { seed?: number } | null)?.seed === 42 ? updated : preview(42)),
+      [DETAIL]: () => ok(detail),
+      [`POST /app/api/evaluations/${EVAL}/items/update-versions`]: () => {
+        detail = detailOf([row(I1, "q1", { versionNumber: 2, latestVersionNumber: 2 }), row(I2, "q2")]);
+        return ok([]);
+      },
+      [`POST ${URL}/grade`]: (call) => ok(correction((call.body as { seed: number }).seed)),
+    });
+    renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
+
+    await user.click(await screen.findByRole("button", { name: "Edit question" }));
+    expect(open).toHaveBeenCalledWith(`/questions/q1?from=${EVAL}`, "_blank", "noopener");
+    expect(await screen.findByText("Version 2 of this question is published")).toBeInTheDocument();
+
+    // An answer on each question, then back to the first one.
+    await user.click(screen.getByRole("radio", { name: "&x" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(await screen.findByRole("radio", { name: "1 octet" }));
+    // The notice is about the question on screen: this one is up to date.
+    expect(screen.queryByText("Version 2 of this question is published")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+
+    await user.click(await screen.findByRole("button", { name: "Use the new version" }));
+    expect(await screen.findByRole("radio", { name: "&y" })).not.toBeChecked();
+    expect(calls.find((c) => c.url.endsWith("/items/update-versions"))?.body).toEqual({ itemIds: [I1] });
+    expect(calls.filter((c) => c.url === URL).map((c) => c.body)).toEqual([null, { seed: 42 }]);
+    await waitFor(() =>
+      expect(screen.queryByText("Version 2 of this question is published")).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText("The evaluation changed since this preview started")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Hand in" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Hand in" }));
+    await screen.findByRole("heading", { name: "Preview correction" });
+    // The replaced question's answer is gone; the other one is handed in.
+    expect(calls.find((c) => c.url === `${URL}/grade`)?.body).toEqual({
+      seed: 42,
+      answers: { [I2]: { selected: [0] } },
+    });
+    open.mockRestore();
+  });
+
+  it("offers nothing that would be refused once students have taken it, and no Edit without the pool's right", async () => {
+    mockFetch({
+      [`POST ${URL}`]: () => ok(preview(42)),
+      [DETAIL]: () =>
+        ok(
+          detailOf([row(I1, "q1", { latestVersionNumber: 2 }), row(I2, "q2")], {
+            attemptCount: 3,
+            editable: false,
+            editableQuestionIds: ["q2"],
+          }),
+        ),
+    });
+    renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
+    expect(await screen.findByText(/re-grade the question from the grading panel/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Use the new version" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit question" })).not.toBeInTheDocument();
+  });
+
+  it("offers to restart when the evaluation changed under the walk", async () => {
+    mockFetch({
+      [`POST ${URL}`]: () => ok(preview(42)),
+      [DETAIL]: () =>
+        ok(detailOf([row(I1, "q1"), row(I2, "q2"), row("33333333-3333-4333-8333-333333333333", "q3")])),
+    });
+    renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
+    expect(await screen.findByText("The evaluation changed since this preview started")).toBeInTheDocument();
   });
 });

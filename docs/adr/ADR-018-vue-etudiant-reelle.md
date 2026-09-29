@@ -481,3 +481,50 @@ it with the next change to the lobby.
    walking their own quiz is meant to be counted (the ring's own comment in
    `enrolledCount`); the preview must simply not connect.
 3. **A screenshot or a drawn copy.** It drifts from the page it depicts.
+
+## Addendum (2026-09-29, sixth) — fixing a question without losing the walk
+
+### Context
+
+A teacher walking the preview (fourth addendum) finds a wrong question. The
+answers live in the tab only (decision 3 of that addendum), so leaving it to
+fix the question throws the walk away, and restarting draws another order.
+
+### Decision
+
+1. **"Edit question" opens another tab.** The banner of the walk carries a
+   secondary "Edit question" for the question on screen, shown only when the
+   teacher may edit it (`EvaluationDetail.editableQuestionIds`, issue #127).
+   It opens the question's editor — its DRAFT, like the item list's Edit —
+   in a new tab; the walk stays where it was.
+2. **A seed may be given back.** `POST /evaluations/:id/preview` takes an
+   optional `{ seed }` (`PreviewStartBody`). Without one it draws a fresh
+   seed as before; with one it rebuilds the walk of that seed from the items
+   as they are now. This changes nothing to the trust model: `grade`, `run`
+   and `simulate` already take a seed from the browser, and a seed is only a
+   draw. The answer also carries `versions` (item id → frozen version number).
+3. **"Use the new version" swaps one question.** The walk reads the
+   evaluation's detail (refetched on focus and on the refresh hints of a
+   publish). When the question on screen has a newer published version and
+   the item list is editable (`itemListLock` is null), the notice offers to
+   use it: the item moves to it through F-EVAL-03's own route, the walk is
+   rebuilt from its seed, and that question alone is replaced in the player
+   (`replace` in `playerReducer`), its answer dropped. The order, the
+   shuffles and the other answers stay. Where the list is frozen, the notice
+   says why — attempts exist (re-grade from the grading panel, F-GRADE-06) or
+   the evaluation has been opened — and offers nothing that would be refused.
+4. **An evaluation that changed otherwise asks for a restart.** When the
+   items, or their versions, differ from the walk's `versions` in any other
+   way (a colleague added, removed or updated one), the grading would rebuild
+   content the teacher did not answer; the walk says so and offers Restart.
+5. **The countdown keeps running** while the teacher edits in the other tab,
+   as it would for a student (product owner's choice).
+
+### Rejected alternatives
+
+1. **Reusing `GET /preview/items/:itemId`.** It renders with seed 0 and no
+   shuffle (issue #127): not the question the walk shows.
+2. **Editing in the same tab.** The walk would be lost; keeping it in the
+   browser's storage is a separate change.
+3. **Showing the latest published version in the preview whatever the
+   evaluation froze.** The preview would then show what no student gets.

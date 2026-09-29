@@ -293,6 +293,34 @@ describe("starting a preview", () => {
     expect(again.seed).not.toBe(preview.seed);
   });
 
+  it("reloads a walk from its seed, with an updated item at its new version (ADR-018, 6th)", async () => {
+    const w = await world();
+    const first = (await post(w.url, teacher.headers)).json() as EvaluationPreview;
+    expect(first.versions[w.mcqItemId]).toBe(1);
+    expect(Object.keys(first.versions).sort()).toEqual(first.view.items.map((i) => i.id).sort());
+
+    const question = (await evaluationService.joinedItem(db, w.evaluationId, w.mcqItemId))!.question;
+    await poolService.putDraft(db, question, {
+      config: { ...mcqConfig, prompt: "A NEWER PROMPT" },
+      explanation: "",
+    });
+    await poolService.publishQuestion(db, question, { userId: teacher.id });
+    const updated = await post(`/app/api/evaluations/${w.evaluationId}/items/update-versions`, teacher.headers, {
+      itemIds: [w.mcqItemId],
+    });
+    expect(updated.statusCode).toBe(200);
+
+    const again = (await post(w.url, teacher.headers, { seed: first.seed })).json() as EvaluationPreview;
+    expect(again.seed).toBe(first.seed);
+    expect(again.versions).toEqual({ ...first.versions, [w.mcqItemId]: 2 });
+    // Same order; every other item exactly as the walk showed it.
+    expect(again.view.items.map((i) => i.id)).toEqual(first.view.items.map((i) => i.id));
+    for (const item of again.view.items.filter((i) => i.id !== w.mcqItemId)) {
+      expect(JSON.stringify(item)).toBe(JSON.stringify(first.view.items.find((i) => i.id === item.id)));
+    }
+    expect(JSON.stringify(again.view.items.find((i) => i.id === w.mcqItemId))).toContain("A NEWER PROMPT");
+  });
+
   it("counts down the announced window of a common-deadline evaluation", async () => {
     const w = await world();
     const row = await reload(db, w.evaluationId);

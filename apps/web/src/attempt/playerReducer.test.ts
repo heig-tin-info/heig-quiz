@@ -232,3 +232,25 @@ describe("playerReducer: won't answer and the review flag (issue #89)", () => {
     expect(playerReducer(done, { type: "flag", itemId: "i1", flagged: true })).toBe(done);
   });
 });
+
+describe("playerReducer: replacing one item (ADR-018, sixth addendum)", () => {
+  it("swaps the content in, drops that answer only, and keeps the place", () => {
+    let state = load(
+      view("free", [item(1, { answer: { selected: [0] } }), item(2, { answer: { selected: [1] } })], "i1"),
+    );
+    state = playerReducer(state, { type: "flag", itemId: "i1", flagged: true });
+    const next = playerReducer(state, {
+      type: "replace",
+      item: item(1, { student: { prompt: "new" }, points: 3 }),
+    });
+    expect(next.index).toBe(0);
+    expect(next.items[0]).toMatchObject({ student: { prompt: "new" }, points: 3, flagged: true, generation: 1 });
+    expect(next.answers).toEqual({ i2: { selected: [1] } });
+    expect(next.items[1]).toBe(state.items[1]);
+  });
+
+  it("ignores an item the walk does not hold", () => {
+    const state = load(view("free", [item(1)]));
+    expect(playerReducer(state, { type: "replace", item: item(9) })).toBe(state);
+  });
+});

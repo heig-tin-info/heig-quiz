@@ -37,6 +37,7 @@ import type { Route } from "../router";
 import { PlayerView } from "../student/Player";
 import { Alert, Button, Card, EmptyState, QueryError, Spinner } from "../ui";
 import { PreviewCorrectionView } from "./PreviewCorrection";
+import { usePreviewEdit } from "./usePreviewEdit";
 import { usePreviewSession } from "./usePreviewSession";
 
 interface Walk {
@@ -213,6 +214,7 @@ function PreviewWalk({
     }
     onRestart();
   };
+  const edit = usePreviewEdit({ evaluationId, preview: walk.preview, session, onRestart });
 
   return (
     <>
@@ -226,13 +228,17 @@ function PreviewWalk({
               icon={Eye}
               title={t("preview.banner")}
               action={
-                <Button variant="secondary" size="sm" onClick={() => void askRestart()} disabled={restarting}>
-                  <RotateCcw /> {t("preview.restart")}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {edit.editButton}
+                  <Button variant="secondary" size="sm" onClick={() => void askRestart()} disabled={restarting}>
+                    <RotateCcw /> {t("preview.restart")}
+                  </Button>
+                </div>
               }
             >
               {t("preview.bannerBody")}
             </Alert>
+            {edit.notice}
             {gradeFailed ? (
               <Alert tone="danger" title={t("preview.gradeFailed")}>
                 {t("preview.gradeFailedBody")}

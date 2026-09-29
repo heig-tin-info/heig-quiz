@@ -39,6 +39,12 @@ export interface PlayerItem {
   student: unknown;
   /** The server's own verdict when the view was built. */
   serverLocked: boolean;
+  /**
+   * Bumped by `replace`: the question's content changed under the same item
+   * id, and the player keys its question on both so the type's component
+   * starts over rather than keeping state built for the old content.
+   */
+  generation?: number;
 }
 
 export interface PlayerState {
@@ -62,7 +68,13 @@ export type PlayerAction =
   | { type: "adopt"; itemId: string; payload: unknown }
   | { type: "done"; itemId: string; done: boolean }
   | { type: "skip"; itemId: string; skipped: boolean }
-  | { type: "flag"; itemId: string; flagged: boolean };
+  | { type: "flag"; itemId: string; flagged: boolean }
+  /**
+   * The teacher's preview only (ADR-018, sixth addendum): one item moved to
+   * a newer version of its question. Its content is replaced and its answer
+   * dropped — written for another question; everything else stays.
+   */
+  | { type: "replace"; item: AttemptItem };
 
 export const emptyPlayerState: PlayerState = {
   items: [],
@@ -205,6 +217,22 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
     case "flag":
       if (isLocked(state, action.itemId)) return state;
       return patchItem(state, action.itemId, { flagged: action.flagged });
+    case "replace": {
+      const { id } = action.item;
+      if (!state.items.some((item) => item.id === id)) return state;
+      const items = state.items.map((item) =>
+        item.id === id
+          ? {
+              ...toItem(action.item),
+              markedDone: item.markedDone,
+              flagged: item.flagged,
+              generation: (item.generation ?? 0) + 1,
+            }
+          : item,
+      );
+      const { [id]: _dropped, ...answers } = state.answers;
+      return { ...state, items, answers };
+    }
     case "done": {
       const items = state.items.map((item) =>
         item.id === action.itemId ? { ...item, markedDone: action.done } : item,

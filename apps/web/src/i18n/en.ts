@@ -2497,6 +2497,20 @@ export const en = {
   "preview.restart.title": "Restart the preview?",
   "preview.restart.message":
     "Your answers are thrown away and a new random order is drawn.",
+  "preview.edit": "Edit question",
+  "preview.edit.hint": "Opens the question's draft in a new tab. Publish it, then come back: this preview keeps your answers.",
+  "preview.newVersion.title": "Version {n} of this question is published",
+  "preview.newVersion.body":
+    "The evaluation still uses version {n}. Using the new version updates the evaluation and reloads this question, without its answer; your other answers stay.",
+  "preview.newVersion.use": "Use the new version",
+  "preview.newVersion.attempts":
+    "Students have already taken this evaluation, so its questions are frozen. To apply the new version to their answers, re-grade the question from the grading panel.",
+  "preview.newVersion.opened":
+    "The evaluation has been opened, so its questions are frozen: the new version cannot replace this one.",
+  "preview.newVersion.failed": "The question could not be moved to its new version.",
+  "preview.changed.title": "The evaluation changed since this preview started",
+  "preview.changed.body":
+    "Questions were added, removed or moved to another version. Restart the preview to walk the evaluation as it is now.",
   "preview.gradeFailed": "The grading failed",
   "preview.gradeFailedBody": "Your answers are still here. Try handing in again.",
   "preview.empty.title": "This evaluation has no questions yet",

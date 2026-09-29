@@ -351,7 +351,7 @@ export function PlayerView({
             />
             <Card className="p-5 sm:p-6">
               <PlayerQuestion
-                key={item.id}
+                key={`${item.id}:${item.generation ?? 0}`}
                 itemId={item.id}
                 type={item.type}
                 student={item.student}
