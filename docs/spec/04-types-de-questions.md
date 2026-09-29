@@ -307,7 +307,7 @@ config:
       source: { kind: sine, amplitude: 1, frequencyHz: 1000, offset: 0 }
       sourceOhms: 50         # series resistance of the source; 0 = ideal
       load: { kind: resistor, ohms: 10000 }    # or { kind: open }, { kind: capacitor, farads: 1e-9 }
-      analysis: { stopMs: 5, skipMs: 1, points: 500 }
+      analysis: { stopMs: 5, skipMs: 1, points: 500 }    # a transient: `kind: tran` is the default
       points: 1
       visible: true
     - name: "10 kHz"           # same shape; visible: false = run at grading only
@@ -315,10 +315,16 @@ config:
       load: { kind: open }
       points: 1
       visible: false
+    - name: "Bode"             # an AC sweep (ADR-040): the source is the DC bias
+      source: { kind: dc, volts: 0 }
+      load: { kind: open }
+      analysis: { kind: ac, fStartHz: 10, fStopHz: 100000, pointsPerDecade: 20 }
+      points: 1
   reference: { components: [...], wires: [...] }     # the teacher's own circuit: the key
   grading:
     mode: simulation         # manual (default), simulation, llm (phase 2)
-    tolerance: 0.05          # simulation: the per-stimulus pass threshold
+    tolerance: 0.05          # simulation, transient stimuli: the pass threshold
+    bode: { magDb: 1, floorDb: 60, phaseDeg: 10 }    # simulation, AC stimuli: the envelope
     rubric: "..."            # manual and llm: the criteria
   showExpected: false        # overlay the reference's curve on the visible stimuli
   simulationsPerMinute: 10   # N-SEC-07, the budget of the Simulate button
@@ -327,18 +333,18 @@ config:
 - **The palette** lists the kinds the student may place, out of the sixteen of the library (R, C, L, four diodes, four bipolars and MOSFETs, an op-amp, and the `GND`, `VCC`, `VEE` terminals). `maxComponents` caps what is placed: a terminal names a net, it is not a part, so it does not count.
 - **Supplies**: `vcc` and `vee` publish a rail at the voltage the teacher wrote; `null` removes the symbol from the palette. The op-amp is ideal and clamped to those rails.
 - **`commonGround`** (default on) makes `in-` and `out-` the reference node. Off, they are two independent nets the student has to wire, and a `GND` symbol is what names the reference.
-- **A stimulus is a test case**: a name, a source (`dc`, `sine`, `pulse`, `step`), a source resistance, a load (`open`, `resistor`, `capacitor`), a transient window (`stopMs`, `skipMs` to drop the settling, `points` samples kept), points, and `visible`. A hidden stimulus is only run at grading, exactly like a hidden case of a `code` question (docs/06 Q8 applies to its name).
+- **A stimulus is a test case**: a name, a source (`dc`, `sine`, `pulse`, `step`), a source resistance, a load (`open`, `resistor`, `capacitor`), an analysis, points, and `visible`. The analysis is either a transient window (`kind: tran`, the default: `stopMs`, `skipMs` to drop the settling, `points` samples kept) or an AC sweep (`kind: ac`, ADR-040: `fStartHz` to `fStopHz`, 0.01 Hz to 1 GHz, `pointsPerDecade` 5 to 200, at most 2000 points). An AC stimulus needs a `dc` source, whose `volts` is the bias the circuit is linearised around (`circuit.ac_needs_dc_source` otherwise): the EMF is `DC <volts> AC 1`, and what is measured is the Bode plot of `v(out)` against it, the source resistance and the load included. A hidden stimulus is only run at grading, exactly like a hidden case of a `code` question (docs/06 Q8 applies to its name).
 - **The reference** is a schematic, not a netlist and not a waveform: the teacher draws the circuit they expect. A `simulation` grading without a reference, or without a stimulus, is refused at publication (`circuit.simulation_needs_reference`, `circuit.simulation_needs_stimulus`).
 - **Three grading modes**:
     - `manual` (default): the teacher reads the schematic — and, when there are stimuli, the simulated curves — and grades by hand;
     - `simulation`: both circuits are simulated under every stimulus and the OUTPUT WAVEFORMS are compared (below);
     - `llm`: phase 2, the netlist and the rubric go to the LLM service.
-- **The grading rule of `simulation`** (ADR-019): the student's schematic and the reference are each turned into a SPICE netlist, run through ngspice for each stimulus, and `v(out)` is compared sample by sample. A stimulus passes when the normalised RMS distance between the two output voltages is at or under `tolerance` times the reference's peak-to-peak swing; its points are then earned whole, and the total is the sum of the stimuli that passed. **What is compared is behaviour, never topology**: a circuit drawn differently, with merged resistors or another ordering, that produces the same output is a correct answer.
+- **The grading rule of `simulation`** (ADR-019): the student's schematic and the reference are each turned into a SPICE netlist, run through ngspice for each stimulus, and `v(out)` is compared sample by sample. A TRANSIENT stimulus passes when the normalised RMS distance between the two output voltages is at or under `tolerance` times the reference's peak-to-peak swing. An AC stimulus passes when the student's Bode plot stays, at EVERY frequency of the sweep, inside an envelope around the reference's (ADR-040): with the floor at the reference's peak minus `bode.floorDb`, a frequency where the reference is at or above the floor needs the magnitudes within `bode.magDb` and — unless `bode.phaseDeg` is `null` — the phases, compared modulo 360°, within `bode.phaseDeg`; below the floor the student's output only has to stay under the floor plus `bode.magDb`, and the phase is not compared. The envelope is checked on the full ngspice table, both runs sharing one frequency grid; the details store the decimated curves and the worst gap (`envelope: { worstDb, worstDeg, outside }`, `error` null). Either way a stimulus's points are then earned whole, and the total is the sum of the stimuli that passed. **What is compared is behaviour, never topology**: a circuit drawn differently, with merged resistors or another ordering, that produces the same output is a correct answer.
 - **When the REFERENCE fails to simulate**, or the runner is unreachable, the grading is stored `proposed` with the reason, never `validated`: an unrunnable question is the teacher's problem, not a zero for the student. A student circuit that fails to simulate is a failed stimulus with its machine reason (`floating_pin`, `spice_failed`), which is information, not an incident.
 - **`showExpected`** overlays the reference's output on the student's plot, for the visible stimuli only. It needs a reference, and it is what decides whether the reference's curve may travel in a grading's details at all.
 - **Answer**: `{ schematic }` — the components with their position, orientation, designator and value, and the wires with their routed polyline. **No netlist is ever stored, and none ever comes from the browser**: it is rebuilt server-side from the stored schematic and the stimulus, every time (invariant 14). Values are parsed case-sensitively, because SPICE reads `1M` as milli and `1Meg` as mega.
-- **Player button**: "Simulate" runs the student's own circuit under the VISIBLE stimuli and plots `v(in)`, `v(out)` and the load current, with the reference's curve beside them when `showExpected` is on. It goes through `POST /app/api/attempts/:id/simulate`, is budgeted by `simulationsPerMinute` per attempt, and is refused once the attempt is closed like any other write. The button is absent when the question has no visible stimulus.
-- **What `toStudent` strips** (invariant 4): the reference, the hidden stimuli (only their count and their total points remain), the tolerance, the rubric and the grading mode. What stays is what the student needs to draw and to simulate: the prompt, the palette, the supplies, `commonGround`, the visible stimuli and the budget.
+- **Player button**: "Simulate" runs the student's own circuit under the VISIBLE stimuli and plots `v(in)`, `v(out)` and the load current — or, for an AC stimulus, the Bode plot of `v(out)`, magnitude above phase on a logarithmic frequency axis — with the reference's curve beside them when `showExpected` is on. It goes through `POST /app/api/attempts/:id/simulate`, is budgeted by `simulationsPerMinute` per attempt, and is refused once the attempt is closed like any other write. The button is absent when the question has no visible stimulus.
+- **What `toStudent` strips** (invariant 4): the reference, the hidden stimuli (only their count and their total points remain), the tolerance, the Bode envelope (`magDb`, `floorDb`, `phaseDeg`: the whole grading block goes), the rubric and the grading mode. A visible AC stimulus keeps its sweep, which the Simulate button needs. What stays is what the student needs to draw and to simulate: the prompt, the palette, the supplies, `commonGround`, the visible stimuli and the budget.
 - **The key** (`toSolution`) is the reference schematic alone: the stimuli and the grading block are no part of it (ADR-037).
 - **Points**: the sum of the stimuli's points; `defaultPoints` proposes it.
 
