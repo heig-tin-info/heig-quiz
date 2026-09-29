@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import { applyParsed } from "../apply.js";
 import { EXAMPLES } from "../examples.js";
 import { estimateText } from "../geometry.js";
-import { DIAGRAM_KINDS, KINDS, type DiagramKind } from "../kinds.js";
-import { parseText, toText } from "./index.js";
+import { DIAGRAM_KINDS, type DiagramKind } from "../kinds.js";
+import { CODECS, toText } from "./index.js";
+import { MAX_LINE } from "./parsed.js";
 
-const TEXT_KINDS = DIAGRAM_KINDS.filter((k) => KINDS[k].text !== null);
+const TEXT_KINDS = DIAGRAM_KINDS.filter((k) => CODECS[k] !== null);
+const parseText = (text: string, kind: DiagramKind) => CODECS[kind]!.read(text);
 
 describe("the text round trip", () => {
   it.each(TEXT_KINDS)("%s: text → scene → the same text, no error", (kind) => {
@@ -138,5 +140,25 @@ describe("DOT", () => {
     expect(text).toMatch(/^digraph/);
     expect(text).toContain('A -> B [label="4", dir=none]');
     expect(text).toContain("A -> F\n");
+  });
+});
+
+describe("a crafted text stays cheap to read", () => {
+  /* each of these took seconds with the first patterns (ADR-041 review): every one must now read in milliseconds */
+  const cases: Array<[DiagramKind, string]> = [
+    ["er", `A {\n  a b${"  PK".repeat(300)}!\n}`],
+    ["class", `class A <<${" ".repeat(MAX_LINE - 20)}>!`],
+    ["graph", `${"a;".repeat(MAX_LINE / 2 - 1)}`],
+    ["flow", `a -- ${"x ".repeat(MAX_LINE / 2 - 10)}`],
+    ["class", `A ${"-".repeat(MAX_LINE - 10)} B`],
+  ];
+  it.each(cases)("%s", (kind, text) => {
+    const start = performance.now();
+    parseText(text, kind);
+    expect(performance.now() - start).toBeLessThan(200);
+  });
+
+  it("refuses a line longer than it reads", () => {
+    expect(parseText(`class ${"A".repeat(MAX_LINE)}`, "class").errors[0]?.code).toBe("unknown");
   });
 });

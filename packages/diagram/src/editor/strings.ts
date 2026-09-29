@@ -70,12 +70,14 @@ export const diagramStrings = {
   bodyHintEntity: "PK underlines the identifier.",
   initial: "Initial",
   accepting: "Accepting",
-  label: "Name",
+  "label.class": "Name",
+  "label.usecase": "Name",
   "label.state": "Label",
   "label.flow": "Label",
   "label.er": "Verb",
   "label.automaton": "Symbols",
   "label.graph": "Weight",
+  "label.free": "Name",
   multiplicity: "Multiplicity at {name}",
   cardinality: "Cardinality at {name}",
   /* the text pane, the teacher's */
@@ -95,6 +97,8 @@ export const diagramStrings = {
   "error.attribute": "an attribute is written “type name”, not “{text}”",
   "error.afterArrow": "an arrow needs an element after it",
   "error.directed": "an automaton is directed: -> expected",
+  /** Not a parse error: the text reads, but the diagram it says is too large for an answer. */
+  codeTooLarge: "This text makes a diagram larger than allowed: too many elements, links or elbows.",
   /* the status line */
   hintSelect: "Double-click the grid for an element, drag from a border to link",
   hintSelectFree: "Pick a shape or the brush",
@@ -123,6 +127,5 @@ export const toolKey = (tool: PlaceTool): keyof DiagramStrings => `tool.${tool}`
 export const linkKey = (type: LinkType): keyof DiagramStrings => `link.${type}`;
 export const errorKey = (code: ParseErrorCode): keyof DiagramStrings => `error.${code}`;
 
-/** The name field of a link, by kind: a verb, a label, symbols, a weight. */
-export const labelKey = (kind: DiagramKind): keyof DiagramStrings =>
-  kind === "state" || kind === "flow" || kind === "er" || kind === "automaton" || kind === "graph" ? `label.${kind}` : "label";
+/** The name field of a link, by kind: a name, a label, a verb, symbols, a weight. */
+export const labelKey = (kind: DiagramKind): keyof DiagramStrings => `label.${kind}`;

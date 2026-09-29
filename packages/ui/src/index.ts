@@ -71,3 +71,4 @@ export { patchAt, removeAt, RowHead, RowList, RowListHeader } from "./rows.js";
 export { AdvancedDisclosure, EditorSection, PromptSection } from "./sections.js";
 export { PromptField } from "./PromptField.js";
 export { pointsOrDash, ScoreHeader, Verdict, verdictTone } from "./verdict.js";
+export { useHistory, type History } from "./history.js";

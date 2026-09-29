@@ -1,7 +1,8 @@
 /**
- * Undo / redo for a CONTROLLED editor.
+ * Undo / redo for a CONTROLLED editor: the circuit canvas and the diagram
+ * editor.
  *
- * The editor does not own the schematic — the host does — so the history is a
+ * The editor does not own its value — the host does — so the history is a
  * stack of previous VALUES, and undoing is just `onChange(previous)`. That
  * keeps one source of truth: there is no internal copy that could drift from
  * what the host stored, and a value the host pushes in from outside simply

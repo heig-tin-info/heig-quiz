@@ -6,9 +6,7 @@
  */
 import { holds, isSeparator, rectOf, type Measure } from "../geometry.js";
 import type { LinkType, Scene } from "../scene.js";
-import { emptyParsed, isIdentifier, unquote, type Parsed, type ParsedNode } from "./parsed.js";
-
-const quote = (s: string): string => (isIdentifier(s) ? s : `"${s.replace(/"/g, "'")}"`);
+import { NodeTable, emptyParsed, isIdentifier, linkEnds, quote, tooLong, unquote, type Parsed, type ParsedNode } from "./parsed.js";
 
 const ARROW_OUT: Readonly<Partial<Record<LinkType, string>>> = {
   assoc: "--",
@@ -23,24 +21,17 @@ const ARROW_OUT: Readonly<Partial<Record<LinkType, string>>> = {
 };
 
 export function classToText(scene: Scene): string {
-  const byId = new Map(scene.nodes.map((n) => [n.id, n] as const));
   let o = "@startuml\n";
   for (const n of scene.nodes) {
-    const name = n.name ?? "";
-    const kw =
-      n.stereo === "interface" ? "interface" : n.stereo === "enumeration" ? "enum" : n.abstract ? "abstract class" : "class";
+    const kw = n.stereo === "interface" ? "interface" : n.stereo === "enumeration" ? "enum" : n.abstract ? "abstract class" : "class";
     const st = n.stereo && n.stereo !== "interface" && n.stereo !== "enumeration" ? ` <<${n.stereo}>>` : "";
-    o += `${kw} ${quote(name)}${st} {\n`;
+    o += `${kw} ${quote(n.name ?? "")}${st} {\n`;
     for (const line of n.body ?? []) o += `  ${isSeparator(line) ? "--" : line}\n`;
     o += "}\n";
   }
   if (scene.links.length > 0) o += "\n";
-  for (const l of scene.links) {
-    const a = byId.get(l.a);
-    const b = byId.get(l.b);
-    if (!a || !b) continue;
-    o += `${quote(a.name ?? "")}${l.ma ? ` "${l.ma}"` : ""} ${ARROW_OUT[l.type] ?? "--"}${l.mb ? ` "${l.mb}"` : ""} ${quote(b.name ?? "")}${l.name ? ` : ${l.name}` : ""}\n`;
-  }
+  for (const [l, a, b] of linkEnds(scene))
+    o += `${quote(a.name ?? "")}${l.ma ? ` "${l.ma.replace(/"/g, "'")}"` : ""} ${ARROW_OUT[l.type] ?? "--"}${l.mb ? ` "${l.mb.replace(/"/g, "'")}"` : ""} ${quote(b.name ?? "")}${l.name ? ` : ${l.name}` : ""}\n`;
   return `${o}@enduml\n`;
 }
 
@@ -69,26 +60,31 @@ export function usecaseToText(scene: Scene, measure: Measure): string {
   for (const n of scene.nodes) if (n.t !== "system" && !inside.has(n.id)) o += decl(n);
   for (const { s, members } of systems) o += `rectangle ${quote(s.name ?? "")} {\n${members.map((n) => `  ${decl(n)}`).join("")}}\n`;
   if (scene.links.length > 0) o += "\n";
-  for (const l of scene.links) {
-    const a = alias.get(l.a);
-    const b = alias.get(l.b);
-    if (!a || !b) continue;
+  for (const [l, a, b] of linkEnds(scene)) {
     const label = l.type === "incl" ? " : <<include>>" : l.type === "ext" ? " : <<extend>>" : l.name ? ` : ${l.name}` : "";
-    o += `${a} ${ARROW_OUT[l.type] ?? "--"} ${b}${label}\n`;
+    o += `${alias.get(a.id) ?? ""} ${ARROW_OUT[l.type] ?? "--"} ${alias.get(b.id) ?? ""}${label}\n`;
   }
   return `${o}@enduml\n`;
 }
 
 const NAME = String.raw`"[^"]+"|\([^)]+\)|:[^:]+:|[\p{L}\w$]+`;
+const ALIAS = String.raw`(?:\s+as\s+([\p{L}\w$]+))?`;
 /* a leading `o` only before a dash or a dot, a trailing one only before a space or a quote */
 const ARROW = String.raw`(?:<\|?|\*|o(?=[-.]))?[-.]+(?:(?:up|down|left|right|u|d|l|r)[-.]+)?(?:\|?>|\*|o(?=[\s"]))?`;
 const LINK_RE = new RegExp(`^(${NAME})\\s*(?:"([^"]*)"\\s*)?(${ARROW})\\s*(?:"([^"]*)"\\s*)?(${NAME})\\s*(?::\\s*(.*))?$`, "u");
+/* the stereotype is `<<…>>` with no `>` inside: one way to read it, whatever the spaces */
 const CLASS_RE =
-  /^(abstract\s+class|abstract|class|interface|enum)\s+("[^"]+"|[\p{L}\w$]+)(?:\s+as\s+[\p{L}\w$]+)?\s*(?:<<\s*(.+?)\s*>>)?\s*(\{)?\s*(\})?$/u;
-const ACTOR_RE = new RegExp(`^actor\\s+(${NAME})(?:\\s+as\\s+([\\p{L}\\w$]+))?(?:\\s*<<[^>]*>>)?$`, "u");
-const USECASE_RE = new RegExp(`^usecase\\s+(${NAME})(?:\\s+as\\s+([\\p{L}\\w$]+))?$`, "u");
+  /^(abstract\s+class|abstract|class|interface|enum)\s+("[^"]+"|[\p{L}\w$]+)(?:\s+as\s+[\p{L}\w$]+)?\s*(?:<<([^>]*)>>)?\s*(\{)?\s*(\})?$/u;
 const SYSTEM_RE = new RegExp(`^(?:rectangle|package)\\s+(${NAME})(?:\\s+as\\s+[\\p{L}\\w$]+)?\\s*\\{$`, "u");
 const IGNORED = /^(@startuml|@enduml|skinparam\b|hide\b|show\b|title\b|left to right direction|top to bottom direction)/i;
+
+/** The four ways a use case diagram declares an actor or a use case: the pattern, the type, and how to read the name. */
+const DECLARATIONS: ReadonlyArray<readonly [RegExp, "actor" | "usecase", (s: string) => string]> = [
+  [new RegExp(`^actor\\s+(${NAME})${ALIAS}(?:\\s*<<[^>]*>>)?$`, "u"), "actor", (s) => unquote(s).replace(/^:(.*):$/, "$1")],
+  [new RegExp(`^:([^:]+):${ALIAS}$`, "u"), "actor", (s) => s.trim()],
+  [new RegExp(`^usecase\\s+(${NAME})${ALIAS}$`, "u"), "usecase", (s) => unquote(s).replace(/^\((.*)\)$/, "$1")],
+  [new RegExp(`^\\(([^)]+)\\)${ALIAS}$`, "u"), "usecase", (s) => s.trim()],
+];
 
 /** A normalised arrow, the type it means, and whether it points from right to left. */
 const ARROW_IN: Readonly<Record<string, readonly [LinkType, boolean]>> = {
@@ -108,21 +104,28 @@ const ARROW_IN: Readonly<Record<string, readonly [LinkType, boolean]>> = {
   "*--": ["comp", true],
 };
 
+/**
+ * What an arrow means in a use case diagram: a dotted one is «include» or
+ * «extend» by its label, a navigable association is an association, and
+ * the arrows of a class diagram are refused.
+ */
+function usecaseLinkType(type: LinkType, label: string): LinkType | "dottedLabel" | "arrowKind" {
+  if (type === "dep") return /include/i.test(label) ? "incl" : /extend/i.test(label) ? "ext" : "dottedLabel";
+  if (type === "nav") return "assoc";
+  return type === "assoc" || type === "inh" ? type : "arrowKind";
+}
+
 export function parsePlantUml(text: string, kind: "class" | "usecase"): Parsed {
   const p = emptyParsed();
-  const keys = new Map<string, ParsedNode>();
+  const table = new NodeTable(p);
   const systems: ParsedNode[] = [];
   let cur: ParsedNode | null = null;
   const lines = text.split("\n");
 
   const declare = (t: ParsedNode["t"], name: string, alias?: string): ParsedNode => {
-    let n = keys.get(name) ?? (alias ? keys.get(alias) : undefined);
-    if (!n || n.t !== t) {
-      n = { t, name, ...(t === "class" ? { stereo: "", abstract: false, body: ["---"] } : {}) };
-      p.nodes.push(n);
-    }
-    keys.set(name, n);
-    if (alias) keys.set(alias, n);
+    const had = table.get(name) ?? (alias ? table.get(alias) : undefined);
+    const n = had && had.t === t ? had : table.add({ t, name, ...(t === "class" ? { stereo: "", abstract: false, body: ["---"] } : {}) });
+    table.add(n, name, ...(alias ? [alias] : []));
     const sys = systems[systems.length - 1];
     if (sys && t !== "system" && !n.sys) n.sys = sys;
     return n;
@@ -130,12 +133,13 @@ export function parsePlantUml(text: string, kind: "class" | "usecase"): Parsed {
   const ref = (tok: string): ParsedNode | null => {
     if (tok.startsWith("(")) return declare("usecase", tok.slice(1, -1).trim());
     if (tok.startsWith(":") && tok.length > 1) return declare("actor", tok.slice(1, -1).trim());
-    return keys.get(unquote(tok)) ?? (kind === "class" ? declare("class", unquote(tok)) : null);
+    return table.get(unquote(tok)) ?? (kind === "class" ? declare("class", unquote(tok)) : null);
   };
 
   lines.forEach((raw, i) => {
     const s = raw.trim();
     const line = i + 1;
+    if (tooLong(p, raw, line)) return;
     if (cur) {
       if (s === "}") cur = null;
       else if (s) cur.body?.push(/^(-{2,}|={2,}|\.{2,}|_{2,})$/.test(s) ? "---" : s);
@@ -152,7 +156,7 @@ export function parsePlantUml(text: string, kind: "class" | "usecase"): Parsed {
       const kw = (m[1] ?? "").replace(/\s+/g, " ");
       const n = declare("class", unquote(m[2] ?? ""));
       n.abstract = kw.startsWith("abstract");
-      n.stereo = kw === "interface" ? "interface" : kw === "enum" ? "enumeration" : (m[3] ?? "");
+      n.stereo = kw === "interface" ? "interface" : kw === "enum" ? "enumeration" : (m[3] ?? "").trim();
       if (m[4]) {
         n.body = [];
         if (!m[5]) cur = n;
@@ -160,33 +164,21 @@ export function parsePlantUml(text: string, kind: "class" | "usecase"): Parsed {
       return;
     }
     if (kind === "usecase") {
-      if ((m = ACTOR_RE.exec(s))) {
-        declare("actor", unquote(m[1] ?? "").replace(/^:(.*):$/, "$1"), m[2]);
-        return;
-      }
-      if ((m = /^:([^:]+):(?:\s+as\s+([\p{L}\w$]+))?$/u.exec(s))) {
-        declare("actor", (m[1] ?? "").trim(), m[2]);
-        return;
-      }
-      if ((m = USECASE_RE.exec(s))) {
-        declare("usecase", unquote(m[1] ?? "").replace(/^\((.*)\)$/, "$1"), m[2]);
-        return;
-      }
-      if ((m = /^\(([^)]+)\)(?:\s+as\s+([\p{L}\w$]+))?$/u.exec(s))) {
-        declare("usecase", (m[1] ?? "").trim(), m[2]);
-        return;
+      for (const [re, t, read] of DECLARATIONS) {
+        if ((m = re.exec(s))) {
+          declare(t, read(m[1] ?? ""), m[2]);
+          return;
+        }
       }
       if ((m = SYSTEM_RE.exec(s))) {
-        const sys: ParsedNode = { t: "system", name: unquote(m[1] ?? "") };
-        p.nodes.push(sys);
+        const sys = table.add({ t: "system", name: unquote(m[1] ?? "") });
         systems.push(sys);
         return;
       }
     }
     if ((m = LINK_RE.exec(s))) {
       const arrow = m[3] ?? "";
-      const norm = arrow.replace(/(up|down|left|right|u|d|l|r)/, "").replace(/-+/g, "--").replace(/\.+/g, "..");
-      const meaning = ARROW_IN[norm];
+      const meaning = ARROW_IN[arrow.replace(/(up|down|left|right|u|d|l|r)/, "").replace(/-+/g, "--").replace(/\.+/g, "..")];
       if (!meaning) {
         p.errors.push({ line, code: "arrow", text: arrow });
         return;
@@ -200,25 +192,18 @@ export function parsePlantUml(text: string, kind: "class" | "usecase"): Parsed {
       let ma = m[2] ?? "";
       let mb = m[4] ?? "";
       let label = (m[6] ?? "").trim();
-      let [type, reversed] = meaning;
-      if (reversed) {
+      let type: LinkType | "dottedLabel" | "arrowKind" = meaning[0];
+      if (meaning[1]) {
         [a, b] = [b, a];
         [ma, mb] = [mb, ma];
       }
       if (kind === "usecase") {
-        if (type === "dep") {
-          if (/include/i.test(label)) type = "incl";
-          else if (/extend/i.test(label)) type = "ext";
-          else {
-            p.errors.push({ line, code: "dottedLabel", text: arrow });
-            return;
-          }
-          label = "";
-        } else if (type === "nav") type = "assoc";
-        else if (type !== "assoc" && type !== "inh") {
-          p.errors.push({ line, code: "arrowKind", text: arrow });
-          return;
-        }
+        type = usecaseLinkType(meaning[0], label);
+        if (type === "incl" || type === "ext") label = "";
+      }
+      if (type === "dottedLabel" || type === "arrowKind") {
+        p.errors.push({ line, code: type, text: arrow });
+        return;
       }
       p.links.push({ a, b, type, ...(ma ? { ma } : {}), ...(mb ? { mb } : {}), ...(label ? { name: label } : {}) });
       return;

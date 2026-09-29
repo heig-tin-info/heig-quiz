@@ -30,6 +30,29 @@ describe("SceneSchema", () => {
   });
 });
 
+describe("the texts of a scene", () => {
+  const withName = (name: string) => ({ nodes: [{ id: "aaaa", t: "class", x: 0, y: 0, name }], links: [] });
+
+  it("refuses a new line or a control character, which would forge the text form", () => {
+    expect(SceneSchema.safeParse(withName("A")).success).toBe(true);
+    expect(SceneSchema.safeParse(withName("A\nclass Fake {")).success).toBe(false);
+    expect(SceneSchema.safeParse(withName("A\u0000")).success).toBe(false);
+  });
+
+  it("caps the characters of the whole scene, like an essay", () => {
+    const body = Array.from({ length: 40 }, () => "x".repeat(200));
+    const nodes = Array.from({ length: 7 }, (_, i) => ({ id: `c${String(i).padStart(3, "0")}`, t: "class", x: 0, y: 0, body }));
+    expect(SceneSchema.safeParse({ nodes: nodes.slice(0, 6), links: [] }).success).toBe(true);
+    expect(SceneSchema.safeParse({ nodes, links: [] }).success).toBe(false);
+  });
+
+  it("keeps each field on the types that use it", () => {
+    expect(SceneSchema.safeParse({ nodes: [{ id: "aaaa", t: "vertex", x: 0, y: 0, stereo: "x" }], links: [] }).success).toBe(false);
+    expect(SceneSchema.safeParse({ nodes: [{ id: "aaaa", t: "stroke", x: 0, y: 0 }], links: [] }).success).toBe(false);
+    expect(SceneSchema.safeParse({ nodes: [{ id: "aaaa", t: "rect", x: 0, y: 0, initial: true }], links: [] }).success).toBe(false);
+  });
+});
+
 describe("kindIssues", () => {
   it("finds nothing wrong in an example of its own kind", () => {
     for (const kind of DIAGRAM_KINDS) expect(kindIssues(EXAMPLES[kind], kind), kind).toEqual([]);

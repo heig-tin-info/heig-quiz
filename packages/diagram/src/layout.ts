@@ -17,8 +17,8 @@
  *   lines of one pair fanned into curves, a loop over an element that points
  *   to itself.
  */
-import { KINDS, type DiagramKind } from "./kinds.js";
-import { GRID, centerOf, rectOf, snap, type Measure, type Rect } from "./geometry.js";
+import { CONTAINERS, INK, KINDS, type DiagramKind } from "./kinds.js";
+import { FINAL_RADIUS, GRID, INITIAL_RADIUS, centerOf, rectOf, snap, type Bounds, type Measure, type Rect } from "./geometry.js";
 import type { DiagramLink, DiagramNode, Point, Scene } from "./scene.js";
 
 type XY = [number, number];
@@ -69,6 +69,19 @@ export function layout(scene: Scene, kind: DiagramKind, measure: Measure, draft?
   return { rects, routes };
 }
 
+/** The box holding every element and every line of a layout, labels included; `null` when empty. */
+export function bounds({ rects, routes }: Layout): Bounds | null {
+  if (rects.size === 0) return null;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const r of rects.values()) xs.push(r.x0, r.x1), ys.push(r.y0, r.y1);
+  for (const route of routes.values()) {
+    for (const [x, y] of route.pts) xs.push(x), ys.push(y);
+    if (route.label) xs.push(route.label.x), ys.push(route.label.y);
+  }
+  return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+}
+
 // ---------------------------------------------------------------------------
 // Anchors
 // ---------------------------------------------------------------------------
@@ -76,12 +89,22 @@ export function layout(scene: Scene, kind: DiagramKind, measure: Measure, draft?
 interface Want {
   key: string;
   toward: { x: number; y: number };
-  fixed: "t" | "r" | "b" | "l" | null;
-  pref: Array<"t" | "r" | "b" | "l">;
+  fixed: Side | null;
+  pref: Side[];
   strength: number;
 }
 
-function anchors(nodes: readonly DiagramNode[], links: readonly LinkLike[], rects: ReadonlyMap<string, Rect>): Map<string, End> {
+type Side = "t" | "r" | "b" | "l";
+
+/** Where an end sits on a side, `off` along it. */
+const ON_SIDE: Readonly<Record<Side, (r: Rect, off: number) => End>> = {
+  t: (r, off) => ({ x: r.x0 + off, y: r.y0, d: 3 }),
+  b: (r, off) => ({ x: r.x0 + off, y: r.y1, d: 1 }),
+  l: (r, off) => ({ x: r.x0, y: r.y0 + off, d: 2 }),
+  r: (r, off) => ({ x: r.x1, y: r.y0 + off, d: 0 }),
+};
+
+function anchors(types: ReadonlyMap<string, DiagramNode["t"]>, links: readonly LinkLike[], rects: ReadonlyMap<string, Rect>): Map<string, End> {
   const wants = new Map<string, Want[]>();
   const add = (id: string, w: Omit<Want, "pref" | "strength">): void => {
     const list = wants.get(id) ?? [];
@@ -100,7 +123,6 @@ function anchors(nodes: readonly DiagramNode[], links: readonly LinkLike[], rect
     if (rb) add(l.b as string, { key: `${l.id}:b`, toward: last ?? centerOf(ra), fixed: self ? "t" : null });
   }
 
-  const types = new Map(nodes.map((n) => [n.id, n.t] as const));
   const slots = new Map<string, Want[]>();
   for (const [id, list] of wants) {
     const r = rects.get(id);
@@ -113,7 +135,7 @@ function anchors(nodes: readonly DiagramNode[], links: readonly LinkLike[], rect
     for (const w of list) {
       const dx = (w.toward.x - c.x) / (r.w / 2);
       const dy = (w.toward.y - c.y) / (r.h / 2);
-      const scores: Array<["t" | "r" | "b" | "l", number]> = [
+      const scores: Array<[Side, number]> = [
         ["r", dx],
         ["b", dy],
         ["l", -dx],
@@ -134,24 +156,14 @@ function anchors(nodes: readonly DiagramNode[], links: readonly LinkLike[], rect
 
   const out = new Map<string, End>();
   for (const [k, list] of slots) {
-    const [id, side] = k.split(":") as [string, "t" | "r" | "b" | "l"];
+    const [id, side] = k.split(":") as [string, Side];
     const r = rects.get(id);
     if (!r) continue;
     const horizontal = side === "t" || side === "b";
     list.sort((p, q) => (horizontal ? p.toward.x - q.toward.x : p.toward.y - q.toward.y));
     const len = horizontal ? r.w : r.h;
     list.forEach((w, i) => {
-      const off = Math.min(len - GRID, Math.max(GRID, snap((len * (i + 1)) / (list.length + 1))));
-      out.set(
-        w.key,
-        side === "t"
-          ? { x: r.x0 + off, y: r.y0, d: 3 }
-          : side === "b"
-            ? { x: r.x0 + off, y: r.y1, d: 1 }
-            : side === "l"
-              ? { x: r.x0, y: r.y0 + off, d: 2 }
-              : { x: r.x1, y: r.y0 + off, d: 0 },
-      );
+      out.set(w.key, ON_SIDE[side](r, Math.min(len - GRID, Math.max(GRID, snap((len * (i + 1)) / (list.length + 1))))));
     });
   }
   return out;
@@ -273,7 +285,7 @@ function astar(ax: number, ay: number, ad: number, bx: number, by: number, bd: n
 }
 
 /** Drops the collinear vertices, so a straight run is two points. */
-export function simplify(points: readonly XY[]): XY[] {
+function simplify(points: readonly XY[]): XY[] {
   if (points.length < 3) return points.map((p) => [p[0], p[1]]);
   const first = points[0] as XY;
   const out: XY[] = [[first[0], first[1]]];
@@ -302,11 +314,11 @@ function markUsed(p: readonly XY[], used: Map<string, number>): void {
   }
 }
 
-/** A box blocks its border too; a system boundary and a freehand element block nothing. */
+/** A box blocks its border too; a container and a freehand element block nothing. */
 function blockedCells(nodes: readonly DiagramNode[], rects: ReadonlyMap<string, Rect>): Set<string> {
   const blocked = new Set<string>();
   for (const n of nodes) {
-    if (n.t === "system" || n.t === "stroke" || n.t === "line") continue;
+    if (CONTAINERS.has(n.t) || INK.has(n.t)) continue;
     const r = rects.get(n.id);
     if (!r) continue;
     for (let gx = Math.ceil(r.x0 / GRID); gx <= Math.floor(r.x1 / GRID); gx += 1)
@@ -321,57 +333,47 @@ function blockedCells(nodes: readonly DiagramNode[], rects: ReadonlyMap<string, 
 
 type Onto = (p: XY, r: Rect, d: number) => XY;
 
-const ontoEllipse: Onto = (p, r, d) => {
-  const a = r.w / 2;
-  const b = r.h / 2;
-  const cx = r.x0 + a;
-  const cy = r.y0 + b;
-  if (d === 1 || d === 3) {
-    const k = Math.sqrt(Math.max(0, 1 - ((p[0] - cx) / a) ** 2));
-    return [p[0], d === 3 ? cy - b * k : cy + b * k];
-  }
-  const k = Math.sqrt(Math.max(0, 1 - ((p[1] - cy) / b) ** 2));
-  return [d === 2 ? cx - a * k : cx + a * k, p[1]];
-};
-
-const ontoDiamond: Onto = (p, r, d) => {
-  const a = r.w / 2;
-  const b = r.h / 2;
-  const cx = r.x0 + a;
-  const cy = r.y0 + b;
-  if (d === 1 || d === 3) {
-    const k = 1 - Math.abs(p[0] - cx) / a;
-    return [p[0], d === 3 ? cy - b * k : cy + b * k];
-  }
-  const k = 1 - Math.abs(p[1] - cy) / b;
-  return [d === 2 ? cx - a * k : cx + a * k, p[1]];
-};
-
-const ontoCircle =
-  (radius: number): Onto =>
+/**
+ * An end slid along its axis onto a shape centred in its box. `profile(u)`
+ * is the half-height of the shape, as a fraction of the box's, at the
+ * fraction `u` of its half-width off the centre (and the other way round).
+ */
+const onto =
+  (profile: (u: number, r: Rect) => number): Onto =>
   (p, r, d) => {
-    const cx = r.x0 + r.w / 2;
-    const cy = r.y0 + r.h / 2;
+    const a = r.w / 2;
+    const b = r.h / 2;
+    const cx = r.x0 + a;
+    const cy = r.y0 + b;
     if (d === 1 || d === 3) {
-      const k = Math.sqrt(Math.max(0, radius * radius - (p[0] - cx) ** 2));
+      const k = b * profile(Math.abs(p[0] - cx) / a, r);
       return [p[0], d === 3 ? cy - k : cy + k];
     }
-    const k = Math.sqrt(Math.max(0, radius * radius - (p[1] - cy) ** 2));
+    const k = a * profile(Math.abs(p[1] - cy) / b, r);
     return [d === 2 ? cx - k : cx + k, p[1]];
   };
 
+const ellipse = onto((u) => Math.sqrt(Math.max(0, 1 - u * u)));
+const diamond = onto((u) => 1 - u);
+/** A circle of a given radius, centred in a box (a pseudo state's disc or ring). */
+const circle = (radius: number): Onto =>
+  onto((u, r) => {
+    const half = r.w / 2;
+    return Math.sqrt(Math.max(0, radius * radius - (u * half) ** 2)) / half;
+  });
+
 const ONTO: Partial<Record<DiagramNode["t"], Onto>> = {
-  usecase: ontoEllipse,
-  decision: ontoDiamond,
-  initial: ontoCircle(9),
-  final: ontoCircle(11),
+  usecase: ellipse,
+  decision: diamond,
+  initial: circle(INITIAL_RADIUS),
+  final: circle(FINAL_RADIUS),
 };
 
 function orthogonal(nodes: readonly DiagramNode[], links: readonly LinkLike[], rects: ReadonlyMap<string, Rect>): Map<string, Route> {
-  const ends = anchors(nodes, links, rects);
+  const types = new Map(nodes.map((n) => [n.id, n.t] as const));
+  const ends = anchors(types, links, rects);
   const blocked = blockedCells(nodes, rects);
   const used = new Map<string, number>();
-  const types = new Map(nodes.map((n) => [n.id, n.t] as const));
   const out = new Map<string, Route>();
   for (const l of links) {
     let a = ends.get(`${l.id}:a`);
@@ -415,16 +417,71 @@ function orthogonal(nodes: readonly DiagramNode[], links: readonly LinkLike[], r
 // Straight lines between circles
 // ---------------------------------------------------------------------------
 
+interface Circle {
+  x: number;
+  y: number;
+  r: number;
+}
+
+type Shape = Omit<Route, "a" | "b">;
+
+/** Where a line toward `t` leaves the circle. */
+const rim = (p: Circle, t: { x: number; y: number }): XY => {
+  const dx = t.x - p.x;
+  const dy = t.y - p.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return [p.x + (dx / len) * p.r, p.y + (dy / len) * p.r];
+};
+
+/** A loop over the top of a circle; the `i`-th of one circle a size larger. */
+function loopRoute(A: Circle, i: number): Shape {
+  const k = 1 + 0.45 * i;
+  const at = (deg: number): XY => [A.x + A.r * Math.cos((deg * Math.PI) / 180), A.y + A.r * Math.sin((deg * Math.PI) / 180)];
+  const a = at(-120);
+  const b = at(-60);
+  const c1: XY = [A.x - A.r * 1.3 * k, A.y - A.r * 2.5 * k];
+  const c2: XY = [A.x + A.r * 1.3 * k, A.y - A.r * 2.5 * k];
+  const top = 0.125 * a[1] + 0.375 * c1[1] + 0.375 * c2[1] + 0.125 * b[1];
+  return { path: `M${a[0]} ${a[1]}C${c1[0]} ${c1[1]} ${c2[0]} ${c2[1]} ${b[0]} ${b[1]}`, aim: [c2, b], pts: [a, [A.x, top], b], label: { x: A.x, y: top - 7 } };
+}
+
+/** Straight segments through the elbows, the label beside the middle one. */
+function viaRoute(A: Circle, B: Circle, via: readonly Point[]): Shape {
+  const pts: XY[] = [rim(A, via[0] as Point), ...via.map((v): XY => [v.x, v.y]), rim(B, via[via.length - 1] as Point)];
+  const i = Math.floor((pts.length - 1) / 2);
+  const p0 = pts[i] as XY;
+  const p1 = pts[i + 1] as XY;
+  const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1;
+  return { pts, label: { x: (p0[0] + p1[0]) / 2 - ((p1[1] - p0[1]) / len) * 12, y: (p0[1] + p1[1]) / 2 + ((p1[0] - p0[0]) / len) * 12 } };
+}
+
+/**
+ * One of the lines joining a pair: `k` is its offset from the straight one.
+ * The normal is taken in a fixed order of the pair (`forward`), so a→b and
+ * b→a bend to opposite sides.
+ */
+function fanRoute(A: Circle, B: Circle, k: number, forward: boolean): Shape {
+  const [p, q] = forward ? [A, B] : [B, A];
+  const len = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+  const nx = -(q.y - p.y) / len;
+  const ny = (q.x - p.x) / len;
+  if (k === 0) {
+    const a = rim(A, B);
+    const b = rim(B, A);
+    return { pts: [a, b], label: { x: (a[0] + b[0]) / 2 + nx * 12, y: (a[1] + b[1]) / 2 + ny * 12 } };
+  }
+  const c = { x: (A.x + B.x) / 2 + nx * 2 * k, y: (A.y + B.y) / 2 + ny * 2 * k };
+  const a = rim(A, c);
+  const b = rim(B, c);
+  const s = Math.sign(k);
+  const mid: XY = [0.25 * a[0] + 0.5 * c.x + 0.25 * b[0], 0.25 * a[1] + 0.5 * c.y + 0.25 * b[1]];
+  return { path: `M${a[0]} ${a[1]}Q${c.x} ${c.y} ${b[0]} ${b[1]}`, aim: [[c.x, c.y], b], pts: [a, mid, b], label: { x: mid[0] + nx * s * 12, y: mid[1] + ny * s * 12 } };
+}
+
 function straight(links: readonly LinkLike[], rects: ReadonlyMap<string, Rect>): Map<string, Route> {
-  const circle = (id: string): { x: number; y: number; r: number } | undefined => {
+  const circle = (id: string): Circle | undefined => {
     const r = rects.get(id);
     return r && { x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2, r: r.w / 2 };
-  };
-  const rim = (p: { x: number; y: number; r: number }, t: { x: number; y: number }): XY => {
-    const dx = t.x - p.x;
-    const dy = t.y - p.y;
-    const len = Math.hypot(dx, dy) || 1;
-    return [p.x + (dx / len) * p.r, p.y + (dy / len) * p.r];
   };
   const pair = (l: LinkLike): string => [l.a, l.b as string].sort().join("|");
   const groups = new Map<string, string[]>();
@@ -437,55 +494,20 @@ function straight(links: readonly LinkLike[], rects: ReadonlyMap<string, Rect>):
     const A = circle(l.a);
     const B = typeof l.b === "string" ? circle(l.b) : { x: l.b.x, y: l.b.y, r: 0 };
     if (!A || !B) continue;
-    let route: Omit<Route, "a" | "b">;
+    let shape: Shape;
     if (l.a === l.b && l.via.length === 0) {
-      /* a loop over the top, the next one a size larger */
       const i = loops.get(l.a) ?? 0;
       loops.set(l.a, i + 1);
-      const k = 1 + 0.45 * i;
-      const at = (deg: number): XY => [A.x + A.r * Math.cos((deg * Math.PI) / 180), A.y + A.r * Math.sin((deg * Math.PI) / 180)];
-      const a = at(-120);
-      const b = at(-60);
-      const c1: XY = [A.x - A.r * 1.3 * k, A.y - A.r * 2.5 * k];
-      const c2: XY = [A.x + A.r * 1.3 * k, A.y - A.r * 2.5 * k];
-      const top = 0.125 * a[1] + 0.375 * c1[1] + 0.375 * c2[1] + 0.125 * b[1];
-      route = { path: `M${a[0]} ${a[1]}C${c1[0]} ${c1[1]} ${c2[0]} ${c2[1]} ${b[0]} ${b[1]}`, aim: [c2, b], pts: [a, [A.x, top], b], label: { x: A.x, y: top - 7 } };
-    } else if (l.via.length > 0) {
-      const first = l.via[0] as Point;
-      const last = l.via[l.via.length - 1] as Point;
-      const pts: XY[] = [rim(A, first), ...l.via.map((v): XY => [v.x, v.y]), rim(B, last)];
-      const i = Math.floor((pts.length - 1) / 2);
-      const p0 = pts[i] as XY;
-      const p1 = pts[i + 1] as XY;
-      const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1;
-      route = { pts, label: { x: (p0[0] + p1[0]) / 2 - ((p1[1] - p0[1]) / len) * 12, y: (p0[1] + p1[1]) / 2 + ((p1[0] - p0[0]) / len) * 12 } };
-    } else {
-      /* the lines of one pair fan out around the straight one; the normal is
-         taken in a fixed order of the pair, so a→b and b→a bend apart */
+      shape = loopRoute(A, i);
+    } else if (l.via.length > 0) shape = viaRoute(A, B, l.via);
+    else {
       const g = typeof l.b === "string" ? groups.get(pair(l)) : undefined;
-      const n = g ? g.length : 1;
-      const k = g ? (g.indexOf(l.id) - (n - 1) / 2) * 30 : 0;
-      const [p, q] = typeof l.b === "string" && l.b < l.a ? [B, A] : [A, B];
-      const len = Math.hypot(q.x - p.x, q.y - p.y) || 1;
-      const nx = -(q.y - p.y) / len;
-      const ny = (q.x - p.x) / len;
-      if (k === 0) {
-        const a = rim(A, B);
-        const b = rim(B, A);
-        route = { pts: [a, b], label: { x: (a[0] + b[0]) / 2 + nx * 12, y: (a[1] + b[1]) / 2 + ny * 12 } };
-      } else {
-        const c = { x: (A.x + B.x) / 2 + nx * 2 * k, y: (A.y + B.y) / 2 + ny * 2 * k };
-        const a = rim(A, c);
-        const b = rim(B, c);
-        const s = Math.sign(k);
-        const mid: XY = [0.25 * a[0] + 0.5 * c.x + 0.25 * b[0], 0.25 * a[1] + 0.5 * c.y + 0.25 * b[1]];
-        route = { path: `M${a[0]} ${a[1]}Q${c.x} ${c.y} ${b[0]} ${b[1]}`, aim: [[c.x, c.y], b], pts: [a, mid, b], label: { x: mid[0] + nx * s * 12, y: mid[1] + ny * s * 12 } };
-      }
+      const k = g ? (g.indexOf(l.id) - (g.length - 1) / 2) * 30 : 0;
+      shape = fanRoute(A, B, k, !(typeof l.b === "string" && l.b < l.a));
     }
-    const f = route.pts[0] as XY;
-    const z = route.pts[route.pts.length - 1] as XY;
-    out.set(l.id, { ...route, a: { x: f[0], y: f[1], d: -1 }, b: { x: z[0], y: z[1], d: -1 } });
+    const f = shape.pts[0] as XY;
+    const z = shape.pts[shape.pts.length - 1] as XY;
+    out.set(l.id, { ...shape, a: { x: f[0], y: f[1], d: -1 }, b: { x: z[0], y: z[1], d: -1 } });
   }
   return out;
 }
-

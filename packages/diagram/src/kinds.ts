@@ -3,10 +3,12 @@
  *
  * A kind is data: the element types it may hold, the tools of its toolbox
  * (a tool may place a type with a preset), its link types, how its lines are
- * drawn, its text form, and where an element added through the text lands.
- * Adding a kind is an entry here, its codec, its icons and its strings.
+ * drawn, where an element added through the text lands, and its limits. Its
+ * text form is its entry in `codecs/index.ts`. Adding a kind is an entry
+ * here, its codec, its icons and its strings.
  */
 import {
+  MAX_NODES,
   MAX_NODES_STRUCTURED,
   type DiagramNode,
   type LinkType,
@@ -17,107 +19,105 @@ import {
 export const DIAGRAM_KINDS = ["class", "usecase", "state", "er", "flow", "automaton", "graph", "free"] as const;
 export type DiagramKind = (typeof DIAGRAM_KINDS)[number];
 
-/** A toolbox entry that places an element: a type, or a type with a preset. */
-export type PlaceTool = NodeType | "accept";
-
-/** What a preset tool places. */
-export const TOOL_PRESET: Readonly<Record<"accept", Partial<DiagramNode> & { t: NodeType }>> = {
+/** The tools that place a type with a preset: the accepting state is a state. */
+export const TOOL_PRESET = {
   accept: { t: "astate", accept: true },
-};
+} as const satisfies Record<string, Partial<DiagramNode> & { t: NodeType }>;
 
-export const typeOfTool = (tool: PlaceTool): NodeType => (tool === "accept" ? "astate" : tool);
+/** A toolbox entry that places an element: a type, or a preset. */
+export type PlaceTool = NodeType | keyof typeof TOOL_PRESET;
 
-export type TextForm = "plantuml" | "mermaid" | "dot";
+export const typeOfTool = (tool: PlaceTool): NodeType => (tool in TOOL_PRESET ? TOOL_PRESET[tool as keyof typeof TOOL_PRESET].t : (tool as NodeType));
 
 export interface KindSpec {
-  /** The element types a scene of this kind may hold. */
-  readonly nodes: readonly NodeType[];
-  /** The toolbox's placing tools, in order. */
+  /** The toolbox's placing tools, in order; the element types a kind holds are theirs. */
   readonly tools: readonly PlaceTool[];
   readonly links: readonly LinkType[];
   /** What a double click on the empty grid places; `null`, nothing. */
   readonly dbl: PlaceTool | null;
   /** Orthogonal lines routed on the grid, or straight lines between circles. */
   readonly lines: "orthogonal" | "straight";
-  readonly text: TextForm | null;
   /** Where an element added through the text lands: in a row, under, or right of its source. */
   readonly place: "row" | "down" | "right";
+  /** What the two ends of a link carry: UML multiplicities, crow's-foot cardinalities, or nothing. */
+  readonly ends: "multiplicity" | "cardinality" | null;
+  readonly maxNodes: number;
 }
+
+const structured = { maxNodes: MAX_NODES_STRUCTURED, ends: null } as const;
 
 export const KINDS: Readonly<Record<DiagramKind, KindSpec>> = {
   class: {
-    nodes: ["class"],
+    ...structured,
     tools: ["class"],
     links: ["assoc", "nav", "inh", "impl", "dep", "agg", "comp"],
     dbl: "class",
     lines: "orthogonal",
-    text: "plantuml",
     place: "row",
+    ends: "multiplicity",
   },
   usecase: {
-    nodes: ["actor", "usecase", "system"],
+    ...structured,
     tools: ["actor", "usecase", "system"],
     links: ["assoc", "incl", "ext", "inh"],
     dbl: "usecase",
     lines: "orthogonal",
-    text: "plantuml",
     place: "row",
   },
   state: {
-    nodes: ["initial", "state", "final"],
+    ...structured,
     tools: ["initial", "state", "final"],
     links: ["strans"],
     dbl: "state",
     lines: "orthogonal",
-    text: "mermaid",
     place: "down",
   },
   er: {
-    nodes: ["entity"],
+    ...structured,
     tools: ["entity"],
     links: ["erel"],
     dbl: "entity",
     lines: "orthogonal",
-    text: "mermaid",
     place: "row",
+    ends: "cardinality",
   },
   flow: {
-    nodes: ["terminal", "action", "decision"],
+    ...structured,
     tools: ["terminal", "action", "decision"],
     links: ["flow"],
     dbl: "action",
     lines: "orthogonal",
-    text: "mermaid",
     place: "down",
   },
   automaton: {
-    nodes: ["astate"],
+    ...structured,
     tools: ["astate", "accept"],
     links: ["trans"],
     dbl: "astate",
     lines: "straight",
-    text: "dot",
     place: "right",
   },
   graph: {
-    nodes: ["vertex"],
+    ...structured,
     tools: ["vertex"],
     links: ["edge", "arc"],
     dbl: "vertex",
     lines: "straight",
-    text: "dot",
     place: "down",
   },
   free: {
-    nodes: ["stroke", "line", "rect", "square", "circle", "ellipse", "triangle"],
     tools: ["stroke", "line", "rect", "square", "circle", "ellipse", "triangle"],
     links: [],
     dbl: null,
     lines: "orthogonal",
-    text: null,
     place: "row",
+    ends: null,
+    maxNodes: MAX_NODES,
   },
 };
+
+/** The element types a scene of a kind may hold. */
+export const nodesOf = (kind: DiagramKind): ReadonlySet<NodeType> => new Set(KINDS[kind].tools.map(typeOfTool));
 
 /** How a link type is drawn. */
 export interface LinkStyle {
@@ -163,6 +163,12 @@ export const BODIED: ReadonlySet<NodeType> = new Set(["class", "entity", "state"
 export const NAMELESS: ReadonlySet<NodeType> = new Set(["initial", "final", "stroke", "line"]);
 /** Types the student sizes with a handle. */
 export const RESIZABLE: ReadonlySet<NodeType> = new Set(["system", "rect", "square", "circle", "ellipse", "triangle"]);
+/** Types that contain others and block no line. */
+export const CONTAINERS: ReadonlySet<NodeType> = new Set(["system"]);
+/** Types that keep their width equal to their height. */
+export const SQUARE: ReadonlySet<NodeType> = new Set(["square", "circle"]);
+/** The smallest a resizable type gets. */
+export const minSize = (t: NodeType): readonly [number, number] => (t === "system" ? [160, 120] : [20, 20]);
 
 /** The size a new shape or system boundary gets. */
 export const DEFAULT_SIZE: Readonly<Partial<Record<NodeType, readonly [number, number]>>> = {
@@ -183,9 +189,10 @@ export type KindIssue = "diagram.node_type" | "diagram.link_type" | "diagram.too
  */
 export function kindIssues(scene: Scene, kind: DiagramKind): KindIssue[] {
   const spec = KINDS[kind];
+  const types = nodesOf(kind);
   const out = new Set<KindIssue>();
-  for (const n of scene.nodes) if (!spec.nodes.includes(n.t)) out.add("diagram.node_type");
+  for (const n of scene.nodes) if (!types.has(n.t)) out.add("diagram.node_type");
   for (const l of scene.links) if (!spec.links.includes(l.type)) out.add("diagram.link_type");
-  if (kind !== "free" && scene.nodes.length > MAX_NODES_STRUCTURED) out.add("diagram.too_many_nodes");
+  if (scene.nodes.length > spec.maxNodes) out.add("diagram.too_many_nodes");
   return [...out];
 }

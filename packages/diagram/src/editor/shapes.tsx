@@ -4,8 +4,8 @@
  */
 import type { JSX } from "react";
 
-import { HEAD, PAD, ROW, bodyCompartments, member, sizeOf, wrapName, wrapWidth, type Measure } from "../geometry.js";
-import { BODIED, CIRCLES, FLOW_NODES, INK, LINK_STYLE, SHAPES, type PlaceTool } from "../kinds.js";
+import { FINAL_RADIUS, HEAD, INITIAL_RADIUS, PAD, PSEUDO, ROW, bodyCompartments, member, sizeOf, wrapName, wrapWidth, type Measure } from "../geometry.js";
+import { CIRCLES, FLOW_NODES, INK, LINK_STYLE, SHAPES, type PlaceTool } from "../kinds.js";
 import { DIRS, type End, type Route } from "../layout.js";
 import type { Cardinality, DiagramLink, DiagramNode, LinkType } from "../scene.js";
 import {
@@ -92,12 +92,12 @@ export function NodeShape({ node: n, measure, selected = false, ghost = false }:
       </>
     );
   } else if (n.t === "initial") {
-    body = <circle className={dotInk} cx={20} cy={20} r={9} />;
+    body = <circle className={dotInk} cx={PSEUDO / 2} cy={PSEUDO / 2} r={INITIAL_RADIUS} />;
   } else if (n.t === "final") {
     body = (
       <>
-        <circle className={outline} cx={20} cy={20} r={11} />
-        <circle className={dotInk} cx={20} cy={20} r={6.5} />
+        <circle className={outline} cx={PSEUDO / 2} cy={PSEUDO / 2} r={FINAL_RADIUS} />
+        <circle className={dotInk} cx={PSEUDO / 2} cy={PSEUDO / 2} r={FINAL_RADIUS - 4.5} />
       </>
     );
   } else if (CIRCLES.has(n.t)) {
@@ -184,7 +184,7 @@ function Box({ node: n, w, h }: { node: DiagramNode; w: number; h: number }): JS
   let y = HEAD;
   const seps: string[] = [];
   const texts: JSX.Element[] = [];
-  for (const lines of BODIED.has(n.t) ? bodyCompartments(n) : []) {
+  for (const lines of bodyCompartments(n)) {
     seps.push(`M0 ${y}H${w}`);
     lines.forEach((raw, i) => {
       const m = member(raw, entity);
@@ -222,7 +222,7 @@ function Box({ node: n, w, h }: { node: DiagramNode; w: number; h: number }): JS
 }
 
 /** The head at a line's end, aimed along the two points. */
-export function Head({ kind, aim }: { kind: NonNullable<(typeof LINK_STYLE)[LinkType]["head"]>; aim: readonly [XY, XY] }): JSX.Element | null {
+function Head({ kind, aim }: { kind: NonNullable<(typeof LINK_STYLE)[LinkType]["head"]>; aim: readonly [XY, XY] }): JSX.Element | null {
   const [p, b] = aim;
   const len = Math.hypot(b[0] - p[0], b[1] - p[1]);
   if (len === 0) return null;
@@ -236,7 +236,7 @@ export function Head({ kind, aim }: { kind: NonNullable<(typeof LINK_STYLE)[Link
 }
 
 /** Crow's foot at an entity end; `end.d` points away from the entity. */
-export function CrowFoot({ card, end }: { card: string | undefined; end: End }): JSX.Element | null {
+function CrowFoot({ card, end }: { card: string | undefined; end: End }): JSX.Element | null {
   if (!card || end.d < 0) return null;
   const u = DIRS[end.d] ?? [1, 0];
   const at = (a: number, s: number): string => `${end.x + u[0] * a - u[1] * s} ${end.y + u[1] * a + u[0] * s}`;
@@ -253,19 +253,20 @@ export function CrowFoot({ card, end }: { card: string | undefined; end: End }):
   );
 }
 
+/** Where a label sits off an end leaving right, down, left or up. */
+const END_LABEL: Readonly<Record<0 | 1 | 2 | 3, readonly [number, number, "start" | "end"]>> = {
+  0: [5, -11, "start"],
+  1: [11, 15, "start"],
+  2: [-5, -11, "end"],
+  3: [11, -6, "start"],
+};
+
 /** A multiplicity, or a flowchart's label, set just off an end. */
 function EndLabel({ text, end, mono }: { text: string | undefined; end: End; mono: boolean }): JSX.Element | null {
   if (!text || end.d < 0) return null;
-  const [x, y, anchor]: [number, number, "start" | "end"] =
-    end.d === 0
-      ? [end.x + 5, end.y - 11, "start"]
-      : end.d === 2
-        ? [end.x - 5, end.y - 11, "end"]
-        : end.d === 1
-          ? [end.x + 11, end.y + 15, "start"]
-          : [end.x + 11, end.y - 6, "start"];
+  const [dx, dy, anchor] = END_LABEL[end.d as 0 | 1 | 2 | 3];
   return (
-    <text className={mono ? lineLabelMono : lineLabel} x={x} y={y} textAnchor={anchor}>
+    <text className={mono ? lineLabelMono : lineLabel} x={end.x + dx} y={end.y + dy} textAnchor={anchor}>
       {text}
     </text>
   );

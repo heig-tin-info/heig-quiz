@@ -31,7 +31,6 @@ export const gridMajor = "fill-none stroke-line-strong";
 /* ink: a node or a line takes the current colour, selection turns it to the accent */
 export const inkNormal = "text-fg";
 export const inkSelected = "text-accent";
-export const paperFill = "fill-surface";
 export const cardFill = "fill-surface";
 export const headFill = "fill-surface-2";
 export const outline = "fill-none stroke-current stroke-[1.5]";

@@ -6,13 +6,10 @@
  * a `digraph` whose edges carry `dir=none`.
  */
 import type { Scene } from "../scene.js";
-import { emptyParsed, isIdentifier, unquote, type Parsed, type ParsedNode } from "./parsed.js";
-
-const quote = (s: string): string => (isIdentifier(s) ? s : `"${s.replace(/"/g, "'")}"`);
+import { NodeTable, emptyParsed, linkEnds, quote, tooLong, unquote, type Parsed } from "./parsed.js";
 
 export function dotToText(scene: Scene, kind: "automaton" | "graph"): string {
   const automaton = kind === "automaton";
-  const byId = new Map(scene.nodes.map((n) => [n.id, n] as const));
   const directed = automaton || scene.links.some((l) => l.type === "arc");
   const op = directed ? "->" : "--";
   let o = `${directed ? "digraph" : "graph"} {\n`;
@@ -20,10 +17,7 @@ export function dotToText(scene: Scene, kind: "automaton" | "graph"): string {
   for (const n of scene.nodes) o += `  ${quote(n.name ?? "")}${automaton && n.accept ? " [shape=doublecircle]" : ""}\n`;
   const starts = automaton ? scene.nodes.filter((n) => n.initial) : [];
   if (starts.length > 0) o += `  __start [shape=point]\n${starts.map((n) => `  __start -> ${quote(n.name ?? "")}\n`).join("")}`;
-  for (const l of scene.links) {
-    const a = byId.get(l.a);
-    const b = byId.get(l.b);
-    if (!a || !b) continue;
+  for (const [l, a, b] of linkEnds(scene)) {
     const attrs: string[] = [];
     if (l.name) attrs.push(`label="${l.name.replace(/"/g, "'")}"`);
     if (directed && l.type === "edge") attrs.push("dir=none");
@@ -37,6 +31,22 @@ const EDGE_RE = new RegExp(`^(${ID})((?:\\s*(?:->|--)\\s*(?:${ID}))+)\\s*(?:\\[(
 const HOP_RE = new RegExp(`\\s*(->|--)\\s*(${ID})`, "gu");
 const NODE_RE = new RegExp(`^(${ID})\\s*(?:\\[(.*)\\])?$`, "u");
 
+/** A line cut at its semicolons, those outside quotes: one pass. */
+function statementsOf(line: string): string[] {
+  const out: string[] = [];
+  let quoted = false;
+  let start = 0;
+  for (let i = 0; i < line.length; i += 1) {
+    if (line[i] === '"') quoted = !quoted;
+    else if (line[i] === ";" && !quoted) {
+      out.push(line.slice(start, i));
+      start = i + 1;
+    }
+  }
+  out.push(line.slice(start));
+  return out;
+}
+
 function attributes(s: string | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   for (const m of (s ?? "").matchAll(/(\w+)\s*=\s*("[^"]*"|[^,;\s\]]+)/g)) out[(m[1] ?? "").toLowerCase()] = unquote(m[2] ?? "");
@@ -46,17 +56,9 @@ function attributes(s: string | undefined): Record<string, string> {
 export function parseDot(text: string, kind: "automaton" | "graph"): Parsed {
   const p = emptyParsed();
   const automaton = kind === "automaton";
-  const keys = new Map<string, ParsedNode>();
+  const table = new NodeTable(p);
   const pseudo = new Set<string>();
-  const declare = (name: string): ParsedNode => {
-    let n = keys.get(name);
-    if (!n) {
-      n = { t: automaton ? "astate" : "vertex", name, ...(automaton ? { accept: false, initial: false } : {}) };
-      keys.set(name, n);
-      p.nodes.push(n);
-    }
-    return n;
-  };
+  const declare = (name: string) => table.obtain(name, () => ({ t: automaton ? "astate" : "vertex", name, ...(automaton ? { accept: false, initial: false } : {}) }));
 
   /* statements: split on newlines and on semicolons outside quotes */
   const statements: Array<{ s: string; line: number }> = [];
@@ -67,7 +69,8 @@ export function parseDot(text: string, kind: "automaton" | "graph"): Parsed {
     .replace(/[{}]/g, ";")
     .split("\n")
     .forEach((raw, i) => {
-      for (const part of raw.replace(/(^|\s)(\/\/|#).*$/, "").split(/;(?=(?:[^"]*"[^"]*")*[^"]*$)/)) {
+      if (tooLong(p, raw, i + 1)) return;
+      for (const part of statementsOf(raw.replace(/(^|\s)(\/\/|#).*$/, ""))) {
         const s = part.trim();
         if (s && !/^\w+\s*=/.test(s)) statements.push({ s, line: i + 1 });
       }

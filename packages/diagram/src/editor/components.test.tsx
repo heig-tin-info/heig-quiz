@@ -78,6 +78,37 @@ describe("DiagramEditor", () => {
     expect(next.nodes[0]?.id).toBe(EXAMPLES.graph.nodes[0]?.id);
   });
 
+  it("links two elements by a drag from the border of one to the other", () => {
+    const onChange = vi.fn();
+    const initial: Scene = {
+      nodes: [
+        { id: "aaaa", t: "vertex", x: 0, y: 0, name: "A" },
+        { id: "bbbb", t: "vertex", x: 200, y: 0, name: "B" },
+      ],
+      links: [],
+    };
+    /* jsdom lays nothing out: give the canvas a box to be inside of, without a width, so the
+       first view stays (40, 40) at 100 % instead of being fitted */
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 2000, bottom: 2000, width: 0, height: 0, toJSON: () => ({}) });
+    render(<Host kind="graph" initial={initial} onChange={onChange} />);
+    const at = (x: number, y: number) => ({ button: 0, clientX: x + 40, clientY: y + 40, pointerId: 1 });
+    fireEvent.pointerDown(canvas(), at(39, 20));
+    fireEvent.pointerMove(canvas(), at(120, 20));
+    fireEvent.pointerMove(canvas(), at(220, 20));
+    fireEvent.pointerUp(canvas(), at(220, 20));
+    const linked = onChange.mock.lastCall?.[0] as Scene;
+    expect(linked.links).toEqual([expect.objectContaining({ type: "edge", a: "aaaa", b: "bbbb" })]);
+  });
+
+  it("refuses an edit past a limit, rather than hand the host an answer it would refuse", () => {
+    const onChange = vi.fn();
+    const full: Scene = { nodes: Array.from({ length: 80 }, (_, i) => ({ id: `v${String(i).padStart(3, "0")}`, t: "vertex" as const, x: (i % 10) * 60, y: Math.floor(i / 10) * 60 })), links: [] };
+    render(<Host kind="graph" initial={full} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Vertex" }));
+    click(900, 900);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it("read only: no toolbar, no inspector", () => {
     render(<DiagramEditor kind="class" value={EXAMPLES.class} onChange={() => undefined} readOnly height={300} />);
     expect(screen.queryByRole("toolbar")).toBeNull();

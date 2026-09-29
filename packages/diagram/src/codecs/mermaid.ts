@@ -7,8 +7,8 @@
  */
 import { isSeparator } from "../geometry.js";
 import { FLOW_NODES } from "../kinds.js";
-import type { Cardinality, DiagramNode, NodeType, Scene } from "../scene.js";
-import { emptyParsed, isIdentifier, unquote, type Parsed, type ParsedNode } from "./parsed.js";
+import { CARDINALITIES, type Cardinality, type DiagramNode, type NodeType, type Scene } from "../scene.js";
+import { NodeTable, emptyParsed, isIdentifier, linkEnds, tooLong, unquote, type Parsed, type ParsedNode } from "./parsed.js";
 
 // ---------------------------------------------------------------------------
 // Flowchart
@@ -28,9 +28,9 @@ export function flowToText(scene: Scene): string {
     if (!shape || !id.has(n.id)) continue;
     o += `  ${id.get(n.id) ?? ""}${shape[0]}"${(n.name ?? "").replace(/"/g, "#quot;")}"${shape[1]}\n`;
   }
-  for (const l of scene.links) {
-    if (!id.has(l.a) || !id.has(l.b)) continue;
-    o += `  ${id.get(l.a) ?? ""} -->${l.name ? `|${l.name.replace(/\|/g, "/")}|` : ""} ${id.get(l.b) ?? ""}\n`;
+  for (const [l, a, b] of linkEnds(scene)) {
+    if (!id.has(a.id) || !id.has(b.id)) continue;
+    o += `  ${id.get(a.id) ?? ""} -->${l.name ? `|${l.name.replace(/\|/g, "/")}|` : ""} ${id.get(b.id) ?? ""}\n`;
   }
   return o;
 }
@@ -46,14 +46,9 @@ const label = (s: string): string => unquote(s.trim()).replace(/#quot;/g, '"').t
 
 export function parseFlow(text: string): Parsed {
   const p = emptyParsed();
-  const ids = new Map<string, ParsedNode>();
+  const table = new NodeTable(p);
   const node = (id: string, shape: string | undefined): ParsedNode => {
-    let n = ids.get(id);
-    if (!n) {
-      n = { t: "action", name: id };
-      ids.set(id, n);
-      p.nodes.push(n);
-    }
+    const n = table.obtain(id, () => ({ t: "action", name: id }));
     if (shape)
       for (const [re, t] of SHAPE_IN) {
         const m = re.exec(shape);
@@ -70,6 +65,7 @@ export function parseFlow(text: string): Parsed {
   text.split("\n").forEach((raw, i) => {
     const s = raw.trim().replace(/;$/, "");
     const line = i + 1;
+    if (tooLong(p, raw, line)) return;
     if (!s || s.startsWith("%%") || /^(flowchart|graph)\b/i.test(s)) return;
     NODE.lastIndex = 0;
     const first = NODE.exec(s);
@@ -119,13 +115,9 @@ export function stateToText(scene: Scene): string {
     else if ((n.body ?? []).length === 0 && !linked.has(n.id)) o += `  ${sid}\n`;
     for (const line of n.body ?? []) o += `  ${sid} : ${line}\n`;
   }
-  const byId = new Map(scene.nodes.map((n) => [n.id, n] as const));
   const end = (n: DiagramNode, left: boolean): string | null =>
     n.t === "initial" ? (left ? "[*]" : null) : n.t === "final" ? (left ? null : "[*]") : (id.get(n.id) ?? null);
-  for (const l of scene.links) {
-    const a = byId.get(l.a);
-    const b = byId.get(l.b);
-    if (!a || !b) continue;
+  for (const [l, a, b] of linkEnds(scene)) {
     const from = end(a, true);
     const to = end(b, false);
     if (from && to) o += `  ${from} --> ${to}${l.name ? ` : ${l.name}` : ""}\n`;
@@ -142,32 +134,21 @@ const LONE = new RegExp(`^(${SID})$`, "u");
 
 export function parseState(text: string): Parsed {
   const p = emptyParsed();
-  const keys = new Map<string, ParsedNode>();
-  let initial: ParsedNode | null = null;
-  let final: ParsedNode | null = null;
+  const table = new NodeTable(p);
   const declare = (name: string, alias?: string): ParsedNode => {
-    let n = keys.get(alias ?? name) ?? keys.get(name);
-    if (!n) {
-      n = { t: "state", name, body: [] };
-      p.nodes.push(n);
-    }
-    keys.set(name, n);
-    if (alias) keys.set(alias, n);
-    return n;
+    const n = table.get(alias ?? name) ?? table.get(name) ?? { t: "state", name, body: [] };
+    return table.add(n, name, ...(alias ? [alias] : []));
   };
+  /* [*] is the initial state on the left of an arrow, the final one on its right */
   const ref = (tok: string, left: boolean): ParsedNode => {
-    if (tok !== "[*]") return keys.get(tok) ?? declare(tok);
-    if (left) {
-      if (!initial) p.nodes.push((initial = { t: "initial", name: "" }));
-      return initial;
-    }
-    if (!final) p.nodes.push((final = { t: "final", name: "" }));
-    return final;
+    if (tok !== "[*]") return table.get(tok) ?? declare(tok);
+    return left ? table.obtain("[*]<", () => ({ t: "initial", name: "" })) : table.obtain("[*]>", () => ({ t: "final", name: "" }));
   };
   text.split("\n").forEach((raw, i) => {
     const s = raw.trim();
     const line = i + 1;
     let m: RegExpExecArray | null;
+    if (tooLong(p, raw, line)) return;
     if (!s || s.startsWith("%%") || /^stateDiagram/.test(s) || /^direction\b/.test(s)) return;
     if ((m = STATE_AS.exec(s))) declare(m[1] ?? "", m[2]);
     else if (/^state\b.*\{$/.test(s)) p.errors.push({ line, code: "composite", text: s });
@@ -188,13 +169,15 @@ export function parseState(text: string): Parsed {
 
 const LEFT: Readonly<Record<Cardinality, string>> = { "1": "||", "0..1": "|o", "1..*": "}|", "0..*": "}o" };
 const RIGHT: Readonly<Record<Cardinality, string>> = { "1": "||", "0..1": "o|", "1..*": "|{", "0..*": "o{" };
-const FROM_LEFT: Readonly<Record<string, Cardinality>> = { "||": "1", "|o": "0..1", "o|": "0..1", "}|": "1..*", "}o": "0..*" };
-const FROM_RIGHT: Readonly<Record<string, Cardinality>> = { "||": "1", "o|": "0..1", "|o": "0..1", "|{": "1..*", "o{": "0..*" };
+const invert = (m: Readonly<Record<Cardinality, string>>): Record<string, Cardinality> =>
+  Object.fromEntries(Object.entries(m).map(([c, sym]) => [sym, c as Cardinality]));
+/* Mermaid reads a zero-or-one written either way round */
+const FROM_LEFT: Readonly<Record<string, Cardinality>> = { ...invert(LEFT), "o|": "0..1" };
+const FROM_RIGHT: Readonly<Record<string, Cardinality>> = { ...invert(RIGHT), "|o": "0..1" };
 const erName = (s: string): string => s.trim().replace(/\s+/g, "_");
-const isCardinality = (s: string | undefined): s is Cardinality => s === "1" || s === "0..1" || s === "1..*" || s === "0..*";
+const isCardinality = (s: string | undefined): s is Cardinality => (CARDINALITIES as readonly string[]).includes(s ?? "");
 
 export function erToText(scene: Scene): string {
-  const byId = new Map(scene.nodes.map((n) => [n.id, n] as const));
   let o = "erDiagram\n";
   for (const n of scene.nodes) {
     o += `  ${erName(n.name ?? "")} {\n`;
@@ -207,10 +190,7 @@ export function erToText(scene: Scene): string {
     }
     o += "  }\n";
   }
-  for (const l of scene.links) {
-    const a = byId.get(l.a);
-    const b = byId.get(l.b);
-    if (!a || !b) continue;
+  for (const [l, a, b] of linkEnds(scene)) {
     const left = isCardinality(l.ma) ? LEFT[l.ma] : "||";
     const right = isCardinality(l.mb) ? RIGHT[l.mb] : "o{";
     o += `  ${erName(a.name ?? "")} ${left}--${right} ${erName(b.name ?? "")} : "${(l.name ?? "").replace(/"/g, "'")}"\n`;
@@ -228,26 +208,22 @@ const ER_LONE = new RegExp(`^(${ER_NAME})$`, "u");
 
 export function parseEr(text: string): Parsed {
   const p = emptyParsed();
-  const keys = new Map<string, ParsedNode>();
+  const table = new NodeTable(p);
   let cur: ParsedNode | null = null;
   const lines = text.split("\n");
   const declare = (raw: string): ParsedNode => {
     const name = raw.replace(/_/g, " ");
-    let n = keys.get(name);
-    if (!n) {
-      n = { t: "entity", name, body: [] };
-      keys.set(name, n);
-      p.nodes.push(n);
-    }
-    return n;
+    return table.obtain(name, () => ({ t: "entity", name, body: [] }));
   };
   lines.forEach((raw, i) => {
     const s = raw.trim();
     const line = i + 1;
     let m: RegExpExecArray | null;
+    if (tooLong(p, raw, line)) return;
     if (cur) {
       if (s === "}") cur = null;
-      else if (s && (m = /^(\S+)\s+(\S+)((?:\s*,?\s*(?:PK|FK|UK))*)\s*(?:"[^"]*")?$/.exec(s))) {
+      /* the keys after `type name`, each after either a comma or spaces: one way to split them */
+      else if (s && (m = /^(\S+)\s+(\S+)((?:(?:\s*,\s*|\s+)(?:PK|FK|UK))*)\s*(?:"[^"]*")?$/.exec(s))) {
         const keys = (m[3] ?? "").replace(/,/g, " ").trim().split(/\s+/).filter(Boolean).join(" ");
         cur.body?.push(`${m[2] ?? ""} : ${m[1] ?? ""}${keys ? ` ${keys}` : ""}`);
       } else if (s) p.errors.push({ line, code: "attribute", text: s });

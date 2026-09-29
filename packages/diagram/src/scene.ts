@@ -18,7 +18,7 @@
  */
 import { z } from "zod";
 
-/** Coordinates stay within ±20 000 canvas units. */
+/** Coordinates stay within ±20 000 canvas units; a freehand point, within 20 000 of its element's corner. */
 export const COORD_LIMIT = 20_000;
 /** Elements of one scene: 80 in every kind but `free`, which allows 200 shapes. */
 export const MAX_NODES = 200;
@@ -31,6 +31,12 @@ export const BODY_LINES_MAX = 40;
 export const BODY_LINE_MAX = 200;
 /** Freehand points of a whole `free` scene. */
 export const MAX_INK_POINTS = 4_000;
+/**
+ * The characters of every text of a scene together — names, bodies, labels.
+ * The autosave sends the whole answer every 300 ms, so a scene is bounded
+ * like an essay (`rich`, 50 000).
+ */
+export const MAX_TEXT = 50_000;
 
 /** Element types, across every kind. */
 export const NODE_TYPES = [
@@ -88,6 +94,14 @@ export type Cardinality = (typeof CARDINALITIES)[number];
 const IdSchema = z.string().regex(/^[a-z0-9]{4,40}$/);
 const Coord = z.number().int().min(-COORD_LIMIT).max(COORD_LIMIT);
 const Size = z.number().int().min(1).max(COORD_LIMIT);
+/**
+ * A text on one line, without control characters: the text form is derived
+ * from these fields, and a new line in a name would let an answer forge the
+ * structure of the text the teacher (and later a grader) reads.
+ */
+const Text = (max: number) => z.string().max(max).regex(/^[^\p{Cc}]*$/u);
+/** A freehand point, relative to its element's corner: never left of it or above it. */
+const Offset = z.number().int().min(0).max(COORD_LIMIT);
 
 export const PointSchema = z.strictObject({ x: Coord, y: Coord });
 export type Point = z.infer<typeof PointSchema>;
@@ -98,12 +112,12 @@ export const NodeSchema = z.strictObject({
   /** Top left corner, on the grid for every type but the freehand ones. */
   x: Coord,
   y: Coord,
-  name: z.string().max(NAME_MAX).optional(),
+  name: Text(NAME_MAX).optional(),
   /** A class's stereotype, without its guillemets. */
-  stereo: z.string().max(NAME_MAX).optional(),
+  stereo: Text(NAME_MAX).optional(),
   abstract: z.boolean().optional(),
   /** A class's members (`---` cuts a compartment), an entity's attributes, a state's activities. */
-  body: z.array(z.string().max(BODY_LINE_MAX)).max(BODY_LINES_MAX).optional(),
+  body: z.array(Text(BODY_LINE_MAX)).max(BODY_LINES_MAX).optional(),
   /** The size of what the student sizes: a system boundary, a shape, a stroke's box. */
   w: Size.optional(),
   h: Size.optional(),
@@ -111,7 +125,7 @@ export const NodeSchema = z.strictObject({
   initial: z.boolean().optional(),
   accept: z.boolean().optional(),
   /** A stroke's or a line's points, relative to `x`, `y`. */
-  pts: z.array(z.tuple([Coord, Coord])).min(2).max(MAX_INK_POINTS).optional(),
+  pts: z.array(z.tuple([Offset, Offset])).min(2).max(MAX_INK_POINTS).optional(),
 });
 export type DiagramNode = z.infer<typeof NodeSchema>;
 
@@ -123,10 +137,10 @@ export const LinkSchema = z.strictObject({
   /** Elbows the line must pass through, in order from `a`. */
   via: z.array(PointSchema).max(MAX_VIA).optional(),
   /** A name, a label, a verb, a weight or the symbols of a transition. */
-  name: z.string().max(NAME_MAX).optional(),
+  name: Text(NAME_MAX).optional(),
   /** Multiplicities (class) or cardinalities (entity-relationship) at `a` and at `b`. */
-  ma: z.string().max(LABEL_MAX).optional(),
-  mb: z.string().max(LABEL_MAX).optional(),
+  ma: Text(LABEL_MAX).optional(),
+  mb: Text(LABEL_MAX).optional(),
 });
 export type DiagramLink = z.infer<typeof LinkSchema>;
 
@@ -147,7 +161,28 @@ export const SceneSchema = z
     }
     const ink = scene.nodes.reduce((n, node) => n + (node.pts?.length ?? 0), 0);
     if (ink > MAX_INK_POINTS) ctx.addIssue({ code: "custom", message: "diagram.too_much_ink" });
+    if (textLength(scene) > MAX_TEXT) ctx.addIssue({ code: "custom", message: "diagram.too_much_text" });
+    for (const n of scene.nodes) if (!fieldsFit(n)) ctx.addIssue({ code: "custom", message: "diagram.field_type" });
   });
+
+/** Every character of every text of a scene. */
+export function textLength(scene: { nodes: readonly DiagramNode[]; links: readonly DiagramLink[] }): number {
+  let n = 0;
+  for (const node of scene.nodes) n += (node.name?.length ?? 0) + (node.stereo?.length ?? 0) + (node.body ?? []).reduce((k, l) => k + l.length, 0);
+  for (const l of scene.links) n += (l.name?.length ?? 0) + (l.ma?.length ?? 0) + (l.mb?.length ?? 0);
+  return n;
+}
+
+/** A field only on the types that use it: a stereotype on a class, points on a stroke, a flag on an automaton state. */
+function fieldsFit(n: DiagramNode): boolean {
+  const is = (...types: NodeType[]): boolean => types.includes(n.t);
+  return (
+    (n.stereo === undefined && n.abstract === undefined ? true : is("class")) &&
+    (n.body === undefined || is("class", "entity", "state")) &&
+    (n.pts === undefined ? !is("stroke", "line") : is("stroke", "line")) &&
+    (n.initial === undefined && n.accept === undefined ? true : is("astate"))
+  );
+}
 export type Scene = z.infer<typeof SceneSchema>;
 
 export const emptyScene = (): Scene => ({ nodes: [], links: [] });

@@ -453,7 +453,7 @@ function DiagramEditorDemo() {
         name="dev-diagram-kind"
         label={t("dev.ui.diagramKind")}
         value={kind}
-        options={DIAGRAM_KINDS.map((k) => ({ value: k, label: k }))}
+        options={DIAGRAM_KINDS.map((k) => ({ value: k, label: t(`diagram.kind.${k}`) }))}
         onChange={setKind}
         size="sm"
         wrap

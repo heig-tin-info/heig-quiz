@@ -8,7 +8,7 @@ import type { DiagramLink, DiagramNode, Scene } from "./scene.js";
 type NodeInit = Omit<DiagramNode, "id" | "t" | "x" | "y">;
 type LinkInit = Omit<DiagramLink, "id" | "type" | "a" | "b">;
 
-/** A small builder: ids are `n001`, `n002`… and `l001`, `l002`…, opaque enough for an example. */
+/** A small builder: ids are `n001`, `n002`… and `l001`, `l002`…, readable for the tests. They say the order the elements were made in, so an example is never a question's starter as is: a starter's ids are minted opaque. */
 function build(fill: (node: (t: DiagramNode["t"], x: number, y: number, o?: NodeInit) => string, link: (type: DiagramLink["type"], a: string, b: string, o?: LinkInit) => void) => void): Scene {
   const scene: Scene = { nodes: [], links: [] };
   fill(
@@ -26,88 +26,88 @@ function build(fill: (node: (t: DiagramNode["t"], x: number, y: number, o?: Node
 
 export const EXAMPLES: Readonly<Record<DiagramKind, Scene>> = {
   class: build((node, link) => {
-    const forme = node("class", 380, 20, { name: "Forme", stereo: "interface", body: ["+ aire() : double", "+ perimetre() : double"] });
+    const shape = node("class", 380, 20, { name: "Forme", stereo: "interface", body: ["+ aire() : double", "+ perimetre() : double"] });
     const figure = node("class", 320, 220, {
       name: "Figure",
       abstract: true,
       body: ["# couleur : Couleur", "# origine : Point", "---", "+ deplacer(dx : double, dy : double) : void", "+ aire() : double {abstract}"],
     });
-    const cercle = node("class", 180, 460, { name: "Cercle", body: ["- rayon : double", "---", "+ aire() : double", "+ perimetre() : double"] });
-    const rect = node("class", 520, 460, {
+    const circle = node("class", 180, 460, { name: "Cercle", body: ["- rayon : double", "---", "+ aire() : double", "+ perimetre() : double"] });
+    const rectangle = node("class", 520, 460, {
       name: "Rectangle",
       body: ["- largeur : double", "- hauteur : double", "---", "+ aire() : double", "+ perimetre() : double"],
     });
-    const couleur = node("class", 820, 240, { name: "Couleur", stereo: "enumeration", body: ["ROUGE", "VERT", "BLEU"] });
-    const dessin = node("class", -60, 200, {
+    const colour = node("class", 820, 240, { name: "Couleur", stereo: "enumeration", body: ["ROUGE", "VERT", "BLEU"] });
+    const drawing = node("class", -60, 200, {
       name: "Dessin",
       body: ["- titre : String", "---", "+ ajouter(f : Forme) : void", "+ vide() : Dessin {static}"],
     });
-    link("impl", figure, forme);
-    link("inh", cercle, figure);
-    link("inh", rect, figure);
-    link("nav", figure, couleur, { mb: "1" });
-    link("comp", forme, dessin, { ma: "0..*", mb: "1", name: "contient" });
+    link("impl", figure, shape);
+    link("inh", circle, figure);
+    link("inh", rectangle, figure);
+    link("nav", figure, colour, { mb: "1" });
+    link("comp", shape, drawing, { ma: "0..*", mb: "1", name: "contient" });
   }),
   usecase: build((node, link) => {
     node("system", 240, 20, { name: "Boutique en ligne", w: 480, h: 440 });
     const client = node("actor", 100, 120, { name: "Client" });
-    const membre = node("actor", 100, 320, { name: "Membre" });
-    const gestion = node("actor", 820, 60, { name: "Gestionnaire" });
-    const catalogue = node("usecase", 280, 60, { name: "Consulter le catalogue" });
-    const commande = node("usecase", 280, 200, { name: "Passer une commande" });
-    const identifier = node("usecase", 520, 320, { name: "S'identifier" });
+    const member = node("actor", 100, 320, { name: "Membre" });
+    const manager = node("actor", 820, 60, { name: "Gestionnaire" });
+    const browse = node("usecase", 280, 60, { name: "Consulter le catalogue" });
+    const order = node("usecase", 280, 200, { name: "Passer une commande" });
+    const logIn = node("usecase", 520, 320, { name: "S'identifier" });
     const promo = node("usecase", 280, 360, { name: "Appliquer un code promo" });
-    const produits = node("usecase", 520, 60, { name: "Gérer les produits" });
-    link("assoc", client, catalogue);
-    link("assoc", client, commande);
-    link("inh", membre, client);
-    link("assoc", gestion, produits);
-    link("incl", commande, identifier);
-    link("incl", produits, identifier);
-    link("ext", promo, commande);
+    const products = node("usecase", 520, 60, { name: "Gérer les produits" });
+    link("assoc", client, browse);
+    link("assoc", client, order);
+    link("inh", member, client);
+    link("assoc", manager, products);
+    link("incl", order, logIn);
+    link("incl", products, logIn);
+    link("ext", promo, order);
   }),
   state: build((node, link) => {
     const initial = node("initial", 60, 120);
-    const fermee = node("state", 180, 120, { name: "Fermée" });
-    const ouverte = node("state", 480, 0, { name: "Ouverte", body: ["entry / allumer la lampe", "exit / éteindre la lampe"] });
-    const verrouillee = node("state", 480, 220, { name: "Verrouillée" });
+    const closed = node("state", 180, 120, { name: "Fermée" });
+    const open = node("state", 480, 0, { name: "Ouverte", body: ["entry / allumer la lampe", "exit / éteindre la lampe"] });
+    const locked = node("state", 480, 220, { name: "Verrouillée" });
     const final = node("final", 760, 220);
-    link("strans", initial, fermee);
-    link("strans", fermee, ouverte, { name: "ouvrir" });
-    link("strans", ouverte, fermee, { name: "fermer" });
-    link("strans", fermee, verrouillee, { name: "verrouiller [code ok]" });
-    link("strans", verrouillee, fermee, { name: "déverrouiller [code ok]" });
-    link("strans", verrouillee, final, { name: "mise hors service" });
+    link("strans", initial, closed);
+    link("strans", closed, open, { name: "ouvrir" });
+    link("strans", open, closed, { name: "fermer" });
+    link("strans", closed, locked, { name: "verrouiller [code ok]" });
+    link("strans", locked, closed, { name: "déverrouiller [code ok]" });
+    link("strans", locked, final, { name: "mise hors service" });
   }),
   er: build((node, link) => {
     const client = node("entity", 20, 40, { name: "Client", body: ["id : int PK", "nom : string", "email : string"] });
-    const commande = node("entity", 360, 40, { name: "Commande", body: ["numero : int PK", "date : date", "client_id : int FK"] });
-    const ligne = node("entity", 360, 280, {
+    const order = node("entity", 360, 40, { name: "Commande", body: ["numero : int PK", "date : date", "client_id : int FK"] });
+    const line = node("entity", 360, 280, {
       name: "LigneCommande",
       body: ["commande_id : int PK FK", "produit_ref : string PK FK", "quantite : int"],
     });
-    const produit = node("entity", 760, 280, { name: "Produit", body: ["ref : string PK", "libelle : string", "prix : decimal"] });
-    link("erel", client, commande, { ma: "1", mb: "0..*", name: "passe" });
-    link("erel", commande, ligne, { ma: "1", mb: "1..*", name: "contient" });
-    link("erel", produit, ligne, { ma: "1", mb: "0..*", name: "figure dans" });
+    const product = node("entity", 760, 280, { name: "Produit", body: ["ref : string PK", "libelle : string", "prix : decimal"] });
+    link("erel", client, order, { ma: "1", mb: "0..*", name: "passe" });
+    link("erel", order, line, { ma: "1", mb: "1..*", name: "contient" });
+    link("erel", product, line, { ma: "1", mb: "0..*", name: "figure dans" });
   }),
   flow: build((node, link) => {
-    const debut = node("terminal", 340, 20, { name: "Début" });
-    const lire = node("action", 340, 100, { name: "Lire n" });
+    const start = node("terminal", 340, 20, { name: "Début" });
+    const read = node("action", 340, 100, { name: "Lire n" });
     const init = node("action", 340, 180, { name: "f ← 1 ; i ← 1" });
     const test = node("decision", 340, 260, { name: "i ≤ n ?" });
-    const mul = node("action", 340, 400, { name: "f ← f × i" });
-    const inc = node("action", 340, 480, { name: "i ← i + 1" });
-    const affiche = node("action", 540, 280, { name: "Afficher f" });
-    const fin = node("terminal", 540, 380, { name: "Fin" });
-    link("flow", debut, lire);
-    link("flow", lire, init);
+    const multiply = node("action", 340, 400, { name: "f ← f × i" });
+    const increment = node("action", 340, 480, { name: "i ← i + 1" });
+    const display = node("action", 540, 280, { name: "Afficher f" });
+    const end = node("terminal", 540, 380, { name: "Fin" });
+    link("flow", start, read);
+    link("flow", read, init);
     link("flow", init, test);
-    link("flow", test, mul, { name: "oui" });
-    link("flow", mul, inc);
-    link("flow", inc, test, { via: [{ x: 260, y: 500 }, { x: 260, y: 300 }] });
-    link("flow", test, affiche, { name: "non" });
-    link("flow", affiche, fin);
+    link("flow", test, multiply, { name: "oui" });
+    link("flow", multiply, increment);
+    link("flow", increment, test, { via: [{ x: 260, y: 500 }, { x: 260, y: 300 }] });
+    link("flow", test, display, { name: "non" });
+    link("flow", display, end);
   }),
   automaton: build((node, link) => {
     /* the words over {a, b} that end with ab */

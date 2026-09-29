@@ -6,7 +6,7 @@
  * A parse error is a CODE and the offending text, never a sentence: the
  * editor renders it through its strings, in the user's language.
  */
-import type { LinkType, NodeType } from "../scene.js";
+import type { DiagramLink, DiagramNode, LinkType, NodeType, Scene } from "../scene.js";
 
 export interface ParsedNode {
   t: NodeType;
@@ -71,8 +71,57 @@ export interface Parsed {
 
 export const emptyParsed = (): Parsed => ({ nodes: [], links: [], errors: [] });
 
+/**
+ * The longest line a parser reads. A longer one is refused before any
+ * pattern runs on it, so no pattern's cost can grow past it; the patterns
+ * themselves are written without nested ambiguity.
+ */
+export const MAX_LINE = 1_000;
+
+/** Records a line too long to read; `true` when it was. */
+export function tooLong(p: Parsed, raw: string, line: number): boolean {
+  if (raw.length <= MAX_LINE) return false;
+  p.errors.push({ line, code: "unknown", text: `${raw.slice(0, 40)}…` });
+  return true;
+}
+
 /** A quoted token without its quotes. */
 export const unquote = (s: string): string => s.replace(/^"(.*)"$/s, "$1").trim();
 
 /** A name that needs no quotes in PlantUML and DOT. */
 export const isIdentifier = (s: string): boolean => /^[\p{L}_][\p{L}\w]*$/u.test(s);
+
+/** A name, quoted when PlantUML or DOT would not read it bare. */
+export const quote = (s: string): string => (isIdentifier(s) ? s : `"${s.replace(/"/g, "'")}"`);
+
+/** The elements a parse declares, by name and by alias. */
+export class NodeTable {
+  private readonly keys = new Map<string, ParsedNode>();
+  constructor(private readonly parsed: Parsed) {}
+
+  get(key: string): ParsedNode | undefined {
+    return this.keys.get(key);
+  }
+
+  /** Registers an element under its keys; a new one joins the parse. */
+  add(node: ParsedNode, ...keys: string[]): ParsedNode {
+    if (!this.parsed.nodes.includes(node)) this.parsed.nodes.push(node);
+    for (const k of keys) this.keys.set(k, node);
+    return node;
+  }
+
+  /** The element under `key`, made the first time. */
+  obtain(key: string, make: () => ParsedNode): ParsedNode {
+    return this.keys.get(key) ?? this.add(make(), key);
+  }
+}
+
+/** Each link of a scene with its two ends; a link whose end is missing is skipped. */
+export function* linkEnds(scene: Scene): Generator<[DiagramLink, DiagramNode, DiagramNode]> {
+  const byId = new Map(scene.nodes.map((n) => [n.id, n] as const));
+  for (const l of scene.links) {
+    const a = byId.get(l.a);
+    const b = byId.get(l.b);
+    if (a && b) yield [l, a, b];
+  }
+}

@@ -2,11 +2,27 @@
  * What the editor does to a scene, as pure functions: each takes a scene and
  * returns a new one, so the editor stays CONTROLLED (the host owns the
  * scene) and every edit is testable without a DOM.
+ *
+ * An edit that would break a limit of the schema returns the scene
+ * unchanged: the answer schema would refuse it at the next autosave, and a
+ * student must never lose work to a refusal they could not see coming.
  */
-import { holds, rectOf, snap, type Measure, type Rect } from "../geometry.js";
-import { DEFAULT_SIZE, INK, NAMELESS, TOOL_PRESET, typeOfTool, type PlaceTool } from "../kinds.js";
+import { holds, rectOf, snap, type Bounds, type Measure, type Rect } from "../geometry.js";
+import { DEFAULT_SIZE, INK, KINDS, NAMELESS, SQUARE, TOOL_PRESET, minSize, typeOfTool, type DiagramKind, type PlaceTool } from "../kinds.js";
 import type { Route } from "../layout.js";
-import { newId, type DiagramLink, type DiagramNode, type LinkType, type NodeType, type Point, type Scene } from "../scene.js";
+import {
+  MAX_INK_POINTS,
+  MAX_LINKS,
+  MAX_VIA,
+  newId,
+  type DiagramLink,
+  type DiagramNode,
+  type LinkType,
+  type NodeType,
+  type Point,
+  type Scene,
+} from "../scene.js";
+import type { DiagramStrings } from "./strings.js";
 
 type XY = readonly [number, number];
 
@@ -17,7 +33,7 @@ export interface Hit {
 }
 
 /** Whether a point is within `d` of a stroke or a line. */
-export function nearInk(n: DiagramNode, x: number, y: number, d: number): boolean {
+function nearInk(n: DiagramNode, x: number, y: number, d: number): boolean {
   const p = n.pts ?? [];
   for (let i = 0; i < p.length - 1; i += 1) {
     const [ax, ay] = [n.x + (p[i]?.[0] ?? 0), n.y + (p[i]?.[1] ?? 0)];
@@ -58,46 +74,35 @@ export function elementAt(scene: Scene, rects: ReadonlyMap<string, Rect>, x: num
   return null;
 }
 
-/** The words a new element's name starts with, in the user's language. */
-export interface NewNames {
-  readonly class: string;
-  readonly actor: string;
-  readonly usecase: string;
-  readonly system: string;
-  readonly state: string;
-  readonly entity: string;
-  readonly start: string;
-  readonly end: string;
-  readonly action: string;
-  readonly decision: string;
-}
-
 /** The name a new element gets: q0, q1… for an automaton, A, B… for a graph, Class1… elsewhere. */
-export function nextName(scene: Scene, t: NodeType, words: NewNames): string {
+export function nextName(scene: Scene, t: NodeType, s: DiagramStrings): string {
   const names = new Set(scene.nodes.map((n) => n.name ?? ""));
-  if (t === "terminal") return names.has(words.start) ? words.end : words.start;
+  if (t === "terminal") return names.has(s["new.start"]) ? s["new.end"] : s["new.start"];
   if (t === "astate") {
     let i = 0;
     while (names.has(`q${i}`)) i += 1;
     return `q${i}`;
   }
-  if (t === "vertex") {
-    const letter = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].find((c) => !names.has(c));
-    if (letter) return letter;
-  }
-  const prefix = t in words ? words[t as keyof NewNames] : t === "vertex" ? "V" : "";
-  if (!prefix || NAMELESS.has(t)) return "";
+  if (t === "vertex") return [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].find((c) => !names.has(c)) ?? numbered(names, "V");
+  const key = `new.${t}`;
+  return !NAMELESS.has(t) && key in s ? numbered(names, s[key as keyof DiagramStrings]) : "";
+}
+
+function numbered(names: ReadonlySet<string>, prefix: string): string {
   let i = 1;
   while (names.has(`${prefix}${i}`)) i += 1;
   return `${prefix}${i}`;
 }
+
+/** Whether a kind's scene still has room for one more element. */
+export const hasRoom = (scene: Scene, kind: DiagramKind): boolean => scene.nodes.length < KINDS[kind].maxNodes;
 
 /**
  * A new element for a tool, centred on a point: a class starts with two
  * empty compartments, an entity with an identifier, the first automaton
  * state is the initial one, a shape starts nameless.
  */
-export function newElement(scene: Scene, tool: PlaceTool, at: Point, measure: Measure, words: NewNames): DiagramNode {
+export function newElement(scene: Scene, tool: PlaceTool, at: Point, measure: Measure, s: DiagramStrings): DiagramNode {
   const t = typeOfTool(tool);
   const size = DEFAULT_SIZE[t];
   const n: DiagramNode = {
@@ -105,10 +110,10 @@ export function newElement(scene: Scene, tool: PlaceTool, at: Point, measure: Me
     t,
     x: 0,
     y: 0,
-    ...(tool === "accept" ? TOOL_PRESET.accept : {}),
+    ...(tool in TOOL_PRESET ? TOOL_PRESET[tool as keyof typeof TOOL_PRESET] : {}),
     ...(size ? { w: size[0], h: size[1] } : {}),
   };
-  const name = t === "system" || !size ? nextName(scene, t, words) : "";
+  const name = t === "system" || !size ? nextName(scene, t, s) : "";
   if (name) n.name = name;
   if (t === "class") n.body = ["---"];
   if (t === "entity") n.body = ["id : int PK"];
@@ -119,13 +124,19 @@ export function newElement(scene: Scene, tool: PlaceTool, at: Point, measure: Me
   return n;
 }
 
-/** A stroke or a line from points in canvas units: its box at the top left, its points relative to it. */
-export function inkElement(t: "stroke" | "line", pts: readonly XY[]): DiagramNode {
+/** Adds an element when the kind has room for it. */
+export const addElement = (scene: Scene, kind: DiagramKind, n: DiagramNode): Scene =>
+  hasRoom(scene, kind) ? { ...scene, nodes: [...scene.nodes, n] } : scene;
+
+/** A stroke or a line from points in canvas units, added when the scene has room for its points. */
+export function addInk(scene: Scene, kind: DiagramKind, t: "stroke" | "line", pts: readonly XY[]): Scene {
+  const ink = scene.nodes.reduce((k, n) => k + (n.pts?.length ?? 0), 0);
+  if (pts.length < 2 || ink + pts.length > MAX_INK_POINTS) return scene;
   const xs = pts.map((q) => q[0]);
   const ys = pts.map((q) => q[1]);
   const x = Math.floor(Math.min(...xs));
   const y = Math.floor(Math.min(...ys));
-  return {
+  return addElement(scene, kind, {
     id: newId(),
     t,
     x,
@@ -133,13 +144,21 @@ export function inkElement(t: "stroke" | "line", pts: readonly XY[]): DiagramNod
     w: Math.max(1, Math.ceil(Math.max(...xs)) - x),
     h: Math.max(1, Math.ceil(Math.max(...ys)) - y),
     pts: pts.map((q): [number, number] => [Math.round(q[0] - x), Math.round(q[1] - y)]),
-  };
+  });
 }
 
-export function addLink(scene: Scene, type: LinkType, a: string, b: string, via: readonly Point[]): { scene: Scene; id: string } {
+/** A new link, with a crow's-foot default for an entity-relationship; `null` past the limit. */
+export function addLink(scene: Scene, type: LinkType, a: string, b: string, via: readonly Point[]): { scene: Scene; id: string } | null {
+  if (scene.links.length >= MAX_LINKS) return null;
   const id = newId();
-  const crow = type === "erel";
-  const link: DiagramLink = { id, type, a, b, ...(via.length > 0 ? { via: [...via] } : {}), ...(crow ? { ma: "1", mb: "0..*" } : {}) };
+  const link: DiagramLink = {
+    id,
+    type,
+    a,
+    b,
+    ...(via.length > 0 ? { via: via.slice(0, MAX_VIA) } : {}),
+    ...(type === "erel" ? { ma: "1", mb: "0..*" } : {}),
+  };
   return { scene: { ...scene, links: [...scene.links, link] }, id };
 }
 
@@ -165,6 +184,17 @@ export function moveBy(scene: Scene, ids: ReadonlySet<string>, selection: Readon
   };
 }
 
+/** A resizable element's bottom right corner dragged to a point; a square or a circle keeps its aspect. */
+export function resizeTo(scene: Scene, id: string, to: Point): Scene {
+  const n = scene.nodes.find((x) => x.id === id);
+  if (!n) return scene;
+  const [minW, minH] = minSize(n.t);
+  let w = Math.max(minW, to.x - n.x);
+  let h = Math.max(minH, to.y - n.y);
+  if (SQUARE.has(n.t)) w = h = Math.max(w, h);
+  return patchItem(scene, id, { w, h });
+}
+
 /** Deletes the selection, with every link that touched a deleted element. */
 export function removeSelection(scene: Scene, selection: ReadonlySet<string>): Scene {
   return {
@@ -173,23 +203,20 @@ export function removeSelection(scene: Scene, selection: ReadonlySet<string>): S
   };
 }
 
-/** Copies of the selected elements 40 away, with the links between them; returns the copies' ids. */
-export function duplicateSelection(scene: Scene, selection: ReadonlySet<string>): { scene: Scene; ids: Set<string> } {
-  const map = new Map<string, string>();
-  const nodes = scene.nodes.filter((n) => selection.has(n.id)).map((n) => {
-    const id = newId();
-    map.set(n.id, id);
-    return { ...structuredClone(n), id, x: n.x + 40, y: n.y + 40 };
-  });
-  const links = scene.links
-    .filter((l) => map.has(l.a) && map.has(l.b))
-    .map((l) => ({
-      ...structuredClone(l),
-      id: newId(),
-      a: map.get(l.a) as string,
-      b: map.get(l.b) as string,
-      ...(l.via ? { via: l.via.map((v) => ({ x: v.x + 40, y: v.y + 40 })) } : {}),
-    }));
+/** Copies of the selected elements 40 away, with the links between them, when the kind has room. */
+export function duplicateSelection(scene: Scene, kind: DiagramKind, selection: ReadonlySet<string>): { scene: Scene; ids: Set<string> } | null {
+  const picked = scene.nodes.filter((n) => selection.has(n.id));
+  const between = scene.links.filter((l) => selection.has(l.a) && selection.has(l.b));
+  if (picked.length === 0 || scene.nodes.length + picked.length > KINDS[kind].maxNodes || scene.links.length + between.length > MAX_LINKS) return null;
+  const map = new Map(picked.map((n) => [n.id, newId()] as const));
+  const nodes = picked.map((n) => ({ ...structuredClone(n), id: map.get(n.id) as string, x: n.x + 40, y: n.y + 40 }));
+  const links = between.map((l) => ({
+    ...structuredClone(l),
+    id: newId(),
+    a: map.get(l.a) as string,
+    b: map.get(l.b) as string,
+    ...(l.via ? { via: l.via.map((v) => ({ x: v.x + 40, y: v.y + 40 })) } : {}),
+  }));
   return { scene: { nodes: [...scene.nodes, ...nodes], links: [...scene.links, ...links] }, ids: new Set([...nodes, ...links].map((x) => x.id)) };
 }
 
@@ -225,13 +252,13 @@ function along(pts: readonly XY[], p: Point): number {
   return at;
 }
 
-/** An elbow where the line was double-clicked, in its place among the others. */
+/** An elbow where the line was double-clicked, in its place among the others, up to the limit. */
 export function insertElbow(scene: Scene, linkId: string, route: Route, p: Point): Scene {
   return {
     ...scene,
     links: scene.links.map((l) => {
-      if (l.id !== linkId) return l;
       const via = l.via ?? [];
+      if (l.id !== linkId || via.length >= MAX_VIA) return l;
       const pos = along(route.pts, p);
       const i = via.filter((v) => along(route.pts, v) < pos).length;
       return { ...l, via: [...via.slice(0, i), p, ...via.slice(i)] };
@@ -251,8 +278,16 @@ export function removeElbow(scene: Scene, linkId: string, index: number): Scene 
   };
 }
 
+/** An elbow moved to a point. */
+export function moveElbow(scene: Scene, linkId: string, index: number, p: Point): Scene {
+  return {
+    ...scene,
+    links: scene.links.map((l) => (l.id === linkId && l.via ? { ...l, via: l.via.map((v, i) => (i === index ? p : v)) } : l)),
+  };
+}
+
 /** What a rubber band selects: the elements it touches (a boundary only whole), the lines it holds. */
-export function inBand(scene: Scene, rects: ReadonlyMap<string, Rect>, routes: ReadonlyMap<string, Route>, band: Rect): Set<string> {
+export function inBand(scene: Scene, rects: ReadonlyMap<string, Rect>, routes: ReadonlyMap<string, Route>, band: Bounds): Set<string> {
   const out = new Set<string>();
   for (const n of scene.nodes) {
     const r = rects.get(n.id);
@@ -267,7 +302,7 @@ export function inBand(scene: Scene, rects: ReadonlyMap<string, Rect>, routes: R
   return out;
 }
 
-/** Replaces one element or link, by id. */
+/** Replaces fields of one element or link, by id; an emptied optional field is dropped. */
 export function patchItem(scene: Scene, id: string, patch: Partial<DiagramNode> & Partial<DiagramLink>): Scene {
   return {
     nodes: scene.nodes.map((n) => (n.id === id ? dropEmpty({ ...n, ...patch } as DiagramNode) : n)),
@@ -287,8 +322,23 @@ export function setInitial(scene: Scene, id: string, on: boolean): Scene {
   return {
     ...scene,
     nodes: scene.nodes.map((n) => {
-      if (n.id === id) return on ? { ...n, initial: true } : dropEmpty({ ...n, initial: false });
+      if (n.id === id) return dropEmpty({ ...n, initial: on });
       return on && n.initial ? dropEmpty({ ...n, initial: false }) : n;
     }),
   };
+}
+
+/** The status line's hint for what the editor is doing. */
+export function hintFor(state: {
+  mode: "select" | "place" | "link";
+  tool: PlaceTool | null;
+  drawing: boolean;
+  selected: number;
+  kind: DiagramKind;
+}): keyof DiagramStrings {
+  if (state.mode === "place") return state.tool && INK.has(typeOfTool(state.tool)) ? "hintInk" : "hintPlace";
+  if (state.drawing) return "hintDrawing";
+  if (state.mode === "link") return "hintLink";
+  if (state.selected > 0) return "hintSelected";
+  return KINDS[state.kind].dbl ? "hintSelect" : "hintSelectFree";
 }

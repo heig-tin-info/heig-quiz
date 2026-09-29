@@ -1,17 +1,27 @@
 /**
  * The properties of the one element or link selected. Every field writes
  * the scene on each keystroke; one focus of a field is one undo step (the
- * `session` handed to `onEdit`).
+ * `session` handed to `onEdit`). Every field is bounded like the schema.
  */
 import { fmt } from "@quiz/core/client";
-import { useEffect, useRef, useState, type JSX, type RefObject } from "react";
+import { useEffect, useId, useRef, type JSX, type KeyboardEvent } from "react";
 
-import { BODIED, CIRCLES, KINDS, type DiagramKind } from "../kinds.js";
-import { CARDINALITIES, type DiagramLink, type DiagramNode, type Scene } from "../scene.js";
+import { BODIED, KINDS, LINK_STYLE, type DiagramKind } from "../kinds.js";
+import {
+  BODY_LINES_MAX,
+  BODY_LINE_MAX,
+  CARDINALITIES,
+  LABEL_MAX,
+  NAME_MAX,
+  type DiagramLink,
+  type DiagramNode,
+  type Scene,
+} from "../scene.js";
+import { BufferedText } from "./BufferedText.js";
 import { patchItem, setInitial } from "./ops.js";
+import { nextSession } from "./session.js";
 import { CardinalityIcon, LinkIcon } from "./shapes.js";
 import { labelKey, linkKey, type DiagramStrings } from "./strings.js";
-import { nextSession } from "./useHistory.js";
 import { checkRow, cx, field, iconButton, input, inspector, lineButton, textarea, tip } from "./styles.js";
 
 /** A field to focus once the inspector shows: the name, or a line of the body. */
@@ -30,10 +40,20 @@ export interface InspectorProps {
 }
 
 const isLink = (item: DiagramNode | DiagramLink): item is DiagramLink => "type" in item;
-const lines = (text: string): string[] => text.split("\n").map((s) => s.trimEnd()).filter((s) => s.trim());
 
+/** A body as lines: blank ones dropped, each line and their count bounded like the schema. */
+const bodyLines = (text: string): string[] =>
+  text
+    .split("\n")
+    .map((l) => l.trimEnd().slice(0, BODY_LINE_MAX))
+    .filter((l) => l.trim())
+    .slice(0, BODY_LINES_MAX);
+
+const MULTIPLICITIES = ["1", "0..1", "*", "0..*", "1..*"];
+const STEREOTYPES = ["interface", "enumeration", "entity", "service", "utility", "dataType"];
 
 export function Inspector({ kind, scene, item, onEdit, onReverse, focus, onFocused, strings: s }: InspectorProps): JSX.Element {
+  const listId = useId();
   const session = useRef(0);
   const nameRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -41,6 +61,11 @@ export function Inspector({ kind, scene, item, onEdit, onReverse, focus, onFocus
     session.current = nextSession();
   };
   const edit = (patch: Partial<DiagramNode> & Partial<DiagramLink>): void => onEdit(patchItem(scene, item.id, patch), session.current);
+  /* a click on a choice is a session of its own */
+  const choose = (patch: Partial<DiagramNode> & Partial<DiagramLink>): void => {
+    begin();
+    edit(patch);
+  };
 
   useEffect(() => {
     if (!focus) return;
@@ -56,18 +81,20 @@ export function Inspector({ kind, scene, item, onEdit, onReverse, focus, onFocus
     onFocused();
   }, [focus, onFocused]);
 
-  const keys = { onFocus: begin, onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => (e.key === "Enter" || e.key === "Escape") && e.currentTarget.blur() };
+  const text = {
+    onFocus: begin,
+    spellCheck: false,
+    onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => (e.key === "Enter" || e.key === "Escape") && e.currentTarget.blur(),
+  };
 
   if (isLink(item)) {
-    const a = scene.nodes.find((n) => n.id === item.a)?.name ?? "";
-    const b = scene.nodes.find((n) => n.id === item.b)?.name ?? "";
-    const types = KINDS[kind].links;
-    const named = kind !== "usecase" || item.type === "assoc";
+    const endName = (end: "ma" | "mb"): string => scene.nodes.find((n) => n.id === (end === "ma" ? item.a : item.b))?.name ?? "";
+    const spec = KINDS[kind];
     return (
       <div className={inspector} aria-label={s[linkKey(item.type)]} role="group">
-        {types.length > 1 && (
+        {spec.links.length > 1 && (
           <div className="flex flex-wrap gap-1" role="radiogroup">
-            {types.map((t) => (
+            {spec.links.map((t) => (
               <button
                 key={t}
                 type="button"
@@ -76,21 +103,18 @@ export function Inspector({ kind, scene, item, onEdit, onReverse, focus, onFocus
                 aria-label={s[linkKey(t)]}
                 title={s[linkKey(t)]}
                 className={lineButton(item.type === t)}
-                onClick={() => {
-                  begin();
-                  edit({ type: t });
-                }}
+                onClick={() => choose({ type: t })}
               >
                 <LinkIcon type={t} />
               </button>
             ))}
           </div>
         )}
-        {kind === "er" &&
+        {spec.ends === "cardinality" &&
           (["ma", "mb"] as const).map((end) => (
             <div key={end} className={field}>
-              <span className="truncate">{end === "ma" ? a : b}</span>
-              <div className="flex gap-1" role="radiogroup" aria-label={fmt(s.cardinality, { name: end === "ma" ? a : b })}>
+              <span className="truncate">{endName(end)}</span>
+              <div className="flex gap-1" role="radiogroup" aria-label={fmt(s.cardinality, { name: endName(end) })}>
                 {CARDINALITIES.map((c) => (
                   <button
                     key={c}
@@ -100,10 +124,7 @@ export function Inspector({ kind, scene, item, onEdit, onReverse, focus, onFocus
                     aria-label={c}
                     title={c}
                     className={iconButton(item[end] === c)}
-                    onClick={() => {
-                      begin();
-                      edit({ [end]: c });
-                    }}
+                    onClick={() => choose({ [end]: c })}
                   >
                     <CardinalityIcon card={c} />
                   </button>
@@ -111,34 +132,36 @@ export function Inspector({ kind, scene, item, onEdit, onReverse, focus, onFocus
               </div>
             </div>
           ))}
-        {named && (
+        {!LINK_STYLE[item.type].label && (
           <label className={field}>
             <span>{s[labelKey(kind)]}</span>
-            <input className={input} value={item.name ?? ""} spellCheck={false} {...keys} onChange={(e) => edit({ name: e.target.value })} />
+            <input className={input} value={item.name ?? ""} maxLength={NAME_MAX} {...text} onChange={(e) => edit({ name: e.target.value })} />
           </label>
         )}
-        {kind === "class" &&
+        {spec.ends === "multiplicity" &&
           (["ma", "mb"] as const).map((end) => (
             <label key={end} className={field}>
-              <span className="truncate" title={end === "ma" ? a : b}>
-                {end === "ma" ? a : b}
+              <span className="truncate" title={endName(end)}>
+                {endName(end)}
               </span>
               <input
                 className={input}
                 value={item[end] ?? ""}
-                list="diagram-multiplicities"
-                spellCheck={false}
-                aria-label={fmt(s.multiplicity, { name: end === "ma" ? a : b })}
-                {...keys}
+                list={`${listId}-m`}
+                maxLength={LABEL_MAX}
+                aria-label={fmt(s.multiplicity, { name: endName(end) })}
+                {...text}
                 onChange={(e) => edit({ [end]: e.target.value.trim() })}
               />
             </label>
           ))}
-        <datalist id="diagram-multiplicities">
-          {["1", "0..1", "*", "0..*", "1..*"].map((m) => (
-            <option key={m} value={m} />
-          ))}
-        </datalist>
+        {spec.ends === "multiplicity" && (
+          <datalist id={`${listId}-m`}>
+            {MULTIPLICITIES.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
+        )}
         <button type="button" className={cx(iconButton(), "w-auto justify-start px-2 text-[12.5px]")} onClick={onReverse}>
           {s.swap}
         </button>
@@ -146,12 +169,11 @@ export function Inspector({ kind, scene, item, onEdit, onReverse, focus, onFocus
     );
   }
 
-  const bodied = BODIED.has(item.t);
   return (
     <div className={inspector} role="group" aria-label={item.name ?? ""}>
       <label className={field}>
         <span>{s.name}</span>
-        <input ref={nameRef} className={input} value={item.name ?? ""} spellCheck={false} {...keys} onChange={(e) => edit({ name: e.target.value })} />
+        <input ref={nameRef} className={input} value={item.name ?? ""} maxLength={NAME_MAX} {...text} onChange={(e) => edit({ name: e.target.value })} />
       </label>
       {item.t === "class" && (
         <>
@@ -161,32 +183,24 @@ export function Inspector({ kind, scene, item, onEdit, onReverse, focus, onFocus
               className={input}
               value={item.stereo ?? ""}
               placeholder={s.stereotypeNone}
-              list="diagram-stereotypes"
-              spellCheck={false}
-              {...keys}
+              list={`${listId}-s`}
+              maxLength={NAME_MAX}
+              {...text}
               onChange={(e) => edit({ stereo: e.target.value.replace(/[«»<>]/g, "").trim() })}
             />
           </label>
-          <datalist id="diagram-stereotypes">
-            {["interface", "enumeration", "entity", "service", "utility", "dataType"].map((v) => (
+          <datalist id={`${listId}-s`}>
+            {STEREOTYPES.map((v) => (
               <option key={v} value={v} />
             ))}
           </datalist>
           <label className={checkRow}>
-            <input
-              type="checkbox"
-              className="accent-accent"
-              checked={item.abstract === true}
-              onChange={(e) => {
-                begin();
-                edit({ abstract: e.target.checked });
-              }}
-            />
+            <input type="checkbox" className="accent-accent" checked={item.abstract === true} onChange={(e) => choose({ abstract: e.target.checked })} />
             {s.abstract}
           </label>
         </>
       )}
-      {CIRCLES.has(item.t) && kind === "automaton" && (
+      {item.t === "astate" && (
         <div className="flex gap-4">
           <label className={checkRow}>
             <input
@@ -201,20 +215,12 @@ export function Inspector({ kind, scene, item, onEdit, onReverse, focus, onFocus
             {s.initial}
           </label>
           <label className={checkRow}>
-            <input
-              type="checkbox"
-              className="accent-accent"
-              checked={item.accept === true}
-              onChange={(e) => {
-                begin();
-                edit({ accept: e.target.checked });
-              }}
-            />
+            <input type="checkbox" className="accent-accent" checked={item.accept === true} onChange={(e) => choose({ accept: e.target.checked })} />
             {s.accepting}
           </label>
         </div>
       )}
-      {bodied && (
+      {BODIED.has(item.t) && (
         <label className="flex flex-col gap-1 text-fg-muted">
           <span>{s[`body.${item.t as "class" | "entity" | "state"}`]}</span>
           <BufferedText
@@ -223,66 +229,12 @@ export function Inspector({ kind, scene, item, onEdit, onReverse, focus, onFocus
             rows={7}
             value={(item.body ?? []).join("\n")}
             onFocus={begin}
-            onValue={(text) => edit({ body: lines(text) })}
+            onValue={(value) => edit({ body: bodyLines(value) })}
           />
         </label>
       )}
       {item.t === "class" && <p className={tip}>{s.bodyHintClass}</p>}
       {item.t === "entity" && <p className={tip}>{s.bodyHintEntity}</p>}
     </div>
-  );
-}
-
-/**
- * A textarea that keeps what is typed while it has the focus: the value it
- * writes back is normalised (blank lines dropped), and re-reading it at once
- * would eat the new line an Enter just made.
- */
-export function BufferedText({
-  value,
-  onValue,
-  onFocus,
-  textRef,
-  tabIndents = false,
-  ...rest
-}: {
-  value: string;
-  onValue: (text: string) => void;
-  onFocus?: () => void;
-  /** Tab indents by two spaces instead of leaving the field: the text pane. */
-  tabIndents?: boolean;
-  textRef?: RefObject<HTMLTextAreaElement | null>;
-  className?: string;
-  rows?: number;
-  "aria-label"?: string;
-  "aria-invalid"?: boolean;
-}): JSX.Element {
-  const [local, setLocal] = useState<string | null>(null);
-  return (
-    <textarea
-      ref={textRef}
-      spellCheck={false}
-      {...rest}
-      value={local ?? value}
-      onFocus={() => {
-        setLocal(value);
-        onFocus?.();
-      }}
-      onBlur={() => setLocal(null)}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") e.currentTarget.blur();
-        if (tabIndents && e.key === "Tab" && !e.shiftKey) {
-          e.preventDefault();
-          const el = e.currentTarget;
-          el.setRangeText("  ", el.selectionStart, el.selectionEnd, "end");
-          setLocal(el.value);
-          onValue(el.value);
-        }
-      }}
-      onChange={(e) => {
-        setLocal(e.target.value);
-        onValue(e.target.value);
-      }}
-    />
   );
 }

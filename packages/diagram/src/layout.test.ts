@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { applyParsed } from "./apply.js";
-import { parseText } from "./codecs/index.js";
+import { CODECS } from "./codecs/index.js";
 import { EXAMPLES } from "./examples.js";
 import { estimateText, rectOf, type Rect } from "./geometry.js";
 import { DIAGRAM_KINDS, KINDS } from "./kinds.js";
@@ -94,7 +94,7 @@ describe("straight layout", () => {
 
 describe("applyParsed placement", () => {
   const add = (scene: Scene, kind: "flow" | "usecase" | "automaton", text: string): Scene =>
-    applyParsed(scene, parseText(text, kind), kind, estimateText);
+    applyParsed(scene, CODECS[kind]!.read(text), kind, estimateText);
 
   it("puts a new flowchart step under the one that leads to it, clear of the rest", () => {
     const text = "flowchart TD\n  n1([Début]) --> n2[Lire n]\n  n2 --> n3[Nouvelle étape]";

@@ -48,7 +48,7 @@ import { CANVAS_STRINGS, type CanvasStrings } from "./canvasStrings.js";
 import { canvasArea, cx, frame } from "./canvasStyles.js";
 import { Drawing, Inspector, PaletteRail, StatusBar, Toolbar, Transient } from "./EditorChrome.js";
 import { ORIENT_0, indexOf, newComponent, viewBoxAttr, type PinTarget } from "./geometry.js";
-import { useHistory } from "./history.js";
+import { useHistory } from "@quiz/ui";
 import { blockedCells, computeRoutes, withRoutes } from "./router.js";
 import { connectedPins, type FlaggedPin } from "./SchematicView.js";
 import { usePartDragging, type Ghost } from "./usePartDragging.js";
