@@ -643,7 +643,8 @@ export const en = {
   "pool.filter.medianTime": "Median time",
   "pool.filter.min": "{label}, from",
   "pool.filter.max": "{label}, up to",
-  "pool.filter.withoutStats": "Include questions without statistics",
+  "pool.filter.unit.seconds": "s",
+  "pool.filter.withoutStats":"Include questions without statistics",
   "pool.filter.statsHint":
     "The rate in percent (below zero under negative marking), the time in seconds. A question has statistics from {n} answers.",
   "pool.filter.statsNone": "No question of this pool has statistics yet: they show from {n} answers.",

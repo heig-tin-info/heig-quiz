@@ -186,8 +186,14 @@ type StatsBounds = Pick<QuestionFilters, "rateMin" | "rateMax" | "timeMin" | "ti
 
 const hasRateBound = (f: StatsBounds) => f.rateMin !== null || f.rateMax !== null;
 const hasTimeBound = (f: StatsBounds) => f.timeMin !== null || f.timeMax !== null;
-const inRange = (value: number, min: number | null, max: number | null) =>
-  (min === null || value >= min) && (max === null || value <= max);
+/** A range typed backwards ("60 to 20") means the same span as the right way round. */
+const inRange = (value: number, a: number | null, b: number | null) => {
+  const [min, max] = a !== null && b !== null && a > b ? [b, a] : [a, b];
+  return (min === null || value >= min) && (max === null || value <= max);
+};
+
+/** A success rate `p` in whole percent, signed: the figure the panel shows and the bounds compare. */
+export const ratePercent = (p: number): number => Math.round(p * 100);
 
 /** Whether a statistics bound is set: the list is then filtered in the page. */
 export function hasStatsFilter(filters: StatsBounds): boolean {
@@ -209,7 +215,7 @@ export function matchesStats(stats: QuestionStats | undefined, filters: StatsBou
   const time = hasTimeBound(filters);
   if (!rate && !time) return true;
   if (!stats) return filters.withoutStats;
-  if (rate && !inRange(Math.round(stats.p * 100), filters.rateMin, filters.rateMax)) return false;
+  if (rate && !inRange(ratePercent(stats.p),filters.rateMin, filters.rateMax)) return false;
   if (!time) return true;
   if (!stats.time) return filters.withoutStats;
   return inRange(stats.time.medianS, filters.timeMin, filters.timeMax);

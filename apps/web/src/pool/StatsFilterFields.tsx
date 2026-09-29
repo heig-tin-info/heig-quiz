@@ -1,3 +1,4 @@
+import type { PoolQuestionStats } from "@quiz/contracts";
 import { QUESTION_STATS_MIN_N } from "@quiz/domain";
 
 import { useT } from "../i18n";
@@ -5,15 +6,14 @@ import { cx, inputClass, inputSize, Spinner, Switch } from "../ui";
 import type { QuestionFilters } from "./filters";
 
 /**
- * What the pool screen knows of its statistics when the filter sheet opens:
- * still loading, failed, or ready — with whether any question has them at
- * all, and whether any has a time (ADR-039), which a question may lack long
- * after its rate shows.
+ * The pool's statistics query as the filter sheet reads it: still loading,
+ * failed, or answered. The TanStack result fits it as it is.
  */
-export type StatsOffer =
-  | { status: "loading" }
-  | { status: "error" }
-  | { status: "ready"; rate: boolean; time: boolean };
+export interface StatsOffer {
+  isPending: boolean;
+  isError: boolean;
+  data?: PoolQuestionStats | undefined;
+}
 
 /** One bound: a bare number field, its name in `aria-label` (the row's label is shared by two). */
 function Bound({
@@ -107,14 +107,18 @@ export function StatsFilterFields({
   onChange: (patch: Partial<QuestionFilters>) => void;
 }) {
   const t = useT();
+  const items = offer.data?.items ?? [];
+  // A question may have its rate long before its time (ADR-039): the time
+  // range shows once one question has a time.
+  const withTime = items.some((s) => s.time !== null);
   return (
     <fieldset className="space-y-3">
       <legend className="mb-2 text-[13px] font-medium">{t("pool.filter.stats")}</legend>
-      {offer.status === "loading" ? (
+      {offer.isPending ? (
         <Spinner className="py-2" />
-      ) : offer.status === "error" ? (
+      ) : offer.isError ? (
         <p className="text-sm text-fg-muted">{t("pool.filter.statsError")}</p>
-      ) : !offer.rate ? (
+      ) : items.length === 0 ? (
         <p className="text-sm text-fg-muted">
           {t("pool.filter.statsNone", { n: QUESTION_STATS_MIN_N })}
         </p>
@@ -127,10 +131,10 @@ export function StatsFilterFields({
             max={filters.rateMax}
             onChange={(rateMin, rateMax) => onChange({ rateMin, rateMax })}
           />
-          {offer.time ? (
+          {withTime ? (
             <Range
               label={t("pool.filter.medianTime")}
-              unit="s"
+              unit={t("pool.filter.unit.seconds")}
               min={filters.timeMin}
               max={filters.timeMax}
               floor={0}

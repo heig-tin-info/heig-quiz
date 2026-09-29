@@ -8,6 +8,7 @@ import {
   hasStatsFilter,
   matchesStats,
   questionQuery,
+  ratePercent,
   resolveFilters,
   toggle,
 } from "./filters";
@@ -177,7 +178,20 @@ describe("the statistics bounds (F-STAT-03)", () => {
     expect(matchesStats(stats(0.725), { ...EMPTY_FILTERS, rateMin: 73 })).toBe(true);
   });
 
-  it("reads a signed rate: a bound below zero finds the questions that take points away", () => {
+  it("reads a range typed backwards as the same span", () => {
+    const rate = { ...EMPTY_FILTERS, rateMin: 73, rateMax: 40 };
+    expect(matchesStats(stats(0.5), rate)).toBe(true);
+    expect(matchesStats(stats(0.8), rate)).toBe(false);
+    const time = { ...EMPTY_FILTERS, timeMin: 90, timeMax: 60 };
+    expect(matchesStats(stats(0.5, TIME), time)).toBe(true);
+  });
+
+  it("rounds a rate to the whole percent the panel shows", () => {
+    expect(ratePercent(0.725)).toBe(73);
+    expect(ratePercent(-0.08)).toBe(-8);
+  });
+
+  it("reads a signed rate:a bound below zero finds the questions that take points away", () => {
     const f = { ...EMPTY_FILTERS, rateMax: -1 };
     expect(matchesStats(stats(-0.08), f)).toBe(true);
     expect(matchesStats(stats(0), f)).toBe(false);

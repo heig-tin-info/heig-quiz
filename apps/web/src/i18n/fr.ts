@@ -637,7 +637,8 @@ export const fr: Record<keyof Dict, string> = {
   "pool.filter.medianTime": "Temps médian",
   "pool.filter.min": "{label}, à partir de",
   "pool.filter.max": "{label}, jusqu'à",
-  "pool.filter.withoutStats": "Inclure les questions sans statistiques",
+  "pool.filter.unit.seconds": "s",
+  "pool.filter.withoutStats":"Inclure les questions sans statistiques",
   "pool.filter.statsHint":
     "Le taux en pour cent (négatif possible sous points négatifs), le temps en secondes. Une question a des statistiques dès {n} réponses.",
   "pool.filter.statsNone":

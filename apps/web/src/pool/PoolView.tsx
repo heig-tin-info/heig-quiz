@@ -53,7 +53,6 @@ import { groupQuestions, isGroupBy, type GroupBy } from "./QuestionGroups";
 import { QuestionStatsSheet } from "./QuestionStatsSheet";
 import { QuestionTable, type StatsFor } from "./QuestionTable";
 import { useSetStars, useStarredQuestions } from "./stars";
-import type { StatsOffer } from "./StatsFilterFields";
 import { useQuestionBrowse } from "./useQuestionBrowse";
 import { QuestionPreview } from "../question/QuestionPreview";
 import { useQuestionActions } from "../question/useQuestionActions";
@@ -262,16 +261,6 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
     const loaded = (questions.data?.pages ?? []).flatMap((page) => page.items);
     return byStats ? loaded.filter((row) => matchesStats(statsById.get(row.id), filters)) : loaded;
   }, [questions.data, byStats, statsById, filters]);
-  const statsOffer: StatsOffer = questionStats.isPending
-    ? { status: "loading" }
-    : questionStats.isError
-      ? { status: "error" }
-      : {
-          status: "ready",
-          rate: statsById.size > 0,
-          time: (questionStats.data?.items ?? []).some((s) => s.time !== null),
-        };
-
   // A statistics bound judges every row: follow the cursor to the end.
   const { hasNextPage, isFetchingNextPage, isError: listFailed, fetchNextPage } = questions;
   useEffect(() => {
@@ -279,6 +268,11 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   }, [byStats, hasNextPage, isFetchingNextPage, listFailed, fetchNextPage]);
   // Rows filtered by bounds still missing a page or the statistics are not an answer yet.
   const gathering = byStats && (hasNextPage || questionStats.isPending);
+  // The count: the rows that pass once all are in under a bound, the API's
+  // `total` otherwise; unknown (nothing drawn) meanwhile.
+  const apiTotal = questions.data?.pages[0]?.total ?? null;
+  const passedTotal = gathering || !questions.data ? null : rows.length;
+  const total = byStats ? passedTotal : apiTotal;
   const checkedIds = rows.filter((r) => checked.has(r.id)).map((r) => r.id);
 
   /**
@@ -423,14 +417,8 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                   setFilters(next);
                 }}
                 tags={detail.tags}
-                stats={statsOffer}
-                total={
-                  byStats
-                    ? gathering || !questions.data
-                      ? null
-                      : rows.length
-                    : (questions.data?.pages[0]?.total ?? null)
-                }
+                stats={questionStats}
+                total={total}
                 view={view}
                 onView={setView}
                 group={group}

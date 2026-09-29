@@ -66,6 +66,13 @@ import { StatsFilterFields, type StatsOffer } from "./StatsFilterFields";
  */
 const DIFFICULTIES = [1, 2, 3, 4, 5];
 
+/** The chip wording of each range the bar can hold, as literal keys. */
+const RANGE_KEYS = {
+  version: { between: "pool.version.between", from: "pool.version.from", upTo: "pool.version.upTo" },
+  rate: { between: "pool.filter.rate.between", from: "pool.filter.rate.from", upTo: "pool.filter.rate.upTo" },
+  time: { between: "pool.filter.time.between", from: "pool.filter.time.from", upTo: "pool.filter.time.upTo" },
+} as const;
+
 /** How many tag chips the sheet shows before "Show all (N)". */
 const TAG_LIMIT = 20;
 
@@ -314,28 +321,26 @@ export function QuestionSearchBar({
   const dropVersion = () =>
     set({ versionMin: null, versionMax: null, q: withoutToken(filters.q, "version") });
 
-  const versionLabel = () => {
-    const { versionMin: min, versionMax: max } = resolved;
-    if (min !== null && max !== null) {
-      return min === max
-        ? t("pool.version.is", { n: min })
-        : t("pool.version.between", { min, max });
-    }
-    return min !== null ? t("pool.version.from", { n: min }) : t("pool.version.upTo", { n: max! });
-  };
-
-  /** "Success 20% to 60%", "Median time 1 min 30 and up": one chip per range. */
+  /**
+   * One chip per range — "Versions 2 to 4", "Success 20% to 60%", "Median
+   * time 1 min 30 and up" — from `RANGE_KEYS`. A version range
+   * closed on one number reads "Version 3".
+   */
   const rangeLabel = (
-    key: "rate" | "time",
+    kind: keyof typeof RANGE_KEYS,
     min: number | null,
     max: number | null,
-    show: (v: number) => string,
-  ) =>
-    min !== null && max !== null
-      ? t(`pool.filter.${key}.between`, { min: show(min), max: show(max) })
-      : min !== null
-        ? t(`pool.filter.${key}.from`, { n: show(min) })
-        : t(`pool.filter.${key}.upTo`, { n: show(max!) });
+    show: (v: number) => string = String,
+  ) => {
+    const keys = RANGE_KEYS[kind];
+    if (kind === "version" && min !== null && min === max) {
+      return t("pool.version.is", { n: min });
+    }
+    if (min !== null && max !== null) {
+      return t(keys.between, { min: show(min), max: show(max) });
+    }
+    return min !== null ? t(keys.from, { n: show(min) }) : t(keys.upTo, { n: show(max!) });
+  };
 
   return (
     <div className="space-y-2.5">
@@ -379,17 +384,22 @@ export function QuestionSearchBar({
             />
           ))}
           {resolved.versionMin !== null || resolved.versionMax !== null ? (
-            <Chip label={versionLabel()} onRemove={dropVersion} />
+            <Chip
+              label={rangeLabel("version", resolved.versionMin, resolved.versionMax)}
+              onRemove={dropVersion}
+            />
           ) : null}
           {filters.rateMin !== null || filters.rateMax !== null ? (
             <Chip
-              label={rangeLabel("rate", filters.rateMin, filters.rateMax, String)}
+              label={rangeLabel("rate", filters.rateMin, filters.rateMax)}
               onRemove={() => set({ rateMin: null, rateMax: null })}
             />
           ) : null}
           {filters.timeMin !== null || filters.timeMax !== null ? (
             <Chip
-              label={rangeLabel("time", filters.timeMin, filters.timeMax, (s) => formatSpan(s, t))}
+              label={rangeLabel("time", filters.timeMin, filters.timeMax, (s) =>
+                formatSpan(s, t),
+              )}
               onRemove={() => set({ timeMin: null, timeMax: null })}
             />
           ) : null}

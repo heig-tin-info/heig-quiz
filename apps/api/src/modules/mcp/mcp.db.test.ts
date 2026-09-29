@@ -137,8 +137,22 @@ describe("the transport", () => {
         "create_poll",
       ].sort(),
     );
+    // …and its reading half, the one set annotated read-only.
     const readOnly = result.tools.filter((t: any) => t.annotations.readOnlyHint).map((t: any) => t.name);
-    expect(readOnly).toContain("get_pool_question_stats");
+    expect(readOnly.sort()).toEqual(
+      [
+        "list_courses",
+        "get_course",
+        "list_pools",
+        "get_pool",
+        "get_pool_question_stats",
+        "list_questions",
+        "get_question",
+        "list_evaluations",
+        "get_evaluation",
+        "describe_question_types",
+      ].sort(),
+    );
     for (const t of result.tools) expect(t.inputSchema.type, t.name).toBe("object");
     // Nothing destructive is exposed.
     expect(names.some((n: string) => /delete|remove|close|release/.test(n))).toBe(false);
