@@ -23,7 +23,13 @@ export interface LiveToggles {
   results: boolean;
 }
 
-export const LIVE_TOGGLES_KEY = "quiz-live-toggles";
+/**
+ * `-v2` since the defaults went OFF (#227): the first key was written with
+ * all three ON by every browser that ever flipped one switch, and a
+ * preference nobody chose kept the names and answers on the projector.
+ * The new key lets the defaults speak once; a choice made since is kept.
+ */
+export const LIVE_TOGGLES_KEY = "quiz-live-toggles-v2";
 
 /**
  * All three OFF on a first visit (#227). The dashboard is a projected screen

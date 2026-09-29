@@ -41,7 +41,7 @@ export function LiveHeader({
   title,
   eyebrow,
   state,
-  closesAt,
+  deadlineAt,
   endPassed = false,
   clock,
   controls,
@@ -52,7 +52,8 @@ export function LiveHeader({
   title: string;
   eyebrow?: React.ReactNode;
   state: EvaluationState;
-  closesAt: string | null;
+  /** The class's one clock (`commonDeadline`): the common close, or the shared start's deadline. */
+  deadlineAt: string | null;
   /**
    * In the waiting room, the common end has passed (#178): the server refuses
    * the start, and "+N min" — moved from now — is the way out.
@@ -116,9 +117,9 @@ export function LiveHeader({
               keeps the paused state and the warning and danger tones of
               every countdown. No clock in the waiting room or once closed:
               there is no running window to count. */}
-          {closesAt && live ? (
+          {deadlineAt && live ? (
             <ClockCountdown
-              deadlineAt={Date.parse(closesAt)}
+              deadlineAt={Date.parse(deadlineAt)}
               clock={clock}
               paused={paused}
               className="mr-2 text-[30px] leading-none [&_svg]:size-6"

@@ -8,6 +8,7 @@ import { initialGrid } from "../realtime/grid";
 import { id, LIVE_NOW, liveAt, makeCell, makeDashboard } from "../test/live-fixtures";
 import { labelIssues } from "../test/labels";
 import { renderWithProviders } from "../test/render";
+import { commonDeadline } from "./cells";
 import { StudentGrid } from "./StudentGrid";
 
 /*
@@ -46,6 +47,7 @@ function setup(view: DashboardView, over: Partial<Parameters<typeof StudentGrid>
     <StudentGrid
       state={initialGrid(view)}
       clock={() => NOW}
+      commonDeadline={commonDeadline(view.evaluation.closesAt, view.rows)}
       paused={view.evaluation.state === "paused"}
       nameOf={(row) => row.displayName}
       showAnswers
@@ -126,8 +128,9 @@ describe("StudentGrid — the rows", () => {
       ],
     };
     setup(view);
-    expect(within(rowOf("Nadia Roux 0")).getByText("2/4")).toBeVisible();
-    expect(within(rowOf("Nadia Roux 0")).getByText("50 %")).toBeInTheDocument();
+    // The percentage alone; the fraction is the tooltip.
+    expect(within(rowOf("Nadia Roux 0")).getByText("50 %")).toBeVisible();
+    expect(within(rowOf("Nadia Roux 0")).getByTitle("2 of 4 questions answered")).toBeInTheDocument();
   });
 
   it("counts a skipped question as progress (issue #89)", () => {
@@ -141,7 +144,7 @@ describe("StudentGrid — the rows", () => {
       ],
     };
     setup(view);
-    expect(within(rowOf("Nadia Roux 0")).getByText("1/2")).toBeVisible();
+    expect(within(rowOf("Nadia Roux 0")).getByText("50 %")).toBeVisible();
     expect(within(rowOf("Nadia Roux 0")).getByRole("button", { name: /Question 1/ })).toBeInTheDocument();
   });
 
@@ -437,23 +440,14 @@ describe("StudentGrid — the sticky ends", () => {
 });
 
 describe("StudentGrid — the class row", () => {
-  it("counts the students and reads the completion as a percentage", () => {
+  // The head count is the status line's ("19/24 connected"), not the grid's:
+  // one number, said once.
+  it("reads the completion as a percentage, and does not count the class again", () => {
     const view = viewIn("running", 3, 2);
     view.totals[0] = { ...view.totals[0]!, completion: 0.5 };
     setup(view);
-    expect(screen.getByText(/\b3 students\b/)).toBeVisible();
     expect(screen.getByText("50 %")).toBeVisible();
-  });
-
-  // A class of one — or, as built here, a class where every other row is
-  // staff — says "1 student", in both dictionaries (`live.grid.students.one`).
-  it("excludes the staff rows from the count, and says \"1 student\" for the one left", () => {
-    const view = viewIn("running", 3, 2);
-    view.rows[1] = { ...view.rows[1]!, staff: true };
-    view.rows[2] = { ...view.rows[2]!, staff: true };
-    setup(view);
-    expect(screen.getByText(/\b1 student\b/)).toBeVisible();
-    expect(screen.queryByText(/\b1 students\b/)).toBeNull();
+    expect(screen.queryByText(/\b3 students\b/)).toBeNull();
   });
 
   it("says the rate is a live one while the answers are being graded as they land", () => {
@@ -496,6 +490,17 @@ describe("StudentGrid — the clock", () => {
     view.rows[0] = { ...view.rows[0]!, deadlineAt: close.toISOString().replace(".000Z", "Z") };
     setup(view);
     expect(within(rowOf("Nadia Roux 0")).queryByRole("timer")).toBeNull();
+  });
+
+  // `duration` timing, started by the teacher: no common close, but the rows
+  // share one deadline, which is the header's clock and not the rows'.
+  it("shows no countdown on rows that share the deadline of a started quiz", () => {
+    const view = viewIn("running", 2, 2);
+    view.evaluation.closesAt = null;
+    view.rows[0] = { ...view.rows[0]!, state: "in_progress", deadlineAt: liveAt(7 * 60_000) };
+    view.rows[1] = { ...view.rows[1]!, state: "in_progress", deadlineAt: liveAt(7 * 60_000) };
+    setup(view);
+    expect(screen.queryByRole("timer")).toBeNull();
   });
 
   it("shows every running row's countdown when there is no common close", () => {

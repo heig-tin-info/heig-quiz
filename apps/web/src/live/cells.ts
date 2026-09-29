@@ -46,19 +46,49 @@ export function cellState(cell: DashboardCell, showResults: boolean): VerdictSta
 }
 
 /**
+ * The ONE clock of the header (#227, F-DASH-03), or null when the class has
+ * none.
+ *
+ * In `deadline` timing it is the common close. In `duration` timing there is
+ * no common close, but a quiz the teacher STARTED begins every waiting
+ * attempt at the same instant (`beginWaitingAttempts`), and pauses and
+ * "+N min for all" move those deadlines together: the running rows share one
+ * deadline, and that deadline is the class's clock. So it is the deadline
+ * most running rows share — compared as instants, since the same moment may
+ * be serialised two ways — provided at least two share it. Students who each
+ * started on their own share none, and every row keeps its own countdown.
+ */
+export function commonDeadline(
+  closesAt: string | null,
+  rows: readonly DashboardRow[],
+): string | null {
+  if (closesAt !== null) return closesAt;
+  const shared = new Map<number, { at: string; n: number }>();
+  for (const row of rows) {
+    if (row.state !== "in_progress" || row.deadlineAt === null) continue;
+    const key = Date.parse(row.deadlineAt);
+    const entry = shared.get(key);
+    shared.set(key, { at: row.deadlineAt, n: (entry?.n ?? 0) + 1 });
+  }
+  let best: { at: string; n: number } | null = null;
+  for (const entry of shared.values()) if (entry.n > (best?.n ?? 1)) best = entry;
+  return best?.at ?? null;
+}
+
+/**
  * Whether a row's deadline is its own (F-DASH-03, #227): an individual
  * extension, a time bonus, a late start in `duration` mode (F-LIVE-12). The
- * header shows the common clock, so only such a row repeats a countdown.
- * Compared as INSTANTS — the same moment may be serialised two ways — and,
- * when the evaluation has no common close, any deadline is the row's own.
- * Whether the row is still running is the caller's question, not this one.
+ * header shows the common clock ({@link commonDeadline}), so only such a row
+ * repeats a countdown. Compared as INSTANTS, and, when there is no common
+ * clock, any deadline is the row's own. Whether the row is still running is
+ * the caller's question, not this one.
  */
 export function ownDeadline(
   deadlineAt: string | null,
-  closesAt: string | null,
+  common: string | null,
 ): deadlineAt is string {
   if (deadlineAt === null) return false;
-  return closesAt === null || Date.parse(deadlineAt) !== Date.parse(closesAt);
+  return common === null || Date.parse(deadlineAt) !== Date.parse(common);
 }
 
 /** The glyph beside the icon, or nothing when the answers are hidden. */

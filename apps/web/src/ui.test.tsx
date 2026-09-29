@@ -1475,7 +1475,7 @@ describe("VerdictCell", () => {
     // An outline with nothing inside, then a fill.
     expect(chrome("inProgress").className).toMatch(/\bborder\b/);
     expect(chrome("inProgress").className).not.toMatch(/\bbg-/);
-    expect(chrome("answered").className).toMatch(/\bbg-info-soft\b/);
+    expect(chrome("answered").className).toMatch(/\bbg-info-mid\b/);
     // `done` is the darker blue AND a check, never the colour alone.
     expect(chrome("done").icon).toBe(true);
   });

@@ -134,7 +134,10 @@ export function AnswerTip({
   return (
     <span
       ref={anchor}
-      className="block"
+      // `flex`, not `block`: a block holding the inline-flex cell makes a
+      // line box, and the baseline's descender space pushed the cell above
+      // the row's middle.
+      className="flex"
       onMouseEnter={() => {
         if (!enabled) return;
         clearTimer();
