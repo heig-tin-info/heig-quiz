@@ -31,6 +31,7 @@ import { DWELL_IDLE_CAP_MS } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { attempts } from "../../db/schema.js";
+import * as drill from "../drill/service.js";
 
 /** The attempts of an evaluation still being taken. */
 export function openAttemptsOf(evaluationId: string): SQL {
@@ -78,6 +79,10 @@ export async function closeShown(db: Db, which: SQL, end: Date): Promise<void> {
  * of `attempts` shares, so two of them cannot deadlock), their open interval
  * is credited, then their state is written. Answers the attempts it ended;
  * one already finished is left alone.
+ *
+ * What it ended is then handed to the drill (ADR-041 §1): the hand-in of an
+ * exercise is when its questions become cards. After the commit, and
+ * best-effort: the attempt is over whatever the drill makes of it.
  */
 export async function endAttempts(
   db: Db,
@@ -85,7 +90,7 @@ export async function endAttempts(
   set: { state: "submitted" | "expired"; closedBy: ClosedBy; submittedAt?: Date },
   now: Date,
 ): Promise<{ id: string; evaluationId: string }[]> {
-  return db.transaction(async (tx) => {
+  const ended = await db.transaction(async (tx) => {
     const locked = await tx
       .select({ id: attempts.id })
       .from(attempts)
@@ -101,4 +106,6 @@ export async function endAttempts(
       .where(ids)
       .returning({ id: attempts.id, evaluationId: attempts.evaluationId });
   });
+  if (ended.length > 0) await drill.bestEffort("cards at hand-in", () => drill.cardsAtHandIn(db, ended, now));
+  return ended;
 }

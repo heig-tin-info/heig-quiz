@@ -98,6 +98,7 @@ import {
 import { answeredBy } from "../live/service.js";
 import { solutionView, stripKeys, studentSolutionView, studentView } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
+import * as drill from "../drill/service.js";
 
 export { watchReleasedGrades, type GradeWatch } from "./updated.js";
 
@@ -329,6 +330,10 @@ export async function releaseResults(
       })),
   };
   await setRelease(db, evaluation.id, { releasedAt, releasedGrades: snapshot }, now);
+  // ADR-041 §1: an exam's questions become drill cards at the release, never
+  // before. Best-effort like the notification below; a re-release creates
+  // only what is missing.
+  await drill.bestEffort("cards at release", () => drill.cardsAtRelease(db, evaluation, now));
   // F-GRADE-09: the students are told — on the FIRST release only. A
   // re-release keeps the original `released_at`, the date they were told
   // about, and telling them twice would announce nothing new. Only a student
