@@ -43,9 +43,11 @@ version, the last change as a distance — hover it for the exact date. Every
 row carries edit, duplicate and delete at its end.
 
 A click shows the question as a student reads it, in a panel beside the
-list (in its place on a narrow window, with **Back to the list**). ↑ and ↓
-move from row to row and the panel follows; Escape or the × closes it. Enter,
-a double-click, the pencil or **Open in the editor** opens the editor.
+list (in its place on a narrow window, with **Back to the list**). From the
+keyboard, P shows the focused row; on a wide window ↑ and ↓ move from row to
+row and show each one, opening the panel if needed. Escape or the × closes
+it. Enter, a double-click, the pencil or **Open in the editor** opens the
+editor.
 
 Clicking a column header sorts the whole pool by it, not just the questions
 already loaded; clicking it again reverses the order. The default is the

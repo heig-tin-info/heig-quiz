@@ -42,6 +42,7 @@ import {
   IconButton,
   Kbd,
   modKey,
+  pageColumnVars,
   Tip,
   useLayer,
   useTruncated,
@@ -593,9 +594,10 @@ export function Shell({
         </div>
 
         <main
+          style={pageColumnVars}
           className={cx(
-            "mx-auto w-full px-4 py-6 sm:px-8 lg:py-8",
-            wide ? "max-w-none" : "max-w-280",
+            "mx-auto w-full px-4 py-6 sm:px-(--page-gutter) lg:py-8",
+            wide ? "max-w-none" : "max-w-(--page-cap)",
           )}
         >
           {children}

@@ -207,6 +207,13 @@ describe("listboxIndex", () => {
     expect(listboxIndex("ArrowUp", 0, 0)).toBe(0);
   });
 
+  it("stops at both ends without wrap", () => {
+    expect(listboxIndex("ArrowDown", 2, 3, { wrap: false })).toBe(2);
+    expect(listboxIndex("ArrowUp", 0, 3, { wrap: false })).toBe(0);
+    expect(listboxIndex("ArrowDown", 0, 3, { wrap: false })).toBe(1);
+    expect(listboxIndex("ArrowUp", 2, 3, { wrap: false })).toBe(1);
+  });
+
   it("leaves Home and End to a text field unless the list owns them", () => {
     expect(listboxIndex("Home", 2, 3)).toBeNull();
     expect(listboxIndex("End", 0, 3)).toBeNull();

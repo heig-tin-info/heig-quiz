@@ -57,7 +57,9 @@ const MENU_FLIP_MARGIN = 280;
  * first row and ArrowUp on the last. An empty list keeps `active`, so the
  * caller still owns the key (the arrows must not move a caret meanwhile).
  * Home and End jump only when `ends` is set: in a text field that owns its
- * caret (a tag or teacher combobox) they belong to the field.
+ * caret (a tag or teacher combobox) they belong to the field. `wrap: false`
+ * stops the arrows at both ends instead (the pool's rows: the last row is the
+ * last LOADED one, and wrapping to the top would hide that more exist).
  *
  * Only the index: each call site keeps its own `preventDefault` and its own
  * side effects (opening the list, focusing a row), which is where the
@@ -67,11 +69,12 @@ export function listboxIndex(
   key: string,
   active: number,
   count: number,
-  { ends = false }: { ends?: boolean } = {},
+  { ends = false, wrap = true }: { ends?: boolean; wrap?: boolean } = {},
 ): number | null {
   if (key === "ArrowDown" || key === "ArrowUp") {
     if (count === 0) return active;
     if (active < 0) return key === "ArrowDown" ? 0 : count - 1;
+    if (!wrap) return Math.min(Math.max(active + (key === "ArrowDown" ? 1 : -1), 0), count - 1);
     return (active + (key === "ArrowDown" ? 1 : count - 1)) % count;
   }
   if (ends && key === "Home") return 0;

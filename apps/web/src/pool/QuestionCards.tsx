@@ -27,9 +27,11 @@ import { entryKey, type RowProps } from "./useQuestionBrowse";
  * and an action that needs a pointer to exist does not exist there.
  *
  * The card answers the same gestures as the table's row (`useQuestionBrowse`,
- * and `QuestionTable` for why): a click and ↑/↓ show the question in the
+ * and `QuestionTable` for why): a click, ↑/↓ and P show the question in the
  * reading pane, Enter, a double-click and the pencil open the editor, Space is
- * kept for the favourite star. The arrows walk the cards in reading order,
+ * kept for the favourite star. A card is a focusable list item wearing
+ * `aria-current` when shown, not a button: a click on it does not do what
+ * Enter does. The arrows walk the cards in reading order,
  * section after section, whatever the grid does with the columns.
  *
  * The grid counts its columns on its OWN width (`@container`), not the
@@ -63,7 +65,7 @@ function QuestionCard({
   const t = useT();
   return (
     <Card
-      role="button"
+      role="listitem"
       {...browse}
       draggable={onDragStart !== undefined}
       onDragStart={onDragStart}
@@ -189,7 +191,7 @@ export function QuestionCards({
               <span className="tabular-nums text-fg-faint">{group.rows.length}</span>
             </h2>
           )}
-          <div className="grid gap-3 @xl:grid-cols-2 @4xl:grid-cols-3">
+          <div role="list" className="grid gap-3 @xl:grid-cols-2 @4xl:grid-cols-3">
             {group.rows.map((row) => (
               <QuestionCard
                 key={entryKey(group, row)}

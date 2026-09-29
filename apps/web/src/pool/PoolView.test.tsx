@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -340,6 +340,41 @@ describe("PoolView", () => {
     expect(cardOf("ptr-null-check")).toHaveFocus();
   });
 
+  it("shows the focused row on P, without a pointer, where the pane takes the list's place", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    mockFetch(previews());
+    renderWithProviders(<PoolView id="p1" navigate={navigate} />);
+    await screen.findByText("ptr-arith-01");
+    expect(rowOf("ptr-arith-01")).toHaveAttribute("aria-keyshortcuts", "P Enter");
+    rowOf("ptr-arith-01").focus();
+    await user.keyboard("{ArrowDown}");
+    // On a narrow window the arrows only move: the pane would hide the list.
+    expect(screen.queryByText("Que vaut un pointeur non initialisé ?")).toBeNull();
+    await user.keyboard("p");
+    expect(await screen.findByText("Never published — this is its draft")).toBeVisible();
+    expect(navigate).not.toHaveBeenCalled();
+    await user.keyboard("{Escape}");
+    expect(rowOf("ptr-null-check")).toHaveFocus();
+  });
+
+  it("waits for a second click before a narrow window gives the list away to the pane", async () => {
+    mockFetch(previews());
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByText("ptr-arith-01"));
+      // Not yet: this click may be the first of a double-click.
+      await act(() => vi.advanceTimersByTimeAsync(299));
+      expect(screen.queryByRole("button", { name: "Back to the list" })).toBeNull();
+      await act(() => vi.advanceTimersByTimeAsync(1));
+      expect(screen.getByRole("button", { name: "Back to the list" })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   describe("on a wide window", () => {
     const matchMedia = window.matchMedia;
     beforeEach(() => {
@@ -361,7 +396,7 @@ describe("PoolView", () => {
       expect(screen.queryByRole("complementary")).toBeNull();
 
       await user.click(screen.getByText("ptr-arith-01"));
-      const pane = await screen.findByRole("complementary", { name: "Preview of ptr-arith-01" });
+      const pane = await screen.findByRole("complementary", { name: "Preview ptr-arith-01" });
       expect(await within(pane).findByText("Que vaut un pointeur non initialisé ?")).toBeVisible();
       // The list stays, the row marked as the one shown.
       expect(rowOf("ptr-arith-01")).toHaveAttribute("aria-current", "true");
@@ -369,7 +404,7 @@ describe("PoolView", () => {
       await user.keyboard("{ArrowDown}");
       expect(rowOf("ptr-null-check")).toHaveFocus();
       expect(
-        await screen.findByRole("complementary", { name: "Preview of ptr-null-check" }),
+        await screen.findByRole("complementary", { name: "Preview ptr-null-check" }),
       ).toBeVisible();
       expect(rowOf("ptr-arith-01")).not.toHaveAttribute("aria-current");
       expect(previewCalls(calls).map((c) => c.url)).toEqual([
@@ -380,6 +415,28 @@ describe("PoolView", () => {
       await user.keyboard("{Escape}");
       expect(screen.queryByRole("complementary")).toBeNull();
       expect(rowOf("ptr-null-check")).toHaveFocus();
+    });
+
+    it("opens the pane from the keyboard alone: the arrows show the row they reach", async () => {
+      const user = userEvent.setup();
+      mockFetch(previews());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-arith-01");
+      rowOf("ptr-arith-01").focus();
+      await user.keyboard("{ArrowDown}");
+      expect(
+        await screen.findByRole("complementary", { name: "Preview ptr-null-check" }),
+      ).toBeVisible();
+      expect(rowOf("ptr-null-check")).toHaveAttribute("aria-current", "true");
+      await user.keyboard("{Home}");
+      expect(
+        await screen.findByRole("complementary", { name: "Preview ptr-arith-01" }),
+      ).toBeVisible();
+      // The name is announced politely as the question changes, not the body.
+      const pane = screen.getByRole("complementary");
+      expect(
+        within(pane).getByRole("heading", { name: "ptr-arith-01" }).parentElement,
+      ).toHaveAttribute("aria-live", "polite");
     });
 
     it("closes with its X and hands the focus back to the row", async () => {

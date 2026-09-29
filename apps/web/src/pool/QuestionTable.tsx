@@ -29,15 +29,12 @@ import { entryKey, type RowProps } from "./useQuestionBrowse";
  * the palette), the type is the ICON in front of it, the difficulty is five
  * dots — a shape, never a colour — and the actions are last.
  *
- * A click on the row SHOWS the question, as a student reads it, in a pane
- * docked beside the list (`PoolView`); it no longer opens the editor. An
- * inspection panel was removed once (b6d38d7) because the need then was "open
- * it to edit it", and a panel was one step between the teacher and the
- * editor. The need changed: a pool shared by a team, or a public one, is
- * BROWSED to choose a question, and a name alone does not say what a
- * question asks. So the gestures split (`useQuestionBrowse`): a click and
- * ↑/↓ LOOK; Enter, a double-click and the pencil EDIT; Space is kept for the
- * favourite star that comes next, and does nothing until then.
+ * A pool is BROWSED to choose a question — a colleague's, a public one — and
+ * a name alone does not say what a question asks. So a row has two gestures
+ * (`useQuestionBrowse`): a click, ↑/↓ and P LOOK, showing the question as a
+ * student reads it in a pane beside the list (`PoolView`); Enter, a
+ * double-click and the pencil EDIT. Space is kept for the favourite star that
+ * comes next, and does nothing until then.
  *
  * The type lost its column and became a 20 px glyph at the left of the name.
  * A badge repeating "Multiple choice" on forty rows is forty copies of a word

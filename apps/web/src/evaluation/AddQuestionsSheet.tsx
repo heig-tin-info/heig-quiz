@@ -193,7 +193,7 @@ export function AddQuestionsSheet({
       {preview && !docked ? (
         <div className="space-y-4">
           <Button variant="secondary" size="sm" onClick={back} autoFocus>
-            <ArrowLeft /> {t("picker.preview.back")}
+            <ArrowLeft /> {t("question.preview.back")}
           </Button>
           {preview}
         </div>
@@ -308,7 +308,7 @@ export function AddQuestionsSheet({
                           rowButtons.current[index] = el;
                         }}
                         aria-pressed={looked}
-                        aria-label={t("picker.preview.show", {
+                        aria-label={t("question.preview.show", {
                           name: row.internalName,
                         })}
                         onClick={() => setShown(row)}

@@ -1,7 +1,16 @@
-import { useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
 
 import type { QuestionRow } from "@quiz/contracts";
 
+import { listboxIndex } from "../ui";
 import type { QuestionGroup } from "./QuestionGroups";
 
 /** A row as the list draws it: a question may repeat (grouped by tag), so it is keyed by section. */
@@ -10,26 +19,11 @@ interface Entry {
   row: QuestionRow;
 }
 
-/** The row an arrow lands on, or null for a key that is not one. No wrap: the list stops at its last LOADED row. */
-function stepIndex(key: string, index: number, count: number): number | null {
-  switch (key) {
-    case "ArrowDown":
-      return Math.min(index + 1, count - 1);
-    case "ArrowUp":
-      return Math.max(index - 1, 0);
-    case "Home":
-      return 0;
-    case "End":
-      return count - 1;
-    default:
-      return null;
-  }
-}
-
 /**
  * How long a click on a narrow window waits for a second one. There the pane
  * REPLACES the list, so a look taken at once would pull the row from under
- * the second click of a double-click, and the editor would never open.
+ * the second click of a double-click, and the editor would never open. Not
+ * under a coarse pointer: a touch screen has no double-click to wait for.
  */
 const DOUBLE_CLICK_MS = 300;
 
@@ -42,12 +36,17 @@ export const entryKey = (group: QuestionGroup, row: QuestionRow) => `${group.key
  * - a click shows the question in the reading pane (`shown`) — on a narrow
  *   window once it is clear the click is not the first of a double-click;
  * - ↑/↓ (Home/End) move the focus through the rows in the order they are
- *   DRAWN — sections included, not the order the server sent — and the pane
- *   follows while it is docked beside the list;
+ *   DRAWN — sections included, not the order the server sent — and stop at
+ *   the last loaded one. Where the pane can dock, the row reached is SHOWN
+ *   (the pane opens if it was closed): browsing with the arrows is the point;
+ *   on a narrow window the pane would take the list away, so they only move;
+ * - P shows the focused row in every layout — the keyboard's click, and the
+ *   only way in on a narrow window;
  * - Enter and a double-click open the editor, like the row's pencil;
  * - Space does nothing yet, on purpose: it is kept for the favourite star,
  *   and a key that opened something today would be a habit to unlearn;
- * - Escape closes the pane, and the focus goes back to the row it showed.
+ * - `close` (Escape and the ✕, wired by the screen) hands the focus back to
+ *   the row the pane showed.
  *
  * One row is in the Tab order (a roving tabindex): the one last focused or
  * shown, the first one otherwise. A key that started on a control inside the
@@ -62,6 +61,8 @@ export function useQuestionBrowse(
   onEdit: (row: QuestionRow) => void,
   /** The pane sits beside the list; otherwise it takes the list's place and arrows have nothing to follow. */
   docked: boolean,
+  /** A touch screen: a tap shows at once, there is no double-click to wait for. */
+  coarse: boolean,
 ) {
   const entries = useMemo<Entry[]>(
     () => groups.flatMap((group) => group.rows.map((row) => ({ key: entryKey(group, row), row }))),
@@ -91,7 +92,7 @@ export function useQuestionBrowse(
   };
 
   const onKeyDown = (e: KeyboardEvent, index: number) => {
-    if (e.target !== e.currentTarget) return;
+    if (e.target !== e.currentTarget || e.ctrlKey || e.metaKey || e.altKey) return;
     const entry = entries[index]!;
     if (e.key === "Enter") {
       e.preventDefault();
@@ -102,17 +103,17 @@ export function useQuestionBrowse(
       e.preventDefault();
       return;
     }
-    if (e.key === "Escape" && shown !== null) {
+    if (e.key === "p" || e.key === "P") {
       e.preventDefault();
-      close();
+      setShown(entry);
       return;
     }
-    const next = stepIndex(e.key, index, entries.length);
+    const next = listboxIndex(e.key, index, entries.length, { ends: true, wrap: false });
     if (next === null) return;
     e.preventDefault();
     const to = entries[next]!;
     setActive(to.key);
-    if (shown !== null && docked) setShown(to);
+    if (docked) setShown(to);
     nodes.current.get(to.key)?.focus();
   };
 
@@ -124,11 +125,12 @@ export function useQuestionBrowse(
     },
     tabIndex: key === activeKey ? 0 : -1,
     "aria-current": shown?.key === key ? true : undefined,
+    "aria-keyshortcuts": "P Enter",
     onClick: (e: MouseEvent) => {
       if (e.detail > 1) return;
       setActive(key);
       clearTimeout(pendingLook.current);
-      if (docked) setShown({ key, row });
+      if (docked || coarse) setShown({ key, row });
       else pendingLook.current = setTimeout(() => setShown({ key, row }), DOUBLE_CLICK_MS);
     },
     onDoubleClick: (e: MouseEvent) => {

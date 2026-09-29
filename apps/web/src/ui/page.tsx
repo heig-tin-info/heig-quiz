@@ -18,30 +18,38 @@ export function GateFrame({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * The shell's content column (DESIGN.md › Spacing): the reading cap of a page
+ * and the side padding inside it from `sm`, as CSS lengths. The shell sets
+ * them on `<main>` (`pageColumnVars`), and a page that draws its own width —
+ * the pool, which widens by its docked question pane — derives it from them,
+ * so the two can never drift apart.
+ */
+export const PAGE_COLUMN = { cap: "70rem", gutter: "2rem" } as const;
+
+/** `PAGE_COLUMN` as the custom properties `max-w-(--page-cap)` and `sm:px-(--page-gutter)` read. */
+export const pageColumnVars = {
+  "--page-cap": PAGE_COLUMN.cap,
+  "--page-gutter": PAGE_COLUMN.gutter,
+} as CSSProperties;
+
 export function Card({
-  children,
-  className = "",
+  className,
   interactive,
-  onClick,
   ...rest
 }: React.ComponentProps<"div"> & {
-  children: ReactNode;
-  className?: string;
   /** Clickable surface: hairline darkens on hover, no movement. */
   interactive?: boolean;
 }) {
   return (
     <div
       {...rest}
-      onClick={onClick}
       className={cx(
         "rounded-card border border-line bg-surface",
         interactive && "cursor-pointer transition-colors duration-150 hover:border-line-strong hover:bg-surface-2/40",
         className,
       )}
-    >
-      {children}
-    </div>
+    />
   );
 }
 

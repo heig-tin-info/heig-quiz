@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Eye, Plus } from "lucide-react";
-import { useMemo, useState, type DragEvent, type KeyboardEvent } from "react";
+import { useMemo, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from "react";
 
 import type {
   CategoryNode,
@@ -16,16 +16,18 @@ import { QUESTION_TYPE_IDS, typeIcon, typeLabel } from "../questionTypes";
 import type { Route } from "../router";
 import { useSearchParam } from "../router";
 import { useScreenCommands } from "../screenCommands";
+import { useShortcuts } from "../shortcuts";
 import {
   ASIDE_MIN_WIDTH,
   Badge,
   Button,
-  cx,
+  PAGE_COLUMN,
   PageError,
   PageHeader,
   PageSkeleton,
   ParentLink,
   QueryError,
+  useCoarsePointer,
   useMinWidth,
   usePersistentChoice,
 } from "../ui";
@@ -57,13 +59,13 @@ import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
  * carries its three actions (edit, duplicate, delete) at its end.
  *
  * The question shown sits in a master/detail pane, not in a Sheet: the list
- * stays where it is and keeps working (↑/↓ walk it, the pane follows). From
- * `ASIDE_MIN_WIDTH` the pane docks to the right and the page widens past its
- * reading cap by exactly the pane's width, so the list keeps its own room on
- * a very wide screen and gives up columns, by `T`'s priorities, on a narrower
- * one; below it, the pane takes the list's place with a Back button, as in
- * the question picker. There is no empty pane: it appears on the first look,
- * and which question it shows is the screen's state, never the URL's.
+ * stays where it is and keeps working (↑/↓ walk it, the pane follows, P shows
+ * the focused row). From `ASIDE_MIN_WIDTH` the pane docks to the right and
+ * the page widens past its reading cap by exactly the pane's width (below,
+ * `DOCKED_BOX`); under it, the pane takes the list's place with a Back
+ * button, as in the question picker. There is no empty pane: it appears on
+ * the first look, and which question it shows is the screen's state, never
+ * the URL's.
  *
  * The category tree is NOT here: it lives in the app sidebar, beside the
  * other navigation, and the category it selects travels in the `category`
@@ -108,6 +110,28 @@ import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
  * only the reset is kept from them. Statistics that fail to load draw no
  * icon and never hold the list back.
  */
+
+/**
+ * The page's own width. The pool is a `WIDE` route: the shell drops its cap
+ * and this box draws it instead, from the same `PAGE_COLUMN`, so that the
+ * docked pane can widen the page by exactly its own width and gap. Every
+ * column comes back on a very wide screen; on a narrower one, the table gives
+ * them up by `T`'s priorities, measured on its own container.
+ *
+ * The widened box does not re-centre: it keeps the list's left edge where it
+ * was and grows to the right, and only moves left by what the window lacks —
+ * a row clicked on a 27" screen stays under the pointer.
+ */
+const PANE_WIDTH = "30rem";
+const PANE_GAP = "1.5rem";
+const READING = `(${PAGE_COLUMN.cap} - 2 * ${PAGE_COLUMN.gutter})`;
+const WIDENED = `(${READING} + ${PANE_GAP} + ${PANE_WIDTH})`;
+const READING_BOX: CSSProperties = { maxWidth: `calc${READING}`, marginInline: "auto" };
+const DOCKED_BOX: CSSProperties = {
+  maxWidth: `calc${WIDENED}`,
+  marginLeft: `max(0px, min((100% - ${READING}) / 2, 100% - ${WIDENED}))`,
+  marginRight: 0,
+};
 
 const VIEW_KEY = "quiz-pool-view";
 const VIEWS: readonly ListView[] = ["cards", "list"];
@@ -258,8 +282,11 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const { category, groups } = useListing(pool.data?.categories, categoryId, rows, group);
   const edit = (row: QuestionRow) => navigate({ view: "question", id: row.id });
   const docked = useMinWidth(ASIDE_MIN_WIDTH);
-  const browse = useQuestionBrowse(groups, edit, docked);
+  const browse = useQuestionBrowse(groups, edit, docked, useCoarsePointer());
   const shown = browse.shown;
+  // P is the one key of the list the strip cannot guess; the arrows and Enter
+  // do what they do everywhere.
+  useShortcuts([{ keys: "P", label: t("question.preview.shortcut") }], rows.length > 0);
   const closeOnEscape = (e: KeyboardEvent) => {
     if (e.key !== "Escape" || e.defaultPrevented) return;
     e.preventDefault();
@@ -288,9 +315,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const readOnly = detail.role === "reader";
 
   return (
-    // 264 = the shell's reading cap (280) less its two side paddings (8 each);
-    // docked, plus the 6 of the gap and the 120 of the pane.
-    <div className={cx("mx-auto w-full space-y-6", shown && docked ? "max-w-390" : "max-w-264")}>
+    <div className="w-full space-y-6" style={shown && docked ? DOCKED_BOX : READING_BOX}>
       <PageHeader
         help="pool"
         eyebrow={
@@ -317,115 +342,118 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
         }
       />
 
-      {shown && !docked ? (
-        <div className="space-y-4" onKeyDown={closeOnEscape}>
-          <Button variant="secondary" size="sm" onClick={browse.close} autoFocus>
-            <ArrowLeft /> {t("picker.preview.back")}
-          </Button>
-          <QuestionPreview row={shown} mode="browse" onOpenEditor={() => edit(shown)} />
-        </div>
-      ) : (
-        <div className="flex items-start gap-6">
-          <div className="min-w-0 flex-1 space-y-4">
-            <FilterBar
-              filters={filters}
-              onChange={(next) => {
-                setChecked(new Set());
-                setFilters(next);
-              }}
-              tags={detail.tags}
-              total={questions.data?.pages[0]?.total ?? null}
-              view={view}
-              onView={setView}
-              group={group}
-              onGroup={setGroup}
-            />
-
-            {questions.isLoading ? (
-              <PoolListSkeleton view={view} />
-            ) : questions.isError ? (
-              <QueryError
-                title={t("pool.title")}
-                error={questions.error}
-                onRetry={() => void questions.refetch()}
-                retrying={questions.isFetching}
-                fallback={t("error.server")}
-              />
-            ) : rows.length === 0 ? (
-              <PoolEmpty
-                questionCount={detail.questionCount}
-                readOnly={readOnly}
-                onCreate={() => setCreating(QUESTION_TYPE_IDS[0]!)}
-                // The sort is not a filter: clearing what hides the rows must not
-                // also change the order they come back in.
-                onClearFilters={() =>
-                  setFilters((f) => ({ ...EMPTY_FILTERS, sort: f.sort, dir: f.dir }))
-                }
-              />
-            ) : (
-              <>
-                {view === "cards" ? (
-                  <QuestionCards
-                    groups={groups}
-                    checked={checked}
-                    onToggleCheck={toggleCheck}
-                    rowProps={browse.rowProps}
-                    onEdit={edit}
-                    onDuplicate={(row) => duplicate(row)}
-                    onDelete={(row) => void askDelete(row)}
-                    onDragStart={readOnly ? undefined : startDrag}
-                    readOnly={readOnly}
-                    statsFor={statsFor}
-                  />
-                ) : (
-                  <QuestionTable
-                    groups={groups}
-                    checked={checked}
-                    onToggleCheck={toggleCheck}
-                    onToggleAll={() =>
-                      setChecked((prev) =>
-                        rows.every((r) => prev.has(r.id))
-                          ? new Set()
-                          : new Set(rows.map((r) => r.id)),
-                      )
-                    }
-                    rowProps={browse.rowProps}
-                    onEdit={edit}
-                    onDuplicate={(row) => duplicate(row)}
-                    onDelete={(row) => void askDelete(row)}
-                    sort={filters.sort}
-                    dir={filters.dir}
-                    onSort={sortBy}
-                    onDragStart={readOnly ? undefined : startDrag}
-                    readOnly={readOnly}
-                    statsFor={statsFor}
-                  />
-                )}
-                <PoolListTail
-                  hasNextPage={questions.hasNextPage}
-                  fetchingNext={questions.isFetchingNextPage}
-                  refetching={questions.isFetching && !questions.isFetchingNextPage}
-                  onLoadMore={() => void questions.fetchNextPage()}
-                />
-              </>
-            )}
+      {/* Escape closes the pane from anywhere in the list or the pane. */}
+      <div onKeyDown={closeOnEscape}>
+        {shown && !docked ? (
+          <div className="space-y-4">
+            <Button variant="secondary" size="sm" onClick={browse.close} autoFocus>
+              <ArrowLeft /> {t("question.preview.back")}
+            </Button>
+            <QuestionPreview row={shown} mode="browse" onOpenEditor={() => edit(shown)} />
           </div>
-          {shown ? (
-            <aside
-              aria-label={t("question.preview.region", { name: shown.internalName })}
-              onKeyDown={closeOnEscape}
-              className="sticky top-8 max-h-[calc(100dvh-4rem)] w-120 shrink-0 overflow-y-auto rounded-card border border-line bg-surface-2 p-5"
-            >
-              <QuestionPreview
-                row={shown}
-                mode="browse"
-                onOpenEditor={() => edit(shown)}
-                onClose={browse.close}
+        ) : (
+          <div className="flex items-start" style={{ gap: PANE_GAP }}>
+            <div className="min-w-0 flex-1 space-y-4">
+              <FilterBar
+                filters={filters}
+                onChange={(next) => {
+                  setChecked(new Set());
+                  setFilters(next);
+                }}
+                tags={detail.tags}
+                total={questions.data?.pages[0]?.total ?? null}
+                view={view}
+                onView={setView}
+                group={group}
+                onGroup={setGroup}
               />
-            </aside>
-          ) : null}
-        </div>
-      )}
+
+              {questions.isLoading ? (
+                <PoolListSkeleton view={view} />
+              ) : questions.isError ? (
+                <QueryError
+                  title={t("pool.title")}
+                  error={questions.error}
+                  onRetry={() => void questions.refetch()}
+                  retrying={questions.isFetching}
+                  fallback={t("error.server")}
+                />
+              ) : rows.length === 0 ? (
+                <PoolEmpty
+                  questionCount={detail.questionCount}
+                  readOnly={readOnly}
+                  onCreate={() => setCreating(QUESTION_TYPE_IDS[0]!)}
+                  // The sort is not a filter: clearing what hides the rows must not
+                  // also change the order they come back in.
+                  onClearFilters={() =>
+                    setFilters((f) => ({ ...EMPTY_FILTERS, sort: f.sort, dir: f.dir }))
+                  }
+                />
+              ) : (
+                <>
+                  {view === "cards" ? (
+                    <QuestionCards
+                      groups={groups}
+                      checked={checked}
+                      onToggleCheck={toggleCheck}
+                      rowProps={browse.rowProps}
+                      onEdit={edit}
+                      onDuplicate={(row) => duplicate(row)}
+                      onDelete={(row) => void askDelete(row)}
+                      onDragStart={readOnly ? undefined : startDrag}
+                      readOnly={readOnly}
+                      statsFor={statsFor}
+                    />
+                  ) : (
+                    <QuestionTable
+                      groups={groups}
+                      checked={checked}
+                      onToggleCheck={toggleCheck}
+                      onToggleAll={() =>
+                        setChecked((prev) =>
+                          rows.every((r) => prev.has(r.id))
+                            ? new Set()
+                            : new Set(rows.map((r) => r.id)),
+                        )
+                      }
+                      rowProps={browse.rowProps}
+                      onEdit={edit}
+                      onDuplicate={(row) => duplicate(row)}
+                      onDelete={(row) => void askDelete(row)}
+                      sort={filters.sort}
+                      dir={filters.dir}
+                      onSort={sortBy}
+                      onDragStart={readOnly ? undefined : startDrag}
+                      readOnly={readOnly}
+                      statsFor={statsFor}
+                    />
+                  )}
+                  <PoolListTail
+                    hasNextPage={questions.hasNextPage}
+                    fetchingNext={questions.isFetchingNextPage}
+                    refetching={questions.isFetching && !questions.isFetchingNextPage}
+                    onLoadMore={() => void questions.fetchNextPage()}
+                  />
+                </>
+              )}
+            </div>
+            {shown ? (
+              <aside
+                aria-label={t("question.preview.show", { name: shown.internalName })}
+                style={{ width: PANE_WIDTH }}
+                className="sticky top-8 max-h-[calc(100dvh-4rem)] shrink-0 overflow-y-auto rounded-card border border-line bg-surface-2 p-5"
+              >
+                <QuestionPreview
+                  row={shown}
+                  mode="browse"
+                  onOpenEditor={() => edit(shown)}
+                  onClose={browse.close}
+                />
+              </aside>
+            ) : null}
+          </div>
+        )}
+      </div>
 
       {checkedIds.length > 0 && !readOnly ? (
         <BulkBar
