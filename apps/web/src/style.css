@@ -629,3 +629,90 @@ html.dark {
     display: none;
   }
 }
+
+/*
+ * The logo's dance, under the pointer (Logo in Header.tsx). Each bubble is
+ * one group of the inlined SVG, moved around a pivot given in viewBox units:
+ * the Q pecks like a bird's head, its tail the beak; the U bounces like a
+ * small ball, squashed where it lands; the i and the z squabble, bumping
+ * into each other, one shove each. One round is 1.6 s (two bounces of the
+ * U), every animation ends on the rest pose, and Logo stops at the end of a
+ * round. Nothing moves under `prefers-reduced-motion`.
+ */
+.quiz-logo svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.quiz-logo g {
+  transform-box: view-box;
+}
+.quiz-logo .logo-q { transform-origin: 44px 50px; }
+.quiz-logo .logo-u { transform-origin: 88px 54px; }
+.quiz-logo .logo-i { transform-origin: 143px 55px; }
+.quiz-logo .logo-z { transform-origin: 197px 55px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .quiz-logo.is-dancing .logo-q { animation: logo-peck 1.6s ease-in-out infinite; }
+  .quiz-logo.is-dancing .logo-u { animation: logo-bounce 0.8s linear infinite; }
+  .quiz-logo.is-dancing .logo-i { animation: logo-squabble-i 1.6s ease-in-out infinite; }
+  .quiz-logo.is-dancing .logo-z { animation: logo-squabble-z 1.6s ease-in-out infinite; }
+}
+
+/* Head back, two quick pecks, then a look around. */
+@keyframes logo-peck {
+  0% { transform: none; }
+  12% { transform: rotate(7deg) translateY(-1.5px); animation-timing-function: cubic-bezier(0.6, 0, 1, 0.6); }
+  19% { transform: rotate(-17deg) scale(1.05, 0.94); animation-timing-function: cubic-bezier(0, 0.6, 0.4, 1); }
+  25% { transform: rotate(-9deg); animation-timing-function: cubic-bezier(0.6, 0, 1, 0.6); }
+  30% { transform: rotate(-18deg) scale(1.05, 0.94); animation-timing-function: cubic-bezier(0, 0.6, 0.4, 1); }
+  40% { transform: rotate(4deg) translateY(-1px); }
+  50% { transform: rotate(0deg); }
+  62% { transform: rotate(-5deg) translateX(-1px); }
+  68% { transform: rotate(-5deg) translateX(-1px); }
+  78% { transform: rotate(4deg) translateX(1px); }
+  86% { transform: rotate(4deg) translateX(1px); }
+  100% { transform: none; }
+}
+
+/* Crouch, launch stretched, hang, fall stretched, land squashed, settle. */
+@keyframes logo-bounce {
+  0% { transform: none; animation-timing-function: ease-out; }
+  10% { transform: scale(1.12, 0.86); animation-timing-function: ease-out; }
+  20% { transform: translateY(-4px) scale(0.9, 1.1); animation-timing-function: cubic-bezier(0.2, 0.6, 0.4, 1); }
+  48% { transform: translateY(-15px) scale(1, 1); animation-timing-function: cubic-bezier(0.6, 0, 0.8, 0.4); }
+  76% { transform: translateY(-1px) scale(0.92, 1.08); animation-timing-function: linear; }
+  82% { transform: translateY(0) scale(1.2, 0.78); animation-timing-function: ease-out; }
+  91% { transform: scale(0.96, 1.04); animation-timing-function: ease-in-out; }
+  100% { transform: none; }
+}
+
+/* The i starts it: wind-up, bonk, recoil; later the z shoves back. */
+@keyframes logo-squabble-i {
+  0% { transform: none; }
+  12% { transform: translateX(-3px) rotate(-6deg); animation-timing-function: cubic-bezier(0.6, 0, 1, 0.5); }
+  22% { transform: translateX(2px) rotate(6deg) scale(0.94, 1.04); animation-timing-function: cubic-bezier(0, 0.5, 0.4, 1); }
+  30% { transform: translateX(-1px) rotate(-2deg); }
+  38% { transform: translateX(0) rotate(1.5deg); }
+  46% { transform: none; }
+  60% { transform: rotate(-1deg); }
+  66% { transform: translateX(0) rotate(2deg) scale(0.95, 1.03); animation-timing-function: cubic-bezier(0, 0.6, 0.4, 1); }
+  74% { transform: translateX(-5px) rotate(-11deg); }
+  84% { transform: translateX(1px) rotate(3deg); }
+  92% { transform: rotate(-1deg); }
+  100% { transform: none; }
+}
+@keyframes logo-squabble-z {
+  0% { transform: none; }
+  14% { transform: rotate(-1deg); }
+  22% { transform: translateX(-1px) rotate(-2deg) scale(0.95, 1.03); animation-timing-function: cubic-bezier(0, 0.6, 0.4, 1); }
+  30% { transform: translateX(5px) rotate(10deg); }
+  40% { transform: translateX(-1px) rotate(-2deg); }
+  48% { transform: none; }
+  58% { transform: translateX(4px) rotate(7deg); animation-timing-function: cubic-bezier(0.6, 0, 1, 0.5); }
+  66% { transform: translateX(-2px) rotate(-6deg) scale(0.94, 1.04); animation-timing-function: cubic-bezier(0, 0.5, 0.4, 1); }
+  76% { transform: translateX(1px) rotate(2deg); }
+  86% { transform: rotate(-1deg); }
+  100% { transform: none; }
+}
