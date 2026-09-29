@@ -85,10 +85,21 @@ export function listboxIndex(
 /**
  * The next stop of a horizontal roving-tabindex strip (`Tabs`,
  * `ProgressSegments`): ArrowRight / ArrowLeft with wrap, Home / End to the
- * ends. Null for any other key, and for an empty strip.
+ * ends. Null for any other key, and for an empty strip. A grid (the question
+ * type tiles) passes its `columns`: ArrowDown / ArrowUp then move a row, and
+ * stay put at the first or last one.
  */
-export function rovingIndex(key: string, current: number, count: number): number | null {
+export function rovingIndex(
+  key: string,
+  current: number,
+  count: number,
+  columns?: number,
+): number | null {
   if (count === 0) return null;
+  if (columns !== undefined && (key === "ArrowDown" || key === "ArrowUp")) {
+    const next = current + (key === "ArrowDown" ? columns : -columns);
+    return next >= 0 && next < count ? next : current;
+  }
   if (key === "ArrowRight") return (current + 1 + count) % count;
   if (key === "ArrowLeft") return (current - 1 + count) % count;
   if (key === "Home") return 0;

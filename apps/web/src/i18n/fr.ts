@@ -52,6 +52,7 @@ export const fr: Record<keyof Dict, string> = {
   "menu.closeMenu": "Fermer le menu",
 
   "common.cancel": "Annuler",
+  "common.back": "Retour",
   "common.close": "Fermer",
   "common.confirm": "Confirmer",
   "common.moreActions": "Plus d'actions",

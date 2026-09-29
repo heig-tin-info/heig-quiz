@@ -53,6 +53,7 @@ export const en = {
   "menu.closeMenu": "Close menu",
 
   "common.cancel": "Cancel",
+  "common.back": "Back",
   "common.close": "Close",
   "common.confirm": "Confirm",
   "common.moreActions": "More actions",

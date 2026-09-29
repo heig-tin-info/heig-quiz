@@ -28,7 +28,20 @@ type CategorizeClient = QuestionTypeClient<
 >;
 
 /** Three columns, the first two holding a card each: sorting into bins. */
-const CategorizeIcon = typeIcon(<path d="M3 4h5v16H3zM9.5 4h5v16h-5zM16 4h5v16h-5zM4.5 7h2M11 11h2" />, "size-4");
+const CategorizeIcon = typeIcon(
+  <>
+    <path d="M2.5 3.5h5v17h-5zM9.5 3.5h5v17h-5zM16.5 3.5h5v17h-5z" opacity=".55" />
+    <g fill="currentColor" stroke="none">
+      <rect x="3.5" y="5.5" width="3" height="3" rx=".6" />
+      <rect x="3.5" y="10" width="3" height="3" rx=".6" />
+      <rect x="10.5" y="5.5" width="3" height="3" rx=".6" />
+      <rect x="17.5" y="5.5" width="3" height="3" rx=".6" />
+      <rect x="17.5" y="10" width="3" height="3" rx=".6" />
+      <rect x="17.5" y="14.5" width="3" height="3" rx=".6" />
+    </g>
+  </>,
+  "size-4",
+);
 
 export const categorizeClient: CategorizeClient = {
   id: "categorize",
