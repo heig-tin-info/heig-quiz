@@ -221,7 +221,7 @@ export function SettingsPage({ me }: { me: Me }) {
       </section>
 
       <PreferencesCard me={me} />
-      <NotificationSettingsSection me={me} />
+      <NotificationSettingsSection />
       {me.role === "student" ? null : (
         <>
           <ConnectionsCard />

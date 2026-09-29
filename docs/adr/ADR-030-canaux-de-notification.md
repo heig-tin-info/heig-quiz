@@ -319,8 +319,10 @@ the account is linked, so
 table, and `users` is `auth`'s), a toggle is an upsert of one row with no
 read-modify-write race, and a kind added later reaches everyone without a
 backfill. The grid is served resolved (`NotificationMatrix`, every kind ×
-every channel); the settings show a student only the kinds a student
-receives (`notificationKindsFor`).
+every channel); the settings list only the kinds the account can receive
+(`kinds`, from `notificationKindsFor` and `NOTIFICATION_AUDIENCE`, #277):
+the student-seat kinds for a student, or for a teacher or an admin while
+they hold a claimed student seat; the staff kinds for a teacher or an admin.
 
 ### 6. `results_released`
 
@@ -456,8 +458,8 @@ The table of §5 stays sparse, and a missing row means the kind's own
 default. App is on for every kind. A kind a user must not miss is on by
 e-mail and Teams too. A background-noise kind is **off by e-mail and Teams**,
 and a user who turns it on gets one message per event (the fold of §e is
-the bell's). `notificationKindsFor(role)` still decides which rows of the
-grid a role sees. The three kinds of this ADR keep bell, e-mail and Teams on:
+the bell's). `notificationKindsFor` still decides which rows of the
+grid an account sees (§5). The three kinds of this ADR keep bell, e-mail and Teams on:
 the change made no difference a user could see.
 
 ### c. The kinds
