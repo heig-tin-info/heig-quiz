@@ -61,17 +61,28 @@ catégorie) et le **tri**, seul endroit d'où trier par type puisqu'il a perdu
 sa colonne. Une question portant trois tags apparaît dans les trois sections.
 Tout cela est retenu pour la prochaine visite.
 
+## Favoris
+
+L'étoile devant le nom d'une question en fait l'un de VOS favoris ; Espace
+fait de même sur la ligne qui a le focus, et **Favori** dans la barre du bas
+sur les lignes cochées. Personne d'autre ne voit vos étoiles — un collègue
+qui partage la banque a les siennes — et un lecteur peut aussi en mettre.
+Quand vous remplissez une évaluation ou un modèle, **Ajouter des questions**
+montre d'abord les favoris de la banque affichée, et **Ajouter les favoris**
+les ajoute d'un coup. **Effacer les favoris**, l'étoile barrée à côté du nombre de questions,
+retire toutes les étoiles que vous y avez mises.
+
 ## Une banque partagée avec vous
 
 Si votre siège sur la banque est **lecteur**, l'écran montre les questions et
 aucune action : ni nouvelle question, ni modification, ni duplication, ni
 suppression, ni cases à cocher. Ouvrir une question reste possible — la lire,
-c'est l'ouvrir.
+c'est l'ouvrir — et la mettre en favori aussi.
 
 ## Plusieurs à la fois
 
-Cochez les lignes : une barre apparaît en bas — ajouter un tag, les déplacer
-dans une catégorie, les supprimer. Elle rend compte une fois, à la fin.
+Cochez les lignes : une barre apparaît en bas — les mettre en favori, ajouter
+un tag, les déplacer dans une catégorie, les supprimer. Elle rend compte une fois, à la fin.
 
 ## Nouvelle question, versions
 

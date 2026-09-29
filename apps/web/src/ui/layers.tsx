@@ -548,7 +548,7 @@ export function IconButton({
         {...props}
         aria-label={label}
         aria-keyshortcuts={shortcut}
-        aria-pressed={active}
+        aria-pressed={active ?? props["aria-pressed"]}
         className={cx(
           "inline-flex shrink-0 items-center justify-center rounded-full transition-colors duration-150 disabled:pointer-events-none disabled:opacity-40",
           size === "sm" ? "size-7 [&_svg]:size-3.5" : "size-8 [&_svg]:size-4",

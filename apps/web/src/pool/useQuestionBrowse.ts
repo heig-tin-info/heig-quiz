@@ -43,8 +43,9 @@ export const entryKey = (group: QuestionGroup, row: QuestionRow) => `${group.key
  * - P shows the focused row in every layout — the keyboard's click, and the
  *   only way in on a narrow window;
  * - Enter and a double-click open the editor, like the row's pencil;
- * - Space does nothing yet, on purpose: it is kept for the favourite star,
- *   and a key that opened something today would be a habit to unlearn;
+ * - Space stars the question, or unstars it (F-POOL-10): the row's own star
+ *   button, from the keyboard. Only a key pressed ON the row — Space in the
+ *   filter bar, a tick box, a button or the pane keeps its own meaning;
  * - `close` (Escape and the ✕, wired by the screen) hands the focus back to
  *   the row the pane showed.
  *
@@ -63,6 +64,8 @@ export function useQuestionBrowse(
   docked: boolean,
   /** A touch screen: a tap shows at once, there is no double-click to wait for. */
   coarse: boolean,
+  /** Space on a row: toggles its star. A soft-deleted question has none. */
+  onStar: (row: QuestionRow) => void,
 ) {
   const entries = useMemo<Entry[]>(
     () => groups.flatMap((group) => group.rows.map((row) => ({ key: entryKey(group, row), row }))),
@@ -101,6 +104,7 @@ export function useQuestionBrowse(
     }
     if (e.key === " ") {
       e.preventDefault();
+      if (!entry.row.deletedAt) onStar(entry.row);
       return;
     }
     if (e.key === "p" || e.key === "P") {
@@ -125,7 +129,7 @@ export function useQuestionBrowse(
     },
     tabIndex: key === activeKey ? 0 : -1,
     "aria-current": shown?.key === key ? true : undefined,
-    "aria-keyshortcuts": "P Enter",
+    "aria-keyshortcuts": "P Enter Space",
     onClick: (e: MouseEvent) => {
       if (e.detail > 1) return;
       setActive(key);

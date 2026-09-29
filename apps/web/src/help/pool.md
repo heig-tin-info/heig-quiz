@@ -59,16 +59,27 @@ which is the only place the type can be sorted since it lost its column. A
 question wearing three tags appears in each of the three sections. All of it
 is remembered for the next visit.
 
+## Favourites
+
+The star in front of a question's name makes it one of YOUR favourites;
+Space does the same on the focused row, and **Star** in the bottom bar on
+the ticked ones. Nobody else sees your stars — a colleague sharing the pool
+has their own — and a reader may star too. When you fill an evaluation or a
+template, **Add questions** lists the favourites of the shown pool first,
+and **Add favourites** adds them all at once. **Clear favourites**, the crossed
+star beside the question count, takes off every star you put in it.
+
 ## A pool someone shared with you
 
 If your seat on the pool is **reader**, the screen shows the questions and
 none of the actions: no new question, no edit, no duplicate, no delete, no
-tick boxes. Opening a question still works — reading one means opening it.
+tick boxes. Opening a question still works — reading one means opening it —
+and so does starring it.
 
 ## Several at once
 
-Tick the rows and a bar appears at the bottom: add a tag, move them to a
-category, delete them. It reports once, at the end.
+Tick the rows and a bar appears at the bottom: star them, add a tag, move
+them to a category, delete them. It reports once, at the end.
 
 ## New question, versions
 

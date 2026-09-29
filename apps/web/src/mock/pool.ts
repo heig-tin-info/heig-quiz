@@ -1301,6 +1301,17 @@ if (flags.many) {
 }
 if (flags.empty) stripPool();
 
+/**
+ * The questions this browser's teacher starred (F-POOL-10): a personal set,
+ * so one `Set` for the one user the mock plays. Three of `p1` to start with —
+ * one of them a draft, so the picker's "Add favourites" has something to skip.
+ */
+export const stars = new Set<string>(
+  questions
+    .filter((q) => ["ptr-arith-01", "malloc-tableau", "strcpy-overflow"].includes(q.internalName))
+    .map((q) => q.id),
+);
+
 // --- Views -----------------------------------------------------------------
 
 const liveQuestions = (poolId: string) => questions.filter((q) => q.poolId === poolId);
@@ -1382,6 +1393,7 @@ const questionRow = (q: MockQuestion) => ({
   deprecated: q.versions.at(-1)?.deprecatedAt !== null && q.versions.length > 0,
   deletedAt: q.deletedAt,
   keyless: isKeyless(q),
+  starred: stars.has(q.id) && q.deletedAt === null,
 });
 
 /**
@@ -1890,6 +1902,31 @@ export const questionOr404 = (id: string) => {
   return q;
 };
 
+/**
+ * `PUT` / `DELETE /questions/star`, registered before `/questions/:id`: the
+ * mock matches in order, and `star` would otherwise read as an id.
+ */
+for (const method of ["PUT", "DELETE"] as const) {
+  on(method, "/app/api/questions/star", (_m, body) => {
+    const ids = (body.questionIds as string[] | undefined) ?? [];
+    for (const id of ids) questionOr404(id);
+    for (const id of ids) {
+      if (method === "PUT") stars.add(id);
+      else stars.delete(id);
+    }
+    return undefined;
+  });
+}
+
+on("DELETE", "/app/api/pools/:id/stars", (m) => {
+  const pool = poolOr404(m.groups!.id!);
+  let cleared = 0;
+  for (const q of liveQuestions(pool.id)) {
+    if (q.deletedAt === null && stars.delete(q.id)) cleared += 1;
+  }
+  return { cleared };
+});
+
 // `?scope=all` (an admin's switch) adds the private pools of other teachers.
 on("GET", "/app/api/pools", (_m, _b, url) =>
   pools
@@ -2190,6 +2227,7 @@ export function searchQuestions(candidates: MockQuestion[], params: URLSearchPar
   const q = (params.get("q") ?? "").trim().toLowerCase();
   const categoryId = params.get("categoryId");
   const includeDeleted = params.get("includeDeleted") === "1";
+  const starred = params.get("starred") === "1";
   // `versionMin` / `versionMax` are bounds on the highest PUBLISHED number,
   // so a draft-only question (no number at all) matches neither of them.
   const versionMin = params.get("versionMin");
@@ -2216,6 +2254,7 @@ export function searchQuestions(candidates: MockQuestion[], params: URLSearchPar
 
   return candidates
     .filter((question) => includeDeleted || question.deletedAt === null)
+    .filter((question) => !starred || (stars.has(question.id) && question.deletedAt === null))
     .filter((question) => list.length === 0 || list.includes(question.type))
     .filter((question) => tags.length === 0 || question.tags.some((x) => tags.includes(x)))
     .filter((question) => difficulties.length === 0 || difficulties.includes(question.difficulty))

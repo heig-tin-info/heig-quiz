@@ -1,15 +1,17 @@
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Library, Search } from "lucide-react";
+import { ArrowLeft, Library, Plus, Search, Star } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { PoolSummary, QuestionPage, QuestionRow } from "@quiz/contracts";
 
 import { api } from "../api";
-import { useT } from "../i18n";
+import { useT, type TFunction } from "../i18n";
 import { EMPTY_FILTERS, questionQuery, type QuestionFilters } from "../pool/filters";
 import { DifficultyDots } from "../pool/QuestionTable";
+import { useSetStars, useStarredQuestions } from "../pool/stars";
 import { QUESTION_TYPE_IDS, typeLabel } from "../questionTypes";
 import {
+  Alert,
   ASIDE_MIN_WIDTH,
   Badge,
   Button,
@@ -55,6 +57,17 @@ import { QuestionPreview } from "../question/QuestionPreview";
  *
  * It fills an evaluation or a template alike: the `target` names the pools
  * to offer (the course's linked pools, either way) and where the pick goes.
+ *
+ * The caller's FAVOURITES of the shown pool (F-POOL-10) come first, in a
+ * section of their own loaded by a separate `starred=1` query: the questions
+ * a teacher starred while browsing the pool, found again at once. The list
+ * below is unchanged, so a starred question appears in both — excluding it
+ * there would cost a second filter and a total that no longer matches the
+ * pool's. The section steps aside while a search or a filter is set: it does
+ * not follow them, and a shelf that ignored what was just typed would read
+ * as a bug. "Add favourites" adds every one that can be added in one call
+ * and says what it skipped and why; it then OFFERS to unstar the questions it
+ * just added, never on its own.
  */
 export function AddQuestionsSheet({
   target,
@@ -77,8 +90,8 @@ export function AddQuestionsSheet({
   // on screen while the teacher narrows the search around it.
   const [shown, setShown] = useState<QuestionRow | null>(null);
   const docked = useMinWidth(ASIDE_MIN_WIDTH);
-  const rowButtons = useRef<(HTMLButtonElement | null)[]>([]);
-  const nameId = useId();
+  const listRef = useRef<HTMLDivElement>(null);
+  const lastLook = useRef<string | null>(null);
   // On a narrow window the preview takes the list's place; "Back" hands the
   // focus to the row it came from, not to the top of the sheet.
   const backTo = useRef<string | null>(null);
@@ -88,6 +101,11 @@ export function AddQuestionsSheet({
     queryFn: () => api(`${target.base}/pools`),
   });
   const current = poolId ?? pools.data?.[0]?.id ?? null;
+  const starred = useStarredQuestions(current);
+  const favourites = starred.data?.items ?? NO_ROWS;
+  const { setStars } = useSetStars(current);
+  // What the last "Add favourites" did, until the pool changes.
+  const [notice, setNotice] = useState<{ plan: FavouritePlan; unstarred: boolean } | null>(null);
 
   // The pool screen's own filter state and query string (`pool/filters.ts`),
   // so an equal search is the SAME request under the SAME key as the pool
@@ -117,6 +135,8 @@ export function AddQuestionsSheet({
     () => (questions.data?.pages ?? []).flatMap((page) => page.items),
     [questions.data],
   );
+  const filtering = q.trim() !== "" || type !== "" || difficulty !== null;
+  const showFavourites = !filtering && favourites.length > 0;
 
   const add = useMutation({
     mutationFn: () =>
@@ -130,39 +150,63 @@ export function AddQuestionsSheet({
     },
   });
 
+  /**
+   * The favourites that can go in, in one call; the rest counted by reason.
+   * A question that is already there is left alone rather than posted twice.
+   */
+  const addFavourites = useMutation({
+    mutationFn: async (plan: FavouritePlan) => {
+      if (plan.add.length > 0) {
+        await api(`${target.base}/items`, {
+          method: "POST",
+          body: JSON.stringify({ questionIds: plan.add }),
+        });
+      }
+      return plan;
+    },
+    onSuccess: async (plan) => {
+      if (plan.add.length > 0) await refresh();
+      setPicked((prev) => prev.filter((id) => !plan.add.includes(id)));
+      setNotice({ plan, unstarred: false });
+    },
+  });
+  const unstarAdded = async () => {
+    if (notice && (await setStars(notice.plan.add, false))) {
+      setNotice({ ...notice, unstarred: true });
+    }
+  };
+
   const toggle = (id: string) =>
     setPicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  // ↑/↓ walk the list and the preview follows; only from a row, never from
-  // inside the preview, whose fields take the arrows for themselves.
-  // Space ticks the row, as on the checkbox beside it: shopping a list with
-  // the keyboard is ↓ to read, Space to take. Enter (and a click) looks.
-  const walk = (e: React.KeyboardEvent, index: number, tickable: boolean) => {
-    if (e.key === " ") {
-      e.preventDefault();
-      if (tickable) toggle(rows[index]!.id);
-      return;
-    }
-    // Docked only: on a narrow window the preview takes the list's place, so
-    // an arrow would open it rather than walk to the next row.
-    if (!docked) return;
-    const next = listboxIndex(e.key, index, rows.length);
-    if (next === null || next === index) return;
-    e.preventDefault();
-    setShown(rows[next]!);
-    rowButtons.current[next]?.focus();
+  // The row last looked at, by its section: "Back" returns to that very
+  // button, whichever of the two lists it was in.
+  const look = (row: QuestionRow, key: string) => {
+    lastLook.current = key;
+    setShown(row);
   };
-
   const preview = shown ? <QuestionPreview row={shown} mode="pick" /> : null;
   const back = () => {
-    backTo.current = shown?.id ?? null;
+    backTo.current = lastLook.current;
     setShown(null);
   };
   useEffect(() => {
     if (shown !== null || backTo.current === null) return;
-    rowButtons.current[rows.findIndex((r) => r.id === backTo.current)]?.focus();
+    listRef.current?.querySelector<HTMLElement>(`[data-look="${backTo.current}"]`)?.focus();
     backTo.current = null;
-  }, [shown, rows]);
+  }, [shown]);
+  const list = (section: string, items: QuestionRow[]) => (
+    <PickerRows
+      section={section}
+      rows={items}
+      existing={existing}
+      picked={picked}
+      shown={shown}
+      docked={docked}
+      onToggle={toggle}
+      onLook={look}
+    />
+  );
 
   return (
     <Sheet
@@ -198,7 +242,7 @@ export function AddQuestionsSheet({
           {preview}
         </div>
       ) : (
-        <div className="space-y-4">
+        <div ref={listRef} className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
             <Select
               label={t("picker.pool")}
@@ -206,6 +250,7 @@ export function AddQuestionsSheet({
               onChange={(e) => {
                 setPoolId(e.target.value);
                 setPicked([]);
+                setNotice(null);
               }}
               width="w-56"
             >
@@ -282,62 +327,43 @@ export function AddQuestionsSheet({
             </EmptyState>
           ) : (
             <>
-              <ul className="divide-y divide-line rounded-field border border-line">
-                {rows.map((row, index) => {
-                  const unpublished = row.latestNumber === null;
-                  // Kept after an opinion poll: no key, so it would grade the
-                  // class against nothing (`422 question_keyless`).
-                  const keyless = !unpublished && row.keyless;
-                  const already = existing.has(row.id);
-                  const looked = shown?.id === row.id;
-                  return (
-                    <li
-                      key={row.id}
-                      className={cx("flex items-center gap-3 px-3", looked && "bg-accent-soft")}
+              {showFavourites ? (
+                <section className="space-y-2" aria-label={t("picker.favourites")}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className={SECTION_TITLE}>
+                      <Star aria-hidden className="size-3.5" />
+                      {t("picker.favourites")}
+                      <span className="tabular-nums text-fg-faint">{favourites.length}</span>
+                    </h3>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      loading={addFavourites.isPending}
+                      onClick={() => addFavourites.mutate(planFavourites(favourites, existing))}
                     >
-                      <Checkbox
-                        checked={already || picked.includes(row.id)}
-                        disabled={unpublished || keyless || already}
-                        onChange={() => toggle(row.id)}
-                        label={null}
-                        aria-labelledby={`${nameId}-${index}`}
-                      />
-                      <button
-                        type="button"
-                        ref={(el) => {
-                          rowButtons.current[index] = el;
-                        }}
-                        aria-pressed={looked}
-                        aria-label={t("question.preview.show", {
-                          name: row.internalName,
-                        })}
-                        onClick={() => setShown(row)}
-                        onKeyDown={(e) => walk(e, index, !(unpublished || keyless || already))}
-                        className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 py-2 text-left text-sm"
-                      >
-                        <span id={`${nameId}-${index}`} className="truncate font-medium">
-                          {row.internalName}
-                        </span>
-                        <span className="text-xs text-fg-faint">{typeLabel(t, row.type)}</span>
-                        <DifficultyDots value={row.difficulty} />
-                        {row.deprecated ? (
-                          <Badge tone="amber">{t("eval.questions.deprecated")}</Badge>
-                        ) : null}
-                        {unpublished ? (
-                          <Tip label={t("picker.unpublishedHint")}>
-                            <Badge tone="zinc">{t("picker.unpublished")}</Badge>
-                          </Tip>
-                        ) : null}
-                        {keyless ? (
-                          <Tip label={t("picker.keylessHint")}>
-                            <Badge tone="zinc">{t("picker.keyless")}</Badge>
-                          </Tip>
-                        ) : null}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+                      <Plus /> {t("picker.favourites.add")}
+                    </Button>
+                  </div>
+                  {list("fav", favourites)}
+                </section>
+              ) : null}
+              {notice ? (
+                <Alert
+                  tone={notice.plan.add.length > 0 ? "success" : "neutral"}
+                  action={
+                    notice.plan.add.length > 0 && !notice.unstarred ? (
+                      <Button size="sm" variant="secondary" onClick={() => void unstarAdded()}>
+                        {t("picker.favourites.unstar")}
+                      </Button>
+                    ) : undefined
+                  }
+                >
+                  {favouriteSummary(t, notice.plan)}
+                  {notice.unstarred ? ` ${t("picker.favourites.unstarred")}` : ""}
+                </Alert>
+              ) : null}
+              {showFavourites ? <h3 className={SECTION_TITLE}>{t("picker.allQuestions")}</h3> : null}
+              {list("all", rows)}
               {/* One page is what the pool screen asks for too; the rest is one
                 click away, never silently cut off. */}
               {questions.hasNextPage ? (
@@ -354,9 +380,159 @@ export function AddQuestionsSheet({
             </>
           )}
 
-          <FormError error={add.error} title={t("eval.saveFailed")} />
+          <FormError error={add.error ?? addFavourites.error} title={t("eval.saveFailed")} />
         </div>
       )}
     </Sheet>
+  );
+}
+
+const NO_ROWS: QuestionRow[] = [];
+
+const SECTION_TITLE =
+  "flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-fg-muted";
+
+/**
+ * Why a row cannot be picked, or null when it can: already in the list,
+ * never published (`422 no_published_version`), or kept after an opinion
+ * poll with no key, which would grade the class against nothing
+ * (`422 question_keyless`). The one rule behind a disabled tick box and
+ * behind what "Add favourites" leaves out.
+ */
+export function skipReason(
+  row: QuestionRow,
+  existing: ReadonlySet<string>,
+): "already" | "unpublished" | "keyless" | null {
+  if (existing.has(row.id)) return "already";
+  if (row.latestNumber === null) return "unpublished";
+  if (row.keyless) return "keyless";
+  return null;
+}
+
+/**
+ * What "Add favourites" does with the starred questions of the shown pool:
+ * the ids it can add, and how many it leaves out for each reason. Posting a
+ * refused one would lose the whole batch.
+ */
+export function planFavourites(rows: readonly QuestionRow[], existing: ReadonlySet<string>) {
+  const plan = { add: [] as string[], already: 0, unpublished: 0, keyless: 0 };
+  for (const row of rows) {
+    const reason = skipReason(row, existing);
+    if (reason === null) plan.add.push(row.id);
+    else plan[reason] += 1;
+  }
+  return plan;
+}
+export type FavouritePlan = ReturnType<typeof planFavourites>;
+
+/** "3 added, 1 skipped: 1 not published", the bulk bar's kind of report. */
+export function favouriteSummary(t: TFunction, plan: FavouritePlan): string {
+  const reasons = [
+    plan.unpublished > 0 ? t("picker.favourites.skip.unpublished", { n: plan.unpublished }) : null,
+    plan.keyless > 0 ? t("picker.favourites.skip.keyless", { n: plan.keyless }) : null,
+    plan.already > 0 ? t("picker.favourites.skip.already", { n: plan.already }) : null,
+  ].filter((r): r is string => r !== null);
+  const skipped = plan.unpublished + plan.keyless + plan.already;
+  const added = t("picker.favourites.added", { n: plan.add.length });
+  return skipped === 0
+    ? added
+    : `${added}, ${t("picker.favourites.skipped", { n: skipped, reasons: reasons.join(", ") })}`;
+}
+
+/**
+ * One list of the picker — the favourites or the whole pool — with its keys.
+ * ↑/↓ walk the list and the preview follows; only from a row, never from
+ * inside the preview, whose fields take the arrows for themselves. Space
+ * ticks the row, as on the checkbox beside it: shopping a list with the
+ * keyboard is ↓ to read, Space to take. Enter (and a click) looks.
+ */
+function PickerRows({
+  section,
+  rows,
+  existing,
+  picked,
+  shown,
+  docked,
+  onToggle,
+  onLook,
+}: {
+  /** Tells the two lists' rows apart, since a favourite appears in both. */
+  section: string;
+  rows: QuestionRow[];
+  existing: Set<string>;
+  picked: string[];
+  shown: QuestionRow | null;
+  docked: boolean;
+  onToggle: (id: string) => void;
+  onLook: (row: QuestionRow, key: string) => void;
+}) {
+  const t = useT();
+  const nameId = useId();
+  const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const walk = (e: React.KeyboardEvent, index: number, tickable: boolean) => {
+    if (e.key === " ") {
+      e.preventDefault();
+      if (tickable) onToggle(rows[index]!.id);
+      return;
+    }
+    // Docked only: on a narrow window the preview takes the list's place, so
+    // an arrow would open it rather than walk to the next row.
+    if (!docked) return;
+    const next = listboxIndex(e.key, index, rows.length);
+    if (next === null || next === index) return;
+    e.preventDefault();
+    onLook(rows[next]!, `${section}:${rows[next]!.id}`);
+    buttons.current[next]?.focus();
+  };
+
+  return (
+    <ul className="divide-y divide-line rounded-field border border-line">
+      {rows.map((row, index) => {
+        const reason = skipReason(row, existing);
+        const looked = shown?.id === row.id;
+        const key = `${section}:${row.id}`;
+        return (
+          <li key={row.id} className={cx("flex items-center gap-3 px-3", looked && "bg-accent-soft")}>
+            <Checkbox
+              checked={reason === "already" || picked.includes(row.id)}
+              disabled={reason !== null}
+              onChange={() => onToggle(row.id)}
+              label={null}
+              aria-labelledby={`${nameId}-${index}`}
+            />
+            <button
+              type="button"
+              data-look={key}
+              ref={(el) => {
+                buttons.current[index] = el;
+              }}
+              aria-pressed={looked}
+              aria-label={t("question.preview.show", { name: row.internalName })}
+              onClick={() => onLook(row, key)}
+              onKeyDown={(e) => walk(e, index, reason === null)}
+              className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 py-2 text-left text-sm"
+            >
+              <span id={`${nameId}-${index}`} className="truncate font-medium">
+                {row.internalName}
+              </span>
+              <span className="text-xs text-fg-faint">{typeLabel(t, row.type)}</span>
+              <DifficultyDots value={row.difficulty} />
+              {row.deprecated ? <Badge tone="amber">{t("eval.questions.deprecated")}</Badge> : null}
+              {reason === "unpublished" ? (
+                <Tip label={t("picker.unpublishedHint")}>
+                  <Badge tone="zinc">{t("picker.unpublished")}</Badge>
+                </Tip>
+              ) : null}
+              {reason === "keyless" ? (
+                <Tip label={t("picker.keylessHint")}>
+                  <Badge tone="zinc">{t("picker.keyless")}</Badge>
+                </Tip>
+              ) : null}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

@@ -20,6 +20,7 @@ import {
 } from "../ui";
 import type { QuestionGroup } from "./QuestionGroups";
 import type { QuestionSort, SortDir } from "./filters";
+import { StarButton } from "./stars";
 import { entryKey, type RowProps } from "./useQuestionBrowse";
 
 /**
@@ -33,8 +34,9 @@ import { entryKey, type RowProps } from "./useQuestionBrowse";
  * a name alone does not say what a question asks. So a row has two gestures
  * (`useQuestionBrowse`): a click, ↑/↓ and P LOOK, showing the question as a
  * student reads it in a pane beside the list (`PoolView`); Enter, a
- * double-click and the pencil EDIT. Space is kept for the favourite star that
- * comes next, and does nothing until then.
+ * double-click and the pencil EDIT. Space and the star at the start of the
+ * name STAR it — the caller's own favourite (F-POOL-10), a reader's too, so
+ * the star sits in the name cell and not among the actions a reader lacks.
  *
  * The type lost its column and became a 20 px glyph at the left of the name.
  * A badge repeating "Multiple choice" on forty rows is forty copies of a word
@@ -171,6 +173,7 @@ export function QuestionTable({
   onDragStart,
   readOnly = false,
   statsFor,
+  onStar,
 }: {
   /** One section per "group by" value; `none` hands over a single unlabelled one. */
   groups: QuestionGroup[];
@@ -196,6 +199,8 @@ export function QuestionTable({
   readOnly?: boolean;
   /** Absent while the statistics load or when they failed. */
   statsFor?: StatsFor | undefined;
+  /** The row's star (F-POOL-10), for every role. */
+  onStar: (row: QuestionRow) => void;
 }) {
   const t = useT();
   const rows = groups.flatMap((g) => g.rows);
@@ -278,6 +283,7 @@ export function QuestionTable({
                 )}
                 <td className={cx(T.td, "whitespace-nowrap")}>
                   <span className="flex items-center gap-2">
+                    <StarButton row={row} onToggle={() => onStar(row)} />
                     <TypeGlyph type={row.type} />
                     <span className="font-mono font-bold group-aria-[current=true]:text-accent">
                       {row.internalName}

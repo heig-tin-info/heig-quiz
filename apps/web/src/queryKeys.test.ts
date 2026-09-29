@@ -41,6 +41,8 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["poolCandidatesKey", keys.poolCandidatesKey("p1"), ["pool-candidates", "p1"]],
     ["poolCandidatesKey (q)", keys.poolCandidatesKey("p1", "ma"), ["pool-candidates", "p1", "ma"]],
     ["poolQuestionStatsKey", keys.poolQuestionStatsKey("p1"), ["pool", "p1", "question-stats"]],
+    ["poolQuestionListsKey", keys.poolQuestionListsKey("p1"), ["pool", "p1", "questions"]],
+    ["poolStarredKey", keys.poolStarredKey("p1"), ["pool", "p1", "starred"]],
     ["questionKey", keys.questionKey("q1"), ["question", "q1"]],
     [
       "questionPreviewKey (draft)",
@@ -154,6 +156,12 @@ describe("queryKeys — the prefixes invalidations rely on", () => {
       keys.poolCandidatesKey("p1", "ma"),
     ],
     ["poolKey ⊂ poolQuestionStatsKey", keys.poolKey("p1"), keys.poolQuestionStatsKey("p1")],
+    [
+      "poolQuestionListsKey ⊂ poolQuestionsKey",
+      keys.poolQuestionListsKey("p1"),
+      keys.poolQuestionsKey("p1", "?limit=25"),
+    ],
+    ["poolKey ⊂ poolStarredKey", keys.poolKey("p1"), keys.poolStarredKey("p1")],
     [
       "questionKey ⊂ questionPreviewKey",
       keys.questionKey("q1"),

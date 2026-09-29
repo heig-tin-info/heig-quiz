@@ -68,6 +68,7 @@ export {
   deleteCategory,
 } from "./categories.js";
 export { InvalidCursor, listQuestions, searchReachableQuestions } from "./questionList.js";
+export { clearPoolStars, starQuestions, unstarQuestions } from "./stars.js";
 export {
   createQuestion,
   createUnsavedQuestion,

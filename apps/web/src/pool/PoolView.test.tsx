@@ -14,7 +14,7 @@ import { PoolView } from "./PoolView";
  *
  * A click on a row SHOWS the question (a pane beside the list on a wide
  * window, in its place on a narrow one); Enter, a double-click and the
- * pencil open the editor; Space is kept for the favourite star to come.
+ * pencil open the editor; Space and the row's star star it (F-POOL-10).
  *
  * The category tree is NOT part of this screen any more: it lives in the app
  * sidebar and hands its selection over through the `category` query-string
@@ -62,6 +62,7 @@ const PAGE: QuestionPage = {
       latestNumber: 3,
       hasDraftChanges: true,
       keyless: false,
+      starred: false,
       updatedAt: "2026-09-18T08:00:00.000Z",
       deprecated: false,
       deletedAt: null,
@@ -76,6 +77,7 @@ const PAGE: QuestionPage = {
       latestNumber: null,
       hasDraftChanges: true,
       keyless: false,
+      starred: false,
       updatedAt: "2026-09-10T08:00:00.000Z",
       deprecated: false,
       deletedAt: null,
@@ -107,18 +109,23 @@ const rowOf = (name: string) => within(screen.getByRole("table")).getByText(name
 
 const EMPTY_PAGE: QuestionPage = { items: [], nextCursor: null, total: 0 };
 
+/** The caller's favourites of the pool (`pool/stars.tsx`). */
+const STARRED = "GET /app/api/pools/p1/questions?starred=1&limit=200";
+
 function routes(over: Record<string, ReturnType<typeof ok>> = {}) {
   return {
     "GET /app/api/pools/p1": ok(POOL),
     "GET /app/api/pools/p1/questions?limit=25": ok(PAGE),
+    [STARRED]: ok(EMPTY_PAGE),
     ...over,
   };
 }
 
-const previews = () =>
+const previews = (over: Record<string, ReturnType<typeof ok>> = {}) =>
   routes({
     "POST /app/api/questions/q1/preview": ok(VIEW),
     "POST /app/api/questions/q2/preview": ok(VIEW),
+    ...over,
   });
 
 describe("PoolView", () => {
@@ -285,10 +292,10 @@ describe("PoolView", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q2" });
   });
 
-  it("keeps Space for later: it neither opens nor ticks a row", async () => {
+  it("stars the focused row on Space, and neither opens nor ticks it", async () => {
     const user = userEvent.setup();
     const navigate = vi.fn();
-    const { calls } = mockFetch(previews());
+    const { calls } = mockFetch(previews({ "PUT /app/api/questions/star": { status: 204 } }));
     renderWithProviders(<PoolView id="p1" navigate={navigate} />);
     await screen.findByText("ptr-arith-01");
     rowOf("ptr-arith-01").focus();
@@ -296,6 +303,16 @@ describe("PoolView", () => {
     expect(navigate).not.toHaveBeenCalled();
     expect(previewCalls(calls)).toEqual([]);
     expect(screen.getByLabelText("Select ptr-arith-01")).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Star ptr-arith-01" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PUT")).toMatchObject({
+        url: "/app/api/questions/star",
+        body: { questionIds: ["q1"] },
+      }),
+    );
     // The tick box keeps its own Space.
     screen.getByLabelText("Select ptr-arith-01").focus();
     await user.keyboard(" ");
@@ -346,7 +363,7 @@ describe("PoolView", () => {
     mockFetch(previews());
     renderWithProviders(<PoolView id="p1" navigate={navigate} />);
     await screen.findByText("ptr-arith-01");
-    expect(rowOf("ptr-arith-01")).toHaveAttribute("aria-keyshortcuts", "P Enter");
+    expect(rowOf("ptr-arith-01")).toHaveAttribute("aria-keyshortcuts", "P Enter Space");
     rowOf("ptr-arith-01").focus();
     await user.keyboard("{ArrowDown}");
     // On a narrow window the arrows only move: the pane would hide the list.
@@ -602,5 +619,92 @@ describe("PoolView", () => {
     mockFetch({ "GET /app/api/pools/p1": ok(POOL) });
     renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
     expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  describe("favourites (F-POOL-10)", () => {
+    const starButton = (name: string) => screen.getByRole("button", { name: `Star ${name}` });
+
+    it("stars from the row at once, and puts the star back when the server refuses", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch(routes({ "PUT /app/api/questions/star": fail(500) }));
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-arith-01");
+      expect(starButton("ptr-arith-01")).toHaveAttribute("aria-pressed", "false");
+
+      await user.click(starButton("ptr-arith-01"));
+      await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+      // Rolled back, and the list was never refetched for it.
+      await waitFor(() => expect(starButton("ptr-arith-01")).toHaveAttribute("aria-pressed", "false"));
+      expect(calls.filter((c) => c.url === "/app/api/pools/p1/questions?limit=25")).toHaveLength(1);
+    });
+
+    it("lets a reader star", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch(
+        routes({
+          "GET /app/api/pools/p1": ok({ ...POOL, role: "reader" }),
+          "PUT /app/api/questions/star": { status: 204 },
+        }),
+      );
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-arith-01");
+      await user.click(starButton("ptr-null-check"));
+      expect(starButton("ptr-null-check")).toHaveAttribute("aria-pressed", "true");
+      await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+    });
+
+    it("stars the selection from the bulk bar, then offers to unstar it", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch(routes({ "PUT /app/api/questions/star": { status: 204 } }));
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-arith-01");
+      await user.click(screen.getByLabelText("Select ptr-arith-01"));
+      await user.click(screen.getByLabelText("Select ptr-null-check"));
+      const bar = await screen.findByRole("region", { name: "2 selected" });
+      await user.click(within(bar).getByRole("button", { name: "Star" }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === "PUT")).toMatchObject({
+          body: { questionIds: ["q1", "q2"] },
+        }),
+      );
+      expect(within(bar).getByRole("button", { name: "Unstar" })).toBeVisible();
+    });
+
+    it("clears the caller's favourites after a confirm that counts them", async () => {
+      const user = userEvent.setup();
+      const starredPage: QuestionPage = {
+        items: [{ ...PAGE.items[0]!, starred: true }],
+        nextCursor: null,
+        total: 1,
+      };
+      const { calls } = mockFetch(
+        routes({
+          "GET /app/api/pools/p1/questions?limit=25": ok({
+            ...PAGE,
+            items: [{ ...PAGE.items[0]!, starred: true }, PAGE.items[1]!],
+          }),
+          [STARRED]: ok(starredPage),
+          "DELETE /app/api/pools/p1/stars": ok({ cleared: 1 }),
+        }),
+      );
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await user.click(await screen.findByRole("button", { name: "Clear favourites" }));
+      const dialog = await screen.findByRole("dialog");
+      expect(dialog).toHaveTextContent("Remove your star from the 1 question of this pool?");
+      await user.click(within(dialog).getByRole("button", { name: "Clear favourites" }));
+      await waitFor(() =>
+        expect(calls.some((c) => c.method === "DELETE" && c.url === "/app/api/pools/p1/stars")).toBe(
+          true,
+        ),
+      );
+      await waitFor(() => expect(starButton("ptr-arith-01")).toHaveAttribute("aria-pressed", "false"));
+    });
+
+    it("has no Clear favourites while the caller has none here", async () => {
+      mockFetch(routes());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-arith-01");
+      expect(screen.queryByRole("button", { name: "Clear favourites" })).toBeNull();
+    });
   });
 });

@@ -151,7 +151,7 @@ Two pairs stay below their target, on purpose:
   the scale, on purpose:
   - **28 px, the pool's floating bulk bar.** It is a pill on one line — the
     browser clamps a radius to half the height, so 28 px on a 44 px bar IS
-    the pill — but on a phone its four actions wrap to two lines, and
+    the pill — but on a phone its five actions wrap to two lines, and
     `rounded-full` would turn that taller bar into a lens. 28 px keeps it a
     pill while it fits and a rounded rectangle when it does not.
   - **14 px, the poll projection's QR tile.** The tile belongs to the
@@ -220,7 +220,7 @@ prevented from scrolling the page. A row keeps `role="row"`; announcing it as
 a button would cost the reader the table around it. The pool's rows and cards
 are the exception, because there a click LOOKS and Enter EDITS: they answer
 their own keys (`useQuestionBrowse`, below), P is the keyboard's click and
-Space is not one.
+Space stars the question.
 
 Ctrl+K (⌘+K on Apple keyboards) opens and closes the command palette, from
 anywhere, including from inside a field: that is the convention wherever the
@@ -868,7 +868,11 @@ live in `ui/state.ts`, each written once.
   browsing with the arrows is the point; on a narrow window they only move,
   and P is the keyboard's way in (`aria-keyshortcuts`, and in the shortcut
   strip). Enter, a double-click and the pencil edit, in the same tab; Space
-  does nothing yet, kept for the favourite star; Escape (handled once, on the
+  and the row's star toggle the caller's favourite (F-POOL-10) — an outline
+  `IconButton` with `aria-pressed`, filled in `fg` when starred, never in
+  accent or warning: a favourite is a personal mark, not the screen's one red
+  thing nor a state that needs attention, and a column of amber stars would
+  outshout the draft badges; Escape (handled once, on the
   wrapper of list and pane) and the ✕ close and hand the focus back to the
   row. One row is in the Tab order (roving tabindex), the shown one wears
   `aria-current` and the grading panel's `accent-soft` with its name in

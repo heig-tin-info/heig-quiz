@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Eye, Plus } from "lucide-react";
+import { ArrowLeft, Eye, Plus, StarOff } from "lucide-react";
 import { useMemo, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from "react";
 
 import type {
@@ -11,6 +11,8 @@ import type {
 } from "@quiz/contracts";
 
 import { api } from "../api";
+import { useConfirm } from "../confirm";
+import { useToast } from "../notify";
 import { useT } from "../i18n";
 import { QUESTION_TYPE_IDS, typeIcon, typeLabel } from "../questionTypes";
 import type { Route } from "../router";
@@ -18,6 +20,7 @@ import { useSearchParam } from "../router";
 import { useScreenCommands } from "../screenCommands";
 import { useShortcuts } from "../shortcuts";
 import {
+  Actions,
   ASIDE_MIN_WIDTH,
   Badge,
   Button,
@@ -47,6 +50,7 @@ import { QuestionCards } from "./QuestionCards";
 import { groupQuestions, isGroupBy, type GroupBy } from "./QuestionGroups";
 import { QuestionStatsSheet } from "./QuestionStatsSheet";
 import { QuestionTable, type StatsFor } from "./QuestionTable";
+import { useSetStars, useStarredQuestions } from "./stars";
 import { useQuestionBrowse } from "./useQuestionBrowse";
 import { QuestionPreview } from "../question/QuestionPreview";
 import { useQuestionActions } from "../question/useQuestionActions";
@@ -103,6 +107,14 @@ import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
  * absent. Looking at a question and opening it still work — the pane is how
  * a reader browses, the editor where a question is read in full — and it is
  * the editor's own business to refuse a save.
+ *
+ * A question can be STARRED (F-POOL-10): the caller's own favourite, to find
+ * it again in the question picker. The star is on every row and card, Space
+ * toggles it on the focused one, the bulk bar stars a selection, and "Clear
+ * favourites" — an icon on the filter bar's second row, the list's tertiary
+ * action, drawn only while the caller has stars in this pool — takes them
+ * all off. Starring is a preference, not an
+ * edit, so a reader has all of it but the bulk bar, which needs tick boxes.
  *
  * The item analysis (ADR-038) is fetched apart from the rows, in one call for
  * the whole pool: a question with ten answers or more gets a chart icon after
@@ -279,14 +291,36 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   };
 
   const { duplicate, askDelete } = useQuestionActions(id);
+  const confirm = useConfirm();
+  const toast = useToast();
+  const { setStars, clearAll } = useSetStars(id);
+  const toggleStar = (row: QuestionRow) => void setStars([row.id], !row.starred);
+  const starredCount = useStarredQuestions(id).data?.total ?? 0;
+  const clearFavourites = async () => {
+    const ok = await confirm({
+      title: t("pool.stars.clearTitle"),
+      message: t(starredCount === 1 ? "pool.stars.clearConfirm.one" : "pool.stars.clearConfirm", {
+        n: starredCount,
+      }),
+      confirmLabel: t("pool.stars.clear"),
+      cancelLabel: t("common.cancel"),
+    });
+    if (ok && (await clearAll()) !== null) toast(t("pool.stars.cleared"), "success");
+  };
   const { category, groups } = useListing(pool.data?.categories, categoryId, rows, group);
   const edit = (row: QuestionRow) => navigate({ view: "question", id: row.id });
   const docked = useMinWidth(ASIDE_MIN_WIDTH);
-  const browse = useQuestionBrowse(groups, edit, docked, useCoarsePointer());
+  const browse = useQuestionBrowse(groups, edit, docked, useCoarsePointer(), toggleStar);
   const shown = browse.shown;
-  // P is the one key of the list the strip cannot guess; the arrows and Enter
-  // do what they do everywhere.
-  useShortcuts([{ keys: "P", label: t("question.preview.shortcut") }], rows.length > 0);
+  // P and Space are the keys of the list the strip cannot guess; the arrows
+  // and Enter do what they do everywhere.
+  useShortcuts(
+    [
+      { keys: "P", label: t("question.preview.shortcut") },
+      { keys: "Space", label: t("pool.star.shortcut") },
+    ],
+    rows.length > 0,
+  );
   const closeOnEscape = (e: KeyboardEvent) => {
     if (e.key !== "Escape" || e.defaultPrevented) return;
     e.preventDefault();
@@ -366,6 +400,22 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 onView={setView}
                 group={group}
                 onGroup={setGroup}
+                actions={
+                  <Actions
+                    size="sm"
+                    items={
+                      starredCount > 0
+                        ? [
+                            {
+                              label: t("pool.stars.clear"),
+                              icon: StarOff,
+                              onSelect: () => void clearFavourites(),
+                            },
+                          ]
+                        : []
+                    }
+                  />
+                }
               />
 
               {questions.isLoading ? (
@@ -403,6 +453,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                       onDragStart={readOnly ? undefined : startDrag}
                       readOnly={readOnly}
                       statsFor={statsFor}
+                      onStar={toggleStar}
                     />
                   ) : (
                     <QuestionTable
@@ -426,6 +477,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                       onDragStart={readOnly ? undefined : startDrag}
                       readOnly={readOnly}
                       statsFor={statsFor}
+                      onStar={toggleStar}
                     />
                   )}
                   <PoolListTail
@@ -461,6 +513,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           ids={checkedIds}
           rows={rows}
           categories={detail.categories}
+          onStar={setStars}
           onClear={() => setChecked(new Set())}
         />
       ) : null}

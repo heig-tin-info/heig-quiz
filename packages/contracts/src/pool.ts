@@ -8,7 +8,7 @@
  */
 import { z } from "zod";
 
-import { IntList, StringList, ZodIssueLite, pageOf } from "./common.js";
+import { BoolFlag, IntList, StringList, ZodIssueLite, pageOf } from "./common.js";
 
 /**
  * The question types of the MVP. `QUESTION_TYPE_IDS` in `@quiz/core` is the
@@ -287,6 +287,11 @@ export const QuestionRow = z.object({
    * never an evaluation (`422 question_keyless`).
    */
   keyless: z.boolean(),
+  /**
+   * The CALLER starred it (F-POOL-10, ADR-040): a personal bookmark, false
+   * for everyone else and always false on a soft-deleted question.
+   */
+  starred: z.boolean(),
 });
 export type QuestionRow = z.infer<typeof QuestionRow>;
 
@@ -311,10 +316,9 @@ export const QuestionSearch = z.object({
   difficulty: IntList.optional(),
   categoryId: z.uuid().optional(),
   /** Soft-deleted questions are hidden unless this is set (F-QST-11). */
-  includeDeleted: z
-    .union([z.string(), z.boolean()])
-    .transform((v) => v === true || v === "1" || v === "true")
-    .optional(),
+  includeDeleted: BoolFlag.optional(),
+  /** Only the questions the caller starred (F-POOL-10); the order and the cursor are unchanged. */
+  starred: BoolFlag.optional(),
   /**
    * Published version number bounds (`version:>1`, `version:v2` in the search
    * box). A draft-only question has no number and matches neither bound.
@@ -435,6 +439,19 @@ export const MoveBody = z.object({
   linkCourses: z.boolean().optional(),
 });
 export type MoveBody = z.infer<typeof MoveBody>;
+
+// --- Favourites (F-POOL-10, ADR-040) ---------------------------------------
+
+/**
+ * `PUT` and `DELETE /questions/star`: star or unstar a batch, idempotently.
+ * Every id must be a question the caller reaches, or the whole batch is a 404.
+ */
+export const QuestionStarBody = z.object({ questionIds: z.array(z.uuid()).min(1).max(200) });
+export type QuestionStarBody = z.infer<typeof QuestionStarBody>;
+
+/** `DELETE /pools/:id/stars`: how many of the caller's stars in that pool went. */
+export const StarsCleared = z.object({ cleared: z.number().int().nonnegative() });
+export type StarsCleared = z.infer<typeof StarsCleared>;
 
 /**
  * A course whose evaluations use one of the questions being moved, while the
