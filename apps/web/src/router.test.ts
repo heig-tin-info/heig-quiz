@@ -28,6 +28,7 @@ describe("routeToPath / parsePath", () => {
     { view: "attempt", evaluationId: "e-1" },
     // WP10 replaced WP9's `/results/:id` with the one feedback route.
     { view: "feedback", attemptId: "a-1" },
+    { view: "drill" },
     { view: "devUi" },
   ];
 
@@ -154,6 +155,7 @@ describe("ROUTES", () => {
     teamsLink: { view: "teamsLink" },
     teamsTab: { view: "teamsTab" },
     feedback: { view: "feedback", attemptId: "a-1" },
+    drill: { view: "drill" },
     live: { view: "live", id: "e-1" },
     evaluationPreview: { view: "evaluationPreview", id: "e-1" },
     poll: { view: "poll", id: "e-1" },
@@ -175,9 +177,10 @@ describe("ROUTES", () => {
     }
   });
 
-  it("marks the eight views a student has a screen for, and only them", () => {
+  it("marks the nine views a student has a screen for, and only them", () => {
     expect(ROUTE_VIEWS.filter((v) => ROUTES[v].studentSafe).sort()).toEqual([
       "attempt",
+      "drill",
       "feedback",
       "home",
       "join",
@@ -203,6 +206,7 @@ describe("ROUTES", () => {
       polls: "polls",
       poll: "polls",
       admin: "admin",
+      drill: "drill",
     });
     const unlit = ROUTE_VIEWS.filter((v) => lit[v] === null).sort();
     expect(unlit).toEqual(

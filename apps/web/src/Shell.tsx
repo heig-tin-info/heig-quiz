@@ -3,6 +3,7 @@ import {
   CalendarRange,
   ChevronDown,
   ClipboardList,
+  Dumbbell,
   Eye,
   FolderTree,
   Library,
@@ -52,6 +53,8 @@ import {
 import { coursesKey, poolsKey } from "./queryKeys";
 import { BottomNav } from "./student/BottomNav";
 import { bottomNavShown } from "./student/bottomNavSlots";
+import { useDrillAvailability, type DrillAvailability } from "./drill/api";
+import { AvailableDot } from "./drill/AvailableDot";
 
 /**
  * Application frame: a 240 px sidebar on desktop (navigation, the teacher's
@@ -172,6 +175,7 @@ function Nav({
   teacherUi,
   poolNav,
   courseNav,
+  drill,
   onNavigate,
 }: {
   me: Me;
@@ -179,6 +183,8 @@ function Nav({
   navigate: (r: Route) => void;
   /** The teacher UI is on (false in student view and for students). */
   teacherUi: boolean;
+  /** The student's drill: whether its row is drawn, and today's badge (#317). */
+  drill: DrillAvailability;
   /**
    * The three-state disclosure of the pools section, held by the frame: the
    * desktop sidebar and the mobile drawer both draw this navigation, and two
@@ -290,6 +296,17 @@ function Nav({
               onClick={() => go({ view: "polls" })}
             />
           </>
+        ) : null}
+        {/* ADR-041 (#317): the student's drill, once a classroom has it on.
+            The dot is "today's drill is available", never a count. */}
+        {!teacherUi && drill.shown ? (
+          <NavItem
+            icon={Dumbbell}
+            label={t("nav.drill")}
+            active={section === "drill"}
+            onClick={() => go({ view: "drill" })}
+            trailing={drill.available ? <AvailableDot /> : null}
+          />
         ) : null}
         {/* Settings is not a section of the product: it lives in the account
             menu at the bottom of this sidebar, and in the palette. */}
@@ -475,6 +492,9 @@ export function Shell({
   // Where the student's bottom bar shows, the top bar does not repeat it:
   // DESIGN.md, "The student's bottom bar" (#191).
   const bottomNav = bottomNavShown(route, teacherUi);
+  // The student's drill (#317): the sidebar row and the bottom slot, both
+  // drawn only once a classroom has it on, with today's badge.
+  const drill = useDrillAvailability(!teacherUi);
   const userMenu = (compact: boolean) => (
     <UserMenu
       me={me}
@@ -524,6 +544,7 @@ export function Shell({
           teacherUi={teacherUi}
           poolNav={poolNav}
           courseNav={courseNav}
+          drill={drill}
         />
         <ShortcutStrip />
         {/* The account row: what is about the PERSON rather than about the
@@ -566,6 +587,7 @@ export function Shell({
               teacherUi={teacherUi}
               poolNav={poolNav}
               courseNav={courseNav}
+              drill={drill}
               onNavigate={() => setDrawer(false)}
             />
             <div className="border-t border-line p-2">
@@ -609,7 +631,7 @@ export function Shell({
         >
           {children}
         </main>
-        {bottomNav ? <BottomNav route={route} navigate={navigate} /> : null}
+        {bottomNav ? <BottomNav route={route} navigate={navigate} drill={drill} /> : null}
       </div>
 
       {/* Mounted only while open: nothing of it — the key listener of its

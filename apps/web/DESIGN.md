@@ -1344,10 +1344,22 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
 - **Slots**, each an icon over a visible 11 px label, sharing the width
   equally: Activities (the home, "Open now"), Courses (the home's "My
   classrooms", `/#classrooms`), Grades (the home's "Past evaluations",
-  `/#past`, and lit on a feedback page), Profile (the settings). Drill (#317)
-  takes the MIDDLE when it lands: one more entry in `BOTTOM_SLOTS`, no
-  redesign. A slot that leads to a section of the home is an anchor on it,
-  not a page of its own: the home already is those lists.
+  `/#past`, and lit on a feedback page), Profile (the settings), and Drill
+  (#317, `/drill`) in the MIDDLE. A slot that leads to a section of the home
+  is an anchor on it, not a page of its own: the home already is those lists.
+- **Drill is drawn only when it leads somewhere**: for a student with at
+  least one classroom whose drill is on (`visibleSlots`); the four others
+  share the width otherwise. Its label is `bnav.drill`, not the page title:
+  "Entraînement" does not fit a fifth of a 390 px phone at 11 px, so the
+  French slot says "Révisions". The desktop sidebar has the same entry, a
+  "Drill" row under Home, under the same condition.
+- **The badge is a dot, never a count.** "Today's drill is available"
+  (ADR-041 §6) is an 8 px `accent` dot on the icon's top right, ringed in
+  `canvas` so it reads on the lit pill too, with the words for a screen
+  reader. The sidebar row carries the same dot as its trailing mark. A
+  number of cards left would be a streak by another name, which the product
+  owner ruled out; the accent is right because the dot points at the one
+  thing to do there, like the primary it leads to.
 - **Shape.** Fixed to the bottom, 56 px plus the iOS home-indicator inset
   (`env(safe-area-inset-bottom)`), `canvas` at 90 % with a blur and a
   hairline over it — the phone top bar, mirrored. `--bottom-nav-h` is its
@@ -1357,7 +1369,7 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
   An anchored section lands under the sticky top bar through one
   `scroll-padding-top` on the root, from `--topbar-h`.
 - **Where it is drawn: an allowlist**, the views the route table gives a
-  `bottomSlot` (`router.ts`: the home, a feedback page, the settings) and
+  `bottomSlot` (`router.ts`: the home, a feedback page, the settings, the drill) and
   nothing else. Hidden on the
   attempt (lobby and player), the poll join page, every projection and
   preview, a SEB-confined page, and any screen with a sticky bottom bar of its

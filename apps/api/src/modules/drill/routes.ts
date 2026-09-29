@@ -31,7 +31,7 @@ import { tracer } from "../../audit.js";
 import { isoOrNull } from "../../clock.js";
 import { accessibleClassroom, loadEvaluation, teacherGuard } from "../guards.js";
 import { invalid, notFound, studentRoute, teacherRoute } from "../http.js";
-import { drillAllowed, setAllowDrill } from "../evaluation/service.js";
+import { drillAllowed, setAllowDrill, type EvaluationRecord } from "../evaluation/service.js";
 import { setClassroomDrill, setDrillOptOut } from "../org/service.js";
 import * as service from "./service.js";
 
@@ -49,6 +49,11 @@ export async function drillPlugin(app: FastifyInstance) {
     accessibleClassroom(app, req, reply, p);
   const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     loadEvaluation(app, req, reply, p.id);
+  /** What the settings screen reads of an evaluation's drill: the switch and its cards. */
+  const evaluationDrill = async (row: EvaluationRecord): Promise<EvaluationDrill> => ({
+    allowDrill: drillAllowed(row),
+    cards: await service.evaluationCardCount(app.db, row.id),
+  });
 
   // --- Student -------------------------------------------------------------
 
@@ -112,7 +117,7 @@ export async function drillPlugin(app: FastifyInstance) {
   //
   // The state of the switches is read from the classroom's and the
   // evaluation's own details (`drillEnabled`, `allowDrill`); these routes
-  // only write.
+  // write, except the one read of the cards an evaluation gave rise to.
 
   /** ADR-041 §6: the teacher enables the drill for a classroom; its students are then in by default. */
   app.put(
@@ -135,6 +140,17 @@ export async function drillPlugin(app: FastifyInstance) {
   );
 
   /**
+   * "Allow drill" and the cards the evaluation gave rise to: the count the
+   * settings screen needs to offer "Remove these questions from the drill"
+   * (ADR-041 §10, item 3), which the evaluation's detail does not carry.
+   */
+  app.get(
+    "/app/api/evaluations/:id/drill",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffEvaluation }, ({ scope }) => evaluationDrill(scope.evaluation)),
+  );
+
+  /**
    * "Allow drill", the one writer of `settings.allowDrill`, editable until
    * the release (ADR-041 §10, item 3). Turning it off keeps the cards
    * already created: the removal is its own action. Answers the card count.
@@ -145,10 +161,7 @@ export async function drillPlugin(app: FastifyInstance) {
     teacher({ params: IdParam, body: EvaluationDrillBody, load: staffEvaluation }, async ({ req, now, body, scope }) => {
       const row = await setAllowDrill(app.db, scope.evaluation, body.allowDrill, now);
       await trace(req, "drill.allow", "evaluation", row.id, { allowDrill: body.allowDrill });
-      return {
-        allowDrill: drillAllowed(row),
-        cards: await service.evaluationCardCount(app.db, row.id),
-      } satisfies EvaluationDrill;
+      return evaluationDrill(row);
     }),
   );
 

@@ -127,6 +127,8 @@ export const evaluationKey = (id: string) => ["evaluation", id] as const;
 /** The summary of a template pull (F-EVAL-26): under the evaluation, so its refresh reaches it. */
 export const templatePullKey = (id: string) => ["evaluation", id, "pull-template"] as const;
 /** `GET /templates/:id`, the editor of one template (F-EVAL-25). */
+/** "Allow drill" and the cards the evaluation gave rise to (ADR-041 §10). */
+export const evaluationDrillKey = (id: string) => ["evaluation", id, "drill"] as const;
 export const templateKey = (id: string) => ["template", id] as const;
 /**
  * One item at its frozen version (issue #127), under the key of the
@@ -176,6 +178,18 @@ export const resultsByQuestionKey = (evaluationId: string) =>
 
 export const studentHomeKey = ["student", "home"] as const;
 export const studentClassroomsKey = ["student", "classrooms"] as const;
+/** Every drill read of the student (ADR-041): what an opt-out or a finished session invalidates. */
+export const drillRootKey = ["student", "drill"] as const;
+/** The classrooms whose drill the student is in or opted out of. */
+export const drillClassroomsKey = [...drillRootKey, "classrooms"] as const;
+/** Today's drill session, for one device class (its reference times are that class's). */
+export const drillSessionKey = (device: string) => [...drillRootKey, "session", device] as const;
+/**
+ * One card served (`POST /drill/cards/:id/serve`). Outside the `student`
+ * root on purpose: a hint must not re-serve a card the student already
+ * answered.
+ */
+export const drillServeKey = (cardId: string) => ["drill-serve", cardId] as const;
 export const attemptKey = (attemptId: string) => ["attempt", attemptId] as const;
 export const attemptFeedbackKey = (attemptId: string) =>
   ["attempt", attemptId, "feedback"] as const;

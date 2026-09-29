@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  allowDrillWritable,
   configLock,
   drillAllowedOn,
   isConfigEditable,
@@ -116,5 +117,23 @@ describe("drillAllowedOn (ADR-041 §2)", () => {
   it("never allows a poll, whatever its row says", () => {
     expect(drillAllowedOn("poll", true)).toBe(false);
     expect(drillAllowedOn("poll", undefined)).toBe(false);
+  });
+});
+
+describe("allowDrillWritable (ADR-041 §10, item 3)", () => {
+  it("stays writable until the release, whatever else is frozen", () => {
+    for (const state of ["draft", "scheduled", "lobby", "running", "paused", "closed", "grading"] as const) {
+      expect(allowDrillWritable("exam", state)).toBe(true);
+      expect(allowDrillWritable("exercise", state)).toBe(true);
+    }
+  });
+
+  it("freezes at the release", () => {
+    expect(allowDrillWritable("exam", "released")).toBe(false);
+    expect(allowDrillWritable("exercise", "released")).toBe(false);
+  });
+
+  it("is never writable on a poll", () => {
+    expect(allowDrillWritable("poll", "draft")).toBe(false);
   });
 });

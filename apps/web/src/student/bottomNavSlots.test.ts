@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parsePath, type Route } from "../router";
-import { activeSlot, bottomNavShown } from "./bottomNavSlots";
+import { activeSlot, bottomNavShown, visibleSlots } from "./bottomNavSlots";
 
 describe("bottomNavShown (#191)", () => {
   it("draws the bar for the student on the pages its slots lead to", () => {
@@ -38,5 +38,31 @@ describe("activeSlot (#191)", () => {
 
   it("lights nothing on a page the bar does not lead to", () => {
     expect(activeSlot({ view: "attempt", evaluationId: "e1" }, "")).toBeNull();
+  });
+
+  it("lights Drill on the drill page (#317)", () => {
+    expect(activeSlot(parsePath("/drill"), "")).toBe("drill");
+    expect(bottomNavShown(parsePath("/drill"), false)).toBe(true);
+  });
+});
+
+describe("visibleSlots (#317)", () => {
+  it("puts Drill in the middle when the student has a classroom with the drill on", () => {
+    expect(visibleSlots(true).map((s) => s.id)).toEqual([
+      "activities",
+      "courses",
+      "drill",
+      "grades",
+      "profile",
+    ]);
+  });
+
+  it("leaves it out otherwise", () => {
+    expect(visibleSlots(false).map((s) => s.id)).toEqual([
+      "activities",
+      "courses",
+      "grades",
+      "profile",
+    ]);
   });
 });

@@ -100,6 +100,8 @@ export type Route =
   | { view: "correction"; evaluationId: string }
   /** The student's own feedback on one finished attempt (the ONE such page). */
   | { view: "feedback"; attemptId: string }
+  /** The student's drill (ADR-041, #317): today's session and the classrooms it draws from. */
+  | { view: "drill" }
   /** Development only: the gallery of the shared primitives (App.tsx gates it). */
   | { view: "devUi" };
 
@@ -115,10 +117,10 @@ export type QuestionOrigin = Partial<Record<(typeof QUESTION_ORIGIN_PARAMS)[numb
 export type RouteOf<V extends Route["view"]> = Extract<Route, { view: V }>;
 
 /** The sidebar sections (`Shell`'s `Nav`): the row that stays lit while a view is up. */
-export type NavSection = "home" | "activities" | "pools" | "polls" | "admin";
+export type NavSection = "home" | "activities" | "pools" | "polls" | "admin" | "drill";
 
 /** The slots of the student's bottom bar on a phone (`student/bottomNavSlots.ts`, #191). */
-export type BottomSlotId = "activities" | "courses" | "grades" | "profile";
+export type BottomSlotId = "activities" | "courses" | "drill" | "grades" | "profile";
 
 /**
  * Everything the app knows about one view, in one place: how it is written
@@ -319,6 +321,12 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
         : null,
     studentSafe: true,
     bottomSlot: "grades",
+  },
+  // ADR-041 (#317): the student's drill, the centre slot of the bottom bar.
+  drill: {
+    ...fixed("drill", { view: "drill" }, true),
+    section: "drill",
+    bottomSlot: "drill",
   },
   // WP8 + WP10: ONE place decides what follows an evaluation id, so a new
   // tail is an entry here and nowhere else.

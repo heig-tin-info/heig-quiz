@@ -32,7 +32,10 @@ import {
   ByQuestion,
   CourseDetail,
   DashboardView,
+  DrillClassroom,
+  DrillSession,
   EvaluationDetail,
+  EvaluationDrill,
   EvaluationSummary,
   EvaluationTemplate,
   GradingProgress,
@@ -317,6 +320,12 @@ const CHECKED: Case[] = [
     .map((p) => one("/app/api/p/:code", `/app/api/p/${p.code}`, PollPublicView)),
   one("/app/api/attempts/:id", `/app/api/attempts/${attemptId}`, AttemptOrLobby),
   one("/app/api/student/home", "/app/api/student/home", StudentHome),
+  // The drill (ADR-041, #317): the student's tab and the teacher's switch.
+  one("/app/api/drill/session", "/app/api/drill/session", DrillSession),
+  each("/app/api/drill/classrooms", "/app/api/drill/classrooms", DrillClassroom),
+  ...evaluations.map((e) =>
+    one("/app/api/evaluations/:id/drill", `/app/api/evaluations/${e.id}/drill`, EvaluationDrill),
+  ),
   // F-EVAL-15: the score-only feedback between two attempts of an exercise.
   one(
     `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`,

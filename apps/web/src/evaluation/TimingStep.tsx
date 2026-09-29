@@ -5,6 +5,7 @@ import { TransitionRefusal, type EvaluationDetail, type EvaluationPatch } from "
 import { configLock, isConfigFieldWritable } from "@quiz/domain";
 
 import { ApiError } from "../api";
+import { EvaluationDrillSetting } from "../drill/EvaluationDrillSetting";
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import {
@@ -414,6 +415,10 @@ export function TimingStep({
         }
         advancedRows={<AccessCodeRow accessCode={accessCode} patch={patch} />}
       />
+
+      {/* ADR-041 §2 (#317): its own writer, editable until the release —
+          not one of the settings `patch` saves, nor frozen with them. */}
+      {mode !== "poll" ? <EvaluationDrillSetting evaluation={detail.evaluation} /> : null}
     </div>
   );
 }

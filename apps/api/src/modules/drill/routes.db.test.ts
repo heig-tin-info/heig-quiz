@@ -159,6 +159,9 @@ describe("the drill over HTTP", () => {
     const url = `/app/api/evaluations/${seed.evaluationId}/drill`;
     expect((await call("PUT", url, stranger, { allowDrill: false })).statusCode).toBe(404);
     expect((await call("DELETE", `${url}/cards`, stranger)).statusCode).toBe(404);
+    expect((await call("GET", url, stranger)).statusCode).toBe(404);
+    // The read the settings screen offers the removal from.
+    expect(EvaluationDrill.parse((await call("GET", url, teacher)).json())).toEqual({ allowDrill: true, cards: 4 });
 
     const detail = `/app/api/evaluations/${seed.evaluationId}`;
     expect((await call("GET", detail, teacher)).json().evaluation.allowDrill).toBe(true);
@@ -173,6 +176,7 @@ describe("the drill over HTTP", () => {
 
     const removed = await call("DELETE", `${url}/cards`, teacher);
     expect(DrillCardsRemoved.parse(removed.json())).toEqual({ removed: 4 });
+    expect(EvaluationDrill.parse((await call("GET", url, teacher)).json())).toEqual({ allowDrill: false, cards: 0 });
     expect(await audited("drill.cards_remove")).toHaveLength(1);
     expect(DrillSession.parse((await call("GET", "/app/api/drill/session", student)).json()).cards).toEqual([]);
   });
