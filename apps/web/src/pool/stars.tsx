@@ -66,8 +66,10 @@ export function useSetStars(poolId: string | null) {
     );
 
   const setStars = async (questionIds: string[], starred: boolean): Promise<boolean> => {
+    if (poolId === null || questionIds.length === 0) return true;
     const ids = questionIds.filter((id) => !pending.current.has(id));
-    if (poolId === null || ids.length === 0) return true;
+    // Every id is already on its way: nothing was sent, so nothing succeeded.
+    if (ids.length === 0) return false;
     const lists = poolQuestionListsKey(poolId);
     for (const id of ids) pending.current.add(id);
     // A page landing mid-flight would overwrite the patch with the old flag.
