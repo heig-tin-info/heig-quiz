@@ -17,7 +17,9 @@ import type { PollRow } from "./pollTally";
  *
  * Revealed, the key is never colour alone (DESIGN.md, VerdictCell): the
  * correct row gains a tick AND the word, and the others fade rather than turn
- * red — nobody in the room is being marked wrong.
+ * red — nobody in the room is being marked wrong. For the same reason a bar
+ * is `info`, never the accent: HEIG red on a wall reads as "wrong", and a
+ * vote is a datum, not a verdict (DESIGN.md, "Projection").
  *
  * Votes hidden (#157), a row is its letter and its label and nothing else:
  * no count, no percentage, no bar — the choices the room is voting on, not
@@ -148,7 +150,7 @@ export function PollBars({
                       ? "border-success bg-success-soft"
                       : faded
                         ? "border-transparent bg-surface-3"
-                        : "border-accent bg-accent-soft",
+                        : "border-info bg-info-soft",
                   )}
                   // The one inline style of the screen: the width IS the datum,
                   // and it changes twice a second.
