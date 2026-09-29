@@ -228,6 +228,16 @@ function Nav({
     // own inside the sticky sidebar instead of pushing the account row out.
     <nav className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-3 py-2">
       <div className="space-y-0.5">
+        {/* Every activity across the classrooms (#190): a flat page, no tree.
+            First, above the courses: it is where a teacher's day starts. */}
+        {teacherUi ? (
+          <NavItem
+            icon={CalendarRange}
+            label={t("nav.activities")}
+            active={section === "activities"}
+            onClick={() => go({ view: "activities" })}
+          />
+        ) : null}
         <NavItem
           icon={teacherUi ? Library : ClipboardList}
           // WP9: student player — the student home is their evaluations now,
@@ -248,13 +258,6 @@ function Nav({
         {teacherUi ? (
           <>
             <CourseNavTree state={courseNav.state} courses={courses} route={route} navigate={go} />
-            {/* Every activity across the classrooms (#190): a flat page, no tree. */}
-            <NavItem
-              icon={CalendarRange}
-              label={t("nav.activities")}
-              active={section === "activities"}
-              onClick={() => go({ view: "activities" })}
-            />
             <NavItem
               icon={FolderTree}
               label={t("pools.title")}
