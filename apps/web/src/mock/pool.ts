@@ -1633,8 +1633,15 @@ export function tryAnswer(
       config as RichConfig,
       (answer as { text: string } | null) ?? null,
       { seed: 0, itemId: q.id, attemptId: "", itemPoints: 1, now: new Date(), runner: NO_RUNNER },
-    ) as { points: number; maxPoints: number; details: unknown };
-    return { status: "graded", points: graded.points, maxPoints: graded.maxPoints, details: graded.details, solution: solutionOf(q) };
+    ) as { points: number; maxPoints: number; details: unknown; state?: string };
+    return {
+      status: "graded",
+      points: graded.points,
+      maxPoints: graded.maxPoints,
+      details: graded.details,
+      solution: solutionOf(q),
+      ...(graded.state === "proposed" ? { manual: true } : {}),
+    };
   }
   /*
    * `codeimage` answers the picture its reference draws — which is what the
@@ -1671,6 +1678,12 @@ export function tryAnswer(
       maxPoints: total,
       details: built.details,
       solution: solutionOf(q),
+      // The server's `manual` mode proposes, and a person decides (issue #267).
+      // An empty schematic is a settled 0 there, as it is here.
+      ...(((config.grading as { mode?: string } | undefined)?.mode ?? "manual") === "manual" &&
+      schematic.components.length > 0
+        ? { manual: true }
+        : {}),
     };
   }
   if (q.type === "mcq") {

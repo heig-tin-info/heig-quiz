@@ -13,6 +13,7 @@ import type {
 } from "@quiz/qt-code/client";
 
 import { api, apiErrorMessage } from "../api";
+import { machineReason } from "../grading/labels";
 import { canRunManually, runCode, runCodeImage } from "../runner/codeRun";
 import { useT } from "../i18n";
 import { emptyAnswerOf, QuestionPlayerHost, QuestionReviewHost } from "../questionTypes";
@@ -197,8 +198,17 @@ export function TryPanel({
       ) : (
         <Card className="space-y-4 p-5">
           <SectionHeading
-            title={t("question.try.score", { points: result.points, max: result.maxPoints })}
+            title={
+              // A proposal is not a score: a person grades it (issue #267).
+              result.manual
+                ? t("question.try.manual")
+                : t("question.try.score", { points: result.points, max: result.maxPoints })
+            }
           />
+          {/* Why the grader only proposed: usually the question's fault (#267). */}
+          {result.manual && result.comment ? (
+            <p className="text-[13px] text-warning">{machineReason(t, result.comment)}</p>
+          ) : null}
           <QuestionReviewHost
             t={t}
             type={type}
@@ -206,7 +216,7 @@ export function TryPanel({
             answer={answer}
             solution={result.solution}
             details={result.details}
-            points={result.points}
+            points={result.manual ? null : result.points}
             maxPoints={result.maxPoints}
             audience="teacher"
           />

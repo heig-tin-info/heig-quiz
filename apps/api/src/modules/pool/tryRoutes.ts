@@ -10,6 +10,7 @@ import {
   RunnerUnavailable,
   type FinalizeContext,
   type GradeContext,
+  type GradedResult,
 } from "@quiz/core/server";
 
 import { questions } from "../../db/schema.js";
@@ -111,7 +112,7 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
           const result = await t.grade(loaded.config, answer, ctx);
 
           if (result.kind === "graded") {
-            return graded(result.points, result.maxPoints, result.details, t.toSolution(loaded.config, view));
+            return graded(result, t.toSolution(loaded.config, view));
           }
           if (result.via === "llm") return { status: "llm_unavailable" } satisfies TryResult;
           if (!t.finalizeRunner) {
@@ -119,7 +120,7 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
           }
           const outcome = await runner.run(result.request);
           const final = t.finalizeRunner(loaded.config, answer, base, outcome);
-          return graded(final.points, final.maxPoints, final.details, t.toSolution(loaded.config, view));
+          return graded(final, t.toSolution(loaded.config, view));
         } catch (error) {
           if (error instanceof RunnerUnavailable) {
             return { status: "runner_unavailable", reason: error.reason } satisfies TryResult;
@@ -138,11 +139,16 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   );
 }
 
-function graded(
-  points: number,
-  maxPoints: number,
-  details: unknown,
-  solution: unknown,
-): TryResult {
-  return { status: "graded", points, maxPoints, details, solution };
+function graded(result: GradedResult, solution: unknown): TryResult {
+  const { points, maxPoints, details } = result;
+  return {
+    status: "graded",
+    points,
+    maxPoints,
+    details,
+    solution,
+    // A proposal is not a grade: a person decides it (issue #267).
+    ...(result.state === "proposed" ? { manual: true as const } : {}),
+    ...(result.state === "proposed" && result.comment ? { comment: result.comment } : {}),
+  };
 }

@@ -373,6 +373,32 @@ describe("POST /questions/:id/try (F-QST-09)", () => {
     expect(wrong.json()).toMatchObject({ status: "graded", points: 0 });
   });
 
+  it("marks a proposed grade as manual: an essay is graded by a person (#267)", async () => {
+    const id = await createQuestion("an essay", "rich");
+    await server.app.inject({
+      method: "PUT",
+      url: `/app/api/questions/${id}/draft`,
+      headers: owner.headers,
+      payload: { config: { configVersion: 1, prompt: "Explain.", rubric: "", format: "plain" } },
+    });
+    const written = await server.app.inject({
+      method: "POST",
+      url: `/app/api/questions/${id}/try`,
+      headers: owner.headers,
+      payload: { source: "draft", answer: { text: "Because." } },
+    });
+    expect(written.json()).toMatchObject({ status: "graded", manual: true });
+    // Nothing written is worth 0, and that IS the grade: no person needed.
+    const empty = await server.app.inject({
+      method: "POST",
+      url: `/app/api/questions/${id}/try`,
+      headers: owner.headers,
+      payload: { source: "draft", answer: { text: "" } },
+    });
+    expect(empty.json()).toMatchObject({ status: "graded", points: 0 });
+    expect(empty.json()).not.toHaveProperty("manual");
+  });
+
   it("degrades to runner_unavailable when the grading needs a runner (D14)", async () => {
     const id = await createQuestion("needs a runner", "code");
     await server.app.inject({

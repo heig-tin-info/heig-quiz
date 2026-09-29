@@ -525,6 +525,13 @@ export const TryResult = z.discriminatedUnion("status", [
     maxPoints: z.number(),
     details: z.unknown(),
     solution: z.unknown(),
+    /**
+     * The grader only PROPOSED `points` (`state: "proposed"`): an essay, a
+     * manual circuit — a person decides (issue #267). Absent otherwise.
+     */
+    manual: z.literal(true).optional(),
+    /** With `manual`: the grader's machine reason, when it gave one (`reference_failed`, …). */
+    comment: z.string().optional(),
   }),
   /** No runner is configured or it refused the job (decision D14). */
   z.object({ status: z.literal("runner_unavailable"), reason: z.string() }),

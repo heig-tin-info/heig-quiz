@@ -230,7 +230,13 @@ export function PlayerView({
   banner?: ReactNode;
 }) {
   const t = useT();
-  const { state, dispatch, sync, closed, paused } = session;
+  const { state, dispatch, sync: saverSync, closed, paused } = session;
+  // The question on screen may hold an edit it will not send (a field over
+  // its limit, issue #267): the autosave has nothing pending, yet the text
+  // on screen is not saved. The question keys this, and resets it on leaving.
+  const [unsent, setUnsent] = useState(false);
+  const sync =
+    unsent && (saverSync === "saved" || saverSync === "saving") ? "unsaved" : saverSync;
   const item = currentItem(state);
   const total = state.items.length;
   const locked = item ? isLocked(state, item.id) : true;
@@ -354,6 +360,7 @@ export function PlayerView({
                 setAnswer={session.setAnswer}
                 run={session.run}
                 simulate={session.simulate}
+                onUnsent={setUnsent}
               />
             </Card>
             <QuestionTools

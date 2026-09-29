@@ -70,7 +70,7 @@ const VERDICT_STATES: VerdictState[] = [
   "pending",
 ];
 
-const SYNC_STATES: SyncState[] = ["saved", "saving", "offline", "closed"];
+const SYNC_STATES: SyncState[] = ["saved", "saving", "unsaved", "offline", "closed"];
 
 /** The four facts of issue #89 side by side: answered, skipped, empty, flagged. */
 const SEGMENT_DEMO: { mark: SegmentMark; flagged?: boolean }[] = [

@@ -331,6 +331,8 @@ interface ItemOutcome {
   status: PreviewItemStatus;
   points: number | null;
   details: unknown;
+  /** `manual` only: why the grader proposed (`GradedResult.comment`). */
+  comment?: string;
 }
 
 const ungraded = (status: PreviewItemStatus): ItemOutcome => ({ status, points: null, details: null });
@@ -369,11 +371,16 @@ async function gradeItem(
   }
 
   const ctx = finalizeContext(evaluation, item, seed, now);
-  const settle = (result: GradedResult<unknown>): ItemOutcome => ({
-    status: "graded",
-    points: round2(result.points),
-    details: result.details,
-  });
+  // A proposal is not a grade: a person decides it (issue #267).
+  const settle = (result: GradedResult<unknown>): ItemOutcome =>
+    result.state === "proposed"
+      ? {
+          status: "manual",
+          points: null,
+          details: result.details,
+          ...(result.comment ? { comment: result.comment } : {}),
+        }
+      : { status: "graded", points: round2(result.points), details: result.details };
   try {
     const first = await type.grade(config, answer, { ...ctx, runner });
     if (first.kind === "graded") return settle(first);
@@ -433,7 +440,8 @@ export async function gradePreview(
     const payload = answers.has(shown.id) ? answers.get(shown.id) : undefined;
     const outcome = await gradeItem(input.runner, evaluation, item, seed, payload, now, input.log);
     if (outcome.points !== null) scored.push(outcome.points);
-    if (outcome.status !== "graded" && outcome.status !== "no_key") pending += 1;
+    // An answer to grade by hand is expected, not a failure: not counted here.
+    if (!["graded", "no_key", "manual"].includes(outcome.status)) pending += 1;
     const version = { config: item.version.config, configVersion: item.version.configVersion };
     items.push({
       itemId: shown.id,
@@ -455,6 +463,7 @@ export async function gradePreview(
         : solutionView({ type: item.question.type, version, seed, itemId: shown.id }),
       explanation: item.version.explanation === "" ? null : item.version.explanation,
       details: outcome.details ?? null,
+      ...(outcome.comment === undefined ? {} : { comment: outcome.comment }),
     });
   }
 

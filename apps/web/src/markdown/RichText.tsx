@@ -72,6 +72,7 @@ export function RichText({
   sourceToggle = !inline,
   shortcuts = [],
   holes = false,
+  rows,
 }: RichTextProps) {
   const t = useT();
   const auto = useId();
@@ -97,6 +98,7 @@ export function RichText({
     onEnter,
     onTab,
     inline,
+    rows,
     holes,
     placeholder,
     ariaLabel,
@@ -172,6 +174,7 @@ export function RichText({
           placeholder={placeholder}
           disabled={disabled}
           inline={inline}
+          rows={rows}
           uploadImage={uploadImage}
           trailing={sourceButton}
         />

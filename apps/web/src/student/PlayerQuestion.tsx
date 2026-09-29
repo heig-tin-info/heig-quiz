@@ -35,6 +35,7 @@ export const PlayerQuestion = memo(function PlayerQuestion({
   setAnswer,
   run,
   simulate,
+  onUnsent,
 }: {
   itemId: string;
   type: string;
@@ -44,6 +45,8 @@ export const PlayerQuestion = memo(function PlayerQuestion({
   setAnswer: (itemId: string, payload: unknown, answered?: boolean) => void;
   run: RunFn;
   simulate: (itemId: string, answer: unknown) => Promise<RunResult>;
+  /** The player holds an edit it does not send: the badge must not say "Saved". */
+  onUnsent: (unsent: boolean) => void;
 }) {
   const onChange = useCallback(
     (payload: unknown) => setAnswer(itemId, payload, isAnswered(type, payload)),
@@ -90,6 +93,7 @@ export const PlayerQuestion = memo(function PlayerQuestion({
       answer={answer}
       onChange={onChange}
       readOnly={readOnly}
+      onUnsent={onUnsent}
       {...(type === "code" ? { allowManualRun: true, onRun: runCodeAnswer } : {})}
       {...(type === "circuit" ? { onSimulate: simulateAnswer } : {})}
       {...(type === "codeimage" ? { onRun: runImageAnswer } : {})}

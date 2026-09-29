@@ -1,6 +1,7 @@
 import {
   ChartPie,
   Check,
+  CircleAlert,
   CircleCheck,
   Clock,
   Flag,
@@ -703,13 +704,19 @@ export function VerdictCell({
   );
 }
 
-export type SyncState = "saved" | "saving" | "offline" | "closed";
+/**
+ * `unsaved`: the question on screen holds an edit it will not send, because
+ * the server would refuse it (`PlayerProps.onUnsent`, issue #267). What was
+ * sent before it is saved; what is on screen is not.
+ */
+export type SyncState = "saved" | "saving" | "unsaved" | "offline" | "closed";
 
-type SyncKey = "sync.saved" | "sync.saving" | "sync.offline" | "sync.closed";
+type SyncKey = "sync.saved" | "sync.saving" | "sync.unsaved" | "sync.offline" | "sync.closed";
 
 const SYNC: Record<SyncState, { icon: IconType; tone: string; key: SyncKey; spin?: boolean }> = {
   saved: { icon: Check, tone: "text-fg-muted [&_svg]:text-success", key: "sync.saved" },
   saving: { icon: Loader2, tone: "text-fg-muted [&_svg]:text-fg-faint", key: "sync.saving", spin: true },
+  unsaved: { icon: CircleAlert, tone: "text-warning", key: "sync.unsaved" },
   offline: { icon: WifiOff, tone: "text-warning", key: "sync.offline" },
   closed: { icon: Lock, tone: "text-fg-faint", key: "sync.closed" },
 };
