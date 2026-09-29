@@ -960,6 +960,12 @@ nothing else on it leaves the system.
   costs, and only the middle band gives way. The distribution shows at most
   eight rows and counts the rest in one muted line: a free-text tally carries
   up to sixty distinct spellings, and sixty bars is a wall of noise.
+- **The bars are `info`, never the accent.** A distribution is data, not an
+  action, and HEIG red on a wall reads as "wrong" from the back row while
+  nobody is being marked. The calm blue carries no verdict (green, amber and
+  red are taken, as on the live grid), and at the reveal it still parts
+  clearly from the correct row's `success` and the faded rows' `surface-3`.
+  The participant's reveal (`PollJoinReveal`) draws its bars in the same blue.
 - **Six choices or more go in TWO columns**, column-major, so A–D are the left
   column and E–H the right one and the letters still read downwards
   (`lg:grid lg:grid-flow-col` over `repeat(⌈n/2⌉, auto)` rows, with

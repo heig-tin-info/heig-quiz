@@ -169,7 +169,7 @@ function ShortReveal({
 /**
  * The reveal of a poll without a key: the share of the room behind each
  * answer, in the order the wall draws them, and which one was this
- * browser's. The bars wear the wall's accent; the rows no tone at all —
+ * browser's. The bars wear the wall's `info`; the rows no tone at all —
  * nobody is being marked.
  */
 function ResultsReveal({
@@ -227,7 +227,7 @@ function ResultsReveal({
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
                   <span
-                    className="block h-full rounded-full bg-accent"
+                    className="block h-full rounded-full bg-info"
                     style={{ width: `${Math.min(100, row.percent)}%` }}
                   />
                 </div>
