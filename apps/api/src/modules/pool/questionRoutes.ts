@@ -231,13 +231,14 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
     "/app/api/questions/:id/stats/reset",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: onQuestion("contributor") }, async ({ req, scope }) => {
-      const since = await service.resetQuestionStats(app.db, scope.question.id, app.clock.now());
+      const now = app.clock.now();
+      await service.resetQuestionStats(app.db, scope.question.id, now);
       await trace(req, "question.stats_reset", "question", scope.question.id, {
         poolId: scope.pool.id,
         previousSince: isoOrNull(scope.question.statsSince),
       });
       poolChanged(scope.pool.id);
-      return { since: iso(since) } satisfies StatsReset;
+      return { since: iso(now) } satisfies StatsReset;
     }),
   );
 

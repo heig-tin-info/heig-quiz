@@ -78,16 +78,12 @@ const reset = (who: Session) =>
 
 describe("reading the statistics", () => {
   it("serves anyone who reads the pool, and hides the pool from everyone else", async () => {
-    const urls = [`/app/api/pools/${seed.poolId}/question-stats`, `/app/api/questions/${seed.questionIds[0]}/stats`];
-    for (const url of urls) {
-      expect((await get(url, stranger)).statusCode).toBe(404);
-      expect((await get(url, student)).statusCode).toBe(403);
-      expect((await get(url, reader)).statusCode).toBe(200);
-    }
-    expect((await get(urls[0]!, reader)).json()).toEqual({
-      items: [{ questionId: seed.questionIds[0], n: 10, p: 1 }],
-    });
-    expect((await get(urls[1]!, reader)).json()).toEqual({ since: null, stats: { n: 10, p: 1 } });
+    const url = `/app/api/pools/${seed.poolId}/question-stats`;
+    expect((await get(url, stranger)).statusCode).toBe(404);
+    expect((await get(url, student)).statusCode).toBe(403);
+    const res = await get(url, reader);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ items: [{ questionId: seed.questionIds[0], n: 10, p: 1, since: null }] });
   });
 });
 
@@ -111,7 +107,6 @@ describe("resetting the statistics (F-STAT-05)", () => {
       .where(and(eq(auditLog.action, "question.stats_reset"), eq(auditLog.subjectId, seed.questionIds[0]!)));
     expect(row).toMatchObject({ actorUserId: contributor.id, payload: { poolId: seed.poolId, previousSince: null } });
 
-    expect((await get(`/app/api/questions/${seed.questionIds[0]}/stats`, owner)).json()).toEqual({ since, stats: null });
     expect((await get(`/app/api/pools/${seed.poolId}/question-stats`, owner)).json()).toEqual({ items: [] });
   });
 });

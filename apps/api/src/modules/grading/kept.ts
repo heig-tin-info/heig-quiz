@@ -105,56 +105,48 @@ async function talliesFor(
 }
 
 /**
- * The kept attempt of every account that took `evaluation`, keyed by user
- * id. With one attempt per student it is simply that attempt.
+ * The kept attempt of every account on each of `evaluations`, keyed by
+ * evaluation id then user id, in two queries whatever their number. With one
+ * attempt per student it is simply that attempt, and costs no points.
  */
-export async function keptAttempts(
-  db: Db,
-  evaluation: EvaluationRecord,
-): Promise<Map<string, AttemptRecord>> {
-  const rows = await db
-    .select()
-    .from(attempts)
-    .where(eq(attempts.evaluationId, evaluation.id))
-    .orderBy(asc(attempts.attemptNumber));
-  const groups = byUser(rows);
-  const tallies = await talliesFor(db, groups.values());
-  const kept = new Map<string, AttemptRecord>();
-  for (const [userId, list] of groups) {
-    const row = keptAmong(evaluation, list, tallies);
-    if (row) kept.set(userId, row);
-  }
-  return kept;
-}
-
-/**
- * The ids of the kept attempts of every account on SEVERAL evaluations —
- * {@link keptAttempts} for the item analysis of a question (ADR-038), in two
- * queries whatever their number.
- */
-export async function keptAttemptIdsOf(
+export async function keptAttemptsOf(
   db: Db,
   evaluations: readonly EvaluationRecord[],
-): Promise<Set<string>> {
-  if (evaluations.length === 0) return new Set();
+): Promise<Map<string, Map<string, AttemptRecord>>> {
+  if (evaluations.length === 0) return new Map();
   const rows = await db
     .select()
     .from(attempts)
     .where(inArray(attempts.evaluationId, evaluations.map((e) => e.id)))
     .orderBy(asc(attempts.attemptNumber));
-  const groups = new Map<string, Map<string, AttemptRecord[]>>();
-  for (const evaluation of evaluations) {
-    groups.set(evaluation.id, byUser(rows.filter((r) => r.evaluationId === evaluation.id)));
+  const byEvaluation = new Map<string, AttemptRecord[]>();
+  for (const row of rows) {
+    const list = byEvaluation.get(row.evaluationId) ?? [];
+    list.push(row);
+    byEvaluation.set(row.evaluationId, list);
   }
+  const groups = new Map(
+    evaluations.map((e) => [e.id, byUser(byEvaluation.get(e.id) ?? [])] as const),
+  );
   const tallies = await talliesFor(db, [...groups.values()].flatMap((users) => [...users.values()]));
-  const kept = new Set<string>();
+  const out = new Map<string, Map<string, AttemptRecord>>();
   for (const evaluation of evaluations) {
-    for (const list of groups.get(evaluation.id)!.values()) {
+    const kept = new Map<string, AttemptRecord>();
+    for (const [userId, list] of groups.get(evaluation.id)!) {
       const row = keptAmong(evaluation, list, tallies);
-      if (row) kept.add(row.id);
+      if (row) kept.set(userId, row);
     }
+    out.set(evaluation.id, kept);
   }
-  return kept;
+  return out;
+}
+
+/** {@link keptAttemptsOf} for one evaluation, keyed by user id. */
+export async function keptAttempts(
+  db: Db,
+  evaluation: EvaluationRecord,
+): Promise<Map<string, AttemptRecord>> {
+  return (await keptAttemptsOf(db, [evaluation])).get(evaluation.id)!;
 }
 
 /** One student's attempts on one evaluation, and the one that counts. */

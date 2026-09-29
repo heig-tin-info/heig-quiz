@@ -1031,8 +1031,8 @@ export function pointsAcrossRegrade(
 
 // The kept attempt of each student (F-EVAL-15, ADR-025), in `./kept.ts`.
 export {
-  keptAttemptIdsOf,
   keptAttempts,
+  keptAttemptsOf,
   scoreOf,
   studentAttempts,
   tallyByAttempt,
