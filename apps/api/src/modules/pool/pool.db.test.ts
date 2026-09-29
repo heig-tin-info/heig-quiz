@@ -10,6 +10,7 @@ import { registerForTests } from "@quiz/registry/server";
 import type { Db } from "../../db/client.js";
 import {
   auditLog,
+  courseStaff,
   courses,
   notifications,
   poolMembers,
@@ -21,6 +22,7 @@ import {
   users,
 } from "../../db/schema.js";
 import { loadConfig as loadAppConfig } from "../../config.js";
+import { subscribe, type BusMessage } from "../../events.js";
 import { syncRoleOfUser } from "../../roles.js";
 import { testDb } from "../../test/db.js";
 import { fakeShort, fakeV1Config } from "../../test/fakeType.js";
@@ -591,6 +593,40 @@ describe("question counts", () => {
     await service.setCoursePools(db, courseId, [counted], undefined, viewer());
     const ofCourse = await service.poolsOfCourse(db, courseId);
     expect(ofCourse.map((p) => p.questionCount)).toEqual([3]);
+  });
+
+  /** #259: an unlink takes `pool:` away from the staff, whose streams close. */
+  it("closes the course staff's streams when a pool is unlinked, not when one is linked", async () => {
+    const linked = await seedPool();
+    const courseId = randomUUID();
+    await db.insert(courses).values({ id: courseId, name: "Unlinking", code: `U-${courseId.slice(0, 8)}` });
+    const colleague = randomUUID();
+    await db.insert(users).values({
+      id: colleague,
+      oidcSub: `s-${colleague}`,
+      email: `unlink-${colleague.slice(0, 8)}@heig.test`,
+      givenName: "Prof",
+      familyName: "Unlink",
+      role: "teacher",
+    });
+    await db.insert(courseStaff).values([
+      { courseId, userId: ownerId },
+      { courseId, userId: colleague },
+    ]);
+    const closed: string[] = [];
+    const unsubscribe = subscribe((m: BusMessage) => {
+      if (m.kind === "close") closed.push(...m.topics);
+    });
+    try {
+      await service.setCoursePools(db, courseId, [linked], undefined, viewer());
+      expect(closed).toEqual([]);
+      await service.setCoursePools(db, courseId, [linked], undefined, viewer());
+      expect(closed).toEqual([]);
+      await service.setCoursePools(db, courseId, [], undefined, viewer());
+      expect(closed.sort()).toEqual([`user:${ownerId}`, `user:${colleague}`].sort());
+    } finally {
+      unsubscribe();
+    }
   });
 
   it("leaves a soft-deleted question out of the count", async () => {
