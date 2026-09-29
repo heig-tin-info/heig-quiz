@@ -2425,19 +2425,32 @@ on("POST", "/app/api/questions/:id/versions/:number/deprecate", (m, body) => {
  * browser only reads — one more, so the reader's panel (no reset) is on
  * screen too. Every other question is below the threshold. The time spent
  * (ADR-039) shows on the first and the third; the second and `p3`'s have too
- * few timed exam answers for it.
+ * few timed exam answers for it. The discrimination (ADR-040) is good on the
+ * first, INVERSE on the second, weak on the third and absent on `p3`'s.
  */
 const questionStats = new Map<string, QuestionStats>([
   ...liveQuestions("p1")
     .slice(0, 3)
     .map((q, i) => [q.id, [
-      { n: 24, p: 0.73, since: null, time: { n: 21, meanS: 95, medianS: 80, p25S: 52, p75S: 121 } },
-      { n: 12, p: -0.08, since: null, time: null },
-      { n: 31, p: 0.41, since: iso(-40 * D), time: { n: 30, meanS: 540, medianS: 412, p25S: 260, p75S: 700 } },
+      {
+        n: 24,
+        p: 0.73,
+        since: null,
+        time: { n: 21, meanS: 95, medianS: 80, p25S: 52, p75S: 121 },
+        discrimination: { r: 0.46, evaluations: 2, n: 21 },
+      },
+      { n: 12, p: -0.08, since: null, time: null, discrimination: { r: -0.18, evaluations: 1, n: 12 } },
+      {
+        n: 31,
+        p: 0.41,
+        since: iso(-40 * D),
+        time: { n: 30, meanS: 540, medianS: 412, p25S: 260, p75S: 700 },
+        discrimination: { r: 0.12, evaluations: 3, n: 30 },
+      },
     ][i]!] as const),
   ...liveQuestions("p3")
     .slice(0, 1)
-    .map((q) => [q.id, { n: 18, p: 0.56, since: null, time: null }] as const),
+    .map((q) => [q.id, { n: 18, p: 0.56, since: null, time: null, discrimination: null }] as const),
 ]);
 
 on("GET", "/app/api/pools/:id/question-stats", (m) => {

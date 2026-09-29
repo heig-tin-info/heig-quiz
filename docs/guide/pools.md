@@ -86,6 +86,8 @@ A question answered at least ten times shows a chart icon after its name. It ope
 
 Below, **Time spent** says how long students keep the question on screen in exams: the **Median time**, with the middle half of the students between two durations, the **Mean time** and the number of **Timed answers**. The server measures it, not the browser, and a stretch without activity counts ten minutes at most, so a forgotten tab does not inflate it. It shows from ten timed exam answers; until then the panel says so.
 
+Last, **Discrimination** says whether the question separates the students: do those who did well on the rest of the exam also do well on it? The **Discrimination index** runs from −1 to 1, with its reading: **Good** from 0.3, **Fair** from 0.2, **Weak** below. A question marked **Inverse** (below zero) is answered better by the weaker students than by the stronger ones: check its answer key and its wording first. The line under the value says how many exams and attempts it rests on. Only exams count, and in each exam only the attempts graded in full (no proposal left to validate); an exam counts once it has at least five other questions and ten such attempts. Until one does, the panel says so.
+
 **Reset statistics** (contributors and owners) starts the count again: only attempts started afterwards count. Nothing is deleted; grades and results stay as they are.
 
 ## Creating a question

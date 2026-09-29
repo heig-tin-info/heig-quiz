@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  discrimination,
+  discriminationBand,
+  DISCRIMINATION_FAIR,
+  DISCRIMINATION_GOOD,
+  DISCRIMINATION_MIN_ITEMS,
+  DISCRIMINATION_MIN_N,
+  evaluationDiscrimination,
+  pearson,
   describe as describeSeries,
   histogram,
   itemStats,
@@ -137,5 +145,121 @@ describe("shownTimeSpread", () => {
     expect(QUESTION_TIME_MIN_N).toBe(10);
     expect(shownTimeSpread(spread([1, 2, 3, 4, 5, 6, 7, 8, 9]))).toBeNull();
     expect(shownTimeSpread(spread([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))?.n).toBe(10);
+  });
+});
+
+describe("pearson", () => {
+  it("matches a known value", () => {
+    expect(pearson([1, 2, 3, 4, 5], [2, 4, 5, 4, 5])).toBeCloseTo(6 / Math.sqrt(60), 12);
+  });
+
+  it("is 1, -1 on a perfect line, whatever its scale", () => {
+    expect(pearson([1, 2, 3], [10, 20, 30])).toBeCloseTo(1, 12);
+    expect(pearson([1, 2, 3], [3, 2, 1])).toBeCloseTo(-1, 12);
+  });
+
+  it("does not exist without variance, or with fewer than two pairs", () => {
+    expect(pearson([1, 1, 1], [1, 2, 3])).toBeNull();
+    expect(pearson([1, 2, 3], [0.1, 0.1, 0.1])).toBeNull();
+    expect(pearson([1], [1])).toBeNull();
+    expect(pearson([], [])).toBeNull();
+  });
+});
+
+describe("evaluationDiscrimination", () => {
+  /** Attempts `a0`, `a1`… earning `items[i]` out of 1 on the question, `rests[i]` out of 10 on the rest. */
+  const sat = (items: readonly number[], rests: readonly number[]) =>
+    items.map((p, i) => ({
+      attemptId: `a${i}`,
+      item: { points: p, maxPoints: 1 },
+      rest: { points: rests[i]!, maxPoints: 10 },
+    }));
+  const rests = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const good = [0, 0, 0, 0, 1, 0, 1, 1, 1, 1];
+
+  it("correlates the item's ratio with the rest-of-test ratio, and names its attempts", () => {
+    const sample = evaluationDiscrimination("e1", sat(good, rests), 5)!;
+    expect(sample.evaluationId).toBe("e1");
+    expect(sample.attemptIds).toEqual(["a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9"]);
+    expect(sample.r).toBeCloseTo(0.8007572, 6);
+  });
+
+  it("keeps a negative correlation signed", () => {
+    const inverse = good.map((x) => 1 - x);
+    expect(evaluationDiscrimination("e1", sat(inverse, rests), 5)!.r).toBeCloseTo(-0.8007572, 6);
+  });
+
+  it("takes a penalised item ratio as it is, unclamped", () => {
+    // A linear map of the same pattern: the same r.
+    const penalised = good.map((x) => (x === 0 ? -0.5 : 1));
+    expect(evaluationDiscrimination("e1", sat(penalised, rests), 5)!.r).toBeCloseTo(0.8007572, 6);
+    // Clamped at 0, -0.5 and 0 would collapse into one value and change r.
+    const mixed = good.map((x, i) => (x === 1 ? 1 : i < 2 ? -0.5 : 0));
+    expect(evaluationDiscrimination("e1", sat(mixed, rests), 5)!.r).toBeCloseTo(pearson(mixed, rests)!, 12);
+    expect(pearson(mixed, rests)).not.toBeCloseTo(0.8007572, 3);
+  });
+
+  it("needs five other items and ten attempts", () => {
+    expect(DISCRIMINATION_MIN_ITEMS).toBe(5);
+    expect(DISCRIMINATION_MIN_N).toBe(10);
+    expect(evaluationDiscrimination("e1", sat(good, rests), 4)).toBeNull();
+    expect(evaluationDiscrimination("e1", sat(good.slice(1), rests.slice(1)), 5)).toBeNull();
+  });
+
+  it("leaves out an attempt with no maximum on either side, before counting", () => {
+    const attempts = sat(good, rests);
+    attempts[0] = { ...attempts[0]!, item: { points: 0, maxPoints: 0 } };
+    expect(evaluationDiscrimination("e1", attempts, 5)).toBeNull();
+  });
+
+  it("does not exist when everybody earned the same on the item", () => {
+    expect(evaluationDiscrimination("e1", sat(rests.map(() => 1), rests), 5)).toBeNull();
+  });
+});
+
+describe("discrimination", () => {
+  /** A sample of exam `evaluationId` over the attempts `ids`. */
+  const sample = (evaluationId: string, r: number, ids: readonly string[]) => ({ evaluationId, r, attemptIds: ids });
+  const range = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
+
+  it("combines by Fisher's z weighted by n - 3, rounds, and skips what did not qualify", () => {
+    // tanh((10 atanh 0.5 + 20 atanh 0.3) / 30) = 0.3709
+    expect(discrimination([sample("e1", 0.5, range("a", 13)), null, sample("e2", 0.3, range("b", 23))])).toEqual({
+      r: 0.37,
+      evaluations: 2,
+      n: 36,
+    });
+    expect(discrimination([sample("e1", -0.25, range("a", 12))])).toEqual({ r: -0.25, evaluations: 1, n: 12 });
+  });
+
+  it("stays finite on a perfect correlation", () => {
+    expect(discrimination([sample("e1", 1, range("a", 10))])).toEqual({ r: 1, evaluations: 1, n: 10 });
+    expect(discrimination([sample("e1", -1, range("a", 10))])).toEqual({ r: -1, evaluations: 1, n: 10 });
+  });
+
+  it("counts an exam and its attempts once, when the question sits in it twice", () => {
+    const ids = range("a", 10);
+    expect(discrimination([sample("e1", 0.5, ids), sample("e1", 0.3, ids)])).toEqual({
+      r: 0.4,
+      evaluations: 1,
+      n: 10,
+    });
+  });
+
+  it("is null when no exam qualifies", () => {
+    expect(discrimination([null, null])).toBeNull();
+    expect(discrimination([])).toBeNull();
+  });
+});
+
+describe("discriminationBand", () => {
+  it("reads weak, fair, good, and flags a negative index", () => {
+    expect([DISCRIMINATION_FAIR, DISCRIMINATION_GOOD]).toEqual([0.2, 0.3]);
+    expect(discriminationBand(-0.01)).toBe("inverse");
+    expect(discriminationBand(0)).toBe("weak");
+    expect(discriminationBand(0.19)).toBe("weak");
+    expect(discriminationBand(0.2)).toBe("fair");
+    expect(discriminationBand(0.29)).toBe("fair");
+    expect(discriminationBand(0.3)).toBe("good");
   });
 });

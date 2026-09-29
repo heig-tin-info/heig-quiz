@@ -679,6 +679,20 @@ export const fr: Record<keyof Dict, string> = {
   "pool.stats.timeScope":
     "Examens uniquement. Temps où la question est à l'écran, mesuré par le serveur ; une période sans activité compte au plus {cap} minutes.",
   "pool.stats.timeNone": "Le temps s'affiche dès {min} réponses d'examen chronométrées.",
+  "pool.stats.discrimination": "Discrimination",
+  "pool.stats.discriminationIndex": "Indice de discrimination",
+  "pool.stats.discriminationBand.good": "Bon",
+  "pool.stats.discriminationBand.fair": "Moyen",
+  "pool.stats.discriminationBand.weak": "Faible",
+  "pool.stats.discriminationBand.inverse": "Inversé",
+  "pool.stats.discriminationBasisOne": "Sur un examen, {n} tentatives",
+  "pool.stats.discriminationBasis": "Sur {evaluations} examens, {n} tentatives",
+  "pool.stats.discriminationScope":
+    "Les étudiants qui ont bien réussi le reste de l'examen réussissent-ils aussi cette question ? De −1 à 1, bon dès {good}, faible sous {fair}.",
+  "pool.stats.discriminationInverse":
+    "Sous zéro : les meilleurs étudiants réussissent moins bien cette question que les plus faibles. Vérifiez le corrigé et la formulation.",
+  "pool.stats.discriminationNone":
+    "La discrimination s'affiche dès qu'un examen d'au moins {items} autres questions a {min} tentatives entièrement corrigées.",
   "pool.stats.reset": "Réinitialiser les statistiques",
   "pool.stats.resetTitle": "Réinitialiser les statistiques de {name} ?",
   "pool.stats.resetBody":
