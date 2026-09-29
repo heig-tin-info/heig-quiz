@@ -15,7 +15,6 @@ import type { FastifyInstance } from "fastify";
 import { TestClock } from "../clock.js";
 import type { Db } from "../db/client.js";
 import * as schema from "../db/schema.js";
-import { registerDrillHooks } from "../modules/drill/service.js";
 import { UnavailableRunner } from "../modules/runner/unavailable.js";
 
 /**
@@ -34,6 +33,10 @@ export function pgliteDb(client: PGlite, logger?: Logger): Db {
 export async function testDatabase(): Promise<{ db: Db; client: PGlite }> {
   // The production wiring of `buildApp`: the drill's hooks on the release and
   // the end of an attempt, so no db test depends on what it happens to import.
+  // Imported here, at the call, and not at the top of this file: the drill
+  // service pulls in `results`, `live` and `notifications`, and a test file
+  // that mocks one of them (`vi.mock`) must have finished loading first.
+  const { registerDrillHooks } = await import("../modules/drill/service.js");
   registerDrillHooks();
   const client = new PGlite();
   const db = pgliteDb(client);
