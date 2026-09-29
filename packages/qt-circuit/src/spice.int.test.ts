@@ -22,8 +22,9 @@ import { dirname, join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { compareBode, wrapDegrees } from "./grade.js";
 import { buildNetlist, parseSpiceOutput, type Harness } from "./spice.js";
-import type { Orientation, Schematic, SchematicComponent, SeriesSet, Stimulus, Supplies } from "./schema.js";
+import type { AcSeries, Orientation, Schematic, SchematicComponent, Stimulus, Supplies, TranSeries } from "./schema.js";
 import { RAIL, ROT90, at, component, freeEnd, pinEnd, portEnd, resetIds, wire } from "./test/fixtures.js";
 
 const IMAGE = "localhost/quiz-runner-spice:latest";
@@ -136,7 +137,7 @@ const stimulus = (overrides: Partial<Stimulus> = {}): Stimulus => ({
   source: { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 },
   sourceOhms: 0,
   load: { kind: "open" },
-  analysis: { stopMs: 5, skipMs: 0, points: 500 },
+  analysis: { kind: "tran", stopMs: 5, skipMs: 0, points: 500 },
   points: 1,
   visible: true,
   ...overrides,
@@ -265,13 +266,13 @@ async function simulate(
   schematic: Schematic,
   stim: Stimulus,
   harness: Harness = GROUNDED,
-): Promise<SeriesSet> {
+): Promise<TranSeries> {
   const { text, issues } = buildNetlist(schematic, stim, harness);
   expect(issues, text).toEqual([]);
   const { stdout, stderr } = await ngspice(text);
   const series = parseSpiceOutput(stdout);
   expect(series, `${text}\n--- stderr ---\n${stderr}`).not.toBeNull();
-  return series as SeriesSet;
+  return series as TranSeries;
 }
 
 describe.skipIf(!available)("the emitted decks on a real ngspice", () => {
@@ -358,6 +359,81 @@ describe.skipIf(!available)("the emitted decks on a real ngspice", () => {
       expect(Math.max(...series.vout)).toBeLessThan(6);
       expect(Math.min(...series.vout)).toBeGreaterThan(-1.2);
       expect(Math.min(...series.vout)).toBeLessThan(-0.4);
+    },
+    TIMEOUT_MS,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// The AC sweep (ADR-040)
+// ---------------------------------------------------------------------------
+
+/** A Bode stimulus: a 0 V bias, the unit AC source, 20 points per decade. */
+const sweep = (fStartHz: number, fStopHz: number): Stimulus =>
+  stimulus({
+    name: "bode",
+    source: { kind: "dc", volts: 0 },
+    analysis: { kind: "ac", fStartHz, fStopHz, pointsPerDecade: 20 },
+  });
+
+async function simulateAc(schematic: Schematic, stim: Stimulus): Promise<AcSeries> {
+  const { text, issues } = buildNetlist(schematic, stim, GROUNDED);
+  expect(issues, text).toEqual([]);
+  const { stdout, stderr } = await ngspice(text);
+  const series = parseSpiceOutput(stdout, "ac");
+  expect(series, `${text}\n--- stderr ---\n${stderr}`).not.toBeNull();
+  return series as AcSeries;
+}
+
+/** The sample at the frequency closest to `hz`. */
+const near = (series: AcSeries, hz: number) => {
+  let best = 0;
+  for (const [i, f] of series.f.entries()) {
+    if (Math.abs(Math.log10(f / hz)) < Math.abs(Math.log10((series.f[best] ?? 1) / hz))) best = i;
+  }
+  return { f: series.f[best] ?? 0, db: series.magDb[best] ?? 0, deg: series.phaseDeg[best] ?? 0 };
+};
+
+describe.skipIf(!available)("the AC decks on a real ngspice", () => {
+  it(
+    "an RC low-pass is at −3 dB and −45° on 1/2πRC",
+    async () => {
+      const series = await simulateAc(rcLowPassSchematic(), sweep(100, 1e4));
+      // 1.59 kΩ and 100 nF: 1/2πRC = 1001 Hz; the grid holds 1 kHz exactly.
+      expect(series.f).toHaveLength(41);
+      const corner = near(series, 1000);
+      expect(corner.f).toBeCloseTo(1000, 6);
+      expect(corner.db).toBeCloseTo(-3.01, 1);
+      expect(corner.deg).toBeCloseTo(-45, 0);
+      // A decade above, the first-order slope: −20 dB and nearly −90°.
+      expect(near(series, 1e4).db).toBeCloseTo(-20, 0);
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    "an inverting amplifier reads +20 dB and 180°, flat",
+    async () => {
+      const series = await simulateAc(invertingAmplifier(), sweep(10, 1e5));
+      for (const [i, db] of series.magDb.entries()) {
+        expect(db).toBeCloseTo(20, 1);
+        expect(Math.abs(wrapDegrees((series.phaseDeg[i] ?? 0) - 180))).toBeLessThan(0.5);
+      }
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    "grades on the same grid: the same filter passes the envelope, a wrong corner does not",
+    async () => {
+      const reference = await simulateAc(rcLowPassSchematic(), sweep(10, 1e5));
+      const tolerance = { magDb: 1, floorDb: 60, phaseDeg: 10 };
+      expect(compareBode(reference, reference, tolerance)?.outside).toBe(0);
+      const wrong = rcLowPassSchematic();
+      wrong.components = wrong.components.map((c) => (c.name === "R1" ? { ...c, value: "3.3k" } : c));
+      const student = await simulateAc(wrong, sweep(10, 1e5));
+      expect(student.f).toEqual(reference.f);
+      expect(compareBode(student, reference, tolerance)?.outside).toBeGreaterThan(0);
     },
     TIMEOUT_MS,
   );

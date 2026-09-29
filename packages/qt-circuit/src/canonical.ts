@@ -16,8 +16,12 @@ import { DEFAULT_PALETTE } from "./library.js";
 import {
   CIRCUIT_CONFIG_VERSION,
   CircuitConfig,
+  DEFAULT_AC_ANALYSIS,
   DEFAULT_ANALYSIS,
+  DEFAULT_BODE,
+  bodeOf,
   type Analysis,
+  type BodeTolerance,
   type Grading,
   type Palette,
   type Stimulus,
@@ -36,12 +40,47 @@ const isDefaultPalette = (p: Palette): boolean =>
 const isDefaultSupplies = (s: Supplies): boolean => s.vcc === null && s.vee === null;
 
 const isDefaultAnalysis = (a: Analysis): boolean =>
+  a.kind !== "ac" &&
   a.stopMs === DEFAULT_ANALYSIS.stopMs &&
   a.skipMs === DEFAULT_ANALYSIS.skipMs &&
   a.points === DEFAULT_ANALYSIS.points;
 
+/**
+ * A transient is written WITHOUT its `kind`, as it was before the AC sweep
+ * existed: the schema fills it back in, and every file exported until then
+ * stays byte for byte what it was. A sweep always says what it is. (A config
+ * stored before the sweep has no `kind` at all, hence `!== "ac"`; see `bodeOf`.)
+ */
+function analysisToCanonical(a: Analysis): Record<string, unknown> {
+  if (a.kind !== "ac") return { stopMs: a.stopMs, skipMs: a.skipMs, points: a.points };
+  return {
+    kind: "ac",
+    fStartHz: a.fStartHz,
+    fStopHz: a.fStopHz,
+    ...(a.pointsPerDecade === DEFAULT_AC_ANALYSIS.pointsPerDecade
+      ? {}
+      : { pointsPerDecade: a.pointsPerDecade }),
+  };
+}
+
+const isDefaultBode = (b: BodeTolerance): boolean =>
+  b.magDb === DEFAULT_BODE.magDb &&
+  b.floorDb === DEFAULT_BODE.floorDb &&
+  b.phaseDeg === DEFAULT_BODE.phaseDeg;
+
 const isDefaultGrading = (g: Grading): boolean =>
-  g.mode === "manual" && g.tolerance === DEFAULT_TOLERANCE && g.rubric === "";
+  g.mode === "manual" && g.tolerance === DEFAULT_TOLERANCE && g.rubric === "" && isDefaultBode(bodeOf(g));
+
+/** The grading block, with the Bode envelope only when it is not the default one. */
+function gradingToCanonical(g: Grading): Record<string, unknown> {
+  const bode = bodeOf(g);
+  return {
+    mode: g.mode,
+    tolerance: g.tolerance,
+    ...(isDefaultBode(bode) ? {} : { bode: { ...bode } }),
+    rubric: g.rubric,
+  };
+}
 
 function stimulusToCanonical(stimulus: Stimulus): Record<string, unknown> {
   return {
@@ -49,7 +88,7 @@ function stimulusToCanonical(stimulus: Stimulus): Record<string, unknown> {
     source: { ...stimulus.source },
     ...(stimulus.sourceOhms === 0 ? {} : { sourceOhms: stimulus.sourceOhms }),
     load: { ...stimulus.load },
-    ...(isDefaultAnalysis(stimulus.analysis) ? {} : { analysis: { ...stimulus.analysis } }),
+    ...(isDefaultAnalysis(stimulus.analysis) ? {} : { analysis: analysisToCanonical(stimulus.analysis) }),
     ...(stimulus.points === 1 ? {} : { points: stimulus.points }),
     ...(stimulus.visible ? {} : { visible: false }),
   };
@@ -75,7 +114,7 @@ export function toCanonical(config: CircuitConfig): Record<string, unknown> {
       })),
     };
   }
-  if (!isDefaultGrading(config.grading)) out["grading"] = { ...config.grading };
+  if (!isDefaultGrading(config.grading)) out["grading"] = gradingToCanonical(config.grading);
   if (config.showExpected) out["showExpected"] = true;
   if (config.simulationsPerMinute !== DEFAULT_SIMULATIONS_PER_MINUTE) {
     out["simulationsPerMinute"] = config.simulationsPerMinute;

@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { COMPONENT_KINDS, type ComponentKind } from "./library.js";
 import {
+  AC_OUTPUT_COLUMNS,
   OUTPUT_COLUMNS,
+  acLine,
+  acSourceSpec,
   buildBareNetlist,
   buildNetlist,
   decimate,
@@ -14,10 +17,12 @@ import {
   tranLine,
   type Harness,
 } from "./spice.js";
-import { SERIES_MAX_POINTS, type Schematic, type Stimulus, type Supplies } from "./schema.js";
+import { DB_FLOOR, SERIES_MAX_POINTS, type Schematic, type Stimulus, type Supplies } from "./schema.js";
 import {
   RAIL,
   at,
+  lowPassBode,
+  readAcStdoutFixture,
   component,
   pinEnd,
   portEnd,
@@ -36,7 +41,7 @@ const sine = (overrides: Partial<Stimulus> = {}): Stimulus => ({
   source: { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 },
   sourceOhms: 0,
   load: { kind: "open" },
-  analysis: { stopMs: 5, skipMs: 0, points: 500 },
+  analysis: { kind: "tran", stopMs: 5, skipMs: 0, points: 500 },
   points: 1,
   visible: true,
   ...overrides,
@@ -105,8 +110,8 @@ describe("sourceSpec", () => {
 
 describe("tranLine", () => {
   it("splits the kept window into `points` steps", () => {
-    expect(tranLine({ stopMs: 5, skipMs: 0, points: 500 })).toBe(".tran 1e-5 5e-3 0");
-    expect(tranLine({ stopMs: 10, skipMs: 5, points: 500 })).toBe(".tran 1e-5 1e-2 5e-3");
+    expect(tranLine({ kind: "tran", stopMs: 5, skipMs: 0, points: 500 })).toBe(".tran 1e-5 5e-3 0");
+    expect(tranLine({ kind: "tran", stopMs: 10, skipMs: 5, points: 500 })).toBe(".tran 1e-5 1e-2 5e-3");
   });
 });
 
@@ -363,5 +368,104 @@ describe("decimate", () => {
 
   it("honours a smaller budget", () => {
     expect(decimate(sineSeries({ n: 500 }), 10).t.length).toBe(10);
+  });
+
+  it("thins a Bode plot the same way, keeping both ends of the sweep", () => {
+    const long = lowPassBode({ fStart: 1, fStop: 1e9, perDecade: 200 });
+    const small = decimate(long);
+    expect(small.kind).toBe("ac");
+    expect(small.f).toHaveLength(SERIES_MAX_POINTS);
+    expect(small.f[0]).toBe(long.f[0]);
+    expect(small.f[SERIES_MAX_POINTS - 1]).toBe(long.f[long.f.length - 1]);
+    expect(small.phaseDeg).toHaveLength(SERIES_MAX_POINTS);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The AC sweep (ADR-040)
+// ---------------------------------------------------------------------------
+
+const bode = (overrides: Partial<Stimulus> = {}): Stimulus =>
+  sine({
+    name: "Bode",
+    source: { kind: "dc", volts: 0 },
+    analysis: { kind: "ac", fStartHz: 100, fStopHz: 1e4, pointsPerDecade: 5 },
+    ...overrides,
+  });
+
+describe("the AC harness", () => {
+  it("drives the EMF with its DC bias and a unit AC amplitude", () => {
+    expect(acSourceSpec({ kind: "dc", volts: 2.5 })).toBe("DC 2.5e+0 AC 1");
+    expect(acSourceSpec({ kind: "dc", volts: 0 })).toBe("DC 0 AC 1");
+    // A draft that is not a DC source still makes a runnable deck, at 0 V.
+    expect(acSourceSpec({ kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 3 })).toBe("DC 0 AC 1");
+  });
+
+  it("sweeps by decade over the teacher's band", () => {
+    expect(acLine({ kind: "ac", fStartHz: 10, fStopHz: 1e5, pointsPerDecade: 20 })).toBe(
+      ".ac dec 20 1e+1 1e+5",
+    );
+  });
+
+  it("emits the AC deck of the RC low-pass, verified on ngspice 42", () => {
+    const { text, issues } = buildNetlist(rcLowPass().schematic, bode(), GROUNDED);
+    expect(issues).toEqual([]);
+    expect(lines(text)).toEqual([
+      "* quiz circuit",
+      "R1 in out 1.59e+3",
+      "C1 out 0 1e-7",
+      "Vin in 0 DC 0 AC 1",
+      "Rload out outl 1e+12",
+      "Vmeas outl 0 0",
+      ".ac dec 5 1e+2 1e+4",
+      ".control",
+      "set wr_vecnames",
+      "set wr_singlescale",
+      "run",
+      "let vmag = mag(v(out))",
+      "let vph = cph(v(out)) * 180 / pi",
+      "wrdata /dev/stdout vmag vph",
+      ".endc",
+      ".end",
+    ]);
+  });
+
+  it("puts the unit EMF behind the source resistance: v(out) is the transfer, the source included", () => {
+    const text = buildNetlist(rcLowPass().schematic, bode({ sourceOhms: 50 }), GROUNDED).text;
+    expect(text).toContain("Vin src 0 DC 0 AC 1");
+    expect(text).toContain("Rs src in 5e+1");
+    expect(text).not.toContain("linearize");
+    expect(text).not.toContain(".tran");
+  });
+});
+
+describe("parseSpiceOutput, AC", () => {
+  const parsed = parseSpiceOutput(readAcStdoutFixture(), "ac");
+
+  it("reads the captured sweep: 5 points per decade over two decades", () => {
+    expect(parsed?.kind).toBe("ac");
+    expect(parsed?.f).toHaveLength(11);
+    expect(parsed?.f[0]).toBe(100);
+    expect(parsed?.f[10]).toBe(1e4);
+  });
+
+  it("turns the magnitude into dB: −3 dB and −45° at the corner", () => {
+    const corner = parsed?.f.findIndex((f) => f === 1000) ?? -1;
+    expect(parsed?.magDb[corner]).toBeCloseTo(-3.01, 1);
+    expect(parsed?.phaseDeg[corner]).toBeCloseTo(-45, 0);
+  });
+
+  it("knows the three columns it asked for, and not the transient's", () => {
+    expect(AC_OUTPUT_COLUMNS).toEqual(["frequency", "vmag", "vph"]);
+    expect(parseSpiceOutput(readAcStdoutFixture())).toBeNull();
+    expect(parseSpiceOutput(readStdoutFixture(), "ac")).toBeNull();
+  });
+
+  it("floors a dead output instead of writing −∞", () => {
+    const dead = parseSpiceOutput(
+      [" frequency       vmag            vph", " 1.0e+2  0.0e+0  0.0e+0", " 1.0e+3  1.0e-20  0.0e+0"].join("\n"),
+      "ac",
+    );
+    expect(dead?.magDb).toEqual([DB_FLOOR, DB_FLOOR]);
   });
 });

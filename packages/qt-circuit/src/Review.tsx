@@ -118,6 +118,22 @@ function errorPercent(error: number): string {
   return percent >= 10 ? percent.toFixed(0) : percent.toFixed(1);
 }
 
+/**
+ * The Error cell: a percentage of the swing for a transient, the worst gap in
+ * dB (and in degrees, when the phase is compared) for an AC sweep — never a
+ * dB figure dressed as a percentage.
+ */
+function errorText(detail: StimulusDetail, s: CircuitReviewStrings): string {
+  const envelope = detail.envelope;
+  if (envelope !== undefined) {
+    const db = envelope.worstDb.toFixed(1);
+    return envelope.worstDeg === null
+      ? fmt(s.envelopeGap, { db })
+      : fmt(s.envelopeGapPhase, { db, deg: envelope.worstDeg.toFixed(0) });
+  }
+  return detail.error === null ? "—" : fmt(s.errorPercent, { percent: errorPercent(detail.error) });
+}
+
 export function CircuitReview({
   student,
   answer,
@@ -265,7 +281,9 @@ export function CircuitReview({
             <tbody>
               {rows.map(({ detail, label }, i) => {
                 // Neither a waveform nor a distance: the stimulus never ran.
-                const ok = detail.series === null && detail.error === null ? null : detail.ok;
+                const ran =
+                  detail.series !== null || detail.error !== null || detail.envelope !== undefined;
+                const ok = ran ? detail.ok : null;
                 return (
                   <tr key={i} className={table.row}>
                     <td className={cx(table.td, "font-medium")}>{label}</td>
@@ -275,7 +293,7 @@ export function CircuitReview({
                       </Verdict>
                     </td>
                     <td className={cx(table.td, "text-right tabular-nums")}>
-                      {detail.error === null ? "—" : fmt(s.errorPercent, { percent: errorPercent(detail.error) })}
+                      {errorText(detail, s)}
                     </td>
                     <td className={cx(table.td, "text-fg-muted")}>
                       {detail.reason === undefined ? "—" : reasonText(detail.reason, s)}

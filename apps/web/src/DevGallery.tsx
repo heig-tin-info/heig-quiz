@@ -182,6 +182,24 @@ function circuitSeries(gain: number, slew: number): CircuitSeries {
 const CIRCUIT_SERIES = circuitSeries(-2, 0.35);
 const CIRCUIT_EXPECTED = circuitSeries(-2, 0);
 
+/** Four decades of an inverting amplifier of gain −10 with a pole at `cornerHz` (ADR-040). */
+function circuitBode(cornerHz: number): CircuitSeries {
+  const f: number[] = [];
+  const magDb: number[] = [];
+  const phaseDeg: number[] = [];
+  for (let i = 0; i <= 80; i += 1) {
+    const freq = 10 * 10 ** (i / 20);
+    const ratio = freq / cornerHz;
+    f.push(freq);
+    magDb.push(20 - 10 * Math.log10(1 + ratio * ratio));
+    phaseDeg.push(180 - (Math.atan(ratio) * 180) / Math.PI);
+  }
+  return { kind: "ac", f, magDb, phaseDeg };
+}
+
+const CIRCUIT_BODE = circuitBode(7000);
+const CIRCUIT_BODE_EXPECTED = circuitBode(10_000);
+
 /** A section of the gallery: a heading and a row of specimens. */
 function Row({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -396,6 +414,7 @@ export function DevGallery() {
           </Card>
           <div className="space-y-4">
             <Plot series={CIRCUIT_SERIES} expected={CIRCUIT_EXPECTED} title={t("dev.ui.sine")} height={200} />
+            <Plot series={CIRCUIT_BODE} expected={CIRCUIT_BODE_EXPECTED} title={t("dev.ui.bode")} height={180} />
             <Plot series={null} height={120} />
           </div>
         </div>

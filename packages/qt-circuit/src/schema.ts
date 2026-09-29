@@ -157,7 +157,9 @@ export const Load = z.discriminatedUnion("kind", [
 ]);
 export type Load = z.infer<typeof Load>;
 
-export const Analysis = z.object({
+/** A transient: the time-domain window a waveform is compared over. */
+export const TranAnalysis = z.object({
+  kind: z.literal("tran"),
   /** End of the transient, in milliseconds. */
   stopMs: z.number().min(0.001).max(1000).default(5),
   /** Samples before this instant are dropped (the transient the teacher wants to skip). */
@@ -165,13 +167,62 @@ export const Analysis = z.object({
   /** Samples kept between `skipMs` and `stopMs`. */
   points: z.number().int().min(50).max(2000).default(500),
 });
+export type TranAnalysis = z.infer<typeof TranAnalysis>;
+
+/**
+ * A small-signal AC sweep (ADR-040): the Bode plot of `v(out)` against the
+ * source's EMF, linearised around the DC bias of a `dc` source, at
+ * `pointsPerDecade` log-spaced frequencies from `fStartHz` to `fStopHz`.
+ */
+export const AcAnalysis = z.object({
+  kind: z.literal("ac"),
+  fStartHz: z.number().min(0.01).max(1e9),
+  fStopHz: z.number().min(0.01).max(1e9),
+  pointsPerDecade: z.number().int().min(5).max(200).default(20),
+});
+export type AcAnalysis = z.infer<typeof AcAnalysis>;
+
+/**
+ * The analysis of a stimulus. Every config written before the AC sweep
+ * existed has no `kind`, and all of them are transients: the missing tag is
+ * filled in BEFORE the discriminated union reads it, so they parse unchanged
+ * — and `canonical.ts` leaves it out again for a transient.
+ */
+export const Analysis = z.preprocess(
+  (value) =>
+    value !== null && typeof value === "object" && !("kind" in value)
+      ? { ...value, kind: "tran" }
+      : value,
+  z.discriminatedUnion("kind", [TranAnalysis, AcAnalysis]),
+);
 export type Analysis = z.infer<typeof Analysis>;
 
-export const DEFAULT_ANALYSIS: Analysis = { stopMs: 5, skipMs: 0, points: 500 };
+export const DEFAULT_ANALYSIS: TranAnalysis = { kind: "tran", stopMs: 5, skipMs: 0, points: 500 };
+
+/** What the editor switches a stimulus to: four decades around 1 kHz. */
+export const DEFAULT_AC_ANALYSIS: AcAnalysis = {
+  kind: "ac",
+  fStartHz: 10,
+  fStopHz: 100_000,
+  pointsPerDecade: 20,
+};
+
+/** The ceiling of ADR-019 on one simulation, which an AC sweep observes too. */
+export const MAX_ANALYSIS_POINTS = 2000;
+
+/** How many frequencies `.ac dec` produces: `pointsPerDecade` per decade, both ends included. */
+export function acPointCount(analysis: AcAnalysis): number {
+  const decades = Math.log10(analysis.fStopHz / analysis.fStartHz);
+  return Math.floor(decades * analysis.pointsPerDecade + 1e-9) + 1;
+}
 
 /**
  * One excitation of the box. Like a test case of `code`: it has a name,
  * points, and may be hidden from the student (docs/06 Q8 applies).
+ *
+ * Under an AC sweep the source is the DC BIAS the circuit is linearised
+ * around, so only a `dc` source means anything there: a sine, a pulse or a
+ * step has no single operating point (`circuit.ac_needs_dc_source`).
  */
 export const Stimulus = z
   .object({
@@ -184,9 +235,19 @@ export const Stimulus = z
     points: z.number().min(0).max(100).default(1),
     visible: z.boolean().default(true),
   })
-  .refine((s) => s.analysis.skipMs < s.analysis.stopMs, {
-    message: "circuit.skip_after_stop",
-    path: ["analysis", "skipMs"],
+  .superRefine((s, ctx) => {
+    const a = s.analysis;
+    const fail = (message: string, path: (string | number)[]) =>
+      ctx.addIssue({ code: "custom", message, path });
+    if (a.kind === "tran") {
+      if (a.skipMs >= a.stopMs) fail("circuit.skip_after_stop", ["analysis", "skipMs"]);
+      return;
+    }
+    if (s.source.kind !== "dc") fail("circuit.ac_needs_dc_source", ["source"]);
+    if (a.fStartHz >= a.fStopHz) fail("circuit.ac_start_after_stop", ["analysis", "fStartHz"]);
+    else if (acPointCount(a) > MAX_ANALYSIS_POINTS) {
+      fail("circuit.ac_too_many_points", ["analysis", "pointsPerDecade"]);
+    }
   });
 export type Stimulus = z.infer<typeof Stimulus>;
 
@@ -208,14 +269,47 @@ export type Palette = z.infer<typeof Palette>;
 export const GradingMode = z.enum(["manual", "simulation", "llm"]);
 export type GradingMode = z.infer<typeof GradingMode>;
 
+/**
+ * The envelope an AC stimulus is judged by (ADR-040, `compareBode`). It lives
+ * in the grading block and never in the analysis: the analysis travels to the
+ * student, the pass rule does not (invariant 4).
+ */
+export const BodeTolerance = z.object({
+  /** Where the reference is above the floor: the largest gap allowed, in dB. */
+  magDb: z.number().min(0.01).max(40).default(1),
+  /** The floor sits this many dB under the reference's own peak; below it only an upper bound holds. */
+  floorDb: z.number().min(1).max(200).default(60),
+  /** The largest phase gap allowed above the floor, in degrees; `null` compares no phase. */
+  phaseDeg: z.number().min(0.1).max(180).nullable().default(10),
+});
+export type BodeTolerance = z.infer<typeof BodeTolerance>;
+
+export const DEFAULT_BODE: BodeTolerance = { magDb: 1, floorDb: 60, phaseDeg: 10 };
+
+/*
+ * A config is re-parsed only when its `configVersion` changes (`reparseMigrate`),
+ * and the AC sweep came without a bump: a config stored before it is read
+ * back AS STORED, with no `analysis.kind` and no `grading.bode`. Every reader
+ * therefore tells a sweep by `kind === "ac"` — anything else is a transient —
+ * and reads the envelope through `bodeOf`.
+ */
+
+/** The Bode envelope of a grading block, the default one when it was stored before the AC sweep. */
+export function bodeOf(grading: Grading): BodeTolerance {
+  return (grading.bode as BodeTolerance | undefined) ?? DEFAULT_BODE;
+}
+
 export const Grading = z.object({
   mode: GradingMode.default("manual"),
   /**
-   * `simulation`: a stimulus passes when the normalised RMS distance between
-   * the student's and the reference's output voltage is at or under this
-   * fraction of the reference's peak-to-peak swing (`grade.ts`).
+   * `simulation`, transient stimuli: a stimulus passes when the normalised
+   * RMS distance between the student's and the reference's output voltage is
+   * at or under this fraction of the reference's peak-to-peak swing
+   * (`grade.ts`).
    */
   tolerance: z.number().min(0.001).max(1).default(0.05),
+  /** `simulation`, AC stimuli: the envelope around the reference's Bode plot. */
+  bode: BodeTolerance.default(() => ({ ...DEFAULT_BODE })),
   /** `llm` and `manual`: the criteria, for the model or for the teacher's own eyes. */
   rubric: z.string().max(8000).default(""),
 });
@@ -239,7 +333,7 @@ export const CircuitConfig = z
     stimuli: z.array(Stimulus).max(4).default([]),
     /** The teacher's own circuit: the key. Never in `toStudent`; a student receives it only under a shown key (ADR-037). */
     reference: Schematic.nullable().default(null),
-    grading: Grading.default({ mode: "manual", tolerance: 0.05, rubric: "" }),
+    grading: Grading.default({ mode: "manual", tolerance: 0.05, bode: { ...DEFAULT_BODE }, rubric: "" }),
     /** Overlay the reference's output on the student's plot, for the visible stimuli. */
     showExpected: z.boolean().default(false),
     /** N-SEC-07: the budget of the student's Simulate button, per attempt. */
@@ -269,7 +363,7 @@ export function emptyCircuitConfig(): CircuitConfig {
     commonGround: true,
     stimuli: [],
     reference: null,
-    grading: { mode: "manual", tolerance: 0.05, rubric: "" },
+    grading: { mode: "manual", tolerance: 0.05, bode: { ...DEFAULT_BODE }, rubric: "" },
     showExpected: false,
     simulationsPerMinute: 10,
   };
@@ -360,8 +454,12 @@ export type CircuitSolution = z.infer<typeof CircuitSolution>;
 // Grading details
 // ---------------------------------------------------------------------------
 
-/** One simulated waveform set, decimated to at most {@link SERIES_MAX_POINTS} samples. */
-export const SeriesSet = z.object({
+/**
+ * One transient's waveforms. It carries no `kind`: every row stored before
+ * the AC sweep existed is one of these, and they must keep parsing as is.
+ */
+export const TranSeries = z.object({
+  kind: z.literal("tran").optional(),
   /** Seconds. */
   t: z.array(z.number()),
   vin: z.array(z.number()),
@@ -369,6 +467,25 @@ export const SeriesSet = z.object({
   /** Amperes, through the load; zeros for an open load. */
   iout: z.array(z.number()),
 });
+export type TranSeries = z.infer<typeof TranSeries>;
+
+/** One AC sweep's Bode plot: `v(out)` against the source's EMF. */
+export const AcSeries = z.object({
+  kind: z.literal("ac"),
+  /** Hertz, log-spaced. */
+  f: z.array(z.number()),
+  /** `20·log10|v(out)|`, floored at {@link DB_FLOOR} so a dead output stays a number. */
+  magDb: z.array(z.number()),
+  /** Degrees, ngspice's continuous phase (`cph`), unwrapped along the sweep. */
+  phaseDeg: z.array(z.number()),
+});
+export type AcSeries = z.infer<typeof AcSeries>;
+
+/** The magnitude a zero output is written as: JSON has no −∞. */
+export const DB_FLOOR = -300;
+
+/** One simulated series set, decimated to at most {@link SERIES_MAX_POINTS} samples when stored. */
+export const SeriesSet = z.union([AcSeries, TranSeries]);
 export type SeriesSet = z.infer<typeof SeriesSet>;
 
 export const SERIES_MAX_POINTS = 250;
@@ -378,8 +495,19 @@ export const StimulusDetail = z.object({
   visible: z.boolean(),
   points: z.number(),
   ok: z.boolean(),
-  /** Normalised RMS distance to the reference; `null` when nothing could be compared. */
+  /** Transient: normalised RMS distance to the reference; `null` when nothing could be compared, and always under AC. */
   error: z.number().nullable(),
+  /** AC: how the student's Bode plot sat in the reference's envelope (`compareBode`). */
+  envelope: z
+    .object({
+      /** The largest magnitude gap, in dB, measured the way the rule measures it. */
+      worstDb: z.number(),
+      /** The largest phase gap above the floor, in degrees; `null` when the phase is not compared. */
+      worstDeg: z.number().nullable(),
+      /** How many frequencies fell outside the envelope. */
+      outside: z.number().int(),
+    })
+    .optional(),
   /** Machine reason when `ok` is false for a cause other than the distance: `floating_pin`, `spice_failed`… */
   reason: z.string().optional(),
   /** The student's waveforms; `null` when the simulation did not run. */

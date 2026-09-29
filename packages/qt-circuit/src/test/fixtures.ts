@@ -18,7 +18,8 @@ import {
   type Orientation,
   type Schematic,
   type SchematicComponent,
-  type SeriesSet,
+  type AcSeries,
+  type TranSeries,
   type Wire,
 } from "../schema.js";
 
@@ -27,6 +28,13 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 /** The exact stdout of `ngspice -b` on `rc-lowpass.cir`, captured on ngspice 42. */
 export const readStdoutFixture = (): string =>
   readFileSync(join(HERE, "ngspice-rc-lowpass.stdout.txt"), "utf8");
+
+/**
+ * The exact stdout of `ngspice -b` on the same RC low-pass under an AC sweep
+ * (`.ac dec 5 1e+2 1e+4`, the deck `buildNetlist` emits), captured on ngspice 42.
+ */
+export const readAcStdoutFixture = (): string =>
+  readFileSync(join(HERE, "ngspice-rc-lowpass-ac.stdout.txt"), "utf8");
 
 // ---------------------------------------------------------------------------
 // Builders
@@ -157,6 +165,8 @@ export const SECRET_REFERENCE_VALUE = "123.4k";
 export const SECRET_HIDDEN_STIMULUS = "hidden-secret-stimulus";
 export const SECRET_RUBRIC = "SECRET_RUBRIC: the filter must roll off at 20 dB per decade";
 export const SECRET_TOLERANCE = 0.0777;
+/** The Bode envelope: three knobs a student must not learn either (invariant 4). */
+export const SECRET_BODE = { magDb: 1.37, floorDb: 47.5, phaseDeg: 13.25 };
 
 /** The teacher's own circuit: the key. */
 export function referenceSchematic(): Schematic {
@@ -233,11 +243,26 @@ export function circuitConfig(overrides: Record<string, unknown> = {}): CircuitC
       },
     ],
     reference: referenceSchematic(),
-    grading: { mode: "simulation", tolerance: SECRET_TOLERANCE, rubric: SECRET_RUBRIC },
+    grading: { mode: "simulation", tolerance: SECRET_TOLERANCE, bode: SECRET_BODE, rubric: SECRET_RUBRIC },
     showExpected: false,
     simulationsPerMinute: 10,
     ...overrides,
   });
+}
+
+/**
+ * {@link circuitConfig} as a row stored before the AC sweep reads back: a
+ * config is re-parsed only across a `configVersion` bump, and there was none,
+ * so it has no `analysis.kind` and no `grading.bode` (`bodeOf`, schema.ts).
+ */
+export function storedBeforeAc(): CircuitConfig {
+  const config = structuredClone(circuitConfig()) as unknown as {
+    stimuli: { analysis: Record<string, unknown> }[];
+    grading: Record<string, unknown>;
+  };
+  for (const s of config.stimuli) delete s.analysis["kind"];
+  delete config.grading["bode"];
+  return config as unknown as CircuitConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -245,7 +270,7 @@ export function circuitConfig(overrides: Record<string, unknown> = {}): CircuitC
 // ---------------------------------------------------------------------------
 
 /** A `wrdata` table, as ngspice would print it. */
-export function spiceTable(series: SeriesSet): string {
+export function spiceTable(series: TranSeries): string {
   const header = " time            v(in)           v(out)          i(Vmeas)       ";
   const rows = series.t.map((t, i) =>
     [t, series.vin[i] ?? 0, series.vout[i] ?? 0, series.iout[i] ?? 0]
@@ -260,7 +285,7 @@ export function spiceTable(series: SeriesSet): string {
 /** `n` samples of a sine of the given amplitude and frequency, on `vout` and `vin` alike. */
 export function sineSeries(
   options: { n?: number; amplitude?: number; frequencyHz?: number; phase?: number; stopS?: number } = {},
-): SeriesSet {
+): TranSeries {
   const n = options.n ?? 64;
   const amplitude = options.amplitude ?? 1;
   const frequencyHz = options.frequencyHz ?? 1000;
@@ -276,12 +301,53 @@ export function sineSeries(
   return { t, vin: [...v], vout: [...v], iout: v.map(() => 0) };
 }
 
+/**
+ * An AC sweep's `wrdata` table, as the AC control block prints it: the
+ * MAGNITUDE, linear, rebuilt from the series' dB.
+ */
+export function acSpiceTable(series: AcSeries): string {
+  const header = " frequency       vmag            vph            ";
+  const rows = series.f.map((f, i) =>
+    [f, 10 ** ((series.magDb[i] ?? 0) / 20), series.phaseDeg[i] ?? 0]
+      .map((v) => v.toExponential(8))
+      .join("  "),
+  );
+  return ["", header, ...rows, "Note: No compatibility mode selected!"].join("\n");
+}
+
+/**
+ * The Bode plot of a first-order low-pass with its corner at `cornerHz`,
+ * times `gain` (a negative gain turns the phase by 180°), on the grid of
+ * `.ac dec perDecade fStart fStop`.
+ */
+export function lowPassBode(
+  options: { cornerHz?: number; gain?: number; fStart?: number; fStop?: number; perDecade?: number } = {},
+): AcSeries {
+  const corner = options.cornerHz ?? 1000;
+  const gain = options.gain ?? 1;
+  const fStart = options.fStart ?? 10;
+  const decades = Math.log10((options.fStop ?? 1e5) / fStart);
+  const perDecade = options.perDecade ?? 10;
+  const n = Math.floor(decades * perDecade + 1e-9) + 1;
+  const f: number[] = [];
+  const magDb: number[] = [];
+  const phaseDeg: number[] = [];
+  for (let i = 0; i < n; i += 1) {
+    const freq = fStart * 10 ** (i / perDecade);
+    const ratio = freq / corner;
+    f.push(freq);
+    magDb.push(20 * Math.log10(Math.abs(gain) / Math.sqrt(1 + ratio * ratio)));
+    phaseDeg.push((gain < 0 ? 180 : 0) - (Math.atan(ratio) * 180) / Math.PI);
+  }
+  return { kind: "ac", f, magDb, phaseDeg };
+}
+
 export type CaseOutcome = RunnerOutcome["cases"][number];
 
-export function okCase(series: SeriesSet): CaseOutcome {
+export function okCase(series: TranSeries | AcSeries): CaseOutcome {
   return {
     exitCode: 0,
-    stdout: spiceTable(series),
+    stdout: series.kind === "ac" ? acSpiceTable(series) : spiceTable(series),
     stderr: "",
     ms: 40,
     timedOut: false,

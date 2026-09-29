@@ -123,11 +123,27 @@ function describeLoad(load: Load, s: CircuitPlayerStrings): string {
   }
 }
 
+/**
+ * `Bode 10Hz → 100kHz · bias 0 V · open output` for an AC stimulus: the
+ * analysis first, because it says what the plot will be, then the operating
+ * point the circuit is linearised around.
+ */
 function describeStimulus(stimulus: StudentStimulus, s: CircuitPlayerStrings): string {
+  const { analysis, source } = stimulus;
+  if (analysis.kind === "ac") {
+    return [
+      fmt(s.sweep, {
+        from: `${formatValue(analysis.fStartHz)}Hz`,
+        to: `${formatValue(analysis.fStopHz)}Hz`,
+      }),
+      fmt(s.srcBias, { volts: formatValue(source.kind === "dc" ? source.volts : 0) }),
+      describeLoad(stimulus.load, s),
+    ].join(" · ");
+  }
   return [
-    describeSource(stimulus.source, s),
+    describeSource(source, s),
     describeLoad(stimulus.load, s),
-    fmt(s.window, { ms: formatValue(stimulus.analysis.stopMs) }),
+    fmt(s.window, { ms: formatValue(analysis.stopMs) }),
   ].join(" · ");
 }
 

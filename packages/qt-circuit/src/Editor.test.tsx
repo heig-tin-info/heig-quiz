@@ -17,7 +17,10 @@ import {
   type CircuitConfig,
   type CircuitDetails,
   type SeriesSet,
+  DEFAULT_BODE,
 } from "./schema.js";
+
+import { storedBeforeAc } from "./test/fixtures.js";
 
 vi.mock("./canvas/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./canvas/index.js")>();
@@ -95,6 +98,70 @@ describe("CircuitEditor", () => {
     expect(screen.getByLabelText("Stop (ms)")).toHaveValue(5);
   });
 
+  it("switches a stimulus to a Bode plot on a DC bias, and the schema accepts it", () => {
+    const sine = Stimulus.parse({
+      name: "1 kHz",
+      source: { kind: "sine", amplitude: 1, frequencyHz: 1000 },
+      load: { kind: "open" },
+    });
+    const { onChange } = setup({ config: config({ stimuli: [sine] }) });
+    fireEvent.click(screen.getByLabelText("Bode plot"));
+    const next = onChange.mock.calls[0]?.[0]?.stimuli[0];
+    expect(next?.analysis.kind).toBe("ac");
+    expect(next?.source).toEqual({ kind: "dc", volts: 0 });
+    expect(Stimulus.safeParse(next).success).toBe(true);
+  });
+
+  it("shows an AC stimulus as a bias and a band, with the small-signal warning", () => {
+    const ac = Stimulus.parse({
+      name: "Bode",
+      source: { kind: "dc", volts: 2.5 },
+      load: { kind: "open" },
+      analysis: { kind: "ac", fStartHz: 10, fStopHz: 1e5 },
+    });
+    setup({ config: config({ stimuli: [ac] }) });
+    expect(screen.getByLabelText("Bias (V)")).toHaveValue(2.5);
+    expect(screen.queryByLabelText("Sine")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("From (Hz)")).toHaveValue(10);
+    expect(screen.getByLabelText("To (Hz)")).toHaveValue(1e5);
+    expect(screen.getByLabelText("Points per decade")).toHaveValue(20);
+    expect(screen.queryByLabelText("Stop (ms)")).not.toBeInTheDocument();
+    expect(screen.getByText(/linearises the circuit around its DC bias/)).toBeInTheDocument();
+  });
+
+  it("gives the Bode envelope to a simulated question with an AC stimulus, and only then", () => {
+    const ac = Stimulus.parse({
+      name: "Bode",
+      source: { kind: "dc", volts: 0 },
+      load: { kind: "open" },
+      analysis: { kind: "ac", fStartHz: 10, fStopHz: 1e5 },
+    });
+    const grading = { mode: "simulation" as const, tolerance: 0.05, bode: { ...DEFAULT_BODE }, rubric: "" };
+    const { onChange } = setup({ config: config({ stimuli: [ac], grading }) });
+    expect(screen.getByLabelText("Gain tolerance (dB)")).toHaveValue(1);
+    expect(screen.getByLabelText("Floor (dB below the peak)")).toHaveValue(60);
+    expect(screen.getByLabelText("Phase tolerance (°)")).toHaveValue(10);
+    // Every stimulus is a sweep: the RMS tolerance has nothing to read.
+    expect(screen.queryByLabelText("Tolerance")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Compare the phase"));
+    expect(onChange.mock.calls[0]?.[0]?.grading.bode.phaseDeg).toBeNull();
+  });
+
+  it("opens a draft stored before the AC sweep, with no `kind` and no envelope", () => {
+    const stored = storedBeforeAc();
+    const { onChange } = setup({ config: stored });
+    expect(screen.getAllByLabelText("Waveform")[0]).toBeChecked();
+    expect(screen.getAllByLabelText("Stop (ms)")[0]).toHaveValue(5);
+    fireEvent.click(screen.getAllByLabelText("Bode plot")[0] as HTMLElement);
+    const next = onChange.mock.calls[0]?.[0];
+    expect(next?.stimuli[0]?.analysis.kind).toBe("ac");
+  });
+
+  it("keeps the Bode envelope out of sight without an AC stimulus", () => {
+    setup({ config: config({ grading: { mode: "simulation", tolerance: 0.05, bode: { ...DEFAULT_BODE }, rubric: "" } }) });
+    expect(screen.queryByLabelText("Gain tolerance (dB)")).not.toBeInTheDocument();
+  });
+
   it("gives the criteria to a hand-graded question, and no tolerance", () => {
     setup();
     expect(screen.getByLabelText("Criteria")).toBeInTheDocument();
@@ -102,7 +169,7 @@ describe("CircuitEditor", () => {
   });
 
   it("gives the tolerance to a simulated question, and no criteria", () => {
-    setup({ config: config({ grading: { mode: "simulation", tolerance: 0.05, rubric: "" } }) });
+    setup({ config: config({ grading: { mode: "simulation", tolerance: 0.05, bode: { ...DEFAULT_BODE }, rubric: "" } }) });
     expect(screen.getByLabelText("Tolerance")).toBeInTheDocument();
     expect(screen.queryByLabelText("Criteria")).not.toBeInTheDocument();
   });
