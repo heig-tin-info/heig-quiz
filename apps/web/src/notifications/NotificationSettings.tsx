@@ -33,8 +33,8 @@ import {
  * into the user's Teams and linked from its tab (`TeamsTabPage`, then the
  * link page, `TeamsLinkPage`). Notifications arrive in the activity feed.
  *
- * The grid lists the kinds the account's role receives (a student is only
- * ever told of a released result). The Teams column is there only when the
+ * The grid lists the server's `kinds`: the kinds this account can receive
+ * (`notificationKindsFor`, #277). The Teams column is there only when the
  * platform has Teams at all, and its switches wait for the link: the
  * preference is kept, and says "on" by default, but a switch that moves
  * nothing would lie.
