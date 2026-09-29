@@ -13,6 +13,7 @@ export * from "./cooldown.js";
 export * from "./debrief.js";
 export * from "./deadline.js";
 export * from "./drillEligibility.js";
+export * from "./drillProgress.js";
 export * from "./drillRating.js";
 export * from "./drillSession.js";
 export * from "./evaluationConfig.js";

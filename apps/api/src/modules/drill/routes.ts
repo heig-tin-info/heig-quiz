@@ -8,8 +8,8 @@
  *
  * Teacher: the drill switch of a classroom, "Allow drill" and "Remove these
  * questions from the drill" on an evaluation, each loaded through
- * `staffAccess` first. The reads of the teacher's view (activity, mastery)
- * are slice 4's.
+ * `staffAccess` first; and the reads of the teacher's view — each
+ * student's activity, the weekly progression, the mastery per tag.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
@@ -17,6 +17,7 @@ import {
   DrillAnswerBody,
   DrillClassroomBody,
   DrillOptOutBody,
+  DrillProgressQuery,
   DrillSessionQuery,
   DrillShownBody,
   EvaluationDrillBody,
@@ -163,6 +164,38 @@ export async function drillPlugin(app: FastifyInstance) {
       await trace(req, "drill.allow", "evaluation", row.id, { allowDrill: body.allowDrill });
       return evaluationDrill(row);
     }),
+  );
+
+  // The teacher's view (slice 4, ADR-041 §8): reads of the classroom's
+  // drill, each loaded through `staffAccess` on the classroom first.
+
+  /** One row per student: activity, recall on repeated reviews, and the opt-out with its date. */
+  app.get(
+    "/app/api/classrooms/:id/drill/activity",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffClassroom }, ({ now, scope }) =>
+      service.classroomActivity(app.db, scope.room.id, now),
+    ),
+  );
+
+  /** The weeks of one student's progression (`?student=`, an enrollment id), or of the whole classroom. */
+  app.get(
+    "/app/api/classrooms/:id/drill/progress",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, query: DrillProgressQuery, load: staffClassroom },
+      async ({ reply, now, query, scope }) =>
+        (await service.classroomProgress(app.db, scope.room, query.student, now)) ?? notFound(reply),
+    ),
+  );
+
+  /** Mastery per tag: the mean retrievability of the classroom's reviewed cards. */
+  app.get(
+    "/app/api/classrooms/:id/drill/mastery",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffClassroom }, ({ now, scope }) =>
+      service.classroomMastery(app.db, scope.room.id, now),
+    ),
   );
 
   /** "Remove these questions from the drill": the cards this evaluation gave rise to, and their reviews. */
