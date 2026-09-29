@@ -652,6 +652,17 @@ export async function deprecateVersion(
 }
 
 /**
+ * Restarts the statistics of a question (ADR-038, F-STAT-05): from `now` on,
+ * only answers of attempts started at or after it are counted. Nothing is
+ * deleted, and `updated_at` does not move — the question's content did not
+ * change. Returns the instant written.
+ */
+export async function resetQuestionStats(db: Db, questionId: string, now: Date): Promise<Date> {
+  await db.update(questions).set({ statsSince: now }).where(eq(questions.id, questionId));
+  return now;
+}
+
+/**
  * True when ANY published version of the question is referenced (F-QST-11).
  *
  * This is what makes `409 in_use` real: a version an evaluation froze

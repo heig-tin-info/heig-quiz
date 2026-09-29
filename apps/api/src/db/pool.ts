@@ -172,6 +172,13 @@ export const questions = pgTable(
     createdBy: uuid("created_by").references(() => users.id),
     /** Set when the question was copied from another one (`POST /copy`). */
     originQuestionId: uuid("origin_question_id"),
+    /**
+     * Where the question's statistics start (ADR-038): only answers of
+     * attempts started at or after it are counted; null counts every one.
+     * Written only by the reset — no answer, grading or attempt is ever
+     * deleted for it.
+     */
+    statsSince: timestamp("stats_since", { withTimezone: true }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

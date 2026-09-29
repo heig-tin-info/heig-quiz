@@ -127,6 +127,36 @@ export async function keptAttempts(
   return kept;
 }
 
+/**
+ * The ids of the kept attempts of every account on SEVERAL evaluations —
+ * {@link keptAttempts} for the item analysis of a question (ADR-038), in two
+ * queries whatever their number.
+ */
+export async function keptAttemptIdsOf(
+  db: Db,
+  evaluations: readonly EvaluationRecord[],
+): Promise<Set<string>> {
+  if (evaluations.length === 0) return new Set();
+  const rows = await db
+    .select()
+    .from(attempts)
+    .where(inArray(attempts.evaluationId, evaluations.map((e) => e.id)))
+    .orderBy(asc(attempts.attemptNumber));
+  const groups = new Map<string, Map<string, AttemptRecord[]>>();
+  for (const evaluation of evaluations) {
+    groups.set(evaluation.id, byUser(rows.filter((r) => r.evaluationId === evaluation.id)));
+  }
+  const tallies = await talliesFor(db, [...groups.values()].flatMap((users) => [...users.values()]));
+  const kept = new Set<string>();
+  for (const evaluation of evaluations) {
+    for (const list of groups.get(evaluation.id)!.values()) {
+      const row = keptAmong(evaluation, list, tallies);
+      if (row) kept.add(row.id);
+    }
+  }
+  return kept;
+}
+
 /** One student's attempts on one evaluation, and the one that counts. */
 export interface StudentAttempts {
   all: AttemptRecord[];

@@ -89,6 +89,15 @@ export function retakesEnabled(row: EvaluationRecord): boolean {
  */
 export const isLatestAttempt = sql`not exists (select 1 from ${attempts} as later where later.evaluation_id = ${attempts.evaluationId} and later.user_id = ${attempts.userId} and later.attempt_number > ${attempts.attemptNumber})`;
 
+/**
+ * The row `attempts` belongs to a STAFF seat of the classroom of the row
+ * `evaluations` (ADR-018): {@link staffAttemptIds} as a predicate, for the
+ * queries that span several evaluations (the item analysis, ADR-038). A
+ * guest (`user_id` null) and a classroom-less evaluation never match. Only
+ * in a SELECT that joins both tables by name.
+ */
+export const isStaffAttempt = sql`exists (select 1 from ${enrollments} where ${enrollments.classroomId} = ${evaluations.classroomId} and ${enrollments.userId} = ${attempts.userId} and ${enrollments.staff})`;
+
 export function feedbackOf(row: EvaluationRecord): FeedbackPolicy {
   return FeedbackPolicy.parse(row.feedbackPolicy);
 }
@@ -365,6 +374,8 @@ export const staleOf = (rows: readonly ItemRow[]): string[] =>
  *
  * ONE query, shared by the dashboard, the grading panel and the results, so
  * the three screens can never disagree about which rows are a teacher's.
+ * {@link isStaffAttempt} is the same rule as a predicate; a test holds the
+ * two together.
  */
 export async function staffAttemptIds(
   db: Db,

@@ -14,8 +14,10 @@ import {
   QuestionPatch,
   QuestionSearch,
   VersionParam,
+  type StatsReset,
 } from "@quiz/contracts";
 
+import { iso, isoOrNull } from "../../clock.js";
 import { questions } from "../../db/schema.js";
 import { findAccessiblePool, requirePoolRole } from "../guards.js";
 import { invalid } from "../http.js";
@@ -218,6 +220,24 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       });
       poolChanged(scope.pool.id);
       return version;
+    }),
+  );
+
+  /**
+   * F-STAT-05 (ADR-038): the question's statistics start again from now.
+   * Nothing is deleted; the reads are the `stats` module's.
+   */
+  app.post(
+    "/app/api/questions/:id/stats/reset",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: onQuestion("contributor") }, async ({ req, scope }) => {
+      const since = await service.resetQuestionStats(app.db, scope.question.id, app.clock.now());
+      await trace(req, "question.stats_reset", "question", scope.question.id, {
+        poolId: scope.pool.id,
+        previousSince: isoOrNull(scope.question.statsSince),
+      });
+      poolChanged(scope.pool.id);
+      return { since: iso(since) } satisfies StatsReset;
     }),
   );
 
