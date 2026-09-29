@@ -3,12 +3,18 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { DEFAULT_CHANNEL_ENABLED, type NotificationPayload } from "@quiz/contracts";
+import {
+  DEFAULT_CHANNEL_ENABLED,
+  NOTIFICATION_KINDS,
+  notificationKindsFor,
+  type NotificationPayload,
+} from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
 import {
   classrooms,
   courses,
+  enrollments,
   NOTIFICATION_FOLD_TARGETS,
   notifications,
   pools,
@@ -433,6 +439,37 @@ describe("preferences", () => {
     expect(await service.unlinkTeams(db, { userId: dave })).toBe(dave);
     expect(await service.unlinkTeams(db, { userId: dave })).toBeNull();
     expect(await service.teamsLinkOf(db, { userId: dave })).toBeNull();
+  });
+
+  /*
+   * #277: the rows of the grid are the kinds the account can receive. The
+   * seat kinds go to claimed STUDENT seats whatever the global role, so a
+   * teacher sees them only while on a roster; a staff seat does not count.
+   */
+  it("lists the kinds the account can receive: a teacher's student kinds follow a student seat", async () => {
+    const frank = await seedUser("frank@heig.test");
+    const seat = async (staff: boolean) =>
+      db.insert(enrollments).values({
+        id: randomUUID(),
+        classroomId: (await seedClassroom(staff ? "Taught" : "Followed")).classroomId,
+        nom: "Frank",
+        prenom: "F",
+        email: "frank@heig.test",
+        userId: frank,
+        claimedAt: new Date(),
+        staff,
+      });
+    const kinds = async (userId: string) => (await service.notificationSettings(db, userId, true)).kinds;
+
+    expect(await kinds(frank)).toEqual(notificationKindsFor("teacher", false));
+    await seat(true);
+    expect(await kinds(frank)).toEqual(notificationKindsFor("teacher", false));
+    await seat(false);
+    expect(await kinds(frank)).toEqual([...NOTIFICATION_KINDS]);
+
+    const gina = await seedUser("gina@heig.test");
+    await db.update(users).set({ role: "student" }).where(eq(users.id, gina));
+    expect(await kinds(gina)).toEqual(notificationKindsFor("student", false));
   });
 });
 

@@ -47,15 +47,35 @@ describe("DEFAULT_CHANNEL_ENABLED — the defaults per kind (ADR-030, #198)", ()
   });
 });
 
-describe("notificationKindsFor", () => {
-  it("gives a student the student kinds, and a teacher everything", () => {
-    expect(notificationKindsFor("student")).toEqual([
-      "results_released",
-      "activity_scheduled",
-      "activity_available",
-      "deadline_approaching",
-      "results_updated",
-    ]);
-    expect(notificationKindsFor("teacher")).toEqual([...NOTIFICATION_KINDS]);
+describe("notificationKindsFor — the rows of the settings grid (#277)", () => {
+  const SEAT_KINDS = [
+    "results_released",
+    "activity_scheduled",
+    "activity_available",
+    "deadline_approaching",
+    "results_updated",
+  ];
+  const STAFF_KINDS = [
+    "student_joined",
+    "roster_conflict",
+    "grading_ready",
+    "pool_shared",
+    "pool_ownership",
+    "pool_question_added",
+  ];
+
+  it("gives a student the seat kinds, with or without a claimed seat", () => {
+    expect(notificationKindsFor("student", false)).toEqual(SEAT_KINDS);
+    expect(notificationKindsFor("student", true)).toEqual(SEAT_KINDS);
+  });
+
+  it("gives a teacher or an admin without a student seat the staff kinds only", () => {
+    expect(notificationKindsFor("teacher", false)).toEqual(STAFF_KINDS);
+    expect(notificationKindsFor("admin", false)).toEqual(STAFF_KINDS);
+  });
+
+  it("gives a teacher or an admin on a roster every kind, in the catalogue order", () => {
+    expect(notificationKindsFor("teacher", true)).toEqual([...NOTIFICATION_KINDS]);
+    expect(notificationKindsFor("admin", true)).toEqual([...NOTIFICATION_KINDS]);
   });
 });

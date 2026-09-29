@@ -25,6 +25,7 @@ import {
   DEFAULT_CHANNEL_ENABLED,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_KINDS,
+  notificationKindsFor,
   NotificationPayload,
   type Notification,
   type NotificationChannel,
@@ -37,6 +38,7 @@ import {
 
 import type { Db } from "../../db/client.js";
 import {
+  enrollments,
   foldKindLiteral,
   NOTIFICATION_FOLD_TARGETS,
   notificationPreferences,
@@ -363,21 +365,32 @@ export async function setPreference(
     });
 }
 
-/** `GET /notifications/settings`: the grid, the address, the Teams link. */
+/** `GET /notifications/settings`: the grid and its rows, the address, the Teams link. */
 export async function notificationSettings(
   db: Db,
   userId: string,
   teamsAvailable: boolean,
 ): Promise<NotificationSettings> {
-  const [matrix, link, [user]] = await Promise.all([
+  const [matrix, link, [user], [seat]] = await Promise.all([
     preferenceMatrix(db, userId),
     teamsLinkOf(db, { userId }),
-    db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1),
+    db
+      .select({ email: users.email, role: users.role })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1),
+    // A claimed student seat: what the seat kinds are sent to, whatever the role.
+    db
+      .select({ id: enrollments.id })
+      .from(enrollments)
+      .where(and(eq(enrollments.userId, userId), eq(enrollments.staff, false)))
+      .limit(1),
   ]);
   // A link made while Teams was configured means nothing once it is not.
   const shown = teamsAvailable ? link : null;
   return {
     matrix,
+    kinds: notificationKindsFor(user?.role ?? "student", seat !== undefined),
     email: user?.email ?? "",
     teams: {
       available: teamsAvailable,

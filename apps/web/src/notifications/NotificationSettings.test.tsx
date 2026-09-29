@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import type { NotificationSettings } from "@quiz/contracts";
+import { notificationKindsFor, type NotificationKind, type NotificationSettings } from "@quiz/contracts";
 
 import { SettingsPage } from "../SettingsPage";
 import { makeMe } from "../test/fixtures";
@@ -10,8 +10,13 @@ import { mockFetch, ok, renderWithProviders } from "../test/render";
 
 /*
  * Where each kind of notification goes (ADR-030): the grid of the kinds the
- * role receives, the address e-mails go to, and the Teams link.
+ * account receives (the server's `kinds`, #277), the address e-mails go to,
+ * and the Teams link.
  */
+
+const STUDENT = notificationKindsFor("student", false);
+const TEACHER = notificationKindsFor("teacher", false);
+const TEACHER_ON_A_ROSTER = notificationKindsFor("teacher", true);
 
 const ALL_ON = { bell: true, email: true, teams: true };
 const OFF = { available: false, linkedAt: null, teamsName: null, teamsUsername: null };
@@ -23,7 +28,10 @@ const LINKED = {
   teamsUsername: "lea.rochat@heig-vd.ch",
 };
 
-function settings(teams: NotificationSettings["teams"]): NotificationSettings {
+function settings(
+  teams: NotificationSettings["teams"],
+  kinds: NotificationKind[] = TEACHER,
+): NotificationSettings {
   return {
     matrix: {
       results_released: ALL_ON,
@@ -38,6 +46,7 @@ function settings(teams: NotificationSettings["teams"]): NotificationSettings {
       grading_ready: ALL_ON,
       pool_question_added: { bell: true, email: false, teams: false },
     },
+    kinds,
     email: "lea@heig.test",
     teams,
   };
@@ -47,7 +56,7 @@ const GET = "GET /app/api/notifications/settings";
 
 describe("the notification settings", () => {
   it("shows a student the kinds they receive, and no Teams column when Teams is off", async () => {
-    mockFetch({ [GET]: ok(settings(OFF)) });
+    mockFetch({ [GET]: ok(settings(OFF, STUDENT)) });
     renderWithProviders(<SettingsPage me={makeMe({ role: "student" })} />);
 
     const grid = await screen.findByRole("table", { name: "Notifications" });
@@ -73,7 +82,7 @@ describe("the notification settings", () => {
     renderWithProviders(<SettingsPage me={makeMe({ role: "teacher" })} />);
 
     const grid = await screen.findByRole("table", { name: "Notifications" });
-    expect(within(grid).getAllByRole("rowheader")).toHaveLength(11);
+    expect(within(grid).getAllByRole("rowheader")).toHaveLength(6);
     const shared = within(grid).getByRole("switch", { name: "Pool shared with you: Email" });
     expect(shared).toHaveAttribute("aria-checked", "false");
     await user.click(shared);
@@ -83,11 +92,32 @@ describe("the notification settings", () => {
     });
   });
 
+  /*
+   * #277: a kind sent to student seats only is a row for a teacher only while
+   * the account holds one (on a colleague's roster); otherwise it controls
+   * nothing (ADR-030 §f).
+   */
+  it("shows a teacher the student kinds only while they hold a student seat", async () => {
+    mockFetch({ [GET]: ok(settings(UNLINKED, TEACHER)) });
+    const first = renderWithProviders(<SettingsPage me={makeMe({ role: "teacher" })} />);
+    const grid = await screen.findByRole("table", { name: "Notifications" });
+    expect(within(grid).queryByText("Results released")).toBeNull();
+    expect(within(grid).queryByText("Deadline approaching")).toBeNull();
+    expect(within(grid).getByText("Grading to validate")).toBeVisible();
+    first.unmount();
+
+    mockFetch({ [GET]: ok(settings(UNLINKED, TEACHER_ON_A_ROSTER)) });
+    renderWithProviders(<SettingsPage me={makeMe({ role: "teacher" })} />);
+    const seated = await screen.findByRole("table", { name: "Notifications" });
+    expect(within(seated).getAllByRole("rowheader")).toHaveLength(11);
+    expect(within(seated).getByText("Results released")).toBeVisible();
+  });
+
   it("offers the Teams app and the steps until Teams is linked, its switches off meanwhile", async () => {
     mockFetch({ [GET]: ok(settings(UNLINKED)) });
     renderWithProviders(<SettingsPage me={makeMe({ role: "teacher" })} />);
     const grid = await screen.findByRole("table", { name: "Notifications" });
-    const teams = within(grid).getByRole("switch", { name: "Results released: Teams" });
+    const teams = within(grid).getByRole("switch", { name: "Pool shared with you: Teams" });
     expect(teams).toBeDisabled();
     expect(teams).toHaveAttribute("aria-checked", "false");
 
@@ -110,7 +140,7 @@ describe("the notification settings", () => {
     renderWithProviders(<SettingsPage me={makeMe({ role: "teacher" })} />);
 
     const grid = await screen.findByRole("table", { name: "Notifications" });
-    expect(within(grid).getByRole("switch", { name: "Results released: Teams" })).toBeEnabled();
+    expect(within(grid).getByRole("switch", { name: "Pool shared with you: Teams" })).toBeEnabled();
     expect(screen.getByText(/Linked to Léa Rochat \(HEIG-VD\) \(lea\.rochat@heig-vd\.ch\) since/)).toBeVisible();
     expect(screen.queryByRole("link", { name: "Download the Teams app" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Disconnect" }));

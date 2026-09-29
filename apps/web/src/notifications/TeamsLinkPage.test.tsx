@@ -36,6 +36,7 @@ const linked: NotificationSettings = {
     grading_ready: { bell: true, email: true, teams: true },
     pool_question_added: { bell: true, email: false, teams: false },
   },
+  kinds: ["results_released"],
   email: "marie.dupont@heig-vd.ch",
   teams: {
     available: true,

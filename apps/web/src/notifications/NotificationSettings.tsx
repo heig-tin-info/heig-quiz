@@ -3,8 +3,6 @@ import { BellRing } from "lucide-react";
 
 import {
   NOTIFICATION_CHANNELS,
-  notificationKindsFor,
-  type Me,
   type NotificationChannel,
   type NotificationKind,
   type NotificationPreferencePut,
@@ -170,7 +168,7 @@ function TeamsRow({ settings }: { settings: NotificationSettings }) {
   );
 }
 
-export function NotificationSettingsSection({ me }: { me: Me }) {
+export function NotificationSettingsSection() {
   const t = useT();
   const qc = useQueryClient();
   const settings = useQuery<NotificationSettings>({
@@ -224,7 +222,7 @@ export function NotificationSettingsSection({ me }: { me: Me }) {
           <Card>
             <ChannelGrid
               settings={settings.data}
-              kinds={notificationKindsFor(me.role)}
+              kinds={settings.data.kinds}
               onToggle={(pref) => toggle.mutate(pref)}
               pending={toggle.isPending}
             />

@@ -35,6 +35,7 @@ import type {
 } from "@quiz/qt-circuit/client";
 import {
   DEFAULT_CHANNEL_ENABLED,
+  notificationKindsFor,
   NotificationPreferencePut,
   type Notification,
   type NotificationSettings,
@@ -1935,6 +1936,8 @@ const notificationSettings: NotificationSettings = {
     ...structuredClone(DEFAULT_CHANNEL_ENABLED),
     pool_shared: { ...DEFAULT_CHANNEL_ENABLED.pool_shared, email: false },
   },
+  // The mock's teacher and admin hold no student seat: the staff kinds only.
+  kinds: notificationKindsFor(me?.role ?? "student", false),
   email: me?.email ?? "",
   teams: { available: true, linkedAt: null, teamsName: null, teamsUsername: null },
 };

@@ -206,18 +206,43 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   pool_question_added: { bell: true, email: false, teams: false },
 };
 
-/** What a student receives; a teacher or an admin receives every kind. */
-const STUDENT_KINDS: readonly NotificationKind[] = [
-  "results_released",
-  "activity_scheduled",
-  "activity_available",
-  "deadline_approaching",
-  "results_updated",
-];
+/**
+ * Who a kind is sent to. `seat`: the claimed STUDENT seats of a classroom
+ * (`enrollments.staff = false`), whatever the account's global role — a
+ * teacher or an admin on a colleague's roster holds one too. `staff`: staff
+ * seats, pool owners and sharees, which only a teacher or an admin reaches.
+ * A kind added to {@link NOTIFICATION_KINDS} without its row here is a
+ * compile error.
+ */
+export const NOTIFICATION_AUDIENCE: Readonly<Record<NotificationKind, "seat" | "staff">> = {
+  results_released: "seat",
+  activity_scheduled: "seat",
+  activity_available: "seat",
+  deadline_approaching: "seat",
+  results_updated: "seat",
+  student_joined: "staff",
+  roster_conflict: "staff",
+  grading_ready: "staff",
+  pool_shared: "staff",
+  pool_ownership: "staff",
+  pool_question_added: "staff",
+};
 
-/** The kinds a role receives, as the settings grid lists them. */
-export function notificationKindsFor(role: "student" | "teacher" | "admin"): NotificationKind[] {
-  return role === "student" ? [...STUDENT_KINDS] : [...NOTIFICATION_KINDS];
+/**
+ * The kinds an account can receive, as the settings grid lists them (ADR-030
+ * §f: a toggle for a kind that sends nothing is a lie). A student always sees
+ * the seat kinds, before the first seat is claimed too; a teacher or an admin
+ * sees the staff kinds, and the seat kinds only while holding a student seat.
+ */
+export function notificationKindsFor(
+  role: "student" | "teacher" | "admin",
+  holdsStudentSeat: boolean,
+): NotificationKind[] {
+  const seat = role === "student" || holdsStudentSeat;
+  const staff = role !== "student";
+  return NOTIFICATION_KINDS.filter((kind) =>
+    NOTIFICATION_AUDIENCE[kind] === "seat" ? seat : staff,
+  );
 }
 
 /** The resolved grid: every kind × every channel, defaults filled in. */
@@ -246,6 +271,8 @@ type TeamsLinkStatus = z.infer<typeof TeamsLinkStatus>;
 /** `GET /app/api/notifications/settings`. */
 export const NotificationSettings = z.object({
   matrix: NotificationMatrix,
+  /** The rows of the grid: the kinds this account can receive (`notificationKindsFor`). */
+  kinds: z.array(NotificationKind),
   /** The address e-mails go to: the account's own, nothing to configure. */
   email: z.string(),
   teams: TeamsLinkStatus,
