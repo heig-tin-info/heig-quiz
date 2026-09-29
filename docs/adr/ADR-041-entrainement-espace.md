@@ -2,9 +2,13 @@
 
 ## Status
 
-Accepted (2026-09-29). §1 to §8 record the decisions of the product owner
-in issue #317 (last comment). What this ADR adds on its own is listed apart,
-under "Proposed in this ADR, to be confirmed by the product owner". Slice 1
+Accepted (2026-09-29). §1 to §4, the opt-in of §6, and §7 to §8 record the
+decisions of the product owner in issue #317 (last comment). §5 (FSRS-5, default weights,
+target retention 0.9, `ts-fsrs`) and the session composition of §6 adopt the
+issue's own proposals (body, §2 and §3), which that comment did not decide;
+the implementation details of §5 are this ADR's. Everything else this ADR
+adds is listed apart, under "Proposed in this ADR, to be confirmed by the
+product owner". Slice 1
 of #317 implements the pure rules in `@quiz/domain`, with the `ts-fsrs`
 dependency. Amends F-DRILL-01 to F-DRILL-04 and adds F-DRILL-06
 (docs/spec/02); amends N-DATA-02, N-DATA-03 and N-DATA-07 (docs/spec/03),
