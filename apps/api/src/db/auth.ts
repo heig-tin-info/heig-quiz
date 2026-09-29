@@ -23,6 +23,12 @@ import { SESSION_KINDS } from "@quiz/contracts";
 
 import { evaluations } from "./evaluation.js";
 
+/**
+ * The stored roles that make an account staff: the ones that may reach a
+ * pool, hold a seat in it or hear of it (`poolAccess`, `pool/members.ts`).
+ */
+export const STAFF_ROLES = ["teacher", "admin"] as const;
+
 export const users = pgTable(
   "users",
   {

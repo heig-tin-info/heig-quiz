@@ -5,7 +5,7 @@ import type { PoolCandidates, PoolMember, PoolMembers, PoolRole } from "@quiz/co
 import { displayName } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { poolMembers, pools, userEmails, users } from "../../db/schema.js";
+import { STAFF_ROLES, poolMembers, pools, userEmails, users } from "../../db/schema.js";
 import { audit } from "../../audit.js";
 import { notify, notifyMany } from "../notifications/service.js";
 import { accessRevoked, userTopic } from "../realtime/bus.js";
@@ -14,10 +14,13 @@ import { type PoolRow, qualified } from "./shared.js";
 
 /**
  * The accounts that may hold a pool seat, and so hear of a pool: the stored
- * role, as `decideRole` (`roles.ts`) computed it, is a teacher or an admin. A
- * member demoted to student keeps the row, never the rights nor the news.
+ * role, as `decideRole` (`roles.ts`) computed it, is staff. A deliberate
+ * demotion deletes the seats (`vacateSeats`), but a LOGIN that stores
+ * `student` keeps them (ADR-013, rule 5), and a demoted owner nobody could
+ * inherit from keeps `pools.owner_id`: such an account holds a claim, never
+ * the rights nor the news.
  */
-const isStaff = inArray(users.role, ["teacher", "admin"]);
+const isStaff = inArray(users.role, [...STAFF_ROLES]);
 
 /**
  * The people of a pool: the `pools.owner_id` account FIRST, then the members
@@ -282,6 +285,29 @@ export async function tellPoolOfPublication(db: Db, poolId: string, authorId: st
     // The service layer has no logger (as `realtime/bus.ts`): stderr, which
     // the process log collects.
     console.error(`pool: telling the colleagues of a publication in ${poolId} failed`, err);
+  }
+}
+
+/**
+ * A member demoted to student loses every seat they held (ADR-013, rule 5),
+ * for good: a later promotion gives nothing back, a colleague has to invite
+ * them again. Called by `storeRole` after `transferOnLoss`, from the same
+ * deliberate actions and never from a login. One statement, so all the seats
+ * go or none, and idempotent; the audiences of the pools concerned are told
+ * their people changed. The caller closes the account's own streams.
+ */
+export async function vacateSeats(db: Db, userId: string): Promise<void> {
+  const removed = await db
+    .delete(poolMembers)
+    .where(eq(poolMembers.userId, userId))
+    .returning({ poolId: poolMembers.poolId });
+  if (removed.length === 0) return;
+  const touched = await db
+    .select({ id: pools.id, ownerId: pools.ownerId })
+    .from(pools)
+    .where(inArray(pools.id, removed.map((r) => r.poolId)));
+  for (const pool of touched) {
+    poolPeopleChanged((await poolAudience(db, pool)).map(userTopic));
   }
 }
 
