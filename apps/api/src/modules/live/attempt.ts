@@ -710,7 +710,11 @@ export async function gradeFinishedRetakes(
 ): Promise<void> {
   if (attemptIds.length === 0 || !retakesEnabled(evaluation)) return;
   if (evaluation.state !== "running" && evaluation.state !== "paused") return;
-  await enqueueEvaluationGrading(app, { evaluationId: evaluation.id, attemptIds: [...attemptIds] });
+  await enqueueEvaluationGrading(app, {
+    evaluationId: evaluation.id,
+    attemptIds: [...attemptIds],
+    retake: true,
+  });
 }
 
 /** `not_started → in_progress`, with the deadline computed once (§5.2). */

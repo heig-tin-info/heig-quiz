@@ -36,7 +36,8 @@ re-render every page (links depend on neighbours) → upsert and delete pages
 → download changed referenced assets, drop unreferenced → set
 `last_commit_sha`, `sync_status=ok` → SSE hint `journal` to every attached
 classroom. Triggers: the push webhook (`journal.ingest`, singleton per
-journal, skipped when `after == last_commit_sha`), a synchronous re-ingest
+journal in heig-classroom — see the note under J2 —, skipped when
+`after == last_commit_sha`), a synchronous re-ingest
 after each browser write, the staff Refresh button, the `repository`
 webhook (renamed ⇒ follow; deleted ⇒ `sync_status=error`, pages kept).
 
@@ -117,6 +118,14 @@ Plumbing: `/webhooks/github` dispatch, queue `journal.ingest`, SSE family
 | J5 | Warnings are server-built English sentences | codes + parameters |
 | J6 | `.md-body` collides with Quiz's question prose styles | `.md-body.md-doc` modifier (long-form: h1 28 px, 72-ch measure, 1.75 leading) |
 | J7 | Quiz dev runs on PGlite without webhooks nor pg-boss | Refresh is the dev path; the mock serves rendered HTML fixtures |
+
+Note on J2 (quiz #273): in pg-boss 12 a `singletonKey` without
+`singletonSeconds` dedupes nothing on a `standard` queue, which is what a
+queue created with no policy is, and a policy cannot be changed after
+creation. Quiz's `SendOptions` (`apps/api/src/jobs.ts`) no longer offers
+`singletonKey`. A port that needs a dedupe must choose a queue policy
+(`singleton`, `stately`, …) in `createQueue`, and add it to the in-process
+queue too, so that development and production behave alike.
 
 ## 4.4 Open points (in `08-decisions.md`)
 

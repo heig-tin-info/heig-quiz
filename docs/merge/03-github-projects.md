@@ -101,7 +101,9 @@ layers:
 
 ### Deadline (`C:deadline.ts`, `github/lock.ts`, `github/commit.ts`, `C:ticker.ts`)
 - Every 20 s: published assignments due and not applied ⇒ `deadline.apply`
-  (singleton, retry 5).
+  (singleton, retry 5 — in heig-classroom; the port must pick a queue
+  policy at creation, since a `singletonKey` dedupes nothing on a
+  `standard` queue: see the note under J2 in `04-journal.md`, quiz #273).
 - Handler: re-reads the condition (a rescheduled deadline is honoured);
   atomic claim (`deadline_applied_at`, `state=locked`, teacher e-mail once);
   provisional freeze (`frozen_grade_run_id = selectGradeRun`); per live repo:

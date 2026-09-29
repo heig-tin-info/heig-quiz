@@ -109,6 +109,14 @@ interface EvaluationGradingJob {
    * exercise with retakes may have been graded, alone, while it ran.
    */
   announce?: boolean;
+  /**
+   * A retake graded alone while the evaluation runs (ADR-025): it never
+   * announces, even when it only runs after the close — the close's own pass,
+   * queued behind it, does. Without this, the retake pass would see a closed
+   * evaluation and a grid it just completed, and tell the staff once before
+   * the close's pass told them again.
+   */
+  retake?: boolean;
 }
 
 interface RunnerGradingJob {
@@ -136,13 +144,18 @@ interface RunnerGradingJob {
  * needs the dedupe either:
  *
  *   - a pass is idempotent: a validated cell is skipped, a proposal is
- *     rewritten identical, and `announce` tells only a complete grid;
+ *     superseded by an identical new row (only its `gradedAt` differs), and
+ *     `grading_ready` goes out only for a complete grid;
  *   - passes do not overlap: pg-boss takes the jobs of a queue one at a time
- *     per process (`localConcurrency` 1), and so does the in-process queue;
+ *     per process (`localConcurrency` 1), in order of creation, and so does
+ *     the in-process queue — so a retake pass sent while the evaluation ran
+ *     always runs before the close's pass;
  *   - were two processes ever to work the queue (`WORKER_MODE` split), two
- *     passes racing on one cell either rewrite the same automatic grade or
- *     collide on `gradings_pair_validated_uq`; the loser throws, and its
- *     retry (`retryLimit: 1`) skips what the winner validated.
+ *     passes racing on one cell end in one of two ways. The loser's write
+ *     starts after the winner's commit: it silently supersedes the winner's
+ *     grading with its own, identical, automatic one. Or the two overlap:
+ *     they collide on `gradings_pair_validated_uq`, the loser throws, and
+ *     its retry (`retryLimit: 1`) skips what the winner validated.
  *
  * The cost is a redundant pass when a button is pressed twice: bounded, and
  * cheap next to losing one.
@@ -383,10 +396,11 @@ export async function runEvaluationGrading(
   // With runner jobs out for empty cells, the grading is not finished: the
   // job that fills the last one says so. Otherwise the pass does, if it
   // filled a cell that had no grading at all (a run with nothing new tells
-  // nobody), or if it is the pass of the close.
+  // nobody), or if it is the pass of the close — never a retake's own pass,
+  // whose close pass comes after it (`retake`).
   const empty = (cell: { attemptId: string; itemId: string }) =>
     !pass.standing.has(pairKey(cell.attemptId, cell.itemId));
-  if (!runnerJobs.some(empty) && (writes.some(empty) || job.announce)) {
+  if (!job.retake && !runnerJobs.some(empty) && (writes.some(empty) || job.announce)) {
     await announceGradingReady(app, evaluation);
   }
 }

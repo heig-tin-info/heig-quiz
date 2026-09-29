@@ -179,7 +179,7 @@ export const GradingRunBody = z.object({
 export type GradingRunBody = z.infer<typeof GradingRunBody>;
 
 /**
- * The queue is a singleton per evaluation, and neither pg-boss nor the
+ * Each request is its own job (#273), and neither pg-boss nor the
  * in-process development runner hands back a usable job id, so the
  * acknowledgement names the work instead of a ticket (deviation W6-4).
  */
