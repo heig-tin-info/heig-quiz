@@ -54,7 +54,11 @@ convenience only). Every push to `main` deploys that sha to staging, then
 waits for `/healthz` to answer 200. The `deploy-production` job deploys the
 SAME sha — the same image — once a required reviewer approves the
 `production` GitHub environment. Only the most recent pending promotion
-waits; an older one is cancelled by the concurrency group.
+waits: the `prod-deploy` group cancels in progress, because a job waiting
+for approval already holds the group, and an unapproved promotion would
+otherwise block every later one with no Review button (2026-09-29). A push
+landing during a running production deploy therefore cancels it, and the
+newer promotion deploys instead.
 
 `deploy.sh` receives `<sha> <token>` over the forced-command SSH key, moves
 its checkout to that commit, detached, and starts the image tagged with it.

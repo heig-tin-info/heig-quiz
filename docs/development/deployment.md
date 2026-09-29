@@ -231,7 +231,10 @@ runner's own image, never the sandbox ones.
    then deploys the SAME sha with the `DEPLOY_SSH_KEY` key (a secret of the
    `production` environment), one SSH call per VM.
 
-Each deploy job has its own concurrency group, and each key is an
+Each deploy job has its own concurrency group. Production's cancels in
+progress: the newest promotion replaces an older one still waiting for
+approval, which would otherwise hold the group and leave the newer one
+"pending" with no *Review deployments* button. Each key is an
 ENVIRONMENT secret, not a repository one: a job only ever sees the key of
 its own environment. The workflow's default token is read-only, and `main`
 is protected by a ruleset (a pull request and the `checks` job required). Without its key a job prints
