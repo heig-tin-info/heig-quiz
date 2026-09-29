@@ -94,7 +94,7 @@ import {
   type KindLabels,
 } from "@quiz/qt-circuit/client";
 
-import { api } from "./api";
+import { ApiError, api } from "./api";
 import { HelpIcon } from "./help";
 import type { Dict, TFunction } from "./i18n";
 import { ClozeMarkdownText } from "./markdown/ClozeMarkdownText";
@@ -328,8 +328,20 @@ export type TryOutcome =
 export interface TryContext {
   /** The question whose DRAFT `POST /questions/:id/try` grades. */
   id: string;
-  /** Saves the local draft now: the try route grades what the server HOLDS. */
-  flush: () => void;
+  /**
+   * Saves the local draft now: the try route grades what the server HOLDS.
+   * `false` when the save failed, and then the server holds an older draft.
+   */
+  flush: () => Promise<boolean>;
+}
+
+/**
+ * The draft goes first, and the request waits for it: a `POST /try` that
+ * overtakes its `PUT /draft` grades the draft of a moment ago — the one
+ * without the component just drawn, or without the reference at all.
+ */
+async function saved(flush: TryContext["flush"]): Promise<void> {
+  if (!(await flush())) throw new Error("the draft could not be saved");
 }
 
 type TryAdapter = (config: unknown) => Promise<TryOutcome>;
@@ -361,8 +373,7 @@ function tryReference({ id, flush }: TryContext): TryAdapter {
     const regions = referenceRegions(config);
     if (regions === null) throw new Error("reference solution does not fit the template");
 
-    // The route grades what the server HOLDS, so the draft goes first.
-    flush();
+    await saved(flush);
     const result = await api<TryResult>(`/app/api/questions/${id}/try`, {
       method: "POST",
       body: JSON.stringify({ source: "draft", answer: { regions } }),
@@ -423,16 +434,28 @@ export async function tryReferenceInBrowser(
 function trySimulateReference({ id, flush }: TryContext): TryAdapter {
   return async (raw) => {
     const config = raw as CircuitConfig;
-    // The route grades what the server HOLDS, so the draft goes first.
-    flush();
-    const result = await api<TryResult>(`/app/api/questions/${id}/try`, {
-      method: "POST",
-      body: JSON.stringify({ source: "draft", answer: { schematic: config.reference } }),
-    });
+    await saved(flush);
+    let result: TryResult;
+    try {
+      result = await api<TryResult>(`/app/api/questions/${id}/try`, {
+        method: "POST",
+        body: JSON.stringify({ source: "draft", answer: { schematic: config.reference } }),
+      });
+    } catch (error) {
+      // The stored draft does not validate: the issues are on the page, and
+      // the teacher must read this as their draft, not as the simulator.
+      if (isConfigInvalid(error)) return "invalid";
+      throw error;
+    }
     if (result.status !== "graded") return "unavailable";
     return { details: result.details as CircuitDetails };
   };
 }
+
+const isConfigInvalid = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  error.status === 422 &&
+  (error.body as { error?: unknown } | null)?.error === "config_invalid";
 
 /**
  * "Try the reference solution" (`CodeImageEditor`): the same two runners as
@@ -461,7 +484,7 @@ function tryDrawReference({ id, flush }: TryContext): TryAdapter {
       }
     }
 
-    flush();
+    await saved(flush);
     const result = await api<TryResult>(`/app/api/questions/${id}/try`, {
       method: "POST",
       body: JSON.stringify({ source: "draft", answer: { regions } }),

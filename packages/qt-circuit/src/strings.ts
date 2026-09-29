@@ -127,6 +127,7 @@ export interface CircuitEditorStrings {
   tryFailed: string;
   tryNeedsReference: string;
   tryNeedsStimulus: string;
+  tryInvalidDraft: string;
   tryDone: string;
   "tryDone.one": string;
 
@@ -238,6 +239,7 @@ export const EDITOR_STRINGS: CircuitEditorStrings = {
   tryFailed: "The reference circuit could not be simulated. Check its wiring and its values.",
   tryNeedsReference: "Draw the reference circuit first.",
   tryNeedsStimulus: "Add a stimulus first: there is nothing to simulate the circuit with.",
+  tryInvalidDraft: "The question has errors, flagged on this page. Fix them, then simulate.",
   tryDone: "{n} stimuli simulated.",
   "tryDone.one": "1 stimulus simulated.",
 

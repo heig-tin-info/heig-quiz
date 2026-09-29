@@ -1579,6 +1579,8 @@ export const fr: Record<keyof Dict, string> = {
   "qt.circuit.e.tryNeedsReference": "Dessinez d'abord le circuit de référence.",
   "qt.circuit.e.tryNeedsStimulus":
     "Ajoutez d'abord un stimulus : il n'y a rien avec quoi simuler le circuit.",
+  "qt.circuit.e.tryInvalidDraft":
+    "La question contient des erreurs, signalées sur cette page. Corrigez-les, puis simulez.",
   "qt.circuit.e.tryDone": "{n} stimuli simulés.",
   "qt.circuit.e.tryDone.one": "1 stimulus simulé.",
   "qt.circuit.e.grading": "Correction",
