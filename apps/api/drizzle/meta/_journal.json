@@ -253,6 +253,13 @@
       "when": 1790707503179,
       "tag": "0035_question_stars",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790716274466,
+      "tag": "0036_drill",
+      "breakpoints": true
     }
   ]
 }

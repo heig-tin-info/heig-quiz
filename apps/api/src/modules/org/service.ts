@@ -322,6 +322,65 @@ export async function deleteClassroom(db: Db, classroomId: string): Promise<void
   await db.delete(classrooms).where(eq(classrooms.id, classroomId));
 }
 
+// --- The drill switches (ADR-041 §6) -------------------------------------------
+//
+// The two columns belong to this module's tables; the `drill` module reaches
+// them through these writers only (CLAUDE.md, Conventions).
+
+/**
+ * The teacher's switch: the drill on (`drill_enabled_at`, kept at its first
+ * instant when switched on again) or off. Returns the stored instant.
+ */
+export async function setClassroomDrill(
+  db: Db,
+  classroomId: string,
+  enabled: boolean,
+  now: Date,
+): Promise<Date | null> {
+  const [row] = await db
+    .update(classrooms)
+    .set({
+      drillEnabledAt: enabled
+        ? sql`coalesce(${classrooms.drillEnabledAt}, ${now.toISOString()}::timestamptz)`
+        : null,
+      updatedAt: now,
+    })
+    .where(eq(classrooms.id, classroomId))
+    .returning({ drillEnabledAt: classrooms.drillEnabledAt });
+  return row?.drillEnabledAt ?? null;
+}
+
+/**
+ * A student's opt-out of one classroom's drill, on their own claimed student
+ * seat. Opting out keeps the first instant (what the teacher's view hides
+ * from); opting back in clears it. `undefined` when the user holds no such
+ * seat.
+ */
+export async function setDrillOptOut(
+  db: Db,
+  classroomId: string,
+  userId: string,
+  optedOut: boolean,
+  now: Date,
+): Promise<{ optedOutAt: Date | null } | undefined> {
+  const [row] = await db
+    .update(enrollments)
+    .set({
+      drillOptedOutAt: optedOut
+        ? sql`coalesce(${enrollments.drillOptedOutAt}, ${now.toISOString()}::timestamptz)`
+        : null,
+    })
+    .where(
+      and(
+        eq(enrollments.classroomId, classroomId),
+        eq(enrollments.userId, userId),
+        eq(enrollments.staff, false),
+      ),
+    )
+    .returning({ optedOutAt: enrollments.drillOptedOutAt });
+  return row;
+}
+
 // --- Roster entries -----------------------------------------------------------
 
 /**

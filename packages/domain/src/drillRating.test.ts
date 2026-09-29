@@ -5,6 +5,7 @@ import {
   drillCorrectness,
   drillRating,
   drillReferenceMs,
+  drillReferenceOf,
   type DrillCorrectness,
 } from "./drillRating.js";
 
@@ -40,6 +41,14 @@ describe("drillReferenceMs", () => {
   it("then to the type's estimate, then to none", () => {
     expect(drillReferenceMs({ correctTimesMs: [], previousOwnMs: null, typeDefaultMs: 30_000 })).toBe(30_000);
     expect(drillReferenceMs({ correctTimesMs: [], previousOwnMs: null, typeDefaultMs: null })).toBeNull();
+  });
+});
+
+describe("drillReferenceOf", () => {
+  it("applies the same rule to the aggregates", () => {
+    expect(drillReferenceOf({ correctCount: 10, correctMedianMs: 5500, previousOwnMs: 1, typeDefaultMs: 2 })).toBe(5500);
+    expect(drillReferenceOf({ correctCount: 9, correctMedianMs: 5000, previousOwnMs: 42, typeDefaultMs: 2 })).toBe(42);
+    expect(drillReferenceOf({ correctCount: 10, correctMedianMs: null, previousOwnMs: null, typeDefaultMs: 7 })).toBe(7);
   });
 });
 

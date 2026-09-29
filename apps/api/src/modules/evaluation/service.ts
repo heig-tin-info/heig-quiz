@@ -62,6 +62,7 @@ export {
   gradeDefaults,
   negativeMarkingEnabled,
   sebRequired,
+  drillAllowed,
   attemptCount,
   joinedItems,
   joinedItem,
@@ -96,6 +97,8 @@ export {
   claimGradingReady,
   clearGradingReady,
   retargetItemVersion,
+  setAllowDrill,
+  AllowDrillLocked,
 } from "./writes.js";
 export {
   coursePoolIds,

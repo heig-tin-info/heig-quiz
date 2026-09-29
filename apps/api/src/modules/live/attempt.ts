@@ -541,8 +541,11 @@ export async function attemptOf(
   return row ?? null;
 }
 
-/** A 32-bit seed, drawn once per attempt and never stored per permutation (D19). */
-function drawSeed(): number {
+/**
+ * A 32-bit seed, drawn once per attempt and never stored per permutation
+ * (D19) — and once per drill review (ADR-041 §10, (i)).
+ */
+export function drawSeed(): number {
   return Math.floor(Math.random() * 0x7fffffff);
 }
 

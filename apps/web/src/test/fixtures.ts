@@ -107,6 +107,7 @@ export function makeClassroomDetail(overrides: Partial<ClassroomDetail> = {}): C
     periodStart: null,
     periodEnd: null,
     archivedAt: null,
+    drillEnabled: false,
     course: { id: "c1", name: "Programmation C", code: "PRG1" },
     roster: [makeRosterEntry()],
     ...overrides,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   configLock,
+  drillAllowedOn,
   isConfigEditable,
   isConfigFieldWritable,
   negativeMarkingAllowedFor,
@@ -98,5 +99,22 @@ describe("negative marking (ADR-026)", () => {
     // `settings` is structural: locked by the run and by the first attempt.
     expect(isConfigFieldWritable("running", "settings")).toBe(false);
     expect(isConfigFieldWritable("attempts", "settings")).toBe(false);
+  });
+});
+
+describe("drillAllowedOn (ADR-041 §2)", () => {
+  it("defaults to on for an exercise and off for an exam", () => {
+    expect(drillAllowedOn("exercise", undefined)).toBe(true);
+    expect(drillAllowedOn("exam", undefined)).toBe(false);
+  });
+
+  it("follows the teacher's choice either way", () => {
+    expect(drillAllowedOn("exam", true)).toBe(true);
+    expect(drillAllowedOn("exercise", false)).toBe(false);
+  });
+
+  it("never allows a poll, whatever its row says", () => {
+    expect(drillAllowedOn("poll", true)).toBe(false);
+    expect(drillAllowedOn("poll", undefined)).toBe(false);
   });
 });

@@ -16,3 +16,4 @@ export * from "./oauth.js";
 export * from "./preview.js";
 export * from "./admin.js";
 export * from "./stats.js";
+export * from "./drill.js";

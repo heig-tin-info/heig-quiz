@@ -11,6 +11,43 @@ export const DRILL_SESSION_BUDGET_MS = 600_000;
 export const DRILL_NEW_PER_DAY = 10;
 /** The time counted for a card with no reference time at all. */
 export const DRILL_UNKNOWN_REFERENCE_MS = 60_000;
+/** Where a drill "day" is counted: the school's clock, not the server's UTC. */
+export const DRILL_TIME_ZONE = "Europe/Zurich";
+
+/**
+ * The calendar day of `now` in `timeZone`, as two instants: its first
+ * millisecond and the first of the next day. What "due today" and "new
+ * cards per day" are measured against — a card due at 14:00 belongs to the
+ * morning's session, and the cap resets at midnight, not 24 hours after the
+ * last session.
+ */
+export function drillDayBounds(now: Date, timeZone: string = DRILL_TIME_ZONE): { start: Date; end: Date } {
+  const offset = (at: Date): number => {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hourCycle: "h23",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+        .formatToParts(at)
+        .map((p) => [p.type, p.value]),
+    );
+    const local = Date.UTC(+parts.year!, +parts.month! - 1, +parts.day!, +parts.hour!, +parts.minute!, +parts.second!);
+    return local - Math.floor(at.getTime() / 1000) * 1000;
+  };
+  const localNow = now.getTime() + offset(now);
+  const localMidnight = localNow - (((localNow % 86_400_000) + 86_400_000) % 86_400_000);
+  // Each bound takes the offset in force at that instant (a DST change may lie between).
+  const start = localMidnight - offset(new Date(localMidnight - offset(now)));
+  const nextMidnight = localMidnight + 86_400_000;
+  const end = nextMidnight - offset(new Date(nextMidnight - offset(now)));
+  return { start: new Date(start), end: new Date(end) };
+}
 
 export interface DrillCandidate {
   id: string;
