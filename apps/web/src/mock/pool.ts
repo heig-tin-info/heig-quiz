@@ -2378,6 +2378,41 @@ on("POST", "/app/api/questions/:id/versions/:number/deprecate", (m, body) => {
   version.deprecationNote = String(body.note ?? "");
   return versionRow(version);
 });
+/**
+ * The item analysis of ADR-038, as the server shapes it: only the questions
+ * with ten answers or more appear. The first three questions of `p1` carry
+ * a high, a NEGATIVE and a middling rate; the first of `p3` — the pool this
+ * browser only reads — one more, so the reader's panel (no reset) is on
+ * screen too. Every other question is below the threshold.
+ */
+const questionStats = new Map<string, { n: number; p: number; since: string | null }>([
+  ...liveQuestions("p1")
+    .slice(0, 3)
+    .map((q, i) => [q.id, [
+      { n: 24, p: 0.73, since: null },
+      { n: 12, p: -0.08, since: null },
+      { n: 31, p: 0.41, since: iso(-40 * D) },
+    ][i]!] as const),
+  ...liveQuestions("p3")
+    .slice(0, 1)
+    .map((q) => [q.id, { n: 18, p: 0.56, since: null }] as const),
+]);
+
+on("GET", "/app/api/pools/:id/question-stats", (m) => {
+  const pool = poolOr404(m.groups!.id!);
+  return {
+    items: liveQuestions(pool.id).flatMap((q) => {
+      const stats = questionStats.get(q.id);
+      return stats ? [{ questionId: q.id, ...stats }] : [];
+    }),
+  };
+});
+on("POST", "/app/api/questions/:id/stats/reset", (m) => {
+  const q = questionOr404(m.groups!.id!);
+  if (poolSummary(poolOr404(q.poolId)).role === "reader") throw new MockError(403, "Read-only access");
+  questionStats.delete(q.id);
+  return { since: iso(0) };
+});
 on("DELETE", "/app/api/questions/:id", (m) => {
   const q = questionOr404(m.groups!.id!);
   q.deletedAt = iso(0);

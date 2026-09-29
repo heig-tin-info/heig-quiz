@@ -89,6 +89,15 @@ export function retakesEnabled(row: EvaluationRecord): boolean {
  */
 export const isLatestAttempt = sql`not exists (select 1 from ${attempts} as later where later.evaluation_id = ${attempts.evaluationId} and later.user_id = ${attempts.userId} and later.attempt_number > ${attempts.attemptNumber})`;
 
+/**
+ * The row `attempts` belongs to a STAFF seat of the classroom of the row
+ * `evaluations` (ADR-018): THE definition, read by {@link staffAttemptIds}
+ * and by the queries that span several evaluations (the item analysis,
+ * ADR-038). A guest (`user_id` null) and a classroom-less evaluation never
+ * match. Only in a SELECT that joins both tables by name.
+ */
+export const isStaffAttempt = sql`exists (select 1 from ${enrollments} where ${enrollments.classroomId} = ${evaluations.classroomId} and ${enrollments.userId} = ${attempts.userId} and ${enrollments.staff})`;
+
 export function feedbackOf(row: EvaluationRecord): FeedbackPolicy {
   return FeedbackPolicy.parse(row.feedbackPolicy);
 }
@@ -373,15 +382,8 @@ export async function staffAttemptIds(
   const rows = await db
     .select({ id: attempts.id })
     .from(attempts)
-    .innerJoin(
-      enrollments,
-      and(
-        seatsOf(evaluation),
-        eq(enrollments.userId, attempts.userId),
-        eq(enrollments.staff, true),
-      ),
-    )
-    .where(eq(attempts.evaluationId, evaluation.id));
+    .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
+    .where(and(eq(attempts.evaluationId, evaluation.id), isStaffAttempt));
   return new Set(rows.map((r) => r.id));
 }
 

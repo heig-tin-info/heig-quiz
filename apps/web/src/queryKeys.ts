@@ -92,6 +92,12 @@ export function poolCandidatesKey(poolId: string, q?: string) {
     : (["pool-candidates", poolId, q] as const);
 }
 
+/**
+ * `GET /pools/:id/question-stats` (ADR-038): under the pool, so a pool hint
+ * — a reset included — refreshes it with the list it decorates.
+ */
+export const poolQuestionStatsKey = (poolId: string) => ["pool", poolId, "question-stats"] as const;
+
 export const questionKey = (id: string) => ["question", id] as const;
 /** `POST /questions/:id/preview` of the draft or of one published version. */
 export const questionPreviewKey = (id: string, source: "draft" | number | undefined) =>

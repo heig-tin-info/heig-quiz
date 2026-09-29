@@ -325,6 +325,44 @@ describe("PoolView", () => {
     expect(screen.getAllByRole("button", { name: /New question/ }).length).toBeGreaterThan(0);
   });
 
+  it("draws the statistics icon only for the questions that have statistics", async () => {
+    const user = userEvent.setup();
+    mockFetch(
+      routes({
+        "GET /app/api/pools/p1/question-stats": ok({ items: [{ questionId: "q1", n: 24, p: 0.73, since: null }] }),
+      }),
+    );
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    const open = await screen.findByRole("button", { name: "Statistics of ptr-arith-01" });
+    expect(screen.queryByRole("button", { name: "Statistics of ptr-null-check" })).not.toBeInTheDocument();
+    await user.click(open);
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByText("73%")).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: /Reset statistics/ })).toBeInTheDocument();
+  });
+
+  it("shows the statistics on a read-only pool too, without the reset", async () => {
+    const user = userEvent.setup();
+    mockFetch(
+      routes({
+        "GET /app/api/pools/p1": ok({ ...POOL, role: "reader" }),
+        "GET /app/api/pools/p1/question-stats": ok({ items: [{ questionId: "q2", n: 10, p: 0.5, since: null }] }),
+      }),
+    );
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await user.click(await screen.findByRole("button", { name: "Statistics of ptr-null-check" }));
+    const sheet = await screen.findByRole("dialog");
+    expect(await within(sheet).findByText("50%")).toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: /Reset statistics/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps the list when the statistics fail, without any icon", async () => {
+    mockFetch(routes({ "GET /app/api/pools/p1/question-stats": fail(500) }));
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    expect(screen.queryByRole("button", { name: /^Statistics of/ })).not.toBeInTheDocument();
+  });
+
   it("reports a failed listing with a retry", async () => {
     mockFetch({ "GET /app/api/pools/p1": ok(POOL) });
     renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);

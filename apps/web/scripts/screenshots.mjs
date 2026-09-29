@@ -520,6 +520,16 @@ const scenes = [
   // is worth a scene here is the row's own three actions, and the confirm
   // dialog the last one goes through.
   { name: "pool-row-delete", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /^(Delete|Supprimer) ptr-arith-01$/ }).first().click() },
+  // A question's statistics (ADR-038): the panel with its reset, the reset's
+  // confirmation, and a pool this browser only reads (no reset).
+  { name: "pool-stats", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /^(Statistics of|Statistiques de) / }).first().click() },
+  { name: "pool-stats-reset", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^(Statistics of|Statistiques de) / }).first().click();
+      await p.getByRole("button", { name: /^(Reset statistics|Réinitialiser les statistiques)$/ }).click();
+    } },
+  { name: "pool-stats-reader", role: "teacher", path: "/pools/p3", fold: true, act: (p) => p.getByRole("button", { name: /^(Statistics of|Statistiques de) / }).first().click() },
+  // The cards, and the question the mock gives a NEGATIVE rate (ADR-026).
+  { name: "pool-stats-negative", role: "teacher", path: "/pools/p1", ls: { "quiz-pool-view": "cards" }, fold: true, act: (p) => p.getByRole("button", { name: /^(Statistics of|Statistiques de) / }).nth(1).click() },
   { name: "pool-bulk", role: "teacher", path: "/pools/p1", act: async (p) => {
       await p.getByLabel(/ptr-arith-01/).first().check();
       await p.getByLabel(/ptr-null-check/).first().check();

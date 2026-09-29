@@ -82,6 +82,7 @@ export type AuditAction =
   | "question.move"
   | "question.publish"
   | "question.restore_version"
+  | "question.stats_reset"
   | "question.update"
   | "results.release"
   | "results.rerelease"

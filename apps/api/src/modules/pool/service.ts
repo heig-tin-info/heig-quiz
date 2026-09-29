@@ -82,6 +82,7 @@ export {
   listVersions,
   restoreVersion,
   deprecateVersion,
+  resetQuestionStats,
   softDeleteQuestion,
   hardDeleteQuestion,
   copyQuestion,

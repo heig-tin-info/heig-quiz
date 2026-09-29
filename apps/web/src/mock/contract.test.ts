@@ -54,6 +54,7 @@ import {
   PoolCategories,
   PoolDetail,
   PoolMembers,
+  PoolQuestionStats,
   PoolSummary,
   PoolTag,
   QuestionDetail,
@@ -213,6 +214,7 @@ const CHECKED: Case[] = [
     one("/app/api/pools/:id/candidates", `/app/api/pools/${p.id}/candidates?q=a`, PoolCandidates),
     one("/app/api/pools/:id/questions", `/app/api/pools/${p.id}/questions`, QuestionPage),
     each("/app/api/pools/:id/tags", `/app/api/pools/${p.id}/tags`, PoolTag),
+    one("/app/api/pools/:id/question-stats", `/app/api/pools/${p.id}/question-stats`, PoolQuestionStats),
   ]),
   // Every question: the payload of a `circuit` is not the payload of an
   // `mcq`, and only the type that drifted would fail.

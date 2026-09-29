@@ -656,6 +656,22 @@ export const fr: Record<keyof Dict, string> = {
   "pool.editRow": "Modifier {name}",
   "pool.duplicateRow": "Dupliquer {name}",
   "pool.deleteRow": "Supprimer {name}",
+  "pool.stats.open": "Statistiques de {name}",
+  "pool.stats.title": "Statistiques",
+  "pool.stats.successRate": "Taux de réussite",
+  "pool.stats.answers": "Réponses comptées",
+  "pool.stats.scope":
+    "Tentatives retenues des examens et exercices, toutes versions de la question, sans les essais des enseignants. Une réponse vide ou absente compte 0.",
+  "pool.stats.negative": "Sous zéro : les points négatifs ont retiré plus qu'ils n'ont donné.",
+  "pool.stats.since": "Depuis le {date}",
+  "pool.stats.sinceAlways": "Depuis la première utilisation",
+  "pool.stats.reset": "Réinitialiser les statistiques",
+  "pool.stats.resetTitle": "Réinitialiser les statistiques de {name} ?",
+  "pool.stats.resetBody":
+    "Seules les réponses des tentatives commencées après maintenant compteront. Rien n'est supprimé : notes et résultats restent inchangés.",
+  "pool.stats.resetConfirm": "Réinitialiser",
+  "pool.stats.resetDone": "Statistiques réinitialisées.",
+  "pool.stats.resetFailed": "La réinitialisation a échoué.",
   "pool.empty.title": "Aucune question",
   "pool.empty.body":
     "Écrivez la première question de cette banque ; son type se choisit à la création.",

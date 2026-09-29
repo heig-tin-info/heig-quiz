@@ -38,6 +38,7 @@ import { flushCoalescers } from "./modules/realtime/bus.js";
 import { realtimePlugin } from "./modules/realtime/routes.js";
 import { resultsPlugin } from "./modules/results/routes.js";
 import { createRunner, runnerCheck } from "./modules/runner/index.js";
+import { statsPlugin } from "./modules/stats/routes.js";
 import { startJobs } from "./jobs.js";
 import { startTicker } from "./ticker.js";
 
@@ -168,6 +169,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(previewPlugin);
   await app.register(gradingPlugin);
   await app.register(resultsPlugin);
+  await app.register(statsPlugin);
   await app.register(notificationsPlugin, { config });
   await app.register(mcpPlugin, { config });
 

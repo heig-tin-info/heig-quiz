@@ -1,8 +1,8 @@
 /**
- * Descriptive statistics for the results screens (PLAN-MVP §7.6).
- *
- * Item analysis proper is out of the MVP; these are the numbers the results
- * page and the grade histogram need.
+ * Descriptive statistics for the results screens (PLAN-MVP §7.6), and the
+ * item analysis of a question in its pool (ADR-038): the mean success rate
+ * over the answers counted, reported with their number and shown only from
+ * `QUESTION_STATS_MIN_N` answers on.
  */
 import { MAX_GRADE, MIN_GRADE } from "./grade.js";
 import { round2 } from "./round.js";
@@ -34,6 +34,38 @@ export function describe(values: readonly number[]): Description {
     min: sorted[0]!,
     max: sorted[count - 1]!,
   };
+}
+
+/** Below this many answers, a question's statistics are not shown (ADR-038). */
+export const QUESTION_STATS_MIN_N = 10;
+
+/** One counted answer to a question: the points it earned out of its maximum. */
+export interface ScoredAnswer {
+  points: number;
+  maxPoints: number;
+}
+
+/**
+ * The item analysis of a question: `n` answers counted, `p` their mean
+ * success rate. `p` is SIGNED: negative marking (ADR-026) can push it below
+ * zero, and that is reported as is. No spread, no extremes (N-DATA-06).
+ */
+export interface ItemStats {
+  n: number;
+  p: number;
+}
+
+/** Answers with no positive maximum carry no rate and are left out. */
+export function itemStats(answers: Iterable<ScoredAnswer>): ItemStats {
+  const ratios: number[] = [];
+  for (const a of answers) if (a.maxPoints > 0) ratios.push(a.points / a.maxPoints);
+  const { count, mean } = describe(ratios);
+  return { n: count, p: mean };
+}
+
+/** The statistics as they may be shown: `null` below `QUESTION_STATS_MIN_N` answers. */
+export function shownItemStats(stats: ItemStats): ItemStats | null {
+  return stats.n >= QUESTION_STATS_MIN_N ? stats : null;
 }
 
 export interface HistogramBucket {

@@ -1,0 +1,1 @@
+ALTER TABLE "questions" ADD COLUMN "stats_since" timestamp with time zone;

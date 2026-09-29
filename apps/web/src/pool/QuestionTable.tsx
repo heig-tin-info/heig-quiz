@@ -1,4 +1,4 @@
-import { Copy, Pencil, Trash2 } from "lucide-react";
+import { BarChart3, Copy, Pencil, Trash2 } from "lucide-react";
 import type { DragEvent } from "react";
 
 import type { QuestionRow } from "@quiz/contracts";
@@ -113,6 +113,35 @@ export function VersionCell({ row }: { row: QuestionRow }) {
   );
 }
 
+/**
+ * The chart icon that opens a question's statistics (ADR-038), drawn only for
+ * a question the pool's statistics list — ten answers or more. It sits after
+ * the name rather than among the row's actions: a reader, who has no action
+ * column, must reach it too. It stops the click, which would open the editor.
+ */
+export function StatsButton({ row, onOpen }: { row: QuestionRow; onOpen: () => void }) {
+  const t = useT();
+  return (
+    <span onClick={(e) => e.stopPropagation()} className="inline-flex">
+      <IconButton size="sm" label={t("pool.stats.open", { name: row.internalName })} onClick={onOpen}>
+        <BarChart3 />
+      </IconButton>
+    </span>
+  );
+}
+
+/**
+ * What the table and the cards take to draw {@link StatsButton}: the opener
+ * of a row's statistics, undefined when the question has none to show.
+ */
+export type StatsFor = (row: QuestionRow) => (() => void) | undefined;
+
+/** {@link StatsButton} when the row has statistics, nothing otherwise. */
+export function RowStatsButton({ row, statsFor }: { row: QuestionRow; statsFor?: StatsFor | undefined }) {
+  const open = statsFor?.(row);
+  return open ? <StatsButton row={row} onOpen={open} /> : null;
+}
+
 export function QuestionTableSkeleton({ rows = 5 }: { rows?: number }) {
   return (
     <div className="space-y-2 p-4">
@@ -136,6 +165,7 @@ export function QuestionTable({
   onSort,
   onDragStart,
   readOnly = false,
+  statsFor,
 }: {
   /** One section per "group by" value; `none` hands over a single unlabelled one. */
   groups: QuestionGroup[];
@@ -157,6 +187,8 @@ export function QuestionTable({
   onDragStart?: (event: DragEvent, row: QuestionRow) => void;
   /** A pool the caller only reads: no tick boxes, no row actions (F-POOL-05). */
   readOnly?: boolean;
+  /** Absent while the statistics load or when they failed. */
+  statsFor?: StatsFor | undefined;
 }) {
   const t = useT();
   const rows = groups.flatMap((g) => g.rows);
@@ -243,6 +275,7 @@ export function QuestionTable({
                     <TypeGlyph type={row.type} />
                     <span className="font-mono font-bold">{row.internalName}</span>
                     {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
+                    <RowStatsButton row={row} statsFor={statsFor} />
                   </span>
                 </td>
                 <td className={cx(T.td, "max-w-56", T.colHigh)}>
