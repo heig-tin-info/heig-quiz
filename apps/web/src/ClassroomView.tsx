@@ -17,6 +17,7 @@ import { ClassroomPatch, type ClassroomDetail, type EvaluationSummary } from "@q
 import { api, useMe } from "./api";
 import { PeriodFields, periodBody, periodInvalid, type PeriodDraft } from "./ClassroomPeriod";
 import { useConfirm } from "./confirm";
+import { ClassroomDrillSetting } from "./drill/ClassroomDrillSetting";
 import { useT } from "./i18n";
 // WP8: evaluation + dashboard
 import { EvaluationList, NewEvaluationModal } from "./evaluation/EvaluationList";
@@ -395,7 +396,11 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
           </section>
         ) : (
           // WP8: evaluation + dashboard
-          <EvaluationList classroomId={id} navigate={navigate} onNew={() => setCreating(true)} />
+          <div className="space-y-6">
+            <EvaluationList classroomId={id} navigate={navigate} onNew={() => setCreating(true)} />
+            {/* ADR-041 §6 (#317): the drill draws on these evaluations. */}
+            <ClassroomDrillSetting room={data} />
+          </div>
         )}
       </div>
 

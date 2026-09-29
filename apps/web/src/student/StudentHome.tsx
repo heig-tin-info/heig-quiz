@@ -25,6 +25,7 @@ import { CalendarClock, CheckCircle2, GraduationCap, School } from "lucide-react
 
 import { formatPoints } from "@quiz/domain";
 import type {
+  DrillSession,
   EvaluationCard as EvaluationCardData,
   JoinResult,
   Me,
@@ -34,6 +35,8 @@ import type {
 } from "@quiz/contracts";
 
 import { api } from "../api";
+import { useDrillAvailability, useDrillDevice, useDrillSession } from "../drill/api";
+import { sessionCourses, sessionLine } from "../drill/format";
 import { feedbackLink } from "../grading";
 import { formatDuration, useT, type TFunction } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
@@ -243,6 +246,24 @@ function PollRow({ poll, navigate }: { poll: StudentPollCard; navigate: (r: Rout
   );
 }
 
+/**
+ * Today's drill (ADR-041 §6), drawn only while it holds something. Its badge
+ * is the home's "today's drill is available"; its button is secondary, since
+ * an evaluation open now is what the page's primary is for.
+ */
+function DrillRow({ session, navigate }: { session: DrillSession; navigate: (r: Route) => void }) {
+  const t = useT();
+  return (
+    <ActivityRow
+      title={t("drill.today.title")}
+      where={sessionCourses(session.cards)}
+      line={sessionLine(session, t)}
+      badge={{ label: t("drill.badge"), accent: true }}
+      action={{ label: t("drill.practise"), onClick: () => navigate({ view: "drill" }) }}
+    />
+  );
+}
+
 function JoinCard() {
   const t = useT();
   const toast = useToast();
@@ -359,6 +380,12 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
     };
   };
 
+  // ADR-041 §6 (#317): today's drill, while it holds something — the home's
+  // "today's drill is available", beside what else is open now.
+  const drillAvailability = useDrillAvailability(true);
+  const drillSession = useDrillSession(useDrillDevice(), drillAvailability.shown);
+  const drill = drillAvailability.available ? (drillSession.data ?? null) : null;
+
   const polls = home.data?.polls ?? [];
   const open = home.data?.open ?? [];
   const upcoming = home.data?.upcoming ?? [];
@@ -391,7 +418,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
             {polls.map((poll) => (
               <PollRow key={poll.id} poll={poll} navigate={navigate} />
             ))}
-            {open.length === 0 && polls.length === 0 ? (
+            {open.length === 0 && polls.length === 0 && !drill ? (
               <Card>
                 <EmptyState icon={CheckCircle2} title={t("shome.empty.title")}>
                   {t("shome.empty.body")}
@@ -411,6 +438,8 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
                 />
               ))
             )}
+            {/* After what closes: an evaluation open now is the more urgent. */}
+            {drill ? <DrillRow session={drill} navigate={navigate} /> : null}
           </section>
 
           <section className="space-y-3">

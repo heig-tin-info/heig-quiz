@@ -31,6 +31,8 @@ const AttemptPage = lazy(() =>
   import("./student/Attempt").then((m) => ({ default: m.AttemptPage })),
 );
 const Feedback = lazy(() => import("./student/Feedback").then((m) => ({ default: m.Feedback })));
+// ADR-041 (#317): the student's drill, its own chunk like every page.
+const DrillPage = lazy(() => import("./drill/DrillPage").then((m) => ({ default: m.DrillPage })));
 const CoursePage = lazy(() =>
   import("./course/CoursePage").then((m) => ({ default: m.CoursePage })),
 );
@@ -209,6 +211,9 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // checking the student view opens the same page a student does. It is the
   // ONE student results page: WP9's `/results/:id` is gone.
   feedback: (r, c) => <Feedback attemptId={r.attemptId} navigate={c.navigate} />,
+  // ADR-041 (#317): a student page; the teacher UI has no drill of its own.
+  drill: (_, c) =>
+    c.teacherUi ? <TeacherHome navigate={c.navigate} /> : <DrillPage navigate={c.navigate} />,
   // WP9: student player — the attempt takes the whole screen (`FULL_SCREEN`).
   attempt: (r, c) => <AttemptPage evaluationId={r.evaluationId} navigate={c.navigate} />,
   join: (r, c) => <PollJoin code={r.code} me={c.me} navigate={c.navigate} />,

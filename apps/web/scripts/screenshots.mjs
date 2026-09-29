@@ -315,6 +315,22 @@ const scenes = [
   // F-EVAL-15: an exercise with retakes — attempt badges, no Reopen.
   { name: "live-retakes", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/paused/live" },
 
+  // The drill (ADR-041, #317): the student's tab, and the teacher's switches.
+  { name: "drill-today", role: "student", path: "/drill" },
+  { name: "drill-card", role: "student", path: "/drill", act: drillStart },
+  { name: "drill-feedback", role: "student", path: "/drill", act: drillAnswer },
+  { name: "drill-done", role: "student", path: "/drill", act: drillWalk },
+  { name: "drill-empty", role: "student", path: "/drill?reviewed=1" },
+  { name: "drill-off", role: "student", path: "/drill?empty=1" },
+  { name: "drill-error", role: "student", path: "/drill?fail=1", settle: 2500 },
+  { name: "drill-optout", role: "student", path: "/drill", fold: true, act: (p) => p.getByRole("switch", { name: /PRG1-2026/ }).click() },
+  { name: "drill-classroom", role: "teacher", path: "/classrooms/r1?tab=evaluations" },
+  // Turned on where it was off: the backfill says how many cards it made.
+  { name: "drill-classroom-on", role: "teacher", path: "/classrooms/r3?tab=evaluations", act: (p) => p.getByRole("switch", { name: /^(drill|entraînement)$/i }).click() },
+  { name: "drill-eval-draft", role: "teacher", path: "/evaluations/draft?step=timing" },
+  { name: "drill-eval-released", role: "teacher", path: "/evaluations/released?step=timing" },
+  { name: "drill-eval-remove", role: "teacher", path: "/evaluations/released?step=timing", fold: true, act: (p) => p.getByRole("button", { name: /remove these questions|retirer ces questions/i }).click() },
+
   // Student
   { name: "student-home", role: "student", path: "/" },
   { name: "student-empty", role: "student", path: "/?empty=1" },
@@ -896,6 +912,37 @@ async function nextQuestion(page, n) {
     await page.getByRole("button", { name: /^(next question|question suivante)$/i }).first().click();
     await page.waitForTimeout(400);
   }
+}
+
+/** The drill page's "Start": the first card of today's session on screen. */
+async function drillStart(page) {
+  await page.getByRole("button", { name: /^(start|commencer)$/i }).click();
+  await page.waitForTimeout(800);
+}
+
+/** The first card answered (the mock's first question, its right choice), the verdict and the key on screen. */
+async function drillAnswer(page) {
+  await drillStart(page);
+  await page.getByText(/^Une valeur indéterminée/).click();
+  await page.getByRole("button", { name: /^(check|vérifier)$/i }).click();
+  await page.waitForTimeout(800);
+}
+
+/** Every card of the session revealed in turn, to its summary. */
+async function drillWalk(page) {
+  await drillStart(page);
+  for (;;) {
+    await page.getByRole("button", { name: /^(show the answer|voir la réponse|check|vérifier)$/i }).click();
+    await page.waitForTimeout(500);
+    const finish = page.getByRole("button", { name: /^(finish|terminer)$/i });
+    if (await finish.isVisible()) {
+      await finish.click();
+      break;
+    }
+    await page.getByRole("button", { name: /^(next|suivante)$/i }).click();
+    await page.waitForTimeout(500);
+  }
+  await page.waitForTimeout(500);
 }
 
 if (flag("list")) {

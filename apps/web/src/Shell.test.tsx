@@ -10,6 +10,7 @@ import { resetShortcuts, useShortcuts } from "./shortcuts";
 import { modKey, PAGE_COLUMN } from "./ui";
 import { makeClassroomSummary, makeCourseSummary, makeMe } from "./test/fixtures";
 import { makeQueryClient, renderWithProviders } from "./test/render";
+import { drillClassroomsKey, drillSessionKey } from "./queryKeys";
 import type { Route } from "./router";
 
 /*
@@ -72,6 +73,7 @@ function renderShell({
   path,
   wide,
   children,
+  drill,
 }: {
   route?: Route;
   courses?: CourseSummary[];
@@ -92,11 +94,36 @@ function renderShell({
   wide?: boolean;
   /** What the frame wraps; a screen registering its own shortcuts, here. */
   children?: ReactNode;
+  /** Seeds the student's drill (#317): its classrooms, and today's card count. */
+  drill?: { rooms: number; cards: number };
 } = {}) {
   const queryClient = makeQueryClient();
   queryClient.setQueryData(["courses"], courses);
   if (pool) queryClient.setQueryData(["pool", pool.pool.id], pool);
   if (poolList) queryClient.setQueryData(["pools"], poolList);
+  if (drill) {
+    queryClient.setQueryData(
+      drillClassroomsKey,
+      Array.from({ length: drill.rooms }, (_, i) => ({
+        classroomId: `r${i}`,
+        classroomName: `Room ${i}`,
+        courseCode: "PRG1",
+        courseName: "Programmation C",
+        optedOutAt: null,
+      })),
+    );
+    queryClient.setQueryData(drillSessionKey("fine"), {
+      cards: Array.from({ length: drill.cards }, (_, i) => ({
+        id: `k${i}`,
+        type: "mcq",
+        courseCode: "PRG1",
+        courseName: "Programmation C",
+        isNew: false,
+      })),
+      budgetMs: 600_000,
+      nextDueAt: null,
+    });
+  }
   renderWithProviders(
     <Shell
       me={me}
@@ -280,6 +307,24 @@ describe("Shell sidebar", () => {
     // WP9: "Home" is the student heading; the teacher sections are gone.
     expect(nav.getByRole("button", { name: "Home" })).toBeInTheDocument();
     expect(nav.queryByRole("button", { name: /^Classroom 1(?!\d)/ })).toBeNull();
+  });
+
+  // ADR-041 (#317): the student's Drill row, once a classroom has the drill on.
+  it("gives the student a Drill row, with today's dot, only when a classroom has the drill", () => {
+    renderShell({ teacherUi: false, me: makeMe({ role: "student" }), drill: { rooms: 1, cards: 2 } });
+    const row = within(sidebar()).getByRole("button", { name: /^Drill/ });
+    expect(within(row).getByText("Today's drill is available")).toBeInTheDocument();
+  });
+
+  it("draws no Drill row without a classroom whose drill is on", () => {
+    renderShell({ teacherUi: false, me: makeMe({ role: "student" }), drill: { rooms: 0, cards: 0 } });
+    expect(within(sidebar()).queryByRole("button", { name: /^Drill/ })).toBeNull();
+  });
+
+  it("keeps the row but drops the dot on a day with nothing to review", () => {
+    renderShell({ teacherUi: false, me: makeMe({ role: "student" }), drill: { rooms: 1, cards: 0 } });
+    const row = within(sidebar()).getByRole("button", { name: "Drill" });
+    expect(within(row).queryByText("Today's drill is available")).toBeNull();
   });
 });
 

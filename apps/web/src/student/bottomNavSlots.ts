@@ -18,13 +18,23 @@ export interface BottomSlot {
 /** The anchors of the student home's sections, written once for both sides. */
 export const HOME_SECTION = { courses: "classrooms", grades: "past" } as const;
 
-/** In the order they are drawn; Drill (#317) goes in the middle. */
+/** In the order they are drawn; Drill (#317) in the middle. */
 export const BOTTOM_SLOTS: readonly BottomSlot[] = [
   { id: "activities", route: { view: "home" } },
   { id: "courses", route: { view: "home" }, anchor: HOME_SECTION.courses },
+  { id: "drill", route: { view: "drill" } },
   { id: "grades", route: { view: "home" }, anchor: HOME_SECTION.grades },
   { id: "profile", route: { view: "settings" } },
 ];
+
+/**
+ * The slots drawn: Drill only for a student with at least one classroom
+ * whose drill is on (ADR-041 §6) — a slot leading to "your teacher has not
+ * turned this on" is a slot for nothing.
+ */
+export function visibleSlots(drill: boolean): readonly BottomSlot[] {
+  return drill ? BOTTOM_SLOTS : BOTTOM_SLOTS.filter((s) => s.id !== "drill");
+}
 
 /** The bar is the student UI's, on the views the route table gives a slot. */
 export function bottomNavShown(route: Route, teacherUi: boolean): boolean {

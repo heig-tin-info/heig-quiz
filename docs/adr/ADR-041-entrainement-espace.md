@@ -292,6 +292,41 @@ UI copy obligations of slice 3, together: the "Allow drill" note (the key
 is shown after each review; the latest version is served) and the opt-out
 confirmation (past activity stays visible; the teacher sees the opt-out).
 
+### 14. Implementation choices of slice 3 (the screens)
+
+- **The session starts on a button.** The drill page shows today's count
+  and budget with one primary, Start; a card is served — its clock opened —
+  only then, never on opening the page. The list is taken as it was at
+  Start and walked on the client: the session re-read after each answer
+  would drop the card just answered, so it is read again only at the end.
+- **One card at a time, through the type's own player** (`QuestionHost`,
+  the attempt's), then its own `Review` for the key (`QuestionReviewHost`,
+  the feedback page's). The one button reads Check, or "Show the answer"
+  while nothing is written: an empty answer is a review, rated Again.
+- **The visibility reports** are a hidden report when the tab hides, a
+  shown one when it returns, and a hidden one when the page is left with
+  the card unanswered. A report that fails is dropped, since it can only
+  lower the time counted (§11).
+- **A card that cannot be served** (its classroom archived since the
+  session was read, say) offers a retry and "Skip it"; the summary counts
+  the reviews only.
+- **The next review** is said in calendar days ("tomorrow", "in 4 days"),
+  the empty day's next due date as a date.
+- **Opting back in takes no confirmation**; opting out is confirmed, with
+  the two sentences of §10 (k) and §13 item 5, and is not styled as
+  destructive — nothing is deleted.
+- **The badge is a dot, never a count** (DESIGN.md, "The student's bottom
+  bar"): on the Drill slot, on the sidebar's Drill row, and an "available"
+  badge on the home's card for today's drill. Slot and row are drawn only
+  for a student with a classroom whose drill is on.
+- **The teacher's switches.** The classroom's sits on its Evaluations tab,
+  under the list, and says how many cards the backfill made. "Allow drill"
+  sits in the evaluation's second step, its note always shown, on or off;
+  the removal is a secondary button in the same card, offered while there
+  are cards, confirmed as destructive with their count. The count is read
+  from `GET /evaluations/:id/drill` (`EvaluationDrill`), the one read added
+  to the module for it: the evaluation's detail does not carry it.
+
 ## Consequences
 
 - The domain rules exist before any table; slice 2 wires them to the
