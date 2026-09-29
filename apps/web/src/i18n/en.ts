@@ -472,6 +472,7 @@ export const en = {
   "verdict.pending": "Awaiting grading",
   "sync.saved": "Saved",
   "sync.saving": "Saving…",
+  "sync.unsaved": "Not saved",
   "sync.offline": "Offline",
   "sync.closed": "Closed",
 
@@ -778,6 +779,7 @@ export const en = {
   "question.try.runTestsHint": "Visible and hidden cases alike, graded as a student's answer: you see the score.",
   "question.try.again": "Try again",
   "question.try.score": "{points} of {max} points",
+  "question.try.manual": "To grade by hand",
   "question.try.empty.title": "Not tried yet",
   "question.try.empty.body": "Answer your own question to check the grading before you publish.",
   "question.try.runnerUnavailable": "The runner is unavailable",
@@ -2415,6 +2417,7 @@ export const en = {
   "preview.ungraded.title": "Some questions could not be graded",
   "preview.ungraded.bodyOne": "One question has no points here: the grade will move once it is graded.",
   "preview.ungraded.body": "{n} questions have no points here: the grade will move once they are graded.",
+  "preview.status.manual": "To grade by hand",
   "preview.status.runner_unavailable": "No code runner",
   "preview.status.llm_unavailable": "Needs an AI grader",
   "preview.status.answer_invalid": "Answer unreadable",

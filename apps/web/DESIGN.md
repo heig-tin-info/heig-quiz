@@ -849,7 +849,9 @@ live in `ui/state.ts`, each written once.
   where it was dropped, not at the caret. `toolbar="focus"` folds the toolbar
   INSIDE the field and shows it while the field has the caret: that is what a
   row of a list (an mcq choice) wears, since six permanent toolbars are a wall
-  of icons. MarkdownField around it is a label and the upload adapter — no
+  of icons. A block field is 128 px high, sized for a prompt; `rows` asks for
+  more, in lines of its text, as a textarea's does — the essay's answer field
+  takes 12. MarkdownField around it is a label and the upload adapter — no
   hint line: it named the keys the toolbar above it already shows, on every
   field of a four-field screen.
   An IMAGE in the editor carries its own bar, at its top-right corner while

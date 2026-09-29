@@ -155,11 +155,16 @@ on("POST", "/app/api/evaluations/:id/preview/grade", (m, body): PreviewCorrectio
             maxPoints?: number;
             details?: unknown;
             solution?: unknown;
+            manual?: true;
           });
     let status: PreviewItemStatus = "graded";
     let itemPoints: number | null = 0;
     if (tried && tried.status !== "graded") {
       status = tried.status === "llm_unavailable" ? "llm_unavailable" : "runner_unavailable";
+      itemPoints = null;
+      ungraded += 1;
+    } else if (tried?.manual) {
+      status = "manual";
       itemPoints = null;
       ungraded += 1;
     } else if (tried) {

@@ -47,6 +47,7 @@ export function RichTextSourcePane({
   placeholder,
   disabled,
   inline,
+  rows,
   uploadImage,
   trailing,
 }: {
@@ -57,6 +58,7 @@ export function RichTextSourcePane({
   placeholder: string | undefined;
   disabled: boolean;
   inline: boolean;
+  rows: number | undefined;
   uploadImage: RichTextProps["uploadImage"];
   trailing: ReactNode;
 }) {
@@ -69,7 +71,7 @@ export function RichTextSourcePane({
       label={ariaLabel ?? t("md.label")}
       placeholder={placeholder ?? t("md.placeholder.body")}
       disabled={disabled}
-      rows={inline ? 3 : 8}
+      rows={inline ? 3 : (rows ?? 8)}
       {...(uploadImage === undefined ? {} : { uploadImage })}
       trailing={trailing}
     />

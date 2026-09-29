@@ -369,11 +369,11 @@ async function gradeItem(
   }
 
   const ctx = finalizeContext(evaluation, item, seed, now);
-  const settle = (result: GradedResult<unknown>): ItemOutcome => ({
-    status: "graded",
-    points: round2(result.points),
-    details: result.details,
-  });
+  // A proposal is not a grade: a person decides it (issue #267).
+  const settle = (result: GradedResult<unknown>): ItemOutcome =>
+    result.state === "proposed"
+      ? { status: "manual", points: null, details: result.details }
+      : { status: "graded", points: round2(result.points), details: result.details };
   try {
     const first = await type.grade(config, answer, { ...ctx, runner });
     if (first.kind === "graded") return settle(first);

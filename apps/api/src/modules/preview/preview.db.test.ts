@@ -548,6 +548,31 @@ describe("grading a preview", () => {
     expect(correction.grade).toBe(1);
   });
 
+  it("shows a proposed grade as awaiting a person, not as points (#267)", async () => {
+    const w = await world();
+    const essay = await publish(w.poolId, teacher.id, "rich", {
+      configVersion: 1,
+      prompt: "Explain pointers.",
+      rubric: "",
+      format: "plain",
+    });
+    const evaluation = await reload(db, w.evaluationId);
+    const added = await evaluationService.addItems(db, evaluation, [essay], () => 3, { attemptCount: 0 });
+    const essayItemId = added.at(-1)!.id;
+    const correction = (
+      await post(`${w.url}/grade`, teacher.headers, {
+        seed: 3,
+        answers: { [essayItemId]: { text: "An address." }, [w.mcqItemId]: { selected: [1, 3] } },
+      })
+    ).json() as PreviewCorrection;
+    const item = correction.items.find((i) => i.itemId === essayItemId);
+    expect(item).toMatchObject({ status: "manual", points: null, verdict: null, maxPoints: 3 });
+    // The review still gets what the grader wrote down.
+    expect(item!.details).toMatchObject({ reason: "manual" });
+    expect(correction.ungraded).toBe(1);
+    expect(correction.points).toBe(1);
+  });
+
   it("ignores an answer to an item the evaluation does not hold, and flags an invalid one", async () => {
     const w = await world();
     const correction = (

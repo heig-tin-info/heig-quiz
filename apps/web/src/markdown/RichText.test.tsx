@@ -64,6 +64,17 @@ function Host({
   );
 }
 
+describe("RichText — its height", () => {
+  it("is sized for a prompt by default, and in lines of text when asked (#267)", () => {
+    const { unmount } = renderWithProviders(<Host />);
+    expect(surface()).toHaveClass("min-h-32");
+    unmount();
+    renderWithProviders(<Host rows={12} />);
+    expect(surface()).not.toHaveClass("min-h-32");
+    expect(surface().getAttribute("style")).toContain("min-height: 12lh");
+  });
+});
+
 describe("RichText — it shows the markdown, it does not print it", () => {
   it("renders emphasis, code and a link as nodes", () => {
     renderWithProviders(

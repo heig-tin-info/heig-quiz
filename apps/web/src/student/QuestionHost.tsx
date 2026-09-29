@@ -89,6 +89,7 @@ export function QuestionHost({
   onRun,
   allowManualRun,
   onSimulate,
+  onUnsent,
 }: {
   type: string;
   student: unknown;
@@ -106,6 +107,8 @@ export function QuestionHost({
    * against a stimulus — and neither has a browser half to fall back on here.
    */
   onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
+  /** Where something is saved as one types: see `PlayerProps.onUnsent`. */
+  onUnsent?: (unsent: boolean) => void;
 }) {
   const t = useT();
   let Player: ComponentType<HostPlayerProps>;
@@ -138,6 +141,7 @@ export function QuestionHost({
           {...(onRun ? { onRun } : {})}
           {...(allowManualRun === undefined ? {} : { allowManualRun })}
           {...(onSimulate ? { onSimulate } : {})}
+          {...(onUnsent ? { onUnsent } : {})}
         />
       </Suspense>
     </ScrollableCode>

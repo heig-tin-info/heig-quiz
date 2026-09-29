@@ -13,9 +13,10 @@
  * which has no such attribute — keeps what the student typed beyond the limit
  * HERE, shown and counted in red, and sends nothing until the answer fits
  * again. Cutting the text instead would delete the END of an essay whenever
- * the student typed in its middle.
+ * the student typed in its middle. While it holds such text back, it tells
+ * the host (`PlayerProps.onUnsent`), whose badge then stops saying "Saved".
  */
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/client";
 import { fmt, resolveStrings } from "@quiz/core/client";
@@ -23,6 +24,9 @@ import { caption, cx, isLocked, label, markdown, textareaClass } from "@quiz/ui"
 
 import { charLimit, countChars, pagesText, type RichAnswer, type RichStudent } from "./schema.js";
 import { richPlayerStrings, type RichPlayerStringKey } from "./strings.js";
+
+/** The answer field's height, formatted or plain: room for an essay, not a line (issue #267). */
+const ESSAY_ROWS = 12;
 
 type RichPlayerProps = PlayerProps<RichStudent, RichAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
@@ -40,6 +44,7 @@ export function RichPlayer({
   strings,
   renderMarkdown,
   RichText,
+  onUnsent,
 }: RichPlayerProps) {
   const s = resolveStrings(richPlayerStrings, strings);
   const locked = isLocked(readOnly, disabled);
@@ -53,7 +58,14 @@ export function RichPlayer({
    * the pin no longer matches and the stored answer shows again.
    */
   const [unsent, setUnsent] = useState<{ text: string; over: string } | null>(null);
-  const text = unsent !== null && unsent.over === stored ? unsent.text : stored;
+  const held = unsent !== null && unsent.over === stored;
+  const text = held ? unsent.text : stored;
+  // The host's sync badge must not say "Saved" over text that was never sent.
+  useEffect(() => {
+    if (!held || !onUnsent) return;
+    onUnsent(true);
+    return () => onUnsent(false);
+  }, [held, onUnsent]);
   const count = countChars(text);
   const over = count - limit;
 
@@ -86,6 +98,7 @@ export function RichPlayer({
               onChange={change}
               placeholder={s.placeholder}
               disabled={locked}
+              rows={ESSAY_ROWS}
             />
           </>
         ) : (
@@ -95,7 +108,7 @@ export function RichPlayer({
             </label>
             <textarea
               id={`${id}-answer`}
-              rows={12}
+              rows={ESSAY_ROWS}
               maxLength={limit}
               aria-describedby={`${id}-count`}
               className={cx(textareaClass, "w-full resize-y")}

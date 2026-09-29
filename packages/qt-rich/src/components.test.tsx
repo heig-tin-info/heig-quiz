@@ -56,6 +56,35 @@ describe("RichPlayer", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("tells the host while it holds text back, and when it no longer does (#267)", () => {
+    const onUnsent = vi.fn();
+    const small: RichStudent = { ...student, maxChars: 5 };
+    const { unmount } = render(
+      <RichPlayer
+        student={small}
+        answer={{ text: "" }}
+        onChange={() => {}}
+        readOnly={false}
+        RichText={FakeRichText}
+        onUnsent={onUnsent}
+      />,
+    );
+    // Nothing held back yet: nothing to report.
+    expect(onUnsent).not.toHaveBeenCalled();
+    const field = screen.getByTestId("rich-text");
+    fireEvent.change(field, { target: { value: "abcdefg" } });
+    expect(onUnsent).toHaveBeenLastCalledWith(true);
+    fireEvent.change(field, { target: { value: "abcdefgh" } });
+    expect(onUnsent).toHaveBeenCalledTimes(1);
+    fireEvent.change(field, { target: { value: "abc" } });
+    expect(onUnsent).toHaveBeenLastCalledWith(false);
+    // Over again, then gone: the host is never left with a stale flag.
+    fireEvent.change(field, { target: { value: "abcdefg" } });
+    expect(onUnsent).toHaveBeenLastCalledWith(true);
+    unmount();
+    expect(onUnsent).toHaveBeenLastCalledWith(false);
+  });
+
   it("drops the unsent excess when the answer changes from outside", () => {
     const small: RichStudent = { ...student, maxChars: 5 };
     const props = { student: small, onChange: () => {}, readOnly: false, RichText: FakeRichText };

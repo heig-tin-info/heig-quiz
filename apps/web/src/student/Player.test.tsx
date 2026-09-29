@@ -1,5 +1,5 @@
 import axe from "axe-core";
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createElement, StrictMode, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -290,6 +290,31 @@ describe("the zen player", () => {
     // The badge carries the word twice on purpose: visible from `sm` up, and
     // for a screen reader under it, where the bar has no room for it.
     expect(await screen.findAllByText("Sauvegardé")).not.toHaveLength(0);
+  });
+
+  it("says 'not saved' while the question holds back an answer over its limit (#267)", async () => {
+    const base = attemptView();
+    const essay = {
+      ...base.items[1]!,
+      type: "rich",
+      student: { prompt: "Explain.", format: "plain", maxChars: 5 },
+      answer: { text: "ab" },
+    };
+    const view = { ...base, items: [base.items[0]!, essay, base.items[2]!] };
+    stubs(view);
+    render(view);
+    const field = await screen.findByLabelText("Votre réponse");
+    // `maxLength` stops a keyboard; a change event goes past it, as a drop may.
+    fireEvent.change(field, { target: { value: "abcdefgh" } });
+    expect(await screen.findAllByText("Non sauvegardé")).not.toHaveLength(0);
+    fireEvent.change(field, { target: { value: "abc" } });
+    await waitFor(() => expect(screen.queryAllByText("Non sauvegardé")).toHaveLength(0));
+    // Leaving the question drops what it held back, and the flag with it.
+    fireEvent.change(field, { target: { value: "abcdefgh" } });
+    expect(await screen.findAllByText("Non sauvegardé")).not.toHaveLength(0);
+    await userEvent.keyboard("{Alt>}{ArrowRight}{/Alt}");
+    expect(await screen.findByText("Question 3")).toBeInTheDocument();
+    expect(screen.queryAllByText("Non sauvegardé")).toHaveLength(0);
   });
 
   /*

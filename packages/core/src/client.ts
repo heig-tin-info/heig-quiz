@@ -142,6 +142,13 @@ export interface RichTextProps {
    * prompt and a `{{` input rule in an mcq choice would be a trap.
    */
   holes?: boolean;
+  /**
+   * A block field's minimum height, in lines of its text — a textarea's
+   * `rows`. Absent, a block field is sized for a prompt (128 px); an essay
+   * asks for more (issue #267). Ignored by an inline field, which grows with
+   * what it holds.
+   */
+  rows?: number;
 }
 
 export type RichTextComponent = ComponentType<RichTextProps>;
@@ -162,6 +169,16 @@ export interface PlayerProps<TStudent, TAnswer> {
    * lends it WITHOUT an image upload: a student's answer carries no image.
    */
   RichText?: RichTextComponent;
+  /**
+   * The player holds an edit back from `onChange` because the server would
+   * refuse it (issue #267: the `rich` field over its limit). The player
+   * calls it with `true` while what is on screen is not what it sent, and
+   * with `false` once they match again. The host then stops saying "Saved"
+   * for this edit. A player that never holds anything back does not call it,
+   * and a host that saves nothing need not pass it. It is called with
+   * `false` when the player unmounts, so the host never keeps a stale flag.
+   */
+  onUnsent?: (unsent: boolean) => void;
 }
 
 export interface ReviewProps<TStudent, TAnswer, TSolution, TDetails> {

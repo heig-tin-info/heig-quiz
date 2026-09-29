@@ -30,6 +30,8 @@ export interface RichTextEditorOptions {
   onEnter: RichTextProps["onEnter"];
   onTab: RichTextProps["onTab"];
   inline: boolean;
+  /** A block field's minimum height in lines (`RichTextProps.rows`). */
+  rows: number | undefined;
   holes: boolean;
   placeholder: string | undefined;
   ariaLabel: string | undefined;
@@ -239,8 +241,10 @@ export function useRichTextEditor(o: RichTextEditorOptions) {
         // list and grows with what it holds.
         class: cx(
           "rt-surface md-body focus:outline-none",
-          o.inline ? "min-h-5 md-sm" : "min-h-32",
+          o.inline ? "min-h-5 md-sm" : o.rows === undefined && "min-h-32",
         ),
+        // `lh`: a line of the surface's own text, whatever its size.
+        ...(o.inline || o.rows === undefined ? {} : { style: `min-height: ${o.rows}lh` }),
         role: "textbox",
         "aria-multiline": o.inline ? "false" : "true",
         ...(o.ariaLabel === undefined ? {} : { "aria-label": o.ariaLabel }),

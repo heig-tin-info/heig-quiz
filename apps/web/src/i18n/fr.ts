@@ -469,6 +469,7 @@ export const fr: Record<keyof Dict, string> = {
   "verdict.pending": "En attente de correction",
   "sync.saved": "Sauvegardé",
   "sync.saving": "Sauvegarde…",
+  "sync.unsaved": "Non sauvegardé",
   "sync.offline": "Hors ligne",
   "sync.closed": "Clôturé",
 
@@ -772,6 +773,7 @@ export const fr: Record<keyof Dict, string> = {
   "question.try.runTests": "Lancer tous les tests",
   "question.try.runTestsHint": "Cas visibles et cachés, corrigés comme la réponse d'un étudiant : vous voyez la note.",
   "question.try.again": "Recommencer",
+  "question.try.manual": "À corriger à la main",
   "question.try.score": "{points} points sur {max}",
   "question.try.empty.title": "Pas encore essayée",
   "question.try.empty.body":
@@ -2407,6 +2409,7 @@ export const fr: Record<keyof Dict, string> = {
   "preview.ungraded.title": "Certaines questions n'ont pas pu être corrigées",
   "preview.ungraded.bodyOne": "Une question n'a pas de points ici : la note changera une fois qu'elle sera corrigée.",
   "preview.ungraded.body": "{n} questions n'ont pas de points ici : la note changera une fois qu'elles seront corrigées.",
+  "preview.status.manual": "À corriger à la main",
   "preview.status.runner_unavailable": "Pas d'exécuteur de code",
   "preview.status.llm_unavailable": "Correction par IA requise",
   "preview.status.answer_invalid": "Réponse illisible",

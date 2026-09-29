@@ -197,7 +197,12 @@ export function TryPanel({
       ) : (
         <Card className="space-y-4 p-5">
           <SectionHeading
-            title={t("question.try.score", { points: result.points, max: result.maxPoints })}
+            title={
+              // A proposal is not a score: a person grades it (issue #267).
+              result.manual
+                ? t("question.try.manual")
+                : t("question.try.score", { points: result.points, max: result.maxPoints })
+            }
           />
           <QuestionReviewHost
             t={t}
@@ -206,7 +211,7 @@ export function TryPanel({
             answer={answer}
             solution={result.solution}
             details={result.details}
-            points={result.points}
+            points={result.manual ? null : result.points}
             maxPoints={result.maxPoints}
             audience="teacher"
           />

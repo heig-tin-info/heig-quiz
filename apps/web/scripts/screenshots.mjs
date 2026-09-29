@@ -616,6 +616,13 @@ const scenes = [
       await p.getByRole("button", { name: /lancer tous les tests|run all the tests/i }).first().click();
       await p.waitForTimeout(1200);
     } },
+  // Issue #267: an essay's grade is a proposal, so the try shows no score.
+  { name: "try-rich-graded", role: "teacher", path: "/questions/q17?tab=try", settle: 3000, act: async (p) => {
+      await p.locator("[contenteditable=true]").last().click();
+      await p.keyboard.insertText("Un pointeur contient l'adresse d'une variable.");
+      await p.getByRole("button", { name: /corriger|grade/i }).first().click();
+      await p.waitForTimeout(1200);
+    } },
   { name: "palette-pool", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.keyboard.press("Control+k") },
 
   // The primitive gallery (development route, teacher only)

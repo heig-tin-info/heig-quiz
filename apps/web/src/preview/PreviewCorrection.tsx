@@ -23,6 +23,7 @@ import { Alert, Badge, Button, Card, NotePanel, Stat } from "../ui";
 
 /** Why an item carries no points, in the teacher's words. */
 const STATUS_LABEL: Record<Exclude<PreviewItemStatus, "graded">, keyof Dict> = {
+  manual: "preview.status.manual",
   runner_unavailable: "preview.status.runner_unavailable",
   llm_unavailable: "preview.status.llm_unavailable",
   answer_invalid: "preview.status.answer_invalid",
@@ -93,7 +94,8 @@ export function PreviewCorrectionView({
                   {formatPoints(item.points)} / {item.maxPoints}
                 </span>
               ) : (
-                <Badge tone={item.status === "no_key" ? "zinc" : "amber"}>
+                // Neutral where nothing went wrong: an opinion question, an essay.
+                <Badge tone={item.status === "no_key" || item.status === "manual" ? "zinc" : "amber"}>
                   {t(STATUS_LABEL[item.status as Exclude<PreviewItemStatus, "graded">])}
                 </Badge>
               )}
