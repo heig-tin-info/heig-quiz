@@ -15,7 +15,6 @@ export const categorizeEditorStrings = {
   tray: "Definitions",
   distractors: "{n} distractors (in no column)",
   "distractors.one": "1 distractor (in no column)",
-  emptyTray: "No distractor",
   newCard: "New definition, Enter to add",
   addCard: "Add",
   cardText: "Text of card",
@@ -27,9 +26,9 @@ export const categorizeEditorStrings = {
   moveCard: "Move card",
   columnLabel: "Column name",
   removeColumn: "Remove column",
-  addColumn: "Column",
-  addColumnLabel: "Add a column",
-  columnHint: "Removing a column sends its cards back to the tray.",
+  addColumn: "Add a column",
+  /** An issue of one column or card, under the board: "Column name 2 — This field is empty." */
+  issueAt: "{field} {n} — {message}",
   dropHere: "Drag the definitions here",
   /** The button every zone grows while a card is selected. */
   moveHere: "Move here",

@@ -63,6 +63,16 @@ describe("issuesOf", () => {
     expect(z.array(ZodIssueLite).safeParse(issues).success).toBe(true);
   });
 
+  it("keeps what a length or size issue measured, and its bound", () => {
+    const schema = z.object({ s: z.string().min(1), a: z.array(z.string()).max(2) });
+    const issues = issuesOf(schema.safeParse({ s: "", a: ["x", "y", "z"] }).error);
+    expect(issues.map(({ path, code, origin, limit }) => ({ path, code, origin, limit }))).toEqual([
+      { path: ["s"], code: "too_small", origin: "string", limit: 1 },
+      { path: ["a"], code: "too_big", origin: "array", limit: 2 },
+    ]);
+    expect(z.array(ZodIssueLite).safeParse(issues).success).toBe(true);
+  });
+
   it("collapses anything that is not a zod error to one pathless issue", () => {
     expect(issuesOf(new Error("boom"))).toEqual([{ path: [], code: "invalid", message: "boom" }]);
     expect(issuesOf("boom")).toEqual([{ path: [], code: "invalid", message: "boom" }]);

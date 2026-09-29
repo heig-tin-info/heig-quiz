@@ -1,5 +1,5 @@
 /** Section 2 of the mock — see `index.ts` for the layout. */
-import { PoolColor } from "@quiz/contracts";
+import { PoolColor, type ZodIssueLite } from "@quiz/contracts";
 import {
   clozeStudentTemplate,
   describeBlank,
@@ -1447,12 +1447,12 @@ export const questionDetail = (q: MockQuestion) => ({
 export function draftIssues(
   q: MockQuestion,
   options: { keyOptional?: boolean } = {},
-): { path: string[]; code: string; message: string }[] {
+): ZodIssueLite[] {
   const config = q.draft.config as Record<string, unknown>;
-  const out: { path: string[]; code: string; message: string }[] = [];
+  const out: ZodIssueLite[] = [];
   const prompt = typeof config.prompt === "string" ? config.prompt : "";
   if (q.type !== "cloze" && prompt.trim() === "") {
-    out.push({ path: ["prompt"], code: "too_small", message: "String must contain at least 1 character(s)" });
+    out.push({ path: ["prompt"], code: "too_small", message: "Too small", origin: "string", limit: 1 });
   }
   if (q.type === "mcq") {
     const choices = (config.choices ?? []) as { text: string; correct: boolean }[];
@@ -1477,10 +1477,21 @@ export function draftIssues(
         out.push({
           path: ["choices", String(i), "text"],
           code: "too_small",
-          message: "String must contain at least 1 character(s)",
+          message: "Too small",
+          origin: "string",
+          limit: 1,
         });
       }
     });
+  }
+  if (q.type === "categorize") {
+    const { columns, cards } = config as unknown as CategorizeConfig;
+    const empty = (path: string[]) => out.push({ path, code: "too_small", message: "Too small", origin: "string", limit: 1 });
+    columns.forEach((column, i) => column.label === "" && empty(["columns", String(i), "label"]));
+    cards.forEach((card, i) => card.text === "" && empty(["cards", String(i), "text"]));
+    if (!columns.some((column) => column.cards.length > 0)) {
+      out.push({ path: ["columns"], code: "custom", message: "categorize.no_target" });
+    }
   }
   if (q.type === "cloze") {
     const parse = parseCloze(String(config.text ?? ""));

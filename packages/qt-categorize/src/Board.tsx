@@ -103,9 +103,9 @@ export interface BoardProps {
   columnHead: (column: { id: string; label: string }, count: number) => ReactNode;
   trayHead: ReactNode;
   trayFoot?: ReactNode;
-  /** The faint word of an empty zone. */
+  /** The faint word of an empty zone; an empty tray may say nothing. */
   emptyColumn: string;
-  emptyTray: string;
+  emptyTray?: string;
   dropHere: string;
   /** `{column}` template. */
   dropInto: string;
@@ -185,7 +185,7 @@ export function Board(props: BoardProps) {
     drop(card, target, index === -1 ? undefined : index);
   }
 
-  const zone = (key: string, ids: readonly string[], target: string | null, name: string, empty: string) => (
+  const zone = (key: string, ids: readonly string[], target: string | null, name: string, empty?: string) => (
     <Zone
       key={key}
       dndId={key}
@@ -296,7 +296,7 @@ function Zone({
   over: boolean;
   locked: boolean;
   selected: string | null;
-  empty: string;
+  empty: string | undefined;
   dropLabel: string;
   dropHere: string;
   onDrop: () => void;
@@ -323,7 +323,7 @@ function Zone({
       >
         {ids.length > 0 ? (
           <ul className={cx("flex gap-1.5", row ? "flex-row flex-wrap" : "flex-col")}>{children}</ul>
-        ) : armed ? null : (
+        ) : armed || empty === undefined ? null : (
           <p className={cx("m-auto px-2 text-center text-xs text-fg-faint", row && "py-2")}>{empty}</p>
         )}
       </SortableContext>

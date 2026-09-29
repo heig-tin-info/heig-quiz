@@ -74,7 +74,8 @@ const unique = (ids: readonly string[]): boolean => new Set(ids).size === ids.le
  * The refinements say what a shape cannot: ids are unique, the key names
  * cards that exist, a card sits in one column at most, and at least one card
  * belongs somewhere — a question made of distractors only has no answer.
- * Messages are i18n keys (`apps/web/src/question/issues.ts` maps them).
+ * Messages are i18n keys (`apps/web/src/question/issues.ts` maps them), and
+ * each names `columns`, so the editor shows it under the board it is about.
  */
 export const CategorizeConfigSchema = z
   .object({
@@ -92,16 +93,17 @@ export const CategorizeConfigSchema = z
   })
   .refine((c) => unique(c.columns.map((col) => col.id)) && unique(c.cards.map((card) => card.id)), {
     message: "categorize.duplicate_id",
+    path: ["columns"],
   })
   .refine(
     (c) => {
       const known = new Set(c.cards.map((card) => card.id));
       return c.columns.every((col) => col.cards.every((id) => known.has(id)));
     },
-    { message: "categorize.unknown_card" },
+    { message: "categorize.unknown_card", path: ["columns"] },
   )
-  .refine((c) => unique(c.columns.flatMap((col) => col.cards)), { message: "categorize.card_twice" })
-  .refine((c) => c.columns.some((col) => col.cards.length > 0), { message: "categorize.no_target" });
+  .refine((c) => unique(c.columns.flatMap((col) => col.cards)), { message: "categorize.card_twice", path: ["columns"] })
+  .refine((c) => c.columns.some((col) => col.cards.length > 0), { message: "categorize.no_target", path: ["columns"] });
 export type CategorizeConfig = z.infer<typeof CategorizeConfigSchema>;
 
 /**

@@ -19,6 +19,10 @@ export const ZodIssueLite = z.object({
   path: z.array(z.string()),
   code: z.string(),
   message: z.string(),
+  /** What a `too_small` / `too_big` measured: `string`, `array`, `number`… */
+  origin: z.string().optional(),
+  /** The bound a `too_small` / `too_big` enforced, so the UI can say it in its own words. */
+  limit: z.number().optional(),
 });
 export type ZodIssueLite = z.infer<typeof ZodIssueLite>;
 
@@ -29,16 +33,24 @@ export type ZodIssueLite = z.infer<typeof ZodIssueLite>;
  * with `ZodIssueLite`. Anything that is not a `ZodError` collapses to a
  * single issue with an empty path, so a caller never has to branch.
  */
+/** The code of an issue that did not come from zod: its message is the error's own. */
+export const NOT_ZOD_ISSUE = "invalid";
+
 export function issuesOf(error: unknown): ZodIssueLite[] {
   if (error instanceof z.ZodError) {
-    return error.issues.map((i) => ({
-      path: i.path.map(String),
-      code: i.code,
-      message: i.message,
-    }));
+    return error.issues.map((i) => {
+      const bound = i.code === "too_small" ? i.minimum : i.code === "too_big" ? i.maximum : undefined;
+      return {
+        path: i.path.map(String),
+        code: i.code,
+        message: i.message,
+        ...(i.code === "too_small" || i.code === "too_big" ? { origin: i.origin } : {}),
+        ...(bound === undefined ? {} : { limit: Number(bound) }),
+      };
+    });
   }
   const message = error instanceof Error ? error.message : String(error);
-  return [{ path: [], code: "invalid", message }];
+  return [{ path: [], code: NOT_ZOD_ISSUE, message }];
 }
 
 /** Cursor pagination: `nextCursor === null` means "last page". */
