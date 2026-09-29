@@ -21,9 +21,11 @@ import type { PollRow } from "./pollTally";
  * is `info`, never the accent: HEIG red on a wall reads as "wrong", and a
  * vote is a datum, not a verdict (DESIGN.md, "Projection").
  *
- * Votes hidden (#157), a row is its letter and its label and nothing else:
+ * Votes hidden (#157), a row shows its letter and its label and nothing else:
  * no count, no percentage, no bar — the choices the room is voting on, not
- * how it is voting.
+ * how it is voting. The places of those three are KEPT, empty and invisible,
+ * so that showing the votes only fills them in: the rows do not move apart
+ * and the labels do not re-wrap under the room's eyes.
  *
  * From six rows up, and only on a screen wide enough for it, they go in TWO
  * columns: eight bars in one column is a list so tall that the fit has to
@@ -118,31 +120,42 @@ export function PollBars({
                 </span>
               ) : null}
               {/* The count leaves first when the screen narrows: the
-                  percentage is the figure a room reads. */}
-              {hideVotes ? null : (
-                <>
-                  <span className="hidden w-[clamp(64px,6vw,100px)] shrink-0 text-right font-mono text-[clamp(13px,1.2vw,17px)] tabular-nums text-fg-faint sm:block">
-                    {t(row.count === 1 ? "poll.votes.one" : "poll.votes", { n: row.count })}
-                  </span>
-                  <span
-                    className={cx(
-                      "shrink-0 font-mono text-[clamp(20px,2.4vw,38px)] font-bold tracking-[-0.02em] tabular-nums",
-                      right && "text-success",
-                      faded && "text-fg-faint",
-                    )}
-                  >
-                    {t("poll.percent", { n: row.percent })}
-                  </span>
-                </>
-              )}
-            </div>
-            {hideVotes ? null : (
-              <div
+                  percentage is the figure a room reads. Votes hidden, both
+                  keep their place with nothing in it; the percentage's
+                  `min-w-[4ch]` is "100%" in mono, so the label beside it is
+                  the same width empty or full. */}
+              <span
+                aria-hidden={hideVotes || undefined}
                 className={cx(
-                  "mt-[clamp(8px,1.2vh,14px)] h-[clamp(8px,0.9vh,12px)] overflow-hidden rounded-full bg-surface-2",
-                  lettered && "ml-[calc(clamp(36px,3.4vw,54px)+clamp(12px,1.4vw,22px))]",
+                  "hidden w-[clamp(64px,6vw,100px)] shrink-0 text-right font-mono text-[clamp(13px,1.2vw,17px)] tabular-nums text-fg-faint sm:block",
+                  hideVotes && "invisible",
                 )}
               >
+                {hideVotes
+                  ? "\u00a0"
+                  : t(row.count === 1 ? "poll.votes.one" : "poll.votes", { n: row.count })}
+              </span>
+              <span
+                aria-hidden={hideVotes || undefined}
+                className={cx(
+                  "min-w-[4ch] shrink-0 text-right font-mono text-[clamp(20px,2.4vw,38px)] font-bold tracking-[-0.02em] tabular-nums",
+                  hideVotes && "invisible",
+                  right && "text-success",
+                  faded && "text-fg-faint",
+                )}
+              >
+                {hideVotes ? "\u00a0" : t("poll.percent", { n: row.percent })}
+              </span>
+            </div>
+            <div
+              aria-hidden={hideVotes || undefined}
+              className={cx(
+                "mt-[clamp(8px,1.2vh,14px)] h-[clamp(8px,0.9vh,12px)] overflow-hidden rounded-full bg-surface-2",
+                lettered && "ml-[calc(clamp(36px,3.4vw,54px)+clamp(12px,1.4vw,22px))]",
+                hideVotes && "invisible",
+              )}
+            >
+              {hideVotes ? null : (
                 <span
                   className={cx(
                     "block h-full rounded-full border transition-[width,background-color,border-color] duration-200 ease-out-emphasized",
@@ -150,7 +163,7 @@ export function PollBars({
                       ? "border-success bg-success-soft"
                       : faded
                         ? "border-transparent bg-surface-3"
-                        : "border-info bg-info-soft",
+                        : "border-accent bg-accent-soft",
                   )}
                   // The one inline style of the screen: the width IS the datum,
                   // and it changes twice a second.
@@ -158,8 +171,8 @@ export function PollBars({
                     width: `${Math.min(100, row.percent)}%`,
                   }}
                 />
-              </div>
-            )}
+              )}
+            </div>
           </li>
         );
       })}
