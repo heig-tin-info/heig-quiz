@@ -36,7 +36,7 @@ export { choiceLetter } from "./schema.js";
  * The caller owns the `<label>`, because the clickable area differs: a small
  * pill beside the editor's field, the WHOLE row in the player. Two things that
  * label must carry — `relative`, so the hidden input has an origin, and
- * `group/opt` while it is enabled, which is what lights the border on hover.
+ * `group/opt` while it is enabled, which is what lights the disc on hover.
  *
  * The focus ring is the app's own (2 px accent at 2 px offset), forwarded to
  * the face: an `sr-only` input is a clipped pixel, and a ring drawn on it is a
