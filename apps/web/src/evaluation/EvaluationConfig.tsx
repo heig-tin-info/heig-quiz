@@ -27,8 +27,8 @@ import {
   Badge,
   Button,
   cx,
+  EditableTitle,
   FormError,
-  InlineTitle,
   Menu,
   PageError,
   PageHeader,
@@ -233,7 +233,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         }
         title={
           <span className="flex flex-wrap items-baseline gap-3">
-            <InlineTitle
+            <EditableTitle
               value={evaluation.title}
               onSave={rename}
               editLabel={t("eval.rename.of", { title: evaluation.title })}

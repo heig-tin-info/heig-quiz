@@ -13,7 +13,7 @@ export type RosterEntryParams = z.infer<typeof RosterEntryParams>;
 
 /** A course: the unit a staff, a pool and a set of classrooms hang off. */
 export const CourseCreate = z.object({
-  name: z.string().min(1).max(200),
+  name: z.string().trim().min(1).max(200),
   /** Short school code (`PRG1`); normalized to upper case server-side. */
   code: z.string().min(1).max(32),
 });
@@ -70,7 +70,7 @@ export function checkPeriodMonths(
 
 export const ClassroomCreate = z
   .object({
-    name: z.string().min(1).max(200),
+    name: z.string().trim().min(1).max(200),
     period: z.string().max(64).default(""),
     periodStart: periodMonths.periodStart.default(null),
     periodEnd: periodMonths.periodEnd.default(null),
@@ -80,7 +80,7 @@ export type ClassroomCreate = z.infer<typeof ClassroomCreate>;
 
 export const ClassroomPatch = z
   .object({
-    name: z.string().min(1).max(200).optional(),
+    name: z.string().trim().min(1).max(200).optional(),
     period: z.string().max(64).optional(),
     /** The two months travel together: a patch sets both or neither. */
     periodStart: periodMonths.periodStart.optional(),

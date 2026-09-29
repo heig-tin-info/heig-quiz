@@ -15,9 +15,9 @@ import {
   Alert,
   Badge,
   Button,
+  EditableTitle,
   EmptyState,
   FormError,
-  InlineTitle,
   isoDateTime,
   PageError,
   PageHeader,
@@ -142,7 +142,7 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
         }
         title={
           <span className="flex flex-wrap items-baseline gap-3">
-            <InlineTitle
+            <EditableTitle
               value={template.title}
               onSave={rename}
               editLabel={t("templates.rename.of", { title: template.title })}

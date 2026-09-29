@@ -11,11 +11,11 @@ import {
   Alert,
   Button,
   Countdown,
+  EditableTitle,
   EmptyState,
   Field,
   FormDialog,
   FormError,
-  InlineTitle,
   Menu,
   Modal,
   NotePanel,
@@ -1636,11 +1636,11 @@ describe("VerdictCell", () => {
   });
 });
 
-describe("InlineTitle", () => {
+describe("EditableTitle", () => {
   function Harness({ onSave = vi.fn() }: { onSave?: (next: string) => void }) {
     const [value, setValue] = useState("Quiz 3");
     return (
-      <InlineTitle
+      <EditableTitle
         value={value}
         onSave={(next) => {
           setValue(next);
@@ -1686,6 +1686,54 @@ describe("InlineTitle", () => {
 
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /^rename evaluation/i })).toBeInTheDocument();
+  });
+
+  it("opens with the whole title selected, and saves once on Enter", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    renderWithProviders(<Harness onSave={onSave} />);
+
+    await user.click(screen.getByRole("button", { name: /^rename evaluation/i }));
+    const input = screen.getByRole("textbox", { name: "Title" }) as HTMLInputElement;
+    expect(input).toHaveFocus();
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, "Quiz 3".length]);
+    await user.keyboard("Quiz 4{Enter}");
+
+    // Enter unmounts the field; its blur must not save a second time.
+    expect(onSave).toHaveBeenCalledExactlyOnceWith("Quiz 4");
+  });
+
+  it("cancels on Escape, and the next edit starts from the stored title", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    renderWithProviders(<Harness onSave={onSave} />);
+
+    await user.click(screen.getByRole("button", { name: /^rename evaluation/i }));
+    await user.keyboard("nonsense{Escape}");
+    expect(onSave).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /^rename evaluation/i }));
+    expect(screen.getByRole("textbox", { name: "Title" })).toHaveValue("Quiz 3");
+  });
+
+  it("reverts a blank title without saving", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    renderWithProviders(<Harness onSave={onSave} />);
+
+    await user.click(screen.getByRole("button", { name: /^rename evaluation/i }));
+    await user.clear(screen.getByRole("textbox", { name: "Title" }));
+    await user.keyboard("   {Enter}");
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /^rename evaluation/i })).toHaveTextContent("Quiz 3");
+  });
+
+  it("shows the title a save is carrying until the stored one catches up", () => {
+    renderWithProviders(
+      <EditableTitle value="Quiz 3" pending="Quiz 4" onSave={vi.fn()} editLabel="Rename" inputLabel="Title" />,
+    );
+    expect(screen.getByRole("button", { name: "Rename" })).toHaveTextContent("Quiz 4");
   });
 });
 

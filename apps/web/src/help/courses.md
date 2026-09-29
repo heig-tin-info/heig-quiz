@@ -9,7 +9,8 @@ a short code. It outlives a class: the same course carries the classrooms of
 One card per course. Its classrooms are listed with their period and their
 headcount; a click opens one. The course's name opens its page, which holds
 all of it: its classrooms (archived ones behind **Show archived**), its pools
-and its evaluation templates.
+and its evaluation templates. A click on the name there renames the course;
+its code stays the one it was created with.
 
 ## Classrooms
 

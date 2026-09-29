@@ -329,31 +329,8 @@ describe("ClassroomView", () => {
       expect(calls.some((c) => c.method === "PATCH" && c.url === ROOM)).toBe(true);
     });
 
-    it("cancels on Escape", async () => {
-      const { calls } = mockFetch({ [`GET ${ROOM}`]: ok(detail()) });
-      renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
-      await userEvent.click(await screen.findByRole("button", { name: RENAME }));
-      await userEvent.type(screen.getByRole("textbox", { name: "Name" }), "nonsense{Escape}");
-
-      expect(calls.some((c) => c.method === "PATCH")).toBe(false);
-      expect(screen.getByRole("heading", { name: /PRG1-2026/ })).toBeVisible();
-      // And the next edit starts from the stored name, not from the abandoned
-      // one.
-      await userEvent.click(screen.getByRole("button", { name: RENAME }));
-      expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("PRG1-2026");
-    });
-
-    it("refuses to save an empty name", async () => {
-      const { calls } = mockFetch({ [`GET ${ROOM}`]: ok(detail()) });
-      renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
-      await userEvent.click(await screen.findByRole("button", { name: RENAME }));
-      const input = screen.getByRole("textbox", { name: "Name" });
-      await userEvent.clear(input);
-      await userEvent.type(input, "   {Enter}");
-
-      expect(calls.some((c) => c.method === "PATCH")).toBe(false);
-      expect(screen.getByRole("heading", { name: /PRG1-2026/ })).toBeVisible();
-    });
+    // Escape, a blank name and the optimistic title are `EditableTitle`'s
+    // own, tested in `ui.test.tsx`.
 
     it("reports a failed rename in a toast", async () => {
       mockFetch({

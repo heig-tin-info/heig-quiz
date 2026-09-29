@@ -14,6 +14,8 @@ A course card holds three things:
 
 A course outlives a class. The same "Programmation C" carries the classroom of 2026, then the one of 2027, and its staff and pools stay in place from one year to the next.
 
+To rename a course, open its page and click its name: it turns into a field, **Enter** saves and **Escape** cancels. The code stays the one it was created with, since it is unique and printed in the exports.
+
 ### Adding a colleague to the staff
 
 Open the card's menu (the three dots) and choose **Add a staff member**. The field asks for the **E-mail of an existing account**: the colleague must have signed in once, otherwise the form answers "No account has signed in with this address yet." Every member of the staff has the same rights on the course and its classrooms; there is no owner. The same menu carries **Remove from the staff** for each member.

@@ -401,6 +401,14 @@ live in `ui/state.ts`, each written once.
   the same pair. A name that does not say where it leads takes a `Tip`
   (`tip`), never a native `title`. It exists because six pages wrote that
   button with two different class lists.
+- EditableTitle: a page title renamed where it is written — the evaluation,
+  the template, the classroom, the course. A real button at the `h1`'s own
+  type, a `PenLine` in `fg-faint` fading in on hover and focus, swapped on a
+  click (or F2) for an input of the same size with the whole title selected.
+  Enter or blur saves, Escape cancels, a blank title reverts; the title being
+  saved stays on screen until the refetch lands. Its accessible name says the
+  action AND the name ("Rename course “Programmation C”"), since it is the
+  whole text of the heading. Never the accent: it is not the page's primary.
 - Logo: the product's wordmark (`src/assets/quiz.svg`), four speech bubbles
   spelling Q U I Z, inlined from the file as `role="img"` named "Quiz". It
   is the file, not retyped JSX: the same mark is delivered elsewhere, and a

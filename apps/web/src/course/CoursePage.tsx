@@ -1,14 +1,19 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Library, Plus, School } from "lucide-react";
 
-import type { CourseSummary } from "@quiz/contracts";
+import type { CoursePatch, CourseSummary } from "@quiz/contracts";
 
+import { api } from "../api";
 import { CourseTemplates } from "../evaluation/templates";
 import { useT } from "../i18n";
+import { useErrorToast } from "../notify";
+import { invalidateHint } from "../realtime/hints";
 import type { Route } from "../router";
 import {
   Actions,
   Button,
   Card,
+  EditableTitle,
   EmptyState,
   PageError,
   PageHeader,
@@ -81,6 +86,37 @@ export function CoursePage({ id, navigate }: { id: string; navigate: (r: Route) 
   return <Course key={course.id} course={course} navigate={navigate} />;
 }
 
+/**
+ * The course name, renamed where it is written, as the classroom's is
+ * (`EditableTitle`, #294). The name only: the code is unique across the
+ * instance and printed in the exports, so it stays what it was created as.
+ */
+function CourseName({ course }: { course: CourseSummary }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const toastError = useErrorToast();
+  const rename = useMutation({
+    mutationFn: (name: string) =>
+      api(`/app/api/courses/${course.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name } satisfies CoursePatch),
+      }),
+    // The name is in the sidebar, on the course cards and in every classroom's
+    // eyebrow: every family a `courses` hint refreshes.
+    onSuccess: () => invalidateHint(qc, ["courses"]),
+    onError: toastError("courses.renameFailed"),
+  });
+  return (
+    <EditableTitle
+      value={course.name}
+      pending={rename.isPending ? rename.variables : undefined}
+      onSave={(name) => rename.mutate(name)}
+      editLabel={t("courses.renameName", { name: course.name })}
+      inputLabel={t("courses.name")}
+    />
+  );
+}
+
 function Course({ course, navigate }: { course: CourseSummary; navigate: (r: Route) => void }) {
   const t = useT();
   const { items, staffActions, newClassroom, dialogs } = useCourseActions(course, {
@@ -96,7 +132,7 @@ function Course({ course, navigate }: { course: CourseSummary; navigate: (r: Rou
         }
         title={
           <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            {course.name}
+            <CourseName course={course} />
             <span className="text-base font-normal text-fg-muted">{course.code}</span>
             <HiddenBadge course={course} />
             <PeopleStack people={course.staff} actions={staffActions} />

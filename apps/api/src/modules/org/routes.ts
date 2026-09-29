@@ -96,7 +96,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     const code = body.data.code.trim().toUpperCase();
     const created = await service.createCourse(
       app.db,
-      { name: body.data.name.trim(), code },
+      { name: body.data.name, code },
       req.user!.id,
     );
     if (!created) {
