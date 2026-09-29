@@ -91,6 +91,8 @@ export const en = {
   "courses.newAction": "Create course",
   "courses.name": "Name",
   "courses.namePlaceholder": "Programmation C",
+  "courses.renameName": "Rename course “{name}”",
+  "courses.renameFailed": "Could not rename this course.",
   "courses.code": "Code",
   "courses.codePlaceholder": "PRG1",
   "courses.createFailed": "Creation failed.",

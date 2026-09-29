@@ -88,6 +88,8 @@ export const fr: Record<keyof Dict, string> = {
   "courses.newAction": "Créer le cours",
   "courses.name": "Nom",
   "courses.namePlaceholder": "Programmation C",
+  "courses.renameName": "Renommer le cours « {name} »",
+  "courses.renameFailed": "Impossible de renommer ce cours.",
   "courses.code": "Code",
   "courses.codePlaceholder": "PRG1",
   "courses.createFailed": "La création a échoué.",

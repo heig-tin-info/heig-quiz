@@ -5,7 +5,6 @@ import {
   CalendarRange,
   ClipboardList,
   GraduationCap,
-  Pencil,
   Trash2,
   UserPlus,
   Users,
@@ -28,10 +27,9 @@ import {
   Badge,
   Button,
   Card,
-  cx,
+  EditableTitle,
   EmptyState,
   FormDialog,
-  inputClass,
   Menu,
   PageHeader,
   ParentLink,
@@ -56,96 +54,36 @@ import { invalidateHint } from "./realtime/hints";
 type Tab = "roster" | "evaluations";
 
 /**
- * The classroom name, renamed where it is written.
- *
- * Hovering the title reveals a pencil — the affordance that says this name is
- * a control and not a heading — and a click on either the name or the pencil
- * swaps it for an input holding the name, selected. Enter saves, Escape
- * cancels and LEAVING THE FIELD SAVES, the same contract as the points field
- * of the evaluation question list (`evaluation/ItemsStep.tsx`), the app's
- * other edit-in-place: a teacher who clicks away does not silently lose what
- * they typed. A blank name is not a name, so it cancels instead of saving.
- *
- * The request is the PATCH the "Rename" menu item used to open a modal for;
- * the modal is gone, this is the whole of it.
+ * The classroom name, renamed where it is written (`EditableTitle`). The
+ * request is the PATCH the "Rename" menu item used to open a modal for; the
+ * modal is gone, this is the whole of it.
  */
 function ClassroomName({ room }: { room: ClassroomDetail }) {
   const t = useT();
   const qc = useQueryClient();
   const toastError = useErrorToast();
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(room.name);
-
   const rename = useMutation({
     mutationFn: (name: string) =>
-      api(`/app/api/classrooms/${room.id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+      api(`/app/api/classrooms/${room.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name } satisfies ClassroomPatch),
+      }),
     // The name is on the course page and in the classroom list too, so
     // everything that carries a classroom is dropped.
     onSuccess: () => invalidateHint(qc, ["classrooms"]),
     onError: toastError("classrooms.renameFailed"),
   });
-
-  if (editing) {
-    const commit = () => {
-      const next = value.trim();
-      setEditing(false);
-      if (next !== "" && next !== room.name) rename.mutate(next);
-    };
-    return (
-      <input
-        aria-label={t("classrooms.name")}
-        value={value}
-        autoFocus
-        // The whole name is selected, so the common case — a new name rather
-        // than an edit of this one — is one keystroke away.
-        onFocus={(e) => e.currentTarget.select()}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          // Both keys unmount the input, so neither leaves a blur behind that
-          // would save a second time.
-          if (e.key === "Enter") commit();
-          else if (e.key === "Escape") {
-            setValue(room.name);
-            setEditing(false);
-          }
-        }}
-        // The title's own type at the height of its own line box (28 px over
-        // `leading-tight`, so 36 px), which is what keeps the tabs below from
-        // jumping when the heading turns into a field. `size` keeps the field
-        // about as wide as what it holds.
-        className={cx(
-          inputClass,
-          "h-9 max-w-full text-[28px] font-bold leading-tight tracking-[-0.02em]",
-        )}
-        size={Math.max(value.length, 8)}
-      />
-    );
-  }
-
   return (
-    <button
-      type="button"
+    <EditableTitle
+      value={room.name}
+      pending={rename.isPending ? rename.variables : undefined}
+      onSave={(name) => rename.mutate(name)}
       // The name is IN the label: this button is the whole text of the <h1>,
       // and a bare "Rename classroom" would leave the heading naming no
-      // classroom at all. Same shape as the roster's per-row menu label.
-      aria-label={t("classrooms.renameName", { name: room.name })}
-      onClick={() => {
-        // From the server, not from the last edit: another session may have
-        // renamed the classroom since this component was mounted.
-        setValue(room.name);
-        setEditing(true);
-      }}
-      className="group inline-flex items-center gap-1.5 rounded-sm text-left"
-    >
-      {/* While the PATCH is in flight the new name is already on screen: the
-          old one coming back for one frame reads as a failed save. */}
-      <span>{rename.isPending ? (rename.variables ?? room.name) : room.name}</span>
-      <Pencil
-        aria-hidden
-        className="size-5 shrink-0 text-fg-faint opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
-      />
-    </button>
+      // classroom at all.
+      editLabel={t("classrooms.renameName", { name: room.name })}
+      inputLabel={t("classrooms.name")}
+    />
   );
 }
 

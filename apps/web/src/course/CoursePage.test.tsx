@@ -92,6 +92,47 @@ describe("CoursePage", () => {
     expect(await screen.findByRole("dialog", { name: "New classroom" })).toBeVisible();
   });
 
+  it("renames the course where its name is written, never its code (#294)", async () => {
+    // Stateful, so the refetch that follows the save answers with the new name.
+    let name = "Programmation C";
+    const { calls } = mockFetch({
+      ...world(),
+      [`GET ${COURSES}`]: () =>
+        ok([makeCourseSummary({ name, classrooms: [makeClassroomSummary({ id: "r1" })] })]),
+      "PATCH /app/api/courses/c1": (call) => {
+        name = (call.body as { name: string }).name;
+        return ok({ id: "c1", name, code: "PRG1" });
+      },
+    });
+    renderWithProviders(<CoursePage id="c1" navigate={vi.fn()} />);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Rename course “Programmation C”" }),
+    );
+    const input = screen.getByRole("textbox", { name: "Name" });
+    expect(input).toHaveValue("Programmation C");
+    await userEvent.clear(input);
+    await userEvent.type(input, "Programmation C avancée{Enter}");
+
+    expect(calls.filter((c) => c.method === "PATCH")).toEqual([
+      { url: "/app/api/courses/c1", method: "PATCH", body: { name: "Programmation C avancée" } },
+    ]);
+    expect(
+      await screen.findByRole("button", { name: "Rename course “Programmation C avancée”" }),
+    ).toBeVisible();
+    // The code is text, not a control.
+    expect(screen.getByText("PRG1").closest("button")).toBeNull();
+  });
+
+  it("reports a failed course rename in a toast", async () => {
+    mockFetch({ ...world(), "PATCH /app/api/courses/c1": fail(500, {}) });
+    renderWithProviders(<CoursePage id="c1" navigate={vi.fn()} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: /^Rename course/ }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Name" }), " 2{Enter}");
+    expect(await screen.findByText("Could not rename this course.")).toBeVisible();
+  });
+
   it("shows the templates section even when empty, and names the door in", async () => {
     mockFetch(world([]));
     renderWithProviders(<CoursePage id="c1" navigate={vi.fn()} />);

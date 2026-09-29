@@ -168,7 +168,7 @@ export async function updateCourse(
   const [updated] = await db
     .update(courses)
     .set({
-      ...(patch.name ? { name: patch.name.trim() } : {}),
+      ...(patch.name ? { name: patch.name } : {}),
       ...(patch.code ? { code: patch.code.trim().toUpperCase() } : {}),
       updatedAt: new Date(),
     })
@@ -287,7 +287,7 @@ export async function updateClassroom(
   const [updated] = await db
     .update(classrooms)
     .set({
-      ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
       ...(patch.period !== undefined ? { period: patch.period.trim() } : {}),
       ...(patch.periodStart !== undefined ? { periodStart: patch.periodStart } : {}),
       ...(patch.periodEnd !== undefined ? { periodEnd: patch.periodEnd } : {}),

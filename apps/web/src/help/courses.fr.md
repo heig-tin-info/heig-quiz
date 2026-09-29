@@ -9,7 +9,8 @@ classes de 2026, puis celles de 2027.
 Une carte par cours. Ses classes y sont listées avec leur période et leur
 effectif ; un clic en ouvre une. Le nom du cours ouvre sa page, qui le
 réunit tout entier : ses classes (les archivées derrière **Afficher les
-archivées**), ses banques et ses modèles d'évaluation.
+archivées**), ses banques et ses modèles d'évaluation. Un clic sur le nom,
+sur cette page, renomme le cours ; son code reste celui de sa création.
 
 ## Classes
 

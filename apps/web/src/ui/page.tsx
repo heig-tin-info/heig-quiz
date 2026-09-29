@@ -161,15 +161,23 @@ export function ParentLink({
  *
  * It is not a primary action and never takes the accent (DESIGN.md): the
  * primary of the screen it sits on stays what it is.
+ *
+ * `pending` is the title a save is carrying, shown in place of `value` until
+ * the caller's refetch lands: the old title coming back for a frame reads as
+ * a failed save. The evaluation, the template, the classroom and the course
+ * all rename through this one component.
  */
-export function InlineTitle({
+export function EditableTitle({
   value,
+  pending,
   onSave,
   editLabel,
   inputLabel,
   className = "",
 }: {
   value: string;
+  /** The title a save in flight carries, if any (the mutation's variables). */
+  pending?: string | undefined;
   /** Called with the trimmed new title, only when it is non-empty and different. */
   onSave: (next: string) => void;
   /** Accessible name of the button, e.g. `Rename evaluation: Test 0`. */
@@ -264,7 +272,7 @@ export function InlineTitle({
         className,
       )}
     >
-      {value}
+      {pending ?? value}
       <PenLine
         aria-hidden
         className="ml-2 inline-block size-4 -translate-y-0.5 align-middle text-fg-faint opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"

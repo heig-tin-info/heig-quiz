@@ -714,6 +714,62 @@ describe("dated period (F-ORG-03, #156)", () => {
   });
 });
 
+describe("PATCH /courses/:id (#294)", () => {
+  const course = async (code: string) => {
+    const id = randomUUID();
+    await server.app.db.insert(courses).values({ id, name: "Old name", code });
+    await server.app.db.insert(courseStaff).values({ courseId: id, userId: teacher.id });
+    return id;
+  };
+  const patch = (id: string, payload: Payload) =>
+    server.app.inject({
+      method: "PATCH",
+      url: `/app/api/courses/${id}`,
+      headers: teacher.headers,
+      payload,
+    });
+
+  it("renames the course, trimmed, and audits it", async () => {
+    const id = await course("RENAME1");
+    const res = await patch(id, { name: "  New name " });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ name: "New name" });
+    const [entry] = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "course.update"), eq(auditLog.subjectId, id)));
+    expect(entry).toBeDefined();
+  });
+
+  it("refuses a blank name with a 400, and keeps the old one", async () => {
+    const id = await course("RENAME2");
+    expect((await patch(id, { name: "   " })).statusCode).toBe(400);
+    const [row] = await server.app.db.select().from(courses).where(eq(courses.id, id));
+    expect(row!.name).toBe("Old name");
+  });
+});
+
+describe("a blank classroom name", () => {
+  it("is refused with a 400 at creation and on PATCH", async () => {
+    const created = await server.app.inject({
+      method: "POST",
+      url: `/app/api/courses/${courseId}/classrooms`,
+      headers: teacher.headers,
+      payload: { name: "   " },
+    });
+    expect(created.statusCode).toBe(400);
+    const patched = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/classrooms/${classroomId}`,
+      headers: teacher.headers,
+      payload: { name: "  " },
+    });
+    expect(patched.statusCode).toBe(400);
+    const [row] = await server.app.db.select().from(classrooms).where(eq(classrooms.id, classroomId));
+    expect(row!.name).toBe("PRG1-A");
+  });
+});
+
 describe("GET /courses/:id", () => {
   it("returns the course, its staff, its classrooms and its pools", async () => {
     const pool = await server.app.inject({
