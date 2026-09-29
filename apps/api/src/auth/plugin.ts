@@ -10,6 +10,7 @@ import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
 import { CoachSeenPatch, MePatch, type PublicConfig, type SessionKind } from "@quiz/contracts";
 
+import { avatarUrl } from "../modules/avatar.js";
 import { invalid } from "../modules/http.js";
 import { devLoginRoutes } from "./dev.js";
 import { impersonationRoutes } from "./impersonation.js";
@@ -308,9 +309,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
         .from(avatars)
         .where(eq(avatars.userId, u.id))
         .limit(1);
-      const avatarUrl = uploaded
-        ? `/app/api/users/${u.id}/avatar?v=${uploaded.updatedAt.getTime()}`
-        : u.pictureUrl;
+      const picture = uploaded ? avatarUrl(u.id, uploaded.updatedAt) : u.pictureUrl;
       return {
         id: u.id,
         email: u.email,
@@ -318,7 +317,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
         familyName: u.familyName,
         role: u.role,
         lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
-        avatarUrl,
+        avatarUrl: picture,
         hasUploadedAvatar: Boolean(uploaded),
         locale: u.locale,
         dateFormat: u.dateFormat,

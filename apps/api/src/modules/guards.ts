@@ -226,7 +226,12 @@ export function accessWhere(user: Pick<Caller, "role">, predicate: SQL): SQL | u
  */
 export function seesUser(user: Caller, subjectId: string): SQL | undefined {
   if (user.id === subjectId) return undefined;
-  const subjectCourses = sql`SELECT ${qualified(courseStaff.courseId)} FROM ${courseStaff} WHERE ${qualified(courseStaff.userId)} = ${subjectId} UNION SELECT ${qualified(classrooms.courseId)} FROM ${enrollments} JOIN ${classrooms} ON ${qualified(classrooms.id)} = ${qualified(enrollments.classroomId)} WHERE ${qualified(enrollments.userId)} = ${subjectId}`;
+  const staffedBySubject = sql`SELECT ${qualified(courseStaff.courseId)} FROM ${courseStaff}
+    WHERE ${qualified(courseStaff.userId)} = ${subjectId}`;
+  const satBySubject = sql`SELECT ${qualified(classrooms.courseId)} FROM ${enrollments}
+    JOIN ${classrooms} ON ${qualified(classrooms.id)} = ${qualified(enrollments.classroomId)}
+    WHERE ${qualified(enrollments.userId)} = ${subjectId}`;
+  const subjectCourses = sql`${staffedBySubject} UNION ${satBySubject}`;
   return accessWhere(
     user,
     sql`EXISTS (SELECT 1 FROM ${courses} WHERE ${staffAccess(user.id, qualified(courses.id))} AND ${qualified(courses.id)} IN (${subjectCourses}))`,
