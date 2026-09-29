@@ -689,12 +689,19 @@ const scenes = [
   // addressable by its STATE in the mock: `closed` is the one still being
   // graded and `released` the published one, and both are the very
   // evaluations the classroom list shows.
+  // One scene per question type of the table (ADR-040): the closed
+  // evaluation holds, in order, code, mcq, circuit, short, rich, categorize
+  // and codeimage (`itemSource` in src/mock/evaluation.ts).
   { name: "grading", role: "teacher", path: "/evaluations/closed/grading" },
-  { name: "grading-short", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 1) },
-  { name: "grading-cloze", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 2) },
-  { name: "grading-code", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 3) },
+  { name: "grading-code-expanded", role: "teacher", path: "/evaluations/closed/grading", act: async (p) => {
+      await p.locator('[role="button"][aria-expanded="false"]').first().click();
+    } },
+  { name: "grading-mcq", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 1) },
+  { name: "grading-circuit", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 2) },
+  { name: "grading-short", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 3) },
   { name: "grading-rich", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 4) },
-  { name: "grading-categorize", role: "teacher", path: "/evaluations/released/grading", settle: 3000, act: async (p) => { await nextQuestion(p, 5); await p.getByText("vif martre").first().click({ timeout: 3000 }).catch(() => {}); await p.waitForTimeout(400); } },
+  { name: "grading-categorize", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 5) },
+  { name: "grading-codeimage", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 6) },
   // ADR-040: the table and its layers — the question menu, the answer
   // panel (an answer, the key, the adjustment), the filters, a sort, names.
   { name: "grading-menu", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {

@@ -16,8 +16,10 @@ d'étapes en dessous mènent à n'importe quelle autre question, et une étape
 pleine est une question dont toutes les réponses sont validées.
 
 Chaque ligne du tableau est la réponse d'un étudiant, dans les colonnes
-propres à la question : un choix, un trou, le texte tapé. La première
-ligne, en bleu, est la réponse attendue. Cliquez un en-tête pour trier (à
+propres à la question : un choix, un trou, le texte tapé, la colonne
+d'une carte, un programme replié après cinq lignes (cliquez-le pour le
+déplier ; la ligne ne s'ouvre pas). La première ligne, en bleu, est la
+réponse attendue. Cliquez un en-tête pour trier (à
 nouveau pour inverser, une troisième fois pour revenir) ; une ligne ouvre
 la réponse en entier à droite.
 

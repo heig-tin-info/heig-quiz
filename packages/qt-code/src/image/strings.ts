@@ -11,9 +11,11 @@
  */
 import {
   EDITOR_STRINGS,
+  GRADING_STRINGS,
   PLAYER_STRINGS,
   REVIEW_STRINGS,
   type CodeEditorStrings,
+  type CodeGradingStrings,
   type CodePlayerStrings,
   type CodeReviewStrings,
 } from "../strings.js";
@@ -177,4 +179,27 @@ export const CODEIMAGE_PLAYER_DEFAULTS: CodeImagePlayerStrings = {
 export const CODEIMAGE_REVIEW_DEFAULTS: CodeImageReviewStrings = {
   ...REVIEW_STRINGS,
   ...IMAGE_REVIEW_STRINGS,
+};
+
+/** What the grading table's picture column adds to `code`'s program column (ADR-040). */
+export type ImageGradingStrings = {
+  column: string;
+  /** The accessible name of a student's thumbnail, and of the key's. */
+  picture: string;
+  target: string;
+  noPicture: string;
+};
+
+export const IMAGE_GRADING_STRINGS: ImageGradingStrings = {
+  column: "Picture · program",
+  picture: "The picture the program draws",
+  target: "The target picture",
+  noPicture: "No picture",
+};
+
+export type CodeImageGradingStrings = CodeGradingStrings & ImageGradingStrings;
+
+export const CODEIMAGE_GRADING_DEFAULTS: CodeImageGradingStrings = {
+  ...GRADING_STRINGS,
+  ...IMAGE_GRADING_STRINGS,
 };

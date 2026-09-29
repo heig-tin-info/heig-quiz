@@ -7,6 +7,7 @@
 import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
 import { typeIcon } from "@quiz/ui";
+import { richGrading } from "./grading.js";
 import { isRichAnswered } from "./schema.js";
 import type { RichAnswer, RichConfig, RichDetails, RichSolution, RichStudent } from "./schema.js";
 
@@ -27,9 +28,10 @@ export const richClient: RichClient = {
 
   emptyAnswer: () => ({ text: "" }),
   isAnswered: isRichAnswered,
+  grading: richGrading,
 };
 
 /* The surfaces stay out of the values exported here, or the `lazy` above is undone (see qt-short). */
-export { richEditorStrings, richPlayerStrings, richReviewStrings } from "./strings.js";
+export { richEditorStrings, richGradingStrings, richPlayerStrings, richReviewStrings } from "./strings.js";
 export { emptyRichDraft } from "./schema.js";
 export type { RichAnswer, RichConfig, RichDetails, RichFormat, RichSolution, RichStudent } from "./schema.js";

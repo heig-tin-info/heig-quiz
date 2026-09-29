@@ -28,9 +28,11 @@ The card at the top says which question you are on, **Question 1 of 5**, with it
 
 Each row is one student's answer. It starts with a verdict square: a solid green check for full marks, a striped green square for partial credit, a red cross for no credit (a missing answer or a negative score included), and a dashed **?** for an answer nothing has judged yet — still at the runner, or an essay waiting for a grade by hand; its tooltip says which. Then come the answer's own columns, the **Points** and the row's actions.
 
-The columns depend on the question type. A multiple choice gets one column per choice, lettered as in the editor: a ticked choice is filled green when it is correct and red when it is not, and a correct choice left out is drawn dashed. A short answer gets one column with the text typed, tinted by its verdict. A fill-in-the-blanks question gets one column per blank. The other types show their answer as text in one column; open the row to see it in full.
+The columns depend on the question type. A multiple choice gets one column per choice, lettered as in the editor: a ticked choice is filled green when it is correct and red when it is not, and a correct choice left out is drawn dashed. A short answer gets one column with the text typed, tinted by its verdict. A fill-in-the-blanks question gets one column per blank.
 
-The first row, on a blue background, is the **Expected answer**: the correct choices, the accepted answers, the key of each blank. Its two buttons **Edit question** and **Re-grade** are there for the moment you notice the key is wrong.
+A categorize question gets one column per card, headed by the card: each cell names the column the student put it in, green where the card belongs there and red where it does not, and a dash for a card left out. With more than eight cards, one column counts the cards placed right instead (`7/9 right`); open the row to see the board. A code question gets one wide column with the program the student wrote, the parts they could edit, and a chip counting the tests passed (`3/4 tests`), or `runner…` while the runner still owes the verdict. A program longer than five lines is folded: click it to unfold it in place, click again to fold it; the row does not open. A code-to-picture question adds the picture the program drew, as a small thumbnail beside the program. A circuit shows what the schematic holds (`3 parts · 4 wires`) and how many stimuli it passed; hover the chip for the ones that failed, and open the row for the drawing. An essay shows its first three lines as plain text.
+
+The first row, on a blue background, is the **Expected answer**: the correct choices, the accepted answers, the key of each blank, the column of each card, the reference solution of a program (with the target picture), what the reference circuit holds, or the model answer of an essay (else its rubric). Its two buttons **Edit question** and **Re-grade** are there for the moment you notice the key is wrong.
 
 Click any column header to sort by it, click again to reverse the order, a third time to go back to the table's own order. Rows with the same value keep their relative order.
 
@@ -65,10 +67,10 @@ A fill-in-the-blanks question renders the text with the student's words in the b
 <figure markdown="span">
   ![Grading a code question with its test cases](../assets/screenshots/grading-code-light.png#only-light)
   ![Grading a code question with its test cases](../assets/screenshots/grading-code-dark.png#only-dark)
-  <figcaption>A code question: one row per test case with the expected and obtained output, and the reference solution.</figcaption>
+  <figcaption>A code question: each program in one wide column, folded after five lines, beside the tests it passed.</figcaption>
 </figure>
 
-A code question shows the points earned, then one row per test case: **Case**, **Arguments**, **Expected**, **Got**, **Verdict** (`Passed` or failed) and **Points**. A case marked `Hidden case` was never shown to the student. When the source did not compile, the view says **Compilation failed** and shows the **Compiler output** instead of the table; a program that died shows `Crashed`. The **Reference solution** is displayed underneath so you can compare without opening the question.
+Opened, a code question shows the points earned, then one row per test case: **Case**, **Arguments**, **Expected**, **Got**, **Verdict** (`Passed` or failed) and **Points**. A case marked `Hidden case` was never shown to the student. When the source did not compile, the view says **Compilation failed** and shows the **Compiler output** instead of the table; a program that died shows `Crashed`. The **Reference solution** is displayed underneath so you can compare without opening the question.
 
 ## Acting on an answer
 

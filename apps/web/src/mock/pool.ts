@@ -722,17 +722,20 @@ export const RICH_CONFIG: Record<string, unknown> = {
  * `mockups/categorize.html`. Three columns, eight targets and one distractor
  * (`string`, which C does not have). The ids are opaque, as the editor mints them.
  */
+/**
+ * Eight cards: the most the grading table gives a column each
+ * (`CATEGORIZE_GRADING_MAX_COLUMNS`), so the mock's table shows them.
+ */
 export const CATEGORIZE_CONFIG: Record<string, unknown> = {
   configVersion: 1,
   prompt: "Classez chaque type C selon ce qu'il représente.",
   columns: [
-    { id: "k3v8a1c2", label: "Entier", cards: ["m1x0q7ta", "m4r2b9zc", "m8n5c3ud"] },
+    { id: "k3v8a1c2", label: "Entier", cards: ["m1x0q7ta", "m8n5c3ud"] },
     { id: "p7w2d5e9", label: "Virgule flottante", cards: ["m2t6e1vf", "m9y3f8wg"] },
     { id: "r5j8g1h4", label: "Pointeur", cards: ["m6u4h2xh", "m0i7j5yi", "m3o1k9zj"] },
   ],
   cards: [
     { id: "m1x0q7ta", text: "`int`" },
-    { id: "m4r2b9zc", text: "`unsigned long`" },
     { id: "m8n5c3ud", text: "`size_t`" },
     { id: "m2t6e1vf", text: "`double`" },
     { id: "m9y3f8wg", text: "`float`" },
@@ -750,7 +753,7 @@ export const CATEGORIZE_CONFIG: Record<string, unknown> = {
 /** A student's partly right answer to {@link CATEGORIZE_CONFIG}, the one of the mockup. */
 export const CATEGORIZE_ANSWER = {
   columns: {
-    k3v8a1c2: ["m1x0q7ta", "m8n5c3ud", "m4r2b9zc", "m0i7j5yi"],
+    k3v8a1c2: ["m1x0q7ta", "m8n5c3ud", "m0i7j5yi"],
     p7w2d5e9: ["m2t6e1vf", "m9y3f8wg"],
     r5j8g1h4: ["m6u4h2xh", "m3o1k9zj", "m5p2l6ak"],
   },
@@ -1083,11 +1086,11 @@ export const questions: MockQuestion[] = [
     explanation: "Chaque ordre ajoute -20 dB/décade ; le second ordre en donne -40.",
   }),
   /*
-   * The `codeimage` question (ADR-021), unpublished so the evaluations built
-   * from the published questions stay as they are. Its target is set: the
-   * editor shows it, and "Try the reference solution" answers through
-   * `tryAnswer` with the picture the reference draws. Last in the list, so
-   * the ids of the questions above do not move.
+   * The `codeimage` question (ADR-021). Its target is set: the editor shows
+   * it, and "Try the reference solution" answers through `tryAnswer` with the
+   * picture the reference draws. Published, and spliced seventh by
+   * `itemSource` (`evaluation.ts`), so the grading table has one to show.
+   * Last in the list, so the ids of the questions above do not move.
    */
   makeQuestion({
     poolId: "p1",
@@ -1100,6 +1103,7 @@ export const questions: MockQuestion[] = [
     tags: ["boucles", "image"],
     config: codeimageConfig(),
     explanation: "La distance au bord le plus proche est min(x, y, 15 − x, 15 − y).",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 4 }],
   }),
   /*
    * The `rich` question, an essay graded by hand (issue #192). Last in the

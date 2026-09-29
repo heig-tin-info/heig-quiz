@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { GradingColumn } from "@quiz/core/client";
 import type { GradingEntry } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
-import { NoAnswer } from "@quiz/ui";
+import { Dash, NoAnswer } from "@quiz/ui";
 
 import { useT } from "../i18n";
 import { Badge, Button, cx, IconButton, pressable, TableHead, T, Tip, type Column } from "../ui";
@@ -277,7 +277,7 @@ function AnswerRow({
             <span className="text-fg-faint"> / {formatPoints(grading.maxPoints)}</span>
           </>
         ) : (
-          <span className="text-fg-faint">—</span>
+          <Dash />
         )}
         {grading?.source === "llm" && grading.confidence ? (
           <span className="block text-[11px] text-info">

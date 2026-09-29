@@ -670,7 +670,7 @@
       "name": "grading",
       "caption": "The grading table, one question at a time: the automatic gradings, validated or waiting for the teacher.",
       "persona": "teacher",
-      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
+      "path": "/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -685,15 +685,15 @@
         "light": "grading-light.png",
         "dark": "grading-dark.png"
       },
-      "takenAt": "2026-09-28T14:45:46.796Z",
-      "commit": "9bd6b57",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-09-29T20:37:15.902Z",
+      "commit": "ca8c0d3",
+      "base": "http://localhost:3147"
     },
     {
       "name": "grading-short",
       "caption": "Grading a short-answer question.",
       "persona": "teacher",
-      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
+      "path": "/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -708,15 +708,15 @@
         "light": "grading-short-light.png",
         "dark": "grading-short-dark.png"
       },
-      "takenAt": "2026-09-28T14:45:46.796Z",
-      "commit": "9bd6b57",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-09-29T20:37:15.902Z",
+      "commit": "ca8c0d3",
+      "base": "http://localhost:3147"
     },
     {
       "name": "grading-cloze",
       "caption": "Grading a fill-in-the-blanks question.",
       "persona": "teacher",
-      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
+      "path": "/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -731,15 +731,15 @@
         "light": "grading-cloze-light.png",
         "dark": "grading-cloze-dark.png"
       },
-      "takenAt": "2026-09-28T14:45:46.796Z",
-      "commit": "9bd6b57",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-09-29T20:37:15.902Z",
+      "commit": "ca8c0d3",
+      "base": "http://localhost:3147"
     },
     {
       "name": "grading-code",
-      "caption": "Grading a code question: compilation and test cases per student.",
+      "caption": "Grading a code question: each program in one wide column, folded after five lines, beside the tests it passed.",
       "persona": "teacher",
-      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
+      "path": "/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -754,15 +754,15 @@
         "light": "grading-code-light.png",
         "dark": "grading-code-dark.png"
       },
-      "takenAt": "2026-09-28T14:45:46.796Z",
-      "commit": "9bd6b57",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-09-29T20:37:15.902Z",
+      "commit": "ca8c0d3",
+      "base": "http://localhost:3147"
     },
     {
       "name": "grading-override",
       "caption": "Adjusting a grading by hand: points and a comment the student will read.",
       "persona": "teacher",
-      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
+      "path": "/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -777,15 +777,15 @@
         "light": "grading-override-light.png",
         "dark": "grading-override-dark.png"
       },
-      "takenAt": "2026-09-28T14:45:46.796Z",
-      "commit": "9bd6b57",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-09-29T20:37:15.902Z",
+      "commit": "ca8c0d3",
+      "base": "http://localhost:3147"
     },
     {
       "name": "grading-batch",
       "caption": "Validating every proposal of a question at once (here the code answers the seed could not run).",
       "persona": "teacher",
-      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
+      "path": "/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -800,9 +800,9 @@
         "light": "grading-batch-light.png",
         "dark": "grading-batch-dark.png"
       },
-      "takenAt": "2026-09-28T14:45:46.796Z",
-      "commit": "9bd6b57",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-09-29T20:37:15.902Z",
+      "commit": "ca8c0d3",
+      "base": "http://localhost:3147"
     },
     {
       "name": "results",

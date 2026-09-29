@@ -1092,6 +1092,7 @@ export const en = {
   "qt.rich.r.noRubric": "No grading criteria.",
   "qt.rich.r.reference": "Model answer",
   "qt.rich.r.score": "Score",
+  "qt.rich.g.essay": "Essay",
 
   // --- qt-categorize strings ---
   "qt.categorize.e.prompt": "Statement",
@@ -1150,6 +1151,12 @@ export const en = {
   "qt.categorize.r.breakdown": "Cards right",
   "qt.categorize.r.breakdownPlaced": "Placed cards right",
   "qt.categorize.r.negativeMarking": "Negative marking: wrong placements cost points.",
+  "qt.categorize.g.leftOut": "Left out",
+  "qt.categorize.g.ranked": "{column} · {rank}",
+  "qt.categorize.g.cards": "Cards",
+  "qt.categorize.g.right": "{right}/{total} right",
+  "qt.categorize.g.placed": "{placed}/{total} placed",
+  "qt.categorize.g.total": "{total} cards",
 
   // --- qt-cloze strings ---
   "qt.cloze.e.text": "Text with blanks",
@@ -1348,6 +1355,16 @@ export const en = {
   "qt.code.r.notAnswered": "Not answered.",
   "qt.code.r.referenceSolution": "Reference solution",
   "qt.code.r.yourCode": "Your code",
+  "qt.code.g.program": "Program",
+  "qt.code.g.more": "{n} more lines",
+  "qt.code.g.more.one": "1 more line",
+  "qt.code.g.expand": "Show the whole program",
+  "qt.code.g.collapse": "Fold the program",
+  "qt.code.g.tests": "{passed}/{total} tests",
+  "qt.code.g.tests.one": "{passed}/{total} test",
+  "qt.code.g.compileFailed": "Does not compile",
+  "qt.code.g.atRunner": "runner…",
+  "qt.code.g.runFailed": "Not run",
 
   // --- qt-code: codeimage (ADR-021) — only what a picture adds; the program
   // half reads the qt.code.* sentences above ---
@@ -1411,6 +1428,10 @@ export const en = {
   "qt.codeimage.p.endCrashed": "The program crashed. The image shows what it printed before.",
   "qt.codeimage.p.endTruncated": "The output was cut at the size limit.",
   "qt.codeimage.r.noImage": "The program printed no image.",
+  "qt.codeimage.g.column": "Picture · program",
+  "qt.codeimage.g.picture": "The picture the program draws",
+  "qt.codeimage.g.target": "The target picture",
+  "qt.codeimage.g.noPicture": "No picture",
 
   // --- qt-circuit ---
   // The component kinds, keyed by `ComponentKind`: the same word labels a
@@ -1683,6 +1704,18 @@ export const en = {
   "qt.circuit.r.runnerError":
     "The circuit could not be simulated; it is waiting for a manual grade.",
   "qt.circuit.r.runnerNone": "This circuit was not simulated.",
+  "qt.circuit.g.schematic": "Schematic",
+  "qt.circuit.g.parts": "{n} parts",
+  "qt.circuit.g.parts.one": "1 part",
+  "qt.circuit.g.wires": "{n} wires",
+  "qt.circuit.g.wires.one": "1 wire",
+  "qt.circuit.g.stimuli": "{passed}/{total} stimuli",
+  "qt.circuit.g.stimuli.one": "{passed}/{total} stimulus",
+  "qt.circuit.g.failed": "Failed: {names}",
+  "qt.circuit.g.issues": "{n} wiring problems",
+  "qt.circuit.g.issues.one": "1 wiring problem",
+  "qt.circuit.g.atSimulator": "simulator…",
+  "qt.circuit.g.notSimulated": "Not simulated",
 
   // --- Schema messages of the question types (question/issues.ts) ---
   "issue.zod.required": "This field is empty.",
@@ -2489,12 +2522,10 @@ export const en = {
   "grading.table.label": "Answers to question {n}",
   "grading.col.verdict": "Verdict",
   "grading.col.student": "Student",
-  "grading.col.answer": "Answer",
   "grading.col.points": "Points",
   "grading.col.actions": "Actions",
   "grading.expected": "Expected answer",
   "grading.noAnswer.short": "no answer",
-  "grading.fallback.open": "Open to see the answer",
   "grading.verdict.correct": "Correct",
   "grading.verdict.partial": "Partly correct",
   "grading.verdict.wrong": "Wrong",

@@ -93,3 +93,25 @@ export const categorizeReviewStrings = {
 } as const;
 
 export type CategorizeReviewStringKey = keyof typeof categorizeReviewStrings;
+
+/**
+ * The words of the grading table's columns (ADR-040). A column per card is
+ * headed by the card itself; past {@link CATEGORIZE_GRADING_MAX_COLUMNS}
+ * cards the question gets ONE summary column instead, and these are its words.
+ */
+export const categorizeGradingStrings = {
+  /** A card left in the tray (the student's), or a distractor (the key's). */
+  leftOut: "Left out",
+  /** A placed card of an ordered question: its column and its rank. */
+  ranked: "{column} · {rank}",
+  /** The summary column's header. */
+  cards: "Cards",
+  /** A graded answer: how many cards are where the key puts them. */
+  right: "{right}/{total} right",
+  /** An answer not graded yet: how many cards left the tray. */
+  placed: "{placed}/{total} placed",
+  /** The key's cell of the summary column. */
+  total: "{total} cards",
+} as const;
+
+export type CategorizeGradingStringKey = keyof typeof categorizeGradingStrings;

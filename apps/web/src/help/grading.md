@@ -15,9 +15,11 @@ other question, and a filled step is a question whose answers are all
 validated.
 
 Each row of the table is one student's answer, in the question's own
-columns: a choice, a blank, the text typed. The first row, in blue, is the
-expected answer. Click a column header to sort by it (again to reverse, a
-third time to go back); a row opens the answer in full on the right.
+columns: a choice, a blank, the text typed, a card's column, a program
+folded after five lines (click it to unfold it; the row does not open).
+The first row, in blue, is the expected answer. Click a column header to
+sort by it (again to reverse, a third time to go back); a row opens the
+answer in full on the right.
 
 **Graded by** is where a proposal comes from: **Rules** is the question's
 own rules (the correct choices, the expected values, the code tests);

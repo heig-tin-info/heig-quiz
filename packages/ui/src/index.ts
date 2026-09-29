@@ -46,9 +46,16 @@ export { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";
 export {
   AnswerChip,
   ChoiceMark,
+  ClampedCode,
+  countTone,
+  Dash,
+  headerOf,
   NoAnswer,
+  runStatus,
+  WordChip,
   type AnswerTone,
   type ChoiceMarkState,
+  type RunStatus,
 } from "./grading.js";
 export { GripIcon, StrokeIcon, typeIcon } from "./icon.js";
 export { IssueList } from "./issues.js";
