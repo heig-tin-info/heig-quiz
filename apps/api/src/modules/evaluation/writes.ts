@@ -464,7 +464,7 @@ export async function flagReleasedEvaluationsOf(
 
 /**
  * The states in which an evaluation's grading can be finished: after its
- * close. Also the states the migration `0032_grading_ready_claim` backfills.
+ * close. Also the states the migration `0033_grading_ready_claim` backfills.
  */
 const GRADED_STATES = ["closed", "grading", "released"] as const;
 
