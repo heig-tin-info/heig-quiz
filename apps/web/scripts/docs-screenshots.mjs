@@ -453,7 +453,7 @@ const scenes = [
   },
   {
     name: "grading-code",
-    caption: "Grading a code question: compilation and test cases per student.",
+    caption: "Grading a code question: each program in one wide column, folded after five lines, beside the tests it passed.",
     phase: "graded",
     persona: "teacher",
     path: (w) => `/evaluations/${w.evals.closed.id}/grading`,

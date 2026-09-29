@@ -27,7 +27,7 @@ export interface StepState {
 }
 
 /**
- * Everything the grading screen reads (ADR-040): the evaluation and its
+ * Everything the grading screen reads (ADR-044): the evaluation and its
  * questions, the state of every question (`…/grading/steps`, two counters
  * each, for the selector and its stepper), the answers of the question on
  * screen, and the automatic pass's progress.

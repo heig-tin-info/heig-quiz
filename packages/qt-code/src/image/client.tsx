@@ -7,6 +7,7 @@ import { lazy } from "react";
 
 import type { QuestionTypeClient } from "@quiz/core/client";
 import { typeIcon } from "@quiz/ui";
+import { codeimageGrading } from "./grading.js";
 import { isCodeImageAnswered } from "./schema.js";
 
 import type {
@@ -48,4 +49,5 @@ export const codeimageClient: QuestionTypeClient<
   },
 
   isAnswered: isCodeImageAnswered,
+  grading: codeimageGrading,
 };

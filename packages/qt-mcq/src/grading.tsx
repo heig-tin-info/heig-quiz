@@ -1,5 +1,5 @@
 /**
- * The `mcq` columns of the grading table (ADR-040): one column per choice,
+ * The `mcq` columns of the grading table (ADR-044): one column per choice,
  * in CANONICAL order and lettered canonically — the grading queue sends the
  * views with `shuffle: false`, so column C is choice C on every row, however
  * each student saw the choices.
@@ -10,7 +10,7 @@
  */
 import type { GradingColumn, QuestionTypeGrading } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
-import { ChoiceMark, type ChoiceMarkState } from "@quiz/ui";
+import { ChoiceMark, headerOf, type ChoiceMarkState } from "@quiz/ui";
 
 import type { McqAnswer, McqDetails, McqSolution, McqStudent } from "./schema.js";
 import { choiceLetter } from "./schema.js";
@@ -18,15 +18,6 @@ import { mcqGradingStrings } from "./strings.js";
 
 /** A header is a column's name, not the choice: the whole text is its tooltip. */
 const HEADER_CHARS = 32;
-
-/**
- * The choice's text as a plain line: whatever markdown line breaks it holds
- * collapsed, and its code spans' backticks dropped — a header is plain text.
- */
-const oneLine = (text: string) => text.replace(/`/g, "").replace(/\s+/g, " ").trim();
-
-const clip = (text: string) =>
-  text.length > HEADER_CHARS ? `${text.slice(0, HEADER_CHARS - 1).trimEnd()}…` : text;
 
 export const mcqGrading: QuestionTypeGrading<McqStudent, McqAnswer, McqSolution, McqDetails> = {
   columns(student, solution, strings) {
@@ -43,7 +34,6 @@ export const mcqGrading: QuestionTypeGrading<McqStudent, McqAnswer, McqSolution,
       expected: s.expected,
     };
     return student.choices.map((choice): GradingColumn<McqAnswer, McqDetails> => {
-      const name = `${choiceLetter(choice.id)} · ${oneLine(choice.text)}`;
       const isCorrect = correct?.has(choice.id) ?? null;
       const markOf = (answer: McqAnswer | null): ChoiceMarkState => {
         const ticked = answer?.selected.includes(choice.id) ?? false;
@@ -52,8 +42,7 @@ export const mcqGrading: QuestionTypeGrading<McqStudent, McqAnswer, McqSolution,
       };
       return {
         key: `choice-${choice.id}`,
-        label: clip(name),
-        title: name,
+        ...headerOf(`${choiceLetter(choice.id)} · ${choice.text}`, HEADER_CHARS),
         align: "center",
         cell: ({ answer }) => {
           const state = markOf(answer);

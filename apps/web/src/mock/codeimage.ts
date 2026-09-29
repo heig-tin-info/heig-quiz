@@ -63,18 +63,33 @@ export function concentric(spec: ImageSpec): number[] {
  * red and green to show.
  */
 export function studentAttemptStdout(spec: ImageSpec): string {
-  const pixels = concentric(spec).map((v, i) => {
-    const x = i % spec.width;
-    const y = Math.floor(i / spec.width);
-    const ring = Math.min(x, y, spec.width - 1 - x, spec.height - 1 - y);
-    return ring >= 5 ? 1 : v;
-  });
+  const pixels = studentAttemptPixels(spec);
   const rows: string[] = [];
   for (let y = 0; y < spec.height; y += 1) {
     rows.push(pixels.slice(y * spec.width, (y + 1) * spec.width).join(" "));
   }
   return `${rows.join("\n")}\n`;
 }
+
+/** The pixels of {@link studentAttemptStdout}: the middle rings flattened to one colour. */
+export function studentAttemptPixels(spec: ImageSpec): number[] {
+  return concentric(spec).map((v, i) => {
+    const x = i % spec.width;
+    const y = Math.floor(i / spec.width);
+    const ring = Math.min(x, y, spec.width - 1 - x, spec.height - 1 - y);
+    return ring >= 5 ? 1 : v;
+  });
+}
+
+/** The student program that prints {@link studentAttemptPixels}: one test too many. */
+export const IMAGE_STUDENT_ATTEMPT =
+  "int couleur(int x, int y) {\n" +
+  "    int bord = x < y ? x : y;\n" +
+  "    if (15 - x < bord) bord = 15 - x;\n" +
+  "    if (15 - y < bord) bord = 15 - y;\n" +
+  "    if (bord >= 5) return 1;\n" +
+  "    return 9 + bord % 7;\n" +
+  "}\n";
 
 const SPEC: ImageSpec = { width: 16, height: 16, palette: "color16" };
 
@@ -136,10 +151,15 @@ export function codeimageRunOutcome(spec: ImageSpec = SPEC): RunnerOutcome {
 /**
  * `POST /questions/:id/try` for the teacher's reference: the grading's
  * details carry the picture, which the editor offers to "Use as target".
+ * The grading world passes a student's `pixels` instead (the reference's
+ * by default), and gets the details the grader would store for them.
  */
-export function codeimageTryDetails(config: Record<string, unknown>): CodeImageDetails {
+export function codeimageTryDetails(
+  config: Record<string, unknown>,
+  printed?: (spec: ImageSpec) => number[],
+): CodeImageDetails {
   const spec = config.image as ImageSpec;
-  const pixels = concentric(spec);
+  const pixels = (printed ?? concentric)(spec);
   // A target captured for another size or palette is no target (ADR-021).
   const stored = config.target as (ImageSpec & { pixels: string }) | null | undefined;
   const fits =

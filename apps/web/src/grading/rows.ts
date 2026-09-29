@@ -1,5 +1,5 @@
 /*
- * The rows of the grading table (ADR-040), as pure functions: what each
+ * The rows of the grading table (ADR-044), as pure functions: what each
  * answer's verdict glyph says, the order the rows stand in, the filters, the
  * sort and the one primary action they leave. The components only draw what
  * these decide, so each rule is tested once, here.
@@ -108,7 +108,7 @@ function hash(text: string): number {
  * item and the attempt — of the ROW, never of its position in a list. A
  * validation, a refetch or a filter changes the list and moves no row: the
  * order is the same for the whole visit, and another one on the next visit
- * (ADR-040). The names never decide it, so the order cannot give them away.
+ * (ADR-044). The names never decide it, so the order cannot give them away.
  */
 export function shuffled(entries: readonly GradingEntry[], seed: number): GradingEntry[] {
   const rank = new Map(entries.map((e) => [e, hash(`${seed}:${entryKey(e)}`)]));

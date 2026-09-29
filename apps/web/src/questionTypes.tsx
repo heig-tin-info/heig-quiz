@@ -44,9 +44,15 @@ import {
   shortPlayerStrings,
   shortReviewStrings,
 } from "@quiz/qt-short/client";
-import { richEditorStrings, richPlayerStrings, richReviewStrings } from "@quiz/qt-rich/client";
+import {
+  richEditorStrings,
+  richGradingStrings,
+  richPlayerStrings,
+  richReviewStrings,
+} from "@quiz/qt-rich/client";
 import {
   categorizeEditorStrings,
+  categorizeGradingStrings,
   categorizePlayerStrings,
   categorizeReviewStrings,
 } from "@quiz/qt-categorize/client";
@@ -59,7 +65,9 @@ import {
 } from "@quiz/qt-cloze/client";
 import {
   EDITOR_STRINGS,
+  GRADING_STRINGS,
   IMAGE_EDITOR_STRINGS,
+  IMAGE_GRADING_STRINGS,
   IMAGE_PLAYER_STRINGS,
   IMAGE_REVIEW_STRINGS,
   PLAYER_STRINGS,
@@ -75,6 +83,7 @@ import {
 import {
   CANVAS_STRINGS,
   EDITOR_STRINGS as CIRCUIT_EDITOR_STRINGS,
+  GRADING_STRINGS as CIRCUIT_GRADING_STRINGS,
   KIND_LABELS,
   PLAYER_STRINGS as CIRCUIT_PLAYER_STRINGS,
   REVIEW_STRINGS as CIRCUIT_REVIEW_STRINGS,
@@ -269,13 +278,22 @@ export const reviewStrings = {
 
 /**
  * The words of the grading table's columns (`QuestionTypeClient.grading`,
- * ADR-040), for the types that give columns; the others fall back on the
- * host's one column and have no words of their own to translate.
+ * ADR-044): every type gives columns, so every type has words here — a
+ * type added to the registry without them is a compile error.
  */
-export const gradingStrings: Partial<Record<QuestionTypeId, (t: TFunction) => Record<string, string>>> = {
+export const gradingStrings: Record<QuestionTypeId, (t: TFunction) => Record<string, string>> = {
   mcq: (t) => translated(t, mcqGradingStrings, "qt.mcq.g"),
   short: (t) => translated(t, shortGradingStrings, "qt.short.g"),
   cloze: (t) => translated(t, clozeGradingStrings, "qt.cloze.g"),
+  categorize: (t) => translated(t, categorizeGradingStrings, "qt.categorize.g"),
+  code: (t) => translated(t, GRADING_STRINGS, "qt.code.g"),
+  // The program half is `code`'s column; the picture adds its own words.
+  codeimage: (t) => ({
+    ...translated(t, GRADING_STRINGS, "qt.code.g"),
+    ...translated(t, IMAGE_GRADING_STRINGS, "qt.codeimage.g"),
+  }),
+  circuit: (t) => translated(t, CIRCUIT_GRADING_STRINGS, "qt.circuit.g"),
+  rich: (t) => translated(t, richGradingStrings, "qt.rich.g"),
 };
 
 // --- Hosts -----------------------------------------------------------------

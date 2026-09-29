@@ -9,6 +9,7 @@
 import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
 import { typeIcon } from "@quiz/ui";
+import { categorizeGrading } from "./grading.js";
 import { isCategorizeAnswered } from "./schema.js";
 import type {
   CategorizeAnswer,
@@ -41,10 +42,16 @@ export const categorizeClient: CategorizeClient = {
 
   emptyAnswer: () => ({ columns: {} }),
   isAnswered: isCategorizeAnswered,
+  grading: categorizeGrading,
 };
 
 /* The surfaces stay out of the values exported here, or the `lazy` above is undone (see qt-mcq). */
-export { categorizeEditorStrings, categorizePlayerStrings, categorizeReviewStrings } from "./strings.js";
+export {
+  categorizeEditorStrings,
+  categorizeGradingStrings,
+  categorizePlayerStrings,
+  categorizeReviewStrings,
+} from "./strings.js";
 export { emptyCategorizeDraft } from "./schema.js";
 export type {
   CategorizeAnswer,

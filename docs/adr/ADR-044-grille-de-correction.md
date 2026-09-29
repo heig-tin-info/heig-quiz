@@ -1,4 +1,4 @@
-# ADR-040 — The grading table: one question at a time, anonymous by default
+# ADR-044 — The grading table: one question at a time, anonymous by default
 
 ## Status
 
@@ -8,10 +8,10 @@ decision D20 of `docs/PLAN-MVP.md` (pseudonyms now belong to the live
 dashboard only) and the grading shortcuts of docs/spec/08 §8.5. Implemented
 by `apps/web/src/grading/`, the optional `grading` member of
 `QuestionTypeClient` (`packages/core/src/client.ts`), the `grading.tsx` of
-`qt-mcq`, `qt-short` and `qt-cloze`, and the grading contracts
-(`packages/contracts/src/grading.ts`). The other types get their columns in a
-second step; the return from the question editor to the grading table, in a
-third.
+every `qt-*` package (the mcq, short and cloze columns first, the other
+five in a second step), and the grading contracts
+(`packages/contracts/src/grading.ts`). The return from the question editor
+to the grading table comes in a third step.
 
 ## Context
 
@@ -55,7 +55,7 @@ the table filters in the browser.
 
 ### 2. The columns belong to the question type
 
-`QuestionTypeClient` gains an OPTIONAL member, `grading.columns(student,
+`QuestionTypeClient` gains a REQUIRED member, `grading.columns(student,
 solution, strings)`, returning columns that each carry a short plain-text
 label (the whole text as its title), `cell({ answer, details })`,
 `expected()` for the key, and `sortKey(answer)`. The key reaches a column
@@ -72,11 +72,35 @@ whitespace collapsed). It sorts the table today; it is the key that will
 group identical answers tomorrow — grade once, apply to every identical
 answer — so it never depends on the student, the grading or the rows.
 
-A type without `grading` gets the host's fallback: one column holding the
-answer as text (the reading the dashboard's tooltip already has), else the
-type's `summarize`, else an invitation to open the row; its key reads "—".
-`mcq`, `short` and `cloze` give columns now; `categorize`, `code`,
-`codeimage`, `circuit` and `rich` fall back until they do.
+There is no host fallback. The first step had one — the answer as one
+column of text — while five types had no columns yet; once every type gave
+its own, the member became required (owner decision, 2026-09-29): a type
+without columns is a compile error, and the host keeps no second reading of
+an answer to drift from the type's. What each type chose, where a column
+per part would not do:
+
+- `mcq` a column per choice, `cloze` per blank, `short` one column.
+- `categorize` a column per CARD, headed by the card, the cell naming the
+  column the student chose, tinted by that card's verdict in the details.
+  Past EIGHT cards, one summary column instead ("5/9 right"): nine columns
+  of chips is a table nobody reads, and the side panel shows the board.
+- `code` ONE wide column: what the student wrote (the editable regions,
+  dedented, a blank line for the locked code between two), in a box as
+  wide as the column, CLAMPED to five lines with a fade and "⋯ N more
+  lines"; a click unfolds it in place and never opens the panel. A chip
+  beside it counts the tests passed. The expected row holds the reference
+  solution. The clamped box is one primitive of `@quiz/ui` (`ClampedCode`).
+- `codeimage` the same, with the PICTURE the grading stored
+  (`details.image`, the field the review reads) as a 56 px thumbnail,
+  drawn only once its row nears the viewport (`IntersectionObserver`): a
+  class is a hundred canvases. "runner…" stands in for a picture the runner
+  still owes; the expected row shows the target.
+- `circuit` one column summarising the schematic ("3 parts · 4 wires") and
+  a chip counting the stimuli passed (the failed ones in its tooltip); the
+  drawing stays in the panel.
+- `rich` one column, the essay as plain text (markdown marks stripped,
+  never rendered) clamped to three lines; the expected row holds the model
+  answer, else the rubric.
 
 ### 3. Anonymous by default, without pseudonyms
 
@@ -135,8 +159,8 @@ registered in the app's shortcut strip, not drawn on the page.
 - The remembered view keeps the state filter, the source and the
   confidence; an older stored view (with `order` and `parts`) reads
   gracefully.
-- Every type that wants a real grading table implements one function;
-  until then the fallback is honest, never wrong.
+- Every type implements one function to have a grading table, and must:
+  a new type without it does not compile.
 
 ### Residual risk
 

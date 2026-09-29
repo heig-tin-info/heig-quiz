@@ -1078,6 +1078,7 @@ export const fr: Record<keyof Dict, string> = {
   "qt.rich.r.noRubric": "Pas de grille.",
   "qt.rich.r.reference": "Réponse modèle",
   "qt.rich.r.score": "Score",
+  "qt.rich.g.essay": "Rédaction",
 
   // --- qt-categorize strings ---
   "qt.categorize.e.prompt": "Énoncé",
@@ -1136,6 +1137,12 @@ export const fr: Record<keyof Dict, string> = {
   "qt.categorize.r.breakdown": "Cartes justes",
   "qt.categorize.r.breakdownPlaced": "Cartes placées justes",
   "qt.categorize.r.negativeMarking": "Points négatifs : une carte mal placée coûte des points.",
+  "qt.categorize.g.leftOut": "Laissée de côté",
+  "qt.categorize.g.ranked": "{column} · {rank}",
+  "qt.categorize.g.cards": "Cartes",
+  "qt.categorize.g.right": "{right}/{total} justes",
+  "qt.categorize.g.placed": "{placed}/{total} placées",
+  "qt.categorize.g.total": "{total} cartes",
 
   // --- qt-cloze strings ---
   "qt.cloze.e.text": "Texte à trous",
@@ -1340,6 +1347,16 @@ export const fr: Record<keyof Dict, string> = {
   "qt.code.r.notAnswered": "Sans réponse.",
   "qt.code.r.referenceSolution": "Solution de référence",
   "qt.code.r.yourCode": "Votre code",
+  "qt.code.g.program": "Programme",
+  "qt.code.g.more": "{n} lignes de plus",
+  "qt.code.g.more.one": "1 ligne de plus",
+  "qt.code.g.expand": "Afficher tout le programme",
+  "qt.code.g.collapse": "Replier le programme",
+  "qt.code.g.tests": "{passed}/{total} tests",
+  "qt.code.g.tests.one": "{passed}/{total} test",
+  "qt.code.g.compileFailed": "Ne compile pas",
+  "qt.code.g.atRunner": "exécution…",
+  "qt.code.g.runFailed": "Non exécuté",
 
   // --- qt-code : codeimage (ADR-021) ---
   "qt.codeimage.e.referenceSolutionHint":
@@ -1402,6 +1419,10 @@ export const fr: Record<keyof Dict, string> = {
   "qt.codeimage.p.endCrashed": "Le programme a planté. L'image montre ce qu'il a écrit avant.",
   "qt.codeimage.p.endTruncated": "La sortie a été coupée à la limite de taille.",
   "qt.codeimage.r.noImage": "Le programme n'a écrit aucune image.",
+  "qt.codeimage.g.column": "Image · programme",
+  "qt.codeimage.g.picture": "L'image que dessine le programme",
+  "qt.codeimage.g.target": "L'image cible",
+  "qt.codeimage.g.noPicture": "Pas d'image",
 
   // --- qt-circuit ---
   // The component kinds, keyed by `ComponentKind`: the same word labels a
@@ -1679,6 +1700,18 @@ export const fr: Record<keyof Dict, string> = {
   "qt.circuit.r.runnerError":
     "Le circuit n'a pas pu être simulé ; il attend une correction manuelle.",
   "qt.circuit.r.runnerNone": "Ce circuit n'a pas été simulé.",
+  "qt.circuit.g.schematic": "Schéma",
+  "qt.circuit.g.parts": "{n} composants",
+  "qt.circuit.g.parts.one": "1 composant",
+  "qt.circuit.g.wires": "{n} fils",
+  "qt.circuit.g.wires.one": "1 fil",
+  "qt.circuit.g.stimuli": "{passed}/{total} stimuli",
+  "qt.circuit.g.stimuli.one": "{passed}/{total} stimulus",
+  "qt.circuit.g.failed": "Échoués : {names}",
+  "qt.circuit.g.issues": "{n} problèmes de câblage",
+  "qt.circuit.g.issues.one": "1 problème de câblage",
+  "qt.circuit.g.atSimulator": "simulation…",
+  "qt.circuit.g.notSimulated": "Non simulé",
 
   // --- Schema messages of the question types (question/issues.ts) ---
   "issue.zod.required": "Ce champ est vide.",
@@ -2485,12 +2518,10 @@ export const fr: Record<keyof Dict, string> = {
   "grading.table.label": "Réponses à la question {n}",
   "grading.col.verdict": "Verdict",
   "grading.col.student": "Étudiant",
-  "grading.col.answer": "Réponse",
   "grading.col.points": "Points",
   "grading.col.actions": "Actions",
   "grading.expected": "Réponse attendue",
   "grading.noAnswer.short": "pas de réponse",
-  "grading.fallback.open": "Ouvrir pour voir la réponse",
   "grading.verdict.correct": "Juste",
   "grading.verdict.partial": "Partiellement juste",
   "grading.verdict.wrong": "Faux",

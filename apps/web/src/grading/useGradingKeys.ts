@@ -20,7 +20,7 @@ export interface GradingKeyActions {
 }
 
 /**
- * The grading screen's keyboard (docs/08 §8.5, ADR-040): ← / → change the
+ * The grading screen's keyboard (docs/08 §8.5, ADR-044): ← / → change the
  * question, ↑ / ↓ the row, Enter opens it, V validates it, A adjusts it;
  * Escape is the panel's own (a sheet closes on it). Bare keys, because
  * nothing on this screen is typed into — except a field, which owns the

@@ -257,12 +257,13 @@ export interface QuestionTypeClient<
    */
   summarize?(answer: TAnswer | null, student: TStudent): string;
   /**
-   * The columns this type gives the grading table (ADR-040): one table per
+   * The columns this type gives the grading table (ADR-044): one table per
    * question, a row per answer, and the answer spread over columns a teacher
-   * can scan and sort — a choice per column, a blank per column. Omitting it
-   * gives the host's fallback: ONE column holding the answer as text.
+   * can scan and sort — a choice per column, a blank per column. REQUIRED:
+   * the host has no column of its own to fall back on, so a type without
+   * columns does not compile.
    */
-  readonly grading?: QuestionTypeGrading<TStudent, TAnswer, TSolution, TDetails>;
+  readonly grading: QuestionTypeGrading<TStudent, TAnswer, TSolution, TDetails>;
 }
 
 /**

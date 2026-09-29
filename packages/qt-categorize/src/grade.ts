@@ -18,7 +18,7 @@
 import type { GradeContext, GradedResult } from "@quiz/core/server";
 import { categorizeFraction, DEFAULT_CATEGORIZE_SCORE_POLICY } from "@quiz/domain/categorizeScore";
 import { round2 } from "@quiz/domain/round";
-import { normalizePlacement } from "./placement.js";
+import { keyOf, placesOf } from "./placement.js";
 import {
   CategorizeDefaultsSchema,
   type CategorizeAnswer,
@@ -46,43 +46,6 @@ export function resolvePolicy(
 /** Whether the evaluation behind `defaults` scores with negative marking (ADR-026, ADR-036). */
 export function negativeMarkingFrom(defaults: GradeContext["defaults"] | undefined): boolean {
   return defaultsOf(defaults)?.negativeMarking === true;
-}
-
-/** Where one card sits: its column and its 1-based rank in it. */
-export interface Place {
-  column: string;
-  rank: number;
-}
-
-/**
- * The student's answer as ONE place per known card (point 2 above), by the
- * one rule the board draws with too (`normalizePlacement`): unknown ids are
- * ignored and a card keeps its first place. The rank counts the cards KEPT
- * in the column, so an unknown id slipped in above a card does not push it down.
- */
-export function placesOf(config: CategorizeConfig, answer: CategorizeAnswer | null): Map<string, Place> {
-  const places = new Map<string, Place>();
-  if (answer === null) return places;
-  const placement = normalizePlacement(config.columns, config.cards, answer.columns);
-  for (const [column, ids] of Object.entries(placement)) {
-    ids.forEach((id, index) => places.set(id, { column, rank: index + 1 }));
-  }
-  return places;
-}
-
-/**
- * The key as a place per TARGET card; a distractor has none. It reads the
- * `{ id, cards }` shape the config's columns and the served solution share,
- * so the grader and the review's "Expected: …" line read one key one way.
- */
-export function keyOf(columns: readonly { id: string; cards: readonly string[] }[]): Map<string, Place> {
-  const key = new Map<string, Place>();
-  for (const column of columns) {
-    column.cards.forEach((id, index) => {
-      if (!key.has(id)) key.set(id, { column: column.id, rank: index + 1 });
-    });
-  }
-  return key;
 }
 
 export function gradeCategorize(

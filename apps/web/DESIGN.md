@@ -1196,7 +1196,7 @@ or EDIT them?". A list you scan stays a table however many columns it has to
 drop. A list you edit field by field becomes panels as soon as a row needs
 more than one line.
 
-## The grading table (ADR-040)
+## The grading table (ADR-044)
 
 One question's answers as a table (`src/grading/`, origin
 `mockups/grading.html`). What is particular to it:
@@ -1226,6 +1226,29 @@ One question's answers as a table (`src/grading/`, origin
   `ChoiceMark`, `NoAnswer`): a mono chip on `success-soft` / `danger-soft`,
   the key in `info` without a fill; a 16 px tick box filled `success` or
   `danger`, dashed `success` for a correct choice left out.
+- **Counts and words.** A chip counting parts ("3/4 tests", "5/9 right",
+  "2/2 stimuli") and a chip naming a column are in the text face
+  (`WordChip`); mono is for what the student typed. A run's state is read
+  once, by `runStatus` (`@quiz/ui`): "runner…" while a verdict may still
+  come, a red "Not run" when it will not, nothing on a teacher's override.
+  An empty cell is `Dash` (a faint em dash). A count (`countTone`) that is
+  only partly right is `partial`: `success` text, a dashed
+  `success` outline and no fill — the "missed" mark's convention, green in
+  part. A cell that must not ask its column for width (a column per card)
+  wraps its chip in `block w-0 min-w-full`, so the equal shares hold.
+- **Clamped code box** (`ClampedCode`, `@quiz/ui`, for `code` and
+  `codeimage`): mono 12 px / 1.45 on `surface-2`, `rounded-field`,
+  `w-full` — the WHOLE column, never fit to the longest line. Past five
+  lines (two past: one more line is shown, not hidden) it is clamped to
+  five whole lines plus a foot: "⋯ N more lines" in 11 px `fg-muted` over a
+  `surface-2` fade. It is then a button (`aria-expanded`, Enter / Space,
+  `cursor-zoom-in` / `-out`): a click unfolds it in place and stops there,
+  never opening the panel. The key's box writes in `info`. A chip (tests,
+  "runner…") or a 56 px thumbnail sits before it in a fixed 96 px lead, so
+  the programs of every row start at one line. A thumbnail is drawn only
+  once its row nears the viewport.
+- **An essay** is plain text clamped to three lines (`line-clamp-3`,
+  13 px, `fg-muted`, at most 110ch), the key's in `info`.
 - **No fill for a row waiting for a decision** (owner decision): its glyph
   and its visible action say it — Validate for a proposal the batch would
   take, **Grade** for a 0-point placeholder (an essay), which opens the

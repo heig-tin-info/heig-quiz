@@ -1,5 +1,5 @@
 /**
- * The `short` column of the grading table (ADR-040): ONE column, the typed
+ * The `short` column of the grading table (ADR-044): ONE column, the typed
  * answer as a chip tinted by its verdict, and the accepted answers of the
  * key on the expected row. Sorted by the normal form of the text, so
  * "Malloc" sits next to "malloc" — the rows a teacher grades alike.

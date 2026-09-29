@@ -1,4 +1,4 @@
-/** The `cloze` columns of the grading table (ADR-040): one per blank. */
+/** The `cloze` columns of the grading table (ADR-044): one per blank. */
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 

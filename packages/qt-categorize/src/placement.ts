@@ -60,3 +60,43 @@ export function moveCard(
   }
   return out;
 }
+
+/** Where one card sits: its column and its 1-based rank in it. */
+export interface Place {
+  column: string;
+  rank: number;
+}
+
+/**
+ * The student's answer as ONE place per known card (`grade.ts`, point 2), by the
+ * one rule the board draws with too (`normalizePlacement`): unknown ids are
+ * ignored and a card keeps its first place. The rank counts the cards KEPT
+ * in the column, so an unknown id slipped in above a card does not push it down.
+ */
+export function placesOf(
+  board: { columns: readonly { id: string }[]; cards: readonly { id: string }[] },
+  answer: { columns: Placement } | null,
+): Map<string, Place> {
+  const places = new Map<string, Place>();
+  if (answer === null) return places;
+  const placement = normalizePlacement(board.columns, board.cards, answer.columns);
+  for (const [column, ids] of Object.entries(placement)) {
+    ids.forEach((id, index) => places.set(id, { column, rank: index + 1 }));
+  }
+  return places;
+}
+
+/**
+ * The key as a place per TARGET card; a distractor has none. It reads the
+ * `{ id, cards }` shape the config's columns and the served solution share,
+ * so the grader and the review's "Expected: …" line read one key one way.
+ */
+export function keyOf(columns: readonly { id: string; cards: readonly string[] }[]): Map<string, Place> {
+  const key = new Map<string, Place>();
+  for (const column of columns) {
+    column.cards.forEach((id, index) => {
+      if (!key.has(id)) key.set(id, { column: column.id, rank: index + 1 });
+    });
+  }
+  return key;
+}

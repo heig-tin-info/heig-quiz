@@ -42,7 +42,7 @@ interface PanelProps {
 }
 
 /**
- * The answer panel (ADR-040): one row of the table, read in full in a
+ * The answer panel (ADR-044): one row of the table, read in full in a
  * sheet on the right — the question as the student saw it with their answer
  * and its verdict (the type's own `Review`), the explanation, the history,
  * and what the teacher does with it: validate the proposal, or adjust the

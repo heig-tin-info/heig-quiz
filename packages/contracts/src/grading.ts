@@ -4,7 +4,7 @@
  * The grading panel is a read model over `gradings`: one entry per
  * (attempt, item) pair, one question at a time, and anonymous unless the
  * teacher asks for the names — an anonymous entry carries NO label at all,
- * not a pseudonym (F-GRADE-03, ADR-040).
+ * not a pseudonym (F-GRADE-03, ADR-044).
  *
  * `answerId` is NULLABLE here for the same reason it is nullable in the
  * table: an absent answer is still graded — zero points, validated, `auto`
@@ -29,65 +29,22 @@ export type GradingState = z.infer<typeof GradingState>;
 export const GradingConfidence = z.enum(["low", "medium", "high"]);
 export type GradingConfidence = z.infer<typeof GradingConfidence>;
 
-/**
- * Why a machine PROPOSED instead of grading: the `details.reason` (and the
- * `comment`) of a grading no grader could settle. Wire values, closed here
- * once: the grading pass writes the first eight (`jobs.ts`), question types
- * the next four (a circuit's or a program's own fault, issue #267), and the
- * runner's saturation the last. The web translates every one of them.
+/*
+ * Why a machine PROPOSED instead of grading, which of those a new pass may
+ * clear, and `reasonOf`: closed once in `@quiz/core/reasons`, where the
+ * question types' grading columns (`@quiz/ui`) read them too, and
+ * re-exported here for the routes and the web.
  */
-export const PASS_REASONS = [
-  "config_unreadable",
-  "answer_invalid",
-  "grader_error",
-  "llm_not_configured",
-  "not_finalizable",
-  "runner_unavailable",
-  "runner_error",
-  "finalize_error",
-] as const;
-export type PassReason = (typeof PASS_REASONS)[number];
-
-export const MACHINE_REASONS = [
-  ...PASS_REASONS,
-  "reference_failed",
-  "palette_violation",
-  "runner_request_invalid",
-  "template_region_mismatch",
-  "runner_busy",
-] as const;
-export type MachineReason = (typeof MACHINE_REASONS)[number];
-
-export const isMachineReason = (value: unknown): value is MachineReason =>
-  typeof value === "string" && (MACHINE_REASONS as readonly string[]).includes(value);
-
-/**
- * The reasons a new pass may clear: the runner or a grader was away or
- * failed. The others are the question's own fault (a reference that fails,
- * an unreadable configuration, no model configured) and only an edit of the
- * question or of the platform settles them, so the panel does not offer a
- * pass for them.
- */
-export const RETRYABLE_REASONS = [
-  "runner_unavailable",
-  "runner_error",
-  "runner_busy",
-  "grader_error",
-  "finalize_error",
-  "not_finalizable",
-] as const satisfies readonly MachineReason[];
-
-export const isRetryableReason = (value: unknown): boolean =>
-  typeof value === "string" && (RETRYABLE_REASONS as readonly string[]).includes(value);
-
-/** `details.reason`, the one field every machine-written grading carries. */
-export function reasonOf(details: unknown): string | null {
-  if (details && typeof details === "object" && "reason" in details) {
-    const reason = (details as { reason: unknown }).reason;
-    return typeof reason === "string" ? reason : null;
-  }
-  return null;
-}
+export {
+  isMachineReason,
+  isRetryableReason,
+  MACHINE_REASONS,
+  PASS_REASONS,
+  reasonOf,
+  RETRYABLE_REASONS,
+  type MachineReason,
+  type PassReason,
+} from "@quiz/core/reasons";
 
 /** The verdict a cell of the dashboard and of the results grid shows. */
 export const Verdict = z.enum(["correct", "partial", "wrong", "pending"]);
@@ -155,7 +112,7 @@ export const GradingEntry = z.object({
   /**
    * The student's display name when `?anonymous=0`; `null` by default, and
    * then nothing else in the entry names the student either (F-GRADE-03,
-   * ADR-040).
+   * ADR-044).
    */
   label: z.string().nullable(),
   /**
@@ -203,7 +160,7 @@ export const GradingQueue = z.object({
 export type GradingQueue = z.infer<typeof GradingQueue>;
 
 /**
- * `?itemId=&anonymous=1`. Grading is by question (ADR-040): the panel reads
+ * `?itemId=&anonymous=1`. Grading is by question (ADR-044): the panel reads
  * one item's answers at a time, every state, and filters them itself;
  * without `itemId`, every item's.
  */

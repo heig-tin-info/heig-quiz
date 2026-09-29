@@ -113,11 +113,22 @@ function itemSource(): MockQuestion[] {
    * evaluations the grading panel is built from carry one (issue #192).
    */
   const essay = published.filter((q) => q.type === "rich");
-  // The categorize question follows the essay, sixth (docs/04 §4.13).
+  // The categorize question follows the essay, sixth (docs/04 §4.13), and
+  // the code-to-picture one comes seventh, so the two finished evaluations
+  // give the grading table every type of question (ADR-044).
   const categorize = published.filter((q) => q.type === "categorize");
-  const rest = primary.filter((q) => q.type !== "rich" && q.type !== "categorize");
+  const codeimage = published.filter((q) => q.type === "codeimage");
+  const rest = primary.filter((q) => !["rich", "categorize", "codeimage"].includes(q.type));
   if (primary.length === 0) return published;
-  return [...rest.slice(0, 2), ...circuit, ...rest.slice(2, 3), ...essay, ...categorize, ...rest.slice(3)];
+  return [
+    ...rest.slice(0, 2),
+    ...circuit,
+    ...rest.slice(2, 3),
+    ...essay,
+    ...categorize,
+    ...codeimage,
+    ...rest.slice(3),
+  ];
 }
 
 const studentConfigOf = (q: MockQuestion): unknown => studentView(q, frozenConfig(q));
@@ -568,11 +579,11 @@ export const EVAL_ROOM = "r1";
  * resolve to, which is what the screenshot script deep-links to.
  */
 evaluations.push(
-  makeEvaluation(EVAL_ROOM, "Quiz 0 — prise en main", "closed", 5, {
+  makeEvaluation(EVAL_ROOM, "Quiz 0 — prise en main", "closed", 7, {
     startedAt: iso(-20 * D),
     closedAt: iso(-20 * D + H),
   }),
-  makeEvaluation(EVAL_ROOM, "Test d'entrée", "released", 6, {
+  makeEvaluation(EVAL_ROOM, "Test d'entrée", "released", 7, {
     startedAt: iso(-60 * D),
     closedAt: iso(-60 * D + H),
     releasedAt: iso(-59 * D),

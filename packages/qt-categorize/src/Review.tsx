@@ -18,8 +18,7 @@ import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
 import { breakdownOf, caption, cx, markdown, ScoreHeader } from "@quiz/ui";
 
 import { ColumnFrame, columnGrid, trayFrame } from "./Board.js";
-import { keyOf } from "./grade.js";
-import { normalizePlacement, trayOf } from "./placement.js";
+import { keyOf, normalizePlacement, trayOf } from "./placement.js";
 import type {
   CategorizeAnswer,
   CategorizeReviewDetails,

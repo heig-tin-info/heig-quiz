@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { GradingColumn } from "@quiz/core/client";
 import type { GradingEntry } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
-import { NoAnswer } from "@quiz/ui";
+import { Dash, NoAnswer } from "@quiz/ui";
 
 import { useT } from "../i18n";
 import { Badge, Button, cx, IconButton, pressable, TableHead, T, Tip, type Column } from "../ui";
@@ -58,7 +58,7 @@ export interface GradingTableProps {
 }
 
 /**
- * One question's answers as a table (ADR-040): the verdict, the student
+ * One question's answers as a table (ADR-044): the verdict, the student
  * (only when names are shown), the question type's own answer columns, the
  * points and the row's actions; the key pinned as the first row. A row is
  * one answer: clicking it opens the answer panel.
@@ -277,7 +277,7 @@ function AnswerRow({
             <span className="text-fg-faint"> / {formatPoints(grading.maxPoints)}</span>
           </>
         ) : (
-          <span className="text-fg-faint">—</span>
+          <Dash />
         )}
         {grading?.source === "llm" && grading.confidence ? (
           <span className="block text-[11px] text-info">

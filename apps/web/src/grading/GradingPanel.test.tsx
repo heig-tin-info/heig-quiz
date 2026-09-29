@@ -16,7 +16,7 @@ import {
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 
 /*
- * The grading screen (ADR-040): one question as a table, the key pinned on
+ * The grading screen (ADR-044): one question as a table, the key pinned on
  * top, the type's own columns, anonymised by default, one primary action,
  * and the answer panel keyed on the ENTRY.
  */

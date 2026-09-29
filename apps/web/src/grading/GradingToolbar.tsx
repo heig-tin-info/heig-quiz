@@ -38,7 +38,7 @@ const CONFIDENCE_WORDS: Record<GradingConfidence | Any, keyof Dict> = {
 };
 
 /**
- * The row between the question and its answers (ADR-040): which answers
+ * The row between the question and its answers (ADR-044): which answers
  * the table shows, whether names are shown, and the ONE primary action of
  * the screen at its end. The confidence control only exists while "AI" is
  * picked: only a model's proposals carry one.

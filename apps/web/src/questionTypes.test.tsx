@@ -20,15 +20,23 @@ import {
   clozePlayerStrings,
   clozeReviewStrings,
 } from "@quiz/qt-cloze/client";
-import { richEditorStrings, richPlayerStrings, richReviewStrings } from "@quiz/qt-rich/client";
+import {
+  richEditorStrings,
+  richGradingStrings,
+  richPlayerStrings,
+  richReviewStrings,
+} from "@quiz/qt-rich/client";
 import {
   categorizeEditorStrings,
+  categorizeGradingStrings,
   categorizePlayerStrings,
   categorizeReviewStrings,
 } from "@quiz/qt-categorize/client";
 import {
   EDITOR_STRINGS,
+  GRADING_STRINGS,
   IMAGE_EDITOR_STRINGS,
+  IMAGE_GRADING_STRINGS,
   IMAGE_PLAYER_STRINGS,
   IMAGE_REVIEW_STRINGS,
   PLAYER_STRINGS,
@@ -37,6 +45,7 @@ import {
 import {
   CANVAS_STRINGS,
   EDITOR_STRINGS as CIRCUIT_EDITOR_STRINGS,
+  GRADING_STRINGS as CIRCUIT_GRADING_STRINGS,
   KIND_LABELS,
   PLAYER_STRINGS as CIRCUIT_PLAYER_STRINGS,
   REVIEW_STRINGS as CIRCUIT_REVIEW_STRINGS,
@@ -88,13 +97,16 @@ const DICTIONARIES: [string, object][] = [
   ["qt.code.e", EDITOR_STRINGS],
   ["qt.code.p", PLAYER_STRINGS],
   ["qt.code.r", REVIEW_STRINGS],
+  ["qt.code.g", GRADING_STRINGS],
   // `codeimage` reads `code`'s program sentences and adds only its own.
   ["qt.codeimage.e", IMAGE_EDITOR_STRINGS],
   ["qt.codeimage.p", IMAGE_PLAYER_STRINGS],
   ["qt.codeimage.r", IMAGE_REVIEW_STRINGS],
+  ["qt.codeimage.g", IMAGE_GRADING_STRINGS],
   ["qt.circuit.e", CIRCUIT_EDITOR_STRINGS],
   ["qt.circuit.p", CIRCUIT_PLAYER_STRINGS],
   ["qt.circuit.r", CIRCUIT_REVIEW_STRINGS],
+  ["qt.circuit.g", CIRCUIT_GRADING_STRINGS],
   // The canvas and the component kinds are dictionaries of the `circuit`
   // package too, keyed by something other than a sentence; they are
   // translated the same way and must be just as complete.
@@ -103,9 +115,11 @@ const DICTIONARIES: [string, object][] = [
   ["qt.rich.e", richEditorStrings],
   ["qt.rich.p", richPlayerStrings],
   ["qt.rich.r", richReviewStrings],
+  ["qt.rich.g", richGradingStrings],
   ["qt.categorize.e", categorizeEditorStrings],
   ["qt.categorize.p", categorizePlayerStrings],
   ["qt.categorize.r", categorizeReviewStrings],
+  ["qt.categorize.g", categorizeGradingStrings],
 ];
 
 /**
@@ -117,12 +131,14 @@ const DICTIONARIES: [string, object][] = [
  */
 const MAPPED_ELSEWHERE: Record<string, readonly string[]> = { "qt.mcq.e": MCQ_HOST_MAPPED_KEYS };
 
-describe("grading columns (ADR-040)", () => {
-  // A type that gives the grading table columns names them in words: the
-  // host must translate them, or a French teacher reads English headers.
+describe("grading columns (ADR-044)", () => {
+  // Every registered type gives the grading table its columns (there is no
+  // host fallback) and its words, translated: a French teacher never reads
+  // an English header or chip.
   it.each(QUESTION_TYPE_IDS)("%s: grading columns come with their translated words", (id) => {
-    if (questionType(id)?.grading) expect(gradingStrings[id]).toBeDefined();
-    else expect(gradingStrings[id]).toBeUndefined();
+    expect(questionType(id)?.grading).toBeDefined();
+    const fr = gradingStrings[id](makeT("fr"));
+    for (const [key, value] of Object.entries(fr)) expect(value, key).not.toMatch(/^qt\./);
   });
 });
 

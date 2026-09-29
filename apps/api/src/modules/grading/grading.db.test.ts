@@ -309,7 +309,7 @@ describe("the panel queue (F-GRADE-03)", () => {
       expect(entry.student).not.toBeNull();
       expect(entry.solution).not.toBeNull();
       // Anonymous is the same entry without its label — no pseudonym either
-      // (ADR-040).
+      // (ADR-044).
       expect(anonymous[index]).toEqual({ ...entry, label: null });
     }
     const [right] = named;

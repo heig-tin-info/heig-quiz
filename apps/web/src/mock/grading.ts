@@ -38,6 +38,12 @@ import {
   ME_TEACHER,
 } from "./org";
 import {
+  IMAGE_REFERENCE,
+  IMAGE_STUDENT_ATTEMPT,
+  codeimageTryDetails,
+  studentAttemptPixels,
+} from "./codeimage";
+import {
   CATEGORIZE_ANSWER,
   CircuitStimulusLike,
   CodeCaseLike,
@@ -180,16 +186,28 @@ function mockAnswer(q: MockQuestion, config: Record<string, unknown>, ability: n
     const key = (config.columns ?? []) as { id: string; cards: string[] }[];
     return rand() < ability ? { columns: Object.fromEntries(key.map((c) => [c.id, c.cards])) } : CATEGORIZE_ANSWER;
   }
+  if (q.type === "codeimage") {
+    return { regions: [rand() < ability ? IMAGE_REFERENCE : IMAGE_STUDENT_ATTEMPT] };
+  }
+  // Short programs and long ones, so the table's box shows its five-line
+  // clamp on some rows and not on others.
   const good = rand() < ability;
   return {
-    regions: [
-      good
-        ? "    int s = 0;\n    for (const int *p = t; p < t + n; p++) s += *p;\n    return s;\n"
-        : "    int s = 0;\n    for (size_t i = 0; i <= n; i++) s += t[i];\n    return s;\n",
-    ],
+    regions: [pick(good ? CODE_GOOD : CODE_BAD)],
     lastRun: null,
   };
 }
+
+const CODE_GOOD = [
+  "    int s = 0;\n    for (const int *p = t; p < t + n; p++) s += *p;\n    return s;\n",
+  "    /* parcours par pointeur, sans [] */\n    int s = 0;\n    const int *fin = t + n;\n" +
+    "    for (const int *p = t; p < fin; p++) {\n        s += *p;\n    }\n    return s;\n",
+];
+const CODE_BAD = [
+  "    int s = 0;\n    for (size_t i = 0; i <= n; i++) s += t[i];\n    return s;\n",
+  "    int s = 0;\n    size_t i = 0;\n    while (i <= n) {\n        s = s + *(t + i);\n" +
+    "        i++;\n    }\n    printf(\"%d\\n\", s);\n    return s;\n",
+];
 
 /** `code` never reaches a runner here, so its case-by-case detail is built. */
 function mockCodeDetails(config: Record<string, unknown>, ability: number) {
@@ -322,6 +340,15 @@ function buildGradingWorld(
         const built = mockCodeDetails(config, attempt.ability);
         points = halfPoints(built.fraction * item.points);
         details = built.details;
+      } else if (q.type === "codeimage") {
+        // The mock has no compiler: the picture is the one the program
+        // above would print, drawn by the same function in TypeScript.
+        const good = (answer as { regions: string[] }).regions[0] === IMAGE_REFERENCE;
+        const built = codeimageTryDetails(config, good ? undefined : studentAttemptPixels);
+        // The share of cells right, unrounded: a picture off by its middle
+        // rings is partial credit, not a full mark rounded up.
+        points = round2((built.matching / built.pixelCount) * item.points);
+        details = built;
       } else if (q.type === "circuit") {
         // A circuit is graded on the ITEM's points, not on its stimuli's, so
         // the fraction is what travels — as it does for every other type.
@@ -407,7 +434,7 @@ function buildGradingWorld(
 
       // Runner-pending: no standing grading at all, so the panel shows the
       // cell as still waiting (the `pending` verdict).
-      if (!options.allValidated && q.type === "code" && rand() < 0.1) {
+      if (!options.allValidated && (q.type === "code" || q.type === "codeimage") && rand() < 0.1) {
         gradings.set(key, []);
         return;
       }
@@ -491,7 +518,7 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
     answerId: answer === null ? null : `${key}-ans`,
     attemptId: attempt.id,
     itemId: item.id,
-    // Anonymous, no label at all (ADR-040); the names only on request.
+    // Anonymous, no label at all (ADR-044); the names only on request.
     label: anonymous ? null : attempt.displayName,
     guest: null,
     staff: attempt.staff,

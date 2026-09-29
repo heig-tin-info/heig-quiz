@@ -471,3 +471,43 @@ export const REVIEW_STRINGS: CircuitReviewStrings = {
   runnerError: "The circuit could not be simulated; it is waiting for a manual grade.",
   runnerNone: "This circuit was not simulated.",
 };
+
+/**
+ * The words of the grading table's one circuit column (ADR-044): what the
+ * schematic holds, and how its simulation went. The drawing itself stays
+ * in the answer panel.
+ */
+/* A type, not an interface: the grading contract takes it as a `Record<string, string>`. */
+export type CircuitGradingStrings = {
+  schematic: string;
+  parts: string;
+  "parts.one": string;
+  wires: string;
+  "wires.one": string;
+  /** The stimuli passed, out of all of them. */
+  stimuli: string;
+  "stimuli.one": string;
+  /** The chip's tooltip when some failed: `{names}` lists them. */
+  failed: string;
+  /** Not simulated, and the netlist read problems in the wiring. */
+  issues: string;
+  "issues.one": string;
+  /** No verdict yet: the simulator owes it. */
+  atSimulator: string;
+  notSimulated: string;
+};
+
+export const GRADING_STRINGS: CircuitGradingStrings = {
+  schematic: "Schematic",
+  parts: "{n} parts",
+  "parts.one": "1 part",
+  wires: "{n} wires",
+  "wires.one": "1 wire",
+  stimuli: "{passed}/{total} stimuli",
+  "stimuli.one": "{passed}/{total} stimulus",
+  failed: "Failed: {names}",
+  issues: "{n} wiring problems",
+  "issues.one": "1 wiring problem",
+  atSimulator: "simulator…",
+  notSimulated: "Not simulated",
+};

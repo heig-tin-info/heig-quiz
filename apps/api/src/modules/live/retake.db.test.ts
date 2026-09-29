@@ -618,7 +618,7 @@ describe("the screens with several attempts", () => {
     const record = await reload(db, evaluation.id);
     const queue = await gradingQueue(db, record, { anonymous: true });
     // One row per attempt, numbered only for the student who retook — and
-    // the number travels anonymous too, where no name does (ADR-040).
+    // the number travels anonymous too, where no name does (ADR-044).
     const rows = new Map(queue.entries.map((e) => [e.attemptId, e]));
     expect(rows.size).toBe(3);
     const numbered = [...rows.values()].filter((e) => e.attemptNumber !== null);

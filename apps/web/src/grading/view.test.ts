@@ -5,7 +5,7 @@ import { GRADING_VIEW_DEFAULTS, parseGradingView, type GradingView } from "./vie
 /*
  * Issue #110: what is read back from storage is validated field by field.
  * Nothing stored, garbage, or one bad field never costs the others — and a
- * value stored by the previous panel (ADR-040) reads gracefully.
+ * value stored by the previous panel (ADR-044) reads gracefully.
  */
 
 const CHOSEN: GradingView = { stateFilter: "todo", source: "llm", confidence: "low" };

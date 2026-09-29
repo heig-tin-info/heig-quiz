@@ -104,7 +104,9 @@ scenes were retaken on their own (`--only`) on 2026-09-28, the
 (`classroom-evaluations`, `classroom-roster`, `roster-import`,
 `help-drawer`) together on 2026-09-29 (#295), each time on a fresh seed,
 which is why their ids differ from the other rows. The `grading*` scenes
-describe the grading table (ADR-040); their images are retaken with it.
+describe the grading table (ADR-044); their images were retaken again on
+2026-09-29 with the columns of every question type, on a fresh seed and
+without a runner (so the code answers wait for it).
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |
@@ -136,12 +138,12 @@ describe the grading table (ADR-040); their images are retaken with it.
 | `live-inspect` | teacher | `/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live` | running | Clicked the first student's cell of question 1. | 1440×900 |
 | `live-extend` | teacher | `/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live` | running | Clicked “Extend”. | 1440×900 |
 | `live-closed` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/live` | graded | Nothing: the page as it loads. | 1440×900 |
-| `grading` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Nothing: the page as it loads. | 1440×900, full page |
-| `grading-short` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Moved to the next question (the short answer). | 1440×900, full page |
-| `grading-cloze` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Moved three questions forward (the cloze). | 1440×900, full page |
-| `grading-code` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Moved four questions forward (the code question). | 1440×900, full page |
-| `grading-override` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Opened the first answer and clicked “Adjust” in its panel. | 1440×900 |
-| `grading-batch` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | seeded | Moved to the code question; the primary button offers to validate its proposals. | 1440×900 |
+| `grading` | teacher | `/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading` | graded | Nothing: the page as it loads. | 1440×900, full page |
+| `grading-short` | teacher | `/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading` | graded | Moved to the next question (the short answer). | 1440×900, full page |
+| `grading-cloze` | teacher | `/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading` | graded | Moved three questions forward (the cloze). | 1440×900, full page |
+| `grading-code` | teacher | `/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading` | graded | Moved four questions forward (the code question). | 1440×900, full page |
+| `grading-override` | teacher | `/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading` | graded | Opened the first answer and clicked “Adjust” in its panel. | 1440×900 |
+| `grading-batch` | teacher | `/evaluations/6dc1ee9d-84f0-4e82-9116-c9097356bd50/grading` | seeded | Moved to the code question; the primary button offers to validate its proposals. | 1440×900 |
 | `results` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results` | graded | Nothing: the page as it loads. | 1440×900, full page |
 | `results-questions` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results?tab=questions` | graded | Nothing: the page as it loads. | 1440×900, full page |
 | `results-release-confirm` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results` | graded | Clicked “Publish results”. | 1440×900 |
