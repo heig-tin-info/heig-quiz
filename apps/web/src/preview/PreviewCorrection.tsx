@@ -23,7 +23,7 @@ import { QuestionReviewHost } from "../questionTypes";
 import { Alert, Badge, Button, Card, NotePanel, Stat } from "../ui";
 
 /** Why an item carries no points, in the teacher's words. */
-const STATUS_LABEL: Record<Exclude<PreviewItemStatus, "graded">, keyof Dict> = {
+export const STATUS_LABEL: Record<Exclude<PreviewItemStatus, "graded">, keyof Dict> = {
   manual: "preview.status.manual",
   runner_unavailable: "preview.status.runner_unavailable",
   llm_unavailable: "preview.status.llm_unavailable",
