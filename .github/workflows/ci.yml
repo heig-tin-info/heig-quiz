@@ -165,9 +165,14 @@ jobs:
     permissions:
       contents: read
       packages: read
+    # A job waiting for approval already holds the group, so without
+    # cancel-in-progress a promotion left unapproved blocks every later one
+    # (they sit "pending", with no Review button). The newest promotion wins:
+    # it carries every older commit. The price is that a push landing while a
+    # production deploy is running cancels it; the newer job then deploys.
     concurrency:
       group: prod-deploy
-      cancel-in-progress: false
+      cancel-in-progress: true
     env:
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}

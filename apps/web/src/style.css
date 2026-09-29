@@ -47,6 +47,11 @@
      `info-soft`, 5.98:1 on `surface`. */
   --info: #1268a0;
   --info-soft: #e8f2f9;
+  /* The live grid's ANSWERED cell: a blue a teacher sees from the back of
+     the room, between `info-soft` (a tint) and `info` (the validated fill).
+     Its ink is 5.46:1 on it. */
+  --info-mid: #b8d7f0;
+  --on-info-mid: #0d5286;
   /* The colours a pool's icon may wear (#213), one per `PoolColor` name.
      Decoration only (N-A11Y-03): the name stays the identifier. Each is held
      to 3:1 on `surface` AND on `surface-2` (the card's icon well), the bar of
@@ -99,6 +104,9 @@ html.dark {
   /* 5.39:1 on `info-soft` over `surface`, 6.76:1 on `surface`. */
   --info: #58a9e0;
   --info-soft: rgb(88 169 224 / 0.14);
+  /* 5.70:1 on `info-mid` over `surface`. */
+  --info-mid: rgb(88 169 224 / 0.35);
+  --on-info-mid: #a6d3f3;
   /* The same fifteen, lifted for the dark surfaces (≥ 4.7:1 on both). */
   --pool-red: #f87171;
   --pool-orange: #fb923c;
@@ -145,6 +153,8 @@ html.dark {
   --color-danger-soft: var(--danger-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+  --color-info-mid: var(--info-mid);
+  --color-on-info-mid: var(--on-info-mid);
 
   --shadow-overlay: var(--shadow-overlay);
   --shadow-popover: var(--shadow-popover);

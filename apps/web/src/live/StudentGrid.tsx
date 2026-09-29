@@ -54,6 +54,7 @@ import { ACTIONS, COL, GridRow, PROGRESS } from "./GridRow";
 export function StudentGrid({
   state,
   clock,
+  commonDeadline,
   paused,
   nameOf,
   showAnswers,
@@ -71,6 +72,8 @@ export function StudentGrid({
    * re-render every second.
    */
   clock: () => number;
+  /** The header's one clock (`commonDeadline`); a row shows its own only when it differs. */
+  commonDeadline: string | null;
   /** The evaluation is paused: every row's countdown freezes with it (W16). */
   paused: boolean;
   /** The name or the anonymous number of one row; the toggle lives above. */
@@ -88,7 +91,6 @@ export function StudentGrid({
   const { view } = state;
   const totals = new Map(view.totals.map((x) => [x.itemId, x]));
   const percent = (v: number) => `${Math.round(v * 100)} %`;
-  const studentCount = view.rows.filter((r) => !r.staff).length;
   // Issue #89: how many students flagged each question for review. The CLASS
   // only, like every total of this grid — a teacher's own test walk flags
   // nothing about the paper's clarity. A question many students flag may be
@@ -213,7 +215,7 @@ export function StudentGrid({
               active={selected?.attemptId === row.attemptId}
               inspectItemId={selected?.itemId ?? view.items[0]?.id ?? ""}
               evaluationId={view.evaluation.id}
-              closesAt={view.evaluation.closesAt}
+              commonDeadline={commonDeadline}
               showScore={showScore}
               live={live}
               retakes={view.evaluation.retakes}
@@ -234,12 +236,10 @@ export function StudentGrid({
               scope="row"
               className={cx(T.td, "sticky left-0 z-10 bg-surface-2 text-left font-semibold")}
             >
-              {t("live.grid.class")}{" "}
-              <span className="font-normal text-fg-muted">
-                · {t(studentCount === 1 ? "live.grid.students.one" : "live.grid.students", {
-                  n: studentCount,
-                })}
-              </span>
+              {/* No head count here: the status line above the grid says
+                  "19/24 connected", and one number said twice is two numbers
+                  to keep in agreement. */}
+              {t("live.grid.class")}
             </th>
             <td className={cx(T.td, PROGRESS, "text-right text-fg-faint")}>—</td>
             {showScore ? <td className={cx(T.td, "text-right text-fg-faint")}>—</td> : null}

@@ -574,8 +574,10 @@ type VerdictKey =
  * ellipsis in a 64 px cell said nothing the tint did not, and thirty rows of
  * them were noise on a projector. So: a faint hollow square glyph for a
  * question never opened (`blank`), an empty outlined box for one opened and
- * left empty (`inProgress`), the box filled `info-soft` once it holds an
- * answer (`answered`), and filled `info` once validated (`done`). Empty
+ * left empty (`inProgress`), the box filled `info-mid` once it holds an
+ * answer (`answered`), and filled `info` once validated (`done`). The
+ * `answered` blue is a real blue, not a tint: `info-soft` vanished on a
+ * projector, and in dark mode against the surface. Empty
  * versus filled is a difference of shape, which survives grey and a washed
  * out projector (N-A11Y, nothing by colour alone); `answered` versus `done`
  * would be two blues and nothing else, which is why `done` keeps its check.
@@ -604,7 +606,7 @@ const VERDICTS: Record<
     tint: "border border-line-strong text-fg-muted",
     key: "verdict.inProgress",
   },
-  answered: { icon: null, tint: "bg-info-soft text-info", key: "verdict.answered" },
+  answered: { icon: null, tint: "bg-info-mid text-on-info-mid", key: "verdict.answered" },
   skipped: {
     icon: Minus,
     tint: "border border-dashed border-fg-faint bg-surface-2 text-fg-muted",

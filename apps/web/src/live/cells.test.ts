@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { initialGrid, presence, applyGridEvent } from "../realtime/grid";
 import { EVALUATION_ID, id, makeCell, makeDashboard, makeRow } from "../test/live-fixtures";
-import { cellState, ownDeadline } from "./cells";
+import { cellState, commonDeadline, ownDeadline } from "./cells";
 
 /*
  * The two things the live dashboard says about a cell and about the room.
@@ -145,5 +145,40 @@ describe("ownDeadline", () => {
   it("is false when the row has no deadline at all", () => {
     expect(ownDeadline(null, close)).toBe(false);
     expect(ownDeadline(null, null)).toBe(false);
+  });
+});
+
+/*
+ * The header's one clock. In `duration` timing there is no common close, but
+ * a quiz the teacher started begins every waiting attempt at one instant, so
+ * the running rows share a deadline: that one is the class's clock.
+ */
+describe("commonDeadline", () => {
+  const at = "2026-09-28T10:00:00.000Z";
+  const running = (deadlineAt: string | null, n: number) =>
+    makeRow(n, [ITEM], { state: "in_progress", deadlineAt });
+
+  it("is the common close whenever there is one", () => {
+    expect(commonDeadline(at, [running("2026-09-28T10:05:00.000Z", 0)])).toBe(at);
+  });
+
+  it("is the deadline most running rows share, compared as instants", () => {
+    const rows = [
+      running(at, 0),
+      running("2026-09-28T12:00:00+02:00", 1),
+      running("2026-09-28T10:05:00.000Z", 2),
+    ];
+    expect(Date.parse(commonDeadline(null, rows)!)).toBe(Date.parse(at));
+  });
+
+  it("ignores the rows that are no longer running", () => {
+    const over = (n: number) => makeRow(n, [ITEM], { state: "submitted", deadlineAt: at });
+    const rows = [over(8), over(9), running("2026-09-28T10:05:00.000Z", 0)];
+    expect(commonDeadline(null, rows)).toBeNull();
+  });
+
+  it("is null when every student started on their own", () => {
+    const rows = [running(at, 0), running("2026-09-28T10:00:07.000Z", 1), running(null, 2)];
+    expect(commonDeadline(null, rows)).toBeNull();
   });
 });

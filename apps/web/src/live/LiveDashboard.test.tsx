@@ -130,7 +130,7 @@ describe("LiveDashboard — the grid", () => {
 
   it("shows the class totals row and the legend", async () => {
     setup();
-    expect(await screen.findByText(/3 students/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^class$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/cell states/i)).toBeInTheDocument();
   });
 
@@ -152,7 +152,7 @@ describe("LiveDashboard — the grid", () => {
 
   it("gives every <label for> of the screen a control to point at", async () => {
     setup();
-    expect(await screen.findByText(/3 students/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^class$/i)).toBeInTheDocument();
     expect(labelIssues()).toEqual([]);
   });
 });
