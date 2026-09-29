@@ -685,10 +685,10 @@ export const fr: Record<keyof Dict, string> = {
   "pool.stats.discriminationBand.fair": "Moyen",
   "pool.stats.discriminationBand.weak": "Faible",
   "pool.stats.discriminationBand.inverse": "Inversé",
-  "pool.stats.discriminationBasisOne": "Sur 1 examen, {n} tentatives",
+  "pool.stats.discriminationBasisOne": "Sur un examen, {n} tentatives",
   "pool.stats.discriminationBasis": "Sur {evaluations} examens, {n} tentatives",
   "pool.stats.discriminationScope":
-    "Les étudiants qui ont bien réussi le reste de l'examen réussissent-ils aussi cette question ? De −1 à 1, bon dès 0.3, faible sous 0.2.",
+    "Les étudiants qui ont bien réussi le reste de l'examen réussissent-ils aussi cette question ? De −1 à 1, bon dès {good}, faible sous {fair}.",
   "pool.stats.discriminationInverse":
     "Sous zéro : les meilleurs étudiants réussissent moins bien cette question que les plus faibles. Vérifiez le corrigé et la formulation.",
   "pool.stats.discriminationNone":

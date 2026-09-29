@@ -172,6 +172,11 @@ export function useT(): TFunction {
   return useContext(I18nContext).t;
 }
 
+/** A number with exactly `digits` decimals, in the notation of `locale`: "0.42", "0,42". */
+export function formatDecimal(value: number, digits: number, locale: Locale): string {
+  return new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+}
+
 /**
  * "45 s", "2 min 05 s", "1 h 12 min": a span of seconds, compact, two units
  * at most, and never broken across two lines (the spaces are non-breaking).

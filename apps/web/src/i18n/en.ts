@@ -691,10 +691,10 @@ export const en = {
   "pool.stats.discriminationBand.fair": "Fair",
   "pool.stats.discriminationBand.weak": "Weak",
   "pool.stats.discriminationBand.inverse": "Inverse",
-  "pool.stats.discriminationBasisOne": "Over 1 exam, {n} attempts",
+  "pool.stats.discriminationBasisOne": "Over one exam, {n} attempts",
   "pool.stats.discriminationBasis": "Over {evaluations} exams, {n} attempts",
   "pool.stats.discriminationScope":
-    "Whether students who did well on the rest of the exam also did well on this question: from −1 to 1, good from 0.3, weak below 0.2.",
+    "Whether students who did well on the rest of the exam also did well on this question: from −1 to 1, good from {good}, weak below {fair}.",
   "pool.stats.discriminationInverse":
     "Below zero: stronger students do worse on this question than weaker ones. Check the answer key and the wording.",
   "pool.stats.discriminationNone":

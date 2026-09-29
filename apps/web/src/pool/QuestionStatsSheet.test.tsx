@@ -83,7 +83,7 @@ describe("QuestionStatsSheet", () => {
     expect(screen.getByText("0.40")).toBeInTheDocument();
     expect(screen.getByText("Good")).toBeInTheDocument();
     expect(screen.getByText("Over 2 exams, 21 attempts")).toBeInTheDocument();
-    expect(screen.getByText(/did well on the rest of the exam/)).toBeInTheDocument();
+    expect(screen.getByText(/did well on the rest of the exam.*good from 0\.3, weak below 0\.2\./)).toBeInTheDocument();
     expect(screen.queryByText(/stronger students do worse/)).not.toBeInTheDocument();
   });
 
@@ -100,8 +100,25 @@ describe("QuestionStatsSheet", () => {
     );
     expect(screen.getByText("-0.18")).toBeInTheDocument();
     expect(screen.getByText("Inverse")).toBeInTheDocument();
-    expect(screen.getByText("Over 1 exam, 12 attempts")).toBeInTheDocument();
+    expect(screen.getByText("Over one exam, 12 attempts")).toBeInTheDocument();
     expect(screen.getByText(/stronger students do worse/)).toBeInTheDocument();
+  });
+
+  it("writes the decimals of the index and its bands with a comma in French", async () => {
+    mockFetch({});
+    renderWithProviders(
+      <QuestionStatsSheet
+        poolId="p1"
+        row={ROW}
+        stats={{ ...STATS, discrimination: { r: 0.25, evaluations: 3, n: 30 } }}
+        canReset
+        onClose={vi.fn()}
+      />,
+      { locale: "fr" },
+    );
+    expect(await screen.findByText("0,25")).toBeInTheDocument();
+    expect(screen.getByText("Moyen")).toBeInTheDocument();
+    expect(screen.getByText(/bon dès 0,3, faible sous 0,2\./)).toBeInTheDocument();
   });
 
   it("says when the discrimination will show", () => {

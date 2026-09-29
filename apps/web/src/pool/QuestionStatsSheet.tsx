@@ -1,8 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 
-import type { QuestionRow, QuestionStats, StatsReset } from "@quiz/contracts";
+import type { DiscriminationStats, QuestionRow, QuestionStats, StatsReset } from "@quiz/contracts";
 import {
+  DISCRIMINATION_FAIR,
+  DISCRIMINATION_GOOD,
   DISCRIMINATION_MIN_ITEMS,
   DISCRIMINATION_MIN_N,
   discriminationBand,
@@ -13,7 +15,7 @@ import {
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
-import { formatSpan, useT } from "../i18n";
+import { formatDecimal, formatSpan, useI18n, useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import { poolQuestionStatsKey } from "../queryKeys";
 import { Alert, Badge, Button, isoDateParts, SectionHeading, Sheet, Stat, type Tone } from "../ui";
@@ -158,48 +160,55 @@ const BAND_TONE: Record<DiscriminationBand, Tone> = {
  * means. Like the time, it has its own conditions, so a question may show
  * its rate without it; the block then says when it will show.
  */
-function DiscriminationBlock({ discrimination }: { discrimination: QuestionStats["discrimination"] }) {
+function DiscriminationBlock({ discrimination }: { discrimination: DiscriminationStats | null }) {
   const t = useT();
-  const band = discrimination && discriminationBand(discrimination.r);
   return (
     <section className="space-y-3">
       <SectionHeading title={t("pool.stats.discrimination")} />
-      {discrimination && band ? (
-        <>
-          {/* Half the width, like the rate above it; the whole row on a phone. */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Stat
-              label={t("pool.stats.discriminationIndex")}
-              value={
-                <span className="flex items-center gap-2">
-                  {discrimination.r.toFixed(2)}
-                  <Badge tone={BAND_TONE[band]} icon={band === "inverse" ? AlertTriangle : undefined}>
-                    {t(`pool.stats.discriminationBand.${band}`)}
-                  </Badge>
-                </span>
-              }
-              hint={
-                discrimination.evaluations === 1
-                  ? t("pool.stats.discriminationBasisOne", { n: discrimination.n })
-                  : t("pool.stats.discriminationBasis", {
-                      evaluations: discrimination.evaluations,
-                      n: discrimination.n,
-                    })
-              }
-            />
-          </div>
-          {band === "inverse" ? (
-            <Alert tone="warning" icon={AlertTriangle}>
-              {t("pool.stats.discriminationInverse")}
-            </Alert>
-          ) : null}
-          <p className="text-sm text-fg-muted">{t("pool.stats.discriminationScope")}</p>
-        </>
+      {discrimination ? (
+        <DiscriminationValue discrimination={discrimination} />
       ) : (
         <p className="text-sm text-fg-muted">
           {t("pool.stats.discriminationNone", { items: DISCRIMINATION_MIN_ITEMS, min: DISCRIMINATION_MIN_N })}
         </p>
       )}
     </section>
+  );
+}
+
+function DiscriminationValue({ discrimination }: { discrimination: DiscriminationStats }) {
+  const { t, locale } = useI18n();
+  const band = discriminationBand(discrimination.r);
+  return (
+    <>
+      {/* Half the width, like the rate above it; the whole row on a phone. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Stat
+          label={t("pool.stats.discriminationIndex")}
+          value={
+            <span className="flex items-center gap-2">
+              {formatDecimal(discrimination.r, 2, locale)}
+              <Badge tone={BAND_TONE[band]}>{t(`pool.stats.discriminationBand.${band}`)}</Badge>
+            </span>
+          }
+          hint={
+            discrimination.evaluations === 1
+              ? t("pool.stats.discriminationBasisOne", { n: discrimination.n })
+              : t("pool.stats.discriminationBasis", { evaluations: discrimination.evaluations, n: discrimination.n })
+          }
+        />
+      </div>
+      {band === "inverse" ? (
+        <Alert tone="warning" icon={AlertTriangle}>
+          {t("pool.stats.discriminationInverse")}
+        </Alert>
+      ) : null}
+      <p className="text-sm text-fg-muted">
+        {t("pool.stats.discriminationScope", {
+          fair: formatDecimal(DISCRIMINATION_FAIR, 1, locale),
+          good: formatDecimal(DISCRIMINATION_GOOD, 1, locale),
+        })}
+      </p>
+    </>
   );
 }
