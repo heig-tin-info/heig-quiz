@@ -112,7 +112,7 @@ export async function drillPlugin(app: FastifyInstance) {
   //
   // The state of the switches is read from the classroom's and the
   // evaluation's own details (`drillEnabled`, `allowDrill`); these routes
-  // only write.
+  // write, except the one read of the cards an evaluation gave rise to.
 
   /** ADR-041 §6: the teacher enables the drill for a classroom; its students are then in by default. */
   app.put(
@@ -132,6 +132,20 @@ export async function drillPlugin(app: FastifyInstance) {
         cardsCreated,
       } satisfies DrillClassroomSettings;
     }),
+  );
+
+  /**
+   * "Allow drill" and the cards the evaluation gave rise to: the count the
+   * settings screen needs to offer "Remove these questions from the drill"
+   * (ADR-041 §10, item 3), which the evaluation's detail does not carry.
+   */
+  app.get(
+    "/app/api/evaluations/:id/drill",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffEvaluation }, async ({ scope }) => ({
+      allowDrill: drillAllowed(scope.evaluation),
+      cards: await service.evaluationCardCount(app.db, scope.evaluation.id),
+    }) satisfies EvaluationDrill),
   );
 
   /**
