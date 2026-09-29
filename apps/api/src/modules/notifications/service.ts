@@ -46,6 +46,7 @@ import {
   users,
   type FoldedKind,
 } from "../../db/schema.js";
+import { holdsCourseSeat } from "../org/service.js";
 import { hint, userTopic } from "../realtime/bus.js";
 import { enqueueDeliveries, teamsOpen, type ExternalChannel } from "./outbox.js";
 import { teamsLinkedUsers, teamsLinkOf } from "./teamsLink.js";
@@ -371,7 +372,7 @@ export async function notificationSettings(
   userId: string,
   teamsAvailable: boolean,
 ): Promise<NotificationSettings> {
-  const [matrix, link, [user], [seat]] = await Promise.all([
+  const [matrix, link, [user], [seat], courseSeat] = await Promise.all([
     preferenceMatrix(db, userId),
     teamsLinkOf(db, { userId }),
     db
@@ -385,12 +386,17 @@ export async function notificationSettings(
       .from(enrollments)
       .where(and(eq(enrollments.userId, userId), eq(enrollments.staff, false)))
       .limit(1),
+    holdsCourseSeat(db, userId),
   ]);
   // A link made while Teams was configured means nothing once it is not.
   const shown = teamsAvailable ? link : null;
   return {
     matrix,
-    kinds: notificationKindsFor(user?.role ?? "student", seat !== undefined),
+    kinds: notificationKindsFor({
+      role: user?.role ?? "student",
+      studentSeat: seat !== undefined,
+      courseSeat,
+    }),
     email: user?.email ?? "",
     teams: {
       available: teamsAvailable,

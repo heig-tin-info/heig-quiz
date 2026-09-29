@@ -13,6 +13,13 @@ import { poolPeopleChanged } from "./events.js";
 import { type PoolRow, qualified } from "./shared.js";
 
 /**
+ * The accounts that may hold a pool seat, and so hear of a pool: the stored
+ * role, as `decideRole` (`roles.ts`) computed it, is a teacher or an admin. A
+ * member demoted to student keeps the row, never the rights nor the news.
+ */
+const isStaff = inArray(users.role, ["teacher", "admin"]);
+
+/**
  * The people of a pool: the `pools.owner_id` account FIRST, then the members
  * in the order they were added — which is the succession order the day the
  * owner loses the teacher role (`transferOnLoss`).
@@ -97,7 +104,7 @@ export async function findTeacherByEmail(db: Db, email: string) {
           sql`lower(${users.email}) = ${normalized}`,
           sql`EXISTS (SELECT 1 FROM ${userEmails} WHERE ${qualified(userEmails.userId)} = ${qualified(users.id)} AND ${qualified(userEmails.email)} = ${normalized} AND ${qualified(userEmails.verified)})`,
         ),
-        inArray(users.role, ["teacher", "admin"]),
+        isStaff,
       ),
     )
     .limit(1);
@@ -115,7 +122,7 @@ export async function findTeacherById(db: Db, userId: string) {
       role: users.role,
     })
     .from(users)
-    .where(and(eq(users.id, userId), inArray(users.role, ["teacher", "admin"])))
+    .where(and(eq(users.id, userId), isStaff))
     .limit(1);
   return row ?? null;
 }
@@ -139,7 +146,7 @@ export async function listCandidates(db: Db, pool: PoolRow, q: string): Promise<
     .from(users)
     .where(
       and(
-        inArray(users.role, ["teacher", "admin"]),
+        isStaff,
         sql`${users.id} <> ${pool.ownerId}`,
         sql`NOT EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${pool.id} AND ${qualified(poolMembers.userId)} = ${qualified(users.id)})`,
         sql`lower(${users.givenName} || ' ' || ${users.familyName} || ' ' || ${users.email}) LIKE ${needle}`,
@@ -212,7 +219,10 @@ export async function removeMember(db: Db, poolId: string, userId: string): Prom
 
 /**
  * The topics a change of the pool's people must reach: the owner and every
- * member (or only the members of `roles`), on their OWN topic.
+ * member (or only the members of `roles`), on their OWN topic — staff only
+ * (`isStaff`): a demoted member has no settings row to silence the pool with.
+ * It is also the realtime audience of `topicsOf` (`routeContext.ts`), and
+ * dropping demoted accounts from those hints is intended.
  *
  * `pool:<id>` is not enough here — a connection subscribes to the pools it
  * could reach WHEN IT OPENED, so the colleague who has just been named is
@@ -223,7 +233,7 @@ export async function poolAudience(
   pool: Pick<PoolRow, "id" | "ownerId">,
   roles?: readonly PoolRole[],
 ): Promise<string[]> {
-  const rows = await db
+  const members = db
     .select({ userId: poolMembers.userId })
     .from(poolMembers)
     .where(
@@ -232,7 +242,11 @@ export async function poolAudience(
         roles ? inArray(poolMembers.role, [...roles]) : undefined,
       ),
     );
-  return [...new Set([pool.ownerId, ...rows.map((r) => r.userId)])];
+  const rows = await db
+    .select({ userId: users.id })
+    .from(users)
+    .where(and(isStaff, or(eq(users.id, pool.ownerId), inArray(users.id, members))));
+  return rows.map((r) => r.userId);
 }
 
 /**
@@ -273,7 +287,8 @@ export async function tellPoolOfPublication(db: Db, poolId: string, authorId: st
 
 /**
  * Succession (F-POOL-05): the pools owned by an account that has just lost
- * the teacher role pass to their FIRST member, then the next, and so on.
+ * the teacher role pass to their FIRST member who is still staff (`isStaff`),
+ * then the next, and so on.
  *
  * "Removed from the system" is never a deletion here — an account is kept for
  * its audit trail and its past attempts. What happens is that the role is
@@ -282,7 +297,7 @@ export async function tellPoolOfPublication(db: Db, poolId: string, authorId: st
  * route that does not exist.
  *
  * One transaction per pool, and idempotent: a pool whose owner is anyone else
- * is left alone, and a pool with NO member keeps its owner — it stays
+ * is left alone, and a pool with NO staff member keeps its owner — it stays
  * readable by the staff of the courses it is linked to, and an admin can
  * still dispose of it. Nothing is ever orphaned to nobody.
  */
@@ -313,7 +328,8 @@ export async function transferOnLoss(
       const [first] = await tx
         .select({ userId: poolMembers.userId })
         .from(poolMembers)
-        .where(eq(poolMembers.poolId, pool.id))
+        .innerJoin(users, eq(users.id, poolMembers.userId))
+        .where(and(eq(poolMembers.poolId, pool.id), isStaff))
         .orderBy(asc(poolMembers.createdAt), asc(poolMembers.userId))
         .limit(1);
       if (!first) return null;
