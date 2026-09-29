@@ -280,7 +280,8 @@ export function CircuitReview({
             </thead>
             <tbody>
               {rows.map(({ detail, label }, i) => {
-                // Neither a waveform nor a distance: the stimulus never ran.
+                // No waveform, no distance, no envelope: the stimulus never ran. (A
+                // hidden sweep reaches a student with its envelope and nothing else.)
                 const ran =
                   detail.series !== null || detail.error !== null || detail.envelope !== undefined;
                 const ok = ran ? detail.ok : null;

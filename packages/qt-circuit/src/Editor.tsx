@@ -23,7 +23,8 @@ import {
   DEFAULT_AC_ANALYSIS,
   DEFAULT_ANALYSIS,
   DEFAULT_BODE,
-  bodeOf,
+  MAX_ANALYSIS_POINTS,
+  biasOf,
   emptyStimulus,
   totalStimulusPoints,
   type Analysis,
@@ -540,7 +541,7 @@ function StimulusFields({
             <NumberField
               id={`${ids}-bias-${i}`}
               label={s.bias}
-              value={source.kind === "dc" ? source.volts : 0}
+              value={biasOf(source)}
               step="any"
               disabled={disabled}
               onChange={(volts) => patch({ source: { kind: "dc", volts } })}
@@ -702,7 +703,7 @@ function AnalysisFields({
         label={s.samples}
         value={analysis.points}
         min={50}
-        max={2000}
+        max={MAX_ANALYSIS_POINTS}
         step={50}
         width="w-24"
         disabled={disabled}
@@ -775,10 +776,11 @@ function GradingSection({
     { value: "llm", label: s.modeLlm },
   ];
   const modeHint = { manual: s.modeManualHint, simulation: s.modeSimulationHint, llm: s.modeLlmHint };
-  // A draft stored before the AC sweep has neither `kind` nor `bode` (`bodeOf`).
+  // Every read parses the config; only an invalid draft reaches this screen as
+  // stored, and one saved before the AC sweep has no `bode` yet.
   const hasAc = config.stimuli.some((st) => st.analysis.kind === "ac");
-  const hasTran = config.stimuli.some((st) => st.analysis.kind !== "ac");
-  const bode = bodeOf(config.grading);
+  const hasTran = config.stimuli.some((st) => st.analysis.kind === "tran");
+  const bode = config.grading.bode ?? DEFAULT_BODE;
   const patchBode = (next: Partial<BodeTolerance>) =>
     patch({ grading: { ...config.grading, bode: { ...bode, ...next } } });
   return (

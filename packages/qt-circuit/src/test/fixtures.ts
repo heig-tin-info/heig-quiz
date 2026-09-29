@@ -251,9 +251,9 @@ export function circuitConfig(overrides: Record<string, unknown> = {}): CircuitC
 }
 
 /**
- * {@link circuitConfig} as a row stored before the AC sweep reads back: a
- * config is re-parsed only across a `configVersion` bump, and there was none,
- * so it has no `analysis.kind` and no `grading.bode` (`bodeOf`, schema.ts).
+ * {@link circuitConfig} as its bytes were stored before the AC sweep: no
+ * `analysis.kind`, no `grading.bode`. The server never hands this to anyone
+ * — every read parses — but an invalid draft reaches the editor as stored.
  */
 export function storedBeforeAc(): CircuitConfig {
   const config = structuredClone(circuitConfig()) as unknown as {

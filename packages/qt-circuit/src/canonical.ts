@@ -19,7 +19,6 @@ import {
   DEFAULT_AC_ANALYSIS,
   DEFAULT_ANALYSIS,
   DEFAULT_BODE,
-  bodeOf,
   type Analysis,
   type BodeTolerance,
   type Grading,
@@ -40,7 +39,7 @@ const isDefaultPalette = (p: Palette): boolean =>
 const isDefaultSupplies = (s: Supplies): boolean => s.vcc === null && s.vee === null;
 
 const isDefaultAnalysis = (a: Analysis): boolean =>
-  a.kind !== "ac" &&
+  a.kind === "tran" &&
   a.stopMs === DEFAULT_ANALYSIS.stopMs &&
   a.skipMs === DEFAULT_ANALYSIS.skipMs &&
   a.points === DEFAULT_ANALYSIS.points;
@@ -48,11 +47,10 @@ const isDefaultAnalysis = (a: Analysis): boolean =>
 /**
  * A transient is written WITHOUT its `kind`, as it was before the AC sweep
  * existed: the schema fills it back in, and every file exported until then
- * stays byte for byte what it was. A sweep always says what it is. (A config
- * stored before the sweep has no `kind` at all, hence `!== "ac"`; see `bodeOf`.)
+ * stays byte for byte what it was. A sweep always says what it is.
  */
 function analysisToCanonical(a: Analysis): Record<string, unknown> {
-  if (a.kind !== "ac") return { stopMs: a.stopMs, skipMs: a.skipMs, points: a.points };
+  if (a.kind === "tran") return { stopMs: a.stopMs, skipMs: a.skipMs, points: a.points };
   return {
     kind: "ac",
     fStartHz: a.fStartHz,
@@ -69,18 +67,15 @@ const isDefaultBode = (b: BodeTolerance): boolean =>
   b.phaseDeg === DEFAULT_BODE.phaseDeg;
 
 const isDefaultGrading = (g: Grading): boolean =>
-  g.mode === "manual" && g.tolerance === DEFAULT_TOLERANCE && g.rubric === "" && isDefaultBode(bodeOf(g));
+  g.mode === "manual" && g.tolerance === DEFAULT_TOLERANCE && g.rubric === "" && isDefaultBode(g.bode);
 
 /** The grading block, with the Bode envelope only when it is not the default one. */
-function gradingToCanonical(g: Grading): Record<string, unknown> {
-  const bode = bodeOf(g);
-  return {
-    mode: g.mode,
-    tolerance: g.tolerance,
-    ...(isDefaultBode(bode) ? {} : { bode: { ...bode } }),
-    rubric: g.rubric,
-  };
-}
+const gradingToCanonical = (g: Grading): Record<string, unknown> => ({
+  mode: g.mode,
+  tolerance: g.tolerance,
+  ...(isDefaultBode(g.bode) ? {} : { bode: { ...g.bode } }),
+  rubric: g.rubric,
+});
 
 function stimulusToCanonical(stimulus: Stimulus): Record<string, unknown> {
   return {

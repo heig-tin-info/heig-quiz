@@ -157,6 +157,9 @@ export const Load = z.discriminatedUnion("kind", [
 ]);
 export type Load = z.infer<typeof Load>;
 
+/** The ceiling of ADR-019 on one simulation, which an AC sweep observes too. */
+export const MAX_ANALYSIS_POINTS = 2000;
+
 /** A transient: the time-domain window a waveform is compared over. */
 export const TranAnalysis = z.object({
   kind: z.literal("tran"),
@@ -165,7 +168,7 @@ export const TranAnalysis = z.object({
   /** Samples before this instant are dropped (the transient the teacher wants to skip). */
   skipMs: z.number().min(0).max(1000).default(0),
   /** Samples kept between `skipMs` and `stopMs`. */
-  points: z.number().int().min(50).max(2000).default(500),
+  points: z.number().int().min(50).max(MAX_ANALYSIS_POINTS).default(500),
 });
 export type TranAnalysis = z.infer<typeof TranAnalysis>;
 
@@ -197,18 +200,10 @@ export const Analysis = z.preprocess(
 );
 export type Analysis = z.infer<typeof Analysis>;
 
-export const DEFAULT_ANALYSIS: TranAnalysis = { kind: "tran", stopMs: 5, skipMs: 0, points: 500 };
+export const DEFAULT_ANALYSIS: TranAnalysis = TranAnalysis.parse({ kind: "tran" });
 
 /** What the editor switches a stimulus to: four decades around 1 kHz. */
-export const DEFAULT_AC_ANALYSIS: AcAnalysis = {
-  kind: "ac",
-  fStartHz: 10,
-  fStopHz: 100_000,
-  pointsPerDecade: 20,
-};
-
-/** The ceiling of ADR-019 on one simulation, which an AC sweep observes too. */
-export const MAX_ANALYSIS_POINTS = 2000;
+export const DEFAULT_AC_ANALYSIS: AcAnalysis = AcAnalysis.parse({ kind: "ac", fStartHz: 10, fStopHz: 100_000 });
 
 /** How many frequencies `.ac dec` produces: `pointsPerDecade` per decade, both ends included. */
 export function acPointCount(analysis: AcAnalysis): number {
@@ -251,6 +246,13 @@ export const Stimulus = z
   });
 export type Stimulus = z.infer<typeof Stimulus>;
 
+/**
+ * The DC bias of an AC sweep: the volts of its `dc` source. Anything else is
+ * refused at publication (`circuit.ac_needs_dc_source`); a draft that still
+ * holds one is biased at 0 V.
+ */
+export const biasOf = (source: Source): number => (source.kind === "dc" ? source.volts : 0);
+
 export const Supplies = z.object({
   /** The `VCC` rail the palette offers, in volts; `null` hides the symbol. */
   vcc: z.number().min(0).max(100).nullable().default(null),
@@ -284,20 +286,7 @@ export const BodeTolerance = z.object({
 });
 export type BodeTolerance = z.infer<typeof BodeTolerance>;
 
-export const DEFAULT_BODE: BodeTolerance = { magDb: 1, floorDb: 60, phaseDeg: 10 };
-
-/*
- * A config is re-parsed only when its `configVersion` changes (`reparseMigrate`),
- * and the AC sweep came without a bump: a config stored before it is read
- * back AS STORED, with no `analysis.kind` and no `grading.bode`. Every reader
- * therefore tells a sweep by `kind === "ac"` — anything else is a transient —
- * and reads the envelope through `bodeOf`.
- */
-
-/** The Bode envelope of a grading block, the default one when it was stored before the AC sweep. */
-export function bodeOf(grading: Grading): BodeTolerance {
-  return (grading.bode as BodeTolerance | undefined) ?? DEFAULT_BODE;
-}
+export const DEFAULT_BODE: BodeTolerance = BodeTolerance.parse({});
 
 export const Grading = z.object({
   mode: GradingMode.default("manual"),
@@ -309,7 +298,7 @@ export const Grading = z.object({
    */
   tolerance: z.number().min(0.001).max(1).default(0.05),
   /** `simulation`, AC stimuli: the envelope around the reference's Bode plot. */
-  bode: BodeTolerance.default(() => ({ ...DEFAULT_BODE })),
+  bode: BodeTolerance.default(() => BodeTolerance.parse({})),
   /** `llm` and `manual`: the criteria, for the model or for the teacher's own eyes. */
   rubric: z.string().max(8000).default(""),
 });
@@ -333,7 +322,7 @@ export const CircuitConfig = z
     stimuli: z.array(Stimulus).max(4).default([]),
     /** The teacher's own circuit: the key. Never in `toStudent`; a student receives it only under a shown key (ADR-037). */
     reference: Schematic.nullable().default(null),
-    grading: Grading.default({ mode: "manual", tolerance: 0.05, bode: { ...DEFAULT_BODE }, rubric: "" }),
+    grading: Grading.default(() => Grading.parse({})),
     /** Overlay the reference's output on the student's plot, for the visible stimuli. */
     showExpected: z.boolean().default(false),
     /** N-SEC-07: the budget of the student's Simulate button, per attempt. */
@@ -363,7 +352,7 @@ export function emptyCircuitConfig(): CircuitConfig {
     commonGround: true,
     stimuli: [],
     reference: null,
-    grading: { mode: "manual", tolerance: 0.05, bode: { ...DEFAULT_BODE }, rubric: "" },
+    grading: Grading.parse({}),
     showExpected: false,
     simulationsPerMinute: 10,
   };

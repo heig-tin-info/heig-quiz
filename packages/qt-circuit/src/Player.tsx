@@ -25,7 +25,7 @@ import { Plot, SchematicEditor, type CanvasStrings } from "./canvas/index.js";
 import { parseSimulation, type SimulationResult } from "./grade.js";
 import { formatValue, LIBRARY, PORT_IDS, type PortId } from "./library.js";
 import { extractNets, type NetlistIssue } from "./netlist.js";
-import type { CircuitAnswer, CircuitStudent, Load, Source, StudentStimulus } from "./schema.js";
+import { biasOf, type CircuitAnswer, type CircuitStudent, type Load, type Source, type StudentStimulus } from "./schema.js";
 import { PLAYER_STRINGS, type CircuitPlayerStrings } from "./strings.js";
 import { badge, buttonClass, card, cx, hint, isLocked, markdown, sectionTitle } from "@quiz/ui";
 
@@ -136,7 +136,7 @@ function describeStimulus(stimulus: StudentStimulus, s: CircuitPlayerStrings): s
         from: `${formatValue(analysis.fStartHz)}Hz`,
         to: `${formatValue(analysis.fStopHz)}Hz`,
       }),
-      fmt(s.srcBias, { volts: formatValue(source.kind === "dc" ? source.volts : 0) }),
+      fmt(s.srcBias, { volts: formatValue(biasOf(source)) }),
       describeLoad(stimulus.load, s),
     ].join(" · ");
   }

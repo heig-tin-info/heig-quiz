@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { fromCanonical, toCanonical } from "./canonical.js";
 import { CircuitConfig, emptyCircuitConfig } from "./schema.js";
-import { circuitConfig, rcLowPass, storedBeforeAc } from "./test/fixtures.js";
+import { circuitConfig, rcLowPass } from "./test/fixtures.js";
 
 describe("toCanonical", () => {
   it("writes down only what the schema cannot rebuild", () => {
@@ -110,10 +110,6 @@ describe("the round trip", () => {
     });
     expect(canonical.grading["bode"]).toEqual({ magDb: 2, floorDb: 40, phaseDeg: null });
     expect(fromCanonical(canonical)).toStrictEqual(config);
-  });
-
-  it("exports a config stored before the AC sweep exactly as the parsed one", () => {
-    expect(toCanonical(storedBeforeAc())).toEqual(toCanonical(CircuitConfig.parse(storedBeforeAc())));
   });
 
   it("leaves the default Bode envelope out of the grading block", () => {

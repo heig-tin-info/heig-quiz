@@ -17,13 +17,19 @@ import { RunnerRequest, type RunnerOutcome } from "@quiz/core/server";
 import { round2 } from "@quiz/domain/round";
 
 import { extractNets, formatIssue, hasPaletteViolation } from "./netlist.js";
-import { buildBareNetlist, buildNetlist, decimate, parseSpiceOutput, type Harness } from "./spice.js";
+import {
+  buildBareNetlist,
+  buildNetlist,
+  decimate,
+  parseSpiceOutput,
+  type AnalysisKind,
+  type Harness,
+  type SeriesOf,
+} from "./spice.js";
 import {
   DB_FLOOR,
-  bodeOf,
   totalStimulusPoints,
   type AcSeries,
-  type Analysis,
   type BodeTolerance,
   type CircuitAnswer,
   type CircuitConfig,
@@ -285,28 +291,34 @@ export interface SimulationResult {
   log?: string;
 }
 
-interface CaseReading {
-  /** Decimated, for storage and for a plot. */
-  series: SeriesSet | null;
-  /** The table exactly as ngspice printed it: what an AC stimulus is judged on. */
-  full: SeriesSet | null;
+/** One run that printed its table: decimated for storage and the plot, and whole for a rule that needs it. */
+interface Run<S extends SeriesSet> {
+  series: S;
+  full: S;
+}
+
+interface CaseReading<S extends SeriesSet = SeriesSet> {
+  /** `null` when the case produced no table. */
+  run: Run<S> | null;
   reason?: string;
   log?: string;
 }
 
 /** One case of an outcome: the table it printed, or why there is none. */
-function readCase(run: RunnerOutcome["cases"][number] | undefined, kind: Analysis["kind"]): CaseReading {
-  if (run === undefined) return { series: null, full: null, reason: "not_run" };
+function readCase<K extends AnalysisKind>(
+  run: RunnerOutcome["cases"][number] | undefined,
+  kind: K,
+): CaseReading<SeriesOf<K>> {
+  if (run === undefined) return { run: null, reason: "not_run" };
   const parsed = parseSpiceOutput(run.stdout, kind);
   if (parsed !== null && run.exitCode === 0 && !run.timedOut) {
-    return { series: decimate(parsed), full: parsed };
+    return { run: { series: decimate(parsed), full: parsed } };
   }
   // ngspice exits 0 after refusing a deck, so a missing table is as much a
   // failure as a non-zero exit; the tail of both streams is what tells the
   // teacher which line it choked on.
   return {
-    series: null,
-    full: null,
+    run: null,
     reason: run.timedOut ? "spice_timeout" : "spice_failed",
     log: tail(`${run.stderr}\n${run.stdout}`.trim()),
   };
@@ -329,8 +341,8 @@ export function parseSimulation(
     const reference = student.showExpected ? readCase(outcome.cases[n + k], kind) : null;
     return {
       name: stimulus.name,
-      series: read.series,
-      expected: reference?.series ?? null,
+      series: read.run?.series ?? null,
+      expected: reference?.run?.series ?? null,
       ...(read.reason === undefined ? {} : { reason: read.reason }),
       ...(read.log === undefined ? {} : { log: read.log }),
     };
@@ -490,31 +502,42 @@ interface Verdict {
   reason?: string;
 }
 
-/**
- * One stimulus's verdict, by the rule of its analysis: the RMS distance for
- * a transient (on the stored samples, as it always was), the envelope for an
- * AC sweep — on the FULL tables, since a resonance peak that decimation
- * steps over is exactly what the envelope is there to catch. With no
- * reference run (`manual` without a reference) a series is all it takes.
- */
-function judge(
-  student: CaseReading,
-  reference: CaseReading | null,
+type Rule<K extends AnalysisKind> = (
+  student: Run<SeriesOf<K>>,
+  reference: Run<SeriesOf<K>>,
   grading: CircuitConfig["grading"],
-): Verdict {
-  const mine = student.full;
-  if (mine === null) return { ok: false, error: null };
-  if (reference === null) return { ok: true, error: null };
-  const theirs = reference.full;
-  if (theirs === null) return { ok: false, error: null };
-  if (mine.kind === "ac" || theirs.kind === "ac") {
-    const envelope =
-      mine.kind === "ac" && theirs.kind === "ac" ? compareBode(mine, theirs, bodeOf(grading)) : null;
+) => Verdict;
+
+/**
+ * The pass rule of each analysis kind. A transient is compared on its stored
+ * samples, as it always was (ADR-019); an AC sweep on the FULL tables, since
+ * a resonance peak that decimation steps over is exactly what the envelope
+ * is there to catch (ADR-040).
+ */
+const RULES: { [K in AnalysisKind]: Rule<K> } = {
+  tran: (student, reference, grading) => {
+    const error = compareSeries(student.series, reference.series);
+    return { ok: error !== null && error <= grading.tolerance, error };
+  },
+  ac: (student, reference, grading) => {
+    const envelope = compareBode(student.full, reference.full, grading.bode);
     if (envelope === null) return { ok: false, error: null, reason: "grid_mismatch" };
     return { ok: envelope.outside === 0, error: null, envelope };
-  }
-  const error = compareSeries(decimate(mine), decimate(theirs));
-  return { ok: error !== null && error <= grading.tolerance, error };
+  },
+};
+
+/** One stimulus's verdict. With no reference run (`manual` without a reference) a table is all it takes. */
+function judge<K extends AnalysisKind>(
+  kind: K,
+  student: CaseReading<SeriesOf<K>>,
+  reference: CaseReading<SeriesOf<K>> | null,
+  grading: CircuitConfig["grading"],
+): Verdict {
+  if (student.run === null) return { ok: false, error: null };
+  if (reference === null) return { ok: true, error: null };
+  if (reference.run === null) return { ok: false, error: null };
+  const rule: Rule<K> = RULES[kind];
+  return rule(student.run, reference.run, grading);
 }
 
 /**
@@ -556,12 +579,12 @@ export function finalizeRunnerCircuit(
     const student = readCase(outcome.cases[indexOf("student", i)], kind);
     const expectedIndex = indexOf("reference", i);
     const reference = expectedIndex < 0 ? null : readCase(outcome.cases[expectedIndex], kind);
-    if (reference !== null && reference.series === null) referenceFailed = true;
+    if (reference !== null && reference.run === null) referenceFailed = true;
 
-    const verdict = judge(student, reference, config.grading);
+    const verdict = judge(kind, student, reference, config.grading);
     const reason =
       student.reason ??
-      (reference !== null && reference.series === null ? "reference_failed" : verdict.reason);
+      (reference !== null && reference.run === null ? "reference_failed" : verdict.reason);
 
     return {
       name: stimulus.name,
@@ -570,8 +593,8 @@ export function finalizeRunnerCircuit(
       ok: verdict.ok,
       error: verdict.error,
       ...(verdict.envelope === undefined ? {} : { envelope: verdict.envelope }),
-      series: student.series,
-      expected: reference?.series ?? null,
+      series: student.run?.series ?? null,
+      expected: reference?.run?.series ?? null,
       ...(reason === undefined ? {} : { reason }),
       ...(student.log === undefined ? {} : { log: student.log }),
     };

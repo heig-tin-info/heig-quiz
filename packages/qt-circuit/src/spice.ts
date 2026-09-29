@@ -23,9 +23,9 @@ import { extractNets, pinKey, type NetlistIssue } from "./netlist.js";
 import {
   DB_FLOOR,
   SERIES_MAX_POINTS,
+  biasOf,
   type AcAnalysis,
   type AcSeries,
-  type Analysis,
   type Load,
   type Schematic,
   type SchematicComponent,
@@ -175,7 +175,7 @@ export function sourceSpec(source: Source): string {
  * reaching here is a draft, biased at 0 V so the deck stays runnable.
  */
 export function acSourceSpec(source: Source): string {
-  return `DC ${spiceNumber(source.kind === "dc" ? source.volts : 0)} AC 1`;
+  return `DC ${spiceNumber(biasOf(source))} AC 1`;
 }
 
 /** The load between `out` and the measuring source: `Rload` or `Cload`. */
@@ -425,8 +425,8 @@ export function buildNetlist(
 
   const inRef = harness.commonGround ? "0" : "inn";
   const outRef = harness.commonGround ? "0" : "outn";
-  const spec =
-    stimulus.analysis.kind === "ac" ? acSourceSpec(stimulus.source) : sourceSpec(stimulus.source);
+  const analysis = analysisDeck(stimulus.analysis.kind, stimulus.analysis, stimulus.source);
+  const spec = analysis.source;
   if (stimulus.sourceOhms > 0) {
     lines.push(`Vin src ${inRef} ${spec}`);
     lines.push(`Rs src in ${spiceNumber(stimulus.sourceOhms)}`);
@@ -439,11 +439,7 @@ export function buildNetlist(
   // which is the only current the student's plot ever shows.
   lines.push(`Vmeas outl ${outRef} 0`);
 
-  if (stimulus.analysis.kind === "ac") {
-    lines.push(acLine(stimulus.analysis), ...AC_CONTROL_BLOCK);
-  } else {
-    lines.push(tranLine(stimulus.analysis), ...CONTROL_BLOCK);
-  }
+  lines.push(analysis.line, ...analysis.control);
 
   return { text: `${lines.join("\n")}\n`, issues: devices.issues };
 }
@@ -520,32 +516,73 @@ function readTable(stdout: string, columns: readonly string[]): number[][] | nul
 const toDb = (magnitude: number): number =>
   magnitude > 0 ? Math.max(DB_FLOOR, 20 * Math.log10(magnitude)) : DB_FLOOR;
 
+// ---------------------------------------------------------------------------
+// One entry per analysis kind
+// ---------------------------------------------------------------------------
+
+/** What each analysis kind is made of, and what its run prints. */
+interface AnalysisTypes {
+  tran: { analysis: TranAnalysis; series: TranSeries };
+  ac: { analysis: AcAnalysis; series: AcSeries };
+}
+export type AnalysisKind = keyof AnalysisTypes;
+export type SeriesOf<K extends AnalysisKind> = AnalysisTypes[K]["series"];
+type AnalysisOf<K extends AnalysisKind> = AnalysisTypes[K]["analysis"];
+
+/**
+ * Everything that differs between a transient and an AC sweep, in one place:
+ * how the source is driven, the analysis line, the control block, the
+ * header its table prints, and how that table becomes a series set.
+ */
+interface AnalysisSpec<K extends AnalysisKind> {
+  source: (source: Source) => string;
+  line: (analysis: AnalysisOf<K>) => string;
+  control: readonly string[];
+  columns: readonly string[];
+  toSeries: (table: number[][]) => SeriesOf<K>;
+}
+
+const ANALYSES: { [K in AnalysisKind]: AnalysisSpec<K> } = {
+  tran: {
+    source: sourceSpec,
+    line: tranLine,
+    control: CONTROL_BLOCK,
+    columns: OUTPUT_COLUMNS,
+    toSeries: ([t = [], vin = [], vout = [], iout = []]) => ({ t, vin, vout, iout }),
+  },
+  ac: {
+    source: acSourceSpec,
+    line: acLine,
+    control: AC_CONTROL_BLOCK,
+    columns: AC_OUTPUT_COLUMNS,
+    toSeries: ([f = [], magnitude = [], phaseDeg = []]) => ({
+      kind: "ac",
+      f,
+      magDb: magnitude.map(toDb),
+      phaseDeg,
+    }),
+  },
+};
+
+/** The harness lines an analysis contributes to a deck: the source spec, the analysis line, the control block. */
+function analysisDeck<K extends AnalysisKind>(
+  kind: K,
+  analysis: AnalysisOf<K>,
+  source: Source,
+): { source: string; line: string; control: readonly string[] } {
+  const spec: AnalysisSpec<K> = ANALYSES[kind];
+  return { source: spec.source(source), line: spec.line(analysis), control: spec.control };
+}
+
 /**
  * The series set of one run — a transient's waveforms or an AC sweep's Bode
  * plot — read with the header of the analysis its deck was built with.
  */
-export function parseSpiceOutput(stdout: string, kind?: "tran"): TranSeries | null;
-export function parseSpiceOutput(stdout: string, kind: "ac"): AcSeries | null;
-export function parseSpiceOutput(stdout: string, kind: Analysis["kind"]): SeriesSet | null;
-export function parseSpiceOutput(
-  stdout: string,
-  kind: Analysis["kind"] = "tran",
-): SeriesSet | null {
-  if (kind === "ac") {
-    const table = readTable(stdout, AC_OUTPUT_COLUMNS);
-    if (table === null) return null;
-    const [f = [], magnitude = [], phaseDeg = []] = table;
-    return { kind: "ac", f, magDb: magnitude.map(toDb), phaseDeg };
-  }
-  const table = readTable(stdout, OUTPUT_COLUMNS);
-  if (table === null) return null;
-  const [t = [], vin = [], vout = [], iout = []] = table;
-  return { t, vin, vout, iout };
+export function parseSpiceOutput<K extends AnalysisKind>(stdout: string, kind: K): SeriesOf<K> | null {
+  const spec: AnalysisSpec<K> = ANALYSES[kind];
+  const table = readTable(stdout, spec.columns);
+  return table === null ? null : spec.toSeries(table);
 }
-
-/** The number of samples of a series set, whichever its kind. */
-export const seriesLength = (series: SeriesSet): number =>
-  series.kind === "ac" ? series.f.length : series.t.length;
 
 /**
  * Keeps at most `max` samples, first and last among them.
@@ -555,28 +592,13 @@ export const seriesLength = (series: SeriesSet): number =>
  * the row must stay small enough to be read back with the grading. A sweep
  * is log-spaced, so the same even pick keeps it log-spaced.
  */
-export function decimate(series: TranSeries, max?: number): TranSeries;
-export function decimate(series: AcSeries, max?: number): AcSeries;
-export function decimate(series: SeriesSet, max?: number): SeriesSet;
-export function decimate(series: SeriesSet, max: number = SERIES_MAX_POINTS): SeriesSet {
-  const n = seriesLength(series);
+export function decimate<S extends SeriesSet>(series: S, max: number = SERIES_MAX_POINTS): S {
+  const columns = Object.values(series).filter((v): v is number[] => Array.isArray(v));
+  const n = columns[0]?.length ?? 0;
   if (n <= max || max < 2) return series;
   const kept = Array.from({ length: max }, (_v, k) => Math.round((k * (n - 1)) / (max - 1)));
-  const pick = (a: readonly number[]): number[] => kept.map((i) => a[i] ?? 0);
-  if (series.kind === "ac") {
-    const ac: AcSeries = {
-      kind: "ac",
-      f: pick(series.f),
-      magDb: pick(series.magDb),
-      phaseDeg: pick(series.phaseDeg),
-    };
-    return ac;
-  }
-  const tran: TranSeries = {
-    t: pick(series.t),
-    vin: pick(series.vin),
-    vout: pick(series.vout),
-    iout: pick(series.iout),
-  };
-  return tran;
+  // Every array is a column of the same table; `kind`, when there is one, is copied.
+  return Object.fromEntries(
+    Object.entries(series).map(([key, v]) => [key, Array.isArray(v) ? kept.map((i) => (v[i] as number | undefined) ?? 0) : v]),
+  ) as S;
 }

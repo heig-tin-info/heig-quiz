@@ -306,7 +306,7 @@ describe("buildBareNetlist", () => {
 // ---------------------------------------------------------------------------
 
 describe("parseSpiceOutput", () => {
-  const parsed = parseSpiceOutput(readStdoutFixture());
+  const parsed = parseSpiceOutput(readStdoutFixture(), "tran");
 
   it("reads the captured ngspice 42 run", () => {
     expect(parsed).not.toBeNull();
@@ -330,10 +330,10 @@ describe("parseSpiceOutput", () => {
   });
 
   it("returns null when ngspice printed no table", () => {
-    expect(parseSpiceOutput("")).toBeNull();
-    expect(parseSpiceOutput("Error on line 4 : R1 in out\nsimulation aborted\n")).toBeNull();
+    expect(parseSpiceOutput("", "tran")).toBeNull();
+    expect(parseSpiceOutput("Error on line 4 : R1 in out\nsimulation aborted\n", "tran")).toBeNull();
     // A header with nothing under it is not a result either.
-    expect(parseSpiceOutput(" time            v(in)           v(out)          i(Vmeas)\n")).toBeNull();
+    expect(parseSpiceOutput(" time            v(in)           v(out)          i(Vmeas)\n", "tran")).toBeNull();
   });
 
   it("stops at the trailing notes ngspice prints after the table", () => {
@@ -345,6 +345,7 @@ describe("parseSpiceOutput", () => {
         "",
         "No. of Data Rows : 2",
       ].join("\n"),
+      "tran",
     );
     expect(set?.t).toEqual([0, 1]);
     expect(set?.vout).toEqual([2, 3]);
@@ -457,7 +458,7 @@ describe("parseSpiceOutput, AC", () => {
 
   it("knows the three columns it asked for, and not the transient's", () => {
     expect(AC_OUTPUT_COLUMNS).toEqual(["frequency", "vmag", "vph"]);
-    expect(parseSpiceOutput(readAcStdoutFixture())).toBeNull();
+    expect(parseSpiceOutput(readAcStdoutFixture(), "tran")).toBeNull();
     expect(parseSpiceOutput(readStdoutFixture(), "ac")).toBeNull();
   });
 

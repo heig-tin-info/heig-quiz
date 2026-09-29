@@ -30,7 +30,6 @@ import {
   rcAnswer,
   resetIds,
   sineSeries,
-  storedBeforeAc,
 } from "./test/fixtures.js";
 
 const runner: RunnerService = {
@@ -731,12 +730,20 @@ describe("finalizeRunnerCircuit, AC", () => {
     expect(result.details.stimuli[0]?.reason).toBe("grid_mismatch");
   });
 
-  it("keeps a hidden sweep's verdict for the student, and drops its curves", () => {
+  it("keeps a hidden sweep's verdict for the student, and drops its name, its band and its curves", () => {
+    // The hidden sweep has a band of its own, so finding it in the view can only be a leak.
+    const hiddenBand = { kind: "ac", fStartHz: 37, fStopHz: 4.7e4, pointsPerDecade: 10 };
+    const config = acConfig();
+    const withBand = circuitConfig({
+      stimuli: [config.stimuli[0], { ...config.stimuli[1], analysis: hiddenBand }],
+      grading: config.grading,
+    });
+    const hiddenCurve = lowPassBode({ fStart: 37, fStop: 4.7e4 });
     const details = finalizeRunnerCircuit(
-      acConfig(),
+      withBand,
       rcAnswer(),
       finalizeCtx,
-      outcome([okCase(reference), okCase(reference), okCase(reference), okCase(reference)]),
+      outcome([okCase(reference), okCase(hiddenCurve), okCase(reference), okCase(hiddenCurve)]),
     ).details;
     const view = studentDetails(details, { showKey: false, showHiddenCaseNames: false });
     expect(view.stimuli[1]?.series).toBeNull();
@@ -744,23 +751,12 @@ describe("finalizeRunnerCircuit, AC", () => {
     expect(view.stimuli[1]?.envelope).toEqual({ worstDb: 0, worstDeg: 0, outside: 0 });
     // The reference's curve of the visible sweep only travels under `showExpected`.
     expect(view.stimuli[0]?.expected).toBeNull();
-  });
-
-  it("grades a config stored before the AC sweep as the transients it holds", () => {
-    const stored = storedBeforeAc();
-    const pending = gradeCircuit(stored, rcAnswer(), ctx);
-    expect(isPendingRunner(pending)).toBe(true);
-    if (!isPendingRunner(pending)) return;
-    expect(pending.request.files.every((f) => f.content.includes(".tran "))).toBe(true);
-    const wave = okCase(sineSeries({ amplitude: 0.7 }));
-    const result = finalizeRunnerCircuit(
-      stored,
-      rcAnswer(),
-      finalizeCtx,
-      outcome([wave, wave, wave, wave, wave, wave]),
-    );
-    expect(result.details.stimuli.map((s) => s.ok)).toEqual([true, true, true]);
-    expect(result.details.stimuli[0]?.envelope).toBeUndefined();
+    const serialized = JSON.stringify(view);
+    expect(serialized).not.toContain(SECRET_HIDDEN_STIMULUS);
+    // The band's ends and every frequency of the hidden sweep, as whole JSON numbers.
+    for (const value of [37, 47_000, ...hiddenCurve.f]) {
+      expect(serialized, String(value)).not.toMatch(new RegExp(`[\\[,:]${String(value).replace(".", "\\.")}[,\\]}]`));
+    }
   });
 
   it("reads the student's own Simulate outcome as a Bode plot", () => {

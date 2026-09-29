@@ -293,6 +293,47 @@ function EmptyPlot({
   );
 }
 
+/**
+ * The shell every chart shares: the frame the width is measured on, a header
+ * line, the SVG at real pixels with its accessible name, and the legend.
+ */
+function PlotFrame({
+  wrapper,
+  className,
+  header,
+  width,
+  height,
+  label,
+  legend,
+  children,
+}: {
+  wrapper: RefObject<HTMLDivElement | null>;
+  className: string | undefined;
+  header: ReactNode;
+  width: number;
+  height: number;
+  label: string;
+  legend: ReactNode;
+  children: ReactNode;
+}): JSX.Element {
+  return (
+    <div ref={wrapper} className={cx(plotFrame, className)}>
+      {header}
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={label}
+        className="block max-w-full"
+      >
+        {children}
+      </svg>
+      {legend}
+    </div>
+  );
+}
+
 /** The legend entries every chart has: the student's output, and the reference's when overlaid. */
 function OutputLegend({
   s,
@@ -382,129 +423,128 @@ function TransientPlot({
   const iStep = (iTicks[1] ?? chart.amps.max) - (iTicks[0] ?? chart.amps.min);
 
   return (
-    <div ref={wrapper} className={cx(plotFrame, className)}>
-      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-        {title === undefined ? <span /> : <span className={plotTitle}>{title}</span>}
-        <button
-          type="button"
-          className={plotToggle(showCurrent)}
-          aria-pressed={showCurrent}
-          onClick={() => setShowCurrent((v) => !v)}
-        >
-          {s.showCurrent}
-        </button>
-      </div>
-
-      <svg
-        width={width}
-        height={height}
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label={title ?? s.seriesVout}
-        className="block max-w-full"
-      >
-        <Axes
-          box={{ left: MARGIN.left, top: MARGIN.top, width: innerW, height: innerH }}
-          x={{ ticks: xTicks, at: px, label: (v) => formatTick(v, xStep) }}
-          y={{ ticks: yTicks, at: py, label: (v) => formatTick(v, yStep) }}
-          yTitle={s.plotVoltage}
-          xTitle={{ text: s.plotTime, baseline: height - 4 }}
-        />
-        {/* The current has its own scale, so it gets its own axis line and its
-            own tick marks: a label floating beside somebody else's grid line
-            is a number the reader has to guess the height of. */}
-        {showCurrent ? (
-          <>
-            {iTicks.map((v) => (
-              <g key={`i${v}`}>
-                <line
-                  className={plotAxis}
-                  x1={MARGIN.left + innerW}
-                  x2={MARGIN.left + innerW + 4}
-                  y1={pi(v)}
-                  y2={pi(v)}
-                />
-                <text
-                  className={plotTick}
-                  x={MARGIN.left + innerW + 8}
-                  y={pi(v)}
-                  dy="0.32em"
-                  textAnchor="start"
-                >
-                  {formatTick(v, iStep)}
-                </text>
-              </g>
-            ))}
-            <line
-              className={plotAxis}
-              x1={MARGIN.left + innerW}
-              x2={MARGIN.left + innerW}
-              y1={MARGIN.top}
-              y2={MARGIN.top + innerH}
-            />
-            <text
-              className={plotAxisTitle}
-              x={MARGIN.left + innerW + 8}
-              y={MARGIN.top - 3}
-              textAnchor="start"
-            >
-              {s.plotCurrent}
-            </text>
-          </>
-        ) : null}
-
-        {chart.expectedMs !== null && expected !== null ? (
-          <path
-            data-series="expected"
-            className="fill-none stroke-info stroke-[1.6]"
-            strokeDasharray={DASH_EXPECTED}
-            d={polyline(chart.expectedMs, expected.vout, px, py)}
-          />
-        ) : null}
-        <path
-          data-series="vin"
-          className="fill-none stroke-fg-muted stroke-[1.4]"
-          d={polyline(chart.ms, series.vin, px, py)}
-        />
-        <path
-          data-series="vout"
-          className="fill-none stroke-accent stroke-[1.8]"
-          d={polyline(chart.ms, series.vout, px, py)}
-        />
-        {showCurrent ? (
-          <path
-            data-series="iout"
-            className="fill-none stroke-warning stroke-[1.6]"
-            strokeDasharray={DASH_CURRENT}
-            d={polyline(
-              chart.ms,
-              series.iout.map((v) => v * 1000),
-              px,
-              pi,
-            )}
-          />
-        ) : null}
-      </svg>
-
-      <OutputLegend
-        s={s}
-        expected={expected !== null}
-        lead={
-          <span className={plotLegendItem}>
-            <Swatch className="stroke-fg-muted" />
-            {s.seriesVin}
-          </span>
-        }
-        trail={
-          showCurrent ? (
+    <PlotFrame
+      wrapper={wrapper}
+      className={className}
+      width={width}
+      height={height}
+      label={title ?? s.seriesVout}
+      header={
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          {title === undefined ? <span /> : <span className={plotTitle}>{title}</span>}
+          <button
+            type="button"
+            className={plotToggle(showCurrent)}
+            aria-pressed={showCurrent}
+            onClick={() => setShowCurrent((v) => !v)}
+          >
+            {s.showCurrent}
+          </button>
+        </div>
+      }
+      legend={
+        <OutputLegend
+          s={s}
+          expected={expected !== null}
+          lead={
             <span className={plotLegendItem}>
-              <Swatch className="stroke-warning" dash={DASH_CURRENT} />
-              {s.seriesIout}
+              <Swatch className="stroke-fg-muted" />
+              {s.seriesVin}
             </span>
-          ) : null
-        }
+          }
+          trail={
+            showCurrent ? (
+              <span className={plotLegendItem}>
+                <Swatch className="stroke-warning" dash={DASH_CURRENT} />
+                {s.seriesIout}
+              </span>
+            ) : null
+          }
+        />
+      }
+    >
+      <Axes
+        box={{ left: MARGIN.left, top: MARGIN.top, width: innerW, height: innerH }}
+        x={{ ticks: xTicks, at: px, label: (v) => formatTick(v, xStep) }}
+        y={{ ticks: yTicks, at: py, label: (v) => formatTick(v, yStep) }}
+        yTitle={s.plotVoltage}
+        xTitle={{ text: s.plotTime, baseline: height - 4 }}
       />
-    </div>
+      {/* The current has its own scale, so it gets its own axis line and its
+          own tick marks: a label floating beside somebody else's grid line
+          is a number the reader has to guess the height of. */}
+      {showCurrent ? (
+        <>
+          {iTicks.map((v) => (
+            <g key={`i${v}`}>
+              <line
+                className={plotAxis}
+                x1={MARGIN.left + innerW}
+                x2={MARGIN.left + innerW + 4}
+                y1={pi(v)}
+                y2={pi(v)}
+              />
+              <text
+                className={plotTick}
+                x={MARGIN.left + innerW + 8}
+                y={pi(v)}
+                dy="0.32em"
+                textAnchor="start"
+              >
+                {formatTick(v, iStep)}
+              </text>
+            </g>
+          ))}
+          <line
+            className={plotAxis}
+            x1={MARGIN.left + innerW}
+            x2={MARGIN.left + innerW}
+            y1={MARGIN.top}
+            y2={MARGIN.top + innerH}
+          />
+          <text
+            className={plotAxisTitle}
+            x={MARGIN.left + innerW + 8}
+            y={MARGIN.top - 3}
+            textAnchor="start"
+          >
+            {s.plotCurrent}
+          </text>
+        </>
+      ) : null}
+
+      {chart.expectedMs !== null && expected !== null ? (
+        <path
+          data-series="expected"
+          className="fill-none stroke-info stroke-[1.6]"
+          strokeDasharray={DASH_EXPECTED}
+          d={polyline(chart.expectedMs, expected.vout, px, py)}
+        />
+      ) : null}
+      <path
+        data-series="vin"
+        className="fill-none stroke-fg-muted stroke-[1.4]"
+        d={polyline(chart.ms, series.vin, px, py)}
+      />
+      <path
+        data-series="vout"
+        className="fill-none stroke-accent stroke-[1.8]"
+        d={polyline(chart.ms, series.vout, px, py)}
+      />
+      {showCurrent ? (
+        <path
+          data-series="iout"
+          className="fill-none stroke-warning stroke-[1.6]"
+          strokeDasharray={DASH_CURRENT}
+          d={polyline(
+            chart.ms,
+            series.iout.map((v) => v * 1000),
+            px,
+            pi,
+          )}
+        />
+      ) : null}
+    </PlotFrame>
   );
 }
 
@@ -563,58 +603,52 @@ function BodePlot({
   const mStep = (mTicks[1] ?? chart.magnitude.max) - (mTicks[0] ?? chart.magnitude.min);
   const x: AxisSpec = { ticks: fTicks, at: px, label: formatValue };
 
+  // Two panels, each with the reference (dashed, under) and the student's output.
+  const panels = [
+    { key: "", y: (d: AcSeries) => d.magDb, at: pm },
+    { key: "-phase", y: (d: AcSeries) => d.phaseDeg, at: pp },
+  ];
+  const curves: { name: string; data: AcSeries; ink: string; dash?: string }[] = [
+    ...(expected === null
+      ? []
+      : [{ name: "expected", data: expected, ink: "stroke-info stroke-[1.6]", dash: DASH_EXPECTED }]),
+    { name: "vout", data: series, ink: "stroke-accent stroke-[1.8]" },
+  ];
+
   return (
-    <div ref={wrapper} className={cx(plotFrame, className)}>
-      {title === undefined ? null : <span className={cx(plotTitle, "mb-1 block")}>{title}</span>}
-      <svg
-        width={width}
-        height={total}
-        viewBox={`0 0 ${width} ${total}`}
-        role="img"
-        aria-label={title ?? s.bodeLabel}
-        className="block max-w-full"
-      >
-        <Axes
-          box={magBox}
-          x={x}
-          y={{ ticks: mTicks, at: pm, label: (v) => formatTick(v, mStep) }}
-          yTitle={s.plotMagnitude}
-        />
-        <Axes
-          box={phaseBox}
-          x={x}
-          y={{ ticks: pTicks, at: pp, label: (v) => String(v) }}
-          yTitle={s.plotPhase}
-          xTitle={{ text: s.plotFrequency, baseline: total - 4 }}
-        />
-        {expected !== null ? (
-          <>
-            <path
-              data-series="expected"
-              className="fill-none stroke-info stroke-[1.6]"
-              strokeDasharray={DASH_EXPECTED}
-              d={polyline(expected.f, expected.magDb, px, pm)}
-            />
-            <path
-              data-series="expected-phase"
-              className="fill-none stroke-info stroke-[1.6]"
-              strokeDasharray={DASH_EXPECTED}
-              d={polyline(expected.f, expected.phaseDeg, px, pp)}
-            />
-          </>
-        ) : null}
-        <path
-          data-series="vout"
-          className="fill-none stroke-accent stroke-[1.8]"
-          d={polyline(series.f, series.magDb, px, pm)}
-        />
-        <path
-          data-series="vout-phase"
-          className="fill-none stroke-accent stroke-[1.8]"
-          d={polyline(series.f, series.phaseDeg, px, pp)}
-        />
-      </svg>
-      <OutputLegend s={s} expected={expected !== null} />
-    </div>
+    <PlotFrame
+      wrapper={wrapper}
+      className={className}
+      width={width}
+      height={total}
+      label={title ?? s.bodeLabel}
+      header={title === undefined ? null : <span className={cx(plotTitle, "mb-1 block")}>{title}</span>}
+      legend={<OutputLegend s={s} expected={expected !== null} />}
+    >
+      <Axes
+        box={magBox}
+        x={x}
+        y={{ ticks: mTicks, at: pm, label: (v) => formatTick(v, mStep) }}
+        yTitle={s.plotMagnitude}
+      />
+      <Axes
+        box={phaseBox}
+        x={x}
+        y={{ ticks: pTicks, at: pp, label: (v) => String(v) }}
+        yTitle={s.plotPhase}
+        xTitle={{ text: s.plotFrequency, baseline: total - 4 }}
+      />
+      {panels.flatMap((panel) =>
+        curves.map((curve) => (
+          <path
+            key={`${curve.name}${panel.key}`}
+            data-series={`${curve.name}${panel.key}`}
+            className={cx("fill-none", curve.ink)}
+            {...(curve.dash === undefined ? {} : { strokeDasharray: curve.dash })}
+            d={polyline(curve.data.f, panel.y(curve.data), px, panel.at)}
+          />
+        )),
+      )}
+    </PlotFrame>
   );
 }

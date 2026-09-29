@@ -270,7 +270,7 @@ async function simulate(
   const { text, issues } = buildNetlist(schematic, stim, harness);
   expect(issues, text).toEqual([]);
   const { stdout, stderr } = await ngspice(text);
-  const series = parseSpiceOutput(stdout);
+  const series = parseSpiceOutput(stdout, "tran");
   expect(series, `${text}\n--- stderr ---\n${stderr}`).not.toBeNull();
   return series as TranSeries;
 }
