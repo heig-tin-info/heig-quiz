@@ -1,0 +1,1988 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Classes UML</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#eef1f3; --side:#e2e7eb; --ink:#17212b; --muted:#66727d; --rule:#cfd7dd;
+  --grid:#dde3e8; --grid2:#c9d2d9; --accent:#2f5bea; --accent-soft:rgba(47,91,234,.10);
+  --btn:#f5f7f8; --btn-h:#ffffff; --card:#fbfcfd; --head:#e3e9f1; --bad:#b93815;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#10161b; --side:#151c22; --ink:#d9e2e8; --muted:#8a97a2; --rule:#26313a;
+    --grid:#182128; --grid2:#223039; --accent:#7f9dff; --accent-soft:rgba(127,157,255,.14);
+    --btn:#1b242b; --btn-h:#222d35; --card:#141c22; --head:#1b2630; --bad:#f0936b; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#10161b; --side:#151c22; --ink:#d9e2e8; --muted:#8a97a2; --rule:#26313a;
+  --grid:#182128; --grid2:#223039; --accent:#7f9dff; --accent-soft:rgba(127,157,255,.14);
+  --btn:#1b242b; --btn-h:#222d35; --card:#141c22; --head:#1b2630; --bad:#f0936b; color-scheme:dark;
+}
+html{height:100%}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+body{height:100%;margin:0;background:var(--paper);color:var(--ink);
+  font:14px/1.45 "Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+.app{display:grid;grid-template-columns:240px 1fr;height:100%}
+
+aside{background:var(--side);border-right:1px solid var(--rule);overflow-y:auto;user-select:none;
+  display:flex;flex-direction:column;gap:20px;padding:20px 16px 18px}
+.brand h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.02em}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+aside h2{margin:0 0 8px;font-size:12.5px;font-weight:600;color:var(--muted)}
+button{font:inherit;color:inherit}
+.act{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--rule);background:var(--btn);
+  border-radius:6px;padding:6px 9px;cursor:pointer;text-align:left;font-size:13px}
+.act:hover{background:var(--btn-h)}
+.act:disabled{opacity:.45;cursor:default}
+.acts{display:grid;grid-template-columns:1fr;gap:5px}
+
+/* segmented controls: the diagram type, and the two views of one diagram */
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;padding:2px;border:1px solid var(--rule);
+  border-radius:7px;background:var(--btn)}
+.seg button{border:0;background:none;padding:6px 8px;border-radius:5px;font-size:12.5px;font-weight:500;
+  color:var(--muted);cursor:pointer;white-space:nowrap}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--accent-soft);color:var(--accent)}
+.seg.vert{grid-auto-flow:row}
+.seg.vert button{text-align:left;padding:6px 10px}
+
+/* the toolbox: icons only, the student is expected to know the notation */
+.tb{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.tb4{grid-template-columns:repeat(4,1fr)}
+.types{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px}
+.tbb{display:flex;align-items:center;justify-content:center;height:46px;padding:0;border:1px solid var(--rule);
+  background:var(--btn);border-radius:6px;cursor:pointer;touch-action:none;color:var(--ink)}
+.tb4 .tbb{height:38px}
+.types .tbb{height:32px}
+.tbb:hover{background:var(--btn-h)}
+.tbb:disabled{opacity:.4;cursor:default}
+.tbb.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.tbb svg{width:44px;height:30px;display:block}
+.tb4 .tbb svg{width:20px;height:20px}
+.types .tbb svg{width:30px;height:20px}
+.tbb .ico{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+.tbb .ilab{font:500 6.5px "Archivo",sans-serif;fill:currentColor;text-anchor:middle}
+.tbb .hd.tri,.tbb .hd.dia{fill:var(--btn)}
+.tbb .uc{fill:var(--btn)}
+.tbb.on .rln,.tbb.on .hd,.tbb.on .uc{stroke:var(--accent)}
+.tbb.on .hd.diaF{fill:var(--accent)}
+.help{margin-top:auto;color:var(--muted);font-size:12px;line-height:1.6}
+.help div{display:flex;justify-content:space-between;gap:8px;white-space:nowrap}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+main{position:relative;overflow:hidden;min-width:0}
+#cv{display:block;width:100%;height:100%;touch-action:none;background:var(--paper);user-select:none}
+#cv.m-link,#cv.m-edge{cursor:crosshair}
+#cv.m-place{cursor:copy}
+.gmin{fill:none;stroke:var(--grid);stroke-width:1}
+.gmaj{fill:none;stroke:var(--grid2);stroke-width:1}
+.tabs{position:absolute;top:12px;left:12px;z-index:2;background:var(--side)}
+
+/* nodes */
+.node .halo{fill:none;stroke:none}
+.node.sel .halo{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1;stroke-dasharray:3 3}
+.node text{pointer-events:none}
+.body{fill:var(--card)}
+.headf{fill:var(--head)}
+.frame{fill:none;stroke:var(--ink);stroke-width:1.5}
+.sep{fill:none;stroke:var(--ink);stroke-width:1.1}
+.uc{fill:var(--card);stroke:var(--ink);stroke-width:1.5}
+.fig{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.sysf{fill:none;stroke:var(--ink);stroke-width:1.4}
+.ring{fill:none;stroke:var(--ink);stroke-width:1.5}
+.dot{fill:var(--ink)}
+.crowc{fill:var(--paper)}
+.tbb .crowc{fill:var(--btn)}
+.tbb .dot{fill:currentColor}
+.node.sel .ring{stroke:var(--accent)}
+.node.sel .dot{fill:var(--accent)}
+.node.sel .frame,.node.sel .sep,.node.sel .uc,.node.sel .fig,.node.sel .sysf{stroke:var(--accent)}
+.nm{font:600 13.5px "Archivo",system-ui,sans-serif;fill:var(--ink);text-anchor:middle}
+.nm.ab{font-style:italic}
+.st{font:400 12px "Archivo",system-ui,sans-serif;fill:var(--muted);text-anchor:middle}
+.mb{font:400 12px "JetBrains Mono",ui-monospace,monospace;fill:var(--ink)}
+.mb.us{text-decoration:underline}
+.mb.ab{font-style:italic}
+.uct{font:500 13px "Archivo",system-ui,sans-serif;fill:var(--ink);text-anchor:middle}
+.sn{font:600 13px "Archivo",system-ui,sans-serif;fill:var(--ink)}
+.node.sel .sn{fill:var(--accent)}
+.ghost{opacity:.5;pointer-events:none}
+
+/* relations */
+.rln{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-linejoin:round}
+.rel.dash .rln{stroke-dasharray:7 5}
+.rhit{fill:none;stroke:transparent;stroke-width:12;cursor:pointer}
+.hd{stroke:var(--ink);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+.hd.open{fill:none}
+.hd.tri,.hd.dia{fill:var(--paper)}
+.hd.diaF{fill:var(--ink)}
+.rel.sel .rln,.rel.sel .hd{stroke:var(--accent)}
+.rel.sel .rln{stroke-width:2.2}
+.rel.sel .hd.diaF{fill:var(--accent)}
+.rel.draft .rln,.rel.draft .hd{stroke:var(--accent)}
+.rel.draft .hd.diaF{fill:var(--accent)}
+.ml,.rn{fill:var(--ink);paint-order:stroke;stroke:var(--paper);stroke-width:4;stroke-linejoin:round;pointer-events:none}
+.ml{font:500 11.5px "JetBrains Mono",ui-monospace,monospace}
+.rn{font:italic 500 12px "Archivo",system-ui,sans-serif}
+.rel.sel .ml,.rel.sel .rn{fill:var(--accent)}
+
+#over *{pointer-events:none}
+#over .via{pointer-events:all;fill:var(--paper);stroke:var(--accent);stroke-width:1.6;cursor:move}
+#over .via[data-resize]{cursor:nwse-resize}
+.dvia{fill:var(--accent)}
+.hov{fill:none;stroke:var(--accent);stroke-width:2}
+.box{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3}
+.xh{stroke:var(--accent);stroke-width:1.2}
+.draft{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+.status{position:absolute;left:12px;right:12px;bottom:10px;display:flex;gap:14px;align-items:center;
+  pointer-events:none;font-size:12.5px;color:var(--muted)}
+.status .md{color:var(--ink);font-weight:600;background:var(--side);border:1px solid var(--rule);border-radius:5px;padding:2px 8px}
+.status .hint{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status .pos{font:500 11.5px "JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+.insp{position:absolute;top:12px;right:12px;width:272px;max-height:calc(100% - 56px);overflow-y:auto;
+  background:var(--side);border:1px solid var(--rule);border-radius:8px;padding:12px}
+.insp>div{display:flex;flex-direction:column;gap:8px}
+.insp .f{display:grid;grid-template-columns:78px 1fr;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.insp .f span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.insp .blk{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted)}
+.insp .chk{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.insp input:not([type]),.insp textarea{width:100%;border:1px solid var(--rule);border-radius:5px;
+  background:var(--paper);color:var(--ink);padding:5px 7px;font:500 12.5px "JetBrains Mono",ui-monospace,monospace}
+.insp textarea{resize:vertical;line-height:1.5;white-space:pre;overflow-x:auto}
+.insp input[type=checkbox]{accent-color:var(--accent);margin:0}
+.tip{margin:0;color:var(--muted);font-size:11.5px}
+.tip code{font:500 11px "JetBrains Mono",ui-monospace,monospace;color:var(--ink)}
+
+.codeview{position:absolute;inset:60px 12px 44px 12px;display:flex;flex-direction:column;gap:8px}
+.codeview textarea{flex:1;border:1px solid var(--rule);border-radius:8px;background:var(--card);color:var(--ink);
+  padding:14px 16px;font:400 13px/1.6 "JetBrains Mono",ui-monospace,monospace;resize:none;tab-size:2}
+.codeview textarea.bad{border-color:var(--bad)}
+.cerr{min-height:20px;font-size:12.5px;color:var(--muted)}
+.cerr.bad{color:var(--bad)}
+
+@media (max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  aside{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;gap:18px;padding:10px 16px;
+    border-right:0;border-bottom:1px solid var(--rule);max-height:42vh}
+  aside>section,aside>header{flex:none;width:220px}
+  .help{display:none}
+  .status .hint{display:none}
+  .insp{width:auto;left:12px;top:60px;max-height:48%}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <header class="brand">
+      <h1>UML</h1>
+      <p>Grille de 20 px</p>
+    </header>
+
+    <section>
+      <h2>Diagramme</h2>
+      <div class="seg vert" id="dtype">
+        <button data-type="class">Classes</button>
+        <button data-type="usecase">Cas d'utilisation</button>
+        <button data-type="state">Machine d'états</button>
+        <button data-type="er">Entité-association</button>
+        <button data-type="flow">Organigramme</button>
+        <button data-type="automaton">Automate fini</button>
+        <button data-type="graph">Graphe</button>
+        <button data-type="free">Dessin libre</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Outils</h2>
+      <div class="tb" id="tb"></div>
+    </section>
+
+    <section>
+      <h2>Édition</h2>
+      <div class="tb tb4" id="ed">
+        <button class="tbb" data-act="undo" title="Annuler (Ctrl Z)" aria-label="Annuler"><svg viewBox="0 0 20 20"><path class="ico" d="M7 4L3 8l4 4M3 8h9a4.5 4.5 0 0 1 0 9H9"/></svg></button>
+        <button class="tbb" data-act="redo" title="Rétablir (Ctrl Y)" aria-label="Rétablir"><svg viewBox="0 0 20 20"><path class="ico" d="M13 4l4 4-4 4M17 8H8a4.5 4.5 0 0 0 0 9h3"/></svg></button>
+        <button class="tbb" data-act="dup" title="Dupliquer (Ctrl D)" aria-label="Dupliquer"><svg viewBox="0 0 20 20"><rect class="ico" x="3" y="3" width="10" height="10" rx="1.5"/><path class="ico" d="M7 16.5h8.5a1.5 1.5 0 0 0 1.5-1.5V7"/></svg></button>
+        <button class="tbb" data-act="del" title="Supprimer (Suppr)" aria-label="Supprimer"><svg viewBox="0 0 20 20"><path class="ico" d="M3.5 5.5h13M8 5.5V3.5h4v2M5.5 5.5l.8 11h7.4l.8-11M8.5 8.5v5.5M11.5 8.5v5.5"/></svg></button>
+      </div>
+    </section>
+
+    <section>
+      <div class="acts">
+        <button class="act" data-act="clear">Nouveau diagramme</button>
+        <button class="act" data-act="demo">Recharger l'exemple</button>
+      </div>
+    </section>
+
+    <div class="help">
+      <div><span>Élément</span><span>double clic</span></div>
+      <div><span>Relier</span><span>glisser un bord</span></div>
+      <div><span>Coude</span><span>double clic</span></div>
+      <div><span>Zoom</span><span>molette</span></div>
+      <div><span>Vue</span><span>clic droit glissé</span></div>
+      <div><span>Multiple</span><span>Maj + clic</span></div>
+    </div>
+  </aside>
+
+  <main>
+    <svg id="cv" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="gmin" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path class="gmin" d="M20 0H0V20"/>
+        </pattern>
+        <pattern id="gmaj" width="100" height="100" patternUnits="userSpaceOnUse">
+          <rect width="100" height="100" fill="url(#gmin)"/>
+          <path class="gmaj" d="M100 0H0V100"/>
+        </pattern>
+      </defs>
+      <g id="world">
+        <rect x="-20000" y="-20000" width="40000" height="40000" fill="url(#gmaj)"/>
+        <g id="nodes"></g>
+        <g id="rels"></g>
+        <g id="over"></g>
+      </g>
+    </svg>
+
+    <div class="seg tabs" id="tabs">
+      <button data-view="draw">Diagramme</button>
+      <button data-view="code" id="codeTab">PlantUML</button>
+    </div>
+
+    <div id="insp" class="insp" hidden>
+      <div id="inspC">
+        <label class="f"><span>Nom</span><input id="cName" spellcheck="false" autocomplete="off"></label>
+        <label class="f" id="cStereoRow"><span>Stéréotype</span><input id="cStereo" list="stereos" placeholder="aucun" spellcheck="false" autocomplete="off"></label>
+        <label class="chk" id="cAbsRow"><input type="checkbox" id="cAbs">Abstrait</label>
+        <label class="blk"><span id="cBodyL">Contenu</span><textarea id="cBody" rows="8" spellcheck="false" placeholder="- nom : String&#10;---&#10;+ aire() : double"></textarea></label>
+        <p class="tip" id="cTipE"><code>PK</code> souligne l'identifiant.</p>
+        <p class="tip" id="cTip"><code>---</code> trace un séparateur. <code>{static}</code> souligne, <code>{abstract}</code> met en italique.</p>
+      </div>
+      <div id="inspN">
+        <label class="f"><span>Nom</span><input id="nName" spellcheck="false" autocomplete="off"></label>
+        <label class="chk" id="nInitRow"><input type="checkbox" id="nInit">Initial</label>
+        <label class="chk" id="nAccRow"><input type="checkbox" id="nAcc">Acceptant</label>
+      </div>
+      <div id="inspR">
+        <div class="types" id="rTypes"></div>
+        <div class="f" id="rCardA"><span id="rCardAL">A</span><div class="types" data-end="ma"></div></div>
+        <div class="f" id="rCardB"><span id="rCardBL">B</span><div class="types" data-end="mb"></div></div>
+        <label class="f" id="rNameRow"><span id="rNameL">Nom</span><input id="rName" placeholder="optionnel" spellcheck="false" autocomplete="off"></label>
+        <label class="f" id="rMaRow"><span id="rMaL">Source</span><input id="rMa" list="mults" placeholder="multiplicité" spellcheck="false" autocomplete="off"></label>
+        <label class="f" id="rMbRow"><span id="rMbL">Cible</span><input id="rMb" list="mults" placeholder="multiplicité" spellcheck="false" autocomplete="off"></label>
+        <button class="act" id="rSwap">Inverser le sens</button>
+      </div>
+    </div>
+    <datalist id="stereos"><option value="interface"><option value="enumeration"><option value="entity"><option value="service"><option value="utility"><option value="dataType"></datalist>
+    <datalist id="mults"><option value="1"><option value="0..1"><option value="*"><option value="0..*"><option value="1..*"></datalist>
+
+    <div id="codeview" class="codeview" hidden>
+      <textarea id="code" spellcheck="false" autocomplete="off" aria-label="Code PlantUML"></textarea>
+      <div id="cerr" class="cerr"></div>
+    </div>
+
+    <div class="status" id="status">
+      <span class="md" id="stMode"></span>
+      <span class="hint" id="stHint"></span>
+      <span class="pos" id="stPos"></span>
+    </div>
+  </main>
+</div>
+
+<script>
+(() => {
+'use strict';
+/* The grid, the router, the selection, the history and the viewport come
+   from mockups/circuit.html. What changes: a node is a box whose size
+   follows its content, and a relation attaches to a SIDE, not to a pin. The
+   anchor points are recomputed on every render: each end takes the side
+   facing the other end, and the ends sharing a side are spread along it in
+   the order of what they point to, so they do not cross.
+
+   Two diagram types share all of it. They differ only by their node kinds
+   and their relation set (DIAGRAMS). A diagram also has a text form, edited
+   in the second tab and parsed back: a subset of PlantUML for classes and
+   use cases, Mermaid for the flowchart, the state machine and the ER
+   diagram, Graphviz DOT for the automaton and the graph. Positions survive
+   by name; new elements are placed below, or after, what leads to them.
+
+   The automaton and the graph do not route: their lines are straight
+   between circles, bend apart when two join the same pair, and loop over a
+   node that points to itself (computeStraight). */
+const G = 20, TURN = 4, HEAD = 40, ROW = 20, PAD = 10, MINW = 120;
+const $ = s => document.querySelector(s);
+const svg = $('#cv'), world = $('#world'), Ln = $('#nodes'), Lr = $('#rels'), Lo = $('#over');
+const DIRS = [[1,0],[0,1],[-1,0],[0,-1]];
+const snap = v => Math.round(v/G)*G;
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+
+/* Relation notations. The names are for the code only: the toolbox shows
+   the notation and nothing else. */
+const REL = {
+  assoc:{head:null,   dash:false},
+  nav:  {head:'open', dash:false},
+  inh:  {head:'tri',  dash:false},
+  impl: {head:'tri',  dash:true},
+  dep:  {head:'open', dash:true},
+  agg:  {head:'dia',  dash:false},
+  comp: {head:'diaF', dash:false},
+  incl: {head:'open', dash:true, label:'«include»'},
+  ext:  {head:'open', dash:true, label:'«extend»'},
+  flow: {head:'arrowF', dash:false, labelAtStart:true},
+  strans:{head:'open', dash:false},
+  erel: {head:null, dash:false, crow:true},
+  trans:{head:'arrowF', dash:false, labelCls:'ml'},
+  edge: {head:null, dash:false, labelCls:'ml'},
+  arc:  {head:'arrowF', dash:false, labelCls:'ml'}
+};
+const DIAGRAMS = {
+  class:    {nodes:['class'], rels:['assoc','nav','inh','impl','dep','agg','comp'], dbl:'class', lang:'PlantUML'},
+  usecase:  {nodes:['actor','usecase','system'], rels:['assoc','incl','ext','inh'], dbl:'usecase', lang:'PlantUML'},
+  state:    {nodes:['initial','state','final'], rels:['strans'], dbl:'state', lang:'Mermaid', place:'down', relName:'Étiquette'},
+  er:       {nodes:['entity'], rels:['erel'], dbl:'entity', lang:'Mermaid', relName:'Verbe'},
+  flow:     {nodes:['terminal','action','decision'], rels:['flow'], dbl:'action', lang:'Mermaid', place:'down', relName:'Étiquette'},
+  automaton:{nodes:['astate','accept'], rels:['trans'], dbl:'astate', lang:'DOT', straight:true, place:'right', relName:'Symboles'},
+  graph:    {nodes:['vertex'], rels:['edge','arc'], dbl:'vertex', lang:'DOT', straight:true, place:'down', relName:'Poids'},
+  /* free: shapes, a line and a brush; no link, no text form */
+  free:     {nodes:['stroke','line','rect','square','circle','ellipse','triangle'], rels:[], dbl:null, lang:null}
+};
+const SHAPES = new Set(['rect','square','circle','ellipse','triangle']), INK = new Set(['stroke','line']);
+const RESIZABLE = new Set(['system', ...SHAPES]);
+const SHAPE_SIZE = {rect:[100,60], square:[60,60], circle:[60,60], ellipse:[100,60], triangle:[80,60]};
+/* A tool may place a node kind with a preset: the accepting state is a state */
+const TOOLKIND = {accept:{t:'astate', accept:true}};
+const PREFIX = {class:'Classe', actor:'Acteur', usecase:'Cas', system:'Système', terminal:'Début', action:'Action',
+  decision:'Condition', state:'État', entity:'Entité'};
+const CARDS = ['1', '0..1', '1..*', '0..*'];
+const CIRCLE = new Set(['astate','vertex']);
+const FLOWN = new Set(['terminal','action','decision']);
+const headOf = r => REL[r.type].head;
+const isSep = l => /^\s*-{3,}\s*$/.test(l);
+
+/* Text measurement: a box follows its longest line */
+const mctx = document.createElement('canvas').getContext('2d');
+const FONTS = {nm:'600 13.5px Archivo, system-ui, sans-serif', ab:'italic 600 13.5px Archivo, system-ui, sans-serif',
+  st:'400 12px Archivo, system-ui, sans-serif', mb:'400 12px "JetBrains Mono", ui-monospace, monospace',
+  uc:'500 13px Archivo, system-ui, sans-serif'};
+const tw = (f,s) => { mctx.font = FONTS[f]; return mctx.measureText(s).width; };
+function member(raw){
+  return {text:raw.replace(/\{(static|abstract)\}/gi,'').replace(/\s+/g,' ').trim(),
+          st:/\{static\}/i.test(raw), ab:/\{abstract\}/i.test(raw)};
+}
+/* A class body cut at every `---`; an empty body is a header alone */
+function compartments(n){
+  if (!n.body.length) return [];
+  const out = [[]];
+  for (const l of n.body) isSep(l) ? out.push([]) : out[out.length-1].push(l);
+  return out;
+}
+/* A name wrapped to a width: use cases, actions, decisions */
+function wrapName(s, max=150){
+  const out = []; let cur = '';
+  for (const w of s.split(/\s+/).filter(Boolean)){
+    const t = cur ? cur+' '+w : w;
+    if (cur && tw('uc', t) > max){ out.push(cur); cur = w; } else cur = t;
+  }
+  out.push(cur);
+  return out;
+}
+const up = (v, k) => Math.ceil(v/k)*k;
+function sizeOf(n){
+  if (n.t==='actor') return {w:40, h:80};
+  if (n.t==='initial' || n.t==='final') return {w:40, h:40};
+  if (CIRCLE.has(n.t)){ const d = Math.max(40, up(tw('uc', n.name)+18, G)); return {w:d, h:d}; }
+  if (n.t==='state'){
+    const m = Math.max(tw('uc', n.name), ...n.body.map(l => tw('mb', l)));
+    return {w:Math.max(120, up(m+32, G)), h:n.body.length ? up(40+n.body.length*ROW+PAD, G) : 40};
+  }
+  if (n.t==='system' || SHAPES.has(n.t)) return {w:n.w, h:n.h};
+  if (INK.has(n.t)) return {w:Math.max(n.w, 1), h:Math.max(n.h, 1)};
+  if (n.t==='usecase'){
+    const ls = wrapName(n.name), m = Math.max(...ls.map(l => tw('uc', l)));
+    return {w:Math.max(120, Math.ceil((m*1.25+30)/G)*G), h:Math.max(60, Math.ceil((ls.length*16+34)/G)*G)};
+  }
+  if (FLOWN.has(n.t)){
+    const ls = wrapName(n.name, n.t==='decision' ? 120 : 200), m = Math.max(...ls.map(l => tw('uc', l)));
+    if (n.t==='terminal') return {w:Math.max(120, up(m+44, 40)), h:40};
+    if (n.t==='action') return {w:Math.max(120, up(m+32, 40)), h:Math.max(40, up(ls.length*16+22, G))};
+    return {w:Math.max(120, up(m*1.8+24, 40)), h:Math.max(80, up(ls.length*16*1.8+28, 40))};
+  }
+  const head = Math.max(tw(n.abstract?'ab':'nm', n.name), n.stereo ? tw('st','«'+n.stereo+'»') : 0);
+  const cs = compartments(n);
+  const mem = Math.max(0, ...cs.flat().map(s => tw('mb', member(s).text)));
+  const w = Math.max(MINW, Math.ceil((head+28)/G)*G, Math.ceil((mem+24)/G)*G);
+  const raw = HEAD + cs.reduce((k, c) => k + c.length*ROW + PAD, 0);
+  return {w, h: Math.ceil(raw/G)*G};
+}
+function rectOf(n){ const {w,h} = sizeOf(n); return {x0:n.x, y0:n.y, x1:n.x+w, y1:n.y+h, w, h}; }
+const center = R => ({x:(R.x0+R.x1)/2, y:(R.y0+R.y1)/2});
+const holds = (R, r) => { const c = center(r); return c.x>R.x0 && c.x<R.x1 && c.y>R.y0 && c.y<R.y1; };
+
+/* State: one document per diagram type */
+const blank = () => ({seq:1, nodes:[], rels:[]});
+let type = 'class', docs = {}, S = null, hist = {};
+for (const t in DIAGRAMS){ docs[t] = blank(); hist[t] = {u:[], r:[]}; }
+S = docs.class;
+let view = {x:80, y:60, k:1}, pane = 'draw';
+let sel = new Set(), mode = 'select', placeT = null, relType = 'assoc';
+let ghost = {x:0, y:0, show:false};
+let drag = null, draft = null, palDrag = null, hover = null;
+let cursor = {x:0,y:0}, lastW = {x:0,y:0}, cursorIn = false, lastVia = null, lastDown = null;
+let routes = new Map(), rects = new Map();
+const STORE = 'uml-editor-v3';
+const isNode = id => id[0]==='k';
+const undoS = () => hist[type].u, redoS = () => hist[type].r;
+
+/* The node under a point, and whether the point is on its border band.
+   A system is reached only by its title strip or its frame, so what it
+   contains stays clickable. */
+function nodeAt(x, y, withSystems=true){
+  const band = Math.max(4, 6/view.k);
+  const R = n => rects.get(n.id) || rectOf(n);
+  for (let i = S.nodes.length-1; i >= 0; i--){
+    const n = S.nodes[i]; if (n.t==='system') continue;
+    if (INK.has(n.t)){ if (nearInk(n, x, y, band+2)) return {id:n.id, edge:false}; continue; }
+    const r = R(n);
+    if (x < r.x0-band || x > r.x1+band || y < r.y0-band || y > r.y1+band) continue;
+    const inner = x > r.x0+band && x < r.x1-band && y > r.y0+band && y < r.y1-band;
+    return {id:n.id, edge:!inner};
+  }
+  if (withSystems) for (let i = S.nodes.length-1; i >= 0; i--){
+    const n = S.nodes[i]; if (n.t!=='system') continue;
+    const r = R(n);
+    const out = x < r.x0-band || x > r.x1+band || y < r.y0-band || y > r.y1+band;
+    const inner = x > r.x0+band && x < r.x1-band && y > r.y0+band && y < r.y1-band;
+    const title = x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y0+28;
+    if (!out && (!inner || title)) return {id:n.id, edge:false, sys:true};
+  }
+  return null;
+}
+
+/* Whether a point is within `d` of a stroke or a line */
+function nearInk(n, x, y, d){
+  const p = n.pts;
+  for (let i = 0; i < p.length-1; i++){
+    const ax = n.x+p[i][0], ay = n.y+p[i][1], bx = n.x+p[i+1][0], by = n.y+p[i+1][1], L2 = (bx-ax)**2+(by-ay)**2;
+    const t = L2 ? Math.max(0, Math.min(1, ((x-ax)*(bx-ax)+(y-ay)*(by-ay))/L2)) : 0;
+    if (Math.hypot(ax+t*(bx-ax)-x, ay+t*(by-ay)-y) <= d) return true;
+  }
+  return false;
+}
+/* Points in world units become a node: its box at the top left, its points relative to it */
+function inkNode(t, pts){
+  const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]), x = Math.floor(Math.min(...xs)), y = Math.floor(Math.min(...ys));
+  return {id:'k'+S.seq++, t, x, y, w:Math.ceil(Math.max(...xs))-x, h:Math.ceil(Math.max(...ys))-y,
+          pts:pts.map(q => [Math.round(q[0]-x), Math.round(q[1]-y)]), name:'', stereo:'', abstract:false, body:[]};
+}
+/* A brush stroke, smoothed through the midpoints */
+function inkPath(pts){
+  if (pts.length < 3) return 'M'+pts.map(q => q.join(' ')).join('L');
+  let d = `M${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length-1; i++){
+    const m = [(pts[i][0]+pts[i+1][0])/2, (pts[i][1]+pts[i+1][1])/2];
+    d += `Q${pts[i][0]} ${pts[i][1]} ${m[0]} ${m[1]}`;
+  }
+  const l = pts[pts.length-1];
+  return d + `L${l[0]} ${l[1]}`;
+}
+
+/* Anchors: the side facing the other end, spread along it */
+function anchorsOf(rels, rs){
+  const slots = new Map(), ends = new Map();
+  const put = (id, side, it) => { const k = id+':'+side; if (!slots.has(k)) slots.set(k, []); slots.get(k).push(it); };
+  const add = (id, it) => { if (!ends.has(id)) ends.set(id, []); ends.get(id).push(it); };
+  for (const r of rels){
+    const ra = rs.get(r.a); if (!ra) continue;
+    const toNode = typeof r.b === 'string', rb = toNode ? rs.get(r.b) : null;
+    if (toNode && !rb) continue;
+    const self = r.a===r.b && !r.via.length;
+    add(r.a, {key:r.id+':a', tow:r.via.length ? r.via[0] : (rb ? center(rb) : r.b), fixed:self ? 'r' : null});
+    if (rb) add(r.b, {key:r.id+':b', tow:r.via.length ? r.via[r.via.length-1] : center(ra), fixed:self ? 't' : null});
+  }
+  /* Each end takes the side that best faces its target, as long as that
+     side has a free grid point; the ends that face most clearly choose
+     first. A decision has one vertex per side, so one end per side. */
+  const byId = new Map(S.nodes.map(n => [n.id, n]));
+  for (const [id, list] of ends){
+    const R = rs.get(id), c = center(R), n = byId.get(id);
+    const cap = L => n && n.t==='decision' ? 1 : Math.max(1, L/G-1);
+    const room = {t:cap(R.w), b:cap(R.w), l:cap(R.h), r:cap(R.h)}, used = {t:0, b:0, l:0, r:0};
+    for (const it of list){
+      const dx = (it.tow.x-c.x)/(R.w/2), dy = (it.tow.y-c.y)/(R.h/2);
+      const score = [['r', dx], ['b', dy], ['l', -dx], ['t', -dy]].sort((a,b) => b[1]-a[1]);
+      it.pref = score.map(x => x[0]); it.strength = it.fixed ? Infinity : score[0][1];
+    }
+    list.sort((a,b) => b.strength-a.strength);
+    for (const it of list){
+      const side = it.fixed || it.pref.find(x => used[x] < room[x]) || it.pref[0];
+      used[side]++; put(id, side, it);
+    }
+  }
+  const out = new Map();
+  for (const [k, list] of slots){
+    const [id, side] = k.split(':'), R = rs.get(id), horiz = side==='t' || side==='b';
+    list.sort((p,q) => horiz ? p.tow.x-q.tow.x : p.tow.y-q.tow.y);
+    const L = horiz ? R.w : R.h, n = list.length;
+    list.forEach((it, i) => {
+      const off = Math.min(L-G, Math.max(G, snap(L*(i+1)/(n+1))));
+      out.set(it.key, side==='t' ? {x:R.x0+off, y:R.y0, d:3} : side==='b' ? {x:R.x0+off, y:R.y1, d:1}
+                    : side==='l' ? {x:R.x0, y:R.y0+off, d:2} : {x:R.x1, y:R.y0+off, d:0});
+    });
+  }
+  return out;
+}
+
+/* Orthogonal A* router, turn penalty, nodes as obstacles (from circuit.html) */
+class Heap{
+  constructor(){this.p=[];this.v=[]}
+  get size(){return this.v.length}
+  push(p,v){const P=this.p,V=this.v;let i=V.length;P.push(p);V.push(v);
+    while(i>0){const j=(i-1)>>1;if(P[j]<=p)break;P[i]=P[j];V[i]=V[j];i=j}P[i]=p;V[i]=v}
+  pop(){const P=this.p,V=this.v,top=V[0],lp=P.pop(),lv=V.pop(),n=V.length;
+    if(n){let i=0;for(;;){let l=2*i+1;if(l>=n)break;const r=l+1;if(r<n&&P[r]<P[l])l=r;if(P[l]>=lp)break;P[i]=P[l];V[i]=V[l];i=l}P[i]=lp;V[i]=lv}
+    return top}
+}
+function astar(ax,ay,ad,bx,by,bd,blk,used){
+  if (ax===bx && ay===by) return {pts:[[ax,ay]], dir:ad};
+  const need = bd>=0 ? (bd+2)%4 : -1;
+  for (const M of [6,20,60]){
+    const x0=Math.min(ax,bx)-M, y0=Math.min(ay,by)-M, W=Math.abs(ax-bx)+2*M+1, H=Math.abs(ay-by)+2*M+1, N=W*H*5;
+    const gS=new Float64Array(N).fill(Infinity), par=new Int32Array(N).fill(-1), done=new Uint8Array(N);
+    const idx=(x,y,d)=>((y-y0)*W+(x-x0))*5+(d+1);
+    const heap=new Heap(), s=idx(ax,ay,ad); gS[s]=0; heap.push(Math.abs(ax-bx)+Math.abs(ay-by), s);
+    while (heap.size){
+      const cur=heap.pop(); if (done[cur]) continue; done[cur]=1;
+      const d=cur%5-1, cell=(cur/5)|0, x=cell%W+x0, y=((cell/W)|0)+y0;
+      if (x===bx && y===by){
+        const pts=[]; let k=cur;
+        while (k>=0){ const c2=(k/5)|0; pts.push([c2%W+x0, ((c2/W)|0)+y0]); k=par[k]; }
+        return {pts:pts.reverse(), dir:d};
+      }
+      const g=gS[cur];
+      for (let nd=0; nd<4; nd++){
+        if (d>=0 && nd===(d+2)%4) continue;
+        const nx=x+DIRS[nd][0], ny=y+DIRS[nd][1];
+        if (nx<x0||ny<y0||nx>=x0+W||ny>=y0+H) continue;
+        const goal = nx===bx && ny===by, key = nx+','+ny;
+        if (!goal && blk.has(key)) continue;
+        let c = 1 + (d>=0 && nd!==d ? TURN : 0);
+        if (goal && need>=0 && nd!==need) c += nd===bd ? TURN*3 : TURN;
+        const u = used.get(key); if (u && (u & (nd%2?2:1))) c += 2.5;
+        const ni=idx(nx,ny,nd), g2=g+c;
+        if (g2<gS[ni]){ gS[ni]=g2; par[ni]=cur; heap.push(g2+Math.abs(nx-bx)+Math.abs(ny-by), ni); }
+      }
+    }
+  }
+  return {pts:[[ax,ay],[bx,ay],[bx,by]], dir: by!==ay ? (by>ay?1:3) : (bx>ax?0:2)};
+}
+function routeEnds(E,blk,used){
+  let pts=[], dir=E[0].d;
+  for (let i=0; i<E.length-1; i++){
+    const a=E[i], b=E[i+1], last=i===E.length-2;
+    const r=astar(a.x/G,a.y/G,dir,b.x/G,b.y/G,last?b.d:-1,blk,used);
+    if (pts.length) r.pts.shift();
+    pts.push(...r.pts); if (r.dir>=0) dir=r.dir;
+  }
+  return pts;
+}
+function markUsed(p,used){
+  for (let i=0;i<p.length-1;i++){
+    const bit = p[i][1]===p[i+1][1] ? 1 : 2;
+    for (const q of [p[i],p[i+1]]){ const k=q[0]+','+q[1]; used.set(k,(used.get(k)||0)|bit); }
+  }
+}
+function simplify(p){
+  if (p.length<3) return p;
+  const o=[p[0]];
+  for (let i=1;i<p.length-1;i++){
+    const a=o[o.length-1], b=p[i], c=p[i+1];
+    if (a[0]===b[0]&&a[1]===b[1]) continue;
+    if (Math.sign(b[0]-a[0])===Math.sign(c[0]-b[0]) && Math.sign(b[1]-a[1])===Math.sign(c[1]-b[1])) continue;
+    o.push(b);
+  }
+  o.push(p[p.length-1]); return o;
+}
+/* A box blocks its border too: a line never runs along a node, and an anchor
+   is only reachable head on. A system blocks nothing: lines cross into it. */
+function blockedCells(rs){
+  const blk = new Set();
+  for (const n of S.nodes){
+    if (n.t==='system') continue;
+    const R = rs.get(n.id);
+    for (let gx=R.x0/G; gx<=R.x1/G; gx++) for (let gy=R.y0/G; gy<=R.y1/G; gy++) blk.add(gx+','+gy);
+  }
+  return blk;
+}
+/* An end on a use case slides along its axis from the bounding box onto the ellipse */
+function ontoEllipse(p, R, d){
+  const a = R.w/2, b = R.h/2, cx = R.x0+a, cy = R.y0+b;
+  if (d===1 || d===3){ const k = Math.sqrt(Math.max(0, 1-((p[0]-cx)/a)**2)); return [p[0], d===3 ? cy-b*k : cy+b*k]; }
+  const k = Math.sqrt(Math.max(0, 1-((p[1]-cy)/b)**2)); return [d===2 ? cx-a*k : cx+a*k, p[1]];
+}
+/* An end on a decision slides onto the diamond the same way */
+function ontoDiamond(p, R, d){
+  const a = R.w/2, b = R.h/2, cx = R.x0+a, cy = R.y0+b;
+  if (d===1 || d===3){ const k = 1-Math.abs(p[0]-cx)/a; return [p[0], d===3 ? cy-b*k : cy+b*k]; }
+  const k = 1-Math.abs(p[1]-cy)/b; return [d===2 ? cx-a*k : cx+a*k, p[1]];
+}
+function ontoCircle(r){
+  return (p, R, d) => {
+    const cx = R.x0+R.w/2, cy = R.y0+R.h/2;
+    if (d===1 || d===3){ const k = Math.sqrt(Math.max(0, r*r-(p[0]-cx)**2)); return [p[0], d===3 ? cy-k : cy+k]; }
+    const k = Math.sqrt(Math.max(0, r*r-(p[1]-cy)**2)); return [d===2 ? cx-k : cx+k, p[1]];
+  };
+}
+const ONTO = {usecase:ontoEllipse, decision:ontoDiamond, initial:ontoCircle(9), final:ontoCircle(11)};
+/* Straight lines between circles: the automaton and the graph */
+function computeStraight(extra){
+  const rs = new Map(S.nodes.map(n => [n.id, rectOf(n)])), R = new Map();
+  const rels = extra ? [...S.rels, extra] : S.rels;
+  const C = id => { const r = rs.get(id); return r && {x:(r.x0+r.x1)/2, y:(r.y0+r.y1)/2, r:r.w/2}; };
+  const rim = (P, T) => { const dx = T.x-P.x, dy = T.y-P.y, L = Math.hypot(dx, dy) || 1; return [P.x+dx/L*P.r, P.y+dy/L*P.r]; };
+  const pair = r => [r.a, r.b].sort().join('|');
+  const groups = new Map();
+  for (const r of rels) if (typeof r.b === 'string' && r.a!==r.b && !r.via.length){
+    if (!groups.has(pair(r))) groups.set(pair(r), []);
+    groups.get(pair(r)).push(r.id);
+  }
+  const loops = new Map();
+  for (const r of rels){
+    const A = C(r.a), B = typeof r.b === 'string' ? C(r.b) : {x:r.b.x, y:r.b.y, r:0};
+    if (!A || !B) continue;
+    let lay;
+    if (r.a===r.b && !r.via.length){
+      /* a loop over the top, the next one a size larger */
+      const i = loops.get(r.a) || 0; loops.set(r.a, i+1);
+      const k = 1+0.45*i, rr = A.r, at = deg => [A.x+rr*Math.cos(deg*Math.PI/180), A.y+rr*Math.sin(deg*Math.PI/180)];
+      const a = at(-120), b = at(-60), c1 = [A.x-rr*1.3*k, A.y-rr*2.5*k], c2 = [A.x+rr*1.3*k, A.y-rr*2.5*k];
+      const top = 0.125*a[1] + 0.375*c1[1] + 0.375*c2[1] + 0.125*b[1];
+      lay = {d:`M${a}C${c1} ${c2} ${b}`, hp:[c2, b], pts:[a, [A.x, top], b], lab:{x:A.x, y:top-7}};
+    } else if (r.via.length){
+      const v = r.via, pts = [rim(A, v[0]), ...v.map(q => [q.x, q.y]), rim(B, v[v.length-1])];
+      const i = Math.floor((pts.length-1)/2), p0 = pts[i], p1 = pts[i+1], L = Math.hypot(p1[0]-p0[0], p1[1]-p0[1]) || 1;
+      lay = {pts, lab:{x:(p0[0]+p1[0])/2-(p1[1]-p0[1])/L*12, y:(p0[1]+p1[1])/2+(p1[0]-p0[0])/L*12}};
+    } else {
+      /* the pair's lines fan out around the straight one; the normal is
+         taken in one fixed order of the pair, so that a->b and b->a bend
+         to opposite sides */
+      const g = typeof r.b === 'string' ? groups.get(pair(r)) : null;
+      const n = g ? g.length : 1, k = g ? (g.indexOf(r.id)-(n-1)/2)*30 : 0;
+      const [p, q] = typeof r.b === 'string' && r.b < r.a ? [B, A] : [A, B];
+      const L = Math.hypot(q.x-p.x, q.y-p.y) || 1, nx = -(q.y-p.y)/L, ny = (q.x-p.x)/L;
+      if (!k){
+        const a = rim(A, B), b = rim(B, A);
+        lay = {pts:[a, b], lab:{x:(a[0]+b[0])/2+nx*12, y:(a[1]+b[1])/2+ny*12}};
+      } else {
+        const c = {x:(A.x+B.x)/2+nx*2*k, y:(A.y+B.y)/2+ny*2*k}, a = rim(A, c), b = rim(B, c), s = Math.sign(k);
+        const mid = [0.25*a[0]+0.5*c.x+0.25*b[0], 0.25*a[1]+0.5*c.y+0.25*b[1]];
+        lay = {d:`M${a}Q${c.x},${c.y} ${b}`, hp:[[c.x, c.y], b], pts:[a, mid, b], lab:{x:mid[0]+nx*s*12, y:mid[1]+ny*s*12}};
+      }
+    }
+    const f = lay.pts[0], l = lay.pts[lay.pts.length-1];
+    lay.A = {x:f[0], y:f[1], d:-1}; lay.B = {x:l[0], y:l[1], d:-1};
+    R.set(r.id, lay);
+  }
+  return {R, rs};
+}
+function computeAll(extra){
+  if (DIAGRAMS[type].straight) return computeStraight(extra);
+  const rs = new Map(S.nodes.map(n => [n.id, rectOf(n)])), byId = new Map(S.nodes.map(n => [n.id, n]));
+  const rels = extra ? [...S.rels, extra] : S.rels;
+  const anchors = anchorsOf(rels, rs), blk = blockedCells(rs), used = new Map(), R = new Map();
+  for (const r of rels){
+    let A = anchors.get(r.id+':a');
+    let B = typeof r.b === 'string' ? anchors.get(r.id+':b') : {x:snap(r.b.x), y:snap(r.b.y), d:-1};
+    if (!A || !B) continue;
+    const grid = routeEnds([A, ...r.via.map(v => ({x:v.x, y:v.y, d:-1})), B], blk, used);
+    markUsed(grid, used);
+    const pts = simplify(grid).map(([x,y]) => [x*G, y*G]);
+    const na = byId.get(r.a), nb = typeof r.b === 'string' ? byId.get(r.b) : null;
+    if (na && ONTO[na.t]){ pts[0] = ONTO[na.t](pts[0], rs.get(na.id), A.d); A = {...A, x:pts[0][0], y:pts[0][1]}; }
+    if (nb && ONTO[nb.t]){ const k = pts.length-1; pts[k] = ONTO[nb.t](pts[k], rs.get(nb.id), B.d); B = {...B, x:pts[k][0], y:pts[k][1]}; }
+    R.set(r.id, {pts, A, B});
+  }
+  return {R, rs};
+}
+const pathD = p => 'M'+p.map(q => q[0]+' '+q[1]).join('L');
+
+/* Drawing */
+function nodeSVG(n, o={}){
+  const {w,h} = sizeOf(n), cx = w/2;
+  let s = `<g class="node${o.sel?' sel':''}${o.ghost?' ghost':''}"${o.ghost?'':` data-node="${n.id}"`} transform="translate(${n.x} ${n.y})">`;
+  s += `<rect class="halo" x="-4" y="-4" width="${w+8}" height="${h+8}" rx="3"/>`;
+  if (INK.has(n.t)){
+    s += `<path class="fig" d="${n.t==='stroke' ? inkPath(n.pts) : 'M'+n.pts.map(q => q.join(' ')).join('L')}"/>`;
+  } else if (SHAPES.has(n.t)){
+    s += n.t==='circle' || n.t==='ellipse' ? `<ellipse class="uc" cx="${cx}" cy="${h/2}" rx="${cx}" ry="${h/2}"/>`
+       : n.t==='triangle' ? `<path class="uc" d="M${cx} 0L${w} ${h}L0 ${h}Z"/>`
+       : `<rect class="uc" width="${w}" height="${h}"/>`;
+    if (n.name) s += `<text class="uct" x="${cx}" y="${(n.t==='triangle' ? h*0.66 : h/2)+4.5}">${esc(n.name)}</text>`;
+  } else if (n.t==='initial'){
+    s += `<circle class="dot" cx="20" cy="20" r="9"/>`;
+  } else if (n.t==='final'){
+    s += `<circle class="ring" cx="20" cy="20" r="11"/><circle class="dot" cx="20" cy="20" r="6.5"/>`;
+  } else if (CIRCLE.has(n.t)){
+    s += `<circle class="uc" cx="${cx}" cy="${h/2}" r="${cx}"/>`;
+    if (n.accept) s += `<circle class="ring" cx="${cx}" cy="${h/2}" r="${cx-4}"/>`;
+    if (n.initial) s += `<path class="fig" d="M-30 ${h/2}H-2"/>` + headSVG('arrowF', [[-30, h/2], [0, h/2]]);
+    s += `<text class="uct" x="${cx}" y="${h/2+4.5}">${esc(n.name)}</text>`;
+  } else if (n.t==='state'){
+    s += `<rect class="uc" width="${w}" height="${h}" rx="10"/><text class="uct" x="${cx}" y="25">${esc(n.name)}</text>`;
+    if (n.body.length) s += `<path class="sep" d="M0 40H${w}"/>` +
+      n.body.map((l,i) => `<text class="mb" x="10" y="${40+PAD/2+i*ROW+14}">${esc(l)}</text>`).join('');
+  } else if (n.t==='actor'){
+    s += `<path class="fig" d="M20 17V38M8 24H32M20 38L10 54M20 38L30 54"/><circle class="fig" cx="20" cy="10" r="7"/>`;
+    s += `<text class="uct" x="${cx}" y="72">${esc(n.name)}</text>`;
+  } else if (n.t==='usecase'){
+    const ls = wrapName(n.name), y0 = h/2 - (ls.length-1)*8 + 4.5;
+    s += `<ellipse class="uc" cx="${cx}" cy="${h/2}" rx="${cx}" ry="${h/2}"/>`;
+    ls.forEach((l,i) => s += `<text class="uct" x="${cx}" y="${y0+i*16}">${esc(l)}</text>`);
+  } else if (FLOWN.has(n.t)){
+    const ls = wrapName(n.name, n.t==='decision' ? 120 : 200), y0 = h/2 - (ls.length-1)*8 + 4.5;
+    s += n.t==='decision' ? `<path class="uc" d="M${cx} 0L${w} ${h/2}L${cx} ${h}L0 ${h/2}Z"/>`
+                          : `<rect class="uc" width="${w}" height="${h}" rx="${n.t==='terminal' ? h/2 : 3}"/>`;
+    ls.forEach((l,i) => s += `<text class="uct" x="${cx}" y="${y0+i*16}">${esc(l)}</text>`);
+  } else if (n.t==='system'){
+    s += `<rect class="sysf" width="${w}" height="${h}"/><text class="sn" x="12" y="20">${esc(n.name)}</text>`;
+  } else {
+    s += `<rect class="body" width="${w}" height="${h}"/><rect class="headf" width="${w}" height="${HEAD}"/>`;
+    let y = HEAD, seps = '', text = '';
+    for (const k of compartments(n)){
+      seps += `M0 ${y}H${w}`;
+      k.forEach((raw, i) => {
+        const m = member(raw);
+        const und = m.st || (n.t==='entity' && /\bPK\b/.test(raw));
+        text += `<text class="mb${und?' us':''}${m.ab?' ab':''}" x="10" y="${y + PAD/2 + i*ROW + 14}">${esc(m.text)}</text>`;
+      });
+      y += k.length*ROW + PAD;
+    }
+    if (seps) s += `<path class="sep" d="${seps}"/>`;
+    s += `<rect class="frame" width="${w}" height="${h}"/>`;
+    const nm = `<text class="nm${n.abstract?' ab':''}" x="${cx}" y="${n.stereo?33:25}">${esc(n.name)}</text>`;
+    s += (n.stereo ? `<text class="st" x="${cx}" y="16">«${esc(n.stereo)}»</text>${nm}` : nm) + text;
+  }
+  return s + '</g>';
+}
+function headSVG(kind, pts){
+  const B = pts[pts.length-1]; let P = null;
+  for (let i = pts.length-2; i >= 0; i--) if (pts[i][0]!==B[0] || pts[i][1]!==B[1]){ P = pts[i]; break; }
+  if (!P) return '';
+  const L = Math.hypot(B[0]-P[0], B[1]-P[1]), ux = (B[0]-P[0])/L, uy = (B[1]-P[1])/L;
+  const at = (a,b) => `${B[0]-ux*a-uy*b} ${B[1]-uy*a+ux*b}`;
+  if (kind==='open') return `<path class="hd open" d="M${at(12,6)}L${at(0,0)}L${at(12,-6)}"/>`;
+  if (kind==='arrowF') return `<path class="hd diaF" d="M${at(0,0)}L${at(11,5)}L${at(11,-5)}Z"/>`;
+  if (kind==='tri') return `<path class="hd tri" d="M${at(0,0)}L${at(15,8)}L${at(15,-8)}Z"/>`;
+  return `<path class="hd ${kind}" d="M${at(0,0)}L${at(10,6)}L${at(20,0)}L${at(10,-6)}Z"/>`;
+}
+/* Crow's foot at an entity end, E.d pointing away from the entity */
+function crowSVG(card, E){
+  if (!card || E.d < 0) return '';
+  const u = DIRS[E.d], P = (a, b) => `${E.x+u[0]*a-u[1]*b} ${E.y+u[1]*a+u[0]*b}`;
+  const bar = t => `M${P(t,-6)}L${P(t,6)}`, many = `M${P(12,0)}L${P(0,-7)}M${P(12,0)}L${P(0,7)}`;
+  const ring = t => `<circle class="hd crowc" cx="${E.x+u[0]*t}" cy="${E.y+u[1]*t}" r="4"/>`;
+  const [d, r] = card==='1' ? [bar(7)+bar(13), ''] : card==='0..1' ? [bar(7), ring(18)]
+               : card==='1..*' ? [many+bar(16), ''] : [many, ring(18)];
+  return `<path class="hd open" d="${d}"/>` + r;
+}
+function multSVG(t, E, cls='ml'){
+  if (!t) return '';
+  const [x, y, a] = E.d===0 ? [E.x+5, E.y-11, 'start'] : E.d===2 ? [E.x-5, E.y-11, 'end']
+                  : E.d===1 ? [E.x+11, E.y+15, 'start'] : [E.x+11, E.y-6, 'start'];
+  return `<text class="${cls}" x="${x}" y="${y}" text-anchor="${a}">${esc(t)}</text>`;
+}
+function nameSVG(t, pts, cls='rn'){
+  if (!t) return '';
+  let best = 0, bi = 0;
+  for (let i = 0; i < pts.length-1; i++){
+    const l = Math.abs(pts[i+1][0]-pts[i][0]) + Math.abs(pts[i+1][1]-pts[i][1]);
+    if (l > best){ best = l; bi = i; }
+  }
+  const a = pts[bi], b = pts[bi+1] || a, mx = (a[0]+b[0])/2, my = (a[1]+b[1])/2;
+  return a[1]===b[1] ? `<text class="${cls}" x="${mx}" y="${my-7}" text-anchor="middle">${esc(t)}</text>`
+                     : `<text class="${cls}" x="${mx+8}" y="${my+4}">${esc(t)}</text>`;
+}
+function relSVG(r, lay, o={}){
+  const d = lay.d || pathD(lay.pts), head = headOf(r), T = REL[r.type];
+  let s = `<g class="rel${o.sel?' sel':''}${o.draft?' draft':''}${REL[r.type].dash?' dash':''}"${o.draft||o.icon?'':` data-rel="${r.id}"`}>`;
+  if (!o.draft && !o.icon) s += `<path class="rhit" d="${d}"/>`;
+  s += `<path class="rln" d="${d}"/>`;
+  if (head) s += headSVG(head, lay.hp || lay.pts);
+  if (T.crow) s += crowSVG(r.ma, lay.A) + (typeof r.b === 'string' ? crowSVG(r.mb, lay.B) : '');
+  if (!o.icon){
+    const t = T.label || r.name, cls = T.labelCls || 'rn';
+    if (!T.crow) s += multSVG(r.ma, lay.A) + (typeof r.b === 'string' ? multSVG(r.mb, lay.B) : '');
+    /* a flow's label (oui, non) sits where it leaves its decision */
+    if (t) s += lay.lab ? `<text class="${cls}" x="${lay.lab.x}" y="${lay.lab.y+4}" text-anchor="middle">${esc(t)}</text>`
+              : T.labelAtStart ? multSVG(t, lay.A, cls) : nameSVG(t, lay.pts, cls);
+  }
+  return s + '</g>';
+}
+
+/* Render */
+let rq = 0;
+function requestRender(){ if (!rq) rq = requestAnimationFrame(() => { rq = 0; render(); }); }
+function draftRel(){
+  if (!draft) return null;
+  if (hover && hover.id===draft.a && !draft.via.length) return null;
+  return {id:'__draft', type:relType, a:draft.a, b: hover ? hover.id : {x:cursor.x, y:cursor.y}, via:draft.via, name:'', ma:'', mb:''};
+}
+function render(){
+  world.setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.k})`);
+  const edgeHover = mode==='select' && hover && hover.edge && !drag && DIAGRAMS[type].rels.length > 0;
+  svg.setAttribute('class', 'm-'+mode+(edgeHover ? ' m-edge' : ''));
+  const extra = draftRel(), {R, rs} = computeAll(extra);
+  routes = R; rects = rs;
+
+  const order = [...S.nodes.filter(n => n.t==='system'), ...S.nodes.filter(n => n.t!=='system')];
+  Ln.innerHTML = order.map(n => nodeSVG(n, {sel:sel.has(n.id)})).join('');
+  let h = '';
+  for (const r of S.rels){ const L = R.get(r.id); if (L) h += relSVG(r, L, {sel:sel.has(r.id)}); }
+  Lr.innerHTML = h;
+
+  let o = '';
+  for (const r of S.rels) if (sel.has(r.id)) r.via.forEach((v,i) => {
+    o += `<rect class="via" data-rel="${r.id}" data-via="${i}" x="${v.x-4.5}" y="${v.y-4.5}" width="9" height="9" rx="1.5"/>`;
+  });
+  for (const n of S.nodes) if (RESIZABLE.has(n.t) && sel.has(n.id) && sel.size===1){
+    const Rr = rs.get(n.id);
+    o += `<rect class="via" data-resize="${n.id}" x="${Rr.x1-5}" y="${Rr.y1-5}" width="10" height="10" rx="1.5"/>`;
+  }
+  const hl = (mode==='link' || draft || edgeHover) && hover ? hover.id : null;
+  for (const id of new Set([hl, draft && draft.a])){
+    const Rr = id && rs.get(id);
+    if (Rr) o += `<rect class="hov" x="${Rr.x0-3}" y="${Rr.y0-3}" width="${Rr.w+6}" height="${Rr.h+6}" rx="3"/>`;
+  }
+  if (extra && R.get('__draft')) o += relSVG(extra, R.get('__draft'), {draft:true});
+  if (draft) for (const v of draft.via) o += `<circle class="dvia" cx="${v.x}" cy="${v.y}" r="3"/>`;
+  if (mode==='place' && ghost.show && !INK.has(placeT)) o += nodeSVG({...ghostNode(placeT), x:ghost.x, y:ghost.y}, {ghost:true});
+  if (mode==='link' && cursorIn && !hover) o += `<path class="xh" d="M${cursor.x-5} ${cursor.y}h10M${cursor.x} ${cursor.y-5}v10"/>`;
+  if (drag && drag.kind==='ink')
+    o += `<path class="draft" d="${drag.t==='stroke' ? inkPath(drag.pts.slice(1)) : 'M'+drag.pts.map(q => q.join(' ')).join('L')}"/>`;
+  if (drag && drag.kind==='box'){
+    const x = Math.min(drag.x0,drag.x1), y = Math.min(drag.y0,drag.y1);
+    o += `<rect class="box" x="${x}" y="${y}" width="${Math.abs(drag.x1-drag.x0)}" height="${Math.abs(drag.y1-drag.y0)}"/>`;
+  }
+  Lo.innerHTML = o;
+  renderUI();
+}
+
+/* Toolbox, per diagram type: select, the node kinds, then the relations */
+const tb = $('#tb'), rTypes = $('#rTypes');
+const NODE_ICON = {
+  class:'<rect class="body" x="10" y="3" width="24" height="24"/><rect class="headf" x="10" y="3" width="24" height="8"/>'+
+        '<path class="sep" d="M10 11H34M10 19H34"/><rect class="frame" x="10" y="3" width="24" height="24"/>',
+  actor:'<g class="ico"><circle cx="22" cy="6.5" r="3.5"/><path d="M22 10v9M16 13.5h12M22 19l-5 7M22 19l5 7"/></g>',
+  usecase:'<ellipse class="uc" cx="22" cy="15" rx="15" ry="8.5"/>',
+  system:'<g class="ico"><rect x="7" y="4" width="30" height="22"/><path d="M10.5 9h9"/></g>',
+  terminal:'<rect class="uc" x="7" y="9" width="30" height="12" rx="6"/>',
+  action:'<rect class="uc" x="8" y="7" width="28" height="16" rx="1.5"/>',
+  decision:'<path class="uc" d="M22 4L37 15L22 26L7 15Z"/>',
+  initial:'<circle class="dot" cx="22" cy="15" r="6"/>',
+  state:'<rect class="uc" x="8" y="7" width="28" height="16" rx="5"/>',
+  final:'<circle class="ico" cx="22" cy="15" r="8"/><circle class="dot" cx="22" cy="15" r="4.5"/>',
+  entity:'<rect class="body" x="10" y="3" width="24" height="24"/><rect class="headf" x="10" y="3" width="24" height="8"/>'+
+         '<path class="sep" d="M10 11H34"/><rect class="frame" x="10" y="3" width="24" height="24"/>',
+  astate:'<circle class="uc" cx="22" cy="15" r="10"/>',
+  accept:'<circle class="uc" cx="22" cy="15" r="10"/><circle class="ico" cx="22" cy="15" r="6.5"/>',
+  vertex:'<circle class="uc" cx="22" cy="15" r="9"/>',
+  stroke:'<path class="ico" d="M8 21c4-9 7-11 10-6s6 5 9-1 5-7 9-3"/>',
+  line:'<path class="ico" d="M9 23L35 7"/>',
+  rect:'<rect class="uc" x="8" y="8" width="28" height="14"/>',
+  square:'<rect class="uc" x="15" y="8" width="14" height="14"/>',
+  circle:'<circle class="uc" cx="22" cy="15" r="8"/>',
+  ellipse:'<ellipse class="uc" cx="22" cy="15" rx="14" ry="7.5"/>',
+  triangle:'<path class="uc" d="M22 6L32 24H12Z"/>'
+};
+const crowIcon = c => `<svg viewBox="0 0 44 30"><path class="rln" d="M4 15H40M40 7V23"/>${crowSVG(c, {x:40, y:15, d:2})}</svg>`;
+function relIcon(k){
+  const lab = REL[k].label ? `<text class="ilab" x="22" y="10">${REL[k].label}</text>` : '';
+  if (REL[k].crow) return relSVG({type:k, b:'x', ma:'1', mb:'0..*'}, {pts:[[4,15],[40,15]], A:{x:4, y:15, d:0}, B:{x:40, y:15, d:2}}, {icon:true});
+  return relSVG({type:k, b:'x'}, {pts:[[4, lab ? 19 : 15], [40, lab ? 19 : 15]]}, {icon:true}) + lab;
+}
+function toolList(){ const D = DIAGRAMS[type]; return [...D.nodes.map(t => ({place:t})), ...D.rels.map(k => ({rel:k}))]; }
+function buildTools(){
+  tb.innerHTML = `<button class="tbb" data-mode="select" aria-label="Sélection"><svg viewBox="0 0 44 30"><path class="ico" d="M17 6l11 6.4-5 1.2-2.4 5.4z"/></svg></button>` +
+    toolList().map(t => t.place
+      ? `<button class="tbb" data-place="${t.place}" aria-label="${t.place}"><svg viewBox="0 0 44 30">${NODE_ICON[t.place]}</svg></button>`
+      : `<button class="tbb" data-rel="${t.rel}" aria-label="${t.rel}"><svg viewBox="0 0 44 30">${relIcon(t.rel)}</svg></button>`).join('');
+  document.querySelectorAll('#inspR [data-end]').forEach(el => {
+    el.innerHTML = CARDS.map(c => `<button class="tbb" data-card="${c}" aria-label="${c}">${crowIcon(c)}</button>`).join('');
+  });
+  rTypes.innerHTML = DIAGRAMS[type].rels.map(k => `<button class="tbb" data-type="${k}" aria-label="${k}"><svg viewBox="0 0 44 30">${relIcon(k)}</svg></button>`).join('');
+}
+tb.addEventListener('pointerdown', e => {
+  const b = e.target.closest('[data-place]'); if (!b || e.button!==0) return;
+  e.preventDefault();
+  const same = mode==='place' && placeT===b.dataset.place;
+  enterPlace(b.dataset.place); palDrag = {x:e.clientX, y:e.clientY, moved:false, same};
+  if (b.hasPointerCapture && b.hasPointerCapture(e.pointerId)) b.releasePointerCapture(e.pointerId);
+});
+tb.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.mode) setMode('select');
+  else if (b.dataset.rel){ const k = b.dataset.rel; mode==='link' && relType===k && !draft ? setMode('select') : enterLink(k); }
+});
+rTypes.addEventListener('click', e => {
+  const b = e.target.closest('[data-type]'); if (!b) return;
+  const r = inspId && findById(inspId); if (!r || r.type===b.dataset.type) return;
+  pushUndo(); r.type = b.dataset.type; save(); render();
+});
+document.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+  const a = b.dataset.act;
+  if (a==='dup') duplicate(); else if (a==='del') del(); else if (a==='undo') undo(); else if (a==='redo') redo();
+  else if (a==='clear' || a==='demo'){
+    pushUndo(); S = docs[type] = blank(); if (a==='demo') DEMOS[type]();
+    sel.clear(); draft = null; save(); refreshCode(); render();
+  }
+  b.blur();
+}));
+document.querySelectorAll('#inspR [data-end]').forEach(el => el.addEventListener('click', e => {
+  const b = e.target.closest('[data-card]'), r = inspId && findById(inspId); if (!b || !r) return;
+  pushUndo(); r[el.dataset.end] = b.dataset.card; save(); render();
+}));
+$('#dtype').addEventListener('click', e => { const b = e.target.closest('[data-type]'); if (b) switchType(b.dataset.type); });
+$('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) setPane(b.dataset.view); });
+
+function switchType(t){
+  if (t===type) return;
+  type = t; S = docs[t]; sel.clear(); draft = null; mode = 'select'; placeT = null; hover = null;
+  relType = DIAGRAMS[t].rels[0];
+  if (!DIAGRAMS[t].lang && pane==='code') setPane('draw');
+  buildTools(); refreshCode(); save(); render();
+}
+
+/* Inspector */
+const insp = $('#insp'), inspC = $('#inspC'), inspN = $('#inspN'), inspR = $('#inspR');
+const cName = $('#cName'), cStereo = $('#cStereo'), cAbs = $('#cAbs'), cBody = $('#cBody'), nName = $('#nName');
+const nInit = $('#nInit'), nAcc = $('#nAcc');
+/* which inspector a node gets: a body (class, entity, state), a name, or none */
+const BODIED = new Set(['class','entity','state']), NAMELESS = new Set(['initial','final','stroke','line']);
+const rName = $('#rName'), rMa = $('#rMa'), rMb = $('#rMb');
+let inspId = null, inspDirty = false;
+const findById = id => isNode(id) ? S.nodes.find(n => n.id===id) : S.rels.find(r => r.id===id);
+function renderUI(){
+  document.querySelectorAll('#dtype [data-type]').forEach(b => b.classList.toggle('on', b.dataset.type===type));
+  document.querySelectorAll('#tabs [data-view]').forEach(b => b.classList.toggle('on', b.dataset.view===pane));
+  $('#codeTab').textContent = DIAGRAMS[type].lang || '';
+  $('#tabs').hidden = !DIAGRAMS[type].lang;
+  tb.querySelector('[data-mode]').classList.toggle('on', mode==='select');
+  tb.querySelectorAll('[data-place]').forEach(b => b.classList.toggle('on', mode==='place' && b.dataset.place===placeT));
+  tb.querySelectorAll('[data-rel]').forEach(b => b.classList.toggle('on', mode==='link' && b.dataset.rel===relType));
+  document.querySelector('[data-act="dup"]').disabled = ![...sel].some(isNode);
+  document.querySelector('[data-act="del"]').disabled = !sel.size;
+  document.querySelector('[data-act="undo"]').disabled = !undoS().length;
+  document.querySelector('[data-act="redo"]').disabled = !redoS().length;
+
+  const ids = [...sel], sole = pane==='draw' && ids.length===1 ? findById(ids[0]) : null;
+  const one = sole && !(isNode(sole.id) && NAMELESS.has(sole.t)) ? sole : null;
+  if (!one){ insp.hidden = true; inspId = null; }
+  else {
+    insp.hidden = false;
+    const kind = !isNode(one.id) ? 'r' : BODIED.has(one.t) ? 'c' : 'n';
+    inspC.hidden = kind!=='c'; inspN.hidden = kind!=='n'; inspR.hidden = kind!=='r';
+    if (inspId!==one.id || !insp.contains(document.activeElement)){
+      inspId = one.id;
+      if (kind==='c'){ cName.value = one.name; cStereo.value = one.stereo; cAbs.checked = one.abstract; cBody.value = one.body.join('\n'); }
+      else if (kind==='n'){ nName.value = one.name; nInit.checked = !!one.initial; nAcc.checked = !!one.accept; }
+      else { rName.value = one.name; rMa.value = one.ma; rMb.value = one.mb; }
+    }
+    if (kind==='c'){
+      const cl = one.t==='class';
+      $('#cStereoRow').hidden = !cl; $('#cAbsRow').hidden = !cl; $('#cTip').hidden = !cl; $('#cTipE').hidden = one.t!=='entity';
+      $('#cBodyL').textContent = cl ? 'Contenu' : one.t==='entity' ? 'Attributs' : 'Activités';
+      cBody.placeholder = cl ? '- nom : String\n---\n+ aire() : double' : one.t==='entity' ? 'id : int PK\nnom : string' : 'entry / allumer';
+    }
+    if (kind==='n'){ $('#nInitRow').hidden = one.t!=='astate'; $('#nAccRow').hidden = one.t!=='astate'; }
+    if (kind==='r'){
+      const a = S.nodes.find(n => n.id===one.a), b = S.nodes.find(n => n.id===one.b);
+      $('#rMaL').textContent = a ? a.name : 'Source'; $('#rMbL').textContent = b ? b.name : 'Cible';
+      const cls = type==='class', er = type==='er';
+      rTypes.hidden = DIAGRAMS[type].rels.length < 2;
+      $('#rNameRow').hidden = type==='usecase' && one.type!=='assoc';
+      $('#rNameL').textContent = DIAGRAMS[type].relName || 'Nom';
+      $('#rCardA').hidden = !er; $('#rCardB').hidden = !er;
+      $('#rCardAL').textContent = a ? a.name : 'A'; $('#rCardBL').textContent = b ? b.name : 'B';
+      document.querySelectorAll('#inspR [data-end]').forEach(el =>
+        el.querySelectorAll('[data-card]').forEach(x => x.classList.toggle('on', x.dataset.card===one[el.dataset.end]))); $('#rMaRow').hidden = !cls; $('#rMbRow').hidden = !cls;
+      rTypes.querySelectorAll('[data-type]').forEach(b => b.classList.toggle('on', b.dataset.type===one.type));
+    }
+  }
+
+  $('#status').hidden = pane!=='draw';
+  const names = {select:'Sélection', link:'Relation', place:'Pose'};
+  $('#stMode').textContent = names[mode];
+  $('#stHint').textContent =
+    mode==='place' ? 'Clic pour poser, Échap pour terminer' :
+    draft ? 'Relâchez ou cliquez sur la cible. Clic dans le vide : coude. Clic droit : retirer le coude. Échap : abandonner' :
+    mode==='link' ? 'Cliquez la source, puis la cible' :
+    sel.size ? `${sel.size} élément${sel.size>1?'s':''} sélectionné${sel.size>1?'s':''}. Glisser pour déplacer, double clic pour éditer`
+             : 'Double clic sur la grille pour un élément, glisser depuis un bord pour relier';
+  $('#stPos').textContent = `x ${cursor.x}  y ${cursor.y}  ${Math.round(view.k*100)} %`;
+}
+const lines = v => v.split('\n').map(s => s.trimEnd()).filter(s => s.trim());
+function bind(el, apply){
+  const change = el.type==='checkbox';
+  el.addEventListener('focus', () => { inspDirty = false; });
+  el.addEventListener(change ? 'change' : 'input', () => {
+    const o = inspId && findById(inspId); if (!o) return;
+    if (!inspDirty || change){ pushUndo(); inspDirty = true; }
+    apply(o, el); save(); render();
+  });
+  el.addEventListener('keydown', e => {
+    if (e.key==='Escape' || (e.key==='Enter' && el.tagName==='INPUT')) el.blur();
+  });
+}
+bind(cName, (n,el) => n.name = el.value);
+bind(nName, (n,el) => n.name = el.value);
+/* one initial state per automaton */
+bind(nInit, (n,el) => { if (el.checked) S.nodes.forEach(x => { x.initial = false; }); n.initial = el.checked; });
+bind(nAcc, (n,el) => n.accept = el.checked);
+bind(cStereo, (n,el) => n.stereo = el.value.replace(/[«»<>]/g,'').trim());
+bind(cAbs, (n,el) => n.abstract = el.checked);
+bind(cBody, (n,el) => n.body = lines(el.value));
+bind(rName, (r,el) => r.name = el.value);
+bind(rMa, (r,el) => r.ma = el.value.trim());
+bind(rMb, (r,el) => r.mb = el.value.trim());
+$('#rSwap').addEventListener('click', () => swapSel());
+
+/* PlantUML, out */
+const ident = s => /^[\p{L}_][\p{L}\w]*$/u.test(s);
+const q = s => ident(s) ? s : '"'+s.replace(/"/g,"'")+'"';
+const PUML = {assoc:'--', nav:'-->', inh:'--|>', impl:'..|>', dep:'..>', agg:'--o', comp:'--*', incl:'..>', ext:'..>'};
+function plantuml(){
+  const byId = new Map(S.nodes.map(n => [n.id, n]));
+  let o = '@startuml\n';
+  if (type==='class'){
+    for (const n of S.nodes){
+      const kw = n.stereo==='interface' ? 'interface' : n.stereo==='enumeration' ? 'enum' : n.abstract ? 'abstract class' : 'class';
+      const st = n.stereo && n.stereo!=='interface' && n.stereo!=='enumeration' ? ` <<${n.stereo}>>` : '';
+      o += `${kw} ${q(n.name)}${st} {\n` + n.body.map(m => '  '+(isSep(m) ? '--' : m)+'\n').join('') + '}\n';
+    }
+    if (S.rels.length) o += '\n';
+    for (const r of S.rels){
+      const a = byId.get(r.a), b = byId.get(r.b); if (!a || !b) continue;
+      o += `${q(a.name)}${r.ma?` "${r.ma}"`:''} ${PUML[r.type]}${r.mb?` "${r.mb}"`:''} ${q(b.name)}${r.name?` : ${r.name}`:''}\n`;
+    }
+    return o + '@enduml\n';
+  }
+  /* use cases: an alias per element whose name is not an identifier */
+  const alias = new Map(); let na = 0, nu = 0;
+  for (const n of S.nodes) if (n.t!=='system') alias.set(n.id, ident(n.name) ? n.name : n.t==='actor' ? 'A'+(++na) : 'UC'+(++nu));
+  const decl = n => `${n.t==='actor' ? 'actor' : 'usecase'} ${q(n.name)}${alias.get(n.id)!==n.name ? ' as '+alias.get(n.id) : ''}\n`;
+  o += 'left to right direction\n';
+  const inside = new Set();
+  const systems = S.nodes.filter(n => n.t==='system').map(s => {
+    const R = rectOf(s), members = S.nodes.filter(n => n.t!=='system' && !inside.has(n.id) && holds(R, rectOf(n)));
+    members.forEach(n => inside.add(n.id));
+    return {s, members};
+  });
+  for (const n of S.nodes) if (n.t!=='system' && !inside.has(n.id)) o += decl(n);
+  for (const {s, members} of systems) o += `rectangle ${q(s.name)} {\n` + members.map(n => '  '+decl(n)).join('') + '}\n';
+  if (S.rels.length) o += '\n';
+  for (const r of S.rels){
+    if (!alias.has(r.a) || !alias.has(r.b)) continue;
+    const lab = r.type==='incl' ? ' : <<include>>' : r.type==='ext' ? ' : <<extend>>' : r.name ? ' : '+r.name : '';
+    o += `${alias.get(r.a)} ${PUML[r.type]} ${alias.get(r.b)}${lab}\n`;
+  }
+  return o + '@enduml\n';
+}
+
+/* PlantUML, in: the subset written above, plus the usual shorthands
+   ((use case), :actor:, reversed arrows, direction hints, longer arrows) */
+const NAMEP = String.raw`"[^"]+"|\([^)]+\)|:[^:]+:|[\p{L}\w$]+`;
+const ARROWP = String.raw`(?:<\|?|\*|o(?=[-.]))?[-.]+(?:(?:up|down|left|right|u|d|l|r)[-.]+)?(?:\|?>|\*|o(?=[\s"]))?`;
+const RELRE = new RegExp(`^(${NAMEP})\\s*(?:"([^"]*)"\\s*)?(${ARROWP})\\s*(?:"([^"]*)"\\s*)?(${NAMEP})\\s*(?::\\s*(.*))?$`, 'u');
+const CLASSRE = /^(abstract\s+class|abstract|class|interface|enum)\s+("[^"]+"|[\p{L}\w$]+)(?:\s+as\s+[\p{L}\w$]+)?\s*(?:<<\s*(.+?)\s*>>)?\s*(\{)?\s*(\})?$/u;
+const ARROWS = {'--':['assoc',0], '-->':['nav',0], '<--':['nav',1], '--|>':['inh',0], '<|--':['inh',1],
+  '..|>':['impl',0], '<|..':['impl',1], '..>':['dep',0], '<..':['dep',1], '..':['dep',0],
+  '--o':['agg',0], 'o--':['agg',1], '--*':['comp',0], '*--':['comp',1]};
+const IGNORED = /^(@startuml|@enduml|skinparam\b|hide\b|show\b|title\b|left to right direction|top to bottom direction)/i;
+const unq = s => s.replace(/^"(.*)"$/, '$1').trim();
+function parse(text){
+  const P = {nodes:[], rels:[], errors:[]}, keys = new Map(), systems = [];
+  let cur = null;
+  const err = (ln, msg) => P.errors.push({ln, msg});
+  const declare = (t, name, alias) => {
+    let n = keys.get(name) || (alias && keys.get(alias));
+    if (!n || n.t!==t){
+      n = {t, name, stereo:'', abstract:false, body:t==='class' ? ['---'] : [], sys:null};
+      P.nodes.push(n);
+    }
+    keys.set(name, n); if (alias) keys.set(alias, n);
+    if (systems.length && t!=='system' && !n.sys) n.sys = systems[systems.length-1];
+    return n;
+  };
+  const ref = tok => {
+    if (tok[0]==='(') return declare('usecase', tok.slice(1,-1).trim());
+    if (tok[0]===':' && tok.length>1) return declare('actor', tok.slice(1,-1).trim());
+    const n = keys.get(unq(tok));
+    if (n) return n;
+    return type==='class' ? declare('class', unq(tok)) : null;
+  };
+  text.split('\n').forEach((raw, i) => {
+    const s = raw.trim(), ln = i+1;
+    if (cur){
+      if (s==='}'){ cur = null; return; }
+      if (s) cur.body.push(/^(-{2,}|={2,}|\.{2,}|_{2,})$/.test(s) ? '---' : s);
+      return;
+    }
+    if (!s || s[0]==="'" || IGNORED.test(s)) return;
+    if (s==='}'){ systems.length ? systems.pop() : err(ln, 'accolade fermante en trop'); return; }
+    let m;
+    if (type==='class' && (m = CLASSRE.exec(s))){
+      const kw = m[1].replace(/\s+/g,' ');
+      const n = declare('class', unq(m[2]));
+      n.abstract = kw.startsWith('abstract');
+      n.stereo = kw==='interface' ? 'interface' : kw==='enum' ? 'enumeration' : (m[3] || '');
+      if (m[4]){ n.body = []; if (!m[5]) cur = n; }
+      return;
+    }
+    if (type==='usecase'){
+      if ((m = new RegExp(`^actor\\s+(${NAMEP})(?:\\s+as\\s+([\\p{L}\\w$]+))?(?:\\s*<<[^>]*>>)?$`, 'u').exec(s))){ declare('actor', unq(m[1]).replace(/^:(.*):$/, '$1'), m[2]); return; }
+      if ((m = /^:([^:]+):(?:\s+as\s+([\p{L}\w$]+))?$/u.exec(s))){ declare('actor', m[1].trim(), m[2]); return; }
+      if ((m = new RegExp(`^usecase\\s+(${NAMEP})(?:\\s+as\\s+([\\p{L}\\w$]+))?$`, 'u').exec(s))){ declare('usecase', unq(m[1]).replace(/^\((.*)\)$/, '$1'), m[2]); return; }
+      if ((m = /^\(([^)]+)\)(?:\s+as\s+([\p{L}\w$]+))?$/u.exec(s))){ declare('usecase', m[1].trim(), m[2]); return; }
+      if ((m = new RegExp(`^(?:rectangle|package)\\s+(${NAMEP})(?:\\s+as\\s+[\\p{L}\\w$]+)?\\s*\\{$`, 'u').exec(s))){
+        const sy = {t:'system', name:unq(m[1]), sys:null}; P.nodes.push(sy); systems.push(sy); return;
+      }
+    }
+    if ((m = RELRE.exec(s))){
+      const norm = m[3].replace(/(up|down|left|right|u|d|l|r)/, '').replace(/-+/g, '--').replace(/\.+/g, '..');
+      const map = ARROWS[norm];
+      if (!map){ err(ln, `flèche inconnue « ${m[3]} »`); return; }
+      let a = ref(m[1]), b = ref(m[5]), ma = m[2] || '', mb = m[4] || '', label = (m[6] || '').trim(), [t, rev] = map;
+      if (!a || !b){ err(ln, `« ${unq(!a ? m[1] : m[5])} » n'est pas déclaré`); return; }
+      if (rev){ [a, b] = [b, a]; [ma, mb] = [mb, ma]; }
+      if (type==='usecase'){
+        if (t==='dep'){
+          if (/include/i.test(label)) t = 'incl'; else if (/extend/i.test(label)) t = 'ext';
+          else { err(ln, 'une flèche pointillée attend : <<include>> ou : <<extend>>'); return; }
+          label = '';
+        } else if (t==='nav') t = 'assoc';
+        else if (t!=='assoc' && t!=='inh'){ err(ln, `flèche « ${m[3]} » hors du diagramme de cas`); return; }
+      }
+      P.rels.push({a, b, type:t, ma, mb, name:label});
+      return;
+    }
+    err(ln, `je ne comprends pas « ${s} »`);
+  });
+  if (cur) err(text.split('\n').length, `la classe « ${cur.name} » n'est pas fermée`);
+  if (systems.length) err(text.split('\n').length, `le système « ${systems[systems.length-1].name} » n'est pas fermé`);
+  return P;
+}
+/* A parsed diagram replaces the current one; a node keeps its place when
+   its kind and name match, a relation its elbows when its ends and type do. */
+function applyParsed(P){
+  const old = new Map(S.nodes.map(n => [n.t+'|'+n.name, n])), map = new Map(), fresh = [];
+  S.nodes = P.nodes.map(p => {
+    const o = old.get(p.t+'|'+p.name);
+    const n = o ? {...o} : {id:'k'+S.seq++, t:p.t, name:p.name, x:0, y:0, w:280, h:240, stereo:'', abstract:false, body:[], accept:false, initial:false};
+    if (o) old.delete(p.t+'|'+p.name); else fresh.push(p);
+    for (const f of ['stereo','abstract','body','accept','initial']) if (p[f]!==undefined) n[f] = p[f];
+    map.set(p, n); return n;
+  });
+  const oldRel = new Map(S.rels.map(r => [r.a+'|'+r.b+'|'+r.type, r]));
+  S.rels = P.rels.map(p => {
+    const a = map.get(p.a).id, b = map.get(p.b).id, k = a+'|'+b+'|'+p.type, o = oldRel.get(k);
+    oldRel.delete(k);
+    return {id:o ? o.id : 'r'+S.seq++, type:p.type, a, b, via:o ? o.via : [], name:p.name, ma:p.ma, mb:p.mb};
+  });
+  placeFresh(fresh, map);
+  sel = new Set([...sel].filter(id => findById(id)));
+}
+function placeFresh(fresh, map){
+  if (!fresh.length) return;
+  const freshN = new Set(fresh.map(p => map.get(p)));
+  if (DIAGRAMS[type].place) return placeFlow(fresh.map(p => map.get(p)), freshN, DIAGRAMS[type].place==='right');
+  const placed = S.nodes.filter(n => !freshN.has(n)).map(rectOf);
+  const x0 = placed.length ? Math.min(...placed.map(r => r.x0)) : 40;
+  let x = x0, y = placed.length ? Math.max(...placed.map(r => r.y1)) + 60 : 40, rowH = 0;
+  const inSys = new Map();
+  for (const p of fresh){
+    const n = map.get(p);
+    if (p.sys){ const s = map.get(p.sys); if (!inSys.has(s)) inSys.set(s, []); inSys.get(s).push(n); continue; }
+    const {w,h} = sizeOf(n);
+    n.x = x; n.y = y; x += w+40; rowH = Math.max(rowH, h);
+    if (x > x0+880){ x = x0; y += rowH+60; rowH = 0; }
+  }
+  /* new members of a system stack below its current content, and it grows */
+  for (const [s, ns] of inSys){
+    const R = rectOf(s);
+    const members = S.nodes.filter(n => n.t!=='system' && !freshN.has(n) && holds(R, rectOf(n)));
+    /* 40 apart, never 20: two boxes one cell apart leave no free row for a line to leave by */
+    let yy = members.length ? Math.max(...members.map(n => rectOf(n).y1)) + 40 : s.y+40, maxX = R.x1, maxY = R.y1;
+    for (const n of ns){
+      const {w,h} = sizeOf(n);
+      n.x = s.x+40; n.y = yy; yy += h+40;
+      maxX = Math.max(maxX, n.x+w+40); maxY = Math.max(maxY, n.y+h+40);
+    }
+    s.w = Math.ceil((maxX-s.x)/G)*G; s.h = Math.ceil((maxY-s.y)/G)*G;
+  }
+}
+
+/* Mermaid, out and in: the flowchart is a graph, and Mermaid says graphs */
+const SHAPE = {terminal:['([', '])'], action:['[', ']'], decision:['{', '}']};
+function mermaid(){
+  const id = new Map(S.nodes.filter(n => FLOWN.has(n.t)).map((n,i) => [n.id, 'n'+(i+1)]));
+  let o = 'flowchart TD\n';
+  for (const n of S.nodes) if (id.has(n.id)){
+    const [a, b] = SHAPE[n.t];
+    o += `  ${id.get(n.id)}${a}"${n.name.replace(/"/g, '#quot;')}"${b}\n`;
+  }
+  for (const r of S.rels) if (id.has(r.a) && id.has(r.b))
+    o += `  ${id.get(r.a)} -->${r.name ? `|${r.name.replace(/\|/g, '/')}|` : ''} ${id.get(r.b)}\n`;
+  return o;
+}
+function parseMermaid(text){
+  const P = {nodes:[], rels:[], errors:[]}, ids = new Map();
+  const SHAPES = [[/^\(\[(.*)\]\)$/s, 'terminal'], [/^\(\((.*)\)\)$/s, 'terminal'], [/^\{(.*)\}$/s, 'decision'],
+                  [/^\[(.*)\]$/s, 'action'], [/^\((.*)\)$/s, 'action']];
+  const label = s => s.trim().replace(/^"(.*)"$/, '$1').replace(/#quot;/g, '"').trim();
+  const node = (id, shape) => {
+    let n = ids.get(id);
+    if (!n){ n = {t:'action', name:id}; ids.set(id, n); P.nodes.push(n); }
+    if (shape) for (const [re, t] of SHAPES){ const m = re.exec(shape); if (m){ n.t = t; n.name = label(m[1]); break; } }
+    return n;
+  };
+  const NODE = /\s*([\p{L}_][\p{L}\w]*)\s*(\(\[.*?\]\)|\(\(.*?\)\)|\{.*?\}|\[.*?\]|\(.*?\))?/uy;
+  const EDGE = /\s*(?:--\s*([^\s>|-][^>|]*?)\s*-->|-->|---|-\.->|==>)\s*(?:\|([^|]*)\|)?/y;
+  text.split('\n').forEach((raw, i) => {
+    const s = raw.trim().replace(/;$/, ''), ln = i+1;
+    if (!s || s.startsWith('%%') || /^(flowchart|graph)\b/i.test(s)) return;
+    NODE.lastIndex = 0;
+    let m = NODE.exec(s);
+    if (!m){ P.errors.push({ln, msg:`je ne comprends pas « ${s} »`}); return; }
+    let prev = node(m[1], m[2]), pos = NODE.lastIndex;
+    while (s.slice(pos).trim()){
+      EDGE.lastIndex = pos;
+      const e = EDGE.exec(s);
+      if (!e){ P.errors.push({ln, msg:`je ne comprends pas « ${s.slice(pos).trim()} »`}); return; }
+      NODE.lastIndex = EDGE.lastIndex;
+      const n2 = NODE.exec(s);
+      if (!n2){ P.errors.push({ln, msg:'une flèche attend un élément après elle'}); return; }
+      const next = node(n2[1], n2[2]);
+      P.rels.push({a:prev, b:next, type:'flow', ma:'', mb:'', name:label(e[1] || e[2] || '')});
+      prev = next; pos = NODE.lastIndex;
+    }
+  });
+  return P;
+}
+
+/* Mermaid state diagram: [*] is the initial state on the left of an
+   arrow, the final one on its right */
+const sid = n => ident(n.name) ? n.name : null;
+function mermaidState(){
+  const id = new Map(); let k = 0;
+  const states = S.nodes.filter(n => n.t==='state');
+  for (const n of states) id.set(n.id, sid(n) || 's'+(++k));
+  const linked = new Set(S.rels.flatMap(r => [r.a, r.b]));
+  let o = 'stateDiagram-v2\n';
+  for (const n of states){
+    if (id.get(n.id)!==n.name) o += `  state "${n.name.replace(/"/g, "'")}" as ${id.get(n.id)}\n`;
+    else if (!n.body.length && !linked.has(n.id)) o += `  ${n.name}\n`;
+    for (const l of n.body) o += `  ${id.get(n.id)} : ${l}\n`;
+  }
+  const byId = new Map(S.nodes.map(n => [n.id, n]));
+  const end = (x, left) => x.t==='initial' ? (left ? '[*]' : null) : x.t==='final' ? (left ? null : '[*]') : id.get(x.id);
+  for (const r of S.rels){
+    const a = byId.get(r.a), b = byId.get(r.b); if (!a || !b) continue;
+    const f = end(a, true), t = end(b, false); if (!f || !t) continue;
+    o += `  ${f} --> ${t}${r.name ? ' : '+r.name : ''}\n`;
+  }
+  return o;
+}
+function parseState(text){
+  const P = {nodes:[], rels:[], errors:[]}, keys = new Map(); let ini = null, fin = null;
+  const decl = (name, alias) => {
+    let n = keys.get(alias || name) || keys.get(name);
+    if (!n){ n = {t:'state', name, body:[]}; P.nodes.push(n); }
+    keys.set(name, n); if (alias) keys.set(alias, n);
+    return n;
+  };
+  const ref = (tok, left) => {
+    if (tok!=='[*]') return keys.get(tok) || decl(tok);
+    if (left){ if (!ini){ ini = {t:'initial', name:'', body:[]}; P.nodes.push(ini); } return ini; }
+    if (!fin){ fin = {t:'final', name:'', body:[]}; P.nodes.push(fin); } return fin;
+  };
+  const ID = String.raw`[\p{L}_][\p{L}\w]*`;
+  text.split('\n').forEach((raw, i) => {
+    const s = raw.trim(), ln = i+1; let m;
+    if (!s || s.startsWith('%%') || /^stateDiagram/.test(s) || /^direction\b/.test(s)) return;
+    if ((m = new RegExp(`^state\\s+"([^"]+)"\\s+as\\s+(${ID})$`, 'u').exec(s))){ decl(m[1], m[2]); return; }
+    if (/^state\b.*\{$/.test(s)){ P.errors.push({ln, msg:'les états composites ne sont pas pris en charge'}); return; }
+    if ((m = new RegExp(`^state\\s+(${ID})$`, 'u').exec(s))){ decl(m[1]); return; }
+    if ((m = new RegExp(`^(\\[\\*\\]|${ID})\\s*-->\\s*(\\[\\*\\]|${ID})\\s*(?::\\s*(.*))?$`, 'u').exec(s))){
+      P.rels.push({a:ref(m[1], true), b:ref(m[2], false), type:'strans', ma:'', mb:'', name:(m[3] || '').trim()}); return;
+    }
+    if ((m = new RegExp(`^(${ID})\\s*:\\s*(.*)$`, 'u').exec(s))){ ref(m[1], true).body.push(m[2].trim()); return; }
+    if ((m = new RegExp(`^(${ID})$`, 'u').exec(s))){ decl(m[1]); return; }
+    P.errors.push({ln, msg:`je ne comprends pas « ${s} »`});
+  });
+  return P;
+}
+
+/* Mermaid ER diagram, crow's foot. An attribute is written `nom : type PK`
+   in the editor and `type nom PK` in Mermaid. */
+const LEFT = {'1':'||', '0..1':'|o', '1..*':'}|', '0..*':'}o'}, RIGHT = {'1':'||', '0..1':'o|', '1..*':'|{', '0..*':'o{'};
+const FROM_LEFT = {'||':'1', '|o':'0..1', 'o|':'0..1', '}|':'1..*', '}o':'0..*'};
+const FROM_RIGHT = {'||':'1', 'o|':'0..1', '|o':'0..1', '|{':'1..*', 'o{':'0..*'};
+const erName = s => s.trim().replace(/\s+/g, '_');
+function mermaidER(){
+  const byId = new Map(S.nodes.map(n => [n.id, n]));
+  let o = 'erDiagram\n';
+  for (const n of S.nodes){
+    o += `  ${erName(n.name)} {\n`;
+    for (const l of n.body){
+      if (isSep(l)) continue;
+      const m = /^\s*([^:\s]+)\s*(?::\s*([^\s]+))?\s*(.*)$/.exec(l), keys = (m[3].match(/\b(PK|FK|UK)\b/g) || []).join(', ');
+      o += `    ${m[2] || 'string'} ${m[1]}${keys ? ' '+keys : ''}\n`;
+    }
+    o += '  }\n';
+  }
+  for (const r of S.rels){
+    const a = byId.get(r.a), b = byId.get(r.b); if (!a || !b) continue;
+    o += `  ${erName(a.name)} ${LEFT[r.ma] || '||'}--${RIGHT[r.mb] || 'o{'} ${erName(b.name)} : "${(r.name || '').replace(/"/g, "'")}"\n`;
+  }
+  return o;
+}
+function parseER(text){
+  const P = {nodes:[], rels:[], errors:[]}, keys = new Map(); let cur = null;
+  const decl = raw => {
+    const name = raw.replace(/_/g, ' ');
+    let n = keys.get(name);
+    if (!n){ n = {t:'entity', name, body:[]}; keys.set(name, n); P.nodes.push(n); }
+    return n;
+  };
+  const NAME = String.raw`[\p{L}\w-]+`;
+  const REL_ER = new RegExp(`^(${NAME})\\s+(\\|\\||\\|o|o\\||\\}o|\\}\\|)(--|\\.\\.)(\\|\\||o\\||\\|o|o\\{|\\|\\{)\\s+(${NAME})\\s*(?::\\s*(.*))?$`, 'u');
+  text.split('\n').forEach((raw, i) => {
+    const s = raw.trim(), ln = i+1; let m;
+    if (cur){
+      if (s==='}'){ cur = null; return; }
+      if (!s) return;
+      if ((m = /^(\S+)\s+(\S+)((?:\s*,?\s*(?:PK|FK|UK))*)\s*(?:"[^"]*")?$/.exec(s))){
+        const keys = m[3].replace(/,/g, ' ').trim().split(/\s+/).filter(Boolean).join(' ');
+        cur.body.push(`${m[2]} : ${m[1]}${keys ? ' '+keys : ''}`);
+      } else P.errors.push({ln, msg:`attribut attendu : type nom, pas « ${s} »`});
+      return;
+    }
+    if (!s || s.startsWith('%%') || /^erDiagram\b/.test(s) || /^direction\b/.test(s)) return;
+    if ((m = new RegExp(`^(${NAME})\\s*\\{\\s*(\\})?$`, 'u').exec(s))){ const n = decl(m[1]); n.body = []; if (!m[2]) cur = n; return; }
+    if ((m = REL_ER.exec(s))){
+      P.rels.push({a:decl(m[1]), b:decl(m[5]), type:'erel', ma:FROM_LEFT[m[2]], mb:FROM_RIGHT[m[4]], name:unq(m[6] || '')});
+      return;
+    }
+    if ((m = new RegExp(`^(${NAME})$`, 'u').exec(s))){ decl(m[1]); return; }
+    P.errors.push({ln, msg:`je ne comprends pas « ${s} »`});
+  });
+  if (cur) P.errors.push({ln:text.split('\n').length, msg:`l'entité « ${cur.name} » n'est pas fermée`});
+  return P;
+}
+
+/* Graphviz DOT, for the automaton and the graph. The initial state is the
+   target of an edge from a point-shaped node, the usual convention. */
+function dotOut(){
+  const aut = type==='automaton', q2 = n => ident(n.name) ? n.name : `"${n.name.replace(/"/g, "'")}"`;
+  const byId = new Map(S.nodes.map(n => [n.id, n]));
+  const directed = aut || S.rels.some(r => r.type==='arc'), op = directed ? '->' : '--';
+  let o = (directed ? 'digraph' : 'graph') + ' {\n';
+  if (aut) o += '  rankdir=LR\n  node [shape=circle]\n';
+  for (const n of S.nodes) o += `  ${q2(n)}${aut && n.accept ? ' [shape=doublecircle]' : ''}\n`;
+  const starts = S.nodes.filter(n => aut && n.initial);
+  if (starts.length) o += '  __start [shape=point]\n' + starts.map(n => `  __start -> ${q2(n)}\n`).join('');
+  for (const r of S.rels){
+    const a = byId.get(r.a), b = byId.get(r.b); if (!a || !b) continue;
+    const at = [];
+    if (r.name) at.push(`label="${r.name.replace(/"/g, "'")}"`);
+    if (directed && r.type==='edge') at.push('dir=none');
+    o += `  ${q2(a)} ${op} ${q2(b)}${at.length ? ` [${at.join(', ')}]` : ''}\n`;
+  }
+  return o + '}\n';
+}
+function dotIn(text){
+  const P = {nodes:[], rels:[], errors:[]}, keys = new Map(), aut = type==='automaton', pseudo = new Set();
+  const decl = name => {
+    let n = keys.get(name);
+    if (!n){ n = {t:aut ? 'astate' : 'vertex', name, accept:false, initial:false}; keys.set(name, n); P.nodes.push(n); }
+    return n;
+  };
+  const attrs = s => {
+    const out = {};
+    for (const m of (s || '').matchAll(/(\w+)\s*=\s*("[^"]*"|[^,;\s\]]+)/g)) out[m[1].toLowerCase()] = unq(m[2]);
+    return out;
+  };
+  const ID = String.raw`"[^"]*"|[\p{L}\w.]+`;
+  const EDGE_RE = new RegExp(`^(${ID})((?:\\s*(?:->|--)\\s*(?:${ID}))+)\\s*(?:\\[(.*)\\])?$`, 'u');
+  const NODE_RE = new RegExp(`^(${ID})\\s*(?:\\[(.*)\\])?$`, 'u');
+  const stmts = [];
+  text.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').forEach((raw, i) => {
+    for (const part of raw.replace(/(^|\s)(\/\/|#).*$/, '').split(/;(?=(?:[^"]*"[^"]*")*[^"]*$)/)){
+      const s = part.trim();
+      if (s && s!=='{' && s!=='}' && !/^(strict\s+)?(di)?graph\b/i.test(s) && !/^\w+\s*=/.test(s)) stmts.push({s, ln:i+1});
+    }
+  });
+  /* nodes first, so a point-shaped start is known before its edge */
+  let def = '';
+  const edges = [];
+  for (const {s, ln} of stmts){
+    let m;
+    if ((m = /^(node|edge|graph)\s*\[(.*)\]$/i.exec(s))){ if (m[1].toLowerCase()==='node') def = attrs(m[2]).shape || def; continue; }
+    if (EDGE_RE.test(s)){ edges.push({s, ln}); continue; }
+    if ((m = NODE_RE.exec(s))){
+      const name = unq(m[1]), shape = attrs(m[2]).shape || def;
+      if (aut && /^(point|none|plaintext)$/.test(shape)){ pseudo.add(name); continue; }
+      const n = decl(name); if (aut) n.accept = shape==='doublecircle';
+      continue;
+    }
+    P.errors.push({ln, msg:`je ne comprends pas « ${s} »`});
+  }
+  for (const {s, ln} of edges){
+    const m = EDGE_RE.exec(s), at = attrs(m[3]);
+    let prev = unq(m[1]);
+    for (const e of m[2].matchAll(new RegExp(`\\s*(->|--)\\s*(${ID})`, 'gu'))){
+      const next = unq(e[2]);
+      if (pseudo.has(prev)) decl(next).initial = true;
+      else {
+        const t = aut ? 'trans' : (e[1]==='--' || at.dir==='none') ? 'edge' : 'arc';
+        if (aut && e[1]==='--'){ P.errors.push({ln, msg:'un automate est orienté : -> attendu'}); return P; }
+        P.rels.push({a:decl(prev), b:decl(next), type:t, ma:'', mb:'', name:at.label || at.weight || ''});
+      }
+      prev = next;
+    }
+  }
+  return P;
+}
+const CODECS = {class:[plantuml, parse], usecase:[plantuml, parse], flow:[mermaid, parseMermaid],
+  state:[mermaidState, parseState], er:[mermaidER, parseER], automaton:[dotOut, dotIn], graph:[dotOut, dotIn]};
+
+/* A new flowchart node goes 40 below the node that flows into it, or
+   below everything, and steps right until it overlaps nothing. */
+function placeFlow(ns, freshN, right){
+  const byId = new Map(S.nodes.map(n => [n.id, n]));
+  const taken = S.nodes.filter(n => !freshN.has(n)).map(rectOf);
+  const free = r => taken.every(q => r.x1+20 <= q.x0 || r.x0 >= q.x1+20 || r.y1+20 <= q.y0 || r.y0 >= q.y1+20);
+  for (const n of ns){
+    const {w,h} = sizeOf(n);
+    const src = S.rels.map(r => r.b===n.id && byId.get(r.a)).find(a => a && !freshN.has(a));
+    let cx = 400, y = 40;
+    if (src){ const R = rectOf(src); cx = right ? R.x1+80+w/2 : (R.x0+R.x1)/2; y = right ? snap((R.y0+R.y1-h)/2) : R.y1+40; }
+    else if (taken.length){ cx = (Math.min(...taken.map(r => r.x0)) + Math.max(...taken.map(r => r.x1)))/2; y = Math.max(...taken.map(r => r.y1))+40; }
+    let x = snap(cx-w/2);
+    for (let k = 0; k < 40 && !free({x0:x, y0:y, x1:x+w, y1:y+h}); k++) right ? (y += 80) : (x += 160);
+    n.x = x; n.y = y; taken.push(rectOf(n)); freshN.delete(n);
+  }
+}
+
+/* The code pane */
+const codeview = $('#codeview'), code = $('#code'), cerr = $('#cerr');
+let codeDirty = false;
+function refreshCode(){
+  code.value = CODECS[type] ? CODECS[type][0]() : ''; code.classList.remove('bad');
+  cerr.className = 'cerr'; cerr.textContent = 'Les modifications s\'appliquent au diagramme au fil de la frappe.';
+}
+function setPane(p){
+  pane = p; codeview.hidden = p!=='code'; $('#cv').style.visibility = p==='code' ? 'hidden' : '';
+  if (p==='code'){ draft = null; mode = 'select'; refreshCode(); }
+  render();
+}
+code.addEventListener('focus', () => { codeDirty = false; });
+code.addEventListener('input', () => {
+  const P = CODECS[type][1](code.value);
+  if (P.errors.length){
+    const e = P.errors[0];
+    code.classList.add('bad'); cerr.className = 'cerr bad'; cerr.textContent = `Ligne ${e.ln} : ${e.msg}`;
+    return;
+  }
+  code.classList.remove('bad'); cerr.className = 'cerr'; cerr.textContent = 'Appliqué au diagramme.';
+  if (!codeDirty){ pushUndo(); codeDirty = true; }
+  applyParsed(P); save(); render();
+});
+code.addEventListener('keydown', e => {
+  if (e.key==='Tab'){ e.preventDefault(); code.setRangeText('  ', code.selectionStart, code.selectionEnd, 'end'); code.dispatchEvent(new Event('input')); }
+});
+
+/* History and persistence */
+function pushUndo(){ const u = undoS(); u.push(JSON.stringify(S)); if (u.length>200) u.shift(); hist[type].r = []; }
+function restore(json){ S = docs[type] = JSON.parse(json); sel.clear(); draft = null; save(); if (pane==='code') refreshCode(); render(); }
+function undo(){ const u = undoS(); if (!u.length) return; redoS().push(JSON.stringify(S)); restore(u.pop()); }
+function redo(){ const r = redoS(); if (!r.length) return; undoS().push(JSON.stringify(S)); restore(r.pop()); }
+function save(){ try { localStorage.setItem(STORE, JSON.stringify({docs, type, view})); } catch (_) {} }
+function load(){
+  try {
+    const d = JSON.parse(localStorage.getItem(STORE) || 'null');
+    if (d && d.docs && d.docs.class && d.docs.usecase){
+      docs = d.docs; type = DIAGRAMS[d.type] ? d.type : 'class'; if (d.view) view = d.view;
+      for (const t in DIAGRAMS) if (!docs[t]){ const cur = type; type = t; S = docs[t] = blank(); DEMOS[t](); type = cur; }
+      S = docs[type]; return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+/* Operations */
+function nextName(t){
+  if (t==='terminal') return S.nodes.some(n => n.t==='terminal' && n.name==='Début') ? 'Fin' : 'Début';
+  if (NAMELESS.has(t)) return '';
+  const names = new Set(S.nodes.map(n => n.name));
+  if (t==='astate'){ let i = 0; while (names.has('q'+i)) i++; return 'q'+i; }
+  if (t==='vertex'){
+    const l = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].find(c => !names.has(c));
+    if (l) return l;
+  }
+  const p = PREFIX[t], re = new RegExp('^'+p+'(\\d+)$'); let n = 0;
+  for (const x of S.nodes){ const m = re.exec(x.name); if (m) n = Math.max(n, +m[1]); }
+  return p+(n+1);
+}
+/* A new class has two empty compartments, the usual shape */
+function ghostNode(tool){
+  const {t, accept} = TOOLKIND[tool] || {t:tool};
+  const [w, h] = SHAPE_SIZE[t] || [280, 240];
+  return {id:'ghost', t, x:0, y:0, name:SHAPES.has(t) ? '' : nextName(t), stereo:'', abstract:false, w, h,
+    body:t==='class' ? ['---'] : t==='entity' ? ['id : int PK'] : [],
+    accept:!!accept, initial:t==='astate' && !S.nodes.some(n => n.initial)};
+}
+function newNode(t, cx, cy){
+  const n = ghostNode(t), {w,h} = sizeOf(n);
+  n.id = 'k'+S.seq++; n.x = snap(cx-w/2); n.y = snap(cy-h/2);
+  return n;
+}
+function enterPlace(t){ mode = 'place'; placeT = t; draft = null; hover = null; render(); }
+function enterLink(k){ relType = k; mode = 'link'; placeT = null; render(); }
+function setMode(m){ mode = m; if (m!=='place') placeT = null; if (m!=='link') draft = null; hover = null; render(); }
+function placeAt(t, cx, cy){
+  pushUndo(); const n = newNode(t, cx, cy);
+  t==='system' ? S.nodes.unshift(n) : S.nodes.push(n);
+  sel = new Set([n.id]); save(); render();
+}
+function linkedRels(ids){ return S.rels.filter(r => sel.has(r.id) || (ids.has(r.a) && ids.has(r.b))); }
+function del(){
+  if (!sel.size) return; pushUndo();
+  S.nodes = S.nodes.filter(n => !sel.has(n.id));
+  S.rels = S.rels.filter(r => !sel.has(r.id) && !sel.has(r.a) && !sel.has(r.b));
+  sel.clear(); save(); render();
+}
+function duplicate(){
+  const ns = S.nodes.filter(n => sel.has(n.id)); if (!ns.length) return; pushUndo();
+  const map = new Map(), nsel = new Set(), off = 40;
+  for (const n of ns){
+    const c = JSON.parse(JSON.stringify(n)); c.id = 'k'+S.seq++; c.x += off; c.y += off;
+    S.nodes.push(c); map.set(n.id, c.id); nsel.add(c.id);
+  }
+  for (const r of S.rels.filter(r => map.has(r.a) && map.has(r.b))){
+    const c = {...r, id:'r'+S.seq++, a:map.get(r.a), b:map.get(r.b), via:r.via.map(v => ({x:v.x+off, y:v.y+off}))};
+    S.rels.push(c); nsel.add(c.id);
+  }
+  sel = nsel; save(); render();
+}
+function swapSel(){
+  const rs = S.rels.filter(r => sel.has(r.id)); if (!rs.length) return; pushUndo();
+  for (const r of rs){ [r.a, r.b] = [r.b, r.a]; [r.ma, r.mb] = [r.mb, r.ma]; r.via.reverse(); }
+  inspId = null; save(); render();
+}
+/* Moving a system carries what it holds */
+function captureMove(d){
+  const ids = new Set(S.nodes.filter(n => sel.has(n.id)).map(n => n.id));
+  for (const s of S.nodes) if (s.t==='system' && ids.has(s.id)){
+    const R = rectOf(s);
+    for (const n of S.nodes) if (n.t!=='system' && holds(R, rectOf(n))) ids.add(n.id);
+  }
+  d.orig = new Map(S.nodes.filter(n => ids.has(n.id)).map(n => [n.id, [n.x, n.y]]));
+  d.vorig = new Map(linkedRels(ids).map(r => [r.id, r.via.map(v => ({...v}))]));
+}
+function applyMove(d){
+  for (const n of S.nodes){ const o = d.orig.get(n.id); if (o){ n.x = o[0]+d.dx; n.y = o[1]+d.dy; } }
+  for (const r of S.rels){ const o = d.vorig.get(r.id); if (o) r.via = o.map(v => ({x:v.x+d.dx, y:v.y+d.dy})); }
+}
+function boxSelect(d){
+  const x0 = Math.min(d.x0,d.x1), x1 = Math.max(d.x0,d.x1), y0 = Math.min(d.y0,d.y1), y1 = Math.max(d.y0,d.y1);
+  sel = new Set(d.base);
+  for (const n of S.nodes){
+    const R = rects.get(n.id); if (!R) continue;
+    const hit = n.t==='system' ? R.x0>=x0 && R.x1<=x1 && R.y0>=y0 && R.y1<=y1 : R.x1>=x0 && R.x0<=x1 && R.y1>=y0 && R.y0<=y1;
+    if (hit) sel.add(n.id);
+  }
+  for (const [id, L] of routes) if (L.pts.every(q => q[0]>=x0 && q[0]<=x1 && q[1]>=y0 && q[1]<=y1)) sel.add(id);
+}
+/* Where a point falls along a polyline, as a distance from its start */
+function arcPos(pts, p){
+  let acc = 0, best = Infinity, at = 0;
+  for (let i = 0; i < pts.length-1; i++){
+    const [ax,ay] = pts[i], [bx,by] = pts[i+1], L = Math.hypot(bx-ax, by-ay);
+    const t = L ? Math.max(0, Math.min(1, ((p.x-ax)*(bx-ax)+(p.y-ay)*(by-ay))/(L*L))) : 0;
+    const dd = Math.hypot(ax+t*(bx-ax)-p.x, ay+t*(by-ay)-p.y);
+    if (dd < best){ best = dd; at = acc+t*L; }
+    acc += L;
+  }
+  return at;
+}
+function insertVia(rid, p){
+  const r = S.rels.find(x => x.id===rid), L = routes.get(rid); if (!r || !L) return;
+  const pos = arcPos(L.pts, p), i = r.via.filter(v => arcPos(L.pts, v) < pos).length;
+  pushUndo(); r.via.splice(i, 0, p); sel = new Set([rid]); save(); render();
+}
+
+/* Relation drawing */
+function startLink(id, back){ draft = {a:id, via:[], back}; if (back) mode = 'link'; }
+function finishLink(b){
+  pushUndo();
+  const er = REL[relType].crow;
+  const r = {id:'r'+S.seq++, type:relType, a:draft.a, b, via:draft.via, name:'', ma:er ? '1' : '', mb:er ? '0..*' : ''};
+  S.rels.push(r); sel = new Set([r.id]);
+  const back = draft.back; draft = null; if (back) mode = back;
+  save(); render();
+}
+function cancelDraft(){ const back = draft && draft.back; draft = null; if (back) mode = back; }
+function linkClick(hit, w){
+  const pt = {x:snap(w.x), y:snap(w.y)};
+  if (!draft){ if (hit){ startLink(hit.id, null); drag = {kind:'link', cx:w.x, cy:w.y, moved:false}; } render(); return; }
+  if (hit){ if (hit.id===draft.a && !draft.via.length) return; finishLink(hit.id); return; }
+  const lv = draft.via[draft.via.length-1];
+  if (!lv || lv.x!==pt.x || lv.y!==pt.y) draft.via.push(pt);
+  render();
+}
+function cancelStep(){
+  if (draft){ if (draft.via.length) draft.via.pop(); else cancelDraft(); }
+  else if (mode!=='select') setMode('select');
+  render();
+}
+
+/* Pointer */
+function toWorld(e){
+  const r = svg.getBoundingClientRect();
+  return {x:(e.clientX-r.left-view.x)/view.k, y:(e.clientY-r.top-view.y)/view.k,
+          inside:e.clientX>=r.left && e.clientX<=r.right && e.clientY>=r.top && e.clientY<=r.bottom};
+}
+/* after the mousedown that follows this pointerdown, or it takes the focus back */
+function focusLater(el, line){
+  setTimeout(() => {
+    el.focus();
+    if (el.tagName==='INPUT') el.select();
+    else if (line!==undefined){
+      const at = el.value.split('\n').slice(0, line+1).join('\n').length;
+      el.setSelectionRange(at, at);
+    }
+  }, 0);
+}
+function doubleClick(t, w){
+  const re = t.closest('[data-rel]');
+  if (re && !t.closest('[data-via]')){ insertVia(re.dataset.rel, {x:snap(w.x), y:snap(w.y)}); return; }
+  const hit = nodeAt(w.x, w.y);
+  if (hit){
+    const n = S.nodes.find(x => x.id===hit.id), ly = w.y-n.y;
+    sel = new Set([n.id]); inspId = null; render();
+    if (NAMELESS.has(n.t)) return;
+    if (!BODIED.has(n.t)){ focusLater(nName); return; }
+    if (ly < HEAD){ focusLater(cName); return; }
+    if (n.t==='state'){ focusLater(cBody, Math.max(0, Math.min(n.body.length-1, Math.floor((ly-HEAD-PAD/2)/ROW)))); return; }
+    /* the body line under the pointer: walk the compartments, counting the `---` between them */
+    let y = HEAD, start = 0, line = Math.max(0, n.body.length-1);
+    for (const k of compartments(n)){
+      const end = y + k.length*ROW + PAD;
+      if (ly < end){ line = start + Math.max(0, Math.min(k.length-1, Math.floor((ly-y-PAD/2)/ROW))); break; }
+      y = end; start += k.length + 1;
+    }
+    focusLater(cBody, line);
+    return;
+  }
+  if (t.closest('[data-via]')) return;
+  const kind = DIAGRAMS[type].dbl;
+  if (!kind) return;
+  placeAt(kind, w.x, w.y);
+  focusLater(BODIED.has(kind) ? cName : nName);
+}
+svg.addEventListener('contextmenu', e => e.preventDefault());
+svg.addEventListener('pointerdown', e => {
+  const w = toWorld(e); lastW = w; cursor = {x:snap(w.x), y:snap(w.y)};
+  if (document.activeElement && document.activeElement!==document.body) document.activeElement.blur();
+  try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+  if (e.button===1 || e.button===2){
+    e.preventDefault();
+    drag = {kind:'pan', cx:e.clientX, cy:e.clientY, vx:view.x, vy:view.y, moved:false, btn:e.button}; return;
+  }
+  if (e.button!==0) return;
+  const t = e.target, now = performance.now();
+  const dbl = lastDown && now-lastDown.t < 380 && Math.hypot(e.clientX-lastDown.x, e.clientY-lastDown.y) < 6;
+  lastDown = dbl ? null : {t:now, x:e.clientX, y:e.clientY};
+  if (mode==='place' && INK.has(placeT)){
+    const p = placeT==='line' ? [cursor.x, cursor.y] : [w.x, w.y];
+    drag = {kind:'ink', t:placeT, pts:[p, p]}; return;
+  }
+  if (mode==='place'){ placeAt(placeT, w.x, w.y); return; }
+
+  const rz = t.closest('[data-resize]');
+  if (rz){ drag = {kind:'resize', id:rz.dataset.resize, snapS:JSON.stringify(S), moved:false}; return; }
+  const via = t.closest('[data-via]');
+  if (via && mode==='select'){
+    const rid = via.dataset.rel, i = +via.dataset.via;
+    if (lastVia && lastVia.rid===rid && lastVia.i===i && now-lastVia.t<380){
+      pushUndo(); S.rels.find(x => x.id===rid).via.splice(i,1); lastVia = null; save(); render(); return;
+    }
+    lastVia = {rid, i, t:now};
+    drag = {kind:'via', rid, i, snapS:JSON.stringify(S), moved:false}; return;
+  }
+  if (dbl && mode==='select' && !e.shiftKey){ doubleClick(t, w); return; }
+
+  if (mode==='link'){ linkClick(nodeAt(w.x, w.y, false), w); return; }
+  const hit = nodeAt(w.x, w.y), re = t.closest('[data-rel]');
+  if (hit && hit.edge && !re && !e.shiftKey && DIAGRAMS[type].rels.length){
+    startLink(hit.id, 'select'); drag = {kind:'link', cx:w.x, cy:w.y, moved:false}; render(); return;
+  }
+  const id = re ? re.dataset.rel : hit ? hit.id : null;
+  if (id){
+    const was = sel.has(id);
+    if (e.shiftKey){ was ? sel.delete(id) : sel.add(id); }
+    else if (!was){ sel = new Set([id]); }
+    if (sel.has(id)){
+      drag = {kind:'move', sx:w.x, sy:w.y, dx:0, dy:0, moved:false, snapS:JSON.stringify(S), collapse:(!e.shiftKey && was) ? id : null};
+      captureMove(drag);
+    }
+    render(); return;
+  }
+  drag = {kind:'box', x0:w.x, y0:w.y, x1:w.x, y1:w.y, base:e.shiftKey ? new Set(sel) : new Set()};
+  if (!e.shiftKey) sel.clear();
+  render();
+});
+window.addEventListener('pointermove', e => {
+  const w = toWorld(e); lastW = w; cursorIn = w.inside; cursor = {x:snap(w.x), y:snap(w.y)};
+  if (palDrag && Math.hypot(e.clientX-palDrag.x, e.clientY-palDrag.y) > 5) palDrag.moved = true;
+  if (mode==='place' && placeT){
+    const {w:gw, h:gh} = sizeOf(ghostNode(placeT));
+    ghost.x = snap(w.x-gw/2); ghost.y = snap(w.y-gh/2); ghost.show = w.inside;
+  }
+  if (!drag || drag.kind==='link'){
+    const linking = mode==='link' || (drag && drag.kind==='link');
+    hover = w.inside && mode!=='place' ? nodeAt(w.x, w.y, !linking) : null;
+  }
+  if (drag){
+    if (drag.kind==='pan'){
+      const dx = e.clientX-drag.cx, dy = e.clientY-drag.cy;
+      if (Math.abs(dx)+Math.abs(dy) > 3) drag.moved = true;
+      view.x = drag.vx+dx; view.y = drag.vy+dy;
+    } else if (drag.kind==='move'){
+      const dx = snap(w.x-drag.sx), dy = snap(w.y-drag.sy);
+      if (dx!==drag.dx || dy!==drag.dy){ drag.dx = dx; drag.dy = dy; drag.moved = true; applyMove(drag); }
+    } else if (drag.kind==='box'){
+      drag.x1 = w.x; drag.y1 = w.y; boxSelect(drag);
+    } else if (drag.kind==='via'){
+      const v = S.rels.find(x => x.id===drag.rid).via[drag.i];
+      if (v.x!==cursor.x || v.y!==cursor.y){ v.x = cursor.x; v.y = cursor.y; drag.moved = true; }
+    } else if (drag.kind==='resize'){
+      const n = S.nodes.find(x => x.id===drag.id);
+      /* a square and a circle keep their aspect */
+      const min = n.t==='system' ? [160, 120] : [G, G];
+      let nw = Math.max(min[0], cursor.x-n.x), nh = Math.max(min[1], cursor.y-n.y);
+      if (n.t==='square' || n.t==='circle') nw = nh = Math.max(nw, nh);
+      if (nw!==n.w || nh!==n.h){ n.w = nw; n.h = nh; drag.moved = true; }
+    } else if (drag.kind==='link'){
+      if (Math.hypot(w.x-drag.cx, w.y-drag.cy) > 8) drag.moved = true;
+    } else if (drag.kind==='ink'){
+      const P = drag.pts;
+      if (drag.t==='line') P[1] = [cursor.x, cursor.y];
+      else if (Math.hypot(w.x-P[P.length-1][0], w.y-P[P.length-1][1]) > 3) P.push([w.x, w.y]);
+    }
+  }
+  requestRender();
+});
+window.addEventListener('pointerup', e => {
+  if (palDrag){
+    const pd = palDrag; palDrag = null;
+    if (pd.moved){
+      const w = toWorld(e);
+      if (w.inside && !INK.has(placeT)) placeAt(placeT, w.x, w.y);
+      setMode('select');
+    } else if (pd.same) setMode('select');
+    render(); return;
+  }
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (d.kind==='pan'){ if (!d.moved && d.btn===2) cancelStep(); save(); }
+  else if (d.kind==='move' || d.kind==='via' || d.kind==='resize'){
+    if (d.moved){ undoS().push(d.snapS); hist[type].r = []; save(); }
+    else if (d.collapse && !e.shiftKey) sel = new Set([d.collapse]);
+  } else if (d.kind==='ink'){
+    const P = d.t==='stroke' ? d.pts.slice(1) : d.pts;
+    if (Math.hypot(P[P.length-1][0]-P[0][0], P[P.length-1][1]-P[0][1]) > 4 || P.length > 3){
+      pushUndo(); const n = inkNode(d.t, P); S.nodes.push(n); save();
+    }
+  } else if (d.kind==='link' && d.moved && draft){
+    /* a drag from a node: released on another one links them, released
+       on the grid drops the drawing; a click-click keeps it going */
+    if (hover && hover.id!==draft.a) finishLink(hover.id);
+    else if (!hover) cancelDraft();
+  }
+  render();
+});
+svg.addEventListener('pointerleave', () => { cursorIn = false; if (mode==='place' && !palDrag) ghost.show = false; requestRender(); });
+svg.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = svg.getBoundingClientRect(), sx = e.clientX-r.left, sy = e.clientY-r.top;
+  const k2 = Math.min(4, Math.max(.25, view.k*Math.exp(-e.deltaY*.0015)));
+  view.x = sx-(sx-view.x)*k2/view.k; view.y = sy-(sy-view.y)*k2/view.k; view.k = k2;
+  requestRender(); save();
+}, {passive:false});
+
+/* Keyboard */
+window.addEventListener('keydown', e => {
+  if (e.target.matches && e.target.matches('input,textarea')) return;
+  const k = e.key, lk = k.toLowerCase(), mod = e.ctrlKey || e.metaKey;
+  if (mod){
+    if (lk==='z'){ e.preventDefault(); e.shiftKey ? redo() : undo(); }
+    else if (lk==='y'){ e.preventDefault(); redo(); }
+    if (pane!=='draw') return;
+    if (lk==='d'){ e.preventDefault(); duplicate(); }
+    else if (lk==='a'){ e.preventDefault(); sel = new Set([...S.nodes, ...S.rels].map(x => x.id)); render(); }
+    return;
+  }
+  if (pane!=='draw') return;
+  if (lk==='i'){ swapSel(); }
+  else if (k==='F2' || k==='Enter'){
+    const n = sel.size===1 && findById([...sel][0]);
+    if (n && isNode(n.id)){ e.preventDefault(); const el = n.t==='class' ? cName : nName; el.focus(); el.select(); }
+  }
+  else if (k==='Delete' || k==='Backspace'){ e.preventDefault(); del(); }
+  else if (k==='Escape'){
+    if (draft) cancelDraft(); else if (mode!=='select') setMode('select'); else sel.clear();
+    render();
+  } else if (/^[1-9]$/.test(k)){
+    const tool = toolList()[+k-1];
+    if (tool && tool.place){ enterPlace(tool.place); ghost.show = cursorIn; render(); }
+    else if (tool) enterLink(tool.rel);
+  }
+});
+window.addEventListener('resize', requestRender);
+
+/* Starting examples */
+const DEMOS = {
+  class(){
+    const add = (x, y, name, o={}) => {
+      const n = {id:'k'+S.seq++, t:'class', x, y, name, stereo:o.stereo||'', abstract:!!o.abstract, body:o.body||[]};
+      S.nodes.push(n); return n.id;
+    };
+    const rel = (type, a, b, o={}) => S.rels.push({id:'r'+S.seq++, type, a, b, via:[], name:o.name||'', ma:o.ma||'', mb:o.mb||''});
+    const forme = add(380, 20, 'Forme', {stereo:'interface', body:['+ aire() : double', '+ perimetre() : double']});
+    const fig = add(320, 220, 'Figure', {abstract:true, body:['# couleur : Couleur', '# origine : Point', '---',
+      '+ deplacer(dx : double, dy : double) : void', '+ aire() : double {abstract}']});
+    const cer = add(180, 460, 'Cercle', {body:['- rayon : double', '---', '+ aire() : double', '+ perimetre() : double']});
+    const rec = add(520, 460, 'Rectangle', {body:['- largeur : double', '- hauteur : double', '---', '+ aire() : double', '+ perimetre() : double']});
+    const col = add(820, 240, 'Couleur', {stereo:'enumeration', body:['ROUGE', 'VERT', 'BLEU']});
+    const des = add(-60, 200, 'Dessin', {body:['- titre : String', '---', '+ ajouter(f : Forme) : void', '+ vide() : Dessin {static}']});
+    rel('impl', fig, forme);
+    rel('inh', cer, fig);
+    rel('inh', rec, fig);
+    rel('nav', fig, col, {mb:'1'});
+    rel('comp', forme, des, {ma:'0..*', mb:'1', name:'contient'});
+  },
+  usecase(){
+    const add = (t, x, y, name, o={}) => {
+      const n = {id:'k'+S.seq++, t, x, y, name, stereo:'', abstract:false, body:[], w:o.w||280, h:o.h||240};
+      S.nodes.push(n); return n.id;
+    };
+    const rel = (type, a, b) => S.rels.push({id:'r'+S.seq++, type, a, b, via:[], name:'', ma:'', mb:''});
+    add('system', 240, 20, 'Boutique en ligne', {w:480, h:440});
+    const client = add('actor', 100, 120, 'Client');
+    const membre = add('actor', 100, 320, 'Membre');
+    const gest = add('actor', 820, 60, 'Gestionnaire');
+    const cat = add('usecase', 280, 60, 'Consulter le catalogue');
+    const cmd = add('usecase', 280, 200, 'Passer une commande');
+    const ident = add('usecase', 520, 320, "S'identifier");
+    const promo = add('usecase', 280, 360, 'Appliquer un code promo');
+    const prod = add('usecase', 520, 60, 'Gérer les produits');
+    rel('assoc', client, cat);
+    rel('assoc', client, cmd);
+    rel('inh', membre, client);
+    rel('assoc', gest, prod);
+    rel('incl', cmd, ident);
+    rel('incl', prod, ident);
+    rel('ext', promo, cmd);
+  },
+  flow(){
+    const add = (t, x, y, name) => { const n = {id:'k'+S.seq++, t, x, y, name, stereo:'', abstract:false, body:[]}; S.nodes.push(n); return n.id; };
+    const rel = (a, b, name='', via=[]) => S.rels.push({id:'r'+S.seq++, type:'flow', a, b, via, name, ma:'', mb:''});
+    const deb = add('terminal', 340, 20, 'Début');
+    const lire = add('action', 340, 100, 'Lire n');
+    const init = add('action', 340, 180, 'f ← 1 ; i ← 1');
+    const test = add('decision', 340, 260, 'i ≤ n ?');
+    const mul = add('action', 340, 400, 'f ← f × i');
+    const inc = add('action', 340, 480, 'i ← i + 1');
+    const aff = add('action', 540, 280, 'Afficher f');
+    const fin = add('terminal', 540, 380, 'Fin');
+    rel(deb, lire); rel(lire, init); rel(init, test);
+    rel(test, mul, 'oui'); rel(mul, inc);
+    rel(inc, test, '', [{x:260, y:500}, {x:260, y:300}]);
+    rel(test, aff, 'non'); rel(aff, fin);
+  },
+  state(){
+    const add = (t, x, y, name='', body=[]) => { const n = {id:'k'+S.seq++, t, x, y, name, stereo:'', abstract:false, body}; S.nodes.push(n); return n.id; };
+    const rel = (a, b, name='') => S.rels.push({id:'r'+S.seq++, type:'strans', a, b, via:[], name, ma:'', mb:''});
+    const ini = add('initial', 60, 120);
+    const fer = add('state', 180, 120, 'Fermée');
+    const ouv = add('state', 480, 0, 'Ouverte', ['entry / allumer la lampe', 'exit / éteindre la lampe']);
+    const ver = add('state', 480, 220, 'Verrouillée');
+    const fin = add('final', 760, 220);
+    rel(ini, fer); rel(fer, ouv, 'ouvrir'); rel(ouv, fer, 'fermer');
+    rel(fer, ver, 'verrouiller [code ok]'); rel(ver, fer, 'déverrouiller [code ok]'); rel(ver, fin, 'mise hors service');
+  },
+  er(){
+    const add = (x, y, name, body) => { const n = {id:'k'+S.seq++, t:'entity', x, y, name, stereo:'', abstract:false, body}; S.nodes.push(n); return n.id; };
+    const rel = (a, b, ma, mb, name) => S.rels.push({id:'r'+S.seq++, type:'erel', a, b, via:[], name, ma, mb});
+    const cli = add(20, 40, 'Client', ['id : int PK', 'nom : string', 'email : string']);
+    const cmd = add(360, 40, 'Commande', ['numero : int PK', 'date : date', 'client_id : int FK']);
+    const lig = add(360, 280, 'LigneCommande', ['commande_id : int PK FK', 'produit_ref : string PK FK', 'quantite : int']);
+    const pro = add(760, 280, 'Produit', ['ref : string PK', 'libelle : string', 'prix : decimal']);
+    rel(cli, cmd, '1', '0..*', 'passe');
+    rel(cmd, lig, '1', '1..*', 'contient');
+    rel(pro, lig, '1', '0..*', 'figure dans');
+  },
+  automaton(){
+    /* the words over {a, b} that end with ab */
+    const add = (x, y, name, o={}) => { const n = {id:'k'+S.seq++, t:'astate', x, y, name, stereo:'', abstract:false, body:[], accept:!!o.accept, initial:!!o.initial}; S.nodes.push(n); return n.id; };
+    const rel = (a, b, name, via=[]) => S.rels.push({id:'r'+S.seq++, type:'trans', a, b, via, name, ma:'', mb:''});
+    const q0 = add(120, 160, 'q0', {initial:true}), q1 = add(320, 160, 'q1'), q2 = add(520, 160, 'q2', {accept:true});
+    rel(q0, q0, 'b'); rel(q0, q1, 'a'); rel(q1, q1, 'a'); rel(q1, q2, 'b'); rel(q2, q1, 'a');
+    rel(q2, q0, 'b', [{x:340, y:300}]);
+  },
+  graph(){
+    const add = (x, y, name) => { const n = {id:'k'+S.seq++, t:'vertex', x, y, name, stereo:'', abstract:false, body:[]}; S.nodes.push(n); return n.id; };
+    const rel = (a, b, name) => S.rels.push({id:'r'+S.seq++, type:'edge', a, b, via:[], name, ma:'', mb:''});
+    const A = add(100, 160, 'A'), B = add(300, 60, 'B'), C = add(300, 280, 'C'), D = add(500, 60, 'D'), E = add(500, 280, 'E'), F = add(700, 160, 'F');
+    rel(A, B, '4'); rel(A, C, '2'); rel(B, C, '1'); rel(B, D, '5'); rel(C, D, '8');
+    rel(C, E, '10'); rel(D, E, '2'); rel(D, F, '6'); rel(E, F, '3');
+  },
+  free(){
+    const shape = (t, x, y, w, h, name='') => S.nodes.push({id:'k'+S.seq++, t, x, y, w, h, name, stereo:'', abstract:false, body:[]});
+    shape('triangle', 200, 80, 200, 100);
+    shape('rect', 220, 180, 160, 140, 'Maison');
+    shape('square', 230, 200, 40, 40);
+    shape('rect', 320, 260, 40, 60);
+    shape('circle', 520, 60, 60, 60);
+    S.nodes.push(inkNode('line', [[100, 320], [640, 320]]));
+    S.nodes.push(inkNode('stroke', [[350, 110], [358, 96], [352, 82], [362, 68], [356, 54], [366, 40]]));
+  }
+};
+
+if (!load()){
+  for (const t of Object.keys(DIAGRAMS).reverse()){ type = t; S = docs[t]; DEMOS[t](); }
+}
+relType = DIAGRAMS[type].rels[0];
+buildTools();
+setPane('draw');
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(render);
+})();
+</script>
+</body>
+</html>
