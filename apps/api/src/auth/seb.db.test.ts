@@ -13,30 +13,14 @@ import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
 import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
-import { CONFIG_KEY_HEADER, configKeyHash, configKeyHeaderFor, launchConfigKey, requestUrl } from "./seb.js";
+import { CONFIG_KEY_HEADER } from "./seb.js";
+import { launchSeb, openSebSession, sebStartUrl, SITTING_ROUTES } from "./testing.js";
 import { kioskStation } from "../test/kiosk.js";
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "./session.js";
 
 type Who = { id: string; headers: Record<string, string> };
 /** Fixed headers, or those of one URL: a `seb` session's Config Key header hashes the URL. */
 type Headers = Record<string, string> | ((url: string) => Record<string, string>);
-
-/** The routes that declare `SITTING` (ADR-027), and no others. */
-const SITTING_ROUTES = new Set([
-  "GET /app/api/me",
-  "GET /app/api/events",
-  "POST /app/api/evaluations/:id/attempt",
-  "GET /app/api/attempts/:id",
-  "PUT /app/api/attempts/:id/answers/:itemId",
-  "POST /app/api/attempts/:id/answers/:itemId/done",
-  "POST /app/api/attempts/:id/answers/:itemId/skip",
-  "POST /app/api/attempts/:id/answers/:itemId/flag",
-  "POST /app/api/attempts/:id/position",
-  "POST /app/api/attempts/:id/submit",
-  "POST /app/api/attempts/:id/events",
-  "POST /app/api/attempts/:id/run",
-  "POST /app/api/attempts/:id/simulate",
-]);
 
 let server: TestServer;
 let restore: () => void;
@@ -54,41 +38,14 @@ const call = (method: Method, url: string, headers: Headers, payload: object = {
   });
 
 /** Downloads a `.seb` and returns the start URL written in it. */
-async function download(evaluationId: string, who: Who = student): Promise<string> {
-  const res = await call("GET", `/app/api/evaluations/${evaluationId}/seb`, who.headers);
-  expect(res.statusCode).toBe(200);
-  expect(res.headers["content-type"]).toBe("application/seb");
-  return /<key>startURL<\/key>\s*<string>([^<]+)<\/string>/.exec(res.body)![1]!;
-}
+const download = (evaluationId: string, who: Who = student): Promise<string> =>
+  sebStartUrl(server, evaluationId, who.headers);
 
 /** Opens the start URL as SEB would (or without its header), and returns the response. */
-const launch = (startUrl: string, header = configKeyHeaderFor(startUrl)) =>
-  server.app.inject({ method: "GET", url: new URL(startUrl).pathname, headers: { [CONFIG_KEY_HEADER]: header } });
-
-/** The session cookies a successful launch set, and its CSRF header. */
-function cookiesOf(res: Awaited<ReturnType<typeof launch>>): Record<string, string> {
-  const jar = Object.fromEntries(res.cookies.map((c) => [c.name, c.value]));
-  return {
-    cookie: `${SESSION_COOKIE}=${jar[SESSION_COOKIE]}; ${CSRF_COOKIE}=${jar[CSRF_COOKIE]}`,
-    "x-csrf-token": jar[CSRF_COOKIE]!,
-  };
-}
-
-/**
- * The headers SEB sends on every request of the session a launch opened: its
- * cookies, and the Config Key hash of that very URL (ADR-051 §3).
- */
-function sessionOf(res: Awaited<ReturnType<typeof launch>>, startUrl: string): (url: string) => Record<string, string> {
-  const cookies = cookiesOf(res);
-  const key = launchConfigKey(startUrl);
-  return (url) => ({ ...cookies, [CONFIG_KEY_HEADER]: configKeyHash(requestUrl(startUrl, url), key) });
-}
+const launch = (startUrl: string, header?: string) => launchSeb(server, startUrl, header);
 
 /** Downloads a `.seb` and opens it as SEB would. */
-async function sebSession(evaluationId: string) {
-  const startUrl = await download(evaluationId);
-  return sessionOf(await launch(startUrl), startUrl);
-}
+const sebSession = (evaluationId: string) => openSebSession(server, evaluationId, student.headers);
 
 beforeAll(async () => {
   restore = registerForTests(fakeShort);

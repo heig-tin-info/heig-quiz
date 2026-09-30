@@ -71,6 +71,25 @@ export type AuditAction =
   | "github.link_conflict"
   /** A linked account's login changed on GitHub, followed by its id (`payload.from`, `payload.to`). */
   | "github.renamed"
+  /**
+   * A classroom connected to a GitHub organization, or moved to another one
+   * (F-GH-01): subject the classroom, `payload.orgId`, `payload.login`,
+   * `payload.previousOrgId`. `unlink`: disconnected, `payload.orgId`.
+   */
+  | "github_org.link"
+  | "github_org.unlink"
+  /**
+   * Quiz's App found installed on an organization (subject the organization
+   * row; `payload.installationId`, `payload.via`: `setup_url`, `listing`,
+   * `healing`), or found uninstalled (`installation_deleted`). A system
+   * action: GitHub said so, nobody asked.
+   */
+  | "github_org.installation_resolved"
+  | "github_org.installation_deleted"
+  /** The organization's login changed on GitHub (`payload.from`, `payload.to`). */
+  | "github_org.renamed"
+  /** The organization no longer exists on GitHub (`status: deleted`). */
+  | "github_org.deleted"
   | "grading.override"
   | "grading.regrade"
   | "grading.run"

@@ -81,9 +81,44 @@ export function githubApp(config: AppConfig): App | null {
   return app;
 }
 
-export interface OrgInstallation {
+/**
+ * What a read serving an HTTP request passes as `request` (§3.1, #37): a
+ * rate limit is answered at once, and the caller falls back to the stored
+ * state. Background jobs pass nothing and wait it out once.
+ */
+export interface ReadOptions {
+  noRateLimitWait?: boolean;
+}
+export const HTTP_READ: ReadOptions = { noRateLimitWait: true };
+
+/**
+ * One installation of Quiz's App on an organization, as GitHub describes it
+ * (`GET /app/installations/{id}`, `/orgs/{org}/installation`, the listing).
+ */
+export interface AppInstallation {
   installationId: number;
   githubOrgId: number;
+  login: string;
+  /** `repository_selection: "all"`: the App reaches every repository (F-GH-03). */
+  allRepositories: boolean;
+}
+
+interface RawInstallation {
+  id: number;
+  account: { id?: number; login?: string; type?: string } | null;
+  repository_selection?: string;
+}
+
+/** An organization's installation, or null for a user's (or a malformed one). */
+function orgInstallation(data: RawInstallation): AppInstallation | null {
+  const account = data.account;
+  if (!account?.login || account.id === undefined || account.type !== "Organization") return null;
+  return {
+    installationId: data.id,
+    githubOrgId: account.id,
+    login: account.login,
+    allRepositories: data.repository_selection === "all",
+  };
 }
 
 export interface InstallationClient {
@@ -107,16 +142,24 @@ export async function installationClient(
   });
 }
 
-/** Organizations where the App is installed (classroom creation dropdown). */
-export async function listInstalledOrgs(config: AppConfig): Promise<string[]> {
+/**
+ * Organizations where the App is installed (the connect sheet's picker),
+ * every page, sorted by login; users' installations left out. Throws when
+ * GitHub fails.
+ */
+export async function listInstalledOrgs(
+  config: AppConfig,
+  read: ReadOptions = {},
+): Promise<AppInstallation[]> {
   const app = githubApp(config);
   if (!app) return [];
-  const logins: string[] = [];
-  for await (const { installation } of app.eachInstallation.iterator()) {
-    const account = installation.account as { login?: string; type?: string } | null;
-    if (account?.login && account.type === "Organization") logins.push(account.login);
-  }
-  return logins.sort();
+  const all = (await app.octokit.paginate(app.octokit.rest.apps.listInstallations, {
+    per_page: 100,
+    request: read,
+  })) as RawInstallation[];
+  return all
+    .flatMap((raw) => orgInstallation(raw) ?? [])
+    .sort((a, b) => a.login.localeCompare(b.login));
 }
 
 /** Does the organization exist on GitHub? Authenticated through the App
@@ -125,11 +168,15 @@ export async function listInstalledOrgs(config: AppConfig): Promise<string[]> {
 export async function orgExistsOnGithub(
   login: string,
   config?: AppConfig,
+  read: ReadOptions = {},
 ): Promise<boolean | null> {
   const app = config ? githubApp(config) : null;
   if (app) {
     try {
-      await app.octokit.request("GET /orgs/{org}", { org: login, request: { retries: 0 } });
+      await app.octokit.request("GET /orgs/{org}", {
+        org: login,
+        request: { retries: 0, ...read },
+      });
       return true;
     } catch (err) {
       const status = (err as { status?: number }).status;
@@ -159,10 +206,11 @@ export async function fetchOrgPlan(
   config: AppConfig,
   installationId: number,
   orgLogin: string,
+  read: ReadOptions = {},
 ): Promise<string | null> {
   try {
     const { octokit } = await installationClient(config, installationId);
-    const { data } = await octokit.request("GET /orgs/{org}", { org: orgLogin });
+    const { data } = await octokit.request("GET /orgs/{org}", { org: orgLogin, request: read });
     const plan = (data as { plan?: { name?: string } }).plan?.name;
     return plan ? plan.toLowerCase() : null;
   } catch {
@@ -182,13 +230,14 @@ export async function fetchOrgLlmSecret(
   config: AppConfig,
   installationId: number,
   orgLogin: string,
+  read: ReadOptions = {},
 ): Promise<"ok" | "missing" | null> {
   try {
     const { octokit } = await installationClient(config, installationId);
     await octokit.request("GET /orgs/{org}/actions/secrets/{secret_name}", {
       org: orgLogin,
       secret_name: "ANTHROPIC_API_KEY",
-      request: { retries: 0 },
+      request: { retries: 0, ...read },
     });
     return "ok";
   } catch (err) {
@@ -196,21 +245,49 @@ export async function fetchOrgLlmSecret(
   }
 }
 
-/** GET /orgs/{org}/installation; null if the App is not installed there. */
+/**
+ * GET /orgs/{org}/installation; null if the App is not installed there. The
+ * login is only what GitHub resolves TODAY: the caller compares the
+ * returned `githubOrgId` with the one it holds (a login can be reused by
+ * another organization).
+ */
 export async function resolveOrgInstallation(
   config: AppConfig,
   orgLogin: string,
-): Promise<OrgInstallation | null> {
+  read: ReadOptions = {},
+): Promise<AppInstallation | null> {
   const app = githubApp(config);
   if (!app) return null;
   try {
     const { data } = await app.octokit.request("GET /orgs/{org}/installation", {
       org: orgLogin,
+      request: read,
     });
-    return {
-      installationId: data.id,
-      githubOrgId: (data.account as { id: number }).id,
-    };
+    return orgInstallation(data as RawInstallation);
+  } catch (err) {
+    if ((err as { status?: number }).status === 404) return null;
+    throw err;
+  }
+}
+
+/**
+ * GET /app/installations/{id} with the App JWT: null when GitHub does not
+ * know the installation (404) or it is not an organization's; any other
+ * failure throws. The one proof the setup return accepts (N-SEC-17).
+ */
+export async function fetchInstallation(
+  config: AppConfig,
+  installationId: number,
+  read: ReadOptions = {},
+): Promise<AppInstallation | null> {
+  const app = githubApp(config);
+  if (!app) return null;
+  try {
+    const { data } = await app.octokit.request("GET /app/installations/{installation_id}", {
+      installation_id: installationId,
+      request: read,
+    });
+    return orgInstallation(data as RawInstallation);
   } catch (err) {
     if ((err as { status?: number }).status === 404) return null;
     throw err;

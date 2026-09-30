@@ -100,6 +100,9 @@ export default defineConfig({
       // OAuth discovery for MCP clients (ADR-023): the issuer is PUBLIC_URL,
       // which is this origin in development.
       "/.well-known": "http://localhost:3000",
+      // The GitHub App's Setup URL (M2-02): GitHub sends the browser to
+      // PUBLIC_URL, this origin in development.
+      "/setup/github": "http://localhost:3000",
     },
   },
   test: {
