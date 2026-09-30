@@ -287,6 +287,13 @@ describe("the student payload, the journal's one exit (invariant 4)", () => {
     }
   });
 
+  it("gives an impersonation session exactly what the student reads", async () => {
+    for (const path of ["", "/pages/README.md", "/pages/010-open.md"]) {
+      const [theirs, ours] = await Promise.all([get(`${base()}${path}`, student.headers), get(`${base()}${path}`, impersonation)]);
+      expect(ours.body).toBe(theirs.body);
+    }
+  });
+
   it("refuses a view that would widen", async () => {
     const res = await get(`${base()}?view=staff`, student.headers);
     expect(res.statusCode).toBe(400);

@@ -698,6 +698,10 @@ files it ports; writes en + fr for every string.
   a leading or trailing `/`), a segment starting with `.` (so `.` and
   `/./`) and a `.lock` ending; the root folder is trimmed of surrounding
   slashes, capped at `JOURNAL_PATH_MAX` and must pass `safeJournalPath`.
+- **From M4-02 (J2)**: every staff write — save, add, delete, upload,
+  choose or remove a repository — bumps `classroom_journals.version`, as the
+  ingestion does, so an ingestion that read GitHub before it never commits
+  over it (`modules/journal/ingest.ts`).
 
 ### M4-04 — Web: journal reader
 - **Depends on**: M4-02 contracts, M1-04, M1-05. ‖ M4-05, M5-02.

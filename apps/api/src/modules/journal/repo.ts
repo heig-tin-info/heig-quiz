@@ -71,6 +71,7 @@ const once = () => ({
  * take no per-request option (the installation token's fetch).
  */
 export function bounded<T>(work: Promise<T>): Promise<T> {
+  // After the timeout the token fetch keeps running in the background; its result is dropped.
   const signal = AbortSignal.timeout(GITHUB_TIMEOUT_MS);
   return Promise.race([
     work,
