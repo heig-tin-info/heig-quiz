@@ -51,6 +51,22 @@ export function Button({
   );
 }
 
+/**
+ * A click on a link that the app may route itself: the main button, no
+ * modifier, not already taken. A new tab, a new window, a download or a
+ * middle click stays the browser's, which follows the link's real `href`.
+ */
+export function isPlainClick(event: React.MouseEvent): boolean {
+  return (
+    !event.defaultPrevented &&
+    event.button === 0 &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    !event.altKey
+  );
+}
+
 /** Anchor styled as a button (external links, downloads, plain navigations). */
 export function LinkButton({
   children,

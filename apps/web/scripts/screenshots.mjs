@@ -878,6 +878,21 @@ const scenes = [
   { name: "admin-empty", role: "admin", path: "/admin?empty=1" },
   { name: "admin-error", role: "admin", path: "/admin?fail=1", settle: 2500 },
   { name: "admin-loading", role: "admin", path: "/admin?slow=1", settle: 300 },
+  // F-JRN-07 (M4-04): the journal reader. `?journal=1` gives PRG1-2026 (r1)
+  // its journal; without it the staff read "no journal yet". The student
+  // reads the home page and its TOC; on a phone the navigation is a
+  // disclosure (opened by the scene); the teacher reads a draft with its
+  // badges and warnings; a page nobody has is the not-found page.
+  { name: "journal-student", role: "student", path: "/classrooms/r1/journal?journal=1" },
+  { name: "journal-phone", role: "student", path: "/classrooms/r1/journal/10-semaine-1/10-pointeurs.md?journal=1", fold: true, act: async (p) => {
+      const toggle = p.getByRole("button", { name: /^(pages)/i });
+      if (await toggle.isVisible()) await toggle.click();
+    } },
+  { name: "journal-teacher-hidden", role: "teacher", path: "/classrooms/r1/journal/20-semaine%202%20%C3%A9t%C3%A9/20-brouillon.md?journal=1" },
+  { name: "journal-empty", role: "teacher", path: "/classrooms/r1/journal?journal=0" },
+  { name: "journal-not-found", role: "student", path: "/classrooms/r1/journal/99-nulle-part.md?journal=1" },
+  { name: "journal-loading", role: "student", path: "/classrooms/r1/journal?journal=1&slow=1", settle: 300 },
+  { name: "journal-error", role: "student", path: "/classrooms/r1/journal?journal=1&fail=1", settle: 2500 },
 ];
 
 /**

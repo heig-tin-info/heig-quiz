@@ -101,6 +101,8 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["drillServeKey", keys.drillServeKey("k1"), ["drill-serve", "k1"]],
     ["evaluationDrillKey", keys.evaluationDrillKey("e1"), ["evaluation", "e1", "drill"]],
     ["classroomDrillKey", keys.classroomDrillKey("r1", "activity"), ["classroom", "r1", "drill", "activity"]],
+    ["journalKey", keys.journalKey("r1", "staff"), ["journal", "r1", "staff"]],
+    ["journalPageKey", keys.journalPageKey("r1", "student", "README.md"), ["journal", "r1", "student", "page", "README.md"]],
     ["attemptKey", keys.attemptKey("a1"), ["attempt", "a1"]],
     ["attemptFeedbackKey", keys.attemptFeedbackKey("a1"), ["attempt", "a1", "feedback"]],
     ["attemptEntryKey", keys.attemptEntryKey("e1", null), ["attempt", "enter", "e1", null]],

@@ -60,6 +60,15 @@ export const classroomKey = (id: string | null) => ["classroom", id] as const;
  * student's `progress` (their enrollment id).
  */
 export const classroomDrillKey = (id: string, part: string) => ["classroom", id, "drill", part] as const;
+/**
+ * A classroom's journal (F-JRN-07), in the payload `view` asks for: the staff
+ * one or the student one (a teacher in the student view reads the latter).
+ * Its pages hang under it, so one invalidation of the journal (a refresh, the
+ * SSE hint of an ingestion) refreshes the navigation and every page read.
+ */
+export const journalKey = (id: string, view: "staff" | "student") => ["journal", id, view] as const;
+export const journalPageKey = (id: string, view: "staff" | "student", path: string) =>
+  [...journalKey(id, view), "page", path] as const;
 
 // --- Pools and questions -----------------------------------------------------
 

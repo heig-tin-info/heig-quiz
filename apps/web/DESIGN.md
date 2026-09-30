@@ -206,6 +206,18 @@ question's prose never carries it, so the question scenes do not move.
   accent, `.tok-str` in success) is semantic and does not count as the
   screen's one accent use.
 
+- **The reader around it** (`src/journal/JournalReader.tsx`): from `lg` a
+  15 rem navigation column beside the page, and from `xl` a 13 rem table
+  of contents on the right (under the navigation before that); both
+  columns stick to the top of the window while the page scrolls. 15 rem
+  holds a week title of the navigation on one line, 13 rem an `h2`, and
+  what is left goes to the page, whose prose is capped at 72 ch anyway.
+  The page is a sheet (`surface`, hairline, card radius) on the canvas;
+  the columns beside it are bare. On a phone the navigation and the table
+  of contents fold into one disclosure above the page, named by the page
+  being read. The ONE accent of the reader is the page being read in the
+  navigation (`accent-soft` chip); a student has no primary action there.
+
 The rendered HTML comes from the server (`packages/docrender`, D15: the
 journal escapes raw HTML), so, like `.md-body` itself, these are tag
 selectors in `style.css` rather than utility classes — there is no React

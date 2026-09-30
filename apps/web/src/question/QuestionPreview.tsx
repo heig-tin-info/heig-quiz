@@ -6,7 +6,7 @@ import type { PreviewResult, QuestionRow } from "@quiz/contracts";
 import { useT, type Dict } from "../i18n";
 import { typeLabel } from "../questionTypes";
 import { routeToPath } from "../router";
-import { Alert, IconButton, LinkButton } from "../ui";
+import { Alert, IconButton, isPlainClick, LinkButton } from "../ui";
 import { PreviewedQuestion, type StudentQuestion } from "./PreviewedQuestion";
 import { questionPreviewQuery, questionSolutionQuery } from "./previewQuery";
 
@@ -90,7 +90,7 @@ export function QuestionPreview(
               onClick={(e) => {
                 // A plain click is the app's navigation; a modified one (a
                 // new tab, a new window) is the browser's.
-                if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                if (!isPlainClick(e)) return;
                 e.preventDefault();
                 props.onOpenEditor();
               }}
