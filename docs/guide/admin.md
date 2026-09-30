@@ -26,6 +26,10 @@ The bin at the end of a row revokes the grant, after a confirmation naming the a
 
 The administrator's own address cannot be granted; it is already above the teacher role.
 
+## Kiosk stations
+
+Where the platform has kiosk stations, the screen also lists the school's Chromebooks that attested themselves. A new one appears as **Unnamed**, with its serial number: **Name** it after the sticker on the machine and it becomes **Active**, ready to be paired by students. **Retire** takes a station out of service, **Reactivate** puts it back. Setting the stations up in the Google Admin console is described in [Kiosk stations](../kiosk.md).
+
 ## What an administrator sees elsewhere
 
 By default, nothing more than a teacher: the administrator works on the courses whose staff they are on, and on their pools with the role they hold there. A colleague's course or private pool is out of sight, as for any teacher, so that one's own teaching never touches somebody else's by accident.

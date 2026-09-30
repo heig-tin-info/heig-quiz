@@ -116,6 +116,7 @@ Everything else lives behind **Advanced options**, folded by default. A novice n
 - **Categorize scoring** (shown once the evaluation holds a categorize question): the policy of every categorize item set to **Inherited**, **Per card** (each card earns its share) or **Exact** (all the points for a perfect board only). The formulas are in [Question types](question-types.md#categorize).
 - **Negative marking** (not on a poll): on every multiple-choice and categorize question, a wrong answer costs points and no answer costs nothing; it replaces the two policies above, which then say so. The total never goes below 0, and students are told in the waiting room and on each question concerned.
 - **Safe Exam Browser** (exams only): the students sit the exam in [Safe Exam Browser](https://safeexambrowser.org), and only there. See below.
+- **Kiosk stations** (exams only, where the platform has stations): the students may sit the exam on one of the school's Chromebooks locked on the exam. See below.
 
 !!! note
     The waiting room and the feedback policy are part of what the presets decide, but their controls sit under **Advanced options**, not on the main card. Open the disclosure to change them.
@@ -131,6 +132,30 @@ What changes for the students:
 - The exam cannot be sat from an ordinary browser, and inside SEB nothing else of the platform is reachable. After handing in, the student may quit SEB; the results are read later from the portal.
 
 To try it yourself before the class does, give yourself a seat with **Join as student** in the classroom (a seat badged as a staff test), switch to the student view and download the file like a student. Plan a first run on a real machine of the room: SEB must be installed there, and its version is what the students will use.
+
+### Kiosk stations
+
+The school keeps Chromebooks locked in kiosk mode as exam stations: a fallback for a student whose laptop fails, or the way a whole room sits an exam. Turn on **Kiosk stations** under **Advanced options**; the switch is offered on exams only, and only where the platform administrator has set the stations up ([Kiosk stations](../kiosk.md)).
+
+| Safe Exam Browser | Kiosk stations | The exam is sat |
+| --- | --- | --- |
+| off | on | on a kiosk station only |
+| on | on | in Safe Exam Browser or on a kiosk station |
+
+The portal alone never opens an exam with either switch on. Both are frozen once the exam runs.
+
+What the students do:
+
+- A station shows its name (the one on its sticker), a code such as `BCDF-GHJK` and a QR code. The student scans the QR code with their phone, where they are signed in to the portal, checks that the phone shows the name of the station in front of them, picks the exam and presses **Start on this station**. The exam opens on the station within a few seconds, in its waiting room if it has one.
+- On their home, the card of a stations-only exam says **Enter a station's code**, for a student who prefers typing the code to scanning it.
+- After the hand-in, the station goes back to its start screen by itself. The results are read later from the portal.
+
+A student without a phone reads the station's code to you, and you assign it to them from the exam's dashboard: the same pairing, approved by you instead of their phone. They still sit as themselves.
+
+On the dashboard, a student on a station is shown with the station's name. A **suspended** station (Google refused to vouch for it, or it stopped checking in) keeps the answers already saved but refuses new ones until it passes its next check, which lifts the suspension by itself; if it does not recover, move the student to another station. When the platform cannot reach Google, nothing is suspended and the exam goes on.
+
+!!! note
+    The supervisor's assignment and the suspension alerts arrive with the last step of the kiosk work (ADR-051 §6–7). Rehearse on a station with a seat of your own (**Join as student**) before the first real exam.
 
 ## Step 3: Launch
 

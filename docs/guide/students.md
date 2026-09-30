@@ -54,6 +54,19 @@ The button appears once the exam is open; until then the card is under **Coming 
 
 If SEB says the file is invalid or has expired, quit SEB and download a new file from your home. Once you have handed in, you may quit SEB; your results are read later from your home, in an ordinary browser.
 
+## Sitting an exam on a kiosk station
+
+Some exams can be sat on one of the school's Chromebooks locked on the exam, a kiosk station. You need your phone, signed in to the portal.
+
+1. **Sit at a station.** It shows its name, a code such as `BCDF-GHJK` and a QR code.
+2. **Scan the QR code** with your phone. If you are not signed in, sign in first; the phone then comes back to the code. You can also open the address shown on the station and type the code, or press **Enter a station's code** on the exam's card on your home.
+3. **Check the station's name** on your phone: it must be the one on the screen in front of you. Pick your exam and press **Start on this station**.
+4. The exam opens on the station within a few seconds: its waiting room, if it has one, then the questions. You can put your phone away.
+
+A code works once and the station shows a new one every 5 minutes. If your phone says **This code does not work**, type the code the station shows now. If the station says **Station not recognised** or **The station cannot start**, call the supervisor. No phone? Read the code to the supervisor, who can start the exam on the station for you.
+
+When you hand in, the station goes back to its start screen by itself. Your results are read later from your home.
+
 ## Taking an evaluation
 
 The player shows one question per screen. The strip at the top is the list of the questions, one segment per question, and clicking a segment moves to that question when the navigation allows it. Each segment says where you stand, by its shape as well as its colour: a solid bar with a check for a question that holds an answer, a dashed bar with a dash for one you left unanswered, a hollow bar for one with nothing yet, and a small flag beside the number of a question you flagged for review. The current question is outlined in red. The header carries the countdown when the evaluation is timed, the saving indicator, a theme toggle and **Hand in**.
