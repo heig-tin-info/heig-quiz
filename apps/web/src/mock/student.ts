@@ -6,8 +6,10 @@ import {
 import type {
   AttemptView,
   AutosaveResponse,
+  EvaluationCard,
   JoinResult,
   LobbyView,
+  StudentClassroomPage,
   StudentHome as StudentHomeData,
 } from "@quiz/contracts";
 import {
@@ -34,6 +36,7 @@ import type { CategorizeConfig } from "@quiz/qt-categorize/client";
 import { diagramServer } from "@quiz/qt-diagram/server";
 import type { DiagramConfig } from "@quiz/qt-diagram/client";
 import { pollOfTeacher, teacherPolls } from "./poll";
+import { studentRooms } from "./org";
 
 // --- 4. The student: home, lobby and player (WP9) --------------------------
 //
@@ -416,7 +419,7 @@ export const studentLobbyView = (): LobbyView => ({
   serverNow: new Date().toISOString(),
 });
 
-on("GET", "/app/api/student/home", (): StudentHomeData => {
+const studentHome = (): StudentHomeData => {
   if (flags.empty) {
     return { polls: [], open: [], upcoming: [], past: [], serverNow: new Date().toISOString() };
   }
@@ -543,6 +546,34 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
       },
     ],
     serverNow: new Date().toISOString(),
+  };
+};
+
+on("GET", "/app/api/student/home", studentHome);
+
+// M5-01: the student's classroom page — the home narrowed to the classroom,
+// under the Courses card as its header. `?journal=1` gives PRG1-2026 (`r1`,
+// `JOURNAL_ROOM` of `mock/journal.ts`) its Journal tab.
+on("GET", "/app/api/student/classrooms/:id", (m): StudentClassroomPage => {
+  const id = m.groups!.id!;
+  const header = studentRooms().find((r) => r.id === id);
+  if (!header) throw new MockError(404, "Not found");
+  const home = studentHome();
+  const inRoom = <T extends { classroomId: string }>(cards: T[]) =>
+    cards.filter((c) => c.classroomId === id);
+  const tagged = (cards: EvaluationCard[]) =>
+    inRoom(cards).map((c) => ({ kind: "evaluation" as const, ...c }));
+  return {
+    classroom: { ...header, archived: false },
+    activities: {
+      polls: inRoom(home.polls),
+      open: tagged(home.open),
+      upcoming: tagged(home.upcoming),
+      past: tagged(home.past),
+    },
+    hasJournal: flags.journal && id === "r1",
+    hasProjects: false,
+    serverNow: home.serverNow,
   };
 });
 

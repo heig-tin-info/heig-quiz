@@ -101,7 +101,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M5-01 | API: the student's classroom | todo | M1-03 | | | |
+| M5-01 | API: the student's classroom | review | M1-03 | `merge/M5-01-student-classroom-api` | #377 | `GET /app/api/student/classrooms` (`StudentClassroom[]`, archived left out) and `GET /app/api/student/classrooms/:id` (`StudentClassroomPage`, always the student payload through the caller's own seat): shapes in `contracts/src/student.ts`. `readableClassroom(app, req, reply, params, { studentView })` in `guards.ts` (rule: `classroomPayload`) |
 | M5-02 | Web: student Courses route and classroom page | todo | M5-01, D07 | | | |
 | M5-03 | Gradebook module | todo | M3-08, D06 | | | |
 | M5-04 | Web: Grades tabs | todo | M5-03 | | | |

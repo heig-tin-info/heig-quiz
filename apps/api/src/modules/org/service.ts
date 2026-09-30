@@ -13,7 +13,7 @@ import { randomInt, randomUUID } from "node:crypto";
 
 import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 
-import type { EnrollmentPatch, StudentClassroom } from "@quiz/contracts";
+import type { EnrollmentPatch, StudentClassroom, StudentClassroomPage } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
 import {
@@ -593,45 +593,68 @@ export async function classroomByJoinCode(
 
 // --- Student surface ----------------------------------------------------------
 
+/** The display names of the staff of each course, for the student's cards. */
+async function teachersOf(db: Db, courseIds: string[]): Promise<Map<string, string[]>> {
+  const teachers = new Map<string, string[]>();
+  for (const s of await staffOf(db, courseIds)) {
+    const name = [s.givenName, s.familyName].filter(Boolean).join(" ");
+    teachers.set(s.courseId, [...(teachers.get(s.courseId) ?? []), name]);
+  }
+  return teachers;
+}
+
+interface StudentClassroomFacts {
+  room: Pick<ClassroomRecord, "id" | "name" | "period">;
+  course: Pick<CourseRecord, "id" | "name" | "code">;
+  timeBonusPercent: number;
+}
+
+const studentCard = (r: StudentClassroomFacts, teachers: Map<string, string[]>): StudentClassroom => ({
+  id: r.room.id,
+  name: r.room.name,
+  period: r.room.period,
+  courseName: r.course.name,
+  courseCode: r.course.code,
+  teachers: teachers.get(r.course.id) ?? [],
+  timeBonusPercent: r.timeBonusPercent,
+});
+
 /**
- * The classrooms whose roster entry the student claimed, and nothing else —
- * no course listing, no roster of their peers.
+ * The Courses list (F-ORG-14) and the student home's classroom cards: the
+ * classrooms whose roster entry the student claimed, archived ones excepted
+ * (F-ORG-03), and nothing else — no course listing, no roster of their peers.
  */
 export async function studentClassrooms(db: Db, userId: string): Promise<StudentClassroom[]> {
   const rows = await db
     .select({
-      id: classrooms.id,
-      name: classrooms.name,
-      period: classrooms.period,
-      courseId: courses.id,
-      courseName: courses.name,
-      courseCode: courses.code,
+      room: { id: classrooms.id, name: classrooms.name, period: classrooms.period },
+      course: { id: courses.id, name: courses.name, code: courses.code },
       timeBonusPercent: enrollments.timeBonusPercent,
     })
     .from(enrollments)
     .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(eq(enrollments.userId, userId))
+    .where(and(eq(enrollments.userId, userId), isNull(classrooms.archivedAt)))
     .orderBy(courses.code, classrooms.name);
-  if (rows.length === 0) return [];
-  const staff = await db
-    .select({
-      courseId: courseStaff.courseId,
-      givenName: users.givenName,
-      familyName: users.familyName,
-    })
-    .from(courseStaff)
-    .innerJoin(users, eq(courseStaff.userId, users.id))
-    .orderBy(users.familyName);
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    period: r.period,
-    courseName: r.courseName,
-    courseCode: r.courseCode,
-    teachers: staff
-      .filter((s) => s.courseId === r.courseId)
-      .map((s) => `${s.givenName} ${s.familyName}`.trim()),
-    timeBonusPercent: r.timeBonusPercent,
-  }));
+  const teachers = await teachersOf(db, [...new Set(rows.map((r) => r.course.id))]);
+  return rows.map((r) => studentCard(r, teachers));
 }
+
+/**
+ * The header of the student's classroom page (F-ORG-15): the Courses card of
+ * a classroom the route loaded through `readableClassroom`, archived or not.
+ * The time bonus is the caller's own seat's, 0 for a staff member without one.
+ */
+export async function studentClassroomHeader(
+  db: Db,
+  scope: {
+    room: ClassroomRecord;
+    course: CourseRecord;
+    seat: { timeBonusPercent: number } | null;
+  },
+): Promise<StudentClassroomPage["classroom"]> {
+  const teachers = await teachersOf(db, [scope.course.id]);
+  const facts = { ...scope, timeBonusPercent: scope.seat?.timeBonusPercent ?? 0 };
+  return { ...studentCard(facts, teachers), archived: scope.room.archivedAt !== null };
+}
+

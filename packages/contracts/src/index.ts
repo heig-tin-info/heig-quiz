@@ -5,6 +5,7 @@ export * from "./pool.js";
 export * from "./evaluation.js";
 export * from "./activity.js";
 export * from "./live.js";
+export * from "./student.js";
 export * from "./grading.js";
 export * from "./results.js";
 export * from "./realtime.js";

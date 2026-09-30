@@ -18,6 +18,7 @@ import { and, eq, getTableName, isNull, sql, type AnyColumn, type SQL } from "dr
 import type { PoolRole } from "@quiz/contracts";
 import { effectivePoolRole, ipAllowed, poolRoleAllows } from "@quiz/domain";
 
+import { delegated, type SessionAuth } from "../auth/session.js";
 import type { Db } from "../db/client.js";
 import {
   answers,
@@ -289,6 +290,121 @@ export async function accessibleClassroom(
   params: { id: string },
 ) {
   return (await findAccessibleClassroom(app.db, req.user!, params.id)) ?? notFound(reply);
+}
+
+// ---------------------------------------------------------------------------
+// The student branch (invariant 6, spec 05 §5.7): the classroom routes a
+// student reads — the student's classroom page, the journal.
+// ---------------------------------------------------------------------------
+
+/**
+ * What a classroom route a student reads serves: the staff payload
+ * (everything, drafts included) or the student payload (what a student with
+ * a claimed seat reads, N-SEC-12).
+ */
+export type ClassroomPayload = "staff" | "student";
+
+/** The facts {@link classroomPayload} decides on, loaded in one query. */
+export interface ClassroomReadFacts {
+  /** A `seb` session (ADR-027): opened to sit one exam, it reads no classroom. */
+  seb: boolean;
+  /** An impersonation session (ADR-034): somebody else acts as the user. */
+  delegated: boolean;
+  /** `staffAccess` holds on the classroom's course, or the caller is an admin. */
+  staff: boolean;
+  /** The caller holds a claimed seat (`enrollments.user_id`) in the classroom. */
+  seat: boolean;
+  /** The request asks for the student payload (a teacher in the student view, ADR-018). */
+  studentView: boolean;
+}
+
+/**
+ * THE rule of the student branch, pure: which payload the caller gets, or
+ * null for the 404 of a missing classroom.
+ *
+ *   | session        | staff | seat | studentView | payload  |
+ *   | seb            |   *   |  *   |      *      | 404      |
+ *   | impersonation  |   *   | yes  |      *      | student  |
+ *   | impersonation  |   *   | no   |      *      | 404      |
+ *   | portal/token   | yes   |  *   |     no      | staff    |
+ *   | portal/token   | yes   |  *   |     yes     | student  |
+ *   | portal/token   | no    | yes  |      *      | student  |
+ *   | portal/token   | no    | no   |      *      | 404      |
+ *
+ * `studentView` only ever narrows: it never turns a seat into staff. An
+ * impersonation session reads through the student's seat alone, whatever
+ * else that account could otherwise reach (N-SEC-12).
+ */
+export function classroomPayload(facts: ClassroomReadFacts): ClassroomPayload | null {
+  if (facts.seb) return null;
+  if (facts.delegated) return facts.seat ? "student" : null;
+  if (facts.staff) return facts.studentView ? "student" : "staff";
+  return facts.seat ? "student" : null;
+}
+
+/** A classroom loaded through {@link readableClassroom}. */
+export interface ReadableClassroom {
+  room: typeof classrooms.$inferSelect;
+  course: typeof courses.$inferSelect;
+  /** The caller's own claimed seat in it; null for a staff member without one. */
+  seat: { id: string; timeBonusPercent: number } | null;
+  payload: ClassroomPayload;
+}
+
+/**
+ * The classroom, its course and the caller's seat if {@link classroomPayload}
+ * lets the caller in; null otherwise. One query: the staff seat is an EXISTS
+ * of the same `staffAccess` predicate, the student seat a left join.
+ */
+export async function findReadableClassroom(
+  db: Db,
+  user: Caller,
+  auth: Pick<SessionAuth, "kind" | "actorUserId"> | null,
+  classroomId: string,
+  { studentView }: { studentView: boolean },
+): Promise<ReadableClassroom | null> {
+  const [row] = await db
+    .select({
+      room: classrooms,
+      course: courses,
+      seat: { id: enrollments.id, timeBonusPercent: enrollments.timeBonusPercent },
+      staff: sql<boolean>`${accessWhere(user, staffAccessOfClassroom(user.id)) ?? sql`true`}`,
+    })
+    .from(classrooms)
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .leftJoin(
+      enrollments,
+      and(eq(enrollments.classroomId, classrooms.id), eq(enrollments.userId, user.id)),
+    )
+    .where(eq(classrooms.id, classroomId))
+    .limit(1);
+  if (!row) return null;
+  const payload = classroomPayload({
+    seb: auth?.kind === "seb",
+    delegated: delegated(auth),
+    staff: row.staff,
+    seat: row.seat !== null,
+    studentView,
+  });
+  return payload === null ? null : { room: row.room, course: row.course, seat: row.seat, payload };
+}
+
+/**
+ * `/classrooms/:id/…` read by a student or the staff: {@link findReadableClassroom}
+ * for the request's own session, answering the 404 of a missing classroom.
+ * `studentView` is the request's explicit ask for the student payload.
+ */
+export async function readableClassroom(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  params: { id: string },
+  options: { studentView: boolean },
+): Promise<ReadableClassroom | null> {
+  return (
+    (await findReadableClassroom(app.db, req.user!, req.auth, params.id, options)) ??
+    notFound(reply)
+  );
 }
 
 /** Loads the roster entry if the current user is on the course's staff. */

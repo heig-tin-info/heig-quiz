@@ -1317,8 +1317,20 @@ export async function reopenAttempt(
 
 // --- Student home (F-LIVE-01) --------------------------------------------
 
-export async function studentHome(db: Db, userId: string, now: Date): Promise<StudentHome> {
-  const all = await studentEvaluationRows(db, userId).orderBy(desc(evaluations.createdAt));
+/**
+ * `classroomId` narrows the home to one of the student's classrooms: the
+ * Activities tab of their classroom page (M5-01, `ActivityKind.studentCards`),
+ * which the caller has loaded through `readableClassroom` first.
+ */
+export async function studentHome(
+  db: Db,
+  userId: string,
+  now: Date,
+  classroomId?: string,
+): Promise<StudentHome> {
+  const all = await studentEvaluationRows(db, userId, classroomId).orderBy(
+    desc(evaluations.createdAt),
+  );
 
   // Issue #163: a poll is answered at `/p/:code`, never through an attempt of
   // the player (`enterEvaluation` refuses one), so it is never an evaluation
