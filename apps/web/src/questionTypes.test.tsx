@@ -222,6 +222,7 @@ describe("question type strings", () => {
   const CANVASES = [
     ["circuit canvas", circuitCanvasStrings],
     ["diagram canvas", diagramCanvasStrings],
+    ["circuit component kinds", circuitKindLabels],
   ] as const;
   const rawKey = /^(qt|mcq|issue)\.[\w.]+$/;
   const sentences = (strings: object) =>
@@ -234,6 +235,12 @@ describe("question type strings", () => {
       for (const [key, value] of fr) expect(value, `${id} ${surface} ${key}`).not.toMatch(rawKey);
       expect(fr.some(([key, value]) => value !== en[key]), `${id} ${surface}`).toBe(true);
     }
+  });
+
+  // A number's separator is behaviour, not wording: "4,5" is what a French student types.
+  it("gives the rich player the locale's decimal separator", () => {
+    const t = makeT("fr");
+    expect(playerStrings.rich(t).decimal).toBe(t("qt.rich.p.decimal"));
   });
 
   it.each(CANVASES)("the %s reaches French, with no raw key", (_, strings) => {

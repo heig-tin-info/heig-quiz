@@ -13,11 +13,9 @@ import { ByQuestionView } from "./ByQuestionView";
  * scale, always revealed — and the type's own review for any other question.
  */
 
-const question = makeByQuestion;
-const item = byQuestionItem;
 
-const MCQ = question({
-  item: item(0, "mcq"),
+const MCQ = makeByQuestion({
+  item: byQuestionItem(0, "mcq"),
   student: {
     prompt: "What is `sizeof(char)`?",
     choices: [
@@ -35,8 +33,8 @@ const MCQ = question({
   successRate: 0.6,
 });
 
-const CLOZE = question({
-  item: item(1, "cloze"),
+const CLOZE = makeByQuestion({
+  item: byQuestionItem(1, "cloze"),
   student: clozeStudentTemplate(parseCloze("Free with {{free}}."), 0, "i1", false),
   solution: { blanks: [{ index: 0, expected: "free" }] },
   outcomes: { correct: 2, partial: 0, wrong: 1, blank: 1 },
@@ -47,14 +45,14 @@ const CLOZE = question({
   successRate: 0.5,
 });
 
-const SHORT_UNANSWERED = question({
-  item: item(2, "short"),
+const SHORT_UNANSWERED = makeByQuestion({
+  item: byQuestionItem(2, "short"),
   student: { prompt: "What does `7 / 2` print?" },
   solution: { expected: ["3"] },
 });
 
-const CODE = question({
-  item: item(3, "code"),
+const CODE = makeByQuestion({
+  item: byQuestionItem(3, "code"),
   student: { prompt: "Write `sum`.", language: "c", template: "", regions: [] },
   solution: { referenceSolution: "return a + b;" },
   outcomes: { correct: 2, partial: 0, wrong: 1, blank: 0 },

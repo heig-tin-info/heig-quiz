@@ -16,11 +16,10 @@ import {
 describe("questionQuery", () => {
   // The exact query of a few states, parameter order included.
   it.each([
+    // No category, no sort: nothing but the page size.
     ["asks for one page and nothing else when no filter is set", EMPTY_FILTERS, undefined, "?limit=25"],
     ["appends the cursor of the next page", EMPTY_FILTERS, "c-42", "?limit=25&cursor=c-42"],
     ["appends no cursor for a null one", EMPTY_FILTERS, null, "?limit=25"],
-    ["leaves the category out when every category is wanted", { ...EMPTY_FILTERS, categoryId: null }, undefined, "?limit=25"],
-    ["sends nothing while the sort is the API's own default", EMPTY_FILTERS, undefined, "?limit=25"],
     [
       "keeps the parameter order stable, cursor last",
       { ...EMPTY_FILTERS, sort: "name" as const, dir: "asc" as const },

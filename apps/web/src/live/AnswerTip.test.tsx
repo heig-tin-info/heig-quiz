@@ -338,7 +338,7 @@ describe("InspectModal under live frames", () => {
   });
 
   it("keeps the teacher's scroll position through frames and re-reads", async () => {
-    const user = userEvent.setup();
+    const user = flowingClock();
     let held: Held = { text: "first draft", revision: 1 };
     const { calls, queryClient } = setup(() => held);
     await user.click(await cellButton());
@@ -353,7 +353,7 @@ describe("InspectModal under live frames", () => {
     held = { text: "second draft", revision: 2 };
     cellFrame(1, 2, "second…");
     // A frame marks the paper stale; it does not re-read it under the modal.
-    await new Promise((r) => setTimeout(r, 50));
+    await elapse(50);
     expect(inspectCalls(calls)).toBe(1);
 
     // A real re-read (a reconnect re-reads every cached paper) lands new

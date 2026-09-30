@@ -13,7 +13,7 @@ type Settings = Evaluation["settings"];
 export type AttemptItem = AttemptView["items"][number];
 
 /** The single-choice question both player suites open on. */
-export const ADDRESS_MCQ = {
+const ADDRESS_MCQ = {
   prompt: "Quelle expression donne l'adresse de `x` ?",
   mode: "single",
   choices: [
