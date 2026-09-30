@@ -20,7 +20,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Draft | The version being edited, unnumbered, never usable in an evaluation. Publishing creates the next version. |
 | Question type | A plugin that defines the configuration schema, the answer schema, the editor, the player, the review view and the grader. E.g. `mcq`, `short`, `cloze`, `code`. |
 | Evaluation | An ordered set of question versions with run settings, created in a classroom. A single term: no quiz, assignment or session. |
-| Activity | What a classroom gives its students to do, with a date and a result: an evaluation (exam, exercise, poll) and, later, a project. The student's **Activities** is the summary of the active activities of all their classrooms. The journal is not an activity. heig-classroom's commit-graph panel is called "repository history", never "activity". |
+| Activity | What a classroom gives its students to do: an evaluation (exam, exercise, poll) and, later, a project. The student's **Activities** is the summary of the active activities of all their classrooms. The journal is not an activity. heig-classroom's commit-graph panel is called "repository history", never "activity". |
 | Project | The future activity kind of the merge (D01): graded work in a student or group GitHub repository, a lab as well as a semester project. heig-classroom's "assignment"; the word "assignment" stays forbidden outside migration code. Specified with the rest of M0-04, not in this spec yet. |
 | Evaluation template | An evaluation kept at the course level rather than in a classroom: its questions, points, order, milestones and settings, without dates, access code nor IP list. Never opened, never answered; each classroom's evaluation is made from it by *Instantiate* and records the template and its revision. `exam` and `exercise` only, never `poll` (ADR-031). |
 | Instance | An evaluation linked to a template: instantiated from it into a classroom, or saved as it (*Save as template*, at revision 1). It records the template and the revision it came from, and editing the template never changes it: a newer revision reaches it only when the teacher pulls it (ADR-031). |
@@ -58,7 +58,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | See the grades of a classroom | Own grades | On own classrooms | Yes |
 | Configure the LLM providers, the runner languages, the admins | No | Own API key | Yes |
 | Connect a classroom to a GitHub organization, create, choose or remove its journal, edit its pages | No | On own classrooms | Yes |
-| Read a classroom's journal | Own classrooms, published pages only | On own classrooms, drafts included | Yes |
+| Read a classroom's journal | Own classrooms, pages neither draft nor before their `visible_from` | On own classrooms, drafts included | Yes |
 | Link or unlink own GitHub account | Yes | Yes | Yes |
 | Delete a classroom or an evaluation and its data | No | On own classrooms | Yes |
 
@@ -132,7 +132,7 @@ erDiagram
 5. The grade of an attempt is computed from the validated gradings, never stored as the source of truth. It is cached when the results are released.
 6. The content sent to a student never contains the answer key nor the explanation before the feedback policy allows it.
 7. A journal page reaches a student only rendered, and only when it is not a draft and its `visible_from` has passed; an asset only when such a page references it (N-SEC-12, N-SEC-13).
-8. Removing a journal or disconnecting a classroom from GitHub never deletes anything on GitHub.
+8. Removing a journal, or disconnecting a classroom from GitHub, never deletes anything on GitHub.
 
 ## 1.4 Lifecycles
 
