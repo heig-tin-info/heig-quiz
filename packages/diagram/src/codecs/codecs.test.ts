@@ -157,10 +157,12 @@ describe("a crafted text stays cheap to read", () => {
     ["automaton", `${"graph\n".repeat(33_000)}{`],
     ["graph", "/* ".repeat(66_000)],
   ];
+  /* A backtracking pattern costs seconds; the bound leaves room for a loaded
+   * machine and for V8 coverage instrumentation (220 ms seen under 200). */
   it.each(cases)("%s", (kind, text) => {
     const start = performance.now();
     parseText(text, kind);
-    expect(performance.now() - start).toBeLessThan(200);
+    expect(performance.now() - start).toBeLessThan(1000);
   });
 
   it("refuses a line longer than it reads", () => {
