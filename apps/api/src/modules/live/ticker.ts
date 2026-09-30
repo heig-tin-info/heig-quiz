@@ -12,6 +12,7 @@ import type { Db } from "../../db/client.js";
 import { attempts, evaluations } from "../../db/schema.js";
 import { applyState, byId, pastTimingOf, settingsOf, type EvaluationRecord } from "../evaluation/service.js";
 import { endAttempts } from "./dwell.js";
+import { endStationSittings } from "./stations.js";
 import * as events from "./events.js";
 import { presence } from "../realtime/presence.js";
 import { type AttemptRecord, enrolledCounts, gradeAtHandIn } from "./attempt.js";
@@ -59,6 +60,7 @@ export async function expireDueAttempts(
       now,
     );
   }
+  await endStationSittings(db, closed);
   // An exercise with retakes, or whose correction is published, grades each
   // attempt as it ends (ADR-025, ADR-050), the ones time ran out on
   // included: the student reads that score, or that correction, next.

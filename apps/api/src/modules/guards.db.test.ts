@@ -2,15 +2,13 @@
  * `sitRefusal`, THE rule of the trusted clients (ADR-027, ADR-051 §2), over
  * the real application: every session kind that sits (portal, seb, kiosk)
  * against every combination of an exam's two switches, through the entry of
- * a sitting route. Nothing opens a `kiosk` session yet (ADR-051 §10, step 6),
- * so the test opens one directly, the way the pairing will.
- *
- * What is under test is `sitRefusal`, not the trust of a confined session
- * (`auth/trust.ts`, tested in `auth/`): the kiosk's rule is a stub that
- * refuses every request until steps 4 and 7 write it, so it is set aside
- * here and every session is trusted.
+ * a sitting route. The test opens each session directly, a `kiosk` one on a
+ * real station whose `quiz_kiosk` cookie rides along, so that the trust of
+ * the session (`auth/trust.ts`) holds and `sitRefusal` is what decides. A
+ * `seb` session is audited, not refused, while `SEB_CONFIG_KEY_ENFORCE` is
+ * off (the default).
  */
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { eq } from "drizzle-orm";
 import type { SessionKind } from "@quiz/contracts";
@@ -20,9 +18,8 @@ import { createSession, CSRF_COOKIE, SESSION_COOKIE } from "../auth/session.js";
 import { evaluations } from "../db/schema.js";
 import { fakeShort } from "../test/fakeType.js";
 import { testServer, type TestServer } from "../test/http.js";
+import { kioskStation } from "../test/kiosk.js";
 import { seedLive } from "../test/live.js";
-
-vi.mock("../auth/trust.js", () => ({ trustRefused: async () => false }));
 
 let server: TestServer;
 let restore: () => void;
@@ -52,8 +49,15 @@ async function running(settings: { safeExamBrowser?: boolean; kiosk?: boolean },
 }
 
 async function headersOf(userId: string, kind: SessionKind, evaluationId: string | null) {
-  const s = await createSession(server.app.db, userId, 12, { kind, actorUserId: null, evaluationId });
-  return { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
+  const station = kind === "kiosk" ? await kioskStation(server.app.db) : null;
+  const s = await createSession(server.app.db, userId, 12, {
+    kind,
+    actorUserId: null,
+    evaluationId,
+    deviceId: station?.deviceId ?? null,
+  });
+  const cookie = `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`;
+  return { cookie: station ? `${cookie}; ${station.cookie}` : cookie, "x-csrf-token": s.csrf };
 }
 
 const enter = (evaluationId: string, headers: Record<string, string>) =>

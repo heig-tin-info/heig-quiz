@@ -353,7 +353,7 @@ export async function findSessionUser(
 async function dropSessions(
   db: Db | Tx,
   where: SQL,
-  reason: "logout" | "expired" | "revoked" | "superseded",
+  reason: "logout" | "expired" | "revoked" | "superseded" | "ended",
   now: Date = new Date(),
 ) {
   const gone = await db.delete(sessions).where(where).returning({
@@ -394,12 +394,35 @@ async function dropSessions(
 async function endSessions(
   db: Db,
   where: SQL,
-  reason: "logout" | "expired" | "revoked",
+  reason: "logout" | "expired" | "revoked" | "ended",
   now: Date = new Date(),
 ): Promise<number> {
   const gone = await dropSessions(db, where, reason, now);
   bus.sessionsEnded(gone.map((s) => s.sidHash));
   return gone.length;
+}
+
+/**
+ * ADR-051 §7: the confined sessions of `kind` that sit `evaluationId` — of
+ * one user, or of everybody when `userId` is absent (the evaluation closed) —
+ * deleted, and their event streams closed; the user's portal sessions (the
+ * phone) are untouched. `live` calls it wherever an attempt ends, for the
+ * `kiosk` kind only: a `seb` session outlives the submit (ADR-027). The
+ * streams of exactly these sessions close; the user's others stay.
+ */
+export async function endConfinedSessions(
+  db: Db,
+  input: { userId?: string; evaluationId: string; kind: TrustedClient },
+): Promise<void> {
+  await endSessions(
+    db,
+    and(
+      eq(sessions.kind, input.kind),
+      eq(sessions.evaluationId, input.evaluationId),
+      input.userId === undefined ? undefined : eq(sessions.userId, input.userId),
+    )!,
+    "ended",
+  );
 }
 
 export async function deleteSession(db: Db, token: string, now: Date = new Date()) {

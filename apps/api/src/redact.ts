@@ -9,6 +9,9 @@
  *    (ADR-034), in the path;
  *  - `/teams/link?token=…`: the single-use token of a pending Teams link
  *    (ADR-030), in the query — the SPA page as the server serves it;
+ *  - `/pair?code=…` and `/app/api/pair/<code>`: a kiosk station's user code
+ *    (ADR-051 §8), in the query of the phone's page and in the path of the
+ *    route that reads it;
  *  - and either of them as the `next=` (or `returnTo=`) of a login round
  *    trip, which carries the page to come back to, token included.
  *
@@ -22,7 +25,13 @@ import { IMPERSONATION_PATH } from "./auth/impersonation.js";
 import { LAUNCH_PATH } from "./auth/seb.js";
 
 /** Everything after one of these prefixes is a secret. */
-const SECRET_PREFIXES: readonly string[] = [LAUNCH_PATH, IMPERSONATION_PATH, "/teams/link"];
+const SECRET_PREFIXES: readonly string[] = [
+  LAUNCH_PATH,
+  IMPERSONATION_PATH,
+  "/teams/link",
+  "/pair?",
+  "/app/api/pair/",
+];
 
 /** The query parameters that hold another URL of the app. */
 const RETURN_PARAMS: readonly string[] = ["next", "returnTo"];

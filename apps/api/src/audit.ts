@@ -84,6 +84,14 @@ export type AuditAction =
   | "kiosk.device_retired"
   /** A retired station put back in service by an admin. */
   | "kiosk.device_reactivated"
+  /**
+   * ADR-051 §7: a student approved a station's pairing from their phone
+   * (subject the pairing; `payload.evaluationId`, `payload.deviceId`), or a
+   * pairing was refused (`payload.reason`: `code` — a wrong, expired or used
+   * code, counted towards the limit — or `evaluation`). Never a code.
+   */
+  | "kiosk.paired"
+  | "kiosk.pair_refused"
   | "oauth.grant"
   | "oauth.refresh_replay"
   | "oauth.revoke"

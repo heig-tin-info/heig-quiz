@@ -22,6 +22,23 @@ describe("the request log", () => {
     );
   });
 
+  it("never writes a kiosk pairing code, nor the login that comes back to it (ADR-051 §8)", () => {
+    const code = "BCDF-GHJK";
+    for (const url of [
+      `/pair?code=${code}`,
+      `/app/api/pair/${code}`,
+      `/app/auth/login?next=${encodeURIComponent(`/pair?code=${code}`)}`,
+      `/app/auth/dev?next=${encodeURIComponent(`/pair?code=${code}`)}`,
+    ]) {
+      expect(redactUrl(url), url).not.toContain("GHJK");
+    }
+    expect(redactUrl(`/pair?code=${code}`)).toBe("/pair?…");
+    expect(redactUrl(`/app/api/pair/${code}`)).toBe("/app/api/pair/…");
+    // The approval carries its code in the body, and the page without one has nothing to hide.
+    expect(redactUrl("/app/api/pair")).toBe("/app/api/pair");
+    expect(redactUrl("/pair")).toBe("/pair");
+  });
+
   it("leaves every other URL as it is", () => {
     for (const url of ["/app/api/me", "/app/auth/login?next=%2Fp%2FABC123", "/settings?tab=x"]) {
       expect(redactUrl(url)).toBe(url);
