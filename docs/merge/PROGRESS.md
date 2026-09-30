@@ -48,7 +48,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | --- | --- | --- | --- | --- | --- | --- |
 | M1-01 | Pure domain into `packages/domain` | review | M0-03 | `merge/M1-01-domain` | #370 | `@quiz/domain` gains `ciScore`, `finalScore`, `repoName` (+`slugify`), `groupRepo`, `reviewDispatch`, `studentIgnore`, `zone` (`SCHOOL_TIME_ZONE`, `zonedIso`); §7.4 names, wire names kept (I16); M1-02 and M4-01 import these, no copies (I17) |
 | M1-02 | GitHub adapters, config, image | todo | M0-03 | | | |
-| M1-03 | `ActivityKind`, `ActivitySummary` union | in progress | M0-03 | `merge/M1-03-activity-kind` | | |
+| M1-03 | `ActivityKind`, `ActivitySummary` union | review | M0-03 | `merge/M1-03-activity-kind` | #373 | `modules/activity/`: `ActivityKind<K, Cards, Entry>` + `evaluationActivity` + `listForTeacher`/`listForClassroom` over a plain `KINDS` list, `GET /activities` served there; M1-05 can rely on `ActivitySummary` carrying `kind: "evaluation"` (mode kept), M5-01 on `evaluationActivity.studentCards(db, userId, classroomId, now)` (the home's sections for one classroom; the caller loads the enrollment); `activity_available` is `{activityKind, activityId, activityTitle}` (migration 0037, may need renumbering against M4-01) |
 | M1-04 | Missing primitives, long-form styles | todo | M0-05 | | | |
 | M1-05 | Web routes and mock skeleton | todo | M1-03 | | | |
 | M1-06 | Import script skeleton, identity, login adoption | todo | D04, D08 | | | |
