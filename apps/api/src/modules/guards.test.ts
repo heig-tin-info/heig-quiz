@@ -89,11 +89,12 @@ describe("reachOf", () => {
     expect(reachOf({ role: "admin" }, portal, later)).toBe("seats");
   });
 
-  it("never reaches further for a token, a delegated or a seb session, or a non-admin", () => {
+  it("never reaches further for a token, a delegated or a confined session, or a non-admin", () => {
     expect(reachOf({ role: "admin" }, null, now)).toBe("seats");
     expect(reachOf({ role: "admin" }, { ...portal, actorUserId: "someone" }, now)).toBe("seats");
     expect(reachOf({ role: "admin" }, { ...portal, kind: "impersonation" }, now)).toBe("seats");
     expect(reachOf({ role: "admin" }, { ...portal, kind: "seb" }, now)).toBe("seats");
+    expect(reachOf({ role: "admin" }, { ...portal, kind: "kiosk" }, now)).toBe("seats");
     expect(reachOf({ role: "teacher" }, portal, now)).toBe("seats");
   });
 
@@ -101,6 +102,7 @@ describe("reachOf", () => {
     expect(mayHoldSuperPowers({ role: "admin" }, portal)).toBe(true);
     expect(mayHoldSuperPowers({ role: "admin" }, null)).toBe(false);
     expect(mayHoldSuperPowers({ role: "admin" }, { ...portal, kind: "seb" })).toBe(false);
+    expect(mayHoldSuperPowers({ role: "admin" }, { ...portal, kind: "kiosk" })).toBe(false);
     expect(mayHoldSuperPowers({ role: "admin" }, { ...portal, actorUserId: "x" })).toBe(false);
     expect(mayHoldSuperPowers({ role: "teacher" }, portal)).toBe(false);
   });

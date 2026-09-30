@@ -231,7 +231,8 @@ export interface Caller {
 
 /**
  * Who may hold Super Powers at all (ADR-054), pure: an admin, through their
- * own portal session — not delegated, not a `seb` one, never a Bearer token
+ * own portal session — not delegated, not a confined one (`seb`, `kiosk`: a
+ * whitelist of `portal`, so a new kind is refused too), never a Bearer token
  * (`auth` null). The enable and disable routes ask this; so does
  * {@link reachOf}, and `GET /me` (`superPowersAvailable`).
  */
@@ -460,7 +461,10 @@ export async function findReadableClassroom(
     .limit(1);
   if (!row) return null;
   const payload = classroomPayload({
-    confined: confined(auth),
+    // Fail closed: every kind that is neither the portal nor a delegated
+    // session is confined here (`seb`, `kiosk`, and any kind added later),
+    // not only the ones `confined()` lists. A null auth is an API token.
+    confined: auth !== null && auth.kind !== "portal" && !delegated(auth),
     delegated: delegated(auth),
     staff: row.staff,
     seat: row.seat !== null,
