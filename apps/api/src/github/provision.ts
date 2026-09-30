@@ -14,7 +14,7 @@ import { join } from "node:path";
 import type { Octokit } from "octokit";
 
 import { inviteCollaborator } from "./collaborators.js";
-import { authUrl, gitRunner } from "./git.js";
+import { gitRunner, repoUrl } from "./git.js";
 import { pushWithRetry } from "./retry.js";
 
 /**
@@ -40,8 +40,6 @@ function isPlanRestriction(err: unknown): boolean {
   return status === 403 && PLAN_RESTRICTION.test(String(message ?? ""));
 }
 
-// Provisioning only clones and pushes existing refs: no bot identity needed.
-const { git, gitBare } = gitRunner();
 
 export interface ProvisionResult {
   repoId: number;
@@ -81,7 +79,9 @@ export async function provisionStudentRepo(opts: {
 }): Promise<ProvisionResult> {
   const { octokit, token, org, squashedRepo, targetRepo, branches, studentLogin } = opts;
   const workMode: WorkMode = opts.workMode ?? "free";
-  const auth = (repo: string) => authUrl(token, org, repo);
+  // Provisioning only clones and pushes existing refs: no bot identity needed.
+  const { git, gitBare } = gitRunner({ token });
+  const url = (repo: string) => repoUrl(org, repo);
 
   // 1. Creation (idempotent: 422 name already exists = step already done).
   let created = true;
@@ -130,13 +130,13 @@ export async function provisionStudentRepo(opts: {
   if (needPush) {
     const work = mkdtempSync(join(tmpdir(), "quiz-prov-"));
     try {
-      git(work, "clone", "--quiet", "--bare", auth(squashedRepo), "src.git");
+      git(work, "clone", "--quiet", "--bare", url(squashedRepo), "src.git");
       const refspecs = branches.map((b) => `refs/heads/${b}:refs/heads/${b}`);
       // The freshly created repository may still be provisioning on GitHub's
       // side: retry the push on transient failures instead of surfacing
       // "provisioning failed" to the student.
       await pushWithRetry(() =>
-        gitBare(join(work, "src.git"), "push", "--quiet", auth(targetRepo), ...refspecs),
+        gitBare(join(work, "src.git"), "push", "--quiet", url(targetRepo), ...refspecs),
       );
     } finally {
       rmSync(work, { recursive: true, force: true });

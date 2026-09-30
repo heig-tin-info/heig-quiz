@@ -132,7 +132,6 @@ function rateLimitReset(err: unknown, now: number): number | null {
   return null;
 }
 
-
 export interface LiveRead {
   state: RepoLiveState | null;
   /** Older than the TTL: a background refresh is under way. */

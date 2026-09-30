@@ -13,9 +13,9 @@ export async function pushWithRetry(fn: () => void): Promise<void> {
       fn();
       return;
     } catch (err) {
-      const detail =
-        String((err as { stderr?: Buffer | string }).stderr ?? "") + String(err);
-      if (attempt >= delays.length || !TRANSIENT_PUSH.test(detail)) throw err;
+      // `gitRunner` rethrows a plain Error whose message carries git's
+      // (redacted) stderr: the message is all there is to match.
+      if (attempt >= delays.length || !TRANSIENT_PUSH.test(String(err))) throw err;
       await new Promise((r) => setTimeout(r, delays[attempt]));
     }
   }

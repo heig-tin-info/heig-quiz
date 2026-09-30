@@ -54,6 +54,15 @@ describe("GitHub tokens (N-SEC-16)", () => {
     );
   });
 
+  it("strips the authorization header git is handed, whatever its scheme", () => {
+    const basic = Buffer.from("x-access-token:v1.opaque").toString("base64");
+    expect(redactTokens(`http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}`)).toBe(
+      "http.https://github.com/.extraheader=AUTHORIZATION: basic ***",
+    );
+    expect(redactTokens("Authorization: Bearer eyJhbGciOi.x.y")).toBe("Authorization: Bearer ***");
+    expect(redactTokens("authorization: token v1.abc")).toBe("authorization: token ***");
+  });
+
   it("strips every bare token by its prefix", () => {
     for (const prefix of ["ghs", "ghu", "ghp", "gho", "ghr"]) {
       expect(redactTokens(`token ${prefix}_abc123XYZ leaked`)).toBe("token gh*_*** leaked");

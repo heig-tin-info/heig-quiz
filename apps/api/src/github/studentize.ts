@@ -17,7 +17,7 @@
 import { cpSync, existsSync, lstatSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
 
-import { parseStudentIgnore } from "./rules.js";
+import { parseStudentIgnore } from "@quiz/domain";
 
 export const OVERLAY_DIR = "student";
 export const IGNORE_FILE = ".studentignore";

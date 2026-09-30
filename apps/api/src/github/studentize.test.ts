@@ -4,7 +4,6 @@ import { dirname, join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { parseStudentIgnore } from "./rules.js";
 import { applyStudentHandout } from "./studentize.js";
 
 /*
@@ -28,19 +27,7 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-describe("parseStudentIgnore", () => {
-  it("keeps plain relative paths and drops comments and blanks", () => {
-    expect(parseStudentIgnore("# teacher only\n\nscripts/\n/.github/workflows/studentize.yml\r\n")).toEqual([
-      "scripts",
-      ".github/workflows/studentize.yml",
-    ]);
-  });
-
-  it("refuses anything that leaves the tree or touches git", () => {
-    expect(parseStudentIgnore("../outside\na/../../b\n.git\n.git/config\n./x\n/\n")).toEqual([]);
-  });
-});
-
+// `parseStudentIgnore` itself is tested in `@quiz/domain`.
 describe("applyStudentHandout", () => {
   it("replaces the solution with the overlay and drops teacher-only paths", () => {
     write("main.cpp", "// solution");

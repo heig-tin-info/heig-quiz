@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { accessSync, constants, statSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { z } from "zod";
@@ -242,7 +242,7 @@ const EnvSchema = z.object({
 
   /**
    * Quiz's OWN GitHub App (decision D23): never heig-classroom's, and in
-   * staging a separate App on a test organization (N-SEC-18). All six empty
+   * staging a separate App on a test organization (N-SEC-18). No App id
    * — the default — means the GitHub features are off and everything else
    * starts as usual. The key is a PEM file outside the repository and the
    * database (ADR-010); its path is made absolute below.
@@ -258,26 +258,17 @@ const EnvSchema = z.object({
   GITHUB_APP_CLIENT_SECRET: z.string().trim().default(""),
 });
 
-const GITHUB_KEYS = [
-  "GITHUB_APP_ID",
-  "GITHUB_APP_PRIVATE_KEY_PATH",
-  "GITHUB_APP_SLUG",
-  "GITHUB_WEBHOOK_SECRET",
-  "GITHUB_APP_CLIENT_ID",
-  "GITHUB_APP_CLIENT_SECRET",
-] as const;
-
 /** The shortest webhook secret production accepts (N-SEC-16). */
 export const GITHUB_WEBHOOK_SECRET_MIN = 32;
 
 /**
- * Production refusals of the GitHub App (N-SEC-16): once ANY `GITHUB_*` is
- * set, a half-configured App is refused rather than left silently off or
- * half working. Returns the reason, or null when the configuration stands.
+ * Production refusals of the GitHub App (N-SEC-16). No App id: GitHub is
+ * off, nothing to refuse. With one, a key that cannot be read, a missing
+ * slug or a brute-forceable webhook secret fail later, on a student's
+ * repository: refuse them at boot. Returns the reason, or null.
  */
-function githubRefusal(env: Record<(typeof GITHUB_KEYS)[number], string>): string | null {
-  if (GITHUB_KEYS.every((key) => env[key] === "")) return null;
-  if (env.GITHUB_APP_ID === "") return "GITHUB_APP_ID is required when any GITHUB_* is set";
+function githubRefusal(env: AppConfig): string | null {
+  if (env.GITHUB_APP_ID === "") return null;
   if (!readableFile(env.GITHUB_APP_PRIVATE_KEY_PATH)) {
     return "GITHUB_APP_PRIVATE_KEY_PATH must be a readable key file";
   }
@@ -291,8 +282,8 @@ function githubRefusal(env: Record<(typeof GITHUB_KEYS)[number], string>): strin
 function readableFile(path: string): boolean {
   if (path === "") return false;
   try {
-    readFileSync(resolve(path));
-    return true;
+    accessSync(resolve(path), constants.R_OK);
+    return statSync(resolve(path)).isFile();
   } catch {
     return false;
   }
@@ -396,17 +387,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       ? resolve(parsed.data.GITHUB_APP_PRIVATE_KEY_PATH)
       : "",
   };
-}
-
-/**
- * The GitHub App is configured: its id and a key file are set. Outside
- * production the key may still be missing on disk, and `githubApp()`
- * (github/app.ts) then stays off too.
- */
-export function githubEnabled(
-  config: Pick<AppConfig, "GITHUB_APP_ID" | "GITHUB_APP_PRIVATE_KEY_PATH">,
-): boolean {
-  return config.GITHUB_APP_ID !== "" && config.GITHUB_APP_PRIVATE_KEY_PATH !== "";
 }
 
 /** Scaleway credentials present: e-mails are really sent (otherwise logged). */

@@ -33,11 +33,14 @@ const secret = (url: string) => SECRET_PREFIXES.find((prefix) => url.startsWith(
  * `text` with every GitHub token masked: the installation token of an
  * `https://x-access-token:<token>@github.com/…` remote that git echoes on a
  * failure, and any bare token by its prefix (`ghs_` installation, `ghu_`
- * user-to-server, `ghp_` personal, `gho_` OAuth, `ghr_` refresh). Tokens
- * expire within the hour, but they are never stored nor logged at all.
+ * user-to-server, `ghp_` personal, `gho_` OAuth, `ghr_` refresh), and the
+ * `AUTHORIZATION: basic <base64>` header the git wrapper hands to git
+ * (`github/git.ts`). Tokens expire within the hour, but they are never
+ * stored nor logged at all. A safety net: the wrapper puts no token in a URL.
  */
 export function redactTokens(text: string): string {
   return text
+    .replace(/(authorization:\s*(?:basic|bearer|token)\s+)[A-Za-z0-9+/=._-]+/gi, "$1***")
     .replace(/x-access-token:[^@\s]+@/g, "x-access-token:***@")
     .replace(/\bgh[a-z]_[A-Za-z0-9_]+/g, "gh*_***");
 }

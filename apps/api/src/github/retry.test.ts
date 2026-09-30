@@ -24,16 +24,13 @@ describe("pushWithRetry", () => {
     expect(fn).toHaveBeenCalledTimes(2);
   });
 
-  it("matches transient markers in the git stderr buffer", async () => {
+  it("matches transient markers in git's stderr, carried by the message", async () => {
     vi.useFakeTimers();
     let calls = 0;
     const fn = vi.fn(() => {
       calls += 1;
-      if (calls === 1) {
-        const err = new Error("git push failed") as Error & { stderr?: Buffer };
-        err.stderr = Buffer.from("fatal: early EOF");
-        throw err;
-      }
+      // The shape gitRunner rethrows: execFileSync's message, stderr appended.
+      if (calls === 1) throw new Error("Command failed: git push -q https://github.com/o/r.git\nfatal: early EOF");
     });
     const done = pushWithRetry(fn);
     await vi.advanceTimersByTimeAsync(1000);

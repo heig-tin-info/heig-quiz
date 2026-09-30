@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import { githubEnabled, loadConfig, loginAllowed, mailEnabled, pgliteDir, teamsEnabled } from "./config.js";
+import { loadConfig, loginAllowed, mailEnabled, pgliteDir, teamsEnabled } from "./config.js";
 
 /*
  * The configuration is the last place a development convenience can be
@@ -166,7 +166,6 @@ describe("the GitHub App (N-SEC-16)", () => {
 
   it("is off with no GITHUB_* at all, in production too, and the rest boots", () => {
     const config = loadConfig(PROD);
-    expect(githubEnabled(config)).toBe(false);
     expect(config.GITHUB_APP_ID).toBe("");
     expect(config.GITHUB_APP_PRIVATE_KEY_PATH).toBe("");
     // Blank values count as absent.
@@ -175,7 +174,6 @@ describe("the GitHub App (N-SEC-16)", () => {
 
   it("boots a complete App in production, the key path made absolute", () => {
     const config = loadConfig({ ...PROD, ...APP });
-    expect(githubEnabled(config)).toBe(true);
     expect(config.GITHUB_APP_PRIVATE_KEY_PATH).toBe(pem);
     const relative = loadConfig({ GITHUB_APP_ID: "1", GITHUB_APP_PRIVATE_KEY_PATH: "secrets/k.pem" });
     expect(relative.GITHUB_APP_PRIVATE_KEY_PATH).toMatch(/^\/.*\/secrets\/k\.pem$/);
@@ -209,10 +207,9 @@ describe("the GitHub App (N-SEC-16)", () => {
     expect(() => loadConfig({ ...PROD, ...APP, GITHUB_APP_SLUG: "" })).toThrow(/GITHUB_APP_SLUG/);
   });
 
-  it("refuses a half-configured App: any GITHUB_* set requires the App id", () => {
+  it("is off without an App id, whatever else is set: nothing to refuse", () => {
     const { GITHUB_APP_ID: _id, ...withoutId } = APP;
-    expect(() => loadConfig({ ...PROD, ...withoutId })).toThrow(/GITHUB_APP_ID/);
-    expect(() => loadConfig({ ...PROD, GITHUB_WEBHOOK_SECRET: "w".repeat(40) })).toThrow(/GITHUB_APP_ID/);
+    expect(() => loadConfig({ ...PROD, ...withoutId, GITHUB_WEBHOOK_SECRET: "short" })).not.toThrow();
   });
 
   it("refuses nothing outside production", () => {

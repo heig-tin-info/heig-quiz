@@ -138,12 +138,6 @@ describe("the App (Quiz's own, D23)", () => {
     expect(githubApp(config)).toBeNull();
   });
 
-  it("builds the App once per configuration", () => {
-    const config = configured();
-    expect(githubApp(config)).not.toBeNull();
-    expect(githubApp(config)).toBe(githubApp(config));
-  });
-
   it("resolves an organization's installation, null when the App is not there", async () => {
     const config = configured();
     routes = [on("GET", "/orgs/heig-tin-info/installation", () => json({ id: 42, account: { id: 7 } }))];

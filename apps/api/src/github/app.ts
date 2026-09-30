@@ -17,7 +17,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 import { App, Octokit } from "octokit";
 
-import { type AppConfig, githubEnabled } from "../config.js";
+import type { AppConfig } from "../config.js";
 
 /** One `App` per configuration object: the process has one, the tests many. */
 let cached: { config: AppConfig; app: App | null } | undefined;
@@ -54,11 +54,17 @@ export const ThrottledOctokit: typeof Octokit = Octokit.defaults({
   },
 });
 
-/** The App, or null when it is not configured (the GitHub features are off). */
+/**
+ * The App, or null when it is not configured: no App id, or no key file on
+ * disk (production refuses the latter at boot, config.ts). `githubApp(config)
+ * !== null` is THE test of "GitHub is on"; nothing else decides it.
+ */
 export function githubApp(config: AppConfig): App | null {
   if (cached?.config === config) return cached.app;
   const app =
-    githubEnabled(config) && existsSync(config.GITHUB_APP_PRIVATE_KEY_PATH)
+    config.GITHUB_APP_ID !== "" &&
+    config.GITHUB_APP_PRIVATE_KEY_PATH !== "" &&
+    existsSync(config.GITHUB_APP_PRIVATE_KEY_PATH)
       ? new App({
           appId: config.GITHUB_APP_ID,
           privateKey: readFileSync(config.GITHUB_APP_PRIVATE_KEY_PATH, "utf8"),
