@@ -4,9 +4,11 @@ import type { DragEvent } from "react";
 import type { QuestionRow } from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { Badge, Card, Checkbox, cx, IconButton, pressable, RelativeTime, Skeleton } from "../ui";
-import { DifficultyDots, TypeGlyph, VersionCell } from "./QuestionTable";
+import { Badge, Card, Checkbox, cx, IconButton, RelativeTime, Skeleton } from "../ui";
+import { DifficultyDots, RowStatsButton, TypeGlyph, VersionCell, type StatsFor } from "./QuestionTable";
 import type { QuestionGroup } from "./QuestionGroups";
+import { StarButton } from "./stars";
+import { entryKey, type RowProps } from "./useQuestionBrowse";
 
 /**
  * The same questions as cards.
@@ -24,10 +26,23 @@ import type { QuestionGroup } from "./QuestionGroups";
  * three actions, on a hairline of their own at the bottom edge — always
  * drawn, not revealed on hover: a card is also what a touch screen shows,
  * and an action that needs a pointer to exist does not exist there.
+ *
+ * The card answers the same gestures as the table's row (`useQuestionBrowse`,
+ * and `QuestionTable` for why): a click, ↑/↓ and P show the question in the
+ * reading pane, Enter, a double-click and the pencil open the editor, Space and
+ * the star beside the name star it (F-POOL-10). A card is a focusable list item wearing
+ * `aria-current` when shown, not a button: a click on it does not do what
+ * Enter does. The arrows walk the cards in reading order,
+ * section after section, whatever the grid does with the columns.
+ *
+ * The grid counts its columns on its OWN width (`@container`), not the
+ * window's: when the reading pane docks beside it, the cards that fit are
+ * the ones the list has room for.
  */
 
 function QuestionCard({
   row,
+  browse,
   checked,
   onToggleCheck,
   onEdit,
@@ -35,8 +50,12 @@ function QuestionCard({
   onDelete,
   onDragStart,
   readOnly,
+  statsFor,
+  onStar,
 }: {
   row: QuestionRow;
+  browse: RowProps;
+  onStar: () => void;
   checked: boolean;
   onToggleCheck: () => void;
   onEdit: () => void;
@@ -44,25 +63,29 @@ function QuestionCard({
   onDelete: () => void;
   onDragStart?: (event: DragEvent) => void;
   readOnly: boolean;
+  statsFor?: StatsFor | undefined;
 }) {
   const t = useT();
   return (
     <Card
-      onClick={onEdit}
-      {...pressable(onEdit)}
+      role="listitem"
+      {...browse}
       draggable={onDragStart !== undefined}
       onDragStart={onDragStart}
       className={cx(
         "group flex min-w-0 cursor-pointer flex-col gap-3 p-4 transition-colors hover:bg-surface-2/70",
         checked && "border-accent",
+        "aria-[current=true]:bg-accent-soft",
       )}
     >
       <div className="flex min-w-0 items-start gap-2">
         <TypeGlyph type={row.type} />
-        <span className="min-w-0 flex-1 break-words font-mono text-[13px] font-bold">
+        <span className="min-w-0 flex-1 break-words font-mono text-[13px] font-bold group-aria-[current=true]:text-accent">
           {row.internalName}
         </span>
         {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
+        <RowStatsButton row={row} statsFor={statsFor} />
+        <StarButton row={row} onToggle={onStar} />
         {readOnly ? null : (
           <span onClick={(e) => e.stopPropagation()}>
             <Checkbox
@@ -126,10 +149,12 @@ function QuestionCard({
 
 export function QuestionCardsSkeleton({ cards = 6 }: { cards?: number }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {Array.from({ length: cards }, (_, i) => (
-        <Skeleton key={i} className="h-36 w-full" />
-      ))}
+    <div className="@container">
+      <div className="grid gap-3 @xl:grid-cols-2 @4xl:grid-cols-3">
+        {Array.from({ length: cards }, (_, i) => (
+          <Skeleton key={i} className="h-36 w-full" />
+        ))}
+      </div>
     </div>
   );
 }
@@ -138,24 +163,33 @@ export function QuestionCards({
   groups,
   checked,
   onToggleCheck,
+  rowProps,
   onEdit,
   onDuplicate,
   onDelete,
   onDragStart,
   readOnly = false,
+  statsFor,
+  onStar,
 }: {
   groups: QuestionGroup[];
   checked: ReadonlySet<string>;
   onToggleCheck: (id: string) => void;
+  /** Looking and walking, as on the table's rows (`useQuestionBrowse`). */
+  rowProps: (key: string, row: QuestionRow) => RowProps;
+  /** The pencil. */
   onEdit: (row: QuestionRow) => void;
   onDuplicate: (row: QuestionRow) => void;
   onDelete: (row: QuestionRow) => void;
   /** Dragging a card onto a sidebar pool moves the question there (ADR-017). */
   onDragStart?: (event: DragEvent, row: QuestionRow) => void;
   readOnly?: boolean;
+  statsFor?: StatsFor | undefined;
+  /** The card's star (F-POOL-10), for every role. */
+  onStar: (row: QuestionRow) => void;
 }) {
   return (
-    <div className="space-y-6">
+    <div className="@container space-y-6">
       {groups.map((group) => (
         <section key={group.key} className="space-y-2.5">
           {group.label === null ? null : (
@@ -164,11 +198,12 @@ export function QuestionCards({
               <span className="tabular-nums text-fg-faint">{group.rows.length}</span>
             </h2>
           )}
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div role="list" className="grid gap-3 @xl:grid-cols-2 @4xl:grid-cols-3">
             {group.rows.map((row) => (
               <QuestionCard
-                key={`${group.key}:${row.id}`}
+                key={entryKey(group, row)}
                 row={row}
+                browse={rowProps(entryKey(group, row), row)}
                 checked={checked.has(row.id)}
                 onToggleCheck={() => onToggleCheck(row.id)}
                 onEdit={() => onEdit(row)}
@@ -176,6 +211,8 @@ export function QuestionCards({
                 onDelete={() => onDelete(row)}
                 onDragStart={onDragStart ? (event) => onDragStart(event, row) : undefined}
                 readOnly={readOnly}
+                statsFor={statsFor}
+                onStar={() => onStar(row)}
               />
             ))}
           </div>

@@ -20,11 +20,12 @@
  * which is why the sections are one component taking a render function.
  */
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarClock, CheckCircle2, GraduationCap, School } from "lucide-react";
 
 import { formatPoints } from "@quiz/domain";
 import type {
+  DrillSession,
   EvaluationCard as EvaluationCardData,
   JoinResult,
   Me,
@@ -34,6 +35,8 @@ import type {
 } from "@quiz/contracts";
 
 import { api } from "../api";
+import { useDrillAvailability } from "../drill/api";
+import { sessionCourses, sessionLine } from "../drill/format";
 import { feedbackLink } from "../grading";
 import { formatDuration, useT, type TFunction } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
@@ -53,6 +56,7 @@ import {
   useNow,
 } from "../ui";
 import { studentClassroomsKey, studentHomeKey } from "../queryKeys";
+import { HOME_SECTION } from "./bottomNavSlots";
 import { useRetake } from "./retake";
 import { SebLaunchModal } from "./SebLaunchModal";
 
@@ -242,6 +246,24 @@ function PollRow({ poll, navigate }: { poll: StudentPollCard; navigate: (r: Rout
   );
 }
 
+/**
+ * Today's drill (ADR-041 §6), drawn only while it holds something. Its badge
+ * is the home's "today's drill is available"; its button is secondary, since
+ * an evaluation open now is what the page's primary is for.
+ */
+function DrillRow({ session, navigate }: { session: DrillSession; navigate: (r: Route) => void }) {
+  const t = useT();
+  return (
+    <ActivityRow
+      title={t("drill.today.title")}
+      where={sessionCourses(session.cards)}
+      line={sessionLine(session, t)}
+      badge={{ label: t("drill.badge"), accent: true }}
+      action={{ label: t("drill.practise"), onClick: () => navigate({ view: "drill" }) }}
+    />
+  );
+}
+
 function JoinCard() {
   const t = useT();
   const toast = useToast();
@@ -314,6 +336,18 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
   // (`retake.ts`). The server decides (`canRetake`, and `retake_refused` on
   // the route); on success the player opens on the new attempt.
   const retake = useRetake(navigate);
+  // The ONE scroll of the bottom bar's slots (#191): to the section the
+  // address names once the lists are drawn, and back to the top when a slot
+  // cleared it. Optional call: `scrollIntoView` does not exist under jsdom.
+  const drawn = !home.isLoading && !rooms.isLoading;
+  const hash = window.location.hash;
+  const lastHash = useRef(hash);
+  useEffect(() => {
+    if (!drawn) return;
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView?.({ block: "start" });
+    else if (lastHash.current) window.scrollTo({ top: 0 });
+    lastHash.current = hash;
+  }, [drawn, hash]);
   // Issue #270: the SEB card opens its instructions; the file comes from there.
   const [sebFor, setSebFor] = useState<EvaluationCardData | null>(null);
 
@@ -345,6 +379,10 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
       onClick: () => navigate({ view: "attempt", evaluationId: card.id }),
     };
   };
+
+  // ADR-041 §6 (#317): today's drill, while it holds something — the home's
+  // "today's drill is available", beside what else is open now.
+  const drill = useDrillAvailability(true).session;
 
   const polls = home.data?.polls ?? [];
   const open = home.data?.open ?? [];
@@ -378,7 +416,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
             {polls.map((poll) => (
               <PollRow key={poll.id} poll={poll} navigate={navigate} />
             ))}
-            {open.length === 0 && polls.length === 0 ? (
+            {open.length === 0 && polls.length === 0 && !drill ? (
               <Card>
                 <EmptyState icon={CheckCircle2} title={t("shome.empty.title")}>
                   {t("shome.empty.body")}
@@ -398,6 +436,8 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
                 />
               ))
             )}
+            {/* After what closes: an evaluation open now is the more urgent. */}
+            {drill ? <DrillRow session={drill} navigate={navigate} /> : null}
           </section>
 
           <section className="space-y-3">
@@ -411,7 +451,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
             )}
           </section>
 
-          <section className="space-y-3">
+          <section id={HOME_SECTION.grades} className="space-y-3">
             <SectionHeading title={t("shome.past")} />
             {past.length === 0 ? (
               <Card className="px-5 py-4 text-sm text-fg-muted">{t("shome.past.empty")}</Card>
@@ -443,7 +483,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
         </>
       )}
 
-      <section className="space-y-3">
+      <section id={HOME_SECTION.courses} className="space-y-3">
         <SectionHeading title={t("shome.classrooms")} />
         {rooms.isLoading ? (
           <Skeleton className="h-20 w-full" />

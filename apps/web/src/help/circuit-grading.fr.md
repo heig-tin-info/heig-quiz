@@ -20,6 +20,16 @@ Un stimulus est réussi quand l'écart reste sous la **tolérance**, exprimée e
 fraction de l'amplitude crête à crête de la référence : 5 % est indulgent, 1 %
 exige les valeurs exactes.
 
+Un stimulus réglé sur **Diagramme de Bode** balaie plutôt une bande de
+fréquences, autour de la polarisation continue que vous indiquez, et compare le
+gain et la phase de la sortie. Il est réussi quand la courbe de l'étudiant reste
+dans la **tolérance de gain** (1 dB par défaut) et la **tolérance de phase**
+(10°, ou aucune) de la vôtre à chaque fréquence. Là où votre courbe descend de
+plus que le **plancher** (60 dB) sous son propre maximum, la sortie de
+l'étudiant doit seulement rester aussi basse. Un diagramme de Bode est une vue
+petits signaux : réservez-le aux filtres et aux amplificateurs utilisés dans
+leur zone linéaire.
+
 Ce mode exige un circuit de référence et au moins un stimulus, sans quoi la
 question ne se publie pas. Un étudiant dont le circuit ne peut pas être
 transformé en netlist — broche en l'air, valeur hors plage — n'obtient rien

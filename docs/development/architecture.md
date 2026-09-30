@@ -280,7 +280,9 @@ flowchart TB
   RJOB --> RUN["POST /run on the runner"]
   RUN -- "outcome" --> FIN["finalizeRunnerCode, validated"]
   RUN -- "runner unavailable" --> PROP["proposed, with a reason"]
-  CELL -- "needs a human or an LLM" --> PROP
+  CELL -- "essay, with an LLM service" --> LLM["app.llm.grade: proposed, with a confidence"]
+  LLM --> PANEL
+  CELL -- "needs a human" --> PROP
   PROP --> PANEL["grading panel: validate, adjust, override with a comment"]
   PANEL --> WRITE["writeGrading: supersede the previous one, one transaction"]
   AUTO --> REL

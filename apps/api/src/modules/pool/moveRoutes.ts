@@ -1,5 +1,4 @@
 /** Moving questions between pools (ADR-017). */
-import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import {
@@ -9,7 +8,7 @@ import {
   type MoveResult,
 } from "@quiz/contracts";
 
-import { pools, questions } from "../../db/schema.js";
+import type { pools } from "../../db/schema.js";
 import { findAccessiblePool, requirePoolRole } from "../guards.js";
 import { invalid } from "../http.js";
 import { publish } from "../../events.js";
@@ -21,7 +20,7 @@ import type { PoolRouteContext } from "./routeContext.js";
 type BlockingCourse = service.UsingCourse & { mayLink: boolean };
 
 export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
-  const { requireTeacher, trace, mine } = ctx;
+  const { requireTeacher, trace, questionsInReach } = ctx;
 
   /**
    * `POST /questions/move` — the question changes pool and KEEPS its id.
@@ -50,7 +49,7 @@ export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     if (!body.success) return invalid(reply, body.error);
     const ids = [...new Set(body.data.questionIds)];
 
-    const sources = await moveSources(req, ids);
+    const sources = await questionsInReach(req, ids);
     if (sources.length !== ids.length) return reply.code(404).send({ error: "not_found" });
     const target = await findAccessiblePool(app.db, req.user!, body.data.targetPoolId);
     if (!target) return reply.code(404).send({ error: "not_found" });
@@ -100,19 +99,6 @@ export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     };
     return result;
   });
-
-  /**
-   * Every source question of a move, LOADED under `poolAccess` in one query:
-   * a list that comes back short holds at least one question this caller
-   * cannot see, and the answer is the same 404 a missing id would give.
-   */
-  function moveSources(req: FastifyRequest, ids: string[]) {
-    return app.db
-      .select({ question: questions, pool: pools })
-      .from(questions)
-      .innerJoin(pools, eq(questions.poolId, pools.id))
-      .where(and(inArray(questions.id, ids), mine(req)));
-  }
 
   /**
    * The courses that already PLAY one of these questions and do not draw
@@ -186,7 +172,7 @@ export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   /** The audit rows and the refresh hints of a move that went through. */
   async function afterMove(
     req: FastifyRequest,
-    sources: Awaited<ReturnType<typeof moveSources>>,
+    sources: Awaited<ReturnType<typeof questionsInReach>>,
     target: typeof pools.$inferSelect,
     categoryId: string | null,
     linkCourseIds: string[],

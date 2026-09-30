@@ -247,7 +247,14 @@ export type FlagBody = z.infer<typeof FlagBody>;
 export const FlagResponse = z.object({ flagged: z.boolean(), serverNow: z.iso.datetime() });
 export type FlagResponse = z.infer<typeof FlagResponse>;
 
-export const PositionBody = z.object({ itemId: z.uuid() });
+/**
+ * What is on the student's screen (F-LIVE-06, ADR-039): an item id is the
+ * question shown, `null` is no question on screen (the tab hidden, the
+ * player left). The server keeps the last item as the reload bookmark and
+ * measures the time each question is shown from these reports, on its own
+ * clock.
+ */
+export const PositionBody = z.object({ itemId: z.uuid().nullable() });
 export type PositionBody = z.infer<typeof PositionBody>;
 
 export const SubmitBody = z.object({ confirm: z.literal(true) });

@@ -35,8 +35,14 @@ raw values live in `src/style.css` and swap in dark mode without any
 | `success` / `success-soft` | `#1f7a4d` / `#e7f4ec` | `#4cc38a` / `rgb(76 195 138 / 0.14)` | semantic only |
 | `warning` / `warning-soft` | `#a35810` / `#fdf1e2` | `#f0a04b` / `rgb(240 160 75 / 0.14)` | semantic only |
 | `danger` / `danger-soft` | `#c2242a` / `#fbe9e9` | `#f26d72` / `rgb(242 109 114 / 0.14)` | destructive actions, failures |
-| `info` / `info-soft` | `#1268a0` / `#e8f2f9` | `#58a9e0` / `rgb(88 169 224 / 0.14)` | "a set of possibilities", and the progress half of a cell state |
+| `info` / `info-soft` | `#1268a0` / `#e8f2f9` | `#58a9e0` / `rgb(88 169 224 / 0.14)` | "a set of possibilities", the progress half of a cell state, and a `SegmentedBar` share that is no verdict (the pool's choices picked, ADR-043) |
 | `info-mid` / `on-info-mid` | `#b8d7f0` / `#0d5286` | `rgb(88 169 224 / 0.35)` / `#a6d3f3` | the ANSWERED cell of the live grid only |
+
+A grade (`<Grade>`, `apps/web/src/Grade.tsx`) is written in `danger` below
+4.0 and in `warning` from 4.0 to 4.4, in the ink from 4.5; its ECTS label
+("Satisfactory (D)") is on hover and in the text for a screen reader. The
+histogram's bars follow the same bands. Teacher and student see the same
+colours.
 
 Rule: strip the accent and every screen must still read. Hierarchy comes
 from size, weight and position, never from red.
@@ -127,7 +133,9 @@ Two pairs stay below their target, on purpose:
 - Rhythm: tight inside a group (4–8), comfortable inside a card (16–20),
   generous between sections (32) and between the page header and its body
   (24). A screen that is all 16 px gaps has made no decision.
-- Content column: 1120 px max, 24 px side gutter (16 on phones).
+- Content column: 1120 px max, 32 px side gutter from `sm` (16 on phones), written
+  once as `PAGE_COLUMN` (`ui/page.tsx`); the pool widens past it by the
+  width of its docked question pane (below).
 - A navigation list is capped, not scrolled: the sidebar shows twelve
   classrooms and a "Show all (N)" row, always including the one being read.
   Thirty names in a column is a wall, and it pushes the account row off.
@@ -149,7 +157,7 @@ Two pairs stay below their target, on purpose:
   the scale, on purpose:
   - **28 px, the pool's floating bulk bar.** It is a pill on one line — the
     browser clamps a radius to half the height, so 28 px on a 44 px bar IS
-    the pill — but on a phone its four actions wrap to two lines, and
+    the pill — but on a phone its five actions wrap to two lines, and
     `rounded-full` would turn that taller bar into a lens. 28 px keeps it a
     pill while it fits and a rounded rectangle when it does not.
   - **14 px, the poll projection's QR tile.** The tile belongs to the
@@ -215,7 +223,10 @@ lists and two strips each wrote that arithmetic out by hand.
 An element made clickable without being a button (a card, a table row) takes
 `pressable()` from `ui/layers.tsx`: `tabIndex={0}` plus Enter and Space, with Space
 prevented from scrolling the page. A row keeps `role="row"`; announcing it as
-a button would cost the reader the table around it.
+a button would cost the reader the table around it. The pool's rows and cards
+are the exception, because there a click LOOKS and Enter EDITS: they answer
+their own keys (`useQuestionBrowse`, below), P is the keyboard's click and
+Space stars the question.
 
 Ctrl+K (⌘+K on Apple keyboards) opens and closes the command palette, from
 anywhere, including from inside a field: that is the convention wherever the
@@ -288,6 +299,13 @@ over it, not as one more card in it.
   with the same gradient, the overlay shadow plus a faint accent halo. The
   target wears a 2 px accent ring 6 px out, with two ripples. `Z.coach` sits
   over the page and its sticky bars, under every dialog.
+- Bottom docks: a bar docked on the window's bottom edge and marked
+  `data-bottom-dock` (the student's bottom bar, the launch step's phone dock)
+  takes its height out of the window the coach places in (`visibleBottom`).
+  The bubble stays above it, the target is scrolled to the middle of what is
+  left, the ring is clipped where the bar starts, and a target wholly behind
+  the bar hides the bubble until it is scrolled back: a bubble never covers
+  the navigation a thumb is reaching for, nor points into it.
 - Motion: pops out of its own tail (scale 0.35 → 1.06 → 1, a degree of
   rotation, 620 ms), floats (4 px, 3.2 s), glides to the next target with an
   overshooting ease (500 ms) while its content cross-fades, and ends a walk
@@ -602,7 +620,8 @@ live in `ui/state.ts`, each written once.
   What a pick does — close, stay open for another tag — is the call site's.
   It exists because three comboboxes wrote the pattern out by hand and had
   started to disagree on the panel and the highlighted row.
-- Toast: bottom-right, `surface` + hairline + overlay shadow. Tones
+- Toast: bottom-right, above the student's bottom bar when it is up
+  (`--bottom-nav-h`), `surface` + hairline + overlay shadow. Tones
   `success` / `error` / `warning`, plus `progress` (a neutral spinner) for
   "this has started", which is the only report an action taken from a menu
   can get. A failed mutation reports through `useErrorToast()` (`notify.tsx`):
@@ -844,6 +863,43 @@ live in `ui/state.ts`, each written once.
   keeps its place instead (the batch banner says "nothing left" rather than
   disappearing). Below `lg` the list becomes a `Select` above the answer and
   the same alignment happens under the phone's top bar.
+- Master and detail (the pool, browse to choose): a click on a question row
+  or card shows the question as a student reads it (`QuestionPreview`, the
+  picker's reading pane too, one request and one cache entry) in an in-page
+  pane, never a `Sheet` — the list stays live beside it. Look and edit are
+  two gestures (`pool/useQuestionBrowse.ts`). A click and P look; ↑/↓/Home/End
+  walk the rows in the order they are DRAWN (sections included), stop at the
+  last loaded one (`listboxIndex` with `wrap: false`) and, where the pane can
+  dock, show the row they reach — opening the pane if it was closed, since
+  browsing with the arrows is the point; on a narrow window they only move,
+  and P is the keyboard's way in (`aria-keyshortcuts`, and in the shortcut
+  strip). Enter, a double-click and the pencil edit, in the same tab; Space
+  and the row's star toggle the caller's favourite (F-POOL-10) — an outline
+  `IconButton` with `aria-pressed`, filled in `fg` when starred, never in
+  accent or warning: a favourite is a personal mark, not the screen's one red
+  thing nor a state that needs attention, and a column of amber stars would
+  outshout the draft badges; Escape (handled once, on the
+  wrapper of list and pane) and the ✕ close and hand the focus back to the
+  row. One row is in the Tab order (roving tabindex), the shown one wears
+  `aria-current` and the grading panel's `accent-soft` with its name in
+  `accent`; a card is a focusable `listitem`, not a button, since its click
+  is not its Enter. The pane is a named `aside` whose heading is a polite
+  live region: walking the list announces the name, not the body. From
+  `ASIDE_MIN_WIDTH` the pane (30 rem, `surface-2`, hairline, `card` radius,
+  sticky and scrolling on its own) docks right, and the page widens past the
+  shell's cap by exactly the pane and its gap, computed from `PAGE_COLUMN`
+  (`ui/page.tsx`, the one source of the cap and gutter the shell uses too).
+  The widened page keeps the list's left edge and grows right, moving left
+  only by what the window lacks, so a clicked row stays under the pointer on
+  a very wide screen; there every column stays, and a narrower one gives
+  them up by `T`'s priorities — the table measures its own container. Below
+  `ASIDE_MIN_WIDTH` the pane replaces the list with a Back button, as in the
+  picker; on that width a click waits 300 ms for a second one (not under a
+  coarse pointer, which has no double-click), or the double-click would lose
+  its row under the pointer. No empty pane: it appears on the first look,
+  and which question it shows is screen state, never the URL. The cards
+  count their columns on their own container for the same reason as the
+  table.
 - SyncBadge: whether the student's work is safe — `saved`, `saving`,
   `offline`, `closed` — icon plus word, in a polite live region, since it is
   the answer to "did that save?". The word hides under `sm` where the zen bar
@@ -1146,6 +1202,76 @@ or EDIT them?". A list you scan stays a table however many columns it has to
 drop. A list you edit field by field becomes panels as soon as a row needs
 more than one line.
 
+## The grading table (ADR-044)
+
+One question's answers as a table (`src/grading/`, origin
+`mockups/grading.html`). What is particular to it:
+
+- **Widths.** The answer columns share the width equally (a `<colgroup>`
+  of `100% / n`); the verdict, the student, the points and the actions are
+  `w-px whitespace-nowrap`. A wide empty last column is the one layout this
+  table must never show. Past the page's width it scrolls sideways under
+  its sticky verdict (and student) column; every `<td>` carries its own fill
+  so a sticky cell never lets the scrolled ones show through.
+- **Verdict glyph.** A 22 px `rounded-md` square: correct = solid `success`
+  and an `on-fill` check; partial = HATCHED, `success` stripes over
+  `success` at 40 % on `surface` (`color-mix`), a small solid check square
+  inside — "some of it" before the eye reaches the check; wrong = solid
+  `danger` and a cross; not judged = a dashed `fg-faint` outline and "?",
+  its reason in the tooltip. The expected row's mark is a star on `info`.
+  It is NOT the live grid's `VerdictCell` (`ui/live.tsx`), on purpose: that
+  cell is a tinted tile of a grid where partial reads AMBER beside the blue
+  of progress, one of nine states; here there is no progress to tell apart,
+  and the owner wanted partial credit to read as green in part — so the
+  stripes. The grid keeps its scale, the table its own.
+- **The key's row** is `info-soft` (laid as a flat gradient over `surface`,
+  so it stays opaque in dark mode where `info-soft` is translucent), with a
+  2 px `line-strong` rule under it. `info` because the key is "a set of
+  possibilities", never a verdict.
+- **Cells** come from the question type (`@quiz/ui` `AnswerChip`,
+  `ChoiceMark`, `NoAnswer`): a mono chip on `success-soft` / `danger-soft`,
+  the key in `info` without a fill; a 16 px tick box filled `success` or
+  `danger`, dashed `success` for a correct choice left out.
+- **Counts and words.** A chip counting parts ("3/4 tests", "5/9 right",
+  "2/2 stimuli") and a chip naming a column are in the text face
+  (`WordChip`); mono is for what the student typed. A run's state is read
+  once, by `runStatus` (`@quiz/ui`): "runner…" while a verdict may still
+  come, a red "Not run" when it will not, nothing on a teacher's override.
+  An empty cell is `Dash` (a faint em dash). A count (`countTone`) that is
+  only partly right is `partial`: `success` text, a dashed
+  `success` outline and no fill — the "missed" mark's convention, green in
+  part. A cell that must not ask its column for width (a column per card)
+  wraps its chip in `block w-0 min-w-full`, so the equal shares hold.
+- **Clamped code box** (`ClampedCode`, `@quiz/ui`, for `code` and
+  `codeimage`): mono 12 px / 1.45 on `surface-2`, `rounded-field`,
+  `w-full` — the WHOLE column, never fit to the longest line. Past five
+  lines (two past: one more line is shown, not hidden) it is clamped to
+  five whole lines plus a foot: "⋯ N more lines" in 11 px `fg-muted` over a
+  `surface-2` fade. It is then a button (`aria-expanded`, Enter / Space,
+  `cursor-zoom-in` / `-out`): a click unfolds it in place and stops there,
+  never opening the panel. The key's box writes in `info`. A chip (tests,
+  "runner…") or a 56 px thumbnail sits before it in a fixed 96 px lead, so
+  the programs of every row start at one line. A thumbnail is drawn only
+  once its row nears the viewport.
+- **An essay** is plain text clamped to three lines (`line-clamp-3`,
+  13 px, `fg-muted`, at most 110ch), the key's in `info`.
+- **No fill for a row waiting for a decision** (owner decision): its glyph
+  and its visible action say it — Validate for a proposal the batch would
+  take, **Grade** for a 0-point placeholder (an essay), which opens the
+  panel on the adjustment form and is never validated unread (nor by V). The selected row is `surface-2` with a
+  3 px inset bar on its left (`fg`; `info` on the key's row). Adjust stays
+  invisible on a validated row until hover, focus or selection — hidden,
+  not removed, so the column keeps its width.
+- **The key's actions.** Edit question (only for whoever may write the
+  pool) and Re-grade are `IconButton`s. While a newer version of the
+  question is published, Re-grade becomes a `secondary` `sm` Button — icon
+  and "New version", no number — with "A newer version is published —
+  re-grade" as its tooltip and name: a filled secondary, never the accent,
+  which stays Validate N.
+- **The answer panel** is a `Sheet` with two optional slots added for it:
+  `leading` (the verdict glyph before the title) and `actions` (↑ / ↓
+  before the close button).
+
 ## Poll outcome donut (launcher, "Recent polls")
 
 A 36 px ring beside each row of the launcher's "Recent polls" (issue #161,
@@ -1186,25 +1312,100 @@ the Results "Questions" tab on the wall. It takes the projection's
   bar of the class with its legend (the same list of parts), and the success
   rate in large mono with a half-size `%`, "out of n papers" under it.
 - **Thin bars are the one reading** (`SegmentedBar`, `ui/bar.tsx`): 8 px per
-  choice or test case, 6 px under a cloze blank. No count beside a bar; the
-  figures are in the hover and focus bubble and the accessible name, one
-  sentence built from the parts ("wrong: 4 · no answer: 1"). A short
-  answer's row is the exception: its count is the row's content.
+  choice or test case, 6 px under a cloze blank. A choice's bar is the share
+  of the papers that ticked it and a test case's its passes, each with its
+  figure at the right (tabular, like a short answer's row, whose count is the
+  row's content). Every bar also speaks in the hover and focus bubble and its
+  accessible name, one sentence built from the parts ("wrong: 4 · no
+  answer: 1", "correct answer · ticked: 13"), so colour is never its only
+  reading.
 - **Colours**: full credit `success`, partial `success` hatched over the
   track, wrong `danger`, no answer `warning`. Red, unlike the poll donut,
   because a graded paper marks answers wrong (ADR-033); colour is never
   alone — 2 px gaps, texture for partial, a fixed order, the figures in words.
+  A choice's bar is ONE part: `success` on a key, `danger` on a distractor,
+  the rest the track; a blank's is right `success` and wrong `danger` over
+  the track, an empty blank being the track too. Amber, the absence, is never
+  a part of either — a choice nobody ticked is not a choice left blank.
 - **The key is not framed**: a key's letter is filled `success` / `on-fill`, a
   distractor's is `danger-soft` / `danger` with its text in `fg-muted`.
-- **Hidden first**: a choice's bar drains to its track, a blank keeps its
-  width without ink, the reference solution is hatched `surface-2` /
+- **Hidden first**: a choice's bar keeps its length in `muted` and says
+  "ticked" only (how the room voted, which the ticks alone do not tell the
+  key from), its letter stays neutral; a blank keeps its width without ink
+  over one muted length, the share that filled it in — the right / wrong
+  split IS the key; the reference solution is hatched `surface-2` /
   `surface-3`. R reveals; E adds the explanation, only where there is one.
+- **The same pieces on the page**: the Results "Questions" tab draws them
+  with the `page` density, always revealed. The sizes of both densities are
+  one table, `SCALE` in `results/CorrectionQuestion.tsx`. An mcq, a cloze and
+  a short answer are drawn whole; any other type keeps its own review for the
+  statement and gets the answer groups and the program below it. "Present",
+  in the Results header beside "Grading panel", opens this screen once the
+  evaluation is over.
 
 ## Voice
 
 Sentence case everywhere. Buttons start with a verb ("Create question",
 "Publish"). Status words are lowercase in badges. Every surface, teacher and
 student alike, goes through `t()` with an `en` and an `fr` entry (N-I18N-01).
+
+## The student's bottom bar (phone)
+
+A student opens the app on a phone far more often than a teacher does, and
+reaches for it with a thumb (#191, the product owner's decision of
+2026-09-29). So under `lg` — the frame's own breakpoint, where the sidebar
+gives way to the top bar; there is no second one — the STUDENT UI gets a bar
+at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
+
+- **Student UI only.** A student, or a teacher in student view, who is looking
+  at exactly what a student gets. The teacher UI is desktop first and keeps its
+  top bar and drawer on a phone.
+- **Navigation, never an action.** No slot wears the accent fill; the current
+  one is the sidebar's selection (`accent` label in semibold, an `accent-soft`
+  pill behind its icon), so the screen's one primary button is still the one
+  red FILL on it (invariant 2).
+- **Slots**, each an icon over a visible 11 px label, sharing the width
+  equally: Activities (the home, "Open now"), Courses (the home's "My
+  classrooms", `/#classrooms`), Grades (the home's "Past evaluations",
+  `/#past`, and lit on a feedback page), Profile (the settings), and Drill
+  (#317, `/drill`) in the MIDDLE. A slot that leads to a section of the home
+  is an anchor on it, not a page of its own: the home already is those lists.
+- **Drill is drawn only when it leads somewhere**: for a student with at
+  least one classroom whose drill is on (`visibleSlots`); the four others
+  share the width otherwise. Its label is `bnav.drill`, not the page title:
+  "Entraînement" does not fit a fifth of a 390 px phone at 11 px, so the
+  French slot says "Révisions". The desktop sidebar has the same entry, a
+  "Drill" row under Home, under the same condition.
+- **The badge is a dot, never a count.** "Today's drill is available"
+  (ADR-041 §6) is an 8 px `accent` dot on the icon's top right, ringed in
+  `canvas` so it reads on the lit pill too, with the words for a screen
+  reader. The sidebar row carries the same dot as its trailing mark. A
+  number of cards left would be a streak by another name, which the product
+  owner ruled out; the accent is right because the dot points at the one
+  thing to do there, like the primary it leads to.
+- **Shape.** Fixed to the bottom, 56 px plus the iOS home-indicator inset
+  (`env(safe-area-inset-bottom)`), `canvas` at 90 % with a blur and a
+  hairline over it — the phone top bar, mirrored. `--bottom-nav-h` is its
+  whole height while it is in the page (pure CSS, `:root:has(nav[data-bottom-dock])`
+  under `lg`; zero otherwise): a spacer under the page and the toast stack
+  read it, so neither the end of a page nor a toast is ever behind the bar.
+  An anchored section lands under the sticky top bar through one
+  `scroll-padding-top` on the root, from `--topbar-h`.
+- **Where it is drawn: an allowlist**, the views the route table gives a
+  `bottomSlot` (`router.ts`: the home, a feedback page, the settings, the drill) and
+  nothing else. Hidden on the
+  attempt (lobby and player), the poll join page, every projection and
+  preview, a SEB-confined page, and any screen with a sticky bottom bar of its
+  own (the player's, PollJoin's "Send", the launch step's dock): two bars at
+  the bottom fight for the thumb, and the one that is the screen's action must
+  win. A new student page does not get the bar until its route has a slot.
+- **No repeats.** Where the bar shows, the top bar loses the drawer's trigger
+  (the drawer held the home, which the bar and the wordmark both reach) and
+  the avatar menu loses Settings (the Profile slot). The avatar stays, for
+  what is about the person: the inbox, the theme, signing out.
+- A `<nav>` named "Main navigation", `aria-current="page"` on the lit slot,
+  real links (a long press or a modified click opens the address, section
+  included).
 
 ## The participant's poll page (`/p/:CODE`)
 

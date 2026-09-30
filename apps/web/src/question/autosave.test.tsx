@@ -147,4 +147,47 @@ describe("useAutosave", () => {
     expect(save).toHaveBeenCalledTimes(2);
     expect(result.current.state).toBe("saved");
   });
+
+  it("flush resolves once the LATEST value is acknowledged, not the one in flight", async () => {
+    vi.useFakeTimers();
+    let release: () => void = () => undefined;
+    const save = vi
+      .fn<(v: string) => Promise<void>>()
+      .mockImplementationOnce(() => new Promise<void>((resolve) => (release = resolve)))
+      .mockResolvedValue();
+    const { rerender, result } = renderHook(({ v }) => useAutosave({ value: v, save }), {
+      initialProps: { v: "a" },
+    });
+    rerender({ v: "b" });
+    await act(async () => {
+      vi.advanceTimersByTime(AUTOSAVE_DELAY_MS);
+    });
+    rerender({ v: "c" });
+    let saved: boolean | undefined;
+    await act(async () => {
+      void result.current.flush().then((ok) => (saved = ok));
+    });
+    // "b" is still on the wire: "c" waits for it, and so does the caller.
+    expect(saved).toBeUndefined();
+    await act(async () => {
+      release();
+    });
+    expect(save).toHaveBeenLastCalledWith("c");
+    expect(saved).toBe(true);
+  });
+
+  it("flush resolves false when the save fails, and true when there is nothing to send", async () => {
+    vi.useFakeTimers();
+    const save = vi.fn<(v: string) => Promise<void>>().mockRejectedValue(new Error("offline"));
+    const { rerender, result } = renderHook(({ v }) => useAutosave({ value: v, save }), {
+      initialProps: { v: "a" },
+    });
+    await expect(result.current.flush()).resolves.toBe(true);
+    rerender({ v: "b" });
+    let saved: boolean | undefined;
+    await act(async () => {
+      saved = await result.current.flush();
+    });
+    expect(saved).toBe(false);
+  });
 });

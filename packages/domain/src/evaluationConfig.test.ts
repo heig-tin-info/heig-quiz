@@ -5,6 +5,7 @@ import {
   feedbackWhenFor,
   isFeedbackAllowed,
   isInClass,
+  isLiveState,
   missingTimingFields,
   pastTiming,
   type TimingInput,
@@ -116,5 +117,12 @@ describe("pastTiming (#178)", () => {
     expect(pastTiming(deadline, "paused", "running", now)).toBeNull();
     expect(pastTiming(deadline, "running", "closed", now)).toBeNull();
     expect(pastTiming(deadline, "scheduled", "draft", now)).toBeNull();
+  });
+});
+
+describe("isLiveState", () => {
+  it("holds while students sit the evaluation, and only then", () => {
+    expect(["running", "paused"].every(isLiveState)).toBe(true);
+    expect(["draft", "lobby", "closed", "grading", "released"].some(isLiveState)).toBe(false);
   });
 });

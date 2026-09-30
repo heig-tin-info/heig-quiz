@@ -3,51 +3,58 @@
 ## Where the proposals come from
 
 At the close, every answer of a deterministic type is graded automatically
-and comes back already validated; a missing answer is worth 0. **Run
-grading** appears while the pass is incomplete, with what is still waiting
-for the runner and what failed.
+and comes back already validated; a missing answer is worth 0. While some
+answers of the question on screen are not graded yet, a banner above the
+table counts them and offers **Run grading** for that question.
 
-## How you walk through it
+## One question at a time
 
-**By question** by default — grading one question across the whole class is
-how you stay consistent — or **By student**. The path at the top says where
-you are; the chevrons and the arrow keys move you along it. Filters narrow
-the list to what is still to validate, or by who graded and how sure it was.
+You grade one question across the whole class — how you stay consistent.
+The card at the top names it; its menu and the stepper under it jump to any
+other question, and a filled step is a question whose answers are all
+validated.
 
-**Graded by** is where the proposal comes from: **Automatic (rules)** is the
-question's own rules (the correct choices, the expected values, the code
-tests); **AI model** is a language model working from the criteria and the
-reference answer; **Teacher** is points set by hand. **Confidence** is how
-sure the grader said it was — start with the low ones.
+Each row of the table is one student's answer, in the question's own
+columns: a choice, a blank, the text typed, a card's column, a program
+folded after five lines (click it to unfold it; the row does not open).
+The first row, in blue, is the expected answer. Click a column header to
+sort by it (again to reverse, a third time to go back); a row opens the
+answer in full on the right.
 
-Names are hidden until you ask for them; a pseudonym keeps your attention
-on the answer.
+**Graded by** is where a proposal comes from: **Rules** is the question's
+own rules (the correct choices, the expected values, the code tests);
+**AI** is a language model working from the criteria and the reference
+answer; **Teacher** is points set by hand. Once **AI** is picked,
+**Confidence** says how sure it was — start with the low ones. This browser
+remembers these filters from one visit to the next.
 
-**Show** chooses what is drawn around each answer: the question's name
-above it, the prompt, the explanation, the expected answer or solution, the grading
-comment. The student's answer is always there — it is what you grade — and
-hiding the comment never stops you from writing one with **Adjust**.
-
-This browser remembers the order, the filters and what **Show** keeps, from
-one visit to the next and across evaluations. It never remembers the names:
-they are hidden again each time you open the page.
+**Anonymise** is on every time you open the page: no name reaches your
+browser, and the rows are shuffled in an order that holds for the visit.
+A retake's number (`#2`, green for the attempt that counts) and a
+**Teacher** badge on a teacher's own run stay visible: they are not names.
 
 ## Acting on an answer
 
-**Validate** takes the proposal as it stands. **Adjust** rewrites the points
-and requires a comment, which the student sees; the grading it replaces is
-kept in the history, never lost.
+**Validate** takes a proposal as it stands. **Adjust** rewrites the points
+and requires a comment — the one the student may read with their result;
+the grading it replaces stays in the history, never lost.
 
-The bar above the list validates every proposal of the current question — or
-of the whole filtered selection — in one click. Each one stays editable
-afterwards.
+The red button validates every proposal the table shows in one click, then
+becomes **Next question**, and **Results** after the last one. An essay
+proposed at 0 points is never validated, in a batch or alone: its row
+offers **Grade**, which opens it on the adjustment form.
 
-**Re-grade**, beside the question's title on every answer, runs the
-automatic grading of that question again on every attempt, against the
-frozen version or a newer published one — by question or by student alike. A note is
-mandatory and is carried by each new grading.
+**Re-grade**, on the expected row, runs the automatic grading of the
+question again on every attempt, against the frozen version or a newer
+published one; a note is mandatory and is carried by each new grading.
+
+A wrong key? **Edit question** (the pencil, offered if you may edit the
+pool), fix it, **Publish**: you come back here on the same question, and
+Re-grade reads **New version** and starts on it. Once the results
+are published, re-grading updates the grades the students see and marks
+them modified after publication; the sheet says so first.
 
 ## Shortcuts
 
-`V` validates and moves on, `←` `→` move between answers, `O` adjusts. When
-the queue is empty, **Results** is where you publish.
+`←` `→` change the question, `↑` `↓` the row, `Enter` opens it, `V`
+validates it, `A` adjusts it, `Esc` closes it. The sidebar lists them.

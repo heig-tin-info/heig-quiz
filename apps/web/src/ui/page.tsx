@@ -18,31 +18,38 @@ export function GateFrame({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * The shell's content column (DESIGN.md › Spacing): the reading cap of a page
+ * and the side padding inside it from `sm`, as CSS lengths. The shell sets
+ * them on `<main>` (`pageColumnVars`), and a page that draws its own width —
+ * the pool, which widens by its docked question pane — derives it from them,
+ * so the two can never drift apart.
+ */
+export const PAGE_COLUMN = { cap: "70rem", gutter: "2rem" } as const;
+
+/** `PAGE_COLUMN` as the custom properties `max-w-(--page-cap)` and `sm:px-(--page-gutter)` read. */
+export const pageColumnVars = {
+  "--page-cap": PAGE_COLUMN.cap,
+  "--page-gutter": PAGE_COLUMN.gutter,
+} as CSSProperties;
+
 export function Card({
-  children,
-  className = "",
+  className,
   interactive,
-  onClick,
   ...rest
-}: Omit<React.HTMLAttributes<HTMLDivElement>, "onClick"> & {
-  children: ReactNode;
-  className?: string;
+}: React.ComponentProps<"div"> & {
   /** Clickable surface: hairline darkens on hover, no movement. */
   interactive?: boolean;
-  onClick?: () => void;
 }) {
   return (
     <div
       {...rest}
-      onClick={onClick}
       className={cx(
         "rounded-card border border-line bg-surface",
         interactive && "cursor-pointer transition-colors duration-150 hover:border-line-strong hover:bg-surface-2/40",
         className,
       )}
-    >
-      {children}
-    </div>
+    />
   );
 }
 
@@ -302,7 +309,7 @@ export function SectionHeading({
   return (
     <div className={cx("flex flex-wrap items-center gap-x-3 gap-y-2", className)}>
       <div className="flex min-w-0 items-center gap-2">
-        {Icon ? <Icon className="size-4 text-fg-faint" /> : null}
+        {Icon ? <Icon className="size-4 shrink-0 text-fg-faint" /> : null}
         <h2 className="text-base font-bold tracking-tight">{title}</h2>
         {count != null ? <span className="text-sm tabular-nums text-fg-faint">{count}</span> : null}
         {help ? <HelpIcon topic={help} /> : null}

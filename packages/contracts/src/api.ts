@@ -178,6 +178,8 @@ export interface ClassroomDetail {
   periodStart: string | null;
   periodEnd: string | null;
   archivedAt: string | null;
+  /** ADR-041 §6: the teacher enabled the drill for this classroom (`PUT /classrooms/:id/drill`). */
+  drillEnabled: boolean;
   course: { id: string; name: string; code: string };
   roster: RosterEntry[];
 }

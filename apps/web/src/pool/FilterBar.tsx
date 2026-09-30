@@ -6,6 +6,7 @@ import { Segmented } from "../ui";
 import type { QuestionFilters } from "./filters";
 import { GROUP_BY, type GroupBy } from "./QuestionGroups";
 import { QuestionSearchBar } from "./QuestionSearchBar";
+import type { StatsOffer } from "./StatsFilterFields";
 
 /**
  * The bar of the pool screen: the shared search field and its filter sheet
@@ -31,6 +32,10 @@ import { QuestionSearchBar } from "./QuestionSearchBar";
  * shows the whole (short, known) set and the current one at a glance, which
  * is what a habit control is for. The caption before the grouping track is
  * also the `aria-label` of its radiogroup.
+ *
+ * `actions` are the list's own tertiary actions, drawn after the count as
+ * `Actions` draws them — today the one "Clear favourites" (F-POOL-10), which
+ * acts on the list and is too rare to stand beside the page's primary.
  */
 export type ListView = "cards" | "list";
 
@@ -38,22 +43,27 @@ export function FilterBar({
   filters,
   onChange,
   tags,
+  stats,
   total,
   view,
   onView,
   group,
   onGroup,
+  actions,
 }: {
   filters: QuestionFilters;
   onChange: (next: QuestionFilters) => void;
   /** Every tag used in this pool, as the API reports them. */
   tags: string[];
+  /** The pool's statistics, which the sheet's last block filters on (F-STAT-03). */
+  stats?: StatsOffer;
   /** How many questions the search matches (the API's `total`); `null` while unknown. */
   total: number | null;
   view: ListView;
   onView: (next: ListView) => void;
   group: GroupBy;
   onGroup: (next: GroupBy) => void;
+  actions?: ReactNode;
 }) {
   const t = useT();
 
@@ -72,7 +82,13 @@ export function FilterBar({
   });
 
   return (
-    <QuestionSearchBar filters={filters} onChange={onChange} tags={tags} coach="pool.search">
+    <QuestionSearchBar
+      filters={filters}
+      onChange={onChange}
+      tags={tags}
+      stats={stats}
+      coach="pool.search"
+    >
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5">
           <span className="text-[11px] text-fg-faint">{t("pool.groupBy")}</span>
@@ -94,6 +110,7 @@ export function FilterBar({
               {t(total === 1 ? "pool.results.one" : "pool.results", { n: total })}
             </span>
           )}
+          {actions}
           <Segmented
             name="pool-view"
             size="sm"

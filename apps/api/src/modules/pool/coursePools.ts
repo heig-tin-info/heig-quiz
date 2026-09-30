@@ -73,6 +73,8 @@ export async function setCoursePools(
   );
   const added = reachable.filter((id) => !current.has(id));
   const unlinked = [...current].some((id) => !reachable.includes(id));
+  // The links as they stand: nothing to write, nobody to notify.
+  if (added.length === 0 && !unlinked) return poolsOfCourse(db, courseId);
   if (added.length) {
     const refused = (await listPools(db, inArray(pools.id, added), viewer)).filter(
       (p) => !poolRoleAllows(p.role, "contributor"),

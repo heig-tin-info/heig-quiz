@@ -8,13 +8,22 @@
 import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
 import { typeIcon } from "@quiz/ui";
+import { mcqGrading } from "./grading.js";
 import { isMcqAnswered } from "./schema.js";
 import type { McqAnswer, McqConfig, McqDetails, McqSolution, McqStudent } from "./schema.js";
 
 type McqClient = QuestionTypeClient<McqConfig, McqAnswer, McqStudent, McqSolution, McqDetails>;
 
 /** A ticked list: the mark of a multiple-choice question in a type picker. */
-const McqIcon = typeIcon(<path d="m3 7 2 2 3-3M3 17l2 2 3-3M12 8h9M12 18h9" />, "size-4");
+const McqIcon = typeIcon(
+  <>
+    <rect x="3" y="4" width="6.5" height="6.5" rx="1.5" />
+    <path d="m4.7 7.3 1.3 1.3 2.2-2.4M13 7.25h8" />
+    <rect x="3" y="13.5" width="6.5" height="6.5" rx="1.5" />
+    <path d="M13 16.75h5.5" opacity=".55" />
+  </>,
+  "size-4",
+);
 
 export const mcqClient: McqClient = {
   id: "mcq",
@@ -28,6 +37,7 @@ export const mcqClient: McqClient = {
 
   emptyAnswer: () => ({ selected: [] }),
   isAnswered: isMcqAnswered,
+  grading: mcqGrading,
 };
 
 /*
@@ -38,6 +48,7 @@ export const mcqClient: McqClient = {
  */
 export {
   mcqEditorStrings,
+  mcqGradingStrings,
   mcqPlayerStrings,
   mcqReviewStrings,
 } from "./strings.js";

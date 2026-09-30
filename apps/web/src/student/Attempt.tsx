@@ -22,7 +22,7 @@ import { feedbackLink } from "../grading";
 import { useT } from "../i18n";
 import type { Navigate } from "../router";
 import { leaveStudentView, studentViewOn } from "../studentView";
-import { Button, Card, EmptyState, Field, QueryError, Spinner } from "../ui";
+import { Button, Card, EmptyState, ErrorText, Field, QueryError, Spinner } from "../ui";
 import { Lobby } from "./Lobby";
 import { Player } from "./Player";
 import { attemptEntryKey } from "../queryKeys";
@@ -115,7 +115,7 @@ export function AttemptPage({
               />
               <p className="-mt-2 text-[13px] text-fg-faint">{t("player.accessCodeHint")}</p>
               {sent === null ? null : (
-                <p className="text-[13px] text-danger">{t("player.accessCodeInvalid")}</p>
+                <ErrorText>{t("player.accessCodeInvalid")}</ErrorText>
               )}
               <Button type="submit" variant="primary" disabled={accessCode.trim().length === 0}>
                 {t("player.enter")}

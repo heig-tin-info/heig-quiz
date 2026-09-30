@@ -14,7 +14,8 @@
  * `usePreviewSession` instead of `useAttempt`, with one addition: the preview
  * banner above the question. The four decisions are therefore the player's;
  * the banner is the calm `neutral` alert, and its one action, Restart, is
- * secondary — the accent stays on "Hand in".
+ * secondary — the accent stays on "Hand in". Under it, "Show the points"
+ * (`PreviewPoints`) grades the question on screen alone, secondary too.
  *
  * The start is a MUTATION, not a query, on purpose: the app's refresh hints
  * invalidate every query, and a query here would draw a new seed — and throw
@@ -31,6 +32,7 @@ import {
 } from "@quiz/contracts";
 
 import { ApiError, api } from "../api";
+import { currentItem } from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import type { Route } from "../router";
@@ -38,6 +40,7 @@ import { PlayerView } from "../student/Player";
 import { Alert, Button, Card, EmptyState, QueryError, Spinner } from "../ui";
 import { PreviewCorrectionView } from "./PreviewCorrection";
 import { usePreviewEdit } from "./usePreviewEdit";
+import { PreviewPoints } from "./PreviewPoints";
 import { usePreviewSession } from "./usePreviewSession";
 
 interface Walk {
@@ -198,6 +201,7 @@ function PreviewWalk({
     onSubmit: onHandIn,
   });
   const touched = Object.keys(session.state.answers).length > 0;
+  const current = currentItem(session.state);
 
   const askRestart = async () => {
     // Only a paper with something on it has something to lose.
@@ -239,6 +243,16 @@ function PreviewWalk({
               {t("preview.bannerBody")}
             </Alert>
             {edit.notice}
+            {current ? (
+              <PreviewPoints
+                // A new question, a clean slate: no points of another one linger.
+                key={current.id}
+                evaluationId={evaluationId}
+                seed={walk.preview.seed}
+                itemId={current.id}
+                answer={session.state.answers[current.id]}
+              />
+            ) : null}
             {gradeFailed ? (
               <Alert tone="danger" title={t("preview.gradeFailed")}>
                 {t("preview.gradeFailedBody")}

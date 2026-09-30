@@ -14,7 +14,6 @@ import {
   GradingIdParam,
   GradingQuery,
   GradingRunBody,
-  GradingStepsQuery,
   IdParam,
   ItemParam,
   type ItemVersions,
@@ -93,12 +92,12 @@ export async function gradingPlugin(app: FastifyInstance) {
 
   // --- The panel ---------------------------------------------------------
 
-  /** The steps of a traversal and their state, for the step picker (#107). */
+  /** The questions and the state of each, for the question selector (#107). */
   app.get(
     "/app/api/evaluations/:id/grading/steps",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, query: GradingStepsQuery, load: staffEvaluation }, ({ query, scope }) =>
-      service.gradingSteps(app.db, scope.evaluation, query),
+    teacher({ params: IdParam, load: staffEvaluation }, ({ scope }) =>
+      service.gradingSteps(app.db, scope.evaluation),
     ),
   );
 
@@ -278,7 +277,7 @@ export async function gradingPlugin(app: FastifyInstance) {
 
         const note = await service.regradeItem(
           app.db,
-          { itemId: item.item.id, questionId: item.question.id },
+          { evaluationId: scope.evaluation.id, itemId: item.item.id, questionId: item.question.id },
           body,
         );
         if (note === null) return notFound(reply);

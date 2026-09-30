@@ -2,9 +2,9 @@
 #
 # Builds the runner images: `quiz-runner-<lang>:latest`, one per language.
 #
-#   images/build.sh              # c cpp python js spice  (the default five)
+#   images/build.sh              # c cpp python js spice rust  (all six)
 #   images/build.sh c python     # only those
-#   images/build.sh rust         # the big one, never built by default
+#   images/build.sh rust         # one image, e.g. after an Alpine bump
 #
 # Rootless (a development workstation) or rootful (the VM) is decided by the
 # socket the runner itself uses; the build does not care. Set PODMAN_BIN or
@@ -30,10 +30,15 @@ fi
 #   python  CPython alone. `pip` is deliberately absent: with no network it
 #           could not install anything, and its absence removes a large attack
 #           surface from a process that only runs one student file.
-#   rust    rustc alone, no cargo registry. An order of magnitude larger than
-#           the others (~700 MB installed): built only when named. `GET
-#           /health` reports the languages whose image is present, so a
-#           deployment without it simply does not offer Rust.
+#   rust    rustc alone (Alpine's `rust`, which pulls gcc as its linker), no
+#           cargo registry. An order of magnitude larger than the others:
+#           ~820 MB on disk, about 30 s to build on a good link (measured
+#           2026-09-29: Alpine 3.20, rust 1.78, apk's "831 MiB in 33
+#           packages"); keep 2 GB free for the build. Built by default
+#           since #234: `code` questions may be written in Rust, so production
+#           must be able to run them. `GET /health` reports the languages whose
+#           image is present, so a host that skips it (`build.sh c python …`)
+#           simply does not offer Rust.
 #   spice   ngspice alone (Alpine 3.20 ships 42), a batch simulator: the
 #           `circuit` question type is graded by simulating the student's
 #           schematic (ADR-019). No X, no editor.
@@ -49,7 +54,7 @@ packages() {
 
 languages=("$@")
 if [ ${#languages[@]} -eq 0 ]; then
-  languages=(c cpp python js spice)
+  languages=(c cpp python js spice rust)
 fi
 
 for lang in "${languages[@]}"; do

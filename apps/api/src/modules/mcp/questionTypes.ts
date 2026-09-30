@@ -143,6 +143,10 @@ const GUIDES: Record<string, TypeGuide> = {
     rules: [
       "Only write one when the teacher asks for an electronics question.",
       "Read an existing circuit question with `get_question` for a complete, working example.",
+      'Each stimulus has an `analysis`. `{ "kind": "tran", "stopMs", "skipMs", "points" }` (the default) compares the output WAVEFORM: it passes when the RMS distance to the reference is at most `grading.tolerance` of the reference\'s swing.',
+      'For a frequency response write `{ "kind": "ac", "fStartHz", "fStopHz", "pointsPerDecade" }` (0.01 Hz to 1 GHz, 5 to 200 points per decade, default 20, at most 2000 points in all). Its `source` MUST be `{ "kind": "dc", "volts": <bias> }`: the circuit is linearised around that DC bias and driven by a unit AC source, and the Bode plot of v(out) is compared.',
+      "An AC stimulus passes when the student's Bode plot stays in an envelope around the reference's, set by `grading.bode` (`magDb` 1, `floorDb` 60, `phaseDeg` 10 by default; `phaseDeg: null` ignores the phase). Below the reference's peak minus `floorDb` the output only has to stay under that floor.",
+      "Keep AC for linear small-signal circuits (filters, amplifiers biased in their linear range): a saturated op-amp or an unbiased diode gives a meaningless Bode plot.",
     ],
   },
 };

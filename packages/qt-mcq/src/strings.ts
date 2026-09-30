@@ -105,3 +105,20 @@ export const mcqReviewStrings = {
 } as const;
 
 export type McqReviewStringKey = keyof typeof mcqReviewStrings;
+
+/**
+ * The words of the grading table's columns (ADR-044): what each tick box
+ * says to a screen reader and in its tooltip. The header of a column is the
+ * choice itself ("A · …"), so it needs no word of its own.
+ */
+export const mcqGradingStrings = {
+  tickedCorrect: "Ticked, correct",
+  tickedWrong: "Ticked, wrong",
+  ticked: "Ticked",
+  missed: "Missed: correct but not ticked",
+  notTicked: "Not ticked",
+  expected: "Expected",
+  notExpected: "Not expected",
+} as const;
+
+export type McqGradingStringKey = keyof typeof mcqGradingStrings;

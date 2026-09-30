@@ -36,8 +36,16 @@ export const codeConfig = {
   cases: [{ name: "visible-1", expected: "ok", visible: true }],
 };
 
-export async function seedCodeEvaluation(db: Db, now: Date): Promise<CodeFixture> {
-  const seed = await seedLive(db, { students: 1, questions: 0 });
+/**
+ * `shortQuestions` puts that many fake `short` questions ahead of the code
+ * one, left unanswered: cells the pass settles itself, beside the runner's.
+ */
+export async function seedCodeEvaluation(
+  db: Db,
+  now: Date,
+  options: { shortQuestions?: number } = {},
+): Promise<CodeFixture> {
+  const seed = await seedLive(db, { students: 1, questions: options.shortQuestions ?? 0 });
 
   const { id: questionId } = await poolService.createQuestion(db, {
     poolId: seed.poolId,
@@ -60,7 +68,7 @@ export async function seedCodeEvaluation(db: Db, now: Date): Promise<CodeFixture
       ),
     { attemptCount: 0 },
   );
-  const itemId = items[0]!.id;
+  const itemId = items.find((i) => i.questionId === questionId)!.id;
 
   evaluation = await evaluationService.applyState(db, evaluation, "running", now);
   const participant = (await live.participantOf(db, evaluation, seed.studentIds[0]!))!;

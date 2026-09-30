@@ -2,18 +2,41 @@ import { describe, expect, it } from "vitest";
 
 import { fmt, plural } from "@quiz/core/client";
 
-import { mcqEditorStrings, mcqPlayerStrings, mcqReviewStrings } from "@quiz/qt-mcq/client";
-import { shortEditorStrings, shortPlayerStrings, shortReviewStrings } from "@quiz/qt-short/client";
-import { clozeEditorStrings, clozePlayerStrings, clozeReviewStrings } from "@quiz/qt-cloze/client";
-import { richEditorStrings, richPlayerStrings, richReviewStrings } from "@quiz/qt-rich/client";
+import {
+  mcqEditorStrings,
+  mcqGradingStrings,
+  mcqPlayerStrings,
+  mcqReviewStrings,
+} from "@quiz/qt-mcq/client";
+import {
+  shortEditorStrings,
+  shortGradingStrings,
+  shortPlayerStrings,
+  shortReviewStrings,
+} from "@quiz/qt-short/client";
+import {
+  clozeEditorStrings,
+  clozeGradingStrings,
+  clozePlayerStrings,
+  clozeReviewStrings,
+} from "@quiz/qt-cloze/client";
+import {
+  richEditorStrings,
+  richGradingStrings,
+  richPlayerStrings,
+  richReviewStrings,
+} from "@quiz/qt-rich/client";
 import {
   categorizeEditorStrings,
+  categorizeGradingStrings,
   categorizePlayerStrings,
   categorizeReviewStrings,
 } from "@quiz/qt-categorize/client";
 import {
   EDITOR_STRINGS,
+  GRADING_STRINGS,
   IMAGE_EDITOR_STRINGS,
+  IMAGE_GRADING_STRINGS,
   IMAGE_PLAYER_STRINGS,
   IMAGE_REVIEW_STRINGS,
   PLAYER_STRINGS,
@@ -22,6 +45,7 @@ import {
 import {
   CANVAS_STRINGS,
   EDITOR_STRINGS as CIRCUIT_EDITOR_STRINGS,
+  GRADING_STRINGS as CIRCUIT_GRADING_STRINGS,
   KIND_LABELS,
   PLAYER_STRINGS as CIRCUIT_PLAYER_STRINGS,
   REVIEW_STRINGS as CIRCUIT_REVIEW_STRINGS,
@@ -32,6 +56,7 @@ import {
   circuitCanvasStrings,
   circuitKindLabels,
   editorStrings,
+  gradingStrings,
   MCQ_HOST_MAPPED_KEYS,
   playerStrings,
   questionType,
@@ -60,22 +85,28 @@ const DICTIONARIES: [string, object][] = [
   ["qt.mcq.e", mcqEditorStrings],
   ["qt.mcq.p", mcqPlayerStrings],
   ["qt.mcq.r", mcqReviewStrings],
+  ["qt.mcq.g", mcqGradingStrings],
   ["qt.short.e", shortEditorStrings],
   ["qt.short.p", shortPlayerStrings],
   ["qt.short.r", shortReviewStrings],
+  ["qt.short.g", shortGradingStrings],
   ["qt.cloze.e", clozeEditorStrings],
   ["qt.cloze.p", clozePlayerStrings],
   ["qt.cloze.r", clozeReviewStrings],
+  ["qt.cloze.g", clozeGradingStrings],
   ["qt.code.e", EDITOR_STRINGS],
   ["qt.code.p", PLAYER_STRINGS],
   ["qt.code.r", REVIEW_STRINGS],
+  ["qt.code.g", GRADING_STRINGS],
   // `codeimage` reads `code`'s program sentences and adds only its own.
   ["qt.codeimage.e", IMAGE_EDITOR_STRINGS],
   ["qt.codeimage.p", IMAGE_PLAYER_STRINGS],
   ["qt.codeimage.r", IMAGE_REVIEW_STRINGS],
+  ["qt.codeimage.g", IMAGE_GRADING_STRINGS],
   ["qt.circuit.e", CIRCUIT_EDITOR_STRINGS],
   ["qt.circuit.p", CIRCUIT_PLAYER_STRINGS],
   ["qt.circuit.r", CIRCUIT_REVIEW_STRINGS],
+  ["qt.circuit.g", CIRCUIT_GRADING_STRINGS],
   // The canvas and the component kinds are dictionaries of the `circuit`
   // package too, keyed by something other than a sentence; they are
   // translated the same way and must be just as complete.
@@ -84,9 +115,11 @@ const DICTIONARIES: [string, object][] = [
   ["qt.rich.e", richEditorStrings],
   ["qt.rich.p", richPlayerStrings],
   ["qt.rich.r", richReviewStrings],
+  ["qt.rich.g", richGradingStrings],
   ["qt.categorize.e", categorizeEditorStrings],
   ["qt.categorize.p", categorizePlayerStrings],
   ["qt.categorize.r", categorizeReviewStrings],
+  ["qt.categorize.g", categorizeGradingStrings],
 ];
 
 /**
@@ -97,6 +130,17 @@ const DICTIONARIES: [string, object][] = [
  * their own case below.
  */
 const MAPPED_ELSEWHERE: Record<string, readonly string[]> = { "qt.mcq.e": MCQ_HOST_MAPPED_KEYS };
+
+describe("grading columns (ADR-044)", () => {
+  // Every registered type gives the grading table its columns (there is no
+  // host fallback) and its words, translated: a French teacher never reads
+  // an English header or chip.
+  it.each(QUESTION_TYPE_IDS)("%s: grading columns come with their translated words", (id) => {
+    expect(questionType(id)?.grading).toBeDefined();
+    const fr = gradingStrings[id](makeT("fr"));
+    for (const [key, value] of Object.entries(fr)) expect(value, key).not.toMatch(/^qt\./);
+  });
+});
 
 describe("question type strings", () => {
   it.each(DICTIONARIES)("%s is translated key by key", (prefix, defaults) => {

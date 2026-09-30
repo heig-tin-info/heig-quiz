@@ -111,6 +111,48 @@ describe("the transport", () => {
     const { result } = await rpc("tools/list");
     const names = result.tools.map((t: { name: string }) => t.name);
     expect(names).toEqual(TOOLS.map((t) => t.name));
+    // The closed list of ADR-022 §C: a tool is added there before it is added here.
+    expect([...names].sort()).toEqual(
+      [
+        "list_courses",
+        "get_course",
+        "list_pools",
+        "get_pool",
+        "get_pool_question_stats",
+        "list_questions",
+        "get_question",
+        "describe_question_types",
+        "list_evaluations",
+        "get_evaluation",
+        "create_course",
+        "create_classroom",
+        "create_pool",
+        "link_pool_to_course",
+        "create_category",
+        "create_question",
+        "update_question",
+        "create_evaluation",
+        "add_questions_to_evaluation",
+        "update_evaluation",
+        "create_poll",
+      ].sort(),
+    );
+    // …and its reading half, the one set annotated read-only.
+    const readOnly = result.tools.filter((t: any) => t.annotations.readOnlyHint).map((t: any) => t.name);
+    expect(readOnly.sort()).toEqual(
+      [
+        "list_courses",
+        "get_course",
+        "list_pools",
+        "get_pool",
+        "get_pool_question_stats",
+        "list_questions",
+        "get_question",
+        "list_evaluations",
+        "get_evaluation",
+        "describe_question_types",
+      ].sort(),
+    );
     for (const t of result.tools) expect(t.inputSchema.type, t.name).toBe("object");
     // Nothing destructive is exposed.
     expect(names.some((n: string) => /delete|remove|close|release/.test(n))).toBe(false);
@@ -268,6 +310,23 @@ describe("an authoring session", () => {
     const other = await server.signIn("teacher");
     const token = await tokenFor(other.headers);
     const { isError, data } = await call("get_pool", { poolId: pool.id }, token);
+    expect(isError).toBe(true);
+    expect(data.status).toBe(404);
+  });
+
+  it("reads a pool's question statistics through the pool screen's route, and nothing of another teacher's", async () => {
+    const pool = await ok("create_pool", { name: "Statistiques" });
+    await ok("create_question", {
+      poolId: pool.id,
+      type: "mcq",
+      internalName: "stats-mcq",
+      config: (describeQuestionType("mcq") as { example: unknown }).example,
+    });
+    // Never answered: under the threshold, so absent — the route's rule, not the tool's.
+    expect(await ok("get_pool_question_stats", { poolId: pool.id })).toEqual({ items: [] });
+
+    const other = await server.signIn("teacher");
+    const { isError, data } = await call("get_pool_question_stats", { poolId: pool.id }, await tokenFor(other.headers));
     expect(isError).toBe(true);
     expect(data.status).toBe(404);
   });

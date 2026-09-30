@@ -22,6 +22,7 @@
 //        export DATABASE_URL=pglite://.data/pglite-docs ASSETS_DIR=.data/assets-docs
 //        export PORT=3100 PUBLIC_URL=http://localhost:3100 AUTH_DEV_LOGIN=1
 //        export STATIC_DIR=$PWD/../web/dist RUNNER_MODE=http RUNNER_URL=http://localhost:3200
+//        export LLM_PROVIDER=stub           # the essays' AI proposals (grading-essay, -batch)
 //        pnpm seed
 //        pnpm exec tsx --env-file-if-exists=../../.env src/server.ts &
 //        curl localhost:3100/healthz        # database up, runner up
@@ -36,7 +37,8 @@
 //      next one starts:
 //
 //        seeded         nothing prepared: the world exactly as `pnpm seed` left it
-//                       (the code answers of "Test 0" wait for a runner)
+//                       (the code, picture and circuit answers of "Test 0"
+//                       wait for a runner; its essays are AI proposals)
 //        graded         one grading pass with the real runner settles them
 //        lobby          the exercise "Quiz d'entraînement" gets a short-answer
 //                       and a code question (so the player shows all four
@@ -123,6 +125,15 @@ int somme(const int *t, int n) {
     return total;
 }
 `;
+
+/**
+ * What "Test 0" looks like once graded: the seed's pass, plus the runner's
+ * when one is beside the instance. Without one, the code, picture and
+ * circuit answers are proposals waiting for it; with `LLM_PROVIDER=stub`,
+ * the essays are AI proposals of the development stub, with a confidence.
+ */
+const TEST0_GRADED =
+  "“Test 0” graded (code, picture and circuit answers waiting for a runner unless one is up; essays proposed by the stub LLM), unreleased.";
 
 // --- Scenes, as data -----------------------------------------------------
 //
@@ -422,12 +433,12 @@ const scenes = [
   // Grading and results (before the release)
   {
     name: "grading",
-    caption: "The grading panel, by question: the automatic gradings, validated or waiting for the teacher.",
+    caption: "The grading table, one question at a time: the automatic gradings, validated or waiting for the teacher.",
     phase: "graded",
     persona: "teacher",
     path: (w) => `/evaluations/${w.evals.closed.id}/grading`,
     fullPage: true,
-    state: "“Test 0” graded by the real runner, results unreleased.",
+    state: TEST0_GRADED,
   },
   {
     name: "grading-short",
@@ -438,7 +449,7 @@ const scenes = [
     fullPage: true,
     act: (p) => nextQuestion(p, 1),
     action: "Moved to the next question (the short answer).",
-    state: "“Test 0” graded by the real runner, unreleased.",
+    state: TEST0_GRADED,
   },
   {
     name: "grading-cloze",
@@ -449,29 +460,77 @@ const scenes = [
     fullPage: true,
     act: (p) => nextQuestion(p, 3),
     action: "Moved three questions forward (the cloze).",
-    state: "“Test 0” graded by the real runner, unreleased.",
+    state: TEST0_GRADED,
   },
   {
     name: "grading-code",
-    caption: "Grading a code question: compilation and test cases per student.",
+    caption: "Grading a code question: each program in one wide column, folded after five lines, beside the tests it passed.",
     phase: "graded",
     persona: "teacher",
     path: (w) => `/evaluations/${w.evals.closed.id}/grading`,
     fullPage: true,
     act: (p) => nextQuestion(p, 4),
     action: "Moved four questions forward (the code question).",
-    state: "“Test 0” graded by the real runner, unreleased.",
+    state: TEST0_GRADED,
   },
   {
-    name: "grading-by-student",
-    caption: "The same panel, by student.",
+    name: "grading-categorize",
+    caption: "Grading a categorize question: one column per card, naming the column the student chose.",
     phase: "graded",
     persona: "teacher",
     path: (w) => `/evaluations/${w.evals.closed.id}/grading`,
     fullPage: true,
-    act: (p) => p.locator("label").filter({ hasText: /^By student$/ }).first().click(),
-    action: "Switched the order to “By student”.",
-    state: "“Test 0” graded by the real runner, unreleased.",
+    act: (p) => nextQuestion(p, 5),
+    action: "Moved five questions forward (the categorize question).",
+    state: TEST0_GRADED,
+  },
+  {
+    name: "grading-codeimage",
+    caption: "Grading a code-to-picture question: the program, and the picture once the runner has drawn it.",
+    phase: "graded",
+    persona: "teacher",
+    path: (w) => `/evaluations/${w.evals.closed.id}/grading`,
+    fullPage: true,
+    act: (p) => nextQuestion(p, 6),
+    action: "Moved six questions forward (the code-to-picture question).",
+    state: TEST0_GRADED,
+  },
+  {
+    name: "grading-circuit",
+    caption: "Grading a circuit: what each schematic holds, and the stimuli it passed once simulated.",
+    phase: "graded",
+    persona: "teacher",
+    path: (w) => `/evaluations/${w.evals.closed.id}/grading`,
+    fullPage: true,
+    act: (p) => nextQuestion(p, 7),
+    action: "Moved seven questions forward (the circuit).",
+    state: TEST0_GRADED,
+  },
+  {
+    name: "grading-essay",
+    caption: "Grading an essay: the first lines of each answer, and the AI's proposal with its confidence.",
+    phase: "graded",
+    persona: "teacher",
+    path: (w) => `/evaluations/${w.evals.closed.id}/grading`,
+    fullPage: true,
+    act: (p) => nextQuestion(p, 8),
+    action: "Moved eight questions forward (the essay).",
+    state: TEST0_GRADED,
+  },
+  {
+    name: "grading-ai-justification",
+    caption: "An AI proposal opened: the model's justification, for the teacher only.",
+    phase: "graded",
+    persona: "teacher",
+    path: (w) => `/evaluations/${w.evals.closed.id}/grading`,
+    act: async (p) => {
+      await nextQuestion(p, 8);
+      // The first row that the AI graded: its Validate button says so.
+      await p.locator("tbody tr").filter({ hasText: /AI ·/ }).first().click();
+      await p.getByRole("dialog").getByText(/never shown to the student/i).waitFor();
+    },
+    action: "Moved to the essay and opened the first AI proposal.",
+    state: TEST0_GRADED,
   },
   {
     name: "grading-override",
@@ -479,22 +538,30 @@ const scenes = [
     phase: "graded",
     persona: "teacher",
     path: (w) => `/evaluations/${w.evals.closed.id}/grading`,
-    act: (p) => p.getByRole("button", { name: /^adjust$/i }).first().click(),
-    action: "Clicked “Adjust” on the first grading.",
-    state: "“Test 0” graded by the real runner, unreleased.",
+    act: async (p) => {
+      await p.locator("tbody tr").nth(1).click();
+      await p.getByRole("dialog").getByRole("button", { name: /^adjust$/i }).click();
+    },
+    action: "Opened the first answer and clicked “Adjust” in its panel.",
+    state: TEST0_GRADED,
   },
   {
     name: "grading-batch",
-    caption: "Validating every proposal of a question at once (here the code answers the seed could not run).",
+    caption: "Validating the AI's proposals of an essay in one click: the primary button counts them.",
     persona: "teacher",
     path: (w) => `/evaluations/${w.evals.closed.id}/grading`,
-    act: (p) => nextQuestion(p, 4),
+    act: async (p) => {
+      await nextQuestion(p, 8);
+      await p.getByRole("button", { name: /^validate \d+$/i }).first().hover();
+      await p.waitForTimeout(600);
+    },
     // The click is NOT made: under eleven proposals the button validates on
-    // the spot (BatchBar.BATCH_CONFIRM_THRESHOLD), and the seed never holds
-    // more than the four code answers. The confirm dialog itself is out of
-    // reach of the demo world.
-    action: "Moved to the code question; the batch bar offers to validate its proposals.",
-    state: "As seeded: the four code answers of “Test 0” are proposals waiting for a runner (reason runner_unavailable), the rest is validated.",
+    // the spot (useGradingActions.BATCH_CONFIRM_THRESHOLD), and the seed never holds
+    // more than the four essays. The confirm dialog itself is out of reach of
+    // the demo world. A 0-point placeholder (a program the runner never ran)
+    // is not batchable; an AI proposal, which states a confidence, is.
+    action: "Moved to the essay and hovered the primary button, which offers to validate its four proposals.",
+    state: "As seeded with LLM_PROVIDER=stub: the four written essays of “Test 0” are AI proposals with a confidence, Chloé's empty one is a validated zero.",
   },
   {
     name: "results",
@@ -513,7 +580,7 @@ const scenes = [
     path: (w) => `/evaluations/${w.evals.closed.id}/results?tab=questions`,
     fullPage: true,
     settle: 2500,
-    state: "“Test 0” graded by the real runner, unreleased.",
+    state: TEST0_GRADED,
   },
   {
     name: "results-release-confirm",
@@ -523,7 +590,7 @@ const scenes = [
     path: (w) => `/evaluations/${w.evals.closed.id}/results`,
     act: (p) => p.getByRole("button", { name: /^publish results$/i }).first().click(),
     action: "Clicked “Publish results”.",
-    state: "“Test 0” graded by the real runner, unreleased.",
+    state: TEST0_GRADED,
   },
 
   // Live polls
@@ -783,7 +850,7 @@ const scenes = [
     phase: "graded",
     persona: "lea",
     path: (w) => `/attempts/${w.closedAttempt}/feedback`,
-    state: "“Test 0” graded by the real runner, unreleased.",
+    state: TEST0_GRADED,
   },
   {
     name: "results-released",
@@ -1045,11 +1112,13 @@ const prepare = {
     console.log("== phase seeded");
   },
 
-  // The seed grades "Test 0" with no runner: its code answers are PROPOSALS
-  // with the reason `runner_unavailable` (decision D14), which is what the
-  // batch-validate scene shows. With a runner beside this instance, one more
-  // pass settles them with real verdicts — a validated grading is never
-  // touched by a pass (`grading/jobs.ts`).
+  // The seed grades "Test 0" with no runner: its code, picture and circuit
+  // answers are PROPOSALS with the reason `runner_unavailable` (decision
+  // D14). With a runner beside this instance, one more pass settles them
+  // with real verdicts — a validated grading is never touched by a pass
+  // (`grading/jobs.ts`). The pass also re-proposes the essays: the instance
+  // must run with the seed's `LLM_PROVIDER`, or they fall back to hand
+  // grading.
   graded: async (world) => {
     const { teacher } = world.api;
     const closed = world.evals.closed;

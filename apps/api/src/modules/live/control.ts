@@ -20,6 +20,7 @@ import {
   tryApplyState,
   type EvaluationRecord,
 } from "../evaluation/service.js";
+import { closeShown, endAttempts, openAttemptsOf } from "./dwell.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import {
@@ -103,6 +104,9 @@ export async function pauseEvaluation(
   now: Date,
 ): Promise<EvaluationRecord> {
   const next = await applyState(db, evaluation, "paused", now);
+  // The paper is covered (D17): nothing is on screen until the resume, whose
+  // players report their question again (ADR-039).
+  await closeShown(db, openAttemptsOf(next.id), now);
   for (const attempt of await attemptsWithBonus(db, next)) {
     if (attempt.state === "in_progress") await logAttemptEvent(db, attempt.id, "paused", null, now);
   }
@@ -219,14 +223,10 @@ async function afterClose(
   closedBy: ClosedBy,
   app?: FastifyInstance,
 ): Promise<EvaluationRecord> {
-  const open = await db
-    .update(attempts)
-    .set({ state: "expired", closedAt: now, closedBy, updatedAt: now })
-    .where(and(eq(attempts.evaluationId, next.id), eq(attempts.state, "in_progress")))
-    .returning({ id: attempts.id });
+  const open = await endAttempts(db, openAttemptsOf(next.id), { state: "expired", closedBy }, now);
   for (const attempt of open) events.attemptClosed(next.id, attempt, closedBy, now);
   events.stateChanged(next, now);
-  if (app) await enqueueEvaluationGrading(app, { evaluationId: next.id, announce: true });
+  if (app) await enqueueEvaluationGrading(app, { evaluationId: next.id });
   return next;
 }
 

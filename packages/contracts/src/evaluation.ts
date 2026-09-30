@@ -171,6 +171,17 @@ export const EvaluationSettings = z.object({
    */
   safeExamBrowser: z.boolean().optional(),
   /**
+   * ADR-041 §2 (#317): the questions of this evaluation become drill cards —
+   * at the release of an exam, at the hand-in of an exercise — when its
+   * classroom has the drill on. Absent means the mode's default, ON for an
+   * exercise and OFF for an exam, never on a poll: read it through
+   * `drillAllowedOn` (`@quiz/domain`), never raw — `Evaluation.allowDrill`
+   * carries the effective value. Unlike the rest of the settings it is NOT in
+   * {@link EvaluationSettingsPatch}: its one writer is `PUT
+   * /evaluations/:id/drill`, editable until the release.
+   */
+  allowDrill: z.boolean().optional(),
+  /**
    * Only on a `poll` evaluation (`./poll.ts`); absent everywhere else. Whether
    * the poll is anonymous is NOT stored here: it is the absence of a
    * classroom (`PollAudience`, ADR-014 addendum 2026-09-27). A row written
@@ -227,6 +238,8 @@ export const Evaluation = z.object({
   mode: EvaluationMode,
   state: EvaluationState,
   settings: EvaluationSettings,
+  /** ADR-041 §2: the effective "Allow drill" (`settings.allowDrill` or the mode's default). */
+  allowDrill: z.boolean(),
   gradingScale: GradingScale,
   feedbackPolicy: FeedbackPolicy,
   /** Seeded at creation from the creator's preference; an `inherit` question takes it. */
@@ -361,6 +374,8 @@ export const EvaluationCreate = z.object({
   mode: EvaluationMode.default("exam"),
   /** Named preset of settings; `exam` and `exercise` for now. */
   preset: z.enum(["exam", "exercise"]).optional(),
+  /** ADR-041 §2: the teacher's choice at creation; absent is the mode's default. */
+  allowDrill: z.boolean().optional(),
 });
 export type EvaluationCreate = z.infer<typeof EvaluationCreate>;
 
@@ -407,9 +422,13 @@ const FeedbackPolicyPatch = z.object({
 type FeedbackPolicyPatch = z.infer<typeof FeedbackPolicyPatch>;
 
 // A field added to the full body and forgotten here would be silently
-// stripped from every patch: the two key sets must stay equal, both ways.
+// stripped from every patch: the two key sets must stay equal, both ways —
+// save `allowDrill`, which has a writer of its own (ADR-041 §10, item 3).
 type SameKeys<A, B> = [keyof A] extends [keyof B] ? ([keyof B] extends [keyof A] ? true : false) : false;
-const _settingsPatchKeys: SameKeys<EvaluationSettings, Required<EvaluationSettingsPatch>> = true;
+const _settingsPatchKeys: SameKeys<
+  Omit<EvaluationSettings, "allowDrill">,
+  Required<EvaluationSettingsPatch>
+> = true;
 const _feedbackPatchKeys: SameKeys<FeedbackPolicy, Required<FeedbackPolicyPatch>> = true;
 void [_settingsPatchKeys, _feedbackPatchKeys];
 

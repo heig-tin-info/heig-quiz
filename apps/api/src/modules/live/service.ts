@@ -8,8 +8,10 @@
  *   - `attempt.ts`: failures, deadlines, participants, attempt creation, item
  *     order, the three views, entering, the write gate, submit, the per-attempt
  *     close/reopen and the student home;
+ *   - `dwell.ts`: the end of an interval on screen, `closeShown` (ADR-039);
  *   - `autosave.ts`: the answer summaries, the live grader, `saveAnswer`,
- *     `markDone`, `setPosition` and the attempt journal;
+ *     `markDone`, `reportShown` (the position and the dwell) and the attempt
+ *     journal;
  *   - `runs.ts`: running code and simulating a schematic for a student;
  *   - `control.ts`: the teacher controls (start, pause, resume, close, extend);
  *   - `dashboard.ts`: the dashboard read model and the attempt inspector;
@@ -64,14 +66,25 @@ export {
   closeAttempt,
   reopenAttempt,
   studentHome,
+  drawSeed,
 } from "./attempt.js";
+export { onAttemptsEnded, type EndedAttempt } from "./dwell.js";
+// The one student exit (invariant 4), for the modules that serve a question
+// outside an attempt: the drill (ADR-041 §9).
+export {
+  FORBIDDEN_STUDENT_KEYS,
+  isShuffleable,
+  solutionView,
+  studentSolutionView,
+  studentView,
+} from "./studentView.js";
 export {
   answeredBy,
   saveAnswer,
   markDone,
   setSkipped,
   setFlagged,
-  setPosition,
+  reportShown,
   logAttemptEvent,
   countRecentEvents,
 } from "./autosave.js";

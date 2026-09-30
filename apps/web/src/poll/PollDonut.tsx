@@ -120,8 +120,13 @@ export function PollDonut({ rows, revealed }: { rows: PollRow[]; revealed: boole
         </span>
       </div>
 
+      {/* The legend is as wide as its longest label, up to half the wall:
+          its labels are beamer-sized, so a cap in `ch` of the list's own
+          (page-sized) font broke "Benevolent Dictator For Life" over three
+          lines beside an empty half-screen. Never stretched either, or short
+          labels would leave their percentages stranded at the far edge. */}
       <ul
-        className="flex min-w-0 max-w-[40ch] list-none flex-col gap-[clamp(8px,1.4vh,18px)] p-0"
+        className="flex min-w-0 max-w-[clamp(320px,50vw,1000px)] list-none flex-col gap-[clamp(8px,1.4vh,18px)] p-0"
         aria-label={t("poll.donut")}
       >
         {rows.map((row, position) => {

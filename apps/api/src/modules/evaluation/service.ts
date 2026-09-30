@@ -54,6 +54,7 @@ export {
   retakePolicyOf,
   retakesEnabled,
   isLatestAttempt,
+  isStaffAttempt,
   feedbackOf,
   scaleOf,
   toEvaluation,
@@ -61,6 +62,7 @@ export {
   gradeDefaults,
   negativeMarkingEnabled,
   sebRequired,
+  drillAllowed,
   attemptCount,
   joinedItems,
   joinedItem,
@@ -92,7 +94,11 @@ export {
   type CachedGrade,
   setModifiedAfterRelease,
   flagReleasedEvaluationsOf,
+  claimGradingReady,
+  clearGradingReady,
   retargetItemVersion,
+  setAllowDrill,
+  AllowDrillLocked,
 } from "./writes.js";
 export {
   coursePoolIds,

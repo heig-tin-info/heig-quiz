@@ -32,7 +32,13 @@ import {
   ByQuestion,
   CourseDetail,
   DashboardView,
+  DrillClassroom,
+  DrillProgress,
+  DrillSession,
+  DrillStudentActivity,
+  DrillTagMastery,
   EvaluationDetail,
+  EvaluationDrill,
   EvaluationSummary,
   EvaluationTemplate,
   GradingProgress,
@@ -54,6 +60,7 @@ import {
   PoolCategories,
   PoolDetail,
   PoolMembers,
+  PoolQuestionStats,
   PoolSummary,
   PoolTag,
   QuestionDetail,
@@ -157,6 +164,8 @@ const templateItems = (
   (await get(`/app/api/templates/${templateIds[0]}`)) as { items: Ref[] }
 ).items.map((i) => i.id);
 const polls = (await get("/app/api/polls")) as { id: string; code: string | null }[];
+/** A student seat of the classroom, for one student's drill progression. */
+const firstSeat = ((await get(`/app/api/classrooms/${classroomId}`)) as { roster: Ref[] }).roster[0]!.id;
 
 // --- Route -> schema -------------------------------------------------------
 
@@ -213,6 +222,7 @@ const CHECKED: Case[] = [
     one("/app/api/pools/:id/candidates", `/app/api/pools/${p.id}/candidates?q=a`, PoolCandidates),
     one("/app/api/pools/:id/questions", `/app/api/pools/${p.id}/questions`, QuestionPage),
     each("/app/api/pools/:id/tags", `/app/api/pools/${p.id}/tags`, PoolTag),
+    one("/app/api/pools/:id/question-stats", `/app/api/pools/${p.id}/question-stats`, PoolQuestionStats),
   ]),
   // Every question: the payload of a `circuit` is not the payload of an
   // `mcq`, and only the type that drifted would fail.
@@ -273,19 +283,10 @@ const CHECKED: Case[] = [
     one("/app/api/evaluations/:id/grading", `/app/api/evaluations/${id}/grading`, GradingQueue),
     one(
       "/app/api/evaluations/:id/grading",
-      `/app/api/evaluations/${id}/grading?by=student&anonymous=0`,
+      `/app/api/evaluations/${id}/grading?anonymous=0`,
       GradingQueue,
     ),
-    one(
-      "/app/api/evaluations/:id/grading/steps",
-      `/app/api/evaluations/${id}/grading/steps?by=question&anonymous=1`,
-      GradingSteps,
-    ),
-    one(
-      "/app/api/evaluations/:id/grading/steps",
-      `/app/api/evaluations/${id}/grading/steps?by=student&anonymous=0`,
-      GradingSteps,
-    ),
+    one("/app/api/evaluations/:id/grading/steps", `/app/api/evaluations/${id}/grading/steps`, GradingSteps),
     one(
       "/app/api/evaluations/:id/grading/progress",
       `/app/api/evaluations/${id}/grading/progress`,
@@ -324,6 +325,24 @@ const CHECKED: Case[] = [
     .map((p) => one("/app/api/p/:code", `/app/api/p/${p.code}`, PollPublicView)),
   one("/app/api/attempts/:id", `/app/api/attempts/${attemptId}`, AttemptOrLobby),
   one("/app/api/student/home", "/app/api/student/home", StudentHome),
+  // The drill (ADR-041, #317): the student's tab and the teacher's switch.
+  one("/app/api/drill/session", "/app/api/drill/session", DrillSession),
+  each("/app/api/drill/classrooms", "/app/api/drill/classrooms", DrillClassroom),
+  ...evaluations.map((e) =>
+    one("/app/api/evaluations/:id/drill", `/app/api/evaluations/${e.id}/drill`, EvaluationDrill),
+  ),
+  // The teacher's view of the classroom's drill (slice 4).
+  each(
+    "/app/api/classrooms/:id/drill/activity",
+    `/app/api/classrooms/${classroomId}/drill/activity`,
+    DrillStudentActivity,
+  ),
+  one(
+    "/app/api/classrooms/:id/drill/progress",
+    `/app/api/classrooms/${classroomId}/drill/progress?student=${firstSeat}`,
+    DrillProgress,
+  ),
+  each("/app/api/classrooms/:id/drill/mastery", `/app/api/classrooms/${classroomId}/drill/mastery`, DrillTagMastery),
   // F-EVAL-15: the score-only feedback between two attempts of an exercise.
   one(
     `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`,
@@ -367,5 +386,14 @@ describe("the mock answers what the contracts describe", () => {
       .map((s) => s.replace(/\(\?<(\w+)>\[\^\/\]\+\)/g, ":$1"));
     const classified = new Set([...CHECKED.map((c) => c.route), ...UNCHECKED]);
     expect(registered.filter((r) => !classified.has(r))).toEqual([]);
+  });
+});
+
+describe("the mock numbers what the API numbers", () => {
+  // `evaluation_items.position` is 0-based on the wire and every screen adds
+  // one; a mock counting from 1 titled question 1 "2." in the re-grade sheet.
+  it.each(evaluations.map((e) => [e.id] as const))("items of %s count from 0", async (id) => {
+    const body = (await get(`/app/api/evaluations/${id}`)) as { items: { position: number }[] };
+    expect(body.items.map((i) => i.position)).toEqual(body.items.map((_, i) => i));
   });
 });

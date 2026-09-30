@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   CircuitAnswer,
   CircuitConfig,
+  DEFAULT_ANALYSIS,
+  acPointCount,
   Wire,
   emptyCircuitConfig,
   emptyStimulus,
@@ -60,10 +62,77 @@ describe("the three refinements", () => {
   it("refuses a stimulus whose window is skipped whole", () => {
     const parsed = CircuitConfig.safeParse({
       ...base,
-      stimuli: [emptyStimulus({ name: "s", analysis: { stopMs: 1, skipMs: 2, points: 500 } })],
+      stimuli: [emptyStimulus({ name: "s", analysis: { kind: "tran", stopMs: 1, skipMs: 2, points: 500 } })],
     });
     expect(parsed.success).toBe(false);
     expect(JSON.stringify(parsed.error?.issues)).toContain("circuit.skip_after_stop");
+  });
+});
+
+describe("the analysis of a stimulus", () => {
+  const base = { ...emptyCircuitConfig(), prompt: "Draw it." };
+  const withStimulus = (stimulus: Record<string, unknown>) =>
+    CircuitConfig.safeParse({
+      ...base,
+      stimuli: [{ name: "s", source: { kind: "dc", volts: 0 }, load: { kind: "open" }, ...stimulus }],
+    });
+  const messages = (parsed: ReturnType<typeof withStimulus>) => JSON.stringify(parsed.error?.issues ?? []);
+
+  it("reads a config written before the AC sweep as a transient", () => {
+    const parsed = withStimulus({ analysis: { kind: "tran", stopMs: 2, skipMs: 1, points: 100 } });
+    expect(parsed.data?.stimuli[0]?.analysis).toEqual({ kind: "tran", stopMs: 2, skipMs: 1, points: 100 });
+    expect(withStimulus({}).data?.stimuli[0]?.analysis).toEqual(DEFAULT_ANALYSIS);
+  });
+
+  it("accepts an AC sweep on a DC bias, with 20 points per decade by default", () => {
+    const parsed = withStimulus({ analysis: { kind: "ac", fStartHz: 10, fStopHz: 1e5 } });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.stimuli[0]?.analysis).toEqual({
+      kind: "ac",
+      fStartHz: 10,
+      fStopHz: 1e5,
+      pointsPerDecade: 20,
+    });
+  });
+
+  it("refuses an AC sweep on anything but a DC source", () => {
+    const parsed = withStimulus({
+      source: { kind: "sine", amplitude: 1, frequencyHz: 1000 },
+      analysis: { kind: "ac", fStartHz: 10, fStopHz: 1e5 },
+    });
+    expect(parsed.success).toBe(false);
+    expect(messages(parsed)).toContain("circuit.ac_needs_dc_source");
+  });
+
+  it("refuses a band that starts after it stops, or leaves the schema's bounds", () => {
+    expect(messages(withStimulus({ analysis: { kind: "ac", fStartHz: 1e4, fStopHz: 1e4 } }))).toContain(
+      "circuit.ac_start_after_stop",
+    );
+    expect(withStimulus({ analysis: { kind: "ac", fStartHz: 0.001, fStopHz: 10 } }).success).toBe(false);
+    expect(withStimulus({ analysis: { kind: "ac", fStartHz: 1, fStopHz: 2e9 } }).success).toBe(false);
+    expect(
+      withStimulus({ analysis: { kind: "ac", fStartHz: 1, fStopHz: 10, pointsPerDecade: 4 } }).success,
+    ).toBe(false);
+  });
+
+  it("caps a sweep at the 2000 points of ADR-019", () => {
+    // 11 decades × 200 points is 2201 frequencies.
+    const tooMany = withStimulus({ analysis: { kind: "ac", fStartHz: 0.01, fStopHz: 1e9, pointsPerDecade: 200 } });
+    expect(messages(tooMany)).toContain("circuit.ac_too_many_points");
+    // 9 decades × 200 + 1 = 1801.
+    expect(
+      withStimulus({ analysis: { kind: "ac", fStartHz: 1, fStopHz: 1e9, pointsPerDecade: 200 } }).success,
+    ).toBe(true);
+  });
+
+  it("counts the frequencies `.ac dec` produces, both ends included", () => {
+    expect(acPointCount({ kind: "ac", fStartHz: 100, fStopHz: 1e4, pointsPerDecade: 5 })).toBe(11);
+    expect(acPointCount({ kind: "ac", fStartHz: 10, fStopHz: 1e5, pointsPerDecade: 20 })).toBe(81);
+  });
+
+  it("fills the Bode envelope with its defaults under an older grading block", () => {
+    const parsed = CircuitConfig.parse({ ...base, grading: { mode: "manual", tolerance: 0.05, rubric: "" } });
+    expect(parsed.grading.bode).toEqual({ magDb: 1, floorDb: 60, phaseDeg: 10 });
   });
 });
 

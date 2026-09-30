@@ -75,17 +75,46 @@ export class TemplateGone extends EvaluationError {
   }
 }
 
-/** "Save as template": a copy of `row` into its course, without anything of a run. */
+/**
+ * "Save as template": a copy of `row` into its course, without anything of a
+ * run, and the source linked to it at revision 1 — relinked if it was an
+ * instance already; the origin it loses is handed back for the audit log.
+ * One transaction, the source locked `FOR NO KEY UPDATE` and re-read under
+ * it (ADR-031, addendum of 2026-09-30, §3).
+ */
 export async function saveAsTemplate(
   db: Db,
   row: EvaluationRecord,
   input: { courseId: string; title: string; createdBy: string },
-): Promise<EvaluationRecord> {
+): Promise<{
+  template: EvaluationRecord;
+  previousOrigin: { templateId: string; revision: number | null } | null;
+}> {
   if (row.mode === "poll") throw new TemplatePoll();
-  return copyEvaluation(db, row, {
-    home: { courseId: input.courseId },
-    title: input.title,
-    createdBy: input.createdBy,
+  return db.transaction(async (tx) => {
+    const [source] = await tx
+      .select()
+      .from(evaluations)
+      .where(eq(evaluations.id, row.id))
+      .for("no key update");
+    // The evaluation went since its load: the loader's 404 all the same.
+    if (!source) throw new TemplateGone();
+    const template = await copyEvaluation(tx, source, {
+      home: { courseId: input.courseId },
+      title: input.title,
+      createdBy: input.createdBy,
+    });
+    await tx
+      .update(evaluations)
+      .set({ originTemplateId: template.id, originRevision: template.revision, updatedAt: new Date() })
+      .where(eq(evaluations.id, source.id));
+    return {
+      template,
+      previousOrigin:
+        source.originTemplateId === null
+          ? null
+          : { templateId: source.originTemplateId, revision: source.originRevision },
+    };
   });
 }
 

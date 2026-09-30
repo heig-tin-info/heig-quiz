@@ -39,9 +39,15 @@ narrow it, arrows to move, Enter to insert, Escape to close.
 
 One row per question: the type as an icon in front of the internal name
 (hover it for its name), tags, difficulty as five dots, the published
-version, the last change as a distance — hover it for the exact date. A
-click opens the editor. Every row carries edit, duplicate and delete at its
-end.
+version, the last change as a distance — hover it for the exact date. Every
+row carries edit, duplicate and delete at its end.
+
+A click shows the question as a student reads it, in a panel beside the
+list (in its place on a narrow window, with **Back to the list**). From the
+keyboard, P shows the focused row; on a wide window ↑ and ↓ move from row to
+row and show each one, opening the panel if needed. Escape or the × closes
+it. Enter, a double-click, the pencil or **Open in the editor** opens the
+editor.
 
 Clicking a column header sorts the whole pool by it, not just the questions
 already loaded; clicking it again reverses the order. The default is the
@@ -53,16 +59,27 @@ which is the only place the type can be sorted since it lost its column. A
 question wearing three tags appears in each of the three sections. All of it
 is remembered for the next visit.
 
+## Favourites
+
+The star in front of a question's name makes it one of YOUR favourites;
+Space does the same on the focused row, and **Star** in the bottom bar on
+the ticked ones. Nobody else sees your stars — a colleague sharing the pool
+has their own — and a reader may star too. When you fill an evaluation or a
+template, **Add questions** lists the favourites of the shown pool first,
+and **Add favourites** adds them all at once. **Clear favourites**, the crossed
+star beside the question count, takes off every star you put in it.
+
 ## A pool someone shared with you
 
 If your seat on the pool is **reader**, the screen shows the questions and
 none of the actions: no new question, no edit, no duplicate, no delete, no
-tick boxes. Opening a question still works — reading one means opening it.
+tick boxes. Opening a question still works — reading one means opening it —
+and so does starring it.
 
 ## Several at once
 
-Tick the rows and a bar appears at the bottom: add a tag, move them to a
-category, delete them. It reports once, at the end.
+Tick the rows and a bar appears at the bottom: star them, add a tag, move
+them to a category, delete them. It reports once, at the end.
 
 ## New question, versions
 

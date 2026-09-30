@@ -77,9 +77,12 @@ The `postgres` service carries the same low-memory tuning as the classroom's
 one vCPU and 2 GB, shared by three services and two PostgreSQL instances.
 
 The Caddy fragment does two things beyond proxying to `localhost:3002`: it
-sets the security headers (HSTS, `nosniff`, referrer policy) and it proxies
+sets the transport headers (HSTS, `nosniff`, referrer policy) and it proxies
 `/app/api/events` with `flush_interval -1`, so the server-sent event stream
 ([ADR-005](../adr/ADR-005-sse-sans-websocket.md)) is never buffered.
+The Content-Security-Policy and `X-Frame-Options` are NOT Caddy's: the
+application sends them (`apps/api/src/csp.ts`), the Teams tab's exception
+included, so staging and production carry the same policy.
 
 ### The `srv` account
 
@@ -121,8 +124,9 @@ cp Caddyfile /etc/caddy/conf.d/quiz.caddy && sudo caddy validate --config /etc/c
 The edu-ID client is registered with the redirect URI
 `https://quiz.chevallier.io/app/auth/callback` and authenticates with
 `private_key_jwt` (`OIDC_PRIVATE_KEY_PATH`, `OIDC_PRIVATE_KEY_KID`).
-`AUTH_DEV_LOGIN` and a `pglite://` database are both refused by `config.ts`
-under `NODE_ENV=production`: setting either in `.env.prod` stops the
+`AUTH_DEV_LOGIN`, a `pglite://` database and the stub LLM provider
+(`LLM_PROVIDER=stub`) are all refused by `config.ts` under
+`NODE_ENV=production`: setting any of them in `.env.prod` stops the
 container from starting, on purpose. The super administrator is
 `SUPER_ADMIN_EMAIL`; teachers are managed from the Admin screen.
 
@@ -200,16 +204,41 @@ grep -q 'conf.d/\*.caddy' /etc/caddy/Caddyfile || sed -i '1i import /etc/caddy/c
 mkdir -p /etc/caddy/conf.d && cp apps/runner/deploy/Caddyfile /etc/caddy/conf.d/quiz-runner.caddy
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && systemctl reload caddy
 # The language images: the runner's only supply chain, built HERE, never pulled.
-# `spice` is ngspice, for the `circuit` question type (ADR-019): without it
-# `GET /health` does not list `spice` and every circuit grading degrades to a
-# PROPOSED grade. It is in the default list, so passing no argument builds it.
-PODMAN_REMOTE_URL=unix:///run/podman/podman.sock apps/runner/images/build.sh c cpp python js spice
+# All six by default: c, cpp, python, js, spice (ngspice, for `circuit`,
+# ADR-019) and rust. A missing one is not listed by `GET /health`, and every
+# question in that language degrades to a PROPOSED grade. rust is the large
+# one (~820 MB): check the disk first and keep 2 GB free for the build.
+df -h /var/lib/containers
+PODMAN_REMOTE_URL=unix:///run/podman/podman.sock apps/runner/images/build.sh
+podman image prune -f
 podman images | grep quiz-runner
 ```
 
+On a VM built before #234, which has the five others only, build rust alone
+the same way (`… images/build.sh rust`); `GET /health` notices it within five
+seconds, no restart needed. The sizes and build times are in
+[`apps/runner/README.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/runner/README.md#the-images).
+
 After an upgrade that adds or changes an image (a new language, a new
 ngspice), rebuild it on the VM; nothing else does: `deploy.sh` ships the
-runner's own image, never the sandbox ones.
+runner's own image, never the sandbox ones. The CI workflow **Runner
+integration** builds the same six images every week and runs the integration
+suite on them under a rootful socket, so a change that breaks a language
+under the seccomp profile turns red there first.
+
+### Checking the runner end to end
+
+After an image rebuild, or whenever a code question misbehaves, run the
+smoke test from the application VM (the only address the code VM's Caddy
+admits); what it prints and checks is in
+[`apps/runner/README.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/runner/README.md#the-smoke-test-against-a-live-runner):
+
+```bash
+# application VM, as srv
+cd /srv/quiz
+RUNNER_TOKEN="$(sed -n 's/^RUNNER_TOKEN=//p' .env.prod)" \
+  apps/runner/scripts/smoke.py https://code.chevallier.io:8443
+```
 
 ## 4. Continuous deployment
 
@@ -414,6 +443,43 @@ deployed image and not `:latest` (main's head, not yet approved):
 docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image <command>
 ```
 
+### The CSP moves from Caddy to the application (#319, once)
+
+The release that brings `apps/api/src/csp.ts` also removes the CSP,
+`X-Frame-Options` and the `@teamsTab` block from `Caddyfile` and
+`Caddyfile.staging`. The fragments are installed by hand, so this is one
+manual step per environment, in this order:
+
+1. **The image first.** Let the merge deploy staging, then check that the
+   application sends the policy:
+   `curl -sI https://quiz.dev.chevallier.io/ | grep -i content-security` shows
+   `default-src 'self'`.
+2. **Then staging's fragment**, as `srv`. Production's checkout is still at
+   the previous release, so the new file comes from `origin/main`:
+
+   ```bash
+   cd /srv/quiz && git fetch -q origin && git show origin/main:Caddyfile.staging > /etc/caddy/conf.d/quiz-staging.caddy \
+     && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
+   ```
+
+3. **Approve production**, check the header as in step 1 on
+   `quiz.chevallier.io`, then install its fragment, as `srv` (the checkout is
+   now at the release):
+
+   ```bash
+   cd /srv/quiz && cp Caddyfile /etc/caddy/conf.d/quiz.caddy \
+     && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
+   ```
+
+Why this order: the new fragment in front of the OLD image leaves the site
+with no CSP at all until the image arrives. The old fragment in front of the
+new image is safe but not finished: every page carries both policies (the
+browser enforces both, and the old one only adds `frame-ancestors`), while
+on `/teams` the old `@teamsTab` block REPLACES the application's policy with
+its framing-only one. Hence the reinstall right after each deploy. A
+rollback to an image older than this release needs the previous fragments
+back (`git show <old sha>:Caddyfile`), for the first reason.
+
 ### Rollback
 
 Re-run the `deploy-production` job of the run of the healthy commit (Actions
@@ -433,7 +499,7 @@ the next approved promotion.
     The application VM is small (1 vCPU, 2 GB). A local build makes the host
     swap and strangles PostgreSQL (the classroom learned it on 2026-07-10, on
     the previous VM) and fills the disk with builder cache. `deploy.sh` only
-    pulls. The runner VM does build the small Alpine language images, on
+    pulls. The runner VM does build the Alpine language images (rust, ~820 MB, included), on
     purpose; the runner image itself still comes from CI, so that both VMs
     run the commit the checks passed on.
 
@@ -451,7 +517,7 @@ the next approved promotion.
   of what to copy: `rsync` is enough. `./secrets` goes through the vault,
   never through the backup directory.
 - The runner VM holds nothing to back up: the language images rebuild in a
-  minute from `apps/runner/images/`, and its environment file is one line,
+  few minutes from `apps/runner/images/`, and its environment file is one line,
   the token, which the vault copy of `.env.prod` also holds.
 - **Before any migration**, take a fresh dump rather than trusting the daily
   one:
@@ -697,6 +763,7 @@ configuration.
 | `RUNNER_MODE`, `RUNNER_URL` | `http`, `https://code.chevallier.io:8443` | `http` without a URL is refused; `stub` disables the runner, see below |
 | `RUNNER_TOKEN` | `openssl rand -hex 32`, the same value as `/etc/quiz-runner/env` on the runner VM | sent as `Authorization: Bearer` on every call; required when `RUNNER_MODE=http`, the process does not start without it |
 | `RUNNER_TIMEOUT_MS` | default `30000` | wall-clock budget of one runner call |
+| `LLM_PROVIDER` | unset (`none`) | essays are graded by hand; `stub`, the development fake, makes the process refuse to start |
 | `LOG_LEVEL`, `WORKER_MODE` | `info`, `all` | `web`/`worker` would split the roles without a code change ([ADR-001](../adr/ADR-001-monolithe-modulaire.md)) |
 
 The uploaded question images live in `./assets` on the host, mounted at

@@ -60,7 +60,8 @@ An exercise skips the waiting room and closes by itself at its deadline. A poll 
 
 ## Where to find things
 
-- **Courses**, the first entry of the sidebar, is the home page: your courses, their classrooms, their staff and their pools. [Courses and classrooms](classrooms.md).
+- **Activities**, the first entry of the sidebar, gathers every exam, exercise and poll of your classrooms in one place.
+- **Courses**, just below it, is the home page: your courses, their classrooms, their staff and their pools. [Courses and classrooms](classrooms.md).
 - **Question pools** lists your pools and opens their questions. [Question pools](pools.md).
 - **Poll** starts a one-question poll on the projector. [Live polls](polls.md).
 - **Settings › API tokens** connects an AI assistant (Claude, ChatGPT) that writes questions and evaluations for you. [AI assistants (MCP)](assistants.md).

@@ -151,6 +151,9 @@ importers:
       '@quiz/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@quiz/diagram':
+        specifier: workspace:*
+        version: link:../../packages/diagram
       '@quiz/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -244,6 +247,9 @@ importers:
       react-dom:
         specifier: ^19.2.7
         version: 19.2.7(react@19.2.7)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.3.2
@@ -293,6 +299,9 @@ importers:
 
   packages/contracts:
     dependencies:
+      '@quiz/core':
+        specifier: workspace:*
+        version: link:../core
       zod:
         specifier: ^4.0.0
         version: 4.4.3
@@ -323,11 +332,57 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.1.0)(@vitest/coverage-v8@4.1.11)(jsdom@30.1.0)(vite@8.1.3(@types/node@26.1.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.1))
 
+  packages/diagram:
+    dependencies:
+      '@quiz/core':
+        specifier: workspace:*
+        version: link:../core
+      '@quiz/ui':
+        specifier: workspace:*
+        version: link:../ui
+    devDependencies:
+      '@testing-library/jest-dom':
+        specifier: ^7.0.1
+        version: 7.0.1(@testing-library/dom@10.4.2)(vitest@4.1.11)
+      '@testing-library/react':
+        specifier: ^16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@types/node':
+        specifier: ^22.20.3
+        version: 22.20.3
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      jsdom:
+        specifier: ^30.1.0
+        version: 30.1.0
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.2.7
+        version: 19.2.7(react@19.2.7)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.20.3)(@vitest/coverage-v8@4.1.11)(jsdom@30.1.0)(vite@8.1.3(@types/node@22.20.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.1))
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
   packages/domain:
     dependencies:
       '@quiz/core':
         specifier: workspace:*
         version: link:../core
+      ts-fsrs:
+        specifier: ^5.4.2
+        version: 5.4.2
     devDependencies:
       '@vitest/coverage-v8':
         specifier: ^4.1.11
@@ -493,7 +548,7 @@ importers:
     dependencies:
       '@monaco-editor/react':
         specifier: ^4.7.0
-        version: 4.7.0(monaco-editor@0.56.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@quiz/core':
         specifier: workspace:*
         version: link:../core
@@ -503,6 +558,9 @@ importers:
       '@quiz/ui':
         specifier: workspace:*
         version: link:../ui
+      monaco-editor:
+        specifier: 0.55.1
+        version: 0.55.1
     devDependencies:
       '@testing-library/jest-dom':
         specifier: ^7.0.1
@@ -2500,8 +2558,8 @@ packages:
   mkdirp-classic@0.5.3:
     resolution: {integrity: sha512-gKLcREMhtuZRwRAfqP3RFW+TK4JqApVBtOIftVgjuABpAtpxhPGaDcfvbhNvD0B8iD1oUr/txX35NjcaY6Ns/A==}
 
-  monaco-editor@0.56.0:
-    resolution: {integrity: sha512-sXboRm3BeBeLm938eaiyLMe0OxzfXIlZvbv4ir/jVgQy1zDhWjgmny0WoN45fuDKhCCQsYMbBJrv/A6jd8aCUg==}
+  monaco-editor@0.55.1:
+    resolution: {integrity: sha512-jz4x+TJNFHwHtwuV9vA9rMujcZRb0CEilTEwG2rRSpe/A7Jdkuj8xPKttCgOh+v/lkHy7HsZ64oj+q3xoAFl9A==}
 
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
@@ -2956,6 +3014,10 @@ packages:
   tr46@6.0.0:
     resolution: {integrity: sha512-bLVMLPtstlZ4iMQHpFHTR7GAGj2jxi8Dg0s2h2MafAE4uSWF98FC/3MomU51iQAMf8/qDUbKWf5GxuvvVcXEhw==}
     engines: {node: '>=20'}
+
+  ts-fsrs@5.4.2:
+    resolution: {integrity: sha512-z4qop4pzTcyTzuJ566d9EaX/4bZZzhYfeaPImfVr+xcYT65c5oBgFDijUhCE/D+C78eaolHIhKRZ04/RwF+v2g==}
+    engines: {node: '>=20.0.0'}
 
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
@@ -3555,10 +3617,10 @@ snapshots:
     dependencies:
       state-local: 1.0.7
 
-  '@monaco-editor/react@4.7.0(monaco-editor@0.56.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@monaco-editor/react@4.7.0(monaco-editor@0.55.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@monaco-editor/loader': 1.7.0
-      monaco-editor: 0.56.0
+      monaco-editor: 0.55.1
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
 
@@ -4636,7 +4698,7 @@ snapshots:
   mkdirp-classic@0.5.3:
     optional: true
 
-  monaco-editor@0.56.0:
+  monaco-editor@0.55.1:
     dependencies:
       dompurify: 3.4.16
       marked: 14.0.0
@@ -5124,6 +5186,8 @@ snapshots:
   tr46@6.0.0:
     dependencies:
       punycode: 2.3.1
+
+  ts-fsrs@5.4.2: {}
 
   tslib@2.8.1: {}
 

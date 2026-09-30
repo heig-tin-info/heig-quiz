@@ -10,6 +10,7 @@ import { registerForTests } from "@quiz/registry/server";
 import type { Db } from "../../db/client.js";
 import {
   auditLog,
+  coursePools,
   courseStaff,
   courses,
   notifications,
@@ -19,11 +20,14 @@ import {
   questionTags,
   questionVersions,
   questions,
+  teacherGrants,
+  userEmails,
   users,
 } from "../../db/schema.js";
 import { loadConfig as loadAppConfig } from "../../config.js";
 import { subscribe, type BusMessage } from "../../events.js";
-import { syncRoleOfUser } from "../../roles.js";
+import { syncRoleOfUser, syncUserRole } from "../../roles.js";
+import { poolAccess } from "../guards.js";
 import { testDb } from "../../test/db.js";
 import { fakeShort, fakeV1Config } from "../../test/fakeType.js";
 import { notify } from "../notifications/service.js";
@@ -40,7 +44,7 @@ function backfillStatement(): string {
   );
   const statement = readFileSync(file, "utf8")
     .split("--> statement-breakpoint")
-    .find((part) => part.includes("INSERT INTO \"pool_tags\""));
+    .find((part) => part.includes('INSERT INTO "pool_tags"'));
   if (!statement) throw new Error("the pool_tags migration no longer carries its backfill");
   return statement;
 }
@@ -48,7 +52,7 @@ function backfillStatement(): string {
 const search = (extra: Record<string, unknown> = {}) =>
   ({ limit: 50, sort: "updated", dir: "desc", ...extra }) as Parameters<
     typeof service.listQuestions
-  >[2];
+  >[3];
 
 /** The caller of `listPools`: the seeded owner, an ordinary teacher. */
 const viewer = () => ({ id: ownerId, role: "teacher" });
@@ -141,7 +145,7 @@ describe("publication (F-QST-03)", () => {
     const version = await service.publishQuestion(db, await questionRow(id), { userId: ownerId });
 
     const stateInList = async () => {
-      const page = await service.listQuestions(db, poolId, search({ q: "republished" }));
+      const page = await service.listQuestions(db, poolId, ownerId, search({ q: "republished" }));
       const row = page.items.find((r) => r.id === id)!;
       return { latestNumber: row.latestNumber, hasDraftChanges: row.hasDraftChanges };
     };
@@ -311,7 +315,7 @@ describe("versions", () => {
     const version = await service.deprecateVersion(db, id, 1, "superseded by the new syllabus");
     expect(version?.deprecatedAt).not.toBeNull();
     expect(version?.deprecationNote).toBe("superseded by the new syllabus");
-    const page = await service.listQuestions(db, poolId, search({ q: "Old" }));
+    const page = await service.listQuestions(db, poolId, ownerId, search({ q: "Old" }));
     expect(page.items.find((q) => q.id === id)?.deprecated).toBe(true);
   });
 });
@@ -323,10 +327,15 @@ describe("soft delete (F-QST-11)", () => {
     await service.publishQuestion(db, await questionRow(id), { userId: ownerId });
 
     await service.softDeleteQuestion(db, await questionRow(id));
-    const visible = await service.listQuestions(db, poolId, search());
+    const visible = await service.listQuestions(db, poolId, ownerId, search());
     expect(visible.items.map((q) => q.id)).not.toContain(id);
 
-    const withDeleted = await service.listQuestions(db, poolId, search({ includeDeleted: true }));
+    const withDeleted = await service.listQuestions(
+      db,
+      poolId,
+      ownerId,
+      search({ includeDeleted: true }),
+    );
     expect(withDeleted.items.map((q) => q.id)).toContain(id);
     expect(await service.listVersions(db, id)).toHaveLength(1);
   });
@@ -341,9 +350,7 @@ describe("soft delete (F-QST-11)", () => {
     const id = await seedQuestion("not in use");
     await writeDraft(id, { statement: "Free", answer: "a" });
     await service.publishQuestion(db, await questionRow(id), { userId: ownerId });
-    await expect(
-      service.hardDeleteQuestion(db, await questionRow(id)),
-    ).resolves.toBeUndefined();
+    await expect(service.hardDeleteQuestion(db, await questionRow(id))).resolves.toBeUndefined();
     expect(await db.select().from(questions).where(eq(questions.id, id))).toEqual([]);
   });
 });
@@ -367,27 +374,31 @@ describe("search", () => {
   });
 
   it("finds a question by the text of its draft, through the generated tsvector", async () => {
-    const page = await service.listQuestions(db, searchPool, search({ q: "malloc" }));
+    const page = await service.listQuestions(db, searchPool, ownerId, search({ q: "malloc" }));
     expect(page.items.map((q) => q.id)).toEqual([alpha]);
   });
 
   it("finds a question by its internal name", async () => {
-    const page = await service.listQuestions(db, searchPool, search({ q: "Recursion" }));
+    const page = await service.listQuestions(db, searchPool, ownerId, search({ q: "Recursion" }));
     expect(page.items.map((q) => q.id)).toEqual([beta]);
   });
 
   it("filters by tag, by type and by difficulty", async () => {
     expect(
-      (await service.listQuestions(db, searchPool, search({ tag: ["memory"] }))).items.map((q) => q.id),
+      (await service.listQuestions(db, searchPool, ownerId, search({ tag: ["memory"] }))).items.map(
+        (q) => q.id,
+      ),
     ).toEqual([alpha]);
     expect(
-      (await service.listQuestions(db, searchPool, search({ difficulty: [2] }))).items.map((q) => q.id),
+      (await service.listQuestions(db, searchPool, ownerId, search({ difficulty: [2] }))).items.map(
+        (q) => q.id,
+      ),
     ).toEqual([beta]);
     expect(
-      (await service.listQuestions(db, searchPool, search({ type: ["short"] }))).items,
+      (await service.listQuestions(db, searchPool, ownerId, search({ type: ["short"] }))).items,
     ).toHaveLength(2);
     expect(
-      (await service.listQuestions(db, searchPool, search({ type: ["mcq"] }))).items,
+      (await service.listQuestions(db, searchPool, ownerId, search({ type: ["mcq"] }))).items,
     ).toHaveLength(0);
   });
 
@@ -401,12 +412,13 @@ describe("search", () => {
   });
 
   it("paginates with an opaque cursor", async () => {
-    const first = await service.listQuestions(db, searchPool, search({ limit: 1 }));
+    const first = await service.listQuestions(db, searchPool, ownerId, search({ limit: 1 }));
     expect(first.items).toHaveLength(1);
     expect(first.nextCursor).not.toBeNull();
     const second = await service.listQuestions(
       db,
       searchPool,
+      ownerId,
       search({ limit: 1, cursor: first.nextCursor }),
     );
     expect(second.items).toHaveLength(1);
@@ -415,17 +427,28 @@ describe("search", () => {
   });
 
   it("counts every question the search matches, on every page", async () => {
-    const first = await service.listQuestions(db, searchPool, search({ limit: 1 }));
+    const first = await service.listQuestions(db, searchPool, ownerId, search({ limit: 1 }));
     expect(first.total).toBe(2);
     const second = await service.listQuestions(
       db,
       searchPool,
+      ownerId,
       search({ limit: 1, cursor: first.nextCursor }),
     );
     expect(second.total).toBe(2);
-    const tagged = await service.listQuestions(db, searchPool, search({ tag: ["memory"] }));
+    const tagged = await service.listQuestions(
+      db,
+      searchPool,
+      ownerId,
+      search({ tag: ["memory"] }),
+    );
     expect(tagged.total).toBe(1);
-    const none = await service.listQuestions(db, searchPool, search({ q: "nothing-matches" }));
+    const none = await service.listQuestions(
+      db,
+      searchPool,
+      ownerId,
+      search({ q: "nothing-matches" }),
+    );
     expect(none.total).toBe(0);
   });
 });
@@ -551,9 +574,7 @@ describe("the tag vocabulary of a pool", () => {
       targetPoolId: target,
       userId: ownerId,
     });
-    expect(await service.poolTags(db, target)).toEqual([
-      { tag: "ipc", description: "", count: 1 },
-    ]);
+    expect(await service.poolTags(db, target)).toEqual([{ tag: "ipc", description: "", count: 1 }]);
   });
 
   it("backfills the pools written before the table existed, exactly as the migration does", async () => {
@@ -589,7 +610,9 @@ describe("question counts", () => {
     expect((await service.poolDetail(db, row!, "owner")).questionCount).toBe(3);
 
     const courseId = randomUUID();
-    await db.insert(courses).values({ id: courseId, name: "Counting", code: `C-${courseId.slice(0, 8)}` });
+    await db
+      .insert(courses)
+      .values({ id: courseId, name: "Counting", code: `C-${courseId.slice(0, 8)}` });
     await service.setCoursePools(db, courseId, [counted], undefined, viewer());
     const ofCourse = await service.poolsOfCourse(db, courseId);
     expect(ofCourse.map((p) => p.questionCount)).toEqual([3]);
@@ -599,7 +622,9 @@ describe("question counts", () => {
   it("closes the course staff's streams when a pool is unlinked, not when one is linked", async () => {
     const linked = await seedPool();
     const courseId = randomUUID();
-    await db.insert(courses).values({ id: courseId, name: "Unlinking", code: `U-${courseId.slice(0, 8)}` });
+    await db
+      .insert(courses)
+      .values({ id: courseId, name: "Unlinking", code: `U-${courseId.slice(0, 8)}` });
     const colleague = randomUUID();
     await db.insert(users).values({
       id: colleague,
@@ -627,6 +652,22 @@ describe("question counts", () => {
     } finally {
       unsubscribe();
     }
+  });
+
+  it("writes nothing when the links already stand", async () => {
+    const linked = await seedPool();
+    const courseId = randomUUID();
+    await db
+      .insert(courses)
+      .values({ id: courseId, name: "Unchanged", code: `N-${courseId.slice(0, 8)}` });
+    await service.setCoursePools(db, courseId, [linked], undefined, viewer());
+    const before = await db.select().from(coursePools).where(eq(coursePools.courseId, courseId));
+
+    const again = await service.setCoursePools(db, courseId, [linked], undefined, viewer());
+
+    expect(again.map((p) => p.id)).toEqual([linked]);
+    // The same row, not a deleted and re-inserted one.
+    expect(await db.select().from(coursePools).where(eq(coursePools.courseId, courseId))).toEqual(before);
   });
 
   it("leaves a soft-deleted question out of the count", async () => {
@@ -674,7 +715,10 @@ describe("members (F-POOL-05)", () => {
       .set({ createdAt: new Date(Date.now() - 60_000) })
       .where(and(eq(poolMembers.poolId, pool!.id), eq(poolMembers.userId, first)));
 
-    const listed = await service.listMembers(db, (await db.select().from(pools).where(eq(pools.id, pool!.id)))[0]!);
+    const listed = await service.listMembers(
+      db,
+      (await db.select().from(pools).where(eq(pools.id, pool!.id)))[0]!,
+    );
     expect(listed.members.map((m) => m.userId)).toEqual([ownerId, first, second]);
     expect(listed.members[0]!.isOwner).toBe(true);
     expect(listed.members[0]!.role).toBe("owner");
@@ -683,7 +727,9 @@ describe("members (F-POOL-05)", () => {
 
   it("turns a private pool into a shared one on the first invitation", async () => {
     const id = randomUUID();
-    await db.insert(pools).values({ id, name: `Private ${id.slice(0, 8)}`, ownerId, visibility: "private" });
+    await db
+      .insert(pools)
+      .values({ id, name: `Private ${id.slice(0, 8)}`, ownerId, visibility: "private" });
     const [pool] = await db.select().from(pools).where(eq(pools.id, id));
     const colleague = await seedTeacher(`flip-${randomUUID().slice(0, 6)}@heig.test`);
     const added = await service.addMember(db, pool!, colleague, "reader");
@@ -700,7 +746,12 @@ describe("members (F-POOL-05)", () => {
     const studentId = randomUUID();
     await db
       .insert(users)
-      .values({ id: studentId, oidcSub: `s-${studentId}`, email: "pupil@heig.test", role: "student" });
+      .values({
+        id: studentId,
+        oidcSub: `s-${studentId}`,
+        email: "pupil@heig.test",
+        role: "student",
+      });
     expect(await service.findTeacherByEmail(db, "pupil@heig.test")).toBeNull();
     expect(await service.findTeacherByEmail(db, "nobody@heig.test")).toBeNull();
   });
@@ -775,6 +826,32 @@ describe("succession when the owner loses the teacher role (F-POOL-05)", () => {
     expect(await service.transferOnLoss(db, leaving)).toEqual([]);
   });
 
+  it("passes over a member demoted to student, and keeps the owner when no staff member remains (#287)", async () => {
+    const leaving = await seedTeacher(`leaving3-${randomUUID().slice(0, 6)}@heig.test`);
+    const demoted = await seedTeacher(`demoted3-${randomUUID().slice(0, 6)}@heig.test`);
+    const heir = await seedTeacher(`heir3-${randomUUID().slice(0, 6)}@heig.test`);
+    const id = randomUUID();
+    await db.insert(pools).values({ id, name: `Demoted ${id.slice(0, 8)}`, ownerId: leaving });
+    const [pool] = await db.select().from(pools).where(eq(pools.id, id));
+    await service.addMember(db, pool!, demoted, "owner");
+    await db
+      .update(poolMembers)
+      .set({ createdAt: new Date(Date.now() - 60_000) })
+      .where(and(eq(poolMembers.poolId, id), eq(poolMembers.userId, demoted)));
+    await service.addMember(db, pool!, heir, "reader");
+    await db.update(users).set({ role: "student" }).where(eq(users.id, demoted));
+
+    expect(await service.transferOnLoss(db, leaving)).toEqual([{ poolId: id, toUserId: heir }]);
+    const inbox = await db.select().from(notifications).where(eq(notifications.userId, demoted));
+    expect(inbox).toEqual([]);
+
+    // The heir leaves in turn: only the demoted member is left, so nobody inherits.
+    await db.update(users).set({ role: "student" }).where(eq(users.id, heir));
+    expect(await service.transferOnLoss(db, heir)).toEqual([]);
+    const [after] = await db.select().from(pools).where(eq(pools.id, id));
+    expect(after!.ownerId).toBe(heir);
+  });
+
   it("leaves a pool with no member alone rather than orphaning it", async () => {
     const lonely = await seedTeacher(`lonely-${randomUUID().slice(0, 6)}@heig.test`);
     const id = randomUUID();
@@ -807,6 +884,70 @@ describe("succession when the owner loses the teacher role (F-POOL-05)", () => {
   });
 });
 
+describe("a member demoted to student loses their seat (ADR-013, rule 5)", () => {
+  const config = loadAppConfig({
+    NODE_ENV: "test",
+    DATABASE_URL: "pglite://./.data/never-opened",
+    LOG_LEVEL: "fatal",
+  });
+  const reaches = async (poolId: string, userId: string) =>
+    (await db.select({ id: pools.id }).from(pools).where(and(eq(pools.id, poolId), poolAccess(userId))))
+      .length === 1;
+  const seatsOf = async (userId: string) =>
+    db.select().from(poolMembers).where(eq(poolMembers.userId, userId));
+
+  it("vacates every seat on demotion, hands the owned pools on, and gives nothing back on promotion", async () => {
+    const demoted = await seedTeacher(`vacate-${randomUUID().slice(0, 6)}@heig.test`);
+    const colleague = await seedTeacher(`colleague-${randomUUID().slice(0, 6)}@heig.test`);
+    const email = `vacate-back-${randomUUID().slice(0, 6)}@heig.test`;
+    await db.insert(userEmails).values({ userId: demoted, email, source: "login", verified: true });
+    const owned = randomUUID();
+    const seated = randomUUID();
+    await db.insert(pools).values([
+      { id: owned, name: `Owned ${owned.slice(0, 8)}`, ownerId: demoted },
+      { id: seated, name: `Seated ${seated.slice(0, 8)}`, ownerId: colleague },
+    ]);
+    const [ownedPool] = await db.select().from(pools).where(eq(pools.id, owned));
+    const [seatedPool] = await db.select().from(pools).where(eq(pools.id, seated));
+    await service.addMember(db, ownedPool!, colleague, "contributor");
+    await service.addMember(db, seatedPool!, demoted, "owner");
+
+    // No grant, no course seat, no `staff` affiliation: `student`.
+    await syncRoleOfUser(db, config, demoted);
+    const [account] = await db.select().from(users).where(eq(users.id, demoted));
+    expect(account!.role).toBe("student");
+    expect(await seatsOf(demoted)).toEqual([]);
+    // The succession still runs: the owned pool went to the colleague.
+    const [after] = await db.select().from(pools).where(eq(pools.id, owned));
+    expect(after!.ownerId).toBe(colleague);
+
+    // Promoted back by a grant: the role returns, the seat does not.
+    await db.insert(teacherGrants).values({ id: randomUUID(), email, createdBy: colleague });
+    await syncUserRole(db, config, email);
+    const [again] = await db.select().from(users).where(eq(users.id, demoted));
+    expect(again!.role).toBe("teacher");
+    expect(await seatsOf(demoted)).toEqual([]);
+    expect(await reaches(seated, demoted)).toBe(false);
+  });
+
+  it("keeps the seat on a login, but a student account reaches no pool through it", async () => {
+    const member = await seedTeacher(`login-${randomUUID().slice(0, 6)}@heig.test`);
+    const owner = await seedTeacher(`login-owner-${randomUUID().slice(0, 6)}@heig.test`);
+    const id = randomUUID();
+    await db.insert(pools).values({ id, name: `Login ${id.slice(0, 8)}`, ownerId: owner });
+    const [pool] = await db.select().from(pools).where(eq(pools.id, id));
+    await service.addMember(db, pool!, member, "reader");
+
+    await syncRoleOfUser(db, config, member, { succession: false });
+    expect(await seatsOf(member)).toHaveLength(1);
+    expect(await reaches(id, member)).toBe(false);
+    // Nor through a public pool, whatever guard runs before.
+    await db.update(pools).set({ visibility: "public" }).where(eq(pools.id, id));
+    expect(await reaches(id, member)).toBe(false);
+    expect(await reaches(id, owner)).toBe(true);
+  });
+});
+
 describe("question listing: sort, cursor and version bounds (F-POOL-03)", () => {
   let sorted: string;
 
@@ -827,9 +968,19 @@ describe("question listing: sort, cursor and version bounds (F-POOL-03)", () => 
   });
 
   it("sorts by internal name, case-insensitively, in both directions", async () => {
-    const asc = await service.listQuestions(db, sorted, search({ sort: "name", dir: "asc" }));
+    const asc = await service.listQuestions(
+      db,
+      sorted,
+      ownerId,
+      search({ sort: "name", dir: "asc" }),
+    );
     expect(asc.items.map((q) => q.internalName)).toEqual(["alpha", "Bravo", "Charlie", "delta"]);
-    const desc = await service.listQuestions(db, sorted, search({ sort: "name", dir: "desc" }));
+    const desc = await service.listQuestions(
+      db,
+      sorted,
+      ownerId,
+      search({ sort: "name", dir: "desc" }),
+    );
     expect(desc.items.map((q) => q.internalName)).toEqual(["delta", "Charlie", "Bravo", "alpha"]);
   });
 
@@ -840,6 +991,7 @@ describe("question listing: sort, cursor and version bounds (F-POOL-03)", () => 
       const page = await service.listQuestions(
         db,
         sorted,
+        ownerId,
         search({ sort: "name", dir: "asc", limit: 2, ...(cursor ? { cursor } : {}) }),
       );
       seen.push(...page.items.map((q) => q.internalName));
@@ -849,32 +1001,67 @@ describe("question listing: sort, cursor and version bounds (F-POOL-03)", () => 
   });
 
   it("refuses a cursor that belongs to another order", async () => {
-    const page = await service.listQuestions(db, sorted, search({ sort: "name", dir: "asc", limit: 1 }));
+    const page = await service.listQuestions(
+      db,
+      sorted,
+      ownerId,
+      search({ sort: "name", dir: "asc", limit: 1 }),
+    );
     expect(page.nextCursor).toBeTruthy();
     await expect(
-      service.listQuestions(db, sorted, search({ sort: "difficulty", dir: "asc", cursor: page.nextCursor! })),
+      service.listQuestions(
+        db,
+        sorted,
+        ownerId,
+        search({ sort: "difficulty", dir: "asc", cursor: page.nextCursor! }),
+      ),
     ).rejects.toBeInstanceOf(service.InvalidCursor);
     await expect(
-      service.listQuestions(db, sorted, search({ sort: "name", dir: "desc", cursor: page.nextCursor! })),
+      service.listQuestions(
+        db,
+        sorted,
+        ownerId,
+        search({ sort: "name", dir: "desc", cursor: page.nextCursor! }),
+      ),
     ).rejects.toBeInstanceOf(service.InvalidCursor);
     await expect(
-      service.listQuestions(db, sorted, search({ sort: "name", dir: "asc", cursor: "not-a-cursor" })),
+      service.listQuestions(
+        db,
+        sorted,
+        ownerId,
+        search({ sort: "name", dir: "asc", cursor: "not-a-cursor" }),
+      ),
     ).rejects.toBeInstanceOf(service.InvalidCursor);
   });
 
   it("sorts by version with the unpublished questions last, whatever the direction", async () => {
-    const desc = await service.listQuestions(db, sorted, search({ sort: "version", dir: "desc" }));
+    const desc = await service.listQuestions(
+      db,
+      sorted,
+      ownerId,
+      search({ sort: "version", dir: "desc" }),
+    );
     expect(desc.items.map((q) => q.latestNumber)).toEqual([2, 1, null, null]);
-    const asc = await service.listQuestions(db, sorted, search({ sort: "version", dir: "asc" }));
+    const asc = await service.listQuestions(
+      db,
+      sorted,
+      ownerId,
+      search({ sort: "version", dir: "asc" }),
+    );
     expect(asc.items.map((q) => q.latestNumber)).toEqual([1, 2, null, null]);
   });
 
   it("bounds the published version number, and a draft-only question matches neither", async () => {
-    const atLeastTwo = await service.listQuestions(db, sorted, search({ versionMin: 2 }));
+    const atLeastTwo = await service.listQuestions(db, sorted, ownerId, search({ versionMin: 2 }));
     expect(atLeastTwo.items.map((q) => q.internalName)).toEqual(["alpha"]);
-    const atMostOne = await service.listQuestions(db, sorted, search({ versionMax: 1 }));
+    const atMostOne = await service.listQuestions(db, sorted, ownerId, search({ versionMax: 1 }));
     expect(atMostOne.items.map((q) => q.internalName)).toEqual(["Bravo"]);
-    const between = await service.listQuestions(db, sorted, search({ versionMin: 1, versionMax: 2 }));
+    const between = await service.listQuestions(
+      db,
+      sorted,
+      ownerId,
+      search({ versionMin: 1, versionMax: 2 }),
+    );
     expect(between.items.map((q) => q.internalName).sort()).toEqual(["Bravo", "alpha"]);
   });
 });

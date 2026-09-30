@@ -36,6 +36,8 @@ import {
   questionVersions,
   questions,
   ownedPollSql,
+  STAFF_ROLES,
+  users,
 } from "../db/schema.js";
 import { sebRequired } from "./evaluation/service.js";
 
@@ -86,11 +88,19 @@ function qualified(column: AnyColumn): SQL {
  * caller may DO once they are in is `poolRoleOf` below, and failing THAT is a
  * 403: they already know the pool exists.
  *
- * `teacherGuard` runs before every pool route, so the `public` branch cannot
- * hand a pool to a student.
+ * And the caller's STORED role is staff (`STAFF_ROLES`), whatever branch lets
+ * them in: a seat or an ownership kept by an account demoted to student (a
+ * login never takes them away, ADR-013 rule 5) opens nothing, nor does a
+ * `public` pool — the predicate holds by itself, without `teacherGuard`
+ * (invariant 6). That EXISTS is uncorrelated, a primary-key lookup on
+ * `users`: PostgreSQL evaluates it once per statement, not per pool row.
  */
 export function poolAccess(userId: string): SQL {
-  return sql`(${qualified(pools.ownerId)} = ${userId} OR ${qualified(pools.visibility)} = 'public' OR EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)} AND ${qualified(poolMembers.userId)} = ${userId}) OR EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)} WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${qualified(courseStaff.userId)} = ${userId}))`;
+  const staff = sql.join(
+    STAFF_ROLES.map((role) => sql`${role}`),
+    sql`, `,
+  );
+  return sql`(EXISTS (SELECT 1 FROM ${users} WHERE ${qualified(users.id)} = ${userId} AND ${qualified(users.role)} IN (${staff})) AND (${qualified(pools.ownerId)} = ${userId} OR ${qualified(pools.visibility)} = 'public' OR EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)} AND ${qualified(poolMembers.userId)} = ${userId}) OR EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)} WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${qualified(courseStaff.userId)} = ${userId})))`;
 }
 
 /**
@@ -210,6 +220,32 @@ export interface Caller {
  */
 export function accessWhere(user: Pick<Caller, "role">, predicate: SQL): SQL | undefined {
   return user.role === "admin" ? undefined : predicate;
+}
+
+/**
+ * "The caller already sees this user somewhere", which is exactly who may
+ * fetch their uploaded picture (#318). The front end shows another user's
+ * face in two places only, and this predicate is their union:
+ *   - the staff of a course, on its card (`listCourses`): a fellow seat;
+ *   - a classroom's roster (`rosterView`): a seat on the staff of a course
+ *     where that user sits a classroom (`enrollments`, claimed).
+ * Plus the user themselves (the shell, the settings) and an admin, like
+ * every other loader. Nothing more: pool member lists show no avatar, so a
+ * shared pool is no reason. Undefined when nothing needs checking; a caller
+ * who fails it gets the 404 of a missing picture (invariant 6).
+ */
+export function seesUser(user: Caller, subjectId: string): SQL | undefined {
+  if (user.id === subjectId) return undefined;
+  const staffedBySubject = sql`SELECT ${qualified(courseStaff.courseId)} FROM ${courseStaff}
+    WHERE ${qualified(courseStaff.userId)} = ${subjectId}`;
+  const satBySubject = sql`SELECT ${qualified(classrooms.courseId)} FROM ${enrollments}
+    JOIN ${classrooms} ON ${qualified(classrooms.id)} = ${qualified(enrollments.classroomId)}
+    WHERE ${qualified(enrollments.userId)} = ${subjectId}`;
+  const subjectCourses = sql`${staffedBySubject} UNION ${satBySubject}`;
+  return accessWhere(
+    user,
+    sql`EXISTS (SELECT 1 FROM ${courses} WHERE ${staffAccess(user.id, qualified(courses.id))} AND ${qualified(courses.id)} IN (${subjectCourses}))`,
+  );
 }
 
 /*

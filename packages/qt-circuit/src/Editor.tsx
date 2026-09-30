@@ -20,8 +20,15 @@ import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/clie
 import { Plot, SchematicEditor, type CanvasStrings } from "./canvas/index.js";
 import { COMPONENT_KINDS, type ComponentKind } from "./library.js";
 import {
+  DEFAULT_AC_ANALYSIS,
+  DEFAULT_ANALYSIS,
+  DEFAULT_BODE,
+  MAX_ANALYSIS_POINTS,
+  biasOf,
   emptyStimulus,
   totalStimulusPoints,
+  type Analysis,
+  type BodeTolerance,
   type CircuitConfig,
   type CircuitDetails,
   type GradingMode,
@@ -42,6 +49,7 @@ import {
   CheckboxField,
   cx,
   EditorSection,
+  ErrorText,
   FieldCell,
   hint,
   IssueList,
@@ -59,8 +67,8 @@ import {
   textareaClass,
   TryPanel,
   tryStatusOf,
-  useReferenceTry,
   type TryState as UiTryState,
+  useReferenceTry,
 } from "@quiz/ui";
 
 import { chip, selectSm } from "./styles.js";
@@ -71,9 +79,11 @@ import { chip, selectSm } from "./styles.js";
  * `POST /questions/:id/try` grades the reference AS AN ANSWER and returns
  * this type's own breakdown, so what comes back is the grading details and
  * not a raw runner outcome — the waveforms are already decimated and already
- * paired with their stimulus. `"unavailable"` is the graceful path.
+ * paired with their stimulus. `"unavailable"` is the graceful path;
+ * `"invalid"` says the STORED draft does not validate, which the issues on
+ * this page already name.
  */
-export type CircuitTryOutcome = { details: CircuitDetails } | "unavailable";
+export type CircuitTryOutcome = { details: CircuitDetails } | "unavailable" | "invalid";
 
 export interface CircuitEditorProps extends EditorProps<CircuitConfig> {
   /**
@@ -103,7 +113,7 @@ export interface CircuitEditorProps extends EditorProps<CircuitConfig> {
 }
 
 type TryDone = { details: CircuitDetails };
-type TryReason = "runner" | "reference" | "stimulus";
+type TryReason = "runner" | "reference" | "stimulus" | "draft";
 type TryState = UiTryState<TryDone, TryReason>;
 
 /**
@@ -161,6 +171,7 @@ async function simulate(
 ): Promise<TryState> {
   const outcome = await onTry(config);
   if (outcome === "unavailable") return { status: "unavailable" };
+  if (outcome === "invalid") return { status: "failed", reason: "draft" };
   return outcome.details.runner === "ok"
     ? { status: "done", details: outcome.details }
     : outcome.details.runner === "unavailable" || outcome.details.runner === "none"
@@ -268,7 +279,7 @@ export function CircuitEditor({
           ))}
         </div>
         {config.palette.kinds.length === 0 ? (
-          <p className="text-[13px] text-danger">{s.paletteEmpty}</p>
+          <ErrorText>{s.paletteEmpty}</ErrorText>
         ) : null}
         <IssueList issues={issuesAt(issues, "palette")} />
         <div className="flex flex-wrap items-end gap-3">
@@ -385,7 +396,9 @@ export function CircuitEditor({
                   ? s.tryNeedsReference
                   : reason === "stimulus"
                     ? s.tryNeedsStimulus
-                    : s.tryFailed,
+                    : reason === "draft"
+                      ? s.tryInvalidDraft
+                      : s.tryFailed,
               // The stimuli that produced a WAVEFORM, not the ones that were
               // sent: a count the plots below do not back up is a count the
               // teacher has to distrust.
@@ -455,8 +468,19 @@ function StimulusFields({
   onRemove: () => void;
   issues: readonly ConfigIssue[];
 }): ReactNode {
-  const patchAnalysis = (next: Partial<Stimulus["analysis"]>) =>
-    patch({ analysis: { ...stimulus.analysis, ...next } });
+  const { analysis, source } = stimulus;
+  /*
+   * Switching to AC keeps a DC source (its volts become the bias) and turns
+   * anything else into a 0 V bias: a sine or a pulse has no operating point,
+   * and a stimulus the schema refuses is not a state to switch into.
+   */
+  const switchAnalysis = (kind: Analysis["kind"]) =>
+    kind === "ac"
+      ? patch({
+          analysis: { ...DEFAULT_AC_ANALYSIS },
+          source: source.kind === "dc" ? source : { kind: "dc", volts: 0 },
+        })
+      : patch({ analysis: { ...DEFAULT_ANALYSIS } });
   return (
     <>
       <RowHead
@@ -479,31 +503,64 @@ function StimulusFields({
         onRemove={onRemove}
       />
 
+      {/* First, because it decides what the source below may be. */}
+      <div className="mt-3 flex flex-col gap-2">
+        <span className={label} id={`${ids}-ank-${i}`}>
+          {s.analysisKind}
+        </span>
+        <Segmented
+          name={`${ids}-ank-${i}`}
+          labelledBy={`${ids}-ank-${i}`}
+          value={analysis.kind === "ac" ? "ac" : "tran"}
+          disabled={disabled}
+          options={[
+            { value: "tran", label: s.analysisTran },
+            { value: "ac", label: s.analysisAc },
+          ]}
+          onChange={switchAnalysis}
+        />
+        {analysis.kind === "ac" ? <p className={hint}>{s.acHint}</p> : null}
+      </div>
+
       <div className="mt-3 flex flex-col gap-2">
         <span className={label} id={`${ids}-src-${i}`}>
           {s.source}
         </span>
-        <Segmented
-          name={`${ids}-srck-${i}`}
-          labelledBy={`${ids}-src-${i}`}
-          value={stimulus.source.kind}
-          disabled={disabled}
-          options={[
-            { value: "dc", label: s.sourceDc },
-            { value: "sine", label: s.sourceSine },
-            { value: "pulse", label: s.sourcePulse },
-            { value: "step", label: s.sourceStep },
-          ]}
-          onChange={(kind) => patch({ source: defaultSource(kind) })}
-        />
-        <div className="flex flex-wrap items-end gap-3">
-          <SourceFields
-            idPrefix={`${ids}-s${i}`}
-            source={stimulus.source}
-            strings={s}
+        {/* Under AC the source is its bias alone: one field, no kind to pick. */}
+        {analysis.kind === "ac" ? null : (
+          <Segmented
+            name={`${ids}-srck-${i}`}
+            labelledBy={`${ids}-src-${i}`}
+            value={source.kind}
             disabled={disabled}
-            onChange={(source) => patch({ source })}
+            options={[
+              { value: "dc", label: s.sourceDc },
+              { value: "sine", label: s.sourceSine },
+              { value: "pulse", label: s.sourcePulse },
+              { value: "step", label: s.sourceStep },
+            ]}
+            onChange={(kind) => patch({ source: defaultSource(kind) })}
           />
+        )}
+        <div className="flex flex-wrap items-end gap-3">
+          {analysis.kind === "ac" ? (
+            <NumberField
+              id={`${ids}-bias-${i}`}
+              label={s.bias}
+              value={biasOf(source)}
+              step="any"
+              disabled={disabled}
+              onChange={(volts) => patch({ source: { kind: "dc", volts } })}
+            />
+          ) : (
+            <SourceFields
+              idPrefix={`${ids}-s${i}`}
+              source={source}
+              strings={s}
+              disabled={disabled}
+              onChange={(next) => patch({ source: next })}
+            />
+          )}
           <NumberField
             id={`${ids}-sohms-${i}`}
             label={s.sourceOhms}
@@ -558,42 +615,106 @@ function StimulusFields({
           above: a group label parked on the baseline of the inputs
           reads as a fourth field with no box. */}
       <div className="mt-3 flex flex-col gap-2">
-        <span className={label}>{s.analysis}</span>
+        <span className={label}>{analysis.kind === "ac" ? s.sweep : s.analysis}</span>
         <div className="flex flex-wrap items-end gap-3">
-        <NumberField
-          id={`${ids}-stop-${i}`}
-          label={s.stopMs}
-          value={stimulus.analysis.stopMs}
-          min={0.001}
-          step="any"
-          width="w-24"
-          disabled={disabled}
-          onChange={(stopMs) => patchAnalysis({ stopMs })}
-        />
-        <NumberField
-          id={`${ids}-skip-${i}`}
-          label={s.skipMs}
-          value={stimulus.analysis.skipMs}
-          min={0}
-          step="any"
-          width="w-24"
-          disabled={disabled}
-          onChange={(skipMs) => patchAnalysis({ skipMs })}
-        />
-        <NumberField
-          id={`${ids}-pts-${i}`}
-          label={s.samples}
-          value={stimulus.analysis.points}
-          min={50}
-          max={2000}
-          step={50}
-          width="w-24"
-          disabled={disabled}
-          onChange={(points) => patchAnalysis({ points })}
-        />
+          <AnalysisFields
+            idPrefix={`${ids}-a${i}`}
+            analysis={analysis}
+            s={s}
+            disabled={disabled}
+            onChange={(next) => patch({ analysis: next })}
+          />
         </div>
       </div>
       <IssueList issues={issues} />
+    </>
+  );
+}
+
+/** The window of a transient, or the band of an AC sweep. */
+function AnalysisFields({
+  idPrefix,
+  analysis,
+  s,
+  disabled,
+  onChange,
+}: {
+  idPrefix: string;
+  analysis: Analysis;
+  s: CircuitEditorStrings;
+  disabled: boolean | undefined;
+  onChange: (analysis: Analysis) => void;
+}): ReactNode {
+  if (analysis.kind === "ac") {
+    return (
+      <>
+        <NumberField
+          id={`${idPrefix}-fstart`}
+          label={s.fStartHz}
+          value={analysis.fStartHz}
+          min={0.01}
+          step="any"
+          width="w-28"
+          disabled={disabled}
+          onChange={(fStartHz) => onChange({ ...analysis, fStartHz })}
+        />
+        <NumberField
+          id={`${idPrefix}-fstop`}
+          label={s.fStopHz}
+          value={analysis.fStopHz}
+          max={1e9}
+          step="any"
+          width="w-28"
+          disabled={disabled}
+          onChange={(fStopHz) => onChange({ ...analysis, fStopHz })}
+        />
+        <NumberField
+          id={`${idPrefix}-ppd`}
+          label={s.pointsPerDecade}
+          value={analysis.pointsPerDecade}
+          min={5}
+          max={200}
+          step={5}
+          width="w-24"
+          disabled={disabled}
+          onChange={(pointsPerDecade) => onChange({ ...analysis, pointsPerDecade })}
+        />
+      </>
+    );
+  }
+  return (
+    <>
+      <NumberField
+        id={`${idPrefix}-stop`}
+        label={s.stopMs}
+        value={analysis.stopMs}
+        min={0.001}
+        step="any"
+        width="w-24"
+        disabled={disabled}
+        onChange={(stopMs) => onChange({ ...analysis, stopMs })}
+      />
+      <NumberField
+        id={`${idPrefix}-skip`}
+        label={s.skipMs}
+        value={analysis.skipMs}
+        min={0}
+        step="any"
+        width="w-24"
+        disabled={disabled}
+        onChange={(skipMs) => onChange({ ...analysis, skipMs })}
+      />
+      <NumberField
+        id={`${idPrefix}-pts`}
+        label={s.samples}
+        value={analysis.points}
+        min={50}
+        max={MAX_ANALYSIS_POINTS}
+        step={50}
+        width="w-24"
+        disabled={disabled}
+        onChange={(points) => onChange({ ...analysis, points })}
+      />
     </>
   );
 }
@@ -661,6 +782,13 @@ function GradingSection({
     { value: "llm", label: s.modeLlm },
   ];
   const modeHint = { manual: s.modeManualHint, simulation: s.modeSimulationHint, llm: s.modeLlmHint };
+  // Every read parses the config; only an invalid draft reaches this screen as
+  // stored, and one saved before the AC sweep has no `bode` yet.
+  const hasAc = config.stimuli.some((st) => st.analysis.kind === "ac");
+  const hasTran = config.stimuli.some((st) => st.analysis.kind === "tran");
+  const bode = config.grading.bode ?? DEFAULT_BODE;
+  const patchBode = (next: Partial<BodeTolerance>) =>
+    patch({ grading: { ...config.grading, bode: { ...bode, ...next } } });
   return (
     <AsideSection aside={aside}>
       {/*
@@ -689,17 +817,27 @@ function GradingSection({
           mean nothing inside it: each field exists where it is read. */}
       {config.grading.mode === "simulation" ? (
         <>
-          <NumberField
-            id={`${ids}-tolerance`}
-            label={s.tolerance}
-            value={config.grading.tolerance}
-            min={0.001}
-            max={1}
-            step={0.01}
-            disabled={disabled}
-            onChange={(tolerance) => patch({ grading: { ...config.grading, tolerance } })}
-          />
-          <p className={hint}>{s.toleranceHint}</p>
+          {/* Each rule where a stimulus reads it: the RMS tolerance for a
+              transient, the envelope for a sweep. With no stimulus yet the
+              tolerance stays, as it always did. */}
+          {hasTran || !hasAc ? (
+            <>
+              <NumberField
+                id={`${ids}-tolerance`}
+                label={s.tolerance}
+                value={config.grading.tolerance}
+                min={0.001}
+                max={1}
+                step={0.01}
+                disabled={disabled}
+                onChange={(tolerance) => patch({ grading: { ...config.grading, tolerance } })}
+              />
+              <p className={hint}>{s.toleranceHint}</p>
+            </>
+          ) : null}
+          {hasAc ? (
+            <BodeFields ids={ids} bode={bode} s={s} disabled={disabled} onChange={patchBode} />
+          ) : null}
         </>
       ) : (
         <FieldCell label={s.rubric} htmlFor={`${ids}-rubric`}>
@@ -725,6 +863,75 @@ function GradingSection({
       <p className={hint}>{s.showExpectedHint}</p>
       <IssueList issues={issuesAt(issues, "showExpected")} />
     </AsideSection>
+  );
+}
+
+/**
+ * The envelope an AC stimulus is graded by. The phase has a checkbox of its
+ * own rather than an empty field meaning "off": switching a comparison off is
+ * a decision, and it should read as one.
+ */
+function BodeFields({
+  ids,
+  bode,
+  s,
+  disabled,
+  onChange,
+}: {
+  ids: string;
+  bode: BodeTolerance;
+  s: CircuitEditorStrings;
+  disabled: boolean | undefined;
+  onChange: (next: Partial<BodeTolerance>) => void;
+}): ReactNode {
+  return (
+    <>
+      <div className="flex flex-wrap items-end gap-3">
+        <NumberField
+          id={`${ids}-magdb`}
+          label={s.bodeMagDb}
+          value={bode.magDb}
+          min={0.01}
+          max={40}
+          step={0.5}
+          width="w-24"
+          disabled={disabled}
+          onChange={(magDb) => onChange({ magDb })}
+        />
+        <NumberField
+          id={`${ids}-floordb`}
+          label={s.bodeFloorDb}
+          value={bode.floorDb}
+          min={1}
+          max={200}
+          step={10}
+          width="w-24"
+          disabled={disabled}
+          onChange={(floorDb) => onChange({ floorDb })}
+        />
+      </div>
+      <CheckboxField
+        className={setting}
+        label={s.bodePhase}
+        checked={bode.phaseDeg !== null}
+        disabled={disabled}
+        onChange={(on) => onChange({ phaseDeg: on ? DEFAULT_BODE.phaseDeg : null })}
+      />
+      {bode.phaseDeg === null ? null : (
+        <NumberField
+          id={`${ids}-phasedeg`}
+          label={s.bodePhaseDeg}
+          value={bode.phaseDeg}
+          min={0.1}
+          max={180}
+          step={1}
+          width="w-24"
+          disabled={disabled}
+          onChange={(phaseDeg) => onChange({ phaseDeg })}
+        />
+      )}
+      <p className={hint}>{s.bodeHint}</p>
+    </>
   );
 }
 

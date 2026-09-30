@@ -10,6 +10,7 @@
  * "paused" looks like.
  */
 import type { EvaluationMode, EvaluationState, EvaluationSummary } from "@quiz/contracts";
+import { isEvaluationOver } from "@quiz/domain";
 
 import { gradingLinks } from "../grading";
 import type { Dict, TFunction } from "../i18n";
@@ -48,10 +49,11 @@ export function isLive(state: EvaluationState): boolean {
 /**
  * The states where the second half of an evaluation's life has something to
  * show: the grading panel has answers to correct, the results a table to
- * print. Before `closed` both would be empty by construction.
+ * print. Before `closed` both would be empty by construction. The server's
+ * own rule (`isEvaluationOver`): what it refuses as `not_over` before.
  */
 export function isGraded(state: EvaluationState): boolean {
-  return state === "closed" || state === "grading" || state === "released";
+  return isEvaluationOver(state);
 }
 
 /** The states whose dashboard is worth opening at all. */

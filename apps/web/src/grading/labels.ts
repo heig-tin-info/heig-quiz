@@ -3,15 +3,17 @@ import type {
   GradingEntry,
   GradingSource,
   GradingState,
+  MachineReason,
 } from "@quiz/contracts";
+import { isMachineReason } from "@quiz/contracts";
 
 import type { Dict, TFunction } from "../i18n";
-import type { Tone, VerdictState } from "../ui";
+import type { Tone } from "../ui";
 
 /**
- * The words and tones the grading list puts on a cell. Kept out of the
- * components so the same badge reads the same in the list, in the detail and
- * in the history.
+ * The words and tones the grading screen puts on an answer. Kept out of the
+ * components so the same word reads the same in the table, in the answer
+ * panel and in the history.
  */
 
 const SOURCE_KEYS: Record<GradingSource, keyof Dict> = {
@@ -20,93 +22,61 @@ const SOURCE_KEYS: Record<GradingSource, keyof Dict> = {
   manual: "grading.source.manual",
 };
 
-const CONFIDENCE_KEYS: Record<GradingConfidence, keyof Dict> = {
-  low: "grading.confidence.low",
-  medium: "grading.confidence.medium",
-  high: "grading.confidence.high",
-};
-
 const STATE_KEYS: Record<GradingState, keyof Dict> = {
   proposed: "grading.state.proposed",
   validated: "grading.state.validated",
   superseded: "grading.state.superseded",
 };
 
+/** The confidence in one word ("High"), where the row already says "AI". */
+const CONFIDENCE_KEYS: Record<GradingConfidence, keyof Dict> = {
+  low: "grading.filter.confidence.low",
+  medium: "grading.filter.confidence.medium",
+  high: "grading.filter.confidence.high",
+};
+
 export const sourceLabel = (t: TFunction, s: GradingSource) => t(SOURCE_KEYS[s]);
-export const confidenceLabel = (t: TFunction, c: GradingConfidence) => t(CONFIDENCE_KEYS[c]);
 export const gradingStateLabel = (t: TFunction, s: GradingState) => t(STATE_KEYS[s]);
-
-/** Low confidence is the one that asks for eyes, so it is the only warm tone. */
-export const confidenceTone = (c: GradingConfidence): Tone =>
-  c === "low" ? "amber" : c === "high" ? "green" : "zinc";
-
-/**
- * Why a grader PROPOSED instead of grading (`GradedResult.comment`), in the
- * author's words: most of these are a fault of the question, not of the
- * answer (issue #267). An unknown code reads as itself, as the grading
- * panel's note does.
- */
-const REASON_KEYS: Partial<Record<string, keyof Dict>> = {
-  reference_failed: "grading.reason.reference_failed",
-  palette_violation: "grading.reason.palette_violation",
-  runner_request_invalid: "grading.reason.runner_request_invalid",
-  template_region_mismatch: "grading.reason.template_region_mismatch",
-};
-
-export const machineReason = (t: TFunction, comment: string): string => {
-  const key = REASON_KEYS[comment];
-  return key === undefined ? comment : t(key);
-};
-
-/** A manual grading is the teacher's own: it wears the accent, never a status colour. */
-export const sourceTone = (s: GradingSource): Tone => (s === "manual" ? "accent" : "zinc");
+export const confidenceLabelShort = (t: TFunction, c: GradingConfidence) =>
+  t(CONFIDENCE_KEYS[c]);
 
 export const stateTone = (s: GradingState): Tone =>
   s === "validated" ? "green" : s === "proposed" ? "amber" : "zinc";
 
 /**
- * The same rule as `verdictOf` in the API's grading service, with the one
- * case the server does not have to name: a cell with no answer at all is
- * blank, not wrong. It is graded zero either way (F-GRADE-01), but a teacher
- * scanning the list must be able to tell "answered badly" from "not there".
+ * Why a machine PROPOSED instead of grading, in the author's words: every
+ * code of `MACHINE_REASONS` (`@quiz/contracts`) has its sentence — a full
+ * record, so a code added there without one is a compile error here — and
+ * one the web does not know reads as a generic sentence, never as the raw
+ * code (issue #267).
  */
-export function entryVerdict(entry: Pick<GradingEntry, "answerId" | "answer" | "grading">): VerdictState {
-  if (entry.answerId === null && entry.answer === null) return "blank";
-  const grading = entry.grading;
-  if (!grading || grading.state === "proposed") return "pending";
-  if (grading.maxPoints > 0 && grading.points >= grading.maxPoints) return "correct";
-  return grading.points > 0 ? "partial" : "wrong";
-}
-
-/** The two ways through the panel: every student on one question, or the reverse. */
-export type GradingOrder = "question" | "student";
-
-/** The words of a traversal, which name its steps after what they are. */
-export const ORDER_WORDS: Record<
-  GradingOrder,
-  { prev: keyof Dict; next: keyof Dict; position: keyof Dict }
-> = {
-  question: {
-    prev: "grading.prevItem",
-    next: "grading.nextItem",
-    position: "grading.item.position",
-  },
-  student: {
-    prev: "grading.prevStudent",
-    next: "grading.nextStudent",
-    position: "grading.student.position",
-  },
+const REASON_KEYS: Record<MachineReason, keyof Dict> = {
+  config_unreadable: "grading.reason.config_unreadable",
+  answer_invalid: "grading.reason.answer_invalid",
+  grader_error: "grading.reason.grader_error",
+  llm_not_configured: "grading.reason.llm_not_configured",
+  not_finalizable: "grading.reason.not_finalizable",
+  runner_unavailable: "grading.reason.runner_unavailable",
+  runner_error: "grading.reason.runner_error",
+  finalize_error: "grading.reason.finalize_error",
+  reference_failed: "grading.reason.reference_failed",
+  palette_violation: "grading.reason.palette_violation",
+  runner_request_invalid: "grading.reason.runner_request_invalid",
+  template_region_mismatch: "grading.reason.template_region_mismatch",
+  runner_busy: "grading.reason.runner_busy",
 };
 
+export const machineReason = (t: TFunction, comment: string): string =>
+  t(isMachineReason(comment) ? REASON_KEYS[comment] : "grading.reason.unknown");
+
 /**
- * Proposals first: they are the only reason the teacher opened the panel.
- * Everything else keeps the order the server sent — the index is the
- * tie-breaker, so the rule does not lean on the engine's sort being stable.
+ * Who gave an answer, when names are shown: the name the server sent, or a
+ * guest's number worded in the reader's language (ADR-014). Anonymised, the
+ * server sends neither, and this says so.
  */
-export function proposalsFirst(entries: readonly GradingEntry[]): GradingEntry[] {
-  const rank = (x: GradingEntry) => (x.grading?.state === "proposed" ? 0 : 1);
-  return entries
-    .map((e, i) => ({ e, i }))
-    .sort((a, b) => rank(a.e) - rank(b.e) || a.i - b.i)
-    .map((x) => x.e);
+export function whoOf(t: TFunction, entry: Pick<GradingEntry, "label" | "guest">): string {
+  if (entry.label !== null) return entry.label;
+  return entry.guest !== null
+    ? t("grading.guest", { n: entry.guest })
+    : t("grading.panel.anonymous");
 }

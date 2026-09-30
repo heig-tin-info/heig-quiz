@@ -21,7 +21,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Question type | A plugin that defines the configuration schema, the answer schema, the editor, the player, the review view and the grader. E.g. `mcq`, `short`, `cloze`, `code`. |
 | Evaluation | An ordered set of question versions with run settings, created in a classroom. A single term: no quiz, assignment, activity or session. |
 | Evaluation template | An evaluation kept at the course level rather than in a classroom: its questions, points, order, milestones and settings, without dates, access code nor IP list. Never opened, never answered; each classroom's evaluation is made from it by *Instantiate* and records the template and its revision. `exam` and `exercise` only, never `poll` (ADR-031). |
-| Instance | An evaluation instantiated from a template into a classroom. A frozen copy: it records the template and the revision it came from, and editing the template never changes it: a newer revision reaches it only when the teacher pulls it (ADR-031). |
+| Instance | An evaluation linked to a template: instantiated from it into a classroom, or saved as it (*Save as template*, at revision 1). It records the template and the revision it came from, and editing the template never changes it: a newer revision reaches it only when the teacher pulls it (ADR-031). |
 | Evaluation mode | `exam` timed and graded, `exercise` open with a deadline, `poll` one live question. |
 | Attempt | A student's participation in an evaluation. Only one per student and per evaluation in phase 1. Carries the start time, the effective end, the state. |
 | Answer | The current state of a student's answer to a question of an evaluation. One record per attempt and per question, updated on every autosave. |
@@ -98,7 +98,7 @@ erDiagram
 - **ATTEMPT**: `evaluation_id`, `user_id`, `state`, `started_at`, `deadline_at` computed with the bonus, `submitted_at`, `seed`, `client_events` JSONB for light cheating events.
 - **ANSWER**: `attempt_id`, `item_id`, `payload` JSONB conforming to the type's answer schema, `revision` integer incremented on every autosave, `marked_done` (the question was validated in a locking navigation), `skipped` ("I won't answer this question"), `flagged` (the student's review flag), `updated_at`.
 - **GRADING**: `answer_id`, `points`, `max_points`, `source` `auto` / `llm` / `manual`, `state` `proposed` / `validated` / `superseded`, `details` JSONB, `graded_by`, `graded_at`, `note` for the annotation of a re-grading.
-- **DRILL_CARD**: `user_id`, `question_id`, FSRS parameters `stability`, `difficulty`, `due_at`, `last_review_at`.
+- **DRILL_CARD**: `user_id`, `question_id`, FSRS parameters `stability`, `difficulty`, `due_at`, `reps`, `lapses`, `last_review_at`; one per student and question, created at the release of an exam or the hand-in of an exercise (ADR-041). Its reviews record the rating, the active time and the device class.
 
 ### Invariants
 

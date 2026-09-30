@@ -25,6 +25,7 @@
     "vitest": "^4.1.11"
   },
   "dependencies": {
-    "@quiz/core": "workspace:*"
+    "@quiz/core": "workspace:*",
+    "ts-fsrs": "^5.4.2"
   }
 }

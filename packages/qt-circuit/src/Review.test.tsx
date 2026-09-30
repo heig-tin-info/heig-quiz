@@ -158,6 +158,45 @@ describe("CircuitReview", () => {
     expect(screen.queryByTestId("schematic-view")).not.toBeInTheDocument();
   });
 
+  it("reads an AC stimulus's error in dB and degrees, never as a share of a swing", () => {
+    const bode: SeriesSet = { kind: "ac", f: [10, 100], magDb: [0, -3], phaseDeg: [0, -45] };
+    setup({
+      details: {
+        ...details,
+        stimuli: [
+          {
+            name: "Bode",
+            visible: true,
+            points: 1,
+            ok: false,
+            error: null,
+            envelope: { worstDb: 1.84, worstDeg: 12.4, outside: 3 },
+            series: bode,
+            expected: bode,
+          },
+          {
+            name: "gain only",
+            visible: false,
+            points: 1,
+            ok: true,
+            error: null,
+            envelope: { worstDb: 0.3, worstDeg: null, outside: 0 },
+            series: null,
+            expected: null,
+          },
+        ],
+      },
+      audience: "student",
+    });
+    expect(screen.getByText("1.8 dB · 12°")).toBeInTheDocument();
+    expect(screen.getByText("0.3 dB")).toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+    // A hidden sweep that ran is a verdict, not "Not run", even without its curves.
+    expect(screen.getByText("Passed")).toBeInTheDocument();
+    expect(screen.getByText("Failed")).toBeInTheDocument();
+    expect(screen.queryByText("Not run")).not.toBeInTheDocument();
+  });
+
   it("hides the statement and the reference circuit on request (#109), keeping the answer", () => {
     setup({ sections: { prompt: false, solution: false }, renderMarkdown: (source: string) => <span data-testid="md">{source}</span> });
     expect(screen.queryByTestId("md")).toBeNull();
