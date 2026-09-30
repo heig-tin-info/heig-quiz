@@ -112,7 +112,7 @@ function firstTime(key: string): boolean {
  * suspension lets the safe methods through: the page still reads the attempt
  * and hears the resumption on its stream. Null when the request is served.
  */
-export type TrustOutcome = "anonymous" | "kiosk_suspended" | "kiosk_attestation_stale" | null;
+export type TrustOutcome = "anonymous" | Extract<TrustRefusal, "kiosk_suspended" | "kiosk_attestation_stale"> | null;
 
 const SAFE: readonly string[] = ["GET", "HEAD", "OPTIONS"];
 

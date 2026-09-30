@@ -147,7 +147,9 @@ then trusted for 6 h, including from any HTTP client holding its cookie.
 - `attested_at`: the last attestation Google accepted;
 - `checked_at` and `attestation`: `ok | unavailable | refused`, the last
   attempt (§6);
-- `credential_hash`: the SHA-256 of the station's cookie.
+- `credential_hash`: the SHA-256 of the station's cookie;
+- `watch`: `ok | unavailable | suspended`, what the supervisor was last
+  told of the station (§6), so that each change is told once.
 
 A device that attests successfully for the first time is created
 `unnamed`. An admin names it (it becomes `active`) or retires it, from a
@@ -178,11 +180,16 @@ is deprecated):
   - `keyTrustLevel` equal to `CHROME_OS_VERIFIED_MODE`, never developer mode;
   - a `devicePermanentId`.
 
-  On success it creates or updates the device, rotates its credential and
-  sets the `quiz_kiosk` cookie (`HttpOnly`, `Secure`, `SameSite=Strict`,
-  path `/app/api`, 12 h, re-issued by every accepted attestation). That
-  cookie is the station's identity, never a user's; §1 requires it beside
-  a `kiosk` session.
+  On success it creates or updates the device and sets the `quiz_kiosk`
+  cookie (`HttpOnly`, `Secure`, `SameSite=Strict`, path `/app/api`, 12 h).
+  When the request's cookie already names that device, its credential is
+  KEPT and the same cookie re-set, which extends it by 12 h: a write of the
+  sitting sent while a re-attestation is in flight carries the cookie of
+  before, and must not turn anonymous. A new credential is drawn only when
+  the request holds no valid cookie for the device (a first attestation, a
+  lost or expired cookie, another device's); the previous one then stops
+  naming it at once. That cookie is the station's identity, never a user's;
+  §1 requires it beside a `kiosk` session.
 - The service account authenticates with the OAuth 2.0 JWT-bearer grant
   and the scope `https://www.googleapis.com/auth/verifiedaccess`. Its key is
   a file named by `KIOSK_VA_KEY_FILE`, outside the repository and the
@@ -211,9 +218,11 @@ own service account key. The extension lists both origins in
 
 ### 6. Re-attestation and suspension
 
-While a kiosk session sits, the page re-attests every 10 minutes and right
-before the submit. The server distinguishes what only it can know, because
-it is the one calling Google:
+While a kiosk session sits, the page re-attests every 10 minutes, and when
+the submit is refused as stale (below) it re-attests and retries it once. A
+station waiting to be paired re-attests before each new code, so it is
+never silent when it starts sitting. The server distinguishes what only it
+can know, because it is the one calling Google:
 
 - **Refused**: Google says no, or the extension fails. The page reports
   the extension's failure to `verify` in place of a response, and the server

@@ -106,7 +106,7 @@ const enter = (evaluationId: string, headers: Headers) =>
 
 describe("the station asks for a code (RFC 8628 §3.1–3.2)", () => {
   it("answers the RFC's fields, the complete URI on /pair, and stores only digests", async () => {
-    const station = await kioskStation(server.app.db, { label: "Poste de secours n° 3" });
+    const station = await kioskStation(server.app, { label: "Poste de secours n° 3" });
     const auth = await authorize(station);
     expect(auth.user_code).toMatch(/^[BCDFGHJKMNPQRSTVWXZ2-9]{4}-[BCDFGHJKMNPQRSTVWXZ2-9]{4}$/);
     expect(auth.device_code).toMatch(/^[A-Za-z0-9_-]{43}$/);
@@ -121,7 +121,7 @@ describe("the station asks for a code (RFC 8628 §3.1–3.2)", () => {
   });
 
   it("expires the station's previous pending code when it asks again", async () => {
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const first = await authorize(station);
     const second = await authorize(station);
     const { student } = await running();
@@ -131,8 +131,8 @@ describe("the station asks for a code (RFC 8628 §3.1–3.2)", () => {
   });
 
   it("refuses an unnamed or retired station, or none, with the one 403", async () => {
-    const unnamed = await kioskStation(server.app.db, { label: null });
-    const retired = await kioskStation(server.app.db, { status: "retired" });
+    const unnamed = await kioskStation(server.app, { label: null });
+    const retired = await kioskStation(server.app, { status: "retired" });
     for (const station of [unnamed, retired, null]) {
       const res = await stationPost("/app/api/kiosk/device_authorization", station);
       expect(res.statusCode).toBe(403);
@@ -146,7 +146,7 @@ describe("the whole pairing, station → phone → station", () => {
     const { evaluationId, student } = await running();
     const other = await running();
     // The student also sits in another kiosk exam, which this session must not reach.
-    const station = await kioskStation(server.app.db, { label: "Poste n° 12" });
+    const station = await kioskStation(server.app, { label: "Poste n° 12" });
     const auth = await authorize(station);
 
     expect((await poll(station, auth.device_code)).json()).toEqual({ error: "authorization_pending" });
@@ -190,7 +190,7 @@ describe("the whole pairing, station → phone → station", () => {
     expect((await me(alone)).statusCode).toBe(401);
     expect((await enter(evaluationId, alone)).statusCode).toBe(401);
     // Nor with another station's.
-    const elsewhere = await kioskStation(server.app.db);
+    const elsewhere = await kioskStation(server.app);
     expect((await me({ ...alone, cookie: `${cookie}; ${elsewhere.cookie}` })).statusCode).toBe(401);
 
     // The audit names the pairing, never a code.
@@ -205,7 +205,7 @@ describe("the whole pairing, station → phone → station", () => {
 
   it("stops holding the station once it is retired", async () => {
     const { evaluationId, student } = await running();
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const { station: headers } = await paired(station, student, evaluationId);
     expect((await me(headers)).statusCode).toBe(200);
     await server.app.inject({
@@ -224,7 +224,7 @@ describe("the whole pairing, station → phone → station", () => {
 describe("what the pairing refuses", () => {
   it("an expired code, on the phone and on the station", async () => {
     const { evaluationId, student } = await running();
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const auth = await authorize(station);
     server.clock.advance(301_000);
     expect((await preview(student.headers, auth.user_code)).json()).toEqual({ error: "pairing_not_found" });
@@ -236,7 +236,7 @@ describe("what the pairing refuses", () => {
 
   it("a code approved twice, and a pairing consumed twice", async () => {
     const { evaluationId, student } = await running();
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const auth = await authorize(station);
     expect((await approve(student.headers, auth.user_code, evaluationId)).statusCode).toBe(200);
     expect((await approve(student.headers, auth.user_code, evaluationId)).json()).toEqual({
@@ -251,7 +251,7 @@ describe("what the pairing refuses", () => {
   it("a student with no seat in the classroom", async () => {
     const { evaluationId } = await running();
     const stranger = await server.signIn("student");
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const auth = await authorize(station);
     const looked = await preview(stranger.headers, auth.user_code);
     expect(looked.statusCode).toBe(200);
@@ -267,7 +267,7 @@ describe("what the pairing refuses", () => {
   it("an exam that does not accept the kiosk, or is not open", async () => {
     const portal = await running({});
     const sebOnly = await running({ safeExamBrowser: true });
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const auth = await authorize(station);
     for (const { evaluationId, student } of [portal, sebOnly]) {
       expect((await preview(student.headers, auth.user_code)).json().evaluations).toEqual([]);
@@ -283,7 +283,7 @@ describe("what the pairing refuses", () => {
 
   it("an exam closed between the approval and the station's poll", async () => {
     const { evaluationId, student, teacher } = await running();
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const auth = await authorize(station);
     expect((await approve(student.headers, auth.user_code, evaluationId)).statusCode).toBe(200);
     const closed = await server.app.inject({
@@ -298,8 +298,8 @@ describe("what the pairing refuses", () => {
   });
 
   it("another station's device_code", async () => {
-    const mine = await kioskStation(server.app.db);
-    const theirs = await kioskStation(server.app.db);
+    const mine = await kioskStation(server.app);
+    const theirs = await kioskStation(server.app);
     const auth = await authorize(theirs);
     const res = await poll(mine, auth.device_code);
     expect(res.statusCode).toBe(400);
@@ -310,7 +310,7 @@ describe("what the pairing refuses", () => {
   });
 
   it("a station that polls too fast is slowed down, five seconds at a time", async () => {
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const auth = await authorize(station);
     expect((await poll(station, auth.device_code)).json()).toEqual({ error: "authorization_pending" });
     expect((await poll(station, auth.device_code)).json()).toEqual({ error: "slow_down" });
@@ -330,7 +330,7 @@ describe("what the pairing refuses", () => {
       evaluationId: null,
     });
     const headers = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const auth = await authorize(station);
     expect((await preview(headers, auth.user_code)).statusCode).toBe(404);
     expect((await approve(headers, auth.user_code, evaluationId)).statusCode).toBeGreaterThanOrEqual(403);
@@ -340,7 +340,7 @@ describe("what the pairing refuses", () => {
 
   it("a signed-out phone, or a mutation without its CSRF header", async () => {
     const { evaluationId, student } = await running();
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const auth = await authorize(station);
     expect((await preview({}, auth.user_code)).statusCode).toBe(401);
     expect((await approve({ cookie: student.headers.cookie! }, auth.user_code, evaluationId)).statusCode).toBe(403);
@@ -348,7 +348,7 @@ describe("what the pairing refuses", () => {
 
   it(`more than ${PAIR_MAX_FAILURES} wrong codes in ten minutes`, async () => {
     const { evaluationId, student } = await running();
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const auth = await authorize(station);
     for (let i = 0; i < PAIR_MAX_FAILURES; i += 1) {
       expect((await approve(student.headers, "BBBB-BBBB", evaluationId)).statusCode).toBe(404);
@@ -404,7 +404,7 @@ describe("one station, one session; and the end of the sitting (ADR-051 §7)", (
   it("a second pairing of the same station ends the first session", async () => {
     const first = await running();
     const second = await running();
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const a = await paired(station, first.student, first.evaluationId);
     expect((await me(a.station)).statusCode).toBe(200);
     const b = await paired(station, second.student, second.evaluationId);
@@ -416,7 +416,7 @@ describe("one station, one session; and the end of the sitting (ADR-051 §7)", (
 
   it("the submit ends the kiosk session, and leaves a seb one and the phone alone", async () => {
     const { evaluationId, student } = await running({ kiosk: true, safeExamBrowser: true });
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const { station: headers } = await paired(station, student, evaluationId);
     const entered = await enter(evaluationId, headers);
     expect(entered.statusCode, entered.body).toBe(200);
@@ -453,7 +453,7 @@ describe("one station, one session; and the end of the sitting (ADR-051 §7)", (
 
   it("closing the evaluation ends every station seated for it, a waiting one included", async () => {
     const { evaluationId, student, teacher } = await running();
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const { station: headers } = await paired(station, student, evaluationId);
     // Paired, never entered: no attempt to end, the session goes all the same.
     const closed = await server.app.inject({
@@ -467,7 +467,7 @@ describe("one station, one session; and the end of the sitting (ADR-051 §7)", (
 
   it("the teacher's close of one attempt, and the ticker's expiry, end it too", async () => {
     const { evaluationId, student, teacher } = await running();
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const { station: headers } = await paired(station, student, evaluationId);
     const attemptId = (await enter(evaluationId, headers)).json().view.attempt.id as string;
     const closed = await server.app.inject({
@@ -479,7 +479,7 @@ describe("one station, one session; and the end of the sitting (ADR-051 §7)", (
     expect((await me(headers)).statusCode).toBe(401);
 
     const late = await running();
-    const again = await paired(await kioskStation(server.app.db), late.student, late.evaluationId);
+    const again = await paired(await kioskStation(server.app), late.student, late.evaluationId);
     expect((await enter(late.evaluationId, again.station)).statusCode).toBe(200);
     const { expireDueAttempts } = await import("../live/service.js");
     server.clock.advance(31 * 60_000);

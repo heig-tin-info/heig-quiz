@@ -94,10 +94,10 @@ async function pairStation(station: TestStation, approve: (code: string) => Prom
  * cookie) and its re-attestation.
  */
 async function sitting(exam: Awaited<ReturnType<typeof running>>) {
-  const station = await kioskStation(server.app.db);
+  const station = await kioskStation(server.app);
   const [row] = await server.app.db.select().from(kioskDevices).where(eq(kioskDevices.id, station.deviceId));
   const googleId = row!.googleDeviceId;
-  let credential = station.credential;
+  const credential = station.credential;
   const paired = await pairStation(station, async (code) => {
     const res = await inject("POST", "/app/api/pair", exam.student.headers, { code, evaluationId: exam.evaluationId });
     expect(res.statusCode, res.body).toBe(200);
@@ -111,15 +111,13 @@ async function sitting(exam: Awaited<ReturnType<typeof running>>) {
     const res = await inject("POST", "/app/api/kiosk/attest/verify", headers(), {
       response: outcome === "ok" ? `mock:${googleId}` : `mock:${outcome}`,
     });
-    const rotated = setCookie(res, KIOSK_COOKIE);
-    if (rotated) credential = rotated.slice(KIOSK_COOKIE.length + 1);
+    const reissued = setCookie(res, KIOSK_COOKIE);
+    // The station keeps its credential: the cookie is only re-set, to last 12 h more.
+    if (reissued) expect(reissued).toBe(`${KIOSK_COOKIE}=${credential}`);
     return res.statusCode;
   };
-  // The server's clock and the station's last check agree from here on.
-  await server.app.db
-    .update(kioskDevices)
-    .set({ checkedAt: server.app.clock.now() })
-    .where(eq(kioskDevices.id, station.deviceId));
+  // Seating told the supervisor where the student sits: that one is `seated`'s test.
+  alerts.length = 0;
   const entered = await inject("POST", `/app/api/evaluations/${exam.evaluationId}/attempt`, headers(), {});
   expect(entered.statusCode, entered.body).toBe(200);
   const attemptId = entered.json().view.attempt.id as string;
@@ -179,6 +177,55 @@ describe("a refused attestation suspends the sitting (ADR-051 §6)", () => {
       ["kiosk_suspended", exam.student.id, exam.evaluationId],
       ["kiosk_resumed", exam.student.id, exam.evaluationId],
     ]);
+  });
+});
+
+describe("a re-attestation keeps the station's credential (ADR-051 §5)", () => {
+  it("serves a write sent with the cookie of before the attestation, and rotates only without one", async () => {
+    const exam = await running();
+    const seat = await sitting(exam);
+    const before = seat.headers();
+    expect(await seat.attest("ok")).toBe(200);
+    // A write in flight during the attestation carries the old headers: still the station's.
+    expect((await inject("POST", `/app/api/attempts/${seat.attemptId}/answers/${exam.itemIds[0]}/flag`, before, { flagged: false })).statusCode).toBe(200);
+    expect((await inject("GET", "/app/api/me", before)).statusCode).toBe(200);
+    // Without its cookie (lost, expired), the same device gets a new credential.
+    const [device] = await server.app.db.select().from(kioskDevices).where(eq(kioskDevices.id, seat.deviceId));
+    const res = await inject("POST", "/app/api/kiosk/attest/verify", {}, { response: `mock:${device!.googleDeviceId}` });
+    expect(res.statusCode).toBe(200);
+    expect(setCookie(res, KIOSK_COOKIE)).not.toBe(before.cookie!.split("; ").find((c) => c.startsWith(KIOSK_COOKIE)));
+    expect((await seat.flag()).statusCode).toBe(401);
+  });
+});
+
+describe("a station that starts sitting is told at once (ADR-051 §6, §8)", () => {
+  it("says the station's state on its pairing, one suspended before it sat included", async () => {
+    const exam = await running();
+    const station = await kioskStation(server.app);
+    await pairStation(station, async (code) => {
+      await inject("POST", "/app/api/pair", exam.student.headers, { code, evaluationId: exam.evaluationId });
+    });
+    expect(alerts.map((a) => [a.kind, a.userId])).toEqual([["kiosk_resumed", exam.student.id]]);
+
+    // Refused while it sat nothing: stored, told to nobody.
+    const late = await running();
+    const silent = await kioskStation(server.app);
+    expect((await inject("POST", "/app/api/kiosk/attest/verify", { cookie: silent.cookie }, { response: "mock:refuse" })).statusCode).toBe(403);
+    expect(await watchAudits(silent.deviceId)).toEqual([]);
+    const auth = KioskDeviceAuthorization.parse(
+      (await inject("POST", "/app/api/kiosk/device_authorization", { cookie: silent.cookie })).json(),
+    );
+    await inject("POST", "/app/api/pair", late.student.headers, { code: auth.user_code, evaluationId: late.evaluationId });
+    alerts.length = 0;
+    const res = await inject("POST", "/app/api/kiosk/token", { cookie: silent.cookie }, {
+      grant_type: DEVICE_CODE_GRANT,
+      device_code: auth.device_code,
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(alerts.map((a) => [a.kind, a.userId])).toEqual([["kiosk_suspended", late.student.id]]);
+    expect((await watchAudits(silent.deviceId)).map((r) => r.action)).toEqual(["kiosk.suspended"]);
+    const [device] = await server.app.db.select().from(kioskDevices).where(eq(kioskDevices.id, silent.deviceId));
+    expect(device!.watch).toBe("suspended");
   });
 });
 
@@ -279,7 +326,7 @@ describe("the supervisor pairs a station for a student without a phone (ADR-051 
 
   it("approves the same pairing: the student's kiosk session, no actor, approved by the teacher", async () => {
     const exam = await running();
-    const station = await kioskStation(server.app.db, { label: "Poste de secours n° 4" });
+    const station = await kioskStation(server.app, { label: "Poste de secours n° 4" });
     const paired = await pairStation(station, async (code) => {
       const res = await assign(exam.evaluationId, exam.teacher.headers, { userCode: code.toLowerCase(), userId: exam.student.id });
       expect(res.statusCode, res.body).toBe(200);
@@ -312,7 +359,7 @@ describe("the supervisor pairs a station for a student without a phone (ADR-051 
 
   it("is a 404 for a teacher off the evaluation's staff, and refused to a student", async () => {
     const exam = await running();
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const auth = KioskDeviceAuthorization.parse(
       (await inject("POST", "/app/api/kiosk/device_authorization", { cookie: station.cookie })).json(),
     );
@@ -328,7 +375,7 @@ describe("the supervisor pairs a station for a student without a phone (ADR-051 
     const exam = await running();
     const outsider = await server.signIn("student");
     const portalOnly = await running({});
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const auth = KioskDeviceAuthorization.parse(
       (await inject("POST", "/app/api/kiosk/device_authorization", { cookie: station.cookie })).json(),
     );

@@ -155,7 +155,9 @@ export type DashboardAttemptEvent = z.infer<typeof DashboardAttemptEvent>;
  * previous one. The station the student sits on: `kiosk_suspended` (its
  * attestation was refused, or it fell silent: writes are refused),
  * `kiosk_unavailable` (Google cannot attest it; nothing is suspended), and
- * `kiosk_resumed` (back to normal: the row's alert is cleared).
+ * `kiosk_resumed` (it attests normally: the row's alert is cleared). When a
+ * station starts sitting, the alert of its current state is sent too, so the
+ * row learns its station at once.
  */
 export const DashboardAlertKind = z.enum([
   "session_superseded",

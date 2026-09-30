@@ -102,6 +102,14 @@ export interface GoogleAttestorOptions {
   log?: Pick<FastifyBaseLogger, "warn">;
 }
 
+/**
+ * A Workspace customer id in one form: the Admin console shows `C0123abc`,
+ * and Verified Access may answer it with or without the leading `C`. One
+ * leading `C` (upper case only) is dropped on both sides before comparing.
+ */
+export const sameCustomer = (a: unknown, b: string): boolean =>
+  typeof a === "string" && a.replace(/^C/, "") === b.replace(/^C/, "");
+
 /** Why a call failed, told apart from a refusal. */
 class Unavailable extends Error {}
 
@@ -168,14 +176,21 @@ export class GoogleAttestor implements KioskAttestor {
       this.warn(err, "kiosk attestation: unreadable verdict");
       return { ok: false, reason: "unavailable" };
     }
+    const customerMatches = sameCustomer(body.customerId, this.opts.customerId);
     if (
-      body.customerId !== this.opts.customerId ||
+      !customerMatches ||
       body.keyTrustLevel !== VERIFIED_MODE ||
       typeof body.devicePermanentId !== "string" ||
       body.devicePermanentId === ""
     ) {
+      // The customer id Google returned is no secret, and on a mismatch it
+      // is what tells a misconfigured KIOSK_GOOGLE_CUSTOMER_ID apart.
       this.opts.log?.warn(
-        { keyTrustLevel: body.keyTrustLevel, customerMatches: body.customerId === this.opts.customerId },
+        {
+          keyTrustLevel: body.keyTrustLevel,
+          customerMatches,
+          ...(!customerMatches && { customerId: body.customerId }),
+        },
         "kiosk attestation: refused",
       );
       return { ok: false, reason: "refused" };

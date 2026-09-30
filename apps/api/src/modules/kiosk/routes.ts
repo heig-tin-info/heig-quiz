@@ -53,14 +53,12 @@ import {
   KIOSK_COOKIE,
   KIOSK_COOKIE_HOURS,
   deviceByCredential,
-  deviceByGoogleId,
   listDevices,
   recordAttested,
-  recordFailed,
   stationOf,
   updateDevice,
 } from "./service.js";
-import { afterAttempt } from "./watch.js";
+import { recordAttempt, stationSeated } from "./watch.js";
 
 /** A station is no session kind: every user session is anonymous on its routes. */
 const STATION = { sessions: [] } as const;
@@ -125,11 +123,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
         // even get a challenge is `unavailable`, never silent — a Google
         // outage must not suspend it twelve minutes later.
         const known = await deviceByCredential(app.db, req.cookies[KIOSK_COOKIE]);
-        if (known) {
-          const now = app.clock.now();
-          await recordFailed(app.db, known.id, "unavailable", now);
-          await afterAttempt(app.db, known, "unavailable", now);
-        }
+        if (known) await recordAttempt(app.db, known.id, "unavailable", app.clock.now());
         return reply.code(503).send({ error: "attestation_unavailable" });
       }
       throw err;
@@ -150,16 +144,22 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
 
     // Every attempt of a known station is compared with what its supervisor
     // was last told (ADR-051 §6): a suspension, an outage, their end.
+    const cookie = req.cookies[KIOSK_COOKIE];
+    const known = await deviceByCredential(app.db, cookie);
     if (verdict.ok) {
-      const previous = await deviceByGoogleId(app.db, verdict.googleDeviceId);
+      // The cookie that already names this device is kept, and re-set for
+      // another 12 hours: a write of the sitting sent while this attestation
+      // was in flight carries it, and must not turn anonymous.
+      const current = known?.googleDeviceId === verdict.googleDeviceId ? cookie! : null;
       const { device, credential, registered } = await recordAttested(
         app.db,
         verdict.googleDeviceId,
         now,
+        current,
       );
       if (registered) await stationAudit("kiosk.device_registered", device.id);
       await stationAudit("kiosk.attested", device.id);
-      if (previous) await afterAttempt(app.db, previous, "ok", now);
+      if (!registered) await recordAttempt(app.db, device.id, "ok", now);
       reply.setCookie(KIOSK_COOKIE, credential, {
         path: "/app/api",
         httpOnly: true,
@@ -170,12 +170,8 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
       return { station: { label: device.label, status: device.status } } satisfies KioskAttested;
     }
 
-    const known = await deviceByCredential(app.db, req.cookies[KIOSK_COOKIE]);
     await stationAudit("kiosk.attest_failed", known?.id ?? null, { reason: verdict.reason });
-    if (known) {
-      await recordFailed(app.db, known.id, verdict.reason, now);
-      await afterAttempt(app.db, known, verdict.reason, now);
-    }
+    if (known) await recordAttempt(app.db, known.id, verdict.reason, now);
     return reply.code(403).send({ error: "not_attested" });
   });
 
@@ -247,6 +243,8 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
       evaluationId: outcome.evaluationId,
       deviceId: station.id,
     });
+    // The supervisor's row shows the station at once, and its state (§6).
+    await stationSeated(app.db, station.id, app.clock.now());
     return { redirect: `/take/${outcome.evaluationId}` } satisfies KioskTokenApproved;
   });
 

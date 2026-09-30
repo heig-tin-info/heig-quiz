@@ -94,19 +94,26 @@ describe("the station's attestation (ADR-051 §5)", () => {
     expect((await station(cookie.value)).json()).toEqual({ label: null, status: "unnamed" });
   });
 
-  it("rotates the credential on every accepted attestation", async () => {
-    const first = kioskCookie(await attest({ response: "mock:station-rot" }))!.value;
+  it("keeps the credential its cookie holds, re-set for 12 h, and draws a new one only without it", async () => {
+    const first = kioskCookie(await attest({ response: "mock:station-rot" }))!;
     server.clock.advance(60_000);
-    const second = kioskCookie(await attest({ response: "mock:station-rot" }, first))!.value;
-    expect(second).not.toBe(first);
-
-    expect((await station(first)).statusCode).toBe(404);
-    expect((await station(second)).statusCode).toBe(200);
+    const again = kioskCookie(await attest({ response: "mock:station-rot" }, first.value))!;
+    expect(again.value).toBe(first.value);
+    expect(again.line).toMatch(/Max-Age=43200/);
+    expect((await station(first.value)).statusCode).toBe(200);
     const row = await device("station-rot");
     expect(row.attestedAt).toEqual(server.clock.now());
-    // Registered once, attested twice.
+
+    // No cookie (lost, expired) or another device's: a new credential, the old one dead.
+    const other = kioskCookie(await attest({ response: "mock:station-rot-2" }))!.value;
+    const fresh = kioskCookie(await attest({ response: "mock:station-rot" }, other))!.value;
+    expect(fresh).not.toBe(first.value);
+    expect((await station(first.value)).statusCode).toBe(404);
+    expect((await station(fresh)).statusCode).toBe(200);
+    expect((await station(other)).statusCode).toBe(200);
+    // Registered once, attested three times.
     expect(await audits("kiosk.device_registered", row.id)).toHaveLength(1);
-    expect(await audits("kiosk.attested", row.id)).toHaveLength(2);
+    expect(await audits("kiosk.attested", row.id)).toHaveLength(3);
   });
 
   it("records a failure on the station its cookie names, and tells the client nothing", async () => {

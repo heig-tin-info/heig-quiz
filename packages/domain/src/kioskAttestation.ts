@@ -41,12 +41,16 @@ export const kioskSuspends = (state: KioskAttestationState): boolean =>
 
 /** The check the submit needs: `ok` or `unavailable`, less than two minutes old. */
 export function kioskCheckFresh(check: KioskCheck, now: Date): boolean {
-  if (check.attestation === null || check.attestation === "refused" || check.checkedAt === null) return false;
-  return ageMs(check, now) < KIOSK_FRESH_MS;
+  return !kioskSuspends(kioskAttestationState(check, now)) && ageMs(check, now) < KIOSK_FRESH_MS;
 }
 
-/** What the supervisor sees of a station: fine, attesting impossible, or suspended. */
-export type KioskWatch = "ok" | "unavailable" | "suspended";
+/**
+ * What the supervisor sees of a station: fine, attesting impossible, or
+ * suspended. Stored as `kiosk_devices.watch`: what the supervisor was last
+ * told, so each change is told once.
+ */
+export const KIOSK_WATCHES = ["ok", "unavailable", "suspended"] as const;
+export type KioskWatch = (typeof KIOSK_WATCHES)[number];
 
 export const kioskWatchOf = (state: KioskAttestationState): KioskWatch =>
   kioskSuspends(state) ? "suspended" : state === "unavailable" ? "unavailable" : "ok";

@@ -13,6 +13,7 @@
 import { char, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 import { KIOSK_ATTESTATIONS, KIOSK_DEVICE_STATUSES } from "@quiz/contracts";
+import { KIOSK_WATCHES } from "@quiz/domain";
 
 import { users } from "./auth.js";
 import { evaluations } from "./evaluation.js";
@@ -37,6 +38,13 @@ export const kioskDevices = pgTable("kiosk_devices", {
   /** The last attempt at an attestation (§6), and what came of it. */
   checkedAt: timestamp("checked_at", { withTimezone: true }),
   attestation: text("attestation", { enum: KIOSK_ATTESTATIONS }),
+  /**
+   * What the supervisor was last told of this station (ADR-051 §6):
+   * `ok`, `unavailable` (Google cannot attest it) or `suspended` (refused, or
+   * silent). A change is told once, by the conditional UPDATE that moves it
+   * (`modules/kiosk/watch.ts`).
+   */
+  watch: text("watch", { enum: KIOSK_WATCHES }).notNull().default("ok"),
   /** Hex SHA-256 of the station's `quiz_kiosk` cookie, never the cookie itself. */
   credentialHash: char("credential_hash", { length: 64 }).unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

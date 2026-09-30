@@ -49,7 +49,7 @@ async function running(settings: { safeExamBrowser?: boolean; kiosk?: boolean },
 }
 
 async function headersOf(userId: string, kind: SessionKind, evaluationId: string | null) {
-  const station = kind === "kiosk" ? await kioskStation(server.app.db) : null;
+  const station = kind === "kiosk" ? await kioskStation(server.app) : null;
   const s = await createSession(server.app.db, userId, 12, {
     kind,
     actorUserId: null,

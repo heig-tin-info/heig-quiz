@@ -115,8 +115,38 @@ describe("GoogleAttestor", () => {
     });
   });
 
+  it.each([["C01abcdef"], ["01abcdef"]])("accepts the customer id %s, with or without its leading C", async (customerId) => {
+    const google = fakeGoogle(() => json(200, { ...GOOD, customerId }));
+    expect(await attestor(google.fetch).verify("x")).toMatchObject({ ok: true });
+    // And the configured id may be written either way too.
+    const bare = new GoogleAttestor({
+      readKey: async () => KEY,
+      customerId: "01abcdef",
+      enrollmentDomain: DOMAIN,
+      fetch: google.fetch,
+      now: () => 1_790_000_000_000,
+    });
+    expect(await bare.verify("x")).toMatchObject({ ok: true });
+  });
+
+  it("logs the customer id Google returned when it is not ours", async () => {
+    const google = fakeGoogle(() => json(200, { ...GOOD, customerId: "C0other" }));
+    const warnings: unknown[] = [];
+    const logged = new GoogleAttestor({
+      readKey: async () => KEY,
+      customerId: CUSTOMER,
+      enrollmentDomain: DOMAIN,
+      fetch: google.fetch,
+      now: () => 1_790_000_000_000,
+      log: { warn: ((obj: unknown) => warnings.push(obj)) as never },
+    });
+    expect(await logged.verify("x")).toEqual({ ok: false, reason: "refused" });
+    expect(warnings).toContainEqual(expect.objectContaining({ customerMatches: false, customerId: "C0other" }));
+  });
+
   it.each([
     ["another customer", { ...GOOD, customerId: "C0other" }],
+    ["a lower-case c is not the prefix", { ...GOOD, customerId: "c01abcdef" }],
     ["developer mode", { ...GOOD, keyTrustLevel: "CHROME_OS_DEVELOPER_MODE" }],
     ["a browser key", { ...GOOD, keyTrustLevel: "CHROME_BROWSER_HW_KEY" }],
     ["no trust level", { ...GOOD, keyTrustLevel: undefined }],

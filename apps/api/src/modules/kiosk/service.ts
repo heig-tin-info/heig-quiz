@@ -43,12 +43,6 @@ export async function deviceByCredential(
   return device ?? null;
 }
 
-/** The device Google knows as `googleDeviceId`; null before its first attestation. */
-export async function deviceByGoogleId(db: Db, googleDeviceId: string): Promise<KioskDeviceRow | null> {
-  const [device] = await db.select().from(kioskDevices).where(eq(kioskDevices.googleDeviceId, googleDeviceId));
-  return device ?? null;
-}
-
 /** What a station's page shows of itself; null when the cookie names no station. */
 export async function stationOf(db: Db, cookie: string | undefined): Promise<KioskStation | null> {
   const device = await deviceByCredential(db, cookie);
@@ -57,15 +51,20 @@ export async function stationOf(db: Db, cookie: string | undefined): Promise<Kio
 
 /**
  * An attestation Google accepted: the device is created (`unnamed`) or
- * updated, and gets a new credential. The previous cookie stops naming it at
- * once. `registered` says the device is new.
+ * updated. `current` is the credential the request's cookie already holds
+ * for THIS device: it is kept, so that a request of the sitting sent while
+ * the attestation was in flight still carries a valid cookie. Without one —
+ * a first attestation, a lost or expired cookie, another device's — a new
+ * credential is drawn, and the previous one stops naming the device at once.
+ * `registered` says the device is new.
  */
 export async function recordAttested(
   db: Db,
   googleDeviceId: string,
   now: Date,
+  current: string | null = null,
 ): Promise<{ device: KioskDeviceRow; credential: string; registered: boolean }> {
-  const credential = randomBytes(32).toString("base64url");
+  const credential = current ?? randomBytes(32).toString("base64url");
   const hash = credentialHash(credential);
   const [row] = await db
     .insert(kioskDevices)
