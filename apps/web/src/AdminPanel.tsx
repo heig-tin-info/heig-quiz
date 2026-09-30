@@ -17,6 +17,7 @@ import {
   Field,
   IconButton,
   PageHeader,
+  PersonAvatar,
   QueryError,
   RelativeTime,
   SectionHeading,
@@ -30,6 +31,9 @@ import { UsersSection } from "./AdminUsers";
 import { adminTeachersKey } from "./queryKeys";
 
 type SortKey = "email" | "name" | "lastLoginAt" | "courses" | "grantedAt";
+
+/** Given and family name; both empty until the grantee first signs in. */
+const nameOf = (r: AdminTeacher): [string, string] => [r.givenName ?? "", r.familyName ?? ""];
 
 /**
  * Administration: the teacher grants, then every account (`UsersSection`,
@@ -151,7 +155,10 @@ export function AdminPage() {
                   <tr key={r.id} className={cx(T.row, T.rowHover)}>
                     <td className={`${T.td} font-semibold`}>
                       {r.signedUp ? (
-                        `${r.givenName ?? ""} ${r.familyName ?? ""}`.trim() || r.email
+                        <span className="flex items-center gap-2.5">
+                          <PersonAvatar name={nameOf(r)} src={r.avatarUrl} />
+                          {nameOf(r).join(" ").trim() || r.email}
+                        </span>
                       ) : (
                         <Badge tone="amber">{t("admin.pending")}</Badge>
                       )}

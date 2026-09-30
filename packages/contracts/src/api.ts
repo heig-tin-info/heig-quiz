@@ -193,6 +193,8 @@ export interface AdminTeacher {
   givenName: string | null;
   familyName: string | null;
   lastLoginAt: string | null;
+  /** Upload, else IdP picture; null before the first sign-in or with neither. */
+  avatarUrl: string | null;
   signedUp: boolean;
   courses: number;
 }

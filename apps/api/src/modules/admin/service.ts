@@ -1,10 +1,11 @@
-import { isNull, sql } from "drizzle-orm";
+import { eq, isNull, sql } from "drizzle-orm";
 
 import type { AdminUser } from "@quiz/contracts";
 
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { classrooms, courseStaff, pools, questions, users } from "../../db/schema.js";
+import { avatars, classrooms, courseStaff, pools, questions, users } from "../../db/schema.js";
+import { shownAvatar } from "../avatar.js";
 import { roleDecisionsOfAll } from "../../roles.js";
 
 /**
@@ -37,6 +38,8 @@ export async function listUsers(db: Db, config: AppConfig): Promise<AdminUser[]>
         role: users.role,
         lastLoginAt: users.lastLoginAt,
         createdAt: users.createdAt,
+        pictureUrl: users.pictureUrl,
+        avatarAt: avatars.updatedAt,
         pools: sql<number>`(SELECT count(*) FROM ${pools} p WHERE p.owner_id = ${uid})::int`,
         questions: sql<number>`(SELECT count(*) FROM ${questions} q JOIN ${pools} p ON p.id = q.pool_id
           WHERE p.owner_id = ${uid} AND q.deleted_at IS NULL)::int`,
@@ -44,14 +47,16 @@ export async function listUsers(db: Db, config: AppConfig): Promise<AdminUser[]>
           WHERE cs.user_id = ${uid} AND c.archived_at IS NULL)::int`,
       })
       .from(users)
+      .leftJoin(avatars, eq(avatars.userId, users.id))
       .where(isNull(users.anonymizedAt))
       .orderBy(users.familyName, users.givenName, users.email),
     roleDecisionsOfAll(db, config),
   ]);
-  return rows.map((r) => {
+  return rows.map(({ pictureUrl, avatarAt, ...r }) => {
     const decision = decisions.get(r.id);
     return {
       ...r,
+      avatarUrl: shownAvatar(r.id, avatarAt, pictureUrl),
       reason: decision?.role === r.role ? decision.reason : null,
       lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),

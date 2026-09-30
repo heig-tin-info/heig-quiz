@@ -30,6 +30,8 @@ export const AdminUser = z.object({
   email: z.string(),
   givenName: z.string(),
   familyName: z.string(),
+  /** Upload, else IdP picture; null with neither (the client draws initials). */
+  avatarUrl: z.string().nullable(),
   /** The STORED role, the one every guard reads. */
   role: z.enum(USER_ROLES),
   /**

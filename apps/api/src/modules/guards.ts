@@ -226,13 +226,14 @@ export function accessWhere(user: Pick<Caller, "role">, predicate: SQL): SQL | u
 /**
  * "The caller already sees this user somewhere", which is exactly who may
  * fetch their uploaded picture (#318). The front end shows another user's
- * face in two places only, and this predicate is their union:
+ * face in two places to a non-admin, and this predicate is their union:
  *   - the staff of a course, on its card (`listCourses`): a fellow seat;
  *   - a classroom's roster (`rosterView`): a seat on the staff of a course
  *     where that user sits a classroom (`enrollments`, claimed).
  * Plus the user themselves (the shell, the settings) and an admin, like
- * every other loader. Nothing more: pool member lists show no avatar, so a
- * shared pool is no reason. Undefined when nothing needs checking; a caller
+ * every other loader: the administration's account lists show every face.
+ * Nothing more: pool member lists show no avatar, so a shared pool is no
+ * reason. Undefined when nothing needs checking; a caller
  * who fails it gets the 404 of a missing picture (invariant 6).
  */
 export function seesUser(user: Caller, subjectId: string): SQL | undefined {

@@ -227,6 +227,7 @@ export const teachers: AdminTeacher[] = [
     email: "ada.lovelace@heig-vd.ch",
     givenName: "Ada",
     familyName: "Lovelace",
+    avatarUrl: null,
     signedUp: true,
     courses: 3,
     lastLoginAt: iso(-2 * H),
@@ -237,6 +238,7 @@ export const teachers: AdminTeacher[] = [
     email: "grace.hopper@heig-vd.ch",
     givenName: "Grace",
     familyName: "Hopper",
+    avatarUrl: null,
     signedUp: true,
     courses: 1,
     lastLoginAt: iso(-30 * D),
@@ -247,6 +249,7 @@ export const teachers: AdminTeacher[] = [
     email: "linus.t@heig-vd.ch",
     givenName: null,
     familyName: null,
+    avatarUrl: null,
     signedUp: false,
     courses: 0,
     lastLoginAt: null,
@@ -258,6 +261,7 @@ export const teachers: AdminTeacher[] = [
     email: "margaret.hamilton@heig-vd.ch",
     givenName: "Margaret",
     familyName: "Hamilton",
+    avatarUrl: null,
     signedUp: true,
     courses: 2,
     lastLoginAt: iso(-3 * D),
@@ -268,6 +272,7 @@ export const teachers: AdminTeacher[] = [
     email: "barbara.liskov@heig-vd.ch",
     givenName: "Barbara",
     familyName: "Liskov",
+    avatarUrl: null,
     signedUp: true,
     courses: 1,
     lastLoginAt: iso(-12 * D),
@@ -278,6 +283,7 @@ export const teachers: AdminTeacher[] = [
     email: "dennis.ritchie@heig-vd.ch",
     givenName: "Dennis",
     familyName: "Ritchie",
+    avatarUrl: null,
     signedUp: true,
     courses: 4,
     lastLoginAt: iso(-1 * H),
@@ -358,6 +364,7 @@ const account = (
   email,
   givenName,
   familyName,
+  avatarUrl: null,
   role: "teacher",
   reason: null,
   lastLoginAt: iso(-rand() * 30 * D),
@@ -407,7 +414,11 @@ function buildAdminUsers(): AdminUser[] {
     rooms.flatMap((r) => r.roster.filter((e) => e.userId !== null).map((e) => [e.email, e])),
   );
   const students = [...claimed.values()].map((e) =>
-    account(e.userId!, e.prenom, e.nom, e.email, { role: "student", lastLoginAt: e.lastLoginAt }),
+    account(e.userId!, e.prenom, e.nom, e.email, {
+      role: "student",
+      lastLoginAt: e.lastLoginAt,
+      avatarUrl: e.avatarUrl,
+    }),
   );
   return [...staff, ...students];
 }
@@ -670,6 +681,7 @@ on("POST", "/app/api/admin/teachers", (_m, body) => {
     email: String(body.email),
     givenName: null,
     familyName: null,
+    avatarUrl: null,
     signedUp: false,
     courses: 0,
     lastLoginAt: null,

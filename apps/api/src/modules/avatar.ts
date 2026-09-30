@@ -24,6 +24,19 @@ export function avatarUrl(userId: string, updatedAt: Date): string {
 }
 
 /**
+ * The picture a user is shown with: their upload, else the IdP's `picture`
+ * claim, else null (the client draws initials). `userId` is null for an
+ * unclaimed roster seat, which has neither.
+ */
+export function shownAvatar(
+  userId: string | null,
+  uploadedAt: Date | null | undefined,
+  pictureUrl: string | null,
+): string | null {
+  return uploadedAt && userId ? avatarUrl(userId, uploadedAt) : pictureUrl;
+}
+
+/**
  * Uploaded avatar (cropped client-side, circular preview). Takes precedence
  * over the OIDC `picture` claim; deletable to fall back to it.
  */

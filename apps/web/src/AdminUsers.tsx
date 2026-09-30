@@ -13,6 +13,7 @@ import {
   Card,
   cx,
   EmptyState,
+  PersonAvatar,
   QueryError,
   RelativeTime,
   SearchInput,
@@ -162,10 +163,15 @@ export function UsersSection() {
               {shown.map((u) => (
                 <tr key={u.id} className={cx(T.row, T.rowHover)}>
                   <td className={T.td}>
-                    <div className="font-semibold">{displayName(u) || u.email}</div>
-                    {displayName(u) ? (
-                      <div className="text-xs text-fg-muted">{u.email}</div>
-                    ) : null}
+                    <div className="flex items-center gap-2.5">
+                      <PersonAvatar name={[u.givenName, u.familyName]} src={u.avatarUrl} />
+                      <div className="min-w-0">
+                        <div className="font-semibold">{displayName(u) || u.email}</div>
+                        {displayName(u) ? (
+                          <div className="text-xs text-fg-muted">{u.email}</div>
+                        ) : null}
+                      </div>
+                    </div>
                   </td>
                   <td className={`${T.td} whitespace-nowrap`}>
                     <Badge tone={ROLE_TONE[u.role]}>
