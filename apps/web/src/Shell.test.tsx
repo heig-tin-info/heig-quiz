@@ -1051,9 +1051,15 @@ describe("Shell student bottom bar (#191)", () => {
   it("navigates, and a section slot names its place in the address", async () => {
     vi.spyOn(window, "scrollTo").mockImplementation(() => {});
     const { navigate } = renderShell({ ...student, route: { view: "settings" } });
-    await userEvent.click(within(bar()!).getByRole("link", { name: "Courses" }));
+    await userEvent.click(within(bar()!).getByRole("link", { name: "Grades" }));
     expect(navigate).toHaveBeenCalledWith({ view: "home" });
-    expect(window.location.hash).toBe("#classrooms");
+    expect(window.location.hash).toBe("#past");
+    // Courses is a page of its own (D07), not an anchor of the home.
+    const courses = within(bar()!).getByRole("link", { name: "Courses" });
+    expect(courses).toHaveAttribute("href", "/courses");
+    await userEvent.click(courses);
+    expect(navigate).toHaveBeenLastCalledWith({ view: "studentCourses" });
+    expect(window.location.hash).toBe("");
     await userEvent.click(within(bar()!).getByRole("link", { name: "Profile" }));
     expect(navigate).toHaveBeenLastCalledWith({ view: "settings" });
     expect(window.location.hash).toBe("");

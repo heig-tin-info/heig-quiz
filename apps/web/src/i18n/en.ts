@@ -2041,6 +2041,15 @@ export const en = {
   "shome.rooms.empty.body": "Join your classroom with the code your teacher gave you.",
   "shome.teachers": "Taught by {names}",
   "shome.bonus": "Extra time: +{n}%",
+  // M5-02 (F-ORG-14, F-ORG-15): the student's Courses and classroom page.
+  "scourses.subtitle": "The classrooms you belong to. Open one for its activities.",
+  "sroom.loadError": "Could not load this classroom",
+  "sroom.backToCourses": "Back to courses",
+  "sroom.tabs": "Classroom sections",
+  "sroom.tab.activities": "Activities",
+  "sroom.tab.journal": "Journal",
+  "sroom.empty.title": "Nothing to do in this classroom right now",
+  "sroom.empty.body": "An evaluation shows up here the moment your teacher opens it.",
   "join.hint": "Enter the code your teacher gave you.",
   "join.label": "Classroom code",
   "join.placeholder": "PRG1-2026",
@@ -3383,7 +3392,6 @@ export const en = {
   // The pages of the classroom merge before their screens (M1-05, `ComingSoon.tsx`).
   "soon.title": "Coming soon",
   "soon.body": "This page is on its way. Everything else works as before.",
-  "soon.classroom": "Classroom",
   "soon.classroomSettings": "Classroom settings",
   "soon.project": "Project",
   "soon.projectGroups": "Project groups",

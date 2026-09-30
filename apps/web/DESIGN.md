@@ -1476,11 +1476,13 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
   pill behind its icon), so the screen's one primary button is still the one
   red FILL on it (invariant 2).
 - **Slots**, each an icon over a visible 11 px label, sharing the width
-  equally: Activities (the home, "Open now"), Courses (the home's "My
-  classrooms", `/#classrooms`), Grades (the home's "Past evaluations",
-  `/#past`, and lit on a feedback page), Profile (the settings), and Drill
-  (#317, `/drill`) in the MIDDLE. A slot that leads to a section of the home
-  is an anchor on it, not a page of its own: the home already is those lists.
+  equally: Activities (the home, "Open now"), Courses (the student's
+  classrooms, `/courses`, and lit on a classroom's pages — F-ORG-14, D07),
+  Grades (the home's "Past evaluations", `/#past`, and lit on a feedback
+  page), Profile (the settings), and Drill (#317, `/drill`) in the MIDDLE.
+  A slot that leads to a section of the home is an anchor on it, not a page
+  of its own: the home already is that list. Grades is the last such slot,
+  until the classroom's Grades tab (M5-04).
 - **Drill is drawn only when it leads somewhere**: for a student with at
   least one classroom whose drill is on (`visibleSlots`); the four others
   share the width otherwise. Its label is `bnav.drill`, not the page title:
@@ -1503,8 +1505,8 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
   An anchored section lands under the sticky top bar through one
   `scroll-padding-top` on the root, from `--topbar-h`.
 - **Where it is drawn: an allowlist**, the views the route table gives a
-  `bottomSlot` (`router.ts`: the home, a feedback page, the settings, the drill) and
-  nothing else. Hidden on the
+  `bottomSlot` (`router.ts`: the home, a feedback page, the settings, the
+  drill, the Courses and a classroom's pages) and nothing else. Hidden on the
   attempt (lobby and player), the poll join page, every projection and
   preview, a SEB-confined page, and any screen with a sticky bottom bar of its
   own (the player's, PollJoin's "Send", the launch step's dock): two bars at

@@ -45,12 +45,18 @@ about this course".
   `/classrooms/:id` (Activities, default), `/classrooms/:id/journal/<path>`
   (only when `hasJournal`), later the projects and
   `/classrooms/:id/grades`.
-- **Header**: eyebrow `ParentLink` to Home; title = classroom name;
+- **Header**: eyebrow `ParentLink` to Courses (M5-02: the page's parent is
+  the Courses route); title = classroom name, and an `archived` badge;
   description = course code, name, period; teachers in `fg-faint`; the
-  time-bonus badge as on the home card.
+  time-bonus badge as on the home card. On the Journal tab the header folds
+  to a breadcrumb (Courses › classroom) over the tabs: the document owns the
+  `h1`.
 - **Activities**: Open now / Upcoming / Past, reusing `EvaluationRow`,
   `PollRow` and a new `ProjectRow`. **The one accent** is the button of the
-  single most urgent open activity; the others are secondary. Empty state:
+  single most urgent open activity (M5-02, `mostUrgent`: an unfinished
+  activity with a deadline, soonest first; then a running poll; then an
+  unfinished one without a deadline; then a retake); the others are
+  secondary. Upcoming and Past are drawn only when they hold something. Empty state:
   nothing to do in this classroom right now. `ProjectRow`: title, deadline
   countdown, group name, status badge (not started / repo ready /
   invitation pending / submitted / graded), CI score as plain tabular text

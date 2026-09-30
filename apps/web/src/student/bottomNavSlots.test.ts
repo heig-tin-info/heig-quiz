@@ -26,9 +26,17 @@ describe("activeSlot (#191)", () => {
 
   it("lights Activities on the home, and the section the address names", () => {
     expect(activeSlot(home, "")).toBe("activities");
-    expect(activeSlot(home, "#classrooms")).toBe("courses");
     expect(activeSlot(home, "#past")).toBe("grades");
     expect(activeSlot(home, "#elsewhere")).toBe("activities");
+    // No longer an anchor of the home (D07): Courses is a page.
+    expect(activeSlot(home, "#classrooms")).toBe("activities");
+  });
+
+  it("leads Courses to the student's classrooms, and lights it on a classroom's page (D07)", () => {
+    for (const path of ["/courses", "/classrooms/c1"]) {
+      expect(activeSlot(parsePath(path), "")).toBe("courses");
+      expect(bottomNavShown(parsePath(path), false)).toBe(true);
+    }
   });
 
   it("keeps Grades lit on a feedback page and Profile on the settings", () => {

@@ -42,9 +42,11 @@ describe("routeToPath / parsePath", () => {
     expect(parsePath("/")).toEqual({ view: "home" });
     expect(parsePath("/nope")).toEqual({ view: "home" });
     expect(parsePath("/classrooms")).toEqual({ view: "home" });
-    // The student's Courses is a route under `CLASSROOM_PAGES` only
-    // (router.classroomPages.test.ts); off, `/courses` is still the home.
-    expect(parsePath("/courses")).toEqual({ view: "home" });
+  });
+
+  it("parses the student's Courses in every build, since M5-02 (F-ORG-14)", () => {
+    expect(parsePath("/courses")).toEqual({ view: "studentCourses" });
+    expect(routeToPath({ view: "studentCourses" })).toBe("/courses");
   });
 
   it("parses none of the classroom merge's routes while CLASSROOM_PAGES is off", () => {
@@ -198,7 +200,9 @@ describe("ROUTES", () => {
   it("marks the views a student has a screen for, and only them", () => {
     expect(ROUTE_VIEWS.filter((v) => ROUTES[v].studentSafe).sort()).toEqual([
       "attempt",
-      // The merge's student pages, reachable only under `CLASSROOM_PAGES`.
+      // F-ORG-15: the student's page of the classroom (M5-02).
+      "classroom",
+      // The merge's student tabs, reachable only under `CLASSROOM_PAGES`.
       "classroomGrades",
       "classroomJournal",
       "drill",
@@ -207,6 +211,7 @@ describe("ROUTES", () => {
       "join",
       "oauthConsent",
       "settings",
+      // F-ORG-14: the student's Courses (M5-02).
       "studentCourses",
       "teamsLink",
       "teamsTab",
@@ -229,7 +234,6 @@ describe("ROUTES", () => {
       poll: "polls",
       admin: "admin",
       drill: "drill",
-      studentCourses: "home",
       project: "activities",
       projectGroups: "activities",
     });
@@ -253,6 +257,9 @@ describe("ROUTES", () => {
         "questionPreview",
         "results",
         "settings",
+        // The student sidebar has no Courses row: lighting Home there would
+        // name the wrong page (the bottom bar lights its Courses slot).
+        "studentCourses",
         "teamsLink",
         "teamsTab",
       ].sort(),

@@ -345,6 +345,18 @@ const scenes = [
   { name: "student-error", role: "student", path: "/?fail=1", settle: 2500 },
   { name: "student-loading", role: "student", path: "/?slow=1", settle: 300 },
   { name: "student-settings", role: "student", path: "/settings" },
+  // M5-02 (F-ORG-14, F-ORG-15, D07): the student's Courses, and the page of a
+  // classroom — PRG1-2026 (`r1`) holds the home's activities, PRG1-2025
+  // (`r2`) none; `?journal=1` gives `r1` its Journal tab.
+  { name: "student-courses", role: "student", path: "/courses" },
+  { name: "student-courses-empty", role: "student", path: "/courses?empty=1" },
+  { name: "student-courses-error", role: "student", path: "/courses?fail=1", settle: 2500 },
+  { name: "student-classroom", role: "student", path: "/classrooms/r1" },
+  { name: "student-classroom-journal", role: "student", path: "/classrooms/r1/journal?journal=1" },
+  { name: "student-classroom-empty", role: "student", path: "/classrooms/r2" },
+  { name: "student-classroom-error", role: "student", path: "/classrooms/r1?fail=1", settle: 2500 },
+  { name: "student-classroom-notfound", role: "student", path: "/classrooms/nope" },
+  { name: "student-classroom-loading", role: "student", path: "/classrooms/r1?slow=1", settle: 300 },
   // F-EVAL-15: the exercise card with its kept score and the Retake button,
   // and the score-only feedback between two attempts.
   { name: "student-home-retake", role: "student", path: "/" },
