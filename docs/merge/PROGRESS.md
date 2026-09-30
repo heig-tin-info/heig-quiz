@@ -93,7 +93,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M4-01 | `packages/docrender`, schema, contracts | review | M1-01, D03, D14, D15 | `merge/M4-01-docrender` | #371 | `@quiz/docrender`: `renderPage(md, {classroomId, pagePath, fallbackTitle, pages, assets, oversized?})` → `{title (plain text or null), frontMatter, html, toc, draft, visibleFrom, warnings, assets}` — call it TWICE per page (`pages` = all ⇒ `html_staff`, = student-visible ⇒ `html_student`), store `cleanSource(md)`; `placePage`/`buildNav`/`homePage`/`relativeHref`/`resolveRelative`, `journalRepoName`, `journalAssetUrl`, `assetContentType`, `@quiz/docrender/highlight`. Contracts (read half; the write bodies moved to M4-03, see its card): `Journal{Student,Staff}`, `JournalPage{Student,Staff}`, `JournalViewQuery`, `JournalPageParams`/`JournalAssetParams`, `JOURNAL_ASSETS_PATH`, `safeJournalPath`, `isJournalPagePath`, `hasControlChar`/`CONTROL_CHAR`, `JournalWarning`, `JournalSyncStatus`, `JournalSyncError`, `JournalRepository`. Tables `classroom_journals`, `journal_pages` (`html_staff`, `html_student`, `asset_paths` for J1), `journal_assets`; migration `0038_journal` |
 | M4-02 | Read side and ingestion | todo | M4-01, M2-02, M2-04 | | | |
 | M4-03 | Writes | todo | M4-02, M2-03 | | | |
-| M4-04 | Web: reader | todo | M4-02, M1-04, M1-05 | | | |
+| M4-04 | Web: reader | in progress | M4-02, M1-04, M1-05 | `merge/M4-04-journal-reader` | | |
 | M4-05 | Web: Journal section of Settings, teacher tab | todo | M4-03, M2-07, D24 | | | |
 | M4-06 | Web: WYSIWYG editor | todo | M4-05, D25 | | | |
 
