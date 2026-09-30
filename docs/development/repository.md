@@ -27,6 +27,8 @@ packages/
   qt-circuit/ question type: two-port schematic, graded by ngspice simulation
   qt-rich/    question type: essay, graded by hand against a rubric
   qt-categorize/ question type: cards sorted into columns (ADR-036)
+  diagram/    the diagram engine: scenes, kinds, router, editor (ADR-046)
+  qt-diagram/ question type: a diagram of one notation, graded by hand (ADR-046)
 docs/
   guide/      the user guide
   spec/       the product specification
@@ -98,6 +100,8 @@ the flags of every container, the request lifecycle, the images under
 | `@quiz/qt-code` | `./server`, `./client` | two types sharing one program half: `code`, graded by the runner's test cases, and `codeimage`, judged by the picture its stdout draws ([ADR-021](../adr/ADR-021-codeimage-variante-de-code.md)) |
 | `@quiz/qt-rich` | `./server`, `./client` | `rich`, shown as "Essay": a text graded by hand against a rubric (docs/spec/04 §4.8) |
 | `@quiz/qt-categorize` | `./server`, `./client` | `categorize`, shown as "Categorize": cards sorted into columns, with distractors and an optional order, scored per card or all or nothing, and by the evaluation's negative marking ([ADR-036](../adr/ADR-036-type-classement.md)) |
+| `@quiz/diagram` | `./server`, `./client` | the diagram engine: the scene and its schema, the catalogue of eight kinds, the router, the text serialisers (`./server`, no parser); `DiagramEditor` and `DiagramView` (`./client`) ([ADR-046](../adr/ADR-046-type-diagramme.md)) |
+| `@quiz/qt-diagram` | `./server`, `./client` | `diagram`, shown as "Diagram": a diagram of the notation the teacher chose, drawn on the engine's canvas and graded by hand beside a reference ([ADR-046](../adr/ADR-046-type-diagramme.md)) |
 | `@quiz/qt-circuit` | `./server`, `./client`, `./canvas` | `circuit`, a two-port schematic graded by simulating it with ngspice through the runner's `spice` language ([ADR-019](../adr/ADR-019-simulation-de-circuit.md)); `./canvas` is the schematic editor |
 
 ### Server and client halves

@@ -189,6 +189,9 @@ export type Scene = z.infer<typeof SceneSchema>;
 
 export const emptyScene = (): Scene => ({ nodes: [], links: [] });
 
+/** A scene with neither an element nor a link. */
+export const isEmptyScene = (scene: Scene): boolean => scene.nodes.length === 0 && scene.links.length === 0;
+
 /**
  * A fresh opaque id: eight base-36 characters. `crypto.getRandomValues`
  * exists in every browser and in Node since 19.
@@ -197,6 +200,27 @@ export function newId(): string {
   const bytes = new Uint8Array(8);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => (b % 36).toString(36)).join("");
+}
+
+/**
+ * A copy of a scene under fresh ids, moved by `offset` (elbows included);
+ * a link keeps its ends through the new ids. The editor's duplicate, and the
+ * starter copied from the reference, which must share no id with it
+ * (ADR-046 §2).
+ */
+export function freshCopy(scene: Scene, offset = 0): Scene {
+  const ids = new Map(scene.nodes.map((n) => [n.id, newId()] as const));
+  const moved = (p: Point): Point => ({ x: p.x + offset, y: p.y + offset });
+  return {
+    nodes: scene.nodes.map((n) => ({ ...structuredClone(n), id: ids.get(n.id) as string, x: n.x + offset, y: n.y + offset })),
+    links: scene.links.map((l) => ({
+      ...structuredClone(l),
+      id: newId(),
+      a: ids.get(l.a) ?? l.a,
+      b: ids.get(l.b) ?? l.b,
+      ...(l.via ? { via: l.via.map(moved) } : {}),
+    })),
+  };
 }
 
 /**

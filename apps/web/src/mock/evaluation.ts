@@ -32,6 +32,7 @@ import {
 } from "./runtime";
 import {
   CATEGORIZE_ANSWER,
+  DIAGRAM_ANSWER,
   MockQuestion,
   RC_REFERENCE,
   RC_STUDENT,
@@ -118,7 +119,9 @@ function itemSource(): MockQuestion[] {
   // give the grading table every type of question (ADR-044).
   const categorize = published.filter((q) => q.type === "categorize");
   const codeimage = published.filter((q) => q.type === "codeimage");
-  const rest = primary.filter((q) => !["rich", "categorize", "codeimage"].includes(q.type));
+  // The diagram comes eighth (docs/04 §4.14), after the picture.
+  const diagram = published.filter((q) => q.type === "diagram");
+  const rest = primary.filter((q) => !["rich", "categorize", "codeimage", "diagram"].includes(q.type));
   if (primary.length === 0) return published;
   return [
     ...rest.slice(0, 2),
@@ -127,6 +130,7 @@ function itemSource(): MockQuestion[] {
     ...essay,
     ...categorize,
     ...codeimage,
+    ...diagram,
     ...rest.slice(3),
   ];
 }
@@ -211,6 +215,9 @@ function answerOf(q: MockQuestion, seedValue: number): unknown {
               ((config.columns ?? []) as { id: string; cards: string[] }[]).map((c) => [c.id, c.cards]),
             ),
           };
+    // Half drawn from the starter, or the reference itself.
+    case "diagram":
+      return wrong ? DIAGRAM_ANSWER : { scene: config.reference };
   }
 }
 
@@ -263,6 +270,11 @@ export function summaryOf(q: MockQuestion, seedValue: number): string {
     case "categorize": {
       const placed = Object.values((answer as { columns: Record<string, string[]> }).columns).flat().length;
       return `${placed}/${((frozenConfig(q).cards ?? []) as unknown[]).length}`;
+    }
+    // `summarizeAnswer` of `@quiz/qt-diagram`: elements · links.
+    case "diagram": {
+      const { scene } = answer as { scene: { nodes: unknown[]; links: unknown[] } };
+      return `${scene.nodes.length} · ${scene.links.length}`;
     }
   }
 }
@@ -579,12 +591,13 @@ export const EVAL_ROOM = "r1";
  * resolve to, which is what the screenshot script deep-links to.
  */
 evaluations.push(
-  // Eight items: the eighth is the cloze, so the correction draws its blanks.
-  makeEvaluation(EVAL_ROOM, "Quiz 0 — prise en main", "closed", 8, {
+  // Nine items: the eighth is the diagram, the ninth the cloze, so the
+  // correction draws both.
+  makeEvaluation(EVAL_ROOM, "Quiz 0 — prise en main", "closed", 9, {
     startedAt: iso(-20 * D),
     closedAt: iso(-20 * D + H),
   }),
-  makeEvaluation(EVAL_ROOM, "Test d'entrée", "released", 7, {
+  makeEvaluation(EVAL_ROOM, "Test d'entrée", "released", 8, {
     startedAt: iso(-60 * D),
     closedAt: iso(-60 * D + H),
     releasedAt: iso(-59 * D),

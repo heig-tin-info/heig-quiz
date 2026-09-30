@@ -419,6 +419,42 @@ describe("studentView never leaks the key (invariant 4)", () => {
     for (const column of payload.columns) expect(column).not.toHaveProperty("cards");
   });
 
+  it("keeps the reference diagram of `diagram` out, and its starter in (ADR-046)", () => {
+    // The key of a diagram is a SCENE, whose texts sit under keys (`name`,
+    // `body`) the value search above does not sow: this test does it by
+    // hand. The starter shares no value with the reference, ids included.
+    const type = questionType("diagram");
+    const config = type.configSchema.parse({
+      configVersion: 1,
+      prompt: "Draw the class diagram.",
+      kind: "class",
+      reference: {
+        nodes: [
+          { id: "s3cr3tn1", t: "class", x: 0, y: 0, name: "S3CR3TCLASS", body: ["- S3CR3TFIELD : int"] },
+          { id: "s3cr3tn2", t: "class", x: 0, y: 200, name: "S3CR3TCHILD" },
+        ],
+        links: [{ id: "s3cr3tl1", type: "inh", a: "s3cr3tn2", b: "s3cr3tn1", name: "S3CR3TLINK" }],
+      },
+      starter: { nodes: [{ id: "st4rt001", t: "class", x: 40, y: 40, name: "Given" }], links: [] },
+      rubric: "S3CR3TRUBRIC",
+    });
+    const payload = studentView({
+      type: "diagram",
+      version: { config, configVersion: type.configVersion },
+      seed: 0,
+      itemId: "77777777-7777-4777-8777-777777777777",
+      shuffle: false,
+    });
+    const serialized = JSON.stringify(payload);
+    expect(serialized).not.toMatch(/s3cr3t|S3CR3T/);
+    expect(keysOf(payload)).not.toContain("reference");
+    expect(payload).toEqual({
+      prompt: "Draw the class diagram.",
+      kind: "class",
+      starter: (config as { starter: unknown }).starter,
+    });
+  });
+
   it("keeps the key of the fake test type out too", () => {
     const restore = registerForTests(fakeShort);
     try {

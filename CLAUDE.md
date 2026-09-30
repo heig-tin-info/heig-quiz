@@ -60,6 +60,10 @@ packages/
               (./server, ./client, ./canvas)
   qt-rich/    question type: essay, graded by hand (./server, ./client)
   qt-categorize/ question type: cards sorted into columns (./server, ./client)
+  diagram/    the diagram engine: scene, kinds, router, text forms (./server),
+              DiagramEditor and DiagramView (./client) — ADR-046
+  qt-diagram/ question type: a diagram of one notation, graded by hand
+              (./server, ./client)
 docs/
   spec/       the product specification (above)
   adr/        the architecture decisions, inherited (001–010, 012) and our own
@@ -67,12 +71,13 @@ docs/
   development/  the developer pages, deployment runbook included
 mockups/      circuit.html, the origin of qt-circuit's schematic editor;
               categorize.html, the origin of qt-categorize's board;
+              uml.html, the origin of the diagram engine's editor;
               grading.html, the origin of the grading table (ADR-044)
 infra/        Keycloak development realm
 ```
 
-`packages/qt-mcq`, `qt-short`, `qt-cloze`, `qt-code`, `qt-circuit`, `qt-rich`
-and `qt-categorize` exist and are registered in `packages/registry` in two places (`./server` and
+`packages/qt-mcq`, `qt-short`, `qt-cloze`, `qt-code`, `qt-circuit`, `qt-rich`,
+`qt-categorize` and `qt-diagram` exist and are registered in `packages/registry` in two places (`./server` and
 `./client`). `qt-circuit` (ADR-019) grades a schematic by simulating it with
 ngspice through the runner's `spice` language; its rules are in
 `docs/spec/04-types-de-questions.md` §4.11. `qt-code` also carries a second
@@ -206,12 +211,13 @@ delete it to start over. It is single-process: stop the API before `pnpm seed`.
 `pnpm seed` (`apps/api/src/seed.ts`, content in `apps/api/src/seed/`) is
 idempotent and builds everything through the ORDINARY SERVICES, never by raw
 inserts: course PRG1, classroom PRG1-2026, six students, two pools with
-eighteen published questions of all eight types, and four evaluations — one
+nineteen published questions of all nine types, and four evaluations — one
 `draft`, one `scheduled`, one exercise in `lobby`, and `Test 0 — bases du C`
-closed, nine questions of all eight types answered by five of the six
+closed, ten questions of all nine types answered by five of the six
 students, graded by the real grading pass (no runner: code, picture and
 circuit answers wait for one; essays proposed by the stub LLM when
-`LLM_PROVIDER=stub`, refused in production like the dev login) and left
+`LLM_PROVIDER=stub`, refused in production like the dev login; diagrams
+proposed at 0 for the teacher, an untouched starter validated at 0) and left
 UNRELEASED so the panel has proposals to validate. Keyed on internal names
 and titles, so a second run writes nothing.
 

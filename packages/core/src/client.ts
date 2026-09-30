@@ -64,6 +64,13 @@ export interface EditorProps<TConfig> {
    * ignores it.
    */
   ungraded?: boolean;
+  /**
+   * The question has a published version. A setting that changes what an
+   * answer IS — the notation of a `diagram` (ADR-046 addendum) — is locked
+   * then: the answers given to a published version must keep meaning what
+   * they meant. An editor with no such setting ignores it.
+   */
+  published?: boolean;
 }
 
 /**
@@ -179,6 +186,27 @@ export interface PlayerProps<TStudent, TAnswer> {
    * `false` when the player unmounts, so the host never keeps a stale flag.
    */
   onUnsent?: (unsent: boolean) => void;
+  /**
+   * The host's EXPAND layer, lent for the reason `RichText` is: a player that
+   * needs more room than the question card — the `diagram` canvas (ADR-046
+   * §6) — draws in it, and the layer is part of the app's chrome, which a
+   * package cannot import. It covers the page with a small margin and keeps a
+   * thin bar of the host's own (the server's clock, the save state, the way
+   * back); it is a layer of the page, never the browser's full screen.
+   *
+   * The player renders it with `open` and its content as `children`, and the
+   * host calls `onClose` (the bar's button, Escape, a move to another
+   * question). Absent — the try panel, the grading panel — the player offers
+   * no Expand button at all. Every other type ignores it.
+   */
+  Expand?: ComponentType<ExpandProps>;
+}
+
+/** The props of the host's expand layer (`PlayerProps.Expand`). */
+export interface ExpandProps {
+  open: boolean;
+  onClose: () => void;
+  children: ReactNode;
 }
 
 export interface ReviewProps<TStudent, TAnswer, TSolution, TDetails> {

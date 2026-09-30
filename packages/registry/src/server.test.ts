@@ -5,9 +5,9 @@ import { QUESTION_TYPE_IDS, questionType, registeredServerIds, serverRegistry } 
 
 /**
  * The four MVP types, `circuit` (docs/spec/04 §4.11), `codeimage` (§4.9),
- * `rich` (§4.8) and `categorize` (§4.13), brought forward.
+ * `rich` (§4.8), `categorize` (§4.13) and `diagram` (§4.14), brought forward.
  */
-const REGISTERED = ["mcq", "short", "cloze", "code", "circuit", "codeimage", "rich", "categorize"] as const;
+const REGISTERED = ["mcq", "short", "cloze", "code", "circuit", "codeimage", "rich", "categorize", "diagram"] as const;
 
 describe("the static registries", () => {
   it("hold every registered type, in both halves", () => {
@@ -26,7 +26,7 @@ describe("the static registries", () => {
     expect(() => questionType("drawing")).toThrow(UnknownQuestionType);
   });
 
-  it("expose the eight ids", () => {
+  it("expose the nine ids", () => {
     expect(QUESTION_TYPE_IDS).toEqual([...REGISTERED]);
     expect(Object.keys(serverRegistry)).toEqual([...REGISTERED]);
   });

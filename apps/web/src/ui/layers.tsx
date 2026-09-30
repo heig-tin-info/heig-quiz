@@ -189,11 +189,20 @@ function focusableIn(root: HTMLElement): HTMLElement[] {
  *   focus back on close.
  * `panel` must carry `tabIndex={-1}` so it can hold the focus by itself when
  * it has no focusable child.
+ *
+ * `escape: false` leaves Escape to the layer itself: the student's expand
+ * layer (`student/ExpandLayer.tsx`) holds a canvas that cancels a tool or a
+ * selection on Escape first, and closes only on a key the canvas left alone
+ * — which a listener in the capture phase, as here, would never see.
  */
 export function useLayer(
   panel: RefObject<HTMLElement | null>,
   onClose: () => void,
-  { trap = true, enabled = true }: { trap?: boolean; enabled?: boolean } = {},
+  {
+    trap = true,
+    enabled = true,
+    escape = true,
+  }: { trap?: boolean; enabled?: boolean; escape?: boolean } = {},
 ) {
   // Latest callback without re-arming the listener on every render.
   const close = useRef(onClose);
@@ -225,7 +234,7 @@ export function useLayer(
     }
     const onKey = (e: KeyboardEvent) => {
       if (!onTop()) return;
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && escape) {
         e.stopPropagation();
         close.current();
         return;
@@ -271,7 +280,7 @@ export function useLayer(
         });
       }
     };
-  }, [enabled, trap, panel]);
+  }, [enabled, trap, escape, panel]);
 }
 
 /** Escape-only layer, for a floating element with no panel to trap. */
