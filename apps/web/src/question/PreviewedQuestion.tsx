@@ -1,6 +1,6 @@
 import { skipToken, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { AlertTriangle, EyeOff, KeyRound } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { PreviewSolution } from "@quiz/contracts";
 
@@ -78,6 +78,11 @@ export function PreviewedQuestion({
  * answers" gives the player back with the answer as it was: it lives here,
  * above the swap. The key is hidden on every open and on every new question,
  * so a preview on a classroom's projector never shows it unasked.
+ *
+ * The answer and the shown key belong to ONE question: a caller that swaps
+ * the question under a mounted preview remounts it with a `key` per question.
+ * A reset after render would leave one render in which the next question's
+ * key is fetched unasked.
  */
 export function PlayedQuestion({
   view,
@@ -93,16 +98,13 @@ export function PlayedQuestion({
   const t = useT();
   const [answer, setAnswer] = useState<unknown>(() => emptyAnswerOf(view.type, view.student));
   const [shown, setShown] = useState(false);
-  const { type, student } = view;
-  useEffect(() => {
-    setAnswer(emptyAnswerOf(type, student));
-    setShown(false);
-  }, [type, student]);
   // Fresh on every "Show": a draft may have changed in the editor meanwhile.
+  // Not on a refocus, though: the shown key would flash a skeleton each time.
   const key = useQuery({
     queryKey: solution?.queryKey ?? [],
     queryFn: solution?.queryFn ?? skipToken,
     enabled: shown,
+    refetchOnWindowFocus: false,
   });
 
   return (

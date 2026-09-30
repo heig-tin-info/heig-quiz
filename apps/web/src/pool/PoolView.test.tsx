@@ -256,6 +256,8 @@ describe("PoolView", () => {
     ]);
     expect(screen.getByText(/Its draft has unpublished changes/)).toBeVisible();
     expect(screen.queryByText("ptr-null-check")).toBeNull();
+    // The key stays with the picker and the item preview, not the pool.
+    expect(screen.queryByRole("button", { name: "Show answers" })).toBeNull();
 
     // Back returns to the list, the focus on the row it came from.
     expect(screen.getByRole("button", { name: "Back to the list" })).toHaveFocus();

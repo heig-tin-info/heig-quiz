@@ -458,6 +458,14 @@ describe("POST /questions/:id/try (F-QST-09)", () => {
       payload: { source: "draft" },
     });
     expect(off.statusCode).toBe(404);
+    const student = await server.signIn("student");
+    const refused = await server.app.inject({
+      method: "POST",
+      url: `/app/api/questions/${id}/preview/solution`,
+      headers: student.headers,
+      payload: { source: "draft" },
+    });
+    expect(refused.statusCode).toBe(403);
   });
 
   it("emits no refresh hint for a preview or a try: a read behind a POST", async () => {

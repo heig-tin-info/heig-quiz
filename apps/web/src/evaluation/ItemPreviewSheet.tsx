@@ -62,6 +62,7 @@ export function ItemPreviewSheet({
           {t("eval.questions.preview.bannerBody")}
         </Alert>
         <PreviewedQuestion
+          key={item.id}
           query={preview}
           solution={{
             queryKey: [...key, "solution"],
