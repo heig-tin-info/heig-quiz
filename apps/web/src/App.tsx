@@ -9,6 +9,7 @@ import { Logo } from "./Header";
 import { type Dict, useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
 import { CoachLayer } from "./coach/CoachLayer";
+import { ComingSoon } from "./ComingSoon";
 import { useRoute, type Navigate, type Route, type RouteOf } from "./router";
 import { ImpersonationBanner, Shell, StudentViewBanner } from "./Shell";
 import {
@@ -226,7 +227,31 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   admin: (_, c) => (c.me.role === "admin" ? <AdminPage /> : <TeacherHome navigate={c.navigate} />),
   course: (r, c) => <CoursePage id={r.id} navigate={c.navigate} />,
   template: (r, c) => <TemplateEditor id={r.id} navigate={c.navigate} />,
-  classroom: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} />,
+  // F-ORG-15: one address, two pages. The student's is a placeholder until
+  // M5-02, and a student reaches it only under `CLASSROOM_PAGES`.
+  classroom: (r, c) =>
+    c.teacherUi ? (
+      <ClassroomView id={r.id} navigate={c.navigate} />
+    ) : (
+      <ComingSoon title="soon.classroom" navigate={c.navigate} />
+    ),
+  // The pages of the classroom merge, placeholders until their screens ship
+  // (`CLASSROOM_PAGES`, `router.ts`). A teacher's Courses is the home.
+  studentCourses: (_, c) =>
+    c.teacherUi ? (
+      <TeacherHome navigate={c.navigate} />
+    ) : (
+      <ComingSoon title="nav.courses" navigate={c.navigate} />
+    ),
+  classroomSettings: (_, c) => (
+    <ComingSoon title="soon.classroomSettings" navigate={c.navigate} />
+  ),
+  classroomJournal: (r, c) => (
+    <ComingSoon title="soon.journal" detail={r.path} navigate={c.navigate} />
+  ),
+  classroomGrades: (_, c) => <ComingSoon title="bnav.grades" navigate={c.navigate} />,
+  project: (_, c) => <ComingSoon title="soon.project" navigate={c.navigate} />,
+  projectGroups: (_, c) => <ComingSoon title="soon.projectGroups" navigate={c.navigate} />,
   activities: (_, c) => <ActivitiesPage navigate={c.navigate} />,
   polls: (_, c) => <PollLauncher navigate={c.navigate} />,
   // The projection is for a beamer: no sidebar, no chrome.

@@ -47,6 +47,9 @@ import {
   ItemPreview,
   PreviewSolution,
   ItemVersions,
+  encodeJournalPath,
+  Journal,
+  JournalPage,
   NotificationList,
   NotificationSettings,
   ApiToken,
@@ -80,6 +83,9 @@ if (typeof window.fetch !== "function") {
   window.fetch = (() => Promise.reject(new Error("no network in this test"))) as typeof fetch;
 }
 
+// `?journal=1`, as the runtime remembers it: PRG1-2026 has a journal, so its
+// pages are served and checked; every other classroom answers "no journal".
+localStorage.setItem("quiz-mock-journal", "1");
 await import("./index");
 const { routes } = await import("./runtime");
 const { STUDENT_ATTEMPT, STUDENT_RETAKE_ATTEMPT } = await import("./student");
@@ -167,6 +173,22 @@ const templateItems = (
 const polls = (await get("/app/api/polls")) as { id: string; code: string | null }[];
 /** A student seat of the classroom, for one student's drill progression. */
 const firstSeat = ((await get(`/app/api/classrooms/${classroomId}`)) as { roster: Ref[] }).roster[0]!.id;
+/** Every page of the classroom's journal (its home and its staff navigation), and whether a student reads it. */
+interface Nav {
+  pagePath: string | null;
+  children: Nav[];
+}
+const journal = (await get(`/app/api/classrooms/${classroomId}/journal`)) as {
+  nav: Nav[];
+  homePath: string | null;
+  hiddenPaths: string[];
+};
+const pagesOf = (nodes: Nav[]): string[] =>
+  nodes.flatMap((n) => [...(n.pagePath ? [n.pagePath] : []), ...pagesOf(n.children)]);
+const journalPages = [...new Set([...(journal.homePath ? [journal.homePath] : []), ...pagesOf(journal.nav)])].map((path) => ({
+  path,
+  student: !journal.hiddenPaths.includes(path),
+}));
 
 // --- Route -> schema -------------------------------------------------------
 
@@ -340,6 +362,25 @@ const CHECKED: Case[] = [
     .map((p) => one("/app/api/p/:code", `/app/api/p/${p.code}`, PollPublicView)),
   one("/app/api/attempts/:id", `/app/api/attempts/${attemptId}`, AttemptOrLobby),
   one("/app/api/student/home", "/app/api/student/home", StudentHome),
+  // The journal (F-JRN-07): the staff payload with and without a journal, the
+  // student payload (`?view=student`), and every page both ways.
+  ...courses
+    .flatMap((c) => c.classrooms)
+    .map((r) => one("/app/api/classrooms/:id/journal", `/app/api/classrooms/${r.id}/journal`, Journal)),
+  one(
+    "/app/api/classrooms/:id/journal",
+    `/app/api/classrooms/${classroomId}/journal?view=student`,
+    Journal,
+  ),
+  ...journalPages.flatMap(({ path, student }) =>
+    ["", ...(student ? ["?view=student"] : [])].map((query) =>
+      one(
+        "/app/api/classrooms/:id/journal/pages/(?<path>.+)",
+        `/app/api/classrooms/${classroomId}/journal/pages/${encodeJournalPath(path)}${query}`,
+        JournalPage,
+      ),
+    ),
+  ),
   // The drill (ADR-041, #317): the student's tab and the teacher's switch.
   one("/app/api/drill/session", "/app/api/drill/session", DrillSession),
   each("/app/api/drill/classrooms", "/app/api/drill/classrooms", DrillClassroom),
@@ -384,6 +425,9 @@ const UNCHECKED = [
   "/app/api/classrooms/:id", // ClassroomDetail
   "/app/api/student/classrooms", // StudentClassroom[]
   "/app/api/admin/teachers", // AdminTeacher[]
+  // TODO(M2-01): the `github` contracts do not exist yet (mock/github.ts).
+  "/app/api/github/orgs",
+  "/app/api/classrooms/:id/github",
 ];
 
 describe("the mock answers what the contracts describe", () => {

@@ -3379,6 +3379,15 @@ export const en = {
   "drill.mastery.untagged": "Without a tag",
   "drill.mastery.counts": "{cards} cards · {students} students",
   "drill.mastery.loadFailed": "Could not load the mastery per tag",
+
+  // The pages of the classroom merge before their screens (M1-05, `ComingSoon.tsx`).
+  "soon.title": "Coming soon",
+  "soon.body": "This page is on its way. Everything else works as before.",
+  "soon.classroom": "Classroom",
+  "soon.classroomSettings": "Classroom settings",
+  "soon.journal": "Journal",
+  "soon.project": "Project",
+  "soon.projectGroups": "Project groups",
 };
 
 export type Dict = typeof en;

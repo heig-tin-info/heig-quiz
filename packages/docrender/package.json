@@ -12,6 +12,10 @@
       "types": "./dist/highlight.d.ts",
       "default": "./dist/highlight.js"
     },
+    "./journalTree": {
+      "types": "./dist/journalTree.d.ts",
+      "default": "./dist/journalTree.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

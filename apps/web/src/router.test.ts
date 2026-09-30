@@ -42,7 +42,18 @@ describe("routeToPath / parsePath", () => {
     expect(parsePath("/")).toEqual({ view: "home" });
     expect(parsePath("/nope")).toEqual({ view: "home" });
     expect(parsePath("/classrooms")).toEqual({ view: "home" });
+    // The student's Courses is a route under `CLASSROOM_PAGES` only
+    // (router.classroomPages.test.ts); off, `/courses` is still the home.
     expect(parsePath("/courses")).toEqual({ view: "home" });
+  });
+
+  it("parses none of the classroom merge's routes while CLASSROOM_PAGES is off", () => {
+    // A production build: every such address reads as it did before them.
+    expect(parsePath("/classrooms/c-1/settings")).toEqual({ view: "classroom", id: "c-1" });
+    expect(parsePath("/classrooms/c-1/journal/a.md")).toEqual({ view: "classroom", id: "c-1" });
+    expect(parsePath("/classrooms/c-1/grades")).toEqual({ view: "classroom", id: "c-1" });
+    expect(parsePath("/projects/p-1")).toEqual({ view: "home" });
+    expect(parsePath("/projects/p-1/groups")).toEqual({ view: "home" });
   });
 
   it("parses the page of one course, a page of the Courses section (F-ORG-12)", () => {
@@ -142,6 +153,12 @@ describe("ROUTES", () => {
     course: { view: "course", id: "k-1" },
     template: { view: "template", id: "t-1" },
     classroom: { view: "classroom", id: "c-1" },
+    studentCourses: { view: "studentCourses" },
+    classroomSettings: { view: "classroomSettings", id: "c-1" },
+    classroomJournal: { view: "classroomJournal", id: "c-1", path: "10-semaine-1/10-pointeurs.md" },
+    classroomGrades: { view: "classroomGrades", id: "c-1" },
+    project: { view: "project", id: "p-1" },
+    projectGroups: { view: "projectGroups", id: "p-1" },
     activities: { view: "activities" },
     pools: { view: "pools" },
     poolCategories: { view: "poolCategories", id: "p-1" },
@@ -172,20 +189,25 @@ describe("ROUTES", () => {
   });
 
   it("round-trips a sample of every view, the table's order included", () => {
-    for (const r of Object.values(sample)) {
+    // The merge's previews round-trip in router.classroomPages.test.ts, flag on.
+    for (const r of Object.values(sample).filter((r) => !ROUTES[r.view].preview)) {
       expect(parsePath(routeToPath(r))).toEqual(r);
     }
   });
 
-  it("marks the nine views a student has a screen for, and only them", () => {
+  it("marks the views a student has a screen for, and only them", () => {
     expect(ROUTE_VIEWS.filter((v) => ROUTES[v].studentSafe).sort()).toEqual([
       "attempt",
+      // The merge's student pages, reachable only under `CLASSROOM_PAGES`.
+      "classroomGrades",
+      "classroomJournal",
       "drill",
       "feedback",
       "home",
       "join",
       "oauthConsent",
       "settings",
+      "studentCourses",
       "teamsLink",
       "teamsTab",
     ]);
@@ -207,12 +229,18 @@ describe("ROUTES", () => {
       poll: "polls",
       admin: "admin",
       drill: "drill",
+      studentCourses: "home",
+      project: "activities",
+      projectGroups: "activities",
     });
     const unlit = ROUTE_VIEWS.filter((v) => lit[v] === null).sort();
     expect(unlit).toEqual(
       [
         "attempt",
         "classroom",
+        "classroomGrades",
+        "classroomJournal",
+        "classroomSettings",
         "correction",
         "devUi",
         "evaluation",
