@@ -173,7 +173,8 @@ layers:
   `ingestCompletedRun`. `reconcile.repos` (24 h): pending invitations,
   head, CI. `reconcile.deliveries` (24 h): local unprocessed > 10 min
   re-enqueued; GitHub failures of the last 24 h redelivered (≤ 50).
-  `purge.housekeeping`: payloads > 30 days.
+  `purge.housekeeping`: payloads > 30 days (in Quiz, the scheduled task
+  `deliveries.purge`, M2-04).
 - Admin-configurable period, enable flag, run-now, last status, atomic claim
   (`scheduled_tasks`).
 

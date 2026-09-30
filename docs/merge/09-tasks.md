@@ -364,6 +364,49 @@ files it ports; writes en + fr for every string.
   default; the purge nulls `payload`, never deletes the row) and
   `push_receipts` (keyed on `github_repo_id`, `ON CONFLICT DO NOTHING`
   keeps the first receipt).
+- **As delivered** (#407): `Q:modules/github/{deliveries,handlers,jobs}.ts`,
+  the route in `routes.ts`.
+  - `POST /webhooks/github`, in a child plugin of the module (no
+    `fastify-plugin`) whose only body parser is a `*` buffer parser;
+    `config: { sessions: [] }`, so a cookie sent along is ignored. In
+    order: `verifySignature` over the raw bytes (401 `bad_signature`,
+    nothing parsed nor stored); `GithubWebhookHeaders` of the contracts
+    (`x-github-delivery` a `z.guid()`, `x-github-event` required; 400
+    `bad_headers`); the body a JSON object (`GithubWebhookBody`; 400
+    `bad_body`); one transaction inserting `webhook_deliveries` `ON
+    CONFLICT DO NOTHING` (`received_at` = `app.clock.now()`) and, for a
+    push on a tracked repository, `push_receipts` (the first kept); a
+    duplicate answers 200 `{ ok, duplicate: true }` and runs nothing; then
+    `github.webhook { deliveryId }` and 200. Without a queue the delivery
+    runs beside the request, not awaited; a failed enqueue is logged and
+    still answered 200 (the reconciliation replays it).
+  - Registry (module-global sets, idempotent, reached through
+    `modules/github/service.ts`): `onEvent(event, handler)` with
+    `WebhookHandler = (app, config, delivery: WebhookDelivery) =>
+    Promise<void>` (`delivery` = `{deliveryId, event, action, payload,
+    receivedAt}`), and `onReceipt(tracks)` with `ReceiptTracker = (tx,
+    githubRepoId) => Promise<boolean>`: the project module (M3) says which
+    repositories it tracks; `github` writes the receipt (its table),
+    `isBot` for `<slug>[bot]` and `github-actions[bot]`.
+  - Worker `processDelivery`: every handler of the event in order, then
+    `processed_at` (`app.clock`); a throw stores `redactTokens(error)` and
+    rethrows. Queue `github.webhook` (`jobs.ts`): `standard` policy, no
+    dedupe (a processed delivery is a no-op), `retryLimit: 5`, backoff from
+    30 s; registered in `app.ts` only with an App.
+  - Handlers: `installation` (`created`, `unsuspend`,
+    `new_permissions_accepted` → `recordInstallation(…, "webhook")`;
+    `deleted`, `suspend` → `clearInstallation`), `installation_repositories`
+    (drops the healing: `allRepositories` is not stored),
+    `organization` (`renamed` → `renameOrg` by id, retiring a row holding
+    the new login; `deleted` → `markOrgDeleted`). Each hints `classrooms`
+    on the linked courses. No new audit action: the `github_org.*` ones
+    carry `via: "webhook"`. Classroom's rewrite of `<org>/` names on a
+    rename is the project module's own `organization` handler (M3).
+  - Scheduled tasks (`GITHUB_TASKS`, catalog): `reconcile.deliveries`
+    (daily: local deliveries unprocessed for 10 min replayed, 200 at most;
+    GitHub's failed attempts of 24 h redelivered, 50 at most, skipping a
+    guid already stored) and `deliveries.purge` (daily: payload nulled 30
+    days after receipt once processed; the row stays).
 
 ### M2-05 — Periodic tasks (`scheduled_tasks`)
 - **Depends on**: D10 (settled). ‖ M2-02…04. Landed before M1-02: the
@@ -551,6 +594,17 @@ files it ports; writes en + fr for every string.
   and `nosniff`, the asset route serves an SVG with
   `Content-Security-Policy: sandbox` (or `Content-Disposition: attachment`),
   so a committed SVG opened directly runs nothing.
+- **From M2-04**: the journal's plugin registers
+  `onEvent("push", handler)` (and `onEvent("repository", …)` for a rename or
+  a deletion) from `modules/github/service.ts`; `github` never imports
+  `journal`. The handler receives `(app, config, delivery)` with the stored
+  payload, finds the journals of `repository.id` whose `after` is not
+  `last_commit_sha`, and sends `journal.ingest` (the queue whose policy J2
+  settles); it must be idempotent, since a delivery is retried and
+  replayed. It registers no `onReceipt`: a journal needs no push receipt.
+  The J4 `visible_from` sweep is not a scheduled task: spec 05 §5.11 and D10
+  make it a clock-bound `TickTask` of the ticker (`everyMs` 60 s), since a
+  page's visibility is a date and must not depend on an admin setting.
 - **Tests**: port `ingest.db.test`, `journal.db.test`; a student cannot
   fetch an asset referenced only by a draft page; two concurrent ingests
   converge; an SVG asset carries the sandbox (or attachment) header.
@@ -718,6 +772,9 @@ files it ports; writes en + fr for every string.
   audit table, pre-flight checks.
 - **Acceptance**: dry-run on the synthetic fixture and on a staging copy of
   a production dump: parity report clean.
+- **From M2-02's review**: an organization imported twice (a null-id row
+  and an id row with the same login) must be merged by the import, not left
+  to `retireLoginHolders`.
 
 ### M8-02 — Legacy URL resolver
 - **Depends on**: M8-01 (id map), M3-12, M4-04.
