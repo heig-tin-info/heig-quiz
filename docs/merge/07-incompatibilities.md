@@ -23,6 +23,8 @@ PR.
 | I13 | Poll = an evaluation mode, anonymous polls have no classroom | not an activity kind of its own; `listForClassroom` never returns anonymous polls | M1-03 |
 | I14 | Roster `status` column vs `user_id IS NULL` | derived | M1-06 |
 | I15 | Classroom `domain/roster.ts` duplicates Quiz's | keep Quiz's (classroom's + time bonus), port classroom's tests if they add cases | M1-01 |
+| I16 | GitHub wire names carry classroom's words: the `GRADE` annotation title, the `grade-final` / `grade-milestone` dispatch events and their `client_payload` keys (`assignment_id`, `milestone_id`, `milestone`), read by the `grading.yml` already in student repositories | kept verbatim on the wire; Quiz's identifiers use §7.4's words (`extractScore`, `planFinalReviewDispatch`, `planCheckpointReviewDispatch`, `checkpointDueAt`) — renaming the wire would break every live repository | M1-01, M3-04, M3-05 |
+| I17 | Pure rules that live inside ported adapter files: `parseStudentIgnore` (`C:github/studentize.ts`), `rateLimitReset` (`C:github/metrics.ts`), `repoName` (under the journal's `journalRepoName`) | in `@quiz/domain` since M1-01: `apps/api/src/github/` imports the first two instead of keeping copies; `packages/docrender` builds `journalRepoName` on `@quiz/domain`'s `repoName` | M1-01, M1-02, M4-01 |
 
 ## 7.2 Invariants of `CLAUDE.md`
 
