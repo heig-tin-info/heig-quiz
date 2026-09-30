@@ -85,7 +85,8 @@ jobs:
       - run: pnpm --filter "@quiz/api^..." build
       - run: pnpm --filter @quiz/api test --shard=${{ matrix.shard }}/3
 
-  # The SPA's suite (jsdom for the components), sharded like the API's.
+  # The SPA's suite (jsdom for the components), sharded like the API's: in
+  # two shards, the first one alone took 110 s.
   test-web:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -93,12 +94,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: pnpm --filter "@quiz/web^..." build
-      - run: pnpm --filter @quiz/web test --shard=${{ matrix.shard }}/2
+      - run: pnpm --filter @quiz/web test --shard=${{ matrix.shard }}/3
 
   # Every other package's `test`: the question types, domain, contracts, ui,
   # diagram, docrender, registry, and the runner's unit suite. The runner's

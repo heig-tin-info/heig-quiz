@@ -248,7 +248,7 @@ RUNNER_TOKEN="$(sed -n 's/^RUNNER_TOKEN=//p' .env.prod)" \
 
 1. **checks**, on every push and pull request: parallel jobs run
    `pnpm build` with `pnpm typecheck` (`build`), the API's tests in three
-   shards (`test-api`), the SPA's in two (`test-web`), and every other
+   shards (`test-api`), the SPA's in three (`test-web`), and every other
    package's, the runner's unit suite included (`test-rest`). The `checks`
    job aggregates them: it is the one required status. A pull request that
    changes only prose (`docs/`, `mockups/`, Markdown outside a `src/`)
