@@ -42,14 +42,13 @@ commune, retour dès qu'une question est validée, pas de salle d'attente.
 Tout ce qu'un préréglage a décidé reste visible et modifiable en dessous —
 le temps (par étudiant, fin commune, ou vous clôturez), la salle d'attente,
 le retour à l'étudiant. Le reste vit sous **Options avancées** : navigation,
-présentation, mélange, barre de progression, code d'accès. Le temps
-supplémentaire de la liste s'ajoute à la durée.
+présentation, mélange, barre de progression. Le temps supplémentaire de la
+liste s'ajoute à la durée.
 
 Pendant que l'évaluation est en cours ou en pause, cette étape est
-verrouillée jusqu'à la clôture : seuls le titre, le code d'accès et le retour
-à l'étudiant changent encore — le code, pour laisser entrer un étudiant resté
-dehors, le retour, pour masquer tout de suite un corrigé oublié. Une
-évaluation avec salle d'attente ne peut toujours pas passer au retour
+verrouillée jusqu'à la clôture : seuls le titre et le retour à l'étudiant
+changent encore — le retour, pour masquer tout de suite un corrigé oublié.
+Une évaluation avec salle d'attente ne peut toujours pas passer au retour
 immédiat. Du temps supplémentaire pour tous se donne depuis le tableau de
 bord. Le retour à l'étudiant reste modifiable après la clôture, jusqu'à la
 publication des résultats.

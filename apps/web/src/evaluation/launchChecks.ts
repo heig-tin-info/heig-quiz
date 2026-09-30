@@ -253,7 +253,6 @@ function rulesCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
 function accessCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
   const { evaluation } = detail;
   const parts = [
-    ...(evaluation.accessCode !== null ? [t("launch.access.code")] : []),
     ...(evaluation.ipAllowlist.length > 0 ? [t("launch.access.ip")] : []),
     ...(safeExamBrowserOn(evaluation.mode, safeExamBrowserOf(evaluation.settings))
       ? [t("eval.seb")]

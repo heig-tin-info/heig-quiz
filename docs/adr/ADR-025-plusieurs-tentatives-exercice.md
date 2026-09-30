@@ -65,7 +65,8 @@ and the maximum — which counts the first attempt — is not reached. The
 server applies it on `POST /evaluations/:id/retake` (`409 retake_refused`
 with the reason); the student home reads the same answer to offer the
 button. The access code is not asked again (the first attempt admitted the
-student); the network allowlist is, like on every entry.
+student); the network allowlist is, like on every entry. *Moot since [ADR-053](ADR-053-retrait-des-codes-d-entree.md)
+(2026-09-30): there is no access code any more.*
 
 A retake is a new row with a new seed: a new item order and newly shuffled
 choices on the same frozen question versions, blank, started at once.

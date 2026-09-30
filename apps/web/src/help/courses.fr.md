@@ -44,17 +44,17 @@ au moment de remplir une évaluation.
 ## Modèles d'évaluation
 
 Un modèle est une évaluation gardée par le cours plutôt que par une classe :
-ses questions, ses points et ses réglages, sans dates, code d'accès ni
-adresses IP. **Nouveau modèle**, sur la page du cours, en crée un vide (un
-titre et un mode) ; **Enregistrer comme modèle**, dans le menu d'une
-évaluation, en crée un à partir de cette évaluation, qui compte dès lors
-comme créée depuis lui (rév. 1). **Utiliser dans une classe** part de l'un
-d'eux pour une nouvelle évaluation.
+ses questions, ses points et ses réglages, sans dates ni adresses IP.
+**Nouveau modèle**, sur la page du cours, en crée un vide (un titre et un
+mode) ; **Enregistrer comme modèle**, dans le menu d'une évaluation, en crée
+un à partir de cette évaluation, qui compte dès lors comme créée depuis lui
+(rév. 1). **Utiliser dans une classe** part de l'un d'eux pour une nouvelle
+évaluation.
 
 Un clic sur un modèle ouvre son éditeur : son titre, ses questions (ajouter,
 retirer, réordonner, points, séparations de section, dernière version d'une
-question) et ses réglages — tout sauf les dates et le code d'accès, que
-chaque évaluation créée depuis lui règle pour elle-même. Chaque changement
+question) et ses réglages — tout sauf les dates, que chaque évaluation
+créée depuis lui règle pour elle-même. Chaque changement
 des questions ou des réglages fait avancer sa révision (**rév. 3**) ; le
 renommer non. Une question dont la banque n'est plus liée au cours y est
 signalée : utiliser le modèle est refusé tant que la banque n'est pas à
@@ -67,7 +67,7 @@ lancement un avertissement ; les deux ouvrent la même confirmation, qui liste l
 et modifiées et dit si l'ordre change. Confirmer remplace les QUESTIONS de
 l'évaluation par celles du modèle — les changements qui leur ont été faits
 dans cette évaluation sont perdus — et garde tout le reste : titre, dates,
-code d'accès, réglages. C'est proposé tant que l'évaluation est un brouillon
+réglages. C'est proposé tant que l'évaluation est un brouillon
 ou planifiée et que personne, vous compris, ne l'a passée.
 
 ## Supprimer

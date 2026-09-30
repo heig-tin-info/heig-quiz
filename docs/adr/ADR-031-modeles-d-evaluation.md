@@ -10,7 +10,10 @@ template in place, then pulling a revision into an instance. The promote
 screen is deferred (06 no. 25, issue #229). The rest of the delivery was re-split on
 2026-09-28: see the addendum at the end. The pull (PR B) is delivered; its
 decisions are the second addendum. *Save as template* links its source
-since 2026-09-30: the third addendum.
+since 2026-09-30: the third addendum. **Amended by [ADR-053](ADR-053-retrait-des-codes-d-entree.md)
+(2026-09-30):** an exam or an exercise has no access code any more, so what
+this record says a template drops or an instance keeps no longer includes
+one; `TemplatePatch` still refuses an `accessCode` key, as an unknown one.
 
 Amended by [ADR-052](ADR-052-questions-bonus.md) (2026-09-30): the bonus
 flag of an item is content like its milestone flag — a template carries it,
@@ -24,8 +27,8 @@ the next"), but everything an evaluation is — its questions, their points and
 order, its milestones, its settings, its grade scale, its feedback policy —
 lives in ONE classroom (F-EVAL-01). Next autumn's class of the same course
 starts from the evaluation of last autumn by F-EVAL-14's *Duplicate*, which
-copies whatever that one run became: its dates, its access code, its IP
-list, and any change made in a hurry for one room. There is no place where
+copies whatever that one run became: its dates, its access code (removed
+since ADR-053), its IP list, and any change made in a hurry for one room. There is no place where
 "the exam of PRG1" is kept as such, and deleting last year's classroom
 deletes it (F-ORG-09).
 
@@ -63,7 +66,8 @@ template: there is no `kind` column to keep in step with it.
   (both null, `mode = 'poll'`, `created_by` set).
 - **A template carries nothing of a run**, and the database says so:
   `evaluations_template_ck` requires, when `course_id` is set,
-  `opens_at`, `closes_at` and `access_code` null, `ip_allowlist` empty,
+  `opens_at`, `closes_at` and `access_code` null (the latter also forced
+  by `evaluations_access_code_poll_ck` since ADR-053), `ip_allowlist` empty,
   `state = 'draft'`, `mode <> 'poll'`, `revision` set and
   `origin_template_id` null. A template that carries a date, a code or an IP
   cannot be written by any path.
@@ -99,8 +103,8 @@ refuses it underneath.
 
 ### 3. What a template holds
 
-Everything except `opens_at`, `closes_at`, `access_code` and
-`ip_allowlist`: the items (frozen versions, points, order, milestones),
+Everything except `opens_at`, `closes_at`, `access_code` (a poll's only,
+since ADR-053) and `ip_allowlist`: the items (frozen versions, points, order, milestones),
 `settings` in full — timing kind, lobby, navigation, presentation, shuffling,
 Safe Exam Browser, fullscreen, visibility log, retakes, negative marking —
 `grading_scale`, `feedback_policy`, `mcq_policy` and `duration_s`. An
@@ -277,7 +281,9 @@ items, settings, dashboard, grading, preview, results, and the MCP tools
 built on them — ever sees a template; the code is shared at the service
 level, not by widening a loader. A `TemplatePatch` contract is the
 evaluation patch minus `opensAt`, `closesAt`, `accessCode` and
-`ipAllowlist`, declared `.strict()` so that an unknown key is refused rather
+`ipAllowlist` (since ADR-053 the evaluation patch has no `accessCode`; the
+strict template patch still refuses one as an unknown key), declared
+`.strict()` so that an unknown key is refused rather
 than stripped: sending a run field is a 400 from the schema, never a silent
 no-op nor a 500 from `evaluations_template_ck`. The pools a template may draw from are the
 course's linked pools: `coursePoolIds` takes a home — a course, for a
@@ -312,7 +318,7 @@ Settled with the product owner before the pull was written (F-EVAL-26).
 The instance's `evaluation_items` are replaced by copies of the template's —
 the same frozen versions, points, order and milestones, under new ids.
 Everything else of the instance is its own and stays: title, dates, access
-code, IP list, settings (timing, waiting room, navigation, Safe Exam
+code (none since ADR-053), IP list, settings (timing, waiting room, navigation, Safe Exam
 Browser, retakes…), grade scale, feedback policy, MCQ policy, duration and
 state. `origin_revision` then records the template revision whose items were
 copied. A template that moved only in its settings therefore makes the

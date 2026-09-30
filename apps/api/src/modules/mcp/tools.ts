@@ -447,7 +447,7 @@ export const TOOLS: Tool[] = [
     description:
       "Changes an evaluation's title, settings, feedback policy, grading scale (linear, its rounding) or schedule (`opensAt`, " +
       "`closesAt` as ISO date-times, `durationS` in seconds). Does not start it. While it is running or " +
-      "paused, only the title, the access code, the IP allowlist and the feedback policy may change " +
+      "paused, only the title, the IP allowlist and the feedback policy may change " +
         "(an evaluation with a waiting room never takes `immediate` feedback). A poll's feedback policy " +
         "is never patched: it follows the poll's reveal.",
     input: z.object({ evaluationId: Id, ...EvaluationPatch.shape }),

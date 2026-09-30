@@ -40,16 +40,14 @@ question is validated, no waiting room.
 Everything a preset decided stays visible and editable underneath — timing
 (per student, common end, or you close it), the waiting room, feedback. The
 rest lives under **Advanced options**: navigation, presentation, shuffling,
-progress bar, access code. Extra time from the roster applies
-on top of the duration.
+progress bar. Extra time from the roster applies on top of the duration.
 
 While the evaluation is running or paused, this step is locked until it
-closes: only the title, the access code and the feedback still change — the
-code so that a student shut out can be let in, the feedback so that an answer
-key you forgot to hide can be hidden at once. An evaluation with a waiting
-room still cannot switch to immediate feedback. Extra time for everybody is
-given from the live dashboard. The feedback can still change after the close,
-until the results are released.
+closes: only the title and the feedback still change — the feedback so that
+an answer key you forgot to hide can be hidden at once. An evaluation with a
+waiting room still cannot switch to immediate feedback. Extra time for
+everybody is given from the live dashboard. The feedback can still change
+after the close, until the results are released.
 
 ## Launch
 

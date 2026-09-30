@@ -115,7 +115,6 @@ Everything else lives behind **Advanced options**, folded by default. A novice n
 - **Multiple-answer scoring**: the policy every multiple-choice item of this evaluation uses when the student ticks only some of several correct answers, unless the question names its own. **Exact**, **True/false**, **Distance**, **Symmetric** or **Ripkey**; a question with a single correct answer is always all or nothing. The formulas are in [Question types](question-types.md).
 - **Categorize scoring** (shown once the evaluation holds a categorize question): the policy of every categorize item set to **Inherited**, **Per card** (each card earns its share) or **Exact** (all the points for a perfect board only). The formulas are in [Question types](question-types.md#categorize).
 - **Negative marking** (not on a poll): on every multiple-choice and categorize question, a wrong answer costs points and no answer costs nothing; it replaces the two policies above, which then say so. The total never goes below 0, and students are told in the waiting room and on each question concerned.
-- **Access code**: asked once, before the student enters. Three characters at least; empty means no code.
 - **Safe Exam Browser** (exams only): the students sit the exam in [Safe Exam Browser](https://safeexambrowser.org), and only there. See below.
 
 !!! note
@@ -176,7 +175,7 @@ Once an evaluation is running, every control lives on the dashboard: pausing, ex
 
 As soon as one attempt exists, the banner **A student has already started: the structure is frozen.** appears on the first two steps. Frozen: the list of questions, their versions, their points and order, the milestones, the bonus flags, the timing mode and duration, the waiting room, the navigation, the presentation, the shuffling, and the scoring policy. Anything that decides what a student sees or what an answer is worth is fixed, so that every student plays the same evaluation.
 
-Still editable: the feedback policy and its two switches, and the access code. You can decide after the fact to show the explanation with the results, or to hide the key.
+Still editable: the feedback policy and its two switches. You can decide after the fact to show the explanation with the results, or to hide the key.
 
 !!! warning
     A student who has started keeps the version of each question they started with. If a key turns out to be wrong, fix the question in its pool, publish it, then use **Re-grade this question** in the grading panel against the new version. Do not delete and recreate the evaluation: its attempts go with it.

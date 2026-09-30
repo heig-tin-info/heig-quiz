@@ -16,7 +16,10 @@
  *     place: a classroom; a course, for an evaluation template (ADR-031); or
  *     — an anonymous poll, and nothing else — with its owner;
  *   - `evaluations_template_ck` keeps everything of a RUN off a template:
- *     no date, no access code, no IP, never out of `draft`, never a poll.
+ *     no date, no access code, no IP, never out of `draft`, never a poll;
+ *   - `evaluations_access_code_poll_ck`: `access_code` is a poll's session
+ *     code (ADR-014) and nothing else — an exam or an exercise has no access
+ *     code since ADR-053.
  *
  * "An anonymous poll" is ONE predicate, {@link ownedPollSql} (and its row
  * twin {@link isOwnedPoll}): since templates, `classroom_id is null` alone
@@ -113,6 +116,7 @@ export const evaluations = pgTable(
      */
     closesAtShiftS: integer("closes_at_shift_s").notNull().default(0),
     durationS: integer("duration_s"),
+    /** A poll's session code (ADR-014); null on any other evaluation (ADR-053). */
     accessCode: text("access_code"),
     /** Prefix list (F-EVAL-12); empty = no restriction. */
     ipAllowlist: text("ip_allowlist").array().notNull().default(sql`'{}'::text[]`),
@@ -184,6 +188,8 @@ export const evaluations = pgTable(
       "evaluations_template_ck",
       sql`${t.courseId} is null or (${t.opensAt} is null and ${t.closesAt} is null and ${t.accessCode} is null and cardinality(${t.ipAllowlist}) = 0 and ${t.state} = 'draft' and ${t.mode} <> 'poll' and ${t.revision} is not null and ${t.originTemplateId} is null)`,
     ),
+    // `access_code` is a poll's session code, and only that (ADR-053).
+    check("evaluations_access_code_poll_ck", sql`${t.accessCode} is null or ${t.mode} = 'poll'`),
     index("evaluations_owned_poll_idx")
       .on(t.createdBy, t.createdAt)
       // The one "owned poll" predicate, so the index and every query agree.

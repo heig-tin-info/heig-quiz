@@ -256,7 +256,6 @@ export async function patchEvaluation(
   // whatever the live controls had added is now part of it.
   if (patch.opensAt !== undefined || patch.closesAt !== undefined) next.closesAtShiftS = 0;
   if (patch.durationS !== undefined) next.durationS = patch.durationS;
-  if (patch.accessCode !== undefined) next.accessCode = patch.accessCode;
   if (patch.ipAllowlist !== undefined) next.ipAllowlist = patch.ipAllowlist;
 
   // `immediate` feedback in class would hand the answers to the first

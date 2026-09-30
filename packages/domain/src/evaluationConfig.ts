@@ -144,8 +144,8 @@ export function feedbackWhenFor(ctx: FeedbackContext, wanted: FeedbackWhen): Fee
  * - `running`: the evaluation is `running` or `paused`. Students are sitting
  *   it, whether or not one of them has entered yet: nothing that decides what
  *   they see or how long they have may move under them. Time is added from
- *   the live dashboard (`live.extendTime`), never here. The access control
- *   stays open — a student locked out by a mistyped code or allowlist must be
+ *   the live dashboard (`live.extendTime`), never here. The network
+ *   allowlist stays open — a student locked out by a mistyped prefix must be
  *   let in mid-exam — and so do the title and the feedback policy: a
  *   forgotten answer key must be hideable during the run (#86). The in-class
  *   rule still holds there: an evaluation with a waiting room never switches
@@ -169,8 +169,8 @@ export const isLiveState = (state: string): boolean =>
 
 /** The fields of `EvaluationPatch` each lock leaves writable. */
 const WRITABLE_UNDER: Record<ConfigLock, readonly string[]> = {
-  running: ["title", "accessCode", "ipAllowlist", "feedbackPolicy"],
-  attempts: ["title", "accessCode", "ipAllowlist", "feedbackPolicy"],
+  running: ["title", "ipAllowlist", "feedbackPolicy"],
+  attempts: ["title", "ipAllowlist", "feedbackPolicy"],
 };
 
 export function configLock(state: EvaluationStateName, attemptCount: number): ConfigLock | null {

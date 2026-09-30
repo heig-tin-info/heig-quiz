@@ -337,8 +337,10 @@ export type CopyHome = { classroomId: string } | { courseId: string };
  * versions, points, order, milestones and bonus flags. Duplicate, "Save as template" and
  * "Instantiate" differ only in the home and the origin. A copy into a
  * course is a template, at revision 1, and carries nothing of a run (dates,
- * access code, IP list); a copy into a classroom keeps them — a template
- * has none to give. One transaction: a copy is never half-made.
+ * IP list); a copy into a classroom keeps them — a template has none to
+ * give. No copy carries a poll's session code: a code names one session
+ * (ADR-014), and an exam or an exercise has none (ADR-053). One
+ * transaction: a copy is never half-made.
  */
 export async function copyEvaluation(
   db: DbOrTx,
@@ -363,7 +365,6 @@ export async function copyEvaluation(
           classroomId: target.home.classroomId,
           opensAt: row.opensAt,
           closesAt: row.closesAt,
-          accessCode: row.accessCode,
           ipAllowlist: row.ipAllowlist,
           originTemplateId: target.origin?.templateId ?? null,
           originRevision: target.origin?.revision ?? null,

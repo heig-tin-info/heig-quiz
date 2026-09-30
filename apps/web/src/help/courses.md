@@ -44,19 +44,19 @@ when you fill an evaluation.
 ## Evaluation templates
 
 A template is an evaluation kept by the course rather than by one classroom:
-its questions, points and settings, without dates, access code or IP
-addresses. **New template**, on the course page, makes an empty one (a title
-and a mode); **Save as template**, in an evaluation's menu, makes one from
-that evaluation, which from then on counts as made from it (rev. 1).
-**Use in a classroom** starts a new evaluation from one.
+its questions, points and settings, without dates or IP addresses. **New
+template**, on the course page, makes an empty one (a title and a mode);
+**Save as template**, in an evaluation's menu, makes one from that
+evaluation, which from then on counts as made from it (rev. 1). **Use in a
+classroom** starts a new evaluation from one.
 
 A click on a template opens its editor: its title, its questions (add,
 remove, reorder, points, section breaks, the latest version of a question)
-and its settings — everything but dates and the access code, which each
-evaluation made from it sets for itself. Every change to the questions or
-the settings moves its revision (**rev. 3**); renaming does not. A question
-whose pool is no longer linked to the course is flagged there: using the
-template is refused until the pool is linked again or the question removed.
+and its settings — everything but dates, which each evaluation made from it
+sets for itself. Every change to the questions or the settings moves its
+revision (**rev. 3**); renaming does not. A question whose pool is no longer
+linked to the course is flagged there: using the template is refused until
+the pool is linked again or the question removed.
 
 An evaluation made from a template — or saved as one — does not follow it
 by itself. When the
@@ -65,7 +65,7 @@ template has moved since, the evaluation's row in the classroom wears a
 the same confirmation, which lists the questions added, removed and changed
 and whether the order moves. Confirming replaces the evaluation's QUESTIONS
 with the template's — changes made to them in this evaluation are lost — and
-keeps everything else: title, dates, access code, settings. It is offered
+keeps everything else: title, dates, settings. It is offered
 only while the evaluation is a draft or scheduled and nobody, you included,
 has taken it.
 

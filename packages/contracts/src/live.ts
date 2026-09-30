@@ -155,7 +155,11 @@ export const AttemptOrLobby = z.union([
 ]);
 export type AttemptOrLobby = z.infer<typeof AttemptOrLobby>;
 
-export const AttemptStartBody = z.object({ accessCode: z.string().max(32).optional() });
+/**
+ * Empty since the access code was removed (ADR-053). Not strict: a client
+ * from before the change still sends `accessCode`, which is stripped.
+ */
+export const AttemptStartBody = z.object({});
 export type AttemptStartBody = z.infer<typeof AttemptStartBody>;
 
 /**

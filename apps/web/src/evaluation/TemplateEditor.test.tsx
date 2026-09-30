@@ -93,14 +93,12 @@ describe("TemplateEditor", () => {
     await userEvent.click(screen.getByRole("button", { name: "PRG1 — Programmation C" }));
     expect(navigate).toHaveBeenLastCalledWith({ view: "course", id: "c1" });
 
-    // Nothing of a run: no launch step, no dates, no access code.
+    // Nothing of a run: no launch step, no dates.
     expect(screen.queryByRole("tab", { name: /Launch/ })).toBeNull();
     await userEvent.click(screen.getByRole("tab", { name: "Settings" }));
     expect(screen.queryByLabelText("Opens at")).toBeNull();
     expect(screen.queryByLabelText("Closes at")).toBeNull();
-    expect(screen.getByText(/Dates and the access code are set in each evaluation/)).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: "Advanced options" }));
-    expect(screen.queryByLabelText("Access code")).toBeNull();
+    expect(screen.getByText(/Dates are set in each evaluation/)).toBeVisible();
   });
 
   it("opens a question with the way back to this template", async () => {
@@ -163,7 +161,7 @@ describe("TemplateEditor", () => {
     await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));
     const body = calls.find((c) => c.method === "PATCH")!.body as Record<string, unknown>;
     expect(body).toHaveProperty("settings.timing", "deadline");
-    for (const key of ["opensAt", "closesAt", "accessCode"]) expect(body).not.toHaveProperty(key);
+    for (const key of ["opensAt", "closesAt", "ipAllowlist"]) expect(body).not.toHaveProperty(key);
   });
 
   it("renames the template in place, with the title alone", async () => {

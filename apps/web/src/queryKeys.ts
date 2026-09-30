@@ -216,9 +216,9 @@ export const drillServeKey = (cardId: string) => ["drill-serve", cardId] as cons
 export const attemptKey = (attemptId: string) => ["attempt", attemptId] as const;
 export const attemptFeedbackKey = (attemptId: string) =>
   ["attempt", attemptId, "feedback"] as const;
-/** The `POST …/take` behind the attempt route, per access code sent (`null`: none yet). */
-export const attemptEntryKey = (evaluationId: string, accessCode: string | null) =>
-  ["attempt", "enter", evaluationId, accessCode] as const;
+/** The `POST …/attempt` behind the attempt route. */
+export const attemptEntryKey = (evaluationId: string) =>
+  ["attempt", "enter", evaluationId] as const;
 
 // --- Polls ---------------------------------------------------------------------
 

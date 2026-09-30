@@ -3,7 +3,10 @@
 ## Status
 
 Accepted (2026-09-21, phase 2). Settles F-LIVE-13, F-LIVE-14 and F-AUTH-05, and lifts
-decision D7 of `docs/PLAN-MVP.md` along one path only (below).
+decision D7 of `docs/PLAN-MVP.md` along one path only (below). **Amended by [ADR-053](ADR-053-retrait-des-codes-d-entree.md)
+(2026-09-30):** the exam and exercise access code is removed, so the session code of
+decision 1 is now the only use of `evaluations.access_code` (CHECK
+`evaluations_access_code_poll_ck`).
 
 ## Context
 

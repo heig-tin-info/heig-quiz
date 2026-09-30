@@ -22,7 +22,7 @@ import {
   Segmented,
   SettingRow,
 } from "../ui";
-import { AccessCodeRow, AdvancedDisclosure } from "./AdvancedDisclosure";
+import { AdvancedDisclosure } from "./AdvancedDisclosure";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 import { RetakesSetting } from "./RetakesSetting";
 import { matchPreset, presetPatch, type PresetId } from "./presets";
@@ -50,7 +50,7 @@ import type { ConfigWriter } from "./usePatch";
  * The step is two layers. `ConfigSettings` is the configuration an
  * evaluation and a template share — the presets, the timing kind and the
  * duration, the retakes, the advanced options — and `TimingStep` wraps it
- * with what only a run has: its dates, its access code, the locks of a
+ * with what only a run has: its dates, the locks of a
  * started evaluation and the fields the launch still needs. A template's
  * editor wraps the same `ConfigSettings` with none of that (F-EVAL-25).
  */
@@ -164,8 +164,7 @@ function DateField({
 
 /**
  * The configuration an evaluation and a template share. What a run adds is
- * handed in: `dates` sits in the timing card beside the duration, and
- * `advancedRows` among the advanced options.
+ * handed in: `dates` sits in the timing card beside the duration.
  */
 export function ConfigSettings({
   config,
@@ -176,7 +175,6 @@ export function ConfigSettings({
   feedbackDisabled = disabled,
   missing = new Set(),
   dates,
-  advancedRows,
   holdsCategorize = false,
 }: {
   config: ConfigView;
@@ -190,7 +188,6 @@ export function ConfigSettings({
   /** The timing fields the launch still needs (#76); none on arrival. */
   missing?: ReadonlySet<TimingField>;
   dates?: ReactNode;
-  advancedRows?: ReactNode;
   /** An item is a `categorize` question: its policy row is shown (ADR-036). */
   holdsCategorize?: boolean;
 }) {
@@ -296,9 +293,7 @@ export function ConfigSettings({
         disabled={disabled}
         feedbackDisabled={feedbackDisabled}
         holdsCategorize={holdsCategorize}
-      >
-        {advancedRows}
-      </AdvancedDisclosure>
+      />
     </>
   );
 }
@@ -321,7 +316,7 @@ export function TimingStep({
   showMissing?: boolean;
 }) {
   const t = useT();
-  const { settings, opensAt, closesAt, mode, state, accessCode } = detail.evaluation;
+  const { settings, opensAt, closesAt, mode, state } = detail.evaluation;
   // Structural settings freeze once somebody has started (W5-17), and the
   // whole configuration while the evaluation runs (#86) — the server says so
   // in `editable`, the domain says which fields stay writable.
@@ -410,7 +405,6 @@ export function TimingStep({
             ) : null}
           </>
         }
-        advancedRows={<AccessCodeRow accessCode={accessCode} patch={patch} />}
       />
 
       {/* ADR-041 §2 (#317): its own writer, editable until the release —

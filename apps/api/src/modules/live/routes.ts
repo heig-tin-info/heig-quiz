@@ -153,7 +153,7 @@ export async function livePlugin(app: FastifyInstance) {
         load: async (req, reply, p) =>
           sitting(req, reply, await reachableEvaluation(app, req, reply, p.id)),
       },
-      async ({ req, reply, now, body, scope }) => {
+      async ({ req, reply, now, scope }) => {
         const participant = await service.participantOf(app.db, scope.evaluation, req.user!.id);
         // A CLAIMED roster seat is the whole admission, staff or not: a teacher
         // who joined their own classroom walks the real flow (ADR-018), and a
@@ -162,7 +162,6 @@ export async function livePlugin(app: FastifyInstance) {
         const result = await service.enterEvaluation(app.db, {
           evaluation: scope.evaluation,
           participant,
-          accessCode: body.accessCode,
           now,
         });
         events.lobbyChanged(

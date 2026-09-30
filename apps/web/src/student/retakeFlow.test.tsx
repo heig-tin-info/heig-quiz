@@ -245,7 +245,7 @@ describe("retakes on an exercise (issues #120, #121)", () => {
     });
     // Attempt 1 was taken in this very session: its entry is still cached.
     const { routes } = mount({ view: "home" }, (qc) => {
-      qc.setQueryData(attemptEntryKey(EVAL, null), attempt(answered));
+      qc.setQueryData(attemptEntryKey(EVAL), attempt(answered));
       qc.setQueryData(attemptKey(FIRST), attempt(answered));
     });
 

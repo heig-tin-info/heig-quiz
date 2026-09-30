@@ -658,17 +658,40 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
     }
   });
 
-  it("keeps the title and the access control writable mid-exam", async () => {
+  it("keeps the title and the allowlist writable mid-exam", async () => {
     const { row } = await inState("running");
     const next = await service.patchEvaluation(
       db,
       row,
-      { title: "Renamed", accessCode: "open-sesame", ipAllowlist: ["10.0.0.0/8"] },
+      { title: "Renamed", ipAllowlist: ["10.0.0.0/8"] },
       { attemptCount: 3, now: clock.now() },
     );
     expect(next.title).toBe("Renamed");
-    expect(next.accessCode).toBe("open-sesame");
     expect(next.ipAllowlist).toEqual(["10.0.0.0/8"]);
+  });
+
+  it("stores an access code on a poll only: its session code (ADR-053)", async () => {
+    const seed = await seedLive(db, { mode: "exam" });
+    const setCode = (values: Partial<typeof evaluations.$inferInsert>) =>
+      db
+        .update(evaluations)
+        .set(values)
+        .where(eq(evaluations.id, seed.evaluationId))
+        .then(
+          () => "stored",
+          (e: { message?: string; cause?: { message?: string } }) =>
+            `${e.message ?? ""} ${e.cause?.message ?? ""}`,
+        );
+    for (const mode of ["exam", "exercise"] as const) {
+      expect(await setCode({ mode, accessCode: "OPEN" }), mode).toContain(
+        "evaluations_access_code_poll_ck",
+      );
+    }
+    expect((await reload(db, seed.evaluationId)).accessCode).toBeNull();
+    // A poll keeps its session code, and cannot turn back into an exam with it.
+    expect(await setCode({ mode: "poll", accessCode: "POLL42" })).toBe("stored");
+    expect((await reload(db, seed.evaluationId)).accessCode).toBe("POLL42");
+    expect(await setCode({ mode: "exam" })).toContain("evaluations_access_code_poll_ck");
   });
 
   it("keeps the feedback policy writable mid-run, so a forgotten answer key can be hidden", async () => {
@@ -789,14 +812,24 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
         message: "the evaluation is running: its configuration is locked until it closes",
       });
 
-      const renamed = await server.app.inject({
+      const restricted = await server.app.inject({
+        method: "PATCH",
+        url: base,
+        headers: teacher.headers,
+        payload: { ipAllowlist: ["10.20."] },
+      });
+      expect(restricted.statusCode).toBe(200);
+      expect(restricted.json().evaluation.ipAllowlist).toEqual(["10.20."]);
+
+      // A stale client's access code (ADR-053) is stripped: alone, it is
+      // nothing to update, never a code stored.
+      const stale = await server.app.inject({
         method: "PATCH",
         url: base,
         headers: teacher.headers,
         payload: { accessCode: "letmein" },
       });
-      expect(renamed.statusCode).toBe(200);
-      expect(renamed.json().evaluation.accessCode).toBe("letmein");
+      expect(stale.statusCode).toBe(400);
 
       const keyless = await server.app.inject({
         method: "PATCH",

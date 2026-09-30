@@ -421,7 +421,7 @@ export async function templatePullPreview(
  * "Pull": the instance's QUESTIONS replaced by the template's current ones —
  * frozen versions, points, order, milestones — and `origin_revision` moved to
  * the revision copied. Nothing else of the instance changes: title, dates,
- * access code, IP list, settings, scale, policies, duration and state stay
+ * IP list, settings, scale, policies, duration and state stay
  * (F-EVAL-26), so a template that moved only in its settings is pulled as a
  * bare record of the revision.
  *

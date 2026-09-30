@@ -245,7 +245,10 @@ export const Evaluation = z.object({
   opensAt: z.iso.datetime().nullable(),
   closesAt: z.iso.datetime().nullable(),
   durationS: z.number().int().nullable(),
-  /** Never echoed to a student; the teacher sees their own code. */
+  /**
+   * The session code of a POLL (ADR-014), null for an exam or an exercise:
+   * those have no access code since ADR-053 (the database refuses one).
+   */
   accessCode: z.string().nullable(),
   ipAllowlist: z.array(z.string()),
   startedAt: z.iso.datetime().nullable(),
@@ -445,6 +448,9 @@ void [_settingsPatchKeys, _feedbackPatchKeys];
  * the one list {@link EvaluationPatch} and {@link TemplatePatch} are cut from.
  */
 const EvaluationPatchFields = z.object({
+  // No `accessCode` since ADR-053: an exam or an exercise has none. The
+  // object is not strict, so a stale client that still sends one has it
+  // stripped (a patch with nothing else is the usual "Nothing to update").
   title: z.string().trim().min(1).max(200).optional(),
   settings: EvaluationSettingsPatch.optional(),
   gradingScale: GradingScale.optional(),
@@ -453,7 +459,6 @@ const EvaluationPatchFields = z.object({
   opensAt: z.iso.datetime().nullable().optional(),
   closesAt: z.iso.datetime().nullable().optional(),
   durationS: z.number().int().min(30).max(24 * 3600).nullable().optional(),
-  accessCode: z.string().trim().min(3).max(32).nullable().optional(),
   ipAllowlist: z.array(z.string().trim().min(1).max(64)).max(32).optional(),
 });
 
@@ -525,16 +530,16 @@ export type TemplateNew = z.infer<typeof TemplateNew>;
 
 /**
  * `PATCH /templates/:id` (F-EVAL-25): the evaluation patch without anything
- * of a run. STRICT at the top level: `opensAt`, `closesAt`, `accessCode` or
- * `ipAllowlist` — or any unknown top-level key — is a `400`, never silently
- * stripped (ADR-031, addendum c). The nested `settings` and `feedbackPolicy`
+ * of a run. STRICT at the top level: `opensAt`, `closesAt` or `ipAllowlist`
+ * — or any unknown top-level key, the `accessCode` an evaluation no longer
+ * has (ADR-053) included — is a `400`, never silently stripped (ADR-031,
+ * addendum c). The nested `settings` and `feedbackPolicy`
  * patches are the evaluation's, which strip an unknown key as they always
  * have. The title is patchable and does not move the revision.
  */
 export const TemplatePatch = EvaluationPatchFields.omit({
   opensAt: true,
   closesAt: true,
-  accessCode: true,
   ipAllowlist: true,
 })
   .strict()

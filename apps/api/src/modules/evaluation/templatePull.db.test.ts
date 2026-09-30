@@ -97,7 +97,6 @@ async function world(): Promise<World> {
   const instanceId = made.evaluation.id;
   const patched = await call(teacher, "PATCH", `/app/api/evaluations/${instanceId}`, {
     opensAt: "2026-11-02T08:00:00.000Z",
-    accessCode: "ROOM12",
     ipAllowlist: ["10.1."],
     durationS: 3600,
     settings: { shuffleItems: true, requireFullscreen: true },
@@ -175,7 +174,6 @@ describe("pulling a revision (F-EVAL-26)", () => {
       state: row.state,
       opensAt: row.opensAt,
       closesAt: row.closesAt,
-      accessCode: row.accessCode,
       ipAllowlist: row.ipAllowlist,
       settings: row.settings,
       gradingScale: row.gradingScale,

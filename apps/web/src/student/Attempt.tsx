@@ -8,12 +8,11 @@
  * where the student was — the lobby before the start, their own answers and
  * their own position after (F-LIVE-06).
  *
- * The three refusals of §4.4 each have a screen: an access code to type, a
- * network that is not allowed, and an evaluation that is not open.
+ * The refusals of §4.4 each have a screen: a network that is not allowed and
+ * an evaluation that is not open. There is no access code to type (ADR-053).
  */
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { KeyRound, Lock, UserX } from "lucide-react";
+import { Lock, UserX } from "lucide-react";
 
 import type { AttemptOrLobby } from "@quiz/contracts";
 
@@ -22,18 +21,13 @@ import { feedbackLink } from "../grading";
 import { useT } from "../i18n";
 import type { Navigate } from "../router";
 import { leaveStudentView, studentViewOn } from "../studentView";
-import { Button, Card, EmptyState, ErrorText, Field, QueryError, Spinner } from "../ui";
+import { Button, Card, EmptyState, QueryError, Spinner } from "../ui";
 import { Lobby } from "./Lobby";
 import { Player } from "./Player";
 import { attemptEntryKey } from "../queryKeys";
 
 const errorCode = (error: unknown): string | null =>
   error instanceof ApiError ? ((error.body as { error?: string })?.error ?? null) : null;
-
-const codeRefused = (error: unknown): boolean => {
-  const code = errorCode(error);
-  return code === "access_code_invalid" || code === "access_code_locked";
-};
 
 export function AttemptPage({
   evaluationId,
@@ -48,31 +42,21 @@ export function AttemptPage({
   // answer a stranger to the classroom gets (invariant 6).
   const me = useMe();
   const staff = me.data?.role === "teacher" || me.data?.role === "admin";
-  const [accessCode, setAccessCode] = useState("");
-  const [sent, setSent] = useState<string | null>(null);
 
   const entry = useQuery<AttemptOrLobby>({
-    queryKey: attemptEntryKey(evaluationId, sent),
-    // A refusal the server SPELLS OUT (a wrong access code, a blocked network,
-    // an evaluation that is not open) has its own screen below and must never
-    // be retried. A failure with no answer at all — the socket died, a proxy
+    queryKey: attemptEntryKey(evaluationId),
+    // A refusal the server SPELLS OUT (a blocked network, an evaluation that
+    // is not open) has its own screen below and must never be retried. A
+    // failure with no answer at all — the socket died, a proxy
     // dropped the request — is worth three goes before the student is shown a
     // dead end: this is the door to an exam, and the alternative is a page
     // that says "the server did not answer" over one lost packet.
     retry: (count, error) => !(error instanceof ApiError) && count < 3,
     retryDelay: (count) => Math.min(500 * 2 ** count, 4_000),
-    // A refused access code stays in the key: re-sending it on every focus or
-    // reconnection would burn the student's tries (each one is counted
-    // towards the lockout, F-EVAL-12). Only a new code sends again.
-    refetchOnWindowFocus: (query) => !codeRefused(query.state.error),
-    refetchOnReconnect: (query) => !codeRefused(query.state.error),
     // A POST behind a query: the route is idempotent by design, and this is
     // the only way the same refetch path serves the lobby and the player.
     queryFn: () =>
-      api<AttemptOrLobby>(`/app/api/evaluations/${evaluationId}/attempt`, {
-        method: "POST",
-        body: JSON.stringify(sent === null ? {} : { accessCode: sent }),
-      }),
+      api<AttemptOrLobby>(`/app/api/evaluations/${evaluationId}/attempt`, { method: "POST" }),
   });
 
   const home = () => navigate({ view: "home" });
@@ -90,41 +74,6 @@ export function AttemptPage({
 
   if (entry.isError) {
     const code = errorCode(entry.error);
-    if (code === "access_code_invalid") {
-      return (
-        <main className="mx-auto w-full max-w-115 px-4 py-16">
-          <Card className="px-6 py-6">
-            <form
-              className="flex flex-col gap-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                setSent(accessCode.trim());
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <KeyRound className="size-5 text-fg-faint" aria-hidden />
-                <h1 className="text-lg font-bold tracking-tight">{t("player.accessCode")}</h1>
-              </div>
-              <Field
-                label={t("player.accessCode")}
-                fullWidth
-                value={accessCode}
-                autoFocus
-                autoComplete="off"
-                onChange={(e) => setAccessCode(e.target.value)}
-              />
-              <p className="-mt-2 text-[13px] text-fg-faint">{t("player.accessCodeHint")}</p>
-              {sent === null ? null : (
-                <ErrorText>{t("player.accessCodeInvalid")}</ErrorText>
-              )}
-              <Button type="submit" variant="primary" disabled={accessCode.trim().length === 0}>
-                {t("player.enter")}
-              </Button>
-            </form>
-          </Card>
-        </main>
-      );
-    }
     /*
      * The refusals that are an ANSWER and not a failure: retrying changes
      * nothing, so each one gets a screen with the one way out. `not_found`
@@ -135,7 +84,6 @@ export function AttemptPage({
      */
     if (
       code === "ip_not_allowed" ||
-      code === "access_code_locked" ||
       code === "not_open" ||
       code === "not_implemented" ||
       code === "not_found"
@@ -151,9 +99,7 @@ export function AttemptPage({
                   ? t("player.notAvailable")
                   : code === "ip_not_allowed"
                     ? t("player.ipBlocked")
-                    : code === "access_code_locked"
-                      ? t("player.accessCodeLocked")
-                      : t("player.notOpen")
+                    : t("player.notOpen")
               }
               action={
                 <Button variant="primary" onClick={home}>
