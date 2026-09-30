@@ -40,6 +40,12 @@ Only `https://quiz.chevallier.io` (production) and
 lists them, and the service worker checks `sender.origin` again. Any other
 sender gets `bad_request`.
 
+Accepting staging on a production station is harmless: the extension signs
+a challenge, and only the server that issued it can use the answer. Staging
+verifies against its own Google service account (never production's,
+ADR-010), registers its own stations and opens sessions only on staging; a
+signed staging challenge proves nothing to production, which never issued it.
+
 | Message | Reply |
 | --- | --- |
 | `{type: "ping"}` | `{ok: true, version: "1.0.0"}` — lets the page detect the extension |
