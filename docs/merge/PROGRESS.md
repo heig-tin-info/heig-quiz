@@ -61,7 +61,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M2-02 | Installations, org link, healing | todo | M2-01 | | | |
 | M2-03 | GitHub account linking | todo | M2-01 | | | |
 | M2-04 | Webhook intake, registry, deliveries | todo | M2-02 | | | |
-| M2-05 | Periodic tasks | todo | M1-02, D10 | | | |
+| M2-05 | Periodic tasks | review | D10 | `merge/M2-05-scheduled-tasks` | #392 | Landed before M1-02 (core only). `scheduled_tasks` (module `system`, migration `0042_scheduled_tasks`); `ScheduledTask {key, defaultIntervalMinutes, run → summary}` in `ticker.ts`, catalog `SCHEDULED_TASKS` in `modules/system/catalog.ts` (keys: the closed `SCHEDULED_TASK_KEYS` of `@quiz/contracts`; a new task adds its key there and its `admin.task.<key>` names en/fr); rows seeded once at boot, the ticker claims every 15 s, the `system.task` queue runs (a finished run publishes `admin`); the ticker starts even if a job registration fails; `live.*` stay `TickTask`s. Admin: `GET/PATCH /app/api/admin/tasks[/:key]`, `POST …/:key/run` (200 inline, 202 queued, 409 `task_running`), audit `task.configure`/`task.run_now`; web: Admin › Scheduled tasks tab. M3-06/M2-04: add `reconcile.*` to the catalog, never a GitHub call in the tick |
 | M2-06 | Quiz's Apps (production, staging), staging safety | todo | M2-01, D23 | | | |
 | M2-07 | Web: classroom Settings tab, GitHub section, link card | todo | M2-02, M2-03, M1-04, M1-05, D24 | | | |
 
@@ -154,6 +154,10 @@ In the critical path only if D09 finds online assignments in production.
 
 Newest first. One line per session that changed the state: date, who,
 what moved, what the next session must know.
+
+- 2026-09-30 — M2-05: D10 settled by the product owner; `scheduled_tasks`
+  ported ahead of M1-02 (the housekeeping moved onto it, the live tasks
+  stay clock-bound). The GitHub reconciliations join its catalog.
 
 - 2026-09-30 — M0-05 (#369): `CLAUDE.md` and `invariant-reviewer` carry
   the merge's rules (invariants 4, 6, 11–12, 14, 15); D16 in ADR prose.

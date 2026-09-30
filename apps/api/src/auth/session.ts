@@ -137,7 +137,11 @@ export async function findSessionUser(db: Db, token: string, opts?: { renewTtlHo
  * or loses its actor's right is ended by the system, the admin named in the
  * payload. An ordinary session that expires leaves nothing, as before.
  */
-async function dropSessions(db: Db, where: SQL, reason: "logout" | "expired" | "revoked") {
+async function dropSessions(
+  db: Db,
+  where: SQL,
+  reason: "logout" | "expired" | "revoked",
+): Promise<number> {
   const gone = await db
     .delete(sessions)
     .where(where)
@@ -157,13 +161,17 @@ async function dropSessions(db: Db, where: SQL, reason: "logout" | "expired" | "
       await audit(db, { actorUserId: session.userId, actorType: "user", action: "auth.logout", ...subject });
     }
   }
+  return gone.length;
 }
 
 export async function deleteSession(db: Db, token: string) {
   await dropSessions(db, eq(sessions.sidHash, hashToken(token)), "logout");
 }
 
-/** Purge of expired sessions, run by the ticker (`ticker.ts`). */
-export async function purgeExpiredSessions(db: Db) {
-  await dropSessions(db, lt(sessions.expiresAt, new Date()), "expired");
+/**
+ * Purge of expired sessions, the scheduled task `sessions.purge`
+ * (`ticker.ts`). Returns how many went.
+ */
+export async function purgeExpiredSessions(db: Db): Promise<number> {
+  return dropSessions(db, lt(sessions.expiresAt, new Date()), "expired");
 }

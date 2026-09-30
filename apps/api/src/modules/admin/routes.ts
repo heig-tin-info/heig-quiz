@@ -3,15 +3,30 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { eq, sql } from "drizzle-orm";
 
-import { TeacherGrantCreate, TeacherGrantParams } from "@quiz/contracts";
+import {
+  ScheduledTaskParams,
+  ScheduledTaskPatch,
+  TASK_INTERVAL_MAX_MINUTES,
+  TASK_INTERVAL_MIN_MINUTES,
+  TeacherGrantCreate,
+  TeacherGrantParams,
+} from "@quiz/contracts";
 
-import { audit } from "../../audit.js";
+import { audit, tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { avatars, courseStaff, teacherGrants, users } from "../../db/schema.js";
 import { publish } from "../../events.js";
 import { syncUserRole } from "../../roles.js";
 import { shownAvatar } from "../avatar.js";
 import { adminGuard } from "../guards.js";
+import {
+  claimTaskNow,
+  configureScheduledTask,
+  dispatchScheduledTask,
+  listScheduledTasks,
+  scheduledTask,
+  scheduledTaskRow,
+} from "../system/service.js";
 import { listUsers } from "./service.js";
 
 /**
@@ -19,10 +34,13 @@ import { listUsers } from "./service.js";
  * teachers in the database. Granting is done by email; identity and last
  * login fill in at the first login. Grant and revoke take effect immediately
  * on an existing account (the role is also recomputed at every login).
+ * The admin also sees and steers the scheduled tasks (F-ADMIN-06), whose
+ * table the `system` module owns.
  */
 export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
   const requireAdmin = adminGuard(app);
+  const trace = tracer(app);
 
   // Every account, with its role, why, and its teaching footprint (F-ADMIN-01).
   app.get("/app/api/admin/users", { preHandler: requireAdmin }, async () =>
@@ -116,5 +134,51 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     });
     publish("admin", ["admin"]);
     return reply.code(204).send();
+  });
+
+  // --- Scheduled tasks (F-ADMIN-06, D10): the catalog is code, the rows are
+  // its configuration and last state (`modules/system`, seeded at boot). A
+  // key the catalog does not hold is a 404, like any missing entity.
+  const taskOf = (params: unknown) => {
+    const parsed = ScheduledTaskParams.safeParse(params);
+    return parsed.success ? scheduledTask(parsed.data.key) : undefined;
+  };
+
+  app.get("/app/api/admin/tasks", { preHandler: requireAdmin }, async () =>
+    listScheduledTasks(app.db),
+  );
+
+  app.patch("/app/api/admin/tasks/:key", { preHandler: requireAdmin }, async (req, reply) => {
+    const task = taskOf(req.params);
+    if (!task) return reply.code(404).send({ error: "not_found" });
+    const body = ScheduledTaskPatch.safeParse(req.body);
+    if (!body.success) {
+      return reply.code(400).send({
+        error: "validation",
+        message: `The period is a whole number of minutes, ${TASK_INTERVAL_MIN_MINUTES} to ${TASK_INTERVAL_MAX_MINUTES}`,
+      });
+    }
+    if (!(await configureScheduledTask(app.db, task, body.data))) {
+      return reply.code(404).send({ error: "not_found" });
+    }
+    await trace(req, "task.configure", "scheduled_task", task.key, body.data);
+    publish("admin", ["admin"]);
+    return scheduledTaskRow(app.db, task);
+  });
+
+  // Claimed here, atomically, then run: the ticker's claim and this one
+  // exclude each other, so a task never runs twice at once (409 while it
+  // runs). 200 with the outcome when it ran inline (no queue), 202 when it
+  // was enqueued and its outcome is still to come.
+  app.post("/app/api/admin/tasks/:key/run", { preHandler: requireAdmin }, async (req, reply) => {
+    const task = taskOf(req.params);
+    if (!task) return reply.code(404).send({ error: "not_found" });
+    if (!(await claimTaskNow(app.db, task))) {
+      return reply.code(409).send({ error: "task_running", message: "This task is already running" });
+    }
+    await trace(req, "task.run_now", "scheduled_task", task.key);
+    publish("admin", ["admin"]);
+    const how = await dispatchScheduledTask(app, config, task);
+    return reply.code(how === "inline" ? 200 : 202).send(await scheduledTaskRow(app.db, task));
   });
 }

@@ -2,7 +2,9 @@
  * Section 1b — courses, classrooms, roster and administration: the world a
  * teacher organises before there is a single question in it.
  */
+import { ScheduledTaskPatch } from "@quiz/contracts";
 import type {
+  AdminScheduledTask,
   AdminTeacher,
   AdminUser,
   ClassroomDetail,
@@ -693,5 +695,89 @@ on("DELETE", "/app/api/admin/teachers/:gid", (m) => {
   const i = teachers.findIndex((x) => x.id === m.groups!.gid);
   if (i >= 0) teachers.splice(i, 1);
   return undefined;
+});
+
+// The scheduled tasks (F-ADMIN-06, D10): one of each state — ok, a failure,
+// one still running, one paused on a changed period.
+const MIN = 60_000;
+function task(
+  key: AdminScheduledTask["key"],
+  defaultIntervalMinutes: number,
+  over: Partial<AdminScheduledTask> = {},
+): AdminScheduledTask {
+  const intervalMinutes = over.intervalMinutes ?? defaultIntervalMinutes;
+  const lastRunAt = over.lastRunAt === undefined ? iso(-3 * MIN) : over.lastRunAt;
+  const enabled = over.enabled ?? true;
+  return {
+    key,
+    enabled,
+    intervalMinutes,
+    defaultIntervalMinutes,
+    lastRunAt,
+    lastStatus: "ok",
+    lastMessage: null,
+    lastDurationMs: 12,
+    lastOkAt: lastRunAt,
+    nextRunAt:
+      enabled && lastRunAt
+        ? new Date(Date.parse(lastRunAt) + intervalMinutes * MIN).toISOString()
+        : enabled
+          ? iso(0)
+          : null,
+    ...over,
+  };
+}
+const tasks: AdminScheduledTask[] = [
+  task("sessions.purge", 10, { lastMessage: "4 expired sessions deleted", lastDurationMs: 18 }),
+  task("oauth.purge", 60, {
+    lastRunAt: iso(-25 * MIN),
+    lastStatus: "error",
+    lastMessage: 'canceling statement due to statement timeout',
+    lastDurationMs: 30_004,
+    lastOkAt: iso(-85 * MIN),
+  }),
+  task("poll.end_idle", 1, { lastRunAt: iso(-20_000), lastMessage: "0 idle polls ended", lastDurationMs: 7 }),
+  task("notifications.deadline_reminders", 1, {
+    lastRunAt: iso(-4_000),
+    lastStatus: "running",
+    lastMessage: "12 reminders sent",
+    lastDurationMs: 240,
+    lastOkAt: iso(-64_000),
+  }),
+  task("drill.purge", 360, {
+    enabled: false,
+    intervalMinutes: 1440,
+    lastRunAt: iso(-2 * D),
+    lastMessage: "0 cards and 0 reviews deleted",
+    lastDurationMs: 95,
+  }),
+];
+const taskOf = (m: RegExpMatchArray) => {
+  const found = tasks.find((x) => x.key === m.groups!.key);
+  if (!found) throw new MockError(404, "not_found");
+  return found;
+};
+on("GET", "/app/api/admin/tasks", () => tasks);
+on("PATCH", "/app/api/admin/tasks/:key", (m, body) => {
+  const patch = ScheduledTaskPatch.safeParse(body);
+  if (!patch.success) throw new MockError(400, "The period is a whole number of minutes, 1 to 10080");
+  const found = taskOf(m);
+  Object.assign(found, patch.data);
+  found.nextRunAt = found.enabled
+    ? new Date(Date.parse(found.lastRunAt ?? iso(0)) + found.intervalMinutes * MIN).toISOString()
+    : null;
+  return found;
+});
+on("POST", "/app/api/admin/tasks/:key/run", (m) => {
+  const found = taskOf(m);
+  if (found.lastStatus === "running") throw new MockError(409, "This task is already running");
+  Object.assign(found, {
+    lastRunAt: iso(0),
+    lastStatus: "ok",
+    lastOkAt: iso(0),
+    lastDurationMs: 9,
+    nextRunAt: found.enabled ? iso(found.intervalMinutes * MIN) : null,
+  });
+  return found;
 });
 

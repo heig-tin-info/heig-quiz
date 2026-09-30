@@ -127,7 +127,11 @@ Status values: `open`, `settled`, `superseded`.
 - **Suggested**: port `scheduled_tasks` (restart-safe, admin-visible
   status, run-now); tasks seeded by code, period editable by admins.
 - Blocks: M2-05.
-- **Status**: open.
+- **Status**: settled 2026-09-30 (product owner, on the suggestion). The
+  minutes-scale tasks move to the table (the housekeeping now, the GitHub
+  reconciliations as they are ported); the clock-bound live tasks stay
+  `TickTask`s of the ticker, neither configurable nor disableable
+  (invariant 5). Spec 05 §5.4 (Clock), F-ADMIN-06.
 
 ### D11 — Classroom's audit history
 - **Suggested**: imported into a read-only `legacy_classroom_audit_log`

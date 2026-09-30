@@ -295,6 +295,13 @@
       "when": 1790789411767,
       "tag": "0041_drop_join_code",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1790790578272,
+      "tag": "0042_scheduled_tasks",
+      "breakpoints": true
     }
   ]
 }

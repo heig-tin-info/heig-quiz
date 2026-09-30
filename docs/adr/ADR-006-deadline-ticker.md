@@ -20,6 +20,16 @@ queue policy when it creates the queue. The journal's `visible_from` hint
 (ADR-049, addendum, J4) is one more sweep of the same ticker. Accommodations
 on project deadlines are D13, open.
 
+**Addendum (2026-09-30, D10, merge task M2-05):** the ticker now carries
+two kinds of periodic work. The clock-bound sweeps above stay `TickTask`s
+of the loop, neither configurable nor disableable. The minutes-scale
+housekeeping (purges, reminders, and the reconciliations of ADR-011 as
+they are ported) are *scheduled tasks*: their period, activation and last
+outcome live in `scheduled_tasks`, a tick task claims the due ones in one
+conditional UPDATE on the database clock and enqueues them on
+`system.task` (spec 05 §5.4, Clock). Point 1's advisory lock is not used: the
+claim is the multi-process safety, as for every other sweep.
+
 ## Context
 
 The deadline job must start at most 60 s after the due time and apply to 100 repositories in

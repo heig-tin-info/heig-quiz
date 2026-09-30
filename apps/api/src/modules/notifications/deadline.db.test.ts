@@ -23,7 +23,7 @@ import type { JobQueue } from "../../jobs.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testDb } from "../../test/db.js";
 import { seedLive, type Seeded } from "../../test/live.js";
-import { CORE_TASKS } from "../../ticker.js";
+import { SCHEDULED_TASKS } from "../system/catalog.js";
 import { sendDeadlineReminders } from "./deadline.js";
 import { closeOutbox, openOutbox, type DeliveryJob } from "./outbox.js";
 
@@ -245,9 +245,9 @@ describe("deadline_approaching", () => {
     expect(await countsOf(seed)).toEqual([0, 0]);
   });
 
-  it("runs on every deployment's ticker, on the injected clock", async () => {
-    const task = CORE_TASKS.find((t) => t.name === "notifications.deadline_reminders");
-    expect(task?.everyMs).toBe(60_000);
+  it("is in the scheduled catalog, a minute apart, on the injected clock", async () => {
+    const task = SCHEDULED_TASKS.find((t) => t.key === "notifications.deadline_reminders");
+    expect(task?.defaultIntervalMinutes).toBe(1);
     const seed = await running();
     const app = { db, clock: { now: () => boundary } } as unknown as FastifyInstance;
     await task!.run(app, {} as AppConfig);

@@ -30,6 +30,11 @@ export const adminTeachersKey = ["admin-teachers"] as const;
  * roles and counts of this list too.
  */
 export const adminUsersKey = [...adminTeachersKey, "users"] as const;
+/**
+ * The scheduled tasks (F-ADMIN-06): under `adminTeachersKey` too, so the
+ * `admin` hint another administrator's change raises reaches this list.
+ */
+export const adminTasksKey = [...adminTeachersKey, "tasks"] as const;
 /** The caller's personal API tokens (settings). */
 export const apiTokensKey = ["api-tokens"] as const;
 /** The assistants connected through OAuth (settings, ADR-023). */

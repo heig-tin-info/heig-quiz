@@ -31,6 +31,14 @@ export const GRADING_EVALUATION_QUEUE = "grading.evaluation";
 export const GRADING_RUNNER_QUEUE = "grading.runner";
 
 /**
+ * One run of a scheduled task (D10, `modules/system/jobs.ts`): `{ key }`,
+ * sent by the ticker after it claimed the task, or by an admin's "Run now".
+ * The claim, not the queue, is what keeps a task from running twice at once;
+ * no retry either: a failed run is recorded, and the next period is the retry.
+ */
+export const SYSTEM_TASK_QUEUE = "system.task";
+
+/**
  * No `singletonKey`, on purpose (#273). Our queues are pg-boss `standard`
  * queues (`createQueue` passes no policy, and pg-boss 12 refuses to change a
  * policy after creation), on which a key without `singletonSeconds` dedupes

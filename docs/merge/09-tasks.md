@@ -235,7 +235,10 @@ files it ports; writes en + fr for every string.
   delivery.
 
 ### M2-05 — Periodic tasks (`scheduled_tasks`)
-- **Depends on**: D10, M1-02. ‖ M2-02…04.
+- **Depends on**: D10 (settled). ‖ M2-02…04. Landed before M1-02: the
+  core carries Quiz's own housekeeping; the GitHub reconciliations join the
+  catalog (`SCHEDULED_TASKS`, `SCHEDULED_TASK_KEYS`, en/fr names) with
+  M3-06 and M2-04.
 - **Port from**: `C:tasks.ts`, the `scheduled_tasks` table, its admin
   routes; onto `Q:ticker.ts` (claim + enqueue on `everyMs`).
 - **Acceptance**: a task runs once across a restart; run-now; admin API

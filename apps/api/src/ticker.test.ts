@@ -9,6 +9,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { eq } from "drizzle-orm";
+import { SCHEDULED_TASK_KEYS } from "@quiz/contracts";
 import { GRACE_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
@@ -22,7 +23,8 @@ import { applyState, settingsOf } from "./modules/evaluation/service.js";
 import { LIVE_TASKS, PRESENCE_IDLE_MS } from "./modules/live/jobs.js";
 import * as live from "./modules/live/service.js";
 import { presence } from "./modules/realtime/presence.js";
-import { CORE_TASKS, type TickTask } from "./ticker.js";
+import { SCHEDULED_TASKS } from "./modules/system/catalog.js";
+import { TICK_TASKS, type TickTask } from "./ticker.js";
 
 let db: Db;
 let restore: () => void;
@@ -45,10 +47,20 @@ async function tick(tasks: readonly TickTask[] = LIVE_TASKS): Promise<void> {
 }
 
 describe("registration", () => {
-  it("is part of CORE_TASKS, so a deployment runs it without extra wiring", () => {
-    const names = CORE_TASKS.map((t) => t.name);
-    expect(names).toContain("sessions.purge");
+  it("is part of TICK_TASKS, so a deployment runs it without extra wiring", () => {
+    const names = TICK_TASKS.map((t) => t.name);
     for (const task of LIVE_TASKS) expect(names).toContain(task.name);
+    // …and so does the claim of the scheduled catalog.
+    expect(names).toContain("system.scheduled_tasks");
+  });
+
+  it("keeps the clock-bound work out of the scheduled catalog (invariant 5, D10)", () => {
+    const keys: string[] = SCHEDULED_TASKS.map((t) => t.key);
+    expect(keys.filter((k) => k.startsWith("live."))).toEqual([]);
+    for (const task of LIVE_TASKS) expect(keys).not.toContain(task.name);
+    // The catalog is exactly the closed list the admin screen names.
+    expect([...keys].sort()).toEqual([...SCHEDULED_TASK_KEYS].sort());
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });
 

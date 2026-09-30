@@ -88,9 +88,9 @@ M2-06 staging and production Apps (product owner's hands) — before the first d
 M0-04 spec (journal, Courses, Settings tab) and M0-05 invariants — before M2-01
 ```
 
-The periodic work the journal needs (`reconcile.deliveries`, the J4
-`visible_from` sweep) runs on the bare ticker's `everyMs`; the
-admin-visible `scheduled_tasks` (M2-05, D10) come with projects. The
+The periodic work the journal needs runs on the ticker: `reconcile.deliveries`
+as a scheduled task (M2-05, D10, which lands first), the J4 `visible_from`
+sweep as a clock-bound tick task. The
 student reader (M4-04) reaches students only through the student
 classroom page (M5-02): a classroom's journal is live for its students
 when both are merged.

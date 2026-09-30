@@ -1,0 +1,40 @@
+/**
+ * The scheduled catalog (D10): every minutes-scale periodic task of the
+ * server, with its default period. The ONE place it is assembled; the rest
+ * of the application reaches it through this module's `service.ts` and
+ * `jobs.ts`.
+ *
+ * A module contributes its tasks as a list, so the order stays readable and
+ * neither the ticker nor this module knows any domain: `POLL_TASKS` ends the
+ * polls left without an answer for 12 hours, `NOTIFICATION_TASKS` reminds
+ * the students of an evaluation closing within 24 hours (ADR-030 §d),
+ * `DRILL_TASKS` purges the drill data past its five-year retention
+ * (N-DATA-03). The GitHub reconciliations (ADR-011) join with the tasks that
+ * port them (M3-06, M2-04). A new task also adds its key to
+ * `SCHEDULED_TASK_KEYS` (`@quiz/contracts`) and its names to the web's
+ * dictionaries.
+ */
+import { purgeOAuth } from "../../auth/oauth/service.js";
+import { purgeExpiredSessions } from "../../auth/session.js";
+import type { ScheduledTask } from "../../ticker.js";
+import { DRILL_TASKS } from "../drill/jobs.js";
+import { NOTIFICATION_TASKS } from "../notifications/jobs.js";
+import { POLL_TASKS } from "../poll/jobs.js";
+
+export const SCHEDULED_TASKS: readonly ScheduledTask[] = [
+  {
+    key: "sessions.purge",
+    defaultIntervalMinutes: 10,
+    run: async (app) => `${await purgeExpiredSessions(app.db)} expired sessions deleted`,
+  },
+  {
+    // ADR-023: spent requests and hourly access tokens, dead grants, and
+    // self-registered clients that never got as far as a grant.
+    key: "oauth.purge",
+    defaultIntervalMinutes: 60,
+    run: async (app) => `${await purgeOAuth(app.db, app.clock.now())} OAuth rows deleted`,
+  },
+  ...POLL_TASKS,
+  ...NOTIFICATION_TASKS,
+  ...DRILL_TASKS,
+];

@@ -9,8 +9,9 @@ verbatim. Read it with the renames of the merge: *assignment* ⇒
 **project**; *GradeRun* ⇒ **grade run**; classroom's ADR-003 is Quiz's
 ADR-003 (the same record); the cron jobs are ported as Quiz periodic tasks
 (`reconcile.grades`, `reconcile.repos`, `reconcile.deliveries`,
-`docs/merge/03-github-projects.md`; how periodic tasks are stored is D10,
-open) and never call GitHub inside a ticker tick (invariant 5).
+`docs/merge/03-github-projects.md`; they are stored as Quiz's
+`scheduled_tasks`, D10 settled 2026-09-30, spec 05 §5.4, Clock) and
+never call GitHub inside a ticker tick (invariant 5).
 Classroom's requirement ids (GR-, GH-, NFR-, AU-) are those of
 heig-classroom's specification; `docs/spec/02-exigences-fonctionnelles.md`
 receives their Quiz form (M0-04), and until then they are read in

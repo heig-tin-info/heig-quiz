@@ -347,17 +347,25 @@ export async function revokeConnection(db: Db, userId: string, grantId: string, 
  * The ticker's sweep: answered or abandoned requests, access tokens a day
  * past their hour, grants dead for a month, and self-registered clients that
  * never got a grant (DCR registers a client per connection attempt).
+ * Returns how many rows went, all four tables together.
  */
-export async function purgeOAuth(db: Db, now: Date) {
+export async function purgeOAuth(db: Db, now: Date): Promise<number> {
   const hourAgo = new Date(now.getTime() - 3_600_000);
   const dayAgo = new Date(now.getTime() - 86_400_000);
   const monthAgo = new Date(now.getTime() - 30 * 86_400_000);
-  await db.delete(oauthRequests).where(lt(oauthRequests.expiresAt, hourAgo));
-  await db.delete(apiTokens).where(and(isNotNull(apiTokens.grantId), lt(apiTokens.expiresAt, dayAgo)));
-  await db
+  const requests = await db
+    .delete(oauthRequests)
+    .where(lt(oauthRequests.expiresAt, hourAgo))
+    .returning({ id: oauthRequests.id });
+  const tokens = await db
+    .delete(apiTokens)
+    .where(and(isNotNull(apiTokens.grantId), lt(apiTokens.expiresAt, dayAgo)))
+    .returning({ id: apiTokens.id });
+  const grants = await db
     .delete(oauthGrants)
-    .where(or(lt(oauthGrants.expiresAt, monthAgo), lt(oauthGrants.revokedAt, monthAgo)));
-  await db
+    .where(or(lt(oauthGrants.expiresAt, monthAgo), lt(oauthGrants.revokedAt, monthAgo)))
+    .returning({ id: oauthGrants.id });
+  const clients = await db
     .delete(oauthClients)
     .where(
       and(
@@ -370,5 +378,7 @@ export async function purgeOAuth(db: Db, now: Date) {
             .where(eq(oauthGrants.clientId, oauthClients.id)),
         ),
       ),
-    );
+    )
+    .returning({ id: oauthClients.id });
+  return requests.length + tokens.length + grants.length + clients.length;
 }

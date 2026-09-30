@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Library, ShieldCheck, Trash2, UserPlus } from "lucide-react";
+import { CalendarClock, Library, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
 import type { AdminTeacher, TeacherGrantCreate } from "@quiz/contracts";
@@ -23,27 +23,68 @@ import {
   SectionHeading,
   Skeleton,
   T,
+  TabPanel,
   TableHead,
+  Tabs,
   useSortableTable,
   type Column,
 } from "./ui";
+import { TasksSection } from "./AdminTasks";
 import { UsersSection } from "./AdminUsers";
 import { adminTeachersKey } from "./queryKeys";
+import { useSearchParam } from "./router";
 
 type SortKey = "email" | "name" | "lastLoginAt" | "courses" | "grantedAt";
 
 /** Given and family name; both empty until the grantee first signs in. */
 const nameOf = (r: AdminTeacher): [string, string] => [r.givenName ?? "", r.familyName ?? ""];
 
+type Tab = "people" | "tasks";
+const TABS: readonly Tab[] = ["people", "tasks"];
+
 /**
- * Administration: the teacher grants, then every account (`UsersSection`,
- * read-only).
+ * Administration, one tab per concern, the open one in `?tab=`: the people
+ * (the teacher grants, then every account) and the scheduled tasks
+ * (F-ADMIN-06). A tab is one entry of `TABS` and one panel below.
+ */
+export function AdminPage() {
+  const t = useT();
+  const [tabParam, setTab] = useSearchParam("tab", "people");
+  const tab: Tab = (TABS as readonly string[]).includes(tabParam) ? (tabParam as Tab) : "people";
+  return (
+    <div className="space-y-6">
+      <PageHeader title={t("admin.title")} />
+      <Tabs<Tab>
+        value={tab}
+        onChange={setTab}
+        idPrefix="admin"
+        items={[
+          { value: "people", label: t("admin.tab.people"), icon: Users },
+          { value: "tasks", label: t("admin.tab.tasks"), icon: CalendarClock },
+        ]}
+      />
+      <TabPanel idPrefix="admin" value={tab} className="space-y-6">
+        {tab === "people" ? (
+          <>
+            <TeachersSection />
+            <UsersSection />
+          </>
+        ) : (
+          <TasksSection />
+        )}
+      </TabPanel>
+    </div>
+  );
+}
+
+/**
+ * The teacher grants: the page's one primary action, "Grant".
  *
  * A grant is an e-mail address, issued before or after that person ever
  * signs in — the role is recomputed server-side at every login, so this
  * screen never has to know whether the account exists.
  */
-export function AdminPage() {
+function TeachersSection() {
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
@@ -93,10 +134,7 @@ export function AdminPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <PageHeader title={t("admin.title")} />
-
-      <section className="space-y-3">
+    <section className="space-y-3">
         <SectionHeading
           icon={ShieldCheck}
           title={t("admin.teachers")}
@@ -202,9 +240,6 @@ export function AdminPage() {
             </table>
           </Card>
         )}
-      </section>
-
-      <UsersSection />
-    </div>
+    </section>
   );
 }

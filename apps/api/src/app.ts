@@ -44,7 +44,9 @@ import { realtimePlugin } from "./modules/realtime/routes.js";
 import { resultsPlugin } from "./modules/results/routes.js";
 import { createRunner, runnerCheck } from "./modules/runner/index.js";
 import { statsPlugin } from "./modules/stats/routes.js";
-import { startJobs } from "./jobs.js";
+import { registerSystemJobs } from "./modules/system/jobs.js";
+import { seedScheduledTasks } from "./modules/system/service.js";
+import { startJobs, type JobQueue } from "./jobs.js";
 import { startTicker } from "./ticker.js";
 
 export interface AppDeps {
@@ -189,26 +191,45 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(mcpPlugin, { config });
 
   // Job queue + ticker. A database that is unreachable at boot does not kill
-  // the server: healthz stays degraded until restart.
+  // the server: healthz stays degraded until restart. Every step below only
+  // logs its failure, and the ticker starts WHATEVER happened to them: the
+  // live clock (invariant 5) never depends on a queue or on a registration.
   const runWorkers = config.WORKER_MODE !== "web";
-  try {
-    const queue = await startJobs(app, {
+  const step = async (what: string, run: () => Promise<unknown>) => {
+    try {
+      await run();
+    } catch (err) {
+      app.log.error({ err }, `${what} failed`);
+    }
+  };
+  let queue: JobQueue | null = null;
+  await step("job queue start — jobs disabled", async () => {
+    queue = await startJobs(app, {
       databaseUrl: config.DATABASE_URL,
       embedded: handle.embedded,
       runWorkers,
       disabled: config.JOBS_DISABLED,
     });
+  });
+  const started: JobQueue | null = queue;
+  if (started) {
     // The grading queues and their handlers (PLAN-MVP §5.4). Without a queue
     // — `JOBS_DISABLED=1`, or a database that was unreachable at boot — the
     // grading pass runs inline at the call site instead of being dropped.
-    if (queue) await registerGradingJobs(app, queue);
+    await step("grading jobs registration", () => registerGradingJobs(app, started));
     // The e-mail and Teams deliveries (ADR-030). Without a queue they are not
     // made at all — the bell row stands alone, nothing is sent inline.
-    if (queue) await registerNotificationJobs(app, queue, config);
-    if (runWorkers) startTicker(app, config);
-  } catch (err) {
-    app.log.error({ err }, "job queue start failed — jobs disabled");
+    await step("notification jobs registration", () =>
+      registerNotificationJobs(app, started, config),
+    );
+    // The scheduled tasks' worker (D10). Without a queue the ticker runs a
+    // claimed task inline instead.
+    await step("system jobs registration", () => registerSystemJobs(app, started, config));
   }
+  // The rows of the scheduled catalog (D10), once. A database down at boot
+  // leaves them missing: the ticker then claims nothing until a restart.
+  await step("scheduled tasks seeding", () => seedScheduledTasks(app.db));
+  if (runWorkers) startTicker(app, config);
 
   // Built SPA served by the monolith (ADR-009: single image, frontend included).
   if (config.STATIC_DIR && existsSync(config.STATIC_DIR)) {
