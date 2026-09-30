@@ -92,6 +92,21 @@ export type AuditAction =
    */
   | "kiosk.paired"
   | "kiosk.pair_refused"
+  /**
+   * ADR-051 §7, the supervisor's fallback: a staff member approved a
+   * station's pairing for a student without a phone (subject the pairing;
+   * `payload.evaluationId`, `payload.userId`, `payload.deviceId`). The actor
+   * is the staff member; the session it opens has none. Never a code.
+   */
+  | "kiosk.assigned"
+  /**
+   * ADR-051 §6: the station a kiosk session sits on was suspended
+   * (`payload.reason`: `refused` or `silent`), or its suspension lifted by an
+   * accepted attestation. Subject the station's device id; the payload names
+   * the student and the evaluation it sat, when it sat one.
+   */
+  | "kiosk.suspended"
+  | "kiosk.resumed"
   | "oauth.grant"
   | "oauth.refresh_replay"
   | "oauth.revoke"

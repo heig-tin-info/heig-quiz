@@ -2,15 +2,24 @@
  * The dashboard read model (F-DASH-01..04) and the inspector of one
  * attempt. Imported through `./service.ts`.
  */
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
 
-import type { AttemptInspect, AttemptState, DashboardView, Verdict } from "@quiz/contracts";
+import type { AttemptInspect, AttemptState, DashboardAccess, DashboardView, Verdict } from "@quiz/contracts";
 import { shuffle } from "@quiz/core/rng";
-import { attemptTotal, countsAsCompleted, evaluationTotal, round2, uniquePseudonyms } from "@quiz/domain";
+import {
+  TRUSTED_CLIENTS,
+  attemptTotal,
+  countsAsCompleted,
+  evaluationTotal,
+  kioskAttestationState,
+  kioskWatchOf,
+  round2,
+  uniquePseudonyms,
+} from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attemptEvents, attempts, enrollments, users } from "../../db/schema.js";
+import { answers, attemptEvents, attempts, enrollments, kioskDevices, sessions, users } from "../../db/schema.js";
 import {
   gradeDefaults,
   seatsOf,
@@ -109,6 +118,7 @@ export async function dashboardView(
     roster.map((r) => r.userId ?? r.seatId),
   );
   const online = presence.online(evaluation.id);
+  const access = await accessOf(db, evaluation.id, input.now);
   const maxPoints = evaluationTotal(items.map((i) => i.item));
 
   // One summarizer per QUESTION (see `answerSummarizer`), built only when the
@@ -204,6 +214,7 @@ export async function dashboardView(
             };
           }),
         ),
+        access: (userId === null ? undefined : access.get(userId)) ?? PORTAL_ACCESS,
       };
     }),
   );
@@ -260,6 +271,38 @@ export async function dashboardView(
       };
     }),
   };
+}
+
+const PORTAL_ACCESS: DashboardAccess = { kind: "portal", station: null, alert: null };
+
+/**
+ * How each student sits `evaluationId` now (ADR-051 §8): their live confined
+ * session — one at a time (§4) — and, on a station, its label and whether
+ * its attestation suspends the sitting or cannot be checked. A student with
+ * none is in the portal.
+ */
+async function accessOf(db: Db, evaluationId: string, now: Date): Promise<Map<string, DashboardAccess>> {
+  const rows = await db
+    .select({ userId: sessions.userId, kind: sessions.kind, device: kioskDevices })
+    .from(sessions)
+    .leftJoin(kioskDevices, eq(sessions.deviceId, kioskDevices.id))
+    .where(
+      and(
+        eq(sessions.evaluationId, evaluationId),
+        inArray(sessions.kind, TRUSTED_CLIENTS),
+        gt(sessions.expiresAt, now),
+      ),
+    );
+  const access = new Map<string, DashboardAccess>();
+  for (const { userId, kind, device } of rows) {
+    if (kind === "seb") {
+      access.set(userId, { kind, station: null, alert: null });
+    } else if (kind === "kiosk" && device) {
+      const watch = kioskWatchOf(kioskAttestationState(device, now));
+      access.set(userId, { kind, station: device.label, alert: watch === "ok" ? null : watch });
+    }
+  }
+  return access;
 }
 
 /**

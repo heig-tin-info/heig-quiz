@@ -6,7 +6,7 @@
  */
 import type { FastifyRequest } from "fastify";
 
-import type { TrustedClient } from "@quiz/domain";
+import { kioskAttestationState, kioskCheckFresh, kioskSuspends, type TrustedClient } from "@quiz/domain";
 
 import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
@@ -19,9 +19,16 @@ import type { SessionAuth } from "./session.js";
  * Why a confined session's request is not trusted: SEB's Config Key does not
  * match; the request does not come from the station the kiosk session was
  * opened on (no `quiz_kiosk` cookie, or not that device's); that station is
- * no longer `active`.
+ * no longer `active`; its attestation suspends the sitting (refused, or
+ * silent, ADR-051 §6); or the route wants a check fresher than its last one
+ * (the submit).
  */
-export type TrustRefusal = "seb_config_key" | "kiosk_station" | "kiosk_inactive";
+export type TrustRefusal =
+  | "seb_config_key"
+  | "kiosk_station"
+  | "kiosk_inactive"
+  | "kiosk_suspended"
+  | "kiosk_attestation_stale";
 
 /** What the session hook knows of a confined session: its kind, and what it was opened with. */
 export interface TrustedSession {
@@ -37,15 +44,21 @@ export interface TrustRequest {
   headers: FastifyRequest["headers"];
   /** The station the request's `quiz_kiosk` cookie names (`deviceByCredential`); null without one. */
   station: KioskDeviceRow | null;
+  /** The route wants a fresh attestation (`freshAttestation`: the submit). */
+  fresh: boolean;
+  /** The server's instant (invariant 5). */
+  now: Date;
 }
 
 /**
- * ADR-051 §6, STEP 7's HOOK: whether the station's attestation suspends its
- * sitting (refused, or silent for 12 minutes). Until step 7 writes the rule,
- * no attestation state refuses anything here; the station's cookie and its
- * `active` status (below) still do.
+ * ADR-051 §6: the station's attestation suspends its sitting when it was
+ * refused or fell silent (12 minutes without an attempt), never when Google
+ * could not answer. On a route that asks for it (the submit), the last check
+ * must also be `ok` or `unavailable` and under two minutes old.
  */
-export function kioskAttestationRefusal(_device: KioskDeviceRow): TrustRefusal | null {
+export function kioskAttestationRefusal(device: KioskDeviceRow, fresh: boolean, now: Date): TrustRefusal | null {
+  if (kioskSuspends(kioskAttestationState(device, now))) return "kiosk_suspended";
+  if (fresh && !kioskCheckFresh(device, now)) return "kiosk_attestation_stale";
   return null;
 }
 
@@ -72,7 +85,7 @@ export function trustRefusal(session: TrustedSession, request: TrustRequest): Tr
       const station = request.station;
       if (station === null || station.id !== session.deviceId) return "kiosk_station";
       if (station.status !== "active") return "kiosk_inactive";
-      return kioskAttestationRefusal(station);
+      return kioskAttestationRefusal(station, request.fresh, request.now);
     }
   }
 }
@@ -93,27 +106,51 @@ function firstTime(key: string): boolean {
 }
 
 /**
- * Whether the session hook must treat this confined session's request as
- * anonymous. A Config Key mismatch refuses only once `SEB_CONFIG_KEY_ENFORCE`
- * is on (after proof B, ADR-051 §3); until then it is audited — the route
- * template, never the header nor the key — and the request proceeds.
+ * What a refusal costs, for the session hook: `anonymous` (the session is not
+ * there at all), or a `423` whose `error` is the refusal — a suspended
+ * station's writes, and a submit without a fresh check (ADR-051 §1, §6). A
+ * suspension lets the safe methods through: the page still reads the attempt
+ * and hears the resumption on its stream. Null when the request is served.
+ */
+export type TrustOutcome = "anonymous" | "kiosk_suspended" | "kiosk_attestation_stale" | null;
+
+const SAFE: readonly string[] = ["GET", "HEAD", "OPTIONS"];
+
+/**
+ * The session hook's call. A Config Key mismatch refuses only once
+ * `SEB_CONFIG_KEY_ENFORCE` is on (after proof B, ADR-051 §3); until then it
+ * is audited — the route template, never the header nor the key — and the
+ * request proceeds.
  */
 export async function trustRefused(
   db: Db,
   config: AppConfig,
   session: TrustedSession & { sidHash: string; userId: string },
   req: FastifyRequest,
-): Promise<boolean> {
+  now: Date,
+): Promise<TrustOutcome> {
   const station =
     session.auth.kind === "kiosk" ? await deviceByCredential(db, req.cookies[KIOSK_COOKIE]) : null;
   const refusal = trustRefusal(session, {
     url: requestUrl(config.PUBLIC_URL, req.raw.url ?? req.url),
     headers: req.headers,
     station,
+    fresh: req.routeOptions.config.freshAttestation === true,
+    now,
   });
-  if (refusal === null) return false;
-  // Only the Config Key has an audit-only mode; every other refusal refuses.
-  if (refusal !== "seb_config_key" || config.SEB_CONFIG_KEY_ENFORCE) return true;
+  switch (refusal) {
+    case null:
+      return null;
+    case "kiosk_suspended":
+      return SAFE.includes(req.method) ? null : refusal;
+    case "kiosk_attestation_stale":
+      return refusal;
+    case "seb_config_key":
+      if (config.SEB_CONFIG_KEY_ENFORCE) return "anonymous";
+      break;
+    default:
+      return "anonymous";
+  }
   const route = req.routeOptions.url ?? "";
   if (firstTime(`${session.sidHash} ${route}`)) {
     await audit(db, {
@@ -125,5 +162,5 @@ export async function trustRefused(
       payload: { route },
     });
   }
-  return false;
+  return null;
 }

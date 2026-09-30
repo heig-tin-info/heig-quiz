@@ -77,6 +77,12 @@ declare module "fastify" {
      * An `impersonation` session is served wherever `portal` is (ADR-034).
      */
     sessions?: readonly SessionKind[];
+    /**
+     * A `kiosk` session reaches this route only with an attestation checked
+     * less than two minutes ago (ADR-051 §6): the submit. Otherwise `423
+     * kiosk_attestation_stale`, and the page re-attests and retries once.
+     */
+    freshAttestation?: boolean;
   }
 }
 
@@ -160,13 +166,14 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // is required, and public routes and static files unaffected.
     if (!serves(req.routeOptions.config.sessions, found.auth.kind)) return;
     // ADR-051 §1: a confined session is worth something only from the client
-    // it was opened in, checked on every request; refused, it is not there.
+    // it was opened in, checked on every request; refused, it is not there —
+    // except a suspended station's write and a stale submit, a `423` (§6).
     const { auth, sidHash, sebConfigKey, deviceId } = found;
-    if (
-      confined(auth) &&
-      (await trustRefused(app.db, config, { auth, sidHash, sebConfigKey, deviceId, userId: found.user.id }, req))
-    ) {
-      return;
+    if (confined(auth)) {
+      const session = { auth, sidHash, sebConfigKey, deviceId, userId: found.user.id };
+      const refused = await trustRefused(app.db, config, session, req, app.clock.now());
+      if (refused === "anonymous") return;
+      if (refused !== null) return reply.code(423).send({ error: refused });
     }
     // ADR-034: outside development, a session acting as a student reads and
     // never writes — every route, by construction, whether or not it calls

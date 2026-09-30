@@ -43,6 +43,12 @@ export async function deviceByCredential(
   return device ?? null;
 }
 
+/** The device Google knows as `googleDeviceId`; null before its first attestation. */
+export async function deviceByGoogleId(db: Db, googleDeviceId: string): Promise<KioskDeviceRow | null> {
+  const [device] = await db.select().from(kioskDevices).where(eq(kioskDevices.googleDeviceId, googleDeviceId));
+  return device ?? null;
+}
+
 /** What a station's page shows of itself; null when the cookie names no station. */
 export async function stationOf(db: Db, cookie: string | undefined): Promise<KioskStation | null> {
   const device = await deviceByCredential(db, cookie);

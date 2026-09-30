@@ -353,10 +353,13 @@ export async function livePlugin(app: FastifyInstance) {
     ),
   );
 
-  /** F-LIVE-10. */
+  /**
+   * F-LIVE-10. On a kiosk station, only with an attestation under two
+   * minutes old (ADR-051 §6, the session hook's `423 kiosk_attestation_stale`).
+   */
   app.post(
     "/app/api/attempts/:id/submit",
-    sit,
+    { ...sit, config: { ...SITTING, freshAttestation: true } },
     student({ params: IdParam, body: SubmitBody, load: own }, async ({ now, scope }) => {
       // An exercise with retakes grades the attempt this request finished.
       const row = await service.submitAttempt(app.db, scope.evaluation, scope.attempt, now, app);

@@ -30,6 +30,7 @@ import type { ScheduledTaskKey } from "@quiz/contracts";
 
 import type { AppConfig } from "./config.js";
 import { expireSuperPowers } from "./auth/session.js";
+import { KIOSK_TASKS } from "./modules/kiosk/jobs.js";
 import { LIVE_TASKS } from "./modules/live/jobs.js";
 import { scheduledTasksTick } from "./modules/system/jobs.js";
 
@@ -58,8 +59,8 @@ export interface ScheduledTask {
  * what makes the one-second period worthwhile: expiring attempts past
  * `deadline + GRACE_MS`, opening the evaluations whose `opens_at` has come
  * and closing those past `closes_at`. Then the expiry of Super Powers
- * (ADR-054). The last one claims and enqueues the
- * due scheduled tasks.
+ * (ADR-054) and the suspension of the silent kiosk stations (ADR-051 §6).
+ * The last one claims and enqueues the due scheduled tasks.
  */
 export const TICK_TASKS: TickTask[] = [
   ...LIVE_TASKS,
@@ -75,6 +76,9 @@ export const TICK_TASKS: TickTask[] = [
       await expireSuperPowers(app.db, app.clock.now());
     },
   },
+  // ADR-051 §6: the silent kiosk stations suspended, clock-bound like the
+  // expiry above, so a bare tick task too.
+  ...KIOSK_TASKS,
   scheduledTasksTick(),
 ];
 
