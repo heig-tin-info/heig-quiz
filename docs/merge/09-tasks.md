@@ -62,9 +62,10 @@ files it ports; writes en + fr for every string.
 ### M0-03 — ADRs
 - **Depends on**: M0-01 (D01, D16). ‖ M0-04.
 - **Goal**: ADR-035 Accepted; ADR-029 status "Superseded by ADR-035";
-  classroom ADR-011 imported as ADR-011; classroom ADR-013/014/015 as
-  ADR-036/037/038 (bodies verbatim, a status line naming the former number
-  and the renames: assignment ⇒ project, …); status notes or addenda on 006
+  classroom ADR-011 imported as ADR-011; classroom ADR-013/014/015 under
+  the next free ADR numbers (036–046 are taken; bodies verbatim, a status
+  line naming the former number and the renames: assignment ⇒ project,
+  …); status notes or addenda on 006
   (project sweeps), 007 (applies again), 010 (GitHub + codespace secrets),
   012 (literal vs analogical reading), 016 (codespace beside the runner),
   027 (`seb` session per activity; cross-VM HS256 exception), 030 (project
@@ -80,7 +81,11 @@ files it ports; writes en + fr for every string.
 
 ### M0-05 — `CLAUDE.md`, `AGENTS.md`, reviewer prompts
 - **Depends on**: M0-03.
-- **Goal**: invariant 4 generalised (activity student views); invariants
+- **Goal**: invariant 4 generalised (activity student views, and the
+  journal's student view as the journal's one exit: no draft, no page
+  before its `visible_from`, no markdown, blob sha nor warning); invariant
+  6 gains the student branch (`readableClassroom`: a claimed enrollment
+  reads its classroom, anyone else gets the 404); invariants
   11–12 scoped to `apps/runner` (codespace's own `CLAUDE.md` comes with
   M6-03); invariant 14 gains the project clause; the `@heig-platform/ui`
   sentence replaced; layout gains `modules/github|project|journal|gradebook`
@@ -137,7 +142,8 @@ files it ports; writes en + fr for every string.
 ### M1-05 — Web route and mock skeleton
 - **Depends on**: M1-03. ‖ M1-04.
 - **Goal**: routes `classroom` (role-dispatched, the student branch a
-  placeholder behind a flag), `classroomJournal`, `classroomGrades`,
+  placeholder behind a flag), `classroomSettings`, `studentCourses`,
+  `classroomJournal`, `classroomGrades`,
   `project`, `projectGroups`; mock files `mock/github.ts`,
   `mock/project.ts`, `mock/journal.ts` with the flags `?projects=1`,
   `?unlinked=1`, `?journal=1`.
@@ -159,10 +165,10 @@ files it ports; writes en + fr for every string.
   reported, not merged silently.
 - **Acceptance**: dry-run report readable; no write outside the target DB.
 
-## M2 — GitHub substrate (dark)
+## M2 — GitHub substrate
 
 ### M2-01 — `github` schema and contracts
-- **Depends on**: M1-02, D02.
+- **Depends on**: M1-02, D02, M0-04, M0-05.
 - **Create**: `Q:db/github.ts` (`github_organizations`,
   `github_classroom_links`, `github_accounts`, `webhook_deliveries`,
   `push_receipts`), one additive migration; `packages/contracts/src/github.ts`;
@@ -176,8 +182,9 @@ files it ports; writes en + fr for every string.
   healing of §3.1).
 - **Create**: `Q:modules/github/{routes,service,events}.ts`;
   `GET|PUT|DELETE /app/api/classrooms/:id/github` (connect / disconnect,
-  staff only through `staffAccess`); `/setup/github/installed` (App JWT);
-  audit `github_org.*`.
+  staff only through `staffAccess`; the GET carries the checks of
+  `05-web.md` §5.3 — installation and repository access, plan, LLM
+  secret); `/setup/github/installed` (App JWT); audit `github_org.*`.
 - **Tests**: healing, setup-URL idempotency, connect by a non-staff ⇒ 404.
 - **Acceptance**: `invariant-reviewer` clean; routes 404 when no App.
 
@@ -208,22 +215,30 @@ files it ports; writes en + fr for every string.
 - **Acceptance**: a task runs once across a restart; run-now; admin API
   under `requireAdmin`.
 
-### M2-06 — Staging App and staging safety
-- **Depends on**: M2-01. ‖ M2-02…05.
-- **Goal**: document and create a staging GitHub App on a test org
-  (product owner's hands for the creation); `staging-refresh.sh` nulls
+### M2-06 — Quiz's Apps (production, staging) and staging safety
+- **Depends on**: M2-01, D23. ‖ M2-02…05.
+- **Goal**: document the registration of Quiz's two GitHub Apps
+  (`docs/development/github-app.md`: permissions of §3.4, events, URLs per
+  environment) and create them (product owner's hands, both owned by the
+  account that owns classroom's App; the staging App installed on a test
+  organization only); secrets
+  into the vault (ADR-010) and the two `.env`; `staging-refresh.sh` nulls
   `installation_id` (and archives projects); tasks no-op without an App (a
   test); ADR-028 note.
 - **Acceptance**: a staging refresh from a dump holding installations
-  leaves no reachable production installation.
+  leaves no reachable production installation; the production App
+  installed on one test organization answers the setup URL of
+  `quiz.chevallier.io`.
 
-### M2-07 — Web: GitHub link card and the connect sheet
-- **Depends on**: M2-02, M2-03 (contracts), M1-04, M1-05.
-- **Goal**: Settings GitHub card (shown only when relevant), return toast,
-  palette entry; "Connect this classroom to GitHub" sheet (org picker,
-  install, live status), header badge. §5.3.
-- **Scenes**: `settings-github-linked|unlinked`,
-  `classroom-github-connect|installed|org-missing`.
+### M2-07 — Web: the classroom's Settings tab, GitHub section, link card
+- **Depends on**: M2-02, M2-03 (contracts), M1-04, M1-05, D24.
+- **Goal**: the teacher classroom's **Settings** tab (rename, archive,
+  delete and the drill switch move there from the header, D24); its GitHub section — "Connect this
+  classroom to GitHub" sheet (org picker, install, live status) and the
+  checks of §5.3; header badge; the user Settings GitHub card (shown only
+  when relevant), return toast, palette entry. §5.3.
+- **Scenes**: `classroom-settings`,
+  `classroom-settings-github-connect|installed|checks-warn|org-missing`, `settings-github-linked|unlinked`.
 
 ## M3 — Projects
 
@@ -342,8 +357,10 @@ files it ports; writes en + fr for every string.
 - **Depends on**: M1-01, D03, D14, D15. ‖ M2.
 - **Create**: `packages/docrender` (`renderPage`, `journalTree`, repo
   naming, the code tokenizer — Quiz's `apps/web/src/markdown/highlight.ts`
-  then imports it); `Q:db/journal.ts`; `packages/contracts/src/journal.ts`
-  (warnings as codes); import-script steps.
+  then imports it); `Q:db/journal.ts` in the shape of `04-journal.md`
+  §4.2 (one row per classroom, D03); `packages/contracts/src/journal.ts`
+  (warnings as codes). No import step (written by M8-01, `01-strategy.md`
+  principle 3).
 - **Tests**: port `render.test`; journal tree tests.
 
 ### M4-02 — Journal read side and ingestion
@@ -359,38 +376,58 @@ files it ports; writes en + fr for every string.
 
 ### M4-03 — Journal writes
 - **Depends on**: M4-02, M2-03.
-- **Goal**: create (no adoption, suggested name), attach (root path
-  honoured), detach, refresh, preview, save with `baseSha`, add, delete,
-  upload; invitations to course staff with a linked login.
+- **Goal**: create (no adoption, suggested name), use an existing
+  repository of the classroom's organization (root path honoured), remove
+  (the repository is kept), refresh, preview, save with `baseSha`, add,
+  delete, upload (committed into the repository); invitations to course
+  staff with a linked login.
 
 ### M4-04 — Web: journal reader
-- **Depends on**: M4-02 contracts, M1-04, M1-05. ‖ M4-05.
+- **Depends on**: M4-02 contracts, M1-04, M1-05. ‖ M4-05, M5-02.
+- **Note**: students reach the reader only through the student classroom
+  page (M5-02); a journal is live for students once both are merged.
 - **Scenes**: `journal-student`, `-phone`, `-teacher-hidden`, `-empty`,
   `-not-found`.
 
-### M4-05 — Web: teacher journal tab
-- **Depends on**: M4-03 contracts, M2-07.
-- **Scenes**: `journal-tab-none`, `-create`, `-attach`, `-pages`,
-  `-sync-error`.
+### M4-05 — Web: the Journal section of Settings, the teacher journal tab
+- **Depends on**: M4-03 contracts, M2-07, D24.
+- **Goal**: the Journal section of the classroom's Settings (create, use a
+  repository, sync state, Refresh, remove); the Journal tab, present only
+  when the classroom has a journal.
+- **Scenes**: `classroom-settings-journal-none|create|use|set`,
+  `journal-tab-pages`, `-sync-error`.
 
-### M4-06 — Web: source editor with preview
-- **Depends on**: M4-05.
-- **Scenes**: `journal-edit`, `-conflict`.
+### M4-06 — Web: the journal's WYSIWYG editor
+- **Depends on**: M4-05, D25.
+- **Goal**: Quiz's markdown editor (`apps/web/src/markdown/`) on a
+  journal page, source mode beside it; front matter as fields; image
+  upload committed into the repository with a relative path; save with
+  `baseSha`, conflict kept as a draft.
+- **Tests**: the five conditions of D25 — the round trip over the journals
+  of classroom's production (fetched read-only with classroom's App, into a
+  fixture kept outside this public repository, as the exam corpus is; the
+  committed test runs on a synthetic journal and skips the real one when
+  absent), front matter, images, relative links and KaTeX, no write of
+  an unedited page.
+- **Scenes**: `journal-edit`, `-source`, `-conflict`.
 
 ## M5 — Student classroom page and gradebook
 
 ### M5-01 — API: the student's classroom
 - **Depends on**: M1-03 (projects and journal plug in when they land).
-- **Goal**: `GET /app/api/student/classrooms/:id` — header, activities by
-  section through `ActivityKind.studentCards`, `hasJournal`,
-  `hasProjects`; loaded by the student's own enrollment (404 otherwise).
+- **Goal**: `GET /app/api/student/classrooms` (the Courses list) and
+  `GET /app/api/student/classrooms/:id` — header, activities by section
+  through `ActivityKind.studentCards`, `hasJournal`, `hasProjects`; loaded
+  by the student's own enrollment (404 otherwise).
 - **Tests**: leak test (no draft, no other student's data); 404 matrix.
 
 ### M5-02 — Web: student classroom page
 - **Depends on**: M5-01, D07.
-- **Goal**: §5.2 (Activities, Journal tab when present, Grades from
-  `GET /app/api/student/results`), pressable home cards.
-- **Scenes**: `student-classroom`, `-grades`, `-empty`, `-error`.
+- **Goal**: §5.2 — the Courses route (sidebar and bottom bar, D07), the
+  classroom page (Activities, Journal tab when present), pressable home
+  cards; Grades stays an anchor of the home until M5-04.
+- **Scenes**: `student-courses`, `student-classroom`, `-journal`,
+  `-empty`, `-error`, phone and desktop.
 
 ### M5-03 — Gradebook module
 - **Depends on**: M3-08, D06.
@@ -426,7 +463,7 @@ files it ports; writes en + fr for every string.
 - **Depends on**: M6-01.
 - **Goal**: `@quiz/codespace`, Node 24, nested `CLAUDE.md` and docs,
   `PLATFORM_URL` with alias; unit tests in CI; classroom ADR-013 already
-  imported as ADR-036 (M0-03).
+  imported under its new number (M0-03).
 - **Acceptance**: package build/typecheck/test; the app image contains no
   codespace; `invariant-reviewer` does not flag the sanctioned divergences.
 

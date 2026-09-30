@@ -79,7 +79,7 @@ module); DROP.
 
 | Classroom | → Quiz | Rule |
 | --- | --- | --- |
-| `organizations` | NEW `github_organizations` | ids kept (`github_org_id`, `login`, `installation_id`, status, plan) |
+| `organizations` | NEW `github_organizations` | `github_org_id`, `login`, status, plan kept; `installation_id` is Quiz's App's (D23), resolved when the organization installs it, null until then |
 | `classrooms` | `classrooms` (MAP) | + `course_id` from the mapping file; `period` empty (the CHECK allows no start/end); `org_id` → NEW `github_classroom_links(classroom_id PK, org_id, linked_by, linked_at)`; `teacher_id` → a `course_staff` seat; `archived_at` kept |
 | `classroom_staff` | `course_staff` (lossy) | claimed seats → seats of the course; pending seats and the `assistant` label reported (D04) |
 | `enrollments` | `enrollments` (MAP) | `status` dropped after checking `status='claimed'` ⇔ `user_id IS NOT NULL`; when merging into an existing Quiz classroom: union on `lower(trim(email))`, conflicting users flagged with `conflict_flag` as a live claim does |
@@ -98,11 +98,18 @@ module); DROP.
 | `webhook_deliveries` | `webhook_deliveries` (module `github`), last 30 days only, none unprocessed at T0 |
 | `scheduled_tasks` | rows DROPPED; the table is re-created by M2-05 (D10) and seeded by code |
 
-### Journal (ids kept)
+### Journal
 
-`journals`, `classroom_journals`, `journal_pages`, `journal_assets` → same
-names, module `journal`. Pages and assets are a read model: copied, then a
-re-ingest after the cutover proves them (same blob shas).
+`journals` ⋈ `classroom_journals` → one `classroom_journals` row per
+attached classroom (D03, `04-journal.md` §4.2), module `journal`; a journal
+attached to several classrooms becomes several rows. Pages and assets are a
+read model: not copied, re-ingested after the cutover through Quiz's App
+(D23), which the organization must have installed. A classroom whose
+teacher already chose the repository in Quiz before the cutover is left as
+it is. Any other collision — a mapped classroom already linked in Quiz to a
+different organization, or a journal on a different repository — is
+reported by the dry run, which aborts; a person decides per classroom in
+the mapping file (D22).
 
 ### Infrastructure
 
@@ -173,13 +180,13 @@ porting task that adds a table extends it, M8-01 completes it).
   staff (owners, claimed seats; pending ones reported) → enrollments (kept
   or merged, remap recorded) → projects, milestones, groups → group members
   → project repos → grade runs, push receipts, bot commits, dispatches,
-  reverts → journals, attachments, pages, assets → webhook deliveries (30
+  reverts → classroom journal rows (re-ingested after) → webhook deliveries (30
   days) → legacy audit → role recompute → one `migration.classroom_import`
   audit row.
 - **Report**: per table inserted / merged / skipped; identity (matches per
   rule, created, merged, ambiguous addresses, role changes); checks —
   repositories per project, `sum(teacher_points)`, count of frozen grades,
-  journal asset bytes, every grade-run link resolves, latest push receipt
+  every journal re-ingested with `sync_status = ok`, every grade-run link resolves, latest push receipt
   per repository equals the source.
 - **Tests**: a synthetic classroom fixture (SQL dump of a seeded classroom
   database, anonymised, committed under `apps/api/scripts/fixtures/`),

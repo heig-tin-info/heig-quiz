@@ -3,7 +3,7 @@
 The journal is a classroom's course documentation, written by the staff,
 read by the students. It is **not an activity**: no assessment, no
 tracking, no deadline. Classroom commit `ab98cc0` (52 files, +10 044 lines),
-classroom ADR-015 (to be imported as ADR-038).
+classroom ADR-015 (to be imported under the next free ADR number).
 
 ## 4.1 How it works
 
@@ -82,6 +82,23 @@ Plumbing: `/webhooks/github` dispatch, queue `journal.ingest`, SSE family
 
 ## 4.2 What the port requires
 
+- **One journal per classroom, a journal is a repository** (D03). The
+  shared mirror and the attachment table collapse into one row per
+  classroom; two classrooms on the same repository (same organization)
+  each keep their own mirror, and a push fans out to every classroom row
+  holding that repository:
+
+  | Table | Key columns |
+  | --- | --- |
+  | `classroom_journals` | PK `classroom_id`, `github_repo_id`, `full_name`, `ref`, `root_path`, `last_commit_sha`, `sync_status`, `sync_error`, `created_by` |
+  | `journal_pages` | unique `(classroom_id, path)`, the columns of §4.1 |
+  | `journal_assets` | unique `(classroom_id, path)`, the columns of §4.1 |
+
+  Routes lose the journal id: assets are served at
+  `/app/api/classrooms/:id/journal/assets/*`, behind the classroom's own
+  access check. "Attach" becomes "choose a repository of the
+  organization" (the classroom's Settings, D24); "Detach" removes the
+  classroom's row and its mirror, never the repository.
 - **Module** `Q:modules/journal/` (routes, service, ingest, render wiring,
   repo, events, jobs), schema `Q:db/journal.ts`; tests ported as
   `*.db.test.ts` (ingest, journal) and unit (render, tree).
@@ -93,7 +110,8 @@ Plumbing: `/webhooks/github` dispatch, queue `journal.ingest`, SSE family
   a GitHub outage).
 - **Prerequisites from the GitHub side**: `github_organizations` with the
   installation, account linking (staff invitations), the webhook handler
-  registry (M2-04), the classroom↔org link (lazy "Connect to GitHub").
+  registry (M2-04), the classroom↔org link (the GitHub section of the
+  classroom's Settings, D24).
 - **Access (invariant 6)**: a `readableClassroom` loader in
   `Q:modules/guards.ts` — staff = `staffAccess(user, classroom.course_id)`;
   student = an enrollment with `user_id = me`. This is Quiz's first
@@ -112,9 +130,9 @@ Plumbing: `/webhooks/github` dispatch, queue `journal.ingest`, SSE family
 | # | Defect | Fix |
 | --- | --- | --- |
 | J1 | Assets of draft or not-yet-visible pages are readable by any enrolled student (the asset route checks membership, not the referencing page's visibility) | serve an asset to a student only if a page visible to students references it |
-| J2 | Concurrent ingestions: `singletonKey` dedups queued jobs only; save and Refresh call `ingestJournal` directly; mirror writes not transactional | every ingestion through the queue or under an advisory lock per journal; `mirror()` in one transaction |
-| J3 | `attach` ignores `rootPath` when it reuses an existing (repo, ref) mirror | key the mirror on (repo, ref, root_path) or refuse a different root |
-| J4 | No SSE hint when `visible_from` passes | a ticker sweep (`everyMs` 60 s) that emits the hint when a page becomes visible |
+| J2 | Concurrent ingestions: `singletonKey` dedups queued jobs only; save and Refresh call `ingestJournal` directly; mirror writes not transactional | every ingestion through the queue or under an advisory lock per classroom journal row; `mirror()` in one transaction |
+| J3 | `attach` ignores `rootPath` when it reuses an existing (repo, ref) mirror | disappears with D03: no mirror is shared, each classroom row has its own root path |
+| J4 | No SSE hint when `visible_from` passes | a ticker sweep (`everyMs` 60 s, on the bare ticker) that emits the hint when a page becomes visible |
 | J5 | Warnings are server-built English sentences | codes + parameters |
 | J6 | `.md-body` collides with Quiz's question prose styles | `.md-body.md-doc` modifier (long-form: h1 28 px, 72-ch measure, 1.75 leading) |
 | J7 | Quiz dev runs on PGlite without webhooks nor pg-boss | Refresh is the dev path; the mock serves rendered HTML fixtures |
@@ -127,15 +145,15 @@ creation. Quiz's `SendOptions` (`apps/api/src/jobs.ts`) no longer offers
 (`singleton`, `stately`, …) in `createQueue`, and add it to the in-process
 queue too, so that development and production behave alike.
 
-## 4.4 Open points (in `08-decisions.md`)
+## 4.4 Decisions (in `08-decisions.md`)
 
-- D03 — journal attached to a classroom (shareable, as in classroom) or to
-  the course.
-- D14 — asset storage: `bytea` (as ported, a rebuildable read model) or
-  Quiz's disk `ASSETS_DIR`.
+- D03 — one journal per classroom, a journal is a repository (settled).
+- D14 — asset storage: `bytea`, a rebuildable read model (settled).
 - D15 — HTML policy: the journal escapes raw HTML; Quiz questions sanitise
-  an allow-list (N-SEC-05). Suggested: keep both, per surface.
-- The planned WYSIWYG editor (Quiz's Tiptap `RichText`) writes `asset:`
-  images and normalises markdown (`_x_` ⇒ `*x*`): noisy git diffs, images
-  that do not render on GitHub. The source editor with server preview ships
-  first; the adapter is phase L.
+  an allow-list (N-SEC-05); each surface keeps its rule (settled).
+- D25 — the editor is Quiz's WYSIWYG (Tiptap) from the start, with its
+  source mode. Its risks are why it was phase L: it writes `asset:` images
+  and normalises markdown (`_x_` ⇒ `*x*`), which means noisy git diffs and
+  images that do not render on GitHub. D25 lists the five conditions M4-06
+  proves by tests; the source editor ships first only if the round trip
+  fails on real journals.

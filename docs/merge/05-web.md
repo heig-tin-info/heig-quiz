@@ -15,8 +15,8 @@ feedback, `/p/:code`, settings. **There is no student classroom page.**
 | Journal tab, `JournalPage`/`Nav`/`Body`/`Editor` | new | `/classrooms/:id/journal/*`, both roles |
 | Students tab (`RosterTable`, `RosterImport`) | merge | Roster tab (Quiz's files descend from these); a GitHub login column only when the classroom is connected |
 | Staff tab | merge | course staff (`PeopleStack`) |
-| Settings tab (rename, archive, delete) | merge | Quiz classroom header (rename in place, overflow menu) |
-| `InstallWizard`, org badge | new | "Connect to GitHub" sheet, header badge |
+| Settings tab (rename, archive, delete) | merge | the teacher classroom's **Settings** tab (D24), with the GitHub and Journal sections |
+| `InstallWizard`, org badge | new | the GitHub section of the classroom's Settings (the "Connect to GitHub" sheet), header badge |
 | xlsx grade sheet | merge | teacher **Grades** tab / export (M5) |
 | `AssignmentDetail` (57 kB) | new | `/projects/:id`, **redesigned in sections**, not copied |
 | `AssignmentForm` (41 kB) | new | a sheet or a stepped page, **redesigned** (one primary action, novice/expert split, spec 08) |
@@ -33,14 +33,18 @@ feedback, `/p/:code`, settings. **There is no student classroom page.**
 The home keeps "what do I do now"; the classroom page holds "everything
 about this course".
 
-- **Door** (D07): the classroom cards of the student home become pressable
-  and open the classroom page. Suggested: always (Activities and Grades are
-  useful without GitHub).
+- **Navigation** (D07): the student's **Courses** entry (sidebar and
+  bottom bar, today an anchor of the home) becomes a route listing the
+  student's classrooms; a classroom card always opens the classroom page.
+  **Activities** stays the summary of the active activities of every
+  classroom (today's home). Grades stays an anchor of the home until the
+  Grades tabs (M5-04).
 - **Route**: `/classrooms/:id` dispatches on the role — teachers get
   today's `ClassroomView`, students (and a teacher in student view,
   ADR-018) a new `StudentClassroom`. Tabs are routes, all `studentSafe`:
   `/classrooms/:id` (Activities, default), `/classrooms/:id/journal/<path>`
-  (only when `hasJournal`), `/classrooms/:id/grades`.
+  (only when `hasJournal`), later the projects and
+  `/classrooms/:id/grades`.
 - **Header**: eyebrow `ParentLink` to Home; title = classroom name;
   description = course code, name, period; teachers in `fg-faint`; the
   time-bonus badge as on the home card.
@@ -77,24 +81,41 @@ button walks four states:
 4. ready ⇒ "Open repository".
 
 The Settings GitHub card appears only once the user has, or has had, a
-project.
+project, or is staff of a classroom connected to GitHub.
 
-**Teacher — lazy, per classroom.** Triggered by "New project" or "Create a
-journal" on an unconnected classroom:
+**Teacher — per classroom, from Settings** (D24). GitHub is optional: a
+classroom without it is a plain Quiz classroom. The Settings tab's
+**GitHub** section:
 
-1. the "Connect this classroom to GitHub" sheet: pick an org where the App
-   is installed (`GET /app/api/github/orgs`) or install it
+1. pick an organization where Quiz's App (D23) is installed
+   (`GET /app/api/github/orgs`) or install it
    (`installations/new?state=<classroomId>`; needs org-owner rights and "All
    repositories"); the status turns green by SSE; suggested default: the
    org of the course's other classrooms;
-2. optionally link their own GitHub account (the expert clone-and-push
-   path needs it; browser editing — the novice path — does not);
-3. back to the task they started.
+2. the section then shows the checks, each a line with its state, never
+   blocking except the first: the App installed with access to every
+   repository; the organization's plan (`free` ⇒ no rulesets and no
+   organization secrets for private repositories — what "an Education
+   organization" buys); the `ANTHROPIC_API_KEY` organization secret for
+   the LLM review of projects (present / missing / unknown when the App
+   cannot read secrets, I50);
+3. optionally link their own GitHub account (the expert clone-and-push
+   path and collaborator invitations need it; browser editing does not).
+
+The **Journal** section, enabled once the classroom is connected: "Create
+a journal" (a new repository with a seed README) or "Use a repository" (any
+repository of the organization, possibly the one of another classroom,
+D03, D27); once set, the repository, its sync state, Refresh, and "Remove the
+journal" (the repository is never deleted). "New project" on an
+unconnected classroom opens the same GitHub sheet, then returns.
 
 Teacher classroom tabs after the merge: **Roster** (primary: Add
 students), **Activities** (primary: New ▾ — Evaluation, Poll, Project),
-**Journal** ("Create a journal" when none; inside a page, Edit), **Grades**
-(primary: Export).
+**Journal** (only when the classroom has one; inside a page, Edit),
+**Grades** (primary: Export), **Settings** (settings rows, `DESIGN.md`
+"Settings row"; the one accent is "Connect to GitHub" while the classroom
+is not connected, else nothing is accented: a classroom connected for its
+projects is not pushed towards a journal).
 
 ## 5.4 UI library
 

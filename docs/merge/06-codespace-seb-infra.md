@@ -128,7 +128,10 @@ CI.
 
 ## 6.4 Environment and secrets Quiz gains
 
-- `GITHUB_APP_ID`, `GITHUB_APP_SLUG` (`hgc-prod`), `GITHUB_APP_PRIVATE_KEY_PATH`
+These are Quiz's own App's (D23), set in M2-06, not at the cutover; its
+slug is its own (classroom's is `hgc-prod`).
+
+- `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_PRIVATE_KEY_PATH`
   + the PEM (copy through a container: it belongs to uid 100999),
   `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`.
 - `CODESPACE_URL`, `CODESPACE_LAUNCH_SECRET` (≥ 32 chars, same on both
@@ -145,12 +148,14 @@ CI.
 
 ## 6.5 Cutover
 
-**A — Ship dark.** All features behind empty switches (`GITHUB_APP_*`,
-`CODESPACE_URL` ⇒ routes 404, tasks no-op), through the normal pipeline.
+**A — Ship.** The GitHub substrate and the journal are live with Quiz's
+own App (D23) since M2/M4; what remains dark sits behind its switch
+(`CODESPACE_URL` ⇒ routes 404, tasks no-op), through the normal pipeline.
 
 **B — Prepare, no downtime.**
-1. Add `https://quiz.chevallier.io/app/auth/github/callback` to the App.
-2. Stage the secrets in Quiz's `.env.prod`, inactive.
+1. Every organization still used by classroom installs Quiz's App ("All
+   repositories"); the list comes from the dry run of the import script.
+2. Stage the codespace secrets in Quiz's `.env.prod`, inactive.
 3. Engine VM: deploy the portal from the Quiz repository (check the Drizzle
    journal is identical), both issuers accepted.
 4. Rehearse on staging (`srvstg`): restore a classroom dump, run the
@@ -161,8 +166,8 @@ CI.
 
 **C — Freeze and migrate (target ≤ 1 h).**
 1. Caddy maintenance fragment on `classroom.chevallier.io`: a bilingual 503
-   with `Retry-After`; `/webhooks/github` answers 503 (GitHub records the
-   failures, `reconcile.deliveries` replays them); pause the uptime probe;
+   with `Retry-After`; `/webhooks/github` answers 503 (classroom's App
+   is idle from then on; Quiz's App received its own deliveries); pause the uptime probe;
    `docker compose stop app` (Postgres stays up). If the rehearsal takes
    > 2 h, build a read-only flag in classroom instead (M8-03b).
 2. Dumps: `pg_dump -Fc hgc` ⇒ `backups/pre-merge-<ts>.dump`, a pre-migration
@@ -170,12 +175,11 @@ CI.
    volumes.
 3. `import-classroom --apply` (classroom project ids kept).
 4. Codespace identity remap (M8-04), `PLATFORM_URL` = Quiz, start the portal.
-5. Set `GITHUB_APP_*` (and `CODESPACE_*`) in Quiz, `up -d app`.
-6. App: webhook URL ⇒ `https://quiz.chevallier.io/webhooks/github`, then the
-   setup URL and homepage. Replace the maintenance fragment with the
-   redirect fragment.
-7. Catch up: `reconcile.deliveries`, `reconcile.repos`, `reconcile.grades`
-   by hand; `codespace.sync` for every online project (new Config Keys ⇒
+5. Set `CODESPACE_*` in Quiz (if M6 is in scope), `up -d app`.
+6. Replace the maintenance fragment with the redirect fragment. Classroom's
+   App is left installed and idle; its webhook points at a stopped service.
+7. Catch up: `reconcile.repos`, `reconcile.grades` by hand (Quiz's App saw
+   every push, but only for repositories the import just made known); `codespace.sync` for every online project (new Config Keys ⇒
    redistribute `.seb` files). Pushes during the freeze fall under GR-14.3
    (late if reconciled after the deadline) — hence T0 away from deadlines.
 8. Smoke: edu-ID login, GitHub link, a webhook from a test push, the
@@ -190,8 +194,8 @@ switch to 301/308.
 **E — Decommission.** Age-encrypted final dump off the VM; remove
 classroom's containers, volumes, secrets, fragment, `/srv/heig-classroom`,
 CI key, repository secret, GHCR package; keep the DNS name and redirect
-fragment ≥ 1 year; remove the classroom callback URL from the App last;
-archive the repository.
+fragment ≥ 1 year; uninstall classroom's App from the organizations and
+delete it last; archive the repository.
 
 ## 6.6 Permalinks (`classroom.chevallier.io` ⇒ Quiz)
 
@@ -203,29 +207,28 @@ Caddy.
 
 | Old | Target | How |
 | --- | --- | --- |
-| `POST /webhooks/github` | Quiz `/webhooks/github` | `reverse_proxy localhost:3002` (safety net after the App change) |
-| `/app/auth/github/callback?…` | Quiz callback | 302 with query (a flow in progress restarts: its state cookie is on the old host) |
-| `/setup/github/installed?…` | Quiz, same path | 302, query kept |
+| `POST /webhooks/github` | — | 410: classroom's App is idle, Quiz's App has its own URL (D23) |
+| `/app/auth/github/callback?…` | Quiz `/settings` | 302 (a link in progress on classroom's App restarts on Quiz's) |
+| `/setup/github/installed?…` | Quiz `/` | 302 (an installation of classroom's App after the cutover is a mistake: Quiz's App is the one to install) |
 | `/app/auth/*` (edu-ID) | Quiz `/` | 302; keep the classroom redirect URI registered until decommission |
 | `/app/codespace/start/:aid` (Start, **old `.seb` startURL**) | Quiz project start route | 302 via the resolver; old `.seb` files still fail (their filter does not allow Quiz): redistribute |
 | `/app/email/unsub?…`, `List-Unsubscribe` | Quiz notification settings | 302 (sign-in), or honour the HMAC with the legacy secret for 90 days |
 | `/classrooms/:id[/assignments/:aid[/groups]]`, `/classrooms/:cid/journal/<path>` | the Quiz classroom, project, groups, journal page | 302 via the resolver |
 | `/settings`, `/admin`, `/` | Quiz equivalents | 302 |
 | `/app/api/*`, `/app/events`, `/kc/*`, `/healthz`, `/metrics` | — | 410 |
-| `/app/api/journals/:jid/assets/*`, `/app/api/users/:uid/avatar` | Quiz equivalents | 302 via the resolver, else 410 |
+| `/app/api/journals/:jid/assets/*` | — | 410: journal ids are not kept (D03), and an asset is only ever reached from its page |
+| `/app/api/users/:uid/avatar` | Quiz equivalent | 302 via the resolver, else 410 |
 | `code.chevallier.io/*` | same host | unchanged |
 
 Draft fragment (M8-03):
 
 ```caddy
 classroom.chevallier.io {
-  handle /webhooks/github { reverse_proxy localhost:3002 }
-  @gone path /app/api/* /app/events /kc/* /healthz /metrics
+  @gone path /webhooks/github /app/api/* /app/events /kc/* /healthz /metrics
   handle @gone { respond `{"error":"moved","to":"https://quiz.chevallier.io"}` 410 }
   @legacy path /classrooms/* /app/codespace/start/*
   handle @legacy { redir https://quiz.chevallier.io/legacy/classroom{uri} 302 }
-  handle /setup/github/installed { redir https://quiz.chevallier.io{uri} 302 }
-  handle /app/auth/github/callback { redir https://quiz.chevallier.io{uri} 302 }
+  handle /app/auth/github/callback { redir https://quiz.chevallier.io/settings 302 }
   handle { redir https://quiz.chevallier.io/ 302 }
 }
 ```
@@ -238,6 +241,6 @@ Precondition: the sha of classroom's last good image is noted;
 | When | Rollback |
 | --- | --- |
 | A, B | re-run an older `deploy-production` job; codespace: switch its release symlink (restore SQLite if a migration crossed) |
-| C, before the App change | remove the maintenance fragment, reinstall `classroom.caddy`, `docker compose start app`, restore `CLASSROOM_URL`, the portal's SQLite and volumes if remapped, restore Quiz's pre-migration dump |
-| After C6, before the point of no return | all of the above + revert the App's webhook and setup URLs + redeliver to classroom what went to Quiz (`GET /app/hook/deliveries`) + unset `GITHUB_APP_*`/`CODESPACE_*` in Quiz + replay by hand the writes Quiz made to classroom-origin data since T0 (from the audit log). The cost grows daily: keep phase D short |
+| C, before step C6 | remove the maintenance fragment, reinstall `classroom.caddy`, `docker compose start app`, restore `CLASSROOM_URL`, the portal's SQLite and volumes if remapped, restore Quiz's pre-migration dump |
+| After C6, before the point of no return | all of the above + classroom's own App redelivers what it missed (`GET /app/hook/deliveries`) + unset `CODESPACE_*` in Quiz + replay by hand the writes Quiz made to classroom-origin data since T0 (from the audit log). The cost grows daily: keep phase D short |
 | After the point of no return | fix forward only |
