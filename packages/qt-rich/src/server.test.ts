@@ -114,9 +114,7 @@ describe("the key", () => {
     expect(text).toContain("unmapped memory");
   });
 
-  it("migrates its own version by identity and refuses an unknown one", () => {
-    const draft = richServer.emptyDraft();
-    expect(richServer.migrate(draft, 1)).toBe(draft);
-    expect(() => richServer.migrate(draft, 0)).toThrow();
+  it("refuses a version it never emitted", () => {
+    expect(() => richServer.migrate(richServer.emptyDraft(), 0)).toThrow();
   });
 });

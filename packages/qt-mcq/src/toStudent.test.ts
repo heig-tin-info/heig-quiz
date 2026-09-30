@@ -1,61 +1,19 @@
 /**
- * The mandatory leak test (PLAN-MVP §2.5, docs/05 §5.7, N-SEC-04).
- *
- * Two independent checks on the SERIALISED student view: no forbidden key, and
- * no secret VALUE. The second one is what catches a leak that renamed a field.
+ * The type-specific half of the leak test (PLAN-MVP §2.5, docs/05 §5.7,
+ * N-SEC-04). The generic half — the full fixture of `./testing.ts` through
+ * `toStudent`, shuffle on and off, searched for every forbidden key and every
+ * secret value — is the registry's contract test, for every type at once.
  */
 import { describe, expect, it } from "vitest";
-import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
-import { SECRET_CONFIG } from "./test/fixtures.js";
+import { findStudentLeaks } from "@quiz/core/testing";
+import { mcqLeakFixture, SECRET_CONFIG } from "./test/fixtures.js";
 import { McqConfigSchema } from "./schema.js";
 import { mcqServer } from "./server.js";
 
-/*
- * The shared floor (`@quiz/core/server`) plus what only `mcq` has. `mode` is
- * absent on purpose: it is a member of `McqStudent` — the player needs to know
- * whether it draws radios or checkboxes — which is why it is not in the floor.
- */
-const FORBIDDEN_KEYS = [
-  ...COMMON_FORBIDDEN_STUDENT_KEYS,
-  // Out of the floor since R-06 (only `code` publishes it, on purpose); here it
-  // still names nothing this type may publish.
-  "compare",
-  "allowNegative",
-  "expected",
-  "policy",
-  "tolerance",
-  "value",
-];
-
 describe("toStudent", () => {
-  const views = [
-    { seed: 7, itemId: "i", shuffle: true },
-    { seed: 0, itemId: "i", shuffle: false },
-  ];
-
-  for (const view of views) {
-    it(`leaks no key (shuffle: ${String(view.shuffle)})`, () => {
-      const out = JSON.stringify(mcqServer.toStudent(SECRET_CONFIG, view));
-      for (const key of FORBIDDEN_KEYS) expect(out).not.toContain(`"${key}"`);
-    });
-  }
-
-  it("leaks no secret value: the key index is nowhere to be read", () => {
-    const student = mcqServer.toStudent(SECRET_CONFIG, { seed: 7, itemId: "i", shuffle: true });
-    const out = JSON.stringify(student);
-    // Every choice text is legitimately present, so the secret is not a text:
-    // it is which index carries `correct`, and the truthy marker itself.
-    expect(out).not.toContain("true");
-    // The scoring policy is a secret of its own: knowing it would tell a
-    // student whether guessing costs anything.
-    expect(out).not.toContain("discordance");
-    expect(out).not.toContain("inherit");
-  });
-
-  it("keeps exactly the four fields the player needs", () => {
+  it("keeps exactly the fields the player needs", () => {
     const student = mcqServer.toStudent(SECRET_CONFIG, { seed: 7, itemId: "i", shuffle: true });
     expect(Object.keys(student).sort()).toEqual(["choices", "mode", "prompt"]);
-    expect(mcqServer.studentSchema.safeParse(student).success).toBe(true);
   });
 
   it("carries maxSelections when the teacher set one", () => {
@@ -97,11 +55,13 @@ describe("toStudent", () => {
     expect(student.negativeMarking).toBe(true);
     expect(Object.keys(student).sort()).toEqual(["choices", "mode", "negativeMarking", "prompt"]);
     expect(mcqServer.studentSchema.safeParse(student).success).toBe(true);
-    const out = JSON.stringify(student);
-    for (const key of FORBIDDEN_KEYS) expect(out).not.toContain(`"${key}"`);
-    expect(out).not.toContain("discordance");
-    expect(out).not.toContain("inherit");
-    expect(out).not.toContain('"correct"');
+    // The flag itself is `true` here, so that one secret of the fixture is
+    // out of this search; `"correct"` (the common floor) still covers the key.
+    const leaks = findStudentLeaks(student, {
+      forbiddenKeys: mcqLeakFixture.forbiddenKeys,
+      secrets: mcqLeakFixture.secrets.filter((secret) => secret !== "true"),
+    });
+    expect(leaks).toEqual([]);
   });
 
   it("says nothing when negative marking is off or unreadable", () => {

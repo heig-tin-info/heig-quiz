@@ -151,13 +151,11 @@ describe("ShortAnswerSchema", () => {
 });
 
 describe("emptyShortDraft", () => {
-  it("is empty, and therefore does NOT validate (D16)", () => {
+  it("is empty, with the defaults the editor binds to (D16)", () => {
     const draft = emptyShortDraft();
     expect(draft.prompt).toBe("");
-    expect(draft.configVersion).toBe(2);
     expect(draft.constraints).toEqual({ minLength: 0, maxLength: 255, integer: false });
     expect(draft.prefilters).toEqual({ trim: true, lowercase: true });
     expect(draft.matchers).toEqual([{ kind: "exact", value: "", points: 1 }]);
-    expect(ShortConfigSchema.safeParse(draft).success).toBe(false);
   });
 });

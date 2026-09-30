@@ -11,22 +11,6 @@ import { MCQ_CONFIG_VERSION, McqConfigSchema, emptyMcqDraft } from "./schema.js"
 import { choiceOrder, mcqServer } from "./server.js";
 
 describe("the contract", () => {
-  it("is registered under its own id and version", () => {
-    expect(mcqServer.id).toBe("mcq");
-    expect(mcqServer.configVersion).toBe(MCQ_CONFIG_VERSION);
-    expect(MCQ_CONFIG_VERSION).toBe(2);
-  });
-
-  it("emits an EMPTY draft, stored as it stands (D16)", () => {
-    expect(mcqServer.emptyDraft().prompt).toBe("");
-    expect(mcqServer.configSchema.safeParse(mcqServer.emptyDraft()).success).toBe(false);
-  });
-
-  it("returns a config already at the current version as it stands (D16)", () => {
-    const config = emptyMcqDraft();
-    expect(mcqServer.migrate(config, MCQ_CONFIG_VERSION)).toBe(config);
-  });
-
   it("refuses a version it never emitted", () => {
     expect(() => mcqServer.migrate(emptyMcqDraft(), 0)).toThrow(ConfigMigrationError);
   });

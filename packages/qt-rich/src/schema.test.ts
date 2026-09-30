@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   a4Pages,
   countChars,
-  emptyRichDraft,
   pagesText,
   RICH_MAX_CHARS,
   RichAnswerSchema,
@@ -17,10 +16,6 @@ describe("the rich config", () => {
     expect(parsed.rubric).toBe("");
     expect(parsed.maxChars).toBeUndefined();
     expect(parsed.reference).toBeUndefined();
-  });
-
-  it("refuses an empty statement, which the empty draft has (D16)", () => {
-    expect(RichConfigSchema.safeParse(emptyRichDraft()).success).toBe(false);
   });
 
   it("holds a limit between 1 and the hard cap", () => {

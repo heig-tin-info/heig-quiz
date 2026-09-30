@@ -15,12 +15,9 @@ import { circuitConfig, rcLowPass } from "./test/fixtures.js";
 describe("emptyCircuitConfig", () => {
   it("is a blank draft: the shape, the defaults, no content (decision D16)", () => {
     const draft = emptyCircuitConfig();
-    expect(draft.configVersion).toBe(1);
     expect(draft.prompt).toBe("");
     expect(draft.stimuli).toEqual([]);
     expect(draft.reference).toBeNull();
-    // Blank, so it does NOT validate: publication is the gate.
-    expect(CircuitConfig.safeParse(draft).success).toBe(false);
   });
 
   it("parses once it has a prompt", () => {
@@ -30,42 +27,37 @@ describe("emptyCircuitConfig", () => {
   });
 });
 
-describe("the three refinements", () => {
+describe("the refinements", () => {
   const base = { ...emptyCircuitConfig(), prompt: "Draw it." };
+  const simulation = { mode: "simulation", tolerance: 0.05, rubric: "" };
 
-  it("refuses `simulation` without a reference", () => {
-    const parsed = CircuitConfig.safeParse({
-      ...base,
-      stimuli: [emptyStimulus({ name: "s" })],
-      grading: { mode: "simulation", tolerance: 0.05, rubric: "" },
-    });
+  it.each([
+    {
+      what: "`simulation` without a reference",
+      over: () => ({ stimuli: [emptyStimulus({ name: "s" })], grading: simulation }),
+      code: "circuit.simulation_needs_reference",
+    },
+    {
+      what: "`simulation` without a stimulus",
+      over: () => ({ reference: rcLowPass().schematic, grading: simulation }),
+      code: "circuit.simulation_needs_stimulus",
+    },
+    {
+      what: "`showExpected` without a reference",
+      over: () => ({ showExpected: true }),
+      code: "circuit.expected_needs_reference",
+    },
+    {
+      what: "a stimulus whose window is skipped whole",
+      over: () => ({
+        stimuli: [emptyStimulus({ name: "s", analysis: { kind: "tran", stopMs: 1, skipMs: 2, points: 500 } })],
+      }),
+      code: "circuit.skip_after_stop",
+    },
+  ])("refuses $what", ({ over, code }) => {
+    const parsed = CircuitConfig.safeParse({ ...base, ...over() });
     expect(parsed.success).toBe(false);
-    expect(JSON.stringify(parsed.error?.issues)).toContain("circuit.simulation_needs_reference");
-  });
-
-  it("refuses `simulation` without a stimulus", () => {
-    const parsed = CircuitConfig.safeParse({
-      ...base,
-      reference: rcLowPass().schematic,
-      grading: { mode: "simulation", tolerance: 0.05, rubric: "" },
-    });
-    expect(parsed.success).toBe(false);
-    expect(JSON.stringify(parsed.error?.issues)).toContain("circuit.simulation_needs_stimulus");
-  });
-
-  it("refuses `showExpected` without a reference", () => {
-    const parsed = CircuitConfig.safeParse({ ...base, showExpected: true });
-    expect(parsed.success).toBe(false);
-    expect(JSON.stringify(parsed.error?.issues)).toContain("circuit.expected_needs_reference");
-  });
-
-  it("refuses a stimulus whose window is skipped whole", () => {
-    const parsed = CircuitConfig.safeParse({
-      ...base,
-      stimuli: [emptyStimulus({ name: "s", analysis: { kind: "tran", stopMs: 1, skipMs: 2, points: 500 } })],
-    });
-    expect(parsed.success).toBe(false);
-    expect(JSON.stringify(parsed.error?.issues)).toContain("circuit.skip_after_stop");
+    expect(JSON.stringify(parsed.error?.issues)).toContain(code);
   });
 });
 

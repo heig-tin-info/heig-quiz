@@ -1,40 +1,15 @@
-/** The mandatory leak test (PLAN-MVP §2.5, docs/05 §5.7, N-SEC-04). */
-import { describe, expect, it } from "vitest";
-import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
-import { config, SECRET_CONFIG, SECRET_VALUES } from "./test/fixtures.js";
-import { clozeServer } from "./server.js";
-
-/*
- * The shared floor (`@quiz/core/server`) plus what only `cloze` has: a blank
- * publishes its `kind`, never its `mode`, and the regex `flags` say as much
- * about the key as the pattern does.
+/**
+ * The type-specific half of the leak test (PLAN-MVP §2.5, docs/05 §5.7,
+ * N-SEC-04). The generic half — the full fixture of `./testing.ts` searched
+ * for every forbidden key and secret value — is the registry's contract test.
  */
-const FORBIDDEN_KEYS = [
-  ...COMMON_FORBIDDEN_STUDENT_KEYS,
-  // Out of the floor since R-06 (only `code` publishes it, on purpose); here it
-  // still names nothing this type may publish.
-  "compare",
-  "expected",
-  "flags",
-  "mode",
-  "policy",
-  "tolerance",
-  "value",
-];
+import { describe, expect, it } from "vitest";
+import { config, SECRET_CONFIG } from "./test/fixtures.js";
+import { clozeServer } from "./server.js";
 
 const view = { seed: 7, itemId: "i", shuffle: true };
 
 describe("toStudent", () => {
-  it("leaks no key", () => {
-    const out = JSON.stringify(clozeServer.toStudent(SECRET_CONFIG, view));
-    for (const key of FORBIDDEN_KEYS) expect(out).not.toContain(`"${key}"`);
-  });
-
-  it("leaks no secret value: no answer, no pattern, no tolerance", () => {
-    const out = JSON.stringify(clozeServer.toStudent(SECRET_CONFIG, view));
-    for (const secret of SECRET_VALUES) expect(out).not.toContain(secret);
-  });
-
   it("replaces every blank by its sentinel, and nothing else", () => {
     const student = clozeServer.toStudent(SECRET_CONFIG, view);
     expect(student.template).not.toContain("{{");
@@ -42,7 +17,6 @@ describe("toStudent", () => {
     expect(student.template).toContain("F = m·a");
     // The fenced code block survives, sentinels and all (decision D5).
     expect(student.template).toContain("```c");
-    expect(clozeServer.studentSchema.safeParse(student).success).toBe(true);
   });
 
   it("collapses text, number and regex blanks to one opaque input kind", () => {

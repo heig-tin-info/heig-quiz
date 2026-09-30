@@ -30,17 +30,5 @@ export function config(over: Partial<RichConfig> = {}): RichConfig {
   });
 }
 
-/** The values only the grader may read: none of them may reach a student. */
-export const SECRET_VALUES = [
-  "RUBRIC-SECRET-names the guard page",
-  "REFERENCE-SECRET-the stack grows down into unmapped memory",
-] as const;
-
-export const SECRET_CONFIG: RichConfig = RichConfigSchema.parse({
-  configVersion: 1,
-  prompt: "Explain why a stack overflow crashes a C program.",
-  rubric: `- 2 pts: ${SECRET_VALUES[0]}\n- 1 pt: mentions recursion`,
-  reference: SECRET_VALUES[1],
-  maxChars: 3000,
-  format: "markdown",
-});
+/** The full fixture of the leak test (`../testing.ts`), shared with the registry's contract test. */
+export * from "../testing.js";

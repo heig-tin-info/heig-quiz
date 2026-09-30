@@ -1,19 +1,18 @@
 /**
- * The mandatory leak test (PLAN-MVP §2.5, docs/spec/05 §5.7, invariant 4).
- *
- * Two independent checks, because either one alone is easy to satisfy by
- * accident: a forbidden-key list on the serialized student view, and a search
- * for the literal secret values of a fully populated configuration.
+ * The type-specific half of the leak test (PLAN-MVP §2.5, docs/spec/05 §5.7,
+ * invariant 4). The generic half — the full fixture of `./testing.ts`
+ * searched for every forbidden key and secret value, and parsed by the
+ * student schema — is the registry's contract test, for every type at once.
  */
 import { describe, expect, it } from "vitest";
 
-import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
+import { findStudentLeaks } from "@quiz/core/testing";
 
-import { CodeConfig, CodeStudent } from "./schema.js";
+import { CodeConfig } from "./schema.js";
 import { codeServer } from "./server.js";
 import {
   codeConfig,
-  SECRET_COMPILE_ARGS,
+  codeLeakFixture,
   SECRET_FILE_CONTENT,
   SECRET_HIDDEN_ARG,
   SECRET_HIDDEN_EXPECTED,
@@ -22,57 +21,11 @@ import {
   SECRET_REFERENCE,
 } from "./test/fixtures.js";
 
-/*
- * The shared floor (`@quiz/core/server`) plus what only `code` has. `expected`
- * is in neither: a VISIBLE case publishes its expected output on purpose —
- * the player shows "stdin / expected / got" and the student is meant to
- * compare them (docs/spec/04 §4.7). The hidden ones are covered by the value
- * search below, which is the check that actually matters here. `compare` is
- * out of the floor since audit R-06 and published on purpose (HOW, never
- * WHAT); its exact shape is pinned by a test of its own below.
- */
-const FORBIDDEN_KEYS = [
-  ...COMMON_FORBIDDEN_STUDENT_KEYS,
-  "action",
-  "content",
-  "files",
-  "policy",
-  "tolerance",
-];
-
-const SECRET_VALUES = [
-  SECRET_HIDDEN_STDIN,
-  SECRET_HIDDEN_EXPECTED,
-  SECRET_HIDDEN_NAME,
-  // A hidden case's command line says as much as its stdin does.
-  SECRET_HIDDEN_ARG,
-  SECRET_REFERENCE,
-  SECRET_FILE_CONTENT,
-  SECRET_COMPILE_ARGS,
-  "0x1004",
-];
-
 const view = { seed: 7, itemId: "item-1", shuffle: true };
 
 describe("codeServer.toStudent", () => {
   const student = codeServer.toStudent(codeConfig(), view);
   const serialized = JSON.stringify(student);
-
-  it("produces a value its own schema accepts", () => {
-    expect(CodeStudent.safeParse(student).success).toBe(true);
-  });
-
-  it("leaks no forbidden key", () => {
-    for (const key of FORBIDDEN_KEYS) {
-      expect(serialized, key).not.toContain(`"${key}"`);
-    }
-  });
-
-  it("leaks no secret value", () => {
-    for (const secret of SECRET_VALUES) {
-      expect(serialized, secret).not.toContain(secret);
-    }
-  });
 
   it("publishes the visible cases and only counts the hidden ones", () => {
     expect(student.visibleCases.map((c) => c.name)).toEqual(["three items", "empty array"]);
@@ -148,9 +101,7 @@ describe("codeServer.toStudent", () => {
       numeric: { epsilon: 0.001, mode: "rel" },
     });
     expect(Object.keys(published.compare).sort()).toEqual(["ignoreCase", "numeric", "trimTrailing"]);
-    for (const secret of SECRET_VALUES) {
-      expect(JSON.stringify(published), secret).not.toContain(secret);
-    }
+    expect(findStudentLeaks(published, codeLeakFixture)).toEqual([]);
   });
 
   it("passes the cooldown rule through, a UI pace and nothing of the key", () => {

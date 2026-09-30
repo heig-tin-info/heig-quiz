@@ -1,36 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { ANSWER_SUMMARY_MAX, ConfigMigrationError } from "@quiz/core/server";
+import { ANSWER_SUMMARY_MAX } from "@quiz/core/server";
 
 import { circuitServer } from "./server.js";
-import { CIRCUIT_CONFIG_VERSION, EMPTY_SCHEMATIC, emptyCircuitConfig } from "./schema.js";
+import { EMPTY_SCHEMATIC, emptyCircuitConfig } from "./schema.js";
 import { circuitConfig, rcAnswer, rcLowPass } from "./test/fixtures.js";
 
 describe("circuitServer: the contract", () => {
-  it("is registered under its own id and version", () => {
-    expect(circuitServer.id).toBe("circuit");
-    expect(circuitServer.configVersion).toBe(CIRCUIT_CONFIG_VERSION);
-  });
-
-  it("emits a blank draft stamped with its configVersion", () => {
-    const draft = circuitServer.emptyDraft() as Record<string, unknown>;
-    expect(draft["configVersion"]).toBe(circuitServer.configVersion);
-    expect(draft["prompt"]).toBe("");
-  });
-
-  it("migrates its own current version by identity, draft included", () => {
-    const draft = circuitServer.emptyDraft();
-    expect(circuitServer.migrate(draft, CIRCUIT_CONFIG_VERSION)).toStrictEqual(draft);
-    const config = circuitConfig();
-    expect(circuitServer.migrate(config, CIRCUIT_CONFIG_VERSION)).toStrictEqual(config);
-  });
-
-  it("refuses a config written by a newer platform", () => {
-    expect(() => circuitServer.migrate(emptyCircuitConfig(), CIRCUIT_CONFIG_VERSION + 1)).toThrow(
-      ConfigMigrationError,
-    );
-  });
-
   it("weighs the question by its stimuli, and falls back to one point", () => {
     expect(circuitServer.defaultPoints(circuitConfig())).toBe(4);
     expect(circuitServer.defaultPoints(emptyCircuitConfig())).toBe(1);
