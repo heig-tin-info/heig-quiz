@@ -28,6 +28,7 @@ const unclaimed = account("student");
 const keptSeat = account("student");
 
 const impersonation: SessionAuth = { kind: "impersonation", actorUserId: admin.id, evaluationId: null };
+const seb: SessionAuth = { kind: "seb", actorUserId: null, evaluationId: randomUUID() };
 
 beforeAll(async () => {
   db = await testDb();
@@ -81,5 +82,11 @@ describe("findReadableClassroom", () => {
     expect((await read(keptSeat, other.classroomId))!.payload).toBe("staff");
     expect(await read(keptSeat, other.classroomId, impersonation)).toBeNull();
     expect((await read(keptSeat, mine.classroomId, impersonation))!.payload).toBe("student");
+  });
+
+  it("refuses a seb session, whoever holds it (ADR-027)", async () => {
+    expect(await read(admin, mine.classroomId, seb)).toBeNull();
+    expect(await read(teacher, mine.classroomId, seb)).toBeNull();
+    expect(await read(student, mine.classroomId, seb)).toBeNull();
   });
 });
