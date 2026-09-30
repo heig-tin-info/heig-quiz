@@ -40,6 +40,11 @@ const CoursePage = lazy(() =>
 const TemplateEditor = lazy(() =>
   import("./evaluation/TemplateEditor").then((m) => ({ default: m.TemplateEditor })),
 );
+// F-JRN-07: the journal reader, its own chunk — no markdown library in it,
+// the pages arrive rendered.
+const JournalReader = lazy(() =>
+  import("./journal/JournalReader").then((m) => ({ default: m.JournalReader })),
+);
 const ClassroomView = lazy(() =>
   import("./ClassroomView").then((m) => ({ default: m.ClassroomView })),
 );
@@ -246,8 +251,9 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   classroomSettings: (_, c) => (
     <ComingSoon title="soon.classroomSettings" navigate={c.navigate} />
   ),
+  // F-JRN-07: both roles; the student UI asks for the student payload.
   classroomJournal: (r, c) => (
-    <ComingSoon title="soon.journal" detail={r.path} navigate={c.navigate} />
+    <JournalReader classroomId={r.id} path={r.path} navigate={c.navigate} studentView={!c.teacherUi} />
   ),
   classroomGrades: (_, c) => <ComingSoon title="bnav.grades" navigate={c.navigate} />,
   project: (_, c) => <ComingSoon title="soon.project" navigate={c.navigate} />,

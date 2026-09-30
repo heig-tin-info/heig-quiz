@@ -15,7 +15,7 @@
  * One page lives in a folder whose name has a space and an accent, so the
  * route's encoded paths are exercised by the mock too.
  */
-import type { Journal, JournalNavNode, JournalPage, JournalTocEntry } from "@quiz/contracts";
+import type { Journal, JournalNavNode, JournalPage, JournalTocEntry, JournalWarning } from "@quiz/contracts";
 import { buildNav, homePage, placePage } from "@quiz/docrender/journalTree";
 
 import { rooms } from "./org";
@@ -33,6 +33,7 @@ interface Fixture {
   /** Days from now; in the future, the page is hidden from students. */
   visibleInDays: number | null;
   markdown: string;
+  warnings?: JournalWarning[];
 }
 
 const heading = (depth: number, id: string, text: string) => `<h${depth} id="${id}">${text}</h${depth}>`;
@@ -45,11 +46,20 @@ const PAGES: Fixture[] = [
       heading(1, "programmation-1", "Programmation 1"),
       "<p>Bienvenue dans le journal du cours. Chaque semaine a sa page : ce qui a été vu, les exercices, les liens.</p>",
       heading(2, "organisation", "Organisation"),
-      '<p>Les semaines sont dans la navigation. Commencez par <a href="10-semaine-1/README.md">la semaine 1</a>.</p>',
+      '<p>Les semaines sont dans la navigation. Commencez par <a href="./10-semaine-1/README.md">la semaine 1</a>, puis lisez <a href="./10-semaine-1/10-pointeurs.md#arithmetique">l\'arithmétique des pointeurs</a>.</p>',
+      heading(2, "evaluation", "Évaluation"),
+      "<p>Deux tests écrits et un projet en groupe. Les tests se passent sur Quiz, en salle, avec Safe Exam Browser.</p>",
+      heading(3, "tests", "Tests"),
+      "<ul><li>Test 1 — bases du C</li><li>Test 2 — pointeurs et tableaux</li></ul>",
+      heading(2, "ressources", "Ressources"),
+      '<p>Le cours suit <a href="https://en.cppreference.com/w/c" target="_blank" rel="noreferrer">cppreference</a> pour la bibliothèque standard.</p>',
     ].join("\n"),
     toc: [
       { id: "programmation-1", depth: 1, text: "Programmation 1" },
       { id: "organisation", depth: 2, text: "Organisation" },
+      { id: "evaluation", depth: 2, text: "Évaluation" },
+      { id: "tests", depth: 3, text: "Tests" },
+      { id: "ressources", depth: 2, text: "Ressources" },
     ],
     draft: false,
     visibleInDays: null,
@@ -102,11 +112,19 @@ const PAGES: Fixture[] = [
   {
     path: "20-semaine 2 été/20-brouillon.md",
     title: "Brouillon — exercices",
-    html: [heading(1, "brouillon-exercices", "Brouillon — exercices"), "<p>À compléter.</p>"].join("\n"),
+    html: [
+      heading(1, "brouillon-exercices", "Brouillon — exercices"),
+      "<p>À compléter. &lt;div class=&quot;box&quot;&gt; Voir les exercices de la semaine.</p>",
+    ].join("\n"),
     toc: [{ id: "brouillon-exercices", depth: 1, text: "Brouillon — exercices" }],
     draft: true,
     visibleInDays: null,
-    markdown: "---\ndraft: true\n---\n# Brouillon — exercices\n",
+    markdown: '---\ndraft: true\n---\n# Brouillon — exercices\n\nÀ compléter. <div class="box"> [Voir](../exercices.md) les exercices de la semaine.\n',
+    // What the renderer reports for that source (codes, worded by the reader).
+    warnings: [
+      { code: "raw_html" },
+      { code: "target_missing", href: "../exercices.md", path: "exercices.md" },
+    ],
   },
 ];
 
@@ -172,7 +190,7 @@ on("GET", "/app/api/classrooms/:id/journal", (m, _body, url): Journal => {
     nav: navOf(PAGES),
     homePath: homePage(PAGES)?.path ?? null,
     hiddenPaths: PAGES.filter(hidden).map((p) => p.path),
-    warningCount: 0,
+    warningCount: PAGES.filter((p) => (p.warnings ?? []).length > 0).length,
     proposedName: null,
   };
 });
@@ -199,6 +217,6 @@ on("GET", "/app/api/classrooms/:id/journal/pages/(?<path>.+)", (m, _body, url): 
     hidden: hidden(page),
     markdown: page.markdown,
     blobSha: `blob-${page.path.length}`,
-    warnings: [],
+    warnings: page.warnings ?? [],
   };
 });
