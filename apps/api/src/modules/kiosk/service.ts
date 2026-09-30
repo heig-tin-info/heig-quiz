@@ -2,7 +2,8 @@
  * The station registry (ADR-051 §5): the one module that writes
  * `kiosk_devices`. A station is known by Google's `devicePermanentId` and,
  * between two attestations, by its `quiz_kiosk` cookie — whose SHA-256 alone
- * is stored, rotated by every accepted attestation.
+ * is stored; an attestation keeps it while the cookie still names the device
+ * and draws a new one otherwise (ADR-051 §5).
  *
  * `deviceByCredential` and `stationOf` are what the pairing (step 6) and the
  * session hook's `trustRefusal` (step 7) read a station through.
