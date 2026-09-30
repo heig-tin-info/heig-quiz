@@ -31,6 +31,7 @@ import { avatarPlugin } from "./modules/avatar.js";
 import { drillPlugin } from "./modules/drill/routes.js";
 import { registerDrillHooks } from "./modules/drill/service.js";
 import { evaluationPlugin } from "./modules/evaluation/routes.js";
+import { registerGithubJobs } from "./modules/github/jobs.js";
 import { githubPlugin } from "./modules/github/routes.js";
 import { gradingPlugin } from "./modules/grading/routes.js";
 import { registerGradingJobs } from "./modules/grading/jobs.js";
@@ -244,6 +245,10 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     // The scheduled tasks' worker (D10). Without a queue the ticker runs a
     // claimed task inline instead.
     await step("system jobs registration", () => registerSystemJobs(app, started, config));
+    // The webhook worker (M2-04), only with Quiz's App: without it there is no intake.
+    if (githubApp(config)) {
+      await step("github jobs registration", () => registerGithubJobs(app, started, config));
+    }
   }
   // The rows of the scheduled catalog (D10), once. A database down at boot
   // leaves them missing: the ticker then claims nothing until a restart.

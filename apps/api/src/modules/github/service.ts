@@ -16,7 +16,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyBaseLogger } from "fastify";
-import { and, desc, eq, isNotNull, isNull, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, ne, notInArray, or, sql, type SQL } from "drizzle-orm";
 
 import {
   AvatarMime,
@@ -104,6 +104,9 @@ function installUrl(config: AppConfig, classroomId: string): string {
 
 // ---------------------------------------------------------------- organization rows
 
+/** Where a fact about an organization was learnt, as its audit says (`payload.via`). */
+type Via = "setup_url" | "listing" | "healing" | "webhook";
+
 function systemAudit(
   db: Db | Tx,
   action:
@@ -165,6 +168,40 @@ async function retireLoginHolders(db: Db, login: string, keep: string | null): P
 }
 
 /**
+ * An organization renamed on GitHub, followed by its immutable id: a row
+ * already holding the new login under another id is retired first, never
+ * taken over ({@link retireLoginHolders}). Audited with where it was learnt.
+ */
+async function followRename(db: Db, row: OrgRow, login: string, via: Via): Promise<OrgRow> {
+  await retireLoginHolders(db, login, row.id);
+  const renamed = await patchOrg(db, row.id, { login });
+  await systemAudit(db, "github_org.renamed", row.id, { from: row.login, to: login, via });
+  return renamed;
+}
+
+/**
+ * The rows matching `where` forget their installation, each audited
+ * `installation_deleted` with `via` and `extra`. Only rows that still held
+ * one are written, so a replay writes and audits nothing.
+ */
+async function forgetInstallation(
+  db: Db,
+  where: SQL | undefined,
+  via: Via,
+  extra: Record<string, unknown> = {},
+): Promise<OrgRow[]> {
+  const rows = await db
+    .update(githubOrganizations)
+    .set({ installationId: null })
+    .where(and(isNotNull(githubOrganizations.installationId), where))
+    .returning();
+  for (const row of rows) {
+    await systemAudit(db, "github_org.installation_deleted", row.id, { via, ...extra });
+  }
+  return rows;
+}
+
+/**
  * The row of an organization GitHub has just shown installed, created or
  * brought up to date: the installation, the login (a rename is followed by
  * the immutable id), `active`. Idempotent: a second call with the same
@@ -177,7 +214,7 @@ async function retireLoginHolders(db: Db, login: string, keep: string | null): P
 export async function recordInstallation(
   db: Db,
   inst: AppInstallation,
-  via: "setup_url" | "listing" | "healing",
+  via: Via,
 ): Promise<OrgRow> {
   const [byId] = await db
     .select()
@@ -189,8 +226,9 @@ export async function recordInstallation(
         .select()
         .from(githubOrganizations)
         .where(and(isNull(githubOrganizations.githubOrgId), sameLogin(inst.login)));
-  const known = byId ?? imported;
-  await retireLoginHolders(db, inst.login, known?.id ?? null);
+  let known = byId ?? imported;
+  if (known && known.login !== inst.login) known = await followRename(db, known, inst.login, via);
+  else await retireLoginHolders(db, inst.login, known?.id ?? null);
   let row: OrgRow;
   if (!known) {
     const [created] = await db
@@ -217,20 +255,15 @@ export async function recordInstallation(
   } else {
     const current =
       known.installationId === inst.installationId &&
-      known.login === inst.login &&
       known.githubOrgId === inst.githubOrgId &&
       known.status === "active";
     row = current
       ? known
       : await patchOrg(db, known.id, {
           installationId: inst.installationId,
-          login: inst.login,
           githubOrgId: inst.githubOrgId,
           status: "active",
         });
-    if (known.login !== inst.login) {
-      await systemAudit(db, "github_org.renamed", row.id, { from: known.login, to: inst.login });
-    }
   }
   if (known?.installationId !== inst.installationId) {
     await systemAudit(db, "github_org.installation_resolved", row.id, {
@@ -280,19 +313,107 @@ async function syncInstallations(db: Db, config: AppConfig): Promise<void> {
   const found = await listInstalledOrgs(config, HTTP_READ);
   for (const inst of found) await recordInstallation(db, inst, "listing");
   const listed = found.map((i) => i.installationId);
-  const gone = await db
-    .update(githubOrganizations)
-    .set({ installationId: null })
+  await forgetInstallation(
+    db,
+    listed.length > 0 ? notInArray(githubOrganizations.installationId, listed) : undefined,
+    "listing",
+  );
+}
+
+// ---------------------------------------------------------------- webhook events
+
+/**
+ * What the `installation`, `installation_repositories` and `organization`
+ * handlers (`handlers.ts`, M2-04) write. Each is idempotent (ADR-011): a
+ * replay writes and audits nothing more.
+ */
+
+/**
+ * An `installation` event, whatever its action: the event says only WHICH
+ * installation changed, and GitHub's CURRENT state of it is what is
+ * recorded (`GET /app/installations/{id}` with the App's JWT) — installed,
+ * through {@link recordInstallation}; gone or suspended, forgotten. So a
+ * delivery replayed out of order (a failed `created` replayed after the
+ * `deleted` that followed it) can never bring back an installation GitHub
+ * no longer has. A GitHub failure throws: the delivery is retried. The
+ * organization touched, or null.
+ */
+export async function resyncInstallation(
+  db: Db,
+  config: AppConfig,
+  installationId: number,
+  action: string,
+): Promise<OrgRow | null> {
+  const inst = await fetchInstallation(config, installationId);
+  if (inst) return recordInstallation(db, inst, "webhook");
+  const [forgotten] = await forgetInstallation(
+    db,
+    eq(githubOrganizations.installationId, installationId),
+    "webhook",
+    { action, installationId },
+  );
+  return forgotten ?? null;
+}
+
+/**
+ * An organization renamed on GitHub ({@link followRename}). Null when the
+ * organization is unknown.
+ */
+export async function renameOrg(db: Db, githubOrgId: number, login: string): Promise<OrgRow | null> {
+  const [row] = await db
+    .select()
+    .from(githubOrganizations)
+    .where(eq(githubOrganizations.githubOrgId, githubOrgId));
+  if (!row || row.login === login) return row ?? null;
+  return followRename(db, row, login, "webhook");
+}
+
+/**
+ * An organization deleted on GitHub: `deleted`, its installation gone with
+ * it. The row and its links stay (they are the history of its classrooms).
+ */
+export async function markOrgDeleted(db: Db, githubOrgId: number): Promise<OrgRow | null> {
+  const [row] = await db
+    .select()
+    .from(githubOrganizations)
+    .where(eq(githubOrganizations.githubOrgId, githubOrgId));
+  if (!row || (row.status === "deleted" && row.installationId === null)) return row ?? null;
+  const deleted = await patchOrg(db, row.id, { status: "deleted", installationId: null });
+  await systemAudit(db, "github_org.deleted", row.id, {
+    via: "webhook",
+    installationId: row.installationId,
+  });
+  return deleted;
+}
+
+/**
+ * An organization changed outside a request (a webhook, the setup return):
+ * its healing is dropped, so the next open reads GitHub again, and the staff
+ * of its classrooms — and of `alsoClassroomId`'s, the setup return's
+ * `state` — get the hint that turns their Settings (F-GH-02).
+ */
+export async function orgChanged(db: Db, orgId: string, alsoClassroomId?: string): Promise<void> {
+  healed.delete(orgId);
+  const rooms = await db
+    .select({ courseId: classrooms.courseId })
+    .from(classrooms)
+    .leftJoin(githubClassroomLinks, eq(githubClassroomLinks.classroomId, classrooms.id))
     .where(
-      and(
-        isNotNull(githubOrganizations.installationId),
-        listed.length > 0 ? notInArray(githubOrganizations.installationId, listed) : undefined,
+      or(
+        eq(githubClassroomLinks.orgId, orgId),
+        alsoClassroomId === undefined ? undefined : eq(classrooms.id, alsoClassroomId),
       ),
-    )
-    .returning({ id: githubOrganizations.id });
-  for (const { id } of gone) {
-    await systemAudit(db, "github_org.installation_deleted", id, { via: "listing" });
-  }
+    );
+  installationChanged(rooms.map((r) => r.courseId));
+}
+
+/** The organization row holding an installation, if any. */
+export async function orgOfInstallation(db: Db, installationId: number): Promise<OrgRow | null> {
+  const [row] = await db
+    .select()
+    .from(githubOrganizations)
+    .where(eq(githubOrganizations.installationId, installationId));
+  return row ?? null;
 }
 
 // ---------------------------------------------------------------- healing
@@ -340,10 +461,8 @@ async function heal(db: Db, config: AppConfig, stored: OrgRow): Promise<Healed> 
     return { org: retired!, checks: UNKNOWN_CHECKS };
   }
   if (!inst) {
-    if (org.installationId !== null) {
-      org = await patchOrg(db, org.id, { installationId: null });
-      await systemAudit(db, "github_org.installation_deleted", org.id, { via: "healing" });
-    }
+    const [forgotten] = await forgetInstallation(db, eq(githubOrganizations.id, org.id), "healing");
+    org = forgotten ?? org;
     // Uninstalled, GitHub delivers nothing about the organization: whether it
     // still exists is asked. `null` (rate limit, network) keeps the stored status.
     const exists = await orgExistsOnGithub(org.login, config, HTTP_READ);
@@ -511,24 +630,13 @@ export async function completeSetup(
   }
   if (!inst) return;
   let org = await recordInstallation(db, inst, "setup_url");
-  healed.delete(org.id);
   try {
     // Read while the installation is fresh: the `free` warning shows at once.
     org = await refreshPlan(config, db, org);
   } catch (err) {
     log.warn({ err, org: org.login }, "reading an organization's plan failed");
   }
-  const rooms = await db
-    .select({ courseId: classrooms.courseId })
-    .from(classrooms)
-    .leftJoin(githubClassroomLinks, eq(githubClassroomLinks.classroomId, classrooms.id))
-    .where(
-      or(
-        eq(githubClassroomLinks.orgId, org.id),
-        query.state === undefined ? undefined : eq(classrooms.id, query.state),
-      ),
-    );
-  installationChanged(rooms.map((r) => r.courseId));
+  await orgChanged(db, org.id, query.state);
 }
 
 // ---------------------------------------------------------------- avatar
@@ -596,3 +704,18 @@ async function downloadAvatar(githubOrgId: number): Promise<OrgAvatar | null> {
   if (!bytes || sniffImage(bytes)?.mime !== declared) return null;
   return { bytes, mime: declared };
 }
+
+// ---------------------------------------------------------------- the webhook registry
+
+/**
+ * What other modules register on the webhook intake (M2-04): the journal
+ * its push handler (M4-02), projects their receipts (M3). Defined in
+ * `deliveries.ts`; reached through this entry, like the rest of the module.
+ */
+export {
+  onEvent,
+  onReceipt,
+  type ReceiptTracker,
+  type WebhookDelivery,
+  type WebhookHandler,
+} from "./deliveries.js";

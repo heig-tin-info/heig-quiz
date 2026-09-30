@@ -1,7 +1,8 @@
 /**
  * HTTP surface of the `github` module (spec 05 §5.11, F-GH-01 to F-GH-04):
  * the organizations where Quiz's App is installed, a classroom's link to one
- * of them, the App's setup return, and an organization's avatar.
+ * of them, the App's setup return, an organization's avatar, and the
+ * webhook intake (M2-04).
  *
  * Registered only when Quiz's App is configured (`githubApp(config)`,
  * `app.ts`): without it none of these routes exists, so each is a 404 and
@@ -9,14 +10,24 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { GithubConnectBody, GithubSetupQuery, IdParam } from "@quiz/contracts";
+import {
+  GithubConnectBody,
+  GithubSetupQuery,
+  GithubWebhookBody,
+  GithubWebhookHeaders,
+  IdParam,
+} from "@quiz/contracts";
 
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
+import { verifySignature } from "../../github/signature.js";
+import { redactTokens } from "../../redact.js";
 import { FixedWindowLimiter } from "../../limiter.js";
 import { accessibleClassroom, teacherGuard } from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
 import { INERT_IMAGE_HEADERS } from "../pool/assets.js";
+import { dispatchDelivery, storeDelivery } from "./deliveries.js";
+import { registerGithubHandlers } from "./handlers.js";
 import * as service from "./service.js";
 
 /** The setup return, per address: an install or two a minute is the real use. */
@@ -31,6 +42,10 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
   const requireSession = (req: FastifyRequest, reply: FastifyReply) =>
     app.requireSession(req, reply);
   const setups = new FixedWindowLimiter(SETUPS_PER_WINDOW, SETUP_WINDOW_MS);
+
+  registerGithubHandlers();
+  // Its own child context: the raw-body parser reaches no other route.
+  await app.register(webhookIntake, { config });
 
   /**
    * A classroom of the caller's staff (invariant 6): a student, a teacher
@@ -134,4 +149,71 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
       303,
     );
   });
+}
+
+/**
+ * `POST /webhooks/github` (N-SEC-17, spec 05 §5.11; the sequence is in
+ * `deliveries.ts`). Public, and served to no session at all (`sessions:
+ * []`): a cookie sent along is ignored, so whoever calls answers the same.
+ *
+ * Registered as a child plugin, without `fastify-plugin`: its parser
+ * replaces every body parser in this context only, so the route reads the
+ * exact bytes GitHub signed and the JSON parsing of every other route is
+ * untouched. Nothing is parsed, nor stored, before the HMAC holds. The body
+ * limit is Fastify's default, 1 MB, as in classroom.
+ */
+async function webhookIntake(app: FastifyInstance, opts: { config: AppConfig }) {
+  const { config } = opts;
+  app.removeAllContentTypeParsers();
+  app.addContentTypeParser("*", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
+
+  app.post("/webhooks/github", { config: { sessions: [] } }, async (req, reply) => {
+    const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    const signature = req.headers["x-hub-signature-256"];
+    if (
+      !verifySignature(
+        config.GITHUB_WEBHOOK_SECRET,
+        raw,
+        typeof signature === "string" ? signature : undefined,
+      )
+    ) {
+      req.log.warn("webhook signature rejected");
+      return reply.code(401).send({ error: "bad_signature" });
+    }
+    const headers = GithubWebhookHeaders.safeParse(req.headers);
+    if (!headers.success) return reply.code(400).send({ error: "bad_headers" });
+    const body = GithubWebhookBody.safeParse(parseJson(raw));
+    if (!body.success) return reply.code(400).send({ error: "bad_body" });
+
+    const payload = body.data;
+    const deliveryId = headers.data["x-github-delivery"];
+    const stored = await storeDelivery(app.db, config, {
+      deliveryId,
+      event: headers.data["x-github-event"],
+      action: typeof payload.action === "string" ? payload.action : null,
+      payload,
+      receivedAt: app.clock.now(),
+    });
+    // A delivery seen before is acknowledged, and nothing runs again.
+    if (!stored) return reply.code(200).send({ ok: true, duplicate: true });
+    try {
+      await dispatchDelivery(app, config, deliveryId);
+    } catch (err) {
+      // Stored, its receipt too: the reconciliation replays it. GitHub gets
+      // its 200, or its redelivery would only be a duplicate.
+      req.log.error(
+        { deliveryId, error: redactTokens(String(err)) },
+        "queueing a GitHub delivery failed",
+      );
+    }
+    return reply.code(200).send({ ok: true });
+  });
+}
+
+function parseJson(raw: Buffer): unknown {
+  try {
+    return JSON.parse(raw.toString("utf8"));
+  } catch {
+    return undefined;
+  }
 }

@@ -107,11 +107,17 @@ interface RawInstallation {
   id: number;
   account: { id?: number; login?: string; type?: string } | null;
   repository_selection?: string;
+  suspended_at?: string | null;
 }
 
-/** An organization's installation, or null for a user's (or a malformed one). */
+/**
+ * An organization's installation, or null for a user's, a malformed one, or
+ * a SUSPENDED one: suspended, the App can do nothing there (its tokens are
+ * refused), so Quiz treats it as not installed until it is unsuspended.
+ */
 function orgInstallation(data: RawInstallation): AppInstallation | null {
   const account = data.account;
+  if (data.suspended_at) return null;
   if (!account?.login || account.id === undefined || account.type !== "Organization") return null;
   return {
     installationId: data.id,
@@ -292,4 +298,56 @@ export async function fetchInstallation(
     if ((err as { status?: number }).status === 404) return null;
     throw err;
   }
+}
+
+/** One delivery attempt of the App's webhook, as `GET /app/hook/deliveries` lists it. */
+export interface HookDelivery {
+  /** The attempt's id, what a redelivery names. */
+  id: number;
+  /** `X-GitHub-Delivery`: the same for every attempt of one delivery. */
+  guid: string;
+  statusCode: number;
+  redelivery: boolean;
+  deliveredAt: Date;
+}
+
+interface RawHookDelivery {
+  id: number;
+  guid: string;
+  status_code: number;
+  redelivery: boolean;
+  delivered_at: string;
+}
+
+/**
+ * The App's latest webhook delivery attempts, newest first, one page of 100
+ * (GH-62): where the reconciliation looks for failures. Empty when the App
+ * has no webhook configured (GitHub's 404); any other failure throws. A
+ * background call: a rate limit is waited out once.
+ */
+export async function recentHookDeliveries(config: AppConfig): Promise<HookDelivery[]> {
+  const app = githubApp(config);
+  if (!app) return [];
+  try {
+    const { data } = await app.octokit.request("GET /app/hook/deliveries", { per_page: 100 });
+    return (data as RawHookDelivery[]).map((d) => ({
+      id: d.id,
+      guid: d.guid,
+      statusCode: d.status_code,
+      redelivery: d.redelivery,
+      deliveredAt: new Date(d.delivered_at),
+    }));
+  } catch (err) {
+    if ((err as { status?: number }).status === 404) return [];
+    throw err;
+  }
+}
+
+/** Asks GitHub to deliver an attempt again (`POST /app/hook/deliveries/{id}/attempts`). */
+export async function redeliverHookDelivery(config: AppConfig, id: number): Promise<void> {
+  const app = githubApp(config);
+  if (!app) return;
+  await app.octokit.request("POST /app/hook/deliveries/{delivery_id}/attempts", {
+    delivery_id: id,
+  });
 }

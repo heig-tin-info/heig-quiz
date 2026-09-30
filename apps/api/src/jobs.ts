@@ -39,6 +39,17 @@ export const GRADING_RUNNER_QUEUE = "grading.runner";
 export const SYSTEM_TASK_QUEUE = "system.task";
 
 /**
+ * One GitHub webhook delivery to handle (spec 05 §5.11, merge task M2-04):
+ * `{ deliveryId }`, sent by `/webhooks/github` once the delivery is stored,
+ * and by `reconcile.deliveries` for one left unprocessed. The job carries
+ * the id only; the worker reads the stored payload. A `standard` queue, no
+ * dedupe: the stored `processed_at` is what makes a second job a no-op, and
+ * the handlers are idempotent (ADR-011). Retried five times with backoff,
+ * the error kept on the delivery.
+ */
+export const GITHUB_WEBHOOK_QUEUE = "github.webhook";
+
+/**
  * No `singletonKey`, on purpose (#273). Our queues are pg-boss `standard`
  * queues (`createQueue` passes no policy, and pg-boss 12 refuses to change a
  * policy after creation), on which a key without `singletonSeconds` dedupes

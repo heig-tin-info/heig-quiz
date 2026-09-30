@@ -306,6 +306,12 @@ export const en = {
   "admin.task.health.checks": "Health checks",
   "admin.task.health.checks.desc":
     "Runs the checks of the System status and tells the administrators when one fails twice in a row, and when it recovers.",
+  "admin.task.reconcile.deliveries": "GitHub deliveries",
+  "admin.task.reconcile.deliveries.desc":
+    "Replays the GitHub events left unprocessed, and asks GitHub to resend the ones it failed to deliver in the last 24 hours.",
+  "admin.task.deliveries.purge": "GitHub event retention",
+  "admin.task.deliveries.purge.desc":
+    "Clears the content of the GitHub events processed more than 30 days ago, and keeps their record.",
   "admin.kiosk": "Kiosk stations",
   "admin.kiosk.hint":
     "The school's Chromebooks that attested themselves. Name a station to let students pair with it; retire one to take it out of service.",

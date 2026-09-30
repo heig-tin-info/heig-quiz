@@ -7,10 +7,12 @@
  *
  * Test support only; nothing in the application imports it.
  */
-import { generateKeyPairSync } from "node:crypto";
+import { createHmac, generateKeyPairSync, randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import type { FastifyInstance, LightMyRequestResponse } from "fastify";
 
 /** A private key file the App can sign its JWT with, and its removal. */
 export function appKey(): { pem: string; remove: () => void } {
@@ -57,6 +59,8 @@ export interface FakeOrg {
   secret: boolean;
   /** False: GitHub has no organization under that login any more. */
   exists: boolean;
+  /** The installation is suspended (`suspended_at` set). */
+  suspended?: boolean;
 }
 
 /**
@@ -71,6 +75,7 @@ export function orgsRoute(orgs: () => FakeOrg[]): Route {
     id: o.installationId,
     account: account(o),
     repository_selection: o.selection,
+    suspended_at: o.suspended ? "2026-09-01T00:00:00Z" : null,
   });
   const byLogin = (login: string) =>
     orgs().find(
@@ -154,4 +159,47 @@ export function fakeGithub(): FakeGithub {
     },
   };
   return fake;
+}
+
+/** What a test may change of a webhook delivery; the rest is a valid one. */
+export interface DeliveryOptions {
+  /** `X-GitHub-Event`; null leaves the header out. */
+  event?: string | null;
+  /** `X-GitHub-Delivery`; a fresh GUID by default. */
+  id?: string;
+  /** The raw body; `JSON.stringify(payload)` by default. */
+  body?: string;
+  /** `X-Hub-Signature-256`; the body signed with `secret` by default, null leaves it out. */
+  signature?: string | null;
+  /** Added last: a session's cookies, or an override. */
+  headers?: Record<string, string>;
+}
+
+/** `sha256=<hex>` of `body` under `secret`, as GitHub signs a delivery. */
+export function signBody(secret: string, body: string): string {
+  return `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
+}
+
+/** `POST /webhooks/github` as GitHub sends it: signed with `secret` unless `opts` says otherwise. */
+export function signedDelivery(
+  app: FastifyInstance,
+  secret: string,
+  payload: object,
+  opts: DeliveryOptions = {},
+): Promise<LightMyRequestResponse> {
+  const body = opts.body ?? JSON.stringify(payload);
+  const signature = opts.signature === undefined ? signBody(secret, body) : opts.signature;
+  const event = opts.event === undefined ? "ping" : opts.event;
+  return app.inject({
+    method: "POST",
+    url: "/webhooks/github",
+    headers: {
+      "content-type": "application/json",
+      "x-github-delivery": opts.id ?? randomUUID(),
+      ...(event === null ? {} : { "x-github-event": event }),
+      ...(signature === null ? {} : { "x-hub-signature-256": signature }),
+      ...opts.headers,
+    },
+    payload: body,
+  });
 }

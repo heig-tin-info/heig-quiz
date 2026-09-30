@@ -81,12 +81,13 @@ export type AuditAction =
   /**
    * Quiz's App found installed on an organization (subject the organization
    * row; `payload.installationId`, `payload.via`: `setup_url`, `listing`,
-   * `healing`), or found uninstalled (`installation_deleted`). A system
-   * action: GitHub said so, nobody asked.
+   * `healing`, `webhook`), or found uninstalled or suspended
+   * (`installation_deleted`; from a webhook, `payload.action` says which).
+   * A system action: GitHub said so, nobody asked.
    */
   | "github_org.installation_resolved"
   | "github_org.installation_deleted"
-  /** The organization's login changed on GitHub (`payload.from`, `payload.to`). */
+  /** The organization's login changed on GitHub (`payload.from`, `payload.to`, `payload.via`). */
   | "github_org.renamed"
   /** The organization no longer exists on GitHub (`status: deleted`). */
   | "github_org.deleted"

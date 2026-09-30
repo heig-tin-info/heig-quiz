@@ -6,8 +6,11 @@
  * - a `seb` session is no session at all on every route of the module
  *   (ADR-027): it answers exactly as an anonymous request;
  * - an impersonation session writes nothing (ADR-034), and reads no
- *   classroom's GitHub link, not even its student's classroom (invariant 6).
+ *   classroom's GitHub link, not even its student's classroom (invariant 6);
+ * - the webhook intake serves no session at all (`sessions: []`): a signed
+ *   delivery needs none, and a session sent along changes nothing.
  */
+
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -22,7 +25,7 @@ import {
   walkUrl,
 } from "../../auth/testing.js";
 import { enrollments } from "../../db/schema.js";
-import { appKey, fakeGithub } from "../../github/testing.js";
+import { appKey, fakeGithub, signedDelivery } from "../../github/testing.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type Method, type TestServer } from "../../test/http.js";
 import { seedLive, type Seeded } from "../../test/live.js";
@@ -33,6 +36,13 @@ let restore: () => void;
 let server: TestServer;
 let seed: Seeded;
 let student: { id: string; headers: Record<string, string> };
+
+const SECRET = "h".repeat(40);
+const WEBHOOK = "/webhooks/github";
+
+/** A delivery GitHub signed, with a session's `headers` sent along. */
+const delivery = (headers: Record<string, string> = {}) =>
+  signedDelivery(server.app, SECRET, { zen: "Anything added dilutes everything else." }, { headers });
 
 const call = (method: Method, url: string, headers: Record<string, string>, payload: object = {}) =>
   server.app.inject({ method, url, headers, ...(method === "GET" ? {} : { payload }) });
@@ -47,6 +57,7 @@ beforeAll(async () => {
     GITHUB_APP_ID: "1",
     GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
     GITHUB_APP_SLUG: "quiz-test",
+    GITHUB_WEBHOOK_SECRET: SECRET,
     SEB_CONFIG_KEY_ENFORCE: "1",
   });
   server.clock.set("2026-09-21T08:00:00.000Z");
@@ -89,6 +100,17 @@ describe("a seb session (ADR-027)", () => {
       expect(asSeb.statusCode, `${method} ${path}`).toBe(asNobody.statusCode);
     }
   });
+
+  it("changes nothing to a signed webhook delivery", async () => {
+    const seb = await openSebSession(server, seed.evaluationId, student.headers);
+    expect((await delivery(seb(WEBHOOK))).statusCode).toBe(200);
+  });
+});
+
+describe("the webhook intake", () => {
+  it("needs no session at all", async () => {
+    expect((await delivery()).statusCode).toBe(200);
+  });
 });
 
 describe("an impersonation session (ADR-034)", () => {
@@ -106,11 +128,21 @@ describe("an impersonation session (ADR-034)", () => {
 
   it("writes nothing, on every route of the module", async () => {
     for (const { method, path } of githubRoutes()) {
-      if (method === "GET") continue;
+      // The intake serves no session: an impersonation's is not there at all (below).
+      if (method === "GET" || path === WEBHOOK) continue;
       const res = await call(method, walkUrl(path), as);
       expect(res.statusCode, `${method} ${path}`).toBe(403);
       expect(res.json().error, `${method} ${path}`).toBe("impersonation_read_only");
     }
+  });
+
+  it("is no session at all on the webhook intake", async () => {
+    const unsigned = (headers: Record<string, string> = {}) =>
+      signedDelivery(server.app, SECRET, {}, { signature: null, headers });
+    const [asImpersonation, asNobody] = await Promise.all([unsigned(as), unsigned()]);
+    expect(asImpersonation.statusCode).toBe(401);
+    expect(asNobody.statusCode).toBe(401);
+    expect((await delivery(as)).statusCode).toBe(200);
   });
 
   it("reads no GitHub link, not even of the student's own classroom", async () => {
