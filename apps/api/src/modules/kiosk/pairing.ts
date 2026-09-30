@@ -154,8 +154,8 @@ export async function pollPairing(
 
 /**
  * Wrong codes a user may send within the window before the pairing refuses
- * them (ADR-051 §7), counted from the audit like the access code
- * (`evaluation.access_code_failed`): no counter to keep in step.
+ * them (ADR-051 §7), counted from the audit's own `kiosk.pair_refused`
+ * rows under an advisory lock: no counter to keep in step.
  */
 export const PAIR_MAX_FAILURES = 10;
 export const PAIR_WINDOW_MS = 10 * 60_000;

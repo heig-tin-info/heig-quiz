@@ -268,6 +268,9 @@ describe("the kiosk session (ADR-051)", () => {
       kind: "kiosk",
       evaluationId: kioskExam.evaluationId,
       readOnly: false,
+      // ADR-054: a confined session never holds Super Powers.
+      superPowersAvailable: false,
+      superPowersUntil: null,
     });
     expect((await call("POST", `/app/api/evaluations/${kioskExam.evaluationId}/attempt`, withStation())).statusCode).toBe(200);
   });
