@@ -10,10 +10,10 @@ separate commit on `main`. Protocol: [`README.md`](README.md).
   (`01-strategy.md` §1.3, "The journal first").
 - **Next actions**: D03, D07, D14, D15, D23, D24, D25, D27 settled
   2026-09-30.
-  The journal track starts: M0-03 (ADR-035 accepted with the D23 amendment,
-  classroom ADR-015 imported as ADR-049), M0-04 for
-  the journal, Courses and Settings-tab requirements, and M0-05, then M1-01…05 (M1-06
-  is not on this track) and M4-01 in parallel, then M2-01…04, M2-07, M4-02…06, M5-01/02.
+  The journal track's paper is done: M0-03 (#365) and M0-04's journal part
+  (#367) merged, M0-05 in review (#369). **Next: M1-01…05 (M1-06 is not
+  on this track) and M4-01 in parallel**, then M2-01…04, M2-07, M4-02…06,
+  M5-01/02.
   M2-06 needs the product owner to register Quiz's two GitHub Apps before
   the first deploy that sets `GITHUB_*`. D09 still awaits confirmation (not
   on this track).
@@ -38,9 +38,9 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | --- | --- | --- | --- | --- | --- | --- |
 | M0-01 | Settle blocking decisions | in progress | — | | | D01, D02, D04, D08, D16 settled 2026-09-28; D03, D07, D14, D15, D23–D25, D27 settled 2026-09-30; D09 awaits confirmation |
 | M0-02 | Measure production (read-only) | done | PO go | `plan/merge-classroom` | #268 | `measures-2026-09-28.md`: pairwise edu-ID subs (login adoption needed), workspace unused by real classes, 3 classes to merge into existing Quiz classrooms, 0 pending staff; App permissions not checked |
-| M0-03 | ADRs (035 accepted, imports, amendments) | review | M0-01 | `merge/M0-03-adrs` | #365 | ADR-035 Accepted; classroom ADR-011 ⇒ 011, 013 ⇒ 047, 014 ⇒ 048, 015 ⇒ 049 (journal, addendum for D03 and J1–J7); 029 superseded; 006/007/010/012/016/027/030 amended, the D05/D06/D18/D21 parts left open; M0-05 must drop "ADR-007 not applicable" from `CLAUDE.md` |
-| M0-04 | Spec amendments | in progress | M0-01 | `merge/M0-04-spec-journal` (journal track) | #367 | Journal track done in #367: F-ORG-13..15, F-GH-01..05, F-JRN-01..12, N-RES-07, N-SEC-12..18, 05 §5.3/§5.7/§5.11, 06 nos. 30–33, 07 frozen, D16 in spec prose; D28 opened then settled (a) 2026-09-30. **Remains**: projects (F-PROJ, D01 onwards), gradebook (F-GBOOK), workspace, unified SEB, the other §7.4 words, 00 GitHub Classroom column, 08 novice path for projects, N-DATA for project repos (D19); ADR-018 still says "journal" for the attempt log (M0-03 or a follow-up) |
-| M0-05 | `CLAUDE.md`, `AGENTS.md`, reviewer prompts | in progress | M0-03 | `merge/M0-05-claude-md` | | |
+| M0-03 | ADRs (035 accepted, imports, amendments) | done | M0-01 | `merge/M0-03-adrs` | #365 | ADR-035 Accepted; classroom ADR-011 ⇒ 011, 013 ⇒ 047, 014 ⇒ 048, 015 ⇒ 049 (journal, addendum for D03 and J1–J7); 029 superseded; 006/007/010/012/016/027/030 amended, the D05/D06/D18/D21 parts left open; M0-05 must drop "ADR-007 not applicable" from `CLAUDE.md` |
+| M0-04 | Spec amendments | in progress | M0-01 | `merge/M0-04-spec-journal` (journal track) | #367 | Journal track done in #367: F-ORG-13..15, F-GH-01..05, F-JRN-01..12, N-RES-07, N-SEC-12..18, 05 §5.3/§5.7/§5.11, 06 nos. 30–33, 07 frozen, D16 in spec prose; D28 opened then settled (a) 2026-09-30. **Remains**: projects (F-PROJ, D01 onwards), gradebook (F-GBOOK), workspace, unified SEB, the other §7.4 words, 00 GitHub Classroom column, 08 novice path for projects, N-DATA for project repos (D19); the ADR prose of D16 was aligned by M0-05 (#369) |
+| M0-05 | `CLAUDE.md`, `AGENTS.md`, reviewer prompts | review | M0-03 | `merge/M0-05-claude-md` | #369 | `CLAUDE.md` invariants 4 (journal student view), 6 (`readableClassroom`, created by M4-02), 11–12 scoped to `apps/runner`, 14 (project source at the frozen sha), new 15 (GitHub App and secrets); `invariant-reviewer` checks them; `AGENTS.md` unchanged; D16 in ADR prose done, the `en`/`fr` strings `eval.resetAttempt.message` and `eval.logVisibility.desc` still say "journal" (a code task) |
 
 ## M1 — Foundations
 
@@ -154,6 +154,10 @@ In the critical path only if D09 finds online assignments in production.
 
 Newest first. One line per session that changed the state: date, who,
 what moved, what the next session must know.
+
+- 2026-09-30 — M0-05 (#369): `CLAUDE.md` and `invariant-reviewer` carry
+  the merge's rules (invariants 4, 6, 11–12, 14, 15); D16 in ADR prose.
+  Next: M1-01…05 and M4-01 in parallel.
 
 - 2026-09-30 — M0-03 (#365): ADR-035 accepted; classroom ADRs imported as
   011, 047, 048, 049; amendments on 006, 007, 010, 012, 016, 027, 029, 030.
