@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { redactUrl, requestLog } from "./redact.js";
+import { redactTokens, redactUrl, requestLog } from "./redact.js";
 
 const TOKEN = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcde";
 
@@ -31,5 +31,52 @@ describe("the request log", () => {
   it("is what the serializer writes", () => {
     const line = requestLog({ method: "GET", url: `/teams/link?token=${TOKEN}`, host: "quiz.test", ip: "10.0.0.1" });
     expect(line).toEqual({ method: "GET", url: "/teams/link…", host: "quiz.test", remoteAddress: "10.0.0.1" });
+  });
+});
+
+describe("GitHub tokens (N-SEC-16)", () => {
+  it("strips the installation token from a remote URL echoed by git", () => {
+    // Same shape as a real failed-push message (classroom provisioning,
+    // 2026-07-14), with a made-up token: a real one trips push protection.
+    const msg =
+      "Error: Command failed: git --git-dir /tmp/x/src.git push --quiet " +
+      "https://x-access-token:ghs_0000000000FAKEFAKEFAKE0000000000000000@github.com/org/repo.git " +
+      "refs/heads/master:refs/heads/master\nerror: RPC failed; curl 55";
+    const clean = redactTokens(msg);
+    expect(clean).not.toContain("ghs_0000");
+    expect(clean).toContain("x-access-token:***@github.com/org/repo.git");
+    expect(clean).toContain("RPC failed"); // the diagnostics survive
+  });
+
+  it("strips a token that has no known prefix from the remote URL", () => {
+    expect(redactTokens("https://x-access-token:v1.abcdef0123@github.com/o/r.git")).toBe(
+      "https://x-access-token:***@github.com/o/r.git",
+    );
+  });
+
+  it("strips the authorization header git is handed, whatever its scheme", () => {
+    const basic = Buffer.from("x-access-token:v1.opaque").toString("base64");
+    expect(redactTokens(`http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}`)).toBe(
+      "http.https://github.com/.extraheader=AUTHORIZATION: basic ***",
+    );
+    expect(redactTokens("Authorization: Bearer eyJhbGciOi.x.y")).toBe("Authorization: Bearer ***");
+    expect(redactTokens("authorization: token v1.abc")).toBe("authorization: token ***");
+  });
+
+  it("strips every bare token by its prefix", () => {
+    for (const prefix of ["ghs", "ghu", "ghp", "gho", "ghr"]) {
+      expect(redactTokens(`token ${prefix}_abc123XYZ leaked`)).toBe("token gh*_*** leaked");
+    }
+  });
+
+  it("leaves words that merely start with gh alone", () => {
+    for (const text of ["ghost_town", "a ghs-like word", "sigh_s", "gh_x"]) {
+      expect(redactTokens(text)).toBe(text);
+    }
+  });
+
+  it("masks a token that reaches the request log in a URL", () => {
+    expect(redactUrl("/app/api/x?t=ghs_abcdef123")).toBe("/app/api/x?t=gh*_***");
+    expect(requestLog({ method: "GET", url: "/a?t=ghu_zz", host: "h", ip: "i" }).url).not.toContain("ghu_zz");
   });
 });

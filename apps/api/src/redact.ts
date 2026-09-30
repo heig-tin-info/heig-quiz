@@ -11,6 +11,10 @@
  *    (ADR-030), in the query — the SPA page as the server serves it;
  *  - and either of them as the `next=` (or `returnTo=`) of a login round
  *    trip, which carries the page to come back to, token included.
+ *
+ * And the GitHub tokens (N-SEC-16), wherever they appear in a text:
+ * `redactTokens` is the one pattern table, used by the git wrapper
+ * (`github/git.ts`) on every failure message and by the request log.
  */
 import type { FastifyRequest } from "fastify";
 
@@ -25,8 +29,28 @@ const RETURN_PARAMS: readonly string[] = ["next", "returnTo"];
 
 const secret = (url: string) => SECRET_PREFIXES.find((prefix) => url.startsWith(prefix));
 
+/**
+ * `text` with every GitHub token masked: the installation token of an
+ * `https://x-access-token:<token>@github.com/…` remote that git echoes on a
+ * failure, and any bare token by its prefix (`ghs_` installation, `ghu_`
+ * user-to-server, `ghp_` personal, `gho_` OAuth, `ghr_` refresh), and the
+ * `AUTHORIZATION: basic <base64>` header the git wrapper hands to git
+ * (`github/git.ts`). Tokens expire within the hour, but they are never
+ * stored nor logged at all. A safety net: the wrapper puts no token in a URL.
+ */
+export function redactTokens(text: string): string {
+  return text
+    .replace(/(authorization:\s*(?:basic|bearer|token)\s+)[A-Za-z0-9+/=._-]+/gi, "$1***")
+    .replace(/x-access-token:[^@\s]+@/g, "x-access-token:***@")
+    .replace(/\bgh[a-z]_[A-Za-z0-9_]+/g, "gh*_***");
+}
+
 /** `url` (a request's path and query) with every secret replaced by `…`. */
 export function redactUrl(url: string): string {
+  return redactTokens(redactSecretPages(url));
+}
+
+function redactSecretPages(url: string): string {
   const prefix = secret(url);
   if (prefix) return `${prefix}…`;
   const q = url.indexOf("?");

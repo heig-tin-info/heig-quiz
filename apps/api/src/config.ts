@@ -1,3 +1,4 @@
+import { accessSync, constants, statSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { z } from "zod";
@@ -236,7 +237,57 @@ const EnvSchema = z.object({
         .map((t) => t.trim().toLowerCase())
         .filter((t) => t !== ""),
     ),
+
+  // --- GitHub (ADR-035, N-SEC-16) ---
+
+  /**
+   * Quiz's OWN GitHub App (decision D23): never heig-classroom's, and in
+   * staging a separate App on a test organization (N-SEC-18). No App id
+   * — the default — means the GitHub features are off and everything else
+   * starts as usual. The key is a PEM file outside the repository and the
+   * database (ADR-010); its path is made absolute below.
+   */
+  GITHUB_APP_ID: z.string().trim().default(""),
+  GITHUB_APP_PRIVATE_KEY_PATH: z.string().trim().default(""),
+  /** The App's URL name: the install link, and the bot login `<slug>[bot]`. */
+  GITHUB_APP_SLUG: z.string().trim().default(""),
+  /** HMAC key of `/webhooks/github` (N-SEC-17). */
+  GITHUB_WEBHOOK_SECRET: z.string().trim().default(""),
+  /** The App's own user-to-server OAuth, for account linking (no OAuth App). */
+  GITHUB_APP_CLIENT_ID: z.string().trim().default(""),
+  GITHUB_APP_CLIENT_SECRET: z.string().trim().default(""),
 });
+
+/** The shortest webhook secret production accepts (N-SEC-16). */
+export const GITHUB_WEBHOOK_SECRET_MIN = 32;
+
+/**
+ * Production refusals of the GitHub App (N-SEC-16). No App id: GitHub is
+ * off, nothing to refuse. With one, a key that cannot be read, a missing
+ * slug or a brute-forceable webhook secret fail later, on a student's
+ * repository: refuse them at boot. Returns the reason, or null.
+ */
+function githubRefusal(env: AppConfig): string | null {
+  if (env.GITHUB_APP_ID === "") return null;
+  if (!readableFile(env.GITHUB_APP_PRIVATE_KEY_PATH)) {
+    return "GITHUB_APP_PRIVATE_KEY_PATH must be a readable key file";
+  }
+  if (env.GITHUB_APP_SLUG === "") return "GITHUB_APP_SLUG is required";
+  if (env.GITHUB_WEBHOOK_SECRET.length < GITHUB_WEBHOOK_SECRET_MIN) {
+    return `GITHUB_WEBHOOK_SECRET must be at least ${GITHUB_WEBHOOK_SECRET_MIN} characters`;
+  }
+  return null;
+}
+
+function readableFile(path: string): boolean {
+  if (path === "") return false;
+  try {
+    accessSync(resolve(path), constants.R_OK);
+    return statSync(resolve(path)).isFile();
+  } catch {
+    return false;
+  }
+}
 
 export type AppConfig = z.infer<typeof EnvSchema>;
 
@@ -289,6 +340,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (teamsEnabled(parsed.data) && parsed.data.TEAMS_ALLOWED_TENANTS.length === 0) {
       throw new Error("Invalid configuration: TEAMS_ALLOWED_TENANTS is required in production when Teams is on");
     }
+    // A GitHub App whose key cannot be read, whose webhook secret can be
+    // brute-forced or whose slug is unknown fails later, on a student's
+    // repository: refuse it at boot instead (N-SEC-16).
+    const github = githubRefusal(parsed.data);
+    if (github) throw new Error(`Invalid configuration: ${github}`);
   }
   // `http` without an address is a runner that is silently never called: the
   // process refuses to start rather than grade every code question by hand
@@ -326,6 +382,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     // its launch directory (ADR-010, secret in a file).
     OIDC_PRIVATE_KEY_PATH: parsed.data.OIDC_PRIVATE_KEY_PATH
       ? resolve(parsed.data.OIDC_PRIVATE_KEY_PATH)
+      : "",
+    GITHUB_APP_PRIVATE_KEY_PATH: parsed.data.GITHUB_APP_PRIVATE_KEY_PATH
+      ? resolve(parsed.data.GITHUB_APP_PRIVATE_KEY_PATH)
       : "",
   };
 }

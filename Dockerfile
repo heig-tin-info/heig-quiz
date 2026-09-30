@@ -30,6 +30,12 @@ RUN pnpm --filter @quiz/api deploy --prod --legacy /out \
   && cp -r apps/web/dist /out/web
 
 FROM node:24-slim
+# git: the GitHub adapters clone and push over HTTPS with an installation
+# token (apps/api/src/github/git.ts, ADR-035); ca-certificates: the slim image
+# has none, and git's TLS to github.com needs them.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /out /app

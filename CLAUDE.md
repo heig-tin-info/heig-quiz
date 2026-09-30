@@ -49,8 +49,9 @@ The screens as they ship are in the user guide's screenshots
 
 ```
 apps/
-  api/        Fastify: modules, SSE, jobs, ticker, Drizzle schema + migrations;
-              to come: src/github/, modules/github|journal|project|gradebook
+  api/        Fastify: modules, SSE, jobs, ticker, Drizzle schema + migrations,
+              src/github/ (the GitHub adapters); to come:
+              modules/github|journal|project|gradebook
   web/        React SPA (Vite, Tailwind, TanStack Query)
   runner/     code execution in hardened Podman containers (@quiz/runner)
 packages/
@@ -229,21 +230,23 @@ internal bridge).
 
 ### GitHub invariant (ADR-035, N-SEC-16..18)
 
-15. **Quiz's own GitHub App, and its secrets never at rest.** None of this
-    code exists yet; each part lands with the task named. Quiz talks to
+15. **Quiz's own GitHub App, and its secrets never at rest.** The
+    redaction, the `config.ts` refusals and the in-memory tokens exist
+    (M1-02); the rest lands with the task named. Quiz talks to
     GitHub only through its own App (D23), never heig-classroom's; staging
     has a separate App on a test organization and never holds the
     production one (N-SEC-18; M2-06). The App key, webhook secret and
     client secret stay out of the repository and the database (ADR-010);
     installation tokens live in memory only; no token is ever stored nor
     logged, and the redaction knows `x-access-token:` and `gh?_` (M1-02);
-    the user token of an account link reads the account once and is
-    discarded (M2-03). Under `NODE_ENV=production`, `config.ts` refuses to
-    start with an App id whose key file is unreadable, a webhook secret
-    under 32 characters or no App slug; with no `GITHUB_*` set the GitHub
-    features are off and the rest starts (M1-02). `/webhooks/github`
-    trusts nothing before its HMAC over the raw body is verified in
-    constant time (M2-04).
+    a token is never in a URL, a file or git's argv: `gitRunner({ token })`
+    hands it to git through the environment only; the user token of an account
+    link reads the account once and is discarded (M2-03). Under
+    `NODE_ENV=production`, `config.ts` refuses to start with an App id whose
+    key file is unreadable, a webhook secret under 32 characters or no App
+    slug; with no `GITHUB_*` set the GitHub features are off and the rest
+    starts (M1-02). `/webhooks/github` trusts nothing before its HMAC over the
+    raw body is verified in constant time (M2-04).
 
 ## Development
 
