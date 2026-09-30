@@ -32,7 +32,7 @@ import {
   Skeleton,
 } from "../ui";
 import { ModeChoice, type CreatedMode } from "./ModeChoice";
-import { courseTemplatesKey, evaluationsKey } from "../queryKeys";
+import { courseTemplatesKey, evaluationKey, evaluationsKey } from "../queryKeys";
 
 /**
  * Evaluation templates of a course (ADR-031): the section of the course page,
@@ -379,11 +379,13 @@ export function CourseTemplates({
 /** "Save as template", from an evaluation's menu. */
 export function SaveAsTemplateDialog({
   evaluationId,
+  classroomId,
   title: initialTitle,
   course,
   onClose,
 }: {
   evaluationId: string;
+  classroomId: string;
   title: string;
   course: { id: string; name: string };
   onClose: () => void;
@@ -399,7 +401,13 @@ export function SaveAsTemplateDialog({
         body: JSON.stringify({ title: title.trim() } satisfies TemplateCreate),
       }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: courseTemplatesKey(course.id) });
+      // The source is now linked to the template it gave (F-EVAL-18): its row
+      // and its launch checklist read that origin.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: courseTemplatesKey(course.id) }),
+        qc.invalidateQueries({ queryKey: evaluationsKey(classroomId) }),
+        qc.invalidateQueries({ queryKey: evaluationKey(evaluationId) }),
+      ]);
       toast(t("templates.saved"), "success");
       onClose();
     },

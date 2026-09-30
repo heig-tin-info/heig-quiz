@@ -47,7 +47,8 @@ A template is an evaluation kept by the course rather than by one classroom:
 its questions, points and settings, without dates, access code or IP
 addresses. **New template**, on the course page, makes an empty one (a title
 and a mode); **Save as template**, in an evaluation's menu, makes one from
-that evaluation. **Use in a classroom** starts a new evaluation from one.
+that evaluation, which from then on counts as made from it (rev. 1).
+**Use in a classroom** starts a new evaluation from one.
 
 A click on a template opens its editor: its title, its questions (add,
 remove, reorder, points, section breaks, the latest version of a question)
@@ -57,7 +58,8 @@ the settings moves its revision (**rev. 3**); renaming does not. A question
 whose pool is no longer linked to the course is flagged there: using the
 template is refused until the pool is linked again or the question removed.
 
-An evaluation made from a template does not follow it by itself. When the
+An evaluation made from a template — or saved as one — does not follow it
+by itself. When the
 template has moved since, the evaluation's row in the classroom wears a
 **template rev. 1 → 3** badge, and its launch checklist a warning; both open
 the same confirmation, which lists the questions added, removed and changed

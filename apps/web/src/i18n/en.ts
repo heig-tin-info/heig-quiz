@@ -2025,7 +2025,7 @@ export const en = {
   "templates.deleteConfirm": "Delete the template “{name}”? The evaluations made from it keep working.",
   "templates.save": "Save as template",
   "templates.saveTitle": "Save as a template of {course}",
-  "templates.saveHelp": "Every classroom of the course can then start from it. The questions, points and settings are kept; dates, access code and IP addresses are not.",
+  "templates.saveHelp": "Every classroom of the course can then start from it. The questions, points and settings are kept; dates, access code and IP addresses are not. This evaluation is then linked to the template.",
   "templates.saved": "Saved as a template of the course.",
   "templates.saveFailed": "The template could not be saved.",
   "templates.startFrom": "Start from",
