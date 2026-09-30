@@ -244,13 +244,19 @@ RUNNER_TOKEN="$(sed -n 's/^RUNNER_TOKEN=//p' .env.prod)" \
 
 ## 4. Continuous deployment
 
-`.github/workflows/ci.yml` has four jobs:
+`.github/workflows/ci.yml` has four stages:
 
-1. **checks**: `pnpm build`, `pnpm typecheck`, `pnpm test` and the runner's
-   unit suite, on every push and pull request.
-2. **image**, on a push to `main` only: both images are built with
-   `docker/build-push-action` and pushed to GHCR twice each, as `:latest` and
-   as `:<commit sha>`.
+1. **checks**, on every push and pull request: parallel jobs run
+   `pnpm build` with `pnpm typecheck` (`build`), the API's tests in three
+   shards (`test-api`), the SPA's in two (`test-web`), and every other
+   package's, the runner's unit suite included (`test-rest`). The `checks`
+   job aggregates them: it is the one required status. A pull request that
+   changes only prose (`docs/`, `mockups/`, Markdown outside a `src/`)
+   skips the jobs and passes `checks`; a push to `main` always runs them all.
+2. **image**, on a push to `main` only: both images are built side by side
+   with `docker/build-push-action`, each with a buildx layer cache of its own
+   (`type=gha`, one `scope` per image), and pushed to GHCR twice each, as
+   `:latest` and as `:<commit sha>`.
 3. **deploy-staging**: one SSH call to the application VM with the
    `STAGING_DEPLOY_SSH_KEY` key (a secret of the `staging` environment), as
    `vars.STAGING_DEPLOY_USER` (`srvstg`), then a wait of up to 150 s for
