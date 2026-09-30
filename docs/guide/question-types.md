@@ -324,6 +324,6 @@ Their full rules are in the specification, [4.8 Rich answer](../spec/04-types-de
 The specification announces more types for later phases. None is available today:
 
 - **Essay graded by an assistant**: a proposal of points per rubric criterion, which you validate.
-- **Drawing**: a small canvas with shapes and freehand strokes, graded with a rubric.
+- **Diagram**: the student draws a diagram in a notation you choose (UML classes, use cases, state machine, entity-relationship, flowchart, automaton, graph, or free shapes), which you grade by hand beside your reference.
 
 Random values in a statement, announced for phase 2, are not available either.

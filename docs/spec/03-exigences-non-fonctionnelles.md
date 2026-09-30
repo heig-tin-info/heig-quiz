@@ -67,7 +67,7 @@
 | Id | Requirement |
 |---|---|
 | N-COMPAT-01 | Last two major versions of Chrome, Firefox, Safari, Edge. Safari iOS and Chrome Android for the student flows. |
-| N-COMPAT-02 | Minimum supported width: 360 px. Code and drawing types: optimised from 1024 px, usable below. |
+| N-COMPAT-02 | Minimum supported width: 360 px. Code and diagram types: optimised from 1024 px, usable below. |
 | N-COMPAT-03 | Light and dark themes, system preference by default, choice remembered. |
 
 ## 3.7 Operations

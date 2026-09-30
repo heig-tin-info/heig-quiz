@@ -332,5 +332,5 @@ The key has one student exit too: once the feedback policy shows it (`showKey`),
 | Sandbox | Hardened Podman from the codespace, gVisor if possible | nsjail, isolate: to be reassessed if container start-up gets in the way |
 | Frontend | SPA | Server rendering: useless behind an authentication |
 | Markdown editor | Tiptap, markdown as the source of truth, WYSIWYG / source toggle | Two separate editors: two sources of truth |
-| Drawing | Embedded Excalidraw | Home-made canvas |
+| Diagram | Home-made structured editor, `packages/diagram`, on the grid and router of `circuit` (ADR-046) | Embedded Excalidraw: free-form, no notion of an element or a link, its own style |
 | Expert extension | Token REST API, CLI, MCP (shipped: ADR-022, ADR-023) | Outgoing webhooks: no identified consumer |

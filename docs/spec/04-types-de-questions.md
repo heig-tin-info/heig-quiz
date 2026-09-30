@@ -284,11 +284,9 @@ config:
 - **Answer**: `{ regions[] }`, as `code`.
 - **Points**: `defaultPoints` proposes 1. The class debrief shows the distribution of pixel accuracy (100 %, 90–99 %, 50–89 %, 1–49 %, 0 %).
 
-## 4.10 Drawing `drawing`, phase 3
+## 4.10 Drawing `drawing`, replaced
 
-Minimalist canvas: rectangle, ellipse, line, arrow, freehand stroke, text. Select, move, delete, undo. Candidate technical base: Excalidraw in embedded mode, which avoids writing an editor.
-
-**Answer**: JSON scene and PNG rendering generated client-side at every autosave. **Scoring**: LLM with vision on the PNG, rubric of criteria like `rich`. Otherwise manual.
+The free-form drawing type planned for phase 3 (an embedded Excalidraw, graded by LLM vision on a PNG) is **replaced by the `diagram` type** (§4.14, ADR-046): its free-form needs are the `free` kind of a diagram, a canvas of basic shapes and freehand strokes. The id `drawing` was never shipped and is not reserved.
 
 ## 4.11 Schematic `circuit`
 
@@ -404,3 +402,67 @@ config:
 **Review**: the student's board with each card marked right or wrong and, when the key is published, where each card was expected.
 
 **Dashboard and more**: the live cell shows "placed/total", figures only. Not pollable, no `aggregate` (the hook would only see opaque ids).
+
+## 4.14 Diagram `diagram`
+
+Shown as **Diagram** / « Diagramme » in the interface. The student draws a diagram of a notation the teacher chose: a UML class diagram, a state machine, an entity-relationship model, a flowchart, an automaton, and so on. It replaces the drawing type of §4.10. Brought forward outside the phases (ADR-046); the origin of its editor is `mockups/uml.html`.
+
+Two packages, so that the editor serves more than one type (ADR-046 §1):
+
+- `packages/diagram` (`@quiz/diagram`) is the **engine**: the scene model, the catalogue of kinds, the orthogonal router and the side anchoring, the straight-line layout, the text serialisers and parsers (`./server`, no React), and the `DiagramEditor` / `DiagramView` components (`./client`). It depends on `@quiz/core` alone and never imports a `qt-*` package.
+- `packages/qt-diagram` is the **question type**, registered in both registries.
+
+**Kinds** (all eight in v1). The kind is chosen once per question; the student's toolbox holds that kind's elements and nothing else.
+
+| Kind | Elements | Links | Lines | Text form |
+|---|---|---|---|---|
+| `class` | class: name, stereotype, abstract, body lines cut into compartments by `---`, `{static}` underlines, `{abstract}` italicises | association, navigable association, inheritance, realisation, dependency, aggregation, composition; a name and a multiplicity at each end | orthogonal | PlantUML |
+| `usecase` | actor, use case, system boundary (contains, never blocks a line) | association, «include», «extend», generalisation | orthogonal | PlantUML |
+| `state` | initial state, state (name and internal activities), final state | transition labelled `event [guard] / action` | orthogonal | Mermaid `stateDiagram-v2` |
+| `er` | entity: attributes `name : type`, `PK` underlines | relationship with a crow's-foot cardinality at each end (`1`, `0..1`, `1..*`, `0..*`) and a verb | orthogonal | Mermaid `erDiagram` |
+| `flow` | start/end, action, decision | arrow with a label (`oui`, `non`) shown where it leaves | orthogonal | Mermaid `flowchart` |
+| `automaton` | state, with an initial and an accepting flag | transition labelled by its symbols | straight | Graphviz DOT |
+| `graph` | vertex | edge, arc; a weight | straight | Graphviz DOT |
+| `free` | freehand stroke, line, square, rectangle, circle, ellipse, triangle; a shape may carry a short label | none | — | none |
+
+- **Orthogonal** lines are routed on the grid of 20 by the A* router of `circuit` (a turn penalty, the boxes as obstacles, a small cost for running along another line). An end attaches to a **side** of its element, the side that best faces the other end while that side has a free grid point; the ends sharing a side spread along it in the order of their targets, so that they do not cross. A decision gives one end per vertex. Ends on an ellipse, a diamond or a circle slide onto the shape.
+- **Straight** lines join two circles centre to centre, bend apart into curves when several join the same pair, and loop over the top of an element that points to itself.
+- A line may carry **elbows** (`via`, at most 16), which the router must pass through; the student adds one by double-clicking the line.
+
+**Configuration** (`configVersion: 1`):
+
+```yaml
+config:
+  prompt: markdown
+  kind: class                  # one of the eight kinds above
+  reference: { nodes: [...], links: [...] }   # the teacher's diagram: the key
+  starter: { nodes: [...], links: [...] }     # optional: what the student starts from
+  rubric: markdown             # the criteria, teacher-only
+```
+
+- **The scene is the record** (ADR-046 §2): elements with their position on the grid and their content, links with their ends, their elbows, their name and end labels; a `free` scene holds shapes and strokes. The text form is DERIVED from the scene by the kind's serialiser, never stored. The server never parses a text written in a browser.
+- **The starter** is optional. The editor offers "Copy the reference into the starter", after which the teacher removes what the student must add; the starter is then edited on its own. A draft may lack a reference; publication refuses a question without one (`diagram.reference_missing`) and a reference or starter holding an element or link the kind does not have (`diagram.kind_mismatch`).
+- **Ids are opaque**: the editor mints random ones. A starter reaches the student with its ids, so an id must say nothing (the rule of `categorize`, ADR-036).
+- **Limits**: 80 elements, 160 links, 16 elbows a link, 120 characters a name, 40 body lines of 200 characters; for `free`, 200 shapes and 4 000 stroke points in all; coordinates within ±20 000. The autosave sends the whole answer every 300 ms, so the answer is bounded like `rich`'s.
+
+**Student** (`toStudent`, invariant 4): the prompt, the kind and the starter. The reference and the rubric never leave. **The text form is not shown to the student in v1**: the text tab exists for the teacher only (editor and review).
+
+**Answer**: `{ scene }`, the student's scene, which starts as a copy of the starter (or empty). `answerSchema` enforces the limits; `answerMisfit` refuses an element or a link that the question's kind does not have (`422 answer_invalid`, key `diagram.answer_misfit`). `isAnswered`: the scene differs from the starter.
+
+**Scoring, v1**: manual, like `rich`. `grade` proposes 0 points (`state: proposed`, `details.reason: manual`) for an answer, and a validated 0 for none, or for the untouched starter (`reason: empty`). The grading panel shows the student's diagram beside the reference, and, for the teacher, both text forms side by side, where a difference is easier to see than on the canvas.
+
+**Scoring, later** (not v1, ADR-046 §5): a proposal computed per kind, always `proposed`, never a diff of the texts (an ordering or a renaming would read as a mistake): the equivalence of two deterministic automata, which is decidable and the one kind that could be validated outright; vertices, edges and weights for a graph; classes, members and links matched by name, with partial credit, for `class` and `er`. And the LLM service (F-LLM-01..04, Q13), fed with the TEXT forms of the reference and of the answer, which costs no vision; `free` would go by a rendering. Both wait for their own ADR.
+
+**The key** (`toSolution`): the reference and the rubric; `studentSolution` keeps the reference alone (ADR-037).
+
+**Editor**: a grid of cards, one per kind, each with its icon and, for the teacher, its name and one line on what it draws. Changing the kind of a draft empties the reference and the starter, after a confirmation. Then the reference canvas with its text tab (editable by the teacher, parsed on every keystroke; a line in error is named and the diagram is left as it was), the starter, the rubric. `defaultPoints` proposes 1.
+
+**Player**: the canvas inline, under the prompt, and an **Expand** button that opens it over the page with a margin of 16 px. The overlay keeps a thin bar: the remaining time, the save state, and its one primary action, "Back to the questions" (Escape too). It is a layer of the page, not the browser's full screen: the student keeps the clock the server runs (invariant 5), and Safe Exam Browser (ADR-027) is not asked to change its window. Both views edit the same answer, which the autosave sends as usual. On a narrow screen the inline canvas is a preview and the overlay is where one draws.
+
+- **The toolbox shows icons only**: the student is expected to know the notation, and a label would give it away. Every icon carries an accessible name, and every string of the editor comes from the host's dictionary in `en` and `fr` through the package's `strings` props, as for `circuit` (N-I18N-01).
+- Double-click on the grid places the kind's usual element; drag from the border of an element to another links them; double-click on an element edits it, on a line adds an elbow, on an elbow removes it; wheel to zoom, right-drag to pan, Ctrl Z / Ctrl Y to undo and redo.
+
+**Review**: the student's diagram and, when the key is published, the reference beside it; the teacher also sees the text forms.
+
+**Dashboard and more**: the live cell shows the number of elements and links, figures only. Not pollable, no drill rating, no `aggregate`.
+
