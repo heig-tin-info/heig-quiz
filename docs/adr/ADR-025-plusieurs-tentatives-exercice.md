@@ -5,7 +5,8 @@
 Accepted (2026-09-25, issue #92, with `@quiz/domain/retake`,
 `apps/api/src/modules/grading/kept.ts`, migration
 `0015_exercise_retakes.sql` and `POST /evaluations/:id/retake`). Settles
-open question 12 of `docs/spec/06-questions-ouvertes.md`.
+open question 12 of `docs/spec/06-questions-ouvertes.md`. Amended
+2026-09-30 (§3): the pool's question statistics no longer read exercises.
 
 ## Context
 
@@ -91,6 +92,11 @@ statistics all go through `keptAttempts` / `studentAttempts`
 Statistics per question count the kept attempts only — one per student, the
 ones the grades come from. It is the simplest consistent choice; learning
 curves over every attempt can come later without a schema change.
+
+*Amendment (2026-09-30): this holds for the per-question figures of an
+exercise's Results page, which still read the kept attempt. The POOL's
+question statistics (ADR-038, ADR-043), which came later, count exams only
+and never read an exercise, for the reason given in ADR-038 §2.*
 
 ### 4. Every attempt is graded; the student reads the score only
 

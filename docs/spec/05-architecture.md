@@ -221,7 +221,7 @@ The drill's switches live on the rows they qualify, and belong to those rows' mo
 | Dashboard grid | join `attempts` × `evaluation_items` left `answers` left validated `gradings`, one evaluation | `answers(attempt_id)`, `gradings(answer_id) WHERE validated` |
 | Search in the pool | `tsvector` on `internal_name`, statement extracted from the config by the type, tags | GIN on `search`, index on `question_tags(tag)` |
 | Latest published version | `SELECT ... WHERE question_id = ? AND number IS NOT NULL ORDER BY number DESC LIMIT 1` | `(question_id, number desc)` |
-| Item statistics | validated `gradings` joined to `evaluation_items`, then to the question through `question_versions.question_id` (ADR-038) | `evaluation_items(question_version_id)`, `gradings(item_id) WHERE validated` |
+| Item statistics | validated `gradings` of exams (never an exercise, amended 2026-09-30) joined to `evaluation_items`, then to the question through `question_versions.question_id` (ADR-038) | `evaluation_items(question_version_id)`, `gradings(item_id) WHERE validated` |
 
 ### Transactions
 

@@ -91,7 +91,7 @@ An **exercise** shows a **Several attempts** switch under the timing; an exam ne
 
 - once a student has handed in (or run out of time), their home page offers **Try again** for as long as the exercise is open: until its common end, or until you close it. Each attempt starts blank, with the questions in a new order and the choices shuffled again;
 - after each attempt the student sees **their score only**, whatever the feedback setting says about the correction. The correction follows the feedback setting once the exercise is closed (**Right away** then shows it at once, **On release** when you publish);
-- **Result kept** decides which attempt counts in the grades, the CSV export, the published results and the per-question statistics: the **Best** (a tie goes to the latest) or the **Last**;
+- **Result kept** decides which attempt counts in the grades, the CSV export, the published results and the per-question statistics of the results (the pool's question statistics count exams only): the **Best** (a tie goes to the latest) or the **Last**;
 - **Maximum** caps the number of attempts, the first one included; empty means no limit.
 
 Every attempt is graded by the usual pass as soon as it ends; an answer that needs you (an open answer) waits in the grading panel, where each attempt of a student who retook the exercise is listed with its number (`· #2`). The live dashboard shows each student's latest attempt with an **attempt n** badge, and offers no **Reopen** there: the student tries again instead. Like the other rules of the evaluation, the setting is frozen once somebody has started.

@@ -645,8 +645,8 @@ export const en = {
   "pool.filter.unit.seconds": "s",
   "pool.filter.withoutStats":"Include questions without statistics",
   "pool.filter.statsHint":
-    "The rate in percent (below zero under negative marking), the time in seconds. A question has statistics from {n} answers.",
-  "pool.filter.statsNone": "No question of this pool has statistics yet: they show from {n} answers.",
+    "The rate in percent (below zero under negative marking), the time in seconds. A question has statistics from {n} exam answers.",
+  "pool.filter.statsNone": "No question of this pool has statistics from exams yet (fewer than {n} answers each).",
   "pool.filter.statsError": "The statistics could not be loaded.",
   "pool.filter.rate.between": "Success {min}% to {max}%",
   "pool.filter.rate.from": "Success {n}% and up",
@@ -689,7 +689,7 @@ export const en = {
   "pool.stats.successRate": "Success rate",
   "pool.stats.answers": "Answers counted",
   "pool.stats.scope":
-    "Kept attempts of exams and exercises, every version of the question, teachers' test attempts left out. A blank answer counts as 0; a question never opened is left out.",
+    "Exams only, never exercises, every version of the question, teachers' test attempts left out. A blank answer counts as 0; a question never opened is left out.",
   "pool.stats.negative": "Below zero: negative marking took away more than it gave.",
   "pool.stats.since": "Since {date}",
   "pool.stats.sinceAlways": "Since the question was first used",
@@ -720,7 +720,7 @@ export const en = {
   "pool.stats.choicesBasis": "Share of {n} answers, on the versions whose choices are these ones.",
   "pool.stats.choicesMultiple": "Several choices may be ticked, so the shares add up to more than 100%.",
   "pool.stats.choicesScope": "A wrong choice nobody picks distracts no one: rewrite it or drop it. A wrong choice picked more often than the right one points to a misconception, or to a wrong key.",
-  "pool.stats.choicesNone": "The choices picked show from {min} answers given to versions with the current choices.",
+  "pool.stats.choicesNone": "The choices picked show from {min} exam answers given to versions with the current choices.",
   "pool.stats.reset": "Reset statistics",
   "pool.stats.resetTitle": "Reset the statistics of {name}?",
   "pool.stats.resetBody":

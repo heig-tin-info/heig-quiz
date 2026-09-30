@@ -700,7 +700,7 @@ describe("PoolView", () => {
       renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
       await screen.findByText("ptr-arith-01");
       const sheet = await openSheet(user);
-      expect(within(sheet).getByText(/No question of this pool has statistics yet/)).toBeInTheDocument();
+      expect(within(sheet).getByText(/No question of this pool has statistics from exams yet/)).toBeInTheDocument();
       expect(within(sheet).queryByLabelText("Success rate, from")).not.toBeInTheDocument();
     });
   });
