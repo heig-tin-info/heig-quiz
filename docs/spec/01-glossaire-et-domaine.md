@@ -54,19 +54,26 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Create a course, a classroom, import a roster | No | Yes | Yes |
 | Create a private pool, edit its questions | No | Yes | Yes |
 | Read the public pool | No | Yes | Yes |
-| Edit a shared pool | No | According to the role on the pool | Yes |
-| Create, launch, drive, grade an evaluation | No | On own classrooms | Yes |
-| Create, instantiate, delete an evaluation template | No | On own courses | Yes |
-| See the grades of a classroom | Own grades | On own classrooms | Yes |
+| Edit a shared pool | No | According to the role on the pool | With Super Powers, else as a teacher |
+| Create, launch, drive, grade an evaluation | No | On own classrooms | With Super Powers, else as a teacher |
+| Create, instantiate, delete an evaluation template | No | On own courses | With Super Powers, else as a teacher |
+| See the grades of a classroom | Own grades | On own classrooms | With Super Powers, else as a teacher |
 | Configure the LLM providers, the runner languages, the admins | No | Own API key | Yes |
-| Connect a classroom to a GitHub organization, create, choose or remove its journal, edit its pages | No | On own classrooms | Yes |
-| Read a classroom's journal | Own classrooms, pages neither draft nor before their `visible_from` | On own classrooms, drafts included | Yes |
+| Connect a classroom to a GitHub organization, create, choose or remove its journal, edit its pages | No | On own classrooms | With Super Powers, else as a teacher |
+| Read a classroom's journal | Own classrooms, pages neither draft nor before their `visible_from` | On own classrooms, drafts included | With Super Powers, else as a teacher |
 | Link or unlink own GitHub account | Yes | Yes | Yes |
-| Delete a classroom or an evaluation and its data | No | On own classrooms | Yes |
+| Delete a classroom or an evaluation and its data | No | On own classrooms | With Super Powers, else as a teacher |
+| Act as a student (a one-time link, ADR-034) | No | No | With Super Powers |
 
 Roles on a shared pool, phase 2: `reader` may read and copy into their own pool, `contributor` may create and publish versions, `owner` manages members and deletes.
 
 A course may have several teachers. They all have the same rights on its classrooms.
+
+**Super Powers** (ADR-054): an admin reaches everyone's content only after switching them on
+from the settings, for one fixed hour of the server's clock, in that browser session only
+(never through an API token or an assistant), each switch audited. Otherwise the admin is a
+teacher: their own seats, their pools by their pool role. The admin's own functions — the
+teacher grants, the user list, the metrics — never need them.
 
 ## 1.3 Domain model
 

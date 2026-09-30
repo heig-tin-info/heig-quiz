@@ -5,6 +5,10 @@
 Accepted (2026-09-21, phase 2). Settles F-POOL-05, F-POOL-06 and open question 9 of
 `docs/spec/06-questions-ouvertes.md`.
 
+**Amended 2026-09-30 by ADR-054:** "admin" in the resolution order of §3 (and "an owner
+everywhere" in §4) now reads "an admin with Super Powers on". Without them an admin resolves
+like any teacher; the pure rule's fact is `reachesAll`, formerly `isAdmin`.
+
 ## Context
 
 Until now a question pool was reached by its owner and by the teaching staff of the courses

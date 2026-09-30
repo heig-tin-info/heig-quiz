@@ -4,9 +4,16 @@
  * — `studentView` only narrows, and an impersonation session reads through
  * the student's seat alone.
  */
+import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
-import { classroomPayload, type ClassroomReadFacts } from "./guards.js";
+import {
+  accessWhere,
+  classroomPayload,
+  mayHoldSuperPowers,
+  reachOf,
+  type ClassroomReadFacts,
+} from "./guards.js";
 
 const facts = (over: Partial<ClassroomReadFacts>): ClassroomReadFacts => ({
   seb: false,
@@ -60,5 +67,47 @@ describe("classroomPayload", () => {
 
   it("refuses every seb session", () => {
     for (const f of every.filter((f) => f.seb)) expect(classroomPayload(f)).toBeNull();
+  });
+});
+
+/**
+ * ADR-054: the admin role alone reaches nothing more than a teacher's seats;
+ * the reach to everyone's content is an admin's own portal session with
+ * Super Powers running by the server's clock, and nothing else.
+ */
+describe("reachOf", () => {
+  const now = new Date("2026-09-30T10:00:00.000Z");
+  const later = new Date(now.getTime() + 60_000);
+  const portal = { kind: "portal" as const, actorUserId: null, superPowersUntil: later };
+
+  it("reaches everyone's content for an admin's portal session with Super Powers on", () => {
+    expect(reachOf({ role: "admin" }, portal, now)).toBe("all");
+  });
+
+  it("keeps an admin to their seats without them, or once their hour has passed", () => {
+    expect(reachOf({ role: "admin" }, { ...portal, superPowersUntil: null }, now)).toBe("seats");
+    expect(reachOf({ role: "admin" }, portal, later)).toBe("seats");
+  });
+
+  it("never reaches further for a token, a delegated or a seb session, or a non-admin", () => {
+    expect(reachOf({ role: "admin" }, null, now)).toBe("seats");
+    expect(reachOf({ role: "admin" }, { ...portal, actorUserId: "someone" }, now)).toBe("seats");
+    expect(reachOf({ role: "admin" }, { ...portal, kind: "impersonation" }, now)).toBe("seats");
+    expect(reachOf({ role: "admin" }, { ...portal, kind: "seb" }, now)).toBe("seats");
+    expect(reachOf({ role: "teacher" }, portal, now)).toBe("seats");
+  });
+
+  it("is `mayHoldSuperPowers` plus a running hour: eligibility is written once", () => {
+    expect(mayHoldSuperPowers({ role: "admin" }, portal)).toBe(true);
+    expect(mayHoldSuperPowers({ role: "admin" }, null)).toBe(false);
+    expect(mayHoldSuperPowers({ role: "admin" }, { ...portal, kind: "seb" })).toBe(false);
+    expect(mayHoldSuperPowers({ role: "admin" }, { ...portal, actorUserId: "x" })).toBe(false);
+    expect(mayHoldSuperPowers({ role: "teacher" }, portal)).toBe(false);
+  });
+
+  it("is what `accessWhere` reads: the predicate stays unless the reach is all", () => {
+    const predicate = sql`true`;
+    expect(accessWhere({ reach: "seats" }, predicate)).toBe(predicate);
+    expect(accessWhere({ reach: "all" }, predicate)).toBeUndefined();
   });
 });

@@ -412,13 +412,14 @@ describe("access (invariant 6)", () => {
     const id = template.id;
 
     // Its creator, through the finders the poll module and the stream use —
-    // and an admin, whom `accessWhere` lets past every ownership test: the
-    // owned-poll shape alone must keep a template out.
-    const admin = await server.signIn("admin");
-    const asTeacher = { id: teacher.id, role: "teacher" };
+    // and an admin with Super Powers, whom `accessWhere` lets past every
+    // ownership test (ADR-054): the owned-poll shape alone must keep a
+    // template out.
+    const admin = await server.signInWithSuperPowers();
+    const asTeacher = { id: teacher.id, role: "teacher", reach: "seats" as const };
     expect(await findManagedEvaluation(server.app.db, asTeacher, id)).toBeNull();
     expect(await findReachableEvaluation(server.app.db, asTeacher, id)).toBeNull();
-    expect(await findManagedEvaluation(server.app.db, { id: admin.id, role: "admin" }, id)).toBeNull();
+    expect(await findManagedEvaluation(server.app.db, { id: admin.id, role: "admin", reach: "all" }, id)).toBeNull();
     for (const [method, url] of [
       ["GET", `/app/api/evaluations/${id}/poll`],
       ["POST", `/app/api/evaluations/${id}/poll/end`],

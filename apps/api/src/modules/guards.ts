@@ -18,7 +18,7 @@ import { and, eq, getTableName, isNull, sql, type AnyColumn, type SQL } from "dr
 import type { PoolRole } from "@quiz/contracts";
 import { effectivePoolRole, ipAllowed, poolRoleAllows } from "@quiz/domain";
 
-import { delegated, type SessionAuth } from "../auth/session.js";
+import { delegated, type SessionAuth, type SessionState } from "../auth/session.js";
 import type { Db } from "../db/client.js";
 import {
   answers,
@@ -113,9 +113,9 @@ export function poolAccess(userId: string): SQL {
 export async function poolRoleOf(
   db: Db,
   pool: Pick<AccessiblePool, "id" | "ownerId" | "visibility">,
-  user: { id: string; role: string },
+  user: Pick<Caller, "id" | "reach">,
 ): Promise<PoolRole> {
-  if (user.role === "admin" || pool.ownerId === user.id) return "owner";
+  if (user.reach === "all" || pool.ownerId === user.id) return "owner";
   const [[member], [seat]] = await Promise.all([
     db
       .select({ role: poolMembers.role })
@@ -130,7 +130,7 @@ export async function poolRoleOf(
       .limit(1),
   ]);
   return effectivePoolRole({
-    isAdmin: false,
+    reachesAll: false,
     isOwner: false,
     memberRole: member?.role ?? null,
     isCourseStaff: seat !== undefined,
@@ -157,7 +157,7 @@ export async function requirePoolRole(
   pool: Pick<AccessiblePool, "id" | "ownerId" | "visibility">,
   needed: PoolRole,
 ): Promise<PoolRole | null> {
-  const role = await poolRoleOf(app.db, pool, req.user!);
+  const role = await poolRoleOf(app.db, pool, callerOf(req));
   if (roleAllows(role, needed)) return role;
   await reply.code(403).send({
     error: "forbidden",
@@ -188,7 +188,10 @@ export function teacherGuard(app: FastifyInstance) {
 }
 
 /**
- * Super admin only. `hidden`: anyone else gets the 404 of a missing entity
+ * Super admin only — the admin ROLE's own functions (the user and teacher
+ * lists, the metrics, the `admin` topic), which never need Super Powers.
+ * Reaching somebody else's content is not one of them: that is the caller's
+ * `reach` (ADR-054). `hidden`: anyone else gets the 404 of a missing entity
  * rather than a 403, for a route on an entity a non-admin could reach
  * otherwise (invariant 6: the refusal says nothing about the entity).
  */
@@ -208,19 +211,96 @@ async function notFound(reply: FastifyReply): Promise<null> {
   return null;
 }
 
-/** Who is asking: the two fields every access decision reads. */
+/**
+ * How far a caller reaches (ADR-054): `all` is everyone's content, `seats`
+ * is what their own staff seats, pool roles and polls give them — which is
+ * where an admin stands too, unless they switched Super Powers on.
+ */
+export type Reach = "all" | "seats";
+
+/**
+ * Who is asking: the fields every access decision reads. `reach` is
+ * REQUIRED, so a caller built by hand from `req.user` does not compile:
+ * every one goes through {@link callerOf}.
+ */
 export interface Caller {
   id: string;
   role: string;
+  reach: Reach;
 }
 
 /**
- * An admin reaches every course; anyone else needs a staff seat. Keeping
- * this in one helper is what stops the two rules drifting apart — every
- * query gated by `staffAccess` or `poolAccess` goes through it.
+ * Who may hold Super Powers at all (ADR-054), pure: an admin, through their
+ * own portal session — not delegated, not a `seb` one, never a Bearer token
+ * (`auth` null). The enable and disable routes ask this; so does
+ * {@link reachOf}, and `GET /me` (`superPowersAvailable`).
  */
-export function accessWhere(user: Pick<Caller, "role">, predicate: SQL): SQL | undefined {
-  return user.role === "admin" ? undefined : predicate;
+export function mayHoldSuperPowers(
+  user: { role: string },
+  auth: Pick<SessionAuth, "kind" | "actorUserId"> | null,
+): boolean {
+  return user.role === "admin" && auth !== null && auth.kind === "portal" && !delegated(auth);
+}
+
+/**
+ * THE rule of the reach (ADR-054), pure: everyone's content while the
+ * Super Powers of a session that may hold them run by the server's clock
+ * (invariant 5); the role alone reaches nothing more than a teacher's seats.
+ */
+export function reachOf(
+  user: { role: string },
+  auth: Pick<SessionState, "kind" | "actorUserId" | "superPowersUntil"> | null,
+  now: Date,
+): Reach {
+  const on =
+    mayHoldSuperPowers(user, auth) &&
+    auth!.superPowersUntil !== null &&
+    auth!.superPowersUntil.getTime() > now.getTime();
+  return on ? "all" : "seats";
+}
+
+/**
+ * The caller of an authenticated request: its user, and its reach by
+ * {@link reachOf} — computed once, by the session hook (`auth/plugin.ts`),
+ * which reads the clock once per request.
+ */
+export function callerOf(req: FastifyRequest): Caller {
+  if (!req.caller) throw new Error("callerOf: the request has no authenticated user");
+  return req.caller;
+}
+
+/** What the session hook stores as `req.caller`. */
+export function callerFor(
+  user: { id: string; role: string },
+  auth: SessionState | null,
+  now: Date,
+): Caller {
+  return { id: user.id, role: user.role, reach: reachOf(user, auth, now) };
+}
+
+/**
+ * Super Powers on, for a route that needs them beyond the admin role — the
+ * link to act as a student (ADR-034, amended by ADR-054). After the route's
+ * own guard: the caller is known and may already see the entity, so the
+ * refusal is a 403, not a 404.
+ */
+export function superPowersGuard() {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    if (callerOf(req).reach === "all") return undefined;
+    return reply
+      .code(403)
+      .send({ error: "super_powers_required", message: "This takes Super Powers" });
+  };
+}
+
+/**
+ * A caller with Super Powers reaches every course and pool; anyone else —
+ * an admin without them included — needs a staff seat. Keeping this in one
+ * helper is what stops the two rules drifting apart — every query gated by
+ * `staffAccess` or `poolAccess` goes through it.
+ */
+export function accessWhere(user: Pick<Caller, "reach">, predicate: SQL): SQL | undefined {
+  return user.reach === "all" ? undefined : predicate;
 }
 
 /**
@@ -230,24 +310,23 @@ export function accessWhere(user: Pick<Caller, "role">, predicate: SQL): SQL | u
  *   - the staff of a course, on its card (`listCourses`): a fellow seat;
  *   - a classroom's roster (`rosterView`): a seat on the staff of a course
  *     where that user sits a classroom (`enrollments`, claimed).
- * Plus the user themselves (the shell, the settings) and an admin, like
- * every other loader: the administration's account lists show every face.
+ * Plus the user themselves (the shell, the settings) and any admin, by ROLE,
+ * with or without Super Powers (ADR-054 §2): the administration's account
+ * lists show every face, and a picture is not a colleague's content. The one
+ * "admin overrides" rule that reads `role`, not `reach`.
  * Nothing more: pool member lists show no avatar, so a shared pool is no
  * reason. Undefined when nothing needs checking; a caller
  * who fails it gets the 404 of a missing picture (invariant 6).
  */
 export function seesUser(user: Caller, subjectId: string): SQL | undefined {
-  if (user.id === subjectId) return undefined;
+  if (user.id === subjectId || user.role === "admin") return undefined;
   const staffedBySubject = sql`SELECT ${qualified(courseStaff.courseId)} FROM ${courseStaff}
     WHERE ${qualified(courseStaff.userId)} = ${subjectId}`;
   const satBySubject = sql`SELECT ${qualified(classrooms.courseId)} FROM ${enrollments}
     JOIN ${classrooms} ON ${qualified(classrooms.id)} = ${qualified(enrollments.classroomId)}
     WHERE ${qualified(enrollments.userId)} = ${subjectId}`;
   const subjectCourses = sql`${staffedBySubject} UNION ${satBySubject}`;
-  return accessWhere(
-    user,
-    sql`EXISTS (SELECT 1 FROM ${courses} WHERE ${staffAccess(user.id, qualified(courses.id))} AND ${qualified(courses.id)} IN (${subjectCourses}))`,
-  );
+  return sql`EXISTS (SELECT 1 FROM ${courses} WHERE ${staffAccess(user.id, qualified(courses.id))} AND ${qualified(courses.id)} IN (${subjectCourses}))`;
 }
 
 /*
@@ -266,7 +345,7 @@ export async function accessibleCourse(
   const [course] = await app.db
     .select()
     .from(courses)
-    .where(and(eq(courses.id, params.id), accessWhere(req.user!, staffAccess(req.user!.id))))
+    .where(and(eq(courses.id, params.id), accessWhere(callerOf(req), staffAccess(req.user!.id))))
     .limit(1);
   if (!course) return notFound(reply);
   return course;
@@ -290,7 +369,7 @@ export async function accessibleClassroom(
   reply: FastifyReply,
   params: { id: string },
 ) {
-  return (await findAccessibleClassroom(app.db, req.user!, params.id)) ?? notFound(reply);
+  return (await findAccessibleClassroom(app.db, callerOf(req), params.id)) ?? notFound(reply);
 }
 
 // ---------------------------------------------------------------------------
@@ -311,7 +390,7 @@ export interface ClassroomReadFacts {
   seb: boolean;
   /** An impersonation session (ADR-034): somebody else acts as the user. */
   delegated: boolean;
-  /** `staffAccess` holds on the classroom's course, or the caller is an admin. */
+  /** `staffAccess` holds on the classroom's course, or the caller has Super Powers. */
   staff: boolean;
   /** The caller holds a claimed seat (`enrollments.user_id`) in the classroom. */
   seat: boolean;
@@ -403,7 +482,7 @@ export async function readableClassroom(
   options: { studentView: boolean },
 ): Promise<ReadableClassroom | null> {
   return (
-    (await findReadableClassroom(app.db, req.user!, req.auth, params.id, options)) ??
+    (await findReadableClassroom(app.db, callerOf(req), req.auth, params.id, options)) ??
     notFound(reply)
   );
 }
@@ -424,7 +503,7 @@ export async function accessibleEnrollment(
       and(
         eq(enrollments.id, params.eid),
         eq(enrollments.classroomId, params.id),
-        accessWhere(req.user!, staffAccess(req.user!.id)),
+        accessWhere(callerOf(req), staffAccess(req.user!.id)),
       ),
     )
     .limit(1);
@@ -459,7 +538,7 @@ export async function accessiblePool(
   reply: FastifyReply,
   params: { id: string },
 ): Promise<AccessiblePool | null> {
-  return (await findAccessiblePool(app.db, req.user!, params.id)) ?? notFound(reply);
+  return (await findAccessiblePool(app.db, callerOf(req), params.id)) ?? notFound(reply);
 }
 
 type QuestionScope = { question: typeof questions.$inferSelect; pool: AccessiblePool };
@@ -485,7 +564,7 @@ export async function findAccessibleQuestion(
 /**
  * A question written in the poll launcher and never kept (`pool_id` null,
  * ADR-014 addenda 2026-09-23 and 2026-09-27), loaded if and only if the
- * caller LAUNCHED a poll on it (or is an admin); null otherwise. It has no
+ * caller LAUNCHED a poll on it (or has Super Powers); null otherwise. It has no
  * pool for `poolAccess` to read, and the polls that froze it are the only
  * thing that ties it to anyone: the launcher's "Recent polls" lists it on
  * exactly this ground, so the two cannot disagree.
@@ -511,7 +590,7 @@ export async function accessibleQuestion(
   reply: FastifyReply,
   params: { id: string },
 ): Promise<QuestionScope | null> {
-  return (await findAccessibleQuestion(app.db, req.user!, params.id)) ?? notFound(reply);
+  return (await findAccessibleQuestion(app.db, callerOf(req), params.id)) ?? notFound(reply);
 }
 
 /** `/categories/:id` — the category AND its pool. */
@@ -525,7 +604,7 @@ export async function accessibleCategory(
     .select({ category: categories, pool: pools })
     .from(categories)
     .innerJoin(pools, eq(categories.poolId, pools.id))
-    .where(and(eq(categories.id, params.id), accessWhere(req.user!, poolAccess(req.user!.id))))
+    .where(and(eq(categories.id, params.id), accessWhere(callerOf(req), poolAccess(req.user!.id))))
     .limit(1);
   if (!row) return notFound(reply);
   return row;
@@ -554,7 +633,7 @@ export async function loadEvaluation(
     .from(evaluations)
     .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(evaluations.id, evaluationId), accessWhere(req.user!, staffAccess(req.user!.id))))
+    .where(and(eq(evaluations.id, evaluationId), accessWhere(callerOf(req), staffAccess(req.user!.id))))
     .limit(1);
   if (!row) return notFound(reply);
   return row;
@@ -587,7 +666,7 @@ export async function loadTemplate(
   reply: FastifyReply,
   templateId: string,
 ) {
-  return (await findTemplate(app.db, req.user!, templateId)) ?? notFound(reply);
+  return (await findTemplate(app.db, callerOf(req), templateId)) ?? notFound(reply);
 }
 
 type ReachableEvaluation = { evaluation: typeof evaluations.$inferSelect; staff: boolean };
@@ -597,7 +676,7 @@ type ReachableEvaluation = { evaluation: typeof evaluations.$inferSelect; staff:
  * classroom AND no course (`evaluations_home_ck`; ADR-014, addendum
  * 2026-09-27; ADR-031) — on a query that has `evaluations` in scope. There
  * is no course and so no staff: the teacher who launched it OWNS it, and
- * nobody else reaches it (an admin, through `accessWhere`). A colleague gets
+ * nobody else reaches it (an admin with Super Powers, through `accessWhere`). A colleague gets
  * the same 404 as for a poll that does not exist.
  */
 function ownedPollAccess(userId: string): SQL {
@@ -610,7 +689,7 @@ function ownedPollAccess(userId: string): SQL {
  * "The caller manages this row", on a query that has `evaluations` in scope
  * and `classrooms` LEFT-joined on its classroom: a staff seat on its course —
  * the classroom's, or a template's own (ADR-031) — or the ownership of an
- * anonymous poll. Undefined for an admin, like {@link accessWhere}. For a
+ * anonymous poll. Undefined with Super Powers, like {@link accessWhere}. For a
  * query that must tell what it may name from what it may only count (the
  * pool-delete refusal), not for loading one entity.
  */
@@ -619,7 +698,7 @@ export function managedEvaluationAccess(user: Caller): SQL | undefined {
 }
 
 /**
- * {@link managedEvaluationAccess} WITHOUT the admin override: what the
+ * {@link managedEvaluationAccess} WITHOUT the Super Powers override: what the
  * caller manages in their own name — a staff seat, or a poll they own. The
  * Activities section (#190) lists exactly this, for an admin as for any
  * teacher: their page is their own work, not the whole platform's.
@@ -632,7 +711,7 @@ export function ownEvaluationAccess(user: Caller): SQL {
 /**
  * An evaluation the caller MANAGES: through a staff seat on its classroom's
  * course (`staffAccess`), or — a poll with no classroom — as its owner
- * (`ownedPollAccess`). Admins reach both. Null otherwise.
+ * (`ownedPollAccess`). Super Powers reach both. Null otherwise.
  *
  * `loadEvaluation` above keeps the classroom join, and therefore never finds
  * a classroom-less poll: the generic evaluation routes (settings, items,
@@ -728,7 +807,7 @@ export async function reachableEvaluation(
   reply: FastifyReply,
   evaluationId: string,
 ): Promise<ReachableEvaluation | null> {
-  return (await findReachableEvaluation(app.db, req.user!, evaluationId)) ?? notFound(reply);
+  return (await findReachableEvaluation(app.db, callerOf(req), evaluationId)) ?? notFound(reply);
 }
 
 /**
@@ -773,7 +852,7 @@ export async function staffAttempt(
       and(
         eq(attempts.id, attemptId),
         eq(attempts.evaluationId, evaluationId),
-        accessWhere(req.user!, staffAccess(req.user!.id)),
+        accessWhere(callerOf(req), staffAccess(req.user!.id)),
       ),
     )
     .limit(1);
@@ -807,7 +886,7 @@ export async function staffAnswer(
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
     .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(answers.id, answerId), accessWhere(req.user!, staffAccess(req.user!.id))))
+    .where(and(eq(answers.id, answerId), accessWhere(callerOf(req), staffAccess(req.user!.id))))
     .limit(1);
   if (!row) return notFound(reply);
   return row;
@@ -832,7 +911,7 @@ export async function staffGrading(
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
     .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(gradings.id, gradingId), accessWhere(req.user!, staffAccess(req.user!.id))))
+    .where(and(eq(gradings.id, gradingId), accessWhere(callerOf(req), staffAccess(req.user!.id))))
     .limit(1);
   if (!row) return notFound(reply);
   return row;

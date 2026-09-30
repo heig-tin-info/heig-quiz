@@ -38,6 +38,7 @@ import { tracer, type AuditAction } from "../../audit.js";
 import { hasKey, loadConfig, typeOf } from "../pool/config.js";
 import {
   accessibleCourse,
+  callerOf,
   findAccessibleClassroom,
   loadEvaluation,
   loadTemplate,
@@ -70,7 +71,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
     row: service.EvaluationRecord,
   ): Promise<EvaluationDetail> =>
     // The lobby ring's denominator, a rule of the `live` module (#152).
-    service.evaluationDetail(app.db, row, req.user!, await live.enrolledCount(app.db, row));
+    service.evaluationDetail(app.db, row, callerOf(req), await live.enrolledCount(app.db, row));
 
   // F-EVAL-02: the type decides an item's default weight, from the config it
   // owns — this module never looks inside a config. And a question kept after
@@ -84,7 +85,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
 
   // The loaders of invariant 6, each answering its own 404.
   const staffClassroom = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => {
-    const scope = await findAccessibleClassroom(app.db, req.user!, p.id);
+    const scope = await findAccessibleClassroom(app.db, callerOf(req), p.id);
     if (scope) return scope;
     await notFound(reply);
     return null;
@@ -160,7 +161,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
     "/app/api/evaluations/:id/pools",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: staffEvaluation }, ({ req, scope }) =>
-      service.listCoursePools(app.db, { classroomId: scope.classroom.id }, req.user!),
+      service.listCoursePools(app.db, { classroomId: scope.classroom.id }, callerOf(req)),
     ),
   );
 
@@ -213,7 +214,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
         // same predicate, so a teacher cannot seed a room they cannot reach.
         let target = scope.classroom.id;
         if (body.classroomId !== undefined && body.classroomId !== target) {
-          const other = await findAccessibleClassroom(app.db, req.user!, body.classroomId);
+          const other = await findAccessibleClassroom(app.db, callerOf(req), body.classroomId);
           if (!other) return notFound(reply);
           target = other.room.id;
         }
@@ -402,7 +403,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
   // has no classroom, hence no SSE topic: nothing is published.
 
   const templateDetail = (req: FastifyRequest, row: service.EvaluationRecord): Promise<TemplateDetail> =>
-    templates.templateDetail(app.db, row, req.user!);
+    templates.templateDetail(app.db, row, callerOf(req));
 
   /** One audited write to a template; `change` says what the request did. */
   async function templateWrite(
@@ -433,7 +434,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
     "/app/api/templates/:id/pools",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: staffTemplate }, ({ req, scope }) =>
-      service.listCoursePools(app.db, { courseId: scope.course.id }, req.user!),
+      service.listCoursePools(app.db, { courseId: scope.course.id }, callerOf(req)),
     ),
   );
 
@@ -534,7 +535,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
     teacher(
       { params: IdParam, body: TemplateInstantiate, load: staffTemplate },
       async ({ req, reply, body, scope }) => {
-        const room = await findAccessibleClassroom(app.db, req.user!, body.classroomId);
+        const room = await findAccessibleClassroom(app.db, callerOf(req), body.classroomId);
         if (!room || room.room.courseId !== scope.course.id) return notFound(reply);
         const made = await templates.instantiateTemplate(app.db, scope.template, {
           classroomId: room.room.id,

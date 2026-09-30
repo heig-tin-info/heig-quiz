@@ -78,8 +78,6 @@ export const journalPageKey = (id: string, view: "staff" | "student", path: stri
 // --- Pools and questions -----------------------------------------------------
 
 export const poolsKey = ["pools"] as const;
-/** An admin's `?scope=all` list: under `poolsKey`, so every invalidation of it reaches this one too. */
-export const allPoolsKey = ["pools", "all"] as const;
 /** The pools an evaluation's picker offers: under `poolsKey`, for the same reason. */
 export const evaluationPoolsKey = (id: string) => ["pools", "evaluation", id] as const;
 /** The pools a template's picker offers (its course's linked pools), likewise. */

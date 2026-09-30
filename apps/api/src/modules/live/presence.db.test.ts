@@ -177,9 +177,10 @@ describe("a staff member in the roster is a body in the room (F-LIVE-02, F-LIVE-
   it("does not count a teacher who holds NO seat, whatever they watch", async () => {
     const other = await server.signIn("teacher");
     const { seed, evaluation } = await world("lobby");
-    // An admin reaches every evaluation; a seat is still what puts them in
-    // the room, and `enrolledCount` never counted a seat that took nothing.
-    const admin = await server.signIn("admin");
+    // An admin with Super Powers reaches every evaluation (ADR-054); a seat
+    // is still what puts them in the room, and `enrolledCount` never counted
+    // a seat that took nothing.
+    const admin = await server.signInWithSuperPowers();
     expect((await openStream(admin.headers, `lobby:${evaluation.id}`)).statusCode).toBe(200);
     await settle();
     expect(presence.count(evaluation.id)).toBe(0);

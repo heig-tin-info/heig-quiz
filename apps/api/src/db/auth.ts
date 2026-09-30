@@ -91,6 +91,13 @@ export const sessions = pgTable(
     actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "cascade" }),
     /** The one evaluation a `seb` session is confined to; null on a `portal` one. */
     evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
+    /**
+     * The end of this session's Super Powers (ADR-054): an admin's portal
+     * session reaches everyone's content until then, by the server's clock.
+     * Null when they are off. Only the enable route sets it; the sliding
+     * renewal never touches it; signing out deletes it with the row.
+     */
+    superPowersUntil: timestamp("super_powers_until", { withTimezone: true }),
   },
   (t) => [index("sessions_expires_idx").on(t.expiresAt)],
 );

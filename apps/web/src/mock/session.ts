@@ -9,6 +9,7 @@ import type {
   OAuthConnection,
   OAuthRequestView,
   PublicConfig,
+  SuperPowersState,
 } from "@quiz/contracts";
 import {
   D,
@@ -37,9 +38,52 @@ export let me: Me | null = {
   mcqPolicy: null,
   coach: { enabled: null, seen: [] },
   ...(flags.impersonating
-    ? { session: { kind: "impersonation", evaluationId: null, readOnly: true } }
-    : {}),
+    ? {
+        session: {
+          kind: "impersonation",
+          evaluationId: null,
+          readOnly: true,
+          superPowersUntil: null,
+          superPowersAvailable: false,
+        },
+      }
+    : role === "admin"
+      ? {
+          session: {
+            kind: "portal",
+            evaluationId: null,
+            readOnly: false,
+            superPowersUntil:
+              flags.superpowers || flags.lastminutes
+                ? iso(flags.lastminutes ? 4.5 * 60_000 : 54 * 60_000)
+                : null,
+            superPowersAvailable: true,
+          },
+        }
+      : {}),
 };
+
+/** The session's Super Powers (ADR-054), switched like the real route: an hour, never extended. */
+const setSuperPowers = (until: string | null): SuperPowersState => {
+  if (!me) throw new MockError(401, "Signed out");
+  if (me.role !== "admin") throw new MockError(403, "Forbidden");
+  me = {
+    ...me,
+    session: {
+      kind: "portal",
+      evaluationId: null,
+      readOnly: false,
+      superPowersUntil: until,
+      superPowersAvailable: true,
+    },
+  };
+  return { superPowersUntil: until };
+};
+on("POST", "/app/api/me/super-powers", () => {
+  if (me?.session?.superPowersUntil) throw new MockError(409, "Super Powers are already on");
+  return setSuperPowers(new Date(Date.now() + H).toISOString());
+});
+on("DELETE", "/app/api/me/super-powers", () => setSuperPowers(null));
 
 /**
  * The one way another section changes the session: `?as=guest` on the poll

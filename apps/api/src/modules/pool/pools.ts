@@ -7,6 +7,7 @@ import type { Pool, PoolColor, PoolInUse, PoolRole, PoolSummary } from "@quiz/co
 import { displayName, effectivePoolRole } from "@quiz/domain";
 
 import { isForeignKeyViolation, type Db } from "../../db/client.js";
+import type { Caller } from "../guards.js";
 import {
   classrooms,
   coursePools,
@@ -62,7 +63,7 @@ function courseStaffOf(userId: string): SQL<boolean> {
 export async function listPools(
   db: Db,
   where: SQL | undefined,
-  viewer: { id: string; role: string },
+  viewer: Pick<Caller, "id" | "reach">,
 ): Promise<PoolSummary[]> {
   const rows = await db
     .select({
@@ -84,7 +85,7 @@ export async function listPools(
     questionCount: r.questionCount,
     memberCount: r.memberCount,
     role: effectivePoolRole({
-      isAdmin: viewer.role === "admin",
+      reachesAll: viewer.reach === "all",
       isOwner: r.pool.ownerId === viewer.id,
       memberRole: r.memberRole,
       isCourseStaff: r.isCourseStaff,

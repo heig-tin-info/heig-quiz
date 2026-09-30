@@ -30,7 +30,6 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["classroomKey", keys.classroomKey("r1"), ["classroom", "r1"]],
     ["classroomKey (not loaded)", keys.classroomKey(null), ["classroom", null]],
     ["poolsKey", keys.poolsKey, ["pools"]],
-    ["allPoolsKey", keys.allPoolsKey, ["pools", "all"]],
     ["evaluationPoolsKey", keys.evaluationPoolsKey("e1"), ["pools", "evaluation", "e1"]],
     ["templatePoolsKey", keys.templatePoolsKey("t1"), ["pools", "template", "t1"]],
     ["anyPoolKey", keys.anyPoolKey, ["pool"]],

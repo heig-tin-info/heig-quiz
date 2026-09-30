@@ -5,13 +5,14 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 
-import { eq, lt, type SQL } from "drizzle-orm";
+import { and, eq, isNotNull, lt, lte, type SQL } from "drizzle-orm";
 
 import type { SessionKind } from "@quiz/contracts";
 
 import { audit } from "../audit.js";
 import type { Db } from "../db/client.js";
 import { sessions, users } from "../db/schema.js";
+import { accessRevoked } from "../modules/realtime/bus.js";
 
 export const SESSION_COOKIE = "quiz_session";
 export const CSRF_COOKIE = "quiz_csrf";
@@ -38,6 +39,60 @@ export interface SessionAuth {
 }
 
 export const PORTAL: SessionAuth = { kind: "portal", actorUserId: null, evaluationId: null };
+
+/**
+ * A session as a request found it: what it is, plus the end of its Super
+ * Powers (ADR-054) — null when they are off. A value in the past never
+ * reaches a request: `findSessionUser` expires it first. Whether the
+ * request reaches everyone's content is `reachOf` in `modules/guards.ts`,
+ * the one reader of this field.
+ */
+export interface SessionState extends SessionAuth {
+  superPowersUntil: Date | null;
+}
+
+/** How long Super Powers last once switched on: one fixed hour, never extended (ADR-054). */
+export const SUPER_POWERS_MS = 3_600_000;
+
+export type SuperPowersEnd = "manual" | "expired" | "logout";
+
+/**
+ * THE record of Super Powers going off, whoever notices: the audit entry
+ * (the admin as actor when they asked for it, the system otherwise), and
+ * the admin's open streams closed, so they reconnect with the topics of
+ * their ordinary reach (invariant 6; `accessRevoked`).
+ */
+export async function superPowersEnded(db: Db, userId: string, reason: SuperPowersEnd) {
+  const byUser = reason !== "expired";
+  await audit(db, {
+    actorUserId: byUser ? userId : null,
+    actorType: byUser ? "user" : "system",
+    action: "superpowers.disabled",
+    subjectType: "user",
+    subjectId: userId,
+    payload: { reason },
+  });
+  accessRevoked([userId]);
+}
+
+/**
+ * Clears the Super Powers whose hour has passed by the server's clock
+ * (invariant 5), and records each end once: the conditional UPDATE is what
+ * keeps the request that notices it and the sweep of the ticker from both
+ * writing `expired`. `where` narrows it to one session. Returns how many
+ * it ended. Run by the request that finds them (`findSessionUser`) and by
+ * the ticker's `superpowers.expire` task, so an open stream holds a reach
+ * that has ended for one ticker period at most.
+ */
+export async function expireSuperPowers(db: Db, now: Date, where?: SQL): Promise<number> {
+  const ended = await db
+    .update(sessions)
+    .set({ superPowersUntil: null })
+    .where(and(isNotNull(sessions.superPowersUntil), lte(sessions.superPowersUntil, now), where))
+    .returning({ userId: sessions.userId });
+  for (const row of ended) await superPowersEnded(db, row.userId, "expired");
+  return ended.length;
+}
 
 /**
  * THE predicate for "somebody else acts through this session" (ADR-034):
@@ -77,17 +132,30 @@ export async function createSession(
   const csrf = newToken();
   const hours = FIXED_HOURS[auth.kind] ?? ttlHours;
   const expiresAt = new Date(Date.now() + hours * 3_600_000);
-  await db.insert(sessions).values({ sidHash: hashToken(token), userId, expiresAt, ...auth });
+  // Field by field: a session is never born with Super Powers (ADR-054).
+  const { kind, actorUserId, evaluationId } = auth;
+  await db
+    .insert(sessions)
+    .values({ sidHash: hashToken(token), userId, expiresAt, kind, actorUserId, evaluationId });
   return { token, csrf, expiresAt };
 }
 
-export async function findSessionUser(db: Db, token: string, opts?: { renewTtlHours?: number }) {
+export async function findSessionUser(
+  db: Db,
+  token: string,
+  opts?: { renewTtlHours?: number; now?: Date },
+) {
   const rows = await db
     .select({
       user: users,
       expiresAt: sessions.expiresAt,
       sidHash: sessions.sidHash,
-      auth: { kind: sessions.kind, actorUserId: sessions.actorUserId, evaluationId: sessions.evaluationId },
+      auth: {
+        kind: sessions.kind,
+        actorUserId: sessions.actorUserId,
+        evaluationId: sessions.evaluationId,
+        superPowersUntil: sessions.superPowersUntil,
+      },
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
@@ -98,6 +166,16 @@ export async function findSessionUser(db: Db, token: string, opts?: { renewTtlHo
   if (row.expiresAt.getTime() <= Date.now()) {
     await dropSessions(db, eq(sessions.sidHash, row.sidHash), "expired");
     return null;
+  }
+  // Super Powers end at their hour by the SERVER's clock (ADR-054): the
+  // first request past it finds them off, and says so in the audit.
+  // `expireSuperPowers`'s WHERE is the one comparison with the clock.
+  const auth: SessionState = row.auth;
+  if (
+    auth.superPowersUntil !== null &&
+    (await expireSuperPowers(db, opts?.now ?? new Date(), eq(sessions.sidHash, row.sidHash))) > 0
+  ) {
+    auth.superPowersUntil = null;
   }
   // The right to act as somebody is the actor's role, read on every request:
   // an admin demoted mid-hour loses the session at once (ADR-034).
@@ -126,7 +204,8 @@ export async function findSessionUser(db: Db, token: string, opts?: { renewTtlHo
       .set({ expiresAt: renewedTo })
       .where(eq(sessions.sidHash, row.sidHash));
   }
-  return { user: row.user, auth: row.auth, renewedTo };
+  // The renewal above moves `expires_at` alone: it never touches Super Powers.
+  return { user: row.user, auth, renewedTo };
 }
 
 /**
@@ -135,18 +214,29 @@ export async function findSessionUser(db: Db, token: string, opts?: { renewTtlHo
  * `impersonation.ended`, the admin as actor and the student as subject: the
  * student signed out of nothing (ADR-034). A delegated session that expires
  * or loses its actor's right is ended by the system, the admin named in the
- * payload. An ordinary session that expires leaves nothing, as before.
+ * payload. An ordinary session that expires leaves nothing, as before —
+ * except the end of its Super Powers, when they were still on (ADR-054):
+ * `logout` if the admin signed out within the hour, `expired` otherwise.
  */
 async function dropSessions(
   db: Db,
   where: SQL,
   reason: "logout" | "expired" | "revoked",
+  now: Date = new Date(),
 ): Promise<number> {
   const gone = await db
     .delete(sessions)
     .where(where)
-    .returning({ userId: sessions.userId, actorUserId: sessions.actorUserId });
+    .returning({
+      userId: sessions.userId,
+      actorUserId: sessions.actorUserId,
+      superPowersUntil: sessions.superPowersUntil,
+    });
   for (const session of gone) {
+    if (session.superPowersUntil !== null) {
+      const live = reason === "logout" && session.superPowersUntil.getTime() > now.getTime();
+      await superPowersEnded(db, session.userId, live ? "logout" : "expired");
+    }
     const subject = { subjectType: "user", subjectId: session.userId } as const;
     if (delegated(session)) {
       const byActor = reason === "logout";
@@ -164,14 +254,14 @@ async function dropSessions(
   return gone.length;
 }
 
-export async function deleteSession(db: Db, token: string) {
-  await dropSessions(db, eq(sessions.sidHash, hashToken(token)), "logout");
+export async function deleteSession(db: Db, token: string, now: Date = new Date()) {
+  await dropSessions(db, eq(sessions.sidHash, hashToken(token)), "logout", now);
 }
 
 /**
  * Purge of expired sessions, the scheduled task `sessions.purge`
- * (`ticker.ts`). Returns how many went.
+ * (`modules/system/catalog.ts`). Returns how many went.
  */
-export async function purgeExpiredSessions(db: Db): Promise<number> {
-  return dropSessions(db, lt(sessions.expiresAt, new Date()), "expired");
+export async function purgeExpiredSessions(db: Db, now: Date = new Date()): Promise<number> {
+  return dropSessions(db, lt(sessions.expiresAt, now), "expired", now);
 }

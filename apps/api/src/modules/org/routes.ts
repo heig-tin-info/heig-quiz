@@ -34,13 +34,15 @@ import { publish } from "../../events.js";
 import { ownersOf } from "../../identity.js";
 import { syncRoleOfUser } from "../../roles.js";
 import {
-  accessWhere,
   accessibleClassroom,
   accessibleCourse,
   accessibleEnrollment,
+  accessWhere,
   adminGuard,
+  callerOf,
   poolAccess,
   staffAccess,
+  superPowersGuard,
   teacherGuard,
 } from "../guards.js";
 import { invalid, notFound, teacherRoute } from "../http.js";
@@ -83,7 +85,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   // --- Courses ---
 
   app.get("/app/api/courses", { preHandler: requireTeacher }, async (req) =>
-    service.listCourses(app.db, accessWhere(req.user!, staffAccess(req.user!.id)), req.user!.id),
+    service.listCourses(app.db, accessWhere(callerOf(req), staffAccess(req.user!.id)), req.user!.id),
   );
 
   app.post("/app/api/courses", { preHandler: requireTeacher }, async (req, reply) => {
@@ -196,8 +198,8 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
         app.db,
         course.id,
         body.poolIds,
-        accessWhere(req.user!, poolAccess(req.user!.id)),
-        req.user!,
+        accessWhere(callerOf(req), poolAccess(req.user!.id)),
+        callerOf(req),
       );
       await trace(req, "course.pools_update", "course", course.id, {
         poolIds: linked.map((p) => p.id),
@@ -445,11 +447,14 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
    * ADR-034: the one-time link that opens a session as this student. Admins
    * only in v1 — the session reads everything the student reads, beyond any
    * staff seat — and anyone else gets the 404 of a missing entry, as does an
-   * entry that is not a claimed student seat.
+   * entry that is not a claimed student seat. And only with Super Powers on
+   * (ADR-054): an admin acting as a teacher on their own course creates no
+   * link. The session the link opens then lives out its own fixed hour,
+   * whatever becomes of the Super Powers that created it.
    */
   app.post(
     "/app/api/classrooms/:id/roster/:eid/impersonation",
-    { preHandler: requireAdmin },
+    { preHandler: [requireAdmin, superPowersGuard()] },
     teacher(onEntry, async ({ req, reply, now, scope: entry }) =>
       (await issueImpersonationLink(app.db, config, entry, req.user!.id, now)) ?? notFound(reply),
     ),

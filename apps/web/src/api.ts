@@ -65,6 +65,9 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   correction_published: "error.correctionPublished",
   // F-ADMIN-06: "Run now" on a task whose run is still going.
   task_running: "error.taskRunning",
+  // ADR-054: a second switch-on while they run, and an action that needs them.
+  super_powers_active: "error.superPowersActive",
+  super_powers_required: "error.superPowersRequired",
 };
 
 /** Server-provided error message of a failed call (or its worded code), or the fallback. */

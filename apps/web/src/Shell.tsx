@@ -693,8 +693,14 @@ export function ImpersonationBanner({ me, children }: { me: Me; children: ReactN
   );
 }
 
-/** The height of a mode banner, published to the frame as `--banner-h`. */
+/** The height of one mode banner; `--banner-h` is the sum of the banners above the frame. */
 const BANNER_HEIGHT = "2rem";
+
+/** The fill of each tone, with its ink, the pill's hairline and its focus ring. */
+const BANNER_TONE = {
+  mode: "bg-fg text-canvas [--banner-ink:var(--canvas)]",
+  danger: "bg-danger text-on-fill [--banner-ink:var(--on-fill)]",
+} as const;
 
 /**
  * A mode of the whole application, stated above everything: full width,
@@ -708,27 +714,44 @@ const BANNER_HEIGHT = "2rem";
  * back; another mode (acting as someone else) says another and offers its
  * own way out. `short` is what a phone shows, where the full sentence would
  * be cut before the word that names the mode; `message` names the region.
+ *
+ * `danger` is the one red banner: Super Powers (ADR-054), a state that is a
+ * hazard rather than a point of view — every colleague's course is open to
+ * the admin's next click. `aside` is what the banner says beside its
+ * message and changes on its own (their countdown).
+ *
+ * Banners stack: each one sticks below the ones around it (`--banner-top`,
+ * the `--banner-h` it inherits) and hands its frame the sum.
  */
 export function ModeBanner({
   icon,
   message,
   short,
+  aside,
   action,
+  tone = "mode",
   children,
 }: {
   icon?: ReactNode;
   message: string;
   short?: string | undefined;
-  action?: { label: string; onClick: () => void } | undefined;
+  aside?: ReactNode;
+  action?: { label: string; onClick: () => void; disabled?: boolean } | undefined;
+  tone?: keyof typeof BANNER_TONE;
   children: ReactNode;
 }) {
   return (
-    <div style={{ "--banner-h": BANNER_HEIGHT } as CSSProperties}>
+    // Two elements, because a custom property read and set on the same
+    // element is a cycle: the outer one reads the offset above, the inner one
+    // adds this banner to it.
+    <div style={{ "--banner-top": "var(--banner-h)" } as CSSProperties}>
+    <div style={{ "--banner-h": `calc(var(--banner-top) + ${BANNER_HEIGHT})` } as CSSProperties}>
       <div
         role="region"
         aria-label={message}
         className={cx(
-          "sticky top-0 flex h-(--banner-h) items-center gap-2 bg-fg px-4 text-xs font-medium text-canvas [&>svg]:size-3.5 [&>svg]:shrink-0",
+          "sticky top-(--banner-top) flex h-8 items-center gap-2 px-4 text-xs font-medium [&>svg]:size-3.5 [&>svg]:shrink-0",
+          BANNER_TONE[tone],
           Z.banner,
         )}
       >
@@ -743,17 +766,20 @@ export function ModeBanner({
             message
           )}
         </span>
+        {aside}
         {action ? (
           <button
             type="button"
             onClick={action.onClick}
-            className="h-6 shrink-0 whitespace-nowrap rounded-full border border-canvas/40 px-2.5 text-xs font-medium text-canvas transition-colors hover:bg-canvas/15 focus-visible:outline-canvas"
+            disabled={action.disabled}
+            className="h-6 shrink-0 whitespace-nowrap rounded-full border border-(--banner-ink)/40 px-2.5 text-xs font-medium transition-colors hover:bg-(--banner-ink)/15 focus-visible:outline-(--banner-ink) disabled:opacity-60"
           >
             {action.label}
           </button>
         ) : null}
       </div>
       {children}
+    </div>
     </div>
   );
 }

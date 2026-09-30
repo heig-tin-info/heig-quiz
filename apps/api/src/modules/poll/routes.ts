@@ -50,6 +50,7 @@ import { CSRF_COOKIE, CSRF_HEADER } from "../../auth/session.js";
 import { isOwnedPoll, questions } from "../../db/schema.js";
 import {
   accessWhere,
+  callerOf,
   findAccessibleClassroom,
   findAccessibleQuestion,
   findManagedEvaluation,
@@ -89,7 +90,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
 
   /** The classroom, loaded through the staff predicate — 404 otherwise. */
   async function reachableClassroom(req: FastifyRequest, classroomId: string) {
-    return (await findAccessibleClassroom(app.db, req.user!, classroomId))?.room ?? null;
+    return (await findAccessibleClassroom(app.db, callerOf(req), classroomId))?.room ?? null;
   }
 
   /**
@@ -99,8 +100,8 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
    */
   async function reachableQuestion(req: FastifyRequest, questionId: string) {
     return (
-      (await findAccessibleQuestion(app.db, req.user!, questionId))?.question ??
-      (await findOwnUnsavedPollQuestion(app.db, req.user!, questionId))
+      (await findAccessibleQuestion(app.db, callerOf(req), questionId))?.question ??
+      (await findOwnUnsavedPollQuestion(app.db, callerOf(req), questionId))
     );
   }
 
@@ -111,7 +112,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
    * poll that does not exist.
    */
   async function reachablePoll(req: FastifyRequest, evaluationId: string) {
-    const evaluation = await findManagedEvaluation(app.db, req.user!, evaluationId);
+    const evaluation = await findManagedEvaluation(app.db, callerOf(req), evaluationId);
     if (!evaluation || evaluation.mode !== "poll") return null;
     return service.scopeOf(app.db, evaluation);
   }
@@ -147,7 +148,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     const home =
       scope.item.question.poolId === null
         ? null
-        : ((await findAccessibleQuestion(app.db, req.user!, scope.item.question.id))?.pool ?? null);
+        : ((await findAccessibleQuestion(app.db, callerOf(req), scope.item.question.id))?.pool ?? null);
     return service.teacherView(
       app.db,
       scope,
@@ -170,7 +171,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
   app.get("/app/api/polls/questions", { preHandler: requireTeacher }, async (req) =>
     service.questionPicks(app.db, {
       userId: req.user!.id,
-      poolWhere: accessWhere(req.user!, poolAccess(req.user!.id)),
+      poolWhere: accessWhere(callerOf(req), poolAccess(req.user!.id)),
     }),
   );
 
@@ -191,7 +192,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     }
     try {
       return await service.poolQuestionPage(app.db, {
-        poolWhere: accessWhere(req.user!, poolAccess(req.user!.id)),
+        poolWhere: accessWhere(callerOf(req), poolAccess(req.user!.id)),
         courseId,
         search: query.data,
       });
@@ -453,7 +454,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     if (
       !isOwnedPoll(found.evaluation) &&
       req.user &&
-      !(await findReachableEvaluation(app.db, req.user, found.evaluation.id))
+      !(await findReachableEvaluation(app.db, callerOf(req), found.evaluation.id))
     ) {
       return "not_on_roster";
     }

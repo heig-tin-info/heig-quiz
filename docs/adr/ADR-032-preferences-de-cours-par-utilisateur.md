@@ -25,7 +25,10 @@ Three facts shape the answer:
 - an admin reaches every course without holding a seat on its staff
   (`accessWhere` in `guards.ts`). A column on `course_staff` would leave the
   admin nothing to hide with — and the admin is the user with the longest
-  list.
+  list. *Amended 2026-09-30 (ADR-054): an admin reaches a course without a
+  seat only while their Super Powers run; the table of its own still holds,
+  since hiding is personal and an admin with Super Powers may hide a
+  colleague's course for themself.*
 
 ## Decision
 

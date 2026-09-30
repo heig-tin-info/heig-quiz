@@ -27,6 +27,7 @@ import { evaluationTotal, itemListDiff } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { evaluationItems, evaluations } from "../../db/schema.js";
+import type { Caller } from "../guards.js";
 import {
   EvaluationError,
   assertItemListEditable,
@@ -188,7 +189,7 @@ export async function templateOf(db: Db, row: EvaluationRecord): Promise<Evaluat
 export async function templateDetail(
   db: Db,
   row: EvaluationRecord,
-  viewer: { id: string; role: string },
+  viewer: Caller,
 ): Promise<TemplateDetail> {
   const [joined, linked] = await Promise.all([
     joinedItems(db, row.id),

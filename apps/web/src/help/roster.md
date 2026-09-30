@@ -32,7 +32,8 @@ results are kept.
 
 ## Seeing the platform as a student
 
-An administrator can **Copy link as this student** on a claimed student row.
+An administrator with **Super Powers** on can **Copy link as this student** on
+a claimed student row.
 The link opens the platform as that student for an hour; it works once,
 within five minutes. Paste it only into a **private window**: a session
 belongs to the whole browser, and opening it here would sign you out of your

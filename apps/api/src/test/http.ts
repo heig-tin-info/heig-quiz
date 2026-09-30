@@ -36,6 +36,12 @@ export interface TestServer {
     role: "student" | "teacher" | "admin",
     email?: string,
   ) => Promise<{ id: string; headers: Record<string, string> }>;
+  /**
+   * An admin whose session has switched Super Powers on (ADR-054), through
+   * the real route: the caller for a test about reaching everyone's
+   * content. An admin from `signIn` reaches what a teacher reaches.
+   */
+  signInWithSuperPowers: (email?: string) => Promise<{ id: string; headers: Record<string, string> }>;
   close: () => Promise<void>;
 }
 
@@ -64,7 +70,7 @@ export async function testServer(env: Record<string, string> = {}): Promise<Test
   const app = await buildApp({ config, clock });
   await app.ready();
 
-  return {
+  const server: TestServer = {
     app,
     assetsDir: config.ASSETS_DIR,
     clock,
@@ -88,11 +94,18 @@ export async function testServer(env: Record<string, string> = {}): Promise<Test
         },
       };
     },
+    async signInWithSuperPowers(email) {
+      const admin = await server.signIn("admin", email);
+      const res = await app.inject({ method: "POST", url: "/app/api/me/super-powers", headers: admin.headers });
+      if (res.statusCode !== 200) throw new Error(`super powers refused: ${res.statusCode} ${res.body}`);
+      return admin;
+    },
     async close() {
       await app.close();
       await rm(dir, { recursive: true, force: true });
     },
   };
+  return server;
 }
 
 export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";

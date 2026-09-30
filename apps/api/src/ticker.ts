@@ -29,6 +29,7 @@ import type { FastifyInstance } from "fastify";
 import type { ScheduledTaskKey } from "@quiz/contracts";
 
 import type { AppConfig } from "./config.js";
+import { expireSuperPowers } from "./auth/session.js";
 import { LIVE_TASKS } from "./modules/live/jobs.js";
 import { scheduledTasksTick } from "./modules/system/jobs.js";
 
@@ -56,10 +57,26 @@ export interface ScheduledTask {
  * Tasks every deployment runs on the loop. The live half (`LIVE_TASKS`) is
  * what makes the one-second period worthwhile: expiring attempts past
  * `deadline + GRACE_MS`, opening the evaluations whose `opens_at` has come
- * and closing those past `closes_at`. The last one claims and enqueues the
+ * and closing those past `closes_at`. Then the expiry of Super Powers
+ * (ADR-054). The last one claims and enqueues the
  * due scheduled tasks.
  */
-export const TICK_TASKS: TickTask[] = [...LIVE_TASKS, scheduledTasksTick()];
+export const TICK_TASKS: TickTask[] = [
+  ...LIVE_TASKS,
+  {
+    // ADR-054: Super Powers past their hour end here when no request of the
+    // session comes — audited `expired`, the admin's streams closed — so an
+    // open stream outlives them by one period at most. A clock-bound task,
+    // not a scheduled one: an admin must not be able to pause the expiry of
+    // their own Super Powers (06 no. 37).
+    name: "superpowers.expire",
+    everyMs: 60_000,
+    run: async (app) => {
+      await expireSuperPowers(app.db, app.clock.now());
+    },
+  },
+  scheduledTasksTick(),
+];
 
 export function startTicker(
   app: FastifyInstance,

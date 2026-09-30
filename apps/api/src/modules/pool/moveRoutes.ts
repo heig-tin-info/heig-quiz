@@ -9,7 +9,7 @@ import {
 } from "@quiz/contracts";
 
 import type { pools } from "../../db/schema.js";
-import { findAccessiblePool, requirePoolRole } from "../guards.js";
+import { callerOf, findAccessiblePool, requirePoolRole } from "../guards.js";
 import { invalid } from "../http.js";
 import { publish } from "../../events.js";
 import { poolChanged } from "./events.js";
@@ -51,7 +51,7 @@ export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
 
     const sources = await questionsInReach(req, ids);
     if (sources.length !== ids.length) return reply.code(404).send({ error: "not_found" });
-    const target = await findAccessiblePool(app.db, req.user!, body.data.targetPoolId);
+    const target = await findAccessiblePool(app.db, callerOf(req), body.data.targetPoolId);
     if (!target) return reply.code(404).send({ error: "not_found" });
 
     const sourcePools = new Map(sources.map((row) => [row.pool.id, row.pool]));
@@ -103,7 +103,7 @@ export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   /**
    * The courses that already PLAY one of these questions and do not draw
    * from the target pool, each with whether the caller may link the pool to
-   * it (a staff seat there, or admin).
+   * it (a staff seat there, or Super Powers, ADR-054).
    */
   async function blockingCourses(
     req: FastifyRequest,
@@ -118,7 +118,7 @@ export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     );
     const blocking = using.filter((c) => !linked.has(c.courseId));
     const seats =
-      req.user!.role === "admin"
+      callerOf(req).reach === "all"
         ? null
         : await service.staffSeatsOf(app.db, req.user!.id, blocking.map((c) => c.courseId));
     return blocking.map((c) => ({

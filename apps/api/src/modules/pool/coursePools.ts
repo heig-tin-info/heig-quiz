@@ -8,6 +8,7 @@ import { DomainError } from "../http.js";
 import { coursePools, courseStaff, pools } from "../../db/schema.js";
 import { accessRevoked } from "../realtime/bus.js";
 import { questionCount, poolJson, listPools } from "./pools.js";
+import type { Caller } from "../guards.js";
 
 export async function poolsOfCourse(db: Db, courseId: string) {
   const rows = await db
@@ -52,7 +53,7 @@ export async function setCoursePools(
   courseId: string,
   poolIds: readonly string[],
   allowed: SQL | undefined,
-  viewer: { id: string; role: string },
+  viewer: Caller,
 ) {
   const unique = [...new Set(poolIds)];
   const reachable = unique.length

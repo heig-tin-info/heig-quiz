@@ -46,7 +46,6 @@ import {
   Segmented,
   Skeleton,
   Spinner,
-  Switch,
   T,
   TableHead,
   Tip,
@@ -57,7 +56,7 @@ import {
 import { PoolIcon } from "./PoolIcon";
 import { PoolIconPicker } from "./PoolIconPicker";
 import { PoolShareSheet } from "./PoolShareSheet";
-import { allPoolsKey, poolsKey } from "../queryKeys";
+import { poolsKey } from "../queryKeys";
 
 /** The body of a `409 pool_in_use`, or null for any other failure. */
 function poolInUse(error: unknown): PoolInUse | null {
@@ -103,9 +102,6 @@ function poolInUseMessage(inUse: PoolInUse, t: TFunction): string {
 
 const VIEW_KEY = "quiz-pools-view";
 const VIEWS = ["cards", "list"] as const;
-/** An admin's choice to see every teacher's pools, remembered like the view. */
-const SCOPE_KEY = "quiz-pools-scope";
-const SCOPES = ["mine", "all"] as const;
 type PoolsView = (typeof VIEWS)[number];
 
 /** The visibility badge of a pool: what it says, and who else is on it. */
@@ -492,15 +488,12 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
   const [creating, setCreating] = useState(false);
   const [view, setView] = usePersistentChoice(VIEW_KEY, VIEWS, "cards");
 
-  const [storedScope, setScope] = usePersistentChoice(SCOPE_KEY, SCOPES, "mine");
-  // The switch is an admin's; anyone else asks for their own shelf whatever
-  // the storage says (the server would refuse them the rest anyway).
-  const isAdmin = me.data?.role === "admin";
-  const scope = isAdmin ? storedScope : "mine";
-
+  // Everything the caller reaches: an admin's own shelf, or every pool of
+  // the instance while their Super Powers are on (ADR-054) — the server's
+  // call, not a switch here.
   const pools = useQuery<PoolSummary[]>({
-    queryKey: scope === "all" ? allPoolsKey : poolsKey,
-    queryFn: () => api(scope === "all" ? "/app/api/pools?scope=all" : "/app/api/pools"),
+    queryKey: poolsKey,
+    queryFn: () => api("/app/api/pools"),
   });
   const rows = pools.data ?? [];
   /* No initial sort: the server hands the shelf over in its own order, and
@@ -554,29 +547,17 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
         }
       />
 
-      {(rows.length > 0 || isAdmin) && !pools.isError ? (
+      {rows.length > 0 && !pools.isError ? (
         <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
-          {isAdmin ? (
-            <label className="mr-auto flex cursor-pointer items-center gap-2 text-sm text-fg-muted">
-              <Switch
-                checked={scope === "all"}
-                onChange={(on) => setScope(on ? "all" : "mine")}
-                label={t("pools.showAll")}
-              />
-              <span aria-hidden="true">{t("pools.showAll")}</span>
-            </label>
-          ) : null}
-          {rows.length > 0 ? (
-            <Segmented
-              name="pools-view"
-              value={view}
-              onChange={setView}
-              options={[
-                viewOption("cards", <LayoutGrid className="size-4" />, t("view.cards")),
-                viewOption("list", <List className="size-4" />, t("view.list")),
-              ]}
-            />
-          ) : null}
+          <Segmented
+            name="pools-view"
+            value={view}
+            onChange={setView}
+            options={[
+              viewOption("cards", <LayoutGrid className="size-4" />, t("view.cards")),
+              viewOption("list", <List className="size-4" />, t("view.list")),
+            ]}
+          />
         </div>
       ) : null}
 

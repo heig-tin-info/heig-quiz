@@ -428,7 +428,14 @@ live in `ui/state.ts`, each written once.
   rule, because the accent on `fg` is about 2.5:1 in light mode, under the
   3:1 a ring needs. The banner hands its frame `--banner-h` (0 elsewhere, in
   `style.css`); the sidebar, the phone top bar and the player's header stick
-  at that offset, and the full-height columns subtract it.
+  at that offset, and the full-height columns subtract it. Banners stack:
+  each sticks at the `--banner-h` it inherits (`--banner-top`) and hands its
+  frame the sum, so Super Powers above the student view read as two strips.
+  ONE banner is red (`tone="danger"`: `danger` fill, `on-fill` ink, 5.9:1 /
+  6.4:1): Super Powers (ADR-054), a hazard rather than a point of view —
+  every colleague's course is one click away. Its `aside` slot carries the
+  time left: minutes, then in the last five a bold countdown by the second
+  behind a warning sign; the pill's ring and hairline follow the ink.
 - Badge: pill, soft background, 12 px, tones green / amber / red / zinc /
   accent. Status is a badge; a count is plain text. A badge that is also the door to
   its own fix — "template rev. 1 → 3" on a classroom's evaluation row

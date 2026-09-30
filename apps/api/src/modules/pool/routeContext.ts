@@ -12,10 +12,11 @@ import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { pools, questions } from "../../db/schema.js";
 import {
-  accessWhere,
   accessibleCategory,
   accessiblePool,
   accessibleQuestion,
+  accessWhere,
+  callerOf,
   poolAccess,
   requirePoolRole,
   teacherGuard,
@@ -49,7 +50,7 @@ function poolFailure(reply: FastifyReply, error: unknown): FastifyReply | null {
 export function poolRouteContext(app: FastifyInstance, config: AppConfig) {
   const requireTeacher = teacherGuard(app);
   const trace = tracer(app);
-  const mine = (req: FastifyRequest) => accessWhere(req.user!, poolAccess(req.user!.id));
+  const mine = (req: FastifyRequest) => accessWhere(callerOf(req), poolAccess(req.user!.id));
 
   const teacher = teacherRoute(app, poolFailure);
 

@@ -1,7 +1,7 @@
 /**
  * `findReadableClassroom` against the real migrations: what its SQL adds to
  * the pure rule `classroomPayload` (tested in `guards.test.ts`) — the staff
- * EXISTS, the admin override, the seat join and its bonus, an unclaimed
+ * EXISTS, the Super Powers override (ADR-054), the seat join and its bonus, an unclaimed
  * line, an unknown id, and an impersonation read through the seat alone.
  */
 import { randomUUID } from "node:crypto";
@@ -18,10 +18,17 @@ import { findReadableClassroom, type Caller } from "./guards.js";
 let db: Db;
 let mine: Seeded;
 let other: Seeded;
-const account = (role: "teacher" | "admin" | "student") => ({ id: randomUUID(), role });
+const account = (role: "teacher" | "admin" | "student", reach: Caller["reach"] = "seats") => ({
+  id: randomUUID(),
+  role,
+  reach,
+});
 const teacher = account("teacher");
 const outsider = account("teacher");
-const admin = account("admin");
+/** An admin with Super Powers on (ADR-054)... */
+const admin = account("admin", "all");
+/** ...and one without: a teacher like any other. */
+const plainAdmin = account("admin");
 const student = account("student");
 const unclaimed = account("student");
 /** A student account that kept a staff seat on the other course (ADR-013 rule 5). */
@@ -32,7 +39,7 @@ const seb: SessionAuth = { kind: "seb", actorUserId: null, evaluationId: randomU
 
 beforeAll(async () => {
   db = await testDb();
-  for (const { id, role } of [teacher, outsider, admin, student, unclaimed, keptSeat]) {
+  for (const { id, role } of [teacher, outsider, admin, plainAdmin, student, unclaimed, keptSeat]) {
     await db.insert(users).values({ id, oidcSub: `test-${id}`, email: `${id}@heig.test`, role });
   }
   mine = await seedLive(db, { teacherId: teacher.id, studentIds: [student.id, keptSeat.id], questions: 0, timeBonusPercent: 25 });
@@ -60,8 +67,12 @@ describe("findReadableClassroom", () => {
     expect(await read(outsider, mine.classroomId)).toBeNull();
   });
 
-  it("serves an admin the staff payload, like `staffAccess` does", async () => {
+  it("serves an admin with Super Powers the staff payload, like `staffAccess` does", async () => {
     expect((await read(admin, other.classroomId))!.payload).toBe("staff");
+  });
+
+  it("serves an admin without Super Powers nothing off their seats (ADR-054)", async () => {
+    expect(await read(plainAdmin, other.classroomId)).toBeNull();
   });
 
   it("serves a claimed seat the student payload, with its bonus", async () => {

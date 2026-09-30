@@ -46,7 +46,7 @@ beforeAll(async () => {
   teacherA = await server.signIn("teacher");
   teacherB = await server.signIn("teacher");
   outsider = await server.signIn("teacher");
-  admin = await server.signIn("admin");
+  admin = await server.signInWithSuperPowers();
   courseId = randomUUID();
   liveRoomId = randomUUID();
   archivedRoomId = randomUUID();
@@ -89,7 +89,7 @@ describe("hiding a course (#155)", () => {
     expect(await listOf(outsider)).toEqual([]);
   });
 
-  it("lets an admin, who holds no staff seat, hide a course for themselves", async () => {
+  it("lets an admin with Super Powers, who holds no staff seat, hide a course for themselves", async () => {
     expect((await post(admin, "hide")).statusCode).toBe(204);
     expect(await hiddenFor(admin)).toBe(true);
     expect(await hiddenFor(teacherA)).toBe(false);

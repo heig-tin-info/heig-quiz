@@ -25,7 +25,7 @@ export const SCHEDULED_TASKS: readonly ScheduledTask[] = [
   {
     key: "sessions.purge",
     defaultIntervalMinutes: 10,
-    run: async (app) => `${await purgeExpiredSessions(app.db)} expired sessions deleted`,
+    run: async (app) => `${await purgeExpiredSessions(app.db, app.clock.now())} expired sessions deleted`,
   },
   {
     // ADR-023: spent requests and hourly access tokens, dead grants, and
