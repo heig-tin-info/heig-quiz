@@ -99,7 +99,7 @@ Carried by the task cards of [`docs/merge/09-tasks.md`](../merge/09-tasks.md), i
 
 ## 0.6 Out of scope
 
-- Heavy proctoring: webcam, device lockdown. (Safe Exam Browser is in scope since ADR-027: an exam may require it, launched from the portal without a second sign-in.)
+- Heavy proctoring: webcam, lockdown of a student's own device. (Safe Exam Browser is in scope since ADR-027: an exam may require it, launched from the portal without a second sign-in. The school's own Chromebooks, locked in a web kiosk and attested by Chrome Verified Access, are in scope since ADR-051 as fallback stations for an exam, paired from the student's phone.)
 - Comparison of electronic schematics by topology: netlist isomorphism, series/parallel
   canonicalisation, "the same circuit drawn differently". The `circuit` question type
   grades a schematic by SIMULATING it and comparing the output waveform with the

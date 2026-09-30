@@ -28,6 +28,14 @@ and what waits for D21 (unified SEB design, open).
   Whether Browser Exam Keys become optional per activity (§2 rejected a
   list) is part of D21 too.
 
+**Addendum (2026-09-30, ADR-051, attested kiosk stations):** a second
+confined kind, `kiosk`, sits beside `seb`, and an exam accepts either or
+both. For `seb`, §2 changes: the Config Key is stored on the session and
+checked on EVERY request, audit-only until proof B. §3 changes: a confined
+session's cookie is `SameSite=Strict`, and a new confined session
+supersedes the previous one of the same student and exam. There is still
+no Browser Exam Key.
+
 ## Context
 
 An exam sat in Safe Exam Browser (SEB) is a separate browser: the portal's
