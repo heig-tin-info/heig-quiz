@@ -38,6 +38,12 @@ raw values live in `src/style.css` and swap in dark mode without any
 | `info` / `info-soft` | `#1268a0` / `#e8f2f9` | `#58a9e0` / `rgb(88 169 224 / 0.14)` | "a set of possibilities", the progress half of a cell state, and a `SegmentedBar` share that is no verdict (the pool's choices picked, ADR-043) |
 | `info-mid` / `on-info-mid` | `#b8d7f0` / `#0d5286` | `rgb(88 169 224 / 0.35)` / `#a6d3f3` | the ANSWERED cell of the live grid only |
 
+A grade (`<Grade>`, `apps/web/src/Grade.tsx`) is written in `danger` below
+4.0 and in `warning` from 4.0 to 4.4, in the ink from 4.5; its ECTS label
+("Satisfactory (D)") is on hover and in the text for a screen reader. The
+histogram's bars follow the same bands. Teacher and student see the same
+colours.
+
 Rule: strip the accent and every screen must still read. Hierarchy comes
 from size, weight and position, never from red.
 

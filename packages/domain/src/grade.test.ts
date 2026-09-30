@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   attemptTotal,
+  gradeBand,
   gradeFromPoints,
+  gradeLetter,
   isPassing,
   MAX_GRADE,
   MIN_GRADE,
@@ -48,6 +50,51 @@ describe("isPassing", () => {
   it("passes at 4.0", () => {
     expect(isPassing(3.9)).toBe(false);
     expect(isPassing(4)).toBe(true);
+  });
+});
+
+describe("gradeBand", () => {
+  it("is fail below 4.0, borderline below 4.5, pass from 4.5", () => {
+    expect([1, 3.9, 4, 4.4, 4.5, 6].map(gradeBand)).toEqual([
+      "fail",
+      "fail",
+      "borderline",
+      "borderline",
+      "pass",
+      "pass",
+    ]);
+  });
+
+  it("judges the grade as written, one decimal", () => {
+    expect(gradeBand(3.96)).toBe("borderline");
+    expect(gradeBand(4.44)).toBe("borderline");
+    expect(gradeBand(4.46)).toBe("pass");
+  });
+});
+
+describe("gradeLetter", () => {
+  it("maps each bound, inclusive from below", () => {
+    const table: [grade: number, letter: string][] = [
+      [1, "F"],
+      [3.4, "F"],
+      [3.5, "FX"],
+      [3.9, "FX"],
+      [4, "E"],
+      [4.2, "E"],
+      [4.3, "D"],
+      [4.7, "D"],
+      [4.8, "C"],
+      [5.2, "C"],
+      [5.3, "B"],
+      [5.7, "B"],
+      [5.8, "A"],
+      [6, "A"],
+    ];
+    for (const [grade, letter] of table) expect(gradeLetter(grade)).toBe(letter);
+  });
+
+  it("does not miss a bound by a float hair", () => {
+    expect(gradeLetter(0.1 + 4.2)).toBe("D");
   });
 });
 

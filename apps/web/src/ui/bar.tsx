@@ -85,6 +85,8 @@ export function SegmentedBar({
   );
 }
 
+const BAR_FILL = { neutral: "bg-fg-muted", danger: "bg-danger", warning: "bg-warning" } as const;
+
 export interface BarDatum {
   key: string;
   value: number;
@@ -94,13 +96,16 @@ export interface BarDatum {
   tick?: string;
   /** The bar's own tooltip, on hover. */
   title?: string;
+  /** A semantic fill instead of the neutral ink (a failing grade range). */
+  tone?: "danger" | "warning";
 }
 
 /**
  * Vertical bars on one axis, one count each: plain `<div>`s on the tokens
  * rather than a chart library — a bar whose height is a percentage survives
  * every width the page has. Neutral ink, not the accent: a chart is a
- * reading, not the thing to press. An empty bar keeps a 2 px stub so the
+ * reading, not the thing to press; a bar that is a verdict (a failing grade
+ * range) may take a semantic `tone`. An empty bar keeps a 2 px stub so the
  * axis reads, a non-empty one at least 6 px so it is never mistaken for one.
  *
  * The bars are `aria-hidden`, and the same numbers are published as a real
@@ -134,7 +139,7 @@ export function Bars({
               <span className="text-center text-[11px] tabular-nums text-fg-faint">{b.value || ""}</span>
             ) : null}
             <span
-              className={cx("w-full rounded-t-[4px]", b.value === 0 ? "bg-surface-3" : "bg-fg-muted")}
+              className={cx("w-full rounded-t-[4px]", b.value === 0 ? "bg-surface-3" : BAR_FILL[b.tone ?? "neutral"])}
               style={{ height: `${Math.max(b.value === 0 ? 2 : 6, (b.value / top) * 100)}%` }}
             />
           </div>
