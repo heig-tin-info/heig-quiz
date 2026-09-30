@@ -201,7 +201,7 @@ extension serves both.
 1. Move the Chromebook into the stations' OU and reboot it. It launches
    `/kiosk`, attests, and shows **Station not recognised — Call the
    supervisor.**: it is known but not named yet.
-2. In the platform, **Administration › Kiosk stations** now lists it as
+2. In the platform, **Administration › People › Kiosk stations** now lists it as
    **Unnamed**, identified by its serial number (Verified Access's device
    id, the serial on the Chromebook's label). "Waiting for a name: 1".
 3. **Name** it after the sticker on the machine, for example
@@ -273,7 +273,7 @@ exam comes back as soon as one attestation is accepted.
 
 | Symptom | Likely cause | Check |
 | --- | --- | --- |
-| The station shows **Station not recognised** | it is **Unnamed** or **Retired** in Administration › Kiosk stations; or its attestation is refused | the station's row, and the audit (`kiosk.attest_failed`, reason `refused`). A station missing from the list never attested: see the next rows |
+| The station shows **Station not recognised** | it is **Unnamed** or **Retired** in Administration › People › Kiosk stations; or its attestation is refused | the station's row, and the audit (`kiosk.attest_failed`, reason `refused`). A station missing from the list never attested: see the next rows |
 | A new Chromebook never appears in the list | the extension is not detected (not force-installed on the kiosk app, wrong `KIOSK_EXTENSION_ID`, **Allow enterprise challenge** off), or the device is in developer mode, or the customer id or enrollment domain differs | the page reports the extension's failure to the server, which records a refusal. Check the kiosk app's extension, its certificate setting, the device's boot mode, and the two identifiers in `.env.prod` |
 | Every station is refused, and the API logs `kiosk attestation: refused` with `customerMatches: false` | `KIOSK_GOOGLE_CUSTOMER_ID` is not the Workspace Google answers for | the same log line carries the `customerId` Google returned: copy it into `.env.prod`. A leading `C` does not matter, it is ignored on both sides. With `customerMatches: true`, look at `keyTrustLevel` instead: anything but `CHROME_OS_VERIFIED_MODE` is a station in developer mode |
 | **The station cannot start** — "The station keeps trying by itself." | the server cannot get a challenge from Google (network, quota, the service account not in **Services with full access**, a revoked key) or the platform is unreachable | the API's log (`attestation` failures are logged by kind and HTTP status, never with a token); the station retries every 30 seconds |
@@ -297,7 +297,7 @@ production; until the last is recorded, keep `SEB_CONFIG_KEY_ENFORCE=0`.
 - [ ] The first station attests with the Admin console's customer id as
       typed in `KIOSK_GOOGLE_CUSTOMER_ID` (with or without its leading `C`;
       on a mismatch the API logs the id Google returned), and the
-      `devicePermanentId` shown in Administration › Kiosk stations is the
+      `devicePermanentId` shown in Administration › People › Kiosk stations is the
       serial on the machine's label.
 - [ ] The Admin console paths and labels on this page are the ones on the
       screen; the ones marked **(unverified)** are corrected here.
