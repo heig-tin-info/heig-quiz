@@ -230,17 +230,38 @@ export interface Caller {
 }
 
 /**
+ * The caller's OWN portal session, pure: not delegated (ADR-034), not a
+ * confined one (`seb`, `kiosk`: a whitelist of `portal`, so a new kind is
+ * refused too), never a Bearer token (`auth` null). What Super Powers and
+ * the GitHub account link (F-GH-05) both require.
+ */
+export function ownPortalSession(auth: Pick<SessionAuth, "kind" | "actorUserId"> | null): boolean {
+  return auth !== null && auth.kind === "portal" && !delegated(auth);
+}
+
+/**
+ * The preHandler of {@link ownPortalSession}: a session, then `403
+ * session_required` for any other caller.
+ */
+export function ownSessionGuard(app: FastifyInstance) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const denied = await app.requireSession(req, reply);
+    if (denied) return denied;
+    if (!ownPortalSession(req.auth)) return reply.code(403).send({ error: "session_required" });
+    return undefined;
+  };
+}
+
+/**
  * Who may hold Super Powers at all (ADR-054), pure: an admin, through their
- * own portal session — not delegated, not a confined one (`seb`, `kiosk`: a
- * whitelist of `portal`, so a new kind is refused too), never a Bearer token
- * (`auth` null). The enable and disable routes ask this; so does
+ * {@link ownPortalSession}. The enable and disable routes ask this; so does
  * {@link reachOf}, and `GET /me` (`superPowersAvailable`).
  */
 export function mayHoldSuperPowers(
   user: { role: string },
   auth: Pick<SessionAuth, "kind" | "actorUserId"> | null,
 ): boolean {
-  return user.role === "admin" && auth !== null && auth.kind === "portal" && !delegated(auth);
+  return user.role === "admin" && ownPortalSession(auth);
 }
 
 /**

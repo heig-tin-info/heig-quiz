@@ -68,7 +68,7 @@ module); DROP.
 
 | Classroom | → Quiz | Rule |
 | --- | --- | --- |
-| `users` | `users` (MAP) | merged by identity (§2.4). GitHub columns → NEW `github_accounts(user_id PK, github_user_id UNIQUE, login, linked_at)` (module `github`; Quiz's `users` stays with `auth`). `email_prefs` → `notification_preferences` rows (after the kinds exist, M3-09). Profile fields from the side with the newer `last_login_at`; earliest `created_at`; Quiz's `locale`, `date_format`, MCQ and coach settings win |
+| `users` | `users` (MAP) | merged by identity (§2.4). GitHub columns → NEW `github_accounts(user_id PK, github_user_id UNIQUE, login, linked_at)` (module `auth`, beside `users`: written by `auth/githubLink.ts` only, M2-03). `email_prefs` → `notification_preferences` rows (after the kinds exist, M3-09). Profile fields from the side with the newer `last_login_at`; earliest `created_at`; Quiz's `locale`, `date_format`, MCQ and coach settings win |
 | `sessions` | DROP | everyone signs in again |
 | `user_emails` | `user_emails` (MAP) | union per merged user; `first_seen_at` = min, `verified` = OR |
 | `user_idp_claims`, `avatars` | MAP | keep the row with the newer `updated_at` |

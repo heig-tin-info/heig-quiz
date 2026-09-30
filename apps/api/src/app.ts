@@ -14,6 +14,7 @@ import { collectDefaultMetrics, Gauge, Registry } from "prom-client";
 
 import { AvatarMime, type HealthResponse } from "@quiz/contracts";
 import type { Clock } from "./clock.js";
+import { githubLinkPlugin } from "./auth/githubLink.js";
 import { authPlugin } from "./auth/plugin.js";
 import { requestLog } from "./redact.js";
 import { systemClock } from "./clock.js";
@@ -21,6 +22,7 @@ import type { AppConfig } from "./config.js";
 import { registerSecurityHeaders } from "./csp.js";
 import { createDb } from "./db/client.js";
 import { publish } from "./events.js";
+import { githubApp } from "./github/app.js";
 import { registerHttpMetrics } from "./httpMetrics.js";
 import { activityPlugin } from "./modules/activity/routes.js";
 import { adminPlugin } from "./modules/admin/routes.js";
@@ -201,6 +203,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   registerDrillHooks();
   await app.register(notificationsPlugin, { config });
   await app.register(mcpPlugin, { config });
+  // GitHub account linking (M2-03): no route at all while GitHub is off.
+  if (githubApp(config)) await app.register(githubLinkPlugin, { config });
 
   // Job queue + ticker. A database that is unreachable at boot does not kill
   // the server: healthz stays degraded until restart. Every step below only

@@ -110,3 +110,21 @@ export const GithubAccountState = z.object({
   relevant: z.boolean(),
 });
 export type GithubAccountState = z.infer<typeof GithubAccountState>;
+
+/**
+ * The closed outcome of a link round trip (F-GH-05, M2-03), the `?github=`
+ * the callback appends to the page the user started from: `linked`, or
+ * `conflict` (the GitHub account is already another user's), or `error`
+ * (refused at GitHub, a stale or forged state, GitHub unreachable). The web
+ * words it as a toast through `t()`.
+ */
+export const GITHUB_LINK_OUTCOMES = ["linked", "conflict", "error"] as const;
+export const GithubLinkOutcome = z.enum(GITHUB_LINK_OUTCOMES);
+export type GithubLinkOutcome = z.infer<typeof GithubLinkOutcome>;
+
+/**
+ * The `409` body of a request that needs the user's GitHub account when
+ * GitHub no longer has it (deleted) or the link is gone: the web offers
+ * "Relink GitHub" (05-web §5.3). Returned by the API's `linkedLogin` (M2-03).
+ */
+export const GITHUB_ACCOUNT_STALE = { error: "github_account_stale" } as const;

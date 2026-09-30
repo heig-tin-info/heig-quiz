@@ -274,6 +274,43 @@ files it ports; writes en + fr for every string.
   (the route name the web mock serves, `?unlinked=1`). This task writes
   the callback's closed return, `GithubLinkOutcome` (`?github=linked |
   conflict | error`), in `contracts/src/github.ts`.
+- **As delivered** (#403): `Q:auth/githubLink.ts`, registered in `app.ts`
+  only while `githubApp(config)` is on (off ⇒ every route 404).
+  - Routes: `GET /app/auth/github/link?return=`, `GET
+    /app/auth/github/callback`, `GET` and `DELETE /app/api/me/github`
+    (`DELETE` idempotent, 204). Link, callback and unlink take
+    `ownSessionGuard` (`Q:modules/guards.ts`, the rule of Super Powers too,
+    `ownPortalSession`): a delegated session or a Bearer token gets `403
+    session_required`; a `seb`/`kiosk` one is nobody there (401, default
+    deny).
+  - `return`: `linkReturn` = `safeReturnTo`, and `/`, `/app/…` or anything
+    refused ⇒ `/settings`. The callback appends `?github=` keeping the
+    path's query and fragment; a bad, forged, foreign or expired state
+    lands on `/settings?github=error` without calling GitHub. `return=` is
+    masked in the request log like `next=`.
+  - State: signed cookie `quiz_github_link` (Path `/app/auth/github`,
+    HttpOnly, Lax, Max-Age 600) carrying `{nonce, userId, returnTo,
+    expiresAt}`, the expiry checked on `app.clock`; cleared by every
+    callback.
+  - Through Octokit: `githubApp()` builds the App with its `oauth` client;
+    `app.oauth.createToken`, a user Octokit for `GET /user`, then
+    `app.oauth.deleteToken` sent without being awaited. The token is a
+    local of `readAccount`; a failure is logged as `{name, status,
+    message}` only (a `RequestError`'s request body holds the client
+    secret, the code or the token). The callback's query is masked in the
+    request log (`redact.ts`). Production refuses an App id without
+    `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET` (`config.ts`).
+  - `linkedLogin(db, octokit, userId)` (an installation client): the
+    login, or `GITHUB_ACCOUNT_STALE` (`@quiz/contracts`, `{error:
+    "github_account_stale"}`, the 409 body) for a deleted account or no
+    link; other failures throw. Nothing calls it yet (M3-03, M4-03).
+  - `relevant` is staff of a classroom linked to an organization only;
+    M3-01 adds "has or had a project" to `linkRelevant`.
+  - Not ported: classroom's `inviteOnGithubLink()` (group repositories
+    created before the link), which belongs to M3-03.
+  - `github_accounts` belongs to `auth` (orchestrator's decision): written
+    by `auth/githubLink.ts` only (link, unlink, rename), though its schema
+    sits in `Q:db/github.ts`.
 
 
 ### M2-04 — Webhook intake, handler registry, delivery reconciliation

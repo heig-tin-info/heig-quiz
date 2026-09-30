@@ -14,6 +14,7 @@ describe("the request log", () => {
       `/teams/link?token=${TOKEN}`,
       `/app/auth/login?next=${encodeURIComponent(`/teams/link?token=${TOKEN}`)}`,
       `/app/auth/dev?returnTo=${encodeURIComponent(`/teams/link?token=${TOKEN}`)}&x=1`,
+      `/app/auth/github/link?return=${encodeURIComponent(`/teams/link?token=${TOKEN}`)}`,
     ]) {
       expect(redactUrl(url), url).not.toContain(TOKEN);
     }

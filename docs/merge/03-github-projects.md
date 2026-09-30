@@ -182,7 +182,7 @@ layers:
 | `classrooms.teacher_id` owner, `classroom_staff`, `isOwner` | `course_staff`, no owner; "the teacher" = the course staff (`staffOfCourse`); `teacher:` audiences → `course:<id>` |
 | `teacherGuard`, `accessibleAssignment/StudentRepo` | `Q:modules/guards.ts`: `staffAccess(me, classrooms.course_id)` + new `findAccessibleProject`, `accessibleProjectRepo`, student loaders by own enrollment/group (404 otherwise) |
 | `enrollments.status='claimed'` | `user_id IS NOT NULL` |
-| `users.github_*` | `github_accounts` (module `github`) |
+| `users.github_*` | `github_accounts` (module `auth`: written by `auth/githubLink.ts` only — link, unlink, rename) |
 | audit strings | the closed union `Q:audit.ts` (§3.6) |
 | `events.ts` string messages, `PER_STUDENT_TYPES` | structured `AppNotice` variants rendered with `t()`; per-repo hints to `course:` + `user:` topics — **Quiz's `classroom:` topic reaches students without per-type filtering; publishing there reintroduces #38** |
 | `mailer.ts queueEmail` | notifications (ADR-030): `notify/notifyMany`, outbox, new kinds |
@@ -221,8 +221,9 @@ layers:
 - `github`: `github_organizations(id, github_org_id UNIQUE NULL, login
   UNIQUE, installation_id UNIQUE NULL, status, plan)`,
   `github_classroom_links(classroom_id PK → classrooms CASCADE, org_id,
-  linked_by, linked_at)`, `github_accounts`, `webhook_deliveries`,
-  `push_receipts`.
+  linked_by, linked_at)`, `webhook_deliveries`,
+  `push_receipts`; in `Q:db/github.ts` too, but `auth`'s: `github_accounts`
+  (M2-03).
 - `project`: `projects` (← assignments; + `classroom_id`, `github_org_id`,
   `created_by`, `grading_scale`; the four partial indexes kept),
   `project_milestones`, `project_groups`, `project_group_members` (FK to

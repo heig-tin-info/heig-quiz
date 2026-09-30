@@ -1,10 +1,12 @@
 /**
  * The GitHub substrate (ADR-035, spec 05 §5.3 and §5.11,
  * docs/merge/03-github-projects.md §3.3). Owned by the `github` module
- * (`modules/github/`, merge tasks M2-02 to M2-04): installations, the
- * classroom's link to an organization, the user's account link, the webhook
- * intake. The project and journal modules read these tables by join and
- * never write them; the intake reaches them through its handler registry.
+ * (`modules/github/`, merge tasks M2-02 and M2-04): installations, the
+ * classroom's link to an organization, the webhook intake — except
+ * `github_accounts`, the user's account link, which is `auth`'s: written by
+ * `auth/githubLink.ts` only (link, unlink, rename; M2-03). The project and
+ * journal modules read these tables by join and never write them; the
+ * intake reaches them through its handler registry.
  *
  * **No column holds a token, a key or a secret** (invariant 15, N-SEC-16):
  * installation tokens live in memory only, and the user token of the

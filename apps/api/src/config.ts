@@ -310,7 +310,7 @@ export const GITHUB_WEBHOOK_SECRET_MIN = 32;
 /**
  * Production refusals of the GitHub App (N-SEC-16). No App id: GitHub is
  * off, nothing to refuse. With one, a key that cannot be read, a missing
- * slug or a brute-forceable webhook secret fail later, on a student's
+ * slug or OAuth client, or a brute-forceable webhook secret fail later, on a student's
  * repository: refuse them at boot. Returns the reason, or null.
  */
 function githubRefusal(env: AppConfig): string | null {
@@ -319,6 +319,10 @@ function githubRefusal(env: AppConfig): string | null {
     return "GITHUB_APP_PRIVATE_KEY_PATH must be a readable key file";
   }
   if (env.GITHUB_APP_SLUG === "") return "GITHUB_APP_SLUG is required";
+  // The account link's code exchange (F-GH-05, M2-03).
+  if (env.GITHUB_APP_CLIENT_ID === "" || env.GITHUB_APP_CLIENT_SECRET === "") {
+    return "GITHUB_APP_CLIENT_ID and GITHUB_APP_CLIENT_SECRET are required";
+  }
   if (env.GITHUB_WEBHOOK_SECRET.length < GITHUB_WEBHOOK_SECRET_MIN) {
     return `GITHUB_WEBHOOK_SECRET must be at least ${GITHUB_WEBHOOK_SECRET_MIN} characters`;
   }
