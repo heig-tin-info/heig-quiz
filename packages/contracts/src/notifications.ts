@@ -6,6 +6,8 @@
 
 import { z } from "zod";
 
+import { ActivityKindName } from "./activity.js";
+
 /**
  * Persistent, per-account notifications (the App channel: the bell, and a
  * toast in every open tab when one arrives — ADR-030, addendum §a): stored
@@ -62,13 +64,15 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("activity_scheduled"), ...classroomCount }),
   z.object({
     /**
-     * An exercise of the recipient's classroom moved to `running` (§c): it
-     * can be taken now. The title and the id of the evaluation, nothing of
-     * its content.
+     * An activity of the recipient's classroom can be done now (§c): today
+     * an exercise that moved to `running`. The kind, id and title of the
+     * activity, nothing of its content. Kind-neutral (ADR-030, addendum of
+     * 2026-09-30): another kind reuses it without a new payload shape.
      */
     kind: z.literal("activity_available"),
-    evaluationId: z.uuid(),
-    evaluationTitle: z.string(),
+    activityKind: ActivityKindName,
+    activityId: z.uuid(),
+    activityTitle: z.string(),
   }),
   z.object({
     /**

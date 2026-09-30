@@ -86,7 +86,7 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
         classroom: payload.classroomName,
       });
     case "activity_available":
-      return t("notif.activityAvailable", { evaluationTitle: payload.evaluationTitle });
+      return t("notif.activityAvailable", { evaluationTitle: payload.activityTitle });
     case "deadline_approaching":
       return t("notif.deadlineApproaching", { evaluationTitle: payload.evaluationTitle });
     case "results_updated":
@@ -138,9 +138,13 @@ function notificationRoute(payload: NotificationPayload): Route {
       return { view: "grading", evaluationId: payload.evaluationId };
     case "activity_scheduled":
       return { view: "home" };
-    case "activity_available":
     case "deadline_approaching":
       return { view: "attempt", evaluationId: payload.evaluationId };
+    case "activity_available":
+      switch (payload.activityKind) {
+        case "evaluation":
+          return { view: "attempt", evaluationId: payload.activityId };
+      }
   }
 }
 

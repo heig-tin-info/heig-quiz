@@ -188,7 +188,7 @@ describe("the inbox in the account menu", () => {
     };
     const open: Notification = {
       id: "n8",
-      payload: { kind: "activity_available", evaluationId: "e5", evaluationTitle: "Série 3" },
+      payload: { kind: "activity_available", activityKind: "evaluation", activityId: "e5", activityTitle: "Série 3" },
       createdAt: new Date(Date.now() - 120_000).toISOString(),
       readAt: null,
     };

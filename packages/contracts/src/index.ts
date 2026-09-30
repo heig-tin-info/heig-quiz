@@ -3,6 +3,7 @@ export * from "./common.js";
 export * from "./org.js";
 export * from "./pool.js";
 export * from "./evaluation.js";
+export * from "./activity.js";
 export * from "./live.js";
 export * from "./grading.js";
 export * from "./results.js";

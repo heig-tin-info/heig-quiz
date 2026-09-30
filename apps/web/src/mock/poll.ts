@@ -1234,6 +1234,7 @@ on("GET", "/app/api/activities", (): ActivitySummary[] => {
     const course = courses.find((c) => c.id === room.courseId);
     return [
       {
+        kind: "evaluation",
         id: e.id,
         title: e.title,
         mode: e.mode,
@@ -1258,6 +1259,7 @@ on("GET", "/app/api/activities", (): ActivitySummary[] => {
     if (tp.classroomId !== null || poll === null) return [];
     return [
       {
+        kind: "evaluation",
         id: tp.id,
         title: poll.title,
         mode: "poll",

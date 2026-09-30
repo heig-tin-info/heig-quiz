@@ -45,7 +45,7 @@ export {
   transition,
 } from "./stateMachine.js";
 export type { JoinedItem } from "./reads.js";
-export { listActivities } from "./activities.js";
+export { listActivities, listClassroomActivities } from "./activities.js";
 export { announceMove } from "./announce.js";
 export {
   seatsOf,

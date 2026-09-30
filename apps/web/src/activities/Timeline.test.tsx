@@ -21,6 +21,7 @@ const ROOM = { id: id("classroom", 1), name: "EMB-2026", courseCode: "EMB" };
 
 function activity(n: number, over: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
+    kind: "evaluation",
     id: id("activity", n),
     title: `Activity ${n}`,
     mode: "exam",

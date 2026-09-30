@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import type { NotificationPayload } from "@quiz/contracts";
 
-import { escapeHtml, mailLocale, notificationPath, renderNotification } from "./templates.js";
+import {
+  activityParameters,
+  escapeHtml,
+  mailLocale,
+  notificationPath,
+  renderNotification,
+} from "./templates.js";
 
 const POOL = "11111111-1111-4111-8111-111111111111";
 const EVAL = "22222222-2222-4222-8222-222222222222";
@@ -80,7 +86,7 @@ describe("renderNotification", () => {
       { ...added, count: 1 },
       { kind: "activity_scheduled", classroomId: CLASSROOM, classroomName: "PRG1-2026", count: 16 },
       { kind: "activity_scheduled", classroomId: CLASSROOM, classroomName: "PRG1-2026", count: 1 },
-      { kind: "activity_available", evaluationId: EVAL, evaluationTitle: "Série 3" },
+      { kind: "activity_available", activityKind: "evaluation", activityId: EVAL, activityTitle: "Série 3" },
       { kind: "deadline_approaching", evaluationId: EVAL, evaluationTitle: "Série 4" },
     ] satisfies NotificationPayload[]) {
       for (const locale of ["en", "fr"] as const) {
@@ -203,11 +209,15 @@ describe("the student kinds of step 6 (#198)", () => {
   });
 
   it("sends activity_available to the page that lets the student in", () => {
-    const available = { kind: "activity_available", evaluationId: EVAL, evaluationTitle: "Série 3" } as const;
+    const available = { kind: "activity_available", activityKind: "evaluation", activityId: EVAL, activityTitle: "Série 3" } as const;
     expect(notificationPath(available)).toBe(`/take/${EVAL}`);
     const out = renderNotification(available, "fr", "https://quiz.test");
     expect(out.subject).toBe("Exercice ouvert : Série 3");
     expect(out.text).toContain(`https://quiz.test/take/${EVAL}`);
+    // The kind-neutral payload keeps the Teams template parameter the
+    // installed app declares (ADR-030, addendum 2026-09-30).
+    expect(out.topic).toBe("Série 3");
+    expect(activityParameters(available)).toEqual({ evaluationTitle: "Série 3" });
   });
 });
 

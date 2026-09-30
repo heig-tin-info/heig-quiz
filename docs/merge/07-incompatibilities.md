@@ -25,6 +25,8 @@ PR.
 | I15 | Classroom `domain/roster.ts` duplicates Quiz's | keep Quiz's (classroom's + time bonus), port classroom's tests if they add cases | M1-01 |
 | I16 | GitHub wire names carry classroom's words: the `GRADE` annotation title, the `grade-final` / `grade-milestone` dispatch events and their `client_payload` keys (`assignment_id`, `milestone_id`, `milestone`), read by the `grading.yml` already in student repositories | kept verbatim on the wire; Quiz's identifiers use §7.4's words (`extractScore`, `planFinalReviewDispatch`, `planCheckpointReviewDispatch`, `checkpointDueAt`) — renaming the wire would break every live repository | M1-01, M3-04, M3-05 |
 | I17 | Pure rules that live inside ported adapter files: `parseStudentIgnore` (`C:github/studentize.ts`), `zurichIso` (`C:github/commit.ts`), `repoName` (under the journal's `journalRepoName`) | in `@quiz/domain` since M1-01 (`studentIgnore.ts`, `zone.ts` as `zonedIso`, `repoName.ts`): `apps/api/src/github/` imports the first two instead of keeping copies; `packages/docrender` builds `journalRepoName` on `@quiz/domain`'s `repoName`. `rateLimitReset` (`C:github/metrics.ts`) reads HTTP headers: transport knowledge, it stays in `github/metrics.ts` | M1-01, M1-02, M4-01 |
+| I58 | `activity_available` is kind-neutral since M1-03, but its sentences say "exercise" and its Teams template parameter is still `{evaluationTitle}`, declared by the app every user installed (found by M1-03) | kept as is; a project reusing the kind (rather than D18's `project_published`) needs kind-aware sentences, a renamed parameter and a `TEAMS_APP_VERSION` bump | M3-09, D18 |
+| I59 | `activity_scheduled` folds per (user, classroom) and its sentences count "exercises"; `deadline_approaching`, `results_released` and `results_updated` stay evaluation-shaped (`evaluationId`, found by M1-03) | a project gets kinds of its own (D18's suggestion) — or, if it shares these, the fold key gains the activity kind (a migration of the partial unique index) and the payloads become kind-neutral like `activity_available` | M3-09, D18 |
 
 ## 7.2 Invariants of `CLAUDE.md`
 
@@ -64,6 +66,7 @@ PR.
 | I55 | The audit table is append-only in production | dry-run until clean | M8-06 |
 | I56 | Classroom keeps changing until the cutover | sync point in `PROGRESS.md`; forward fixes | every phase |
 | I57 | Rulesets `hgc-protect` and `hgc-deadline-lock` may name classroom's App as a bypass actor: Quiz's App (D23) could not then lock, revert nor dispatch | check on the M8-06 rehearsal; the import rewrites the bypass list to Quiz's App | M8-06 |
+| I60 | The deploy of M1-03 changes a stored payload shape: delivery jobs already queued carry the old `activity_available`, and a rollback past migration 0037 meets rewritten rows | `deliver` parses the payload and drops a stale job with a warning; after a rollback the old reader drops the rewritten bells from the list (no failure) until the next deploy | M1-03 |
 
 ## 7.4 Words
 
