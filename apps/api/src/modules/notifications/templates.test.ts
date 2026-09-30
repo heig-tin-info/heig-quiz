@@ -8,6 +8,7 @@ import {
   mailLocale,
   notificationPath,
   renderNotification,
+  renderTestMail,
 } from "./templates.js";
 
 const POOL = "11111111-1111-4111-8111-111111111111";
@@ -258,5 +259,20 @@ describe("system_alert (ADR-055 §5)", () => {
         for (const part of [out.subject, out.text, out.html]) expect(part).not.toMatch(/\{\w+\}/);
       }
     }
+  });
+});
+
+describe("the test e-mail (ADR-055 §6)", () => {
+  it("names the platform, links back to the System status, and has no notification footer", () => {
+    for (const locale of ["en", "fr"] as const) {
+      const mail = renderTestMail(locale, "https://quiz.heig-vd.ch");
+      expect(mail.subject).toContain("quiz.heig-vd.ch");
+      expect(mail.text).toContain("https://quiz.heig-vd.ch/admin?tab=system");
+      for (const part of [mail.subject, mail.text, mail.html]) expect(part).not.toMatch(/\{\w+\}/);
+      // Not a notification: no preference chose it.
+      expect(mail.text).not.toContain("/settings");
+      expect(mail.html).not.toContain("/settings");
+    }
+    expect(renderTestMail("fr", "https://quiz.test").text).toContain("Retour à l'état du système");
   });
 });

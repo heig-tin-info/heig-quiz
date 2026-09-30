@@ -24,16 +24,17 @@ import type { FastifyInstance } from "fastify";
 import { eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type {
-  CheckCause,
-  CheckDetail,
-  CheckStatus,
-  CheckValue,
-  SystemCheck,
-  SystemCheckKey,
-  SystemDeployment,
-  SystemSection,
-  SystemStatus,
+import {
+  serviceCheckKey,
+  type CheckCause,
+  type CheckDetail,
+  type CheckStatus,
+  type CheckValue,
+  type SystemCheck,
+  type SystemCheckKey,
+  type SystemDeployment,
+  type SystemSection,
+  type SystemStatus,
 } from "@quiz/contracts";
 import {
   backupStatus,
@@ -43,14 +44,22 @@ import {
   HEALTH_THRESHOLDS,
   jobsStatus,
   overdueStatus,
+  serverErrorsStatus,
+  SERVICE_NAMES,
+  servicePolicy,
+  serviceStatus,
   taskAttention,
   tickerStatus,
   worstStatus,
+  type ServiceName,
 } from "@quiz/domain";
 
-import type { AppConfig } from "../../config.js";
+import { mailEnabled, teamsEnabled, type AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { evaluations, healthCheckStates } from "../../db/schema.js";
+import { githubApp } from "../../github/app.js";
+import { serverErrorsOf } from "../../httpMetrics.js";
+import { serviceRecord } from "../../serviceHealth.js";
 import { MIGRATIONS_DIR } from "../../paths.js";
 import { InProcessQueue } from "../../jobs.js";
 import { lastTickOf } from "../../ticker.js";
@@ -195,6 +204,20 @@ async function runnerHealthCheck({ app, config }: CheckContext): Promise<CheckRe
   if (runner === "up") return { status: "ok" };
   if (runner === "disabled") return { status: "ok", cause: "runner.disabled" };
   return { status: "fail", cause: "runner.down" };
+}
+
+/** The 5xx of the last day in this process, and the routes that answered most of them. */
+async function serverErrorsCheck({ app }: CheckContext): Promise<CheckResult> {
+  const errors = serverErrorsOf(app);
+  if (!errors) return { status: "unknown" };
+  const status = serverErrorsStatus(errors.count);
+  return {
+    status,
+    value: count(errors.count),
+    cause: status === "ok" ? null : "http.errors",
+    // Route templates, never URLs (`httpMetrics.ts`).
+    details: errors.top.map((r) => named(r.route, count(r.count))),
+  };
 }
 
 async function liveEvaluationsCheck({ app }: CheckContext): Promise<CheckResult> {
@@ -347,6 +370,58 @@ async function backupCheck({ config }: CheckContext): Promise<CheckResult> {
   };
 }
 
+// --- Third-party services (ADR-055 §6) ------------------------------------
+
+/**
+ * Why a service is not judged on this platform, or null when it is in use:
+ * a service that is not configured is neutral (`unknown`), never a failure.
+ */
+const SERVICE_OFF: Record<ServiceName, (config: AppConfig) => CheckCause | null> = {
+  mail: (config) => (mailEnabled(config) ? null : "mail.dry_run"),
+  signin: () => null,
+  teams: (config) => (teamsEnabled(config) ? null : "service.not_configured"),
+  llm: (config) => (config.LLM_PROVIDER === "none" ? "service.not_configured" : null),
+  github: (config) => (githubApp(config) === null ? "service.not_configured" : null),
+};
+
+const SERVICE_CAUSES: Record<CheckStatus, CheckCause | null> = {
+  ok: null,
+  warn: "service.failed_recently",
+  fail: "service.failing",
+  unknown: "service.unused",
+};
+
+/**
+ * One service, from what this process saw of its calls (`serviceHealth.ts`):
+ * the value is the last success, a detail line the last failure (its class
+ * and when, and how many in a row), and the verdict `serviceStatus`'s.
+ */
+function serviceCheck(name: ServiceName): HealthCheck["run"] {
+  return async ({ config }) => {
+    const off = SERVICE_OFF[name](config);
+    if (off) return { status: "unknown", cause: off };
+    const record = serviceRecord(name);
+    // The wall clock, like the record's own stamps.
+    const status = serviceStatus(record, new Date(), servicePolicy(name));
+    const details: CheckDetail[] =
+      record.lastErrorAt && record.lastError
+        ? [
+            {
+              subject: { kind: "name", name: record.lastError },
+              values: [
+                { meaning: "lastFailure", value: at(record.lastErrorAt) },
+                ...(record.failuresSinceOk > 0
+                  ? [{ meaning: "failed" as const, value: count(record.failuresSinceOk) }]
+                  : []),
+              ],
+              cause: null,
+            },
+          ]
+        : [];
+    return { status, value: record.lastOkAt ? at(record.lastOkAt) : null, cause: SERVICE_CAUSES[status], details };
+  };
+}
+
 // --- The registry ---------------------------------------------------------
 
 /** Every check, in the order the screen lists them. */
@@ -357,6 +432,7 @@ export const HEALTH_CHECKS: readonly HealthCheck[] = [
   { key: "tasks", section: "live", run: tasksCheck },
   { key: "jobs", section: "live", run: jobsCheck },
   { key: "runner", section: "live", run: runnerHealthCheck },
+  { key: "http.errors", section: "live", run: serverErrorsCheck },
   { key: "evaluations.live", section: "live", run: liveEvaluationsCheck },
   { key: "connections.live", section: "live", run: liveConnectionsCheck },
   { key: "database", section: "storage", run: databaseCheck },
@@ -364,6 +440,11 @@ export const HEALTH_CHECKS: readonly HealthCheck[] = [
   { key: "database.connections", section: "storage", run: databaseConnectionsCheck },
   { key: "disk", section: "storage", run: diskCheck },
   { key: "backup", section: "storage", run: backupCheck },
+  ...SERVICE_NAMES.map((name): HealthCheck => ({
+    key: serviceCheckKey(name),
+    section: "services",
+    run: serviceCheck(name),
+  })),
 ];
 
 /**

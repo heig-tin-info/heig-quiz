@@ -20,6 +20,12 @@ page, and the backup report written by the `backup` service of
 the table `health_check_states` (migration `health_check_states`) and the
 notification kind `system_alert`
 (ADR-030, addendum of 2026-09-30).
+Amended the same day (branch `ops/health-services`) by §6 (the external
+services, and the administrator's test e-mail) and §7 (the HTTP metrics of
+N-OPS-02): `apps/api/src/serviceHealth.ts`, `apps/api/src/httpMetrics.ts`,
+`serviceStatus` and `serverErrorsStatus` of `@quiz/domain`, the route
+`POST /app/api/admin/system/test-mail` (`TestMailResult`) and the audit
+action `system.test_mail`. No migration.
 
 ## Context
 
@@ -191,6 +197,87 @@ The page shows, under a failing check, when the task first saw it fail
 This alarm shares the process's fate: the task runs on the ticker's claim
 and the mail needs the job queue, so a dead VM, a crash loop, a ticker dead
 in every process or a queue down silences it. That is why it is second.
+
+### 6. The external services, judged from real traffic
+
+A third section of checks, **External services**, through the same
+registry: `service.mail` (Scaleway TEM), `service.signin` (the OIDC
+callback's exchange with the identity provider), `service.teams`,
+`service.llm` and `service.github` (the App's installation-token fetch).
+Nothing is probed: each is judged from the calls the process already makes.
+
+**Recording.** Each transport has one call site — the mailer's `send`, the
+Teams client's `notify`, the LLM service `createLlm` returns,
+`installationClient`, the callback's `completeLogin` — and it goes through
+one helper, `tracked(name, run)` of `serviceHealth.ts`, which keeps in
+memory, per process, the last success, the last failure, its CLASS and the
+failures in a row since the last success. The class comes from a closed
+vocabulary (`timeout`, a registered OAuth code such as `invalid_grant` —
+openid-client's `.error`, which for the callback comes from the browser's
+query string, so anything unregistered is `oauth_error` —, `http_<status>`,
+`network_<code>`, `error`): never a message, which may echo an address, and
+never a body. Chosen over the existing tables because none holds it: a mail
+delivery is a pg-boss job whose completion says nothing kept past a day,
+and the audit log has the logins but not the refused exchanges. In memory
+costs no migration and no write on a hot path, and "is the provider
+answering us now?" is a question about the process that calls it. What it
+costs: a restart forgets it (`unknown` until the next call), and in
+`WORKER_MODE=web` the web process never calls the mailer, Teams nor the
+LLM, so those rows read `unknown` there (production runs `all`).
+
+A refusal about one recipient is not the service failing: a permanent
+Teams refusal (the app not installed for them) counts as an answer. A
+missing login state (a stale browser tab), the staging allowlist and
+`access_denied` (the person cancelling at the provider) are not the
+provider's failing and do not count.
+
+**Verdict.** `serviceStatus` of `@quiz/domain`: `unknown` when never used
+since the start; `ok` when the last call succeeded; `fail` when the calls
+have kept failing for more than half an hour since the first failure, with
+at least two failures (three for sign-in, where a code used twice is the
+person's doing); `warn` short of that. A service that is not configured —
+no Scaleway credentials (`mail.dry_run`), no Teams application,
+`LLM_PROVIDER=none`, no GitHub App — is `unknown`, never a failure; so is
+sign-in in development, where the persona picker never calls the provider
+(`service.unused`). The services are the closed list `SERVICE_NAMES` of
+`@quiz/domain`, from which the check keys `service.<name>` and the
+registry's rows derive; the policy is one default with an override per
+service (`servicePolicy`). A `fail` feeds the
+`health.checks` alerts of §5 like any check; the mail about a failing mail
+may itself not arrive, which the page and the external probe cover.
+
+**The test e-mail.** The e-mail row carries a secondary action, "Send me a
+test e-mail": `POST /app/api/admin/system/test-mail` (the admin guard)
+renders a short en/fr message in the caller's language and sends it to the
+caller through the mailer alone — no notification row, no preference, no
+queue, and no notification-settings footer, since no preference chose it —
+and answers `sent`, `dry_run` or `error` with its class. One per minute per
+admin, through the preview's in-memory `Budget` (now `budget.ts`, shared;
+a guard against a double click, not a quota), 429 `rate_limited`
+otherwise; an account without an address gets 409 `no_email`; audited `system.test_mail` with the outcome,
+never the address.
+
+### 7. The HTTP metrics (N-OPS-02)
+
+A hook registered on the root instance before any route feeds
+`quiz_http_requests_total{method, route, status}` and
+`quiz_http_request_duration_seconds{method, route}` (buckets 25 ms to 10 s)
+on `/metrics`. `route` is Fastify's route template (`routeOptions.url`),
+`unmatched` when no route matched; never the URL, which carries ids and,
+for some routes, one-time secrets. `status` is the class (`2xx`…`5xx`).
+
+The same hook keeps, per process, the 5xx of the last 24 hours in hourly
+buckets by route template; the **Server errors (24 h)** check of the live
+section shows their count and the three templates that answered most of
+them, and warns from five (`serverErrorsStatus`), never fails: an error
+page is a reason to read the logs, not an alarm. No log line, no URL, no
+user reaches the page.
+
+The per-process values the checks read (the ticker's last pass, this
+window) are kept by `perApp`, which the admin routes' plugin instance —
+a child of the root — reaches through its prototype; a plain `WeakMap` on
+the root missed it, and the ticker's row read "not in this process" on the
+page of a process that ran it.
 
 ## Consequences
 

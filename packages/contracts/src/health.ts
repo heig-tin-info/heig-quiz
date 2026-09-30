@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { SERVICE_NAMES, type ServiceName } from "@quiz/domain";
+
 import { SCHEDULED_TASK_KEYS } from "./admin.js";
 
 const HealthStatus = z.enum(["ok", "degraded"]);
@@ -45,6 +47,15 @@ export type HealthResponse = z.infer<typeof HealthResponse>;
 export const CHECK_STATUSES = ["ok", "warn", "fail", "unknown"] as const;
 export type CheckStatus = (typeof CHECK_STATUSES)[number];
 
+/** The check key of a third-party service (ADR-055 §6). */
+export const serviceCheckKey = <N extends ServiceName>(name: N) => `service.${name}` as const;
+
+/** `service.<name>` for every service of `SERVICE_NAMES`, in its order. */
+type ServiceCheckKeys<T extends readonly ServiceName[]> = { readonly [K in keyof T]: `service.${T[K] & string}` };
+export const SERVICE_CHECK_KEYS = SERVICE_NAMES.map(serviceCheckKey) as unknown as ServiceCheckKeys<
+  typeof SERVICE_NAMES
+>;
+
 /**
  * Every check of the registry (`apps/api/src/modules/system/health.ts`), a
  * closed list: the admin screen names each one in both languages, or does
@@ -58,6 +69,7 @@ export const SYSTEM_CHECK_KEYS = [
   "tasks",
   "jobs",
   "runner",
+  "http.errors",
   "evaluations.live",
   "connections.live",
   // Data and storage.
@@ -66,10 +78,12 @@ export const SYSTEM_CHECK_KEYS = [
   "database.connections",
   "disk",
   "backup",
+  // Third-party services, judged from the process's own traffic (ADR-055 §6).
+  ...SERVICE_CHECK_KEYS,
 ] as const;
 export type SystemCheckKey = (typeof SYSTEM_CHECK_KEYS)[number];
 
-export const SYSTEM_SECTIONS = ["live", "storage"] as const;
+export const SYSTEM_SECTIONS = ["live", "storage", "services"] as const;
 export type SystemSection = (typeof SYSTEM_SECTIONS)[number];
 
 /**
@@ -99,6 +113,12 @@ export const CHECK_CAUSES = [
   "backup.missing",
   "backup.failed",
   "backup.stale",
+  "http.errors",
+  "service.not_configured",
+  "service.unused",
+  "service.failed_recently",
+  "service.failing",
+  "mail.dry_run",
   "check.failed",
 ] as const;
 export type CheckCause = (typeof CHECK_CAUSES)[number];
@@ -122,7 +142,7 @@ export type CheckValue = z.infer<typeof CheckValue>;
  * the screen words it ("3 waiting", "oldest 2 min"). `null`: the value
  * speaks for itself (a size, an instant).
  */
-export const DETAIL_MEANINGS = ["waiting", "failed", "oldest"] as const;
+export const DETAIL_MEANINGS = ["waiting", "failed", "oldest", "lastFailure"] as const;
 export type DetailMeaning = (typeof DETAIL_MEANINGS)[number];
 
 /**
@@ -181,6 +201,21 @@ export const SystemStatus = z.object({
   deployment: SystemDeployment,
 });
 export type SystemStatus = z.infer<typeof SystemStatus>;
+
+/**
+ * `POST /app/api/admin/system/test-mail` (admin only, no body): a short
+ * test message to the calling administrator, through the platform's mailer
+ * and nothing else (no notification preference). `dry_run`: no Scaleway
+ * credentials, the message was only logged. `error`: the provider refused
+ * or did not answer, `error` its class (`http_502`, `timeout`), never its
+ * words. Refused with 429 `rate_limited` within a minute of the last one.
+ */
+export const TestMailResult = z.discriminatedUnion("outcome", [
+  z.object({ outcome: z.literal("sent") }),
+  z.object({ outcome: z.literal("dry_run") }),
+  z.object({ outcome: z.literal("error"), error: z.string() }),
+]);
+export type TestMailResult = z.infer<typeof TestMailResult>;
 
 /** `?fresh=1` skips the short server cache (the screen's Refresh). */
 export const SystemStatusQuery = z.object({ fresh: z.enum(["0", "1"]).optional() });

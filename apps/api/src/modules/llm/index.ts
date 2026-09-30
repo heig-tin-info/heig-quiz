@@ -10,10 +10,13 @@
 import type { LlmService } from "@quiz/core/server";
 
 import type { AppConfig } from "../../config.js";
+import { tracked } from "../../serviceHealth.js";
 import { StubLlm } from "./stub.js";
 
 export function createLlm(config: Pick<AppConfig, "LLM_PROVIDER">): LlmService | null {
-  return config.LLM_PROVIDER === "stub" ? new StubLlm() : null;
+  const provider = config.LLM_PROVIDER === "stub" ? new StubLlm() : null;
+  // Every call recorded for the services' status (ADR-055 §6), whatever the provider.
+  return provider && { grade: (req) => tracked("llm", () => provider.grade(req)) };
 }
 
 declare module "fastify" {

@@ -18,6 +18,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { App, Octokit } from "octokit";
 
 import type { AppConfig } from "../config.js";
+import { tracked } from "../serviceHealth.js";
 
 /** One `App` per configuration object: the process has one, the tests many. */
 let cached: { config: AppConfig; app: App | null } | undefined;
@@ -92,9 +93,13 @@ export async function installationClient(
 ): Promise<InstallationClient> {
   const app = githubApp(config);
   if (!app) throw new Error("GitHub App is not configured (missing app id or PEM file)");
-  const octokit = await app.getInstallationOctokit(installationId);
-  const { token } = (await octokit.auth({ type: "installation" })) as { token: string };
-  return { octokit, token };
+  // The token fetch is the App's own health: recorded for the services'
+  // status (ADR-055 §6), by its outcome only — the token never leaves here.
+  return tracked("github", async () => {
+    const octokit = await app.getInstallationOctokit(installationId);
+    const { token } = (await octokit.auth({ type: "installation" })) as { token: string };
+    return { octokit, token };
+  });
 }
 
 /** Organizations where the App is installed (classroom creation dropdown). */

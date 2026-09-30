@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { resetServiceRecords, serviceRecord } from "../../serviceHealth.js";
 import { createMailer, type Mail } from "./mailer.js";
 
 const mail: Mail = {
@@ -71,5 +72,27 @@ describe("createMailer", () => {
       fetchImpl as unknown as typeof fetch,
     );
     await expect(mailer.send(mail)).rejects.toThrow("Scaleway TEM 429: quota exceeded");
+  });
+
+  it("records every real send for the services' status, a failure by its class only", async () => {
+    resetServiceRecords();
+    let status = 502;
+    const fetchImpl = vi.fn(async () => new Response("ada@heig.test bounced", { status }));
+    const mailer = createMailer(
+      { ...base, SCW_SECRET_KEY: "secret", SCW_DEFAULT_PROJECT_ID: "project" },
+      { info: vi.fn() },
+      fetchImpl as unknown as typeof fetch,
+    );
+    await expect(mailer.send(mail)).rejects.toThrow();
+    expect(serviceRecord("mail")).toMatchObject({ lastOkAt: null, lastError: "http_502", failuresSinceOk: 1 });
+    expect(JSON.stringify(serviceRecord("mail"))).not.toContain("ada@heig.test");
+    status = 200;
+    expect(await mailer.send(mail)).toBe("sent");
+    expect(serviceRecord("mail")).toMatchObject({ lastError: "http_502", failuresSinceOk: 0, failingSince: null });
+    expect(serviceRecord("mail").lastOkAt).not.toBeNull();
+    // A dry run is not a use of the provider.
+    resetServiceRecords();
+    await createMailer(base, { info: vi.fn() }).send(mail);
+    expect(serviceRecord("mail").lastOkAt).toBeNull();
   });
 });

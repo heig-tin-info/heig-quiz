@@ -8,6 +8,7 @@ import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
+import { errorClass, tracked } from "../serviceHealth.js";
 import { CoachSeenPatch, MePatch, type PublicConfig, type SessionKind } from "@quiz/contracts";
 
 import { shownAvatar } from "../modules/avatar.js";
@@ -306,7 +307,15 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     const callbackUrl = new URL(req.raw.url ?? "", config.PUBLIC_URL);
     let claims: OidcClaims;
     try {
-      claims = await provider.completeLogin(callbackUrl, stash);
+      // The exchange with the identity provider is what the services' status
+      // judges (ADR-055 §6); a missing login state above is the browser's
+      // doing, and the allowlist below a policy, so neither counts; nor does
+      // `access_denied`, the person cancelling at the provider, which answered.
+      claims = await tracked(
+        "signin",
+        () => provider.completeLogin(callbackUrl, stash),
+        (err) => errorClass(err) !== "access_denied",
+      );
     } catch (err) {
       req.log.warn({ err }, "OIDC exchange failed");
       return reply.code(401).send({ error: "oidc", message: "Authentication refused" });

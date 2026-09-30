@@ -658,8 +658,20 @@ background jobs per queue (waiting, failed in 24 h, oldest wait), the
 runner, the live evaluations and the open real-time connections. Data and
 storage: the database's response time, size and largest tables, the
 connections in use against `max_connections`, the free disk, the last
-backup. Then what is deployed: commit, last migration, start time, Node,
-worker mode, environment. No chart and no log line, on purpose.
+backup. The live section also counts the server errors (5xx) of the last
+24 hours, with the three route templates that answered most of them (a
+warning from five, never a failure). External services (ADR-055 §6):
+e-mail, sign-in (the OIDC callback), Teams, the LLM provider and the GitHub
+App, each judged from this process's own calls since it started — the last
+success, the last failure with its class (`http_502`, `timeout`,
+`invalid_grant`), `unknown` when not configured (staging's mail runs dry)
+or not used yet. A service fails once its calls have kept failing for half
+an hour (mail: two failures; sign-in: three), and then the `health.checks`
+mail reports it like any check. The e-mail row has **Send me a test
+e-mail**: a short message to the signed-in admin through the mailer alone,
+one per minute, audited as `system.test_mail`. Then what is deployed:
+commit, last migration, start time, Node, worker mode, environment. No
+chart and no log line, on purpose.
 
 The status is cached 20 s by the server; the page polls every 30 s while
 visible, and Refresh recomputes it.
@@ -668,7 +680,14 @@ visible, and Refresh recomputes it.
 
 `GET /metrics` is a Prometheus endpoint with the default collectors, a
 `quiz_database_up` gauge and `quiz_sse_connections` (the open real-time
-streams of the process, N-OPS-02). It is never public: a request with
+streams of the process, N-OPS-02), and the HTTP series of N-OPS-02:
+
+| Series | Labels | What |
+| --- | --- | --- |
+| `quiz_http_requests_total` (counter) | `method`, `route`, `status` | requests answered; `route` is the ROUTE TEMPLATE (`/app/api/classrooms/:id`), `unmatched` when no route matched, never a URL; `status` is the class, `2xx`…`5xx` |
+| `quiz_http_request_duration_seconds` (histogram) | `method`, `route` | time to answer, buckets 25 ms, 100 ms, 250 ms, 1 s, 2.5 s, 10 s (an SSE stream lands in `+Inf`) |
+
+No user, IP or query string in any label. It is never public: a request with
 `Authorization: Bearer $METRICS_TOKEN` passes when the token is set, and any
 other request must carry an admin session.
 

@@ -12,6 +12,7 @@
  * `fetch` is injected, so the unit tests see every call without a network.
  */
 import { mailEnabled, type AppConfig } from "../../config.js";
+import { tracked } from "../../serviceHealth.js";
 
 export interface Mail {
   to: string;
@@ -45,28 +46,34 @@ export function createMailer(config: MailConfig, log: Log, fetchImpl: typeof fet
         log.info({ to: mail.to, subject: mail.subject }, "email dry-run (no SCW credentials)");
         return "dry_run";
       }
-      const res = await fetchImpl(endpoint, {
-        method: "POST",
-        headers: {
-          "X-Auth-Token": config.SCW_SECRET_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: { email: config.MAIL_FROM, name: config.MAIL_FROM_NAME },
-          to: [{ email: mail.to }],
-          subject: mail.subject,
-          text: mail.text,
-          html: mail.html,
-          project_id: config.SCW_DEFAULT_PROJECT_ID,
-        }),
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        // Thrown, so the job is retried with backoff.
-        throw new Error(`Scaleway TEM ${res.status}: ${body.slice(0, 300)}`);
-      }
-      return "sent";
+      // Every real send, a delivery's or the admin's test (ADR-055 §6).
+      return tracked("mail", () => post(mail));
     },
   };
+
+  async function post(mail: Mail): Promise<"sent"> {
+    const res = await fetchImpl(endpoint, {
+      method: "POST",
+      headers: {
+        "X-Auth-Token": config.SCW_SECRET_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: { email: config.MAIL_FROM, name: config.MAIL_FROM_NAME },
+        to: [{ email: mail.to }],
+        subject: mail.subject,
+        text: mail.text,
+        html: mail.html,
+        project_id: config.SCW_DEFAULT_PROJECT_ID,
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      // Thrown, so the job is retried with backoff. The status rides along:
+      // the services' status keeps the class of a failure, never its words.
+      throw Object.assign(new Error(`Scaleway TEM ${res.status}: ${body.slice(0, 300)}`), { status: res.status });
+    }
+    return "sent";
+  }
 }

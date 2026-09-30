@@ -8,6 +8,9 @@ import {
   HEALTH_THRESHOLDS,
   jobsStatus,
   overdueStatus,
+  serverErrorsStatus,
+  servicePolicy,
+  serviceStatus,
   taskAttention,
   tickerStatus,
   worstStatus,
@@ -111,5 +114,48 @@ describe("the database and the queues", () => {
     expect(jobsStatus(0, 60_000)).toBe("ok");
     expect(jobsStatus(1, null)).toBe("warn");
     expect(jobsStatus(0, 10 * 60_000 + 1)).toBe("warn");
+  });
+});
+
+describe("serverErrorsStatus", () => {
+  it("warns from a handful of 5xx a day, and never fails", () => {
+    expect(serverErrorsStatus(0)).toBe("ok");
+    expect(serverErrorsStatus(HEALTH_THRESHOLDS.serverErrorsWarn - 1)).toBe("ok");
+    expect(serverErrorsStatus(HEALTH_THRESHOLDS.serverErrorsWarn)).toBe("warn");
+    expect(serverErrorsStatus(10_000)).toBe("warn");
+  });
+});
+
+describe("serviceStatus", () => {
+  const M = 60_000;
+  const mail = servicePolicy("mail");
+  const never = { lastOkAt: null, lastErrorAt: null, failingSince: null, failuresSinceOk: 0 };
+
+  it("is unknown until the service is used", () => {
+    expect(serviceStatus(never, now, mail)).toBe("unknown");
+  });
+
+  it("is ok when the last call succeeded, whatever failed before it", () => {
+    expect(serviceStatus({ ...never, lastOkAt: ago(M) }, now, mail)).toBe("ok");
+    expect(serviceStatus({ ...never, lastOkAt: ago(M), lastErrorAt: ago(5 * M) }, now, mail)).toBe("ok");
+  });
+
+  it("warns on a failure short of the policy", () => {
+    // One failure, however old: not yet a pattern.
+    const once = { lastOkAt: ago(H), lastErrorAt: ago(2 * H), failingSince: ago(2 * H), failuresSinceOk: 1 };
+    expect(serviceStatus({ ...once, lastOkAt: ago(3 * H) }, now, mail)).toBe("warn");
+    // Several, but recent: the retries may still get through.
+    const recent = { lastOkAt: ago(H), lastErrorAt: ago(M), failingSince: ago(10 * M), failuresSinceOk: 4 };
+    expect(serviceStatus(recent, now, mail)).toBe("warn");
+  });
+
+  it("fails once the calls kept failing past the window, with enough failures", () => {
+    const failing = { lastOkAt: ago(5 * H), lastErrorAt: ago(M), failingSince: ago(31 * M), failuresSinceOk: 2 };
+    expect(serviceStatus(failing, now, mail)).toBe("fail");
+    // Never succeeded since the start, failing for long: the same.
+    expect(serviceStatus({ ...failing, lastOkAt: null }, now, mail)).toBe("fail");
+    // Sign-in wants three: a person's own mistakes are not the provider's.
+    expect(serviceStatus(failing, now, servicePolicy("signin"))).toBe("warn");
+    expect(serviceStatus({ ...failing, failuresSinceOk: 3 }, now, servicePolicy("signin"))).toBe("fail");
   });
 });

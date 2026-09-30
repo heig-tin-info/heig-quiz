@@ -11,15 +11,18 @@ import {
   TASK_INTERVAL_MIN_MINUTES,
   TeacherGrantCreate,
   TeacherGrantParams,
+  type TestMailResult,
 } from "@quiz/contracts";
 
 import { audit, tracer } from "../../audit.js";
+import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import type { AppConfig } from "../../config.js";
 import { avatars, courseStaff, teacherGrants, users } from "../../db/schema.js";
 import { publish } from "../../events.js";
 import { syncUserRole } from "../../roles.js";
 import { shownAvatar } from "../avatar.js";
 import { adminGuard } from "../guards.js";
+import { sendTestMail } from "../notifications/service.js";
 import {
   claimTaskNow,
   configureScheduledTask,
@@ -144,6 +147,24 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     const query = SystemStatusQuery.safeParse(req.query ?? {});
     if (!query.success) return reply.code(400).send({ error: "validation" });
     return systemStatus(app, config, { fresh: query.data.fresh === "1" });
+  });
+
+  // --- "Send me a test e-mail" (ADR-055 §6): to the calling admin, through
+  // the mailer alone. One per minute per admin (`budget.ts`): a guard
+  // against a double click or a script, not a quota.
+  const testMails = new Budget();
+  app.post("/app/api/admin/system/test-mail", { preHandler: requireAdmin }, async (req, reply) => {
+    const user = req.user!;
+    if (!user.email) return reply.code(409).send({ error: "no_email", message: "Your account has no e-mail address" });
+    if (!testMails.spend(`test-mail:${user.id}`, 1, app.clock.now())) {
+      return reply
+        .code(429)
+        .header("retry-after", String(BUDGET_RETRY_AFTER_S))
+        .send({ error: "rate_limited", message: "One test e-mail per minute" });
+    }
+    const result: TestMailResult = await sendTestMail(config, req.log, { email: user.email, locale: user.locale });
+    await trace(req, "system.test_mail", "user", user.id, result);
+    return result;
   });
 
   // --- Scheduled tasks (F-ADMIN-06, D10): the catalog is code, the rows are

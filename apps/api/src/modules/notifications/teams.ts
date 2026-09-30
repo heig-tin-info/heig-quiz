@@ -24,6 +24,7 @@
  * network.
  */
 import type { AppConfig } from "../../config.js";
+import { tracked } from "../../serviceHealth.js";
 
 const LOGIN = "https://login.microsoftonline.com";
 const GRAPH = "https://graph.microsoft.com/v1.0";
@@ -131,22 +132,28 @@ export function createTeamsClient(config: TeamsConfig, fetchImpl: typeof fetch =
   }
 
   return {
-    async notify(to, n) {
-      const token = await graphToken(to.tenantId);
-      const res = await call(
-        `${GRAPH}/users/${encodeURIComponent(to.aadObjectId)}/teamwork/sendActivityNotification`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            topic: { source: "text", value: n.topic, webUrl: n.webUrl },
-            activityType: n.activityType,
-            previewText: { content: n.previewText },
-            templateParameters: Object.entries(n.templateParameters).map(([name, value]) => ({ name, value })),
-          }),
-        },
-      );
-      if (!res.ok) await fail("send the Teams activity", res);
-    },
+    // Recorded for the services' status (ADR-055 §6). A permanent refusal is
+    // about ONE recipient (the app not installed for them): Microsoft
+    // answered, so it counts as an answer, not as the service failing.
+    notify: (to, n) =>
+      tracked("teams", () => send(to, n), (err) => !(err instanceof TeamsError && err.permanent)),
   };
+
+  async function send(to: TeamsRecipient, n: ActivityNotification): Promise<void> {
+    const token = await graphToken(to.tenantId);
+    const res = await call(
+      `${GRAPH}/users/${encodeURIComponent(to.aadObjectId)}/teamwork/sendActivityNotification`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: { source: "text", value: n.topic, webUrl: n.webUrl },
+          activityType: n.activityType,
+          previewText: { content: n.previewText },
+          templateParameters: Object.entries(n.templateParameters).map(([name, value]) => ({ name, value })),
+        }),
+      },
+    );
+    if (!res.ok) await fail("send the Teams activity", res);
+  }
 }
