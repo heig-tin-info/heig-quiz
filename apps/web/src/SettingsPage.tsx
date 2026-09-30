@@ -5,6 +5,7 @@ import { GraduationCap, School, ShieldCheck, SlidersHorizontal } from "lucide-re
 import { ApiTokensCard, ConnectionsCard } from "./ApiTokensCard";
 import { AvatarEditor } from "./AvatarEditor";
 import { api, useMePatch } from "./api";
+import { GithubAccountCard } from "./github/AccountCard";
 import { useI18n, useT, LOCALES } from "./i18n";
 import {
   DATE_FORMATS,
@@ -225,6 +226,8 @@ export function SettingsPage({ me }: { me: Me }) {
       {/* ADR-054: the server says whether this session may hold them. */}
       {me.session?.superPowersAvailable ? <SuperPowersSection me={me} /> : null}
       <NotificationSettingsSection />
+      {/* F-GH-05: only when relevant, the card decides. */}
+      <GithubAccountCard />
       {me.role === "student" ? null : (
         <>
           <ConnectionsCard />

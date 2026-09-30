@@ -10,7 +10,7 @@ import { useT } from "../i18n";
 import { pairPreviewKey } from "../queryKeys";
 import type { Navigate } from "../router";
 import { SignInGate } from "../SignInGate";
-import { Alert, Button, Card, EmptyState, Field, GateFrame, QueryError, Skeleton, cx } from "../ui";
+import { Alert, Button, Card, EmptyState, Field, GateFrame, QueryError, RadioRow, Skeleton, cx } from "../ui";
 
 /**
  * `/pair` — the phone's half of a kiosk station's pairing (ADR-051 §7,
@@ -226,28 +226,19 @@ function ExamPicker({
         {exams.map((exam) => {
           const checked = chosen === exam.id;
           return (
-            <label
+            <RadioRow
               key={exam.id}
-              className={cx(
-                "flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors",
-                checked ? "bg-accent-soft" : "hover:bg-surface-2",
-              )}
+              name={name}
+              value={exam.id}
+              checked={checked}
+              onPick={onPick}
+              className="px-4 py-3 text-[15px]"
             >
-              <input
-                type="radio"
-                name={name}
-                value={exam.id}
-                checked={checked}
-                onChange={() => onPick(exam.id)}
-                className="mt-1 size-4 shrink-0 appearance-none rounded-full border border-line-strong bg-surface transition-[border-width] checked:border-[5px] checked:border-accent"
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block text-[15px] font-semibold text-fg">{exam.title}</span>
-                <span className="block text-[13px] text-fg-muted">
-                  {exam.courseCode} · {exam.classroomName}
-                </span>
+              <span className="block font-semibold text-fg">{exam.title}</span>
+              <span className="block text-[13px] text-fg-muted">
+                {exam.courseCode} · {exam.classroomName}
               </span>
-            </label>
+            </RadioRow>
           );
         })}
       </div>

@@ -49,9 +49,12 @@ describe("routeToPath / parsePath", () => {
     expect(routeToPath({ view: "studentCourses" })).toBe("/courses");
   });
 
+  it("parses the classroom's Settings in every build, since M2-07 (F-ORG-13)", () => {
+    expect(parsePath("/classrooms/c-1/settings")).toEqual({ view: "classroomSettings", id: "c-1" });
+  });
+
   it("parses none of the classroom merge's routes while CLASSROOM_PAGES is off", () => {
     // A production build: every such address reads as it did before them.
-    expect(parsePath("/classrooms/c-1/settings")).toEqual({ view: "classroom", id: "c-1" });
     expect(parsePath("/classrooms/c-1/journal/a.md")).toEqual({ view: "classroom", id: "c-1" });
     expect(parsePath("/classrooms/c-1/grades")).toEqual({ view: "classroom", id: "c-1" });
     expect(parsePath("/projects/p-1")).toEqual({ view: "home" });

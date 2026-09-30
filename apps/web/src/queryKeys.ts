@@ -78,6 +78,20 @@ export const classroomKey = (id: string | null) => ["classroom", id] as const;
  */
 export const classroomDrillKey = (id: string, part: string) => ["classroom", id, "drill", part] as const;
 /**
+ * A classroom's GitHub link and checks (F-GH-02, F-GH-03): under the
+ * classroom, so the `classrooms` hint the setup return raises (M2-02) turns
+ * the Settings' status green without a reload.
+ */
+export const classroomGithubKey = (id: string) => ["classroom", id, "github"] as const;
+/**
+ * The organizations Quiz's App is installed on (the connect sheet's picker).
+ * Its own root, which the `classrooms` hint names: an installation that
+ * completes adds a row while the sheet is open.
+ */
+export const githubOrgsKey = ["github", "orgs"] as const;
+/** The caller's GitHub account link (F-GH-05): under `meKey`, refreshed with the session. */
+export const meGithubKey = ["me", "github"] as const;
+/**
  * A classroom's journal (F-JRN-07), in the payload `view` asks for: the staff
  * one or the student one (a teacher in the student view reads the latter).
  * Its pages hang under it, so one invalidation of the journal (a refresh, the

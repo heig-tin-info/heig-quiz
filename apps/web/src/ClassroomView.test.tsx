@@ -17,8 +17,9 @@ import { fail, mockFetch, ok, renderWithProviders } from "./test/render";
  * The page opens on the tab that holds the work: the evaluations once there
  * are students, the roster while it is empty.
  *
- * The title renames in place, so the classroom name is a button, and both
- * tabs count what they hold.
+ * The header keeps the name and the period; renaming, archiving and
+ * deleting moved to the Settings tab (D24, `ClassroomSettings.test.tsx`).
+ * Both lists count what they hold.
  */
 
 const ROOM = "/app/api/classrooms/r1";
@@ -26,8 +27,6 @@ const EVALUATIONS = `${ROOM}/evaluations`;
 const ME = "/app/api/me";
 /** The roster tab, whatever the roster holds. */
 const ROSTER_TAB = "/classrooms/r1?tab=roster";
-/** The classroom name as a control: the accessible name carries it. */
-const RENAME = /Rename classroom/;
 
 /** Only the number of these matters here; the list has its own tests. */
 const summary = (over: Partial<EvaluationSummary>): EvaluationSummary => ({
@@ -144,15 +143,12 @@ describe("ClassroomView", () => {
     expect(await screen.findByRole("dialog")).toBeVisible();
   });
 
-  it("puts the page help in the action row, before the overflow menu", async () => {
+  it("puts the page help in the action row", async () => {
     mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()) });
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
     const heading = await screen.findByRole("heading", { level: 1 });
     expect(within(heading).queryByRole("button", { name: "Help" })).toBeNull();
-    const help = screen.getByRole("button", { name: "Help" });
-    expect(help).toHaveAttribute("data-coach", "page.help");
-    const menu = screen.getByRole("button", { name: "Actions" });
-    expect(help.compareDocumentPosition(menu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Help" })).toHaveAttribute("data-coach", "page.help");
   });
 
   it("counts every row of the table on the roster tab, staff seats included", async () => {
@@ -206,26 +202,22 @@ describe("ClassroomView", () => {
     expect(await screen.findByRole("dialog")).toHaveAccessibleName("Add students");
   });
 
-  it("keeps only archiving and deletion in the overflow menu", async () => {
+  it("keeps the name and the period in the header, and no overflow menu (D24)", async () => {
     mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()) });
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
-    await userEvent.click(await screen.findByRole("button", { name: "Actions" }));
-    const menu = within(screen.getByRole("menu"));
-    const items = menu.getAllByRole("menuitem").map((el) => el.textContent);
-    expect(items).toEqual(["Archive", "Period…", "Delete classroom"]);
-    // The two that left it are on the header itself now.
-    expect(menu.queryByRole("menuitem", { name: "Join as student" })).toBeNull();
-    expect(menu.queryByRole("menuitem", { name: RENAME })).toBeNull();
+    const heading = await screen.findByRole("heading", { level: 1 });
+    expect(heading).toHaveTextContent("PRG1-2026");
+    expect(within(heading).queryByRole("button", { name: /Rename/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Actions" })).toBeNull();
   });
 
-  it("edits the period from the overflow menu", async () => {
+  it("edits the period from the period beside the title", async () => {
     const { calls } = mockFetch({
       [`GET ${ROOM}`]: ok(makeClassroomDetail()),
       [`PATCH ${ROOM}`]: ok(makeClassroomDetail({ period: "2027-P" })),
     });
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
-    await userEvent.click(await screen.findByRole("button", { name: "Actions" }));
-    await userEvent.click(screen.getByRole("menuitem", { name: "Period…" }));
+    await userEvent.click(await screen.findByRole("button", { name: /^Change period/ }));
 
     const dialog = await screen.findByRole("dialog");
     const field = within(dialog).getByRole("textbox", { name: "Period label" });
@@ -253,8 +245,7 @@ describe("ClassroomView", () => {
         [`PATCH ${ROOM}`]: ok(makeClassroomDetail()),
       });
       renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
-      await userEvent.click(await screen.findByRole("button", { name: "Actions" }));
-      await userEvent.click(screen.getByRole("menuitem", { name: "Period…" }));
+      await userEvent.click(await screen.findByRole("button", { name: /^Change period/ }));
       const dialog = await screen.findByRole("dialog");
 
       // Undated: "No dates" is the pressed chip; the presets are the current
@@ -285,8 +276,7 @@ describe("ClassroomView", () => {
         ),
       });
       renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
-      await userEvent.click(await screen.findByRole("button", { name: "Actions" }));
-      await userEvent.click(screen.getByRole("menuitem", { name: "Period…" }));
+      await userEvent.click(await screen.findByRole("button", { name: /^Change period/ }));
       const dialog = await screen.findByRole("dialog");
       const label = within(dialog).getByRole("textbox", { name: "Period label" });
 
@@ -341,72 +331,6 @@ describe("ClassroomView", () => {
     });
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
     expect(await screen.findByRole("button", { name: "Join as student" })).toBeDisabled();
-  });
-
-  describe("renaming in place", () => {
-    const detail = () => makeClassroomDetail();
-
-    it("turns the title into a field and saves on Enter", async () => {
-      // Stateful, so the refetch that follows the save answers with the new
-      // name the way the server would.
-      let name = "PRG1-2026";
-      const { calls } = mockFetch({
-        [`GET ${ROOM}`]: () => ok(makeClassroomDetail({ name })),
-        [`PATCH ${ROOM}`]: (call) => {
-          name = (call.body as { name: string }).name;
-          return ok(makeClassroomDetail({ name }));
-        },
-      });
-      renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
-      await userEvent.click(await screen.findByRole("button", { name: RENAME }));
-
-      const input = screen.getByRole("textbox", { name: "Name" }) as HTMLInputElement;
-      expect(input).toHaveFocus();
-      expect(input).toHaveValue("PRG1-2026");
-      // Selected, so a new name is one keystroke away.
-      expect([input.selectionStart, input.selectionEnd]).toEqual([0, "PRG1-2026".length]);
-      await userEvent.clear(input);
-      await userEvent.type(input, "PRG1-2027{Enter}");
-
-      expect(
-        calls.find((c) => c.method === "PATCH" && c.url === ROOM)?.body,
-      ).toEqual({ name: "PRG1-2027" });
-      // The field is gone at once and already shows what was typed.
-      expect(screen.queryByRole("textbox", { name: "Name" })).toBeNull();
-      expect(await screen.findByRole("heading", { name: /PRG1-2027/ })).toBeVisible();
-    });
-
-    it("saves when the field loses the focus", async () => {
-      const { calls } = mockFetch({
-        [`GET ${ROOM}`]: ok(detail()),
-        [`PATCH ${ROOM}`]: ok(makeClassroomDetail({ name: "PRG1-2027" })),
-      });
-      renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
-      await userEvent.click(await screen.findByRole("button", { name: RENAME }));
-      const input = screen.getByRole("textbox", { name: "Name" });
-      await userEvent.clear(input);
-      await userEvent.type(input, "PRG1-2027");
-      await userEvent.tab();
-
-      expect(calls.some((c) => c.method === "PATCH" && c.url === ROOM)).toBe(true);
-    });
-
-    // Escape, a blank name and the optimistic title are `EditableTitle`'s
-    // own, tested in `ui.test.tsx`.
-
-    it("reports a failed rename in a toast", async () => {
-      mockFetch({
-        [`GET ${ROOM}`]: ok(detail()),
-        [`PATCH ${ROOM}`]: fail(500, {}),
-      });
-      renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
-      await userEvent.click(await screen.findByRole("button", { name: RENAME }));
-      const input = screen.getByRole("textbox", { name: "Name" });
-      await userEvent.clear(input);
-      await userEvent.type(input, "PRG1-2027{Enter}");
-
-      expect(await screen.findByText(/Could not rename this classroom/)).toBeVisible();
-    });
   });
 
   it("says so when the classroom cannot be read", async () => {

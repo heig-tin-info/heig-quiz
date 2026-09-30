@@ -645,6 +645,9 @@ live in `ui/state.ts`, each written once.
   the control on the right. The row wraps rather than squeezing — the text
   keeps a 14 rem floor, so a segmented control or a select drops to its own
   line on a phone while a switch stays on the label's line at any width.
+- Tabs keep the selected tab in sight: a strip wider than a phone scrolls
+  itself (never the page) to the selected tab, so a route that opens on a
+  fourth tab shows it.
 - Sheet: right drawer, 560 px, for every form longer than three fields.
   Dialog: centered, ≤ 480 px, for confirmations and one-field forms.
   A sheet never opens another sheet; a dialog may open over a sheet.
@@ -1651,6 +1654,9 @@ waiting room — and "Schedule…" is its only secondary.
   passed check wears a `success` check, and an information row a neutral icon
   in `fg-faint`. Blockers and warnings sort first. The tints are semantic;
   the accent stays on the button.
+- The levels and their icons are shared (`CheckLevel`, `LEVEL_ICON` in
+  `ui/feedback.tsx`): also the GitHub checks of a classroom's Settings,
+  where `unknown` is a `fg-faint` circle-question, never green.
 - A row that leads somewhere is a button across its width: the name of the
   step it opens, underlined, on a desktop; a chevron on a phone. A fix done in
   place (updating stale versions) is a real secondary `sm` button instead, and

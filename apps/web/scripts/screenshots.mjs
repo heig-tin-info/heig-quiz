@@ -188,17 +188,21 @@ const scenes = [
   { name: "classroom-drill-none", role: "teacher", path: "/classrooms/r2?tab=drill" },
   { name: "classroom-drill-off", role: "teacher", path: "/classrooms/r3?tab=drill" },
   { name: "classroom-import", role: "teacher", path: "/classrooms/r1?tab=roster", act: (p) => p.getByRole("button", { name: /add students/i }).first().click() },
-  { name: "classroom-menu", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^actions$/i }).first().click() },
-  // #156: the period dialog — the months, the two semester presets, the label.
-  { name: "classroom-period", role: "teacher", path: "/classrooms/r1", fold: true, act: async (p) => {
-      await p.getByRole("button", { name: /^actions$/i }).first().click();
-      await p.getByRole("menuitem", { name: /^period…$|^période…$/i }).click();
-    } },
-  // The title renamed in place: the pencil is the affordance (it only exists
-  // under the pointer), and the field that replaces the name must keep the
-  // baseline it had.
-  { name: "classroom-rename-hover", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^rename classroom/i }).first().hover() },
-  { name: "classroom-rename", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^rename classroom/i }).first().click() },
+  // #156: the period dialog — the months, the two semester presets, the label
+  // — opened from the period beside the title (the header's overflow menu
+  // left for the Settings tab, D24).
+  { name: "classroom-period", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^(change period|changer la période)/i }).first().click() },
+  // F-ORG-13 (D24, M2-07): the Settings tab. A classroom that is not
+  // connected (r2, its course's organization suggested): "Connect to GitHub"
+  // is the one accent, and the connect sheet it opens; PRG1-2026 connected,
+  // every check green, then with the warnings (free plan, no LLM secret) and
+  // with its organization gone from GitHub; the rename dialog.
+  { name: "classroom-settings", role: "teacher", path: "/classrooms/r2/settings" },
+  { name: "classroom-settings-github-connect", role: "teacher", path: "/classrooms/r2/settings?connect=1", fold: true },
+  { name: "classroom-settings-github-installed", role: "teacher", path: "/classrooms/r1/settings" },
+  { name: "classroom-settings-github-checks-warn", role: "teacher", path: "/classrooms/r1/settings?ghwarn=1" },
+  { name: "classroom-settings-github-org-missing", role: "teacher", path: "/classrooms/r1/settings?ghmissing=1" },
+  { name: "classroom-settings-rename", role: "teacher", path: "/classrooms/r1/settings", fold: true, act: (p) => p.getByRole("button", { name: /^(rename|renommer)$/i }).first().click() },
   { name: "classroom-row-menu", role: "teacher", path: "/classrooms/r1?tab=roster", fold: true, act: (p) => openRowMenu(p, /^Actions for /) },
   // ADR-034: an admin's row menu offers the impersonation link — with Super
   // Powers on (ADR-054); the private window it opens shows the student's
@@ -355,7 +359,7 @@ const scenes = [
   { name: "drill-optout", role: "student", path: "/drill", fold: true, act: (p) => p.getByRole("switch", { name: /PRG1-2026/ }).click() },
   { name: "drill-classroom", role: "teacher", path: "/classrooms/r1?tab=evaluations" },
   // Turned on where it was off: the backfill says how many cards it made.
-  { name: "drill-classroom-on", role: "teacher", path: "/classrooms/r3?tab=evaluations", act: (p) => p.getByRole("switch", { name: /^(drill|entraînement)$/i }).click() },
+  { name: "drill-classroom-on", role: "teacher", path: "/classrooms/r3/settings", act: (p) => p.getByRole("switch", { name: /^(drill|entraînement)$/i }).click() },
   { name: "drill-eval-draft", role: "teacher", path: "/evaluations/draft?step=timing" },
   { name: "drill-eval-released", role: "teacher", path: "/evaluations/released?step=timing" },
   { name: "drill-eval-remove", role: "teacher", path: "/evaluations/released?step=timing", fold: true, act: (p) => p.getByRole("button", { name: /remove these questions|retirer ces questions/i }).click() },
@@ -876,6 +880,9 @@ const scenes = [
 
   // Settings and administration
   { name: "settings", role: "teacher", path: "/settings" },
+  // F-GH-05 (M2-07): the GitHub card, linked and not.
+  { name: "settings-github-linked", role: "teacher", path: "/settings", fold: true, act: (p) => p.getByRole("heading", { name: "GitHub" }).scrollIntoViewIfNeeded() },
+  { name: "settings-github-unlinked", role: "teacher", path: "/settings?unlinked=1", fold: true, act: (p) => p.getByRole("heading", { name: "GitHub" }).scrollIntoViewIfNeeded() },
   // ADR-054: an admin's Super Powers, off and on, and the red banner above
   // everything — its minutes, its last-five-minutes countdown, and stacked
   // over the student view's banner.

@@ -1,12 +1,10 @@
 /**
- * The Drill tab of a classroom (ADR-041 §6, §8, #317 slice 4): the switch,
- * each student's activity, and the mastery per tag. A read view — its only
- * write is the switch, a setting and not the screen's purpose — so the page
+ * The Drill tab of a classroom (ADR-041 §6, §8, #317 slice 4): each
+ * student's activity, and the mastery per tag. A read view, so the page
  * header carries no primary action on this tab.
  *
- * The switch sits at the foot of the tab: with the drill off, the tab is
- * an empty state that points down at it; with the drill on, the activity
- * comes first and the switch is where a setting belongs.
+ * The switch is a row of the classroom's Settings (D24): with the drill off,
+ * the tab is an empty state whose one action opens them.
  */
 import type { ClassroomDetail, DrillStudentActivity, DrillTagMastery } from "@quiz/contracts";
 import { drillRecallRate, drillRecallTrend } from "@quiz/domain";
@@ -15,6 +13,7 @@ import { useState } from "react";
 
 import { useI18n, useT } from "../i18n";
 import {
+  Button,
   Card,
   EmptyState,
   isoDateParts,
@@ -27,13 +26,19 @@ import {
   Stat,
 } from "../ui";
 import { useClassroomDrillActivity, useClassroomDrillMastery, useDrillProgress } from "./api";
-import { ClassroomDrillSetting } from "./ClassroomDrillSetting";
 import { DrillActivityTable, studentName, TrendMark } from "./DrillActivityTable";
 import { WeeklyProgress } from "./WeeklyProgress";
 
 const hasActivity = (rows: DrillStudentActivity[]) => rows.some((r) => r.reviews.all > 0 || r.optedOutAt !== null);
 
-export function ClassroomDrill({ room }: { room: ClassroomDetail }) {
+export function ClassroomDrill({
+  room,
+  onSettings,
+}: {
+  room: ClassroomDetail;
+  /** Opens the classroom's Settings, where the switch is. */
+  onSettings: () => void;
+}) {
   const t = useT();
   const activity = useClassroomDrillActivity(room.id);
   const [open, setOpen] = useState<DrillStudentActivity | null>(null);
@@ -57,8 +62,8 @@ export function ClassroomDrill({ room }: { room: ClassroomDetail }) {
       />
     );
   } else if (!hasActivity(activity.data)) {
-    // Off with no history, or on with nothing yet: one sentence, and the
-    // switch below is the one thing to do.
+    // Off with no history, or on with nothing yet: one sentence, and, when
+    // off, the way to the switch is the one thing to do.
     body = (
       <Card>
         {room.drillEnabled ? (
@@ -66,7 +71,15 @@ export function ClassroomDrill({ room }: { room: ClassroomDetail }) {
             {t("drill.teacher.none.body")}
           </EmptyState>
         ) : (
-          <EmptyState icon={Dumbbell} title={t("drill.teacher.off.title")}>
+          <EmptyState
+            icon={Dumbbell}
+            title={t("drill.teacher.off.title")}
+            action={
+              <Button variant="secondary" onClick={onSettings}>
+                {t("drill.teacher.openSettings")}
+              </Button>
+            }
+          >
             {t("drill.teacher.off.body")}
           </EmptyState>
         )}
@@ -90,7 +103,6 @@ export function ClassroomDrill({ room }: { room: ClassroomDetail }) {
   return (
     <div className="space-y-8">
       {body}
-      <ClassroomDrillSetting room={room} />
       {open ? <DrillStudentSheet classroomId={room.id} row={open} onClose={() => setOpen(null)} /> : null}
     </div>
   );

@@ -337,6 +337,60 @@ export function Checkbox({
   );
 }
 
+/**
+ * One choice of a list of radios drawn as rows (the regrade's versions, the
+ * pairing's exams, the GitHub organizations): the accent ring, the row tinted
+ * `accent-soft` when checked, `surface-2` on hover. The radio is centred on
+ * the first line of the row's own text size (`h-[1lh]`), so a 15 px title
+ * and a 14 px one both line up without a per-site margin. `className` is the
+ * row's padding and text size, whole: `cx` does not merge, so it replaces the
+ * default rather than fighting it. Wrap the rows in a `fieldset`.
+ */
+export function RadioRow<V extends string | number>({
+  name,
+  value,
+  checked,
+  disabled,
+  onPick,
+  children,
+  className = "px-3 py-2.5 text-sm",
+}: {
+  name: string;
+  value: V;
+  checked: boolean;
+  disabled?: boolean;
+  onPick: (value: V) => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <label
+      className={cx(
+        "flex items-start gap-3 transition-colors",
+        disabled
+          ? "cursor-not-allowed opacity-60"
+          : checked
+            ? "cursor-pointer bg-accent-soft"
+            : "cursor-pointer hover:bg-surface-2",
+        className,
+      )}
+    >
+      <span className="flex h-[1lh] shrink-0 items-center">
+        <input
+          type="radio"
+          name={name}
+          value={value}
+          checked={checked}
+          disabled={disabled}
+          onChange={() => onPick(value)}
+          className="size-4 appearance-none rounded-full border border-line-strong bg-surface transition-[border-width] checked:border-[5px] checked:border-accent"
+        />
+      </span>
+      <span className="min-w-0 flex-1">{children}</span>
+    </label>
+  );
+}
+
 /** On/off switch (settings rows). Accent when on: it is a state, not an action. */
 export function Switch({
   checked,

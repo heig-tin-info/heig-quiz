@@ -8,7 +8,7 @@ import { api } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { gradingItemVersionsKey } from "../queryKeys";
-import { Alert, Badge, cx, ErrorText, FormError, isoDateTime, QueryError, Skeleton, Textarea } from "../ui";
+import { Alert, Badge, cx, ErrorText, FormError, isoDateTime, QueryError, RadioRow, Skeleton, Textarea } from "../ui";
 import { useGradingInvalidate } from "./useGradingInvalidate";
 import { ValidatedSheet } from "./ValidatedSheet";
 
@@ -196,21 +196,8 @@ function VersionOption({
 }) {
   const t = useT();
   return (
-    <label
-      className={cx(
-        "flex cursor-pointer items-start gap-3 px-3 py-2.5 transition-colors",
-        checked ? "bg-accent-soft" : "hover:bg-surface-2",
-      )}
-    >
-      <input
-        type="radio"
-        name={name}
-        value={v.number}
-        checked={checked}
-        onChange={() => onPick(v.number)}
-        className="mt-0.5 size-4 shrink-0 appearance-none rounded-full border border-line-strong bg-surface transition-[border-width] checked:border-[5px] checked:border-accent"
-      />
-      <span className="min-w-0 flex-1 space-y-0.5">
+    <RadioRow name={name} value={v.number} checked={checked} onPick={onPick}>
+      <span className="block space-y-0.5">
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="text-sm font-semibold tabular-nums text-fg">
             {t("question.versions.number", { n: v.number })}
@@ -227,6 +214,6 @@ function VersionOption({
           {v.changeNote || t("grading.regrade.noChangeNote")}
         </span>
       </span>
-    </label>
+    </RadioRow>
   );
 }

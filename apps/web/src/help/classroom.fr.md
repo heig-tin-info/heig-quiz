@@ -31,10 +31,17 @@ bord, le panneau de correction ou les résultats, selon l'endroit où elle en
 est. **Nouvelle évaluation**, en haut à droite tant que cet onglet est
 ouvert, en crée une.
 
-## Archiver, renommer, supprimer
+## Réglages
 
-Un clic sur le nom de la classe le renomme ; un clic sur la période (ou sur
-**Définir la période** quand il n'y en a pas) ouvre ses dates et son libellé.
+Un clic sur la période (ou sur **Définir la période** quand il n'y en a pas)
+ouvre ses dates et son libellé. L'onglet **Réglages** porte le reste :
+**Renommer**, l'interrupteur de l'**Entraînement**, la connexion **GitHub**
+quand la plateforme en a une, et la fin de la classe.
+
+**Connecter à GitHub** choisit une organisation où l'app de Quiz est
+installée, ou l'installe sur une autre ; les vérifications disent ensuite
+si l'app voit tous les dépôts, l'offre de l'organisation et le secret du
+LLM. **Déconnecter** ne supprime rien sur GitHub.
 
 **Archiver** met de côté une classe terminée sans rien supprimer ;
 **Restaurer** la ramène. **Supprimer** est tout autre chose : la liste, les

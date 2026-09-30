@@ -1,13 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Archive,
-  ArchiveRestore,
-  CalendarRange,
   ClipboardList,
   Dumbbell,
   GraduationCap,
   Plus,
-  Trash2,
+  Settings as SettingsIcon,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -17,23 +14,24 @@ import { ClassroomPatch, type ClassroomDetail, type EvaluationSummary } from "@q
 
 import { api, useMe } from "./api";
 import { PeriodFields, periodBody, periodInvalid, type PeriodDraft } from "./ClassroomPeriod";
-import { useConfirm } from "./confirm";
+import { ClassroomSettings } from "./ClassroomSettings";
 import { ClassroomDrill } from "./drill/ClassroomDrill";
+import { useClassroomGithub } from "./github/api";
 import { useT } from "./i18n";
 // WP8: evaluation + dashboard
 import { EvaluationList, NewEvaluationModal } from "./evaluation/EvaluationList";
 import { useErrorToast, useToast } from "./notify";
 import { RosterImport } from "./RosterImport";
 import { RosterTable } from "./RosterTable";
-import { useSearchParam, type Route } from "./router";
+import { useSearchParam, type Navigate, type Route } from "./router";
+import { useScreenCommands } from "./screenCommands";
 import {
   Badge,
   Button,
   Card,
-  EditableTitle,
   EmptyState,
   FormDialog,
-  Menu,
+  GithubIcon,
   PageHeader,
   ParentLink,
   QueryError,
@@ -45,7 +43,8 @@ import { classroomKey, evaluationsKey } from "./queryKeys";
 import { invalidateHint } from "./realtime/hints";
 
 /**
- * One classroom: its roster and its evaluations, one tab each.
+ * One classroom: its roster, its evaluations, its drill and its settings,
+ * one tab each.
  *
  * Two lists that never answer the same question sat stacked on one page, so
  * a teacher looking for a quiz scrolled past thirty names to find it. The
@@ -53,45 +52,24 @@ import { invalidateHint } from "./realtime/hints";
  * same slot whichever tab is open: "Add students" on the roster — an empty
  * roster is the only thing that blocks everything a classroom is for — and
  * "New evaluation" on the evaluations (#295). The third tab, the drill
- * (ADR-041, #317), is a read view — each student's practice, and the
- * classroom's drill switch at its foot — so the slot stays empty there.
+ * (ADR-041, #317), is a read view — each student's practice — so the slot
+ * stays empty there. The fourth, Settings (F-ORG-13, D24), is a route of its
+ * own (`/classrooms/:id/settings`): rename, archive, delete and the drill
+ * switch moved there from the header and the Drill tab, beside GitHub; its
+ * one accent is its own ("Connect to GitHub"), so the header's slot stays
+ * empty there too. The header keeps the name and the period.
  */
 
-type Tab = "roster" | "evaluations" | "drill";
+export type ClassroomTab = "roster" | "evaluations" | "drill" | "settings";
+type Tab = ClassroomTab;
 
 /**
- * The classroom name, renamed where it is written (`EditableTitle`). The
- * request is the PATCH the "Rename" menu item used to open a modal for; the
- * modal is gone, this is the whole of it.
+ * The tabs that are routes of their own (`/classrooms/:id/<tab>`), not a
+ * `?tab=` on the classroom's address: Settings today, the Journal with M4-05.
  */
-function ClassroomName({ room }: { room: ClassroomDetail }) {
-  const t = useT();
-  const qc = useQueryClient();
-  const toastError = useErrorToast();
-  const rename = useMutation({
-    mutationFn: (name: string) =>
-      api(`/app/api/classrooms/${room.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name } satisfies ClassroomPatch),
-      }),
-    // The name is on the course page and in the classroom list too, so
-    // everything that carries a classroom is dropped.
-    onSuccess: () => invalidateHint(qc, ["classrooms"]),
-    onError: toastError("classrooms.renameFailed"),
-  });
-  return (
-    <EditableTitle
-      value={room.name}
-      pending={rename.isPending ? rename.variables : undefined}
-      onSave={(name) => rename.mutate(name)}
-      // The name is IN the label: this button is the whole text of the <h1>,
-      // and a bare "Rename classroom" would leave the heading naming no
-      // classroom at all.
-      editLabel={t("classrooms.renameName", { name: room.name })}
-      inputLabel={t("classrooms.name")}
-    />
-  );
-}
+const ROUTE_TABS: Partial<Record<Tab, (id: string) => Route>> = {
+  settings: (id) => ({ view: "classroomSettings", id }),
+};
 
 /**
  * The period: its dates and its label (F-ORG-03, #156), in a dialog.
@@ -163,10 +141,18 @@ function PeriodLink({ room, onOpen }: { room: ClassroomDetail; onOpen: () => voi
   );
 }
 
-export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
+export function ClassroomView({
+  id,
+  navigate,
+  routeTab,
+}: {
+  id: string;
+  navigate: Navigate;
+  /** The tab the route names, for a tab that is a route (`ROUTE_TABS`). */
+  routeTab?: Tab;
+}) {
   const t = useT();
   const qc = useQueryClient();
-  const confirm = useConfirm();
   const toast = useToast();
   const toastError = useErrorToast();
   const me = useMe();
@@ -177,6 +163,10 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
   // not loaded yet when this runs. The empty value means "whatever the page
   // decides"; a click always writes a real one.
   const [tabParam, setTab] = useSearchParam("tab", "");
+  // The Settings' GitHub connect sheet, in the address so the palette's
+  // "Connect this classroom to GitHub" can open it from any tab.
+  const [connectParam, setConnect] = useSearchParam("connect", "");
+  const github = useClassroomGithub(id);
 
   const room = useQuery<ClassroomDetail>({
     queryKey: classroomKey(id),
@@ -193,7 +183,6 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
     queryFn: () => api(`/app/api/classrooms/${id}/evaluations`),
   });
 
-  const invalidate = () => invalidateHint(qc, ["classrooms"]);
   /**
    * The teacher takes a (staff) seat in their own classroom, to walk the
    * student flow without a second account. It stays out of the headcount.
@@ -206,18 +195,37 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
     },
     onError: toastError("roster.joinFailed"),
   });
-  const archive = useMutation({
-    mutationFn: (to: "archive" | "unarchive") =>
-      api(`/app/api/classrooms/${id}/${to}`, { method: "POST" }),
-    onSuccess: invalidate,
-  });
-  const remove = useMutation({
-    mutationFn: () => api(`/app/api/classrooms/${id}`, { method: "DELETE" }),
-    onSuccess: async () => {
-      await invalidate();
-      navigate({ view: "home" });
-    },
-  });
+
+  /** A tab: a route of its own (`ROUTE_TABS`), or a `?tab=` on the classroom's address. */
+  const openTab = (next: Tab) => {
+    const route = ROUTE_TABS[next];
+    if (route) {
+      navigate(route(id));
+      return;
+    }
+    if (routeTab) navigate({ view: "classroom", id });
+    setTab(next);
+  };
+  const openConnect = () => {
+    if (routeTab !== "settings") openTab("settings");
+    setConnect("1");
+  };
+  const link = github.data?.link;
+  // F-GH-02: the palette's door to the connect sheet, on a classroom that
+  // has none (and on a platform whose App exists: the route answered).
+  useScreenCommands(
+    github.data && link === null
+      ? [
+          {
+            id: "classroom-github-connect",
+            label: t("github.connectTitle"),
+            icon: GithubIcon,
+            group: "action",
+            run: openConnect,
+          },
+        ]
+      : [],
+  );
 
   if (room.isLoading) {
     return (
@@ -245,8 +253,9 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
   // on; once there are students, the work is in the evaluations. The teacher's
   // own seat does not count: a classroom holding nothing else is still one to
   // fill.
-  const tab: Tab =
-    tabParam === "roster" || tabParam === "evaluations" || tabParam === "drill"
+  const tab: Tab = routeTab
+    ? routeTab
+    : tabParam === "roster" || tabParam === "evaluations" || tabParam === "drill"
       ? tabParam
       : students.length > 0
         ? "evaluations"
@@ -268,9 +277,14 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
         }
         title={
           <span className="flex flex-wrap items-baseline gap-3">
-            <ClassroomName room={data} />
+            {data.name}
             <PeriodLink room={data} onOpen={() => setEditingPeriod(true)} />
             {data.archivedAt ? <Badge tone="zinc">{t("classrooms.archived")}</Badge> : null}
+            {link ? (
+              <Badge tone="zinc" icon={GithubIcon}>
+                {link.org.login}
+              </Badge>
+            ) : null}
           </span>
         }
         help="classroom"
@@ -305,53 +319,12 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
             ) : null}
           </>
         }
-        menu={
-          <Menu
-            label={t("common.actions")}
-            items={[
-              data.archivedAt
-                ? {
-                    label: t("classrooms.unarchive"),
-                    icon: ArchiveRestore,
-                    onSelect: () => archive.mutate("unarchive"),
-                  }
-                : {
-                    label: t("classrooms.archive"),
-                    icon: Archive,
-                    onSelect: () => archive.mutate("archive"),
-                  },
-              {
-                label: t("classrooms.setPeriod"),
-                icon: CalendarRange,
-                onSelect: () => setEditingPeriod(true),
-              },
-              {
-                label: t("classrooms.delete"),
-                icon: Trash2,
-                danger: true,
-                separator: true,
-                onSelect: async () => {
-                  if (
-                    await confirm({
-                      title: t("classrooms.deleteConfirm", { name: data.name }),
-                      confirmLabel: t("common.delete"),
-                      cancelLabel: t("common.cancel"),
-                      danger: true,
-                    })
-                  ) {
-                    remove.mutate();
-                  }
-                },
-              },
-            ]}
-          />
-        }
       />
 
       <div className="space-y-4">
         <Tabs
           value={tab}
-          onChange={setTab}
+          onChange={openTab}
           label={t("classrooms.tabs")}
           items={[
             // The whole roster, staff seats included: the number on a tab
@@ -368,6 +341,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
             },
             // ADR-041 (#317): the students' drill, and its switch.
             { value: "drill", label: t("nav.drill"), icon: Dumbbell },
+            { value: "settings", label: t("classroomSettings.tab"), icon: SettingsIcon },
           ]}
         />
 
@@ -400,8 +374,15 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
         ) : tab === "evaluations" ? (
           // WP8: evaluation + dashboard
           <EvaluationList classroomId={id} navigate={navigate} onNew={() => setCreating(true)} />
+        ) : tab === "drill" ? (
+          <ClassroomDrill room={data} onSettings={() => openTab("settings")} />
         ) : (
-          <ClassroomDrill room={data} />
+          <ClassroomSettings
+            room={data}
+            navigate={navigate}
+            connecting={connectParam === "1"}
+            onConnecting={(open) => setConnect(open ? "1" : "")}
+          />
         )}
       </div>
 

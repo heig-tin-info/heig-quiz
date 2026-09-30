@@ -37,8 +37,10 @@ export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
   // A seat added or removed on a course's staff changes what that teacher
   // reaches: every open evaluation, grading or results screen of it too.
   courses: [...EVALUATION_ROOTS, "courses", "pools", "pool", "admin-teachers"],
-  // An archived classroom takes its evaluations out of the Activities.
-  classrooms: ["courses", "course", "classroom", "student", "activities"],
+  // An archived classroom takes its evaluations out of the Activities. The
+  // GitHub setup return (M2-02) raises it too: the organizations the connect
+  // sheet offers, and the classroom's link (under `classroom`).
+  classrooms: ["courses", "course", "classroom", "student", "activities", "github"],
   roster: ["courses", "course", "classroom", "evaluations", "evaluation", "dashboard", "student"],
   pool: [
     "pools",

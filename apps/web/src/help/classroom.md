@@ -28,10 +28,17 @@ reach its configuration, the live dashboard, the grading panel or the
 results, depending on where it stands. **New evaluation**, at the top right
 while this tab is open, creates one.
 
-## Archive, rename, delete
+## Settings
 
-A click on the classroom's name renames it; a click on the period (or on
-**Set period** when there is none) opens its dates and its label.
+A click on the period (or on **Set period** when there is none) opens its
+dates and its label. The **Settings** tab holds the rest: **Rename**, the
+**Drill** switch, the **GitHub** connection when the platform has one, and
+the classroom's end.
+
+**Connect to GitHub** picks an organization where Quiz's App is installed,
+or installs it on another one; the checks then say whether the App sees
+every repository, the organization's plan, and the LLM secret.
+**Disconnect** deletes nothing on GitHub.
 
 **Archive** puts a finished classroom aside without deleting anything;
 **Restore** brings it back. **Delete** is the other thing entirely: the
