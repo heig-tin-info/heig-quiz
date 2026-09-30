@@ -4,6 +4,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   Copy,
+  FileStack,
   MonitorPlay,
   Plus,
   Presentation,
@@ -48,6 +49,7 @@ import { classroomKey, evaluationsKey } from "../queryKeys";
 import { ModeChoice, type CreatedMode } from "./ModeChoice";
 import {
   InstantiateError,
+  SaveAsTemplateDialog,
   useCourseTemplates,
   useDuplicateErrorToast,
   useInstantiate,
@@ -194,6 +196,12 @@ export function EvaluationList({
   const confirm = useConfirm();
   /** The row whose template pull is being confirmed (F-EVAL-26). */
   const [pulling, setPulling] = useState<string | null>(null);
+  /** The row being saved as a template of the course (ADR-031). */
+  const [savingTemplate, setSavingTemplate] = useState<EvaluationSummary | null>(null);
+  const classroom = useQuery<ClassroomDetail>({
+    queryKey: classroomKey(classroomId),
+    queryFn: () => api(`/app/api/classrooms/${classroomId}`),
+  });
 
   const list = useQuery<EvaluationSummary[]>({
     queryKey: evaluationsKey(classroomId),
@@ -373,6 +381,16 @@ export function EvaluationList({
                           icon: Copy,
                           onSelect: () => duplicate.mutate(row),
                         },
+                        // A poll has nothing to keep (`422 template_poll`).
+                        ...(row.mode === "poll" || !classroom.data
+                          ? []
+                          : [
+                              {
+                                label: t("templates.save"),
+                                icon: FileStack,
+                                onSelect: () => setSavingTemplate(row),
+                              },
+                            ]),
                         {
                           label: t("eval.delete"),
                           icon: Trash2,
@@ -400,6 +418,15 @@ export function EvaluationList({
           </table>
         </Card>
       )}
+      {savingTemplate && classroom.data ? (
+        <SaveAsTemplateDialog
+          evaluationId={savingTemplate.id}
+          classroomId={classroomId}
+          title={savingTemplate.title}
+          course={classroom.data.course}
+          onClose={() => setSavingTemplate(null)}
+        />
+      ) : null}
       {pulling ? (
         <PullTemplateDialog
           evaluationId={pulling}

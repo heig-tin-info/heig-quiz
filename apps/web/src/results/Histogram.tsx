@@ -1,6 +1,7 @@
-import { formatGrade, MAX_GRADE } from "@quiz/domain";
+import { formatGrade, gradeBand, MAX_GRADE } from "@quiz/domain";
 import type { ResultsStats } from "@quiz/contracts";
 
+import { GRADE_BAND_TONE } from "../Grade";
 import { useT } from "../i18n";
 import { Bars } from "../ui";
 
@@ -34,6 +35,9 @@ export function Histogram({
         value: b.count,
         label: bucketLabel(b.bucket, step),
         tick: Number.isInteger(b.bucket) ? b.bucket.toFixed(0) : "",
+        // The buckets are half grades, so 4.0 and 4.5 fall on their edges:
+        // a bucket's band is its lower bound's (the letters would not be).
+        tone: GRADE_BAND_TONE[gradeBand(b.bucket)],
       }))}
     />
   );

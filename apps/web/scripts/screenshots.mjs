@@ -682,6 +682,10 @@ const scenes = [
   { name: "editor-rich", role: "teacher", path: "/questions/q17", settle: 3000 },
   { name: "editor-categorize", role: "teacher", path: "/questions/q18", settle: 3000 },
   // A column left unnamed and a card emptied: the autosave's issues, on the fields and under the board.
+  // The tray emptied of its distractor: it takes no room above the "new card" field.
+  { name: "editor-categorize-empty-tray", role: "teacher", path: "/questions/q18", settle: 3000, act: async (p) => { await p.locator("li", { hasText: "string" }).getByRole("button", { name: /^Remove card/ }).click(); await p.waitForTimeout(500); } },
+  // ...and opens again while a card is dragged, to take it back (the pointer stays down).
+  { name: "editor-categorize-empty-tray-drag", role: "teacher", path: "/questions/q18", settle: 3000, act: async (p) => { await p.locator("li", { hasText: "string" }).getByRole("button", { name: /^Remove card/ }).click(); const grip = p.locator("li", { hasText: "double" }).getByRole("button", { name: /^Move card/ }); const b = await grip.boundingBox(); await p.mouse.move(b.x + 5, b.y + 5); await p.mouse.down(); await p.mouse.move(b.x + 20, b.y - 20, { steps: 4 }); await p.mouse.move(b.x + 40, b.y - 110, { steps: 8 }); await p.waitForTimeout(300); } },
   { name: "editor-categorize-issues", role: "teacher", path: "/questions/q18", settle: 3000, act: async (p) => { await p.getByRole("textbox", { name: "Column name 2" }).fill(""); await p.getByRole("textbox", { name: "Text of card 1" }).fill(""); await p.waitForTimeout(2500); } },
   { name: "editor-codeimage-try", role: "teacher", path: "/questions/q16", settle: 5000, act: async (p) => { await p.getByRole("button", { name: /try the reference solution|essayer la solution de référence/i }).click(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).waitFor(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).scrollIntoViewIfNeeded(); } },
   // "Student preview": a page of its own, opened by the editor in a new tab.
@@ -780,6 +784,13 @@ const scenes = [
   { name: "results", role: "teacher", path: "/evaluations/closed/results" },
   { name: "results-released", role: "teacher", path: "/evaluations/released/results" },
   { name: "results-questions", role: "teacher", path: "/evaluations/closed/results?tab=questions", settle: 2500 },
+  // The correction on a beamer (ADR-033): hidden, revealed (R), and walked
+  // down to the cloze, the eighth question, whose blanks carry their bars.
+  { name: "correction", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: (p) => projectNext(p, 1) },
+  { name: "correction-revealed", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: async (p) => { await projectNext(p, 1); await p.keyboard.press("r"); } },
+  { name: "correction-code-revealed", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: (p) => p.keyboard.press("r") },
+  { name: "correction-cloze", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: (p) => projectNext(p, 7) },
+  { name: "correction-cloze-revealed", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: async (p) => { await projectNext(p, 7); await p.keyboard.press("r"); } },
   { name: "results-release-confirm", role: "teacher", path: "/evaluations/closed/results", fold: true, act: (p) => p.getByRole("button", { name: /publish results|publier les résultats/i }).first().click() },
   { name: "results-empty", role: "teacher", path: "/evaluations/closed/results?empty=1", settle: 800 },
   { name: "results-error", role: "teacher", path: "/evaluations/closed/results?fail=1", settle: 2500 },
@@ -918,6 +929,14 @@ async function nextQuestion(page, n) {
   for (let i = 0; i < n; i += 1) {
     await page.getByRole("button", { name: /^(next question|question suivante)$/i }).first().click();
     await page.waitForTimeout(400);
+  }
+}
+
+/** Walks the correction projection forward `n` questions with J, as a clicker would. */
+async function projectNext(page, n) {
+  for (let i = 0; i < n; i += 1) {
+    await page.keyboard.press("j");
+    await page.waitForTimeout(250);
   }
 }
 

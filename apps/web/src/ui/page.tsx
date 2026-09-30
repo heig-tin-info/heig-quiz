@@ -309,7 +309,7 @@ export function SectionHeading({
   return (
     <div className={cx("flex flex-wrap items-center gap-x-3 gap-y-2", className)}>
       <div className="flex min-w-0 items-center gap-2">
-        {Icon ? <Icon className="size-4 text-fg-faint" /> : null}
+        {Icon ? <Icon className="size-4 shrink-0 text-fg-faint" /> : null}
         <h2 className="text-base font-bold tracking-tight">{title}</h2>
         {count != null ? <span className="text-sm tabular-nums text-fg-faint">{count}</span> : null}
         {help ? <HelpIcon topic={help} /> : null}

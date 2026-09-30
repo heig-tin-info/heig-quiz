@@ -18,7 +18,7 @@ import {
   studentRouteFor,
   useStudentView,
 } from "./studentView";
-import { Button, Card, EmptyState, LinkButton, setDateFormat, Spinner } from "./ui";
+import { Button, Card, EmptyState, ErrorText, LinkButton, setDateFormat, Spinner } from "./ui";
 import { configKey } from "./queryKeys";
 
 // One chunk per page: a student never downloads the teacher UI and vice versa.
@@ -132,9 +132,9 @@ function Landing() {
         {/* ADR-027: a SEB launch that was refused lands here, in SEB; and
             ADR-034: so does a used or expired impersonation link. */}
         {refused ? (
-          <p role="alert" className="mt-4 text-sm text-danger">
+          <ErrorText role="alert" className="mt-4">
             {t(refused)}
-          </p>
+          </ErrorText>
         ) : null}
         <LinkButton href="/app/auth/login" variant="primary" size="lg" className="mt-8 w-full">
           {t("landing.signin")}

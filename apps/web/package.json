@@ -23,6 +23,7 @@
     "@microsoft/teams-js": "^2.57.0",
     "@quiz/contracts": "workspace:*",
     "@quiz/core": "workspace:*",
+    "@quiz/diagram": "workspace:*",
     "@quiz/domain": "workspace:*",
     "@quiz/qt-categorize": "workspace:*",
     "@quiz/qt-circuit": "workspace:*",

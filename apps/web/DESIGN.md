@@ -38,6 +38,12 @@ raw values live in `src/style.css` and swap in dark mode without any
 | `info` / `info-soft` | `#1268a0` / `#e8f2f9` | `#58a9e0` / `rgb(88 169 224 / 0.14)` | "a set of possibilities", the progress half of a cell state, and a `SegmentedBar` share that is no verdict (the pool's choices picked, ADR-043) |
 | `info-mid` / `on-info-mid` | `#b8d7f0` / `#0d5286` | `rgb(88 169 224 / 0.35)` / `#a6d3f3` | the ANSWERED cell of the live grid only |
 
+A grade (`<Grade>`, `apps/web/src/Grade.tsx`) is written in `danger` below
+4.0 and in `warning` from 4.0 to 4.4, in the ink from 4.5; its ECTS label
+("Satisfactory (D)") is on hover and in the text for a screen reader. The
+histogram's bars follow the same bands. Teacher and student see the same
+colours.
+
 Rule: strip the accent and every screen must still read. Hierarchy comes
 from size, weight and position, never from red.
 
@@ -1323,19 +1329,36 @@ the Results "Questions" tab on the wall. It takes the projection's
   bar of the class with its legend (the same list of parts), and the success
   rate in large mono with a half-size `%`, "out of n papers" under it.
 - **Thin bars are the one reading** (`SegmentedBar`, `ui/bar.tsx`): 8 px per
-  choice or test case, 6 px under a cloze blank. No count beside a bar; the
-  figures are in the hover and focus bubble and the accessible name, one
-  sentence built from the parts ("wrong: 4 · no answer: 1"). A short
-  answer's row is the exception: its count is the row's content.
+  choice or test case, 6 px under a cloze blank. A choice's bar is the share
+  of the papers that ticked it and a test case's its passes, each with its
+  figure at the right (tabular, like a short answer's row, whose count is the
+  row's content). Every bar also speaks in the hover and focus bubble and its
+  accessible name, one sentence built from the parts ("wrong: 4 · no
+  answer: 1", "correct answer · ticked: 13"), so colour is never its only
+  reading.
 - **Colours**: full credit `success`, partial `success` hatched over the
   track, wrong `danger`, no answer `warning`. Red, unlike the poll donut,
   because a graded paper marks answers wrong (ADR-033); colour is never
   alone — 2 px gaps, texture for partial, a fixed order, the figures in words.
+  A choice's bar is ONE part: `success` on a key, `danger` on a distractor,
+  the rest the track; a blank's is right `success` and wrong `danger` over
+  the track, an empty blank being the track too. Amber, the absence, is never
+  a part of either — a choice nobody ticked is not a choice left blank.
 - **The key is not framed**: a key's letter is filled `success` / `on-fill`, a
   distractor's is `danger-soft` / `danger` with its text in `fg-muted`.
-- **Hidden first**: a choice's bar drains to its track, a blank keeps its
-  width without ink, the reference solution is hatched `surface-2` /
+- **Hidden first**: a choice's bar keeps its length in `muted` and says
+  "ticked" only (how the room voted, which the ticks alone do not tell the
+  key from), its letter stays neutral; a blank keeps its width without ink
+  over one muted length, the share that filled it in — the right / wrong
+  split IS the key; the reference solution is hatched `surface-2` /
   `surface-3`. R reveals; E adds the explanation, only where there is one.
+- **The same pieces on the page**: the Results "Questions" tab draws them
+  with the `page` density, always revealed. The sizes of both densities are
+  one table, `SCALE` in `results/CorrectionQuestion.tsx`. An mcq, a cloze and
+  a short answer are drawn whole; any other type keeps its own review for the
+  statement and gets the answer groups and the program below it. "Present",
+  in the Results header beside "Grading panel", opens this screen once the
+  evaluation is over.
 
 ## Voice
 

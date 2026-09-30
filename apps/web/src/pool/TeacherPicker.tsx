@@ -9,6 +9,7 @@ import {
   ComboboxList,
   ComboboxOption,
   cx,
+  ErrorText,
   FieldLabel,
   Initials,
   inputClass,
@@ -115,7 +116,7 @@ export function TeacherPicker({
                 {t("share.candidatesLoading")}
               </p>
             ) : candidates.isError ? (
-              <p className="px-2.5 py-2 text-[13px] text-danger">{t("share.candidatesFailed")}</p>
+              <ErrorText className="px-2.5 py-2">{t("share.candidatesFailed")}</ErrorText>
             ) : rows.length === 0 ? (
               <p className="px-2.5 py-2 text-[13px] text-fg-faint">
                 {q ? t("share.noCandidate", { q }) : t("share.everyoneSeated")}

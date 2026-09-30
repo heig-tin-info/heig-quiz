@@ -364,17 +364,18 @@ export async function evaluationPlugin(app: FastifyInstance) {
     teacher(
       { params: IdParam, body: TemplateCreate, load: staffEvaluation },
       async ({ req, reply, body, scope }) => {
-        const row = await templates.saveAsTemplate(app.db, scope.evaluation, {
+        const { template, previousOrigin } = await templates.saveAsTemplate(app.db, scope.evaluation, {
           courseId: scope.classroom.courseId,
           title: body.title,
           createdBy: req.user!.id,
         });
-        await trace(req, "template.create", "evaluation", row.id, {
+        await trace(req, "template.create", "evaluation", template.id, {
           from: scope.evaluation.id,
           courseId: scope.classroom.courseId,
-          title: row.title,
+          title: template.title,
+          previousOrigin,
         });
-        return reply.code(201).send(await templates.templateOf(app.db, row));
+        return reply.code(201).send(await templates.templateOf(app.db, template));
       },
     ),
   );

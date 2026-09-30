@@ -410,9 +410,10 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         )}
       </div>
 
-      {savingTemplate && classroom.data ? (
+      {savingTemplate && classroom.data && classroomId ? (
         <SaveAsTemplateDialog
           evaluationId={id}
+          classroomId={classroomId}
           title={evaluation.title}
           course={classroom.data.course}
           onClose={() => setSavingTemplate(false)}

@@ -5,6 +5,7 @@ import {
   describe,
   histogram,
   isBatchable,
+  isEvaluationOver,
   negativeMarkingOn,
   parseCloze,
   round2,
@@ -845,8 +846,7 @@ function attemptAggregate(type: string, answer: unknown, details: unknown): Item
 
 on("GET", "/app/api/evaluations/:id/results/by-question", (m) => {
   const e = gradingWorldOr404(m.groups!.id!);
-  const state = e.evaluation.state;
-  if (state !== "closed" && state !== "grading" && state !== "released") {
+  if (!isEvaluationOver(e.evaluation.state)) {
     throw new MockPayload(409, { error: "not_over", message: "the evaluation is not over" });
   }
   const view = resultsView(e);

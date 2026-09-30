@@ -362,6 +362,7 @@ export function Switch({
  * beside the app's `size` and `label`.
  */
 export { Segmented };
+export { ErrorText } from "@quiz/ui";
 
 /**
  * Settings row: label + a description of the CURRENT choice on the left

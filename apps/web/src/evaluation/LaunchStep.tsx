@@ -20,7 +20,18 @@ import type { Evaluation, EvaluationDetail } from "@quiz/contracts";
 import { api } from "../api";
 import { useT } from "../i18n";
 import type { Route } from "../router";
-import { Alert, Button, Card, cx, Field, FormDialog, isoDateTime, useNow, type IconType } from "../ui";
+import {
+  Alert,
+  Button,
+  Card,
+  cx,
+  ErrorText,
+  Field,
+  FormDialog,
+  isoDateTime,
+  useNow,
+  type IconType,
+} from "../ui";
 import { launchChecks, lobbyKey, readiness, type LaunchCheck } from "./launchChecks";
 import { LobbyPreviewColumn, LobbyPreviewRow } from "./LobbyPreview";
 import { PullTemplateDialog } from "./templatePull";
@@ -438,7 +449,7 @@ function ScheduleDialog({
       canSubmit={opensAt !== null && !past}
       error={
         schedule.error ? (
-          <p className="text-[13px] text-danger">{transitionErrorMessage(schedule.error, t)}</p>
+          <ErrorText>{transitionErrorMessage(schedule.error, t)}</ErrorText>
         ) : null
       }
     >
@@ -470,7 +481,7 @@ function ScheduleDialog({
           autoFocus
         />
       )}
-      {past ? <p className="text-[13px] text-danger">{t("launch.schedule.past")}</p> : null}
+      {past ? <ErrorText>{t("launch.schedule.past")}</ErrorText> : null}
       <p className="text-sm text-fg-muted">
         {t("launch.when.scheduled")} {t(lobbyKey(evaluation.settings.lobby))}
       </p>

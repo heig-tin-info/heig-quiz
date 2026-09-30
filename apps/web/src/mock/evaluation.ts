@@ -579,7 +579,8 @@ export const EVAL_ROOM = "r1";
  * resolve to, which is what the screenshot script deep-links to.
  */
 evaluations.push(
-  makeEvaluation(EVAL_ROOM, "Quiz 0 — prise en main", "closed", 7, {
+  // Eight items: the eighth is the cloze, so the correction draws its blanks.
+  makeEvaluation(EVAL_ROOM, "Quiz 0 — prise en main", "closed", 8, {
     startedAt: iso(-20 * D),
     closedAt: iso(-20 * D + H),
   }),

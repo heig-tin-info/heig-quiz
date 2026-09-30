@@ -43,6 +43,7 @@ import {
   describe,
   gradeFromPoints,
   histogram,
+  isEvaluationOver,
   retakeRefusal,
   round2,
   type AttemptTally,
@@ -118,12 +119,8 @@ export class NotOver extends ResultsError {
   }
 }
 
-/** Closed, being graded or released: what the web calls `isGraded`. */
-function isOver(evaluation: EvaluationRecord): boolean {
-  return (
-    evaluation.state === "closed" || evaluation.state === "grading" || evaluation.state === "released"
-  );
-}
+/** Closed, being graded or released: the rule the web reads too (`isEvaluationOver`). */
+const isOver = (evaluation: EvaluationRecord): boolean => isEvaluationOver(evaluation.state);
 
 // --- The grade table ------------------------------------------------------
 
