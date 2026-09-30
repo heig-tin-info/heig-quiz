@@ -105,21 +105,23 @@ describe("LaunchStep checklist (#152)", () => {
     expect(screen.queryByText(/newer revision/i)).not.toBeInTheDocument();
   });
 
-  it("names negative marking and SEB only in the modes the server honours them", () => {
+  it("names negative marking, SEB and kiosk stations only in the modes the server honours them", () => {
     mockFetch({});
     const settings = {
       ...makeEvaluationDetail().evaluation.settings,
       negativeMarking: true,
       safeExamBrowser: true,
+      kiosk: true,
     };
     const { unmount } = render(withEvaluation({ settings }));
     expect(screen.getByText(/negative marking/i)).toBeInTheDocument();
-    expect(screen.getByText(/safe exam browser/i)).toBeInTheDocument();
+    expect(screen.getByText(/safe exam browser · kiosk stations/i)).toBeInTheDocument();
     unmount();
-    // A poll ignores both switches.
+    // A poll ignores the three switches.
     render(withEvaluation({ mode: "poll", settings }));
     expect(screen.queryByText(/negative marking/i)).toBeNull();
     expect(screen.queryByText(/safe exam browser/i)).toBeNull();
+    expect(screen.queryByText(/kiosk stations/i)).toBeNull();
   });
 
   it("warns on an empty roster, and blocks on a common end already past (#178)", async () => {

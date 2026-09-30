@@ -18,7 +18,7 @@ import { and, eq, getTableName, isNull, sql, type AnyColumn, type SQL } from "dr
 import type { PoolRole } from "@quiz/contracts";
 import { effectivePoolRole, ipAllowed, poolRoleAllows } from "@quiz/domain";
 
-import { delegated, type SessionAuth, type SessionState } from "../auth/session.js";
+import { confined, delegated, type SessionAuth, type SessionState } from "../auth/session.js";
 import type { Db } from "../db/client.js";
 import {
   answers,
@@ -40,7 +40,7 @@ import {
   STAFF_ROLES,
   users,
 } from "../db/schema.js";
-import { sebRequired } from "./evaluation/service.js";
+import { trustedClients } from "./evaluation/service.js";
 
 /**
  * THE access predicate, on a query that has `courses` in scope: a seat on
@@ -386,8 +386,8 @@ export type ClassroomPayload = "staff" | "student";
 
 /** The facts {@link classroomPayload} decides on, loaded in one query. */
 export interface ClassroomReadFacts {
-  /** A `seb` session (ADR-027): opened to sit one exam, it reads no classroom. */
-  seb: boolean;
+  /** A confined session (`seb` or `kiosk`, ADR-027, ADR-051): opened to sit one exam, it reads no classroom. */
+  confined: boolean;
   /** An impersonation session (ADR-034): somebody else acts as the user. */
   delegated: boolean;
   /** `staffAccess` holds on the classroom's course, or the caller has Super Powers. */
@@ -403,7 +403,7 @@ export interface ClassroomReadFacts {
  * null for the 404 of a missing classroom.
  *
  *   | session        | staff | seat | studentView | payload  |
- *   | seb            |   *   |  *   |      *      | 404      |
+ *   | seb, kiosk     |   *   |  *   |      *      | 404      |
  *   | impersonation  |   *   | yes  |      *      | student  |
  *   | impersonation  |   *   | no   |      *      | 404      |
  *   | portal/token   | yes   |  *   |     no      | staff    |
@@ -416,7 +416,7 @@ export interface ClassroomReadFacts {
  * else that account could otherwise reach (N-SEC-12).
  */
 export function classroomPayload(facts: ClassroomReadFacts): ClassroomPayload | null {
-  if (facts.seb) return null;
+  if (facts.confined) return null;
   if (facts.delegated) return facts.seat ? "student" : null;
   if (facts.staff) return facts.studentView ? "student" : "staff";
   return facts.seat ? "student" : null;
@@ -460,7 +460,7 @@ export async function findReadableClassroom(
     .limit(1);
   if (!row) return null;
   const payload = classroomPayload({
-    seb: auth?.kind === "seb",
+    confined: confined(auth),
     delegated: delegated(auth),
     staff: row.staff,
     seat: row.seat !== null,
@@ -777,25 +777,32 @@ export async function findReachableEvaluation(
 }
 
 /**
- * ADR-027: why this request may NOT sit `evaluation` — enter it, answer it,
- * watch it as a participant — or `null` when it may. A `seb` session sits its
- * own evaluation and nothing else; any other session sits every evaluation
- * that does not require Safe Exam Browser, staff included: a teacher
- * rehearses a SEB exam with its `.seb`, like a student. And nobody sits from
- * outside the room (F-EVAL-12): the IP allow-list holds on every sitting
- * request, not only at the entry. `staffWatch` is a staff member watching
- * somebody else (dashboard, inspector), which is not sitting. Checked after
- * the loaders of invariant 6; `seb` is answered with their 404.
+ * ADR-027, ADR-051 §2: why this request may NOT sit `evaluation` — enter it,
+ * answer it, watch it as a participant — or `null` when it may. THE rule of
+ * the trusted clients:
+ * - a confined session (`seb`, `kiosk`) sits its own evaluation and nothing
+ *   else, and only while that evaluation still accepts its kind;
+ * - any other session sits only an evaluation that accepts no trusted
+ *   client, staff included: a teacher rehearses a SEB exam with its `.seb`,
+ *   like a student;
+ * - nobody sits from outside the room (F-EVAL-12): the IP allow-list holds on
+ *   every sitting request, whatever the kind, not only at the entry.
+ * `staffWatch` is a staff member watching somebody else (dashboard,
+ * inspector), which is not sitting. Checked after the loaders of invariant 6;
+ * `client` is answered with their 404.
  */
 export function sitRefusal(
   req: FastifyRequest,
   evaluation: typeof evaluations.$inferSelect,
   staffWatch: boolean,
-): "seb" | "ip" | null {
-  const confinedTo = req.auth?.evaluationId ?? null;
-  if (confinedTo !== null ? confinedTo !== evaluation.id : !staffWatch && sebRequired(evaluation)) {
-    return "seb";
-  }
+): "client" | "ip" | null {
+  const clients = trustedClients(evaluation);
+  const auth = req.auth;
+  const refused =
+    auth?.evaluationId != null
+      ? auth.evaluationId !== evaluation.id || !clients.some((c) => c === auth.kind)
+      : !staffWatch && clients.length > 0;
+  if (refused) return "client";
   if (!staffWatch && !ipAllowed(evaluation.ipAllowlist, req.ip)) return "ip";
   return null;
 }

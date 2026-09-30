@@ -41,6 +41,7 @@ const card = (over: Partial<EvaluationCard>): EvaluationCard => ({
   deadlineAt: null,
   retakes: null,
   results: "none",
+  trustedClients: [],
   ...over,
 });
 
@@ -89,7 +90,7 @@ describe("the student home", () => {
 
   it("hands out the Safe Exam Browser file instead of opening an exam that requires it", async () => {
     mockFetch({
-      "GET /app/api/student/home": ok({ ...home, open: [card({ safeExamBrowser: true })] }),
+      "GET /app/api/student/home": ok({ ...home, open: [card({ trustedClients: ["seb"] })] }),
       "GET /app/api/student/classrooms": ok([]),
     });
     const assign = vi.fn();
@@ -113,7 +114,7 @@ describe("the student home", () => {
 
   it("closes the Safe Exam Browser instructions without downloading", async () => {
     mockFetch({
-      "GET /app/api/student/home": ok({ ...home, open: [card({ safeExamBrowser: true })] }),
+      "GET /app/api/student/home": ok({ ...home, open: [card({ trustedClients: ["seb"] })] }),
       "GET /app/api/student/classrooms": ok([]),
     });
     const assign = vi.fn();
@@ -124,6 +125,29 @@ describe("the student home", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(assign).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+
+  it("keeps the Safe Exam Browser button on an exam that also accepts kiosk stations", async () => {
+    mockFetch({
+      "GET /app/api/student/home": ok({ ...home, open: [card({ trustedClients: ["seb", "kiosk"] })] }),
+      "GET /app/api/student/classrooms": ok([]),
+    });
+    render();
+    expect(await screen.findByRole("button", { name: "Ouvrir dans Safe Exam Browser" })).toBeInTheDocument();
+    expect(screen.queryByText(/poste kiosque/)).toBeNull();
+  });
+
+  it("opens nothing on an exam sat on a kiosk station only, and says where to sit it (ADR-051)", async () => {
+    mockFetch({
+      "GET /app/api/student/home": ok({ ...home, open: [card({ trustedClients: ["kiosk"] })] }),
+      "GET /app/api/student/classrooms": ok([]),
+    });
+    const { navigate } = render();
+    const line = await screen.findByText(
+      "Passez cet examen sur un poste kiosque : scannez le code affiché sur le poste.",
+    );
+    expect(within(line.closest("div.rounded-card") as HTMLElement).queryByRole("button")).toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it("says “resume” on an attempt already started", async () => {

@@ -1,11 +1,11 @@
 /** Portal API client: session cookies + double-submit CSRF header. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { Me, MePatch } from "@quiz/contracts";
+import type { Me, MePatch, PublicConfig } from "@quiz/contracts";
 
 import type { Dict } from "./i18n/en";
 import { translateNow } from "./i18n/current";
-import { meKey } from "./queryKeys";
+import { configKey, meKey } from "./queryKeys";
 
 function csrfToken(): string {
   return (
@@ -76,6 +76,19 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
   const body = err.body as { error?: string; message?: string } | null;
   const worded = body?.error ? WORDED[body.error] : undefined;
   return worded ? translateNow(worded) : (body?.message ?? fallback);
+}
+
+/**
+ * The public configuration (`/app/api/config`), the one unauthenticated
+ * endpoint. A failure is not an error state for its readers: each falls back
+ * to what the platform does without the option.
+ */
+export function usePublicConfig() {
+  return useQuery<PublicConfig>({
+    queryKey: configKey,
+    queryFn: () => api<PublicConfig>("/app/api/config"),
+    retry: false,
+  });
 }
 
 /** Current session, or null when signed out (401). */

@@ -15,6 +15,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -22,6 +23,7 @@ import { SESSION_KINDS } from "@quiz/contracts";
 
 import { bytea } from "./columns.js";
 import { evaluations } from "./evaluation.js";
+import { kioskDevices } from "./kiosk.js";
 
 /**
  * The stored roles that make an account staff: the ones that may reach a
@@ -89,7 +91,10 @@ export const sessions = pgTable(
     kind: text("kind", { enum: SESSION_KINDS }).notNull().default("portal"),
     /** Who acts through the session when it is not `user_id` themself; null otherwise. */
     actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "cascade" }),
-    /** The one evaluation a `seb` session is confined to; null on a `portal` one. */
+    /**
+     * The one evaluation a confined session (`seb`, `kiosk`) is confined to;
+     * null on a `portal` or `impersonation` one.
+     */
     evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
     /**
      * The end of this session's Super Powers (ADR-054): an admin's portal
@@ -98,8 +103,21 @@ export const sessions = pgTable(
      * renewal never touches it; signing out deletes it with the row.
      */
     superPowersUntil: timestamp("super_powers_until", { withTimezone: true }),
+    /**
+     * The station a `kiosk` session sits on (ADR-051 §7); null on every other
+     * kind. At most one session per station: the partial unique index.
+     */
+    deviceId: uuid("device_id").references(() => kioskDevices.id, { onDelete: "cascade" }),
+    /**
+     * The Config Key a `seb` session was launched with (ADR-051 §3), hex, to
+     * check the header of every later request; null on every other kind.
+     */
+    sebConfigKey: char("seb_config_key", { length: 64 }),
   },
-  (t) => [index("sessions_expires_idx").on(t.expiresAt)],
+  (t) => [
+    index("sessions_expires_idx").on(t.expiresAt),
+    uniqueIndex("sessions_device_idx").on(t.deviceId).where(sql`${t.deviceId} IS NOT NULL`),
+  ],
 );
 
 /**

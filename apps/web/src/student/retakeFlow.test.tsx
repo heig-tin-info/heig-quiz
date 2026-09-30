@@ -151,6 +151,7 @@ function card(canRetake: boolean, keep: Keep = "best"): EvaluationCard {
       kept: { attemptId: FIRST, attemptNumber: 1, score: { points: 1, totalPoints: 1, pending: false } },
     },
     results: "pending",
+    trustedClients: [],
   };
 }
 

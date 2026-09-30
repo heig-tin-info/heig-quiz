@@ -210,15 +210,26 @@ export function negativeMarkingAllowedFor(mode: EvaluationModeName): boolean {
   return mode !== "poll";
 }
 
+/** A confined client an exam may require (ADR-051): Safe Exam Browser, or a kiosk station. */
+export type TrustedClient = "seb" | "kiosk";
+
 /**
- * Whether this evaluation is sat in Safe Exam Browser only (ADR-027): an
- * exam's switch, inert on any other mode whatever its row says.
+ * The trusted clients an evaluation accepts (ADR-027, ADR-051 §2), in this
+ * order: `seb`, then `kiosk`. Empty means the evaluation is sat in the
+ * portal; otherwise ONLY through one of the kinds listed. Both switches are
+ * an exam's, inert on any other mode whatever its row says. The one reader
+ * of whether they are IN FORCE: every rule that depends on them (who sits,
+ * the `.seb`, the student's card, the launch summary) asks this.
  */
-export function safeExamBrowserOn(
+export function trustedClientsOf(
   mode: EvaluationModeName,
-  safeExamBrowser: boolean | undefined,
-): boolean {
-  return mode === "exam" && safeExamBrowser === true;
+  settings: { safeExamBrowser?: boolean | undefined; kiosk?: boolean | undefined },
+): TrustedClient[] {
+  if (mode !== "exam") return [];
+  const clients: TrustedClient[] = [];
+  if (settings.safeExamBrowser === true) clients.push("seb");
+  if (settings.kiosk === true) clients.push("kiosk");
+  return clients;
 }
 
 /**

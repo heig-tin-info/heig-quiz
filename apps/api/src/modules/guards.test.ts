@@ -16,7 +16,7 @@ import {
 } from "./guards.js";
 
 const facts = (over: Partial<ClassroomReadFacts>): ClassroomReadFacts => ({
-  seb: false,
+  confined: false,
   delegated: false,
   staff: false,
   seat: false,
@@ -26,11 +26,11 @@ const facts = (over: Partial<ClassroomReadFacts>): ClassroomReadFacts => ({
 
 const bools = [false, true];
 /** Every combination of the five facts. */
-const every: ClassroomReadFacts[] = bools.flatMap((seb) =>
+const every: ClassroomReadFacts[] = bools.flatMap((confined) =>
   bools.flatMap((delegated) =>
     bools.flatMap((staff) =>
       bools.flatMap((seat) =>
-        bools.map((studentView) => ({ seb, delegated, staff, seat, studentView })),
+        bools.map((studentView) => ({ confined, delegated, staff, seat, studentView })),
       ),
     ),
   ),
@@ -65,8 +65,8 @@ describe("classroomPayload", () => {
     }
   });
 
-  it("refuses every seb session", () => {
-    for (const f of every.filter((f) => f.seb)) expect(classroomPayload(f)).toBeNull();
+  it("refuses every confined session (seb, kiosk)", () => {
+    for (const f of every.filter((f) => f.confined)) expect(classroomPayload(f)).toBeNull();
   });
 });
 

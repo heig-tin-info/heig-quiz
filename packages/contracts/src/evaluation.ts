@@ -119,6 +119,17 @@ export const negativeMarkingOf = (settings: { negativeMarking?: boolean | undefi
 export const safeExamBrowserOf = (settings: { safeExamBrowser?: boolean | undefined }): boolean =>
   settings.safeExamBrowser === true;
 
+/**
+ * A confined client an exam may require (ADR-051 §2): Safe Exam Browser or a
+ * kiosk station — the confined session kinds. `trustedClientsOf`
+ * (`@quiz/domain`) computes an evaluation's list.
+ */
+export const TrustedClient = z.enum(["seb", "kiosk"]);
+export type TrustedClient = z.infer<typeof TrustedClient>;
+
+/** The kiosk-station switch of an evaluation's settings (ADR-051); absent is off. */
+export const kioskOf = (settings: { kiosk?: boolean | undefined }): boolean => settings.kiosk === true;
+
 /** A stored evaluation without the field: one attempt, as before #92. */
 const defaultRetakes = (): RetakeSettings => ({
   enabled: false,
@@ -167,9 +178,19 @@ export const EvaluationSettings = z.object({
    * ADR-027 (#139): the evaluation is sat in Safe Exam Browser only. A
    * student launches it from the portal with a one-time `.seb` file; a
    * portal session cannot sit it. Absent means off: read it through
-   * {@link safeExamBrowserOf}, never raw.
+   * {@link safeExamBrowserOf}, never raw. Whether it is IN FORCE is
+   * `trustedClientsOf` (`@quiz/domain`), with {@link EvaluationSettings.kiosk}.
    */
   safeExamBrowser: z.boolean().optional(),
+  /**
+   * ADR-051 §2: the evaluation may be sat on one of the school's attested
+   * kiosk stations, paired from the student's phone. With
+   * {@link EvaluationSettings.safeExamBrowser} it forms the exam's trusted
+   * clients (`trustedClientsOf`, `@quiz/domain`): either or both. An exam's
+   * switch, inert on any other mode. Absent means off: read it through
+   * {@link kioskOf}, never raw.
+   */
+  kiosk: z.boolean().optional(),
   /**
    * ADR-041 §2 (#317): the questions of this evaluation become drill cards —
    * at the release of an exam, at the hand-in of an exercise — when its
@@ -417,6 +438,7 @@ export const EvaluationSettingsPatch = z.object({
   negativeMarking: z.boolean().optional(),
   categorizePolicy: CategorizePolicy.optional(),
   safeExamBrowser: z.boolean().optional(),
+  kiosk: z.boolean().optional(),
   poll: EvaluationSettings.shape.poll,
 });
 export type EvaluationSettingsPatch = z.infer<typeof EvaluationSettingsPatch>;

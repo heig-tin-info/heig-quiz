@@ -61,7 +61,7 @@ export {
   templateRevisionsOf,
   gradeDefaults,
   negativeMarkingEnabled,
-  sebRequired,
+  trustedClients,
   drillAllowed,
   attemptCount,
   joinedItems,

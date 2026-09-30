@@ -27,6 +27,7 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
 /**
  * `negative`: every evaluation of the mock scores its choice questions negatively (ADR-026).
  * `impersonating`: the session is an admin acting as this persona, read-only (ADR-034).
+ * `kiosk`: the open exam of the student's home is sat on a kiosk station (ADR-051).
  * `reviewed`: the student already did today's drill, the empty day (`mock/drill.ts`).
  * `unlinked`: the persona has no linked GitHub account (`mock/github.ts`).
  * `journal`: the classroom PRG1-2026 has a journal (`mock/journal.ts`).
@@ -42,6 +43,7 @@ export const FLAG_NAMES = [
   "negative",
   "impersonating",
   "seb",
+  "kiosk",
   "reviewed",
   "unlinked",
   "journal",

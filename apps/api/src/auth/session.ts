@@ -30,7 +30,7 @@ export function newToken(): string {
  * What a session is, as the rest of the API sees it (ADR-027); modules read
  * this, never the columns. `actorUserId` is null when the user acts for
  * themself (set on an `impersonation` session, ADR-034); `evaluationId` is
- * set on a `seb` session only.
+ * set on a confined session only (`seb`, `kiosk`: ADR-027, ADR-051).
  */
 export interface SessionAuth {
   kind: SessionKind;
@@ -103,14 +103,30 @@ export const delegated = (auth: Pick<SessionAuth, "actorUserId"> | null): boolea
   (auth?.actorUserId ?? null) !== null;
 
 /**
+ * A confined session (ADR-027, ADR-051): `seb` or `kiosk`, opened to sit ONE
+ * evaluation, `evaluationId`, and nothing else.
+ */
+export const confined = (auth: Pick<SessionAuth, "kind"> | null): boolean =>
+  auth?.kind === "seb" || auth?.kind === "kiosk";
+
+/**
  * The lifetime of each kind: fixed hours, never renewed — or null for
  * SESSION_TTL_HOURS with sliding renewal. A `seb` session outlives any sitting;
- * an `impersonation` one is an hour of looking over a student's shoulder (ADR-034).
+ * a `kiosk` one is as long but ends with its attempt (ADR-051 §4, §7); an
+ * `impersonation` one is an hour of looking over a student's shoulder (ADR-034).
  */
-const FIXED_HOURS: Record<SessionKind, number | null> = { portal: null, seb: 6, impersonation: 1 };
+const FIXED_HOURS: Record<SessionKind, number | null> = {
+  portal: null,
+  seb: 6,
+  impersonation: 1,
+  kiosk: 6,
+};
 
-/** The route config of the routes a `seb` session may call: sitting its evaluation. */
-export const SITTING = { sessions: ["portal", "seb"] } as const;
+/**
+ * The route config of the routes a confined session (`seb`, `kiosk`) may
+ * call: sitting its evaluation (ADR-027 §3, ADR-051 §1).
+ */
+export const SITTING = { sessions: ["portal", "seb", "kiosk"] } as const;
 
 /**
  * Whether a route declaring `routeKinds` (absent: `portal` only) serves a

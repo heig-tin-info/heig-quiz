@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-import { CategorizePolicy, categorizePolicyOf, McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
+import { CategorizePolicy, categorizePolicyOf, kioskOf, McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
 import { allowedFeedbackWhen, feedbackWhenFor, isInClass } from "@quiz/domain";
 
+import { usePublicConfig } from "../api";
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import { Button, Card, Segmented, Select, SettingRow, Switch } from "../ui";
@@ -47,6 +48,8 @@ export function AdvancedDisclosure({
   const t = useT();
   const [open, setOpen] = useState(false);
   const { settings, feedbackPolicy, mode, mcqPolicy } = config;
+  // ADR-051: the kiosk path exists on this platform (`KIOSK_ATTESTATION`).
+  const kioskOffered = usePublicConfig().data?.kiosk === true;
 
   const set = (next: Partial<EvaluationSettings>) => patch.mutate({ settings: next });
   const feedback = (next: Partial<FeedbackPolicy>) => patch.mutate({ feedbackPolicy: next });
@@ -288,6 +291,20 @@ export function AdvancedDisclosure({
               disabled={disabled}
               label={t("eval.seb")}
               onChange={(safeExamBrowser) => set({ safeExamBrowser })}
+            />
+          </SettingRow>
+        ) : null}
+
+        {/* ADR-051 §2: an exam sat on the school's kiosk stations — offered
+            where the kiosk path exists, and kept in sight where it is on,
+            so it can always be turned off. */}
+        {mode === "exam" && (kioskOffered || kioskOf(settings)) ? (
+          <SettingRow title={t("eval.kiosk")} desc={t("eval.kiosk.desc")}>
+            <Switch
+              checked={kioskOf(settings)}
+              disabled={disabled}
+              label={t("eval.kiosk")}
+              onChange={(kiosk) => set({ kiosk })}
             />
           </SettingRow>
         ) : null}

@@ -8,8 +8,8 @@ import {
   isConfigFieldWritable,
   negativeMarkingAllowedFor,
   negativeMarkingOn,
-  safeExamBrowserOn,
   scoresNegatively,
+  trustedClientsOf,
 } from "./evaluationConfig.js";
 import { EVALUATION_STATES } from "./itemList.js";
 
@@ -60,12 +60,19 @@ describe("configLock (#86)", () => {
   });
 });
 
-describe("Safe Exam Browser (ADR-027)", () => {
-  it("is on only when set on an exam", () => {
-    expect(safeExamBrowserOn("exam", true)).toBe(true);
-    expect(safeExamBrowserOn("exam", undefined)).toBe(false);
-    expect(safeExamBrowserOn("exercise", true)).toBe(false);
-    expect(safeExamBrowserOn("poll", true)).toBe(false);
+describe("trusted clients (ADR-027, ADR-051 §2)", () => {
+  it("lists what an exam accepts, SEB first", () => {
+    expect(trustedClientsOf("exam", {})).toEqual([]);
+    expect(trustedClientsOf("exam", { safeExamBrowser: false, kiosk: false })).toEqual([]);
+    expect(trustedClientsOf("exam", { safeExamBrowser: true })).toEqual(["seb"]);
+    expect(trustedClientsOf("exam", { kiosk: true })).toEqual(["kiosk"]);
+    expect(trustedClientsOf("exam", { kiosk: true, safeExamBrowser: true })).toEqual(["seb", "kiosk"]);
+  });
+
+  it("is empty on any other mode, whatever the row says", () => {
+    for (const mode of ["exercise", "poll"] as const) {
+      expect(trustedClientsOf(mode, { safeExamBrowser: true, kiosk: true })).toEqual([]);
+    }
   });
 });
 

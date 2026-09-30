@@ -1,10 +1,9 @@
 import { lazy, Suspense, useEffect, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { LogOut } from "lucide-react";
 
-import type { Me, PublicConfig } from "@quiz/contracts";
+import type { Me } from "@quiz/contracts";
 
-import { api, useMe } from "./api";
+import { useMe, usePublicConfig } from "./api";
 import { Logo } from "./Header";
 import { type Dict, useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
@@ -21,7 +20,6 @@ import {
   useStudentView,
 } from "./studentView";
 import { Button, Card, EmptyState, ErrorText, LinkButton, setDateFormat, Spinner } from "./ui";
-import { configKey } from "./queryKeys";
 
 // One chunk per page: a student never downloads the teacher UI and vice versa.
 const TeacherHome = lazy(() => import("./TeacherHome").then((m) => ({ default: m.TeacherHome })));
@@ -129,11 +127,7 @@ function Landing() {
   const refused = REFUSALS.find(([param]) => search.has(param))?.[1] ?? null;
   // The one unauthenticated endpoint. A failure is not an error state here:
   // the OIDC button is the real door and it is always there.
-  const config = useQuery<PublicConfig>({
-    queryKey: configKey,
-    queryFn: () => api("/app/api/config"),
-    retry: false,
-  });
+  const config = usePublicConfig();
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-115 rounded-card border border-line bg-surface px-8 py-10 text-center">
@@ -368,11 +362,13 @@ function SignedOut({ route, navigate }: { route: Route; navigate: (r: Route) => 
 }
 
 /**
- * ADR-027: what a `seb` session shows outside its evaluation — after the
- * submit, or on leaving the waiting room. Safe Exam Browser is closed from its
- * own frame; the one action here is going back to the exam.
+ * ADR-027, ADR-051 §7: what a confined session (`seb`, `kiosk`) shows outside
+ * its evaluation — after the submit, or on leaving the waiting room. Safe
+ * Exam Browser is closed from its own frame; the one action here is going
+ * back to the exam. (The kiosk page, ADR-051 step 6, returns to `/kiosk` on
+ * its own and is not expected to land here.)
  */
-function SebElsewhere({ onBack }: { onBack: () => void }) {
+function ConfinedElsewhere({ onBack }: { onBack: () => void }) {
   const t = useT();
   return (
     <main className="mx-auto w-full max-w-160 px-4 py-16 sm:px-6">
@@ -474,7 +470,7 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
         {renderPage({ view: "attempt", evaluationId: confinedTo }, { me: me.data, navigate, teacherUi: false })}
       </Suspense>
     ) : (
-      <SebElsewhere onBack={() => navigate({ view: "attempt", evaluationId: confinedTo })} />
+      <ConfinedElsewhere onBack={() => navigate({ view: "attempt", evaluationId: confinedTo })} />
     );
   }
   const shown: Route = onTeacherRoute ? { view: "home" } : route;

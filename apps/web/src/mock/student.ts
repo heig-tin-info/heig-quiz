@@ -457,8 +457,9 @@ const studentHome = (): StudentHomeData => {
         deadlineAt: scene === "lobby" ? null : new Date(studentDeadline).toISOString(),
         retakes: null,
         results: "pending",
-        // Issue #270: `?seb=1` makes this exam a Safe Exam Browser one.
-        ...(flags.seb ? { safeExamBrowser: true } : {}),
+        // Issue #270: `?seb=1` makes this exam a Safe Exam Browser one;
+        // ADR-051: `?kiosk=1` a kiosk-station one (both: either).
+        trustedClients: [...(flags.seb ? ["seb" as const] : []), ...(flags.kiosk ? ["kiosk" as const] : [])],
       },
       {
         id: STUDENT_EVAL_RETAKE,
@@ -487,6 +488,7 @@ const studentHome = (): StudentHomeData => {
         },
         // Between two attempts the page is score only (ADR-025).
         results: "pending",
+        trustedClients: [],
       },
     ],
     upcoming: [
@@ -506,6 +508,7 @@ const studentHome = (): StudentHomeData => {
         deadlineAt: null,
         retakes: null,
         results: "none",
+        trustedClients: [],
       },
     ],
     past: [
@@ -527,6 +530,7 @@ const studentHome = (): StudentHomeData => {
         deadlineAt: iso(-5 * 60_000),
         retakes: null,
         results: "pending",
+        trustedClients: [],
       },
       {
         id: STUDENT_EVAL_PAST,
@@ -544,6 +548,7 @@ const studentHome = (): StudentHomeData => {
         deadlineAt: null,
         retakes: null,
         results: "available",
+        trustedClients: [],
       },
     ],
     serverNow: new Date().toISOString(),

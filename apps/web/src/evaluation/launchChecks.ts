@@ -21,15 +21,15 @@
 import {
   negativeMarkingOf,
   retakesOf,
-  safeExamBrowserOf,
   type EvaluationDetail,
 } from "@quiz/contracts";
 import {
   lacksGradedPoints,
   negativeMarkingOn,
   retakesOn,
-  safeExamBrowserOn,
   templatePullable,
+  type TrustedClient,
+  trustedClientsOf,
 } from "@quiz/domain";
 
 import type { Dict, TFunction } from "../i18n";
@@ -250,13 +250,14 @@ function rulesCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
   };
 }
 
+const TRUSTED_CLIENT_KEY: Record<TrustedClient, keyof Dict> = { seb: "eval.seb", kiosk: "eval.kiosk" };
+
 function accessCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
   const { evaluation } = detail;
   const parts = [
     ...(evaluation.ipAllowlist.length > 0 ? [t("launch.access.ip")] : []),
-    ...(safeExamBrowserOn(evaluation.mode, safeExamBrowserOf(evaluation.settings))
-      ? [t("eval.seb")]
-      : []),
+    // ADR-051 §2: the trusted clients it is sat through, SEB then kiosk.
+    ...trustedClientsOf(evaluation.mode, evaluation.settings).map((client) => t(TRUSTED_CLIENT_KEY[client])),
   ];
   return {
     id: "access",

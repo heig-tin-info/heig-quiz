@@ -118,3 +118,49 @@ describe("the categorize policy setting", () => {
     expect(screen.queryByRole("radiogroup", { name: "Categorize scoring" })).toBeNull();
   });
 });
+
+/* ADR-051 §2: kiosk stations, an exam's second trusted client, under SEB. */
+describe("the kiosk-station setting", () => {
+  const exam = (kiosk?: boolean): EvaluationDetail => {
+    const detail = withMode("exam");
+    return kiosk === undefined
+      ? detail
+      : { ...detail, evaluation: { ...detail.evaluation, settings: { ...detail.evaluation.settings, kiosk } } };
+  };
+  const config = (kiosk: boolean) => ({ "GET /app/api/config": ok({ devLogin: false, kiosk }) });
+
+  it("is offered on an exam where the kiosk path exists, and sends the switch alone", async () => {
+    const detail = exam();
+    const { calls } = mockFetch({ ...config(true), [PATCH]: ok(detail) });
+    renderWithProviders(<Harness detail={detail} />);
+    await open();
+    const toggle = await screen.findByRole("switch", { name: "Kiosk stations" });
+    expect(toggle).not.toBeChecked();
+    // Beside Safe Exam Browser, not instead of it.
+    expect(screen.getByRole("switch", { name: "Safe Exam Browser" })).toBeInTheDocument();
+    await userEvent.click(toggle);
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ settings: { kiosk: true } }),
+    );
+  });
+
+  it("is not offered where the platform has no kiosk path, nor on an exercise", async () => {
+    mockFetch(config(false));
+    const { unmount } = renderWithProviders(<Harness detail={exam()} />);
+    await open();
+    await waitFor(() => expect(screen.getByRole("switch", { name: "Safe Exam Browser" })).toBeInTheDocument());
+    expect(screen.queryByRole("switch", { name: "Kiosk stations" })).toBeNull();
+    unmount();
+    mockFetch(config(true));
+    renderWithProviders(<Harness detail={withMode("exercise")} />);
+    await open();
+    expect(screen.queryByRole("switch", { name: "Kiosk stations" })).toBeNull();
+  });
+
+  it("stays in sight while it is on, so it can be turned off, even without the kiosk path", async () => {
+    mockFetch(config(false));
+    renderWithProviders(<Harness detail={exam(true)} />);
+    await open();
+    expect(screen.getByRole("switch", { name: "Kiosk stations" })).toBeChecked();
+  });
+});

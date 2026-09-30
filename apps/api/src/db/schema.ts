@@ -17,3 +17,4 @@ export * from "./notifications.js";
 export * from "./drill.js";
 export * from "./journal.js";
 export * from "./system.js";
+export * from "./kiosk.js";
