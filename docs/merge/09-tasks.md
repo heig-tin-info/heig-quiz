@@ -261,6 +261,32 @@ files it ports; writes en + fr for every string.
   source is derived from `github_org_id`
   (`avatars.githubusercontent.com/u/<id>`), or kept in a column this task
   adds if it chooses to store it.
+- **As delivered** (#404): `Q:modules/github/{routes,service,events}.ts`,
+  registered in `app.ts` only when `githubApp(config)` is non-null (as the
+  kiosk plugin), so without an App no route exists. Choices the next tasks
+  inherit:
+  - Routes: `GET /app/api/github/orgs` (teacher role, 403 otherwise);
+    `GET|PUT|DELETE /app/api/classrooms/:id/github` (session +
+    `accessibleClassroom`: 404 off the staff; PUT answers the
+    `GithubClassroom`, DELETE 204; 409 `journal_attached` (D28) or
+    `app_not_installed`, `GITHUB_CONNECT_REFUSALS`, worded in `api.ts`);
+    `GET /setup/github/installed` (`GithubSetupQuery`; 303 to
+    `/classrooms/<state>/settings` when `state` is a uuid, `/` otherwise);
+    `GET /app/api/github/orgs/:id/avatar`.
+  - Healing and the listing are cached in memory `HEAL_TTL_MS` (60 s) per
+    organization; the setup return drops the cache. The listing is
+    authoritative: an installation GitHub no longer lists is cleared.
+  - `recordInstallation(db, installation, via)` (service) is the one writer
+    of an installed organization (create, follow a rename by id, audit):
+    M2-04's `installation` handler calls it. Adapters gained
+    `fetchInstallation`, `listInstallations` and an optional `ReadOptions`
+    (`HTTP_READ` = `noRateLimitWait`) on the four HTTP-read adapters.
+  - Avatar derived, not stored: fetched from `avatars.githubusercontent.com`
+    (`redirect: "error"`, 5 s, PNG/JPEG/GIF/WebP whose bytes match, 256 KB
+    cap), cached in memory 24 h (10 min for a failure, 500 entries).
+  - Audit: `github_org.link|unlink|installation_resolved|installation_deleted|renamed|deleted`.
+  - SSE: the setup return hints `classrooms` on `course:<id>` (the linked
+    classrooms' courses and `state`'s), never `classroom:`.
 
 ### M2-03 — GitHub account linking
 - **Depends on**: M2-01. ‖ M2-02.
