@@ -32,6 +32,31 @@ const HOP_RE = new RegExp(`\\s*(->|--)\\s*(${ID})`, "gu");
 const NODE_RE = new RegExp(`^(${ID})\\s*(?:\\[(.*)\\])?$`, "u");
 
 /** A line cut at its semicolons, those outside quotes: one pass. */
+/* Both passes below read the whole text in one scan and keep its newlines, so a
+   line number still names the line typed: a regular expression for either was
+   quadratic on a pasted run of blank lines or of unclosed comments (ADR-046 review). */
+function stripBlockComments(text: string): string {
+  let out = "";
+  for (let i = 0; ; ) {
+    const open = text.indexOf("/*", i);
+    if (open < 0) return out + text.slice(i);
+    const close = text.indexOf("*/", open + 2);
+    if (close < 0) return out + text.slice(open);
+    out += text.slice(i, open) + text.slice(open, close + 2).replace(/[^\n]/g, "");
+    i = close + 2;
+  }
+}
+
+/** The `[strict] [di]graph name {` header, at the start of a line before the first brace, becomes a break. */
+function cutHeader(text: string): string {
+  const brace = text.indexOf("{");
+  if (brace < 0) return text;
+  const m = /(^|\n)[ \t\r]*(?:strict[ \t\r\n]+)?(?:di)?graph\b/i.exec(text.slice(0, brace));
+  if (!m) return text;
+  const start = m.index + (m[1] ?? "").length;
+  return text.slice(0, start) + ";" + text.slice(start, brace + 1).replace(/[^\n]/g, "") + text.slice(brace + 1);
+}
+
 function statementsOf(line: string): string[] {
   const out: string[] = [];
   let quoted = false;
@@ -62,10 +87,8 @@ export function parseDot(text: string, kind: "automaton" | "graph"): Parsed {
 
   /* statements: split on newlines and on semicolons outside quotes */
   const statements: Array<{ s: string; line: number }> = [];
-  text
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    /* the header and the braces are statement breaks, so a graph may sit on one line */
-    .replace(/^\s*(strict\s+)?(di)?graph\b[^{]*\{/im, ";")
+  /* the header and the braces are statement breaks, so a graph may sit on one line */
+  cutHeader(stripBlockComments(text))
     .replace(/[{}]/g, ";")
     .split("\n")
     .forEach((raw, i) => {
