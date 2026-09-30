@@ -1,9 +1,9 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import type { ByQuestion } from "@quiz/contracts";
 import { clozeStudentTemplate, parseCloze } from "@quiz/domain/cloze";
 
+import { byQuestionItem, makeByQuestion } from "../test/grading-fixtures";
 import { renderWithProviders } from "../test/render";
 import { ByQuestionView } from "./ByQuestionView";
 
@@ -13,30 +13,8 @@ import { ByQuestionView } from "./ByQuestionView";
  * scale, always revealed — and the type's own review for any other question.
  */
 
-function question(over: Partial<ByQuestion> & Pick<ByQuestion, "item">): ByQuestion {
-  return {
-    papers: 0,
-    student: null,
-    solution: null,
-    explanation: null,
-    outcomes: { correct: 0, partial: 0, wrong: 0, blank: 0 },
-    distribution: [],
-    casePassRate: [],
-    successRate: null,
-    avgMs: null,
-    ...over,
-  };
-}
-
-const item = (position: number, type: string) => ({
-  id: `i${position}`,
-  position,
-  internalName: `q-${position}`,
-  type,
-  points: 1,
-  bonus: false,
-  successRate: null,
-});
+const question = makeByQuestion;
+const item = byQuestionItem;
 
 const MCQ = question({
   item: item(0, "mcq"),

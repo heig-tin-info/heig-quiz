@@ -13,6 +13,7 @@ import type {
 import App from "./App";
 import { resetEventStream } from "./realtime/useEventStream";
 import { elapse, flowingClock } from "./test/clock";
+import { makeMe } from "./test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "./test/render";
 
 /*
@@ -36,20 +37,16 @@ import { mockFetch, ok, renderWithProviders } from "./test/render";
 
 const EVAL = "11111111-1111-4111-8111-111111111111";
 
-const me: Me = {
+const me: Me = makeMe({
   id: "33333333-3333-4333-8333-333333333333",
   email: "lea.rochat@heig-vd.ch",
   givenName: "Léa",
   familyName: "Rochat",
   role: "student",
   lastLoginAt: null,
-  avatarUrl: null,
-  hasUploadedAvatar: false,
   locale: "fr",
   dateFormat: null,
-  mcqPolicy: null,
-  coach: { enabled: false, seen: [] },
-};
+});
 
 const lobby: AttemptOrLobby = {
   kind: "lobby",

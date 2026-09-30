@@ -2,10 +2,9 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ByQuestion } from "@quiz/contracts";
 import { clozeStudentTemplate, parseCloze } from "@quiz/domain/cloze";
 
-import { makeEvaluationDetail } from "../test/grading-fixtures";
+import { byQuestionItem, makeByQuestion, makeEvaluationDetail } from "../test/grading-fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { BAR_TONES } from "../ui";
 import { CorrectionProjection } from "./CorrectionProjection";
@@ -18,31 +17,10 @@ import { CorrectionProjection } from "./CorrectionProjection";
 
 const BY_QUESTION = "/app/api/evaluations/e1/results/by-question";
 
-function question(over: Partial<ByQuestion> & Pick<ByQuestion, "item">): ByQuestion {
-  return {
-    papers: 0,
-    student: null,
-    solution: null,
-    explanation: null,
-    outcomes: { correct: 0, partial: 0, wrong: 0, blank: 0 },
-    distribution: [],
-    casePassRate: [],
-    successRate: null,
-    avgMs: null,
-    ...over,
-  };
-}
-
-const item = (position: number, type: string) => ({
-  id: `i${position}`,
-  position,
-  // Never on the wall (invariant 4): only the number and the type are.
-  internalName: `secret-name-${position}`,
-  type,
-  points: 1,
-  bonus: false,
-  successRate: null,
-});
+const question = makeByQuestion;
+// Never on the wall (invariant 4): only the number and the type are.
+const item = (position: number, type: string) =>
+  byQuestionItem(position, type, `secret-name-${position}`);
 
 const MCQ = question({
   item: item(0, "mcq"),
