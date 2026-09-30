@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { makeResultsView } from "../test/grading-fixtures";
+import { makeEvaluationDetail, makeResultsView } from "../test/grading-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { ResultsView } from "./ResultsView";
 
@@ -97,5 +97,29 @@ describe("ResultsView", () => {
     renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
     expect(await screen.findByText("No grade yet")).toBeVisible();
     expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("offers the projection in the header once the evaluation is over", async () => {
+    const navigate = vi.fn();
+    mockFetch({
+      [`GET ${VIEW}`]: ok(makeResultsView()),
+      "GET /app/api/evaluations/e1": ok(makeEvaluationDetail()),
+    });
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={navigate} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Present" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "correction", evaluationId: "e1" });
+  });
+
+  it("offers no projection while the evaluation runs, the server would refuse it", async () => {
+    const running = makeEvaluationDetail();
+    running.evaluation.state = "running";
+    mockFetch({
+      [`GET ${VIEW}`]: ok(makeResultsView()),
+      "GET /app/api/evaluations/e1": ok(running),
+    });
+    renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Results" });
+    await waitFor(() => expect(screen.getByRole("button", { name: /Grading panel/ })).toBeVisible());
+    expect(screen.queryByRole("button", { name: "Present" })).toBeNull();
   });
 });

@@ -784,6 +784,13 @@ const scenes = [
   { name: "results", role: "teacher", path: "/evaluations/closed/results" },
   { name: "results-released", role: "teacher", path: "/evaluations/released/results" },
   { name: "results-questions", role: "teacher", path: "/evaluations/closed/results?tab=questions", settle: 2500 },
+  // The correction on a beamer (ADR-033): hidden, revealed (R), and walked
+  // down to the cloze, the eighth question, whose blanks carry their bars.
+  { name: "correction", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: (p) => projectNext(p, 1) },
+  { name: "correction-revealed", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: async (p) => { await projectNext(p, 1); await p.keyboard.press("r"); } },
+  { name: "correction-code-revealed", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: (p) => p.keyboard.press("r") },
+  { name: "correction-cloze", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: (p) => projectNext(p, 7) },
+  { name: "correction-cloze-revealed", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: async (p) => { await projectNext(p, 7); await p.keyboard.press("r"); } },
   { name: "results-release-confirm", role: "teacher", path: "/evaluations/closed/results", fold: true, act: (p) => p.getByRole("button", { name: /publish results|publier les résultats/i }).first().click() },
   { name: "results-empty", role: "teacher", path: "/evaluations/closed/results?empty=1", settle: 800 },
   { name: "results-error", role: "teacher", path: "/evaluations/closed/results?fail=1", settle: 2500 },
@@ -922,6 +929,14 @@ async function nextQuestion(page, n) {
   for (let i = 0; i < n; i += 1) {
     await page.getByRole("button", { name: /^(next question|question suivante)$/i }).first().click();
     await page.waitForTimeout(400);
+  }
+}
+
+/** Walks the correction projection forward `n` questions with J, as a clicker would. */
+async function projectNext(page, n) {
+  for (let i = 0; i < n; i += 1) {
+    await page.keyboard.press("j");
+    await page.waitForTimeout(250);
   }
 }
 

@@ -53,6 +53,15 @@ export const EVALUATION_STATES = [
   "released",
 ] as const satisfies readonly EvaluationStateName[];
 
+/**
+ * Closed, being graded or released: the second half of an evaluation's life.
+ * The server refuses the grade table's release and the per-question debrief
+ * before it (`not_over`, ADR-033), and the web offers them only then — one
+ * rule, so a button never leads to a refusal.
+ */
+export const isEvaluationOver = (state: EvaluationStateName): boolean =>
+  state === "closed" || state === "grading" || state === "released";
+
 /** The states in which no student can have entered: nothing is open yet. */
 export const ITEM_LIST_EDITABLE_STATES: readonly EvaluationStateName[] = ["draft", "scheduled"];
 

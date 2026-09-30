@@ -3,8 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ByQuestion } from "@quiz/contracts";
+import { clozeStudentTemplate, parseCloze } from "@quiz/domain/cloze";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
+import { BAR_TONES } from "../ui";
 import { CorrectionProjection } from "./CorrectionProjection";
 
 /*
@@ -41,7 +43,7 @@ const item = (position: number, type: string) => ({
 
 const MCQ = question({
   item: item(0, "mcq"),
-  student: { prompt: "What is `sizeof(char)`?", choices: [{ id: 0, text: "1" }, { id: 1, text: "2" }], mode: "single" },
+  student: { prompt: "What is `sizeof(char)`?", choices: [{ id: 0, text: "`1` byte" }, { id: 1, text: "`2` bytes" }], mode: "single" },
   solution: { correct: [0] },
   explanation: "By definition of the standard.",
   outcomes: { correct: 2, partial: 0, wrong: 1, blank: 1 },
@@ -76,9 +78,20 @@ const CODE = question({
   ],
 });
 
+const CLOZE = question({
+  item: item(3, "cloze"),
+  student: clozeStudentTemplate(parseCloze("Free with {{free}}."), 0, "i3", false),
+  solution: { blanks: [{ index: 0, expected: "free" }] },
+  outcomes: { correct: 2, partial: 0, wrong: 1, blank: 1 },
+  distribution: [
+    { key: "0:free", label: "free", count: 2, correct: true, part: 0 },
+    { key: "0:delete", label: "delete", count: 1, correct: false, part: 0 },
+  ],
+});
+
 function render() {
   mockFetch({
-    [`GET ${BY_QUESTION}`]: ok([MCQ, SHORT, CODE]),
+    [`GET ${BY_QUESTION}`]: ok([MCQ, SHORT, CODE, CLOZE]),
     "GET /app/api/evaluations/e1": fail(404),
   });
   return renderWithProviders(<CorrectionProjection evaluationId="e1" navigate={vi.fn()} />);
@@ -92,8 +105,15 @@ describe("CorrectionProjection", () => {
     expect(screen.queryByText(/secret-name/)).toBeNull();
     // The class in one bar, with its figures in words.
     expect(within(first).getByRole("img", { name: /correct: 2 · wrong: 1 · no answer: 1/ })).toBeVisible();
-    // Hidden: no bar of a choice speaks, the expected answer is not on the wall.
-    expect(within(first).queryByRole("img", { name: /ticked/ })).toBeNull();
+    // Hidden: the ticks of each choice, counted, named without a verdict and
+    // drawn without one; no expected answer on the wall.
+    const choices = within(first).getByRole("list");
+    expect(within(choices).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["A1 byte2", "B2 bytes1"]);
+    expect(within(choices).getAllByRole("img").map((bar) => bar.getAttribute("aria-label"))).toEqual([
+      "ticked: 2",
+      "ticked: 1",
+    ]);
+    expect(choices.querySelector(`.${BAR_TONES.success}, .${BAR_TONES.danger}`)).toBeNull();
     expect(screen.queryByText("Expected answer")).toBeNull();
     expect(screen.getByRole("button", { name: /Reveal the answers/ })).toBeVisible();
   });
@@ -102,14 +122,18 @@ describe("CorrectionProjection", () => {
     render();
     const first = await screen.findByRole("region", { name: "Question 1" });
     await userEvent.keyboard("r");
-    expect(within(first).getByRole("img", { name: "ticked: 2 · not ticked: 2" })).toBeVisible();
-    expect(
-      within(first).getByRole("img", { name: "ticked wrongly: 1 · avoided: 2 · no answer: 1" }),
-    ).toBeVisible();
+    // One bar per choice, the share of the papers that ticked it, named with
+    // its verdict — never "no answer", which is the head bar's alone.
+    const choices = within(first).getByRole("list");
+    expect(within(choices).getAllByRole("img").map((bar) => bar.getAttribute("aria-label"))).toEqual([
+      "correct answer · ticked: 2",
+      "wrong answer · ticked: 1",
+    ]);
+    expect(choices.querySelector(`.${BAR_TONES.warning}`)).toBeNull();
     expect(screen.getByText("Expected answer")).toBeVisible();
     expect(screen.getByRole("button", { name: /Hide the answers/ })).toBeVisible();
     await userEvent.keyboard("r");
-    expect(within(first).queryByRole("img", { name: /ticked/ })).toBeNull();
+    expect(within(first).queryByRole("img", { name: /answer · ticked/ })).toBeNull();
   });
 
   it("shows the explanation on E, only where there is one", async () => {
@@ -131,10 +155,21 @@ describe("CorrectionProjection", () => {
     // The second question has no explanation: nothing to switch on.
     expect(screen.queryByRole("button", { name: "Explanation" })).toBeNull();
     // The walk stops at the last question.
-    await userEvent.keyboard("{PageDown}{PageDown}");
-    expect(within(steps).getByRole("button", { name: "Question 3" })).toHaveAttribute("aria-current", "step");
-    await userEvent.keyboard("kk");
+    await userEvent.keyboard("{PageDown}{PageDown}{PageDown}");
+    expect(within(steps).getByRole("button", { name: "Question 4" })).toHaveAttribute("aria-current", "step");
+    await userEvent.keyboard("kkk");
     expect(within(steps).getByRole("button", { name: "Question 1" })).toHaveAttribute("aria-current", "step");
+  });
+
+  it("draws a blank's filled share muted, and its right / wrong split once revealed", async () => {
+    render();
+    const fourth = await screen.findByRole("region", { name: "Question 4" });
+    const hole = within(fourth).getByText("free").parentElement!;
+    // Hidden: how far the class got, in one length — the split IS the key.
+    expect(within(hole).getByRole("img")).toHaveAccessibleName("filled in: 3");
+    await userEvent.keyboard("r");
+    // Right and wrong over the track: the empty blank is not a part.
+    expect(within(hole).getByRole("img")).toHaveAccessibleName("correct: 2 · wrong: 1");
   });
 
   it("names a hidden test case by its label, never by its name", async () => {
