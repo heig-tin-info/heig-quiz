@@ -26,6 +26,7 @@ import {
   PreviewGradeBody,
   PreviewRunBody,
   PreviewSimulateBody,
+  PreviewStartBody,
   type EvaluationPreview,
   type ItemPreview,
   type PreviewCorrection,
@@ -54,14 +55,17 @@ export async function previewPlugin(app: FastifyInstance) {
     loadEvaluation(app, req, reply, p.id);
   const options = { preHandler: requireTeacher, config: { readOnly: true } };
 
-  /** A fresh seed, and the evaluation as a student holding it would get it. */
+  /**
+   * A fresh seed — or the one the walk already holds, to reload it (ADR-018,
+   * sixth addendum) — and the evaluation as a student holding it would get it.
+   */
   app.post(
     "/app/api/evaluations/:id/preview",
     options,
     teacher(
-      { params: IdParam, load: staffEvaluation },
-      ({ now, scope }): Promise<EvaluationPreview> =>
-        service.startPreview(app.db, scope.evaluation, now, service.drawPreviewSeed()),
+      { params: IdParam, body: PreviewStartBody, optionalBody: true, load: staffEvaluation },
+      ({ body, now, scope }): Promise<EvaluationPreview> =>
+        service.startPreview(app.db, scope.evaluation, now, body.seed ?? service.drawPreviewSeed()),
     ),
   );
 

@@ -5,8 +5,10 @@
  * Four calls, all on `/app/api/evaluations/:id/preview…`, all staff-only, and
  * none of them writes a row:
  *
- *   - `POST /preview` draws a fresh seed and answers {@link EvaluationPreview}:
- *     the evaluation exactly as a student would get it under that seed;
+ *   - `POST /preview` draws a fresh seed — or takes the one it is given, to
+ *     reload a walk in progress (ADR-018, sixth addendum) — and answers
+ *     {@link EvaluationPreview}: the evaluation exactly as a student would
+ *     get it under that seed;
  *   - `POST /preview/run` and `/preview/simulate` are the player's Run and
  *     Simulate buttons, with the SEED in place of an attempt;
  *   - `POST /preview/grade` takes every answer and the seed, and answers
@@ -28,6 +30,16 @@ import { AttemptView, RunBody, SimulateBody } from "./live.js";
 const PreviewSeed = z.number().int().min(0).max(0x7fffffff);
 type PreviewSeed = z.infer<typeof PreviewSeed>;
 
+/**
+ * `POST /evaluations/:id/preview`, optional body. Without a seed the server
+ * draws one; with one, it rebuilds the walk of that seed from the items as
+ * they are NOW — how the preview reloads the one question the teacher just
+ * moved to its new version, the other questions keeping their order and
+ * shuffles (ADR-018, sixth addendum).
+ */
+export const PreviewStartBody = z.object({ seed: PreviewSeed.optional() });
+export type PreviewStartBody = z.infer<typeof PreviewStartBody>;
+
 /** `POST /evaluations/:id/preview` — the start of one preview. */
 export const EvaluationPreview = z.object({
   /** Sent back with every run and with the final grading. */
@@ -43,6 +55,13 @@ export const EvaluationPreview = z.object({
    * placeholder: no attempt exists.
    */
   view: AttemptView,
+  /**
+   * Item id → the version number the item was frozen on when this view was
+   * built: what the preview compares the evaluation against, to tell a
+   * question that has a newer version from an evaluation that changed under
+   * the walk (`ItemRow.versionNumber` is the same number).
+   */
+  versions: z.record(z.uuid(), z.number().int()),
 });
 export type EvaluationPreview = z.infer<typeof EvaluationPreview>;
 

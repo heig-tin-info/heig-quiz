@@ -924,9 +924,12 @@ export async function previewView(
   evaluation: EvaluationRecord,
   now: Date,
   seed = 0,
+  /** The evaluation's items when the caller already read them, not read twice. */
+  items?: readonly JoinedItem[],
 ): Promise<AttemptView> {
   return viewOf(db, evaluation, {
     seed,
+    items,
     answered: new Map(),
     header: {
       id: PREVIEW_ATTEMPT_ID,
@@ -952,13 +955,14 @@ async function viewOf(
   evaluation: EvaluationRecord,
   input: {
     seed: number;
+    items?: readonly JoinedItem[] | undefined;
     answered: ReadonlyMap<string, AnswerRecord>;
     header: AttemptView["attempt"];
   },
 ): Promise<AttemptView> {
   const { seed, answered } = input;
   const settings = settingsOf(evaluation);
-  const items = await joinedItems(db, evaluation.id);
+  const items = input.items ?? (await joinedItems(db, evaluation.id));
   const ordered = orderItems(items, settings, seed, evaluation.id);
   const locked = lockedItemIds(settings, ordered, answered);
   return {

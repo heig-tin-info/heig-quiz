@@ -39,6 +39,7 @@ import type { Route } from "../router";
 import { PlayerView } from "../student/Player";
 import { Alert, Button, Card, EmptyState, QueryError, Spinner } from "../ui";
 import { PreviewCorrectionView } from "./PreviewCorrection";
+import { usePreviewEdit } from "./usePreviewEdit";
 import { PreviewPoints } from "./PreviewPoints";
 import { usePreviewSession } from "./usePreviewSession";
 
@@ -217,6 +218,7 @@ function PreviewWalk({
     }
     onRestart();
   };
+  const edit = usePreviewEdit({ evaluationId, preview: walk.preview, session, askRestart });
 
   return (
     <>
@@ -230,17 +232,21 @@ function PreviewWalk({
               icon={Eye}
               title={t("preview.banner")}
               action={
-                <Button variant="secondary" size="sm" onClick={() => void askRestart()} disabled={restarting}>
-                  <RotateCcw /> {t("preview.restart")}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {edit.editButton}
+                  <Button variant="secondary" size="sm" onClick={() => void askRestart()} disabled={restarting}>
+                    <RotateCcw /> {t("preview.restart")}
+                  </Button>
+                </div>
               }
             >
               {t("preview.bannerBody")}
             </Alert>
+            {edit.notice}
             {current ? (
               <PreviewPoints
                 // A new question, a clean slate: no points of another one linger.
-                key={current.id}
+                key={`${current.id}:${current.generation ?? 0}`}
                 evaluationId={evaluationId}
                 seed={walk.preview.seed}
                 itemId={current.id}
