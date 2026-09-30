@@ -512,3 +512,38 @@ describe("StudentGrid — the clock", () => {
     expect(within(rowOf("Nadia Roux 0")).getByText("7:00")).toBeVisible();
   });
 });
+
+describe("StudentGrid — how each student sits (ADR-051 §8)", () => {
+  it("badges SEB and the station, and says a suspended or unattested station", () => {
+    const view = viewIn("running", 4, 2);
+    view.rows[1] = { ...view.rows[1]!, access: { kind: "seb", station: null, alert: null } };
+    view.rows[2] = { ...view.rows[2]!, access: { kind: "kiosk", station: "Poste n° 7", alert: "suspended" } };
+    view.rows[3] = { ...view.rows[3]!, access: { kind: "kiosk", station: "Poste n° 8", alert: "unavailable" } };
+    setup(view);
+    const portal = rowOf(view.rows[0]!.displayName);
+    expect(within(portal).queryByText("SEB")).toBeNull();
+    expect(within(portal).queryByText(/Poste/)).toBeNull();
+    expect(within(rowOf(view.rows[1]!.displayName)).getByText("SEB")).toBeInTheDocument();
+    const suspended = rowOf(view.rows[2]!.displayName);
+    expect(within(suspended).getByText("Poste n° 7")).toBeInTheDocument();
+    expect(within(suspended).getByText("suspended")).toBeInTheDocument();
+    const unavailable = rowOf(view.rows[3]!.displayName);
+    expect(within(unavailable).getByText("Poste n° 8")).toBeInTheDocument();
+    expect(within(unavailable).getByText("not attested")).toBeInTheDocument();
+  });
+
+  it("offers Assign a station on the running rows only when the exam accepts the kiosk", async () => {
+    const view = viewIn("running", 2, 2);
+    view.rows[1] = { ...view.rows[1]!, state: "submitted" };
+    const { unmount } = setup(view);
+    expect(screen.queryByRole("button", { name: "Assign a station" })).toBeNull();
+    unmount();
+
+    const onAssign = vi.fn();
+    setup(view, { onAssign });
+    const buttons = screen.getAllByRole("button", { name: "Assign a station" });
+    expect(buttons).toHaveLength(1);
+    await userEvent.click(buttons[0]!);
+    expect(onAssign).toHaveBeenCalledWith(view.rows[0], view.rows[0]!.displayName);
+  });
+});

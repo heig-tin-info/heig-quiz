@@ -85,6 +85,7 @@ export function makeRow(index: number, itemIds: string[], overrides: Partial<Das
     points: null,
     maxPoints: itemIds.length,
     cells: itemIds.map((itemId) => makeCell({ itemId })),
+    access: { kind: "portal", station: null, alert: null },
     ...overrides,
   };
 }

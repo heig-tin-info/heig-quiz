@@ -6,6 +6,7 @@
  */
 import { randomUUID } from "node:crypto";
 
+import type { Clock } from "../clock.js";
 import type { Db } from "../db/client.js";
 import { KIOSK_COOKIE, recordAttested, updateDevice } from "../modules/kiosk/service.js";
 
@@ -16,11 +17,13 @@ export interface TestStation {
   cookie: string;
 }
 
+/** Attested at the SERVER's instant (`app.clock`), so a test's clock and the station's last check agree. */
 export async function kioskStation(
-  db: Db,
+  app: { db: Db; clock: Clock },
   opts: { label?: string | null; status?: "active" | "retired" } = {},
 ): Promise<TestStation> {
-  const { device, credential } = await recordAttested(db, `test-${randomUUID()}`, new Date());
+  const { db } = app;
+  const { device, credential } = await recordAttested(db, `test-${randomUUID()}`, app.clock.now());
   const label = opts.label === undefined ? "Poste n° 7" : opts.label;
   if (label !== null) await updateDevice(db, device.id, { label });
   if (opts.status === "retired") await updateDevice(db, device.id, { status: "retired" });

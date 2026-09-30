@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Clock, DoorOpen, Eye, GraduationCap, RotateCcw, WifiOff } from "lucide-react";
+import { Clock, DoorOpen, Eye, GraduationCap, Monitor, MonitorCheck, RotateCcw, ShieldAlert, WifiOff } from "lucide-react";
 
 import type { DashboardRow, DashboardView } from "@quiz/contracts";
 
@@ -18,6 +18,44 @@ export const COL = "w-16 min-w-16";
  * the teacher's pointer.
  */
 export const ACTIONS = "w-26 min-w-26";
+/** The same, with room for a fourth button: "Assign a station", on an exam that accepts the kiosk (ADR-051 §7). */
+export const ACTIONS_KIOSK = "w-30 min-w-30";
+
+/**
+ * How the row's student sits the exam (ADR-051 §8), beside the name: nothing
+ * for the portal — the default, and most of the class — a `SEB` badge, or the
+ * station's label behind a monitor; then, on a station, what its attestation
+ * says when it is not fine: suspended (writes refused) or not attested
+ * (Google cannot check it, nothing blocked).
+ */
+function AccessBadges({ access, t }: { access: DashboardRow["access"]; t: ReturnType<typeof useT> }) {
+  if (access.kind === "portal") return null;
+  return (
+    <>
+      {access.kind === "seb" ? (
+        <span title={t("live.access.sebHint")} className="shrink-0">
+          <Badge tone="zinc">{t("live.access.seb")}</Badge>
+        </span>
+      ) : (
+        <span title={t("live.access.kioskHint", { label: access.station ?? "—" })} className="min-w-0 shrink">
+          <Badge tone="zinc" icon={Monitor} className="max-w-32">
+            <span className="truncate">{access.station ?? "—"}</span>
+          </Badge>
+        </span>
+      )}
+      {access.alert !== null ? (
+        <span
+          title={t(access.alert === "suspended" ? "live.access.suspendedHint" : "live.access.unavailableHint")}
+          className="shrink-0"
+        >
+          <Badge tone={access.alert === "suspended" ? "red" : "amber"} icon={ShieldAlert}>
+            {t(access.alert === "suspended" ? "live.access.suspended" : "live.access.unavailable")}
+          </Badge>
+        </span>
+      ) : null}
+    </>
+  );
+}
 
 /**
  * The progress column (#227): "75 %", right-aligned. It used to be a meta
@@ -105,6 +143,7 @@ export const GridRow = memo(function GridRow({
   onExtend,
   onClose,
   onReopen,
+  onAssign,
 }: {
   row: DashboardRow;
   items: DashboardView["items"];
@@ -134,6 +173,8 @@ export const GridRow = memo(function GridRow({
   /** With the name the row shows, for the confirmation that asks first. */
   onClose: (row: DashboardRow, name: string) => void;
   onReopen: (row: DashboardRow, name: string) => void;
+  /** The exam accepts the kiosk: the supervisor may pair a station for this student (ADR-051 §7). */
+  onAssign?: ((row: DashboardRow, name: string) => void) | undefined;
 }) {
   const t = useT();
   const presence = presenceOf(row, t);
@@ -183,6 +224,7 @@ export const GridRow = memo(function GridRow({
               <WifiOff className="size-3.5" aria-hidden />
             </span>
           ) : null}
+          <AccessBadges access={row.access} t={t} />
           {/* F-EVAL-15: the row is the LATEST attempt; the
               earlier ones are in the grading panel. */}
           {row.attemptCount > 1 ? (
@@ -293,12 +335,24 @@ export const GridRow = memo(function GridRow({
       <td
         className={cx(
           TD,
-          ACTIONS,
+          onAssign ? ACTIONS_KIOSK : ACTIONS,
           "px-1 sm:sticky sm:right-0 sm:z-10 sm:border-l sm:border-line",
           stick,
         )}
       >
         <span className="flex items-center justify-end gap-0.5">
+          {/* First: a student whose laptop just died is the one the
+              supervisor is standing beside, with the station's code. */}
+          {onAssign && live && !finished && row.userId !== null ? (
+            <IconButton
+              size="sm"
+              className={ROW_BUTTON}
+              label={t("live.row.assign")}
+              onClick={() => onAssign(row, name)}
+            >
+              <MonitorCheck />
+            </IconButton>
+          ) : null}
           {row.attemptId === null ? null : (
             <IconButton
               size="sm"

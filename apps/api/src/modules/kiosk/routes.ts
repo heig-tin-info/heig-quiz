@@ -24,6 +24,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
   IdParam,
+  KioskAssign,
   KioskAttestVerify,
   KioskDevicePatch,
   KioskTokenRequest,
@@ -43,8 +44,8 @@ import { audit, tracer, type AuditAction } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { delegated, endStationSessions } from "../../auth/session.js";
 import { users } from "../../db/schema.js";
-import { adminGuard } from "../guards.js";
-import { csrfRefused, emptyBody, invalid, notFound, sendFailure } from "../http.js";
+import { adminGuard, loadEvaluation, teacherGuard } from "../guards.js";
+import { csrfRefused, emptyBody, invalid, notFound, sendFailure, teacherRoute } from "../http.js";
 import { AttestationUnavailable } from "./attestation.js";
 import { FixedWindowLimiter } from "../../limiter.js";
 import { PairRateLimited, approvePairing, issuePairing, pollPairing, previewPairing } from "./pairing.js";
@@ -54,10 +55,10 @@ import {
   deviceByCredential,
   listDevices,
   recordAttested,
-  recordFailed,
   stationOf,
   updateDevice,
 } from "./service.js";
+import { recordAttempt, stationSeated } from "./watch.js";
 
 /** A station is no session kind: every user session is anonymous on its routes. */
 const STATION = { sessions: [] } as const;
@@ -87,6 +88,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
   const trace = tracer(app);
   const attempts = new FixedWindowLimiter(ATTEST_LIMIT, 60_000);
   const previews = new FixedWindowLimiter(PAIR_PREVIEW_LIMIT, 60_000);
+  const staffRoute = teacherRoute(app);
 
   /** The 429 of an address over its budget, with its `retry-after`; null otherwise. */
   const throttled = (req: FastifyRequest, reply: FastifyReply) => {
@@ -117,6 +119,11 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
       return { challenge: await app.kioskAttestor!.challenge() } satisfies KioskChallenge;
     } catch (err) {
       if (err instanceof AttestationUnavailable) {
+        // An attempt all the same (ADR-051 §6): a known station that cannot
+        // even get a challenge is `unavailable`, never silent — a Google
+        // outage must not suspend it twelve minutes later.
+        const known = await deviceByCredential(app.db, req.cookies[KIOSK_COOKIE]);
+        if (known) await recordAttempt(app.db, known.id, "unavailable", app.clock.now());
         return reply.code(503).send({ error: "attestation_unavailable" });
       }
       throw err;
@@ -135,14 +142,24 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
         ? await app.kioskAttestor!.verify(body.data.response)
         : ({ ok: false, reason: "refused" } as const);
 
+    // Every attempt of a known station is compared with what its supervisor
+    // was last told (ADR-051 §6): a suspension, an outage, their end.
+    const cookie = req.cookies[KIOSK_COOKIE];
+    const known = await deviceByCredential(app.db, cookie);
     if (verdict.ok) {
+      // The cookie that already names this device is kept, and re-set for
+      // another 12 hours: a write of the sitting sent while this attestation
+      // was in flight carries it, and must not turn anonymous.
+      const current = known?.googleDeviceId === verdict.googleDeviceId ? cookie! : null;
       const { device, credential, registered } = await recordAttested(
         app.db,
         verdict.googleDeviceId,
         now,
+        current,
       );
       if (registered) await stationAudit("kiosk.device_registered", device.id);
       await stationAudit("kiosk.attested", device.id);
+      if (!registered) await recordAttempt(app.db, device.id, "ok", now);
       reply.setCookie(KIOSK_COOKIE, credential, {
         path: "/app/api",
         httpOnly: true,
@@ -153,9 +170,8 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
       return { station: { label: device.label, status: device.status } } satisfies KioskAttested;
     }
 
-    const known = await deviceByCredential(app.db, req.cookies[KIOSK_COOKIE]);
-    if (known) await recordFailed(app.db, known.id, verdict.reason, now);
     await stationAudit("kiosk.attest_failed", known?.id ?? null, { reason: verdict.reason });
+    if (known) await recordAttempt(app.db, known.id, verdict.reason, now);
     return reply.code(403).send({ error: "not_attested" });
   });
 
@@ -227,6 +243,8 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
       evaluationId: outcome.evaluationId,
       deviceId: station.id,
     });
+    // The supervisor's row shows the station at once, and its state (§6).
+    await stationSeated(app.db, station.id, app.clock.now());
     return { redirect: `/take/${outcome.evaluationId}` } satisfies KioskTokenApproved;
   });
 
@@ -296,6 +314,55 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
       return rateLimited(reply, err);
     }
   });
+
+  // =========================================================================
+  // The supervisor's fallback (ADR-051 §7)
+  // =========================================================================
+
+  /**
+   * A student without a phone reads the station's code to the supervisor,
+   * who approves the SAME pairing from the dashboard. Staff of the
+   * evaluation only (invariant 6: a 404 for anyone else); the student must
+   * be able to start the exam on a station now, as on `/pair`. The
+   * supervisor is recorded in `approved_by` and `kiosk.assigned`, never as
+   * the session's actor: the student must be able to answer. The label comes
+   * back in the answer, so the dialog confirms which station it paired — the
+   * supervisor is standing at it, reading its code, and a code that names
+   * another pending station is a one-in-27⁸ typo.
+   */
+  app.post(
+    "/app/api/evaluations/:id/kiosk-assign",
+    { preHandler: teacherGuard(app) },
+    staffRoute(
+      { params: IdParam, body: KioskAssign, load: (req, reply, p) => loadEvaluation(app, req, reply, p.id) },
+      async ({ req, reply, now, body, scope }) => {
+        const evaluationId = scope.evaluation.id;
+        try {
+          const outcome = await approvePairing(
+            app.db,
+            { userId: body.userId, code: body.userCode, evaluationId, approvedBy: req.user!.id },
+            now,
+          );
+          if (outcome.kind === "not_found") return pairingNotFound(reply);
+          if (outcome.kind === "evaluation") {
+            await trace(req, "kiosk.pair_refused", "evaluation", evaluationId, {
+              reason: "evaluation",
+              userId: body.userId,
+            });
+            return reply.code(409).send({ error: "evaluation_not_pairable" });
+          }
+          await trace(req, "kiosk.assigned", "kiosk_pairing", outcome.pairingId, {
+            evaluationId,
+            userId: body.userId,
+            deviceId: outcome.deviceId,
+          });
+          return { station: { label: outcome.label } } satisfies PairApproved;
+        } catch (err) {
+          return rateLimited(reply, err);
+        }
+      },
+    ),
+  );
 
   // =========================================================================
   // The registry (admin)

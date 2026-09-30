@@ -341,3 +341,35 @@ describe("applyGridEvent — what the grid does not read", () => {
     }
   });
 });
+
+describe("applyGridEvent — dashboard.alert (ADR-051 §6)", () => {
+  const alert = (kind: Extract<ServerEvent, { type: "dashboard.alert" }>["kind"]) =>
+    ({
+      type: "dashboard.alert",
+      evaluationId: EVALUATION_ID,
+      userId: id("user", 0),
+      kind,
+      at: liveAt(0),
+    }) as const;
+  const onStation = () => {
+    const s = state();
+    s.view.rows[0] = { ...s.view.rows[0]!, access: { kind: "kiosk", station: "Poste n° 7", alert: null } };
+    return s;
+  };
+
+  it("sets and clears the alert of a station's row", () => {
+    const suspended = applyGridEvent(onStation(), alert("kiosk_suspended"));
+    expect(suspended.view.rows[0]!.access.alert).toBe("suspended");
+    const unavailable = applyGridEvent(suspended, alert("kiosk_unavailable"));
+    expect(unavailable.view.rows[0]!.access.alert).toBe("unavailable");
+    expect(applyGridEvent(unavailable, alert("kiosk_resumed")).view.rows[0]!.access.alert).toBeNull();
+  });
+
+  it("changes nothing off a station, nor for a superseded session", () => {
+    const portal = state();
+    expect(applyGridEvent(portal, alert("kiosk_suspended"))).toBe(portal);
+    const kiosk = onStation();
+    expect(applyGridEvent(kiosk, alert("session_superseded"))).toBe(kiosk);
+    expect(applyGridEvent(kiosk, alert("kiosk_resumed"))).toBe(kiosk);
+  });
+});

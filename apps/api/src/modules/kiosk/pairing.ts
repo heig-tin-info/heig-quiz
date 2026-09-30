@@ -269,18 +269,21 @@ export type ApproveOutcome =
 
 /**
  * `POST /pair`: the student approves the pairing for one of their pairable
- * exams. The code is checked first (the limit, then the pairing); one
- * conditional UPDATE from `pending` then approves it, so a code approved
- * twice (two phones, one code) is approved once. An exam the student cannot
- * start there is refused (reason `evaluation`), and does not count as a
- * wrong code.
+ * exams — or, `approvedBy` a supervisor, `kiosk-assign` does it for a
+ * student without a phone (ADR-051 §7): the same pairing, and the wrong
+ * codes counted against whoever typed them. The code is checked first (the
+ * limit, then the pairing); one conditional UPDATE from `pending` then
+ * approves it, so a code approved twice (two phones, one code) is approved
+ * once. An exam the student cannot start there is refused (reason
+ * `evaluation`), and does not count as a wrong code.
  */
 export async function approvePairing(
   db: Db,
-  input: { userId: string; code: string; evaluationId: string },
+  input: { userId: string; code: string; evaluationId: string; approvedBy?: string },
   now: Date,
 ): Promise<ApproveOutcome> {
-  const found = await pendingByCode(db, input.userId, input.code, now, { count: true });
+  const approvedBy = input.approvedBy ?? input.userId;
+  const found = await pendingByCode(db, approvedBy, input.code, now, { count: true });
   if (!found) return { kind: "not_found" };
   const pairable = await pairableEvaluations(db, input.userId, now);
   if (!pairable.some((e) => e.id === input.evaluationId)) return { kind: "evaluation" };
@@ -290,7 +293,7 @@ export async function approvePairing(
       state: "approved",
       userId: input.userId,
       evaluationId: input.evaluationId,
-      approvedBy: input.userId,
+      approvedBy,
       approvedAt: now,
     })
     .where(

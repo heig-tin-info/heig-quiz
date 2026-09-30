@@ -142,3 +142,15 @@ export type PairApprove = z.infer<typeof PairApprove>;
 /** The approval, answered with the station's label. */
 export const PairApproved = z.object({ station: z.object({ label: z.string() }) });
 export type PairApproved = z.infer<typeof PairApproved>;
+
+/**
+ * `POST /app/api/evaluations/:id/kiosk-assign` (ADR-051 §7, the supervisor's
+ * fallback): the code a station shows, approved for one student of the
+ * evaluation who has no phone. Answered with the station's label, like
+ * {@link PairApproved}.
+ */
+export const KioskAssign = z.strictObject({
+  userCode: z.string().min(1).max(32),
+  userId: z.uuid(),
+});
+export type KioskAssign = z.infer<typeof KioskAssign>;

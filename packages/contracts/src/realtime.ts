@@ -152,10 +152,19 @@ export type DashboardAttemptEvent = z.infer<typeof DashboardAttemptEvent>;
 /**
  * What a supervisor is alerted to about one student's row (ADR-051 §4, §6).
  * `session_superseded`: a new SEB or kiosk session replaced the student's
- * previous one. The kiosk states (`kiosk_suspended`, `kiosk_unavailable`,
- * `kiosk_resumed`) join this list with step 7.
+ * previous one. The station the student sits on: `kiosk_suspended` (its
+ * attestation was refused, or it fell silent: writes are refused),
+ * `kiosk_unavailable` (Google cannot attest it; nothing is suspended), and
+ * `kiosk_resumed` (it attests normally: the row's alert is cleared). When a
+ * station starts sitting, the alert of its current state is sent too, so the
+ * row learns its station at once.
  */
-export const DashboardAlertKind = z.enum(["session_superseded"]);
+export const DashboardAlertKind = z.enum([
+  "session_superseded",
+  "kiosk_suspended",
+  "kiosk_unavailable",
+  "kiosk_resumed",
+]);
 export type DashboardAlertKind = z.infer<typeof DashboardAlertKind>;
 
 /** Staff connections only: an alert on one student's row of the dashboard. */

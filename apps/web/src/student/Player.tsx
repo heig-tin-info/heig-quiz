@@ -47,6 +47,7 @@
  * where the student decides to try again (ADR-025 addendum, issue #121).
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ShieldAlert } from "lucide-react";
 
 import type { AttemptView } from "@quiz/contracts";
 import { answerMark, mayValidate } from "@quiz/domain";
@@ -59,7 +60,8 @@ import { useT } from "../i18n";
 import { Button, Card, useMinWidth } from "../ui";
 import { ExpandChrome, type ExpandChromeValue } from "./ExpandLayer";
 import { OfflineBanner } from "./OfflineBanner";
-import { PausedOverlay } from "./PausedOverlay";
+import { PausedOverlay, ScreenOverlay } from "./PausedOverlay";
+import { useStationAttestation } from "../kiosk/useStationAttestation";
 import { PlayerActions } from "./PlayerActions";
 import { PlayerEnd } from "./PlayerEnd";
 import { PlayerQuestion, QuestionHeading } from "./PlayerQuestion";
@@ -202,17 +204,34 @@ export function Player({
       postSimulate(`/app/api/attempts/${attemptId}/simulate`, { itemId, answer }),
     [attemptId],
   );
-  const session = useMemo<PlayerSession>(() => ({ ...attempt, simulate }), [attempt, simulate]);
+  // ADR-051 §6: on a station, the page re-attests on its own, and before the submit.
+  const attestation = useStationAttestation(station);
+  const { submit } = attempt;
+  const { guardSubmit } = attestation;
+  const guardedSubmit = useCallback(() => guardSubmit(submit), [guardSubmit, submit]);
+  const session = useMemo<PlayerSession>(
+    () => ({ ...attempt, simulate, submit: guardedSubmit }),
+    [attempt, simulate, guardedSubmit],
+  );
   return (
-    <PlayerView
-      initial={initial}
-      session={session}
-      onHome={() => void leave()}
-      homeBusy={leaving}
-      onResults={onResults}
-      station={station}
-      {...(onExitStudentView ? { onExitStudentView } : {})}
-    />
+    <>
+      {/* ADR-051 §6: the station could not prove its integrity; its writes are refused. */}
+      <ScreenOverlay
+        show={attestation.suspended && closed === null}
+        icon={ShieldAlert}
+        title={t("player.suspended.title")}
+        body={t("player.suspended.body")}
+      />
+      <PlayerView
+        initial={initial}
+        session={session}
+        onHome={() => void leave()}
+        homeBusy={leaving}
+        onResults={onResults}
+        station={station}
+        {...(onExitStudentView ? { onExitStudentView } : {})}
+      />
+    </>
   );
 }
 

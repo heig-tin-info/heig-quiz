@@ -245,7 +245,7 @@ describe("the kiosk session (ADR-051)", () => {
       confirm: true,
     });
     expect(started.statusCode, started.body).toBe(200);
-    station = await kioskStation(server.app.db);
+    station = await kioskStation(server.app);
     // What the station's poll opens once a phone approved it.
     const s = await createSession(server.app.db, student.id, 12, {
       kind: "kiosk",

@@ -19,7 +19,7 @@ import type {
   LobbyName,
   McqScorePolicy,
 } from "@quiz/domain";
-import { TemplatePatch } from "@quiz/contracts";
+import { TemplatePatch, type DashboardAccess } from "@quiz/contracts";
 import {
   D,
   H,
@@ -343,6 +343,22 @@ interface MockRowState {
   points: null;
   maxPoints: number;
   cells: MockCell[];
+  /** ADR-051 §8: how the student sits it — the portal, unless `?seb=1` / `?kiosk=1`. */
+  access: DashboardAccess;
+}
+
+const PORTAL: DashboardAccess = { kind: "portal", station: null, alert: null };
+
+/**
+ * `?kiosk=1`: three students sit on stations — one suspended, one Google
+ * cannot attest, one fine; `?seb=1`: one in Safe Exam Browser.
+ */
+function mockAccess(index: number): DashboardAccess {
+  if (flags.kiosk && index === 1) return { kind: "kiosk", station: "Poste de secours n° 7", alert: "suspended" };
+  if (flags.kiosk && index === 3) return { kind: "kiosk", station: "Poste de secours n° 8", alert: "unavailable" };
+  if (flags.kiosk && index === 5) return { kind: "kiosk", station: "Poste de secours n° 2", alert: null };
+  if (flags.seb && index === 2) return { kind: "seb", station: null, alert: null };
+  return PORTAL;
 }
 
 export interface MockEvaluation {
@@ -396,6 +412,9 @@ const defaultEvaluationSettings = () => ({
   requireFullscreen: false,
   // ADR-026, behind the `?negative=1` scene flag.
   ...(flags.negative ? { negativeMarking: true } : {}),
+  // ADR-051, behind `?kiosk=1`: the exams accept the stations, and the live
+  // grid offers "Assign a station".
+  ...(flags.kiosk ? { kiosk: true } : {}),
 });
 
 /**
@@ -485,6 +504,7 @@ export function makeRows(e: MockEvaluation, started: boolean): MockRowState[] {
       attemptCount: !hasAttempt ? 0 : retaking && index % 3 === 1 ? 2 + (index % 2) : 1,
       points: null,
       maxPoints,
+      access: mockAccess(index),
       cells: e.items.map((item, i) => {
         // The states of F-DASH-01 a `free` paper reaches (issue #89): an
         // answer behind the student and where they are, now and then a
@@ -764,6 +784,7 @@ function staffRow(e: MockEvaluation): MockRowState {
     attemptCount: 1,
     points: null,
     maxPoints,
+    access: PORTAL,
     cells: e.items.map((item, i) => ({
       itemId: item.id,
       status: "in_progress" as const,

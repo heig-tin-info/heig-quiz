@@ -189,3 +189,11 @@ on("POST", "/app/api/pair", (_m, body): PairApproved => {
   writePairing({ ...p, state: "approved", evaluationId: String(body.evaluationId) });
   return { station: { label: pairedLabel() } };
 });
+
+// The supervisor's fallback (ADR-051 §7): the pending code, approved for a
+// student of the evaluation. `?empty=1` has no station showing one.
+on("POST", "/app/api/evaluations/:id/kiosk-assign", (_m, body): PairApproved => {
+  const p = pending(String(body.userCode ?? ""));
+  writePairing({ ...p, state: "approved", evaluationId: STUDENT_EVAL });
+  return { station: { label: pairedLabel() } };
+});
