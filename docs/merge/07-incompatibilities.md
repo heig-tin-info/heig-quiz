@@ -68,6 +68,10 @@ PR.
 | I56 | Classroom keeps changing until the cutover | sync point in `PROGRESS.md`; forward fixes | every phase |
 | I57 | Rulesets `hgc-protect` and `hgc-deadline-lock` may name classroom's App as a bypass actor: Quiz's App (D23) could not then lock, revert nor dispatch | check on the M8-06 rehearsal; the import rewrites the bypass list to Quiz's App | M8-06 |
 | I60 | The deploy of M1-03 changes a stored payload shape: delivery jobs already queued carry the old `activity_available`, and a rollback past migration 0037 meets rewritten rows | `deliver` parses the payload and drops a stale job with a warning; after a rollback the old reader drops the rewritten bells from the list (no failure) until the next deploy | M1-03 |
+| I61 | Classroom's `verifySignature` compares the hex STRINGS' lengths, so a 64-character header with a non-hex character decodes short and `timingSafeEqual` throws (a 500 instead of a 401); an empty secret is not refused | fixed in the port (`github/signature.ts`: decoded lengths compared, empty secret accepts nothing, never throws); classroom should get the same fix | M1-02 |
+| I62 | Newer octokit types declare GitHub ids `number \| bigint` | `Number()` at the five places the adapters keep an id (`provision` ×2, `squash` ×2, `collaborators`); ids stay below 2^53 | M1-02 |
+| I63 | The git bot identity of classroom is `hgc <bot@hgc.local>` | Quiz's commits are `heig-quiz <bot@heig-quiz.local>`; harmless, bot pushes are recognised by the sender login `<slug>[bot]`, not the committer; the ruleset names keep `hgc-*` (I57) | M1-02 |
+| I64 | Classroom clones with `https://x-access-token:<token>@github.com/…`: the installation token lands in the clone's `.git/config` under `/tmp` (outliving a crash) and in git's argv | fixed in the port: plain remotes, the token reaches git only through the environment (`GIT_CONFIG_*` → `http.https://github.com/.extraheader`), tested on a clone; classroom should get the same fix | M1-02 |
 
 ## 7.4 Words
 
