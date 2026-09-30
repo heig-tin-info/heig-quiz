@@ -21,6 +21,7 @@ import {
 } from "./runtime";
 import {
   CATEGORIZE_CONFIG,
+  DIAGRAM_CONFIG,
   RC_STUDENT,
   RICH_CONFIG,
   ngspiceOutcome,
@@ -30,6 +31,8 @@ import { richServer } from "@quiz/qt-rich/server";
 import type { RichConfig } from "@quiz/qt-rich/client";
 import { categorizeServer } from "@quiz/qt-categorize/server";
 import type { CategorizeConfig } from "@quiz/qt-categorize/client";
+import { diagramServer } from "@quiz/qt-diagram/server";
+import type { DiagramConfig } from "@quiz/qt-diagram/client";
 import { pollOfTeacher, teacherPolls } from "./poll";
 
 // --- 4. The student: home, lobby and player (WP9) --------------------------
@@ -251,6 +254,11 @@ const studentPayloads: Record<number, unknown> = {
    * the cards in this student's shuffled order — the type's own `toStudent`.
    */
   8: categorizeServer.toStudent(CATEGORIZE_CONFIG as CategorizeConfig, { seed: 11, itemId: "8", shuffle: true }),
+  /*
+   * The `diagram` item (docs/04 §4.14): the kind and the starter, never the
+   * reference — the type's own `toStudent`.
+   */
+  9: diagramServer.toStudent(DIAGRAM_CONFIG as DiagramConfig, { seed: 0, itemId: "9", shuffle: false }),
 };
 
 /** The attempt's mutable half: what the student typed, and where they are. */
@@ -352,7 +360,7 @@ export const studentAttemptView = (): AttemptView => ({
     pausedAt: scene === "paused" ? iso(-30_000) : null,
     totalPoints: 10,
   },
-  items: (scene === "single" ? [1] : [1, 2, 3, 4, 5, 6, 7, 8]).map((n) => {
+  items: (scene === "single" ? [1] : [1, 2, 3, 4, 5, 6, 7, 8, 9]).map((n) => {
     const stored = studentAnswers.get(studentItem(n));
     return {
       id: studentItem(n),
@@ -373,7 +381,9 @@ export const studentAttemptView = (): AttemptView => ({
                     ? "codeimage"
                     : n === 7
                       ? "rich"
-                      : "categorize",
+                      : n === 8
+                        ? "categorize"
+                        : "diagram",
       milestone: n === 3,
       // ADR-026: what `toStudent` adds to a choice question under negative marking.
       student:

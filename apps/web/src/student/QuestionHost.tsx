@@ -29,13 +29,13 @@ import { useT } from "../i18n";
 import { ClozeMarkdownText } from "../markdown/ClozeMarkdownText";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { Alert, ScrollableCode, Spinner } from "../ui";
-import { LazyRichText } from "../questionTypes";
-import { circuitCanvasStringsFor, playerStringsFor } from "./questionStrings";
+import { canvasStringsProp, LazyRichText } from "../questionTypes";
+import { playerStringsFor } from "./questionStrings";
 
 /** What every shipped player accepts on top of the core contract. */
 interface HostPlayerProps extends PlayerProps<unknown, unknown> {
   strings?: unknown;
-  /** `circuit` only: the canvas ships a dictionary of its own. */
+  /** `circuit` and `diagram`: the canvas ships a dictionary of its own. */
   canvasStrings?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
   /** `cloze` only: its text with the blanks in place, through the app's pipeline. */
@@ -90,6 +90,7 @@ export function QuestionHost({
   allowManualRun,
   onSimulate,
   onUnsent,
+  Expand,
 }: {
   type: string;
   student: unknown;
@@ -109,6 +110,8 @@ export function QuestionHost({
   onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
   /** Where something is saved as one types: see `PlayerProps.onUnsent`. */
   onUnsent?: (unsent: boolean) => void;
+  /** The attempt's expand layer (`PlayerProps.Expand`); a player that needs no room ignores it. */
+  Expand?: PlayerProps<unknown, unknown>["Expand"];
 }) {
   const t = useT();
   let Player: ComponentType<HostPlayerProps>;
@@ -134,7 +137,7 @@ export function QuestionHost({
           onChange={onChange}
           readOnly={readOnly}
           strings={playerStringsFor(type, t)}
-          {...(type === "circuit" ? { canvasStrings: circuitCanvasStringsFor(t) } : {})}
+          {...canvasStringsProp(type, t)}
           renderMarkdown={renderMarkdown}
           {...(type === "cloze" ? { renderText: ClozeMarkdownText } : {})}
           RichText={LazyRichText}
@@ -142,6 +145,7 @@ export function QuestionHost({
           {...(allowManualRun === undefined ? {} : { allowManualRun })}
           {...(onSimulate ? { onSimulate } : {})}
           {...(onUnsent ? { onUnsent } : {})}
+          {...(Expand ? { Expand } : {})}
         />
       </Suspense>
     </ScrollableCode>

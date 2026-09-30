@@ -63,6 +63,26 @@ describe("DiagramEditor", () => {
     expect((onChange.mock.lastCall?.[0] as Scene).nodes).toHaveLength(0);
   });
 
+  it("consumes Escape only when it cancelled something, so a host layer may close on it", () => {
+    render(<Host kind="class" initial={emptyScene()} />);
+    const group = screen.getByRole("group", { name: "Diagram" });
+    fireEvent.click(screen.getByRole("button", { name: "Class" }));
+    // A tool in hand: Escape drops it, and the key is consumed.
+    expect(fireEvent.keyDown(group, { key: "Escape" })).toBe(false);
+    expect(screen.getByRole("button", { name: "Select" })).toHaveAttribute("aria-pressed", "true");
+    // Nothing left to cancel: the key goes on to whoever holds the editor.
+    expect(fireEvent.keyDown(group, { key: "Escape" })).toBe(true);
+  });
+
+  it("consumes Escape in an inspector field and in the text pane: a host layer stays open", () => {
+    const initial: Scene = { nodes: [{ id: "aaaa", t: "vertex", x: 0, y: 0, name: "A" }], links: [] };
+    render(<Host kind="graph" initial={initial} withText />);
+    fireEvent.keyDown(screen.getByRole("group", { name: "Diagram" }), { key: "a", ctrlKey: true });
+    expect(fireEvent.keyDown(screen.getByRole("textbox", { name: "Name" }), { key: "Escape" })).toBe(false);
+    fireEvent.click(screen.getByRole("tab", { name: "Text" }));
+    expect(fireEvent.keyDown(screen.getByRole("textbox", { name: "Text" }), { key: "Escape" })).toBe(false);
+  });
+
   it("applies a text that reads, names the line of one that does not", () => {
     const onChange = vi.fn();
     render(<Host kind="graph" initial={EXAMPLES.graph} onChange={onChange} withText />);

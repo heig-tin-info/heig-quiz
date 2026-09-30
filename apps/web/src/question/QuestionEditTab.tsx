@@ -98,6 +98,7 @@ export function QuestionEditTab({
               disabled={readOnly}
               uploadAsset={uploadAsset}
               aside={scoringSlot}
+              published={data.latestPublished !== null}
               {...(onTry === undefined ? {} : { onTry })}
             />
           ) : (

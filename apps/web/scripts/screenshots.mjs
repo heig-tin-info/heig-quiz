@@ -378,6 +378,10 @@ const scenes = [
   // The categorize item (docs/04 §4.13): the board empty, then three cards placed by click-then-click and a fourth selected.
   { name: "player-categorize", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 8) },
   { name: "player-categorize-placed", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 8); for (const [card, column] of [["int", "Entier"], ["double", "Virgule flottante"], ["char *", "Pointeur"]]) { await p.getByRole("button", { name: card, exact: true }).click(); await p.getByRole("button", { name: new RegExp(`${column}$`) }).click(); } await p.getByRole("button", { name: "void *", exact: true }).click(); await p.waitForTimeout(300); } },
+  // The diagram item (docs/04 §4.14): the canvas inline under the prompt, then
+  // expanded over the page, under the bar with the clock and the way back.
+  { name: "player-diagram", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 9) },
+  { name: "player-diagram-expanded", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openQuestion(p, 9); await p.getByRole("button", { name: /^(Expand|Agrandir)$/ }).click(); await p.waitForTimeout(400); } },
   { name: "player-codeimage-run", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); } },
   { name: "player-codeimage-diff", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); await p.getByRole("radio", { name: /^(difference|différence)$/i }).check({ force: true }); } },
   { name: "player-codeimage-single", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); await p.getByRole("radio", { name: /^(single|seule)$/i }).check({ force: true }); await p.getByRole("radio", { name: /^(difference|différence)$/i }).check({ force: true }); } },
@@ -681,6 +685,9 @@ const scenes = [
   { name: "editor-circuit", role: "teacher", path: "/questions/q8" },
   { name: "editor-rich", role: "teacher", path: "/questions/q17", settle: 3000 },
   { name: "editor-categorize", role: "teacher", path: "/questions/q18", settle: 3000 },
+  // The diagram (ADR-046): published, so its kind is shown locked; the new draft's grid is `editor-diagram-new`.
+  { name: "editor-diagram", role: "teacher", path: "/questions/q19", settle: 3000 },
+  { name: "editor-diagram-new", role: "teacher", path: "/pools/p1", settle: 3000, act: async (p) => { await p.getByRole("button", { name: /nouvelle question|new question/i }).first().click(); await p.getByRole("button", { name: /^(diagram|diagramme)\b/i }).first().click(); await p.getByLabel(/internal name|nom interne/i).fill("uml-demo"); await p.keyboard.press("Enter"); await p.waitForURL(/\/questions\//); await p.waitForTimeout(2500); } },
   // A column left unnamed and a card emptied: the autosave's issues, on the fields and under the board.
   // The tray emptied of its distractor: it takes no room above the "new card" field.
   { name: "editor-categorize-empty-tray", role: "teacher", path: "/questions/q18", settle: 3000, act: async (p) => { await p.locator("li", { hasText: "string" }).getByRole("button", { name: /^Remove card/ }).click(); await p.waitForTimeout(500); } },
@@ -728,8 +735,8 @@ const scenes = [
   // graded and `released` the published one, and both are the very
   // evaluations the classroom list shows.
   // One scene per question type of the table (ADR-044): the closed
-  // evaluation holds, in order, code, mcq, circuit, short, rich, categorize
-  // and codeimage (`itemSource` in src/mock/evaluation.ts).
+  // evaluation holds, in order, code, mcq, circuit, short, rich, categorize,
+  // codeimage and diagram (`itemSource` in src/mock/evaluation.ts).
   { name: "grading", role: "teacher", path: "/evaluations/closed/grading" },
   { name: "grading-code-expanded", role: "teacher", path: "/evaluations/closed/grading", act: async (p) => {
       await p.locator('[role="button"][aria-expanded="false"]').first().click();
@@ -740,6 +747,8 @@ const scenes = [
   { name: "grading-rich", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 4) },
   { name: "grading-categorize", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 5) },
   { name: "grading-codeimage", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 6) },
+  { name: "grading-diagram", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 7) },
+  { name: "grading-diagram-panel", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, fold: true, act: async (p) => { await nextQuestion(p, 7); await openRow(p, 1); } },
   // ADR-044: the table and its layers — the question menu, the answer
   // panel (an answer, the key, the adjustment), the filters, a sort, names.
   { name: "grading-menu", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {

@@ -183,10 +183,18 @@ export function DiagramEditor(props: DiagramEditorProps): JSX.Element {
     setSelection(copy.ids);
   };
   const reverse = (): void => commit(reverseSelection(value, selection));
-  const escape = (): void => {
+  /**
+   * Cancels what is in progress, innermost first: the link being drawn, the
+   * tool, the selection. `false` when there was nothing to cancel, so the key
+   * is left to whoever holds the editor — the student's expand layer closes
+   * on it (ADR-046 addendum).
+   */
+  const escape = (): boolean => {
     if (draft) cancelDraft();
     else if (mode.kind !== "select") setMode({ kind: "select" });
-    else setSelection(new Set());
+    else if (selection.size > 0) setSelection(new Set());
+    else return false;
+    return true;
   };
 
   const doubleClick = (target: Element, w: Point): void => {
@@ -385,7 +393,8 @@ export function DiagramEditor(props: DiagramEditorProps): JSX.Element {
   };
 
   const tools = [...spec.tools.map((tool): Mode => ({ kind: "place", tool })), ...spec.links.map((type): Mode => ({ kind: "link", type }))];
-  const shortcuts: Readonly<Record<string, () => void>> = {
+  /** A shortcut returns `false` when it did nothing: the key is then not consumed. */
+  const shortcuts: Readonly<Record<string, () => void | boolean>> = {
     Delete: remove,
     Backspace: remove,
     Escape: escape,
@@ -402,8 +411,9 @@ export function DiagramEditor(props: DiagramEditorProps): JSX.Element {
     if ((e.target as HTMLElement).matches("input, textarea, select") || readOnly || pane !== "draw") return;
     const run = e.ctrlKey || e.metaKey ? withModifier[e.key.toLowerCase()]?.bind(null, e.shiftKey) : shortcuts[e.key];
     const tool = !e.ctrlKey && !e.metaKey && /^[1-9]$/.test(e.key) ? tools[Number(e.key) - 1] : undefined;
-    if (run) run();
-    else if (tool) changeMode(tool);
+    if (run) {
+      if (run() === false) return;
+    } else if (tool) changeMode(tool);
     else return;
     e.preventDefault();
   };

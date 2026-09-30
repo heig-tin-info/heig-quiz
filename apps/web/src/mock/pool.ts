@@ -75,6 +75,10 @@ import type { RichConfig } from "@quiz/qt-rich/client";
 /* `categorize` likewise: its `toStudent` drops the key, its grade is the real one. */
 import { categorizeServer } from "@quiz/qt-categorize/server";
 import type { CategorizeAnswer, CategorizeConfig } from "@quiz/qt-categorize/client";
+/* `diagram` likewise: graded by hand, and its `toStudent` drops the reference. */
+import { diagramServer } from "@quiz/qt-diagram/server";
+import type { DiagramAnswer, DiagramConfig } from "@quiz/qt-diagram/client";
+import { EXAMPLES, type Scene } from "@quiz/diagram/server";
 import type { AnyQuestionTypeServer, RunnerService } from "@quiz/core/server";
 import { shortServer } from "@quiz/qt-short/server";
 
@@ -107,7 +111,7 @@ interface MockVersion {
 export interface MockQuestion {
   id: string;
   poolId: string;
-  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich" | "categorize";
+  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich" | "categorize" | "diagram";
   internalName: string;
   categoryId: string | null;
   difficulty: number;
@@ -759,6 +763,46 @@ export const CATEGORIZE_ANSWER = {
   },
 };
 
+/** A scene under ids of its own: the engine's examples number theirs, a starter must not share them. */
+const reid = (scene: Scene, prefix: string, keep: (id: string) => boolean = () => true): Scene => {
+  const id = (old: string) => `${prefix}${old.slice(1)}`;
+  const nodes = scene.nodes.filter((n) => keep(n.id));
+  const kept = new Set(nodes.map((n) => n.id));
+  return {
+    nodes: nodes.map((n) => ({ ...n, id: id(n.id) })),
+    links: scene.links.filter((l) => kept.has(l.a) && kept.has(l.b)).map((l) => ({ ...l, id: id(l.id), a: id(l.a), b: id(l.b) })),
+  };
+};
+
+/**
+ * The diagram question of the mock (docs/04 §4.14): the class diagram of
+ * `mockups/uml.html` as the reference, and its two abstractions as the
+ * starter, under ids of their own.
+ */
+const DIAGRAM_STARTER = reid(EXAMPLES.class, "s", (id) => id === "n001" || id === "n002");
+export const DIAGRAM_CONFIG: Record<string, unknown> = {
+  configVersion: 1,
+  prompt:
+    "Complétez le **diagramme de classes** : un `Cercle` et un `Rectangle` sont des `Figure`, " +
+    "chaque figure a une `Couleur`, et un `Dessin` contient des formes.",
+  kind: "class",
+  reference: reid(EXAMPLES.class, "r"),
+  starter: DIAGRAM_STARTER,
+  rubric: "- **1 pt** : les deux héritages vers `Figure`.\n- **1 pt** : la composition `Dessin` ◆— `Forme`, multiplicités comprises.",
+};
+
+/** A student's answer: the starter, a circle that inherits, and a rectangle not linked yet. */
+export const DIAGRAM_ANSWER: DiagramAnswer = {
+  scene: {
+    nodes: [
+      ...DIAGRAM_STARTER.nodes,
+      { id: "a0000001", t: "class", x: 180, y: 460, name: "Cercle", body: ["- rayon : double", "---", "+ aire() : double"] },
+      { id: "a0000002", t: "class", x: 520, y: 460, name: "Rectangle", body: ["- largeur : double", "- hauteur : double"] },
+    ],
+    links: [...DIAGRAM_STARTER.links, { id: "a0000003", type: "inh", a: "a0000001", b: "s002" }],
+  },
+};
+
 export const questions: MockQuestion[] = [
   makeQuestion({
     poolId: "p1",
@@ -1140,6 +1184,23 @@ export const questions: MockQuestion[] = [
     explanation: "`string` n'existe pas en C : une chaîne est un tableau de `char`.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 5 }],
   }),
+  /*
+   * The `diagram` question (docs/04 §4.14), last for the reason `rich` is;
+   * `itemSource` in `evaluation.ts` splices it into the evaluations too.
+   */
+  makeQuestion({
+    poolId: "p1",
+    type: "diagram",
+    internalName: "figures-diagramme-classes",
+    categoryId: "k1",
+    difficulty: 2,
+    shuffleable: false,
+    randomizable: false,
+    tags: ["uml", "héritage", "diagramme"],
+    config: DIAGRAM_CONFIG,
+    explanation: "`Figure` réalise `Forme` ; `Cercle` et `Rectangle` en héritent.",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 3 }],
+  }),
 ];
 
 /**
@@ -1510,6 +1571,14 @@ export function draftIssues(
       out.push({ path: ["columns"], code: "custom", message: "categorize.no_target" });
     }
   }
+  if (q.type === "diagram") {
+    const parsed = diagramServer.configSchema.safeParse(config);
+    if (parsed.success) {
+      for (const issue of diagramServer.publicationIssues?.(parsed.data) ?? []) {
+        out.push({ path: issue.path.map(String), code: "custom", message: issue.message });
+      }
+    }
+  }
   if (q.type === "cloze") {
     const parse = parseCloze(String(config.text ?? ""));
     if (parse.blanks.length === 0) {
@@ -1576,6 +1645,8 @@ export function studentView(q: MockQuestion, config: Record<string, unknown>): u
       return richServer.toStudent(config as RichConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "categorize":
       return categorizeServer.toStudent(config as CategorizeConfig, { seed: 0, itemId: q.id, shuffle: false });
+    case "diagram":
+      return diagramServer.toStudent(config as DiagramConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "code": {
       const cases = ((config.tests as { cases?: CodeCaseLike[] })?.cases ?? []) as CodeCaseLike[];
       const visible = cases.filter((c) => c.visible);
@@ -1704,6 +1775,8 @@ export function solutionOf(q: MockQuestion): unknown {
       return richServer.toSolution(config as RichConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "categorize":
       return categorizeServer.toSolution(config as CategorizeConfig, { seed: 0, itemId: q.id, shuffle: false });
+    case "diagram":
+      return diagramServer.toSolution(config as DiagramConfig, { seed: 0, itemId: q.id, shuffle: false });
   }
 }
 
@@ -1711,6 +1784,7 @@ export function solutionOf(q: MockQuestion): unknown {
 const STUDENT_SOLUTION_HOOKS: Partial<Record<string, AnyQuestionTypeServer>> = {
   rich: richServer,
   short: shortServer,
+  diagram: diagramServer,
 };
 
 /**
@@ -1731,12 +1805,13 @@ export function tryAnswer(
   negativeMarking = false,
 ): unknown {
   if (q.type === "code") return { status: "runner_unavailable", reason: "not_configured" };
-  // An essay is graded by hand: the type proposes 0 points and the teacher decides.
-  if (q.type === "rich") {
-    const graded = richServer.grade(
-      config as RichConfig,
-      (answer as { text: string } | null) ?? null,
-      { seed: 0, itemId: q.id, attemptId: "", itemPoints: 1, now: new Date(), runner: NO_RUNNER },
+  // An essay or a diagram is graded by hand: the type proposes 0 points and the teacher decides.
+  if (q.type === "rich" || q.type === "diagram") {
+    const ctx = { seed: 0, itemId: q.id, attemptId: "", itemPoints: 1, now: new Date(), runner: NO_RUNNER };
+    const graded = (
+      q.type === "rich"
+        ? richServer.grade(config as RichConfig, (answer as { text: string } | null) ?? null, ctx)
+        : diagramServer.grade(config as DiagramConfig, (answer as DiagramAnswer | null) ?? null, ctx)
     ) as { points: number; maxPoints: number; details: unknown; state?: string };
     return {
       status: "graded",
@@ -2350,6 +2425,8 @@ export function emptyConfig(type: MockQuestion["type"]): Record<string, unknown>
       return { ...richServer.emptyDraft() };
     case "categorize":
       return { ...categorizeServer.emptyDraft() };
+    case "diagram":
+      return { ...diagramServer.emptyDraft() };
     case "circuit":
       return {
         configVersion: 1,

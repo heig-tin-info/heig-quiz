@@ -47,6 +47,7 @@ import {
 import {
   CATEGORIZE_ANSWER,
   CircuitStimulusLike,
+  DIAGRAM_ANSWER,
   CodeCaseLike,
   EMPTY_SCHEMATIC,
   MockQuestion,
@@ -189,6 +190,9 @@ function mockAnswer(q: MockQuestion, config: Record<string, unknown>, ability: n
   }
   if (q.type === "codeimage") {
     return { regions: [rand() < ability ? IMAGE_REFERENCE : IMAGE_STUDENT_ATTEMPT] };
+  }
+  if (q.type === "diagram") {
+    return rand() < ability ? { scene: config.reference } : DIAGRAM_ANSWER;
   }
   // Short programs and long ones, so the table's box shows its five-line
   // clamp on some rows and not on others.
@@ -369,9 +373,11 @@ function buildGradingWorld(
         details = graded.details;
       }
 
-      // An essay is graded by hand (issue #192): the type proposes 0, and
-      // only a teacher turns it into points — already done once released.
-      if (q.type === "rich" && !blank) {
+      // An essay or a diagram is graded by hand (issue #192, ADR-046): the
+      // type proposes 0, and only a teacher turns it into points — already
+      // done once released.
+      const byHand = q.type === "rich" || q.type === "diagram";
+      if (byHand && !blank) {
         if (options.allValidated) {
           points = halfPoints(attempt.ability * item.points);
           source = "manual";
@@ -383,7 +389,7 @@ function buildGradingWorld(
       // `code` needs the teacher's eyes in the MVP (the stub runner cannot
       // settle it on its own), and every fourth answer of the two longest
       // questions is still a proposal waiting to be validated.
-      if (!options.allValidated && !blank && q.type !== "rich") {
+      if (!options.allValidated && !blank && !byHand) {
         const proposeRate = q.type === "code" ? 0.55 : itemIndex >= items.length - 2 ? 0.3 : 0.08;
         if (rand() < proposeRate) {
           state = "proposed";

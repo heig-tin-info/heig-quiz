@@ -15,6 +15,7 @@ import type { RunFn, RunResult } from "../attempt/run";
 import { useT } from "../i18n";
 import { runCode, runCodeImage } from "../runner/codeRun";
 import { Badge } from "../ui";
+import { ExpandLayer } from "./ExpandLayer";
 import { isAnswered, QuestionHost } from "./QuestionHost";
 
 /**
@@ -94,6 +95,8 @@ export const PlayerQuestion = memo(function PlayerQuestion({
       onChange={onChange}
       readOnly={readOnly}
       onUnsent={onUnsent}
+      // The room a canvas needs (ADR-046 §6); every type but `diagram` ignores it.
+      Expand={ExpandLayer}
       {...(type === "code" ? { allowManualRun: true, onRun: runCodeAnswer } : {})}
       {...(type === "circuit" ? { onSimulate: simulateAnswer } : {})}
       {...(type === "codeimage" ? { onRun: runImageAnswer } : {})}
