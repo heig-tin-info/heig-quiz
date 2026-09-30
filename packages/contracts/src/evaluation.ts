@@ -9,6 +9,8 @@
  */
 import { z } from "zod";
 
+import { TRUSTED_CLIENTS } from "@quiz/domain";
+
 /** F-EVAL-01. `poll` is accepted by the column and refused by every route (decision D7). */
 export const EvaluationMode = z.enum(["exam", "exercise", "poll"]);
 export type EvaluationMode = z.infer<typeof EvaluationMode>;
@@ -119,6 +121,18 @@ export const negativeMarkingOf = (settings: { negativeMarking?: boolean | undefi
 export const safeExamBrowserOf = (settings: { safeExamBrowser?: boolean | undefined }): boolean =>
   settings.safeExamBrowser === true;
 
+/**
+ * A confined client an exam may require (ADR-051 §2), on the wire. The list
+ * is `@quiz/domain`'s `TRUSTED_CLIENTS`, re-exported here; `trustedClientsOf`
+ * computes an evaluation's.
+ */
+export const TrustedClient = z.enum(TRUSTED_CLIENTS);
+export type TrustedClient = z.infer<typeof TrustedClient>;
+export { TRUSTED_CLIENTS };
+
+/** The kiosk-station switch of an evaluation's settings (ADR-051); absent is off. */
+export const kioskOf = (settings: { kiosk?: boolean | undefined }): boolean => settings.kiosk === true;
+
 /** A stored evaluation without the field: one attempt, as before #92. */
 const defaultRetakes = (): RetakeSettings => ({
   enabled: false,
@@ -167,9 +181,19 @@ export const EvaluationSettings = z.object({
    * ADR-027 (#139): the evaluation is sat in Safe Exam Browser only. A
    * student launches it from the portal with a one-time `.seb` file; a
    * portal session cannot sit it. Absent means off: read it through
-   * {@link safeExamBrowserOf}, never raw.
+   * {@link safeExamBrowserOf}, never raw. Whether it is IN FORCE is
+   * `trustedClientsOf` (`@quiz/domain`), with {@link EvaluationSettings.kiosk}.
    */
   safeExamBrowser: z.boolean().optional(),
+  /**
+   * ADR-051 §2: the evaluation may be sat on one of the school's attested
+   * kiosk stations, paired from the student's phone. With
+   * {@link EvaluationSettings.safeExamBrowser} it forms the exam's trusted
+   * clients (`trustedClientsOf`, `@quiz/domain`): either or both. An exam's
+   * switch, inert on any other mode. Absent means off: read it through
+   * {@link kioskOf}, never raw.
+   */
+  kiosk: z.boolean().optional(),
   /**
    * ADR-041 §2 (#317): the questions of this evaluation become drill cards —
    * at the release of an exam, at the hand-in of an exercise — when its
@@ -417,6 +441,7 @@ export const EvaluationSettingsPatch = z.object({
   negativeMarking: z.boolean().optional(),
   categorizePolicy: CategorizePolicy.optional(),
   safeExamBrowser: z.boolean().optional(),
+  kiosk: z.boolean().optional(),
   poll: EvaluationSettings.shape.poll,
 });
 export type EvaluationSettingsPatch = z.infer<typeof EvaluationSettingsPatch>;

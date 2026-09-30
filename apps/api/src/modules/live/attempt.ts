@@ -44,7 +44,7 @@ import {
   negativeMarkingEnabled,
   classroomIdOf,
   seatsOf,
-  sebRequired,
+  trustedClients,
   settingsOf,
   type EvaluationRecord,
   type JoinedItem,
@@ -327,8 +327,9 @@ export async function participantOf(
 }
 
 /**
- * ADR-027: the evaluation a `.seb` opens — one that requires Safe Exam
- * Browser and in which `userId` holds a seat — or `null`. Checked when the
+ * ADR-027: the evaluation a `.seb` opens — one that accepts Safe Exam
+ * Browser (`trustedClients`, ADR-051 §2) and in which `userId` holds a seat —
+ * or `null`. Checked when the
  * file is issued AND when it is used, minutes later.
  */
 export async function sebSeat(
@@ -337,7 +338,7 @@ export async function sebSeat(
   evaluationId: string,
 ): Promise<EvaluationRecord | null> {
   const [evaluation] = await db.select().from(evaluations).where(eq(evaluations.id, evaluationId));
-  if (!evaluation || !sebRequired(evaluation)) return null;
+  if (!evaluation || !trustedClients(evaluation).includes("seb")) return null;
   return (await participantOf(db, evaluation, userId)) ? evaluation : null;
 }
 
@@ -1380,7 +1381,7 @@ export async function studentHome(
     // Issue #203: what "See my results" would lead to, for the attempt
     // that counts — the results service's own rule.
     results: resultsState(row.evaluation, countedAttempt(perEvaluation, row)?.state ?? null),
-    safeExamBrowser: sebRequired(row.evaluation),
+    trustedClients: trustedClients(row.evaluation),
   });
 
   const open: EvaluationCard[] = [];

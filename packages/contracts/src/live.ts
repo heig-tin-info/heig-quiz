@@ -18,6 +18,7 @@ import {
   FeedbackPolicy,
   Navigation,
   RetakeKeep,
+  TrustedClient,
 } from "./evaluation.js";
 
 export const AttemptState = z.enum(["not_started", "in_progress", "submitted", "expired"]);
@@ -424,8 +425,13 @@ export const EvaluationCard = z.object({
   retakes: CardRetakes.nullable(),
   /** Issue #203: what "See my results" would lead to — see {@link CardResults}. */
   results: CardResults,
-  /** ADR-027: sat in Safe Exam Browser only; the card downloads the `.seb` instead of opening. */
-  safeExamBrowser: z.boolean().optional(),
+  /**
+   * ADR-027, ADR-051 §2: the trusted clients this exam is sat through, `seb`
+   * first. Empty: the portal opens it. With `seb`, the card downloads the
+   * `.seb` instead of opening; with `kiosk` only, it opens nothing and says
+   * to sit it on a kiosk station.
+   */
+  trustedClients: z.array(TrustedClient),
 });
 export type EvaluationCard = z.infer<typeof EvaluationCard>;
 

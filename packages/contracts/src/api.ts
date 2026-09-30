@@ -6,6 +6,8 @@
 
 import { z } from "zod";
 
+import { TRUSTED_CLIENTS } from "@quiz/domain";
+
 import { McqPolicy } from "./evaluation.js";
 
 /** Display format for date-times; null falls back to ISO (`2026-09-01 08:00`). */
@@ -20,6 +22,11 @@ export type DateFormat = (typeof DATE_FORMATS)[number];
 export interface PublicConfig {
   /** The API exposes the persona picker at `/app/auth/dev` (never in prod). */
   devLogin: boolean;
+  /**
+   * The kiosk path exists (ADR-051: `KIOSK_ATTESTATION` is not `off`), so an
+   * exam may accept kiosk stations and the setting is offered.
+   */
+  kiosk: boolean;
 }
 
 /**
@@ -27,11 +34,13 @@ export interface PublicConfig {
  * whole application. `seb`: opened by a one-time launch ticket inside Safe
  * Exam Browser, confined to ONE evaluation. `impersonation`: an admin acting
  * as a student (ADR-034), opened by a one-time link, reaching what a
- * `portal` session of that student reaches, read-only in production. A
- * route accepts `portal` (and so `impersonation`) only unless it declares
- * otherwise.
+ * `portal` session of that student reaches, read-only in production.
+ * `kiosk`: opened on one of the school's attested stations by a pairing
+ * (ADR-051), confined to ONE evaluation like `seb`. `seb` and `kiosk` are the
+ * confined kinds, the trusted clients an exam may require. A route accepts
+ * `portal` (and so `impersonation`) only unless it declares otherwise.
  */
-export const SESSION_KINDS = ["portal", "seb", "impersonation"] as const;
+export const SESSION_KINDS = ["portal", "impersonation", ...TRUSTED_CLIENTS] as const;
 export type SessionKind = (typeof SESSION_KINDS)[number];
 
 export interface Me {
@@ -59,8 +68,8 @@ export interface Me {
    */
   coach: { enabled: boolean | null; seen: string[] };
   /**
-   * The session this request rode on; `evaluationId` is set on a `seb` one
-   * only, and `readOnly` says the server refuses its writes (an
+   * The session this request rode on; `evaluationId` is set on a confined
+   * one only (`seb` or `kiosk`, the evaluation it is confined to), and `readOnly` says the server refuses its writes (an
    * `impersonation` outside development, ADR-034). Absent: `portal`.
    * `superPowersUntil` is the server's end of this session's Super Powers
    * (ADR-054), ISO; null when they are off. The browser only counts down

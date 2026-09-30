@@ -111,8 +111,16 @@ function retakeLine(card: EvaluationCardData, t: TFunction): string | null {
   return parts.join(" · ");
 }
 
-/** The line of an open card: the retake count once done, the time left otherwise. */
+/** ADR-051 §2: an exam sat on a kiosk station and nowhere else. */
+const kioskOnly = (card: EvaluationCardData): boolean =>
+  card.trustedClients.includes("kiosk") && !card.trustedClients.includes("seb");
+
+/**
+ * The line of an open card: where to sit it for a kiosk-only exam, the
+ * retake count once done, the time left otherwise.
+ */
 export function openLine(card: EvaluationCardData, now: number, t: TFunction): string | null {
+  if (kioskOnly(card)) return t("shome.kiosk");
   return card.retakes !== null && finished(card) ? retakeLine(card, t) : timingLine(card, now, t);
 }
 
@@ -251,7 +259,7 @@ export function PollRow({
  * SEB instructions, to render once on the page.
  */
 export function useCardActions(navigate: (r: Route) => void): {
-  open: (card: EvaluationCardData, primary: boolean) => RowAction;
+  open: (card: EvaluationCardData, primary: boolean) => RowAction | undefined;
   review: (card: EvaluationCardData) => RowAction | undefined;
   modal: ReactNode;
 } {
@@ -263,7 +271,12 @@ export function useCardActions(navigate: (r: Route) => void): {
   // Issue #270: the SEB card opens its instructions; the file comes from there.
   const [sebFor, setSebFor] = useState<EvaluationCardData | null>(null);
 
-  const open = (card: EvaluationCardData, primary: boolean): RowAction => {
+  /** The one button of an open card; none for an exam sat on a kiosk station only. */
+  const open = (card: EvaluationCardData, primary: boolean): RowAction | undefined => {
+    // ADR-051: sat on a kiosk station only — the station starts it, once
+    // paired from the phone; nothing opens here, not even a retake (the
+    // card's line says where to go).
+    if (kioskOnly(card)) return undefined;
     const r = card.retakes;
     if (r !== null && finished(card) && r.canRetake) {
       return {
@@ -275,9 +288,9 @@ export function useCardActions(navigate: (r: Route) => void): {
     }
     // Issue #203: a finished attempt that cannot be retaken is never here —
     // the server lists it under Past, where the results are.
-    // ADR-027: sat in Safe Exam Browser only — the card hands out the file,
+    // ADR-027: sat in Safe Exam Browser — the card hands out the file,
     // after the instructions (#270).
-    if (card.safeExamBrowser) {
+    if (card.trustedClients.includes("seb")) {
       return { label: t("shome.seb"), primary, onClick: () => setSebFor(card) };
     }
     return {

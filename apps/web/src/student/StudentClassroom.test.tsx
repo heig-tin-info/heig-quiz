@@ -33,6 +33,7 @@ const card = (over: Partial<EvaluationCard>): EvaluationCard & { kind: "evaluati
   deadlineAt: null,
   retakes: null,
   results: "none",
+  trustedClients: [],
   ...over,
 });
 

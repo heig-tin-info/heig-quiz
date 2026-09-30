@@ -34,6 +34,7 @@ import {
   type TemplatePullResult,
 } from "@quiz/contracts";
 
+import type { AppConfig } from "../../config.js";
 import { tracer, type AuditAction } from "../../audit.js";
 import { hasKey, loadConfig, typeOf } from "../pool/config.js";
 import {
@@ -50,8 +51,10 @@ import { evaluationChanged } from "./events.js";
 import * as service from "./service.js";
 import * as templates from "./templates.js";
 
-export async function evaluationPlugin(app: FastifyInstance) {
+export async function evaluationPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const requireTeacher = teacherGuard(app);
+  /** ADR-051 §2: whether an exam may be switched to kiosk stations. */
+  const kioskAvailable = opts.config.KIOSK_ATTESTATION !== "off";
 
   /**
    * A template gone between the loader and the write is exactly the loader's
@@ -176,7 +179,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
           scope.evaluation,
           "evaluation.update",
           { fields: Object.keys(body) },
-          (ctx) => service.patchEvaluation(app.db, scope.evaluation, body, { ...ctx, now }),
+          (ctx) => service.patchEvaluation(app.db, scope.evaluation, body, { ...ctx, now, kioskAvailable }),
         );
         return detail(req, row);
       },
@@ -445,7 +448,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
       { params: IdParam, body: TemplatePatch, load: staffTemplate },
       ({ req, now, body, scope }) =>
         templateWrite(req, scope.template, { fields: Object.keys(body) }, (tx, row, ctx) =>
-          service.patchEvaluation(tx, row, body, { ...ctx, now }),
+          service.patchEvaluation(tx, row, body, { ...ctx, now, kioskAvailable }),
         ),
     ),
   );

@@ -211,14 +211,33 @@ export function negativeMarkingAllowedFor(mode: EvaluationModeName): boolean {
 }
 
 /**
- * Whether this evaluation is sat in Safe Exam Browser only (ADR-027): an
- * exam's switch, inert on any other mode whatever its row says.
+ * The confined clients an exam may require (ADR-051 §2): Safe Exam Browser,
+ * or a kiosk station — each also the kind of the confined session it opens.
+ * THE list: `@quiz/contracts` builds `TrustedClient` and `SESSION_KINDS` from
+ * it, and the API's `confined()` reads it.
  */
-export function safeExamBrowserOn(
+export const TRUSTED_CLIENTS = ["seb", "kiosk"] as const;
+export type TrustedClient = (typeof TRUSTED_CLIENTS)[number];
+
+/** Whether a session kind is a trusted client's, i.e. a confined session. */
+export const isTrustedClient = (kind: string): kind is TrustedClient =>
+  (TRUSTED_CLIENTS as readonly string[]).includes(kind);
+
+/**
+ * The trusted clients an evaluation accepts (ADR-027, ADR-051 §2), in this
+ * order: `seb`, then `kiosk`. Empty means the evaluation is sat in the
+ * portal; otherwise ONLY through one of the kinds listed. Both switches are
+ * an exam's, inert on any other mode whatever its row says. The one reader
+ * of whether they are IN FORCE: every rule that depends on them (who sits,
+ * the `.seb`, the student's card, the launch summary) asks this.
+ */
+export function trustedClientsOf(
   mode: EvaluationModeName,
-  safeExamBrowser: boolean | undefined,
-): boolean {
-  return mode === "exam" && safeExamBrowser === true;
+  settings: { safeExamBrowser?: boolean | undefined; kiosk?: boolean | undefined },
+): TrustedClient[] {
+  if (mode !== "exam") return [];
+  const on: Record<TrustedClient, boolean | undefined> = { seb: settings.safeExamBrowser, kiosk: settings.kiosk };
+  return TRUSTED_CLIENTS.filter((client) => on[client] === true);
 }
 
 /**

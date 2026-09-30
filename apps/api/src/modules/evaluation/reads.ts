@@ -15,7 +15,6 @@ import {
   type ItemRow,
   type McqPolicy,
   negativeMarkingOf,
-  safeExamBrowserOf,
   retakesOf,
   type RetakeSettings,
 } from "@quiz/contracts";
@@ -25,7 +24,8 @@ import {
   negativeMarkingOn,
   retakesOn,
   round2,
-  safeExamBrowserOn,
+  trustedClientsOf,
+  type TrustedClient,
   drillAllowedOn,
   evaluationTotal,
 } from "@quiz/domain";
@@ -204,9 +204,12 @@ export function drillAllowed(row: EvaluationRecord): boolean {
   return drillAllowedOn(row.mode, settingsOf(row).allowDrill);
 }
 
-/** ADR-027: sat in Safe Exam Browser only. An exam's switch; inert on any other mode. */
-export function sebRequired(row: EvaluationRecord): boolean {
-  return safeExamBrowserOn(row.mode, safeExamBrowserOf(settingsOf(row)));
+/**
+ * ADR-027, ADR-051 §2: the trusted clients this evaluation is sat through —
+ * empty for the portal. Exam switches; inert on any other mode.
+ */
+export function trustedClients(row: EvaluationRecord): TrustedClient[] {
+  return trustedClientsOf(row.mode, settingsOf(row));
 }
 
 /**

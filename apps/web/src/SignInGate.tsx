@@ -1,11 +1,7 @@
 import type { ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
 
-import type { PublicConfig } from "@quiz/contracts";
-
-import { api } from "./api";
+import { usePublicConfig } from "./api";
 import { useT } from "./i18n";
-import { configKey } from "./queryKeys";
 import { Button, Card, GateFrame } from "./ui";
 
 /**
@@ -34,11 +30,7 @@ export function SignInGate({
   action: string;
 }) {
   const t = useT();
-  const config = useQuery<PublicConfig>({
-    queryKey: configKey,
-    queryFn: () => api<PublicConfig>("/app/api/config"),
-    retry: false,
-  });
+  const config = usePublicConfig();
   const back = encodeURIComponent(next);
   return (
     <GateFrame>

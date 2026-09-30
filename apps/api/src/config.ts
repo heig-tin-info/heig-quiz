@@ -120,6 +120,15 @@ const EnvSchema = z.object({
     .default("")
     .transform((v) => v === "1" || v === "true"),
 
+  /**
+   * Attested kiosk stations (ADR-051 §5). `off` — the default — means no
+   * kiosk path at all: the kiosk routes answer 404 and an exam is not offered
+   * the setting. `google` checks each station with Chrome Verified Access;
+   * `mock` accepts `mock:<device id>` for development and the end-to-end
+   * tests and, like the development login, is refused in production below.
+   */
+  KIOSK_ATTESTATION: z.enum(["google", "mock", "off"]).default("off"),
+
   /** Signs the login state cookies (not the sessions, which live in the database). */
   COOKIE_SECRET: z.string().min(16).default("dev-cookie-secret-change-me"),
   /**
@@ -324,6 +333,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     // given for turning it on: refuse to boot rather than serve it.
     if (parsed.data.AUTH_DEV_LOGIN) {
       throw new Error("Invalid configuration: dev AUTH_DEV_LOGIN forbidden in production");
+    }
+    // A station nobody attested is a laptop that says it is a station: the
+    // mock attestation is a development fixture, whatever the reason given.
+    if (parsed.data.KIOSK_ATTESTATION === "mock") {
+      throw new Error("Invalid configuration: dev KIOSK_ATTESTATION (mock) forbidden in production");
     }
     // A grade no model produced must never reach a real student: the stub
     // provider is a development fixture, whatever the reason given.

@@ -219,7 +219,13 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
    * The only unauthenticated endpoint: what the sign-in screen must know
    * before anyone has a session. No personal data, no secret.
    */
-  app.get("/app/api/config", async (): Promise<PublicConfig> => ({ devLogin: development }));
+  app.get(
+    "/app/api/config",
+    async (): Promise<PublicConfig> => ({
+      devLogin: development,
+      kiosk: config.KIOSK_ATTESTATION !== "off",
+    }),
+  );
 
   // --- Routes ---
 

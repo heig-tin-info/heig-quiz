@@ -2,60 +2,10 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import type { EvaluationDetail } from "@quiz/contracts";
-
-import { EVALUATION_ID, makeEvaluationDetail } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
-import { AdvancedDisclosure } from "./AdvancedDisclosure";
-import { evaluationTarget } from "./editTarget";
-import { useConfigPatch } from "./usePatch";
+import { Harness, open, PATCH, withMode } from "../test/advancedDisclosure";
 
 /* ADR-026 (#130): negative marking, one switch for the whole evaluation. */
-
-const withMode = (
-  mode: EvaluationDetail["evaluation"]["mode"],
-  negativeMarking?: boolean,
-): EvaluationDetail => {
-  const detail = makeEvaluationDetail();
-  return {
-    ...detail,
-    evaluation: {
-      ...detail.evaluation,
-      mode,
-      settings: {
-        ...detail.evaluation.settings,
-        ...(negativeMarking === undefined ? {} : { negativeMarking }),
-      },
-    },
-  };
-};
-
-function Harness({
-  detail,
-  disabled = false,
-  holdsCategorize = false,
-}: {
-  detail: EvaluationDetail;
-  disabled?: boolean;
-  holdsCategorize?: boolean;
-}) {
-  const patch = useConfigPatch(evaluationTarget(EVALUATION_ID));
-  return (
-    <AdvancedDisclosure
-      config={detail.evaluation}
-      patch={patch}
-      disabled={disabled}
-      feedbackDisabled={false}
-      holdsCategorize={holdsCategorize}
-    />
-  );
-}
-
-const PATCH = `PATCH /app/api/evaluations/${EVALUATION_ID}`;
-
-async function open() {
-  await userEvent.click(screen.getByRole("button", { name: /^advanced options$/i }));
-}
 
 describe("the negative-marking setting", () => {
   it("is off by default, says what it does, and sends the switch alone", async () => {
@@ -75,7 +25,7 @@ describe("the negative-marking setting", () => {
   });
 
   it("shows the stored value, frozen with the rest of the structure", async () => {
-    renderWithProviders(<Harness detail={withMode("exercise", true)} disabled />);
+    renderWithProviders(<Harness detail={withMode("exercise", { negativeMarking: true })} disabled />);
     await open();
     const toggle = screen.getByRole("switch", { name: "Negative marking" });
     expect(toggle).toBeChecked();
@@ -107,7 +57,7 @@ describe("the categorize policy setting", () => {
   });
 
   it("says, on both policy rows, that negative marking replaces them while it is on", async () => {
-    renderWithProviders(<Harness detail={withMode("exam", true)} holdsCategorize />);
+    renderWithProviders(<Harness detail={withMode("exam", { negativeMarking: true })} holdsCategorize />);
     await open();
     expect(screen.getAllByText(/Negative marking is on and replaces this policy\./)).toHaveLength(2);
   });
@@ -118,3 +68,4 @@ describe("the categorize policy setting", () => {
     expect(screen.queryByRole("radiogroup", { name: "Categorize scoring" })).toBeNull();
   });
 });
+

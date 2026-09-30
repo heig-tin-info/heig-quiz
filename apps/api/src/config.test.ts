@@ -33,6 +33,14 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ ...PROD, AUTH_DEV_LOGIN: "0" })).not.toThrow();
   });
 
+  it("refuses the mock kiosk attestation in production", () => {
+    expect(() => loadConfig({ ...PROD, KIOSK_ATTESTATION: "mock" })).toThrow(/KIOSK_ATTESTATION/);
+    // Off, or absent, it boots.
+    expect(() => loadConfig({ ...PROD, KIOSK_ATTESTATION: "off" })).not.toThrow();
+    expect(loadConfig({}).KIOSK_ATTESTATION).toBe("off");
+    expect(loadConfig({ NODE_ENV: "development", KIOSK_ATTESTATION: "mock" }).KIOSK_ATTESTATION).toBe("mock");
+  });
+
   it("refuses the stub LLM provider in production", () => {
     expect(() => loadConfig({ ...PROD, LLM_PROVIDER: "stub" })).toThrow(/LLM_PROVIDER/);
     // Off, or absent, it boots.

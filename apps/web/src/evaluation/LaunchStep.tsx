@@ -17,7 +17,7 @@ import { useState } from "react";
 
 import type { Evaluation, EvaluationDetail } from "@quiz/contracts";
 
-import { api } from "../api";
+import { api, usePublicConfig } from "../api";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import {
@@ -129,7 +129,9 @@ function Checklist({
   const now = useNow();
   const [scheduling, setScheduling] = useState(false);
   const [pulling, setPulling] = useState(false);
-  const checks = launchChecks(detail, t, now, isoDateTime);
+  // ADR-051: while the public configuration is unknown, no kiosk warning.
+  const kioskAvailable = usePublicConfig().data?.kiosk ?? true;
+  const checks = launchChecks(detail, t, now, isoDateTime, kioskAvailable);
   const { blockers, warnings } = readiness(checks);
   const blocked = blockers > 0;
   const skip = evaluation.settings.lobby === "skip";

@@ -16,7 +16,7 @@ import {
 } from "./guards.js";
 
 const facts = (over: Partial<ClassroomReadFacts>): ClassroomReadFacts => ({
-  seb: false,
+  confined: false,
   delegated: false,
   staff: false,
   seat: false,
@@ -26,11 +26,11 @@ const facts = (over: Partial<ClassroomReadFacts>): ClassroomReadFacts => ({
 
 const bools = [false, true];
 /** Every combination of the five facts. */
-const every: ClassroomReadFacts[] = bools.flatMap((seb) =>
+const every: ClassroomReadFacts[] = bools.flatMap((confined) =>
   bools.flatMap((delegated) =>
     bools.flatMap((staff) =>
       bools.flatMap((seat) =>
-        bools.map((studentView) => ({ seb, delegated, staff, seat, studentView })),
+        bools.map((studentView) => ({ confined, delegated, staff, seat, studentView })),
       ),
     ),
   ),
@@ -65,8 +65,8 @@ describe("classroomPayload", () => {
     }
   });
 
-  it("refuses every seb session", () => {
-    for (const f of every.filter((f) => f.seb)) expect(classroomPayload(f)).toBeNull();
+  it("refuses every confined session (seb, kiosk)", () => {
+    for (const f of every.filter((f) => f.confined)) expect(classroomPayload(f)).toBeNull();
   });
 });
 
@@ -89,11 +89,12 @@ describe("reachOf", () => {
     expect(reachOf({ role: "admin" }, portal, later)).toBe("seats");
   });
 
-  it("never reaches further for a token, a delegated or a seb session, or a non-admin", () => {
+  it("never reaches further for a token, a delegated or a confined session, or a non-admin", () => {
     expect(reachOf({ role: "admin" }, null, now)).toBe("seats");
     expect(reachOf({ role: "admin" }, { ...portal, actorUserId: "someone" }, now)).toBe("seats");
     expect(reachOf({ role: "admin" }, { ...portal, kind: "impersonation" }, now)).toBe("seats");
     expect(reachOf({ role: "admin" }, { ...portal, kind: "seb" }, now)).toBe("seats");
+    expect(reachOf({ role: "admin" }, { ...portal, kind: "kiosk" }, now)).toBe("seats");
     expect(reachOf({ role: "teacher" }, portal, now)).toBe("seats");
   });
 
@@ -101,6 +102,7 @@ describe("reachOf", () => {
     expect(mayHoldSuperPowers({ role: "admin" }, portal)).toBe(true);
     expect(mayHoldSuperPowers({ role: "admin" }, null)).toBe(false);
     expect(mayHoldSuperPowers({ role: "admin" }, { ...portal, kind: "seb" })).toBe(false);
+    expect(mayHoldSuperPowers({ role: "admin" }, { ...portal, kind: "kiosk" })).toBe(false);
     expect(mayHoldSuperPowers({ role: "admin" }, { ...portal, actorUserId: "x" })).toBe(false);
     expect(mayHoldSuperPowers({ role: "teacher" }, portal)).toBe(false);
   });

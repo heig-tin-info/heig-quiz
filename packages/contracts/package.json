@@ -15,7 +15,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@quiz/core": "workspace:*"
+    "@quiz/core": "workspace:*",
+    "@quiz/domain": "workspace:*"
   },
   "peerDependencies": {
     "zod": "^4.0.0"

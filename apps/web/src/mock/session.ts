@@ -94,7 +94,7 @@ export const setMe = (next: Me | null) => {
   me = next;
 };
 
-on("GET", "/app/api/config", (): PublicConfig => ({ devLogin: true }));
+on("GET", "/app/api/config", (): PublicConfig => ({ devLogin: true, kiosk: true }));
 
 on("GET", "/app/api/me", () => {
   if (!me) throw new MockError(401, "Signed out");

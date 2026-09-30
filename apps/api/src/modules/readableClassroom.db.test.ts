@@ -36,6 +36,7 @@ const keptSeat = account("student");
 
 const impersonation: SessionAuth = { kind: "impersonation", actorUserId: admin.id, evaluationId: null };
 const seb: SessionAuth = { kind: "seb", actorUserId: null, evaluationId: randomUUID() };
+const kiosk: SessionAuth = { kind: "kiosk", actorUserId: null, evaluationId: randomUUID() };
 
 beforeAll(async () => {
   db = await testDb();
@@ -99,5 +100,11 @@ describe("findReadableClassroom", () => {
     expect(await read(admin, mine.classroomId, seb)).toBeNull();
     expect(await read(teacher, mine.classroomId, seb)).toBeNull();
     expect(await read(student, mine.classroomId, seb)).toBeNull();
+  });
+
+  it("refuses a kiosk session, whoever holds it (ADR-051)", async () => {
+    expect(await read(admin, mine.classroomId, kiosk)).toBeNull();
+    expect(await read(teacher, mine.classroomId, kiosk)).toBeNull();
+    expect(await read(student, mine.classroomId, kiosk)).toBeNull();
   });
 });
