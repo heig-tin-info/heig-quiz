@@ -62,6 +62,12 @@ export const classroomJournals = pgTable(
     /** Head commit the copy was built from; null before the first synchronisation. */
     lastCommitSha: text("last_commit_sha"),
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    /**
+     * The database's `now()` the pages' `html_student` were last rendered at
+     * (an ingestion, or the J4 sweep): a page whose `visible_from` passed
+     * since is not linked in them yet, and the sweep renders them again.
+     */
+    studentRenderedAt: timestamp("student_rendered_at", { withTimezone: true }),
     syncStatus: text("sync_status", { enum: JOURNAL_SYNC_STATUSES }).notNull().default("pending"),
     /** Why the last synchronisation failed: a `JournalSyncError` code, worded by the web app. */
     syncError: text("sync_error").$type<JournalSyncError>(),

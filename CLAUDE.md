@@ -50,8 +50,8 @@ The screens as they ship are in the user guide's screenshots
 ```
 apps/
   api/        Fastify: modules, SSE, jobs, ticker, Drizzle schema + migrations,
-              src/github/ (the GitHub adapters); to come:
-              modules/github|journal|project|gradebook
+              src/github/ (the GitHub adapters), modules/github and
+              modules/journal; to come: modules/project|gradebook
   web/        React SPA (Vite, Tailwind, TanStack Query)
   runner/     code execution in hardened Podman containers (@quiz/runner)
 packages/

@@ -30,6 +30,7 @@ import type { ScheduledTaskKey } from "@quiz/contracts";
 
 import type { AppConfig } from "./config.js";
 import { expireSuperPowers } from "./auth/session.js";
+import { JOURNAL_TASKS } from "./modules/journal/jobs.js";
 import { KIOSK_TASKS } from "./modules/kiosk/jobs.js";
 import { perApp } from "./perApp.js";
 import { LIVE_TASKS } from "./modules/live/jobs.js";
@@ -80,6 +81,9 @@ export const TICK_TASKS: TickTask[] = [
   // ADR-051 §6: the silent kiosk stations suspended, clock-bound like the
   // expiry above, so a bare tick task too.
   ...KIOSK_TASKS,
+  // Fix J4 (M4-02): a journal page appears to students when its
+  // `visible_from` passes, a date, so clock-bound too (spec 05 §5.11).
+  ...JOURNAL_TASKS,
   scheduledTasksTick(),
 ];
 

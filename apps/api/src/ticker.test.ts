@@ -52,6 +52,8 @@ describe("registration", () => {
     for (const task of LIVE_TASKS) expect(names).toContain(task.name);
     // …and so does the claim of the scheduled catalog.
     expect(names).toContain("system.scheduled_tasks");
+    // …and the journal's `visible_from` sweep (fix J4): a date, clock-bound.
+    expect(names).toContain("journal.visible_from");
   });
 
   it("keeps the clock-bound work out of the scheduled catalog (invariant 5, D10)", () => {

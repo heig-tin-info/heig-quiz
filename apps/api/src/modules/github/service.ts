@@ -6,8 +6,8 @@
  * heig-classroom's `modules/classrooms.ts` (sync point `ab98cc0`).
  *
  * This module owns `github_organizations` and `github_classroom_links`; it
- * reads `classroom_journals` by join (D28) until the journal module has a
- * service (M4-02).
+ * reads `classroom_journals` by join (D28), inside its own transaction:
+ * `github` never imports the `journal` module, which registers on it.
  *
  * Every GitHub read here serves an HTTP request, so it passes `HTTP_READ`:
  * a rate limit fails at once and the stored state is served (§3.1, #37).
@@ -549,7 +549,7 @@ function refusal(code: (typeof GITHUB_CONNECT_REFUSALS)[number], message: string
 
 /**
  * D28: while the classroom has a journal, its organization does not change.
- * Read by join: the journal module has no service yet (M4-02 moves it).
+ * Read in the connect's transaction; `github` never imports `journal`.
  */
 async function refuseWithJournal(tx: Tx, classroomId: string): Promise<void> {
   const [journal] = await tx

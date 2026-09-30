@@ -79,7 +79,9 @@ seed README, attach, invite, ingest), `POST base/attach`, `DELETE base`
 `POST base/pages`, `DELETE base/pages/*`, `POST base/assets/*` (raw ≤ 5 MB,
 content type matches the extension); `GET /app/api/journals/:jid/assets/*`.
 Plumbing: `/webhooks/github` dispatch, queue `journal.ingest`, SSE family
-`journal` (classroom-wide), nine audit actions `journal.*`.
+`journal` (classroom-wide), nine audit actions `journal.*` (in the port,
+all of them staff writes of M4-03: the ingestion, the webhooks and the J4
+sweep audit nothing, their outcome is the row's sync state).
 
 ## 4.2 What the port requires
 
@@ -149,6 +151,15 @@ Plumbing: `/webhooks/github` dispatch, queue `journal.ingest`, SSE family
 | J5 | Warnings are server-built English sentences | codes + parameters |
 | J6 | `.md-body` collides with Quiz's question prose styles | `.md-body.md-doc` modifier (long-form: h1 28 px, 72-ch measure, 1.75 leading) |
 | J7 | Quiz dev runs on PGlite without webhooks nor pg-boss | Refresh is the dev path; the mock serves rendered HTML fixtures |
+
+As ported (M4-02): `journal.ingest` is a `standard` queue with no dedupe,
+and the serialisation is the ingestion's own: one transaction per
+ingestion, whose first statement is `pg_advisory_xact_lock` on the
+classroom's row, and which reads the head, the tree and the blobs inside
+that lock, so a slow ingestion of an old head can never commit after a
+fast one of the new head. The copy's writes run in a savepoint; a failure
+GitHub answered is written under the same lock. The J4 sweep only tries
+the lock and skips a journal an ingestion holds.
 
 Note on J2 (quiz #273): in pg-boss 12 a `singletonKey` without
 `singletonSeconds` dedupes nothing on a `standard` queue, which is what a

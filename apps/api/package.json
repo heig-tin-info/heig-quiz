@@ -20,6 +20,7 @@
     "@fastify/static": "^10.1.2",
     "@quiz/contracts": "workspace:*",
     "@quiz/core": "workspace:*",
+    "@quiz/docrender": "workspace:*",
     "@quiz/domain": "workspace:*",
     "@quiz/qt-code": "workspace:*",
     "@quiz/registry": "workspace:*",

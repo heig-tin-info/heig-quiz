@@ -1,0 +1,1 @@
+ALTER TABLE "classroom_journals" ADD COLUMN "student_rendered_at" timestamp with time zone;
