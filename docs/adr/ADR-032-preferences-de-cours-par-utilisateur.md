@@ -56,9 +56,10 @@ Three facts shape the answer:
    data; a hide changes what one person's screen shows and nothing else.
 
 5. **"Hidden", not "archived".** "Archived" is a state of a classroom, seen by
-   the whole staff, which also closes its join code. Using the same word for a
-   personal hide would promise the teacher an effect on their colleagues that
-   does not exist. The course list therefore says "Show hidden", and the
+   the whole staff, which also closes its join code (amended by ADR-053,
+   2026-09-30: classrooms have no join code any more; the point stands).
+   Using the same word for a personal hide would promise the teacher an
+   effect on their colleagues that does not exist. The course list therefore says "Show hidden", and the
    classrooms of a course keep "Show archived".
 
 ## Consequences
@@ -79,7 +80,7 @@ migration. Nothing else reads it.
 1. **`course_staff.hidden_at`.** One column instead of a table, but an admin
    has no row there, and the preference would vanish with the seat.
 2. **A global archive on `courses`.** One colleague would hide the course
-   from all, and it would tempt a cascade (join codes, running evaluations)
+   from all, and it would tempt a cascade (running evaluations)
    that can break a live exam.
 3. **Filtering hidden courses on the server** (`GET /courses?hidden=…`). Two
    readings of one list, and the pickers, the MCP and the "Show hidden" toggle

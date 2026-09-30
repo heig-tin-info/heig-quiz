@@ -317,15 +317,26 @@ describe("in development (AUTH_DEV_LOGIN)", () => {
     expect(submitted.statusCode, submitted.body).toBe(200);
 
     // A traced write made through the session is the admin's, on the student's behalf.
-    const other = await seedLive(w.server.app.db, { teacherId: w.teacher.id, studentIds: [] });
-    const code = (
-      await call(w.server, "PATCH", `/app/api/classrooms/${other.classroomId}`, w.teacher.headers, {
-        joinCodeEnabled: true,
-      })
-    ).json().joinCode as string;
-    const joined = await call(w.server, "POST", `/app/api/join/${code}`, as);
-    expect(joined.statusCode, joined.body).toBe(201);
-    const [trace] = await w.server.app.db.select().from(auditLog).where(eq(auditLog.action, "roster.join"));
+    // The retake of an exercise is such a write (F-EVAL-15).
+    const exercise = await seedLive(w.server.app.db, {
+      teacherId: w.teacher.id,
+      studentIds: [w.student.id],
+      mode: "exercise",
+      questions: 1,
+      durationS: null,
+      settings: { timing: "manual", lobby: "skip", retakes: { enabled: true, keep: "best", maxAttempts: 2 } },
+    });
+    const id = exercise.evaluationId;
+    expect(
+      (await call(w.server, "POST", `/app/api/evaluations/${id}/start`, w.teacher.headers, { confirm: true })).statusCode,
+    ).toBe(200);
+    const first = await call(w.server, "POST", `/app/api/evaluations/${id}/attempt`, as);
+    expect(first.statusCode, first.body).toBe(200);
+    const firstId = first.json().view.attempt.id as string;
+    expect((await call(w.server, "POST", `/app/api/attempts/${firstId}/submit`, as, { confirm: true })).statusCode).toBe(200);
+    const retaken = await call(w.server, "POST", `/app/api/evaluations/${id}/retake`, as);
+    expect(retaken.statusCode, retaken.body).toBe(200);
+    const [trace] = await w.server.app.db.select().from(auditLog).where(eq(auditLog.action, "attempt.retake"));
     expect(trace).toMatchObject({ actorUserId: w.admin.id, actorType: "user" });
   });
 });

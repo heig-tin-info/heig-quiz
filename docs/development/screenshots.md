@@ -113,6 +113,8 @@ describe the grading table (ADR-044); their images were retaken again on
 2026-09-29 with the columns of every question type, on a fresh seed and
 without a runner (so the code answers wait for it). Every scene showing
 "Test 0", and `teacher-home`, was retaken on 2026-09-30 (nine questions, `LLM_PROVIDER=stub`).
+The `student-home` scenes were retaken on 2026-09-30 once more, without the
+classroom code field (ADR-053).
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |

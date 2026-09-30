@@ -252,26 +252,6 @@ describe("the student home", () => {
     expect(await screen.findByRole("button", { name: "Réessayer" })).toBeInTheDocument();
   });
 
-  it("joins a classroom by code", async () => {
-    const { calls } = mockFetch({
-      "GET /app/api/student/home": ok(home),
-      "GET /app/api/student/classrooms": ok([]),
-      "POST /app/api/join/PRG1-2026": ok({
-        classroomId: "r1",
-        classroomName: "PRG1-2026",
-        courseCode: "PRG1",
-        status: "joined",
-      }),
-    });
-    render();
-    await userEvent.type(await screen.findByLabelText("Code de la classe"), "PRG1-2026");
-    await userEvent.click(screen.getByRole("button", { name: "Rejoindre" }));
-    expect(calls.some((c) => c.url === "/app/api/join/PRG1-2026" && c.method === "POST")).toBe(
-      true,
-    );
-    expect(await screen.findByText("Vous avez rejoint PRG1-2026.")).toBeInTheDocument();
-  });
-
   // D07 (M5-02): a classroom card is the door to the classroom's page.
   it("opens the classroom's page from its card, by click and by keyboard", async () => {
     mockFetch({

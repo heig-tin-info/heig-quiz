@@ -488,11 +488,12 @@ manual deploy above with that sha. The sha tags stay on GHCR, so every past
 commit remains deployable.
 
 Most migrations are additive, so an older image runs against a newer
-schema. Two are not: `0008_schema_audit.sql` (drops `enrollments.status` and
-three unused tables) and `0022_teams_uploaded_app.sql` (drops `teams_links`).
-A rollback to an image older than either needs that migration's
-pre-migration dump restored first (§6); when in doubt, restore it anyway. A rollback holds until
-the next approved promotion.
+schema. Three are not: `0008_schema_audit.sql` (drops `enrollments.status` and
+three unused tables), `0022_teams_uploaded_app.sql` (drops `teams_links`) and
+`0041_drop_join_code.sql` (drops `classrooms.join_code` and
+`join_code_enabled`, ADR-053). A rollback to an image older than any of them
+needs that migration's pre-migration dump restored first (§6); when in doubt,
+restore it anyway. A rollback holds until the next approved promotion.
 
 !!! warning "Never build on the application VM"
 

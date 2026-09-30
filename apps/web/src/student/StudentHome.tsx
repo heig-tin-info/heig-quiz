@@ -2,8 +2,8 @@
  * The student's home.
  *
  * Three questions, in the order a student asks them: what can I do NOW, what
- * is coming, what did I already hand in. The classrooms and the join code
- * come last, because they are administration, not work. A classroom card
+ * is coming, what did I already hand in. The classrooms come last, because
+ * they are administration, not work. A classroom card
  * opens the classroom's page (D07).
  *
  * The four decisions:

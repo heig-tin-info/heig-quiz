@@ -19,14 +19,12 @@ const DETAIL = {
   staff: [],
   pools: [{ id: "p1", name: "Pointers", visibility: "private", questionCount: 7 }],
   classrooms: [
-    { id: "r1", name: "PRG1-2026", period: "2026-A", archivedAt: null, joinCode: null, joinCodeEnabled: false },
+    { id: "r1", name: "PRG1-2026", period: "2026-A", archivedAt: null },
     {
       id: "r0",
       name: "PRG1-2024",
       period: "2024-A",
       archivedAt: "2025-02-01T08:00:00.000Z",
-      joinCode: null,
-      joinCodeEnabled: false,
     },
   ],
 };

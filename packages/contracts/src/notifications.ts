@@ -101,7 +101,7 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     attemptId: z.uuid(),
     count: z.number().int().positive(),
   }),
-  /** Students took their seat in a classroom (join code, or a roster claim). */
+  /** Students took their seat in a classroom (a roster line claimed at sign-in). */
   z.object({ kind: z.literal("student_joined"), ...classroomCount }),
   /** Roster lines of a classroom were flagged for the teacher's decision (AU-21). */
   z.object({ kind: z.literal("roster_conflict"), ...classroomCount }),

@@ -1,7 +1,7 @@
 /**
  * The cards the student's pages share: the activity rows (an evaluation, a
- * running poll), their one-line captions, and the list of classrooms with its
- * join card. The home (`StudentHome`) lists them across every classroom, the
+ * running poll), their one-line captions, and the list of classrooms. The
+ * home (`StudentHome`) lists them across every classroom, the
  * classroom page (`StudentClassroom`) for one, the Courses page
  * (`StudentCourses`) the classrooms (F-ORG-14, F-ORG-15).
  *
@@ -16,7 +16,6 @@ import { CalendarClock, GraduationCap, School } from "lucide-react";
 import { formatPoints } from "@quiz/domain";
 import type {
   EvaluationCard as EvaluationCardData,
-  JoinResult,
   StudentClassroom,
   StudentPollCard,
 } from "@quiz/contracts";
@@ -24,7 +23,6 @@ import type {
 import { api } from "../api";
 import { feedbackLink } from "../grading";
 import { formatDuration, useT, type TFunction } from "../i18n";
-import { useErrorToast, useToast } from "../notify";
 import { studentClassroomsKey } from "../queryKeys";
 import type { Route } from "../router";
 import {
@@ -32,7 +30,6 @@ import {
   Button,
   Card,
   EmptyState,
-  Field,
   isoDateParts,
   isoDateTime,
   pressable,
@@ -359,8 +356,7 @@ function ClassroomCard({
 }
 
 /**
- * The student's classrooms, each a door to its page, and the join card under
- * them — the home's "My classrooms" and the Courses page (F-ORG-14) alike.
+ * The student's classrooms, each a door to its page — the home's "My classrooms" and the Courses page (F-ORG-14) alike.
  * Its four states are its own; the caller frames it (a section, a page).
  */
 export function ClassroomList({ navigate }: { navigate: (r: Route) => void }) {
@@ -390,64 +386,6 @@ export function ClassroomList({ navigate }: { navigate: (r: Route) => void }) {
       ) : (
         rooms.data!.map((room) => <ClassroomCard key={room.id} room={room} navigate={navigate} />)
       )}
-      <JoinCard />
     </>
-  );
-}
-
-/** Joining a classroom with the code the teacher gave. */
-function JoinCard() {
-  const t = useT();
-  const toast = useToast();
-  const toastError = useErrorToast();
-  const [code, setCode] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const join = async () => {
-    setBusy(true);
-    try {
-      const result = await api<JoinResult>(`/app/api/join/${encodeURIComponent(code.trim())}`, {
-        method: "POST",
-      });
-      toast(
-        t(result.status === "joined" ? "join.joined" : "join.already", {
-          name: result.classroomName,
-        }),
-        "success",
-      );
-      setCode("");
-    } catch (error) {
-      toastError("join.failed")(error);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Card className="p-5">
-      <form
-        className="flex flex-wrap items-end gap-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void join();
-        }}
-      >
-        <div className="min-w-0 flex-1 basis-60 sm:max-w-80">
-          <Field
-            data-coach="student.join"
-            label={t("join.label")}
-            placeholder={t("join.placeholder")}
-            fullWidth
-            value={code}
-            autoComplete="off"
-            onChange={(e) => setCode(e.target.value)}
-          />
-          <p className="mt-1.5 text-[13px] text-fg-faint">{t("join.hint")}</p>
-        </div>
-        <Button type="submit" variant="secondary" loading={busy} disabled={code.trim().length < 4}>
-          {t("join.action")}
-        </Button>
-      </form>
-    </Card>
   );
 }

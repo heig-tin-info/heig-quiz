@@ -86,11 +86,11 @@ interface RosterEvent {
  * and the classroom: no name, no address. Call it after the write has
  * committed.
  *
- * BEST-EFFORT: it runs inside a login (the claim at sign-in), a join and a
- * roster import, none of which may fail because telling the staff did. A
+ * BEST-EFFORT: it runs inside a login (the claim at sign-in) and a roster
+ * import, neither of which may fail because telling the staff did. A
  * failure is logged and swallowed; the roster itself is already right.
  */
-export async function tellStaff(db: Db, event: RosterEvent): Promise<void> {
+async function tellStaff(db: Db, event: RosterEvent): Promise<void> {
   const { kind, classroomId, classroomName, count } = event;
   try {
     const seats = await db

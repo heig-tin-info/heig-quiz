@@ -8,8 +8,6 @@ Open the platform and press **Sign in with Switch edu-ID**. You sign in with the
 
 Your teacher adds your school e-mail address to the class list. The seat is attached to your account the first time you sign in with a matching address: there is no code to enter and nothing to accept. If a classroom you expect is missing from your home, check that you signed in with the address your teacher used, and that this address is registered on your Switch edu-ID account.
 
-A **Classroom code** field sits at the bottom of your home. Use it only if your teacher gave you a code for the classroom: type it and press **Join**. Most classrooms use the e-mail match above and have no code.
-
 ## Your home
 
 Your home shows what your classrooms have opened for you, in three sections.

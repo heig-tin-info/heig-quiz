@@ -11,7 +11,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Hidden course | A course a user took out of their own navigation (F-ORG-11). A per-user display state, not a state of the course: the word is "hidden", never "archived", which is a state of a classroom seen by the whole staff. |
 | Classroom | An instance of a course for a group and a period. E.g. "Prog C, class A, autumn 2026". Owns a roster. May be connected to one GitHub organization and carry one journal (ADR-035). heig-classroom's "classroom" (top-level, bound to an organization) maps to a course plus a classroom here. |
 | Period | When a classroom runs: a free label (`2026-A`, "Autumn 2026") and, optionally, a first and a last month (`YYYY-MM`, both or neither). The HEIG-VD semesters are the presets: autumn N = September N – January N+1, spring N = February – July. A dated classroom is *current* while its months, give or take one month on each side, cover today; an undated one is always current. "Ended" is computed, never written: nothing is archived automatically. |
-| Roster | The list of the students of a classroom, with their accommodations. Fed by CSV import or by self-enrolment with a classroom code. |
+| Roster | The list of the students of a classroom, with their accommodations. Fed by the teacher only, by CSV import or by hand; a student's line is claimed at sign-in on a matching address (ADR-053). |
 | Pool | A collection of questions. Private to a teacher, or shared with roles. A global public pool is readable by every teacher. |
 | Category | A hierarchical folder in a pool. Used for filing, not for permissions. |
 | Tag | A free keyword attached to a question. Used for search, statistics and quiz generation. |
@@ -108,7 +108,7 @@ erDiagram
 
 - **USER**: `id`, `eduid_sub`, `email`, `display_name`, `role`, `locale`, `theme`, `llm_api_key` encrypted.
 - **COURSE**: `id`, `name`, `code`.
-- **CLASSROOM**: `id`, `course_id`, `name`, `period`, `period_start`, `period_end`, `join_code`, `archived_at`.
+- **CLASSROOM**: `id`, `course_id`, `name`, `period`, `period_start`, `period_end`, `archived_at`.
 - **ENROLLMENT**: `classroom_id`, `user_id`, `time_bonus_percent` integer, 0 by default, `note`.
 - **POOL**: `id`, `name`, `visibility` `private` / `shared` / `public`, `owner_id`.
 - **QUESTION**: `id`, `pool_id`, `category_id`, `type`, `internal_name`, `difficulty` 1 to 5, `created_by`, `origin_question_id` for a fork.

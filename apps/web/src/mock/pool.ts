@@ -2684,8 +2684,6 @@ on("GET", "/app/api/courses/:id", (m) => {
         periodStart: r.periodStart,
         periodEnd: r.periodEnd,
         archivedAt: r.archivedAt,
-        joinCode: null,
-        joinCodeEnabled: false,
       })),
   };
 });

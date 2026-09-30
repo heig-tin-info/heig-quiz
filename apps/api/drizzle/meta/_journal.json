@@ -288,6 +288,13 @@
       "when": 1790788322709,
       "tag": "0040_evaluation_item_bonus",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790789411767,
+      "tag": "0041_drop_join_code",
+      "breakpoints": true
     }
   ]
 }

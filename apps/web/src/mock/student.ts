@@ -7,7 +7,6 @@ import type {
   AttemptView,
   AutosaveResponse,
   EvaluationCard,
-  JoinResult,
   LobbyView,
   StudentClassroomPage,
   StudentHome as StudentHomeData,
@@ -780,10 +779,3 @@ on("POST", "/app/api/attempts/:id/run", (m, body): unknown => {
   },
   };
 });
-
-on("POST", "/app/api/join/:code", (m): JoinResult => ({
-  classroomId: "r1",
-  classroomName: "PRG1-2026",
-  courseCode: "PRG1",
-  status: m.groups!.code!.toUpperCase() === "PRG1-2026" ? "already" : "joined",
-}));
