@@ -18,6 +18,7 @@ import { useErrorToast } from "../notify";
 import { TeacherPicker, nameOf } from "./TeacherPicker";
 import {
   Button,
+  ErrorText,
   IconButton,
   Initials,
   QueryError,
@@ -306,7 +307,7 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
             </Button>
           </form>
           {invite.isError ? (
-            <p className="mt-2 text-[13px] text-danger">{inviteMessage(invite.error, t)}</p>
+            <ErrorText className="mt-2">{inviteMessage(invite.error, t)}</ErrorText>
           ) : null}
         </section>
       </div>

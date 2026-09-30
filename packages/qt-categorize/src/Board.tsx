@@ -22,6 +22,7 @@ import { useEffect, useRef, useState, type CSSProperties, type HTMLAttributes, t
 import {
   closestCorners,
   DndContext,
+  MeasuringStrategy,
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
@@ -192,6 +193,7 @@ export function Board(props: BoardProps) {
       ids={ids}
       row={target === null}
       over={overZone === key}
+      dragging={active !== null}
       locked={locked}
       selected={current}
       empty={empty}
@@ -235,6 +237,9 @@ export function Board(props: BoardProps) {
     <DndContext
       sensors={sensors}
       collisionDetection={closestCorners}
+      // An empty, silent tray only takes room once a drag starts (see Zone):
+      // the zones are measured again after that re-render, not before it.
+      measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDragEnd={onDragEnd}
@@ -276,12 +281,18 @@ export function Board(props: BoardProps) {
  * One drop zone: the tray (a wrapping row) or the body of a column (a
  * stack). It is a droppable of its own, so an EMPTY column still takes a
  * card, and it lights in `info-soft` while a card hovers over it.
+ *
+ * An empty tray with nothing to say (the editor's, above its "new card"
+ * field) takes no room at rest: a blank strip between the tray's title and
+ * that field read as a missing element. It opens while a card is dragged or
+ * selected, since it is then a place a card may go back to.
  */
 function Zone({
   dndId,
   ids,
   row,
   over,
+  dragging,
   locked,
   selected,
   empty,
@@ -294,6 +305,8 @@ function Zone({
   ids: readonly string[];
   row: boolean;
   over: boolean;
+  /** A card is being dragged somewhere on the board. */
+  dragging: boolean;
   locked: boolean;
   selected: string | null;
   empty: string | undefined;
@@ -304,6 +317,7 @@ function Zone({
 }) {
   const { setNodeRef } = useDroppable({ id: dndId, disabled: locked });
   const armed = selected !== null && !ids.includes(selected);
+  const collapsed = row && ids.length === 0 && empty === undefined && !armed && !dragging;
   return (
     <div
       ref={setNodeRef}
@@ -311,6 +325,7 @@ function Zone({
         "flex transition-colors duration-120 motion-reduce:transition-none",
         row ? "min-h-10 flex-col gap-2 rounded-field" : "min-h-30 flex-1 flex-col gap-1.5 rounded-b-card p-2",
         over && "bg-info-soft",
+        collapsed && "hidden",
       )}
       // The pointer may drop anywhere on the zone; the keyboard has the button below.
       onClick={(e) => {

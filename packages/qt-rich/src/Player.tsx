@@ -20,7 +20,15 @@ import { useEffect, useId, useState } from "react";
 
 import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/client";
 import { fmt, resolveStrings } from "@quiz/core/client";
-import { caption, cx, isLocked, label, markdown, textareaClass } from "@quiz/ui";
+import {
+  caption,
+  cx,
+  ErrorText,
+  isLocked,
+  label,
+  markdown,
+  textareaClass,
+} from "@quiz/ui";
 
 import { charLimit, countChars, pagesText, type RichAnswer, type RichStudent } from "./schema.js";
 import { richPlayerStrings, type RichPlayerStringKey } from "./strings.js";
@@ -123,9 +131,9 @@ export function RichPlayer({
           {counter} · {fmt(s.pages, { pages: pagesText(count, s.decimal) })}
         </p>
         {over > 0 ? (
-          <p role="alert" className="text-[13px] text-danger">
+          <ErrorText role="alert">
             {fmt(s.over, { n: over })}
-          </p>
+          </ErrorText>
         ) : null}
       </div>
     </div>

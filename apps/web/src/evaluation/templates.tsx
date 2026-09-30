@@ -23,6 +23,7 @@ import {
   Actions,
   Button,
   EmptyState,
+  ErrorText,
   Field,
   FormDialog,
   FormError,
@@ -113,7 +114,7 @@ export function InstantiateError({ error }: { error: unknown }) {
   if (!error) return null;
   const message = instantiateError(error, t);
   return message ? (
-    <p className="text-[13px] text-danger">{message}</p>
+    <ErrorText>{message}</ErrorText>
   ) : (
     <FormError error={error} fallback={t("templates.createFailed")} />
   );

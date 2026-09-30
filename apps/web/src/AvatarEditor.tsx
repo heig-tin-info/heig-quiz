@@ -6,7 +6,7 @@ import { AvatarMime } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "./api";
 import { useT } from "./i18n";
-import { Button, Modal } from "./ui";
+import { Button, ErrorText, Modal } from "./ui";
 import { meKey } from "./queryKeys";
 
 /** The one list of accepted types (B-19); the API enforces the same set. */
@@ -206,14 +206,14 @@ export function AvatarEditor({
           }}
         />
         {save.isError ? (
-          <p className="text-sm text-danger">
+          <ErrorText>
             {apiErrorMessage(save.error, t("avatar.uploadFailed"))}
-          </p>
+          </ErrorText>
         ) : null}
         {remove.isError ? (
-          <p className="text-sm text-danger">
+          <ErrorText>
             {apiErrorMessage(remove.error, t("avatar.removeFailed"))}
-          </p>
+          </ErrorText>
         ) : null}
       </div>
     </Modal>

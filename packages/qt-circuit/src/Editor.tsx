@@ -49,6 +49,7 @@ import {
   CheckboxField,
   cx,
   EditorSection,
+  ErrorText,
   FieldCell,
   hint,
   IssueList,
@@ -66,8 +67,8 @@ import {
   textareaClass,
   TryPanel,
   tryStatusOf,
-  useReferenceTry,
   type TryState as UiTryState,
+  useReferenceTry,
 } from "@quiz/ui";
 
 import { chip, selectSm } from "./styles.js";
@@ -278,7 +279,7 @@ export function CircuitEditor({
           ))}
         </div>
         {config.palette.kinds.length === 0 ? (
-          <p className="text-[13px] text-danger">{s.paletteEmpty}</p>
+          <ErrorText>{s.paletteEmpty}</ErrorText>
         ) : null}
         <IssueList issues={issuesAt(issues, "palette")} />
         <div className="flex flex-wrap items-end gap-3">

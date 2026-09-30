@@ -57,8 +57,8 @@ export {
   type ChoiceMarkState,
   type RunStatus,
 } from "./grading.js";
-export { GripIcon, StrokeIcon, typeIcon } from "./icon.js";
-export { IssueList } from "./issues.js";
+export { AlertIcon, GripIcon, StrokeIcon, typeIcon } from "./icon.js";
+export { ErrorText, IssueList } from "./issues.js";
 export {
   AsideSection,
   TryPanel,
