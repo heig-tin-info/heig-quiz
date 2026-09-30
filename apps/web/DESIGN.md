@@ -1453,6 +1453,14 @@ the Results "Questions" tab on the wall. It takes the projection's
   statement and gets the answer groups and the program below it. "Present",
   in the Results header beside "Grading panel", opens this screen once the
   evaluation is over.
+- **An exercise's correction, published while it runs** (ADR-050): a
+  tertiary action, so it sits in the live header's overflow (`Actions` with
+  `menu`, one item whichever state, so the header keeps its shape) —
+  "Publish the correction" before, "Present the correction" after, with a
+  zinc badge beside the state saying it is published. Its confirmation is
+  the plain `useConfirm` dialog, not `danger`: it is irreversible but
+  destroys nothing; the last line says so. The projection's header adds, in
+  13 px muted, "Handed in so far: n" while the exercise is open — worded apart from a question's "out of n papers", which counts graded answers only.
 
 ## Voice
 

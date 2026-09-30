@@ -173,7 +173,7 @@ async function sit(evaluation: EvaluationRecord, userId: string, answers: Answer
     });
   }
   const submitted = await live.submitAttempt(db(), evaluation, attempt, server.clock.now());
-  await live.gradeFinishedRetakes(server.app, evaluation, [submitted.id]);
+  await live.gradeAtHandIn(server.app, evaluation, [submitted.id]);
   server.clock.advance(1000);
   return submitted;
 }

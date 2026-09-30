@@ -62,6 +62,17 @@ export const EVALUATION_STATES = [
 export const isEvaluationOver = (state: EvaluationStateName): boolean =>
   state === "closed" || state === "grading" || state === "released";
 
+/**
+ * The states in which the evaluation is open to students: the waiting room,
+ * running, paused. The live dashboard is their screen, an exercise with
+ * retakes takes them (ADR-025), the deploy guard names them.
+ */
+export const OPEN_STATES = ["lobby", "running", "paused"] as const satisfies readonly EvaluationStateName[];
+
+/** Whether the evaluation is in one of {@link OPEN_STATES}. */
+export const isEvaluationOpen = (state: string): boolean =>
+  (OPEN_STATES as readonly string[]).includes(state);
+
 /** The states in which no student can have entered: nothing is open yet. */
 export const ITEM_LIST_EDITABLE_STATES: readonly EvaluationStateName[] = ["draft", "scheduled"];
 

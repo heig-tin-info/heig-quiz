@@ -322,6 +322,12 @@ const scenes = [
   { name: "live-error", role: "teacher", path: "/evaluations/running/live?fail=1", settle: 2500 },
   // F-EVAL-15: an exercise with retakes — attempt badges, no Reopen.
   { name: "live-retakes", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/paused/live" },
+  // ADR-050: an exercise's correction, published without closing it — the
+  // overflow item, its confirmation, the header once done, and the projection.
+  { name: "live-correction-menu", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/paused/live", fold: true, act: (p) => p.getByRole("button", { name: /^(actions)$/i }).first().click() },
+  { name: "live-correction-confirm", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/paused/live", fold: true, act: correctionAsk },
+  { name: "live-correction-published", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/paused/live", fold: true, act: correctionPublish },
+  { name: "correction-open-exercise", role: "teacher", path: "/evaluations/paused/live", fold: true, act: correctionPresent },
 
   // The drill (ADR-041, #317): the student's tab, and the teacher's switches.
   { name: "drill-today", role: "student", path: "/drill" },
@@ -971,6 +977,28 @@ async function projectNext(page, n) {
     await page.keyboard.press("j");
     await page.waitForTimeout(250);
   }
+}
+
+/** ADR-050: the live header's overflow, "Publish the correction", its confirmation open. */
+async function correctionAsk(page) {
+  await page.getByRole("button", { name: /^actions$/i }).first().click();
+  await page.getByRole("menuitem", { name: /(publish the correction|publier le corrigé)/i }).click();
+  await page.waitForTimeout(400);
+}
+
+/** …confirmed: the badge in the header, the toast. */
+async function correctionPublish(page) {
+  await correctionAsk(page);
+  await page.getByRole("dialog").getByRole("button", { name: /(publish the correction|publier le corrigé)/i }).click();
+  await page.waitForTimeout(800);
+}
+
+/** …and the projection it opens, counting the papers handed in so far. */
+async function correctionPresent(page) {
+  await correctionPublish(page);
+  await page.getByRole("button", { name: /^actions$/i }).first().click();
+  await page.getByRole("menuitem", { name: /(present the correction|projeter le corrigé)/i }).click();
+  await page.waitForTimeout(1200);
 }
 
 /** The drill page's "Start": the first card of today's session on screen. */

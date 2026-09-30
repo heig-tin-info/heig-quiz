@@ -5,7 +5,9 @@
 Accepted (2026-09-28, issue #245, settled with the product owner; with the
 route `/evaluations/:id/correction`, the `outcomes`, `part` and case `label`
 fields of `ByQuestion`, `TallyEntry` in `@quiz/core`, `debrief()` and
-`outcomeOf()` in `@quiz/domain`, and F-RES-03).
+`outcomeOf()` in `@quiz/domain`, and F-RES-03). Amended 2026-09-30 by
+ADR-050: §1's `not_over` is lifted, for an exercise, once its teacher
+publishes the correction.
 
 ## Context
 
@@ -26,6 +28,12 @@ group answers.
    projection must never do. Access stays `staffAccess`. The grading panel,
    which the palette opens in any state, no longer reads this endpoint: the
    explanation it shows travels with the grading queue's items.
+
+   *Amended by ADR-050 (2026-09-30): an exercise whose teacher published the
+   correction (`correction_published_at`, an explicit and irreversible act)
+   is served while it still runs, over its FINISHED attempts only — never
+   one in progress — with `papers`, the count of papers handed in so far.
+   An exam still waits for its close.*
 
 2. **Validated gradings only.** Over the counted attempts (one per student,
    no teacher's rehearsal — ADR-018, ADR-025), an attempt is `blank` (no

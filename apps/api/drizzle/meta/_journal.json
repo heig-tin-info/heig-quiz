@@ -274,6 +274,13 @@
       "when": 1790776061843,
       "tag": "0038_journal",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790785480553,
+      "tag": "0039_correction_published",
+      "breakpoints": true
     }
   ]
 }

@@ -14,7 +14,7 @@ import { applyState, byId, pastTimingOf, settingsOf, type EvaluationRecord } fro
 import { endAttempts } from "./dwell.js";
 import * as events from "./events.js";
 import { presence } from "../realtime/presence.js";
-import { type AttemptRecord, enrolledCounts, gradeFinishedRetakes } from "./attempt.js";
+import { type AttemptRecord, enrolledCounts, gradeAtHandIn } from "./attempt.js";
 import { startEvaluation, closeEvaluation } from "./control.js";
 
 // --- Ticker tasks (§5.3) --------------------------------------------------
@@ -59,8 +59,9 @@ export async function expireDueAttempts(
       now,
     );
   }
-  // An exercise with retakes grades each attempt as it ends (ADR-025), the
-  // ones time ran out on included: the student reads that score next.
+  // An exercise with retakes, or whose correction is published, grades each
+  // attempt as it ends (ADR-025, ADR-050), the ones time ran out on
+  // included: the student reads that score, or that correction, next.
   if (app) {
     const byEvaluation = new Map<string, string[]>();
     for (const row of closed) {
@@ -68,7 +69,7 @@ export async function expireDueAttempts(
     }
     for (const [evaluationId, ids] of byEvaluation) {
       const evaluation = await byId(db, evaluationId);
-      if (evaluation) await gradeFinishedRetakes(app, evaluation, ids);
+      if (evaluation) await gradeAtHandIn(app, evaluation, ids);
     }
   }
   return closed;

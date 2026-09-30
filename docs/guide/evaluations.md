@@ -90,7 +90,7 @@ Extra time granted on the roster (see [Students](students.md)) applies on top: a
 An **exercise** shows a **Several attempts** switch under the timing; an exam never does, it is one sitting. Switched on:
 
 - once a student has handed in (or run out of time), their home page offers **Try again** for as long as the exercise is open: until its common end, or until you close it. Each attempt starts blank, with the questions in a new order and the choices shuffled again;
-- after each attempt the student sees **their score only**, whatever the feedback setting says about the correction. The correction follows the feedback setting once the exercise is closed (**Right away** then shows it at once, **On release** when you publish);
+- after each attempt the student sees **their score only**, whatever the feedback setting says about the correction. The correction follows the feedback setting once the exercise is closed (**Right away** then shows it at once, **On release** when you publish), or as soon as you **Publish the correction** from the live dashboard ([Running an evaluation](live.md)) — the retakes then go on, correction in hand;
 - **Result kept** decides which attempt counts in the grades, the CSV export, the published results and the per-question statistics of the results (the pool's question statistics count exams only): the **Best** (a tie goes to the latest) or the **Last**;
 - **Maximum** caps the number of attempts, the first one included; empty means no limit.
 

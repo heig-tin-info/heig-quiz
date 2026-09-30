@@ -4,8 +4,9 @@ import {
   debrief,
   describe,
   histogram,
+  correctionPublishRefusal,
   isBatchable,
-  isEvaluationOver,
+  isDebriefOpen,
   negativeMarkingOn,
   parseCloze,
   round2,
@@ -277,7 +278,12 @@ let gradingSeq = 0;
  */
 function buildGradingWorld(
   evaluation: MockEvaluation,
-  options: { allValidated: boolean; pinnedAttemptId?: string },
+  options: {
+    allValidated: boolean;
+    pinnedAttemptId?: string;
+    /** The rows whose attempts are graded; every row by default. */
+    rows?: MockEvaluation["rows"];
+  },
 ): MockGradingWorld {
   const items: MockEvalItem[] = evaluation.items
     .filter((i) => questions.some((q) => q.id === i.questionId))
@@ -294,7 +300,7 @@ function buildGradingWorld(
   // student who never opened it, and stays one: the results table lists them
   // as absent (deviation W6-10) instead of inventing a second class.
   const attempts: MockAttempt[] = [];
-  evaluation.rows.forEach((row) => {
+  (options.rows ?? evaluation.rows).forEach((row) => {
     if (row.attemptId === null) return;
     // The student persona's own attempt is pinned on the first row, so the
     // `past` card of their home and the player's finished screen link to a
@@ -852,10 +858,16 @@ function attemptAggregate(type: string, answer: unknown, details: unknown): Item
 
 on("GET", "/app/api/evaluations/:id/results/by-question", (m) => {
   const e = gradingWorldOr404(m.groups!.id!);
-  if (!isEvaluationOver(e.evaluation.state)) {
+  if (
+    !isDebriefOpen({
+      state: e.evaluation.state,
+      correctionPublished: e.evaluation.correctionPublishedAt !== null,
+    })
+  ) {
     throw new MockPayload(409, { error: "not_over", message: "the evaluation is not over" });
   }
   const view = resultsView(e);
+  const papers = e.attempts.filter((a) => !a.staff).length;
   return e.items.map((item, index) => {
     const q = questions.find((x) => x.id === item.questionId)!;
     const config = publishedConfig(q);
@@ -877,6 +889,7 @@ on("GET", "/app/api/evaluations/:id/results/by-question", (m) => {
     const { outcomes, successRate, distribution, casePassRate } = debrief(tallies);
     return {
       item: view.items[index]!,
+      papers,
       student: studentView(q, config),
       solution:
         q.type === "code"
@@ -904,6 +917,35 @@ on("POST", "/app/api/evaluations/:id/release", (m) => {
     rows: e.attempts.filter((a) => !a.staff).length,
     released: true,
   };
+});
+
+/**
+ * ADR-050: the correction of an open exercise. The debrief reads a grading
+ * world, so publishing builds one from the papers handed in so far, graded —
+ * the attempts still being written are not in it, as the server counts them.
+ */
+on("POST", "/app/api/evaluations/:id/publish-correction", (m) => {
+  const evaluation = evaluationOr404(m.groups!.id!);
+  const refusal = correctionPublishRefusal(evaluation);
+  if (refusal === "exam" || refusal === "poll") {
+    throw new MockPayload(422, {
+      error: "correction_not_allowed",
+      reason: refusal,
+      message: "never published early",
+    });
+  }
+  if (evaluation.correctionPublishedAt !== null) {
+    return { correctionPublishedAt: evaluation.correctionPublishedAt, queued: 0 };
+  }
+  if (refusal !== null) {
+    throw new MockPayload(409, { error: "correction_not_open", message: "not open" });
+  }
+  evaluation.correctionPublishedAt = iso(0);
+  const handedIn = evaluation.rows.filter((r) => r.state === "submitted" || r.state === "expired");
+  if (!gradingWorlds.some((w) => w.evaluation.id === evaluation.id)) {
+    gradingWorlds.push(buildGradingWorld(evaluation, { allValidated: true, rows: handedIn }));
+  }
+  return { correctionPublishedAt: evaluation.correctionPublishedAt, queued: handedIn.length };
 });
 
 on("POST", "/app/api/evaluations/:id/unrelease", (m) => {

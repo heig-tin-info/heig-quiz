@@ -115,10 +115,21 @@ export type ItemOutcomes = z.infer<typeof ItemOutcomes>;
 /**
  * F-RES-03: the per-question view, for the correction in front of the class
  * — the Results "Questions" tab and its projection. Served once the
- * evaluation is over (`closed`, `grading`, `released`); `409 not_over` before.
+ * evaluation is over (`closed`, `grading`, `released`), or once the
+ * correction of an open exercise is published (ADR-050); `409 not_over`
+ * before.
  */
 export const ByQuestion = z.object({
   item: ResultsItem,
+  /**
+   * The papers the debrief counts, the same on every item: one per student,
+   * the kept attempt — and while the exercise is still open, finished
+   * attempts only (ADR-050): "handed in so far: n". It is not the sum of
+   * `outcomes`: an answer whose grading is still a proposal is in this count
+   * and in no outcome (ADR-033 §2). Carried on every item because the
+   * response is an array; the projection reads the first.
+   */
+  papers: z.number().int(),
   /** The question as a student saw it (seed 0), never the raw config. */
   student: z.unknown(),
   solution: z.unknown(),
@@ -150,6 +161,23 @@ export const ReleaseResponse = z.object({
   released: z.boolean(),
 });
 export type ReleaseResponse = z.infer<typeof ReleaseResponse>;
+
+/**
+ * `POST /evaluations/:id/publish-correction` (ADR-050): an explicit teacher
+ * act, irreversible, so the body says so like a release does.
+ */
+export const PublishCorrectionBody = z.object({ confirm: z.literal(true) });
+export type PublishCorrectionBody = z.infer<typeof PublishCorrectionBody>;
+
+/**
+ * The instant it was published — the first publication's, on a repeated
+ * call (idempotent) — and how many finished attempts were sent to grading.
+ */
+export const PublishCorrectionResponse = z.object({
+  correctionPublishedAt: z.iso.datetime(),
+  queued: z.number().int(),
+});
+export type PublishCorrectionResponse = z.infer<typeof PublishCorrectionResponse>;
 
 /** The frozen snapshot stored in `evaluations.released_grades` (§3.5). */
 export const ReleasedGrades = z.object({
@@ -198,21 +226,6 @@ export const StudentResultItem = z.object({
 });
 export type StudentResultItem = z.infer<typeof StudentResultItem>;
 
-const StudentResults = z.object({
-  available: z.literal(true),
-  evaluation: z.object({
-    id: z.uuid(),
-    title: z.string(),
-    releasedAt: z.iso.datetime().nullable(),
-  }),
-  attemptId: z.uuid(),
-  points: z.number(),
-  totalPoints: z.number(),
-  grade: z.number(),
-  items: z.array(StudentResultItem),
-});
-type StudentResults = z.infer<typeof StudentResults>;
-
 /**
  * The student's retake standing on an exercise that allows several attempts
  * (F-EVAL-15, ADR-025), as the results page offers it. `refusal` is the
@@ -229,6 +242,27 @@ export const RetakeStatus = z.object({
 });
 export type RetakeStatus = z.infer<typeof RetakeStatus>;
 
+const StudentResults = z.object({
+  available: z.literal(true),
+  evaluation: z.object({
+    id: z.uuid(),
+    title: z.string(),
+    releasedAt: z.iso.datetime().nullable(),
+  }),
+  attemptId: z.uuid(),
+  points: z.number(),
+  totalPoints: z.number(),
+  grade: z.number(),
+  items: z.array(StudentResultItem),
+  /**
+   * While an exercise with retakes is open and its correction published
+   * (ADR-050): whether another attempt may start now, as on the score-only
+   * page — the correction does not end the retakes.
+   */
+  retake: RetakeStatus.optional(),
+});
+type StudentResults = z.infer<typeof StudentResults>;
+
 /**
  * Before the release — or under `feedbackPolicy.when = "none"` — the student
  * sees a reason and nothing else. No points, no answer, no key: the payload
@@ -240,7 +274,8 @@ export const FeedbackPending = z.object({
    * `retakes_open`: an exercise that allows several attempts is still open
    * (F-EVAL-15, ADR-025). The student reads the score of this attempt and
    * nothing else, whatever the policy says about the correction. Once the
-   * evaluation is closed, the feedback policy decides what is shown.
+   * evaluation is closed, or its correction published (ADR-050), the
+   * feedback policy decides what is shown.
    */
   reason: z.enum(["results_pending", "no_feedback", "attempt_open", "retakes_open"]),
   evaluation: z.object({ id: z.uuid(), title: z.string() }),

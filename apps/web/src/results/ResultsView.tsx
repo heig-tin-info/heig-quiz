@@ -19,7 +19,7 @@ import type {
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
-import { isGraded } from "../evaluation/common";
+import { hasCorrection } from "../evaluation/common";
 import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
@@ -129,11 +129,12 @@ export function ResultsView({
     retry: false,
   });
   const classroomId = evaluation.data?.evaluation.classroomId ?? null;
-  // The correction exists once the evaluation is over: `isGraded` is the
-  // server's own `not_over` rule (`isEvaluationOver`, @quiz/domain), and the
-  // state is already here — no by-question fetch just to decide a button.
+  // The correction exists once the evaluation is over, or once an exercise's
+  // correction is published (ADR-050): `hasCorrection` is the server's own
+  // `not_over` rule (`isDebriefOpen`, @quiz/domain), and the evaluation is
+  // already here — no by-question fetch just to decide a button.
   const presentable =
-    evaluation.data !== undefined && isGraded(evaluation.data.evaluation.state) && (view?.items.length ?? 0) > 0;
+    evaluation.data !== undefined && hasCorrection(evaluation.data.evaluation) && (view?.items.length ?? 0) > 0;
 
   const links = gradingLinks(evaluationId);
   useScreenCommands([

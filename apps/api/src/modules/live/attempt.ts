@@ -150,6 +150,32 @@ export class RetakesEnabled extends LiveError {
   }
 }
 
+/**
+ * Nor does an exercise whose correction is published (ADR-050): its finished
+ * attempts are graded at hand-in, and the pass never re-grades a validated
+ * cell, so what a reopened student rewrote would never be graded — and they
+ * could rewrite it with the correction in hand.
+ */
+export class CorrectionPublished extends LiveError {
+  constructor() {
+    super("correction_published", 409, "the correction of this exercise is published: no attempt is reopened");
+  }
+}
+
+/**
+ * Why no finished attempt of this evaluation may be reopened, whatever its
+ * state: the rule `reopenAttempt` applies and the live grid reads
+ * (`DashboardView.evaluation.reopenable`), so the grid never offers a
+ * refused Reopen.
+ */
+export function reopenRefusal(
+  evaluation: EvaluationRecord,
+): "retakes_enabled" | "correction_published" | null {
+  if (retakesEnabled(evaluation)) return "retakes_enabled";
+  if (evaluation.correctionPublishedAt !== null) return "correction_published";
+  return null;
+}
+
 class NotOpen extends LiveError {
   constructor() {
     super("not_open", 409, "this evaluation is not open");
@@ -702,17 +728,20 @@ export async function retakeAttempt(
 }
 
 /**
- * An attempt of an exercise that allows retakes is graded as soon as it is
- * finished, alone (ADR-025): its score is what the student reads before
- * deciding to try again. Everywhere else the pass of the evaluation's close
- * grades every attempt, as before.
+ * An attempt is graded alone as soon as it is finished — handed in, expired,
+ * or closed by the teacher — on an exercise that allows retakes (ADR-025):
+ * its score is what the student reads before deciding to try again; and on
+ * an exercise whose correction is published (ADR-050): the correction the
+ * student reads is graded. Everywhere else the pass of the evaluation's
+ * close grades every attempt, as before.
  */
-export async function gradeFinishedRetakes(
+export async function gradeAtHandIn(
   app: FastifyInstance,
   evaluation: EvaluationRecord,
   attemptIds: readonly string[],
 ): Promise<void> {
-  if (attemptIds.length === 0 || !retakesEnabled(evaluation)) return;
+  if (attemptIds.length === 0) return;
+  if (!retakesEnabled(evaluation) && evaluation.correctionPublishedAt === null) return;
   if (evaluation.state !== "running" && evaluation.state !== "paused") return;
   await enqueueEvaluationGrading(app, {
     evaluationId: evaluation.id,
@@ -1235,7 +1264,7 @@ export async function submitAttempt(
   );
   const row = (await attemptById(db, attempt.id))!;
   events.attemptClosed(evaluation.id, row, "student", now);
-  if (app && finished.length > 0) await gradeFinishedRetakes(app, evaluation, [row.id]);
+  if (app && finished.length > 0) await gradeAtHandIn(app, evaluation, [row.id]);
   return row;
 }
 
@@ -1268,7 +1297,7 @@ export async function closeAttempt(
   if (app && closed.length > 0 && evaluation.state === "closed") {
     await enqueueEvaluationGrading(app, { evaluationId: evaluation.id, attemptIds: [row.id] });
   } else if (app && closed.length > 0) {
-    await gradeFinishedRetakes(app, evaluation, [row.id]);
+    await gradeAtHandIn(app, evaluation, [row.id]);
   }
   return row;
 }
@@ -1290,7 +1319,9 @@ export async function reopenAttempt(
     throw new EvaluationNotLive();
   }
   if (attempt.state === "in_progress") return attempt;
-  if (retakesEnabled(evaluation)) throw new RetakesEnabled();
+  const refused = reopenRefusal(evaluation);
+  if (refused === "retakes_enabled") throw new RetakesEnabled();
+  if (refused === "correction_published") throw new CorrectionPublished();
   const participant = await participantOfAttempt(db, evaluation, attempt);
   const { deadlineAt, bonusS } = deadlineFor(evaluation, {
     startedAt: attempt.startedAt ?? now,

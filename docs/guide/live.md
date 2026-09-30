@@ -75,6 +75,17 @@ Each row has its own actions at the right: **Open the answers**, **+5 minutes fo
 
 **Close** ends the evaluation for everybody, after the confirmation **Close the evaluation for everybody? Open attempts are handed in as they are.** Every action here is propagated to the students within a second and logged.
 
+### Publishing the correction of an exercise
+
+An exercise is practice, and you may want to go through its correction in class without stopping the students. The **⋯** menu of the header, on a running exercise, holds **Publish the correction**. It asks first, and the confirmation says what will happen with this exercise's settings:
+
+- the exercise stays open: the students keep working, hand in later, and retake it if **Several attempts** is on;
+- the correction projection becomes available, counting the papers handed in so far;
+- on their results page, each student who has handed in sees their correction as if you had published the results — with the answer key only if the feedback shows it, and nothing at all if the feedback is **None**;
+- it cannot be undone.
+
+From then on each paper is graded as soon as it is handed in, and an attempt can no longer be reopened (the row stops offering **Reopen this attempt**). The header shows **Correction published** beside the state, and the same menu now offers **Present the correction**, which opens the projection (see [Grading and results](grading.md)); its header reads **Handed in so far** with the count, taken when you open it — open it again to count the later ones. Each question's own "out of n papers" counts only the papers whose answer to it is graded: an answer waiting for you in the grading panel is in the first count and not yet in the second. A student who retakes the exercise can read the correction of their previous attempt: this is practice, and the grade of such an exercise means little. If you later set the feedback to **None**, the students stop seeing their correction; the projection stays available. An exam never offers this: its correction waits for the close.
+
 ## Inspecting a cell
 
 <figure markdown="span">

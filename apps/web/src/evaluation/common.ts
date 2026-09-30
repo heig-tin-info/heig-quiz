@@ -9,8 +9,8 @@
  * and three copies of a colour map is three chances to disagree about what
  * "paused" looks like.
  */
-import type { EvaluationMode, EvaluationState, EvaluationSummary } from "@quiz/contracts";
-import { isEvaluationOver } from "@quiz/domain";
+import type { Evaluation, EvaluationMode, EvaluationState, EvaluationSummary } from "@quiz/contracts";
+import { isDebriefOpen, isEvaluationOpen, isEvaluationOver } from "@quiz/domain";
 
 import { gradingLinks } from "../grading";
 import type { Dict, TFunction } from "../i18n";
@@ -43,7 +43,7 @@ export function evaluationStateLabel(state: EvaluationState, t: TFunction): stri
 
 /** Live means "there are students in it right now", which is what routes the row click. */
 export function isLive(state: EvaluationState): boolean {
-  return state === "lobby" || state === "running" || state === "paused";
+  return isEvaluationOpen(state);
 }
 
 /**
@@ -54,6 +54,18 @@ export function isLive(state: EvaluationState): boolean {
  */
 export function isGraded(state: EvaluationState): boolean {
   return isEvaluationOver(state);
+}
+
+/**
+ * Whether the correction (the Questions tab, its projection) can be read:
+ * once the evaluation is over, or once an exercise's correction has been
+ * published while it runs (ADR-050) — the server's own `not_over` rule.
+ */
+export function hasCorrection(evaluation: Pick<Evaluation, "state" | "correctionPublishedAt">): boolean {
+  return isDebriefOpen({
+    state: evaluation.state,
+    correctionPublished: evaluation.correctionPublishedAt !== null,
+  });
 }
 
 /** The states whose dashboard is worth opening at all. */

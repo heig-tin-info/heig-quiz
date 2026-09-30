@@ -255,6 +255,11 @@ export const Evaluation = z.object({
   closedAt: z.iso.datetime().nullable(),
   releasedAt: z.iso.datetime().nullable(),
   modifiedAfterRelease: z.boolean(),
+  /**
+   * When the correction of this exercise was published while it ran
+   * (ADR-050, `POST /evaluations/:id/publish-correction`); null otherwise.
+   */
+  correctionPublishedAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
   /**
    * The template revision this evaluation's questions were last copied at

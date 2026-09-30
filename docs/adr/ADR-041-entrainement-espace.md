@@ -11,6 +11,8 @@ ADR's. §10 records the second round of decisions (issue #317, last
 comment, 2026-09-29): the product owner accepted every proposal this ADR
 had listed as "to be confirmed", one of them changed, and settled question
 28 of docs/spec/06; §13 records the third round (the review of slice 2).
+§13.2 is amended by ADR-050 (2026-09-30): a correction published while an
+exercise runs opens its cards as a release would.
 Slice 1 of #317 implements the pure rules in
 `@quiz/domain`, with the `ts-fsrs` dependency; slice 2 the `drill` module.
 Amends F-DRILL-01 to F-DRILL-04 and adds F-DRILL-06 (docs/spec/02); amends
@@ -269,6 +271,11 @@ Recorded in the last comment of issue #317; all accepted as recommended.
    never shows a key earlier than the exercise would. The card exists from
    the hand-in; the serving rule, not a due date, holds it back, so the
    session, the serve and the answer all refuse it alike.
+   *Amended by ADR-050 (2026-09-30): `keyShownTo` counts a correction the
+   teacher published while the exercise runs as the release, so under
+   `showKey` the cards are served from the publication on — held back again
+   while the student's latest attempt is being written. No drill rule
+   changed; the drill follows the feedback page by construction.*
 3. **A withdrawn release.** An exam's cards are served only while its
    results are released. Withdrawn, they are suspended — not served, their
    history kept; the next release serves them again and creates only what

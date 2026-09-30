@@ -12,7 +12,7 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { IdParam, ReleaseBody } from "@quiz/contracts";
+import { IdParam, PublishCorrectionBody, ReleaseBody } from "@quiz/contracts";
 
 import { tracer } from "../../audit.js";
 import { iso } from "../../clock.js";
@@ -20,6 +20,7 @@ import { loadEvaluation, ownAttempt, teacherGuard } from "../guards.js";
 import { studentRoute, teacherRoute } from "../http.js";
 import { byId } from "../evaluation/service.js";
 import * as gradingEvents from "../grading/events.js";
+import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import * as bus from "../realtime/bus.js";
 import { csvFilename, resultsCsv } from "./csv.js";
 import * as service from "./service.js";
@@ -92,6 +93,41 @@ export async function resultsPlugin(app: FastifyInstance) {
         await trace(req, action, "evaluation", scope.evaluation.id, { rows: released.rows });
         await announce(scope.evaluation.id);
         return { releasedAt: iso(released.releasedAt), rows: released.rows, released: true };
+      },
+    ),
+  );
+
+  /**
+   * ADR-050: the correction of a running exercise — the class
+   * debrief opens, each student's correction follows the feedback policy as
+   * if released, and the finished attempts nothing graded yet go to the
+   * grading pass. Irreversible; idempotent (a repeat answers the first
+   * instant, audits and grades nothing).
+   */
+  app.post(
+    "/app/api/evaluations/:id/publish-correction",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: PublishCorrectionBody, load: staffEvaluation },
+      async ({ req, now, scope }) => {
+        const published = await service.publishCorrection(app.db, scope.evaluation, now);
+        if (published.first) {
+          await trace(req, "evaluation.correction_publish", "evaluation", scope.evaluation.id, {
+            queued: published.toGrade.length,
+          });
+          if (published.toGrade.length > 0) {
+            await enqueueEvaluationGrading(app, {
+              evaluationId: scope.evaluation.id,
+              attemptIds: published.toGrade,
+            });
+          }
+          // The students' results pages re-read: the correction may be theirs now.
+          gradingEvents.resultsChanged(scope.evaluation, []);
+        }
+        return {
+          correctionPublishedAt: iso(published.publishedAt),
+          queued: published.toGrade.length,
+        };
       },
     ),
   );

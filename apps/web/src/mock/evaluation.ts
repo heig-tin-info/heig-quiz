@@ -370,6 +370,8 @@ export interface MockEvaluation {
   pausedAt: string | null;
   closedAt: string | null;
   releasedAt: string | null;
+  /** ADR-050: an exercise's correction published while it runs. */
+  correctionPublishedAt: string | null;
   modifiedAfterRelease: boolean;
   createdAt: string;
   /** The template it was made from, and the revision its questions came from (ADR-031). */
@@ -548,6 +550,7 @@ export function makeEvaluation(
     pausedAt: null,
     closedAt: null,
     releasedAt: null,
+    correctionPublishedAt: null,
     modifiedAfterRelease: false,
     createdAt: iso(-10 * D),
     originTemplateId: null,
@@ -826,6 +829,7 @@ export const toEvaluation = (e: MockEvaluation) => ({
   pausedAt: e.pausedAt,
   closedAt: e.closedAt,
   releasedAt: e.releasedAt,
+  correctionPublishedAt: e.correctionPublishedAt,
   modifiedAfterRelease: e.modifiedAfterRelease,
   createdAt: e.createdAt,
   originRevision: e.originRevision,
@@ -937,7 +941,8 @@ export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
       pausedAt: e.pausedAt,
       closesAt: e.closesAt,
       serverNow: iso(0),
-      retakes: retakesOnMock(e),
+      // The server's `reopenRefusal`: retakes on, or the correction published.
+      reopenable: !retakesOnMock(e) && e.correctionPublishedAt === null,
     },
     items: e.items.map((i) => ({
       id: i.id,
@@ -1168,6 +1173,7 @@ function makeTemplate(courseId: string, source: MockEvaluation): MockTemplate {
     pausedAt: null,
     closedAt: null,
     releasedAt: null,
+    correctionPublishedAt: null,
     rows: [],
     present: 0,
     items: source.items.map((item) => ({ ...item, id: uuid() })),

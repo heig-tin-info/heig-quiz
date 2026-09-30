@@ -59,6 +59,10 @@ export async function api<T>(
 const WORDED: Partial<Record<string, keyof Dict>> = {
   // ADR-034: every write of an admin acting as a student, in production.
   impersonation_read_only: "error.impersonationReadOnly",
+  // ADR-050: publishing the correction, and a Reopen it forbids.
+  correction_not_open: "error.correctionNotOpen",
+  correction_not_allowed: "error.correctionNotAllowed",
+  correction_published: "error.correctionPublished",
 };
 
 /** Server-provided error message of a failed call (or its worded code), or the fallback. */

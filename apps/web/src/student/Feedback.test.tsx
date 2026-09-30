@@ -86,6 +86,20 @@ describe("student feedback", () => {
     expect(screen.queryByRole("heading", { name: "Question 0" })).toBeNull();
   });
 
+  // ADR-050: a correction published while the exercise still takes retakes.
+  it("shows the correction and keeps Try again when the retakes go on", async () => {
+    mockFetch({
+      [`GET ${URL}`]: ok({
+        ...makeFeedback(),
+        retake: { evaluationId: "e1", keep: "best", maxAttempts: 3, attemptCount: 1, refusal: null },
+      }),
+    });
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
+    expect(await screen.findByRole("heading", { name: "Question 1" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /try again/i })).toBeVisible();
+    expect(screen.getByText(/1 of 3/)).toBeVisible();
+  });
+
   it("shows only what the policy let through", async () => {
     const payload = makeFeedback();
     mockFetch({

@@ -15,6 +15,7 @@ import { ByQuestionView } from "./ByQuestionView";
 
 function question(over: Partial<ByQuestion> & Pick<ByQuestion, "item">): ByQuestion {
   return {
+    papers: 0,
     student: null,
     solution: null,
     explanation: null,

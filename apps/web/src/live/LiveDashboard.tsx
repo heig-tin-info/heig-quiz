@@ -32,6 +32,7 @@ import { LiveHeader, type LiveControls } from "./LiveHeader";
 import { StudentGrid } from "./StudentGrid";
 import { useLiveToggles } from "./toggles";
 import { useDashboard } from "./useDashboard";
+import { useCorrectionControls } from "./useCorrectionControls";
 import { useLiveCommands } from "./useLiveCommands";
 import { useRowDensity } from "./useRowDensity";
 import { dashboardKey, evaluationKey } from "../queryKeys";
@@ -202,6 +203,14 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     },
   };
 
+  // ADR-050: an exercise's correction, published without closing it.
+  const correction = useCorrectionControls({
+    id,
+    evaluation: detail.data?.evaluation,
+    navigate,
+    onChanged: refresh,
+  });
+
   const selectCell = useCallback((row: DashboardRow, itemId: string) => {
     if (row.attemptId === null) return;
     setSelected({ attemptId: row.attemptId, seatId: row.seatId, itemId });
@@ -325,6 +334,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         fullscreen={fullscreen}
         onToggleFullscreen={toggleFullscreen}
         onGoToGrading={() => navigate(gradingLinks(id).grading)}
+        correction={correction}
       />
 
       {/* The switches on the left, what the connection says on the right,

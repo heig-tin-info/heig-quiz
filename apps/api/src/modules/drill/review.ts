@@ -205,7 +205,9 @@ type Context = Awaited<ReturnType<typeof loadContext>>;
  *   - an exercise's, once its own feedback policy shows the key to the
  *     student's latest attempt (`results.keyShownTo`, the rule of the
  *     feedback page): at the hand-in under immediate feedback with the key,
- *     at the release under `on_release`, never when the key is not shown.
+ *     at the release under `on_release`, never when the key is not shown —
+ *     and, since ADR-050, as soon as the teacher publishes the correction of
+ *     the running exercise, which that rule counts as the release.
  */
 function keyReleased(evaluation: EvaluationRecord, latestAttemptState: string | undefined): boolean {
   if (evaluation.mode === "exam") return evaluation.releasedAt !== null;

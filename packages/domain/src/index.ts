@@ -11,6 +11,7 @@ export { extractScore, SCORE_ANNOTATION_TITLE, type AnnotationLike, type ScorePa
 export * from "./cloze.js";
 export * from "./compareOutput.js";
 export * from "./cooldown.js";
+export * from "./correction.js";
 export * from "./debrief.js";
 export * from "./deadline.js";
 export * from "./drillEligibility.js";
