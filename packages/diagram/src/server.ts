@@ -1,9 +1,9 @@
 /**
- * `@quiz/diagram/server`: the diagram engine without React (ADR-041 §1).
+ * `@quiz/diagram/server`: the diagram engine without React (ADR-046 §1).
  * The scene model and its schema, the catalogue of kinds, the sizes and the
  * layout, and the text SERIALISER of each kind.
  *
- * The parsers are not exported here, on purpose (ADR-041 §2): the server
+ * The parsers are not exported here, on purpose (ADR-046 §2): the server
  * never parses a text written in a browser, and an entry that does not
  * offer a parser cannot be used to. The editor reads text through its own
  * modules.

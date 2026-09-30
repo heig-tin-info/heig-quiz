@@ -442,7 +442,7 @@ export function DevGallery() {
   );
 }
 
-/** The diagram editor (ADR-041), one kind at a time, with the teacher's text tab. */
+/** The diagram editor (ADR-046), one kind at a time, with the teacher's text tab. */
 function DiagramEditorDemo() {
   const t = useT();
   const [kind, setKind] = useState<DiagramKind>("class");

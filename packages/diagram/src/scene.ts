@@ -1,5 +1,5 @@
 /**
- * The SCENE: what a diagram stores (docs/spec/04 §4.14, ADR-041 §2).
+ * The SCENE: what a diagram stores (docs/spec/04 §4.14, ADR-046 §2).
  *
  * A scene is elements and links. An element has a position on the grid and
  * its content; a link joins two elements and may pass through elbows. The

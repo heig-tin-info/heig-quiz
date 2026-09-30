@@ -1,5 +1,5 @@
 /**
- * Where every line goes, recomputed on display (ADR-041 §2): nothing here is
+ * Where every line goes, recomputed on display (ADR-046 §2): nothing here is
  * stored.
  *
  * Two layouts, chosen by the kind:

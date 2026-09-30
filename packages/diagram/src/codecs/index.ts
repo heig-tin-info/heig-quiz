@@ -1,5 +1,5 @@
 /**
- * The text form of each kind (ADR-041 §2): a scene serialises to it, and the
+ * The text form of each kind (ADR-046 §2): a scene serialises to it, and the
  * EDITOR parses it back. The server serialises only; it never parses a text
  * that came from a browser.
  */

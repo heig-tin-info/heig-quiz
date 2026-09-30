@@ -1,5 +1,5 @@
 /**
- * The diagram editor: the React port of `mockups/uml.html` (ADR-041).
+ * The diagram editor: the React port of `mockups/uml.html` (ADR-046).
  *
  * It is CONTROLLED. Every committed edit — an element placed, a drag let go
  * of, a link finished, a character typed in the inspector or the text pane,
@@ -60,7 +60,7 @@ export interface DiagramEditorProps {
   onChange: (next: Scene) => void;
   /** View, pan and zoom only. */
   readOnly?: boolean | undefined;
-  /** The text tab, for the teacher (ADR-041 §4). */
+  /** The text tab, for the teacher (ADR-046 §4). */
   withText?: boolean | undefined;
   strings?: Partial<DiagramStrings> | undefined;
   /** The drawing area's height in px; absent, the editor fills its parent. */

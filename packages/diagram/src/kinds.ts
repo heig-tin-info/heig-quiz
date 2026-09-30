@@ -1,5 +1,5 @@
 /**
- * The catalogue of diagram KINDS (docs/spec/04 §4.14, ADR-041 §3).
+ * The catalogue of diagram KINDS (docs/spec/04 §4.14, ADR-046 §3).
  *
  * A kind is data: the element types it may hold, the tools of its toolbox
  * (a tool may place a type with a preset), its link types, how its lines are

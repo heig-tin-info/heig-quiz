@@ -1,5 +1,5 @@
 /**
- * `@quiz/diagram/client`: the diagram editor and view (ADR-041 §1). The pure
+ * `@quiz/diagram/client`: the diagram editor and view (ADR-046 §1). The pure
  * engine is `@quiz/diagram/server`, which this entry does not repeat.
  */
 export { DiagramEditor, type DiagramEditorProps } from "./editor/DiagramEditor.js";

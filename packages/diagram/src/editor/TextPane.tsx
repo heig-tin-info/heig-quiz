@@ -1,5 +1,5 @@
 /**
- * The text form of the diagram, the teacher's (ADR-041 §4): edited, parsed
+ * The text form of the diagram, the teacher's (ADR-046 §4): edited, parsed
  * on every keystroke and applied when it reads and fits. A line in error is
  * named, and a text that says a diagram larger than the schema allows is
  * refused: in both cases the diagram is left as it was.

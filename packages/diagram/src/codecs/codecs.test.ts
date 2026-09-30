@@ -144,7 +144,7 @@ describe("DOT", () => {
 });
 
 describe("a crafted text stays cheap to read", () => {
-  /* each of these took seconds with the first patterns (ADR-041 review): every one must now read in milliseconds */
+  /* each of these took seconds with the first patterns (ADR-046 review): every one must now read in milliseconds */
   const cases: Array<[DiagramKind, string]> = [
     ["er", `A {\n  a b${"  PK".repeat(300)}!\n}`],
     ["class", `class A <<${" ".repeat(MAX_LINE - 20)}>!`],
