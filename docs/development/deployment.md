@@ -624,16 +624,34 @@ Staging has no backup report (`backup: "unknown"` does not raise
 `attention`) and runs the runner in `stub` (`disabled` does not either), so
 the same keyword works there.
 
-E-mail alerts from the application itself come next (ADR-055 §5): a
-`health.checks` scheduled task will run the same checks every five minutes
-and mail the administrators on a transition to failing.
+### The e-mail, the secondary alarm
+
+The application tells its administrators itself (ADR-055 §5): the
+`health.checks` scheduled task runs the checks of the System status every
+five minutes (Administration → Scheduled tasks, where its period can be
+changed), keeps each check's state in `health_check_states`, and notifies
+every account whose role is admin — in the bell, and by e-mail unless they
+turned it off in their settings (kind "Platform health"; never Teams):
+
+- once a check has **failed on two runs in a row** (about ten minutes),
+  naming the checks concerned — the page gives their causes;
+- a reminder if it is **still failing a day later**;
+- once it is **OK again**, if an alert was sent.
+
+A warning, or a check that cannot be measured here, sends nothing. The
+e-mail goes through the ordinary delivery (ADR-030), so staging, whose
+mailer runs dry, only logs it, and it needs the job queue: `jobs.down` on
+the page means no e-mail at all. It is the SECONDARY alarm: the task runs on
+the ticker's claim, so a VM down, a crash loop or a ticker dead in every
+process silences it too. The external probe above stays the primary.
 
 ### The System status page
 
 Administration → **System status** (`GET /app/api/admin/system`, admins
 only) answers "can I run an exam now, and does anything need me?": every
 check with its status (OK, to look at, failing, unknown), its value, when it
-was checked and, when not OK, its cause. Live exam readiness: the ticker's
+was checked and, when not OK, its cause; a failing check also says when
+the `health.checks` task first saw it fail. Live exam readiness: the ticker's
 lag, attempts and evaluations left open a minute past their end (the
 symptom of a dead ticker, whatever process runs it), scheduled tasks,
 background jobs per queue (waiting, failed in 24 h, oldest wait), the

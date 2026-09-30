@@ -34,15 +34,12 @@ import { TasksSection } from "./AdminTasks";
 import { KioskSection } from "./AdminKiosk";
 import { UsersSection } from "./AdminUsers";
 import { adminTeachersKey } from "./queryKeys";
-import { useSearchParam } from "./router";
+import { ADMIN_TABS, useSearchParam, type AdminTab } from "./router";
 
 type SortKey = "email" | "name" | "lastLoginAt" | "courses" | "grantedAt";
 
 /** Given and family name; both empty until the grantee first signs in. */
 const nameOf = (r: AdminTeacher): [string, string] => [r.givenName ?? "", r.familyName ?? ""];
-
-type Tab = "people" | "system" | "tasks";
-const TABS: readonly Tab[] = ["people", "system", "tasks"];
 
 /**
  * Administration, one tab per concern, the open one in `?tab=`: the people
@@ -50,17 +47,17 @@ const TABS: readonly Tab[] = ["people", "system", "tasks"];
  * `KioskSection`, ADR-051 — then every account), the system status
  * (F-ADMIN-07, next to the tasks it points to) and the scheduled tasks
  * (F-ADMIN-06). The people stay first and the default: the page's one
- * primary action, "Grant", is there. A tab is one entry of `TABS` and one
- * panel below.
+ * primary action, "Grant", is there. A tab is one entry of `ADMIN_TABS`
+ * (`router.ts`) and one panel below.
  */
 export function AdminPage() {
   const t = useT();
   const [tabParam, setTab] = useSearchParam("tab", "people");
-  const tab: Tab = (TABS as readonly string[]).includes(tabParam) ? (tabParam as Tab) : "people";
+  const tab: AdminTab = (ADMIN_TABS as readonly string[]).includes(tabParam) ? (tabParam as AdminTab) : "people";
   return (
     <div className="space-y-6">
       <PageHeader title={t("admin.title")} />
-      <Tabs<Tab>
+      <Tabs<AdminTab>
         value={tab}
         onChange={setTab}
         idPrefix="admin"

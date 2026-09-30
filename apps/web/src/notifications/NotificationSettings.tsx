@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing } from "lucide-react";
 
 import {
+  kindChannels,
   NOTIFICATION_CHANNELS,
   type NotificationChannel,
   type NotificationKind,
@@ -91,6 +92,15 @@ function ChannelGrid({
             <p className="mt-0.5 text-[13px] text-fg-muted">{t(`settings.kind.${kind}.desc` as TKey)}</p>
           </div>
           {channels.map((channel) => {
+            // A channel the kind never uses (`KIND_CHANNELS`): no toggle, a dash.
+            if (!kindChannels(kind).includes(channel)) {
+              return (
+                <div key={channel} role="cell" className="flex justify-center text-fg-faint">
+                  <span aria-hidden="true">—</span>
+                  <span className="sr-only">{t("settings.channel.none")}</span>
+                </div>
+              );
+            }
             const waiting = channel === "teams" && !teamsLinked;
             const on = settings.matrix[kind][channel] && !waiting;
             return (

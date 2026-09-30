@@ -7,6 +7,7 @@
 import { z } from "zod";
 
 import { ActivityKindName } from "./activity.js";
+import { SYSTEM_CHECK_KEYS } from "./health.js";
 
 /**
  * Persistent, per-account notifications (the App channel: the bell, and a
@@ -25,6 +26,13 @@ const classroomCount = {
   classroomName: z.string(),
   count: z.number().int().positive(),
 };
+
+/**
+ * The notices of a `system_alert` (ADR-055 §5), named as `nextCheckState` of
+ * `@quiz/domain` returns them (the domain mirrors this list).
+ */
+export const SYSTEM_ALERT_STATES = ["failing", "still_failing", "recovered"] as const;
+export type SystemAlertState = (typeof SYSTEM_ALERT_STATES)[number];
 
 /** What each kind carries; the web app renders the sentence from it. */
 export const NotificationPayload = z.discriminatedUnion("kind", [
@@ -126,6 +134,18 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     poolName: z.string(),
     count: z.number().int().positive(),
   }),
+  z.object({
+    /**
+     * Health checks of the platform changed state (ADR-055 §5), told to the
+     * administrators by the `health.checks` task: `failing` after two failed
+     * runs in a row, `still_failing` a day later, `recovered` once OK again
+     * after an alert. Which checks, by key only: their causes and measures
+     * are on the System status page the notification opens.
+     */
+    kind: z.literal("system_alert"),
+    state: z.enum(SYSTEM_ALERT_STATES),
+    checks: z.array(z.enum(SYSTEM_CHECK_KEYS)).min(1),
+  }),
 ]);
 export type NotificationPayload = z.infer<typeof NotificationPayload>;
 
@@ -165,6 +185,7 @@ export const NOTIFICATION_KINDS = [
   "pool_shared",
   "pool_ownership",
   "pool_question_added",
+  "system_alert",
 ] as const;
 export const NotificationKind = z.enum(NOTIFICATION_KINDS);
 export type NotificationKind = z.infer<typeof NotificationKind>;
@@ -208,7 +229,35 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   pool_shared: { bell: true, email: true, teams: true },
   pool_ownership: { bell: true, email: true, teams: true },
   pool_question_added: { bell: true, email: false, teams: false },
+  // The secondary alarm of the operator (ADR-055 §5): the e-mail is the point.
+  // Teams stays off: `KIND_CHANNELS` forbids it (a test holds every default to it).
+  system_alert: { bell: true, email: true, teams: false },
 };
+
+/**
+ * The channels a kind may use, when it may not use them all. `notifyMany`
+ * never delivers a kind elsewhere, and the settings grid shows no toggle
+ * there. `system_alert` has no Teams activity type: declaring one would bump
+ * the Teams app for every user, for a notice a handful of administrators
+ * receive by e-mail anyway (ADR-030, addendum of 2026-09-30).
+ */
+export const KIND_CHANNELS = {
+  system_alert: ["bell", "email"],
+} as const satisfies Partial<Record<NotificationKind, readonly NotificationChannel[]>>;
+
+/** The channels `kind` may use (`KIND_CHANNELS`, every channel otherwise). */
+export function kindChannels(kind: NotificationKind): readonly NotificationChannel[] {
+  const limited: Partial<Record<NotificationKind, readonly NotificationChannel[]>> = KIND_CHANNELS;
+  return limited[kind] ?? NOTIFICATION_CHANNELS;
+}
+
+/** The kinds `KIND_CHANNELS` keeps out of Teams. */
+type NoTeamsKind = {
+  [K in keyof typeof KIND_CHANNELS]: "teams" extends (typeof KIND_CHANNELS)[K][number] ? never : K;
+}[keyof typeof KIND_CHANNELS];
+
+/** The kinds Teams may carry: the Teams app declares an activity type for each. */
+export type TeamsNotificationKind = Exclude<NotificationKind, NoTeamsKind>;
 
 /**
  * Who a kind is sent to. `seat`: the claimed STUDENT seats of a classroom
@@ -216,10 +265,13 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
  * teacher or an admin on a colleague's roster holds one too. `course`: the
  * staff seats of a course (`course_staff`: `tellStaff`, `staffOf`), never a
  * seatless admin. `pool`: pool owners and members, which only a teacher or an
- * admin reaches. A kind added to {@link NOTIFICATION_KINDS} without its row
- * here is a compile error.
+ * admin reaches. `admin`: the accounts whose role is admin (the platform's
+ * health, ADR-055 §5). A kind added to {@link NOTIFICATION_KINDS} without its
+ * row here is a compile error.
  */
-export const NOTIFICATION_AUDIENCE: Readonly<Record<NotificationKind, "seat" | "course" | "pool">> = {
+export const NOTIFICATION_AUDIENCE: Readonly<
+  Record<NotificationKind, "seat" | "course" | "pool" | "admin">
+> = {
   results_released: "seat",
   activity_scheduled: "seat",
   activity_available: "seat",
@@ -231,6 +283,7 @@ export const NOTIFICATION_AUDIENCE: Readonly<Record<NotificationKind, "seat" | "
   pool_shared: "pool",
   pool_ownership: "pool",
   pool_question_added: "pool",
+  system_alert: "admin",
 };
 
 /**
@@ -240,7 +293,7 @@ export const NOTIFICATION_AUDIENCE: Readonly<Record<NotificationKind, "seat" | "
  * sees the pool kinds, and the seat kinds only while holding a student seat.
  * The course kinds go to a teacher, whose course seat may come at any time,
  * and to an admin only while holding one: without it they are a row that
- * controls nothing (#287).
+ * controls nothing (#287). The admin kinds go to an admin, and only there.
  */
 export function notificationKindsFor({
   role,
@@ -257,6 +310,7 @@ export function notificationKindsFor({
     seat: role === "student" || studentSeat,
     course: role === "teacher" || (role === "admin" && courseSeat),
     pool: role !== "student",
+    admin: role === "admin",
   };
   return NOTIFICATION_KINDS.filter((kind) => reaches[NOTIFICATION_AUDIENCE[kind]]);
 }

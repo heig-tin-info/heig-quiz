@@ -150,6 +150,12 @@ export const SystemCheck = z.object({
   cause: z.enum(CHECK_CAUSES).nullable(),
   details: z.array(CheckDetail),
   checkedAt: z.iso.datetime(),
+  /**
+   * While the check fails, since when: the first failed run of the streak
+   * the `health.checks` task recorded (ADR-055 §5). `null` when it does not
+   * fail, or the task has not seen it fail yet.
+   */
+  failingSince: z.iso.datetime().nullable(),
 });
 export type SystemCheck = z.infer<typeof SystemCheck>;
 

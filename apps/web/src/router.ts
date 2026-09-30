@@ -10,7 +10,12 @@ import { encodeJournalPath, safeJournalPath } from "@quiz/contracts";
 export type Route =
   | { view: "home" }
   | { view: "settings" }
-  | { view: "admin" }
+  /**
+   * `tab`: the Administration tab to open on (a system alert opens the
+   * System status). Written into `?tab=` only: `parsePath` never reads it
+   * back, the page reads it off the query string, like the classroom's.
+   */
+  | { view: "admin"; tab?: AdminTab }
   /**
    * One course: its classrooms, its linked pools and its evaluation
    * templates (F-ORG-12). The Courses row stays lit: it is a page of that
@@ -210,6 +215,10 @@ export interface RouteSpec<V extends Route["view"]> {
 export const CLASSROOM_PAGES =
   import.meta.env.VITE_MOCK === "1" || import.meta.env.VITE_CLASSROOM_PAGES === "1";
 
+/** The tabs of the Administration page, in their order (`AdminPanel.tsx`). */
+export const ADMIN_TABS = ["people", "system", "tasks"] as const;
+export type AdminTab = (typeof ADMIN_TABS)[number];
+
 /** A view whose path is one fixed segment (`/settings`, `/polls`, …), whatever follows it. */
 function fixed<V extends Route["view"]>(
   segment: string,
@@ -273,7 +282,11 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     bottomSlot: "activities",
   },
   settings: { ...fixed("settings", { view: "settings" }, true), bottomSlot: "profile" },
-  admin: { ...fixed("admin", { view: "admin" }), section: "admin" },
+  admin: {
+    ...fixed("admin", { view: "admin" }),
+    path: (r) => `/admin${r.tab ? `?tab=${r.tab}` : ""}`,
+    section: "admin",
+  },
   course: {
     path: (r) => `/courses/${r.id}`,
     match: ([head, id]) => (head === "courses" && id ? { view: "course", id } : null),

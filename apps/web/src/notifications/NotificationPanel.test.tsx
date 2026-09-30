@@ -227,6 +227,28 @@ describe("the inbox in the account menu", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "attempt", evaluationId: "e6" });
   });
 
+  it("names the failing health checks to an administrator, and opens the System status", async () => {
+    const alert: Notification = {
+      id: "n10",
+      payload: {
+        kind: "system_alert",
+        state: "failing",
+        checks: ["disk", "runner"],
+      },
+      createdAt: new Date(Date.now() - 60_000).toISOString(),
+      readAt: null,
+    };
+    mockFetch({
+      [`GET ${LIST}`]: ok({ items: [alert], unread: 1 }),
+      "POST /app/api/notifications/n10/read": { status: 204 },
+    });
+    const navigate = vi.fn();
+    renderMenu(navigate);
+    await openInbox();
+    await userEvent.click(screen.getByText("Health checks failing: Disk space, Code runner."));
+    expect(navigate).toHaveBeenCalledWith({ view: "admin", tab: "system" });
+  });
+
   it("marks the whole inbox read from the panel", async () => {
     const { calls } = mockFetch({
       [`GET ${LIST}`]: ok({ items: [SHARED], unread: 1 }),

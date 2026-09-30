@@ -9,7 +9,7 @@ import * as fs from "node:fs";
 import { unzipSync } from "fflate";
 import { describe, expect, it, vi } from "vitest";
 
-import { NOTIFICATION_KINDS, type NotificationPayload } from "@quiz/contracts";
+import { kindChannels, NOTIFICATION_KINDS } from "@quiz/contracts";
 
 import {
   TEAMS_ACTIVITY_KINDS,
@@ -19,6 +19,7 @@ import {
   teamsAppPackage,
   teamsAppStrings,
   teamsTabDeepLink,
+  type TeamsPayload,
 } from "./teamsApp.js";
 import { placeholders, renderNotification, serverText } from "./templates.js";
 
@@ -37,7 +38,7 @@ const POOL = "11111111-1111-4111-8111-111111111111";
 const ATTEMPT = "33333333-3333-4333-8333-333333333333";
 const CLASSROOM = "44444444-4444-4444-8444-444444444444";
 
-const PAYLOADS: NotificationPayload[] = [
+const PAYLOADS: TeamsPayload[] = [
   {
     kind: "results_released",
     evaluationId: "22222222-2222-4222-8222-222222222222",
@@ -97,8 +98,12 @@ describe("the Teams app package", () => {
     const { manifest } = unpack();
     const types = manifest.activities.activityTypes as { type: string; description: string; templateText: string }[];
     expect(types.map((a) => a.type)).toEqual(TEAMS_ACTIVITY_KINDS.map((k) => TEAMS_ACTIVITY_TYPES[k]));
-    // The list runs ahead of the catalogue, never behind it.
-    for (const kind of NOTIFICATION_KINDS) expect(TEAMS_ACTIVITY_KINDS, kind).toContain(kind);
+    // The list runs ahead of the catalogue, never behind it — for every kind
+    // Teams may carry (`KIND_CHANNELS` keeps `system_alert` out of it).
+    for (const kind of NOTIFICATION_KINDS) {
+      if (kindChannels(kind).includes("teams")) expect(TEAMS_ACTIVITY_KINDS, kind).toContain(kind);
+      else expect(TEAMS_ACTIVITY_KINDS, kind).not.toContain(kind);
+    }
     // The one bump of #198 step 4: every kind of steps 4 to 8 is declared.
     expect(TEAMS_ACTIVITY_KINDS).toEqual(
       expect.arrayContaining([
@@ -181,7 +186,7 @@ describe("an activity of the app", () => {
     const fr = teamsActivity(APP_ID, released!, renderNotification(released!, "fr", "https://quiz.test"));
     expect(fr.previewText).toBe("Les résultats de « Test 0 — bases du C » sont disponibles.");
     expect(fr.topic).toBe("Test 0 — bases du C");
-    const long = { ...released!, evaluationTitle: "x".repeat(400) } as NotificationPayload;
+    const long = { ...released!, evaluationTitle: "x".repeat(400) } as TeamsPayload;
     const cut = teamsActivity(APP_ID, long, renderNotification(long, "en", "https://quiz.test"));
     expect(cut.previewText).toHaveLength(150);
     expect(cut.previewText.endsWith("…")).toBe(true);

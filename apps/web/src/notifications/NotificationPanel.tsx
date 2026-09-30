@@ -3,10 +3,10 @@ import { BellOff, CheckCheck } from "lucide-react";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import type { Notification, NotificationList, NotificationPayload } from "@quiz/contracts";
+import type { Notification, NotificationList, NotificationPayload, SystemCheckKey } from "@quiz/contracts";
 
 import { api } from "../api";
-import { useT, type TFunction } from "../i18n";
+import { useT, type Dict, type TFunction } from "../i18n";
 import type { Route } from "../router";
 import {
   Button,
@@ -60,6 +60,9 @@ const GUTTER = 16;
 /** What the panel is assumed to be worth when deciding to open it upward. */
 const PANEL_MAX_HEIGHT = 420;
 
+/** A health check's name, as the System status page gives it. */
+const checkName = (key: SystemCheckKey) => `admin.system.check.${key}` as const satisfies keyof Dict;
+
 /**
  * One notification as a sentence. Pure and exported: the payloads are a
  * closed union, and this is the one place that turns a kind into words, in
@@ -111,6 +114,10 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
         n: payload.count,
         poolName: payload.poolName,
       });
+    case "system_alert":
+      return t(`notif.systemAlert.${payload.state}`, {
+        checks: payload.checks.map((key) => t(checkName(key))).join(", "),
+      });
   }
 }
 
@@ -140,6 +147,8 @@ function notificationRoute(payload: NotificationPayload): Route {
       return { view: "home" };
     case "deadline_approaching":
       return { view: "attempt", evaluationId: payload.evaluationId };
+    case "system_alert":
+      return { view: "admin", tab: "system" };
     case "activity_available":
       switch (payload.activityKind) {
         case "evaluation":

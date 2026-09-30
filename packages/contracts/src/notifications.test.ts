@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_CHANNEL_ENABLED,
+  kindChannels,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_KINDS,
   notificationKindsFor,
+  NotificationPayload,
 } from "./notifications.js";
 
 describe("DEFAULT_CHANNEL_ENABLED — the defaults per kind (ADR-030, #198)", () => {
@@ -45,6 +47,29 @@ describe("DEFAULT_CHANNEL_ENABLED — the defaults per kind (ADR-030, #198)", ()
   it("keeps deadline_approaching on everywhere: a reminder a student must not miss (§c)", () => {
     expect(DEFAULT_CHANNEL_ENABLED.deadline_approaching).toEqual({ bell: true, email: true, teams: true });
   });
+
+  it("mails system_alert by default, and keeps it out of Teams whatever the toggle (ADR-055 §5)", () => {
+    expect(DEFAULT_CHANNEL_ENABLED.system_alert).toEqual({ bell: true, email: true, teams: false });
+    expect(kindChannels("system_alert")).toEqual(["bell", "email"]);
+    expect(kindChannels("results_released")).toEqual(NOTIFICATION_CHANNELS);
+  });
+
+  it("never enables by default a channel a kind may not use", () => {
+    for (const kind of NOTIFICATION_KINDS) {
+      for (const channel of NOTIFICATION_CHANNELS) {
+        if (!kindChannels(kind).includes(channel)) expect(DEFAULT_CHANNEL_ENABLED[kind][channel], `${kind}.${channel}`).toBe(false);
+      }
+    }
+  });
+});
+
+describe("system_alert — the payload", () => {
+  it("names checks by key only, and refuses an empty list", () => {
+    const payload = { kind: "system_alert", state: "failing", checks: ["disk", "runner"] };
+    expect(NotificationPayload.parse(payload)).toEqual(payload);
+    expect(NotificationPayload.safeParse({ ...payload, checks: [] }).success).toBe(false);
+    expect(NotificationPayload.safeParse({ ...payload, checks: ["nope"] }).success).toBe(false);
+  });
 });
 
 describe("notificationKindsFor — the rows of the settings grid (#277)", () => {
@@ -58,6 +83,7 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
   const COURSE_KINDS = ["student_joined", "roster_conflict", "grading_ready"];
   const POOL_KINDS = ["pool_shared", "pool_ownership", "pool_question_added"];
   const STAFF_KINDS = [...COURSE_KINDS, ...POOL_KINDS];
+  const ADMIN_KINDS = ["system_alert"];
 
   it("gives a student the seat kinds, with or without a claimed seat", () => {
     expect(notificationKindsFor({ role: "student", studentSeat: false, courseSeat: false })).toEqual(SEAT_KINDS);
@@ -70,12 +96,24 @@ describe("notificationKindsFor — the rows of the settings grid (#277)", () => 
   });
 
   it("gives an admin the course kinds only while holding a course seat (#287)", () => {
-    expect(notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: false })).toEqual(POOL_KINDS);
-    expect(notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: true })).toEqual(STAFF_KINDS);
+    expect(notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: false })).toEqual([
+      ...POOL_KINDS,
+      ...ADMIN_KINDS,
+    ]);
+    expect(notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: true })).toEqual([
+      ...STAFF_KINDS,
+      ...ADMIN_KINDS,
+    ]);
   });
 
-  it("gives a teacher or an admin on a roster every kind, in the catalogue order", () => {
-    expect(notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: false })).toEqual([...NOTIFICATION_KINDS]);
+  it("gives the admin kinds to an admin only", () => {
+    expect(notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: true })).not.toContain("system_alert");
+  });
+
+  it("gives a teacher on a roster every kind but the admin ones, and an admin every kind, in the catalogue order", () => {
+    expect(notificationKindsFor({ role: "teacher", studentSeat: true, courseSeat: false })).toEqual(
+      NOTIFICATION_KINDS.filter((k) => !ADMIN_KINDS.includes(k)),
+    );
     expect(notificationKindsFor({ role: "admin", studentSeat: true, courseSeat: true })).toEqual([...NOTIFICATION_KINDS]);
   });
 });

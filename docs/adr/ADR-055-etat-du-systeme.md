@@ -15,7 +15,11 @@ Delivered with `@quiz/domain/health` (the thresholds),
 `GET /app/api/admin/system`, the `SystemStatus` and `HealthResponse`
 schemas of `@quiz/contracts`, the "System status" tab of the Administration
 page, and the backup report written by the `backup` service of
-`compose.prod.yml`.
+`compose.prod.yml`. §5's mail followed (2026-09-30, branch
+`ops/health-alerts`): `@quiz/domain/healthAlert`, `modules/system/alerts.ts`,
+the table `health_check_states` (migration `health_check_states`) and the
+notification kind `system_alert`
+(ADR-030, addendum of 2026-09-30).
 
 ## Context
 
@@ -144,16 +148,49 @@ off-site copy is configured**: open question 10 of
 `docs/spec/06-questions-ouvertes.md` stays open, and this ADR does not
 settle it.
 
-### 5. The alarm: an external probe now, mail next
+### 5. The alarm: an external probe first, a mail second
 
 The primary alarm is the product owner's **external uptime probe**,
 alerting on a non-200 and on a body without `"attention":false`
 (`docs/development/deployment.md` §7): it also sees what the process cannot
 report about itself (a VM down, a crash loop, a certificate or DNS gone
-wrong). The next step adds a `health.checks` task to the scheduled catalog
-(D10) that runs the same `runChecks` every five minutes, keeps the
-transitions and mails the administrators through a new notification kind
-(ADR-030); nothing of it is built here.
+wrong).
+
+The secondary alarm is the application's own. A `health.checks` task in
+the scheduled catalog (D10, every five minutes by default) runs the same
+`runChecks` and keeps, per check, what a transition needs — the status of
+the last run, since when and for how many runs it holds, the last notice
+sent — in `health_check_states`, a table of the `system` module, so a
+restart or another process sees the same streak. The rule is pure,
+`nextCheckState` of `@quiz/domain`:
+
+- **alert** once a check has been `fail` on **two consecutive runs**: one
+  slow run, one restart, one blip of the runner is not news;
+- **recovery** once it is `ok` again after an alert, and only then: a
+  failure nobody was told about recovers silently;
+- a **reminder** when it is still failing a day after the last notice;
+- nothing on `warn` (the page shows it; a mail per late dump would teach
+  the reader to ignore the mail) and nothing on `unknown`, which is not a
+  verdict; never the same notice twice while nothing changed.
+
+The notices of one run are grouped by kind (failing, still failing,
+recovered) into one notification each, of the kind `system_alert`, sent
+through `notifyMany` to every non-anonymized account whose role is admin
+(ADR-030, addendum of 2026-09-30): the bell, and an e-mail by default,
+never Teams. It names the checks, in the recipient's language, and the
+platform's host, so production and staging cannot be confused, and links to
+the System status, where their causes and measures are: the mail says what
+to look at, the page says why. Nothing in it is about a person.
+The states are stored before the notifications are sent: a notice is sent
+at most once, and a send that fails is the task's error on the scheduled
+tasks screen, not a retry.
+
+The page shows, under a failing check, when the task first saw it fail
+(`SystemCheck.failingSince`).
+
+This alarm shares the process's fate: the task runs on the ticker's claim
+and the mail needs the job queue, so a dead VM, a crash loop, a ticker dead
+in every process or a queue down silences it. That is why it is second.
 
 ## Consequences
 
@@ -172,6 +209,13 @@ transitions and mails the administrators through a new notification kind
 - The pg-boss statistics read the `pgboss` schema directly (§3); a pg-boss
   upgrade that reshapes `pgboss.job` turns that one check `unknown`
   (`check.failed`), nothing else.
+- A new check also needs its name in the mail's dictionary (`templates.ts`,
+  `check.<key>`), beside the web's.
+- An administrator gets at most one mail per run and per kind of notice,
+  about ten minutes after a check starts failing; a check that flaps
+  between `fail` and `ok` on every run never alerts, and one that flaps
+  every two runs alerts and recovers each time — the page, not the mail,
+  is where a flapping check is read.
 
 ## Alternatives considered
 

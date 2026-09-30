@@ -466,7 +466,8 @@ describe("preferences", () => {
     await seat(true);
     expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false }));
     await seat(false);
-    expect(await kinds(frank)).toEqual([...NOTIFICATION_KINDS]);
+    // Every kind but the administrators' own (`system_alert`).
+    expect(await kinds(frank)).toEqual(NOTIFICATION_KINDS.filter((k) => k !== "system_alert"));
 
     const gina = await seedUser("gina@heig.test");
     await db.update(users).set({ role: "student" }).where(eq(users.id, gina));

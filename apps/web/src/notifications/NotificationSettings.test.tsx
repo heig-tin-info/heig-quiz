@@ -45,6 +45,7 @@ function settings(
       roster_conflict: ALL_ON,
       grading_ready: ALL_ON,
       pool_question_added: { bell: true, email: false, teams: false },
+      system_alert: { bell: true, email: true, teams: false },
     },
     kinds,
     email: "lea@heig.test",
@@ -174,6 +175,18 @@ describe("the notification settings", () => {
     );
     expect(screen.queryByText(/pop-up alerts/i)).toBeNull();
     expect(screen.queryByText(/this browser only/i)).toBeNull();
+  });
+
+  it("gives an administrator the platform health, by app and e-mail, never Teams (ADR-055 §5)", async () => {
+    const ADMIN = notificationKindsFor({ role: "admin", studentSeat: false, courseSeat: false });
+    mockFetch({ [GET]: ok(settings(LINKED, ADMIN)) });
+    renderWithProviders(<SettingsPage me={makeMe({ role: "admin" })} />);
+    const grid = await screen.findByRole("table", { name: "Notifications" });
+    const health = (channel: string) => within(grid).queryByRole("switch", { name: `Platform health: ${channel}` });
+    expect(health("App")).toHaveAttribute("aria-checked", "true");
+    expect(health("Email")).toHaveAttribute("aria-checked", "true");
+    expect(health("Teams")).toBeNull();
+    expect(within(grid).getByText("Not sent there")).toBeInTheDocument();
   });
 
   it("offers a retry when the settings cannot be read", async () => {

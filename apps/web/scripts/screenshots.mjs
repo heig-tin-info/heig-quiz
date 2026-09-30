@@ -935,6 +935,9 @@ const scenes = [
   { name: "admin-system-degraded", role: "admin", path: "/admin?tab=system&degraded=1" },
   { name: "admin-system-error", role: "admin", path: "/admin?tab=system&fail=1", settle: 2500 },
   { name: "admin-system-loading", role: "admin", path: "/admin?tab=system&slow=1", settle: 300 },
+  // ADR-055 §5: the administrators' health alert, in the bell and in the settings.
+  { name: "notifications-admin", role: "admin", path: "/", fold: true, act: async (p) => { await p.getByRole("button", { name: /^user menu/i }).first().click(); await p.getByRole("menuitem", { name: /^notifications/i }).click(); } },
+  { name: "settings-admin", role: "admin", path: "/settings" },
   // F-JRN-07 (M4-04): the journal reader. `?journal=1` gives PRG1-2026 (r1)
   // its journal; without it the staff read "no journal yet". The student
   // reads the home page and its TOC; on a phone the navigation is a

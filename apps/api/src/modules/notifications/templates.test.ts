@@ -234,3 +234,29 @@ describe("deadline_approaching (#198 step 7)", () => {
     expect(out.text).toContain(`https://quiz.test/take/${EVAL}`);
   });
 });
+
+describe("system_alert (ADR-055 §5)", () => {
+  const failing: NotificationPayload = { kind: "system_alert", state: "failing", checks: ["disk", "runner"] };
+
+  it("names the platform and the checks, and links to the System status for the rest", () => {
+    const en = renderNotification(failing, "en", "https://quiz.heig-vd.ch");
+    expect(en.subject).toBe("quiz.heig-vd.ch: health checks failing");
+    expect(en.text).toContain("Health checks of quiz.heig-vd.ch failed on two runs in a row: Disk space, Code runner.");
+    expect(en.text).toContain("Open the system status: https://quiz.heig-vd.ch/admin?tab=system");
+    expect(notificationPath(failing)).toBe("/admin?tab=system");
+
+    const fr = renderNotification(failing, "fr", "https://quiz.heig-vd.ch");
+    expect(fr.subject).toBe("quiz.heig-vd.ch : contrôles de santé en échec");
+    expect(fr.text).toContain("Espace disque, Exécuteur de code");
+    expect(fr.text).toContain("Ouvrir l'état du système");
+  });
+
+  it("has a sentence per state, in both languages", () => {
+    for (const state of ["failing", "still_failing", "recovered"] as const) {
+      for (const locale of ["en", "fr"] as const) {
+        const out = renderNotification({ kind: "system_alert", state, checks: ["backup"] }, locale, "https://quiz.test");
+        for (const part of [out.subject, out.text, out.html]) expect(part).not.toMatch(/\{\w+\}/);
+      }
+    }
+  });
+});

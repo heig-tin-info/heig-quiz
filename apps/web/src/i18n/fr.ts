@@ -299,6 +299,9 @@ export const fr: Record<keyof Dict, string> = {
     "Rappelle aux étudiants une évaluation qui se ferme dans les 24 heures.",
   "admin.task.drill.purge": "Rétention de l'entraînement",
   "admin.task.drill.purge.desc": "Supprime les cartes et révisions d'entraînement de plus de cinq ans.",
+  "admin.task.health.checks": "Contrôles de santé",
+  "admin.task.health.checks.desc":
+    "Exécute les contrôles de l'état du système et prévient les administrateurs quand l'un échoue deux fois de suite, puis quand il se rétablit.",
   "admin.kiosk": "Postes kiosque",
   "admin.kiosk.hint":
     "Les Chromebooks de l'école qui se sont attestés. Nommez un poste pour que les étudiants puissent s'y appairer ; retirez-le pour le mettre hors service.",
@@ -329,6 +332,7 @@ export const fr: Record<keyof Dict, string> = {
   "admin.system.attention.one": "1 vérification demande votre attention",
   "admin.system.attention.other": "{n} vérifications demandent votre attention",
   "admin.system.checked": "Vérifié",
+  "admin.system.failingSince": "Premier échec",
   "admin.system.unknown.one": "1 vérification n'est pas mesurable ici",
   "admin.system.unknown.other": "{n} vérifications ne sont pas mesurables ici",
   "admin.system.status.ok": "OK",
@@ -444,6 +448,9 @@ export const fr: Record<keyof Dict, string> = {
   "settings.kind.grading_ready.desc": "La correction automatique d'une évaluation est terminée et des propositions attendent votre validation.",
   "settings.kind.pool_question_added": "Question publiée dans une banque partagée",
   "settings.kind.pool_question_added.desc": "Un collègue publie une question dans une banque dont vous êtes propriétaire ou contributeur.",
+  "settings.kind.system_alert": "Santé de la plateforme",
+  "settings.kind.system_alert.desc": "Un contrôle de santé de la plateforme échoue deux fois de suite, échoue encore un jour plus tard, ou se rétablit. Pas envoyé dans Teams.",
+  "settings.channel.none": "Pas envoyé ici",
   "settings.email.title": "E-mail",
   "settings.email.desc": "Envoyé à {email}. Rien à configurer.",
   "settings.teams.title": "Microsoft Teams",
@@ -3243,6 +3250,9 @@ export const fr: Record<keyof Dict, string> = {
   "notif.gradingReady.one": "La correction de « {evaluationTitle} » est terminée : une proposition à valider.",
   "notif.poolQuestionAdded": "{n} questions publiées dans « {poolName} ».",
   "notif.poolQuestionAdded.one": "Une question publiée dans « {poolName} ».",
+  "notif.systemAlert.failing": "Contrôles de santé en échec : {checks}.",
+  "notif.systemAlert.still_failing": "Toujours en échec après un jour : {checks}.",
+  "notif.systemAlert.recovered": "De nouveau OK : {checks}.",
   "notif.empty.title": "Rien de neuf",
   "notif.empty.body": "Les banques partagées, les résultats publiés et les nouvelles de vos classes apparaissent ici.",
 

@@ -53,6 +53,27 @@ suggestion being `project_published`, `project_deadline_reminder`,
 for the staff, e-mail on by default only for those that must not be
 missed — is D18, open; this record is amended again when it is settled.
 
+**Addendum (2026-09-30, ADR-055 §5): an admin kind, and a kind kept out of
+Teams.** `system_alert` tells the administrators that health checks of the
+platform fail, still fail a day later, or recovered. Its audience is a
+fourth one, `admin`: every account whose role is admin (`NOTIFICATION_AUDIENCE`,
+`notificationKindsFor`), whatever seat it holds, and nobody else. It is
+bell and e-mail on by default and has **no Teams channel**: declaring its
+activity type would bump the Teams app for every user (§f) for a notice a
+handful of administrators already receive by e-mail. So the contracts gain
+`KIND_CHANNELS`, the channels a kind may use when not all: `notifyMany`
+never delivers a kind elsewhere, whatever the preferences say; the delivery
+job drops a Teams job of such a kind; the settings grid shows a dash, not a
+switch, in that cell; and the Teams manifest need only declare the kinds
+Teams may carry (`TeamsNotificationKind`), with no version bump; a test
+holds every default to `KIND_CHANNELS`. The payload carries the check keys
+only; the e-mail names them in the recipient's language, with the
+platform's host, and links to the System status for their causes. Its
+sentences are chosen by the payload's `state`, one per state. The delivery
+job re-reads the recipient's role, and the bell hides the kind from an
+account that is no longer admin. Not folded: one notification per run and
+per kind of notice.
+
 ## Context
 
 The bell (F-POOL-05) tells an account what happened while it was away, but
