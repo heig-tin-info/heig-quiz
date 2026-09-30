@@ -3231,7 +3231,7 @@ export const fr: Record<keyof Dict, string> = {
   "coach.home.newCourse.title": "Ajoutez un cours",
   "coach.home.newCourse.body": "Un cours (par exemple PRG1) regroupe les classes de chaque semestre. Ajoutez le vôtre, puis invitez vos collègues.",
   "coach.page.help.title": "L'aide, là où vous êtes",
-  "coach.page.help.body": "Ce petit ? explique la page affichée. Vous le trouverez à côté de la plupart des titres.",
+  "coach.page.help.body": "Ce petit ? explique la page affichée. Vous le trouverez en haut à droite de la plupart des pages.",
   "coach.classroom.add.title": "Faites entrer vos étudiants",
   "coach.classroom.add.body": "Collez une liste d'adresses ou importez la liste de classe exportée du système de l'école.",
   "coach.classroom.evaluations.title": "Les quiz de cette classe",

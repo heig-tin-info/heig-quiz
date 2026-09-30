@@ -144,18 +144,15 @@ describe("ClassroomView", () => {
     expect(await screen.findByRole("dialog")).toBeVisible();
   });
 
-  it("puts the page help right after the name, before the period (#295)", async () => {
+  it("puts the page help in the action row, before the overflow menu", async () => {
     mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()) });
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
     const heading = await screen.findByRole("heading", { level: 1 });
-    const order = within(heading)
-      .getAllByRole("button")
-      .map((b) => b.getAttribute("aria-label"));
-    expect(order).toEqual([expect.stringMatching(RENAME), "Help", "Change period: 2026-A"]);
-    expect(within(heading).getByRole("button", { name: "Help" })).toHaveAttribute(
-      "data-coach",
-      "page.help",
-    );
+    expect(within(heading).queryByRole("button", { name: "Help" })).toBeNull();
+    const help = screen.getByRole("button", { name: "Help" });
+    expect(help).toHaveAttribute("data-coach", "page.help");
+    const menu = screen.getByRole("button", { name: "Actions" });
+    expect(help.compareDocumentPosition(menu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("counts every row of the table on the roster tab, staff seats included", async () => {

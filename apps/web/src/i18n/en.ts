@@ -3232,7 +3232,7 @@ export const en = {
   "coach.home.newCourse.title": "Add a course",
   "coach.home.newCourse.body": "A course (say, PRG1) holds the classes of each semester. Add yours, then invite colleagues to its staff.",
   "coach.page.help.title": "Help, right where you are",
-  "coach.page.help.body": "This little ? explains the page you are on. You will find it next to most titles.",
+  "coach.page.help.body": "This little ? explains the page you are on. You will find it at the top right of most pages.",
   "coach.classroom.add.title": "Bring your students in",
   "coach.classroom.add.body": "Paste a list of emails or import the roster exported from the school's system.",
   "coach.classroom.evaluations.title": "The quizzes of this class",

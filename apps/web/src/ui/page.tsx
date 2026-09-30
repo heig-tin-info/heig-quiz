@@ -2,7 +2,7 @@ import { PenLine } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
-import { cx, HelpIcon, Tip, type IconType } from "./layers";
+import { cx, HelpIcon, PageHelpButton, Tip, type IconType } from "./layers";
 import { rovingIndex } from "./menu";
 
 // Surfaces and page structure.
@@ -112,36 +112,52 @@ export function NotePanel({
   );
 }
 
-/** Title row of a page: one h1, an optional line under it, the actions right. */
+/**
+ * Title row of a page: one h1, an optional line under it, the actions right.
+ * The row on the right always ends the same way: the page's actions, then
+ * the help of the page, then its overflow menu — so "…" stays the last thing
+ * on the line and "?" is found in one place on every page.
+ */
 export function PageHeader({
   eyebrow,
   title,
   description,
   help,
   actions,
+  menu,
   className = "",
 }: {
   eyebrow?: ReactNode;
   title: ReactNode;
   description?: ReactNode;
-  /** Help topic (`src/help/<topic>.md`) opened by a "?" beside the title. */
+  /** Help topic (`src/help/<topic>.md`) opened by the "?" of the action row. */
   help?: string;
   actions?: ReactNode;
+  /** The page's overflow `Menu`, placed after the help. */
+  menu?: ReactNode;
   className?: string;
 }) {
+  const right = actions || help || menu;
   return (
     <header className={cx("flex flex-wrap items-end justify-between gap-x-6 gap-y-3", className)}>
       <div className="min-w-0">
         {eyebrow ? <div className="mb-1.5 text-[13px] text-fg-muted">{eyebrow}</div> : null}
-        <h1 className="flex items-center gap-2 text-[28px] font-bold leading-tight tracking-[-0.02em]">
-          <span className="min-w-0">{title}</span>
-          {/* `HelpIcon` carries its own `shrink-0` and its own placement on
-              the line: a title says WHICH topic, never where the "?" goes. */}
-          {help ? <HelpIcon topic={help} coach="page.help" /> : null}
-        </h1>
+        <h1 className="text-[28px] font-bold leading-tight tracking-[-0.02em]">{title}</h1>
         {description ? <div className="mt-1.5 text-sm text-fg-muted">{description}</div> : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {right ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {actions}
+          {/* "?" and "…" wrap as one: on a phone the row breaks before them,
+              never between them, so "…" is not left alone on a line. */}
+          {help || menu ? (
+            <span className="flex items-center gap-2">
+              {help ? <PageHelpButton topic={help} /> : null}
+              {menu}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </header>
   );
 }

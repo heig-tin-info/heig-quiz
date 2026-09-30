@@ -157,15 +157,13 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
           </span>
         }
         actions={
-          <>
-            {filled && actions.canUse ? (
-              <Button onClick={() => actions.use(template)}>
-                <CopyPlus /> {t("templates.use")}
-              </Button>
-            ) : null}
-            <Actions label={t("common.actions")} items={[actions.deleteItem(template)]} />
-          </>
+          filled && actions.canUse ? (
+            <Button onClick={() => actions.use(template)}>
+              <CopyPlus /> {t("templates.use")}
+            </Button>
+          ) : null
         }
+        menu={<Actions label={t("common.actions")} items={[actions.deleteItem(template)]} />}
       />
 
       <Tabs

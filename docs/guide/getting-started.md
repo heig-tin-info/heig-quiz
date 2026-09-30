@@ -66,12 +66,12 @@ Type to filter. The list narrows to what matches, across the three groups at onc
 
 ## The help drawer
 
-Every main screen carries a small question-mark icon beside its title. Click it and a drawer slides in from the right with the help topic of that screen: what the screen is, what each control does, what a destructive action takes with it. The page stays visible behind it. Close it with the cross, with `Esc`, or by clicking outside.
+Every main screen carries a round question-mark button at the top right, in the row of its actions. Click it and a drawer slides in from the right with the help topic of that screen: what the screen is, what each control does, what a destructive action takes with it. The page stays visible behind it. Close it with the cross, with `Esc`, or by clicking outside.
 
 <figure markdown="span">
   ![The help drawer on a classroom](../assets/screenshots/help-drawer-light.png#only-light)
   ![The help drawer on a classroom](../assets/screenshots/help-drawer-dark.png#only-dark)
-  <figcaption>The help drawer of the classroom screen, opened from the question mark beside the title.</figcaption>
+  <figcaption>The help drawer of the classroom screen, opened from the question mark at the top right, beside the actions.</figcaption>
 </figure>
 
 The topics are short and describe one screen each. This guide is the longer version: it walks through the tasks that cross several screens.
