@@ -4,6 +4,20 @@
 
 Accepted (2026-09-21, first production deployment).
 
+**Addendum (2026-09-30, ADR-035, the classroom merge):** the code VM
+(`code.chevallier.io`, "the engine VM") also hosts the online workspace
+portal (`apps/codespace`, ADR-047), which already runs there natively
+today. The merge adds no VM: the runner and the portal share it, each in
+its own cgroup slice (`CPUWeight`, `MemoryMax`) so that the sessions of an
+exam cannot starve grading, with orphan reaping scoped by label and one
+CI deploy dispatcher behind the forced command. The VM is resized before
+a real class uses the portal. `apps/codespace` keeps its own `CLAUDE.md`
+with its two sanctioned divergences from invariants 11–12 (a persistent
+work volume, a git channel on an internal bridge); invariants 10–14
+remain those of `apps/runner`. The plan is
+`docs/merge/06-codespace-seb-infra.md` §6.2; it ships with phase M6,
+after the cutover unless D09 says otherwise (awaiting confirmation).
+
 ## Context
 
 `docs/spec/05-architecture.md` (5.5 and 5.9) and ADR-009 put the runner in the

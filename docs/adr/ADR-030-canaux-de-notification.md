@@ -35,6 +35,22 @@ and the fold indexes, migration `0027_notification_folds`; Teams app 2.1.0);
 §h records the decisions taken after the review. Step 8, `results_updated`
 (migration `0031_results_updated_fold`), closed the list.
 
+**Addendum (2026-09-30, ADR-035, the classroom merge):** projects bring
+notification kinds of their own, sent through `notify` like every other
+kind (§1), rendered in the recipient's language (§2), with per-kind
+defaults (addendum 2026-09-28, b). Classroom's e-mails are not ported as
+e-mails: they become kinds. Settled with the merge: the `activity_*`
+payloads become kind-neutral (`{activityKind, activityId,
+activityTitle}`) before the project kinds are built (M1-03). Classroom's
+old unsubscribe links are planned to land on Quiz's notification settings
+(`docs/merge/06-codespace-seb-infra.md` §6.6).
+The list of project kinds and which ones e-mail by default — the
+suggestion being `project_published`, `project_deadline_reminder`,
+`project_repo_invited`, `project_grade_final` for students and
+`project_deadline_applied`, `project_provision_failed`, `github_org_lost`
+for the staff, e-mail on by default only for those that must not be
+missed — is D18, open; this record is amended again when it is settled.
+
 ## Context
 
 The bell (F-POOL-05) tells an account what happened while it was away, but

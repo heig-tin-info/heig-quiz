@@ -11,7 +11,7 @@ separate commit on `main`. Protocol: [`README.md`](README.md).
 - **Next actions**: D03, D07, D14, D15, D23, D24, D25, D27 settled
   2026-09-30.
   The journal track starts: M0-03 (ADR-035 accepted with the D23 amendment,
-  classroom ADR-015 imported under the next free number), M0-04 for
+  classroom ADR-015 imported as ADR-049), M0-04 for
   the journal, Courses and Settings-tab requirements, and M0-05, then M1-01…05 (M1-06
   is not on this track) and M4-01 in parallel, then M2-01…04, M2-07, M4-02…06, M5-01/02.
   M2-06 needs the product owner to register Quiz's two GitHub Apps before

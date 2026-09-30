@@ -13,6 +13,20 @@ runner's shared token (`RUNNER_TOKEN`, ADR-016), the metrics token, and the
 notification credentials (`SCW_SECRET_KEY`, `TEAMS_CLIENT_SECRET`, ADR-030);
 `.env.prod.example` and `apps/api/src/config.ts` are the full list.
 
+**Amended again (2026-09-30, ADR-035, the classroom merge):** the GitHub
+secrets come back, as those of **Quiz's own GitHub App** (D23), not
+classroom's: the App's private key (`GITHUB_APP_PRIVATE_KEY_PATH`, the PEM
+mounted read-only), the webhook secret (`GITHUB_WEBHOOK_SECRET`) and the
+App's OAuth client secret (`GITHUB_APP_CLIENT_SECRET`), beside
+`GITHUB_APP_ID`, `GITHUB_APP_SLUG` and `GITHUB_APP_CLIENT_ID`. Staging holds
+its own App's, never production's (ADR-028). Point 3's two-key rotation
+applies to Quiz's App as written. The online workspace (ADR-047) adds the
+codespace launch secret (`CODESPACE_LAUNCH_SECRET`, at least 32
+characters, the same on both sides, refused without `CODESPACE_URL` and
+as `change-me`), set only when phase M6 ships. The runners PAT of
+ADR-007 stays on classroom's runner VM and never reaches Quiz. All of them
+go into the age-encrypted vault of point 2.
+
 ## Context
 
 Server secrets: the PEM private key of the GitHub App, the OIDC and GitHub OAuth client

@@ -4,6 +4,28 @@
 
 Accepted (2026-07-03, phase 3).
 
+**Addendum (2026-09-30, ADR-035, the classroom merge): two readings of
+the same principle.** Until the merge, Quiz applied this record by
+analogy only. With projects it has two readings:
+
+- **Literal, for projects** (classroom's *assignments*): exactly as
+  written — `push_receipts` written synchronously by the webhook handler,
+  `bot_commits`, the provisional pointer at the deadline, the definitive
+  freeze at `deadline + grace_minutes` by the ticker (ADR-006), GR-14.3 for
+  a SHA with no known receipt. What is frozen is a **score** (points out of
+  a maximum), not a grade.
+- **Analogical, for evaluations**: the same principle — a result is fixed
+  on facts the server recorded (its own receipt time of every write,
+  invariant 5), in two steps — but the second step is the teacher's
+  **release**, not a clock: grades are proposed, validated, then released
+  (`released_at`, `released_grades`), and a later change is visible as
+  `modified_after_release`.
+
+How a frozen project score reaches students and the gradebook — after a
+teacher release, and on which scale (a per-project `grading_scale`) — is
+D05, open; the gradebook's rules are D06, open. Until they are settled,
+nothing here says that a frozen score is a released one.
+
 ## Context
 
 The grade frozen at the deadline is the most disputable piece of data in the system. The

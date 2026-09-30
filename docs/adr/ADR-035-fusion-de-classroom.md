@@ -2,15 +2,25 @@
 
 ## Status
 
-Proposed (2026-09-28, asked for by the product owner on issue #143). This
-ADR records the direction and the rules of the merge; the work itself is
-planned and tracked in `docs/merge/` (strategy, task cards, progress). It
-becomes Accepted when the decisions listed in `docs/merge/08-decisions.md`
-as blocking for phase 1 are settled.
+Accepted (2026-09-30). Proposed on 2026-09-28, asked for by the product
+owner on issue #143; accepted once the decisions blocking phase 1 were
+settled (`docs/merge/08-decisions.md`: D01, D02, D04, D08, D16 on
+2026-09-28; D03, D07, D14, D15, D23, D24, D25, D27 on 2026-09-30, when the
+journal was moved to the front of the plan and given Quiz's own GitHub
+App). This ADR records the direction and the rules of the merge; the work
+itself is planned and tracked in `docs/merge/` (strategy, task cards,
+progress). The decisions still `open` there are not taken by this record:
+where a paragraph below touches one, it names it.
 
-On acceptance it **supersedes ADR-029** (a UI library shared by two apps as
-an npm package): the one alternative ADR-029 rejected — merging the two
+It **supersedes ADR-029** (a UI library shared by two apps as an npm
+package): the one alternative ADR-029 rejected — merging the two
 products — is the decision here.
+
+Classroom's ADRs imported with it: its ADR-011 as
+[ADR-011](ADR-011-reconciliation-par-les-handlers.md), its ADR-013 as
+[ADR-047](ADR-047-espace-de-travail-en-ligne.md), its ADR-014 as
+[ADR-048](ADR-048-projets-de-groupe.md), its ADR-015 as
+[ADR-049](ADR-049-journal-source-github.md).
 
 ## Context
 
@@ -46,7 +56,8 @@ What classroom has that Quiz does not:
    or per group created from a source repository, protected files, a
    deadline applied on the repositories, CI grading, reconciliation.
 2. **The journal**: course documentation kept in a GitHub repository,
-   rendered by the platform, read by the students (classroom ADR-015). A
+   rendered by the platform, read by the students (classroom ADR-015, imported as
+   [ADR-049](ADR-049-journal-source-github.md)). A
    teacher's tool, not an activity.
 3. **The online workspace** (`apps/codespace`): code-server in a hardened
    container, optionally under SEB. Deployed, never used by a real class.
@@ -72,7 +83,12 @@ behaviour Quiz lacks, never copied beside it.
 ### 2. A classroom hosts activities of several kinds, and a journal
 
 A student who enters a classroom sees three things: its **activities**, its
-**journal** if there is one, and a **grades** tab.
+**journal** if there is one, and a **grades** tab (its rules are D06,
+open). The door is **Courses**, the list of the student's classrooms, each
+opening its page; **Activities** stays the summary of the active
+activities across every classroom (D07). The teacher's classroom page
+gains a **Settings** tab, home of the GitHub connection and of the
+journal (D24).
 
 - **Evaluation** — exists: exam, exercise, and poll as a mode
   (`evaluations.mode`, ADR-014).
@@ -95,15 +111,17 @@ its own tables and state machine (a table belongs to one module).
 
 Each activity kind calls the same services: roster and staff (`org`),
 deadlines (the single ticker, ADR-006), notifications (ADR-030), audit (one
-closed union), SEB (ADR-027 launch tickets for every kind), runner
-(ADR-016), and later one `llm` module. Grades meet in a **gradebook** module
-that owns only its column table and reads the released results of each
-kind; a project score reaches it only after a teacher release (ADR-012,
-read literally for projects).
+closed union), SEB (ADR-027 launch tickets; how they reach a project is
+D21, open), runner (ADR-016), and later one `llm` module. Grades meet in a
+**gradebook** module that owns only its column table and reads the released
+results of each kind. A project score is frozen by the clock as ADR-012
+states (read literally for projects); when and on what scale it reaches the
+gradebook is D05 (the suggestion: after a teacher release), and the
+gradebook's rules are D06 — both open.
 
 ### 4. GitHub is optional
 
-- The GitHub features are off when `GITHUB_APP_*` is empty. Production
+- The GitHub features are off when the `GITHUB_*` settings are empty. Production
   turns them on with Quiz's own App as soon as it is registered; staging
   always has its own App on a test organization and never holds the
   production one (ADR-028 restores production dumps into staging).
@@ -144,19 +162,29 @@ production dump before it runs once for real.
 - **ADR-006** gains the project sweeps; **ADR-012** gets an addendum giving
   its literal (projects) and analogical (evaluations) readings;
   **ADR-016** hosts the codespace beside the runner; **ADR-027** confines a
-  `seb` session to an activity rather than an evaluation; **ADR-030** gains
-  the project notification kinds.
-- **Classroom's own ADRs** are imported: its ADR-011 (reconciliation
-  handlers) into Quiz's free 011 slot; its ADR-013 (online workspace),
-  ADR-014 (group assignments), ADR-015 (journal) under the next free
-  numbers at import time (036–046 are taken since), bodies verbatim, with a status line naming the former number.
+  `seb` session to an activity rather than an evaluation (the design is
+  D21, open); **ADR-030** gains the project notification kinds (their list
+  is D18, open). Each of these records carries a status note saying so.
+- **Classroom's own ADRs** are imported, bodies verbatim, with a status
+  line naming the former number and the renames: its ADR-011
+  (reconciliation handlers) into Quiz's free 011 slot,
+  [ADR-011](ADR-011-reconciliation-par-les-handlers.md); its ADR-013
+  (online workspace) as [ADR-047](ADR-047-espace-de-travail-en-ligne.md),
+  ADR-014 (group assignments) as [ADR-048](ADR-048-projets-de-groupe.md)
+  and ADR-015 (journal) as [ADR-049](ADR-049-journal-source-github.md),
+  the next free numbers at import time (036–046 were taken). ADR-049 has
+  an addendum: how the port differs (one journal per classroom, D03).
   Classroom's 001–010 and 012 are not imported: Quiz's copies are
   authoritative.
 - **The spec**: 07 is frozen as history; 00, 01, 02, 05, 06 and 08 are
   amended (the list is `docs/merge/07-incompatibilities.md`).
 - **Invariants**: invariant 4 (`toStudent`, one exit) is generalized to
   "activity content reaches a student only through its kind's student
-  view"; invariants 11 and 12 (closed network, nothing mounted) are scoped
+  view", and the journal's student view is the journal's one exit (no
+  draft, no page before its `visible_from`, no markdown, blob sha nor
+  warning); invariant 6 gains a student branch (`readableClassroom`: a
+  claimed enrollment reads its classroom, anyone else gets the 404);
+  invariants 11 and 12 (closed network, nothing mounted) are scoped
   to `apps/runner`, `apps/codespace` carrying its own `CLAUDE.md` with its
   two sanctioned divergences (a persistent work volume, a git channel on an
   internal bridge).

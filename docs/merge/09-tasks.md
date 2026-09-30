@@ -62,10 +62,10 @@ files it ports; writes en + fr for every string.
 ### M0-03 — ADRs
 - **Depends on**: M0-01 (D01, D16). ‖ M0-04.
 - **Goal**: ADR-035 Accepted; ADR-029 status "Superseded by ADR-035";
-  classroom ADR-011 imported as ADR-011; classroom ADR-013/014/015 under
-  the next free ADR numbers (036–046 are taken; bodies verbatim, a status
-  line naming the former number and the renames: assignment ⇒ project,
-  …); status notes or addenda on 006
+  classroom ADR-011 imported as ADR-011; classroom ADR-013/014/015
+  imported as ADR-047/048/049, the next free numbers (036–046 were taken;
+  bodies verbatim, a status line naming the former number and the
+  renames: assignment ⇒ project, …); status notes or addenda on 006
   (project sweeps), 007 (applies again), 010 (GitHub + codespace secrets),
   012 (literal vs analogical reading), 016 (codespace beside the runner),
   027 (`seb` session per activity; cross-VM HS256 exception), 030 (project
@@ -463,7 +463,7 @@ files it ports; writes en + fr for every string.
 - **Depends on**: M6-01.
 - **Goal**: `@quiz/codespace`, Node 24, nested `CLAUDE.md` and docs,
   `PLATFORM_URL` with alias; unit tests in CI; classroom ADR-013 already
-  imported under its new number (M0-03).
+  imported as ADR-047 (M0-03).
 - **Acceptance**: package build/typecheck/test; the app image contains no
   codespace; `invariant-reviewer` does not flag the sanctioned divergences.
 

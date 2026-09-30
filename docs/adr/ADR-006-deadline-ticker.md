@@ -4,6 +4,22 @@
 
 Accepted (2026-07-03, phase 3).
 
+**Addendum (2026-09-30, ADR-035, the classroom merge):** in Quiz this
+record governs the deadlines of evaluations through the ticker
+(`apps/api/src/ticker.ts`); with the merge it applies again to what it was
+written for, the deadlines of **projects** (classroom's *assignments*).
+The project sweeps — deadline application, the definitive freeze at
+`deadline + grace` (ADR-012), scheduled publication, the J-1 reminder —
+are tasks (`TickTask`, with their `everyMs`) of Quiz's single ticker, not
+a second one: they claim and enqueue only, and never call GitHub inside a
+tick (invariant 5). The 20 s period of point 1 becomes the task's
+`everyMs`. Point 1's "singleton per assignment" does not carry over as
+written: in pg-boss 12 a `singletonKey` without `singletonSeconds`
+dedupes nothing on a `standard` queue (quiz #273), so the port chooses a
+queue policy when it creates the queue. The journal's `visible_from` hint
+(ADR-049, addendum, J4) is one more sweep of the same ticker. Accommodations
+on project deadlines are D13, open.
+
 ## Context
 
 The deadline job must start at most 60 s after the due time and apply to 100 repositories in
