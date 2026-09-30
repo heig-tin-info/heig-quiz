@@ -6,10 +6,17 @@ results. One VM, one PostgreSQL, one repository, operable by one person.
 
 This repository started as a **pruned copy of `~/heig-classroom`** (same
 author, same stack, same identity provider, in production). Its ADRs 001–010
-and 012 live in `docs/adr/` and apply here as written, except ADR-007 (not
-applicable: the quiz has its own runner, ADR-016) and ADR-009 and ADR-010
-(amended, see their status). What was reused, adapted or dropped is spelled
-out in `docs/spec/07-reutilisation-heig-classroom.md`.
+and 012 live in `docs/adr/` and apply here as written, except where their
+status says amended; ADR-007 applies again, to the CI of projects (the code
+of a question still runs on `apps/runner`, ADR-016). What was reused, adapted
+or dropped is spelled out in `docs/spec/07-reutilisation-heig-classroom.md`
+(frozen as history).
+
+heig-classroom is being **merged into this repository** (ADR-035, which
+supersedes ADR-029). Classroom's later ADRs are imported as ADR-011, ADR-047
+(online workspace), ADR-048 (group projects) and ADR-049 (the journal). Merge
+work follows `docs/merge/`: read its `README.md`, then `PROGRESS.md`, then
+your task card.
 
 ## Several agents at once
 
@@ -42,7 +49,11 @@ The screens as they ship are in the user guide's screenshots
 
 ```
 apps/
-  api/        Fastify: modules, SSE, jobs, ticker, Drizzle schema + migrations
+  api/        Fastify: modules, SSE, jobs, ticker, Drizzle schema + migrations;
+              the merge adds src/github/ (GitHub App adapters),
+              modules/github (org link, account link, webhooks) and
+              modules/journal (ADR-049), then modules/project and
+              modules/gradebook (docs/merge/)
   web/        React SPA (Vite, Tailwind, TanStack Query)
   runner/     code execution in hardened Podman containers (@quiz/runner)
 packages/
@@ -66,7 +77,9 @@ packages/
               (./server, ./client)
 docs/
   spec/       the product specification (above)
-  adr/        the architecture decisions, inherited (001–010, 012) and our own
+  adr/        the architecture decisions, inherited (001–010, 012), imported
+              from heig-classroom (011, 047–049) and our own
+  merge/      the heig-classroom merge: plan, decisions, task cards, PROGRESS
   guide/      the user guide
   development/  the developer pages, deployment runbook included
 mockups/      circuit.html, the origin of qt-circuit's schematic editor;
@@ -91,12 +104,14 @@ covers it like `mcq`.
 `packages/ui` exists since the refactoring campaign of 2026-09-23 (PR #51): the
 shared primitives of the question-type surfaces (`@quiz/ui`, React as a
 peer, `@quiz/core` its only dependency; it never imports a `qt-*` package nor
-`apps/web`). The generic primitives of `apps/web/src/ui/` are due to move
-to `@heig-platform/ui`, a library shared with heig-classroom (ADR-029, not
-extracted yet): a new generic primitive belongs there, not in this repo.
-Packages still to create, in this order (`docs/spec/05-architecture.md`,
-5.2 and `docs/PLAN-MVP.md` §8): `packages/canonical`,
-`packages/cli`.
+`apps/web`). The generic primitives stay in `apps/web/src/ui/` until they
+move to `packages/ui-kit`, a workspace package never published, on which
+`@quiz/ui` will build (ADR-035; there is no `@heig-platform/ui`, ADR-029 is
+superseded): a new generic primitive goes in `apps/web/src/ui/`.
+Packages still to create: `packages/docrender` (the journal's server-side
+renderer, merge task M4-01), `packages/ui-kit` (above), then
+`packages/canonical` and `packages/cli`, in this order
+(`docs/spec/05-architecture.md`, 5.2 and `docs/PLAN-MVP.md` §8).
 
 `packages/core` is split in two entry points: `@quiz/core/server` (no React,
 anywhere) and `@quiz/core/client` (React as type-only imports). The static
@@ -133,13 +148,20 @@ Never work around these, not even "temporarily".
    to start, exactly like a dev secret. The same refusal covers a
    `pglite://` database. The OIDC path (Keycloak in dev, Switch edu-ID in
    production) is the real one and stays intact.
-4. **Question content never reaches a student except through `toStudent`.**
+4. **Content reaches a student only through the student view of its kind.**
+   **Question content never reaches a student except through `toStudent`.**
    One point of exit, in the `studentView` service of the `live` module: it
    strips the internal name, the tags, the difficulty and the explanation,
    then applies the feedback policy. Every question type is tested with a
    full configuration passed through `toStudent`, by forbidden-key list AND
    by searching the serialized output for the answer-key values
    (`docs/spec/05-architecture.md`, 5.7).
+   **The journal's one exit is the student view of the `journal` module**:
+   no draft page, no page whose `visible_from` has not passed (the
+   database's clock), no markdown, no blob sha, no warning, no count of what
+   is hidden; an asset only when a page of that payload references it
+   (N-SEC-12, N-SEC-13). Tested by a draft, a future page and an asset
+   referenced by them only, searched for in every student response.
 5. **The server owns the clock.** A deadline is closed by the ticker, never
    by a client. The receipt time of a write is the server's, never the
    browser's. A write arriving after `deadline + 3 s` is refused with
@@ -149,6 +171,14 @@ Never work around these, not even "temporarily".
    classroom if and only if they hold a seat on its course's staff (or are
    an admin). An entity is loaded only if that holds; otherwise the answer is
    a 404 indistinguishable from a missing entity.
+   **The student branch** is `readableClassroom`, in the same file (merge
+   task M4-02 creates it), for the classroom routes a student reads: the
+   staff through `staffAccess` (staff payload); a claimed enrollment reads
+   its own classroom (student payload); the staff test seat (ADR-018), an
+   impersonation session (ADR-034) and an explicit student-view request get
+   the student payload — that request can only narrow, never widen; anyone
+   else gets the 404 of a missing classroom. The journal's routes serve
+   portal sessions only, never a `seb` session (ADR-027).
 7. **Every HTTP input is validated by a schema from `packages/contracts`,**
    and the client uses the same schema. A route change breaks both sides at
    compile time.
@@ -161,6 +191,10 @@ Never work around these, not even "temporarily".
 
 These are already proven in the sibling project, and `apps/runner` implements
 them. Do not re-derive them, and do not relax one to make a test simpler.
+They bind `apps/runner`. The online workspace (`apps/codespace`, merge task
+M6-03) is not held to 11 and 12: it gets its own `CLAUDE.md` with its two
+sanctioned divergences (a persistent work volume, a git channel on an
+internal bridge).
 
 10. **No secret inside the container.** No token, no key, no credential
     helper. The set of environment variables passed at `podman run` is a
@@ -188,7 +222,26 @@ them. Do not re-derive them, and do not relax one to make a test simpler.
     once at startup and dropped with a log line when the engine cannot do it.
     gVisor (`--runtime runsc`) on top when the host has it.
 14. **The source sent to the runner is rebuilt server-side** from the
-    template and the student's editable regions — never taken as-is.
+    template and the student's editable regions — never taken as-is. A
+    project's source is fetched by the server at the frozen sha, never
+    uploaded by a client.
+
+### GitHub invariant (ADR-035, N-SEC-16..18)
+
+15. **Quiz's own GitHub App, and its secrets never at rest.** Quiz talks to
+    GitHub only through its own App (D23), never heig-classroom's; staging
+    has a separate App on a test organization and never holds the
+    production one (a production dump restored into staging loses every
+    installation id). The App key, webhook secret and client secret stay
+    out of the repository and the database (ADR-010); installation tokens
+    live in memory only; no token is ever stored nor logged (the redaction
+    knows `x-access-token:` and `gh?_`); the user token of an account link
+    reads the account once and is discarded. Under `NODE_ENV=production`,
+    `config.ts` refuses to start with an App id whose key file is
+    unreadable, a webhook secret under 32 characters or no App slug; with
+    no `GITHUB_*` set the GitHub features are off and the rest starts.
+    `/webhooks/github` trusts nothing before its HMAC over the raw body is
+    verified in constant time.
 
 ## Development
 
