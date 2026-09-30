@@ -14,6 +14,19 @@ import { availableParallelism } from "node:os";
 export const maxWorkers =
   Number(process.env.VITEST_MAX_WORKERS) || Math.max(1, Math.min(6, availableParallelism() - 1));
 
+/**
+ * What `vitest run --coverage` measures, in every package: the sources, never
+ * the tests nor their helpers. Off by default (a plain run pays nothing);
+ * `pnpm test:coverage` turns it on and scripts/coverage-summary.mjs reads the
+ * `json-summary` of each package against coverage.floors.json.
+ */
+export const coverage = {
+  provider: "v8" as const,
+  include: ["src/**/*.{ts,tsx}"],
+  exclude: ["src/**/*.test.{ts,tsx}", "src/test/**"],
+  reporter: ["text-summary", "json-summary", "html"],
+};
+
 /** Testing Library under jsdom; `src/test/setup.ts` unmounts after each test. */
 const dom = {
   environment: "jsdom",
@@ -23,12 +36,12 @@ const dom = {
 
 /** Pure code: every `*.test.ts` in `node`. */
 export const nodeTests = {
-  test: { include: ["src/**/*.test.ts"], maxWorkers },
+  test: { include: ["src/**/*.test.ts"], maxWorkers, coverage },
 };
 
 /** One jsdom environment for the whole package, `.ts` and `.tsx` tests alike. */
 export const domTests = {
-  test: { ...dom, include: ["src/**/*.test.ts", "src/**/*.test.tsx"], maxWorkers },
+  test: { ...dom, include: ["src/**/*.test.ts", "src/**/*.test.tsx"], maxWorkers, coverage },
 };
 
 /**
@@ -40,6 +53,7 @@ export const domTests = {
 export const splitTests = {
   test: {
     maxWorkers,
+    coverage,
     projects: [
       {
         extends: true,

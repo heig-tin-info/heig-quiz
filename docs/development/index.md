@@ -292,12 +292,32 @@ reported and skipped, not failed.
 pnpm build && pnpm typecheck && pnpm test
 ```
 
-`.github/workflows/ci.yml` runs exactly that on every push and pull
-request, on Node 24 with a frozen lockfile, plus `pnpm --filter
-@quiz/runner test` on its own so the runner's unit suite cannot silently
-stop running. The runner's integration suite is deliberately not run on
-CI. On a push to `main` the same workflow then builds the two production
-images and deploys them; see [deployment](deployment.md).
+`.github/workflows/ci.yml` runs the same three steps on every push and
+pull request, on Node 24 with a frozen lockfile, split into parallel jobs
+under one `checks` status: build and typecheck, the API's and the SPA's
+suites in three shards each, and every other package (the runner's unit
+suite included). The runner's integration suite has its own workflow. On
+a push to `main` the same workflow then builds the two production images
+and deploys them; see [deployment](deployment.md).
+
+### Coverage
+
+```bash
+pnpm test:coverage
+```
+
+runs every package's suite with V8 coverage, one package at a time, then
+`scripts/coverage-summary.mjs`, which prints one table and fails when a
+package falls under its floor in `coverage.floors.json`. Each package also
+keeps an HTML report in its `coverage/` directory. The floors only go up:
+after adding tests, `node scripts/coverage-summary.mjs --ratchet` raises
+each floor to the whole percentage just reached; commit the file with the
+tests. `packages/domain` additionally requires 100 % of its lines on every
+plain `pnpm test`.
+
+`.github/workflows/coverage.yml` does the same on every pull request and
+push to `main`, apart from `checks`: it never blocks a merge nor a deploy,
+shows the table in the run's summary and keeps the reports as an artifact.
 
 The test layout, including the database tests that run on PGlite against
 the real migrations, is described on the [repository page](repository.md#tests).

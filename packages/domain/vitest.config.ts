@@ -1,6 +1,6 @@
 import { defineConfig } from "vitest/config";
 
-import { nodeTests } from "../../vitest.shared.js";
+import { coverage, nodeTests } from "../../vitest.shared.js";
 
 /**
  * `packages/domain` holds the rules that decide a student's grade. Every line
@@ -11,11 +11,9 @@ export default defineConfig({
   test: {
     ...nodeTests.test,
     coverage: {
+      ...coverage,
       enabled: true,
-      provider: "v8",
-      include: ["src/**/*.ts"],
-      exclude: ["src/**/*.test.ts"],
-      reporter: ["text"],
+      reporter: ["text", "json-summary", "html"],
       thresholds: { lines: 100 },
     },
   },

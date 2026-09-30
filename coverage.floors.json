@@ -1,0 +1,92 @@
+{
+  "apps/api": {
+    "lines": 89,
+    "branches": 80,
+    "functions": 89
+  },
+  "apps/runner": {
+    "lines": 90,
+    "branches": 81,
+    "functions": 87
+  },
+  "apps/web": {
+    "lines": 82,
+    "branches": 76,
+    "functions": 76
+  },
+  "packages/contracts": {
+    "lines": 74,
+    "branches": 83,
+    "functions": 63
+  },
+  "packages/core": {
+    "lines": 77,
+    "branches": 59,
+    "functions": 87
+  },
+  "packages/diagram": {
+    "lines": 85,
+    "branches": 71,
+    "functions": 82
+  },
+  "packages/docrender": {
+    "lines": 94,
+    "branches": 85,
+    "functions": 100
+  },
+  "packages/domain": {
+    "lines": 100,
+    "branches": 97,
+    "functions": 100
+  },
+  "packages/qt-categorize": {
+    "lines": 85,
+    "branches": 73,
+    "functions": 79
+  },
+  "packages/qt-circuit": {
+    "lines": 86,
+    "branches": 75,
+    "functions": 78
+  },
+  "packages/qt-cloze": {
+    "lines": 93,
+    "branches": 87,
+    "functions": 86
+  },
+  "packages/qt-code": {
+    "lines": 80,
+    "branches": 74,
+    "functions": 76
+  },
+  "packages/qt-diagram": {
+    "lines": 91,
+    "branches": 91,
+    "functions": 86
+  },
+  "packages/qt-mcq": {
+    "lines": 92,
+    "branches": 85,
+    "functions": 88
+  },
+  "packages/qt-rich": {
+    "lines": 88,
+    "branches": 87,
+    "functions": 79
+  },
+  "packages/qt-short": {
+    "lines": 83,
+    "branches": 80,
+    "functions": 70
+  },
+  "packages/registry": {
+    "lines": 40,
+    "branches": 0,
+    "functions": 24
+  },
+  "packages/ui": {
+    "lines": 79,
+    "branches": 89,
+    "functions": 81
+  }
+}

@@ -294,6 +294,7 @@ argument.
 
 ```bash
 pnpm build && pnpm typecheck && pnpm test    # what CI runs
+pnpm test:coverage                           # coverage per package, against coverage.floors.json
 pnpm dev:mock                                # the SPA alone, no backend at all
 pnpm db:generate                             # a migration, after a schema change
 ```
