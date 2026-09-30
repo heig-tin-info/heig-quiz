@@ -103,16 +103,21 @@ export interface AppInstallation {
   allRepositories: boolean;
 }
 
-/** An installation as GitHub's REST API and the `installation` webhook describe it. */
-export interface RawInstallation {
+interface RawInstallation {
   id: number;
   account: { id?: number; login?: string; type?: string } | null;
   repository_selection?: string;
+  suspended_at?: string | null;
 }
 
-/** An organization's installation, or null for a user's (or a malformed one). */
-export function orgInstallation(data: RawInstallation): AppInstallation | null {
+/**
+ * An organization's installation, or null for a user's, a malformed one, or
+ * a SUSPENDED one: suspended, the App can do nothing there (its tokens are
+ * refused), so Quiz treats it as not installed until it is unsuspended.
+ */
+function orgInstallation(data: RawInstallation): AppInstallation | null {
   const account = data.account;
+  if (data.suspended_at) return null;
   if (!account?.login || account.id === undefined || account.type !== "Organization") return null;
   return {
     installationId: data.id,

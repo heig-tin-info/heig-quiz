@@ -39,7 +39,7 @@ import type { GithubWebhookBody } from "@quiz/contracts";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { pushReceipts, webhookDeliveries } from "../../db/schema.js";
-import { recentHookDeliveries, redeliverHookDelivery } from "../../github/app.js";
+import { githubApp, recentHookDeliveries, redeliverHookDelivery } from "../../github/app.js";
 import { GITHUB_WEBHOOK_QUEUE } from "../../jobs.js";
 import { redactTokens } from "../../redact.js";
 
@@ -171,12 +171,20 @@ export async function storeDelivery(
 /** How much of a failure is kept on the delivery. */
 const ERROR_MAX = 1000;
 
+/** A failure as it may be stored or logged: its text, every token masked (invariant 15). */
+function redactedError(err: unknown): string {
+  return redactTokens(String(err)).slice(0, ERROR_MAX);
+}
+
 /**
  * The `github.webhook` job: the stored delivery through every handler of
  * its event, then `processed_at`. An unknown or already processed delivery
- * is a no-op, so a second job for the same one costs a read. A failure is
- * kept on the delivery, tokens masked (invariant 15), and rethrown for the
- * queue's retry.
+ * is a no-op, so a second job for the same one costs a read.
+ *
+ * A failure is kept on the delivery, tokens masked (invariant 15), and a
+ * NEW error carrying only that masked text is thrown for the queue's retry
+ * — never the original, nor as its `cause`: pg-boss stores what a job
+ * throws (`pgboss.job.output`), and a handler's error may quote a token.
  */
 export async function processDelivery(
   app: FastifyInstance,
@@ -193,11 +201,12 @@ export async function processDelivery(
   try {
     for (const handler of handlers.get(row.event) ?? []) await handler(app, config, delivery);
   } catch (err) {
+    const message = redactedError(err);
     await app.db
       .update(webhookDeliveries)
-      .set({ error: redactTokens(String(err)).slice(0, ERROR_MAX) })
+      .set({ error: message })
       .where(eq(webhookDeliveries.deliveryId, deliveryId));
-    throw err;
+    throw new Error(message);
   }
   await app.db
     .update(webhookDeliveries)
@@ -207,28 +216,37 @@ export async function processDelivery(
 
 /**
  * Hands a stored delivery to the worker: the `github.webhook` queue, or,
- * without one (`JOBS_DISABLED=1`, a queue failed at boot), a run beside
- * the caller, never awaited by it — the intake still answers at once, and
- * a failure is left to the reconciliation.
+ * without one (`JOBS_DISABLED=1`, a queue failed at boot), a run in this
+ * process — beside the caller by default, so the intake still answers at
+ * once; awaited with `wait`, so the reconciliation replays one delivery at
+ * a time. An inline failure is logged masked, and left to the
+ * reconciliation.
  */
 export async function dispatchDelivery(
   app: FastifyInstance,
   config: AppConfig,
   deliveryId: string,
+  { wait = false }: { wait?: boolean } = {},
 ): Promise<void> {
   if (app.boss) {
     await app.boss.send(GITHUB_WEBHOOK_QUEUE, { deliveryId });
     return;
   }
-  void processDelivery(app, config, deliveryId).catch((err: unknown) =>
-    app.log.error({ err, deliveryId }, "handling a GitHub delivery failed"),
+  const run = processDelivery(app, config, deliveryId).catch((err: unknown) =>
+    app.log.error({ deliveryId, error: redactedError(err) }, "handling a GitHub delivery failed"),
   );
+  if (wait) await run;
 }
 
 // ---------------------------------------------------------------- reconciliation
 
-/** A delivery unprocessed for this long lost its job, or failed its retries. */
-export const REPLAY_AFTER_MS = 10 * 60_000;
+/**
+ * A delivery unprocessed for this long lost its job, or exhausted its
+ * retries: five, with a backoff from 30 s doubling each time (`jobs.ts`),
+ * about 15 minutes in all. Classroom replayed after 10 minutes, while
+ * retries could still be pending; 30 leaves them room, jitter included.
+ */
+export const REPLAY_AFTER_MS = 30 * 60_000;
 /** At most this many replayed per run: the next run takes the rest. */
 const MAX_REPLAYS = 200;
 /** GitHub's failed attempts younger than this are asked again, at most {@link MAX_REDELIVERIES}. */
@@ -240,12 +258,14 @@ const MAX_REDELIVERIES = 50;
  * stored but left unprocessed (a lost job, a crash, retries exhausted) go
  * through the worker again; the deliveries GitHub failed to hand over in
  * the last 24 hours (the intake down, a 5xx) are asked again, unless one of
- * their attempts was stored since.
+ * their attempts was stored since. Without Quiz's App it does nothing:
+ * there is no intake, and no handler registered to replay through.
  */
 export async function reconcileDeliveries(
   app: FastifyInstance,
   config: AppConfig,
 ): Promise<string> {
+  if (!githubApp(config)) return "GitHub App not configured";
   const now = app.clock.now().getTime();
   const stuck = await app.db
     .select({ deliveryId: webhookDeliveries.deliveryId })
@@ -259,7 +279,9 @@ export async function reconcileDeliveries(
     )
     .orderBy(asc(webhookDeliveries.receivedAt))
     .limit(MAX_REPLAYS);
-  for (const { deliveryId } of stuck) await dispatchDelivery(app, config, deliveryId);
+  for (const { deliveryId } of stuck) {
+    await dispatchDelivery(app, config, deliveryId, { wait: true });
+  }
 
   const failed = new Map<string, number>();
   for (const d of await recentHookDeliveries(config)) {
@@ -285,7 +307,7 @@ export async function reconcileDeliveries(
       await redeliverHookDelivery(config, id);
       redelivered += 1;
     } catch (err) {
-      app.log.warn({ err, guid }, "reconcile.deliveries: a redelivery failed");
+      app.log.warn({ guid, error: redactedError(err) }, "reconcile.deliveries: a redelivery failed");
     }
   }
   return `${stuck.length} local deliveries replayed, ${redelivered} GitHub redeliveries requested`;

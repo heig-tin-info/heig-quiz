@@ -390,12 +390,16 @@ files it ports; writes en + fr for every string.
     `isBot` for `<slug>[bot]` and `github-actions[bot]`.
   - Worker `processDelivery`: every handler of the event in order, then
     `processed_at` (`app.clock`); a throw stores `redactTokens(error)` and
-    rethrows. Queue `github.webhook` (`jobs.ts`): `standard` policy, no
+    throws a NEW error with that masked text only (no `cause`: pg-boss
+    stores what a job throws); every log of a failure is masked too. Queue `github.webhook` (`jobs.ts`): `standard` policy, no
     dedupe (a processed delivery is a no-op), `retryLimit: 5`, backoff from
     30 s; registered in `app.ts` only with an App.
-  - Handlers: `installation` (`created`, `unsuspend`,
-    `new_permissions_accepted` → `recordInstallation(…, "webhook")`;
-    `deleted`, `suspend` → `clearInstallation`), `installation_repositories`
+  - Handlers: `installation`, whatever the action, re-reads the
+    installation from GitHub (`resyncInstallation`: `fetchInstallation`,
+    then `recordInstallation(…, "webhook")`, or forgotten when gone or
+    suspended), so a stale event replayed out of order cannot undo a later
+    one; a suspended installation counts as not installed everywhere
+    (`orgInstallation`); `installation_repositories`
     (drops the healing: `allRepositories` is not stored),
     `organization` (`renamed` → `renameOrg` by id, retiring a row holding
     the new login; `deleted` → `markOrgDeleted`). Each hints `classrooms`
@@ -403,7 +407,9 @@ files it ports; writes en + fr for every string.
     carry `via: "webhook"`. Classroom's rewrite of `<org>/` names on a
     rename is the project module's own `organization` handler (M3).
   - Scheduled tasks (`GITHUB_TASKS`, catalog): `reconcile.deliveries`
-    (daily: local deliveries unprocessed for 10 min replayed, 200 at most;
+    (daily, nothing without an App: local deliveries unprocessed for 30
+    min, past the queue's ~15 min of retries, replayed one at a time
+    without a queue, 200 at most;
     GitHub's failed attempts of 24 h redelivered, 50 at most, skipping a
     guid already stored) and `deliveries.purge` (daily: payload nulled 30
     days after receipt once processed; the row stays).

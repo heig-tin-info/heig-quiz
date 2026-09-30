@@ -10,7 +10,6 @@
  * - the webhook intake serves no session at all (`sessions: []`): a signed
  *   delivery needs none, and a session sent along changes nothing.
  */
-import { createHmac, randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -26,7 +25,7 @@ import {
   walkUrl,
 } from "../../auth/testing.js";
 import { enrollments } from "../../db/schema.js";
-import { appKey, fakeGithub } from "../../github/testing.js";
+import { appKey, fakeGithub, signedDelivery } from "../../github/testing.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type Method, type TestServer } from "../../test/http.js";
 import { seedLive, type Seeded } from "../../test/live.js";
@@ -41,22 +40,9 @@ let student: { id: string; headers: Record<string, string> };
 const SECRET = "h".repeat(40);
 const WEBHOOK = "/webhooks/github";
 
-/** A delivery GitHub signed, with `headers` (a session's cookies) added. */
-function delivery(headers: Record<string, string> = {}) {
-  const body = JSON.stringify({ zen: "Anything added dilutes everything else." });
-  return server.app.inject({
-    method: "POST",
-    url: WEBHOOK,
-    headers: {
-      ...headers,
-      "content-type": "application/json",
-      "x-github-event": "ping",
-      "x-github-delivery": randomUUID(),
-      "x-hub-signature-256": `sha256=${createHmac("sha256", SECRET).update(body).digest("hex")}`,
-    },
-    payload: body,
-  });
-}
+/** A delivery GitHub signed, with a session's `headers` sent along. */
+const delivery = (headers: Record<string, string> = {}) =>
+  signedDelivery(server.app, SECRET, { zen: "Anything added dilutes everything else." }, { headers });
 
 const call = (method: Method, url: string, headers: Record<string, string>, payload: object = {}) =>
   server.app.inject({ method, url, headers, ...(method === "GET" ? {} : { payload }) });
@@ -151,11 +137,9 @@ describe("an impersonation session (ADR-034)", () => {
   });
 
   it("is no session at all on the webhook intake", async () => {
-    const unsigned = { method: "POST" as const, url: WEBHOOK, payload: {} };
-    const [asImpersonation, asNobody] = await Promise.all([
-      server.app.inject({ ...unsigned, headers: as }),
-      server.app.inject(unsigned),
-    ]);
+    const unsigned = (headers: Record<string, string> = {}) =>
+      signedDelivery(server.app, SECRET, {}, { signature: null, headers });
+    const [asImpersonation, asNobody] = await Promise.all([unsigned(as), unsigned()]);
     expect(asImpersonation.statusCode).toBe(401);
     expect(asNobody.statusCode).toBe(401);
     expect((await delivery(as)).statusCode).toBe(200);

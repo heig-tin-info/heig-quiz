@@ -21,6 +21,7 @@ import {
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { verifySignature } from "../../github/signature.js";
+import { redactTokens } from "../../redact.js";
 import { FixedWindowLimiter } from "../../limiter.js";
 import { accessibleClassroom, teacherGuard } from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
@@ -200,7 +201,10 @@ async function webhookIntake(app: FastifyInstance, opts: { config: AppConfig }) 
     } catch (err) {
       // Stored, its receipt too: the reconciliation replays it. GitHub gets
       // its 200, or its redelivery would only be a duplicate.
-      req.log.error({ err, deliveryId }, "queueing a GitHub delivery failed");
+      req.log.error(
+        { deliveryId, error: redactTokens(String(err)) },
+        "queueing a GitHub delivery failed",
+      );
     }
     return reply.code(200).send({ ok: true });
   });

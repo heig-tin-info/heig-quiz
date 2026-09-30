@@ -11,30 +11,20 @@
  */
 import { z } from "zod";
 
-import { orgInstallation, type RawInstallation } from "../../github/app.js";
 import { onEvent, type WebhookHandler } from "./deliveries.js";
 import {
-  clearInstallation,
   markOrgDeleted,
   orgChanged,
   orgOfInstallation,
-  recordInstallation,
   renameOrg,
+  resyncInstallation,
 } from "./service.js";
 
-const Installation = z.object({
-  id: z.number().int(),
-  account: z
-    .object({
-      id: z.number().int().optional(),
-      login: z.string().optional(),
-      type: z.string().optional(),
-    })
-    .nullable(),
-  repository_selection: z.string().optional(),
+/** What the installation handlers read of an event: which installation. */
+const InstallationEvent = z.object({
+  action: z.string(),
+  installation: z.object({ id: z.number().int() }),
 });
-
-const InstallationEvent = z.object({ action: z.string(), installation: Installation });
 
 const OrganizationEvent = z.object({
   action: z.string(),
@@ -42,24 +32,16 @@ const OrganizationEvent = z.object({
 });
 
 /**
- * `installation`: created, unsuspended, or its permissions accepted, the
- * organization is recorded through `recordInstallation` (the one writer,
- * matched by id, never a takeover by login); deleted or suspended, the row
- * forgets it. A user's installation is not an organization's: ignored.
+ * `installation` (created, deleted, suspend, unsuspend, ...): the
+ * installation is re-read from GitHub and its current state recorded
+ * (`resyncInstallation`), never the event's, so a replay out of order
+ * cannot undo a later event.
  */
-const installation: WebhookHandler = async (app, _config, delivery) => {
+const installation: WebhookHandler = async (app, config, delivery) => {
   const event = InstallationEvent.safeParse(delivery.payload);
   if (!event.success) return;
-  const { action, installation: raw } = event.data;
-  let orgId: string | undefined;
-  if (action === "deleted" || action === "suspend") {
-    orgId = (await clearInstallation(app.db, raw.id, action))?.id;
-  } else if (["created", "unsuspend", "new_permissions_accepted"].includes(action)) {
-    // The schema checked every field; only `exactOptionalPropertyTypes` needs the cast.
-    const inst = orgInstallation(raw as RawInstallation);
-    if (inst) orgId = (await recordInstallation(app.db, inst, "webhook")).id;
-  }
-  if (orgId) await orgChanged(app.db, orgId);
+  const org = await resyncInstallation(app.db, config, event.data.installation.id, event.data.action);
+  if (org) await orgChanged(app.db, org.id);
 };
 
 /**
@@ -75,7 +57,11 @@ const installationRepositories: WebhookHandler = async (app, _config, delivery) 
   if (org) await orgChanged(app.db, org.id);
 };
 
-/** `organization`: renamed, followed by its id; deleted, marked so. */
+/**
+ * `organization`: renamed, followed by its id; deleted, marked so. A stale
+ * rename replayed after a later one is corrected by the next listing or
+ * healing, which follow the login by the same id.
+ */
 const organization: WebhookHandler = async (app, _config, delivery) => {
   const event = OrganizationEvent.safeParse(delivery.payload);
   if (!event.success) return;

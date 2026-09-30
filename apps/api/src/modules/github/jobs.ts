@@ -33,9 +33,9 @@ export async function registerGithubJobs(
 }
 
 /**
- * Daily, both, like classroom's. They run whether or not the App is
- * configured: without it there is no delivery to replay nor to purge, and
- * GitHub is never asked.
+ * Daily, both, like classroom's, and in the catalog whether or not the App
+ * is configured (the catalog is static). Without it the reconciliation
+ * returns at once, and the purge clears what an earlier configuration left.
  */
 export const GITHUB_TASKS: readonly ScheduledTask[] = [
   {
