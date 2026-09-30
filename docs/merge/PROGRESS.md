@@ -49,7 +49,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M1-01 | Pure domain into `packages/domain` | review | M0-03 | `merge/M1-01-domain` | #370 | `@quiz/domain` gains `ciScore`, `finalScore`, `repoName` (+`slugify`), `groupRepo`, `reviewDispatch`, `studentIgnore`, `zone` (`SCHOOL_TIME_ZONE`, `zonedIso`); §7.4 names, wire names kept (I16); M1-02 and M4-01 import these, no copies (I17) |
 | M1-02 | GitHub adapters, config, image | todo | M0-03 | | | |
 | M1-03 | `ActivityKind`, `ActivitySummary` union | review | M0-03 | `merge/M1-03-activity-kind` | #373 | `ActivitySummary` is a union on `kind` (`"evaluation"`, `mode` kept): M1-05 relies on it. `ActivityKind<K>` = `kind` + `listForTeacher` over `KINDS` (`modules/activity/`); M5-01 adds `studentCards`, M5-03 `gradebookEntries`, M3-05 `deadlines`, each through `KINDS`, a classroom id only after the route loaded the classroom (card, "As delivered"). `activity_available` = `{activityKind, activityId, activityTitle}` (migration 0037; I58–I60) |
-| M1-04 | Missing primitives, long-form styles | in progress | M0-05 | `merge/M1-04-primitives` | | |
+| M1-04 | Missing primitives, long-form styles | review | M0-05 | `merge/M1-04-primitives` | #374 | From `./ui`: `GithubIcon({className})` (an `IconType`); `OrgAvatar({login, src?, size?: "xs"\|"sm"\|"md", label?, className?})` (src defaults to `github.com/<login>.png`, `null` = initials); `Progress({label, value?, max = 100, className?})` (no `value` = indeterminate). Journal HTML wears `md-body md-doc` (`MarkdownView className="md-doc"` for a client render); DESIGN.md › Long-form reading |
 | M1-05 | Web routes and mock skeleton | todo | M1-03 | | | |
 | M1-06 | Import script skeleton, identity, login adoption | todo | D04, D08 | | | |
 
