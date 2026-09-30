@@ -9,18 +9,28 @@
  * The period is one second by default because that is what the live
  * evaluation clock needs (docs/spec/05-architecture.md, 5.4): a tentative
  * whose deadline has passed by more than three seconds must already be
- * closed by the server. A task that does not need that cadence carries its
- * own `everyMs`.
+ * closed by the server.
+ *
+ * Two kinds of periodic work, kept apart on purpose (D10, merge task M2-05):
+ *
+ *   - the CLOCK-BOUND tasks (`TickTask`, `TICK_TASKS`): the live half, run
+ *     by the loop itself, every tick or every `everyMs`. They are neither
+ *     configurable nor disableable — invariant 5 (the server owns the clock)
+ *     must never depend on an admin setting;
+ *   - the SCHEDULED tasks (`ScheduledTask`, catalog `SCHEDULED_TASKS` in
+ *     `modules/system/catalog.ts`): the minutes-scale housekeeping, whose
+ *     period, activation and last outcome live in the `scheduled_tasks`
+ *     table, where an administrator sees and changes them. One tick task of
+ *     the loop claims the due ones and enqueues them
+ *     (`modules/system/jobs.ts`); it never runs one inside the tick.
  */
 import type { FastifyInstance } from "fastify";
 
+import type { ScheduledTaskKey } from "@quiz/contracts";
+
 import type { AppConfig } from "./config.js";
-import { purgeOAuth } from "./auth/oauth/service.js";
-import { purgeExpiredSessions } from "./auth/session.js";
-import { DRILL_TASKS } from "./modules/drill/jobs.js";
 import { LIVE_TASKS } from "./modules/live/jobs.js";
-import { NOTIFICATION_TASKS } from "./modules/notifications/jobs.js";
-import { POLL_TASKS } from "./modules/poll/jobs.js";
+import { scheduledTasksTick } from "./modules/system/jobs.js";
 
 export interface TickTask {
   name: string;
@@ -30,45 +40,31 @@ export interface TickTask {
 }
 
 /**
- * Tasks every deployment runs.
- *
- * The live half (`LIVE_TASKS`) is what makes the one-second period
- * worthwhile: expiring attempts past `deadline + GRACE_MS`, opening the
- * evaluations whose `opens_at` has come and closing those past `closes_at`.
- * `POLL_TASKS` ends the polls left without an answer for 12 hours, and
- * `NOTIFICATION_TASKS` reminds the students of an evaluation closing within
- * 24 hours (ADR-030 §d). `DRILL_TASKS` purges the drill data past its
- * five-year retention (N-DATA-03).
- * A module contributes its tasks as a list, so the order stays readable and
- * the ticker itself stays ignorant of the domain.
+ * A task of the scheduled catalog. `key` is one of the closed list of
+ * `@quiz/contracts` (the admin screen names each one, in both languages);
+ * `run` may return a short English summary of what it did ("3 sessions
+ * deleted"), stored as the task's last message for the administrator —
+ * operator data, like a log line, never translated.
  */
-export const CORE_TASKS: TickTask[] = [
-  {
-    name: "sessions.purge",
-    everyMs: 10 * 60_000,
-    run: async (app) => {
-      await purgeExpiredSessions(app.db);
-    },
-  },
-  {
-    // ADR-023: spent requests and hourly access tokens, dead grants, and
-    // self-registered clients that never got as far as a grant.
-    name: "oauth.purge",
-    everyMs: 60 * 60_000,
-    run: async (app) => {
-      await purgeOAuth(app.db, app.clock.now());
-    },
-  },
-  ...LIVE_TASKS,
-  ...POLL_TASKS,
-  ...NOTIFICATION_TASKS,
-  ...DRILL_TASKS,
-];
+export interface ScheduledTask {
+  key: ScheduledTaskKey;
+  defaultIntervalMinutes: number;
+  run: (app: FastifyInstance, config: AppConfig) => Promise<string | void>;
+}
+
+/**
+ * Tasks every deployment runs on the loop. The live half (`LIVE_TASKS`) is
+ * what makes the one-second period worthwhile: expiring attempts past
+ * `deadline + GRACE_MS`, opening the evaluations whose `opens_at` has come
+ * and closing those past `closes_at`. The last one claims and enqueues the
+ * due scheduled tasks.
+ */
+export const TICK_TASKS: TickTask[] = [...LIVE_TASKS, scheduledTasksTick()];
 
 export function startTicker(
   app: FastifyInstance,
   config: AppConfig,
-  tasks: readonly TickTask[] = CORE_TASKS,
+  tasks: readonly TickTask[] = TICK_TASKS,
 ) {
   let running = false;
   const lastRun = new Map<string, number>();

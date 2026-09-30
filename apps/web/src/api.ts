@@ -63,6 +63,8 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   correction_not_open: "error.correctionNotOpen",
   correction_not_allowed: "error.correctionNotAllowed",
   correction_published: "error.correctionPublished",
+  // F-ADMIN-05: "Run now" on a task whose run is still going.
+  task_running: "error.taskRunning",
 };
 
 /** Server-provided error message of a failed call (or its worded code), or the fallback. */

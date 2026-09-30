@@ -104,6 +104,10 @@ export type AuditAction =
   | "roster.unclaim"
   | "roster.update"
   | "tag.describe"
+  /** An admin paused, resumed or changed the period of a scheduled task (D10; `payload` the patch). */
+  | "task.configure"
+  /** An admin's "Run now" of a scheduled task (D10). */
+  | "task.run_now"
   | "template.create"
   | "template.delete"
   | "template.instantiate"

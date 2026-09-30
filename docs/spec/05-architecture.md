@@ -80,7 +80,8 @@ Each module lives in `apps/api/src/modules/<name>/` with `routes.ts` the HTTP ha
 | `runner` | HTTP client of the runner service, queue and priorities | |
 | `drill` | Cards, FSRS, sessions, reviews, the teacher's activity and mastery reads (ADR-041) | `org`, `pool`, `evaluation`, `live` (the student view), `results`; registers on `live`'s `onAttemptsEnded` (hand-in) and `results`' `onResultsReleased` (release), which never import it |
 | `canonical` | Import / export, API and CLI | `pool` |
-| `admin` | Users, health, settings, audit | all, read-only |
+| `admin` | Users, health, settings, audit; the admin routes of the scheduled tasks | all, read-only; `system` |
+| `system` | The scheduled tasks (D10): their table, the ticker's claim, the `system.task` worker, the instrumented run (5.4, Clock) | |
 | `realtime` | Event bus, SSE streams, presence, topics | |
 | `github` | Quiz's GitHub App: installations and organizations, the classroom ↔ organization link and its checks, GitHub account linking, the webhook intake and its handler registry, delivery reconciliation (5.11) | `auth`, `org` |
 | `journal` | A classroom's journal: its repository, ingestion into the read model, rendering through `docrender`, browser writes, assets, the reader's access (5.11) | `org`, `github` (registers on its webhook registry, which never imports it) |
@@ -212,6 +213,12 @@ The drill's switches live on the rows they qualify, and belong to those rows' mo
 
 **Infrastructure**: the `pgboss` schema managed by pg-boss, a `settings` table with jsonb key / value pairs for the global settings, `providers` for the LLM providers with an encrypted key.
 
+**Scheduled tasks**, module `system` (`db/system.ts`, D10):
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `scheduled_tasks` | `key` text pk, `enabled` bool, `interval_minutes`, `last_run_at`, `last_status` running / ok / error, `last_message`, `last_duration_ms`, `last_ok_at` | One row per task of the catalog, which is code: inserted with the defaults at boot, never deleted; a row whose key left the catalog is ignored. `last_run_at` is the claim (5.4, Clock) |
+
 ### Critical queries and indexes
 
 | Need | Query | Index |
@@ -289,6 +296,15 @@ One stream per tab, `GET /events?watch=evaluation:<id>` or `watch=attempt:<id>`.
 ### Clock
 
 Every `clock` and every autosave HTTP response carry `serverNow`. The client keeps the median of the last five offsets `serverNow − clientNow`, corrected by half the round-trip time measured on the requests. The countdown shows `deadlineAt − (Date.now() + offset)`. The server alone closes the attempt: the ticker runs every second and expires the attempts that are more than 3 seconds past their deadline. A write arriving after `deadline + 3 s` is refused with `410 attempt_closed`; the client shows that time is up and stops sending.
+
+#### The ticker's two kinds of periodic work
+
+One ticker (ADR-006), one loop of `TICK_MS` (one second), and two kinds of work on it (D10, settled 2026-09-30):
+
+- **Clock-bound tasks** (`TickTask`, `TICK_TASKS` in `apps/api/src/ticker.ts`): the live half — `live.expire_attempts`, `live.open_scheduled`, `live.close_due`, `live.presence_sweep` (every 5 s). Run by the loop itself, every tick or every `everyMs`. Neither configurable nor disableable: invariant 5 never depends on an admin setting.
+- **Scheduled tasks** (`ScheduledTask`, catalog `SCHEDULED_TASKS` in `apps/api/src/modules/system/catalog.ts`): the minutes-scale housekeeping — `sessions.purge` (10 min), `oauth.purge` (60 min), `poll.end_idle` (1 min), `notifications.deadline_reminders` (1 min), `drill.purge` (6 h); the GitHub reconciliations join with the tasks that port them (ADR-011). Each module contributes its list; the keys are a closed list of `@quiz/contracts` (`SCHEDULED_TASK_KEYS`). Every 15 s one clock-bound task claims the due ones in ONE conditional UPDATE on the database clock (`enabled`, in the catalog, `last_run_at` null or `last_run_at + interval_minutes <= now()`, and not `running` unless the run is 30 minutes old and taken for dead), setting `last_run_at = now()` and `last_status = 'running'`, and sends each claimed key to the `system.task` queue, whose worker runs it and records the status, the duration, an English summary or the error, and `last_ok_at`. Without a queue the claimed task runs inline, beside the tick and not awaited by it. The claim is the multi-process safety; a restart finds the condition still true and catches up.
+
+The administrator sees the catalog joined to its rows (`GET /app/api/admin/tasks`), pauses a task or changes its period, 1 minute to 1 week (`PATCH /app/api/admin/tasks/:key`, audited `task.configure`), and runs one now (`POST /app/api/admin/tasks/:key/run`, audited `task.run_now`): the same claim for that key whatever its period, refused with 409 `task_running` while it runs; 200 with the outcome when it ran inline, 202 when enqueued. A finished run raises the `admin` hint (F-ADMIN-05).
 
 ### Autosave
 
@@ -380,6 +396,6 @@ ADR-035; the plan is `docs/merge/03-github-projects.md` and `docs/merge/04-journ
 
 **Writes** go to GitHub first, through the Contents API, with the `baseSha` the editor opened as an optimistic lock: a concurrent push is a 409, never a merge, and the teacher's draft stays in the browser. Commits are authored as the teacher. Creating a journal never adopts an existing repository.
 
-**Periodic work** on the bare ticker's `everyMs`, claim and enqueue only: the delivery reconciliation, the purge of delivery payloads older than 30 days, and a sweep every 60 s that emits the `journal` hint when a page's `visible_from` passes (fix J4). The admin-visible `scheduled_tasks` come with projects, if D10 settles so (06, question 32).
+**Periodic work**, claim and enqueue only: the delivery reconciliation and the purge of delivery payloads older than 30 days are scheduled tasks (5.4, Clock; D10), visible to the administrator; the sweep every 60 s that emits the `journal` hint when a page's `visible_from` passes (fix J4) is a clock-bound task of the ticker, since a page's visibility is a date and must not depend on an admin setting.
 
 **Routes** of the journal, base `/app/api/classrooms/:id/journal`, every body and payload a schema of `packages/contracts/src/journal.ts`, portal sessions only (ADR-027: never a `seb` session): `GET` (tree, home path, repository), `GET pages/*`, `GET assets/*` (both roles, `readableClassroom`); staff: `POST` (create), `POST use` (choose a repository of the organization, heig-classroom's `attach`), `DELETE` (remove), `POST refresh`, `POST preview`, `PUT pages/*` (save with `baseSha`), `POST pages`, `DELETE pages/*`, `POST assets/*`. Every staff write is audited (`journal.*`).

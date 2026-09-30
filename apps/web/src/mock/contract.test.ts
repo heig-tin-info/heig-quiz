@@ -26,6 +26,7 @@
  */
 import {
   ActivitySummary,
+  AdminScheduledTask,
   AdminUser,
   AttemptInspect,
   AttemptOrLobby,
@@ -351,6 +352,7 @@ const CHECKED: Case[] = [
     ),
   ]),
   each("/app/api/admin/users", "/app/api/admin/users", AdminUser),
+  each("/app/api/admin/tasks", "/app/api/admin/tasks", AdminScheduledTask),
   each("/app/api/polls", "/app/api/polls", PollSummary),
   // The Activities section (#190).
   each("/app/api/activities", "/app/api/activities", ActivitySummary),

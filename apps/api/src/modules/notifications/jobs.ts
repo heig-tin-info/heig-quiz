@@ -19,7 +19,7 @@ import { teamsEnabled, type AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { users } from "../../db/schema.js";
 import type { JobQueue } from "../../jobs.js";
-import type { TickTask } from "../../ticker.js";
+import type { ScheduledTask } from "../../ticker.js";
 import { sendDeadlineReminders } from "./deadline.js";
 import { createMailer, type Mailer } from "./mailer.js";
 import {
@@ -145,17 +145,16 @@ export async function registerNotificationJobs(
 }
 
 /**
- * The notification task of the ticker (ADR-006): the `deadline_approaching`
- * scan (ADR-030 §d). A reminder due "24 hours before" needs no one-second
- * cadence; the scan is idempotent (its markers are the claim), so a late or
- * repeated pass costs nothing and a restart catches up.
+ * The notification's scheduled task (ADR-006, D10): the
+ * `deadline_approaching` scan (ADR-030 §d). A reminder due "24 hours before"
+ * needs no one-second cadence; the scan is idempotent (its markers are the
+ * claim), so a late or repeated pass costs nothing and a restart catches up.
  */
-export const NOTIFICATION_TASKS: TickTask[] = [
+export const NOTIFICATION_TASKS: ScheduledTask[] = [
   {
-    name: "notifications.deadline_reminders",
-    everyMs: 60_000,
-    run: async (app) => {
-      await sendDeadlineReminders(app.db, app.clock.now(), app.log);
-    },
+    key: "notifications.deadline_reminders",
+    defaultIntervalMinutes: 1,
+    run: async (app) =>
+      `${(await sendDeadlineReminders(app.db, app.clock.now(), app.log)).length} reminders sent`,
   },
 ];

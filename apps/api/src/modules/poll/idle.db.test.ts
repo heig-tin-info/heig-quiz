@@ -11,7 +11,7 @@ import { and, eq } from "drizzle-orm";
 import { attempts, auditLog, evaluations, questions } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
-import { CORE_TASKS } from "../../ticker.js";
+import { SCHEDULED_TASKS } from "../system/catalog.js";
 import * as poolService from "../pool/service.js";
 import { answerPoll, createPoll, endIdlePolls, endPoll, join, POLL_IDLE_MS } from "./service.js";
 
@@ -175,7 +175,7 @@ describe("a poll that was answered", () => {
 });
 
 describe("registration", () => {
-  it("runs on every deployment's ticker", () => {
-    expect(CORE_TASKS.map((t) => t.name)).toContain("poll.end_idle");
+  it("is in the scheduled catalog every deployment runs", () => {
+    expect(SCHEDULED_TASKS.map((t) => t.key)).toContain("poll.end_idle");
   });
 });

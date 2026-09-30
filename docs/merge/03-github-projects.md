@@ -228,7 +228,8 @@ layers:
   `project_milestones`, `project_groups`, `project_group_members` (FK to
   `enrollments`), `project_repos` (← student_repos, partial uniques kept),
   `project_grade_runs`, `bot_commits`, `grade_dispatches`, `reverts`.
-- `admin` (D10): `scheduled_tasks`.
+- `system` (D10, M2-05, already there): `scheduled_tasks`; the admin
+  routes live in `admin`.
 - UNIQUE constraints remain the idempotency mechanism.
 
 ### Contracts (`packages/contracts`)
