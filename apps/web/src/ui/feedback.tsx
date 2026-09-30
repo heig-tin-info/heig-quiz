@@ -1,8 +1,7 @@
 import { Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { useI18n, useT } from "../i18n";
-import { percent } from "./dates";
+import { useT } from "../i18n";
 import { cx, type IconType } from "./layers";
 
 // Feedback: loading, key caps, status and notices.
@@ -29,51 +28,17 @@ export function Skeleton({ className = "h-4 w-full" }: { className?: string }) {
 }
 
 /**
- * A job that takes seconds, as a thin bar under its label (DESIGN.md ›
- * Progress). With a `value` it is determinate — the fill is the share and
- * the percentage is written at the right end; without one it is
- * indeterminate — a third of the track slides across and no number is
- * invented. Either way it is one `progressbar` named by the label.
+ * A job that takes seconds and whose length is unknown, as a thin bar under
+ * its label (DESIGN.md › Progress): a third of the track slides across, and
+ * no number is invented. One `progressbar`, named by the label, busy, with no
+ * value. A known count is a `SegmentedBar` with an `info` part.
  */
-export function Progress({
-  label,
-  value,
-  max = 100,
-  className,
-}: {
-  /** What is happening, already translated: "Importing the roster…". */
-  label: string;
-  /** Done so far, 0 to `max`; leave it out when the duration is unknown. */
-  value?: number;
-  max?: number;
-  className?: string;
-}) {
-  const { locale } = useI18n();
-  const now = value === undefined ? undefined : Math.min(max, Math.max(0, value));
-  const share = now === undefined || max <= 0 ? 0 : now / max;
+export function Progress({ label, className }: { label: string; className?: string }) {
   return (
-    <div
-      role="progressbar"
-      aria-label={label}
-      aria-valuemin={0}
-      aria-valuemax={max}
-      aria-valuenow={now}
-      aria-busy={now === undefined || undefined}
-      className={cx("space-y-1.5", className)}
-    >
-      <div className="flex items-baseline justify-between gap-3 text-[13px] text-fg-muted">
-        <span className="min-w-0 truncate">{label}</span>
-        {now === undefined ? null : <span className="shrink-0 tabular-nums">{percent(share, locale)}</span>}
-      </div>
+    <div role="progressbar" aria-label={label} aria-busy="true" className={cx("space-y-1.5", className)}>
+      <p className="truncate text-[13px] text-fg-muted">{label}</p>
       <div className="h-1 overflow-hidden rounded-full bg-surface-3">
-        {now === undefined ? (
-          <div className="progress-indeterminate h-full w-1/3 rounded-full bg-info" />
-        ) : (
-          <div
-            className="h-full rounded-full bg-info transition-[width] duration-200"
-            style={{ width: `${share * 100}%` }}
-          />
-        )}
+        <div className="progress-indeterminate h-full w-1/3 rounded-full bg-info" />
       </div>
     </div>
   );

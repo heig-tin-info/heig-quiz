@@ -8,16 +8,14 @@
 //   controls  buttons and form controls.
 //   table     sortable tables: useSortableTable, the styles `T`, TableHead.
 //   identity  a person or an organization as a picture or initials
-//             (PersonAvatar, Avatar, OrgAvatar).
+//             (PersonAvatar, Avatar, OrgAvatar), and the GitHub mark
+//             (GithubIcon).
 //   dates     the account's date format, absolute and relative times, and a
 //             percentage in the interface language.
 //   feedback  Spinner, Skeleton, Progress, Kbd, Badge, Alert, EmptyState.
 //   page      surfaces and page structure: Card, PageHeader, Tabs…
 //             The six above are on layers and import no other sibling,
-//             except page, which reads rovingIndex from menu, and feedback,
-//             which writes Progress's percentage with dates.
-//   brand     brand marks lucide does not carry (GithubIcon). Imports
-//             nothing.
+//             except page, which reads rovingIndex from menu.
 //   actions   the actions of one record: icon buttons or a menu, decided
 //             by their number (Actions), on layers and menu.
 //   popover   the small floating card anchored on a trigger (Popover), on
@@ -54,5 +52,4 @@ export * from "./forms";
 export * from "./combobox";
 export * from "./state";
 export * from "./expand";
-export * from "./brand";
 export { FormError, PageError, QueryError } from "../queryError";

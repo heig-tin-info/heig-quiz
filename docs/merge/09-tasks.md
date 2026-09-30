@@ -207,6 +207,10 @@ files it ports; writes en + fr for every string.
   staff only through `staffAccess`; the GET carries the checks of
   `05-web.md` §5.3 — installation and repository access, plan, LLM
   secret); `/setup/github/installed` (App JWT); audit `github_org.*`.
+- **Org avatar**: an organization's avatar is served same-origin (fetched
+  server-side and cached, or stored at installation), never loaded by the
+  browser from github.com (privacy: the viewer's IP). The web's `OrgAvatar`
+  (M1-04) takes that URL as `src` and shows the initials without one.
 - **Tests**: healing, setup-URL idempotency, connect by a non-staff ⇒ 404.
 - **Acceptance**: `invariant-reviewer` clean; routes 404 when no App.
 

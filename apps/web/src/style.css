@@ -539,8 +539,16 @@ html.dark {
 .md-body.md-doc {
   font-size: 14px;
   line-height: 1.75;
-  max-width: 72ch;
 }
+/* The measure caps what is READ — prose, lists, quotes, headings. A code
+   block or a table is scanned, and keeps the column's width: capping it
+   would only make it scroll sooner. */
+.md-body.md-doc > p,
+.md-body.md-doc > ul,
+.md-body.md-doc > ol,
+.md-body.md-doc > blockquote,
+.md-body.md-doc > h1, .md-body.md-doc > h2, .md-body.md-doc > h3,
+.md-body.md-doc > h4, .md-body.md-doc > h5, .md-body.md-doc > h6 { max-width: 72ch; }
 .md-body.md-doc p,
 .md-body.md-doc ul,
 .md-body.md-doc ol,

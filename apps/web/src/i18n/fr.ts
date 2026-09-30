@@ -1962,7 +1962,6 @@ export const fr: Record<keyof Dict, string> = {
   "dev.ui.brand": "Logo GitHub",
   "dev.ui.orgAvatar": "Avatar d'organisation",
   "dev.ui.progress": "Progression",
-  "dev.ui.progressImport": "Import de la liste des étudiants…",
   "dev.ui.progressExplore": "Exploration du dépôt modèle…",
   "dev.ui.longForm": "Lecture longue (journal)",
 

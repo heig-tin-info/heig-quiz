@@ -1962,7 +1962,6 @@ export const en = {
   "dev.ui.brand": "GitHub mark",
   "dev.ui.orgAvatar": "Organization avatar",
   "dev.ui.progress": "Progress",
-  "dev.ui.progressImport": "Importing the roster…",
   "dev.ui.progressExplore": "Exploring the template repository…",
   "dev.ui.longForm": "Long-form reading (journal)",
 

@@ -162,6 +162,9 @@ printf("%d\\n", *p); /* affiche 42 */
 1. Écrivez une fonction \`swap\` qui échange deux entiers.
 2. Expliquez pourquoi \`swap(a, b)\` ne peut pas fonctionner sans pointeurs.`;
 
+/** The padding of the M1-04 rows, inside the shared `Row` card. */
+const M104_ROW = "flex flex-wrap items-center gap-6 p-4 sm:p-5";
+
 /** An organization's picture, drawn here so the gallery needs no network. */
 const ORG_PICTURE = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#1268a0"/><path d="M1 1h2v2H1zM5 1h2v2H5zM3 3h2v2H3zM1 5h2v2H1zM5 5h2v2H5z" fill="#e8f2f9"/></svg>',
@@ -253,7 +256,7 @@ function Row({ title, children }: { title: string; children: React.ReactNode }) 
   return (
     <section className="space-y-3">
       <SectionHeading title={title} />
-      <Card className="flex flex-wrap items-center gap-6 p-4 sm:p-5">{children}</Card>
+      <Card className="flex flex-wrap items-center gap-6">{children}</Card>
     </section>
   );
 }
@@ -485,54 +488,56 @@ export function DevGallery() {
       </section>
 
       {/* M1-04, the primitives of the classroom merge. Last, so that the
-          sections above keep their place in the screenshot. */}
+          sections above keep their place in the screenshot; padded inside,
+          without touching the shared `Row`. */}
       <Row title={t("dev.ui.brand")}>
-        <Specimen name="beside lucide">
-          <span className="flex items-center gap-2 text-fg-muted">
-            <Pencil className="size-4" />
-            <GithubIcon className="size-4" />
-            <Users className="size-4" />
-          </span>
-        </Specimen>
-        <Specimen name="size-5, fg">
-          <GithubIcon className="size-5 text-fg" />
-        </Specimen>
-        <Specimen name="button">
-          <Button size="sm" variant="secondary">
-            <GithubIcon /> GitHub
-          </Button>
-        </Specimen>
-        <Specimen name="actions">
-          <Actions label="GitHub" items={[{ label: "GitHub", icon: GithubIcon }]} />
-        </Specimen>
+        <div className={M104_ROW}>
+          <Specimen name="beside lucide">
+            <span className="flex items-center gap-2 text-fg-muted">
+              <Pencil className="size-4" />
+              <GithubIcon className="size-4" />
+              <Users className="size-4" />
+            </span>
+          </Specimen>
+          <Specimen name="size-5, fg">
+            <GithubIcon className="size-5 text-fg" />
+          </Specimen>
+          <Specimen name="button">
+            <Button size="sm" variant="secondary">
+              <GithubIcon /> GitHub
+            </Button>
+          </Specimen>
+          <Specimen name="actions">
+            <Actions label="GitHub" items={[{ label: "GitHub", icon: GithubIcon }]} />
+          </Specimen>
+        </div>
       </Row>
 
       <Row title={t("dev.ui.orgAvatar")}>
-        {(["xs", "sm", "md"] as const).map((size) => (
-          <Specimen key={size} name={`${size}, picture`}>
-            <OrgAvatar login="heig-tin-info" src={ORG_PICTURE} size={size} />
+        <div className={M104_ROW}>
+          {(["xs", "sm", "md"] as const).map((size) => (
+            <Specimen key={size} name={`${size}, picture`}>
+              <OrgAvatar login="heig-tin-info" src={ORG_PICTURE} size={size} />
+            </Specimen>
+          ))}
+          {(["xs", "sm", "md"] as const).map((size) => (
+            <Specimen key={size} name={`${size}, initials`}>
+              <OrgAvatar login="heig-tin-info" size={size} />
+            </Specimen>
+          ))}
+          <Specimen name="failed">
+            <OrgAvatar login="prg1-2026" src="/missing-org-avatar.png" size="md" />
           </Specimen>
-        ))}
-        {(["xs", "sm", "md"] as const).map((size) => (
-          <Specimen key={size} name={`${size}, initials`}>
-            <OrgAvatar login="heig-tin-info" src={null} size={size} />
+          <Specimen name="beside a name">
+            <span className="flex items-center gap-2 text-sm font-medium">
+              <OrgAvatar login="heig-tin-info" /> heig-tin-info
+            </span>
           </Specimen>
-        ))}
-        <Specimen name="failed">
-          <OrgAvatar login="prg1-2026" src="/missing-org-avatar.png" size="md" label="prg1-2026" />
-        </Specimen>
-        <Specimen name="beside a name">
-          <span className="flex items-center gap-2 text-sm font-medium">
-            <OrgAvatar login="heig-tin-info" src={null} /> heig-tin-info
-          </span>
-        </Specimen>
+        </div>
       </Row>
 
       <Row title={t("dev.ui.progress")}>
-        <div className="grid w-full gap-6 sm:grid-cols-2">
-          <Progress label={t("dev.ui.progressImport")} value={0} max={24} />
-          <Progress label={t("dev.ui.progressImport")} value={18} max={24} />
-          <Progress label={t("dev.ui.progressImport")} value={24} max={24} />
+        <div className="w-full max-w-md p-4 sm:p-5">
           <Progress label={t("dev.ui.progressExplore")} />
         </div>
       </Row>
