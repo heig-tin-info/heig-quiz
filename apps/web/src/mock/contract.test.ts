@@ -384,6 +384,14 @@ const UNCHECKED = [
   "/app/api/classrooms/:id", // ClassroomDetail
   "/app/api/student/classrooms", // StudentClassroom[]
   "/app/api/admin/teachers", // AdminTeacher[]
+  // TODO(M2-01): the `github` contracts do not exist yet (mock/github.ts).
+  "/app/api/github/orgs",
+  "/app/api/classrooms/:id/github",
+  "/app/api/me/github",
+  // TODO(M4-01, #371): `Journal` and `JournalPage` of contracts/journal.ts,
+  // once merged; move these two to CHECKED (mock/journal.ts).
+  "/app/api/classrooms/:id/journal",
+  "/app/api/classrooms/:id/journal/pages/(?<path>.+)",
 ];
 
 describe("the mock answers what the contracts describe", () => {

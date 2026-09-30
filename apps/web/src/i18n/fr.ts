@@ -3374,4 +3374,13 @@ export const fr: Record<keyof Dict, string> = {
   "drill.mastery.untagged": "Sans tag",
   "drill.mastery.counts": "{cards} cartes · {students} étudiants",
   "drill.mastery.loadFailed": "Impossible de charger la maîtrise par tag",
+
+  // The pages of the classroom merge before their screens (M1-05, `ComingSoon.tsx`).
+  "soon.title": "Bientôt disponible",
+  "soon.body": "Cette page est en préparation. Tout le reste fonctionne comme avant.",
+  "soon.classroom": "Classe",
+  "soon.classroomSettings": "Réglages de la classe",
+  "soon.journal": "Journal",
+  "soon.project": "Projet",
+  "soon.projectGroups": "Groupes du projet",
 };

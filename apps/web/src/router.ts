@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { CLASSROOM_PAGES } from "./flags";
+
 /**
  * Minimal history-backed router: every in-app navigation pushes a real URL,
  * so the browser (and mouse) back/forward buttons work, and deep links
@@ -26,6 +28,28 @@ export type Route =
    * sees it, the page reads it off the query string.
    */
   | { view: "classroom"; id: string; tab?: "roster" }
+  /*
+   * The pages of the classroom merge (ADR-035, `docs/merge/05-web.md` §5.2),
+   * each behind `CLASSROOM_PAGES` (`flags.ts`) until its screen ships.
+   */
+  /**
+   * The student's Courses (F-ORG-14, D07): their classrooms, each card opening
+   * the classroom's page. `/courses` alone; `/courses/:id` is a teacher's course.
+   */
+  | { view: "studentCourses" }
+  /** The teacher classroom's Settings tab (F-ORG-13, D24): GitHub, Journal, rename… */
+  | { view: "classroomSettings"; id: string }
+  /**
+   * The classroom's journal, both roles (F-JRN-07): `path` is the page's
+   * journal path, DECODED (`20-semaine 2/10-tableaux.md`), absent for the
+   * journal's home. The address encodes each segment on its own.
+   */
+  | { view: "classroomJournal"; id: string; path?: string }
+  /** The classroom's Grades tab: the teacher's export, the student's table (§5.2). */
+  | { view: "classroomGrades"; id: string }
+  /** One project (M3-12), and its groups. Declared: no screen reaches them yet. */
+  | { view: "project"; id: string }
+  | { view: "projectGroups"; id: string }
   /**
    * Every evaluation and poll the teacher manages, across classrooms (#190):
    * a table, cards or a week-by-week schedule, "Live now" on top.
@@ -149,6 +173,13 @@ export interface RouteSpec<V extends Route["view"]> {
    * (the palette's "grading" and "results" entries): the evaluation's id.
    */
   evaluationId?(route: RouteOf<V>): string;
+  /**
+   * A route of the classroom merge whose screen is not built yet: `parsePath`
+   * skips it unless `CLASSROOM_PAGES` is on (`flags.ts`), so a production
+   * address reads exactly as it did before it. Dropped by the PR that ships
+   * the screen.
+   */
+  preview?: true;
 }
 
 /** A view whose path is one fixed segment (`/settings`, `/polls`, …), whatever follows it. */
@@ -197,11 +228,13 @@ function evaluationIdOf(route: RouteOf<EvaluationTailView | "evaluation">): stri
  * `router.test.ts` walks the table against the union as well.
  *
  * `parsePath` asks the entries IN THIS ORDER and takes the first match. Most
- * are told apart by their first segment and could sit anywhere; the one
- * place order matters is the evaluation family: `evaluation` accepts ANY
- * tail after the id — an unknown tail lands on the configuration screen
+ * are told apart by their first segment and could sit anywhere; order
+ * matters in a family with a catch-all, the evaluation's first: `evaluation`
+ * accepts ANY tail after the id — an unknown tail lands on the configuration screen
  * rather than on the home — so it comes after `live`, `poll`, `grading`,
- * `results` and `evaluationPreview`. `home` matches nothing: it is the fallback.
+ * `results` and `evaluationPreview`. The classroom's tabs and the project's
+ * groups precede `classroom` and `project` for the same reason. `home`
+ * matches nothing: it is the fallback.
  */
 export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   home: {
@@ -225,10 +258,69 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: false,
     section: "home",
   },
+  // F-ORG-14 (D07): `/courses` alone, the student's classrooms. A teacher's
+  // Courses is the home; `/courses/:id` is one course (above).
+  studentCourses: {
+    path: () => "/courses",
+    match: ([head, id]) => (head === "courses" && !id ? { view: "studentCourses" } : null),
+    studentSafe: true,
+    section: "home",
+    bottomSlot: "courses",
+    preview: true,
+  },
+  // The classroom's tabs that are routes (§5.2). Before `classroom`, which
+  // takes any tail after the id.
+  classroomSettings: {
+    path: (r) => `/classrooms/${r.id}/settings`,
+    match: ([head, id, tail]) =>
+      head === "classrooms" && id && tail === "settings" ? { view: "classroomSettings", id } : null,
+    studentSafe: false,
+    preview: true,
+  },
+  classroomJournal: {
+    path: (r) => `/classrooms/${r.id}/journal${r.path ? `/${encodeJournalPath(r.path)}` : ""}`,
+    match: ([head, id, tail, ...rest]) => {
+      if (head !== "classrooms" || !id || tail !== "journal") return null;
+      return rest.length === 0
+        ? { view: "classroomJournal", id }
+        : { view: "classroomJournal", id, path: rest.map(decodeSegment).join("/") };
+    },
+    studentSafe: true,
+    bottomSlot: "courses",
+    preview: true,
+  },
+  classroomGrades: {
+    path: (r) => `/classrooms/${r.id}/grades`,
+    match: ([head, id, tail]) =>
+      head === "classrooms" && id && tail === "grades" ? { view: "classroomGrades", id } : null,
+    studentSafe: true,
+    bottomSlot: "courses",
+    preview: true,
+  },
+  // Role-dispatched (F-ORG-15): the teacher's classroom, or the student's page
+  // of it — a student reaches it only while `CLASSROOM_PAGES` is on (M5-02).
   classroom: {
     path: (r) => `/classrooms/${r.id}${r.tab ? `?tab=${r.tab}` : ""}`,
     match: ([head, id]) => (head === "classrooms" && id ? { view: "classroom", id } : null),
+    studentSafe: CLASSROOM_PAGES,
+    bottomSlot: "courses",
+  },
+  // M3-12: declared, no screen links to them yet. `projectGroups` first:
+  // `project` takes any tail after the id.
+  projectGroups: {
+    path: (r) => `/projects/${r.id}/groups`,
+    match: ([head, id, tail]) =>
+      head === "projects" && id && tail === "groups" ? { view: "projectGroups", id } : null,
     studentSafe: false,
+    section: "activities",
+    preview: true,
+  },
+  project: {
+    path: (r) => `/projects/${r.id}`,
+    match: ([head, id]) => (head === "projects" && id ? { view: "project", id } : null),
+    studentSafe: false,
+    section: "activities",
+    preview: true,
   },
   activities: { ...fixed("activities", { view: "activities" }), section: "activities" },
   pools: {
@@ -397,9 +489,33 @@ export function evaluationInView(route: Route): string | null {
   return specOf(route.view).evaluationId?.(route) ?? null;
 }
 
+/**
+ * A journal path as an address: each segment encoded on its own, so a space,
+ * an accent or a `#` survives and the slashes stay separators.
+ */
+function encodeJournalPath(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
+/** One segment of an address, decoded; a malformed escape is kept as written (the reader then finds no such page). */
+function decodeSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+/**
+ * The route a path names. Split on `/`, empty segments dropped: a trailing
+ * slash, or a doubled one, names the same page. Segments reach `match` as
+ * the address wrote them, still encoded; a route whose segment is free text
+ * (the journal's path) decodes it itself.
+ */
 export function parsePath(path: string): Route {
   const parts = path.split("/").filter(Boolean);
   for (const view of ROUTE_VIEWS) {
+    if (ROUTES[view].preview && !CLASSROOM_PAGES) continue;
     const route = specOf(view).match(parts);
     if (route) return route;
   }

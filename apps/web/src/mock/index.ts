@@ -27,6 +27,8 @@
  *    path that asks for a confirmation first;
  *  - `reviewed` — the student already did today's drill: the empty day
  *    (section 7);
+ *  - `unlinked` — the persona has no linked GitHub account (section 8);
+ *  - `journal` — the classroom PRG1-2026 has a journal (section 9);
  *  - `scene` — the student player's state, and only that one screen's:
  *    `?scene=lobby|running|paused|closed|extend|single|marks|forward|exercise` (`running` by default).
  *
@@ -47,7 +49,11 @@
  *   grading.ts     5.  grading, results and the student's feedback;
  *   preview.ts     5b. the teacher's stateless preview of an evaluation;
  *   poll.ts        6.  the participant's poll page and the teacher's half;
- *   drill.ts       7.  the student's drill, the teacher's drill switches and view.
+ *   drill.ts       7.  the student's drill, the teacher's drill switches and view;
+ *   github.ts      8.  GitHub: the App's organizations, a classroom's link, the
+ *                      persona's account (`?unlinked=1`);
+ *   journal.ts     9.  a classroom's journal, its navigation and its rendered
+ *                      pages (`?journal=1`).
  *
  * That list is also the dependency order, and the graph is acyclic: a file
  * reads the ones above it and never the ones below. Two handlers are
@@ -111,6 +117,8 @@ import {
 import "./grading";
 import "./preview";
 import "./drill";
+import "./github";
+import "./journal";
 import {
   polls,
   findTeacherPoll,
