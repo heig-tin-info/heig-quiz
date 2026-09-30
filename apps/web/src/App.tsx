@@ -10,6 +10,7 @@ import { kioskStationKey } from "./queryKeys";
 import { Logo } from "./Header";
 import { type Dict, useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
+import { useGithubLinkReturn } from "./github/linkReturn";
 import { CoachLayer } from "./coach/CoachLayer";
 import { ComingSoon } from "./ComingSoon";
 import { useRoute, type Navigate, type Route, type RouteOf } from "./router";
@@ -252,11 +253,8 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // F-ORG-14: the student's classrooms. A teacher's Courses is the home.
   studentCourses: (_, c) =>
     c.teacherUi ? <TeacherHome navigate={c.navigate} /> : <StudentCourses navigate={c.navigate} />,
-  // The pages of the classroom merge, placeholders until their screens ship
-  // (`CLASSROOM_PAGES`, `router.ts`).
-  classroomSettings: (_, c) => (
-    <ComingSoon title="soon.classroomSettings" navigate={c.navigate} />
-  ),
+  // F-ORG-13 (D24): the teacher classroom's Settings tab, a route of its own.
+  classroomSettings: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} settings />,
   // F-JRN-07: both roles. The student's is the Journal tab of their
   // classroom page, which asks for the student payload.
   classroomJournal: (r, c) =>
@@ -265,6 +263,8 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
     ) : (
       <StudentClassroom id={r.id} tab="journal" path={r.path} navigate={c.navigate} />
     ),
+  // The pages of the classroom merge, placeholders until their screens ship
+  // (`CLASSROOM_PAGES`, `router.ts`).
   classroomGrades: (_, c) => <ComingSoon title="bnav.grades" navigate={c.navigate} />,
   project: (_, c) => <ComingSoon title="soon.project" navigate={c.navigate} />,
   projectGroups: (_, c) => <ComingSoon title="soon.projectGroups" navigate={c.navigate} />,
@@ -502,6 +502,8 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
     me.data != null && confinedTo === null && route.view !== "attempt",
     confinedTo !== null || QUIET.has(route.view),
   );
+  // F-GH-05: back from a GitHub link round trip, on whichever page it began.
+  useGithubLinkReturn(me.data != null);
   // The account's saved language wins on load, so the choice follows the user
   // across devices (no re-persist: adopt only). Unset means "the browser's".
   const serverLocale = me.data ? (me.data.locale ?? "browser") : null;

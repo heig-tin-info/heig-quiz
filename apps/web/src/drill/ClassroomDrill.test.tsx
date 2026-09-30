@@ -77,11 +77,11 @@ const MASTERY: DrillTagMastery[] = [
 const base = "/app/api/classrooms/r1/drill";
 
 describe("the classroom's Drill tab", () => {
-  it("says the drill is off, above the switch that turns it on", async () => {
+  it("says the drill is off, and leads to the switch in Settings", async () => {
     mockFetch({ [`GET ${base}/activity`]: ok([row({ nom: "Cattaneo" })]) });
     renderWithProviders(<ClassroomDrill room={makeClassroomDetail()} />);
     expect(await screen.findByText("The drill is off for this classroom")).toBeVisible();
-    expect(screen.getByRole("switch", { name: "Drill" })).toHaveAttribute("aria-checked", "false");
+    expect(screen.queryByRole("switch", { name: "Drill" })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
   });
 

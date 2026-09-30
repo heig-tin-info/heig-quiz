@@ -3,6 +3,9 @@
  * students are then in by default and may opt out. Turning it on creates the
  * cards of the past evaluations that allow the drill (ADR-041 §13, item 1),
  * and the row says how many, so the teacher knows what the students got.
+ *
+ * A row of the classroom's Settings tab (D24, F-ORG-13): the card around it
+ * is the tab's.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -12,7 +15,7 @@ import type { ClassroomDetail } from "@quiz/contracts";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import { classroomKey } from "../queryKeys";
-import { Card, SettingRow, Switch } from "../ui";
+import { SettingRow, Switch } from "../ui";
 import { setClassroomDrill } from "./api";
 
 export function ClassroomDrillSetting({ room }: { room: ClassroomDetail }) {
@@ -35,8 +38,7 @@ export function ClassroomDrillSetting({ room }: { room: ClassroomDetail }) {
   });
 
   return (
-    <Card className="px-4">
-      <SettingRow
+    <SettingRow
         title={t("nav.drill")}
         desc={
           <>
@@ -57,7 +59,6 @@ export function ClassroomDrillSetting({ room }: { room: ClassroomDetail }) {
           label={t("nav.drill")}
           onChange={(enabled) => change.mutate(enabled)}
         />
-      </SettingRow>
-    </Card>
+    </SettingRow>
   );
 }

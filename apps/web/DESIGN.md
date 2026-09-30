@@ -645,6 +645,16 @@ live in `ui/state.ts`, each written once.
   the control on the right. The row wraps rather than squeezing — the text
   keeps a 14 rem floor, so a segmented control or a select drops to its own
   line on a phone while a switch stays on the label's line at any width.
+- Check line (`github/ClassroomGithub.tsx`, F-GH-03): one fact of a
+  connection, a 16 px state icon then the sentence that says what to do.
+  `success` circle-check (ok), `warning` triangle (warn), `danger` circle-x
+  (blocks), `fg-faint` circle-question (unknown — never green for a fact
+  nobody read); the icon carries the state's name for a screen reader. Its
+  way out, when it is on another site, is a quiet `accent` link at the end
+  of the line, never a button.
+- Tabs keep the selected tab in sight: a strip wider than a phone scrolls
+  itself (never the page) to the selected tab, so a route that opens on a
+  fourth tab shows it.
 - Sheet: right drawer, 560 px, for every form longer than three fields.
   Dialog: centered, ≤ 480 px, for confirmations and one-field forms.
   A sheet never opens another sheet; a dialog may open over a sheet.

@@ -32,7 +32,7 @@ On the course card, click **New classroom**. A classroom has a **Name**, such as
 
 ### The classroom screen
 
-The eyebrow above the title names the course and goes back to it. The title is the classroom's name, followed by the page's help **?** and by the period. Under the title, three tabs, and the primary action at the right of the title changes with the tab, always in the same place: **Add students** on the roster, **New evaluation** on the evaluations; the **Drill** tab is a read view and has none.
+The eyebrow above the title names the course and goes back to it. The title is the classroom's name, followed by the page's help **?**, by the period and, when the classroom is connected to GitHub, by its organization. Under the title, four tabs, and the primary action at the right of the title changes with the tab, always in the same place: **Add students** on the roster, **New evaluation** on the evaluations; the **Drill** tab is a read view and **Settings** a page of settings, and neither has one.
 
 <figure markdown="span">
   ![A classroom, on its evaluations tab](../assets/screenshots/classroom-evaluations-light.png#only-light)
@@ -50,7 +50,7 @@ The eyebrow above the title names the course and goes back to it. The title is t
 
 **Roster** is the class list: **Last name**, **First name**, **E-mail**, **Status**, **Extra time** and **Last sign-in**. The count on the tab is the headcount. Click a column header to sort.
 
-**Drill** is the classroom's spaced practice. With the drill off, the tab says so above the **Drill** switch that turns it on. With it on, one row per student: the **Recall, 30 days** — the share of reviews of questions the student had already practised that were not failed, a question's first review left out — with an arrow when it rose or fell against the 30 days before, the **Sessions** (days with a review), the **Questions seen**, the **Reviews, 30 days** and the **Last activity**. A student who opted out carries an **Opted out on** badge with the date: nothing after it is counted, what came before stays. Click a row for that student's weeks: reviews per week, and the recall rate per week against the scheduler's 90 % target. Below the table, **Mastery per tag**: for each tag, the chance today that the students still recall a question they practised, weakest first. Only the questions a student first met in this classroom count here. Students are told in their drill tab that you see this activity, which is kept five years.
+**Drill** is the classroom's spaced practice. With the drill off, the tab says so, and **Open Settings** leads to the **Drill** switch that turns it on. With it on, one row per student: the **Recall, 30 days** — the share of reviews of questions the student had already practised that were not failed, a question's first review left out — with an arrow when it rose or fell against the 30 days before, the **Sessions** (days with a review), the **Questions seen**, the **Reviews, 30 days** and the **Last activity**. A student who opted out carries an **Opted out on** badge with the date: nothing after it is counted, what came before stays. Click a row for that student's weeks: reviews per week, and the recall rate per week against the scheduler's 90 % target. Below the table, **Mastery per tag**: for each tag, the chance today that the students still recall a question they practised, weakest first. Only the questions a student first met in this classroom count here. Students are told in their drill tab that you see this activity, which is kept five years.
 
 ## Importing the roster
 
@@ -94,17 +94,29 @@ The menu at the end of a row offers **Edit**, **Revoke claim** and **Remove from
 
 **Join as student**, the button beside the primary action, gives you a seat in your own classroom, flagged *staff*, which stays out of the headcount and the results. With it, **Switch to student view** in the account menu shows you this classroom the way a student gets it, and you can take an evaluation from start to finish as one. It is the right way to check an evaluation before opening it to the class.
 
-## Archive, rename, delete
+## Settings: rename, drill, GitHub, archive, delete
 
-The name and the period are changed where they are written, and the classroom's menu (the three dots at the right of the title) holds the rest of its life.
+The period is changed where it is written: click it beside the name, or **Set period** when there is none; the dialog sets its months and its label. Everything else of the classroom's life is in its **Settings** tab.
 
-- **Rename**: click the classroom's name. It turns into a field; **Enter** saves, **Escape** cancels.
-- **Period**: click the period beside the name, or **Set period** when there is none (the menu's **Period…** does the same). The dialog sets its months and its label.
-- **Archive** puts a finished classroom aside without deleting anything: it leaves the sidebar and the course card, and its roster, evaluations and results stay readable on its own page, marked *archived*. **Restore**, in the same menu, brings it back. Today no list shows the archived classrooms, so keep the page's address (or a bookmark) if you expect to come back to one.
+- **Name**: **Rename** opens a dialog with the name; **Save** changes it everywhere it is shown.
+- **Drill**: the switch that turns the classroom's spaced practice on or off (see the **Drill** tab above).
+- **GitHub**: see [Connecting a classroom to GitHub](#connecting-a-classroom-to-github) below.
+- **Archive** puts a finished classroom aside without deleting anything: it leaves the sidebar and the course card, and its roster, evaluations and results stay readable on its own page, marked *archived*. **Restore**, in the same row, brings it back. Today no list shows the archived classrooms, so keep the page's address (or a bookmark) if you expect to come back to one.
 - **Delete classroom** is the other thing entirely. The roster, the evaluations, the attempts, the answers and their gradings go, after a confirmation that names the classroom. The questions of the pools are never touched.
 
 !!! warning
     Archive when the semester is over; delete only a classroom created by mistake. Deletion cannot be undone, and the students lose the results they had been shown.
+
+### Connecting a classroom to GitHub
+
+GitHub is optional: a classroom that is never connected is a plain Quiz classroom. Connected to an organization of GitHub, it can later hold projects and a journal. The **GitHub** section of the **Settings** tab shows only on a platform where Quiz's GitHub App is set up.
+
+- **Connect to GitHub** opens a panel listing the organizations where Quiz's App is installed, the organization of the course's other classrooms first and already chosen. Pick one and **Connect**.
+- An organization missing from the list needs the App: **Install the App on GitHub** opens GitHub in a new tab. You must be an owner of the organization, and give the App access to **all repositories**. Back in Quiz, the list updates by itself and the new organization is chosen.
+- Once connected, the section shows the organization and three checks: the App installed with access to every repository (the only one that blocks), the organization's plan (on the free plan, no rulesets and no organization secrets for private repositories), and the `ANTHROPIC_API_KEY` secret the LLM review of projects needs (present, missing, or unknown when the App cannot read secrets).
+- **Disconnect** deletes nothing on GitHub. It is refused while the classroom has a journal: remove the journal first.
+
+Your own GitHub account is linked from your **Settings** page, in its **GitHub** card, which shows once you are on the staff of a connected classroom. **Link GitHub** goes through GitHub's authorisation and comes back to the page you started from, with a message saying it is linked, already linked to another Quiz account, or failed. **Unlink** undoes it.
 
 ### Deleting a course
 
