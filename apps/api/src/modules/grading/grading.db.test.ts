@@ -6,34 +6,53 @@
  * no sleep. Everything it depends on — the clock, the runner — is an object
  * the test hands over, which is what makes "the stub degrades to a proposal"
  * and "a real runner validates" two lines apart.
+ *
+ * Also here: the MCQ scoring hierarchy end to end (docs/04 §4.4) — the
+ * teacher's preference seeds the evaluation, the evaluation is what an
+ * `inherit` question defers to, and a question that names a policy
+ * overrides both; the same hierarchy, minus the preference, for
+ * `categorize` (ADR-036, `settings.categorizePolicy`). The two halves a unit
+ * test cannot prove: that the column carries the preference at creation, and
+ * that the pass hands the evaluation's policy to the type's `grade`.
+ *
+ * And the batched writer of the pass (D-01): what one pass costs in
+ * statements, and the supersede chain `writeGradings` builds for many cells
+ * at once.
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { PGlite } from "@electric-sql/pglite";
 
-import { reasonOf } from "@quiz/contracts";
+import { and, eq } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+import { reasonOf, type McqPolicy } from "@quiz/contracts";
 import type { RunnerOutcome, RunnerService } from "@quiz/core/server";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import { answers, attempts, gradings, guestParticipants } from "../../db/schema.js";
+import { answers, attempts, evaluations, gradings, guestParticipants, questions, users } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
-import { testApp, testDb } from "../../test/db.js";
+import { pgliteDb, testApp, testDatabase } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { seedCodeEvaluation } from "../../test/codeFixture.js";
 import { reload, seedLive } from "../../test/live.js";
-import { applyState, byId, joinedItems } from "../evaluation/service.js";
+import * as evaluationService from "../evaluation/service.js";
+import { applyState, byId, createEvaluation, joinedItems } from "../evaluation/service.js";
 import * as live from "../live/service.js";
+import { loadConfig, typeOf } from "../pool/config.js";
+import * as poolService from "../pool/service.js";
 import { runEvaluationGrading } from "./jobs.js";
 import * as service from "./service.js";
+import { writeGradings } from "./service.js";
 
+let client: PGlite;
 let db: Db;
 const restores: (() => void)[] = [];
 
 beforeAll(async () => {
   restores.push(registerForTests(fakeShort));
-  db = await testDb();
+  ({ db, client } = await testDatabase());
 });
 afterAll(() => {
   for (const restore of restores) restore();
@@ -589,5 +608,370 @@ describe("runner-backed grading (decision D14)", () => {
     } finally {
       restore();
     }
+  });
+});
+
+// --- The MCQ and categorize policy hierarchy (docs/04 §4.4, ADR-036) ------
+
+/** Two keys, two distractors: C = 2, W = 2, so every policy gives its own mark. */
+const mcqConfig = (policy: "inherit" | McqPolicy) => ({
+  configVersion: 2,
+  prompt: "Which declarations are valid in C17?",
+  choices: [
+    { text: "`int a[] = {1,2,3};`", correct: true },
+    { text: "`int a[3] = {0};`", correct: true },
+    { text: "`int a[];`", correct: false },
+    { text: "`int a[-1];`", correct: false },
+  ],
+  mode: "multiple",
+  policy,
+  shuffleChoices: false,
+});
+
+async function publishMcq(
+  poolId: string,
+  ownerId: string,
+  name: string,
+  policy: "inherit" | McqPolicy,
+): Promise<string> {
+  const { id } = await poolService.createQuestion(db, {
+    poolId,
+    type: "mcq",
+    internalName: name,
+    createdBy: ownerId,
+  });
+  const [question] = await db.select().from(questions).where(eq(questions.id, id));
+  await poolService.putDraft(db, question!, { config: mcqConfig(policy) });
+  await poolService.publishQuestion(db, question!, { userId: ownerId });
+  return id;
+}
+
+describe("the evaluation is seeded from its creator's preference", () => {
+  it("copies the preference at creation, and falls back to all or nothing", async () => {
+    const seed = await seedLive(db, { questions: 0 });
+
+    const plain = await createEvaluation(db, {
+      classroomId: seed.classroomId,
+      title: "No preference",
+      mode: "exam",
+      createdBy: seed.teacherId,
+    });
+    expect(plain.mcqPolicy).toBe("all_or_nothing");
+
+    await db
+      .update(users)
+      .set({ mcqPolicy: "discordance" })
+      .where(eq(users.id, seed.teacherId));
+    const seeded = await createEvaluation(db, {
+      classroomId: seed.classroomId,
+      title: "With a preference",
+      mode: "exam",
+      createdBy: seed.teacherId,
+    });
+    expect(seeded.mcqPolicy).toBe("discordance");
+
+    // The preference is a SEED: moving it never moves an evaluation that
+    // already exists.
+    await db.update(users).set({ mcqPolicy: "ripkey" }).where(eq(users.id, seed.teacherId));
+    expect((await byId(db, seeded.id))!.mcqPolicy).toBe("discordance");
+  });
+});
+
+describe("the grading pass applies the hierarchy", () => {
+  /**
+   * One evaluation scored `true_false`, two mcq items — one inheriting, one
+   * overriding with `ripkey` — and a student who ticks exactly one of the two
+   * correct choices. The marks then differ by policy and by nothing else:
+   * `true_false` gives (1 + 2) / 4 = 0.75, `ripkey` gives 1/2 = 0.5.
+   */
+  it("uses the evaluation's policy for inherit and the question's otherwise", async () => {
+    const app = await testApp(db);
+    app.clock.set("2026-09-20T09:00:00.000Z");
+    const seed = await seedLive(db, { students: 1, questions: 0 });
+
+    const inheriting = await publishMcq(seed.poolId, seed.teacherId, "mcq-inherit", "inherit");
+    const overriding = await publishMcq(seed.poolId, seed.teacherId, "mcq-ripkey", "ripkey");
+
+    await db
+      .update(evaluations)
+      .set({ mcqPolicy: "true_false" })
+      .where(eq(evaluations.id, seed.evaluationId));
+    let evaluation = (await byId(db, seed.evaluationId))!;
+    await evaluationService.addItems(
+      db,
+      evaluation,
+      [inheriting, overriding],
+      (type, version) =>
+        typeOf(type).defaultPoints(
+          loadConfig(type, { config: version.config, configVersion: version.configVersion }),
+        ),
+      { attemptCount: 0 },
+    );
+
+    evaluation = await applyState(db, await reload(db, seed.evaluationId), "running", app.clock.now());
+    const items = await joinedItems(db, evaluation.id);
+    const participant = (await live.participantOf(db, evaluation, seed.studentIds[0]!))!;
+    const created = await live.ensureAttempt(db, evaluation, participant, app.clock.now());
+    const attempt = await live.beginAttempt(db, evaluation, created, participant, app.clock.now());
+    for (const [index, item] of items.entries()) {
+      await live.saveAnswer(db, {
+        evaluation,
+        attempt,
+        itemId: item.item.id,
+        // One of the two keys, and no distractor.
+        payload: { selected: [0] },
+        revision: index + 1,
+        now: app.clock.now(),
+      });
+    }
+    evaluation = await live.closeEvaluation(db, evaluation, app.clock.now());
+
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+    const rows = await db
+      .select({ grading: gradings })
+      .from(gradings)
+      .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
+      .where(eq(attempts.evaluationId, evaluation.id));
+    expect(rows).toHaveLength(2);
+
+    const detailsOf = (itemId: string) =>
+      rows.find((r) => r.grading.itemId === itemId)!.grading.details as {
+        policy: string;
+        fraction: number;
+      };
+    const byQuestion = new Map(items.map((i) => [i.question.id, i.item.id]));
+
+    const inherited = detailsOf(byQuestion.get(inheriting)!);
+    expect(inherited.policy).toBe("true_false");
+    expect(inherited.fraction).toBeCloseTo(0.75, 10);
+
+    const overridden = detailsOf(byQuestion.get(overriding)!);
+    expect(overridden.policy).toBe("ripkey");
+    expect(overridden.fraction).toBeCloseTo(0.5, 10);
+  });
+});
+
+/** Columns A and B, one target each, and a distractor: T = 2, D = 1. */
+const categorizeConfig = (policy: "inherit" | "per_item" | "all_or_nothing") => ({
+  configVersion: 1,
+  prompt: "Sort the cards.",
+  columns: [
+    { id: "col4a9xq", label: "A", cards: ["crd7k2ma"] },
+    { id: "col8m3wz", label: "B", cards: ["crd1p6vb"] },
+  ],
+  cards: [
+    { id: "crd7k2ma", text: "a" },
+    { id: "crd1p6vb", text: "b" },
+    { id: "crd5d0zt", text: "distractor" },
+  ],
+  shuffleCards: false,
+  policy,
+});
+
+describe("the grading pass hands categorize the evaluation's policy (ADR-036)", () => {
+  /**
+   * The evaluation says `all_or_nothing`; one item inherits it, one names
+   * `per_item`. The student places one target right, leaves the other and the
+   * distractor in the tray: all or nothing gives 0, per card (1 + 1) / 3.
+   */
+  it("uses settings.categorizePolicy for inherit and the question's otherwise", async () => {
+    const app = await testApp(db);
+    app.clock.set("2026-09-20T09:00:00.000Z");
+    const seed = await seedLive(db, { students: 1, questions: 0 });
+
+    const publish = async (name: string, policy: "inherit" | "per_item") => {
+      const { id } = await poolService.createQuestion(db, {
+        poolId: seed.poolId,
+        type: "categorize",
+        internalName: name,
+        createdBy: seed.teacherId,
+      });
+      const [question] = await db.select().from(questions).where(eq(questions.id, id));
+      await poolService.putDraft(db, question!, { config: categorizeConfig(policy) });
+      await poolService.publishQuestion(db, question!, { userId: seed.teacherId });
+      return id;
+    };
+    const inheriting = await publish("categorize-inherit", "inherit");
+    const overriding = await publish("categorize-per-item", "per_item");
+
+    let evaluation = (await byId(db, seed.evaluationId))!;
+    await db
+      .update(evaluations)
+      .set({ settings: { ...evaluationService.settingsOf(evaluation), categorizePolicy: "all_or_nothing" } })
+      .where(eq(evaluations.id, seed.evaluationId));
+    evaluation = (await byId(db, seed.evaluationId))!;
+    await evaluationService.addItems(
+      db,
+      evaluation,
+      [inheriting, overriding],
+      (type, version) =>
+        typeOf(type).defaultPoints(
+          loadConfig(type, { config: version.config, configVersion: version.configVersion }),
+        ),
+      { attemptCount: 0 },
+    );
+
+    evaluation = await applyState(db, await reload(db, seed.evaluationId), "running", app.clock.now());
+    const items = await joinedItems(db, evaluation.id);
+    const participant = (await live.participantOf(db, evaluation, seed.studentIds[0]!))!;
+    const created = await live.ensureAttempt(db, evaluation, participant, app.clock.now());
+    const attempt = await live.beginAttempt(db, evaluation, created, participant, app.clock.now());
+    for (const [index, item] of items.entries()) {
+      await live.saveAnswer(db, {
+        evaluation,
+        attempt,
+        itemId: item.item.id,
+        payload: { columns: { col4a9xq: ["crd7k2ma"] } },
+        revision: index + 1,
+        now: app.clock.now(),
+      });
+    }
+    evaluation = await live.closeEvaluation(db, evaluation, app.clock.now());
+
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+    const rows = await db
+      .select({ grading: gradings })
+      .from(gradings)
+      .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
+      .where(eq(attempts.evaluationId, evaluation.id));
+    expect(rows).toHaveLength(2);
+
+    const detailsOf = (itemId: string) =>
+      rows.find((r) => r.grading.itemId === itemId)!.grading.details as { policy: string; fraction: number };
+    const byQuestion = new Map(items.map((i) => [i.question.id, i.item.id]));
+
+    const inherited = detailsOf(byQuestion.get(inheriting)!);
+    expect(inherited.policy).toBe("all_or_nothing");
+    expect(inherited.fraction).toBe(0);
+
+    const overridden = detailsOf(byQuestion.get(overriding)!);
+    expect(overridden.policy).toBe("per_item");
+    expect(overridden.fraction).toBeCloseTo(2 / 3, 10);
+  });
+});
+
+// --- The batched writer of the pass (D-01) ------------------------------
+
+const NOW = new Date("2026-09-20T09:00:00.000Z");
+
+/** A closed evaluation of `students` × `questions` cells; every student answered the first. */
+async function closedGrid(students: number, questions: number) {
+  const seed = await seedLive(db, { students, questions });
+  let evaluation = await applyState(db, await reload(db, seed.evaluationId), "running", NOW);
+  const items = await joinedItems(db, evaluation.id);
+  const attemptIds: string[] = [];
+  for (const [index, userId] of seed.studentIds.entries()) {
+    const participant = (await live.participantOf(db, evaluation, userId))!;
+    const created = await live.ensureAttempt(db, evaluation, participant, NOW);
+    const attempt = await live.beginAttempt(db, evaluation, created, participant, NOW);
+    await live.saveAnswer(db, {
+      evaluation,
+      attempt,
+      itemId: items[0]!.item.id,
+      payload: index % 2 === 0 ? "answer-q0" : "nope",
+      revision: 1,
+      now: NOW,
+    });
+    attemptIds.push(attempt.id);
+  }
+  evaluation = await live.closeEvaluation(db, evaluation, NOW);
+  return { evaluation, items, attemptIds };
+}
+
+describe("the grading pass writes in batches (D-01)", () => {
+  it("grades 10 × 5 cells in one transaction of two write statements", async () => {
+    const { evaluation } = await closedGrid(10, 5);
+
+    // The same database, seen through a drizzle handle that logs every
+    // statement, and the driver's transactions counted underneath.
+    const statements: string[] = [];
+    const logged = pgliteDb(client, { logQuery: (query) => statements.push(query) });
+    const transactions = vi.spyOn(client, "transaction");
+    const app = await testApp(logged);
+    app.clock.set(NOW.toISOString());
+
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+    const transactionCount = transactions.mock.calls.length;
+    transactions.mockRestore();
+
+    // Before D-01: 50 transactions, 50 UPDATE + 50 INSERT.
+    const writes = statements.filter((s) => /^(update|insert into) "gradings"/i.test(s));
+    expect(writes.map((s) => s.split(" ")[0]!.toLowerCase())).toEqual(["update", "insert"]);
+    expect(transactionCount).toBe(1);
+
+    const rows = await db
+      .select({ grading: gradings })
+      .from(gradings)
+      .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
+      .where(eq(attempts.evaluationId, evaluation.id));
+    expect(rows).toHaveLength(50);
+    expect(rows.every((r) => r.grading.state === "validated")).toBe(true);
+  });
+});
+
+describe("writeGradings", () => {
+  it("supersedes what stands on each cell and chains to it, never a validated one from a proposal", async () => {
+    const { items, attemptIds } = await closedGrid(3, 1);
+    const itemId = items[0]!.item.id;
+    const cell = (attemptId: string) => ({
+      attemptId,
+      itemId,
+      answerId: null,
+      maxPoints: 1,
+      source: "auto" as const,
+      now: NOW,
+    });
+    const [a, b, c] = attemptIds as [string, string, string];
+
+    const first = await writeGradings(db, [
+      { ...cell(a), points: 0, state: "proposed" },
+      { ...cell(b), points: 1, state: "validated" },
+    ]);
+    expect(first.map((r) => r.supersedesId)).toEqual([null, null]);
+
+    const second = await writeGradings(db, [
+      // Validated over a proposal: supersedes it.
+      { ...cell(a), points: 1, state: "validated" },
+      // A proposal over a validated grade: supersedes nothing.
+      { ...cell(b), points: 0, state: "proposed" },
+      // A fresh cell.
+      { ...cell(c), points: 0, state: "validated" },
+    ]);
+    expect(second.map((r) => r.attemptId)).toEqual([a, b, c]);
+    expect(second.map((r) => r.supersedesId)).toEqual([first[0]!.id, null, null]);
+
+    const stateOf = async (id: string) =>
+      (await db.select().from(gradings).where(eq(gradings.id, id)))[0]!.state;
+    expect(await stateOf(first[0]!.id)).toBe("superseded");
+    expect(await stateOf(first[1]!.id)).toBe("validated");
+
+    const standingOnB = await db
+      .select()
+      .from(gradings)
+      .where(and(eq(gradings.attemptId, b), eq(gradings.itemId, itemId)));
+    expect(standingOnB.map((r) => r.state).sort()).toEqual(["proposed", "validated"]);
+  });
+
+  it("refuses a batch that names one cell twice, and writes nothing", async () => {
+    const { items, attemptIds } = await closedGrid(1, 1);
+    const cell = {
+      attemptId: attemptIds[0]!,
+      itemId: items[0]!.item.id,
+      answerId: null,
+      maxPoints: 1,
+      points: 0,
+      source: "auto" as const,
+      state: "proposed" as const,
+      now: NOW,
+    };
+    await expect(writeGradings(db, [cell, { ...cell, state: "validated" }])).rejects.toThrow(
+      /appears twice in one batch/,
+    );
+    const rows = await db.select().from(gradings).where(eq(gradings.attemptId, cell.attemptId));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("writes nothing for an empty batch", async () => {
+    expect(await writeGradings(db, [])).toEqual([]);
   });
 });

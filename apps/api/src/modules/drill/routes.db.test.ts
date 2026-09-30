@@ -3,6 +3,13 @@
  * the contracts on both sides (invariant 7), the audit of the teacher's
  * writes (invariant 9), and a whole review over HTTP with the key held back
  * until the answer (invariant 4).
+ *
+ * It also proves that the drill's hooks are wired where the application is
+ * built (ADR-041 §1), never by the side effect of an import. This file does
+ * not import `test/db.ts`, whose helper registers them too: the only
+ * registration it can see is `buildApp`'s — a release over HTTP proves it
+ * by the cards it creates, and the hand-in's hook by the cards `handIn`
+ * leaves behind.
  */
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -22,8 +29,9 @@ import { auditLog, drillCards } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type Payload, type TestServer } from "../../test/http.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
-import { applyState } from "../evaluation/service.js";
+import { applyState, setAllowDrill } from "../evaluation/service.js";
 import * as live from "../live/service.js";
+import { setClassroomDrill } from "../org/service.js";
 
 type Session = Awaited<ReturnType<TestServer["signIn"]>>;
 type Method = "GET" | "POST" | "PUT" | "DELETE";
@@ -179,5 +187,25 @@ describe("the drill over HTTP", () => {
     expect(EvaluationDrill.parse((await call("GET", url, teacher)).json())).toEqual({ allowDrill: false, cards: 0 });
     expect(await audited("drill.cards_remove")).toHaveLength(1);
     expect(DrillSession.parse((await call("GET", "/app/api/drill/session", student)).json()).cards).toEqual([]);
+  });
+});
+
+describe("buildApp", () => {
+  it("wires the drill on the release: releasing an exam over HTTP creates its cards", async () => {
+    const db = server.app.db;
+    const now = server.clock.now();
+    const owner = await server.signIn("teacher");
+    const exam = await seedLive(db, { teacherId: owner.id, students: 1, questions: 2 });
+    await setClassroomDrill(db, exam.classroomId, true, now);
+    let evaluation = await setAllowDrill(db, await reload(db, exam.evaluationId), true, now);
+    evaluation = await applyState(db, evaluation, "running", now);
+    const participant = (await live.participantOf(db, evaluation, exam.studentIds[0]!))!;
+    const created = await live.ensureAttempt(db, evaluation, participant, now);
+    await live.beginAttempt(db, evaluation, created, participant, now);
+    await live.closeEvaluation(db, evaluation, now);
+
+    const released = await call("POST", `/app/api/evaluations/${exam.evaluationId}/release`, owner, { confirm: true });
+    expect(released.statusCode, released.body).toBe(200);
+    expect(await db.select().from(drillCards).where(eq(drillCards.evaluationId, exam.evaluationId))).toHaveLength(2);
   });
 });

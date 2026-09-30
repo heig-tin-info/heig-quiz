@@ -1,10 +1,15 @@
 /**
- * The REAL `codeimage` type through the pool routes (ADR-021, decision D16).
+ * The REAL question types through the pool routes: no `registerForTests`
+ * here, so `short` and `codeimage` are the ones production registers.
  *
+ * `codeimage` (ADR-021, decision D16):
  * The target is what "Try the reference solution" captures, so `/try` and
  * `/preview` must accept a draft whose target is missing, or stale after a
  * resize — only publication refuses one. The runner is a stub that prints a
  * fixed picture; nothing here needs a container.
+ *
+ * `short`: an `llm` matcher (phase 2) survives a draft, and publication
+ * refuses it (ADR-037).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -224,5 +229,32 @@ describe("codeimage: the target is required to publish, never to try (D16)", () 
     expect(published.statusCode).toBe(201);
     const res = await tryReference(id);
     expect(res.json()).toMatchObject({ status: "graded", points: 1, details: { matching: 12 } });
+  });
+});
+
+describe("short: an llm matcher is refused at publication", () => {
+  it("saves the draft and refuses to publish it with short.llm_not_available", async () => {
+    const inject = (method: "POST" | "PUT", url: string, payload: unknown) =>
+      server.app.inject({ method, url, headers: owner.headers, payload: payload as object });
+    const pool = await inject("POST", "/app/api/pools", { name: "Short answers" });
+    const created = await inject("POST", `/app/api/pools/${pool.json().id}/questions`, {
+      type: "short",
+      internalName: "with an llm matcher",
+    });
+    const id = created.json().meta.id as string;
+    const saved = await inject("PUT", `/app/api/questions/${id}/draft`, {
+      config: {
+        configVersion: 2,
+        prompt: "Who wrote the three laws of motion?",
+        kind: "text",
+        matchers: [{ kind: "llm", rubric: "Names Isaac Newton" }],
+      },
+      explanation: "",
+    });
+    expect(saved.statusCode).toBe(200);
+
+    const refused = await inject("POST", `/app/api/questions/${id}/publish`, {});
+    expect(refused.statusCode).toBe(422);
+    expect(refused.json().details[0].message).toBe("short.llm_not_available");
   });
 });
