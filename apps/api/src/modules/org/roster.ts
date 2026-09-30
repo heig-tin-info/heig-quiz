@@ -8,7 +8,7 @@ import { publish } from "../../events.js";
 import type { Db } from "../../db/client.js";
 import { avatars, classrooms, courseStaff, enrollments, userEmails, users } from "../../db/schema.js";
 import { emailIn, knownEmails, normalizeEmail, sharedWithOthers } from "../../identity.js";
-import { avatarUrl } from "../avatar.js";
+import { shownAvatar } from "../avatar.js";
 import { notifyMany } from "../notifications/service.js";
 import { rosterConflict, studentJoined } from "../realtime/bus.js";
 
@@ -333,11 +333,9 @@ export async function rosterView(db: Db, classroomId: string) {
     .leftJoin(avatars, eq(avatars.userId, users.id))
     .where(eq(enrollments.classroomId, classroomId))
     .orderBy(enrollments.nom, enrollments.prenom);
-  // Avatar: upload > IdP claim > (client-side initials)
   return rows.map(({ avatarAt, pictureUrl, claimedAt, ...r }) => ({
     ...r,
     lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
-    avatarUrl:
-      avatarAt && r.userId ? avatarUrl(r.userId, avatarAt) : pictureUrl,
+    avatarUrl: shownAvatar(r.userId, avatarAt, pictureUrl),
   }));
 }

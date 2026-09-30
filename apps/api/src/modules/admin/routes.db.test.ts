@@ -4,9 +4,10 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { AdminUser } from "@quiz/contracts";
+import { AdminUser, type AdminTeacher } from "@quiz/contracts";
 
 import {
+  avatars,
   classrooms,
   courseStaff,
   courses,
@@ -50,6 +51,9 @@ beforeAll(async () => {
   await db
     .insert(teacherGrants)
     .values({ id: randomUUID(), email: "granted@heig.test", createdBy: admin.id });
+  await db
+    .insert(avatars)
+    .values({ userId: granted.id, data: Buffer.from("png"), contentType: "image/png" });
 
   // Teacher by a course seat, with the whole footprint to count.
   seated = await server.signIn("teacher");
@@ -87,6 +91,10 @@ beforeAll(async () => {
   await db
     .insert(userIdpClaims)
     .values({ userId: staff.id, claims: {}, affiliations: ["staff@hes-so.ch"] });
+  await db
+    .update(users)
+    .set({ pictureUrl: "https://idp.test/staff.png" })
+    .where(eq(users.id, staff.id));
 
   student = await server.signIn("student");
   // Stored teacher, but nothing in the rule gives it any more.
@@ -98,6 +106,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await server.close();
 });
+
+/** The URL of an uploaded picture, whatever its cache-busting version. */
+const uploaded = (who: Actor) => new RegExp(`^/app/api/users/${who.id}/avatar\\?v=\\d+$`);
 
 async function list(who: Actor) {
   return server.app.inject({ method: "GET", url: "/app/api/admin/users", headers: who.headers });
@@ -142,9 +153,35 @@ describe("GET /app/api/admin/users (F-ADMIN-01)", () => {
     expect(row(stale)).toMatchObject({ role: "teacher", reason: null });
   });
 
+  it("shows each account's picture: the upload, else the IdP's, else none", async () => {
+    const rows = z.array(AdminUser).parse((await list(admin)).json());
+    const row = (who: Actor) => rows.find((r) => r.id === who.id);
+    expect(row(granted)?.avatarUrl).toMatch(uploaded(granted));
+    expect(row(staff)?.avatarUrl).toBe("https://idp.test/staff.png");
+    expect(row(student)?.avatarUrl).toBeNull();
+  });
+
   it("never lists an anonymized account", async () => {
     const rows = z.array(AdminUser).parse((await list(admin)).json());
     expect(rows.map((r) => r.id)).not.toContain(anonymized.id);
     expect(rows).toHaveLength(6);
+  });
+});
+
+describe("GET /app/api/admin/teachers", () => {
+  it("shows a signed-up grantee's picture, and none for a pending grant", async () => {
+    await server.app.db
+      .insert(teacherGrants)
+      .values({ id: randomUUID(), email: "pending@heig.test", createdBy: admin.id });
+    const res = await server.app.inject({
+      method: "GET",
+      url: "/app/api/admin/teachers",
+      headers: admin.headers,
+    });
+    expect(res.statusCode).toBe(200);
+    const rows = res.json() as AdminTeacher[];
+    const byEmail = (email: string) => rows.find((r) => r.email === email);
+    expect(byEmail("granted@heig.test")?.avatarUrl).toMatch(uploaded(granted));
+    expect(byEmail("pending@heig.test")).toMatchObject({ signedUp: false, avatarUrl: null });
   });
 });

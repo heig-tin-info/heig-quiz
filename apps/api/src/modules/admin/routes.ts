@@ -7,9 +7,10 @@ import { TeacherGrantCreate, TeacherGrantParams } from "@quiz/contracts";
 
 import { audit } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { courseStaff, teacherGrants, users } from "../../db/schema.js";
+import { avatars, courseStaff, teacherGrants, users } from "../../db/schema.js";
 import { publish } from "../../events.js";
 import { syncUserRole } from "../../roles.js";
+import { shownAvatar } from "../avatar.js";
 import { adminGuard } from "../guards.js";
 import { listUsers } from "./service.js";
 
@@ -37,14 +38,19 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
         givenName: users.givenName,
         familyName: users.familyName,
         lastLoginAt: users.lastLoginAt,
+        userId: users.id,
+        pictureUrl: users.pictureUrl,
+        avatarAt: avatars.updatedAt,
         signedUp: sql<boolean>`${users.id} IS NOT NULL`,
         courses: sql<number>`coalesce((SELECT count(*) FROM ${courseStaff} cs WHERE cs.user_id = ${users.id}), 0)::int`,
       })
       .from(teacherGrants)
       .leftJoin(users, sql`lower(${users.email}) = ${teacherGrants.email}`)
+      .leftJoin(avatars, eq(avatars.userId, users.id))
       .orderBy(teacherGrants.createdAt);
-    return rows.map((r) => ({
+    return rows.map(({ userId, pictureUrl, avatarAt, ...r }) => ({
       ...r,
+      avatarUrl: shownAvatar(userId, avatarAt, pictureUrl),
       grantedAt: r.grantedAt.toISOString(),
       lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
     }));
