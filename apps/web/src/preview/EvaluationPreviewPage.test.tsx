@@ -13,6 +13,7 @@ import type {
 
 import { makeEvaluationDetail } from "../test/grading-fixtures";
 
+import { elapse, flowingClock } from "../test/clock";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { EvaluationPreviewPage } from "./EvaluationPreviewPage";
 
@@ -253,20 +254,21 @@ describe("EvaluationPreviewPage", () => {
   });
 
   it("hands the paper in by itself when the countdown reaches zero", async () => {
+    // A one-second countdown, jumped on a flowing clock.
+    flowingClock();
     const { calls } = mockFetch({
       [`POST ${URL}`]: ok(preview(7, 1)),
       [`POST ${URL}/grade`]: ok(correction(7)),
     });
     renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
     await screen.findByText("Preview — nothing is saved");
-    expect(
-      await screen.findByRole("heading", { name: "Preview correction" }, { timeout: 4000 }),
-    ).toBeInTheDocument();
+    await elapse(1_000);
+    expect(await screen.findByRole("heading", { name: "Preview correction" })).toBeInTheDocument();
     expect(calls.filter((c) => c.url === `${URL}/grade`)).toHaveLength(1);
   });
 
   it("hands in by itself only once when that grading fails, and Hand in still works", async () => {
-    const user = userEvent.setup();
+    const user = flowingClock();
     let failing = true;
     const { calls } = mockFetch({
       [`POST ${URL}`]: ok(preview(9, 1)),
@@ -274,9 +276,11 @@ describe("EvaluationPreviewPage", () => {
         failing ? fail(503, { error: "runner_unavailable" }) : ok(correction(9)),
     });
     renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
-    expect(await screen.findByText("The grading failed", {}, { timeout: 4000 })).toBeInTheDocument();
+    await screen.findByText("Preview — nothing is saved");
+    await elapse(1_000);
+    expect(await screen.findByText("The grading failed")).toBeInTheDocument();
     // The clock keeps ticking past zero: no retry every second.
-    await new Promise((r) => setTimeout(r, 2500));
+    await elapse(3_000);
     expect(calls.filter((c) => c.url === `${URL}/grade`)).toHaveLength(1);
     // The manual button is the retry.
     failing = false;

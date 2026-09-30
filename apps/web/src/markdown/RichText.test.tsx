@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { elapse, flowingClock } from "../test/clock";
 import { renderWithProviders } from "../test/render";
 import { resetShortcuts, useActiveShortcuts } from "../shortcuts";
 import { modKey } from "../ui";
@@ -112,11 +113,12 @@ describe("RichText — it shows the markdown, it does not print it", () => {
 
 describe("RichText — what it tells its host", () => {
   it("says NOTHING on mount, so the draft is not autosaved for being looked at", async () => {
+    flowingClock();
     const onChange = vi.fn();
     renderWithProviders(
       <RichText aria-label="Prompt" value="**bold** and `code`" onChange={onChange} />,
     );
-    await new Promise((r) => setTimeout(r, 30));
+    await elapse(30);
     expect(onChange).not.toHaveBeenCalled();
   });
 

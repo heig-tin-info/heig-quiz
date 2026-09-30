@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PoolDetail, QuestionDetail } from "@quiz/contracts";
 
 import { makeEvaluationDetail } from "../test/live-fixtures";
+import { elapse, flowingClock } from "../test/clock";
 import { labelIssues } from "../test/labels";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { AUTOSAVE_DELAY_MS } from "./autosave";
@@ -182,6 +183,14 @@ function routes(detail: QuestionDetail, over: Record<string, unknown> = {}) {
   } as Record<string, ReturnType<typeof ok>>;
 }
 
+/*
+ * The tests that prove a save did NOT leave wait out the debounce on a
+ * flowing clock (`test/clock.ts`), faked from their first line: a debounce
+ * armed on the real clock would not be jumped.
+ */
+/** Long enough for a debounced save to have left, had one been armed. */
+const pastTheDebounce = () => elapse(AUTOSAVE_DELAY_MS * 3);
+
 describe("QuestionEditor — mcq", () => {
   it("mounts the type's own editor with the translated strings", async () => {
     mockFetch(routes(mcqDetail()));
@@ -226,7 +235,7 @@ describe("QuestionEditor — mcq", () => {
    * save returned and lets it pass.
    */
   it("ignores its own draft coming back from the server, instead of saving again", async () => {
-    const user = userEvent.setup();
+    const user = flowingClock();
     let served = mcqDetail();
     const { calls } = mockFetch({
       ...routes(mcqDetail()),
@@ -249,13 +258,13 @@ describe("QuestionEditor — mcq", () => {
     await waitFor(() =>
       expect(calls.filter((c) => c.url === "/app/api/questions/q1").length).toBeGreaterThan(before),
     );
-    // Long enough for a debounced second save to have left, had one been armed.
-    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DELAY_MS * 3));
+    await pastTheDebounce();
     expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1);
     expect(await screen.findByLabelText("Statement")).toHaveTextContent("!");
   }, 20_000);
 
   it("still takes a FOREIGN draft — a version restored from the Versions tab", async () => {
+    flowingClock();
     let served = mcqDetail();
     const { calls } = mockFetch({
       ...routes(mcqDetail()),
@@ -279,7 +288,7 @@ describe("QuestionEditor — mcq", () => {
       expect(screen.getByLabelText("Statement")).toHaveTextContent("Restored from v1"),
     );
     // Shown, not written back: the server already holds it.
-    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DELAY_MS * 3));
+    await pastTheDebounce();
     expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
   }, 20_000);
 
@@ -291,7 +300,7 @@ describe("QuestionEditor — mcq", () => {
    * changes" about a question that had none.
    */
   it("after publishing, writes nothing back and shows no unpublished changes", async () => {
-    const user = userEvent.setup();
+    const user = flowingClock();
     const PUBLISHED_AT = "2026-09-20T10:00:05.000Z";
     const version = {
       number: 1,
@@ -326,7 +335,7 @@ describe("QuestionEditor — mcq", () => {
     expect(await screen.findByText("published v1")).toBeInTheDocument();
 
     // Long enough for a debounced save of the refetched draft to have left.
-    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DELAY_MS * 3));
+    await pastTheDebounce();
     expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1);
     expect(screen.queryByText("unpublished changes")).not.toBeInTheDocument();
   }, 20_000);
@@ -669,14 +678,14 @@ describe("QuestionEditor — shared as reader", () => {
   }, 20_000);
 
   it("sends no draft, not even on Ctrl+S, and never opens the publish dialog", async () => {
-    const user = userEvent.setup();
+    const user = flowingClock();
     const { calls } = mockFetch(readerRoutes(mcqDetail()));
     renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
     await screen.findByRole("heading", { name: "ptr-null-check" });
 
     await user.keyboard("{Control>}s{/Control}");
     await user.keyboard("{Control>}{Shift>}P{/Shift}{/Control}");
-    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DELAY_MS * 3));
+    await pastTheDebounce();
 
     expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
     expect(screen.queryByRole("dialog")).toBeNull();

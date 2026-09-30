@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "./api";
 import { useErrorToast } from "./notify";
+import { elapse, flowingClock } from "./test/clock";
 import { renderWithProviders } from "./test/render";
 import { PersonPill } from "./ui/people";
 import {
@@ -312,13 +313,14 @@ describe("useLayer focus restore", () => {
   }
 
   /** Past the deferred restore, which is one `requestAnimationFrame` away. */
-  const afterTheFrame = () => act(() => new Promise((r) => setTimeout(r, 60)));
+  const afterTheFrame = () => elapse(60);
 
   it("leaves the focus to a layer that opened in the same tick", async () => {
+    const user = flowingClock();
     renderWithProviders(<Relay />);
     const trigger = screen.getByRole("button", { name: "Open first" });
-    await userEvent.click(trigger);
-    await userEvent.click(screen.getByRole("button", { name: "Relay" }));
+    await user.click(trigger);
+    await user.click(screen.getByRole("button", { name: "Relay" }));
 
     const second = screen.getByRole("dialog", { name: "Second" });
     expect(second.contains(document.activeElement)).toBe(true);

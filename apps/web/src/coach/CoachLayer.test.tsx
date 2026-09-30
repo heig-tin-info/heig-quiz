@@ -1,7 +1,7 @@
-import { act, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { elapse, flowingClock } from "../test/clock";
 import { makeMe } from "../test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { CoachLayer, visibleBottom } from "./CoachLayer";
@@ -29,11 +29,17 @@ function Pool() {
   );
 }
 
-const slow = { timeout: 3000 };
-
+/*
+ * The layer lets a screen settle (0.9 s) before its tour, and batches what was
+ * read (0.4 s): each test jumps those delays on a flowing clock.
+ */
 describe("CoachLayer", () => {
+  let user: ReturnType<typeof flowingClock>;
+  beforeEach(() => {
+    user = flowingClock();
+  });
+
   it("plays the screen's tour and reports what was read", async () => {
-    const user = userEvent.setup();
     const { calls } = mockFetch({ "POST /app/api/me/coach": ok({ seen: ["pool.new-question"] }) });
     renderWithProviders(
       <>
@@ -42,14 +48,16 @@ describe("CoachLayer", () => {
       </>,
     );
 
-    expect(await screen.findByText("Write a question", undefined, slow)).toBeInTheDocument();
+    await elapse(1_000);
+    expect(await screen.findByText("Write a question")).toBeInTheDocument();
     // The search field of the pool is not on this page (yet): "Next" finds
     // nothing more to point at and ends the walk.
     await user.click(screen.getByRole("button", { name: "Next" }));
+    await elapse(500);
     await waitFor(() => {
       const post = calls.find((c) => c.method === "POST");
       expect(post?.body).toEqual({ seen: ["pool.new-question"] });
-    }, slow);
+    });
   });
 
   it("never shows a bubble already read", async () => {
@@ -64,7 +72,7 @@ describe("CoachLayer", () => {
         />
       </>,
     );
-    await act(() => new Promise((r) => setTimeout(r, 1500)));
+    await elapse(1_500);
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -76,7 +84,7 @@ describe("CoachLayer", () => {
         <CoachLayer me={makeMe({ coach: { enabled: false, seen: [] } })} view="pool" teacherUi />
       </>,
     );
-    await act(() => new Promise((r) => setTimeout(r, 1500)));
+    await elapse(1_500);
     expect(screen.queryByText("Write a question")).toBeNull();
   });
 
@@ -89,7 +97,7 @@ describe("CoachLayer", () => {
         <CoachLayer me={makeMe({ coach: { enabled: null, seen: [] } })} view="pool" teacherUi />
       </>,
     );
-    await act(() => new Promise((r) => setTimeout(r, 1500)));
+    await elapse(1_500);
     expect(screen.queryByText("Write a question")).toBeNull();
 
     rerender(
@@ -98,7 +106,8 @@ describe("CoachLayer", () => {
         <CoachLayer me={makeMe({ coach: { enabled: null, seen: [] } })} view="pool" teacherUi />
       </>,
     );
-    expect(await screen.findByText("Write a question", undefined, slow)).toBeInTheDocument();
+    await elapse(500);
+    expect(await screen.findByText("Write a question")).toBeInTheDocument();
   });
 });
 

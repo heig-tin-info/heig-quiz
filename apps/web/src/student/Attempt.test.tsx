@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AttemptOrLobby, AttemptView, LobbyView, ServerEvent } from "@quiz/contracts";
 
+import { elapse, flowingClock } from "../test/clock";
 import { mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { AttemptPage } from "./Attempt";
 
@@ -185,6 +186,7 @@ describe("/take/:id", () => {
   });
 
   it("re-enters the evaluation exactly once: the entry POST never feeds itself", async () => {
+    flowingClock();
     const { calls, start, queryClient } = render();
     expect(await screen.findByText("Salle d'attente")).toBeInTheDocument();
     expect(entryCalls(calls)).toHaveLength(1);
@@ -199,9 +201,7 @@ describe("/take/:id", () => {
     // the POST goes out again. `App` no longer mounts the hint refresh on this
     // route (`live.test.tsx`); this asserts the other half — that the player,
     // once mounted, asks for nothing more on its own.
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
+    await elapse(50);
     expect(entryCalls(calls)).toHaveLength(2);
 
     // And a refetch that IS asked for stays a single round trip.

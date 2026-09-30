@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AttemptInspect, DashboardView, ServerEvent } from "@quiz/contracts";
 
 import { initialGrid } from "../realtime/grid";
+import { elapse, flowingClock } from "../test/clock";
 import { resetEventStream } from "../realtime/useEventStream";
 import { EVALUATION_ID, id, makeDashboard, makeEvaluationDetail } from "../test/live-fixtures";
 import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
@@ -181,11 +182,13 @@ describe("AnswerTip (#94)", () => {
 
   it("offers nothing, and fetches nothing, while the answers are hidden", async () => {
     localStorage.setItem(LIVE_TOGGLES_KEY, JSON.stringify({ names: true, answers: false, results: true }));
+    // The hover delay is jumped rather than waited for.
+    flowingClock();
     const { calls } = setup(() => "secret");
     const cell = await cellButton();
     act(() => cell.focus());
     fireEvent.mouseEnter(cell.parentElement!);
-    await new Promise((r) => setTimeout(r, ANSWER_TIP_DELAY + 100));
+    await elapse(ANSWER_TIP_DELAY + 100);
     expect(screen.queryByRole("tooltip")).toBeNull();
     expect(inspectCalls(calls)).toBe(0);
   });
