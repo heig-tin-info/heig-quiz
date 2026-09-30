@@ -41,3 +41,34 @@ describe("QuestionHost for an essay", () => {
     expect(field.tagName).toBe("TEXTAREA");
   });
 });
+
+/*
+ * The host once built its own copy of the `mcq` dictionary, which lacked the
+ * negative-marking notice: a French student read it in English.
+ */
+describe("QuestionHost for a choice question", () => {
+  it("tells of negative marking in the student's language", async () => {
+    renderWithProviders(
+      <QuestionHost
+        type="mcq"
+        student={{
+          prompt: "Quelle adresse ?",
+          choices: [
+            { id: 0, text: "0x1000" },
+            { id: 1, text: "0x1004" },
+          ],
+          mode: "single",
+          negativeMarking: true,
+        }}
+        answer={null}
+        onChange={() => {}}
+        readOnly={false}
+      />,
+      { locale: "fr" },
+    );
+    expect(
+      await screen.findByText("Une réponse fausse coûte des points ; ne pas répondre ne coûte rien."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Choisissez une réponse.")).toBeInTheDocument();
+  });
+});
