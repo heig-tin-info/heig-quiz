@@ -33,6 +33,13 @@ import {
   categorizeReviewStrings,
 } from "@quiz/qt-categorize/client";
 import {
+  diagramEditorStrings,
+  diagramGradingStrings,
+  diagramPlayerStrings,
+  diagramReviewStrings,
+} from "@quiz/qt-diagram/client";
+import { diagramStrings } from "@quiz/diagram/client";
+import {
   EDITOR_STRINGS,
   GRADING_STRINGS,
   IMAGE_EDITOR_STRINGS,
@@ -55,6 +62,7 @@ import { DICTS, type Locale, type TFunction } from "./i18n";
 import {
   circuitCanvasStrings,
   circuitKindLabels,
+  diagramCanvasStrings,
   editorStrings,
   gradingStrings,
   MCQ_HOST_MAPPED_KEYS,
@@ -120,6 +128,12 @@ const DICTIONARIES: [string, object][] = [
   ["qt.categorize.p", categorizePlayerStrings],
   ["qt.categorize.r", categorizeReviewStrings],
   ["qt.categorize.g", categorizeGradingStrings],
+  ["qt.diagram.e", diagramEditorStrings],
+  ["qt.diagram.p", diagramPlayerStrings],
+  ["qt.diagram.r", diagramReviewStrings],
+  ["qt.diagram.g", diagramGradingStrings],
+  // The engine's canvas (`@quiz/diagram`): tools, inspector, text pane.
+  ["qt.diagram.c", diagramStrings],
 ];
 
 /**
@@ -203,6 +217,8 @@ describe("question type strings", () => {
     expect(editorStrings.circuit(t).reference).toBe("Circuit de référence");
     expect(editorStrings.codeimage(t).useAsTarget).toBe("Utiliser comme cible");
     expect(editorStrings.rich(t).rubric).toBe("Grille de correction");
+    expect(editorStrings.diagram(t)["kind.flow"]).toBe("Organigramme");
+    expect(diagramCanvasStrings(t)["tool.decision"]).toBe("Décision");
     // The page count's separator is a translation like any other.
     expect(playerStrings.rich(t).decimal).toBe(",");
   });

@@ -8,9 +8,11 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { ApiTokenCreated } from "@quiz/contracts";
+import { questionType } from "@quiz/registry/server";
 
 import { evaluations } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
+
 import { checkConfig, describeQuestionType } from "./questionTypes.js";
 import { TOOLS } from "./tools.js";
 
@@ -160,10 +162,16 @@ describe("the transport", () => {
 });
 
 describe("the question-type guide", () => {
-  it.each(["mcq", "short", "cloze", "categorize"])("gives a %s example the publication gate accepts", (type) => {
+  it.each(["mcq", "short", "cloze", "categorize", "diagram"])("gives a %s example the publication gate accepts", (type) => {
     const guide = describeQuestionType(type) as { example: unknown; configSchema: { type: string } };
     expect(guide.configSchema.type).toBe("object");
     expect(checkConfig(type, guide.example)).toBeNull();
+  });
+
+  it("gives a diagram example that passes the publication checks too (a reference, one kind)", () => {
+    const type = questionType("diagram");
+    const config = type.configSchema.parse((describeQuestionType("diagram") as { example: unknown }).example);
+    expect(type.publicationIssues?.(config)).toEqual([]);
   });
 });
 

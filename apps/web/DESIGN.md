@@ -809,6 +809,23 @@ live in `ui/state.ts`, each written once.
   under `prefers-reduced-motion` (nor on the first load). Its hidden sides
   fade like the Tabs strip's (`useScrollFade`). Nothing is lost: the number and the state
   live in each circle's accessible name, which never thins out.
+- ProgressList: the same question list, standing — the zen player's side
+  column from 1024 px of viewport up. A laptop has width to spare and height
+  to none, so the list, what the current question is worth and its review
+  flag move out of the bar and from over and under the question into a
+  12rem column left of it (sticky, bounded to the viewport); the question
+  column keeps its 760 px and the bar widens to span both, so the title
+  lines up with the list. Same circles, same four facts, same connector
+  (drawn down), same accessible names as the strip; each row adds
+  "Question n" in words, so nothing thins out and nothing compresses — a
+  long paper scrolls inside the list, which keeps the current row in view.
+  Roving on ↑/↓ (the rows stand, and stop at the ends), ←/→ stepping with
+  wrap as on the strip, Home and End. Under the list, a hairline,
+  then the current question's own block — "Question n · p points" heading
+  it, so the flag reads as this question's and not as one more row — and
+  the move keys (`Alt` + ←/→) in `Kbd`. "I won't answer" and "Clear" stay
+  under the question: they act on the answer. One question, or under
+  1024 px, the column is absent and the strip is back in the bar.
 - Pastille (`packages/qt-mcq/src/ui.tsx`): the letter of a choice IS its
   checkbox — a circle, 32 px in the teacher's editor, 40 px under a student's
   finger. A hairline `line-strong` circle on `surface` with a bold `fg-muted`

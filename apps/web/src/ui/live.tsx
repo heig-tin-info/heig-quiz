@@ -17,7 +17,7 @@ import {
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
-import { useT } from "../i18n";
+import { useT, type TFunction } from "../i18n";
 import { cx, useNow, type IconType } from "./layers";
 import { rovingIndex } from "./menu";
 import { useScrollFade } from "./page";
@@ -333,6 +333,62 @@ function segmentLabelStep(width: number, count: number): 1 | 5 {
   return width / count >= 22 ? 1 : 5;
 }
 
+/** The accessible name of a question of the paper: its number and every fact of it, in words. */
+function segmentName(t: TFunction, segment: Segment, i: number): string {
+  const facts = [
+    t(SEGMENT_LABEL[segment.mark]),
+    ...(segment.flagged ? [t("segments.flagged")] : []),
+    ...(segment.locked ? [t("segments.locked")] : []),
+    ...(segment.current ? [t("segments.current")] : []),
+  ];
+  return t("segments.item", { n: i + 1, state: facts.join(", ") });
+}
+
+/**
+ * One question's circle, the same in the strip and in the list: its mark as
+ * a shape, the accent ring where the student is, faded when closed. Not
+ * `roomy`, it drops to a plain dot with no glyph.
+ */
+function SegmentDot({ segment, roomy }: { segment: Segment; roomy: boolean }) {
+  const Glyph = roomy ? SEGMENT_GLYPH[segment.mark] : null;
+  return (
+    <span
+      className={cx(
+        "flex shrink-0 items-center justify-center rounded-full transition-colors duration-150",
+        roomy ? "size-5 border-2" : "size-2.5 border-[1.5px]",
+        SEGMENT_DOT[segment.mark],
+        segment.locked && !segment.current && "opacity-45",
+        segment.current && "border-accent! ring-accent-soft",
+        segment.current && (roomy ? "ring-4" : "ring-3 bg-accent!"),
+      )}
+    >
+      {Glyph ? <Glyph className="size-2.5 stroke-3" aria-hidden /> : null}
+      {roomy && segment.current && segment.mark === "unanswered" ? (
+        <span className="size-2 rounded-full bg-accent" aria-hidden />
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * Roving focus over the buttons of a question list, from a keydown on it. A
+ * standing list is a grid of one column (`columns`): ↑/↓ move a row, and
+ * ←/→ still step through it like the strip.
+ */
+function rove(e: React.KeyboardEvent, list: HTMLElement | null, current: number, columns?: number) {
+  const buttons = Array.from(list?.querySelectorAll("button") ?? []);
+  const from = buttons.indexOf(document.activeElement as HTMLButtonElement);
+  const next = rovingIndex(e.key, from === -1 ? current : from, buttons.length, columns);
+  if (next === null) return;
+  e.preventDefault();
+  buttons[next]?.focus();
+}
+
+/** Two questions already dealt with: the stretch between them is drawn solid. */
+function covered(segment: Segment, next: Segment | undefined): boolean {
+  return segment.mark !== "unanswered" && next !== undefined && next.mark !== "unanswered";
+}
+
 /**
  * A stepper in the zen player, one circle per question (issues #89 and
  * #219): what the
@@ -427,20 +483,11 @@ export function ProgressSegments({
   }, [scrolls, current, width]);
   const fade = useScrollFade(strip, scrolls ? `${segments.length}` : "");
 
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    const buttons = Array.from(strip.current?.querySelectorAll("button") ?? []);
-    const from = buttons.indexOf(document.activeElement as HTMLButtonElement);
-    const next = rovingIndex(e.key, from === -1 ? current : from, buttons.length);
-    if (next === null) return;
-    e.preventDefault();
-    buttons[next]?.focus();
-  };
-
   return (
     <nav
       ref={strip}
       aria-label={label}
-      onKeyDown={onKeyDown}
+      onKeyDown={(e) => rove(e, strip.current, current)}
       style={fade}
       className={cx(
         "relative flex w-full items-start",
@@ -454,13 +501,7 @@ export function ProgressSegments({
       )}
     >
       {segments.map((segment, i) => {
-        const facts = [
-          t(SEGMENT_LABEL[segment.mark]),
-          ...(segment.flagged ? [t("segments.flagged")] : []),
-          ...(segment.locked ? [t("segments.locked")] : []),
-          ...(segment.current ? [t("segments.current")] : []),
-        ];
-        const name = t("segments.item", { n: i + 1, state: facts.join(", ") });
+        const name = segmentName(t, segment, i);
         const last = segments.length - 1;
         const numbered =
           step === 1 ||
@@ -469,8 +510,6 @@ export function ProgressSegments({
           i === current ||
           ((i + 1) % step === 0 && last - i >= 2);
         const next = segments[i + 1];
-        const covered = segment.mark !== "unanswered" && next !== undefined && next.mark !== "unanswered";
-        const Glyph = roomy ? SEGMENT_GLYPH[segment.mark] : null;
         return (
           <button
             key={segment.id}
@@ -486,21 +525,7 @@ export function ProgressSegments({
               scrolls ? "w-7 flex-none" : "min-w-0 flex-1 basis-0",
             )}
           >
-            <span
-              className={cx(
-                "flex items-center justify-center rounded-full transition-colors duration-150",
-                roomy ? "size-5 border-2" : "size-2.5 border-[1.5px]",
-                SEGMENT_DOT[segment.mark],
-                segment.locked && !segment.current && "opacity-45",
-                segment.current && "border-accent! ring-accent-soft",
-                segment.current && (roomy ? "ring-4" : "ring-3 bg-accent!"),
-              )}
-            >
-              {Glyph ? <Glyph className="size-2.5 stroke-3" aria-hidden /> : null}
-              {roomy && segment.current && segment.mark === "unanswered" ? (
-                <span className="size-2 rounded-full bg-accent" aria-hidden />
-              ) : null}
-            </span>
+            <SegmentDot segment={segment} roomy={roomy} />
             {/* From this circle's edge to the next one's — never under a
                 circle, which a faded (closed) one would let show through.
                 The hairline may miss 3:1 in dark mode: it repeats what the
@@ -512,7 +537,7 @@ export function ProgressSegments({
                   roomy
                     ? "top-4 left-[calc(50%+10px)] w-[calc(100%-20px)]"
                     : "top-2.75 left-[calc(50%+5px)] w-[calc(100%-10px)]",
-                  covered ? "h-0.5 bg-fg" : "h-px bg-line-strong",
+                  covered(segment, next) ? "h-0.5 bg-fg" : "h-px bg-line-strong",
                 )}
                 data-part="link"
                 aria-hidden
@@ -535,6 +560,105 @@ export function ProgressSegments({
                 <Flag className="size-2.5 shrink-0 fill-current text-warning" aria-hidden />
               ) : null}
             </span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+/**
+ * The same question list as {@link ProgressSegments}, standing: one row per
+ * question down the side column of the zen player on a wide screen, where
+ * the room is beside the question rather than above it. The circles, their
+ * four facts, the connector and the accessible names are the strip's; what
+ * the row adds is room for "Question 7" in words, so nothing thins out and
+ * nothing compresses. A long paper scrolls inside the list — it is given a
+ * bounded height by its column — and keeps the current question in view.
+ *
+ * Roving tabindex like the strip, ↑/↓ added.
+ */
+export function ProgressList({
+  segments,
+  onSelect,
+  label,
+  className = "",
+}: {
+  segments: Segment[];
+  onSelect: (id: string) => void;
+  label: string;
+  className?: string;
+}) {
+  const t = useT();
+  const list = useRef<HTMLElement>(null);
+  const current = Math.max(0, segments.findIndex((s) => s.current === true));
+  // The list scrolls itself, never the page (which `scrollIntoView` would).
+  useEffect(() => {
+    const el = list.current;
+    const button = el?.querySelectorAll("button")[current];
+    if (!el || !button) return;
+    if (button.offsetTop < el.scrollTop) el.scrollTop = button.offsetTop;
+    else if (button.offsetTop + button.offsetHeight > el.scrollTop + el.clientHeight)
+      el.scrollTop = button.offsetTop + button.offsetHeight - el.clientHeight;
+  }, [current]);
+  const fade = useScrollFade(list, `${segments.length}`);
+  return (
+    <nav
+      ref={list}
+      aria-label={label}
+      onKeyDown={(e) => rove(e, list.current, current, 1)}
+      style={fade}
+      // The padding keeps the focus ring and the current circle's halo
+      // inside the scroller, which clips them.
+      className={cx("relative flex flex-col overflow-y-auto overscroll-contain p-1", className)}
+    >
+      {segments.map((segment, i) => {
+        const name = segmentName(t, segment, i);
+        const next = segments[i + 1];
+        return (
+          <button
+            key={segment.id}
+            type="button"
+            tabIndex={i === current ? 0 : -1}
+            aria-label={name}
+            title={name}
+            aria-current={segment.current ? "true" : undefined}
+            onClick={() => onSelect(segment.id)}
+            className={cx(
+              "relative flex items-center gap-2.5 rounded-field px-2 py-1.5 text-left text-[13px] leading-5",
+              !segment.current && "hover:bg-surface-2",
+            )}
+          >
+            <SegmentDot segment={segment} roomy />
+            {/* From this circle's bottom edge to the next one's top: the
+                path down the paper, drawn like the strip's. */}
+            {next ? (
+              <span
+                className={cx(
+                  "absolute top-[calc(50%+10px)] h-[calc(100%-20px)]",
+                  // Centred under the circle: the row's 8 px padding, then
+                  // half the 20 px circle, less half the stroke.
+                  covered(segment, next)
+                    ? "left-[17px] w-0.5 bg-fg"
+                    : "left-[17.5px] w-px bg-line-strong",
+                )}
+                data-part="link"
+                aria-hidden
+              />
+            ) : null}
+            <span
+              className={cx(
+                "min-w-0 flex-1 truncate tabular-nums",
+                segment.current ? "font-semibold text-accent" : "text-fg-muted",
+                segment.locked && !segment.current && "opacity-45",
+              )}
+              aria-hidden
+            >
+              {t("player.question", { n: i + 1 })}
+            </span>
+            {segment.flagged ? (
+              <Flag className="size-3.5 shrink-0 fill-current text-warning" aria-hidden />
+            ) : null}
           </button>
         );
       })}

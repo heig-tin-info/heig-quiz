@@ -212,6 +212,70 @@ int case_noire(int x, int y) {
  * that order, full marks with high confidence, half the points with medium
  * confidence, zero with low confidence, and zero with high confidence.
  */
+/*
+ * The flowchart of `somme` (docs/04 §4.14): its reference, the starter the
+ * student opens (the two terminals only) and three answers. Every id is
+ * opaque and written by hand, so a second seed run writes the same config;
+ * the starter's ids are not the reference's (ADR-046 §2), and an answer
+ * keeps the starter's ids for the two terminals it started from.
+ */
+const SUM_FLOW_REFERENCE = {
+  nodes: [
+    { id: "t6f2ka9w", t: "terminal", x: 340, y: 20, name: "Début" },
+    { id: "a1m8zq4e", t: "action", x: 340, y: 100, name: "s ← 0 ; i ← 0" },
+    { id: "d7c3nx5r", t: "decision", x: 340, y: 180, name: "i < n ?" },
+    { id: "a9v2hb6j", t: "action", x: 340, y: 320, name: "s ← s + t[i]" },
+    { id: "a4p7wd1s", t: "action", x: 340, y: 400, name: "i ← i + 1" },
+    { id: "a8k5gy3o", t: "action", x: 560, y: 200, name: "Retourner s" },
+    { id: "t0e9ru2l", t: "terminal", x: 560, y: 300, name: "Fin" },
+  ],
+  links: [
+    { id: "f3x6mc8b", type: "flow", a: "t6f2ka9w", b: "a1m8zq4e" },
+    { id: "f5n1qs7t", type: "flow", a: "a1m8zq4e", b: "d7c3nx5r" },
+    { id: "f2j8vl4h", type: "flow", a: "d7c3nx5r", b: "a9v2hb6j", name: "oui" },
+    { id: "f9w4ke6d", type: "flow", a: "a9v2hb6j", b: "a4p7wd1s" },
+    { id: "f7r0ty3g", type: "flow", a: "a4p7wd1s", b: "d7c3nx5r", via: [{ x: 260, y: 420 }, { x: 260, y: 200 }] },
+    { id: "f1b5oz9u", type: "flow", a: "d7c3nx5r", b: "a8k5gy3o", name: "non" },
+    { id: "f6h3pa0c", type: "flow", a: "a8k5gy3o", b: "t0e9ru2l" },
+  ],
+};
+
+const SUM_FLOW_START = { id: "s2d7fe4k", t: "terminal", x: 340, y: 20, name: "Début" };
+const SUM_FLOW_END = { id: "s8q1lw6n", t: "terminal", x: 560, y: 300, name: "Fin" };
+const SUM_FLOW_STARTER = { nodes: [SUM_FLOW_START, SUM_FLOW_END], links: [] };
+
+/** The right flowchart, drawn from the starter. */
+const SUM_FLOW_RIGHT = {
+  nodes: [
+    SUM_FLOW_START,
+    { id: "k3r8bv2x", t: "action", x: 340, y: 100, name: "s ← 0 ; i ← 0" },
+    { id: "k7n4cz9q", t: "decision", x: 340, y: 180, name: "i < n ?" },
+    { id: "k1w6dy5m", t: "action", x: 340, y: 320, name: "s ← s + t[i]" },
+    { id: "k9t2ex7p", t: "action", x: 340, y: 400, name: "i ← i + 1" },
+    { id: "k5h0fu3j", t: "action", x: 560, y: 200, name: "Retourner s" },
+    SUM_FLOW_END,
+  ],
+  links: [
+    { id: "l2m9ga4r", type: "flow", a: "s2d7fe4k", b: "k3r8bv2x" },
+    { id: "l8c3hb7w", type: "flow", a: "k3r8bv2x", b: "k7n4cz9q" },
+    { id: "l5q1ic0z", type: "flow", a: "k7n4cz9q", b: "k1w6dy5m", name: "oui" },
+    { id: "l0v6jd2s", type: "flow", a: "k1w6dy5m", b: "k9t2ex7p" },
+    { id: "l7x4ke8n", type: "flow", a: "k9t2ex7p", b: "k7n4cz9q", via: [{ x: 260, y: 420 }, { x: 260, y: 200 }] },
+    { id: "l3z8lf1y", type: "flow", a: "k7n4cz9q", b: "k5h0fu3j", name: "non" },
+    { id: "l9a2mg6v", type: "flow", a: "k5h0fu3j", b: "s8q1lw6n" },
+  ],
+};
+
+/** The loop forgets `i ← i + 1`, and the "non" branch is not labelled. */
+const SUM_FLOW_NO_INCREMENT = {
+  nodes: SUM_FLOW_RIGHT.nodes.filter((n) => n.id !== "k9t2ex7p"),
+  links: [
+    ...SUM_FLOW_RIGHT.links.filter((l) => !["l0v6jd2s", "l7x4ke8n", "l3z8lf1y"].includes(l.id)),
+    { id: "l4b7nh3u", type: "flow", a: "k1w6dy5m", b: "k7n4cz9q", via: [{ x: 260, y: 340 }, { x: 260, y: 200 }] },
+    { id: "l6d1oi5t", type: "flow", a: "k7n4cz9q", b: "k5h0fu3j" },
+  ],
+};
+
 const ESSAYS = {
   complete:
     "Chaque appel de fonction empile un cadre sur la pile : l'adresse de retour et les " +
@@ -597,6 +661,30 @@ const C_POOL: PoolSpec = {
         policy: "inherit",
       },
     },
+    {
+      internalName: "prg1-organigramme-somme",
+      type: "diagram",
+      category: TYPES,
+      difficulty: 2,
+      tags: ["boucles", "organigramme", "diagramme"],
+      explanation:
+        "La boucle teste `i < n` AVANT d'ajouter `t[i]` : un tableau vide rend 0. " +
+        "Sans `i ← i + 1`, la boucle ne se termine jamais.",
+      // Graded by hand (ADR-046): the answers of "Test 0" arrive as proposals
+      // of 0 points, except the untouched starter, which is a validated 0.
+      config: {
+        configVersion: 1,
+        prompt:
+          "Complétez l'**organigramme** de la fonction `somme`, qui additionne les `n` " +
+          "éléments du tableau `t` et retourne leur somme.",
+        kind: "flow",
+        reference: SUM_FLOW_REFERENCE,
+        starter: SUM_FLOW_STARTER,
+        rubric:
+          "- **1 pt** : initialisation de `s` et de `i`, test `i < n` avant le corps.\n" +
+          "- **1 pt** : corps et incrément dans la boucle, retour de `s` sur la branche « non ».",
+      },
+    },
   ],
 };
 
@@ -834,6 +922,7 @@ export const EVALUATIONS: EvaluationSpec[] = [
       "prg1-image-damier",
       "elec-filtre-rc-passe-bas",
       "prg1-redaction-pile",
+      "prg1-organigramme-somme",
     ],
   },
 ];
@@ -867,6 +956,7 @@ export const PAPERS: PaperSpec[] = [
       "prg1-image-damier": { regions: [CHECKERBOARD_SOLUTION] },
       "elec-filtre-rc-passe-bas": { schematic: RC_LOW_PASS },
       "prg1-redaction-pile": { text: ESSAYS.complete },
+      "prg1-organigramme-somme": { scene: SUM_FLOW_RIGHT },
     },
   },
   {
@@ -889,6 +979,7 @@ export const PAPERS: PaperSpec[] = [
       // The right drawing, a capacitor ten times too small: 10 kHz.
       "elec-filtre-rc-passe-bas": { schematic: rcLowPass("1.59k", "10n") },
       "prg1-redaction-pile": { text: ESSAYS.partial },
+      "prg1-organigramme-somme": { scene: SUM_FLOW_NO_INCREMENT },
     },
   },
   {
@@ -913,6 +1004,8 @@ export const PAPERS: PaperSpec[] = [
         schematic: { components: RC_LOW_PASS.components.slice(0, 1), wires: RC_LOW_PASS.wires.slice(0, 2) },
       },
       "prg1-redaction-pile": { text: ESSAYS.brief },
+      // Opened, touched and put back: the starter as it was, a validated 0.
+      "prg1-organigramme-somme": { scene: SUM_FLOW_STARTER },
     },
   },
   {

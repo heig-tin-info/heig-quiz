@@ -89,8 +89,9 @@ What gets built:
 | Quiz d'entraînement | exercise | `lobby`, waiting for students |
 | Test 0 — bases du C | exam, 45 min | `closed`, graded, **not released** |
 
-*Test 0* has already run: nine questions, one or more of every type (multiple
-choice, short answer, cloze, code, categorize, code image, circuit, essay),
+*Test 0* has already run: ten questions, one or more of every type (multiple
+choice, short answer, cloze, code, categorize, code image, circuit, essay,
+diagram),
 answered by five of the six students (Gabriel is absent, Chloé never handed
 in, so closing the evaluation expired one attempt), right, partly right,
 wrong or left empty. The real grading pass graded every answer: the
@@ -98,7 +99,9 @@ deterministic types (categorize included) are validated; the code, code image
 and circuit answers are proposals with the reason `runner_unavailable`, since
 the seed never has a runner; the essays are AI proposals with a confidence
 (high, medium, low) when `LLM_PROVIDER=stub`, as `.env.example` sets it, and
-0-point placeholders to grade by hand otherwise. The results are
+0-point placeholders to grade by hand otherwise; the diagrams are 0-point
+proposals to grade by hand, except a starter handed back untouched, which is
+a validated 0. The results are
 deliberately left unreleased so that the grading panel has proposals to
 validate the moment you open it, which is the screen a teacher spends the
 most time on.

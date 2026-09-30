@@ -36,10 +36,10 @@ Open <http://localhost:5173>, click **Dev login** and pick a persona:
 
 `pnpm seed` is idempotent — run it as often as you like. It builds a course
 `PRG1`, the classroom `PRG1-2026`, six students, a pool *Programmation C*
-(three categories, thirteen published questions: multiple choice, short
-answer, cloze, code, code image, essay and categorize) and a second pool
-*Électronique* (five more, a circuit among them), eighteen questions of all
-eight types in all, then
+(three categories, fourteen published questions: multiple choice, short
+answer, cloze, code, code image, essay, categorize and diagram) and a second pool
+*Électronique* (five more, a circuit among them), nineteen questions of all
+nine types in all, then
 four evaluations in the
 classroom: one `draft`, one `scheduled` two days out, one exercise waiting in
 its `lobby`, and one that has already run — **Test 0 — bases du C** is closed,

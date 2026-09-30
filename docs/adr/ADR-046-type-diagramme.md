@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed (2026-09-29). Decided with the product owner: v1 graded by hand,
+Accepted (2026-09-30), with the addendum below. Proposed 2026-09-29.
+Decided with the product owner: v1 graded by hand,
 all eight kinds in v1, the text form shown to the teacher only, `diagram`
 replaces the drawing type of docs/spec/04 §4.10, and a starter diagram may
 be given to the student. Open: whether a drawing-only schematic is a kind of
@@ -174,6 +175,65 @@ a schematic drawn and graded by hand, and ADR-021 kept one concept per type.
 Unregistering the type hides it from new questions; stored questions of the
 type would then fail to load, so a rollback deletes them first. The engine
 package is inert without the type.
+
+## Addendum (2026-09-30): what the implementation settled
+
+Decided with the product owner when `packages/qt-diagram` was written.
+
+1. **An answer is a stored, non-empty scene.** `isAnswered` keeps the
+   contract of every type: a question is answered as soon as its stored
+   answer holds something. The player writes nothing until the student's
+   first edit, so an untouched starter is no answer at all. `grade` compares
+   the answer with the starter (`sameScene` of the engine, key order and
+   absent fields ignored): no answer, an empty scene or the starter as it
+   was is a VALIDATED 0 with `details.reason: "empty"`; anything else is a
+   PROPOSED 0 with `reason: "manual"`, like `rich`. A scene edited back to
+   the starter therefore counts as answered on the student's list and is
+   graded empty — the one place the two readings differ, on purpose: the
+   list says "you touched it", the grade says "nothing was added".
+2. **The overlay is an optional slot of `PlayerProps`.** `@quiz/core/client`
+   gains `Expand?: ComponentType<{ open; onClose; children }>` (the
+   `ExpandProps` interface). The student host of `apps/web`
+   (`student/ExpandLayer.tsx`) implements it: a layer of the page with a
+   16 px margin, a thin bar with the server's clock, the save state and the
+   single primary action "Back to the questions". The player renders its
+   ONE editor inside it while it is open (two live editors would keep two
+   undo histories of one answer). Where the host lends no layer — the try
+   panel, the grading panel — the player shows no Expand button. Every
+   other type ignores the slot. Escape first reaches the canvas, which now
+   consumes the key only when it cancelled something (the link being drawn,
+   the tool, the selection); a key it leaves alone closes the layer, which
+   is why `useLayer` gained `escape: false`. Alt+←/→ closes the layer and
+   the player moves as ever. Under 1024 px the inline canvas is a read-only
+   preview and the drawing happens in the layer.
+3. **The grading panel stacks, the table counts.** The review draws the
+   student's diagram, then the reference, then — for the teacher only — the
+   two text forms (`toText`) in tabs "Student | Reference", then the rubric.
+   The grading table's cell is the counts, "n elements · m links", with no
+   thumbnail; the expected row gives the reference's.
+4. **The kind is chosen on a draft and locked once published.** The editor
+   shows a grid of eight cards (icon, name, one line); changing the kind of
+   a drawn draft asks inline, then empties the reference and the starter. A
+   question with a published version shows its kind without the grid: the
+   host passes `EditorProps.published` (a new optional prop of
+   `@quiz/core/client`, which every other editor ignores). The lock is the
+   EDITOR's only. The server's publication gate
+   (`QuestionTypeServer.publicationIssues`) sees the new config and not the
+   published one, so it cannot tell a changed kind; enforcing it there
+   would need a hook that compares two versions, which no type has yet.
+   A version of another kind can still exist (one published through the
+   MCP or an import), and can meet answers already given: the one-click
+   "update to the latest version" is refused once an attempt exists
+   (`updateVersions`), but a REGRADE (F-GRADE-06, issue #106) repoints the
+   item at the version the teacher picks and grades the stored answers
+   against it (`regradeItem`). `answerMisfit` only guards new writes. So
+   `grade` defends itself: an answer holding an element or a link the
+   version's kind does not have is a PROPOSED 0 with `details.reason:
+   "kind_mismatch"` — never a validated empty 0 — the review says so, and
+   `DiagramView` draws the foreign elements as they are.
+
+The MCP guide (`describe_question_types`) documents the scene with one
+example; `create_question` takes a scene, never a text form.
 
 ## Alternatives considered
 

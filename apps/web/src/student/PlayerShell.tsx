@@ -12,7 +12,11 @@
  *   - Space: the bar is tight (8–12), the question column is generous (24
  *     between the header and the body, 32 to the footer). The column is
  *     capped at 760 px: a statement that runs the full width of a laptop is
- *     unreadable, and the strip stays over its own question.
+ *     unreadable, and the strip stays over its own question. On a wide
+ *     screen the strip leaves the bar for a side column (`aside`) left of
+ *     the question: the room a laptop has is beside the statement, not
+ *     above it, and every pixel of bar is a pixel of answer field lost.
+ *     The bar then spans both columns, so the title lines up with the list.
  *   - Finish: hairlines top and bottom, `surface` bars on the warm canvas, no
  *     shadow — both bars are in the page flow, not above it.
  *
@@ -30,7 +34,7 @@
  * pause.
  */
 import { Home, Moon, Sun } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { CommandPalette } from "../CommandPalette";
 import type { Command } from "../commands";
@@ -40,11 +44,20 @@ import {
   ClockCountdown,
   cx,
   IconButton,
+  Kbd,
   ProgressSegments,
   SyncBadge,
   type Segment,
   type SyncState,
 } from "../ui";
+
+/**
+ * With the side column, the bar and the body share one width: the 760 px
+ * question column (`max-w-190`), unchanged, plus the column and its gap —
+ * the two terms of `RAIL_GRID`.
+ */
+const WIDE = "max-w-[61.5rem]";
+const RAIL_GRID = "grid grid-cols-[12rem_minmax(0,1fr)] gap-8";
 
 export function PlayerShell({
   title,
@@ -62,6 +75,7 @@ export function PlayerShell({
   commands,
   banner,
   footer,
+  aside,
   children,
 }: {
   title: string;
@@ -101,6 +115,12 @@ export function PlayerShell({
   banner?: ReactNode;
   /** Absent on a desktop: the actions then sit under the question itself. */
   footer?: ReactNode;
+  /**
+   * The side column, left of the question, on a wide screen only. It holds
+   * the question list, so the strip (`segments`) is not drawn; the shell
+   * adds the move keys under it, visible.
+   */
+  aside?: ReactNode;
   children: ReactNode;
 }) {
   const t = useT();
@@ -111,6 +131,23 @@ export function PlayerShell({
   // never disagree about what is on screen. It is QUIET — the single accent
   // of this screen is "Hand in".
   const theme = useResolvedTheme();
+  // The bar's own height, for the side column that sticks under it: it grows
+  // with a subtitle or a larger text size, and the column must not slide
+  // under it.
+  const docked = aside !== undefined;
+  const bar = useRef<HTMLElement>(null);
+  const [barHeight, setBarHeight] = useState(0);
+  useLayoutEffect(() => {
+    const el = bar.current;
+    if (!docked || !el) return;
+    const measure = () => setBarHeight(el.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [docked]);
+  const strip = docked ? [] : segments;
   const [palette, setPalette] = useState(false);
   const hasPalette = (commands?.length ?? 0) > 0;
   useEffect(() => {
@@ -127,14 +164,18 @@ export function PlayerShell({
     return () => window.removeEventListener("keydown", onKey);
   }, [hasPalette]);
   return (
-    <div className="flex min-h-[calc(100dvh-var(--banner-h))] flex-col bg-canvas">
-      <header className="sticky top-(--banner-h) z-20 border-b border-line bg-surface">
+    <div
+      className="flex min-h-[calc(100dvh-var(--banner-h))] flex-col bg-canvas"
+      style={{ "--bar-h": `${barHeight}px` } as CSSProperties}
+    >
+      <header ref={bar} className="sticky top-(--banner-h) z-20 border-b border-line bg-surface">
         <div
           className={cx(
-            "mx-auto w-full max-w-190 px-4 pt-2.5 sm:px-6",
+            "mx-auto w-full px-4 pt-2.5 sm:px-6",
+            aside ? WIDE : "max-w-190",
             // The strip carries the bar's bottom margin; without one the bar
             // would sit on its own hairline.
-            segments.length === 0 && "pb-2.5",
+            strip.length === 0 && "pb-2.5",
           )}
         >
           <div className="flex items-center gap-3">
@@ -183,12 +224,12 @@ export function PlayerShell({
             {sync === undefined ? null : <SyncBadge state={sync} />}
             {headerAction}
           </div>
-          {segments.length === 0 ? null : (
+          {strip.length === 0 ? null : (
             // The margin sits on a wrapper: the strip sets its own vertical
             // margin when it scrolls, and `cx` does not merge classes.
             <div className="mt-1">
               <ProgressSegments
-                segments={segments}
+                segments={strip}
                 {...(onSelectSegment ? { onSelect: onSelectSegment } : {})}
                 label={progressLabel ?? ""}
               />
@@ -197,10 +238,27 @@ export function PlayerShell({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-190 flex-1 px-4 py-6 sm:px-6">
-        {banner ? <div className="mb-5">{banner}</div> : null}
-        {children}
-      </main>
+      <div
+        className={cx(
+          "mx-auto w-full flex-1 py-6",
+          aside ? cx(RAIL_GRID, WIDE, "px-6") : "max-w-190 px-4 sm:px-6",
+        )}
+      >
+        {aside ? (
+          // Sticks the body's top padding under the bar, and fits in the
+          // viewport under it: a long list scrolls inside, never the page.
+          <aside className="sticky top-[calc(var(--banner-h)+var(--bar-h)+1.5rem)] flex max-h-[calc(100dvh-var(--banner-h)-var(--bar-h)-3rem)] flex-col gap-4 self-start">
+            {aside}
+            <p className="text-[12px] leading-relaxed text-fg-faint">
+              <Kbd>Alt</Kbd> + <Kbd>←</Kbd> <Kbd>→</Kbd> {t("player.shortcuts")}
+            </p>
+          </aside>
+        ) : null}
+        <main className="min-w-0">
+          {banner ? <div className="mb-5">{banner}</div> : null}
+          {children}
+        </main>
+      </div>
 
       {footer ? (
         <footer className="sticky bottom-0 z-20 border-t border-line bg-surface">
@@ -209,7 +267,7 @@ export function PlayerShell({
           </div>
           <p className="sr-only">{t("player.shortcuts")}</p>
         </footer>
-      ) : (
+      ) : aside ? null : (
         <p className="sr-only">{t("player.shortcuts")}</p>
       )}
       {palette && commands ? (

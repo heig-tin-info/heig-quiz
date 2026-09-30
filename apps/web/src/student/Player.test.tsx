@@ -197,6 +197,75 @@ const render = (view = attemptView()) =>
     route: `/take/${EVAL}`,
   });
 
+/** A viewport at least this wide: `useMinWidth` reads `matchMedia`. */
+function viewport(width: number) {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: Number(/min-width: (\d+)px/.exec(query)?.[1] ?? Infinity) <= width,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }));
+}
+
+describe("the zen player on a wide screen", () => {
+  // The setup's narrow stub, back for the tests after these.
+  const narrow = window.matchMedia;
+  afterEach(() => vi.stubGlobal("matchMedia", narrow));
+
+  it("stands the list, the points and the flag beside the question, not over it", async () => {
+    viewport(1280);
+    const view = attemptView();
+    const { calls } = stubs(view);
+    const { container } = render(view);
+    const list = await screen.findByRole("navigation", { name: "Progression : question 2 sur 3" });
+    // One list, and it is in the side column: no strip left in the bar.
+    expect(list.closest("aside")).not.toBeNull();
+    expect(container.querySelector("header nav")).toBeNull();
+    const aside = list.closest("aside")!;
+    // Question 2 is worth one point, said once, beside the list.
+    expect(aside).toHaveTextContent("Question 2 · 1 point");
+    expect(container.querySelector("main")).not.toHaveTextContent("1 point");
+    // The flag is the side column's, and there is only one.
+    const flags = screen.getAllByRole("button", { name: "Marquer à revoir" });
+    expect(flags).toHaveLength(1);
+    expect(aside).toContainElement(flags[0]!);
+    await userEvent.click(flags[0]!);
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.endsWith("/answers/i2/flag"))).toBe(true),
+    );
+    // A row of the list moves, like a circle of the strip.
+    await userEvent.click(within(list).getByRole("button", { name: /^Question 3,/ }));
+    expect(await screen.findByText("Question 3", { selector: "p" })).toBeInTheDocument();
+  });
+
+  it("draws no side column for a single question: nothing to list", async () => {
+    viewport(1280);
+    const view = oneItemView();
+    stubs(view);
+    const { container } = render(view);
+    await screen.findByText("Question 1");
+    expect(container.querySelector("aside")).toBeNull();
+    // The points and the flag stay where a narrow screen has them.
+    expect(screen.getByText("2 points")).toBeInTheDocument();
+    const tools = screen.getByRole("group", { name: "Cette question" });
+    expect(within(tools).getByRole("button", { name: "Marquer à revoir" })).toBeInTheDocument();
+  });
+
+  it("keeps the strip over the question under the breakpoint", async () => {
+    viewport(900);
+    const view = attemptView();
+    stubs(view);
+    const { container } = render(view);
+    const strip = await screen.findByRole("navigation", { name: "Progression : question 2 sur 3" });
+    expect(strip.closest("header")).not.toBeNull();
+    expect(container.querySelector("aside")).toBeNull();
+  });
+});
+
 describe("the zen player", () => {
   it("restores the answers and the position after a reload (F-LIVE-06)", async () => {
     const view = attemptView();

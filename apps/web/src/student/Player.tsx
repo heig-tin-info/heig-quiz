@@ -55,11 +55,13 @@ import { currentItem, isLocked, neighbour, segmentsOf } from "../attempt/playerR
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { Button, Card, useMinWidth } from "../ui";
+import { ExpandChrome, type ExpandChromeValue } from "./ExpandLayer";
 import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay } from "./PausedOverlay";
 import { PlayerActions } from "./PlayerActions";
 import { PlayerEnd } from "./PlayerEnd";
 import { PlayerQuestion, QuestionHeading } from "./PlayerQuestion";
+import { PlayerRail } from "./PlayerRail";
 import { PlayerShell } from "./PlayerShell";
 import { isAnswered } from "./QuestionHost";
 import { QuestionTools } from "./QuestionTools";
@@ -246,6 +248,9 @@ export function PlayerView({
   // is — a footer at the bottom of a 900 px window is a trip per question.
   // A hook, so it stays above the early return below.
   const desktop = useMinWidth(640);
+  // Wider still, the question list, the points and the flag stand in a
+  // column beside the question rather than over and under it.
+  const wide = useMinWidth(1024);
   const segments = useMemo(() => segmentsOf(state, isAnswered), [state]);
   const unanswered = state.items.filter(
     (i) => !isAnswered(i.type, state.answers[i.id] ?? null),
@@ -265,6 +270,12 @@ export function PlayerView({
   const next = neighbour(state, 1);
   // The palette of the exam screen (W15): only what the footer and the bar
   // already carry.
+  // The bar of a question's expand layer: the same clock and badge as the
+  // shell's, through a context so the memoised question does not re-render.
+  const chrome = useMemo<ExpandChromeValue>(
+    () => ({ deadlineAt: session.deadlineAt, clock: session.clock, paused, sync }),
+    [session.deadlineAt, session.clock, paused, sync],
+  );
   const commands = usePlayerCommands({
     next,
     previous,
@@ -294,6 +305,11 @@ export function PlayerView({
   // at all — one question, nothing to validate — means no bar, not an empty
   // one.
   const manyItems = total > 1;
+  // One question has no list to stand beside it: the heading keeps the
+  // points and the tools keep the flag, as on a narrow screen.
+  const rail = wide && manyItems && item !== undefined;
+  const selectSegment = (itemId: string) => dispatch({ type: "goto", itemId });
+  const progressLabel = t("player.progress", { n: state.index + 1, total });
   const actions =
     manyItems || canValidate ? (
       <PlayerActions
@@ -308,7 +324,7 @@ export function PlayerView({
     ) : null;
 
   return (
-    <>
+    <ExpandChrome.Provider value={chrome}>
       <PlayerShell
         title={initial.evaluation.title}
         deadlineAt={session.deadlineAt}
@@ -316,8 +332,8 @@ export function PlayerView({
         paused={paused}
         {...(sync === undefined ? {} : { sync })}
         segments={manyItems ? segments : []}
-        onSelectSegment={(itemId) => dispatch({ type: "goto", itemId })}
-        progressLabel={t("player.progress", { n: state.index + 1, total })}
+        onSelectSegment={selectSegment}
+        progressLabel={progressLabel}
         commands={commands}
         // Issue #125: an exercise may be left and continued later; an exam
         // may not look like it can. The preview is a tab of its own.
@@ -340,12 +356,26 @@ export function PlayerView({
           </>
         }
         {...(desktop ? {} : { footer: actions })}
+        {...(rail
+          ? {
+              aside: (
+                <PlayerRail
+                  segments={segments}
+                  onSelect={selectSegment}
+                  label={progressLabel}
+                  item={item}
+                  readOnly={readOnly}
+                  onFlag={() => void controls.toggleFlag()}
+                />
+              ),
+            }
+          : {})}
       >
         {item ? (
           <>
             <QuestionHeading
               index={state.index}
-              points={item.points}
+              {...(rail ? {} : { points: item.points })}
               validated={validated}
               mark={mark}
             />
@@ -367,6 +397,7 @@ export function PlayerView({
               item={item}
               answered={answered}
               readOnly={readOnly}
+              withFlag={!rail}
               onFlag={() => void controls.toggleFlag()}
               onClear={controls.clear}
               onSkip={() => void controls.toggleSkip()}
@@ -385,7 +416,7 @@ export function PlayerView({
         onCancel={controls.cancelSubmit}
         onConfirm={controls.handIn}
       />
-    </>
+    </ExpandChrome.Provider>
   );
 }
 

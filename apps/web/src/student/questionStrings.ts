@@ -11,14 +11,7 @@
  * drifted and left the negative-marking notice of `mcq` in English.
  */
 import type { TFunction } from "../i18n";
-import { circuitCanvasStrings, playerStrings } from "../questionTypes";
-
-/**
- * The canvas of the `circuit` type has a dictionary of its own, keyed under
- * `qt.circuit.c.*` and handed to the player beside its `strings`: a package
- * splits its surfaces, and the host translates each one whole.
- */
-export const circuitCanvasStringsFor = (t: TFunction): unknown => circuitCanvasStrings(t);
+import { playerStrings } from "../questionTypes";
 
 /** The dictionary a given type's player expects, or `undefined` for an unknown one. */
 export function playerStringsFor(type: string, t: TFunction): unknown {
