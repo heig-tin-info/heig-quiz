@@ -281,7 +281,10 @@ Status values: `open`, `settled`, `superseded`.
   classroom. Accepted risk: any staff of a connected classroom makes Quiz's
   App read that repository and write into it (browser edits), whatever
   their own rights on GitHub. Every choice and every write is audited
-  (`journal.*`), and the commits are authored as the teacher.
+  (`journal.*`), and the commits are authored as the teacher. Creating
+  or choosing a repository also invites the staff with a linked GitHub
+  account as collaborators, `push` only, each invitation audited
+  (confirmed by the product owner 2026-09-30).
 - Blocks: M4-03, M4-05.
 - **Status**: settled 2026-09-30 (product owner, conversation).
 
@@ -297,4 +300,4 @@ Status values: `open`, `settled`, `superseded`.
   journal first: nothing is lost by surprise, and (b) is one click away.
   Projects will raise the same question for their repositories.
 - Blocks: M2-02 (disconnect route), M4-03.
-- **Status**: open.
+- **Status**: settled 2026-09-30 (product owner, conversation): (a).
