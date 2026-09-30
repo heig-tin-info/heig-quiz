@@ -281,6 +281,23 @@ Status values: `open`, `settled`, `superseded`.
   classroom. Accepted risk: any staff of a connected classroom makes Quiz's
   App read that repository and write into it (browser edits), whatever
   their own rights on GitHub. Every choice and every write is audited
-  (`journal.*`), and the commits are authored as the teacher.
+  (`journal.*`), and the commits are authored as the teacher. Creating
+  or choosing a repository also invites the staff with a linked GitHub
+  account as collaborators, `push` only, each invitation audited
+  (confirmed by the product owner 2026-09-30).
 - Blocks: M4-03, M4-05.
 - **Status**: settled 2026-09-30 (product owner, conversation).
+
+### D28 — Disconnecting a classroom that has a journal
+- **Question**: the journal is a repository of the classroom's organization
+  (D03, D27). What happens to it when a teacher disconnects the classroom
+  from GitHub, or connects it to another organization? Found by M0-04
+  (journal track), spec F-GH-04 and 06 no. 33.
+- **Options**: (a) refused while the classroom has a journal; (b) the
+  journal is removed with the link (its copy dropped, the repository
+  kept); (c) the journal stays, read-only, in error, until removed.
+- **Suggested**: (a), `409` with a message that says to remove the
+  journal first: nothing is lost by surprise, and (b) is one click away.
+  Projects will raise the same question for their repositories.
+- Blocks: M2-02 (disconnect route), M4-03.
+- **Status**: settled 2026-09-30 (product owner, conversation): (a).
