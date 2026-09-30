@@ -7,8 +7,9 @@ répartition des notes. Puis une ligne par étudiant — points, note au
 dixième, temps utilisé, et l'état de sa tentative : absent, non commencée,
 en cours, rendue, ou expirée à l'échéance.
 
-La note vient du barème de l'évaluation, linéaire ou à seuil, sur l'échelle
-suisse de 1 à 6 arrondie au dixième. Elle est calculée à partir des
+La note vaut 1 + 5 × points / total sur l'échelle suisse de 1 à 6, plafonnée
+à 6 et arrondie au dixième. Le total laisse de côté les questions bonus, dont
+les points ne peuvent que monter un étudiant. Elle est calculée à partir des
 corrections validées : modifier l'une d'elles dans le panneau de correction
 la déplace.
 
@@ -22,7 +23,8 @@ fait pour être déroulé pendant la correction en classe.
 ## Export
 
 **Exporter en CSV** donne une ligne par étudiant avec les points de chaque
-question, le total et la note. Point-virgule et marque d'ordre des octets en
+question, le total et la note ; la colonne d'une question bonus est marquée
+`(bonus)`. Point-virgule et marque d'ordre des octets en
 UTF-8, pour qu'Excel l'ouvre sans poser de question.
 
 ## Publication

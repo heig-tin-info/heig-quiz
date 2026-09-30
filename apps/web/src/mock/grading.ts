@@ -3,10 +3,12 @@ import {
   attemptTotal,
   debrief,
   describe,
+  evaluationTotal,
   histogram,
   correctionPublishRefusal,
   isBatchable,
   isDebriefOpen,
+  itemPoints,
   negativeMarkingOn,
   parseCloze,
   round2,
@@ -96,6 +98,8 @@ interface MockEvalItem {
   internalName: string;
   type: string;
   points: number;
+  /** ADR-052. */
+  bonus: boolean;
 }
 
 interface MockAttempt {
@@ -294,6 +298,7 @@ function buildGradingWorld(
       internalName: i.internalName,
       type: i.type,
       points: i.points,
+      bonus: i.bonus,
     }));
 
   // One attempt per dashboard row that has one. A row without an attempt is a
@@ -375,7 +380,8 @@ function buildGradingWorld(
           points: number;
           details: unknown;
         };
-        points = halfPoints(graded.points * item.points);
+        // A bonus item is floored at 0, as the server writes it (ADR-052).
+        points = itemPoints(halfPoints(graded.points * item.points), item.bonus);
         details = graded.details;
       }
 
@@ -491,7 +497,8 @@ function standingGrading(e: MockGradingWorld, attemptId: string, itemId: string)
   return chain.find((g) => g.state !== "superseded") ?? null;
 }
 
-const gradedTotalPointsOf = (e: MockGradingWorld) => e.items.reduce((s, i) => s + i.points, 0);
+/** The server's total: bonus items left out (ADR-052). */
+const gradedTotalPointsOf = (e: MockGradingWorld) => evaluationTotal(e.items);
 
 function gradeOf(points: number, total: number): number {
   return total <= 0 ? 1 : Math.min(6, Math.max(1, Math.round((1 + (5 * points) / total) * 10) / 10));
@@ -580,7 +587,7 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
       internalName: i.internalName,
       type: i.type,
       points: i.points,
-      minPoints: scoresNegatively(i.type, negativeOf(e.evaluation)) ? -i.points : 0,
+      minPoints: scoresNegatively(i.type, negativeOf(e.evaluation), i.bonus) ? -i.points : 0,
       explanation: questions.find((q) => q.id === i.questionId)?.versions.at(-1)?.explanation || null,
     })),
     entries,
@@ -824,6 +831,7 @@ function resultsView(e: MockGradingWorld) {
         internalName: i.internalName,
         type: i.type,
         points: i.points,
+        bonus: i.bonus,
         successRate:
           scores.length === 0
             ? null
@@ -993,6 +1001,7 @@ on("GET", "/app/api/attempts/:id/feedback", (m) => {
         type: item.type,
         points: grading ? grading.points : null,
         maxPoints: item.points,
+        bonus: item.bonus,
         verdict: grading
           ? grading.points >= item.points
             ? "correct"

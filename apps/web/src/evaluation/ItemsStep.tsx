@@ -18,6 +18,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useMutation } from "@tanstack/react-query";
 import {
+  Candy,
   Eye,
   Flag,
   Unlink,
@@ -32,7 +33,7 @@ import {
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type { EvaluationDetail, ItemRow } from "@quiz/contracts";
-import type { ItemListLock } from "@quiz/domain";
+import { bonusTotal, type ItemListLock } from "@quiz/domain";
 
 import { api } from "../api";
 import type { Route } from "../router";
@@ -53,6 +54,7 @@ import {
   SectionHeading,
   Tip,
 } from "../ui";
+import { BonusLabel } from "../BonusLabel";
 import { AddQuestionsSheet } from "./AddQuestionsSheet";
 import type { EditTarget } from "./editTarget";
 import { useTargetRefresh } from "./editTarget";
@@ -80,7 +82,9 @@ import { ItemPreviewSheet } from "./ItemPreviewSheet";
  * separator along, which is the only reading that survives a reorder.
  *
  * The points field commits on blur, not on every keystroke: typing "12" over
- * a "1" must not first save a "1".
+ * a "1" must not first save a "1". Beside it, a toggle makes the item a BONUS
+ * (ADR-052): its points leave the total and can only lift a student. It is
+ * locked with the points, and the row says "bonus" beside the name.
  *
  * It edits an evaluation's items or a template's (F-EVAL-25) through the
  * same code: the `target` names the routes and the caches, the `lock` is the
@@ -274,6 +278,7 @@ function ItemCard({
   canEdit,
   t,
   onPoints,
+  onBonus,
   onMilestone,
   onUpdate,
   onRemove,
@@ -288,6 +293,7 @@ function ItemCard({
   canEdit: boolean;
   t: TFunction;
   onPoints: (points: number) => void;
+  onBonus: (bonus: boolean) => void;
   onMilestone: (milestone: boolean) => void;
   onUpdate: () => void;
   onRemove: () => void;
@@ -330,6 +336,9 @@ function ItemCard({
         <span className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
           <span className="flex flex-wrap items-center gap-2">
             <span className="truncate font-semibold">{item.internalName}</span>
+            {item.bonus ? (
+              <BonusLabel label="eval.questions.bonus.badge" hint="eval.questions.bonus.hint" />
+            ) : null}
             {item.deprecated ? <Badge tone="red">{t("eval.questions.deprecated")}</Badge> : null}
             {item.poolUnlinked ? (
               <Tip label={t("templates.poolUnlinked.hint")}>
@@ -342,7 +351,20 @@ function ItemCard({
           <span className="text-xs text-fg-faint">{typeLabel(t, item.type)}</span>
         </span>
         <VersionCell item={item} stale={stale} t={t} />
-        <PointsField item={item} disabled={locked} onCommit={onPoints} />
+        <span className="flex shrink-0 items-center gap-1">
+          <PointsField item={item} disabled={locked} onCommit={onPoints} />
+          {/* A pressed chip, secondary to the points it qualifies (ADR-052). */}
+          <IconButton
+            size="sm"
+            label={t("eval.questions.bonus")}
+            active={item.bonus}
+            aria-pressed={item.bonus}
+            disabled={locked}
+            onClick={() => onBonus(!item.bonus)}
+          >
+            <Candy />
+          </IconButton>
+        </span>
         {/* Looking at the question and opening it (#127). Neither changes the
             evaluation — an edit becomes a new version that only "Update"
             brings in — so both stay once the list is frozen. On a phone the
@@ -520,6 +542,8 @@ export function ItemsStep({
   );
 
   const failed = patch.error ?? remove.error ?? updateVersions.error;
+  // The points the bonus items may add on top of the total (ADR-052).
+  const bonusPoints = bonusTotal(items);
   // Read off the live list: a row removed meanwhile closes its sheet.
   const previewed = items.find((i) => i.id === previewing) ?? null;
 
@@ -596,6 +620,7 @@ export function ItemsStep({
                       last={index === items.length - 1}
                       t={t}
                       onPoints={(points) => patch.mutate({ itemId: item.id, body: { points } })}
+                      onBonus={(bonus) => patch.mutate({ itemId: item.id, body: { bonus } })}
                       onMilestone={(milestone) =>
                         patch.mutate({ itemId: item.id, body: { milestone } })
                       }
@@ -617,6 +642,7 @@ export function ItemsStep({
               n: items.length,
               points: detail.totalPoints,
             })}
+            {bonusPoints > 0 ? ` · ${t("eval.questions.total.bonus", { points: bonusPoints })}` : null}
           </p>
         </>
       )}

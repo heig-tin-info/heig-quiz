@@ -11,7 +11,7 @@ import { and, count, eq, getTableColumns, gte, isNull, sql } from "drizzle-orm";
 
 import type { AutosaveResponse, CellStatus, Verdict } from "@quiz/contracts";
 import { ANSWER_SUMMARY_MAX, isGraded, type AnyQuestionTypeServer } from "@quiz/core/server";
-import { mayValidate, progressStatus, round2 } from "@quiz/domain";
+import { itemPoints, mayValidate, progressStatus } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -192,7 +192,7 @@ export function liveGrader(
       // manual circuit): shown as a verdict it would paint every written
       // answer red. No preview, the cell keeps its progress colour.
       if (!isGraded(result) || result.state === "proposed") return null;
-      const points = round2(result.points);
+      const points = itemPoints(result.points, item.item.bonus);
       const maxPoints = result.maxPoints;
       return {
         verdict: verdictOf({ points, maxPoints, state: "validated" }),

@@ -5,7 +5,8 @@
  *
  * Four levels, and the line between them is the triage's, not taste:
  *   - `blocker`: exactly what the API refuses (`guardTransition`): no
- *     question, an incomplete timing, a common end already past (#178).
+ *     question, nothing that counts towards the total (every question a
+ *     bonus, ADR-052), an incomplete timing, a common end already past (#178).
  *     Nothing else may disable the launch —
  *     a client-side refusal the server does not share is a lie in one
  *     direction or the other.
@@ -23,7 +24,13 @@ import {
   safeExamBrowserOf,
   type EvaluationDetail,
 } from "@quiz/contracts";
-import { negativeMarkingOn, retakesOn, safeExamBrowserOn, templatePullable } from "@quiz/domain";
+import {
+  lacksGradedPoints,
+  negativeMarkingOn,
+  retakesOn,
+  safeExamBrowserOn,
+  templatePullable,
+} from "@quiz/domain";
 
 import type { Dict, TFunction } from "../i18n";
 import { typeLabel } from "../questionTypes";
@@ -71,6 +78,16 @@ function itemsCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
       level: "blocker",
       title: t("launch.items.none"),
       detail: t("eval.launch.needQuestions"),
+      fix: { kind: "step", step: "questions" },
+    };
+  }
+  // `totalPoints` leaves the bonus items out: the server's own rule.
+  if (lacksGradedPoints(detail.evaluation.mode, detail.totalPoints)) {
+    return {
+      id: "items",
+      level: "blocker",
+      title: t("launch.items.noGradedPoints"),
+      detail: t("eval.launch.needGradedPoints"),
       fix: { kind: "step", step: "questions" },
     };
   }

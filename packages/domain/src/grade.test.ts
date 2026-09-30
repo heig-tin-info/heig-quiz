@@ -1,18 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   attemptTotal,
+  bonusTotal,
   gradeBand,
   gradeFromPoints,
   gradeLetter,
   isPassing,
+  evaluationTotal,
+  itemPoints,
+  lacksGradedPoints,
   MAX_GRADE,
   MIN_GRADE,
   overridePointsRange,
   type Scale,
 } from "./grade.js";
 
-const linear: Scale = { kind: "linear" };
-const threshold18: Scale = { kind: "threshold", threshold: 18 };
+const linear: Scale = {};
 
 describe("gradeFromPoints", () => {
   const table: [points: number, total: number, scale: Scale, grade: number][] = [
@@ -20,9 +23,9 @@ describe("gradeFromPoints", () => {
     [12, 20, linear, 4],
     [20, 20, linear, 6],
     [3, 7, linear, 3.1],
-    [18, 20, threshold18, 6],
-    [19, 20, threshold18, 6],
-    [9, 20, threshold18, 3.5],
+    // Bonus points past the total (ADR-052): capped at 6.
+    [21, 18, linear, 6],
+    [9, 18, linear, 3.5],
     [-2, 20, linear, 1],
     [5, 0, linear, 1],
   ];
@@ -37,12 +40,12 @@ describe("gradeFromPoints", () => {
     expect(gradeFromPoints(-100, 20, linear)).toBe(MIN_GRADE);
     expect(gradeFromPoints(100, 20, linear)).toBe(MAX_GRADE);
     expect(gradeFromPoints(5, -1, linear)).toBe(MIN_GRADE);
-    expect(gradeFromPoints(5, 20, { kind: "threshold", threshold: 0 })).toBe(MIN_GRADE);
+    expect(gradeFromPoints(5, 0, linear)).toBe(MIN_GRADE);
   });
 
   it("honours the rounding mode", () => {
-    expect(gradeFromPoints(3, 7, { kind: "linear", rounding: "up" })).toBe(3.2);
-    expect(gradeFromPoints(3, 7, { kind: "linear", rounding: "down" })).toBe(3.1);
+    expect(gradeFromPoints(3, 7, { rounding: "up" })).toBe(3.2);
+    expect(gradeFromPoints(3, 7, { rounding: "down" })).toBe(3.1);
   });
 });
 
@@ -119,6 +122,58 @@ describe("attemptTotal (ADR-026)", () => {
 
   it("gives the grade of a floored total", () => {
     expect(gradeFromPoints(attemptTotal([-3, 1]), 10, linear)).toBe(1);
+  });
+});
+
+describe("evaluationTotal (ADR-052)", () => {
+  it("sums the items, bonus items left out, rounded to the hundredth", () => {
+    expect(evaluationTotal([])).toBe(0);
+    expect(
+      evaluationTotal([
+        { points: 0.1, bonus: false },
+        { points: 0.2, bonus: false },
+        { points: 3, bonus: true },
+      ]),
+    ).toBe(0.3);
+  });
+
+  it("rounds half away from zero, where Math.round went up (audit B-08)", () => {
+    expect(evaluationTotal([{ points: 1.25, bonus: false }, { points: 2.5, bonus: false }, { points: 0.75, bonus: false }])).toBe(4.5);
+    expect(evaluationTotal([{ points: -0.125, bonus: false }])).toBe(-0.13);
+  });
+
+  it("has its complement in bonusTotal", () => {
+    const items = [
+      { points: 2, bonus: false },
+      { points: 0.1, bonus: true },
+      { points: 0.2, bonus: true },
+    ];
+    expect([evaluationTotal(items), bonusTotal(items)]).toEqual([2, 0.3]);
+  });
+});
+
+describe("lacksGradedPoints (ADR-052)", () => {
+  it("refuses an exam or an exercise with nothing that counts", () => {
+    expect(lacksGradedPoints("exam", 0)).toBe(true);
+    expect(lacksGradedPoints("exercise", 0)).toBe(true);
+    expect(lacksGradedPoints("exam", 0.5)).toBe(false);
+  });
+
+  it("never refuses a poll", () => {
+    expect(lacksGradedPoints("poll", 0)).toBe(false);
+  });
+});
+
+describe("itemPoints (ADR-052)", () => {
+  it("rounds, and floors a bonus item at 0, never -0", () => {
+    expect(itemPoints(-0.5, true)).toBe(0);
+    expect(Object.is(itemPoints(-0.001, true), 0)).toBe(true);
+    expect(itemPoints(1.005, true)).toBe(1.01);
+  });
+
+  it("leaves an ordinary item as the type scored it, rounded", () => {
+    expect(itemPoints(-0.5, false)).toBe(-0.5);
+    expect(itemPoints(2 / 3, false)).toBe(0.67);
   });
 });
 

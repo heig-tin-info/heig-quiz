@@ -41,6 +41,10 @@ A milestone is a line drawn across the list. For the student, everything above t
 
 Hover the space between two rows and click **Add a milestone** to put one there. A milestone belongs to the row above it and travels with that row when you drag it. The **×** on the separator removes it. Milestones only act when the navigation is set to **Milestones** in the advanced options (below); otherwise they are drawn but not enforced.
 
+### Bonus questions
+
+The candy button beside a row's points makes that question a **bonus**: the row says `bonus`, and its points no longer count in the evaluation's total. They can only lift a student: someone with every point of an 18-point test plus a 3-point bonus reads `21 / 18`, and the grade is still capped at 6. Under negative marking a bonus question is scored like the others — a wrong tick still lowers its score — but its score never goes below 0. The student sees **Bonus question** on the question, in the player and on the feedback page. Like the points, the flag is fixed once the evaluation is opened or somebody has started, and an evaluation whose every question is a bonus cannot be opened: at least one question must count.
+
 ### Frozen versions and the update banner
 
 Adding a question freezes it on its current published version. If you publish a newer version of that question later, this evaluation does not change behind your back: the row shows `version 2 available` and a banner above the list says **One question has a newer published version.** or **3 questions have a newer published version.** Click the refresh button on one row to move that item forward, or **Update it** / **Update 3 questions** in the banner to move them all.
@@ -113,7 +117,6 @@ Everything else lives behind **Advanced options**, folded by default. A novice n
 - **Negative marking** (not on a poll): on every multiple-choice and categorize question, a wrong answer costs points and no answer costs nothing; it replaces the two policies above, which then say so. The total never goes below 0, and students are told in the waiting room and on each question concerned.
 - **Access code**: asked once, before the student enters. Three characters at least; empty means no code.
 - **Safe Exam Browser** (exams only): the students sit the exam in [Safe Exam Browser](https://safeexambrowser.org), and only there. See below.
-- **Grading scale**: **Linear** (grade = 1 + 5 × points / total) or **Threshold** (grade = 1 + 5 × points / threshold, capped at 6). Both land on the Swiss 1 to 6 scale, rounded to the tenth.
 
 !!! note
     The waiting room and the feedback policy are part of what the presets decide, but their controls sit under **Advanced options**, not on the main card. Open the disclosure to change them.
@@ -171,7 +174,7 @@ Once an evaluation is running, every control lives on the dashboard: pausing, ex
 
 ## What can still change once someone has started
 
-As soon as one attempt exists, the banner **A student has already started: the structure is frozen.** appears on the first two steps. Frozen: the list of questions, their versions, their points and order, the milestones, the timing mode and duration, the waiting room, the navigation, the presentation, the shuffling, the scoring policy and the grading scale. Anything that decides what a student sees or what an answer is worth is fixed, so that every student plays the same evaluation.
+As soon as one attempt exists, the banner **A student has already started: the structure is frozen.** appears on the first two steps. Frozen: the list of questions, their versions, their points and order, the milestones, the bonus flags, the timing mode and duration, the waiting room, the navigation, the presentation, the shuffling, and the scoring policy. Anything that decides what a student sees or what an answer is worth is fixed, so that every student plays the same evaluation.
 
 Still editable: the feedback policy and its two switches, and the access code. You can decide after the fact to show the explanation with the results, or to hide the key.
 

@@ -12,6 +12,11 @@ screen is deferred (06 no. 25, issue #229). The rest of the delivery was re-spli
 decisions are the second addendum. *Save as template* links its source
 since 2026-09-30: the third addendum.
 
+Amended by [ADR-052](ADR-052-questions-bonus.md) (2026-09-30): the bonus
+flag of an item is content like its milestone flag — a template carries it,
+a copy and a pull copy it, a change of it moves the revision and shows in a
+pull's summary. The `threshold` grade scale a template could hold is gone.
+
 ## Context
 
 A course is taught year after year (glossary: "persistent from one year to

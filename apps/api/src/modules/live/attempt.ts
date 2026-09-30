@@ -23,6 +23,7 @@ import {
 } from "@quiz/contracts";
 import { shuffle, streamSeed } from "@quiz/core/rng";
 import {
+  evaluationTotal,
   attemptDeadline,
   bonusSeconds,
   isFinishedAttempt,
@@ -57,7 +58,6 @@ import {
   retakesEnabled,
   studentEvaluationRows,
   totalPointsByEvaluation,
-  totalPointsOf,
 } from "../evaluation/service.js";
 import { endAttempts } from "./dwell.js";
 import * as events from "./events.js";
@@ -849,6 +849,7 @@ function attemptItems(
       points: entry.item.points,
       type: entry.question.type,
       milestone: entry.item.milestone,
+      bonus: entry.item.bonus,
       student: studentView({
         type: entry.question.type,
         version,
@@ -1004,7 +1005,7 @@ async function viewOf(
       settings,
       feedbackPolicy: feedbackOf(evaluation),
       pausedAt: isoOrNull(evaluation.pausedAt),
-      totalPoints: totalPointsOf(items.map((i) => i.item)),
+      totalPoints: evaluationTotal(items.map((i) => i.item)),
     },
     items: attemptItems(ordered, answered, locked, settings, seed, gradeDefaults(evaluation)),
   };

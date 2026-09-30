@@ -52,6 +52,12 @@ async function addAttempt(evaluationId: string, userId: string): Promise<string>
   return id;
 }
 
+/** What readiness reads of an ordinary item list of two questions. */
+const TWO_ITEMS = [
+  { points: 1, bonus: false },
+  { points: 1, bonus: false },
+];
+
 describe("state machine (§5.1)", () => {
   it("walks draft → scheduled → lobby → running ⇄ paused → closed", async () => {
     const seed = await seedLive(db, { opensAt: new Date(clock.now().getTime() + 3_600_000) });
@@ -248,19 +254,19 @@ describe("state machine (§5.1)", () => {
     const row = await reload(db, seed.evaluationId);
     for (const to of ["scheduled", "lobby", "running"] as const) {
       expect(() =>
-        service.guardTransition(row, to, { itemCount: 2, attemptCount: 0, now: clock.now() }),
+        service.guardTransition(row, to, { items: TWO_ITEMS, attemptCount: 0, now: clock.now() }),
       ).toThrow(expect.objectContaining({ details: { reason: "closes_at_past" } }));
     }
     const justBefore = new Date(clock.now().getTime() - 1);
     for (const to of ["lobby", "running"] as const) {
       expect(() =>
-        service.guardTransition(row, to, { itemCount: 2, attemptCount: 0, now: justBefore }),
+        service.guardTransition(row, to, { items: TWO_ITEMS, attemptCount: 0, now: justBefore }),
       ).not.toThrow();
     }
     // A resume is not a start: it moves the common end by the pause itself.
     const paused = { ...row, state: "paused" as const };
     expect(() =>
-      service.guardTransition(paused, "running", { itemCount: 2, attemptCount: 0, now: clock.now() }),
+      service.guardTransition(paused, "running", { items: TWO_ITEMS, attemptCount: 0, now: clock.now() }),
     ).not.toThrow();
   });
 
@@ -380,7 +386,7 @@ describe("state machine (§5.1)", () => {
     const seed = await seedLive(db, { mode: "exercise" });
     const row = await service.applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
     expect(() =>
-      service.guardTransition(row, "paused", { itemCount: 2, attemptCount: 0, now: clock.now() }),
+      service.guardTransition(row, "paused", { items: TWO_ITEMS, attemptCount: 0, now: clock.now() }),
     ).toThrow(service.IllegalTransition);
   });
 
@@ -516,7 +522,7 @@ describe("items (F-EVAL-02, F-EVAL-03)", () => {
     });
     const items = await service.itemRows(db, seed.evaluationId);
     await expect(
-      service.patchItem(db, row, items[0]!.id, { points: 9 }, ctx),
+      service.patchItem(db, row, items[0]!.id, { points: 9, bonus: false }, ctx),
     ).rejects.toMatchObject({ code: "locked" });
     await expect(service.deleteItem(db, row, items[0]!.id, ctx)).rejects.toMatchObject({
       code: "locked",
@@ -546,7 +552,7 @@ describe("the item list freezes once the evaluation is opened (issue #79)", () =
         frozen,
       );
       await expect(
-        service.patchItem(db, row, items[0]!.id, { points: 9 }, ctx),
+        service.patchItem(db, row, items[0]!.id, { points: 9, bonus: false }, ctx),
         state,
       ).rejects.toMatchObject(frozen);
       await expect(
@@ -597,7 +603,7 @@ describe("the item list freezes once the evaluation is opened (issue #79)", () =
       };
       const writes: [string, "POST" | "PATCH" | "PUT" | "DELETE", string, Payload | undefined][] = [
         ["add items", "POST", `${base}/items`, { questionIds: mine.questionIds.slice(0, 1) }],
-        ["patch item", "PATCH", itemUrl, { points: 3 }],
+        ["patch item", "PATCH", itemUrl, { points: 3, bonus: false }],
         ["reorder", "PUT", `${base}/items/order`, { itemIds: [...mine.itemIds].reverse() }],
         ["delete item", "DELETE", itemUrl, undefined],
         ["update versions", "POST", `${base}/items/update-versions`, {}],
@@ -1072,7 +1078,7 @@ describe("the order of the refusals, over HTTP", () => {
       const writes: [string, "POST" | "PATCH" | "PUT" | "DELETE", string, Payload | undefined, unknown][] = [
         ["patch evaluation", "PATCH", base, { durationS: 600 }, locked],
         ["add items", "POST", `${base}/items`, { questionIds: mine.questionIds.slice(0, 1) }, locked],
-        ["patch item", "PATCH", itemUrl, { points: 3 }, locked],
+        ["patch item", "PATCH", itemUrl, { points: 3, bonus: false }, locked],
         ["reorder", "PUT", `${base}/items/order`, { itemIds: [...mine.itemIds].reverse() }, locked],
         ["delete item", "DELETE", itemUrl, undefined, locked],
         [
@@ -1096,16 +1102,5 @@ describe("the order of the refusals, over HTTP", () => {
     } finally {
       await server.close();
     }
-  });
-});
-
-describe("totalPointsOf (audit B-08)", () => {
-  it("sums the items and rounds through round2, half away from zero", () => {
-    expect(service.totalPointsOf([])).toBe(0);
-    // Binary representation error is absorbed: 0.1 + 0.2 is 0.3.
-    expect(service.totalPointsOf([{ points: 0.1 }, { points: 0.2 }])).toBe(0.3);
-    expect(service.totalPointsOf([{ points: 1.25 }, { points: 2.5 }, { points: 0.75 }])).toBe(4.5);
-    // An exact negative half goes away from zero, where Math.round went up.
-    expect(service.totalPointsOf([{ points: -0.125 }])).toBe(-0.13);
   });
 });

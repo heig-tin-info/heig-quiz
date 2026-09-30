@@ -15,6 +15,7 @@ import type { RunFn, RunResult } from "../attempt/run";
 import { useT, type TFunction } from "../i18n";
 import { runCode, runCodeImage } from "../runner/codeRun";
 import { Badge } from "../ui";
+import { BonusLabel } from "../BonusLabel";
 import { ExpandLayer } from "./ExpandLayer";
 import { isAnswered, QuestionHost } from "./QuestionHost";
 
@@ -106,11 +107,12 @@ export const PlayerQuestion = memo(function PlayerQuestion({
 
 /**
  * "Question 2", its state in a word AND a symbol — the same symbols as the
- * list above — and what it is worth.
+ * list above — whether it is a bonus (ADR-052), and what it is worth.
  */
 export function QuestionHeading({
   index,
   points,
+  bonus = false,
   validated,
   mark,
 }: {
@@ -118,6 +120,8 @@ export function QuestionHeading({
   index: number;
   /** Absent on a wide screen: the side column says it, beside the list. */
   points?: number;
+  /** A bonus question: its points are not in the total. */
+  bonus?: boolean;
   validated: boolean;
   mark: AnswerMark;
 }) {
@@ -136,6 +140,7 @@ export function QuestionHeading({
             one question per page needs no second counter. */}
         {t("player.question", { n: index + 1 })}
       </p>
+      {bonus ? <BonusLabel /> : null}
       {/* Nothing for "not answered yet": that is what a question is until
           it is not. */}
       {validated ? (

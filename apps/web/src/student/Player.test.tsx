@@ -85,6 +85,7 @@ const attemptView = (over: Partial<AttemptView["attempt"]> = {}): AttemptView =>
       points: 2,
       type: "mcq",
       milestone: false,
+      bonus: false,
       student: {
         prompt: "Quelle expression donne l'adresse de `x` ?",
         mode: "single",
@@ -106,6 +107,7 @@ const attemptView = (over: Partial<AttemptView["attempt"]> = {}): AttemptView =>
       points: 1,
       type: "short",
       milestone: false,
+      bonus: false,
       student: {
         prompt: "Combien d'octets pour un `int` ?",
         kind: "number",
@@ -124,6 +126,7 @@ const attemptView = (over: Partial<AttemptView["attempt"]> = {}): AttemptView =>
       points: 1,
       type: "short",
       milestone: false,
+      bonus: false,
       student: {
         prompt: "Et pour un `char` ?",
         kind: "number",

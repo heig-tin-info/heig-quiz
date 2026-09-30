@@ -24,7 +24,6 @@ import type { ConfigWriter } from "./usePatch";
  */
 export function AdvancedDisclosure({
   config,
-  totalPoints,
   patch,
   disabled,
   feedbackDisabled,
@@ -32,8 +31,6 @@ export function AdvancedDisclosure({
   children,
 }: {
   config: ConfigView;
-  /** The threshold scale's default pass mark. */
-  totalPoints: number;
   patch: ConfigPatch;
   /** The structural settings: frozen by an attempt, or by the run (#86). */
   disabled: boolean;
@@ -50,12 +47,12 @@ export function AdvancedDisclosure({
    * reads). A poll never holds one.
    */
   holdsCategorize?: boolean;
-  /** The rows of a run's own (the access code), before the grade scale. */
+  /** The rows of a run's own (the access code), last. */
   children?: ReactNode;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const { settings, feedbackPolicy, mode, mcqPolicy, gradingScale } = config;
+  const { settings, feedbackPolicy, mode, mcqPolicy } = config;
 
   const set = (next: Partial<EvaluationSettings>) => patch.mutate({ settings: next });
   const feedback = (next: Partial<FeedbackPolicy>) => patch.mutate({ feedbackPolicy: next });
@@ -303,36 +300,6 @@ export function AdvancedDisclosure({
 
         {children}
 
-        <SettingRow
-          title={t("eval.scale")}
-          desc={
-            gradingScale.kind === "linear"
-              ? t("eval.scale.desc.linear")
-              : t("eval.scale.desc.threshold")
-          }
-        >
-          <Segmented
-            name="scale"
-            value={gradingScale.kind}
-            disabled={disabled}
-            onChange={(kind) =>
-              patch.mutate({
-                gradingScale:
-                  kind === "linear"
-                    ? { kind: "linear", rounding: "nearest" }
-                    : {
-                        kind: "threshold",
-                        rounding: "nearest",
-                        threshold: Math.max(1, totalPoints || 1),
-                      },
-              })
-            }
-            options={[
-              { value: "linear", label: t("eval.scale.linear") },
-              { value: "threshold", label: t("eval.scale.threshold") },
-            ]}
-          />
-        </SettingRow>
       </Card>
     </div>
   );

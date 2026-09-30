@@ -247,7 +247,8 @@ export const TOOLS: Tool[] = [
   tool({
     name: "get_evaluation",
     title: "Get an evaluation",
-    description: "One evaluation: settings, schedule and its items (the questions it plays, with their points).",
+    description: "One evaluation: settings, schedule and its items (the questions it plays, with their points). " +
+      "A `bonus` item's points are left out of the total: they can only lift a student (ADR-052).",
     input: z.object({ evaluationId: Id }),
     annotations: READ,
     run: (api, a) => api.get(`/evaluations/${a.evaluationId}`),
@@ -444,7 +445,7 @@ export const TOOLS: Tool[] = [
     name: "update_evaluation",
     title: "Update an evaluation",
     description:
-      "Changes an evaluation's title, settings, feedback policy, grading scale or schedule (`opensAt`, " +
+      "Changes an evaluation's title, settings, feedback policy, grading scale (linear, its rounding) or schedule (`opensAt`, " +
       "`closesAt` as ISO date-times, `durationS` in seconds). Does not start it. While it is running or " +
       "paused, only the title, the access code, the IP allowlist and the feedback policy may change " +
         "(an evaluation with a waiting room never takes `immediate` feedback). A poll's feedback policy " +

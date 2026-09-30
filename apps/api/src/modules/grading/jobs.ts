@@ -39,7 +39,7 @@ import type {
 } from "@quiz/core/server";
 import { JUSTIFICATION_KEY, type PassReason } from "@quiz/contracts";
 import { RunnerBusy, RunnerUnavailable, isGraded, isPendingRunner } from "@quiz/core/server";
-import { isLiveState, round2 } from "@quiz/domain";
+import { isLiveState, itemPoints, round2 } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { answers, attempts, gradings } from "../../db/schema.js";
@@ -322,7 +322,12 @@ async function gradeCell(
       defaults: gradeDefaults(evaluation),
     },
   });
-  if (outcome.kind === "written") return { write: { ...base, ...outcome.grading } };
+  if (outcome.kind === "written") {
+    // A bonus item never takes points away (ADR-052): floored at 0 here, the
+    // one place an automatic grade becomes an item's points.
+    const points = itemPoints(outcome.grading.points, item.item.bonus);
+    return { write: { ...base, ...outcome.grading, points } };
+  }
   return {
     runner: {
       evaluationId: evaluation.id,
@@ -601,7 +606,7 @@ async function gradeWithRunner(
     );
     await writeGrading(db, {
       ...base,
-      points: round2(graded.points),
+      points: itemPoints(graded.points, item.item.bonus),
       source: "auto",
       state: graded.state ?? "validated",
       details: graded.details,

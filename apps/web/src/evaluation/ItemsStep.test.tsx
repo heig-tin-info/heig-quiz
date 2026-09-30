@@ -147,3 +147,43 @@ describe("ItemsStep — preview and edit (#127)", () => {
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 });
+
+describe("ItemsStep — bonus questions (ADR-052)", () => {
+  it("toggles a row's bonus flag, and names it beside the question", async () => {
+    const user = userEvent.setup();
+    const bonus = makeItemRow(1, { internalName: "array-decay", bonus: true, points: 2 });
+    const { calls } = mockFetch({
+      [`PATCH /app/api/evaluations/${EVALUATION_ID}/items/${frozen.id}`]: ok([]),
+    });
+    renderWithProviders(
+      <ItemsStep
+        target={target}
+        lock={null}
+        detail={makeEvaluationDetail({ items: [frozen, bonus], totalPoints: 1 })}
+        navigate={vi.fn()}
+      />,
+    );
+    const toggle = within(rowOf("array-decay")).getByRole("button", { name: /^bonus$/i });
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(within(rowOf("array-decay")).getByText("bonus")).toBeInTheDocument();
+    expect(screen.getByText(/\+2 bonus points/)).toBeInTheDocument();
+
+    await user.click(within(rowOf("pointer-decl")).getByRole("button", { name: /^bonus$/i }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ bonus: true }),
+    );
+  });
+
+  it("locks the flag with the points", () => {
+    mockFetch({});
+    renderWithProviders(
+      <ItemsStep
+        target={target}
+        lock={itemListLock("draft", 1)}
+        detail={makeEvaluationDetail({ items: [frozen] })}
+        navigate={vi.fn()}
+      />,
+    );
+    expect(within(rowOf("pointer-decl")).getByRole("button", { name: /^bonus$/i })).toBeDisabled();
+  });
+});

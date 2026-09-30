@@ -20,7 +20,7 @@ import type {
   PreviewItemStatus,
   PreviewSolution,
 } from "@quiz/contracts";
-import { gradeFromPoints, round2 } from "@quiz/domain";
+import { evaluationTotal, gradeFromPoints, round2 } from "@quiz/domain";
 
 import { evaluationOr404, itemQuestion, templateOr404, type MockEvaluation } from "./evaluation";
 import { frozenConfig, solutionOf, studentSolutionOf, studentView, tryAnswer } from "./pool";
@@ -70,7 +70,7 @@ function viewOf(e: MockEvaluation, seed: number): AttemptView {
       settings: e.settings as AttemptView["evaluation"]["settings"],
       feedbackPolicy: e.feedbackPolicy as AttemptView["evaluation"]["feedbackPolicy"],
       pausedAt: e.pausedAt,
-      totalPoints: e.items.reduce((sum, i) => sum + i.points, 0),
+      totalPoints: evaluationTotal(e.items),
     },
     items: orderOf(e, seed).flatMap((item) => {
       const q = itemQuestion(item);
@@ -82,6 +82,7 @@ function viewOf(e: MockEvaluation, seed: number): AttemptView {
           points: item.points,
           type: item.type,
           milestone: item.milestone,
+          bonus: item.bonus,
           student: studentView(q, frozenConfig(q)),
           answer: null,
           revision: 0,
@@ -215,7 +216,7 @@ on("POST", "/app/api/evaluations/:id/preview/grade", (m, body): PreviewCorrectio
       details: tried?.status === "graded" ? (tried.details ?? null) : null,
     });
   }
-  const totalPoints = e.items.reduce((sum, i) => sum + i.points, 0);
+  const totalPoints = evaluationTotal(e.items);
   const scale = (e.gradingScale.kind ? e.gradingScale : { kind: "linear", rounding: "nearest" }) as
     PreviewCorrection["scale"];
   points = round2(points);

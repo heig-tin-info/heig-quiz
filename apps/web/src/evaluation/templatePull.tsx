@@ -65,7 +65,7 @@ export function TemplateBehindBadge({
   );
 }
 
-/** What moved on one item: its version, its points, its section break. */
+/** What moved on one item: its version, its points, its section break, its bonus flag. */
 function changeOf(from: TemplatePullItem, to: TemplatePullItem, t: TFunction): string {
   const parts = [
     ...(from.versionNumber !== to.versionNumber
@@ -74,6 +74,9 @@ function changeOf(from: TemplatePullItem, to: TemplatePullItem, t: TFunction): s
     ...(from.points !== to.points ? [t("templatePull.change.points", { from: from.points, to: to.points })] : []),
     ...(from.milestone !== to.milestone
       ? [t(to.milestone ? "templatePull.change.milestoneOn" : "templatePull.change.milestoneOff")]
+      : []),
+    ...(from.bonus !== to.bonus
+      ? [t(to.bonus ? "templatePull.change.bonusOn" : "templatePull.change.bonusOff")]
       : []),
   ];
   return `${to.internalName} (${parts.join(", ")})`;
@@ -104,6 +107,9 @@ function refusalOf(error: unknown, t: TFunction): string | null {
   const unlinked = instantiateError(error, t);
   if (unlinked !== null) return unlinked;
   if (TransitionRefusal.safeParse(error.body).data?.reason === "no_items") return t("templatePull.noItems");
+  if (TransitionRefusal.safeParse(error.body).data?.reason === "no_graded_points") {
+    return t("eval.launch.needGradedPoints");
+  }
   const code = (error.body as { error?: string } | null)?.error;
   if (code === "template_moved") return t("templatePull.moved");
   if (code === "no_template") return t("templatePull.gone");

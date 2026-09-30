@@ -23,6 +23,9 @@ export const SEPARATOR = ";";
 /** A header built from `internal_name` is truncated to this (§4.6). */
 const HEADER_MAX = 30;
 
+/** What a bonus item's header ends with (ADR-052): its points are not in the total. */
+const BONUS_SUFFIX = " (bonus)";
+
 /**
  * RFC-4180 quoting, with the separator of this file. A field is quoted only
  * when it has to be, so a plain export stays diff-readable.
@@ -62,7 +65,8 @@ const grade = (value: number): NumericField => ({ numeric: value.toFixed(1) });
 
 /**
  * `email;last_name;first_name;q1;…;total;grade`, one row per STUDENT — the
- * absent ones included, with empty per-item cells and a 1.0.
+ * absent ones included, with empty per-item cells and a 1.0. A bonus item's
+ * header says ` (bonus)`; `total` is the student's points, bonus included.
  *
  * A teacher's own test walk (ADR-018) is NOT a row of this file. The export
  * is a grade sheet: it is read by a human, pasted into another one, and
@@ -76,7 +80,7 @@ export function resultsCsv(view: ResultsView): string {
     "email",
     "last_name",
     "first_name",
-    ...view.items.map((i) => i.internalName.slice(0, HEADER_MAX)),
+    ...view.items.map((i) => `${i.internalName.slice(0, HEADER_MAX)}${i.bonus ? BONUS_SUFFIX : ""}`),
     "total",
     "grade",
   ];

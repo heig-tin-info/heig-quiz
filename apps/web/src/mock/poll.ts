@@ -471,6 +471,7 @@ function seedPollEvaluation(tp: MockTeacherPoll, alias: string): void {
       position: 0,
       points: 1,
       milestone: false,
+      bonus: false,
       questionId: uuid(),
       questionVersionId: uuid(),
       type: poll.type,

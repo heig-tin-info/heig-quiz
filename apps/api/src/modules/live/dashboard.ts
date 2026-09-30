@@ -6,7 +6,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import type { AttemptInspect, AttemptState, DashboardView, Verdict } from "@quiz/contracts";
 import { shuffle } from "@quiz/core/rng";
-import { attemptTotal, countsAsCompleted, round2, uniquePseudonyms } from "@quiz/domain";
+import { attemptTotal, countsAsCompleted, evaluationTotal, round2, uniquePseudonyms } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -19,7 +19,7 @@ import {
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
-import { joinedItems, totalPointsOf } from "../evaluation/service.js";
+import { joinedItems } from "../evaluation/service.js";
 import * as events from "./events.js";
 import {
   pairKey,
@@ -109,7 +109,7 @@ export async function dashboardView(
     roster.map((r) => r.userId ?? r.seatId),
   );
   const online = presence.online(evaluation.id);
-  const maxPoints = totalPointsOf(items.map((i) => i.item));
+  const maxPoints = evaluationTotal(items.map((i) => i.item));
 
   // One summarizer per QUESTION (see `answerSummarizer`), built only when the
   // teacher actually asked for the answers.

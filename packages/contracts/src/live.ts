@@ -66,6 +66,8 @@ export const AttemptItem = z.object({
   points: z.number(),
   type: z.string(),
   milestone: z.boolean(),
+  /** ADR-052: shown as "Bonus question"; an item's property, not question content. */
+  bonus: z.boolean(),
   student: z.unknown(),
   answer: z.unknown().nullable(),
   revision: z.number().int(),

@@ -236,6 +236,11 @@ export const evaluationItems = pgTable(
     points: numeric("points", { precision: 6, scale: 2, mode: "number" }).notNull(),
     /** F-EVAL-07: navigation cannot go back past a milestone item. */
     milestone: boolean("milestone").notNull().default(false),
+    /**
+     * ADR-052: a bonus item's points are left out of the evaluation's total
+     * (`evaluationTotal`), and its score is floored at 0 (`itemPoints`).
+     */
+    bonus: boolean("bonus").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

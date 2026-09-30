@@ -1,5 +1,6 @@
 /** Section 3 of the mock — see `index.ts` for the layout. */
 import { countsAsCompleted,
+  evaluationTotal,
   configLock,
   isConfigEditable,
   isConfigFieldWritable,
@@ -311,6 +312,7 @@ interface MockItem {
   position: number;
   points: number;
   milestone: boolean;
+  bonus: boolean;
   questionId: string;
   questionVersionId: string;
   type: string;
@@ -422,6 +424,9 @@ function makeItems(count: number): MockItem[] {
       // shows one: the milestone separator is a shape of the list and has to
       // appear on the screenshot that documents it.
       milestone: i === 1 || i === 4,
+      // One bonus question (ADR-052) in a list long enough to keep others
+      // that count: the builder's candy toggle and the student's label.
+      bonus: count >= 4 && i === 2,
       questionId: q.id,
       questionVersionId: uuid(),
       type: q.type,
@@ -440,7 +445,7 @@ const retakesOnMock = (e: MockEvaluation): boolean =>
 
 export function makeRows(e: MockEvaluation, started: boolean): MockRowState[] {
   const roster = classroomRoster(e.classroomId);
-  const maxPoints = e.items.reduce((sum, i) => sum + i.points, 0);
+  const maxPoints = evaluationTotal(e.items);
   const retaking = retakesOnMock(e);
   return roster.map((student, index) => {
     // A deterministic spread: some are ahead, some have not opened it.
@@ -740,7 +745,7 @@ function seedStaffTest() {
 
 /** The teacher's own row: every question answered and submitted. */
 function staffRow(e: MockEvaluation): MockRowState {
-  const maxPoints = e.items.reduce((sum, i) => sum + i.points, 0);
+  const maxPoints = evaluationTotal(e.items);
   return {
     attemptId: uuid(),
     seatId: uuid(),
@@ -803,7 +808,8 @@ export const evaluationOr404 = (id: string) => {
   return e;
 };
 
-const totalPointsOf = (e: MockEvaluation) => e.items.reduce((sum, i) => sum + i.points, 0);
+/** The server's total: bonus items left out (ADR-052). */
+const totalPointsOf = (e: MockEvaluation) => evaluationTotal(e.items);
 const attemptCountOf = (e: MockEvaluation) => e.rows.filter((r) => r.attemptId !== null).length;
 
 export const toEvaluation = (e: MockEvaluation) => ({
@@ -1342,6 +1348,7 @@ on("GET", "/app/api/evaluations/:id/pull-template", (m) => {
     versionNumber: i.versionNumber,
     points: i.points,
     milestone: i.milestone,
+    bonus: i.bonus,
   });
   return {
     templateId: template.id,
@@ -1446,6 +1453,7 @@ function addItemsTo(e: MockEvaluation, questionIds: string[]): void {
       position: e.items.length,
       points: q.type === "code" ? 3 : 1,
       milestone: false,
+      bonus: false,
       questionId: q.id,
       questionVersionId: uuid(),
       type: q.type,
@@ -1462,6 +1470,7 @@ function patchItemOf(e: MockEvaluation, itemId: string, body: Record<string, unk
   if (!item) throw new MockError(404, "Item not found");
   if (typeof body.points === "number") item.points = body.points;
   if (typeof body.milestone === "boolean") item.milestone = body.milestone;
+  if (typeof body.bonus === "boolean") item.bonus = body.bonus;
   return item;
 }
 
@@ -1513,11 +1522,11 @@ on("DELETE", "/app/api/evaluations/:id/items/:itemId", (m) => {
 
 /**
  * The content the revision follows: the items (order, points, milestones,
- * versions) and every stored setting — everything but the title.
+ * bonus flags, versions) and every stored setting — everything but the title.
  */
 const contentOf = (e: MockEvaluation) =>
   JSON.stringify([
-    e.items.map((i) => [i.id, i.points, i.milestone, i.versionNumber]),
+    e.items.map((i) => [i.id, i.points, i.milestone, i.bonus, i.versionNumber]),
     e.settings,
     e.gradingScale,
     e.feedbackPolicy,

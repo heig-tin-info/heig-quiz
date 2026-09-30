@@ -14,6 +14,12 @@ the columns — and negative marking scores it with its own rule
 (`categorizeFraction`). "Every choice question" below now means `mcq` and
 `categorize` (`NEGATIVE_MARKING_TYPES`).
 
+Amended by [ADR-052](ADR-052-questions-bonus.md) (2026-09-30): a BONUS item
+is scored with the same negative rule, its final score floored at 0
+(`itemPoints`); the student is told as on any other item; a correction by
+hand stays within `[0, max]` (`scoresNegatively(type, on, bonus)`). §3's attempt-level
+floor is unchanged: one `attemptTotal`, bonus items included.
+
 ## Context
 
 The first MCQ configuration (docs/spec/04 §4.4, v1) carried a `penalty`

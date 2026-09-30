@@ -45,7 +45,14 @@ import {
   type RunnerOutcome,
   type RunnerService,
 } from "@quiz/core/server";
-import { attemptTotal, compilesPerMinute, gradeFromPoints, previewDurationS, round2 } from "@quiz/domain";
+import {
+  evaluationTotal,
+  attemptTotal,
+  compilesPerMinute,
+  gradeFromPoints,
+  itemPoints,
+  previewDurationS,
+} from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { DomainError } from "../http.js";
@@ -55,7 +62,6 @@ import {
   joinedItems,
   scaleOf,
   settingsOf,
-  totalPointsOf,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
@@ -405,7 +411,12 @@ async function gradeItem(
           details: result.details,
           ...(result.comment ? { comment: result.comment } : {}),
         }
-      : { status: "graded", points: round2(result.points), details: result.details };
+      : {
+          status: "graded",
+          // Floored on a bonus item, as the grading pass writes it (ADR-052).
+          points: itemPoints(result.points, item.item.bonus),
+          details: result.details,
+        };
   try {
     const first = await type.grade(config, answer, { ...ctx, runner });
     if (first.kind === "graded") return settle(first);
@@ -495,7 +506,7 @@ export async function gradePreview(
 
   // The total the student's own results would show: floored at 0 (ADR-026).
   const points = attemptTotal(scored);
-  const totalPoints = totalPointsOf(view.items);
+  const totalPoints = evaluationTotal(view.items);
   const scale = scaleOf(evaluation);
   return {
     seed,

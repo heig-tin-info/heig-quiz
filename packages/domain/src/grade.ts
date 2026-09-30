@@ -1,30 +1,28 @@
 /**
  * The Swiss grade scale (F-RES, F-EVAL-10, PLAN-MVP §7.1).
  *
- * A grade is 1.0 … 6.0 at one decimal. `linear` maps the full point total onto
- * the scale; `threshold` names the point count that earns a 6, so anything
- * above it is still a 6 — the way a teacher announces "18 points suffisent".
+ * A grade is 1.0 … 6.0 at one decimal. `linear` maps the point total onto
+ * the scale. The total leaves out the bonus items (ADR-052), so a student's
+ * points may exceed it: the grade is then capped at 6.
  */
+import type { EvaluationModeName } from "./evaluationConfig.js";
 import { round2, roundToTenth, type Rounding } from "./round.js";
 
-export type Scale =
-  | { kind: "linear"; rounding?: Rounding | undefined }
-  | { kind: "threshold"; threshold: number; rounding?: Rounding | undefined };
+/** How a grade is rounded; the scale itself is linear (ADR-052). */
+export type Scale = { rounding?: Rounding | undefined };
 
 export const MIN_GRADE = 1;
 export const MAX_GRADE = 6;
 
 /**
- * points -> Swiss grade 1.0 … 6.0 at 0.1.
- *  linear    : 1 + 5 * points / total
- *  threshold : 1 + 5 * points / threshold, capped at 6
- * `total <= 0` gives 1.0; negative points clamp to 1.0 (a caller that went
- * through {@link attemptTotal} never passes any).
+ * points -> Swiss grade 1.0 … 6.0 at 0.1: 1 + 5 * points / total, capped at 6
+ * (the points of the bonus items may carry a student past the total,
+ * ADR-052). `total <= 0` gives 1.0; negative points clamp to 1.0 (a caller
+ * that went through {@link attemptTotal} never passes any).
  */
 export function gradeFromPoints(points: number, total: number, scale: Scale): number {
-  const base = scale.kind === "threshold" ? scale.threshold : total;
-  if (!(base > 0)) return MIN_GRADE;
-  const raw = 1 + 5 * (points / base);
+  if (!(total > 0)) return MIN_GRADE;
+  const raw = 1 + 5 * (points / total);
   return Math.min(MAX_GRADE, Math.max(MIN_GRADE, roundToTenth(raw, scale.rounding ?? "nearest")));
 }
 
@@ -98,10 +96,57 @@ export function attemptTotal(points: Iterable<number>): number {
 }
 
 /**
+ * THE total of an evaluation (ADR-052): the points of its items, BONUS ITEMS
+ * LEFT OUT, rounded by {@link round2} (decision D13). The one definition
+ * behind the builder, the attempt view, the live dashboard, the results, the
+ * feedback page, the templates and the release snapshot. A student's points
+ * include the bonus items, so they may exceed it ("21 / 18 pts").
+ */
+export function evaluationTotal(items: Iterable<{ points: number; bonus: boolean }>): number {
+  return pointsWhere(items, false);
+}
+
+/** What the bonus items may add on top of {@link evaluationTotal}, rounded the same way. */
+export function bonusTotal(items: Iterable<{ points: number; bonus: boolean }>): number {
+  return pointsWhere(items, true);
+}
+
+function pointsWhere(items: Iterable<{ points: number; bonus: boolean }>, bonus: boolean): number {
+  let sum = 0;
+  for (const item of items) if (item.bonus === bonus) sum += item.points;
+  return round2(sum);
+}
+
+/**
+ * Readiness `no_graded_points` (ADR-052): an exam or an exercise whose
+ * {@link evaluationTotal} is 0 — every question a bonus, or none worth a
+ * point — has nothing to grade against, and is not opened. A poll is never
+ * graded, so it is never refused for it.
+ */
+export function lacksGradedPoints(mode: EvaluationModeName, total: number): boolean {
+  return mode !== "poll" && !(total > 0);
+}
+
+/**
+ * THE points of one automatically graded item: what its question type gave,
+ * rounded by {@link round2} to the granularity of `gradings.points`, and
+ * floored at 0 on a BONUS item (ADR-052). A bonus item is graded like any
+ * other — under negative marking (ADR-026) with the negative rule, so a wrong
+ * choice still lowers a partial score — but it can only add to the total,
+ * never take from it. Every automatic grade goes through this one function.
+ */
+export function itemPoints(raw: number, bonus: boolean): number {
+  const points = round2(raw);
+  // `+ 0` turns a `-0` into a `0`, as in {@link attemptTotal}.
+  return bonus ? Math.max(0, points) + 0 : points;
+}
+
+/**
  * The points a teacher may give one item by hand (F-GRADE-05): `[0, max]`,
  * or `[-max, max]` for a choice question of an evaluation with negative
  * marking (ADR-026) — the same range the automatic grading can reach, so a
- * correction can land on any score the rule itself could have given.
+ * correction can land on any score the rule itself could have given. A
+ * bonus item never scores below 0 (`scoresNegatively`, ADR-052).
  */
 export function overridePointsRange(
   maxPoints: number,

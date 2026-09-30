@@ -59,6 +59,8 @@ export const ResultsItem = z.object({
   internalName: z.string(),
   type: z.string(),
   points: z.number(),
+  /** ADR-052: a bonus item, whose points are not in `totalPoints`. */
+  bonus: z.boolean(),
   /** Mean of `points / maxPoints` over the validated gradings of this item. */
   successRate: z.number().nullable(),
 });
@@ -210,6 +212,8 @@ export const StudentResultItem = z.object({
   type: z.string(),
   points: z.number().nullable(),
   maxPoints: z.number(),
+  /** ADR-052: a bonus question, labelled as such; its points are not in the total. */
+  bonus: z.boolean(),
   verdict: Verdict.nullable(),
   /** The question as the student saw it, same seed, same shuffle. */
   student: z.unknown(),

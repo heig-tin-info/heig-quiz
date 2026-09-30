@@ -219,7 +219,6 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
             <FormError error={patch.error} title={t("eval.saveFailed")} />
             <ConfigSettings
               config={template}
-              totalPoints={data.totalPoints}
               patch={patch}
               presetOf={(preset) => presetSettings(preset, template.mode)}
               summary={presetSummary(template, t, isoDateTime)}

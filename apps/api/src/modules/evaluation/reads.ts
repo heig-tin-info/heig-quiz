@@ -27,6 +27,7 @@ import {
   round2,
   safeExamBrowserOn,
   drillAllowedOn,
+  evaluationTotal,
 } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
@@ -298,7 +299,10 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
     );
 }
 
-/** The total points of each evaluation, in one grouped query. */
+/**
+ * The total points of each evaluation, in one grouped query:
+ * `@quiz/domain#evaluationTotal` in SQL, bonus items left out (ADR-052).
+ */
 export async function totalPointsByEvaluation(
   db: Db,
   evaluationIds: readonly string[],
@@ -310,7 +314,12 @@ export async function totalPointsByEvaluation(
       points: sql<string>`sum(${evaluationItems.points})`,
     })
     .from(evaluationItems)
-    .where(inArray(evaluationItems.evaluationId, [...evaluationIds]))
+    .where(
+      and(
+        inArray(evaluationItems.evaluationId, [...evaluationIds]),
+        eq(evaluationItems.bonus, false),
+      ),
+    )
     .groupBy(evaluationItems.evaluationId);
   return new Map(rows.map((r) => [r.evaluationId, round2(Number(r.points))]));
 }
@@ -360,6 +369,7 @@ export async function itemRowsOf(db: DbOrTx, joined: readonly JoinedItem[]): Pro
     position: j.item.position,
     points: j.item.points,
     milestone: j.item.milestone,
+    bonus: j.item.bonus,
     questionId: j.question.id,
     questionVersionId: j.version.id,
     type: j.question.type,
@@ -369,16 +379,6 @@ export async function itemRowsOf(db: DbOrTx, joined: readonly JoinedItem[]): Pro
     deprecated: j.version.deprecatedAt !== null,
   }));
 }
-
-/**
- * The total points of an evaluation: the sum of its items' points, rounded by
- * `@quiz/domain#round2` like every other number of the platform (decision
- * D13). The one definition behind the builder, the attempt view, the live
- * dashboard, the results and the feedback page, which show the same number.
- * A caller holding `JoinedItem`s passes `items.map((i) => i.item)`.
- */
-export const totalPointsOf = (rows: readonly { points: number }[]): number =>
-  round2(rows.reduce((sum, r) => sum + r.points, 0));
 
 export const staleOf = (rows: readonly ItemRow[]): string[] =>
   rows.filter((r) => r.latestVersionNumber !== null && r.latestVersionNumber > r.versionNumber)
@@ -550,7 +550,7 @@ export async function evaluationDetail(
   return {
     evaluation: toEvaluation(row),
     items,
-    totalPoints: totalPointsOf(items),
+    totalPoints: evaluationTotal(items),
     staleItems: staleOf(items),
     attemptCount: attemptsSoFar,
     editable: isConfigEditable(row.state, attemptsSoFar),
@@ -572,15 +572,11 @@ export async function listEvaluations(
     .orderBy(desc(evaluations.createdAt));
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const itemStats = await db
-    .select({
-      evaluationId: evaluationItems.evaluationId,
-      n: count(),
-      points: sql<number>`coalesce(sum(${evaluationItems.points}), 0)`,
-    })
-    .from(evaluationItems)
-    .where(inArray(evaluationItems.evaluationId, ids))
-    .groupBy(evaluationItems.evaluationId);
+  // The same total as everywhere else, bonus items left out (ADR-052).
+  const [itemCounts, totals] = await Promise.all([
+    itemCountsByEvaluation(db, ids),
+    totalPointsByEvaluation(db, ids),
+  ]);
   // Students, not attempt rows: a retake (F-EVAL-15) is not a second student.
   const attemptStats = await db
     .select({
@@ -590,7 +586,6 @@ export async function listEvaluations(
     .from(attempts)
     .where(inArray(attempts.evaluationId, ids))
     .groupBy(attempts.evaluationId);
-  const items = new Map(itemStats.map((s) => [s.evaluationId, s]));
   const tries = new Map(attemptStats.map((s) => [s.evaluationId, s.n]));
   const templateRevisions = await templateRevisionsOf(db, rows);
   return rows.map((r) => ({
@@ -599,8 +594,8 @@ export async function listEvaluations(
     title: r.title,
     mode: r.mode,
     state: r.state,
-    itemCount: items.get(r.id)?.n ?? 0,
-    totalPoints: Number(items.get(r.id)?.points ?? 0),
+    itemCount: itemCounts.get(r.id) ?? 0,
+    totalPoints: totals.get(r.id) ?? 0,
     attemptCount: tries.get(r.id) ?? 0,
     opensAt: isoOrNull(r.opensAt),
     closesAt: isoOrNull(r.closesAt),
