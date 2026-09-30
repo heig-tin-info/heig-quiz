@@ -15,28 +15,10 @@
  * One page lives in a folder whose name has a space and an accent, so the
  * route's encoded paths are exercised by the mock too.
  */
+import type { Journal, JournalNavNode, JournalPage, JournalTocEntry } from "@quiz/contracts";
+
 import { rooms } from "./org";
 import { flags, iso, D, MockError, on, role } from "./runtime";
-
-/*
- * TODO(M4-01, #371): replace these local shapes with the journal contracts of
- * `packages/contracts/src/journal.ts` (`Journal`, `JournalPage`,
- * `JournalNavNode`) once #371 is merged, and move the two routes below from
- * `UNCHECKED` to `CHECKED` in `contract.test.ts`. They mirror the field names
- * of #371 and nothing more: they are NOT a second contract, and nothing
- * outside this file may import them.
- */
-interface NavNode {
-  path: string;
-  title: string;
-  pagePath: string | null;
-  children: NavNode[];
-}
-interface TocEntry {
-  id: string;
-  depth: number;
-  text: string;
-}
 
 /** The classroom that has a journal under `?journal=1`. */
 const JOURNAL_ROOM = "r1";
@@ -45,7 +27,7 @@ interface Fixture {
   path: string;
   title: string;
   html: string;
-  toc: TocEntry[];
+  toc: JournalTocEntry[];
   draft: boolean;
   /** Days from now; in the future, the page is hidden from students. */
   visibleInDays: number | null;
@@ -130,8 +112,8 @@ const PAGES: Fixture[] = [
 const hidden = (p: Fixture) => p.draft || (p.visibleInDays !== null && p.visibleInDays > 0);
 
 /** The navigation of the pages `pages` (F-JRN-06): folders as sections, their README as landing page. */
-function navOf(pages: Fixture[]): NavNode[] {
-  const root: NavNode[] = [];
+function navOf(pages: Fixture[]): JournalNavNode[] {
+  const root: JournalNavNode[] = [];
   for (const page of pages) {
     const parts = page.path.split("/");
     if (parts.length === 1) {
@@ -164,7 +146,7 @@ function journalOr404(classroomId: string, url: URL): boolean {
   return has;
 }
 
-on("GET", "/app/api/classrooms/:id/journal", (m, _body, url) => {
+on("GET", "/app/api/classrooms/:id/journal", (m, _body, url): Journal => {
   const id = m.groups!.id!;
   const has = journalOr404(id, url);
   if (studentPayload(url)) {
@@ -204,7 +186,7 @@ on("GET", "/app/api/classrooms/:id/journal", (m, _body, url) => {
   };
 });
 
-on("GET", "/app/api/classrooms/:id/journal/pages/(?<path>.+)", (m, _body, url) => {
+on("GET", "/app/api/classrooms/:id/journal/pages/(?<path>.+)", (m, _body, url): JournalPage => {
   if (!journalOr404(m.groups!.id!, url)) throw new MockError(404, "Not found");
   const path = decodeURIComponent(m.groups!.path!);
   const page = PAGES.find((p) => p.path === path);
