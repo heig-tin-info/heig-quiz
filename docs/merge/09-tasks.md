@@ -281,7 +281,7 @@ files it ports; writes en + fr for every string.
     of an installed organization: M2-04's `installation` handler calls it.
     It matches by `github_org_id`, by login only a row without one (an
     import), and never takes over a row holding the login under another
-    id: that row is marked `deleted`, its login moved aside (I65).
+    id: that row is marked `deleted`, its login moved aside (I66).
     Adapters: `listInstalledOrgs`, `resolveOrgInstallation` and the new
     `fetchInstallation` return `AppInstallation`; an optional `ReadOptions`
     (`HTTP_READ` = `noRateLimitWait`) on the HTTP-read adapters.

@@ -45,7 +45,7 @@ layers:
   LLM secret, return `appSlug`. **Quiz (M2-02)**: at most once a minute
   per organization (`HEAL_TTL_MS`, 60 s, in memory; the setup return
   drops it), since the Settings are re-read on every SSE hint; a login
-  that now resolves to another `github_org_id` is not ours (I65).
+  that now resolves to another `github_org_id` is not ours (I66).
 
 ### Account linking (`C:auth/github-link.ts`)
 - The App's own user-to-server OAuth (no OAuth App, no scope): signed state
