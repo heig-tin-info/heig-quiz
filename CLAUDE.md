@@ -250,8 +250,8 @@ internal bridge).
     hands it to git through the environment only; the user token of an account
     link reads the account once and is discarded (M2-03). Under
     `NODE_ENV=production`, `config.ts` refuses to start with an App id whose
-    key file is unreadable, a webhook secret under 32 characters or no App
-    slug; with no `GITHUB_*` set the GitHub features are off and the rest
+    key file is unreadable, a webhook secret under 32 characters, no App
+    slug, or no OAuth client id and secret (M2-03); with no `GITHUB_*` set the GitHub features are off and the rest
     starts (M1-02). `/webhooks/github` trusts nothing before its HMAC over the
     raw body is verified in constant time (M2-04).
 
