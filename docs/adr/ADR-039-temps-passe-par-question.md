@@ -23,7 +23,7 @@ measured it:
   for the reload (F-LIVE-06), never read as a time;
 - `answers.first_seen_at` is written on the first save or flag, not on
   display, and nothing reads it;
-- the journal (F-EVAL-13) records visibility and focus, for the teacher's
+- the attempt log (F-EVAL-13) records visibility and focus, for the teacher's
   eyes, rate-limited and unordered with the position.
 
 A time measured in the browser would be the student's clock, which
@@ -56,15 +56,15 @@ The attempt holds at most one open interval: `shown_item_id` since
 `shown_since`, both null or both set (`attempts_shown_ck`). A report ends
 the open interval at the server's `now` and, for an item of a RUNNING
 evaluation on an `in_progress` attempt, opens the next one. The interval is
-credited to `answers.dwell_ms`, an accumulator; there is no journal row per
-interval, and the journal is not read for the time.
+credited to `answers.dwell_ms`, an accumulator; there is no attempt-log row
+per interval, and the attempt log is not read for the time.
 
 A report of the item already open changes nothing: a re-sent position never
 cuts an interval in two. A report must name an item of the attempt's own
 evaluation, or it is a `404` that writes nothing — which also closes a hole
 the bookmark had: any `evaluation_items` id used to pass.
 
-The report takes the same gate as the journal (`assertOpen`): it is
+The report takes the same gate as the attempt log (`assertOpen`): it is
 accepted during a pause, refused with `410` past `deadline + 3 s`. Inside
 its transaction it locks the attempt row, then reads the attempt's and the
 evaluation's states in statements of their own — under READ COMMITTED their
@@ -188,7 +188,7 @@ are inert without them. The not-reached rule is one condition of the
   invariant 5 forbids it, and it is trivially forged.
 - **A heartbeat.** A write every few seconds per student during an exam, to
   learn what the idle cap already bounds.
-- **One journal row per interval.** A second journal with its own rate
+- **One attempt-log row per interval.** A second log with its own rate
   limit and ordering problems, re-aggregated at every read; the
   accumulator is what the statistics read.
 - **Closing on SSE disconnect.** A flaky network would cut honest

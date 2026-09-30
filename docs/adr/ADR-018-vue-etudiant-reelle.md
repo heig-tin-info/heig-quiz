@@ -9,7 +9,9 @@ the evaluation page's own button (and the read-only preview beside it) and
 makes the heading rename itself. Decisions 1 and 2 below are the ones they
 touch. Three later addenda follow (2026-09-24, 2026-09-25: the stateless
 preview of a whole evaluation, 2026-09-27). Decision 4 is amended by
-ADR-020 (presence counts a body in the room).
+ADR-020 (presence counts a body in the room). Wording aligned 2026-09-30
+(D16, `docs/merge/08-decisions.md`): the attempt's "journal" is now called
+the attempt log, "journal" meaning only a classroom's journal (ADR-049).
 
 ## Context
 
@@ -104,7 +106,7 @@ teacher who submits their test attempt has tested that quiz once, for ever.
    the seat they hold in the classroom is a `staff` seat, and the row deleted
    is keyed on their own user id. A student's attempt is unreachable from this
    route in any state, and a teacher cannot reach a colleague's. The dependent
-   rows — answers, journal entries, gradings — go with it through the
+   rows — answers, attempt-log entries, gradings — go with it through the
    `ON DELETE CASCADE` the schema already declares. Audited as
    `attempt.staff_reset`.
 
@@ -169,7 +171,7 @@ readable ("Preview as student" vs "View as student").
    must not depend on who is asking; an explicit reset does the same job
    without touching the property.
 6. **`PUT`-ing the attempt back to `not_started` instead of deleting it.** The
-   answers, the journal and the gradings would survive, so the second walk
+   answers, the attempt log and the gradings would survive, so the second walk
    would start half-filled and the "does the empty state look right?" question
    — one of the reasons to walk it — could never be asked again.
 
@@ -380,7 +382,7 @@ visible banner, and availability in EVERY state of the evaluation.
    answers `{ seed, durationS, view }`. `view` is `live.previewView` under
    that seed — the builder of `attemptView`, so the item order, the choice
    shuffles and `toStudent` (invariant 4) are exactly an attempt's.
-2. **Nothing is written.** No attempt, no answer, no journal entry, no
+2. **Nothing is written.** No attempt, no answer, no attempt-log entry, no
    grading, no audit entry: the four routes are reads behind a POST
    (`readOnly: true`, no refresh hint). A db test counts the rows before and
    after a whole preview.
@@ -408,7 +410,7 @@ visible banner, and availability in EVERY state of the evaluation.
    filtering and judging are the SAME helpers as `POST /attempts/:id/run`
    (`live/visibleRun.ts`, extracted for this). Budgets: the question's own
    runs per minute, and ten gradings per minute, per teacher, in memory — an
-   attempt counts its runs in its journal, and a preview has none.
+   attempt counts its runs in its attempt log, and a preview has none.
 6. **Staff only, every state.** Every route loads the evaluation through
    `loadEvaluation` (invariant 6): a teacher off the staff gets the 404 of a
    missing evaluation. The preview touches nothing a student can see, so it
@@ -421,7 +423,7 @@ visible banner, and availability in EVERY state of the evaluation.
 
 The autosave and its revision race, the server clock and the 410 gate, the
 server-side lock enforcement (the player's reducer enforces the navigation
-rules, the server does not re-check them), the lobby, pause, the journal and
+rules, the server does not re-check them), the lobby, pause, the attempt log and
 the grading panel. That is the walk of decision 1 above, which stays: the two
 answer different questions, "is this the quiz I meant" and "does the exam
 path work".

@@ -84,7 +84,7 @@ reads a netlist on the command line and writes a table on stdout.
    only the visible stimuli, never the reference's output — and
    `POST /app/api/attempts/:id/simulate` runs it with `priority: "interactive"`,
    against the question's `simulationsPerMinute` budget counted in the attempt
-   journal, and hands the `RunnerOutcome` back raw. The live module knows
+   log, and hands the `RunnerOutcome` back raw. The live module knows
    nothing of netlists; `code` keeps its older, case-filtering `/run`.
 
 7. **A reference that does not simulate is the teacher's problem.** When the

@@ -124,7 +124,7 @@ Some GETs write, and each is handled:
 
 - **Presence.** The SSE watch joins the room (`presence.join`), and
   `GET /attempts/:id` — the attempt page, reloaded — stamps the attempt's
-  `present_at` (`markPresent`), as does the journal's `reconnect` event. A
+  `present_at` (`markPresent`), as does the attempt log's `reconnect` event. A
   session acting as the student is not the student in the room: it does
   none of the three, in development either. The live dashboard never shows
   the student present because somebody looked. (Entering an attempt, a
