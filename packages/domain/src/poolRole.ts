@@ -13,8 +13,12 @@ export type PoolRoleName = "reader" | "contributor" | "owner";
 
 /** What the database knows about one (pool, account) pair. */
 export interface PoolRoleFacts {
-  /** A platform administrator reaches every pool as an owner. */
-  isAdmin: boolean;
+  /**
+   * The caller reaches everyone's content: an administrator with Super
+   * Powers on (ADR-054). Such a caller is an owner of every pool; an admin
+   * WITHOUT them resolves like any teacher.
+   */
+  reachesAll: boolean;
   /** The account is `pools.owner_id`. */
   isOwner: boolean;
   /** The `pool_members` row, when there is one. */
@@ -28,7 +32,7 @@ export interface PoolRoleFacts {
 /**
  * Resolved from the strongest claim to the weakest:
  *
- *   1. `owner` — an admin, `pools.owner_id`, or a member row saying `owner`;
+ *   1. `owner` — an admin with Super Powers (ADR-054), `pools.owner_id`, or a member row saying `owner`;
  *   2. the member role, as the owner of the pool set it. An explicit seat
  *      WINS over the course-staff rule below: naming a colleague `reader`
  *      has to mean something;
@@ -41,7 +45,7 @@ export interface PoolRoleFacts {
  * DO, never whether they may see the pool.
  */
 export function effectivePoolRole(facts: PoolRoleFacts): PoolRoleName {
-  if (facts.isAdmin || facts.isOwner || facts.memberRole === "owner") return "owner";
+  if (facts.reachesAll || facts.isOwner || facts.memberRole === "owner") return "owner";
   if (facts.memberRole) return facts.memberRole;
   if (facts.isCourseStaff) return "contributor";
   return "reader";

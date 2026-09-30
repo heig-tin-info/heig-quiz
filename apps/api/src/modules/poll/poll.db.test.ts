@@ -311,16 +311,19 @@ describe("creating and starting a poll", () => {
     // Nor does the generic evaluation surface hand it to anyone, its owner
     // included: it has no classroom to be loaded through.
     expect((await get(`/app/api/evaluations/${evaluationId}`, teacher.headers)).statusCode).toBe(404);
-    // An admin reaches it.
-    const admin = await server.signIn("admin");
+    // An admin reaches it with Super Powers (ADR-054), and without them
+    // like any other teacher: not at all.
+    const plainAdmin = await server.signIn("admin");
+    expect((await get(`/app/api/evaluations/${evaluationId}/poll`, plainAdmin.headers)).statusCode).toBe(404);
+    const admin = await server.signInWithSuperPowers();
     expect((await get(`/app/api/evaluations/${evaluationId}/poll`, admin.headers)).statusCode).toBe(200);
     // The owner's live stream is authorised on it (the projection's tally).
     const { findReachableEvaluation } = await import("../guards.js");
     expect(
-      await findReachableEvaluation(server.app.db, { id: teacher.id, role: "teacher" }, evaluationId),
+      await findReachableEvaluation(server.app.db, { id: teacher.id, role: "teacher", reach: "seats" }, evaluationId),
     ).toMatchObject({ staff: true });
     expect(
-      await findReachableEvaluation(server.app.db, { id: stranger.id, role: "teacher" }, evaluationId),
+      await findReachableEvaluation(server.app.db, { id: stranger.id, role: "teacher", reach: "seats" }, evaluationId),
     ).toBeNull();
   });
 

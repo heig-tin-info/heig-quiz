@@ -36,7 +36,8 @@ en attente et le détenteur de la nouvelle adresse la reprend. Retirer un
 
 ## Voir la plateforme comme un étudiant
 
-Un administrateur peut **Copier un lien en tant que cet étudiant** sur la
+Un administrateur dont les **Super Powers** sont actifs peut **Copier un lien
+en tant que cet étudiant** sur la
 ligne d'un étudiant rattaché. Le lien ouvre la plateforme comme cet étudiant
 pour une heure ; il sert une fois, dans les cinq minutes. Collez-le
 uniquement dans une **fenêtre privée** : une session vaut pour tout le

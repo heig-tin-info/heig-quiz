@@ -12,6 +12,7 @@ import { CoachLayer } from "./coach/CoachLayer";
 import { ComingSoon } from "./ComingSoon";
 import { useRoute, type Navigate, type Route, type RouteOf } from "./router";
 import { ImpersonationBanner, Shell, StudentViewBanner } from "./Shell";
+import { SuperPowersBanner } from "./SuperPowers";
 import {
   enterStudentView,
   leaveStudentView,
@@ -488,16 +489,22 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   if (FULL_SCREEN.has(shown.view)) {
     // The attempt has no frame, and so no Teacher | Student switch: the
     // banner carries the way back, which leaves the attempt open (ADR-018).
-    return inStudentView && shown.view === "attempt" ? (
-      <StudentViewBanner onLeave={toggleView}>{page}</StudentViewBanner>
-    ) : (
-      <ImpersonationBanner me={me.data}>{page}</ImpersonationBanner>
+    return (
+      <SuperPowersBanner me={me.data}>
+        {inStudentView && shown.view === "attempt" ? (
+          <StudentViewBanner onLeave={toggleView}>{page}</StudentViewBanner>
+        ) : (
+          <ImpersonationBanner me={me.data}>{page}</ImpersonationBanner>
+        )}
+      </SuperPowersBanner>
     );
   }
 
   // ADR-034: an admin acting as this student says so on every page, the
-  // full-screen ones above included (the banner is a no-op otherwise).
+  // full-screen ones above included (the banner is a no-op otherwise); and
+  // an admin with Super Powers (ADR-054) sees them above everything.
   return (
+    <SuperPowersBanner me={me.data}>
     <ImpersonationBanner me={me.data}>
     <Shell
       me={me.data}
@@ -516,5 +523,6 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
         returned above and never gets a bubble. */}
     <CoachLayer me={me.data} view={shown.view} teacherUi={teacherUi} />
     </ImpersonationBanner>
+    </SuperPowersBanner>
   );
 }

@@ -34,7 +34,11 @@ import {
   deleteSession,
   findSessionUser,
   type SessionAuth,
+  type SessionState,
 } from "./session.js";
+import { superPowersRoutes } from "./superPowers.js";
+import { isoOrNull } from "../clock.js";
+import { callerFor, callerOf, mayHoldSuperPowers, type Caller } from "../modules/guards.js";
 
 const LOGIN_STASH_COOKIE = "quiz_login";
 const LOGOUT_PATH = "/app/auth/logout";
@@ -49,8 +53,13 @@ declare module "fastify" {
      * token in `Authorization: Bearer` (ADR-022). Null when anonymous.
      */
     authVia: "session" | "token" | null;
-    /** What the browser session is (ADR-027); null for a token or when anonymous. */
-    auth: SessionAuth | null;
+    /**
+     * What the browser session is (ADR-027) and its Super Powers (ADR-054);
+     * null for a token or when anonymous.
+     */
+    auth: SessionState | null;
+    /** `user` and its reach (ADR-054), set with it; null when anonymous. Read through `callerOf`. */
+    caller: Caller | null;
   }
   interface FastifyContextConfig {
     /**
@@ -88,6 +97,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   app.decorateRequest("user", null);
   app.decorateRequest("authVia", null);
   app.decorateRequest("auth", null);
+  app.decorateRequest("caller", null);
   const internalSecret = randomBytes(32).toString("base64url");
   app.decorate("internalCallSecret", internalSecret);
   const isInternalCall = (req: FastifyRequest) => {
@@ -114,6 +124,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       }
       req.user = found.user;
       req.authVia = "token";
+      req.caller = callerFor(found.user, null, app.clock.now());
       return;
     }
     const token = req.cookies[SESSION_COOKIE];
@@ -123,6 +134,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // would sign every teacher out mid-flow and turn our 5xx into 401.
     const found = await findSessionUser(app.db, token, {
       renewTtlHours: config.SESSION_TTL_HOURS,
+      now: app.clock.now(),
     });
     if (!found) return;
     // Default deny (ADR-027): on a route that does not serve its kind, the
@@ -146,6 +158,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     req.user = found.user;
     req.authVia = "session";
     req.auth = found.auth;
+    req.caller = callerFor(found.user, found.auth, app.clock.now());
     // Mirror the sliding renewal on the cookies, else the browser drops them
     // while the server-side session is still alive.
     if (found.renewedTo) {
@@ -277,6 +290,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   await sebRoutes(app, config);
   await oauthRoutes(app, config);
   await impersonationRoutes(app);
+  await superPowersRoutes(app);
 
   // Development persona picker. Registered only when explicitly enabled, and
   // config.ts refuses the flag under NODE_ENV=production.
@@ -291,7 +305,8 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     async (req, reply) => {
       const token = req.cookies[SESSION_COOKIE];
       // The audit entry is `deleteSession`'s: `auth.logout`, or the end of an impersonation.
-      if (token) await deleteSession(app.db, token);
+      // And `superpowers.disabled` (`logout`) when they were still on (ADR-054).
+      if (token) await deleteSession(app.db, token, app.clock.now());
       reply.clearCookie(SESSION_COOKIE, { path: "/" });
       reply.clearCookie(CSRF_COOKIE, { path: "/" });
       return reply.code(204).send();
@@ -327,6 +342,10 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
           kind: req.auth?.kind ?? "portal",
           evaluationId: req.auth?.evaluationId ?? null,
           readOnly: delegated(req.auth) && !development,
+          superPowersUntil: isoOrNull(
+            callerOf(req).reach === "all" ? (req.auth?.superPowersUntil ?? null) : null,
+          ),
+          superPowersAvailable: mayHoldSuperPowers(u, req.auth),
         },
       };
     },

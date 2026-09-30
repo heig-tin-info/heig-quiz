@@ -62,9 +62,27 @@ export interface Me {
    * The session this request rode on; `evaluationId` is set on a `seb` one
    * only, and `readOnly` says the server refuses its writes (an
    * `impersonation` outside development, ADR-034). Absent: `portal`.
+   * `superPowersUntil` is the server's end of this session's Super Powers
+   * (ADR-054), ISO; null when they are off. The browser only counts down
+   * to it for display: the server decides, by its own clock.
    */
-  session?: { kind: SessionKind; evaluationId: string | null; readOnly: boolean };
+  session?: {
+    kind: SessionKind;
+    evaluationId: string | null;
+    readOnly: boolean;
+    superPowersUntil: string | null;
+    /** This session may switch Super Powers on: an admin's own portal session (ADR-054). */
+    superPowersAvailable: boolean;
+  };
 }
+
+/**
+ * `POST /app/api/me/super-powers` switches them on for one hour, and
+ * `DELETE` off (ADR-054): an admin's own portal session reaches every
+ * course and pool until then. Neither takes a body; both answer this.
+ */
+export const SuperPowersState = z.object({ superPowersUntil: z.string().nullable() });
+export type SuperPowersState = z.infer<typeof SuperPowersState>;
 
 /**
  * `POST /app/api/classrooms/:id/roster/:eid/impersonation` (ADR-034): the

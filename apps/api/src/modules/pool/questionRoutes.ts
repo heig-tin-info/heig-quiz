@@ -19,7 +19,7 @@ import {
 
 import { iso, isoOrNull } from "../../clock.js";
 import { questions } from "../../db/schema.js";
-import { findAccessiblePool, requirePoolRole } from "../guards.js";
+import { callerOf, findAccessiblePool, requirePoolRole } from "../guards.js";
 import { invalid } from "../http.js";
 import { poolChanged } from "./events.js";
 import * as service from "./service.js";
@@ -285,7 +285,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       async ({ req, reply, body, scope }) => {
         // The target pool must be reachable too, or a copy would be a way to
         // write into someone else's pool.
-        const target = await findAccessiblePool(app.db, req.user!, body.targetPoolId);
+        const target = await findAccessiblePool(app.db, callerOf(req), body.targetPoolId);
         if (!target) return reply.code(404).send({ error: "not_found" });
         // Reading the source is enough to copy FROM it; writing the copy needs a
         // contributor's seat on the TARGET.

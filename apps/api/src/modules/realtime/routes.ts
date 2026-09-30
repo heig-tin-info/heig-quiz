@@ -29,7 +29,14 @@ import { iso } from "../../clock.js";
 import { classrooms, courses, enrollments, evaluations, pools } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
 import { SITTING, delegated } from "../../auth/session.js";
-import { accessWhere, findReachableEvaluation, poolAccess, sitRefusal, staffAccess } from "../guards.js";
+import {
+  accessWhere,
+  callerOf,
+  findReachableEvaluation,
+  poolAccess,
+  sitRefusal,
+  staffAccess,
+} from "../guards.js";
 import * as live from "../live/service.js";
 import * as bus from "./bus.js";
 import { presence } from "./presence.js";
@@ -195,10 +202,14 @@ class TopicIndex {
  * live subjects.
  */
 async function topicsOf(app: FastifyInstance, req: FastifyRequest): Promise<Set<string>> {
-  const me = req.user!;
+  // Computed once, at connection, with the reach of that moment: Super
+  // Powers switched on or off close the stream (ADR-054), so it comes back
+  // with the topics of the new reach.
+  const me = callerOf(req);
   const topics = new Set<string>([`user:${me.id}`]);
   if (me.role === "teacher" || me.role === "admin") {
     topics.add(`teacher:${me.id}`);
+    // The admin ROLE's own topic (the user lists), with or without Super Powers.
     if (me.role === "admin") topics.add("admin");
     const own = await app.db
       .select({ courseId: courses.id, roomId: classrooms.id })
@@ -246,7 +257,7 @@ async function resolveWatch(
   const separator = subject.indexOf(":");
   const [kind, id] = [subject.slice(0, separator), subject.slice(separator + 1)];
   if (kind === "evaluation") {
-    const scope = await findReachableEvaluation(app.db, req.user!, id);
+    const scope = await findReachableEvaluation(app.db, callerOf(req), id);
     if (!scope || studentOnPoll(scope)) return null;
     return {
       watch: { kind: "evaluation", evaluationId: id },
@@ -260,7 +271,7 @@ async function resolveWatch(
     // door. What the subject adds is the side of the room: this connection
     // draws the waiting room, so it receives no `dashboard.*` whoever opened
     // it, and it counts as present when its user holds a seat.
-    const scope = await findReachableEvaluation(app.db, req.user!, id);
+    const scope = await findReachableEvaluation(app.db, callerOf(req), id);
     if (!scope || studentOnPoll(scope)) return null;
     const seat = await live.participantOf(app.db, scope.evaluation, req.user!.id);
     return {
@@ -273,7 +284,7 @@ async function resolveWatch(
   if (kind === "attempt") {
     const attempt = await live.attemptById(app.db, id);
     if (!attempt) return null;
-    const scope = await findReachableEvaluation(app.db, req.user!, attempt.evaluationId);
+    const scope = await findReachableEvaluation(app.db, callerOf(req), attempt.evaluationId);
     if (!scope) return null;
     // A student watches their OWN attempt; a staff member watches any of
     // the evaluation's, which is what the dashboard's cell inspector needs.

@@ -55,7 +55,7 @@ const search = (extra: Record<string, unknown> = {}) =>
   >[3];
 
 /** The caller of `listPools`: the seeded owner, an ordinary teacher. */
-const viewer = () => ({ id: ownerId, role: "teacher" });
+const viewer = () => ({ id: ownerId, role: "teacher", reach: "seats" as const });
 
 let db: Db;
 let ownerId: string;

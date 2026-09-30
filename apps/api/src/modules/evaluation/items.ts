@@ -28,6 +28,7 @@ import {
 } from "./shared.js";
 import { byId, classroomIdOf, type JoinedItem, joinedItems, itemRows } from "./reads.js";
 import type { ItemRecord } from "./shared.js";
+import type { Caller } from "../guards.js";
 
 /**
  * THE pools a home may draw questions from (F-EVAL-01, ADR-031 addendum c):
@@ -69,7 +70,7 @@ function homeOf(row: EvaluationRecord): CopyHome {
 export async function listCoursePools(
   db: Db,
   home: CopyHome,
-  viewer: { id: string; role: string },
+  viewer: Caller,
 ): Promise<PoolSummary[]> {
   const ids = await coursePoolIds(db, home);
   if (ids.size === 0) return [];

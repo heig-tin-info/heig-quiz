@@ -101,6 +101,13 @@ export type AuditAction =
   | "roster.self_enroll"
   | "roster.unclaim"
   | "roster.update"
+  /**
+   * An admin switched Super Powers on for one portal session (ADR-054):
+   * actor and subject the admin, `payload.until` the server's end of it.
+   */
+  | "superpowers.enabled"
+  /** …and they went off: `payload.reason` is `manual`, `expired` or `logout`. */
+  | "superpowers.disabled"
   | "tag.describe"
   /** An admin paused, resumed or changed the period of a scheduled task (D10; `payload` the patch). */
   | "task.configure"

@@ -46,6 +46,7 @@ import {
 } from "../../db/schema.js";
 import { listPools } from "../pool/service.js";
 import type { EvaluationRecord, ItemRecord, DbOrTx } from "./shared.js";
+import type { Caller } from "../guards.js";
 
 /**
  * The roster seats of an evaluation, as a condition on `enrollments`: the
@@ -496,7 +497,7 @@ async function selfOf(
 export async function editableQuestionIdsOf(
   db: Db,
   items: readonly ItemRow[],
-  viewer: { id: string; role: string },
+  viewer: Caller,
 ): Promise<string[]> {
   if (items.length === 0) return [];
   const rows = await db
@@ -542,7 +543,7 @@ async function rosterOf(
 export async function evaluationDetail(
   db: Db,
   row: EvaluationRecord,
-  viewer: { id: string; role: string },
+  viewer: Caller,
   enrolled: number,
 ): Promise<EvaluationDetail> {
   const items = await itemRows(db, row.id);

@@ -90,6 +90,7 @@ nav = [
       { "ADR-049 The journal, GitHub as the source" = "adr/ADR-049-journal-source-github.md" },
       { "ADR-050 Publishing an exercise's correction" = "adr/ADR-050-publier-la-correction-d-un-exercice.md" },
       { "ADR-051 Attested kiosk stations" = "adr/ADR-051-postes-kiosque-attestes.md" },
+      { "ADR-054 Super Powers of an admin" = "adr/ADR-054-super-powers-admin.md" },
     ] },
     { "Classroom merge" = [
       { "Overview" = "merge/README.md" },

@@ -830,13 +830,19 @@ describe("pool sharing", () => {
   let coOwner: Actor;
   let outsider: Actor;
   let staffer: Actor;
+  /** An admin with Super Powers on (ADR-054)... */
   let admin: Actor;
+  /** ...and one without, who reaches what a teacher reaches. */
+  let plainAdmin: Actor;
   let shared: string;
   const emails = new Map<string, string>();
 
-  async function actor(role: "teacher" | "admin", label: string): Promise<Actor> {
+  async function actor(role: "teacher" | "admin" | "superpowers", label: string): Promise<Actor> {
     const email = `${label}-${crypto.randomUUID().slice(0, 8)}@heig.test`;
-    const who = await server.signIn(role, email);
+    const who =
+      role === "superpowers"
+        ? await server.signInWithSuperPowers(email)
+        : await server.signIn(role, email);
     emails.set(who.id, email);
     return who;
   }
@@ -848,7 +854,8 @@ describe("pool sharing", () => {
     coOwner = await actor("teacher", "co-owner");
     outsider = await actor("teacher", "outsider");
     staffer = await actor("teacher", "staffer");
-    admin = await actor("admin", "admin");
+    admin = await actor("superpowers", "admin");
+    plainAdmin = await actor("admin", "plain-admin");
 
     const created = await server.app.inject({
       method: "POST",
@@ -933,7 +940,7 @@ describe("pool sharing", () => {
     expect(reset.json().color).toBeNull();
   });
 
-  it("keeps the admin's shelf to their own pools unless they ask for all", async () => {
+  it("keeps an admin to their own shelf unless their Super Powers are on (ADR-054)", async () => {
     const list = async (who: Actor, query = "") => {
       const res = await server.app.inject({
         method: "GET",
@@ -943,22 +950,15 @@ describe("pool sharing", () => {
       expect(res.statusCode).toBe(200);
       return res.json().map((p: { id: string }) => p.id) as string[];
     };
-    // Someone else's pool, the admin holding no seat on it: not on the shelf...
-    expect(await list(admin)).not.toContain(shared);
-    expect(await list(admin, "?scope=mine")).not.toContain(shared);
-    // ...unless the admin asks for every pool of the instance.
-    expect(await list(admin, "?scope=all")).toContain(shared);
-    // A teacher asking for all gets their own list, nothing more.
-    expect(await list(outsider, "?scope=all")).not.toContain(shared);
-    // And the pool is still the admin's to open, list or no list.
+    // Someone else's pool, the admin holding no seat on it: neither on the
+    // shelf nor there at all — the 404 of a missing pool (invariant 6).
+    expect(await list(plainAdmin)).not.toContain(shared);
+    expect((await readPool(shared, plainAdmin)).statusCode).toBe(404);
+    // The `?scope=all` switch of #63 is gone: asking for it changes nothing.
+    expect(await list(plainAdmin, "?scope=all")).not.toContain(shared);
+    // With Super Powers, every pool of the instance is on the shelf, and opens.
+    expect(await list(admin)).toContain(shared);
     expect((await readPool(shared, admin)).statusCode).toBe(200);
-
-    const bad = await server.app.inject({
-      method: "GET",
-      url: "/app/api/pools?scope=everything",
-      headers: admin.headers,
-    });
-    expect(bad.statusCode).toBe(400);
   });
 
   it("offers an owner the teachers not yet seated, by name or address", async () => {

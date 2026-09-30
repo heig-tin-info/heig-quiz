@@ -189,10 +189,11 @@ const scenes = [
   { name: "classroom-rename-hover", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^rename classroom/i }).first().hover() },
   { name: "classroom-rename", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^rename classroom/i }).first().click() },
   { name: "classroom-row-menu", role: "teacher", path: "/classrooms/r1?tab=roster", fold: true, act: (p) => openRowMenu(p, /^Actions for /) },
-  // ADR-034: an admin's row menu offers the impersonation link; the private
-  // window it opens shows the student's portal under the mode banner.
-  { name: "classroom-row-menu-admin", role: "admin", path: "/classrooms/r1?tab=roster", fold: true, act: (p) => openRowMenu(p, /^Actions for /) },
-  { name: "impersonation-link", role: "admin", path: "/classrooms/r1?tab=roster", fold: true, act: async (p) => {
+  // ADR-034: an admin's row menu offers the impersonation link — with Super
+  // Powers on (ADR-054); the private window it opens shows the student's
+  // portal under the mode banner.
+  { name: "classroom-row-menu-admin", role: "admin", path: "/classrooms/r1?tab=roster&superpowers=1", fold: true, act: (p) => openRowMenu(p, /^Actions for /) },
+  { name: "impersonation-link", role: "admin", path: "/classrooms/r1?tab=roster&superpowers=1", fold: true, act: async (p) => {
       await openRowMenu(p, /^Actions for /);
       await p.getByRole("menuitem", { name: /as this student|en tant que cet étudiant/ }).first().click();
       await p.getByRole("dialog").waitFor();
@@ -853,6 +854,14 @@ const scenes = [
 
   // Settings and administration
   { name: "settings", role: "teacher", path: "/settings" },
+  // ADR-054: an admin's Super Powers, off and on, and the red banner above
+  // everything — its minutes, its last-five-minutes countdown, and stacked
+  // over the student view's banner.
+  { name: "settings-admin", role: "admin", path: "/settings?superpowers=0&lastminutes=0" },
+  { name: "settings-superpowers", role: "admin", path: "/settings?superpowers=1&lastminutes=0" },
+  { name: "superpowers-banner", role: "admin", path: "/?superpowers=1&lastminutes=0", fold: true },
+  { name: "superpowers-ending", role: "admin", path: "/?superpowers=0&lastminutes=1", fold: true },
+  { name: "superpowers-student-view", role: "admin", path: "/?superpowers=1&lastminutes=0", fold: true, ss: { "quiz-view-as": "student", "quiz-view-as-return": "/" } },
   // The App channel's toast (ADR-030 §a): `?notify=1` makes a student join
   // PRG1-2026 a moment after the page loads, and the bell's toast shows it.
   {

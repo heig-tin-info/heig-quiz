@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { effectivePoolRole, poolRoleAllows, type PoolRoleFacts } from "./poolRole.js";
 
 const nobody: PoolRoleFacts = {
-  isAdmin: false,
+  reachesAll: false,
   isOwner: false,
   memberRole: null,
   isCourseStaff: false,
@@ -11,9 +11,9 @@ const nobody: PoolRoleFacts = {
 };
 
 describe("effectivePoolRole", () => {
-  it("makes an owner of the pool's owner, of an admin and of a member-owner", () => {
+  it("makes an owner of the pool's owner, of an admin with Super Powers and of a member-owner", () => {
     expect(effectivePoolRole({ ...nobody, isOwner: true })).toBe("owner");
-    expect(effectivePoolRole({ ...nobody, isAdmin: true })).toBe("owner");
+    expect(effectivePoolRole({ ...nobody, reachesAll: true })).toBe("owner");
     expect(effectivePoolRole({ ...nobody, memberRole: "owner" })).toBe("owner");
   });
 

@@ -407,6 +407,7 @@ export async function seedDemoContent(
   await poolService.setCoursePools(db, ctx.courseId, linked, undefined, {
     id: ctx.teacherId,
     role: "teacher",
+    reach: "seats",
   });
 
   for (const spec of EVALUATIONS) {

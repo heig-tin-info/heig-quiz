@@ -12,7 +12,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { registerForTests } from "@quiz/registry/server";
 
-import { attempts, auditLog, enrollments, launchTickets, sessions, users } from "../db/schema.js";
+import { attempts, auditLog, courseStaff, enrollments, launchTickets, sessions, users } from "../db/schema.js";
 import { presence } from "../modules/realtime/presence.js";
 import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
@@ -36,7 +36,8 @@ interface World {
 async function world(env: Record<string, string> = {}): Promise<World> {
   const server = await testServer(env);
   server.clock.set("2026-09-21T08:00:00.000Z");
-  const admin = await server.signIn("admin");
+  // A link to act as a student takes Super Powers (ADR-054).
+  const admin = await server.signInWithSuperPowers();
   const teacher = await server.signIn("teacher");
   const student = await server.signIn("student");
   const seed = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id] });
@@ -152,15 +153,23 @@ describe("in production (no development login)", () => {
       expect(await issue(w, w.admin, await seat(null))).toBe(404);
     });
 
+    it("is refused to an admin without Super Powers, even on their own course (ADR-054)", async () => {
+      const plain = await w.server.signIn("admin");
+      await w.server.app.db.insert(courseStaff).values({ courseId: w.seed.courseId, userId: plain.id });
+      const res = await call(w.server, "POST", linkUrl(w), plain.headers);
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error).toBe("super_powers_required");
+    });
+
     it("opens nothing once its actor is no longer an admin", async () => {
-      const other = await w.server.signIn("admin");
+      const other = await w.server.signInWithSuperPowers();
       const path = (await issue(w, other)) as string;
       await w.server.app.db.update(users).set({ role: "teacher" }).where(eq(users.id, other.id));
       expect(await open(w, path)).toBeNull();
     });
 
     it("stops working the moment its actor is no longer an admin", async () => {
-      const other = await w.server.signIn("admin");
+      const other = await w.server.signInWithSuperPowers();
       const session = (await open(w, (await issue(w, other)) as string))!;
       expect((await call(w.server, "GET", "/app/api/me", session)).statusCode).toBe(200);
       await w.server.app.db.update(users).set({ role: "teacher" }).where(eq(users.id, other.id));
@@ -184,6 +193,8 @@ describe("in production (no development login)", () => {
         kind: "impersonation",
         evaluationId: null,
         readOnly: true,
+        superPowersUntil: null,
+        superPowersAvailable: false,
       });
       const [row] = await w.server.app.db
         .select()

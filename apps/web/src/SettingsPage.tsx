@@ -16,6 +16,7 @@ import {
 import { NotificationSettingsSection } from "./notifications/NotificationSettings";
 import { useToast } from "./notify";
 import { meKey } from "./queryKeys";
+import { SuperPowersSection } from "./SuperPowers";
 import { setThemeChoice, useThemeChoice } from "./theme";
 import {
   Avatar,
@@ -221,6 +222,8 @@ export function SettingsPage({ me }: { me: Me }) {
       </section>
 
       <PreferencesCard me={me} />
+      {/* ADR-054: the server says whether this session may hold them. */}
+      {me.session?.superPowersAvailable ? <SuperPowersSection me={me} /> : null}
       <NotificationSettingsSection />
       {me.role === "student" ? null : (
         <>

@@ -7,7 +7,7 @@ import { AvatarMime } from "@quiz/contracts";
 import { audit } from "../audit.js";
 import { avatars } from "../db/schema.js";
 import { publish } from "../events.js";
-import { seesUser } from "./guards.js";
+import { callerOf, seesUser } from "./guards.js";
 import { INERT_IMAGE_HEADERS, sniffImage } from "./pool/assets.js";
 
 /** `AvatarMime` is the one list (B-19); `app.ts` parses the same set. */
@@ -119,7 +119,7 @@ export async function avatarPlugin(app: FastifyInstance) {
         .select()
         .from(avatars)
         .where(
-          and(eq(avatars.userId, params.data.uid), seesUser(req.user!, params.data.uid)),
+          and(eq(avatars.userId, params.data.uid), seesUser(callerOf(req), params.data.uid)),
         )
         .limit(1);
       // No picture and a picture the caller may not see answer alike (#318).

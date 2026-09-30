@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 
 import { IdParam } from "@quiz/contracts";
 
-import { readableClassroom, teacherGuard } from "../guards.js";
+import { callerOf, readableClassroom, teacherGuard } from "../guards.js";
 import { studentRoute } from "../http.js";
 import * as service from "./service.js";
 
@@ -18,7 +18,7 @@ export async function activityPlugin(app: FastifyInstance) {
    * input, so no schema.
    */
   app.get("/app/api/activities", { preHandler: requireTeacher }, async (req) =>
-    service.listForTeacher(app.db, req.user!, app.clock.now()),
+    service.listForTeacher(app.db, callerOf(req), app.clock.now()),
   );
 
   /**
@@ -38,7 +38,7 @@ export async function activityPlugin(app: FastifyInstance) {
         params: IdParam,
         load: (req, reply, p) => readableClassroom(app, req, reply, p, { studentView: true }),
       },
-      ({ req, now, scope }) => service.studentClassroomPage(app.db, req.user!, scope, now),
+      ({ req, now, scope }) => service.studentClassroomPage(app.db, callerOf(req), scope, now),
     ),
   );
 }

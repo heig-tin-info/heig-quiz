@@ -1,0 +1,1 @@
+ALTER TABLE "sessions" ADD COLUMN "super_powers_until" timestamp with time zone;

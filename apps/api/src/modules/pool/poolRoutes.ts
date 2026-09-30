@@ -1,9 +1,16 @@
 /** The pools themselves: list, create, read, rename, delete. */
 import type { FastifyInstance } from "fastify";
 
-import { IdParam, PoolCreate, PoolListQuery, PoolPatch, type PoolInUse } from "@quiz/contracts";
+import { IdParam, PoolCreate, PoolPatch, type PoolInUse } from "@quiz/contracts";
 
-import { managedEvaluationAccess, poolAccess, poolRoleOf, requirePoolRole } from "../guards.js";
+import {
+  accessWhere,
+  callerOf,
+  managedEvaluationAccess,
+  poolAccess,
+  poolRoleOf,
+  requirePoolRole,
+} from "../guards.js";
 import { invalid } from "../http.js";
 import { publish } from "../../events.js";
 import { poolChanged, poolPeopleChanged } from "./events.js";
@@ -19,16 +26,14 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
    * caller's effective role, so the list can say what it offers (F-POOL-05).
    */
   /**
-   * The pools list is filtered by `poolAccess` for EVERYONE, admins included:
-   * an admin who sees every teacher's private pools on their shelf cannot
-   * tell theirs from the others'. `?scope=all` lifts the filter, for an admin
-   * only; a teacher asking for it gets their own list.
+   * Filtered by `poolAccess` through `accessWhere`, like every loader: an
+   * admin sees their own shelf, and every pool of the instance only with
+   * Super Powers on (ADR-054, which removed the `?scope=all` switch of #63).
+   * No input, so no schema.
    */
-  app.get("/app/api/pools", { preHandler: requireTeacher }, async (req, reply) => {
-    const query = PoolListQuery.safeParse(req.query);
-    if (!query.success) return invalid(reply, query.error);
-    const everyone = query.data.scope === "all" && req.user!.role === "admin";
-    return service.listPools(app.db, everyone ? undefined : poolAccess(req.user!.id), req.user!);
+  app.get("/app/api/pools", { preHandler: requireTeacher }, async (req) => {
+    const caller = callerOf(req);
+    return service.listPools(app.db, accessWhere(caller, poolAccess(caller.id)), caller);
   });
 
   app.post("/app/api/pools", { preHandler: requireTeacher }, async (req, reply) => {
@@ -50,7 +55,7 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     "/app/api/pools/:id",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: inPool() }, async ({ req, scope: pool }) =>
-      service.poolDetail(app.db, pool, await poolRoleOf(app.db, pool, req.user!)),
+      service.poolDetail(app.db, pool, await poolRoleOf(app.db, pool, callerOf(req))),
     ),
   );
 
@@ -81,7 +86,7 @@ export function poolRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
       if (!(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
       // A version an evaluation or a template pins cannot vanish under it
       // (ADR-031): the refusal names what holds the pool, not a 500.
-      const inUse = () => service.poolUses(app.db, pool.id, managedEvaluationAccess(req.user!));
+      const inUse = () => service.poolUses(app.db, pool.id, managedEvaluationAccess(callerOf(req)));
       const uses = await inUse();
       if (uses) return reply.code(409).send(uses);
       if (!(await service.deletePool(app.db, pool.id))) {

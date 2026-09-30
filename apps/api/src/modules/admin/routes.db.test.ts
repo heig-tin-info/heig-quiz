@@ -159,6 +159,14 @@ describe("GET /app/api/admin/users (F-ADMIN-01)", () => {
     expect(row(granted)?.avatarUrl).toMatch(uploaded(granted));
     expect(row(staff)?.avatarUrl).toBe("https://idp.test/staff.png");
     expect(row(student)?.avatarUrl).toBeNull();
+    // And the admin, without Super Powers, fetches it: pictures follow the
+    // role, not the reach (ADR-054 §2).
+    const picture = await server.app.inject({
+      method: "GET",
+      url: row(granted)!.avatarUrl!,
+      headers: admin.headers,
+    });
+    expect(picture.statusCode).toBe(200);
   });
 
   it("never lists an anonymized account", async () => {

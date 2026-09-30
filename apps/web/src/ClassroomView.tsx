@@ -391,7 +391,8 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
                 <RosterTable
                   classroomId={id}
                   roster={data.roster}
-                  canImpersonate={me.data?.role === "admin"}
+                  // ADR-054: a link to act as a student takes Super Powers.
+                  canImpersonate={me.data?.session?.superPowersUntil != null}
                 />
               )}
             </Card>

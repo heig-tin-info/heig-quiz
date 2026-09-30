@@ -30,6 +30,8 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  * `reviewed`: the student already did today's drill, the empty day (`mock/drill.ts`).
  * `unlinked`: the persona has no linked GitHub account (`mock/github.ts`).
  * `journal`: the classroom PRG1-2026 has a journal (`mock/journal.ts`).
+ * `superpowers`: the admin persona's Super Powers are on, 54 minutes left (ADR-054).
+ * `lastminutes`: ...with 4 min 30 s left instead, the banner's countdown.
  */
 export const FLAG_NAMES = [
   "empty",
@@ -43,6 +45,8 @@ export const FLAG_NAMES = [
   "reviewed",
   "unlinked",
   "journal",
+  "superpowers",
+  "lastminutes",
 ] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;

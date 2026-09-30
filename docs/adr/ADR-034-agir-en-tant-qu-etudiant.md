@@ -64,7 +64,11 @@ masks the secret (`redact.ts`, the same table as the `.seb` path).
 
 ### 2. Who: an admin, acting as a student
 
-- **The caller is an admin, in v1.** The impersonated session reads
+- **The caller is an admin, in v1.** *Amended 2026-09-30 (ADR-054): an
+  admin with Super Powers on; without them, `403 super_powers_required`, and
+  the roster offers no link. Only the creation needs them: the consumption
+  of the link keeps reading the actor's role, and the session it opens lives
+  out its hour.* The impersonated session reads
   everything the student reads, other courses and released grades included,
   where a teacher may hold no seat. `staffAccess` would guard the issuing of
   the link, not what the session reads afterwards — that would break N-SEC-03

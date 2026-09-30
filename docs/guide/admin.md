@@ -28,4 +28,10 @@ The administrator's own address cannot be granted; it is already above the teach
 
 ## What an administrator sees elsewhere
 
-The administrator reaches every course and every classroom, not only those whose staff they are on, and holds the owner role on every pool. The server's metrics endpoint answers an administrator's session as well as the monitoring token, which is a matter for whoever runs the machine rather than for this screen.
+By default, nothing more than a teacher: the administrator works on the courses whose staff they are on, and on their pools with the role they hold there. A colleague's course or private pool is out of sight, as for any teacher, so that one's own teaching never touches somebody else's by accident.
+
+## Super Powers
+
+To help a colleague or look into a problem, switch on **Super Powers** in **Settings**. For one hour, every course, classroom, evaluation and pool of the platform opens to you, with the owner role on every pool, and the roster rows offer the link to act as a student. A red banner at the top of every page says so, with the time left and **Switch off**; in the last five minutes it counts down by the second. The hour is fixed and cannot be extended: when it ends, the pages that belong to someone else answer as missing, and a change started on one of them is refused. Switching on and off, and the end of the hour, are recorded in the audit log.
+
+Super Powers belong to the browser session that switched them on: signing out ends them, another browser does not have them, and neither an API token nor a connected assistant ever gets them. The administration screen itself, and the server's metrics endpoint, which answers an administrator's session as well as the monitoring token, need none.

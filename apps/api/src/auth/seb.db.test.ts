@@ -159,6 +159,8 @@ describe("the seb session (ADR-027)", () => {
     expect(me.json().session).toEqual({
       kind: "seb",
       evaluationId: exam.evaluationId,
+      superPowersUntil: null,
+      superPowersAvailable: false,
       readOnly: false,
     });
     const entered = await call("POST", `/app/api/evaluations/${exam.evaluationId}/attempt`, seb);

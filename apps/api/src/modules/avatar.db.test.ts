@@ -114,7 +114,7 @@ describe("avatar", () => {
       }
     });
 
-    it("serves a picture to its owner and to an admin", async () => {
+    it("serves a picture to its owner and to an admin, by role, without Super Powers (ADR-054)", async () => {
       expect(await fetchAvatar(teacher, teacher)).toBe(200);
       expect(await fetchAvatar(student, admin)).toBe(200);
       expect(await fetchAvatar(teacher, admin)).toBe(200);
