@@ -142,7 +142,7 @@ on("GET", "/app/api/classrooms/:id/journal", (m, _body, url): Journal => {
   const has = journalOr404(id, url);
   if (studentPayload(url)) {
     const visible = PAGES.filter((p) => !hidden(p));
-    return { view: "student", nav: navOf(visible), homePath: homePage(PAGES)?.path ?? null };
+    return { view: "student", nav: navOf(visible), homePath: homePage(visible)?.path ?? null };
   }
   if (!has) {
     const room = rooms.find((r) => r.id === id)!;
