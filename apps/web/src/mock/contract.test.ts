@@ -47,6 +47,7 @@ import {
   ItemPreview,
   PreviewSolution,
   ItemVersions,
+  encodeJournalPath,
   Journal,
   JournalPage,
   NotificationList,
@@ -188,7 +189,6 @@ const journalPages = [...new Set([...(journal.homePath ? [journal.homePath] : []
   path,
   student: !journal.hiddenPaths.includes(path),
 }));
-const encodeJournalPath = (path: string) => path.split("/").map(encodeURIComponent).join("/");
 
 // --- Route -> schema -------------------------------------------------------
 
@@ -428,7 +428,6 @@ const UNCHECKED = [
   // TODO(M2-01): the `github` contracts do not exist yet (mock/github.ts).
   "/app/api/github/orgs",
   "/app/api/classrooms/:id/github",
-  "/app/api/me/github",
 ];
 
 describe("the mock answers what the contracts describe", () => {

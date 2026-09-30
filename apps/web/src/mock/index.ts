@@ -50,8 +50,8 @@
  *   preview.ts     5b. the teacher's stateless preview of an evaluation;
  *   poll.ts        6.  the participant's poll page and the teacher's half;
  *   drill.ts       7.  the student's drill, the teacher's drill switches and view;
- *   github.ts      8.  GitHub: the App's organizations, a classroom's link, the
- *                      persona's account (`?unlinked=1`);
+ *   github.ts      8.  GitHub: the App's organizations and a classroom's link
+ *                      (`?unlinked=1` declared for the account, M2-01);
  *   journal.ts     9.  a classroom's journal, its navigation and its rendered
  *                      pages (`?journal=1`).
  *

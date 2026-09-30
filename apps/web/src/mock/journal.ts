@@ -16,6 +16,7 @@
  * route's encoded paths are exercised by the mock too.
  */
 import type { Journal, JournalNavNode, JournalPage, JournalTocEntry } from "@quiz/contracts";
+import { buildNav, homePage, placePage } from "@quiz/docrender/journalTree";
 
 import { rooms } from "./org";
 import { flags, iso, D, MockError, on, role } from "./runtime";
@@ -111,27 +112,17 @@ const PAGES: Fixture[] = [
 
 const hidden = (p: Fixture) => p.draft || (p.visibleInDays !== null && p.visibleInDays > 0);
 
-/** The navigation of the pages `pages` (F-JRN-06): folders as sections, their README as landing page. */
+/**
+ * The navigation of the pages `pages` (F-JRN-06), built by the renderer's own
+ * rules (`@quiz/docrender/journalTree`), as the API's ingestion builds it.
+ */
 function navOf(pages: Fixture[]): JournalNavNode[] {
-  const root: JournalNavNode[] = [];
-  for (const page of pages) {
-    const parts = page.path.split("/");
-    if (parts.length === 1) {
-      if (page.path !== "README.md") root.push({ path: page.path, title: page.title, pagePath: page.path, children: [] });
-      continue;
-    }
-    const folder = parts[0]!;
-    let section = root.find((n) => n.path === folder);
-    if (!section) {
-      section = { path: folder, title: folder.replace(/^\d+-/, ""), pagePath: null, children: [] };
-      root.push(section);
-    }
-    if (parts[1] === "README.md") {
-      section.pagePath = page.path;
-      section.title = page.title;
-    } else section.children.push({ path: page.path, title: page.title, pagePath: page.path, children: [] });
-  }
-  return root;
+  return buildNav(
+    pages.flatMap((page) => {
+      const placed = placePage(page.path);
+      return placed ? [{ ...placed, title: page.title }] : [];
+    }),
+  );
 }
 
 /** Whether this request is served the student payload: a student, or the staff asking for it. */
@@ -151,7 +142,7 @@ on("GET", "/app/api/classrooms/:id/journal", (m, _body, url): Journal => {
   const has = journalOr404(id, url);
   if (studentPayload(url)) {
     const visible = PAGES.filter((p) => !hidden(p));
-    return { view: "student", nav: navOf(visible), homePath: "README.md" };
+    return { view: "student", nav: navOf(visible), homePath: homePage(PAGES)?.path ?? null };
   }
   if (!has) {
     const room = rooms.find((r) => r.id === id)!;
@@ -179,7 +170,7 @@ on("GET", "/app/api/classrooms/:id/journal", (m, _body, url): Journal => {
       editable: true,
     },
     nav: navOf(PAGES),
-    homePath: "README.md",
+    homePath: homePage(PAGES)?.path ?? null,
     hiddenPaths: PAGES.filter(hidden).map((p) => p.path),
     warningCount: 0,
     proposedName: null,

@@ -60,6 +60,16 @@ export function safeJournalPath(raw: string): string | null {
   return raw;
 }
 
+/**
+ * A journal path as a URL path: each segment encoded on its own, so a space,
+ * an accent or a `#` survives and the slashes stay separators. The web app's
+ * reader addresses (`/classrooms/:id/journal/<path>`) and the calls to the
+ * journal's page and asset routes both write paths with it.
+ */
+export function encodeJournalPath(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
 /** A page of the journal is a markdown file; any other file is an asset. */
 export function isJournalPagePath(path: string): boolean {
   return /\.md$/i.test(path);

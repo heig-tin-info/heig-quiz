@@ -236,7 +236,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
       <ComingSoon title="soon.classroom" navigate={c.navigate} />
     ),
   // The pages of the classroom merge, placeholders until their screens ship
-  // (`flags.ts`). A teacher's Courses is the home.
+  // (`CLASSROOM_PAGES`, `router.ts`). A teacher's Courses is the home.
   studentCourses: (_, c) =>
     c.teacherUi ? (
       <TeacherHome navigate={c.navigate} />

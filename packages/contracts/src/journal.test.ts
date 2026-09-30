@@ -11,6 +11,7 @@ import {
   JournalViewQuery,
   JournalRepository,
   JournalWarning,
+  encodeJournalPath,
   safeJournalPath,
 } from "./journal.js";
 
@@ -63,6 +64,20 @@ describe("safeJournalPath (N-SEC-15)", () => {
     ["a%5Cb.md", "an escaped backslash"],
   ])("refuses %j (%s)", (raw) => {
     expect(safeJournalPath(raw)).toBeNull();
+  });
+});
+
+describe("encodeJournalPath", () => {
+  it("encodes each segment on its own and keeps the slashes", () => {
+    expect(encodeJournalPath("20-semaine 2 été/10-tableaux #1.md")).toBe(
+      "20-semaine%202%20%C3%A9t%C3%A9/10-tableaux%20%231.md",
+    );
+    expect(encodeJournalPath("README.md")).toBe("README.md");
+  });
+
+  it("round-trips through a per-segment decode", () => {
+    const path = "a b/c?d/é%.md";
+    expect(encodeJournalPath(path).split("/").map(decodeURIComponent).join("/")).toBe(path);
   });
 });
 

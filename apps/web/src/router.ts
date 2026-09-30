@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { CLASSROOM_PAGES } from "./flags";
+import { encodeJournalPath, safeJournalPath } from "@quiz/contracts";
 
 /**
  * Minimal history-backed router: every in-app navigation pushes a real URL,
@@ -30,7 +30,7 @@ export type Route =
   | { view: "classroom"; id: string; tab?: "roster" }
   /*
    * The pages of the classroom merge (ADR-035, `docs/merge/05-web.md` §5.2),
-   * each behind `CLASSROOM_PAGES` (`flags.ts`) until its screen ships.
+   * each behind `CLASSROOM_PAGES` (below) until its screen ships.
    */
   /**
    * The student's Courses (F-ORG-14, D07): their classrooms, each card opening
@@ -174,13 +174,28 @@ export interface RouteSpec<V extends Route["view"]> {
    */
   evaluationId?(route: RouteOf<V>): string;
   /**
-   * A route of the classroom merge whose screen is not built yet: `parsePath`
-   * skips it unless `CLASSROOM_PAGES` is on (`flags.ts`), so a production
-   * address reads exactly as it did before it. Dropped by the PR that ships
-   * the screen.
+   * A route of the classroom merge whose screen is not built yet, gated by
+   * `CLASSROOM_PAGES` (below): `parsePath` skips it while the flag is off, so
+   * a production address reads exactly as it did before it. Dropped by the PR
+   * that ships the screen.
    */
   preview?: true;
 }
+
+/**
+ * The gate of the classroom merge's routes (ADR-035, `docs/merge/05-web.md`
+ * §5.1–§5.2) whose routes exist before their screens do: the student's
+ * Courses and classroom page, the classroom's Settings, Journal and Grades
+ * tabs, the project pages. Each renders a placeholder (`ComingSoon`) until
+ * its task ships the real screen (M2-07, M4-04, M5-02, M5-04, M3-12).
+ *
+ * Off in a production build: the `preview` routes do not parse and a student
+ * on `/classrooms/:id` still lands on the home. On in the browser mock
+ * (`VITE_MOCK=1`), and wherever `VITE_CLASSROOM_PAGES=1` is set at build time.
+ * The student branch of `classroom` leaves it with M5-02.
+ */
+export const CLASSROOM_PAGES =
+  import.meta.env.VITE_MOCK === "1" || import.meta.env.VITE_CLASSROOM_PAGES === "1";
 
 /** A view whose path is one fixed segment (`/settings`, `/polls`, …), whatever follows it. */
 function fixed<V extends Route["view"]>(
@@ -281,9 +296,8 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     path: (r) => `/classrooms/${r.id}/journal${r.path ? `/${encodeJournalPath(r.path)}` : ""}`,
     match: ([head, id, tail, ...rest]) => {
       if (head !== "classrooms" || !id || tail !== "journal") return null;
-      return rest.length === 0
-        ? { view: "classroomJournal", id }
-        : { view: "classroomJournal", id, path: rest.map(decodeSegment).join("/") };
+      const path = journalPathOf(rest);
+      return path === undefined ? { view: "classroomJournal", id } : { view: "classroomJournal", id, path };
     },
     studentSafe: true,
     bottomSlot: "courses",
@@ -489,14 +503,6 @@ export function evaluationInView(route: Route): string | null {
   return specOf(route.view).evaluationId?.(route) ?? null;
 }
 
-/**
- * A journal path as an address: each segment encoded on its own, so a space,
- * an accent or a `#` survives and the slashes stay separators.
- */
-function encodeJournalPath(path: string): string {
-  return path.split("/").map(encodeURIComponent).join("/");
-}
-
 /** One segment of an address, decoded; a malformed escape is kept as written (the reader then finds no such page). */
 function decodeSegment(segment: string): string {
   try {
@@ -504,6 +510,18 @@ function decodeSegment(segment: string): string {
   } catch {
     return segment;
   }
+}
+
+/**
+ * The journal path the segments after `/journal/` name, or undefined — the
+ * journal's home — when they name none the journal's routes would serve
+ * (`safeJournalPath`, N-SEC-15): a climb, an escaped dot or slash, a control
+ * character, a path over the cap. A segment holding an encoded slash is
+ * refused outright rather than read as two segments.
+ */
+function journalPathOf(segments: string[]): string | undefined {
+  if (segments.length === 0 || segments.some((s) => /%2f/i.test(s))) return undefined;
+  return safeJournalPath(segments.map(decodeSegment).join("/")) ?? undefined;
 }
 
 /**

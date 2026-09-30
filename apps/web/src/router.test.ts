@@ -54,7 +54,6 @@ describe("routeToPath / parsePath", () => {
     expect(parsePath("/classrooms/c-1/grades")).toEqual({ view: "classroom", id: "c-1" });
     expect(parsePath("/projects/p-1")).toEqual({ view: "home" });
     expect(parsePath("/projects/p-1/groups")).toEqual({ view: "home" });
-    expect(ROUTES.classroom.studentSafe).toBe(false);
   });
 
   it("parses the page of one course, a page of the Courses section (F-ORG-12)", () => {
