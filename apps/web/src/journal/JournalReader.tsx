@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import {
   AlertTriangle,
   BookOpen,
@@ -7,8 +7,6 @@ import {
   ChevronRight,
   EyeOff,
   FileQuestion,
-  Pencil,
-  RefreshCw,
 } from "lucide-react";
 import { useEffect, useId, useState, type ReactNode } from "react";
 
@@ -36,7 +34,6 @@ import {
   QueryError,
   RelativeTime,
   Skeleton,
-  Tip,
   useMinWidth,
 } from "../ui";
 import { JournalArticle } from "./JournalArticle";
@@ -55,8 +52,8 @@ import { SYNC_ERRORS, warningText } from "./words";
  *   `.md-doc`; the navigation is 13 px dense UI. No page title above it: two
  *   `h1`s on one screen and neither wins.
  * - Color: ONE accent, the page being read in the navigation (an
- *   `accent-soft` chip). A student has no primary action here; the staff's
- *   Edit is the one accent control, inside a page.
+ *   `accent-soft` chip). A student has no primary action here. The staff's
+ *   Edit (primary, inside a page) and Refresh arrive with M4-05 and M4-06.
  * - Space: 2 between navigation rows, 32 between the columns, 24 under the
  *   header; the prose has its own rhythm (1.75 leading, 72 ch).
  * - Finish: the page is a sheet of paper (`surface`, hairline, card radius)
@@ -69,29 +66,30 @@ import { SYNC_ERRORS, warningText } from "./words";
 
 type View = "staff" | "student";
 
-/** The first page of the navigation, depth first: the journal's front when it has no home page. */
-function firstPage(nodes: JournalNavNode[]): string | null {
+/** The first node of the navigation, depth first, that `pred` accepts. */
+function findNode(nodes: JournalNavNode[], pred: (node: JournalNavNode) => boolean): JournalNavNode | null {
   for (const node of nodes) {
-    if (node.pagePath !== null) return node.pagePath;
-    const inner = firstPage(node.children);
+    if (pred(node)) return node;
+    const inner = findNode(node.children, pred);
     if (inner !== null) return inner;
   }
   return null;
 }
 
-/** The navigation's title of a page, when it names it. */
-function navTitle(nodes: JournalNavNode[], pagePath: string): string | null {
-  for (const node of nodes) {
-    if (node.pagePath === pagePath) return node.title;
-    const inner = navTitle(node.children, pagePath);
-    if (inner !== null) return inner;
-  }
-  return null;
-}
+/**
+ * The columns, decided once in JS (`useMinWidth`) rather than again in CSS:
+ * the navigation (and the TOC) beside the article from 1024 px, the TOC in
+ * a column of its own from 1280 px, one column below 1024 px.
+ */
+const GRID = {
+  phone: "grid gap-6",
+  wide: "grid grid-cols-[15rem_minmax(0,1fr)] gap-8",
+  extraWide: "grid grid-cols-[15rem_minmax(0,1fr)_13rem] gap-8",
+} as const;
+type Layout = keyof typeof GRID;
 
-/** The navigation column beside the article; the TOC's column too from `xl`. */
-const GRID = "grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8";
-const GRID_XL = "xl:grid-cols-[15rem_minmax(0,1fr)_13rem]";
+/** A column beside the article: it stays in view while the page scrolls. */
+const SIDE_COLUMN = "sticky top-8 max-h-[calc(100dvh-4rem)] self-start overflow-y-auto";
 
 const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404;
 
@@ -124,7 +122,8 @@ export function JournalReader({
   const data: Journal | undefined = journal.data;
   const staffJournal = data && data.view === "staff" ? data : null;
   const hasJournal = data !== undefined && (staffJournal === null || staffJournal.repository !== null);
-  const target = path ?? (data ? (data.homePath ?? firstPage(data.nav)) : null);
+  const target =
+    path ?? (data ? (data.homePath ?? findNode(data.nav, (n) => n.pagePath !== null)?.pagePath ?? null) : null);
 
   const page = useQuery<JournalPage>({
     queryKey: journalPageKey(classroomId, view, target ?? ""),
@@ -150,17 +149,14 @@ export function JournalReader({
 
   const wide = useMinWidth(1024);
   const extraWide = useMinWidth(1280);
+  const layout: Layout = extraWide ? "extraWide" : wide ? "wide" : "phone";
 
-  if (journal.isPending) return <ReaderSkeleton wide={wide} extraWide={extraWide} />;
+  if (journal.isPending) return <ReaderSkeleton layout={layout} />;
 
   const header = (
     <ReaderHeader
       onClassroom={() => navigate({ view: "classroom", id: classroomId })}
-      actions={
-        staffJournal?.repository ? (
-          <StaffActions repository={staffJournal.repository} canEdit={page.data !== undefined} />
-        ) : null
-      }
+      aside={staffJournal?.repository ? <SyncState repository={staffJournal.repository} /> : null}
     />
   );
 
@@ -232,69 +228,83 @@ export function JournalReader({
   const currentTitle =
     target === loaded.homePath
       ? t("journal.home")
-      : (navTitle(loaded.nav, target) ?? page.data?.title ?? t("journal.untitled"));
+      : (findNode(loaded.nav, (n) => n.pagePath === target)?.title ?? page.data?.title ?? t("journal.untitled"));
 
   return (
     <Frame header={header}>
       {syncAlert}
-      <div className={cx(GRID, extraWide && GRID_XL)}>
-        {wide ? (
-          <aside className="space-y-8 lg:sticky lg:top-8 lg:max-h-[calc(100dvh-4rem)] lg:self-start lg:overflow-y-auto">
-            {nav}
-            {extraWide ? null : toc}
-          </aside>
-        ) : (
+      <div className={GRID[layout]}>
+        {layout === "phone" ? (
           <PhoneDisclosure title={currentTitle}>
             {nav}
             {toc}
           </PhoneDisclosure>
+        ) : (
+          <aside className={cx("space-y-8", SIDE_COLUMN)}>
+            {nav}
+            {layout === "wide" ? toc : null}
+          </aside>
         )}
 
         <div className="min-w-0 space-y-4">
-          {page.isPending ? (
-            <ArticleSkeleton />
-          ) : page.isError ? (
-            isNotFound(page.error) ? (
-              <EmptyState
-                icon={FileQuestion}
-                titleAs="h1"
-                title={t("journal.pageNotFound")}
-                action={
-                  loaded.homePath && loaded.homePath !== target ? (
-                    <Button variant="secondary" onClick={() => open(loaded.homePath!)}>
-                      {t("journal.backHome")}
-                    </Button>
-                  ) : undefined
-                }
-              >
-                {t("journal.pageNotFoundHint")}
-              </EmptyState>
-            ) : (
-              <QueryError
-                title={t("journal.pageError")}
-                error={page.error}
-                onRetry={() => void page.refetch()}
-                retrying={page.isFetching}
-              />
-            )
-          ) : (
-            <PageBody
-              page={page.data}
-              classroomId={classroomId}
-              stale={page.isPlaceholderData}
-              onOpen={open}
-            />
-          )}
+          <PageSlot
+            page={page}
+            classroomId={classroomId}
+            onOpen={open}
+            onHome={loaded.homePath && loaded.homePath !== target ? () => open(loaded.homePath!) : null}
+          />
         </div>
 
-        {wide && extraWide && toc ? (
-          <aside className="lg:sticky lg:top-8 lg:max-h-[calc(100dvh-4rem)] lg:self-start lg:overflow-y-auto">
-            {toc}
-          </aside>
-        ) : null}
+        {layout === "extraWide" && toc ? <aside className={SIDE_COLUMN}>{toc}</aside> : null}
       </div>
     </Frame>
   );
+}
+
+/** The page's place beside the navigation: loading, not found, failed, or the page. */
+function PageSlot({
+  page,
+  classroomId,
+  onOpen,
+  onHome,
+}: {
+  page: UseQueryResult<JournalPage>;
+  classroomId: string;
+  onOpen: (pagePath: string, hash: string) => void;
+  /** Back to the journal's home, when the page is not it. */
+  onHome: (() => void) | null;
+}) {
+  const t = useT();
+  if (page.isPending) return <ArticleSkeleton />;
+  if (page.isError) {
+    if (!isNotFound(page.error)) {
+      return (
+        <QueryError
+          title={t("journal.pageError")}
+          error={page.error}
+          onRetry={() => void page.refetch()}
+          retrying={page.isFetching}
+        />
+      );
+    }
+    return (
+      <EmptyState
+        icon={FileQuestion}
+        titleAs="h1"
+        title={t("journal.pageNotFound")}
+        action={
+          onHome ? (
+            <Button variant="secondary" onClick={onHome}>
+              {t("journal.backHome")}
+            </Button>
+          ) : undefined
+        }
+      >
+        {t("journal.pageNotFoundHint")}
+      </EmptyState>
+    );
+  }
+  return <PageBody page={page.data} classroomId={classroomId} stale={page.isPlaceholderData} onOpen={onOpen} />;
 }
 
 /** The header row and what follows it, 24 px apart (DESIGN.md › Spacing). */
@@ -309,47 +319,20 @@ function Frame({ header, children }: { header: ReactNode; children: ReactNode })
 
 /**
  * The compact header: where the reader is (the classroom, then the journal)
- * and, for the staff, what they can do about the journal. No title: the
- * document owns it.
+ * and, for the staff, where the copy of the repository stands. No title: the
+ * document owns it. The staff's actions (Edit, Refresh) join `aside` with
+ * M4-05 and M4-06.
  */
-function ReaderHeader({ onClassroom, actions }: { onClassroom: () => void; actions: ReactNode }) {
+function ReaderHeader({ onClassroom, aside }: { onClassroom: () => void; aside: ReactNode }) {
   const t = useT();
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-      <nav aria-label={t("journal.crumb")} className="flex items-center gap-1.5 text-[13px] text-fg-muted">
+      <nav aria-label={t("journal.breadcrumb")} className="flex items-center gap-1.5 text-[13px] text-fg-muted">
         <ParentLink onClick={onClassroom}>{t("journal.classroom")}</ParentLink>
         <ChevronRight className="size-3.5 text-fg-faint" aria-hidden />
         <span className="text-fg">{t("journal.crumb")}</span>
       </nav>
-      {actions}
-    </div>
-  );
-}
-
-/**
- * The staff's controls: the sync state, Refresh (secondary) and, inside a
- * page, Edit (primary). The writes arrive with the journal's settings and
- * editor (M4-05, M4-06): until then both buttons are shown disabled, with
- * a tooltip saying they are coming, so the layout they will take is the
- * one already on screen.
- */
-function StaffActions({ repository, canEdit }: { repository: JournalRepository; canEdit: boolean }) {
-  const t = useT();
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <SyncState repository={repository} />
-      <Tip label={t("soon.title")}>
-        <Button variant="secondary" size="sm" disabled>
-          <RefreshCw /> {t("journal.refresh")}
-        </Button>
-      </Tip>
-      {canEdit ? (
-        <Tip label={t("soon.title")}>
-          <Button variant="primary" size="sm" disabled>
-            <Pencil /> {t("journal.edit")}
-          </Button>
-        </Tip>
-      ) : null}
+      {aside}
     </div>
   );
 }
@@ -481,20 +464,20 @@ function ArticleSkeleton() {
   );
 }
 
-function ReaderSkeleton({ wide, extraWide }: { wide: boolean; extraWide: boolean }) {
+function ReaderSkeleton({ layout }: { layout: Layout }) {
   const t = useT();
   return (
     <div className="space-y-6" role="status" aria-label={t("common.loading")}>
       <Skeleton className="h-4 w-40" />
-      <div className={cx(GRID, extraWide && GRID_XL)}>
-        {wide ? (
+      <div className={GRID[layout]}>
+        {layout === "phone" ? (
+          <Skeleton className="h-14 w-full" />
+        ) : (
           <div className="space-y-2">
             <Skeleton className="h-6 w-40" />
             <Skeleton className="h-6 w-48" />
             <Skeleton className="h-6 w-36" />
           </div>
-        ) : (
-          <Skeleton className="h-14 w-full" />
         )}
         <ArticleSkeleton />
       </div>

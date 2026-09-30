@@ -3391,6 +3391,7 @@ export const en = {
   // The journal reader (F-JRN-07, M4-04, `journal/`). A warning or a sync
   // error is a code of `@quiz/contracts`, worded here (fix J5).
   "journal.crumb": "Journal",
+  "journal.breadcrumb": "Where you are",
   "journal.classroom": "Classroom",
   "journal.nav": "Pages of the journal",
   "journal.pages": "Pages",
@@ -3406,14 +3407,12 @@ export const en = {
   "journal.noneHint": "A teacher of the course creates it from the classroom's settings.",
   "journal.empty": "Nothing to read yet",
   "journal.emptyHint": "The journal has no page yet.",
-  "journal.emptyHint.staff": "Add a markdown file to the repository, then refresh.",
+  "journal.emptyHint.staff": "Add a markdown file to the journal's repository: it appears here once the repository is read again.",
   "journal.pageNotFound": "Page not found",
   "journal.pageNotFoundHint": "This page does not exist, or it is not open yet.",
   "journal.backHome": "Go to the journal's home",
   "journal.draft": "Draft",
   "journal.visibleFrom": "Visible from {date}",
-  "journal.edit": "Edit",
-  "journal.refresh": "Refresh",
   "journal.sync.ok": "Synced",
   "journal.sync.never": "Not synced yet",
   "journal.sync.pending": "Reading the repository…",

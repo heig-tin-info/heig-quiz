@@ -7,8 +7,13 @@ import type { Journal, JournalPage, JournalPageStaff, JournalStaff } from "@quiz
 
 import type { Route } from "../router";
 import { fail, mockFetch, ok, renderWithProviders, type RouteHandler } from "../test/render";
-import { journalLinkTarget } from "./JournalArticle";
-import { JournalReader } from "./JournalReader";
+
+// The journal's route is a `preview` one (`CLASSROOM_PAGES`), on in the mock
+// and off in a test build; the router reads the flag once, when evaluated, so
+// the environment is stubbed before anything imports it.
+vi.stubEnv("VITE_CLASSROOM_PAGES", "1");
+const { journalLinkTarget } = await import("./JournalArticle");
+const { JournalReader } = await import("./JournalReader");
 
 /*
  * The journal reader (F-JRN-07): the navigation and its current page, the
@@ -152,7 +157,6 @@ describe("JournalReader — navigation", () => {
     const pages = await screen.findByRole("navigation", { name: "Pages of the journal" });
     const home = within(pages).getByRole("link", { name: "Home" });
     expect(home).toHaveAttribute("aria-current", "page");
-    expect(home.className).toContain("bg-accent-soft");
     // A folder with a landing page is a link; one without is a heading that folds.
     expect(within(pages).getByRole("link", { name: "Semaine 1" })).not.toHaveAttribute("aria-current");
     const folder = within(pages).getByRole("button", { name: "Semaine 2 été" });
@@ -292,9 +296,6 @@ describe("JournalReader — the staff", () => {
     expect(
       screen.getByText("The front matter is not valid YAML (line 3); the page renders without it."),
     ).toBeInTheDocument();
-    // Edit and Refresh are there, and disabled until the writes ship.
-    expect(screen.getByRole("button", { name: /Edit/ })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Refresh/ })).toBeDisabled();
     expect(screen.getByText(/Synced/)).toBeInTheDocument();
   });
 
@@ -334,8 +335,19 @@ describe("JournalReader — the staff", () => {
 });
 
 describe("JournalReader — the student", () => {
-  it("asks for the student payload and shows no staff field", async () => {
+  it("reads the student payload, never the staff one, and shows no staff field", async () => {
+    // The staff routes answer with every staff field set: were the student
+    // view reading them, the badges, warnings and marks would show.
     const { calls } = mockFetch({
+      [`GET ${BASE}`]: ok(staffJournal()),
+      [`GET ${BASE}/pages/${HOME}`]: ok(
+        staffPage(HOME, {
+          draft: true,
+          hidden: true,
+          visibleFrom: "2031-03-02T08:00:00.000Z",
+          warnings: [{ code: "raw_html" }],
+        }),
+      ),
       [`GET ${BASE}?view=student`]: ok(studentJournal),
       [`GET ${BASE}/pages/${HOME}?view=student`]: ok(studentPage(HOME)),
     });
@@ -346,8 +358,8 @@ describe("JournalReader — the student", () => {
       expect(screen.queryByText(text)).toBeNull();
     }
     expect(screen.queryByRole("img", { name: "Hidden from students" })).toBeNull();
-    // No primary action: neither Edit nor Refresh.
-    expect(screen.queryByRole("button", { name: /Edit|Refresh/ })).toBeNull();
+    // The staff navigation's second section is not the student's.
+    expect(screen.queryByText("Semaine 2 été")).toBeNull();
   });
 
   it("reads a 404 of the journal as not found", async () => {

@@ -1,26 +1,11 @@
 import { BookOpen, ChevronRight, EyeOff } from "lucide-react";
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import type { JournalNavNode } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { navRowClass } from "../navTree";
-import { cx } from "../ui";
-
-/**
- * A click the browser should keep: a new tab, a new window, a download, a
- * middle click. Everything else on a journal link is the app's to route.
- */
-export function isPlainClick(event: MouseEvent): boolean {
-  return (
-    !event.defaultPrevented &&
-    event.button === 0 &&
-    !event.metaKey &&
-    !event.ctrlKey &&
-    !event.shiftKey &&
-    !event.altKey
-  );
-}
+import { cx, isPlainClick } from "../ui";
 
 /**
  * The navigation of a journal (F-JRN-06): the repository's own tree, one

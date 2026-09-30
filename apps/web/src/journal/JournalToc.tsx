@@ -11,12 +11,12 @@ import { cx } from "../ui";
  * Nothing when the page has fewer than two such headings: one entry is not
  * a table of anything.
  */
-export function JournalToc({ toc, className = "" }: { toc: JournalTocEntry[]; className?: string }) {
+export function JournalToc({ toc }: { toc: JournalTocEntry[] }) {
   const t = useT();
   const entries = toc.filter((e) => e.depth === 2 || e.depth === 3);
   if (entries.length < 2) return null;
   return (
-    <nav aria-label={t("journal.toc")} className={className}>
+    <nav aria-label={t("journal.toc")}>
       <p className="mb-2 px-2.5 text-xs font-semibold uppercase tracking-wide text-fg-faint">
         {t("journal.toc")}
       </p>

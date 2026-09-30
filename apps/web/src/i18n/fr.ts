@@ -3386,6 +3386,7 @@ export const fr: Record<keyof Dict, string> = {
   // The journal reader (F-JRN-07, M4-04, `journal/`). A warning or a sync
   // error is a code of `@quiz/contracts`, worded here (fix J5).
   "journal.crumb": "Journal",
+  "journal.breadcrumb": "Où vous êtes",
   "journal.classroom": "Classe",
   "journal.nav": "Pages du journal",
   "journal.pages": "Pages",
@@ -3401,14 +3402,12 @@ export const fr: Record<keyof Dict, string> = {
   "journal.noneHint": "Un enseignant du cours le crée depuis les réglages de la classe.",
   "journal.empty": "Rien à lire pour l'instant",
   "journal.emptyHint": "Le journal n'a pas encore de page.",
-  "journal.emptyHint.staff": "Ajoutez un fichier markdown au dépôt, puis rafraîchissez.",
+  "journal.emptyHint.staff": "Ajoutez un fichier markdown au dépôt du journal : il apparaît ici dès que le dépôt est relu.",
   "journal.pageNotFound": "Page introuvable",
   "journal.pageNotFoundHint": "Cette page n'existe pas, ou elle n'est pas encore ouverte.",
   "journal.backHome": "Aller à l'accueil du journal",
   "journal.draft": "Brouillon",
   "journal.visibleFrom": "Visible dès le {date}",
-  "journal.edit": "Modifier",
-  "journal.refresh": "Rafraîchir",
   "journal.sync.ok": "Synchronisé",
   "journal.sync.never": "Pas encore synchronisé",
   "journal.sync.pending": "Lecture du dépôt…",

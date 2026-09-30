@@ -6,7 +6,7 @@ import { AvailableDot } from "../drill/AvailableDot";
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import { routeToPath, type Route } from "../router";
-import { cx, type IconType } from "../ui";
+import { cx, isPlainClick, type IconType } from "../ui";
 import { activeSlot, visibleSlots, type BottomSlot, type BottomSlotId } from "./bottomNavSlots";
 
 const SLOT_LOOK: Record<BottomSlotId, { icon: IconType; label: keyof Dict }> = {
@@ -36,7 +36,7 @@ export function BottomNav({
 
   const go = (slot: BottomSlot) => (e: MouseEvent<HTMLAnchorElement>) => {
     // A modified click is the browser's: a new tab gets the real address.
-    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (!isPlainClick(e)) return;
     e.preventDefault();
     // A fresh route: the same slot twice is a new state, so the bar re-reads the hash.
     navigate({ ...slot.route });

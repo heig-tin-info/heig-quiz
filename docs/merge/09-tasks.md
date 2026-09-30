@@ -441,6 +441,11 @@ files it ports; writes en + fr for every string.
 - **Goal**: the Journal section of the classroom's Settings (create, use a
   repository, sync state, Refresh, remove); the Journal tab, present only
   when the classroom has a journal.
+- **Reader** (from M4-04): the reader ships with no staff action. This task
+  adds **Refresh** (secondary) to the reader's header, in
+  `ReaderHeader`'s `aside` beside the sync state, and invalidates
+  `journalKey(id, view)` on success; it words the "no page yet" hint for
+  the staff again once Refresh exists.
 - **Scenes**: `classroom-settings-journal-none|create|use|set`,
   `journal-tab-pages`, `-sync-error`.
 
@@ -450,6 +455,9 @@ files it ports; writes en + fr for every string.
   journal page, source mode beside it; front matter as fields; image
   upload committed into the repository with a relative path; save with
   `baseSha`, conflict kept as a draft.
+- **Reader** (from M4-04): this task adds **Edit** (the primary action,
+  inside a page) to the reader's header, in `ReaderHeader`'s `aside`, and
+  swaps the article for the editor.
 - **Tests**: the five conditions of D25 — the round trip over the journals
   of classroom's production (fetched read-only with classroom's App, into a
   fixture kept outside this public repository, as the exam corpus is; the

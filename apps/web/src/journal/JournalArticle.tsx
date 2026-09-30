@@ -2,8 +2,8 @@ import { useEffect, useRef, type MouseEvent } from "react";
 
 import { isJournalPagePath } from "@quiz/contracts";
 
-import { ROUTES, routeToPath } from "../router";
-import { isPlainClick } from "./JournalNav";
+import { parsePath, routeToPath } from "../router";
+import { isPlainClick } from "../ui";
 
 /**
  * The journal page a link of the article leads to, or null when it leads
@@ -12,8 +12,8 @@ import { isPlainClick } from "./JournalNav";
  * The stored HTML links pages RELATIVELY (`../20-x/README.md`, docrender's
  * `relativeHref`), so the href is resolved against the reader's address of
  * the page being read — not against `window.location`, which is the bare
- * `/journal` while the home is shown — and read back by the journal route's
- * own matcher, which decodes and checks the path (`safeJournalPath`).
+ * `/journal` while the home is shown — and read back by the router, whose
+ * journal route decodes and checks the path (`safeJournalPath`).
  */
 export function journalLinkTarget(
   href: string,
@@ -30,8 +30,9 @@ export function journalLinkTarget(
     return null;
   }
   if (url.origin !== origin) return null;
-  const route = ROUTES.classroomJournal.match(url.pathname.split("/").filter(Boolean));
-  if (!route || route.id !== classroomId || !route.path || !isJournalPagePath(route.path)) return null;
+  const route = parsePath(url.pathname);
+  if (route.view !== "classroomJournal" || route.id !== classroomId) return null;
+  if (!route.path || !isJournalPagePath(route.path)) return null;
   return { path: route.path, hash: url.hash };
 }
 
