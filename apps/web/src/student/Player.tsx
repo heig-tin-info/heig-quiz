@@ -59,7 +59,8 @@ import { useT } from "../i18n";
 import { Button, Card, useMinWidth } from "../ui";
 import { ExpandChrome, type ExpandChromeValue } from "./ExpandLayer";
 import { OfflineBanner } from "./OfflineBanner";
-import { PausedOverlay } from "./PausedOverlay";
+import { PausedOverlay, StationSuspendedOverlay } from "./PausedOverlay";
+import { useStationAttestation } from "../kiosk/useStationAttestation";
 import { PlayerActions } from "./PlayerActions";
 import { PlayerEnd } from "./PlayerEnd";
 import { PlayerQuestion, QuestionHeading } from "./PlayerQuestion";
@@ -202,17 +203,28 @@ export function Player({
       postSimulate(`/app/api/attempts/${attemptId}/simulate`, { itemId, answer }),
     [attemptId],
   );
-  const session = useMemo<PlayerSession>(() => ({ ...attempt, simulate }), [attempt, simulate]);
+  // ADR-051 §6: on a station, the page re-attests on its own, and before the submit.
+  const attestation = useStationAttestation(station);
+  const { submit } = attempt;
+  const { guardSubmit } = attestation;
+  const guardedSubmit = useCallback(() => guardSubmit(submit), [guardSubmit, submit]);
+  const session = useMemo<PlayerSession>(
+    () => ({ ...attempt, simulate, submit: guardedSubmit }),
+    [attempt, simulate, guardedSubmit],
+  );
   return (
-    <PlayerView
-      initial={initial}
-      session={session}
-      onHome={() => void leave()}
-      homeBusy={leaving}
-      onResults={onResults}
-      station={station}
-      {...(onExitStudentView ? { onExitStudentView } : {})}
-    />
+    <>
+      <StationSuspendedOverlay show={attestation.suspended && closed === null} />
+      <PlayerView
+        initial={initial}
+        session={session}
+        onHome={() => void leave()}
+        homeBusy={leaving}
+        onResults={onResults}
+        station={station}
+        {...(onExitStudentView ? { onExitStudentView } : {})}
+      />
+    </>
   );
 }
 

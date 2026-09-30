@@ -275,6 +275,27 @@ function applyClosed(
 }
 
 /**
+ * A station's attestation changed (ADR-051 §6): the row's alert follows. A
+ * row whose access the grid does not yet know as a station — the pairing
+ * happened after the fetch — waits for the next read; `session_superseded`
+ * changes the access itself, which the dashboard re-reads.
+ */
+const ALERT_OF = { kiosk_suspended: "suspended", kiosk_unavailable: "unavailable", kiosk_resumed: null } as const;
+
+function applyAlert(
+  state: GridState,
+  event: Extract<ServerEvent, { type: "dashboard.alert" }>,
+): GridState {
+  if (event.evaluationId !== state.view.evaluation.id || event.kind === "session_superseded") return state;
+  const index = state.view.rows.findIndex((r) => r.userId === event.userId);
+  if (index < 0) return state;
+  const row = state.view.rows[index]!;
+  const alert = ALERT_OF[event.kind];
+  if (row.access.kind !== "kiosk" || row.access.alert === alert) return state;
+  return { ...state, view: withRow(state.view, index, { ...row, access: { ...row.access, alert } }) };
+}
+
+/**
  * Folds one server event into the grid. Anything the grid does not read —
  * `clock`, `runner.result`, `grading.progress`, `hint`, a `snapshot` of
  * another subject — leaves it untouched, by identity.
@@ -293,6 +314,8 @@ export function applyGridEvent(state: GridState, event: ServerEvent): GridState 
       return applyDeadline(state, event);
     case "attempt.closed":
       return applyClosed(state, event);
+    case "dashboard.alert":
+      return applyAlert(state, event);
     case "lobby.count":
       if (event.evaluationId !== state.view.evaluation.id) return state;
       if (

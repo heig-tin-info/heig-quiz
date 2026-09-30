@@ -1,10 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users, Wifi, WifiOff } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { TransitionRefusal, type DashboardRow, type EvaluationDetail } from "@quiz/contracts";
+import {
+  TransitionRefusal,
+  type DashboardAlertEvent,
+  type DashboardRow,
+  type EvaluationDetail,
+} from "@quiz/contracts";
+import { trustedClientsOf } from "@quiz/domain";
 
-import { ApiError, api } from "../api";
+import { ApiError, api, usePublicConfig } from "../api";
 import { useConfirm } from "../confirm";
 import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
@@ -24,6 +30,7 @@ import {
   Switch,
   useFullscreen,
 } from "../ui";
+import { AssignStationDialog } from "./AssignStation";
 import { anonymousNumbers, commonDeadline } from "./cells";
 import { InspectModal } from "./InspectModal";
 import { Legend } from "./Legend";
@@ -66,7 +73,29 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     null,
   );
 
-  const { query, clock, connected } = useDashboard(id, toggles.answers, toggles.results);
+  // The row a station is being assigned to (ADR-051 §7), with the name it showed.
+  const [assigning, setAssigning] = useState<{ userId: string; name: string } | null>(null);
+
+  /**
+   * What a supervisor must not miss about one student (ADR-051 §4, §6): the
+   * row itself says it (its access and alert), and two of them are also said
+   * once, out loud — a session opened elsewhere, a station suspended.
+   */
+  const nameRef = useRef<(userId: string) => string | null>(() => null);
+  const onAlert = useCallback(
+    (event: DashboardAlertEvent) => {
+      if (event.kind !== "session_superseded" && event.kind !== "kiosk_suspended") return;
+      const name = nameRef.current(event.userId);
+      if (name === null) return;
+      toast(
+        t(event.kind === "session_superseded" ? "live.alert.superseded" : "live.alert.suspended", { name }),
+        event.kind === "session_superseded" ? "warning" : "error",
+      );
+    },
+    [toast, t],
+  );
+
+  const { query, clock, connected } = useDashboard(id, toggles.answers, toggles.results, onAlert);
   // The grid fits the class on one screen (#227): the row height is what the
   // viewport leaves under the grid's top, minus the legend under it and the
   // page's bottom padding, all measured by the hook.
@@ -178,6 +207,22 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         ? row.displayName
         : t("live.row.anonymous", { n: numbers.get(row.seatId) ?? 0 }),
     [toggles.names, numbers, t],
+  );
+  const rows = state?.view.rows;
+  nameRef.current = (userId) => {
+    const row = rows?.find((r) => r.userId === userId);
+    return row ? nameOf(row) : null;
+  };
+
+  // ADR-051 §7: the exam accepts the kiosk, and the platform offers it.
+  const config = usePublicConfig();
+  const kioskAccepted =
+    config.data?.kiosk != null &&
+    detail.data !== undefined &&
+    trustedClientsOf(detail.data.evaluation.mode, detail.data.evaluation.settings).includes("kiosk");
+  const assignRow = useCallback(
+    (row: DashboardRow, name: string) => row.userId && setAssigning({ userId: row.userId, name }),
+    [],
   );
 
   const controls: LiveControls = {
@@ -392,9 +437,22 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
                 onExtend={extendRow}
                 onClose={closeRow}
                 onReopen={reopenRow}
+                onAssign={kioskAccepted ? assignRow : undefined}
               />
             </Card>
           </div>
+          {assigning ? (
+            <AssignStationDialog
+              evaluationId={id}
+              userId={assigning.userId}
+              name={assigning.name}
+              onClose={() => setAssigning(null)}
+              onDone={(label) => {
+                toast(t("live.assign.done", { label, name: assigning.name }), "success");
+                setAssigning(null);
+              }}
+            />
+          ) : null}
           {selectedRow && selected ? (
             <InspectModal
               evaluationId={id}

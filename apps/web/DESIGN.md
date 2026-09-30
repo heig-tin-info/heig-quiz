@@ -1612,6 +1612,30 @@ a `surface-2` panel at 20 px bold — the thing to check against the screen —
 and the exams as one radio group. ONE primary action at a time: Continue
 while there is only a code, then "Start on this station".
 
+The supervisor's side (ADR-051 §6–8) lives in the live grid, not on a page
+of its own:
+
+- **How a student sits it is a badge in the name line**, after the name:
+  nothing for the portal (most of the class, and silence is the default),
+  `SEB` in zinc, or the station's label in zinc behind a `Monitor` icon,
+  capped at 128 px and truncated (the whole label in its tooltip). A
+  station whose attestation is not fine adds one more badge with
+  `ShieldAlert`: `suspended` in red (its writes are refused), `not attested`
+  in amber (Google cannot check it; nothing is blocked). The tooltip says
+  which, in a sentence.
+- **"Assign a station"** is a fourth row button (`MonitorCheck`), first in
+  the row, on the rows still sitting, and only on an exam that accepts the
+  kiosk; the actions column then widens from 104 to 120 px for every row
+  (`ACTIONS_KIOSK`), so no row jumps. It opens a one-field `Modal`: the code
+  as on `/pair` (mono, formatted as typed), one primary action, Assign. The
+  station's label comes back in the success toast.
+- A suspension and a session opened elsewhere are also said once in a toast
+  (error, warning), naming the row as the grid shows it — the anonymous
+  number when the names are hidden.
+- On the station, a suspension covers the question exactly like the pause
+  (`StationSuspendedOverlay`, the same panel): no action, what is saved is
+  kept, and it lifts by itself.
+
 ## The launch checklist (evaluation, step 3)
 
 The last step before a class can enter (issue #152, variant B). Its one

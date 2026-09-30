@@ -121,10 +121,11 @@ describe("LiveDashboard — the grid", () => {
     // Student and progress + 12 questions + the actions column; no score
     // column while no row has points (#227).
     expect(screen.getAllByRole("columnheader")).toHaveLength(15);
-    // Only the evaluation's own detail; the grid came from the cache and no
-    // cell asked for anything of its own.
+    // Only the evaluation's own detail (and the public configuration, which
+    // says whether stations exist, ADR-051); the grid came from the cache and
+    // no cell asked for anything of its own.
     expect(calls.filter((c) => c.url.includes("/dashboard"))).toHaveLength(0);
-    expect(calls.filter((c) => c.method === "GET")).toHaveLength(1);
+    expect(calls.filter((c) => c.method === "GET" && c.url !== "/app/api/config")).toHaveLength(1);
     expect(calls.every((c) => !c.url.includes("/attempts/"))).toBe(true);
   }, 30_000);
 

@@ -25,6 +25,25 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Dispatched on `window` by every call answered `423 kiosk_suspended`: the
+ * station this kiosk session sits on could not prove its integrity (ADR-051
+ * §6). The autosave, the state writes and the submit all learn it here, and
+ * `useStationAttestation` alone listens.
+ */
+export const KIOSK_SUSPENDED_EVENT = "quiz:kiosk-suspended";
+
+/** A `423` of a suspended kiosk station, or of a submit that needs a fresh attestation. */
+export const kioskSuspended = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  error.status === 423 &&
+  (error.body as { error?: string } | null)?.error === "kiosk_suspended";
+
+export const kioskAttestationStale = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  error.status === 423 &&
+  (error.body as { error?: string } | null)?.error === "kiosk_attestation_stale";
+
 export async function api<T>(
   path: string,
   init: RequestInit & { csv?: string } = {},
@@ -47,7 +66,10 @@ export async function api<T>(
   }
   const res = await fetch(path, { ...init, headers, credentials: "same-origin" });
   if (!res.ok) {
-    throw new ApiError(res.status, await res.json().catch(() => null));
+    const error = new ApiError(res.status, await res.json().catch(() => null));
+    // ADR-051 §6: whichever write learnt it, the station's page is told once.
+    if (kioskSuspended(error)) window.dispatchEvent(new Event(KIOSK_SUSPENDED_EVENT));
+    throw error;
   }
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }

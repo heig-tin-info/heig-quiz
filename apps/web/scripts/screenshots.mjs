@@ -320,6 +320,9 @@ const scenes = [
   { name: "view-switch-student", role: "teacher", path: "/", fold: true, settle: 3000, ss: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/running/live" } },
   { name: "live-running", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live" },
   { name: "live-running-many", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live?many=1" },
+  // ADR-051 §8: stations (one suspended, one not attested) and a SEB row, and the supervisor's fallback.
+  { name: "live-kiosk", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live?kiosk=1&seb=1" },
+  { name: "live-kiosk-assign", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live?kiosk=1&seb=1", fold: true, act: (p) => p.getByRole("button", { name: "Assign a station" }).first().dispatchEvent("click") },
   { name: "live-lobby", role: "teacher", path: "/evaluations/lobby/live" },
   { name: "live-closed", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/closed/live" },
   { name: "live-inspect", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", act: (p) => p.getByRole("button", { name: /· Question 1$/ }).first().click() },

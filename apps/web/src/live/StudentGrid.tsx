@@ -6,7 +6,7 @@ import { displayedRate } from "@quiz/domain";
 import { useT } from "../i18n";
 import type { GridState } from "../realtime/grid";
 import { cx, T } from "../ui";
-import { ACTIONS, COL, GridRow, PROGRESS } from "./GridRow";
+import { ACTIONS, ACTIONS_KIOSK, COL, GridRow, PROGRESS } from "./GridRow";
 
 /**
  * The grid of F-DASH-01: students down, questions across.
@@ -64,6 +64,7 @@ export function StudentGrid({
   onExtend,
   onClose,
   onReopen,
+  onAssign,
 }: {
   state: GridState;
   /**
@@ -86,6 +87,8 @@ export function StudentGrid({
   /** With the name the row shows, for the confirmation that asks first. */
   onClose: (row: DashboardRow, name: string) => void;
   onReopen: (row: DashboardRow, name: string) => void;
+  /** Given when the exam accepts the kiosk: each row may get a station (ADR-051 §7). */
+  onAssign?: ((row: DashboardRow, name: string) => void) | undefined;
 }) {
   const t = useT();
   const { view } = state;
@@ -196,7 +199,7 @@ export function StudentGrid({
               scope="col"
               className={cx(
                 T.th,
-                ACTIONS,
+                onAssign ? ACTIONS_KIOSK : ACTIONS,
                 "bg-surface text-right sm:sticky sm:right-0 sm:z-10 sm:border-l sm:border-line",
               )}
             >
@@ -229,6 +232,7 @@ export function StudentGrid({
               onExtend={onExtend}
               onClose={onClose}
               onReopen={onReopen}
+              onAssign={onAssign}
             />
           ))}
         </tbody>
@@ -272,7 +276,7 @@ export function StudentGrid({
             <td
               className={cx(
                 T.td,
-                ACTIONS,
+                onAssign ? ACTIONS_KIOSK : ACTIONS,
                 "bg-surface-2 sm:sticky sm:right-0 sm:z-10 sm:border-l sm:border-line",
               )}
             />
