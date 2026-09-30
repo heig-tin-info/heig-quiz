@@ -121,6 +121,8 @@ export interface CircuitEditorStrings {
 
   reference: string;
   referenceHint: string;
+  expand: string;
+  expanded: string;
   tryReference: string;
   trying: string;
   tryUnavailable: string;
@@ -233,6 +235,8 @@ export const EDITOR_STRINGS: CircuitEditorStrings = {
   reference: "Reference circuit",
   referenceHint:
     "Your own answer, inside the same box: what a simulated grade compares against. Students may receive it when the evaluation shows the expected answer.",
+  expand: "Expand",
+  expanded: "The circuit is open over the page.",
   tryReference: "Simulate the reference",
   trying: "Simulating…",
   tryUnavailable: "The runner is unavailable, so the reference cannot be simulated right now.",
@@ -279,6 +283,9 @@ export const EDITOR_STRINGS: CircuitEditorStrings = {
 
 export interface CircuitPlayerStrings {
   schematic: string;
+  expand: string;
+  expandHint: string;
+  expanded: string;
   components: string;
   complete: string;
 
@@ -323,6 +330,9 @@ export interface CircuitPlayerStrings {
 
 export const PLAYER_STRINGS: CircuitPlayerStrings = {
   schematic: "Your circuit",
+  expand: "Expand",
+  expandHint: "Expand the circuit to draw.",
+  expanded: "The circuit is open over the page.",
   components: "{n} / {max} components",
   complete: "Everything is connected.",
 

@@ -40,6 +40,8 @@ export const diagramEditorStrings = {
   starterCopy: "Copy the reference into the starter",
   starterCopyHint: "Then remove what the student must add.",
   starterRemove: "Remove the starter",
+  expand: "Expand",
+  expanded: "This diagram is open over the page.",
   rubric: "Grading criteria",
   rubricHint:
     "How you will award the points, for yourself or another grader: shown beside every answer in the grading panel. Students never see it.",

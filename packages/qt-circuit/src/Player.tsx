@@ -14,6 +14,11 @@
  * "Simulate" is optional. With `RUNNER_MODE=stub` — the default until a
  * machine with Podman exists (decision D14) — `onSimulate` resolves with
  * `"unavailable"` and the panel says so in one calm line.
+ *
+ * EXPAND, as in the `diagram` player (ADR-046 addendum): when the host lends
+ * a layer (`PlayerProps.Expand`), a button opens the canvas and its strip
+ * over the page; under 1024 px the inline canvas is a picture that opens it.
+ * `ExpandableCanvas` of `@quiz/ui` is that behaviour, shared by both.
  */
 import { useMemo, useState } from "react";
 
@@ -21,13 +26,13 @@ import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { MarkdownRenderer, PlayerProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 
-import { Plot, SchematicEditor, type CanvasStrings } from "./canvas/index.js";
+import { Plot, SchematicEditor, SchematicView, type CanvasStrings } from "./canvas/index.js";
 import { parseSimulation, type SimulationResult } from "./grade.js";
 import { formatValue, LIBRARY, PORT_IDS, type PortId } from "./library.js";
 import { extractNets, type NetlistIssue } from "./netlist.js";
 import { biasOf, type CircuitAnswer, type CircuitStudent, type Load, type Source, type StudentStimulus } from "./schema.js";
 import { PLAYER_STRINGS, type CircuitPlayerStrings } from "./strings.js";
-import { badge, buttonClass, card, cx, hint, isLocked, markdown, sectionTitle } from "@quiz/ui";
+import { badge, buttonClass, card, cx, ExpandableCanvas, hint, isLocked, markdown, sectionTitle } from "@quiz/ui";
 
 import { strip } from "./styles.js";
 
@@ -157,6 +162,7 @@ export function CircuitPlayer({
   strings,
   canvasStrings,
   renderMarkdown,
+  Expand,
 }: CircuitPlayerProps) {
   const s = resolveStrings(PLAYER_STRINGS, strings);
   const locked = isLocked(readOnly, disabled);
@@ -241,46 +247,65 @@ export function CircuitPlayer({
         {markdown(renderMarkdown, student.prompt)}
       </div>
 
-      <div className="flex flex-col gap-2">
-        <SchematicEditor
-          aria-label={s.schematic}
-          value={schematic}
-          onChange={(next) => onChange({ schematic: next })}
-          palette={student.palette}
-          supplies={student.supplies}
-          readOnly={locked}
-          highlightPins={highlightPins}
-          highlightPorts={highlightPorts}
-          {...(canvasStrings === undefined ? {} : { strings: canvasStrings })}
-        />
-        {/*
-         * One line, never a panel: it sits UNDER the drawing and must not
-         * compete with it. The count first, because it is the budget; then
-         * what is still wrong, in the order the extractor found it.
-         */}
-        <div className={strip} role="status">
-          <span className={badge(netlist.counted > student.palette.maxComponents ? "danger" : "neutral")}>
-            {fmt(s.components, { n: netlist.counted, max: student.palette.maxComponents })}
-          </span>
-          {/*
-           * An untouched box is not a box full of mistakes: every port is
-           * "unconnected" before the first wire, and a student who has drawn
-           * nothing is told so by the canvas itself. The strip only speaks
-           * once there is something to say about.
-           */}
-          {empty || netlist.issues.length === 0 ? (
-            empty ? null : (
-              <span className="text-success">{s.complete}</span>
-            )
-          ) : (
-            netlist.issues.map((issue, i) => (
-              <span key={`${issue.code}-${issue.ref}-${i}`} className="text-warning">
-                {sentence(issue, s)}
+      <ExpandableCanvas
+        Expand={Expand}
+        title={s.schematic}
+        strings={s}
+        locked={locked}
+        preview={
+          <SchematicView
+            schematic={schematic}
+            height={280}
+            flaggedPins={highlightPins}
+            flaggedPorts={highlightPorts}
+            {...(canvasStrings === undefined ? {} : { strings: canvasStrings })}
+          />
+        }
+      >
+        {(expanded) => (
+          <div className={cx("flex flex-col gap-2", expanded && "h-full")}>
+            <SchematicEditor
+              aria-label={s.schematic}
+              value={schematic}
+              onChange={(next) => onChange({ schematic: next })}
+              palette={student.palette}
+              supplies={student.supplies}
+              readOnly={locked}
+              highlightPins={highlightPins}
+              highlightPorts={highlightPorts}
+              {...(expanded ? { height: "fill" as const } : {})}
+              {...(canvasStrings === undefined ? {} : { strings: canvasStrings })}
+            />
+            {/*
+             * One line, never a panel: it sits UNDER the drawing and must not
+             * compete with it. The count first, because it is the budget; then
+             * what is still wrong, in the order the extractor found it.
+             */}
+            <div className={strip} role="status">
+              <span className={badge(netlist.counted > student.palette.maxComponents ? "danger" : "neutral")}>
+                {fmt(s.components, { n: netlist.counted, max: student.palette.maxComponents })}
               </span>
-            ))
-          )}
-        </div>
-      </div>
+              {/*
+               * An untouched box is not a box full of mistakes: every port is
+               * "unconnected" before the first wire, and a student who has drawn
+               * nothing is told so by the canvas itself. The strip only speaks
+               * once there is something to say about.
+               */}
+              {empty || netlist.issues.length === 0 ? (
+                empty ? null : (
+                  <span className="text-success">{s.complete}</span>
+                )
+              ) : (
+                netlist.issues.map((issue, i) => (
+                  <span key={`${issue.code}-${issue.ref}-${i}`} className="text-warning">
+                    {sentence(issue, s)}
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </ExpandableCanvas>
 
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
         <div className="flex flex-wrap items-center gap-3">

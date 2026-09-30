@@ -197,6 +197,15 @@ drawer and the help drawer:
 - a form layer is portalled but still inside the React tree that rendered it,
   so its root stops click propagation: a click in a dialog opened from a
   table row must not reach that row's `onClick`.
+- the **expand layer** (`ExpandPanel`, `ui/expand.tsx`) is where a canvas
+  of the `diagram` or `circuit` type grows to (ADR-046, addenda): the page
+  covered with a 16 px margin, a thin bar — what the layer holds on the
+  left, a status on the right, ONE primary button that closes it — and no
+  backdrop close. It leaves Escape to the canvas first (`useLayer(…,
+  { escape: false })`): a canvas consumes the key (`preventDefault`) only
+  when it cancelled something, and the layer closes on a key left alone.
+  Two bars, one panel: the attempt's (clock, save state, "Back to the
+  questions", Alt+←/→) and the teacher's (title, save state, "Close").
 
 `Menu` follows the WAI-ARIA menu button pattern: `aria-haspopup="menu"` and
 `aria-expanded` on the trigger (cloned onto a custom one), Enter / Space /

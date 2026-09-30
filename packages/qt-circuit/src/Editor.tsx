@@ -50,6 +50,7 @@ import {
   cx,
   EditorSection,
   ErrorText,
+  ExpandableCanvas,
   FieldCell,
   hint,
   IssueList,
@@ -198,6 +199,7 @@ export function CircuitEditor({
   renderHelp,
   uploadAsset,
   aside,
+  Expand,
 }: CircuitEditorProps) {
   const s = resolveStrings(EDITOR_STRINGS, strings);
   const kinds = resolveStrings(KIND_LABELS, kindLabels);
@@ -369,17 +371,29 @@ export function CircuitEditor({
         <IssueList issues={issuesAt(issues, "stimuli").filter((x) => x.path.length === 1)} />
       </EditorSection>
 
-      <EditorSection title={s.reference} hint={s.referenceHint}>
-        <SchematicEditor
-          id={`${ids}-reference`}
-          aria-label={s.reference}
-          value={config.reference ?? { components: [], wires: [] }}
-          onChange={(reference: Schematic) => patch({ reference })}
-          palette={{ kinds: config.palette.kinds, maxComponents: 40 }}
-          supplies={config.supplies}
-          readOnly={disabled === true}
-          {...canvasProps(canvasStrings)}
-        />
+      <EditorSection>
+        {/* Its own Expand button when the host lends a layer (`EditorProps.Expand`). */}
+        <ExpandableCanvas
+          Expand={Expand}
+          title={s.reference}
+          heading={<h3 className={sectionTitle}>{s.reference}</h3>}
+          hint={<p className={hint}>{s.referenceHint}</p>}
+          strings={s}
+        >
+          {(expanded) => (
+            <SchematicEditor
+              id={`${ids}-reference`}
+              aria-label={s.reference}
+              value={config.reference ?? { components: [], wires: [] }}
+              onChange={(reference: Schematic) => patch({ reference })}
+              palette={{ kinds: config.palette.kinds, maxComponents: 40 }}
+              supplies={config.supplies}
+              readOnly={disabled === true}
+              {...(expanded ? { height: "fill" as const } : {})}
+              {...canvasProps(canvasStrings)}
+            />
+          )}
+        </ExpandableCanvas>
         <IssueList issues={issuesAt(issues, "reference")} />
 
         {onTry === undefined ? null : (

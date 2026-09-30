@@ -146,6 +146,7 @@ function ExpectedBody({ item, columns, student, explanation }: PanelProps) {
           answer={emptyAnswerOf(item.type, student)}
           onChange={() => {}}
           readOnly
+          expandable={false}
         />
       </Section>
       <Section title={t("grading.expected")}>

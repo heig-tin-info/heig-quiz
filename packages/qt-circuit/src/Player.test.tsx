@@ -7,7 +7,10 @@
  * is the DEFAULT configuration of the platform (decision D14), not an edge
  * case. The canvas is stubbed for the reason `Editor.test.tsx` stubs it.
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import type { ReactNode } from "react";
+
+import type { ExpandProps } from "@quiz/core/client";
 import { describe, expect, it, vi } from "vitest";
 
 import { CircuitPlayer, type CircuitSimulateOutcome } from "./Player.js";
@@ -17,12 +20,25 @@ vi.mock("./canvas/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./canvas/index.js")>();
   return {
     ...actual,
-    SchematicEditor: ({ "aria-label": label }: { "aria-label"?: string }) => (
-      <div data-testid="schematic-editor" aria-label={label} />
+    SchematicEditor: ({ "aria-label": label, height }: { "aria-label"?: string; height?: number | "fill" }) => (
+      <div data-testid="schematic-editor" aria-label={label} data-height={height ?? "auto"} />
     ),
     Plot: ({ title }: { title?: string }) => <div data-testid="plot">{title}</div>,
   };
 });
+
+/** The host's layer, reduced to what the component relies on. */
+function TestExpand({ open, onClose, title, children }: ExpandProps): ReactNode {
+  if (!open) return null;
+  return (
+    <div role="dialog" aria-label="Expanded" title={title}>
+      <button type="button" onClick={onClose}>
+        Close
+      </button>
+      {children}
+    </div>
+  );
+}
 
 /** One ngspice table, in the shape `parseSimulation` reads. */
 const TABLE = [
@@ -206,5 +222,20 @@ describe("CircuitPlayer", () => {
     // the answer this player ever builds holds `schematic` and nothing else.
     expect(onChange).not.toHaveBeenCalled();
     expect(Object.keys({ schematic: drawn } satisfies CircuitAnswer)).toEqual(["schematic"]);
+  });
+
+  it("opens the canvas and its strip in the host's layer, one editor at a time", () => {
+    setup({ Expand: TestExpand });
+    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+    const layer = screen.getByRole("dialog", { name: "Expanded" });
+    expect(layer).toHaveAttribute("title", "Your circuit");
+    expect(screen.getAllByTestId("schematic-editor")).toHaveLength(1);
+    expect(within(layer).getByTestId("schematic-editor")).toHaveAttribute("data-height", "fill");
+    // The diagnostics travel with the canvas.
+    expect(within(layer).getByText("R1.1 is not connected.")).toBeInTheDocument();
+    expect(screen.getByText("The circuit is open over the page.")).toBeInTheDocument();
+    fireEvent.click(within(layer).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByTestId("schematic-editor")).toHaveAttribute("data-height", "auto");
   });
 });

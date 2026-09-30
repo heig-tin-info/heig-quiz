@@ -7,7 +7,10 @@
  * own job — the sections, the stimulus it appends, the fields each grading
  * mode owns, and where a validation issue lands.
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import type { ReactNode } from "react";
+
+import type { ExpandProps } from "@quiz/core/client";
 import { describe, expect, it, vi } from "vitest";
 
 import { CircuitEditor, type CircuitTryOutcome } from "./Editor.js";
@@ -26,12 +29,25 @@ vi.mock("./canvas/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./canvas/index.js")>();
   return {
     ...actual,
-    SchematicEditor: ({ "aria-label": label }: { "aria-label"?: string }) => (
-      <div data-testid="schematic-editor" aria-label={label} />
+    SchematicEditor: ({ "aria-label": label, height }: { "aria-label"?: string; height?: number | "fill" }) => (
+      <div data-testid="schematic-editor" aria-label={label} data-height={height ?? "auto"} />
     ),
     Plot: ({ title }: { title?: string }) => <div data-testid="plot">{title}</div>,
   };
 });
+
+/** The host's layer, reduced to what the component relies on. */
+function TestExpand({ open, onClose, title, children }: ExpandProps): ReactNode {
+  if (!open) return null;
+  return (
+    <div role="dialog" aria-label="Expanded" title={title}>
+      <button type="button" onClick={onClose}>
+        Close
+      </button>
+      {children}
+    </div>
+  );
+}
 
 const series = (): SeriesSet => ({ t: [0, 1e-3], vin: [0, 1], vout: [0, 0.5], iout: [0, 0] });
 
@@ -69,6 +85,18 @@ describe("CircuitEditor", () => {
     }
     expect(screen.getByLabelText("Statement")).toHaveValue("Wire a low-pass filter.");
     expect(screen.getByLabelText("Reference circuit")).toBeInTheDocument();
+  });
+
+  it("expands the reference circuit into the host's layer", () => {
+    setup({ Expand: TestExpand });
+    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+    const layer = screen.getByRole("dialog", { name: "Expanded" });
+    expect(layer).toHaveAttribute("title", "Reference circuit");
+    expect(screen.getAllByTestId("schematic-editor")).toHaveLength(1);
+    expect(within(layer).getByTestId("schematic-editor")).toHaveAttribute("data-height", "fill");
+    expect(screen.getByText("The circuit is open over the page.")).toBeInTheDocument();
+    fireEvent.click(within(layer).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("offers the palette as chips, and toggling one patches only the palette", () => {

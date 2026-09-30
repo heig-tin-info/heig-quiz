@@ -1,4 +1,4 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { renderWithProviders } from "../test/render";
@@ -6,7 +6,7 @@ import { ExpandChrome, ExpandLayer } from "./ExpandLayer";
 import { QuestionHost } from "./QuestionHost";
 
 /*
- * The student's host lends the `diagram` player its expand layer
+ * The student's host lends the `diagram` and `circuit` players its expand layer
  * (`PlayerProps.Expand`, ADR-046 addendum): the canvas over the page, a thin
  * bar with the server's clock, the save state and "Back to the questions".
  * The package's suite proves the player uses the slot; this proves what the
@@ -74,6 +74,35 @@ describe("the expand layer of the diagram player", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(onWindow).toHaveBeenCalledTimes(1);
     expect((onWindow.mock.calls[0]![0] as KeyboardEvent).defaultPrevented).toBe(false);
+  });
+
+  it("serves the circuit player the same way, Escape first to its canvas", async () => {
+    const circuit = {
+      prompt: "Câblez un passe-bas.",
+      palette: { kinds: ["R", "C", "GND"], maxComponents: 4 },
+      supplies: { vcc: null, vee: null },
+      commonGround: true,
+      visibleStimuli: [],
+      hiddenCount: 0,
+      hiddenPoints: 0,
+      canSimulate: false,
+      showExpected: false,
+      simulationsPerMinute: 10,
+    };
+    renderWithProviders(
+      <ExpandChrome.Provider value={{ deadlineAt: Date.now() + 600_000, clock: Date.now, paused: false, sync: "saved" }}>
+        <QuestionHost type="circuit" student={circuit} answer={null} onChange={vi.fn()} readOnly={false} Expand={ExpandLayer} />
+      </ExpandChrome.Provider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Expand" }));
+    const layer = screen.getByRole("dialog", { name: "Expanded view" });
+    expect(layer).toContainElement(screen.getByRole("timer"));
+    const canvas = within(layer).getAllByRole("group", { name: "Your circuit" })[0]!;
+    fireEvent.click(within(layer).getByRole("button", { name: "Wire" }));
+    fireEvent.keyDown(canvas, { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.keyDown(canvas, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("offers no Expand button where the host lends no layer", async () => {

@@ -372,6 +372,8 @@ const scenes = [
   // `codeimage` (ADR-021): question 6. Its runtime is the server's, so Run
   // goes through the mock's `POST /attempts/:id/simulate`.
   { name: "player-circuit", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 5) },
+  // The circuit in the attempt's expand layer (ADR-046, second addendum): the clock, the save state, the way back.
+  { name: "player-circuit-expanded", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openQuestion(p, 5); await p.getByRole("button", { name: /^(Expand|Agrandir)$/ }).click(); await p.waitForTimeout(400); } },
   { name: "player-codeimage", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 6) },
   // The essay (issue #192): the formatted field and its counter, then past the limit.
   { name: "player-rich", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 7) },
@@ -684,10 +686,14 @@ const scenes = [
   // through the mock's `POST /try`, whose details carry the reference image.
   { name: "editor-codeimage", role: "teacher", path: "/questions/q16", settle: 5000 },
   { name: "editor-circuit", role: "teacher", path: "/questions/q8" },
+  // The teacher's expand layer over the reference circuit: its title, the save state, "Close".
+  { name: "editor-circuit-expanded", role: "teacher", path: "/questions/q8", fold: true, settle: 2000, act: async (p) => { await p.getByRole("button", { name: /^(Expand|Agrandir)$/ }).first().click(); await p.waitForTimeout(400); } },
   { name: "editor-rich", role: "teacher", path: "/questions/q17", settle: 3000 },
   { name: "editor-categorize", role: "teacher", path: "/questions/q18", settle: 3000 },
   // The diagram (ADR-046): published, so its kind is shown locked; the new draft's grid is `editor-diagram-new`.
   { name: "editor-diagram", role: "teacher", path: "/questions/q19", settle: 3000 },
+  // The reference diagram expanded, text tab and all (the starter has a button of its own).
+  { name: "editor-diagram-expanded", role: "teacher", path: "/questions/q19", fold: true, settle: 3000, act: async (p) => { await p.getByRole("button", { name: /^(Expand|Agrandir)$/ }).first().click(); await p.waitForTimeout(400); } },
   { name: "editor-diagram-new", role: "teacher", path: "/pools/p1", settle: 3000, act: async (p) => { await p.getByRole("button", { name: /nouvelle question|new question/i }).first().click(); await p.getByRole("button", { name: /^(diagram|diagramme)\b/i }).first().click(); await p.getByLabel(/internal name|nom interne/i).fill("uml-demo"); await p.keyboard.press("Enter"); await p.waitForURL(/\/questions\//); await p.waitForTimeout(2500); } },
   // A column left unnamed and a card emptied: the autosave's issues, on the fields and under the board.
   // The tray emptied of its distractor: it takes no room above the "new card" field.

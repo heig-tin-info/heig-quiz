@@ -9,6 +9,7 @@ import { useT } from "../i18n";
 import { QuestionReviewHost } from "../questionTypes";
 import { emptyAnswerOf, QuestionHost } from "../student/QuestionHost";
 import { Alert, Button, Card, Skeleton } from "../ui";
+import { EditorExpandLayer } from "./EditorExpandLayer";
 
 /** One question as the server built it for a student (`studentView`, invariant 4). */
 export interface StudentQuestion {
@@ -132,6 +133,7 @@ export function PlayedQuestion({
             answer={answer}
             onChange={setAnswer}
             readOnly={false}
+            Expand={EditorExpandLayer}
           />
         ) : key.isError ? (
           <Alert tone="warning" icon={AlertTriangle} title={t("preview.answers.failed")}>

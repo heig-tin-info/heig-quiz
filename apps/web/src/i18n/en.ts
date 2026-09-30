@@ -1581,6 +1581,8 @@ export const en = {
   "qt.circuit.e.reference": "Reference circuit",
   "qt.circuit.e.referenceHint":
     "Your own answer, inside the same box: what a simulated grade compares against. Students may receive it when the evaluation shows the expected answer.",
+  "qt.circuit.e.expand": "Expand",
+  "qt.circuit.e.expanded": "The circuit is open over the page.",
   "qt.circuit.e.tryReference": "Simulate the reference",
   "qt.circuit.e.trying": "Simulation…",
   "qt.circuit.e.tryUnavailable":
@@ -1626,6 +1628,9 @@ export const en = {
 
   // --- qt-circuit player strings ---
   "qt.circuit.p.schematic": "Your circuit",
+  "qt.circuit.p.expand": "Expand",
+  "qt.circuit.p.expandHint": "Expand the circuit to draw.",
+  "qt.circuit.p.expanded": "The circuit is open over the page.",
   "qt.circuit.p.components": "{n} / {max} components",
   "qt.circuit.p.complete": "Everything is connected.",
   "qt.circuit.p.issueFloatingPin": "{ref} is not connected.",
@@ -1760,6 +1765,8 @@ export const en = {
   "qt.diagram.e.starterCopy": "Copy the reference into the starter",
   "qt.diagram.e.starterCopyHint": "Then remove what the student must add.",
   "qt.diagram.e.starterRemove": "Remove the starter",
+  "qt.diagram.e.expand": "Expand",
+  "qt.diagram.e.expanded": "This diagram is open over the page.",
   "qt.diagram.e.rubric": "Grading criteria",
   "qt.diagram.e.rubricHint":
     "How you will award the points, for yourself or another grader: shown beside every answer in the grading panel. Students never see it.",
