@@ -169,6 +169,13 @@ const scenes = [
   { name: "classroom-error", role: "teacher", path: "/classrooms/r1?fail=1", settle: 2500 },
   { name: "classroom-loading", role: "teacher", path: "/classrooms/r1?slow=1", settle: 300 },
   { name: "classroom-roster-many", role: "teacher", path: "/classrooms/r1?tab=roster&many=1" },
+  // ADR-041 (#317, slice 4): the classroom's Drill tab — the students'
+  // activity and the mastery per tag, a student's weekly progression, the
+  // drill on with nothing yet (r2) and the drill off (r3).
+  { name: "classroom-drill", role: "teacher", path: "/classrooms/r1?tab=drill" },
+  { name: "classroom-drill-student", role: "teacher", path: "/classrooms/r1?tab=drill", fold: true, act: async (p) => { await p.getByRole("button", { name: /^(Progression of|Progression de)/ }).first().click(); await p.getByText(/^(Reviews per week|Révisions par semaine)$/).first().waitFor(); } },
+  { name: "classroom-drill-none", role: "teacher", path: "/classrooms/r2?tab=drill" },
+  { name: "classroom-drill-off", role: "teacher", path: "/classrooms/r3?tab=drill" },
   { name: "classroom-import", role: "teacher", path: "/classrooms/r1?tab=roster", act: (p) => p.getByRole("button", { name: /add students/i }).first().click() },
   { name: "classroom-menu", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^actions$/i }).first().click() },
   // #156: the period dialog — the months, the two semester presets, the label.

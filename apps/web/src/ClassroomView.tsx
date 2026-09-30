@@ -4,6 +4,7 @@ import {
   ArchiveRestore,
   CalendarRange,
   ClipboardList,
+  Dumbbell,
   GraduationCap,
   Plus,
   Trash2,
@@ -17,7 +18,7 @@ import { ClassroomPatch, type ClassroomDetail, type EvaluationSummary } from "@q
 import { api, useMe } from "./api";
 import { PeriodFields, periodBody, periodInvalid, type PeriodDraft } from "./ClassroomPeriod";
 import { useConfirm } from "./confirm";
-import { ClassroomDrillSetting } from "./drill/ClassroomDrillSetting";
+import { ClassroomDrill } from "./drill/ClassroomDrill";
 import { useT } from "./i18n";
 // WP8: evaluation + dashboard
 import { EvaluationList, NewEvaluationModal } from "./evaluation/EvaluationList";
@@ -52,10 +53,12 @@ import { invalidateHint } from "./realtime/hints";
  * tabs also settle the primary action, and the page header carries it in the
  * same slot whichever tab is open: "Add students" on the roster — an empty
  * roster is the only thing that blocks everything a classroom is for — and
- * "New evaluation" on the evaluations (#295).
+ * "New evaluation" on the evaluations (#295). The third tab, the drill
+ * (ADR-041, #317), is a read view — each student's practice, and the
+ * classroom's drill switch at its foot — so the slot stays empty there.
  */
 
-type Tab = "roster" | "evaluations";
+type Tab = "roster" | "evaluations" | "drill";
 
 /**
  * The classroom name, renamed where it is written (`EditableTitle`). The
@@ -244,7 +247,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
   // own seat does not count: a classroom holding nothing else is still one to
   // fill.
   const tab: Tab =
-    tabParam === "roster" || tabParam === "evaluations"
+    tabParam === "roster" || tabParam === "evaluations" || tabParam === "drill"
       ? tabParam
       : students.length > 0
         ? "evaluations"
@@ -300,11 +303,11 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
               <Button data-coach="classroom.add" onClick={() => setImporting(true)}>
                 <UserPlus /> {t("roster.add")}
               </Button>
-            ) : (
+            ) : tab === "evaluations" ? (
               <Button onClick={() => setCreating(true)}>
                 <Plus /> {t("eval.new")}
               </Button>
-            )}
+            ) : null}
             <Menu
               label={t("common.actions")}
               items={[
@@ -366,6 +369,8 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
               icon: ClipboardList,
               coach: "classroom.tab.evaluations",
             },
+            // ADR-041 (#317): the students' drill, and its switch.
+            { value: "drill", label: t("nav.drill"), icon: Dumbbell },
           ]}
         />
 
@@ -394,13 +399,11 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
               )}
             </Card>
           </section>
-        ) : (
+        ) : tab === "evaluations" ? (
           // WP8: evaluation + dashboard
-          <div className="space-y-6">
-            <EvaluationList classroomId={id} navigate={navigate} onNew={() => setCreating(true)} />
-            {/* ADR-041 §6 (#317): the drill draws on these evaluations. */}
-            <ClassroomDrillSetting room={data} />
-          </div>
+          <EvaluationList classroomId={id} navigate={navigate} onNew={() => setCreating(true)} />
+        ) : (
+          <ClassroomDrill room={data} />
         )}
       </div>
 

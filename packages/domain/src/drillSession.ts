@@ -15,6 +15,33 @@ export const DRILL_UNKNOWN_REFERENCE_MS = 60_000;
 export const DRILL_TIME_ZONE = "Europe/Zurich";
 
 /**
+ * The share of cards the scheduler aims to have remembered when they come
+ * due (ADR-041 §5). Here, beside the day, and not in `drillSchedule.ts`:
+ * the web app draws it on the teacher's chart without pulling `ts-fsrs`.
+ */
+export const DRILL_TARGET_RETENTION = 0.9;
+
+/** How far `timeZone`'s wall clock is ahead of UTC at `at`, in ms. */
+function zoneOffset(at: Date, timeZone: string): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+      .formatToParts(at)
+      .map((p) => [p.type, p.value]),
+  );
+  const local = Date.UTC(+parts.year!, +parts.month! - 1, +parts.day!, +parts.hour!, +parts.minute!, +parts.second!);
+  return local - Math.floor(at.getTime() / 1000) * 1000;
+}
+
+/**
  * The calendar day of `now` in `timeZone`, as two instants: its first
  * millisecond and the first of the next day. What "due today" and "new
  * cards per day" are measured against — a card due at 14:00 belongs to the
@@ -22,24 +49,7 @@ export const DRILL_TIME_ZONE = "Europe/Zurich";
  * last session.
  */
 export function drillDayBounds(now: Date, timeZone: string = DRILL_TIME_ZONE): { start: Date; end: Date } {
-  const offset = (at: Date): number => {
-    const parts = Object.fromEntries(
-      new Intl.DateTimeFormat("en-US", {
-        timeZone,
-        hourCycle: "h23",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      })
-        .formatToParts(at)
-        .map((p) => [p.type, p.value]),
-    );
-    const local = Date.UTC(+parts.year!, +parts.month! - 1, +parts.day!, +parts.hour!, +parts.minute!, +parts.second!);
-    return local - Math.floor(at.getTime() / 1000) * 1000;
-  };
+  const offset = (at: Date) => zoneOffset(at, timeZone);
   const localNow = now.getTime() + offset(now);
   const localMidnight = localNow - (((localNow % 86_400_000) + 86_400_000) % 86_400_000);
   // Each bound takes the offset in force at that instant (a DST change may lie between).
@@ -47,6 +57,11 @@ export function drillDayBounds(now: Date, timeZone: string = DRILL_TIME_ZONE): {
   const nextMidnight = localMidnight + 86_400_000;
   const end = nextMidnight - offset(new Date(nextMidnight - offset(now)));
   return { start: new Date(start), end: new Date(end) };
+}
+
+/** The calendar date (`YYYY-MM-DD`) of an instant on the drill's clock, where its days are counted. */
+export function drillLocalDate(at: Date, timeZone: string = DRILL_TIME_ZONE): string {
+  return new Date(at.getTime() + zoneOffset(at, timeZone)).toISOString().slice(0, 10);
 }
 
 export interface DrillCandidate {

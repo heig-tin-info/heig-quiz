@@ -8,7 +8,9 @@
  *     the teacher, purged after five years; the key fingerprint and the
  *     eligibility of a question;
  *   - `review.ts`: the student's session, the served card, its time on
- *     screen and the review.
+ *     screen and the review;
+ *   - `teacher.ts`: the teacher's reads of a classroom — each student's
+ *     activity, the weekly progression, the mastery per tag.
  *
  * The module owns `drill_cards` and `drill_reviews`. The switches it reads
  * belong to their modules and are written through their services:
@@ -51,3 +53,4 @@ export {
   serveCard,
   studentDrillClassrooms,
 } from "./review.js";
+export { classroomActivity, classroomMastery, classroomProgress } from "./teacher.js";

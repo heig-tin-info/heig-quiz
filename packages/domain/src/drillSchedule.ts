@@ -11,6 +11,8 @@
  */
 import { createEmptyCard, fsrs, State, type Card, type Grade } from "ts-fsrs";
 
+import { DRILL_TARGET_RETENTION } from "./drillSession.js";
+
 /** FSRS recall rating: 1 Again, 2 Hard, 3 Good, 4 Easy. */
 export type DrillRating = 1 | 2 | 3 | 4;
 
@@ -27,8 +29,6 @@ export interface DrillCard {
   lapses: number;
 }
 
-/** The share of cards the scheduler aims to have remembered when they come due. */
-export const DRILL_TARGET_RETENTION = 0.9;
 
 /**
  * The 19 default weights of FSRS-5, followed by the two that make the

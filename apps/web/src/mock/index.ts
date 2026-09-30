@@ -47,7 +47,7 @@
  *   grading.ts     5.  grading, results and the student's feedback;
  *   preview.ts     5b. the teacher's stateless preview of an evaluation;
  *   poll.ts        6.  the participant's poll page and the teacher's half;
- *   drill.ts       7.  the student's drill and the teacher's drill switches.
+ *   drill.ts       7.  the student's drill, the teacher's drill switches and view.
  *
  * That list is also the dependency order, and the graph is acyclic: a file
  * reads the ones above it and never the ones below. Two handlers are

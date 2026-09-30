@@ -4,15 +4,12 @@ import type { AnswerDistributionEntry, ByQuestion } from "@quiz/contracts";
 import { displayedRate } from "@quiz/domain";
 
 import { ApiError } from "../api";
-import { useT } from "../i18n";
+import { useI18n, useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { choicesOf } from "../poll/pollTally";
 import { typeLabel, QuestionReviewHost } from "../questionTypes";
-import { Badge, Card, EmptyState, NotePanel, SectionHeading, SegmentedBar, type BarTone } from "../ui";
+import { Badge, Card, EmptyState, NotePanel, percent, SectionHeading, SegmentedBar, type BarTone } from "../ui";
 
-// Clamped for display (ADR-026): negative marking can push a mean below 0.
-const percent = (rate: number | null) =>
-  rate === null ? "—" : `${Math.round(displayedRate(rate) * 100)}%`;
 
 /** The `code` key, when the payload carries one and the policy let it out. */
 export function referenceSolution(solution: unknown): string | null {
@@ -66,6 +63,7 @@ function distributionRows(q: ByQuestion, blank: string) {
  */
 export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
   const t = useT();
+  const { locale } = useI18n();
   if (questions.length === 0) {
     return (
       <Card>
@@ -92,7 +90,9 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
                   <Badge tone="zinc">{typeLabel(t, q.item.type)}</Badge>
                   <Badge tone="zinc">{t("results.byQuestion.answered", { n: answered })}</Badge>
                   <Badge tone={(q.successRate ?? 0) >= 0.5 ? "green" : "amber"}>
-                    {t("results.byQuestion.successRate")} {percent(q.successRate)}
+                    {t("results.byQuestion.successRate")}{" "}
+                    {/* Clamped for display (ADR-026): negative marking can push a mean below 0. */}
+                    {q.successRate === null ? "—" : percent(displayedRate(q.successRate), locale)}
                   </Badge>
                 </div>
               }
