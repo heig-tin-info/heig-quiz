@@ -2709,6 +2709,13 @@ export const en = {
   "feedback.pending.attempt_open.title": "Your attempt is still open",
   "feedback.pending.attempt_open.body":
     "Hand in “{title}”, or wait for the deadline, and your results will appear here.",
+  "grade.letter.F": "Fail (F)",
+  "grade.letter.FX": "Fail (FX)",
+  "grade.letter.E": "Sufficient (E)",
+  "grade.letter.D": "Satisfactory (D)",
+  "grade.letter.C": "Good (C)",
+  "grade.letter.B": "Very good (B)",
+  "grade.letter.A": "Excellent (A)",
   "feedback.grade": "Grade",
   "feedback.points": "Points",
   "feedback.released": "Published",

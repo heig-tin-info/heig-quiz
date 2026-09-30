@@ -2708,6 +2708,13 @@ export const fr: Record<keyof Dict, string> = {
   "feedback.pending.attempt_open.title": "Votre tentative est encore ouverte",
   "feedback.pending.attempt_open.body":
     "Rendez « {title} », ou attendez l'échéance, et vos résultats apparaîtront ici.",
+  "grade.letter.F": "Échec (F)",
+  "grade.letter.FX": "Échec (FX)",
+  "grade.letter.E": "Passable (E)",
+  "grade.letter.D": "Satisfaisant (D)",
+  "grade.letter.C": "Bien (C)",
+  "grade.letter.B": "Très bien (B)",
+  "grade.letter.A": "Excellent (A)",
   "feedback.grade": "Note",
   "feedback.points": "Points",
   "feedback.released": "Publiés",
