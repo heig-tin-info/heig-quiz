@@ -152,10 +152,10 @@ const scenes = [
       await p.getByLabel(/internal name|nom interne/i).waitFor();
     await p.waitForTimeout(250); // the slide
     } },
-  // #154: the course → classroom tree under "Courses", in its three states,
+  // #154: the course → classroom tree under "Courses", in its two states,
   // and a second course's row in "all" with its code's tip. The rows open the
   // course page (F-ORG-12), so the tip is hovered, not clicked.
-  ...["collapsed", "active", "all"].map((state) => ({
+  ...["active", "all"].map((state) => ({
     name: `sidebar-courses-${state}`, role: "teacher", path: "/classrooms/r4", fold: true,
     ls: { "quiz-courses-nav": state },
   })),
