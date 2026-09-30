@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-30), with the addendum below. Proposed 2026-09-29.
+Accepted (2026-09-30), with the two addenda below. Proposed 2026-09-29.
 Decided with the product owner: v1 graded by hand,
 all eight kinds in v1, the text form shown to the teacher only, `diagram`
 replaces the drawing type of docs/spec/04 §4.10, and a starter diagram may
@@ -234,6 +234,49 @@ Decided with the product owner when `packages/qt-diagram` was written.
 
 The MCP guide (`describe_question_types`) documents the scene with one
 example; `create_question` takes a scene, never a text form.
+
+## Addendum (2026-09-30): Expand wherever one draws
+
+Asked by the product owner once `diagram` shipped: the Expand button of
+item 2 of the addendum above serves every canvas, the `circuit` one
+included, and the teacher's as well as the student's. What it settled:
+
+1. **One primitive, two types.** `ExpandableCanvas` of `@quiz/ui` is the
+   behaviour item 2 describes, written once: the heading row with the Expand
+   button (only when a layer is lent), the one-line note in place of the
+   inline canvas while the layer is open (one live editor), and — for a
+   player, which passes a `preview` — the read-only picture under 1024 px
+   that opens the layer. The `diagram` and `circuit` players and editors all
+   use it; `@quiz/ui` still depends on `@quiz/core` alone. `circuit` keeps
+   its own canvas (§7): only its frame changed.
+2. **`circuit` hands Escape back like `diagram` does.** Its canvas consumes
+   Escape only when it cancelled something (the wire being drawn, the armed
+   tool, the selection), and its inspector fields consume the Escape that
+   blurs them, so a layer around it closes on a key left alone and never
+   under a field being typed in. `SchematicEditor` takes `height="fill"` to
+   take the room of the layer rather than its fitted height.
+3. **`EditorProps.Expand`, the same slot as the player's.** `@quiz/core`
+   gains an optional `Expand` on `EditorProps`, of the same `ExpandProps`
+   shape, which gains an optional `title` (what the layer holds, "Reference
+   diagram"). In `diagram`'s editor the reference and the starter each get
+   their own button, and the text tab works inside the layer; in
+   `circuit`'s, the reference circuit (its only canvas). The inspectors
+   stay where they are.
+4. **One layer in `apps/web`, two bars.** The layer's mechanics
+   (`ui/expand.tsx`, `ExpandPanel`: the 16 px margin, the focus trap, the
+   Escape rule) are one component; the student's bar
+   (`student/ExpandLayer.tsx`) keeps the server's clock, the save state,
+   "Back to the questions" and Alt+←/→; the teacher's
+   (`question/EditorExpandLayer.tsx`) shows the title of what is edited, the
+   draft's save state where the screen autosaves (the question editor's
+   Edit tab, through a context), and one primary action, "Close" — no
+   Alt+←/→, there is no question to move to.
+5. **Where a teacher plays a question, the teacher's layer too.** Every
+   editor host lends it (`QuestionEditorHost`), and so do the Try tab and
+   the previews (`PlayedQuestion`: the preview page, the pool's reading
+   pane, the picker, an evaluation item's preview). The grading panel,
+   which shows a read-only statement, lends none, and there the players
+   still show no Expand button.
 
 ## Alternatives considered
 

@@ -71,6 +71,16 @@ export interface EditorProps<TConfig> {
    * they meant. An editor with no such setting ignores it.
    */
   published?: boolean;
+  /**
+   * The host's EXPAND layer, lent to an editor for the reason it is lent to a
+   * player (`PlayerProps.Expand`): a canvas of the `diagram` or `circuit`
+   * editor (the reference, the starter) opens in it, over the page with a
+   * small margin, under a thin bar of the host's — what is being edited
+   * (`ExpandProps.title`), the draft's save state where the host knows it,
+   * and "Close". Absent, the editor offers no Expand button. Every other
+   * type ignores it.
+   */
+  Expand?: ComponentType<ExpandProps>;
 }
 
 /**
@@ -188,24 +198,30 @@ export interface PlayerProps<TStudent, TAnswer> {
   onUnsent?: (unsent: boolean) => void;
   /**
    * The host's EXPAND layer, lent for the reason `RichText` is: a player that
-   * needs more room than the question card — the `diagram` canvas (ADR-046
-   * §6) — draws in it, and the layer is part of the app's chrome, which a
-   * package cannot import. It covers the page with a small margin and keeps a
-   * thin bar of the host's own (the server's clock, the save state, the way
-   * back); it is a layer of the page, never the browser's full screen.
+   * needs more room than the question card — the `diagram` and `circuit`
+   * canvases (ADR-046 §6 and addendum) — draws in it, and the layer is part
+   * of the app's chrome, which a package cannot import. It covers the page
+   * with a small margin and keeps a thin bar of the host's own (in an attempt:
+   * the server's clock, the save state, the way back); it is a layer of the
+   * page, never the browser's full screen.
    *
-   * The player renders it with `open` and its content as `children`, and the
-   * host calls `onClose` (the bar's button, Escape, a move to another
-   * question). Absent — the try panel, the grading panel — the player offers
+   * The player renders it with `open`, a `title` and its content as
+   * `children`, and the host calls `onClose` (the bar's button, Escape, a
+   * move to another question). Absent — the grading panel — the player offers
    * no Expand button at all. Every other type ignores it.
    */
   Expand?: ComponentType<ExpandProps>;
 }
 
-/** The props of the host's expand layer (`PlayerProps.Expand`). */
+/** The props of the host's expand layer (`PlayerProps.Expand`, `EditorProps.Expand`). */
 export interface ExpandProps {
   open: boolean;
   onClose: () => void;
+  /**
+   * What the layer holds, in the caller's words ("Reference diagram"): the
+   * editor's layer shows it in its bar, and a host may name the layer by it.
+   */
+  title: string;
   children: ReactNode;
 }
 

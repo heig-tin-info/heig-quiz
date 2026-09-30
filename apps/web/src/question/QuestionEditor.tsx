@@ -10,6 +10,7 @@ import { tryAdapterFor } from "../questionTypes";
 import { QUESTION_ORIGIN_PARAMS, routeToPath, useSearchParam, type Route } from "../router";
 import { PageError, PageSkeleton, TabPanel, Tabs } from "../ui";
 import { PublishDialog } from "./PublishDialog";
+import { EditorExpandChrome } from "./EditorExpandLayer";
 import { QuestionEditTab } from "./QuestionEditTab";
 import { QuestionHeader } from "./QuestionHeader";
 import { TryPanel } from "./TryPanel";
@@ -263,16 +264,19 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
 
       <TabPanel idPrefix="question" value={tab} ref={panelRef}>
       {tab === "edit" ? (
-        <QuestionEditTab
-          data={data}
-          pool={pool.data}
-          draft={draft}
-          setDraft={setDraft}
-          issues={issues}
-          edited={edited}
-          readOnly={readOnly}
-          onTry={onTry}
-        />
+        // The draft's save state, in the bar of a canvas's expand layer too.
+        <EditorExpandChrome.Provider value={autosave.state}>
+          <QuestionEditTab
+            data={data}
+            pool={pool.data}
+            draft={draft}
+            setDraft={setDraft}
+            issues={issues}
+            edited={edited}
+            readOnly={readOnly}
+            onTry={onTry}
+          />
+        </EditorExpandChrome.Provider>
       ) : tab === "try" ? (
         <TryPanel questionId={id} type={data.meta.type} />
       ) : (

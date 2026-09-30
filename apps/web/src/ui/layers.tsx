@@ -190,8 +190,8 @@ function focusableIn(root: HTMLElement): HTMLElement[] {
  * `panel` must carry `tabIndex={-1}` so it can hold the focus by itself when
  * it has no focusable child.
  *
- * `escape: false` leaves Escape to the layer itself: the student's expand
- * layer (`student/ExpandLayer.tsx`) holds a canvas that cancels a tool or a
+ * `escape: false` leaves Escape to the layer itself: the expand layer
+ * (`ui/expand.tsx`) holds a canvas that cancels a tool or a
  * selection on Escape first, and closes only on a key the canvas left alone
  * — which a listener in the capture phase, as here, would never see.
  */

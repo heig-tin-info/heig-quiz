@@ -25,7 +25,7 @@
 import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 
 import type { TryResult } from "@quiz/contracts";
-import type { ConfigIssue, ReviewSections, RichTextComponent } from "@quiz/core/client";
+import type { ConfigIssue, ExpandProps, ReviewSections, RichTextComponent } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 import {
   clientRegistry,
@@ -106,6 +106,7 @@ import { HelpIcon } from "./help";
 import type { Dict, TFunction } from "./i18n";
 import { ClozeMarkdownText } from "./markdown/ClozeMarkdownText";
 import { MarkdownView } from "./markdown/MarkdownView";
+import { EditorExpandLayer } from "./question/EditorExpandLayer";
 import { BrowserRunnerUnavailable, runnerFor } from "./runner";
 import { imageReferenceRunRequest, referenceRunRequest } from "./runner/codeRun";
 import { ScrollableCode, Skeleton, type IconType } from "./ui";
@@ -575,6 +576,8 @@ interface EditorHostProps {
   onTry?: (config: unknown) => Promise<TryOutcome>;
   /** `code` only: `CodeEditorProps.onTryInBrowser`. */
   onTryInBrowser?: (config: CodeConfig) => Promise<RunnerOutcome | "unavailable">;
+  /** `diagram` and `circuit`: the layer a canvas expands into (`EditorProps.Expand`). */
+  Expand?: ComponentType<ExpandProps>;
 }
 
 /**
@@ -664,6 +667,9 @@ export function QuestionEditorHost({
         {...(onTry !== undefined && client.id === "code"
           ? { onTryInBrowser: tryReferenceInBrowser }
           : {})}
+        // Every editor host lends the layer; the save state in its bar is the
+        // question editor's (`EditorExpandChrome`), absent elsewhere.
+        Expand={EditorExpandLayer}
       />
     </Suspense>
   );
@@ -685,6 +691,7 @@ interface PlayerHostProps {
   allowManualRun?: boolean;
   testsPrimary?: boolean;
   onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
+  Expand?: ComponentType<ExpandProps>;
 }
 
 export function QuestionPlayerHost({
@@ -698,6 +705,7 @@ export function QuestionPlayerHost({
   allowManualRun,
   testsPrimary,
   onSimulate,
+  expandable = true,
 }: {
   t: TFunction;
   type: string;
@@ -716,6 +724,12 @@ export function QuestionPlayerHost({
    * and its two words are the graceful paths (D14, N-SEC-07).
    */
   onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
+  /**
+   * Whether the player gets the teacher's expand layer (`PlayerProps.Expand`,
+   * `EditorExpandLayer`). Lent by default — the Try tab draws in it — and
+   * refused by the grading panel, which shows a statement with nothing to draw.
+   */
+  expandable?: boolean;
 }) {
   const client = questionType(type);
   if (!client) return <Unknown>{t("qt.unknown")}</Unknown>;
@@ -740,6 +754,7 @@ export function QuestionPlayerHost({
           {...(allowManualRun === undefined ? {} : { allowManualRun })}
           {...(testsPrimary === undefined ? {} : { testsPrimary })}
           {...(onSimulate === undefined ? {} : { onSimulate })}
+          {...(expandable ? { Expand: EditorExpandLayer } : {})}
         />
       </Suspense>
     </ScrollableCode>

@@ -28,6 +28,8 @@
 //   state     browser state a screen reads: remembered choices
 //             (usePersistentChoice), isTyping, useFullscreen. Imports no
 //             sibling.
+//   expand    the layer a question type's canvas expands into
+//             (ExpandPanel), on layers + controls.
 //
 // `QueryError`, `PageError` and `FormError` come from the app side (they read an
 // `ApiError`), so that nothing under `ui/` imports the HTTP client.
@@ -47,4 +49,5 @@ export * from "./bar";
 export * from "./forms";
 export * from "./combobox";
 export * from "./state";
+export * from "./expand";
 export { FormError, PageError, QueryError } from "../queryError";

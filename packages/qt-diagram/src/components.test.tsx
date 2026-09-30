@@ -1,8 +1,8 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useState, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ExpandProps } from "@quiz/core/client";
+import type { EditorProps, ExpandProps } from "@quiz/core/client";
 import { emptyScene } from "@quiz/diagram/server";
 
 import { DiagramQuestionEditor } from "./Editor.js";
@@ -12,12 +12,23 @@ import type { DiagramConfig } from "./schema.js";
 import { config, REFERENCE, STARTER } from "./test/fixtures.js";
 
 /** A host that owns the config, as the question editor does. */
-function EditorHost({ initial, onChange, published }: { initial: DiagramConfig; onChange: (c: DiagramConfig) => void; published?: boolean }) {
+function EditorHost({
+  initial,
+  onChange,
+  published,
+  Expand,
+}: {
+  initial: DiagramConfig;
+  onChange: (c: DiagramConfig) => void;
+  published?: boolean;
+  Expand?: EditorProps<DiagramConfig>["Expand"];
+}) {
   const [value, setValue] = useState(initial);
   return (
     <DiagramQuestionEditor
       config={value}
       published={published ?? false}
+      {...(Expand === undefined ? {} : { Expand })}
       onChange={(next) => {
         setValue(next);
         onChange(next);
@@ -27,10 +38,10 @@ function EditorHost({ initial, onChange, published }: { initial: DiagramConfig; 
 }
 
 /** The host's layer, reduced to what the player relies on. */
-function TestExpand({ open, onClose, children }: ExpandProps): ReactNode {
+function TestExpand({ open, onClose, title, children }: ExpandProps): ReactNode {
   if (!open) return null;
   return (
-    <div role="dialog" aria-label="Expanded">
+    <div role="dialog" aria-label="Expanded" title={title}>
       <button type="button" onClick={onClose}>
         Back to the questions
       </button>
@@ -87,6 +98,36 @@ describe("DiagramQuestionEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove the starter" }));
     expect("starter" in (onChange.mock.lastCall?.[0] as DiagramConfig)).toBe(false);
   });
+
+  it("expands the reference and the starter each on its own, text tab included", () => {
+    const onChange = vi.fn();
+    render(<EditorHost initial={config()} onChange={onChange} Expand={TestExpand} />);
+    const [reference, starter] = screen.getAllByRole("button", { name: "Expand" });
+    expect(starter).toBeDefined();
+
+    fireEvent.click(reference!);
+    const layer = screen.getByRole("dialog", { name: "Expanded" });
+    expect(layer).toHaveAttribute("title", "Reference diagram");
+    // The layer holds the one live reference canvas; the starter stays inline.
+    expect(screen.getAllByRole("group", { name: "Reference diagram" })).toHaveLength(1);
+    expect(layer).toContainElement(screen.getByRole("group", { name: "Reference diagram" }));
+    expect(layer).not.toContainElement(screen.getByRole("group", { name: "Starter diagram" }));
+    expect(screen.getByText("This diagram is open over the page.")).toBeInTheDocument();
+
+    // The text tab works in the layer: typing there edits the reference.
+    fireEvent.click(within(layer).getByRole("tab", { name: "Text" }));
+    const text = within(layer).getByRole("textbox", { name: "Text" });
+    fireEvent.focus(text);
+    fireEvent.change(text, { target: { value: "class Solo" } });
+    expect((onChange.mock.lastCall?.[0] as DiagramConfig).reference.nodes.map((n) => n.name)).toEqual(["Solo"]);
+
+    fireEvent.click(within(layer).getByRole("button", { name: "Back to the questions" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Expand" })[1]!);
+    expect(screen.getByRole("dialog")).toHaveAttribute("title", "Starter diagram");
+    expect(screen.getByRole("dialog")).toContainElement(screen.getByRole("group", { name: "Starter diagram" }));
+  });
 });
 
 describe("DiagramPlayer", () => {
@@ -97,8 +138,6 @@ describe("DiagramPlayer", () => {
     render(<DiagramPlayer student={student} answer={null} onChange={onChange} readOnly={false} />);
     expect(screen.getByRole("group", { name: "Your diagram" })).toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
-    // No layer lent by the host: no Expand button at all.
-    expect(screen.queryByRole("button", { name: "Expand" })).toBeNull();
   });
 
   it("sends the whole scene on an edit", () => {
@@ -119,19 +158,6 @@ describe("DiagramPlayer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to the questions" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("group", { name: "Your diagram" })).toBeInTheDocument();
-  });
-
-  it("previews inline on a narrow screen and draws in the layer", () => {
-    const matchMedia = vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
-    vi.stubGlobal("matchMedia", matchMedia);
-    try {
-      render(<DiagramPlayer student={student} answer={null} onChange={vi.fn()} readOnly={false} Expand={TestExpand} />);
-      expect(screen.queryByRole("group", { name: "Your diagram" })).toBeNull();
-      fireEvent.click(screen.getByRole("button", { name: "Expand the diagram to draw." }));
-      expect(screen.getByRole("dialog")).toContainElement(screen.getByRole("group", { name: "Your diagram" }));
-    } finally {
-      vi.unstubAllGlobals();
-    }
   });
 
   it("offers no tool on a locked attempt", () => {

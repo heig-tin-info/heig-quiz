@@ -314,14 +314,17 @@ export interface KeyActions {
   transform: (t: Orientation) => void;
   toggleWire: () => void;
   remove: () => void;
-  escape: () => void;
+  /** Cancels one level; `false` when there was nothing to cancel, so the key is left to the host. */
+  escape: () => boolean;
   /** Arms the palette kind at this index (0-based). */
   arm: (index: number) => void;
 }
 
 /**
  * The editor's answer to each key. Escape unwinds one level: the wire being
- * drawn, then the armed tool, then the selection.
+ * drawn, then the armed tool, then the selection. With none of the three it
+ * does nothing and says so, and the key is not consumed: a host layer around
+ * the editor (the expand layer, ADR-046 addendum) closes on it.
  */
 export function keyActions(e: {
   undo: () => void;
@@ -331,6 +334,8 @@ export function keyActions(e: {
   transform: (t: Orientation) => void;
   value: Schematic;
   setSelection: Dispatch<SetStateAction<ReadonlySet<string>>>;
+  /** Something is selected now. */
+  hasSelection: boolean;
   kinds: readonly ComponentKind[];
   mode: Mode;
   setMode: Dispatch<SetStateAction<Mode>>;
@@ -356,7 +361,9 @@ export function keyActions(e: {
       else if (e.mode !== "select") {
         e.setMode("select");
         e.setPlaceKind(null);
-      } else e.setSelection(new Set());
+      } else if (e.hasSelection) e.setSelection(new Set());
+      else return false;
+      return true;
     },
     arm: (index) => {
       const kind = e.kinds[index];
@@ -369,11 +376,15 @@ export function keyActions(e: {
 }
 
 interface KeyBinding {
-  /** Swallow the browser's own meaning of the key (scroll, back, …). */
+  /**
+   * Swallow the browser's own meaning of the key (scroll, back, …) — and tell
+   * a host listening further up that the key was used.
+   */
   prevent: boolean;
   /** Ignored in a read-only editor. */
   edit: boolean;
-  run: (a: KeyActions, key: string) => void;
+  /** `false` when the key did nothing: it is then not consumed. */
+  run: (a: KeyActions, key: string) => void | boolean;
 }
 
 const bind = (run: KeyBinding["run"], prevent = false, edit = false): KeyBinding => ({ prevent, edit, run });
@@ -399,7 +410,7 @@ const LETTERS = new Map<string, KeyBinding>([
 const NAMED = new Map<string, KeyBinding>([
   ["Delete", bind((a) => a.remove(), true)],
   ["Backspace", bind((a) => a.remove(), true)],
-  ["Escape", bind((a) => a.escape())],
+  ["Escape", bind((a) => a.escape(), true)],
 ]);
 
 const DIGIT = bind((a, key) => a.arm(Number(key) - 1), false, true);
@@ -436,6 +447,5 @@ export function editorKey(
   }
   const binding = bindingOf(e.key);
   if (binding === undefined || (binding.edit && readOnly)) return;
-  if (binding.prevent) e.preventDefault();
-  binding.run(actions, e.key);
+  if (binding.run(actions, e.key) !== false && binding.prevent) e.preventDefault();
 }

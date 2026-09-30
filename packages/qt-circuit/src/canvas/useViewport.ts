@@ -46,7 +46,7 @@ export interface PanDrag {
 export interface Viewport {
   view: ViewBox;
   setView: Dispatch<SetStateAction<ViewBox>>;
-  /** The drawing area's height in px: the fitted view's shape, capped by `height`. */
+  /** The drawing area's height in px: the fitted view's shape capped by `height`, or the room it fills. */
   canvasHeight: number;
   toWorld: (clientX: number, clientY: number) => WorldPoint;
   /** The hit radius around a pin or a waypoint, in world units at this zoom. */
@@ -60,12 +60,13 @@ export interface Viewport {
 export function useViewport(
   svgRef: RefObject<SVGSVGElement | null>,
   canvasRef: RefObject<HTMLDivElement | null>,
-  height: number,
+  /** The cap, in px; `null` when the area FILLS its parent (the expand layer) and is only measured. */
+  height: number | null,
 ): Viewport {
   const [view, setView] = useState<ViewBox>(FIT_VIEW);
   /* The drawing area is as tall as the fitted view is, for the width it was
      given — never taller, or the frame floats in a band of empty canvas. */
-  const [canvasHeight, setCanvasHeight] = useState<number>(height);
+  const [canvasHeight, setCanvasHeight] = useState<number>(height ?? 0);
 
   const toWorld = useCallback(
     (clientX: number, clientY: number): WorldPoint => {
@@ -97,7 +98,7 @@ export function useViewport(
     if (el === null) return;
     const measure = (): void => {
       setCanvasHeight((current) => {
-        const next = fitCanvasHeight(el.clientWidth, height);
+        const next = height === null ? el.clientHeight : fitCanvasHeight(el.clientWidth, height);
         return next === current ? current : next;
       });
     };

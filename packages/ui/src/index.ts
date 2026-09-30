@@ -42,6 +42,7 @@ export {
   type ButtonVariant,
 } from "./styles.js";
 export { breakdownOf, isLocked, markdown } from "./content.js";
+export { ExpandableCanvas, type ExpandableCanvasProps, type ExpandableCanvasStrings } from "./expand.js";
 export { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";
 export {
   AnswerChip,

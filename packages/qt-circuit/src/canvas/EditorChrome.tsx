@@ -415,8 +415,11 @@ export function Inspector({
   );
 }
 
-const blurOnEnterOrEscape = (e: { key: string; currentTarget: HTMLInputElement }): void => {
-  if (e.key === "Enter" || e.key === "Escape") e.currentTarget.blur();
+/* Consumed: a host layer around the editor (the expand layer) must not close on it. */
+const blurOnEnterOrEscape = (e: { key: string; currentTarget: HTMLInputElement; preventDefault: () => void }): void => {
+  if (e.key !== "Enter" && e.key !== "Escape") return;
+  e.preventDefault();
+  e.currentTarget.blur();
 };
 
 /** The value box, with the unit the library declares and a live verdict. */

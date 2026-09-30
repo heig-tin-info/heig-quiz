@@ -236,6 +236,42 @@ describe("wiring", () => {
   });
 });
 
+/*
+ * The expand layer around the editor (ADR-046 addendum) closes on an Escape
+ * the editor left alone, and stays open on one it used: the editor says which
+ * by `preventDefault`, which `fireEvent` reports as a `false` return.
+ */
+describe("Escape under a host layer", () => {
+  const escape = (el: Element): boolean => fireEvent.keyDown(el, { key: "Escape" });
+
+  it("consumes the key only when it cancelled something", () => {
+    const { container } = render(<Harness initial={ONE_R} />);
+    const root = container.firstElementChild!;
+    expect(escape(root)).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Wire" }));
+    expect(escape(root)).toBe(false);
+    expect(escape(root)).toBe(true);
+    fireEvent.pointerDown(canvas(), { button: 0, shiftKey: true, ...client(200, 160) });
+    expect(escape(root)).toBe(false);
+    expect(escape(root)).toBe(true);
+  });
+
+  it("consumes it in a field of the inspector", () => {
+    render(<Harness initial={ONE_R} />);
+    fireEvent.pointerDown(canvas(), { button: 0, shiftKey: true, ...client(200, 160) });
+    expect(escape(screen.getByDisplayValue("R1"))).toBe(false);
+    expect(escape(screen.getByDisplayValue("10k"))).toBe(false);
+  });
+
+  it("fills its parent in the layer instead of sizing itself", () => {
+    const { container } = render(
+      <SchematicEditor value={EMPTY} onChange={() => {}} palette={PALETTE} supplies={SUPPLIES} height="fill" />,
+    );
+    expect(container.firstElementChild).toHaveClass("h-full");
+    expect((canvas().parentElement as HTMLElement).style.height).toBe("");
+  });
+});
+
 describe("waypoints", () => {
   const WITH_VIA: Schematic = withRoutes({
     components: [{ id: "c1", kind: "R", x: 200, y: 160, m: ORIENT_0, name: "R1", value: "10k" }],

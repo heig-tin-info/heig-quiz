@@ -73,8 +73,10 @@ export interface SchematicEditorProps {
   /**
    * The TALLEST the drawing area gets, in px. It is normally shorter: the
    * area takes the shape of the fitted view for the width it was given.
+   * `"fill"`: the editor takes the whole height of its parent instead (the
+   * host's expand layer), and the drawing area whatever the bars leave.
    */
-  height?: number | undefined;
+  height?: number | "fill" | undefined;
   id?: string | undefined;
   "aria-label"?: string | undefined;
 }
@@ -105,7 +107,8 @@ export function SchematicEditor({
   const [mode, setMode] = useState<Mode>("select");
   const [placeKind, setPlaceKind] = useState<ComponentKind | null>(null);
   const [ghost, setGhost] = useState<Ghost>({ x: 200, y: 200, m: ORIENT_0, show: false });
-  const { view, setView, canvasHeight, toWorld, slack, fit, zoom } = useViewport(svgRef, canvasRef, height);
+  const fill = height === "fill";
+  const { view, setView, canvasHeight, toWorld, slack, fit, zoom } = useViewport(svgRef, canvasRef, fill ? null : height);
   const [cursor, setCursor] = useState<Cursor>({ x: 0, y: 0, inside: false });
   const [hover, setHover] = useState<PinTarget | null>(null);
 
@@ -178,11 +181,11 @@ export function SchematicEditor({
     (e: ReactKeyboardEvent<HTMLDivElement>) => {
       const actions = keyActions({
         undo, redo, duplicate, remove: removeSelection, transform: transformSelection, value, setSelection,
-        kinds, mode, setMode, setPlaceKind, drafting: draft !== null, setDraft,
+        hasSelection: selection.size > 0, kinds, mode, setMode, setPlaceKind, drafting: draft !== null, setDraft,
       });
       editorKey(e, actions, readOnly);
     },
-    [draft, duplicate, kinds, mode, readOnly, redo, removeSelection, setSelection, transformSelection, undo, value],
+    [draft, duplicate, kinds, mode, readOnly, redo, removeSelection, selection.size, setSelection, transformSelection, undo, value],
   );
 
   // --- the inspector -----------------------------------------------------
@@ -221,21 +224,29 @@ export function SchematicEditor({
   };
 
   return (
-    <div ref={rootRef} id={id} className={cx(frame, "focus-visible:outline-none")} tabIndex={0} role="group" aria-label={label} onKeyDown={onKeyDown}>
+    <div
+      ref={rootRef}
+      id={id}
+      className={cx(frame, "focus-visible:outline-none", fill && "flex h-full min-h-0 flex-1 flex-col")}
+      tabIndex={0}
+      role="group"
+      aria-label={label}
+      onKeyDown={onKeyDown}
+    >
       <Toolbar
         strings={s} readOnly={readOnly} mode={mode} selection={selection} zoom={zoom}
         canUndo={history.canUndo} canRedo={history.canRedo}
         setMode={setMode} setPlaceKind={setPlaceKind} setDraft={setDraft}
         transform={transformSelection} duplicate={duplicate} remove={removeSelection} undo={undo} redo={redo} fit={fit}
       />
-      <div className="flex flex-col sm:flex-row">
+      <div className={cx("flex flex-col sm:flex-row", fill && "min-h-0 flex-1")}>
         {readOnly ? null : (
           <PaletteRail
             strings={s} kinds={kinds} used={used} max={palette.maxComponents} full={full}
             mode={mode} placeKind={placeKind} maxHeight={canvasHeight} onGrab={grabTile}
           />
         )}
-        <div ref={canvasRef} className={canvasArea} style={{ height: canvasHeight }}>
+        <div ref={canvasRef} className={canvasArea} style={fill ? undefined : { height: canvasHeight }}>
           <svg
             ref={svgRef}
             data-testid="schematic-canvas"

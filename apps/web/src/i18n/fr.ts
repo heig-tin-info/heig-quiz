@@ -1576,6 +1576,8 @@ export const fr: Record<keyof Dict, string> = {
   "qt.circuit.e.reference": "Circuit de référence",
   "qt.circuit.e.referenceHint":
     "Votre propre réponse, dans la même boîte : la comparaison d'une correction par simulation. Les étudiants peuvent la recevoir quand l'évaluation montre la réponse attendue.",
+  "qt.circuit.e.expand": "Agrandir",
+  "qt.circuit.e.expanded": "Le circuit est ouvert par-dessus la page.",
   "qt.circuit.e.tryReference": "Simuler la référence",
   "qt.circuit.e.trying": "Simulation…",
   "qt.circuit.e.tryUnavailable":
@@ -1621,6 +1623,9 @@ export const fr: Record<keyof Dict, string> = {
 
   // --- qt-circuit player strings ---
   "qt.circuit.p.schematic": "Votre circuit",
+  "qt.circuit.p.expand": "Agrandir",
+  "qt.circuit.p.expandHint": "Agrandissez le circuit pour dessiner.",
+  "qt.circuit.p.expanded": "Le circuit est ouvert par-dessus la page.",
   "qt.circuit.p.components": "{n} / {max} composants",
   "qt.circuit.p.complete": "Tout est connecté.",
   "qt.circuit.p.issueFloatingPin": "{ref} n'est pas connectée.",
@@ -1758,6 +1763,8 @@ export const fr: Record<keyof Dict, string> = {
   "qt.diagram.e.starterCopy": "Copier la référence dans le départ",
   "qt.diagram.e.starterCopyHint": "Puis retirez ce que l'étudiant doit ajouter.",
   "qt.diagram.e.starterRemove": "Retirer le diagramme de départ",
+  "qt.diagram.e.expand": "Agrandir",
+  "qt.diagram.e.expanded": "Ce diagramme est ouvert par-dessus la page.",
   "qt.diagram.e.rubric": "Grille de correction",
   "qt.diagram.e.rubricHint":
     "Comment vous attribuerez les points, pour vous ou un autre correcteur : affichée à côté de chaque réponse dans le panneau de correction. Les étudiants ne la voient jamais.",

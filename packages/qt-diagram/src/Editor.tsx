@@ -12,14 +12,18 @@
  * elements the new kind does not have — after an inline confirmation. Once
  * the question has a published version (`EditorProps.published`) the kind is
  * shown, locked: the answers already given are diagrams of that kind.
+ *
+ * The reference and the starter each have an Expand button when the host
+ * lends a layer (`EditorProps.Expand`): the same canvas, text tab included,
+ * over the page under the host's bar ("Close").
  */
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState } from "react";
 
 import type { ConfigIssue, EditorProps, MarkdownRenderer, StringOverrides } from "@quiz/core/client";
 import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import { DiagramEditor, ToolIcon, type DiagramStrings } from "@quiz/diagram/client";
 import { DIAGRAM_KINDS, emptyScene, freshCopy, isEmptyScene, type DiagramKind, type PlaceTool, type Scene } from "@quiz/diagram/server";
-import { AsideSection, buttonClass, cx, hint, IssueList, label, PromptField, sectionClass } from "@quiz/ui";
+import { AsideSection, buttonClass, cx, ExpandableCanvas, hint, IssueList, label, PromptField, sectionClass } from "@quiz/ui";
 
 import type { DiagramConfig } from "./schema.js";
 import { diagramEditorStrings, kindHintKey, kindKey, type DiagramEditorStringKey } from "./strings.js";
@@ -60,6 +64,7 @@ export function DiagramQuestionEditor({
   RichText,
   uploadAsset,
   aside,
+  Expand,
 }: DiagramEditorProps) {
   const s = resolveStrings(diagramEditorStrings, strings);
   const id = useId();
@@ -82,7 +87,8 @@ export function DiagramQuestionEditor({
     onChange(starter === undefined ? rest : { ...rest, starter });
   };
 
-  const canvas = (value: Scene, name: string, change: (next: Scene) => void, fieldId: string): ReactNode => (
+  /** Inline at its height, or filling the host's expand layer (`EditorProps.Expand`). */
+  const canvas = (value: Scene, name: string, change: (next: Scene) => void, fieldId: string) => (expanded: boolean) => (
     <DiagramEditor
       id={fieldId}
       kind={config.kind}
@@ -90,7 +96,7 @@ export function DiagramQuestionEditor({
       onChange={change}
       readOnly={disabled}
       withText
-      height={CANVAS_HEIGHT}
+      {...(expanded ? {} : { height: CANVAS_HEIGHT })}
       strings={canvasStrings}
       aria-label={name}
     />
@@ -172,38 +178,49 @@ export function DiagramQuestionEditor({
       </section>
 
       <section className={sectionClass}>
-        <span className={label}>{s.reference}</span>
-        <p className={hint}>{s.referenceHint}</p>
-        {canvas(config.reference, s.reference, (reference) => patch({ reference }), `${id}-reference`)}
+        <ExpandableCanvas
+          Expand={Expand}
+          title={s.reference}
+          hint={<p className={hint}>{s.referenceHint}</p>}
+          strings={s}
+        >
+          {canvas(config.reference, s.reference, (reference) => patch({ reference }), `${id}-reference`)}
+        </ExpandableCanvas>
         <IssueList issues={issuesAt(issues, "reference")} />
       </section>
 
       <section className={sectionClass}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className={label}>{s.starter}</span>
-          {config.starter === undefined || disabled ? null : (
-            <button type="button" className={buttonClass("ghost", "sm")} onClick={() => setStarter(undefined)}>
-              {s.starterRemove}
-            </button>
-          )}
-        </div>
-        <p className={hint}>{s.starterHint}</p>
-        {config.starter === undefined ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={buttonClass("secondary", "sm")}
-              disabled={disabled || isEmptyScene(config.reference)}
-              // Fresh ids: the starter reaches the student, and must share none with the reference (ADR-046 §2).
-              onClick={() => setStarter(freshCopy(config.reference))}
-            >
-              {s.starterCopy}
-            </button>
-            <span className={hint}>{s.starterCopyHint}</span>
-          </div>
-        ) : (
-          canvas(config.starter, s.starter, (starter) => setStarter(starter), `${id}-starter`)
-        )}
+        {/* Without a starter there is nothing to expand: the row offers the copy instead. */}
+        <ExpandableCanvas
+          Expand={config.starter === undefined ? undefined : Expand}
+          title={s.starter}
+          hint={<p className={hint}>{s.starterHint}</p>}
+          strings={s}
+          actions={
+            config.starter === undefined || disabled ? undefined : (
+              <button type="button" className={buttonClass("ghost", "sm")} onClick={() => setStarter(undefined)}>
+                {s.starterRemove}
+              </button>
+            )
+          }
+        >
+          {config.starter === undefined
+            ? () => (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className={buttonClass("secondary", "sm")}
+                    disabled={disabled || isEmptyScene(config.reference)}
+                    // Fresh ids: the starter reaches the student, and must share none with the reference (ADR-046 §2).
+                    onClick={() => setStarter(freshCopy(config.reference))}
+                  >
+                    {s.starterCopy}
+                  </button>
+                  <span className={hint}>{s.starterCopyHint}</span>
+                </div>
+              )
+            : canvas(config.starter, s.starter, (starter) => setStarter(starter), `${id}-starter`)}
+        </ExpandableCanvas>
         <IssueList issues={issuesAt(issues, "starter")} />
       </section>
 
