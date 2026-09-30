@@ -197,6 +197,46 @@ files it ports; writes en + fr for every string.
   import-script steps for these tables.
 - **Acceptance**: migration runs on a production dump copy; idempotency
   indexes tested.
+- **As delivered** (#402): tables in `Q:db/github.ts`, migration
+  `0048_github` (five `CREATE TABLE`, FKs to `users` and `classrooms` only;
+  not run on a production dump copy: purely additive, checked on PGlite by
+  `db/github.db.test.ts`). Choices the next tasks inherit:
+  - `github_organizations.status` is `GITHUB_ORG_STATUSES` (installed /
+    suspended / uninstalled / deleted), closed by a CHECK, and a second
+    CHECK holds `installation_id` exactly while installed or suspended: an
+    uninstallation, a deletion or the staging refresh (M2-06) sets the
+    status WITH the id. Rows are never deleted.
+  - The avatar: `avatar_source_url` (the installation's
+    `account.avatar_url`), fetched by the server; never sent to a browser.
+    The contract's `GithubOrg.avatarUrl` only accepts a same-origin path.
+  - `webhook_deliveries.payload` is nullable: the purge sets it to null
+    and keeps the row (the deduplication outlives it); `received_at` and
+    `push_receipts.received_at` have NO default, the intake writes
+    `app.clock.now()`.
+  - `push_receipts` is keyed on `github_repo_id` (GitHub's repository id),
+    not on a project repository's row: `github` owns no FK into `project`
+    (spec 05 §5.3 amended). M3 joins through `project_repos.github_repo_id`
+    and deletes a repository's receipts itself if it wants them gone.
+  - Contracts (`packages/contracts/src/github.ts`): `GithubOrg`,
+    `GithubClassroom` (`link: GithubClassroomLink | null` with
+    `checks: GithubChecks {app, plan, llmSecret}`, `suggestedOrgId`,
+    `installUrl`), `GithubConnectBody {orgId}`, `GithubAccountState`
+    (`GET /app/api/me/github`), `GithubLinkOutcome`. The web mock serves
+    all three GETs on them (`contract.test.ts`, CHECKED).
+- **For M8-01** (no import script yet, M1-06 is off the journal track):
+  `organizations` → `github_organizations` (id kept; `installation_id`
+  NULL and `status` `uninstalled` whatever classroom held, D23: the
+  healing of M2-02 resolves Quiz's installation; `github_org_id`,
+  `login`, `plan` copied);
+  `classrooms.org_id` → `github_classroom_links` (`linked_by` = the
+  remapped `teacher_id`, `linked_at` = the classroom's `created_at`);
+  `users.github_*` → `github_accounts` for the rows with a
+  `github_user_id`, on the remapped user (two classroom users merged into
+  one Quiz user with two GitHub ids: report, keep the newer link);
+  `webhook_deliveries`: the last 30 days, all processed at T0;
+  `push_receipts`: `github_repo_id` from `student_repos.github_repo_id`
+  (a receipt whose repository has none is dropped and counted), the id
+  kept, `ON CONFLICT DO NOTHING`.
 
 ### M2-02 — Installations, org link, lazy healing
 - **Depends on**: M2-01. ‖ M2-03.
@@ -213,6 +253,11 @@ files it ports; writes en + fr for every string.
   (M1-04) takes that URL as `src` and shows the initials without one.
 - **Tests**: healing, setup-URL idempotency, connect by a non-staff ⇒ 404.
 - **Acceptance**: `invariant-reviewer` clean; routes 404 when no App.
+- **Contracts** (M2-01): `GET /app/api/github/orgs` ⇒ `GithubOrg[]`;
+  `GET /app/api/classrooms/:id/github` ⇒ `GithubClassroom`; `PUT` body
+  `GithubConnectBody`. The avatar is fetched from
+  `github_organizations.avatar_source_url` and served under a same-origin
+  path (`GithubOrg.avatarUrl` refuses anything else).
 
 ### M2-03 — GitHub account linking
 - **Depends on**: M2-01. ‖ M2-02.
@@ -221,6 +266,10 @@ files it ports; writes en + fr for every string.
   impersonation and delegated sessions (ADR-034, ADR-027); `github.renamed`;
   the token never stored nor logged.
 - **Acceptance**: return to the `return` path, not `/`.
+- **Contracts** (M2-01): the account's state is
+  `GET /app/api/me/github` ⇒ `GithubAccountState {account, relevant}`
+  (the route name the web mock serves, `?unlinked=1`); the callback returns
+  `?github=<GithubLinkOutcome>` (`linked` / `conflict` / `error`).
 
 ### M2-04 — Webhook intake, handler registry, delivery reconciliation
 - **Depends on**: M2-02.
@@ -233,6 +282,11 @@ files it ports; writes en + fr for every string.
   deleted, org renamed/deleted); receipt written with `app.clock`.
 - **Acceptance**: 200 in < 100 ms on a fixture; replay of an unprocessed
   delivery.
+- **Schema** (M2-01): `webhook_deliveries` (insert `ON CONFLICT DO
+  NOTHING` on `delivery_id`; `received_at` = `app.clock.now()`, no
+  default; the purge nulls `payload`, never deletes the row) and
+  `push_receipts` (keyed on `github_repo_id`, `ON CONFLICT DO NOTHING`
+  keeps the first receipt).
 
 ### M2-05 — Periodic tasks (`scheduled_tasks`)
 - **Depends on**: D10 (settled). ‖ M2-02…04. Landed before M1-02: the

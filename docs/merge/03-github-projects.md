@@ -234,8 +234,10 @@ layers:
 
 ### Contracts (`packages/contracts`)
 
-- `github.ts`: `OrgStatus` (installed, exists, plan, llmSecret, appSlug),
-  `GithubAccount`, link body.
+- `github.ts` (M2-01): `GithubOrg` (`status` of `GITHUB_ORG_STATUSES`,
+  a same-origin `avatarUrl`), `GithubClassroom` (the link, its `GithubChecks`
+  `app` / `plan` / `llmSecret`, `suggestedOrgId`, `installUrl`),
+  `GithubConnectBody`, `GithubAccountState`, `GithubLinkOutcome`.
 - `project.ts`: `ProjectCreate/Patch` (classroom's zod rules),
   `ProjectSummary`, `ProjectDetail` (`liveStale`), `GradeView`,
   `GradeRunList`, `GroupsPayload`, `Milestone`, `GradeOverride`,

@@ -43,6 +43,9 @@ import {
   EvaluationDrill,
   EvaluationSummary,
   EvaluationTemplate,
+  GithubAccountState,
+  GithubClassroom,
+  GithubOrg,
   GradingProgress,
   GradingQueue,
   GradingSteps,
@@ -398,6 +401,13 @@ const CHECKED: Case[] = [
       ),
     ),
   ),
+  // GitHub (F-GH-01 to F-GH-05): the organizations, every classroom's link
+  // (connected or not), and the persona's account.
+  each("/app/api/github/orgs", "/app/api/github/orgs", GithubOrg),
+  ...courses
+    .flatMap((c) => c.classrooms)
+    .map((r) => one("/app/api/classrooms/:id/github", `/app/api/classrooms/${r.id}/github`, GithubClassroom)),
+  one("/app/api/me/github", "/app/api/me/github", GithubAccountState),
   // The drill (ADR-041, #317): the student's tab and the teacher's switch.
   one("/app/api/drill/session", "/app/api/drill/session", DrillSession),
   each("/app/api/drill/classrooms", "/app/api/drill/classrooms", DrillClassroom),
@@ -441,9 +451,6 @@ const UNCHECKED = [
   "/app/api/courses", // CourseSummary[]
   "/app/api/classrooms/:id", // ClassroomDetail
   "/app/api/admin/teachers", // AdminTeacher[]
-  // TODO(M2-01): the `github` contracts do not exist yet (mock/github.ts).
-  "/app/api/github/orgs",
-  "/app/api/classrooms/:id/github",
 ];
 
 // ADR-051 §7: one pending pairing (the mock keeps it in localStorage, which
