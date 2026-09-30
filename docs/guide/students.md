@@ -65,6 +65,8 @@ Some exams can be sat on one of the school's Chromebooks locked on the exam, a k
 
 A code works once and the station shows a new one every 5 minutes. If your phone says **This code does not work**, type the code the station shows now. If the station says **Station not recognised** or **The station cannot start**, call the supervisor. No phone? Read the code to the supervisor, who can start the exam on the station for you.
 
+If the station covers the exam with **This station is suspended**, your answers are saved: call the supervisor. The exam comes back by itself once the station has been checked again.
+
 When you hand in, the station goes back to its start screen by itself. Your results are read later from your home.
 
 ## Taking an evaluation

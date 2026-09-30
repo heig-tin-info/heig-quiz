@@ -31,8 +31,12 @@ Verified Access):
   customer id admits every Chromebook of the Workspace, staff machines
   included; only a station an administrator has named can be paired.
 
-A station re-attests every 10 minutes while an exam is sat on it, and right
-before the hand-in (ADR-051 §6).
+A station attests before each new code it shows, so it is never silent
+when a student starts sitting; it re-attests every 10 minutes while an exam
+is sat on it, and once more when the hand-in finds its last check more than
+two minutes old (ADR-051 §6). A re-attestation keeps the station's cookie
+(`quiz_kiosk`) and only extends it: an answer saved while it is in flight
+still belongs to the station.
 
 ## 1. Google Cloud: the service account
 
@@ -150,8 +154,8 @@ either way.
 - **`KIOSK_GOOGLE_CUSTOMER_ID`**: **Account › Account settings › Profile ›
   Customer ID** in the Admin console. Verified Access must return the same
   value for every station; a station of another Workspace is refused.
-  Whether Google's response carries the id with or without its leading `C`
-  is to be checked on the first station (see the checklist below).
+  The comparison ignores one leading `C` on either side, so `C0123abc` and
+  `0123abc` are the same id, whichever form Google answers with.
 - **`KIOSK_ENROLLMENT_DOMAIN`**: the domain the Chromebooks are enrolled
   in (for example `heig-vd.ch`), shown on each device's page in **Devices ›
   Chrome › Devices**. Google checks the station's response against it
@@ -235,27 +239,35 @@ Every change is audited (`kiosk.device_labeled`, `kiosk.device_retired`,
 
 ### A student without a phone
 
-!!! note "ADR-051 step 7"
-    This fallback and the suspension below are specified by ADR-051 §6–7
-    and ship with step 7. Check that your deployment has them before
-    relying on them.
-
-The student reads the code on the station to the supervisor. From the
-exam's dashboard, the supervisor assigns that code to that student: it is
-the same pairing, approved by the teacher instead of the student's phone
-(`kiosk.assigned` in the audit). The student then sits as themselves, and
-can answer; the teacher is recorded as the approver, never as an
-impersonator.
+The student reads the code on the station to the supervisor. On the exam's
+dashboard, while it is open and accepts kiosk stations, each student's row
+has an **Assign a station** button (a monitor with a check). It opens
+**Assign a station to** the student, with one field, **Code shown on the
+station**; **Assign** approves that code for that student, and the dialog
+confirms with the station's name ("Poste de secours n° 7 is opening the
+exam for …"). It is the same pairing, approved by the teacher instead of
+the student's phone (`kiosk.assigned` in the audit). The student then sits
+as themselves, and can answer; the teacher is recorded as the approver,
+never as an impersonator. Wrong codes count against the supervisor's own
+limit of 10 in 10 minutes, not the student's.
 
 ### Suspended, and "Google unreachable"
 
-Each row of the dashboard shows how the student sits (portal, SEB, or
-kiosk with the station's name) and an alert when something is wrong.
+Each row of the dashboard shows how the student sits beside their name:
+nothing for the portal, a **SEB** badge, or the station's name behind a
+monitor icon. On a station, a second pill says when its attestation is not
+fine.
 
 | The supervisor sees | Meaning | Answers | What to do |
 | --- | --- | --- | --- |
-| **Suspended** | Google refused the station's attestation, the extension failed, or the station stopped attesting for 12 minutes | the saved answers are kept; new ones are refused until the next accepted attestation, which lifts the suspension by itself | look at the station. If it does not recover within a minute, move the student to another station (a new pairing replaces the old session) |
-| **Attestation impossible** / Google unreachable | the server cannot reach Google | the exam continues; nothing is suspended for a Google outage | nothing during the exam. The hand-in still requires a check less than two minutes old, `ok` or unreachable, so it goes through |
+| a red **suspended** pill, and once the message "…'s station is suspended: it could not prove its integrity." | Google refused the station's attestation, the extension failed, or the station stopped attesting for 12 minutes | the saved answers are kept; new ones are refused until the next accepted attestation, which lifts the suspension by itself | look at the station. If it does not recover within a minute, move the student to another station (a new pairing replaces the old session) |
+| an amber **not attested** pill | the server cannot reach Google | the exam continues; nothing is suspended for a Google outage | nothing during the exam. The hand-in still requires a check less than two minutes old, accepted or unreachable, so it goes through |
+
+A suspended station covers the exam with **This station is suspended** —
+"This station could not prove its integrity; your answers are saved. Call
+the supervisor. The exam comes back here by itself once the station is
+checked again." It re-attests every 30 seconds while suspended, and the
+exam comes back as soon as one attestation is accepted.
 
 ## 6. Troubleshooting
 
@@ -263,6 +275,7 @@ kiosk with the station's name) and an alert when something is wrong.
 | --- | --- | --- |
 | The station shows **Station not recognised** | it is **Unnamed** or **Retired** in Administration › Kiosk stations; or its attestation is refused | the station's row, and the audit (`kiosk.attest_failed`, reason `refused`). A station missing from the list never attested: see the next rows |
 | A new Chromebook never appears in the list | the extension is not detected (not force-installed on the kiosk app, wrong `KIOSK_EXTENSION_ID`, **Allow enterprise challenge** off), or the device is in developer mode, or the customer id or enrollment domain differs | the page reports the extension's failure to the server, which records a refusal. Check the kiosk app's extension, its certificate setting, the device's boot mode, and the two identifiers in `.env.prod` |
+| Every station is refused, and the API logs `kiosk attestation: refused` with `customerMatches: false` | `KIOSK_GOOGLE_CUSTOMER_ID` is not the Workspace Google answers for | the same log line carries the `customerId` Google returned: copy it into `.env.prod`. A leading `C` does not matter, it is ignored on both sides. With `customerMatches: true`, look at `keyTrustLevel` instead: anything but `CHROME_OS_VERIFIED_MODE` is a station in developer mode |
 | **The station cannot start** — "The station keeps trying by itself." | the server cannot get a challenge from Google (network, quota, the service account not in **Services with full access**, a revoked key) or the platform is unreachable | the API's log (`attestation` failures are logged by kind and HTTP status, never with a token); the station retries every 30 seconds |
 | **Google unreachable** in the Last check column | the last attempt could not reach Google | as above; a station at rest shows **The station cannot start** until Google answers again |
 | The phone says **This code does not work** | the code expired (5 minutes), was already used, or was mistyped | type the code the station shows now. After 10 wrong codes in 10 minutes the phone says **Too many wrong codes** and must wait |
@@ -281,9 +294,11 @@ production; until the last is recorded, keep `SEB_CONFIG_KEY_ENFORCE=0`.
 - [ ] The `/kiosk` page reaches the extension (`chrome.runtime.sendMessage`
       through `externally_connectable`; the `ping` answers), with the URL
       blocklist in force.
-- [ ] Google's `customerId` in the verify response equals the Admin
-      console's customer id as typed in `KIOSK_GOOGLE_CUSTOMER_ID`, and the
-      `devicePermanentId` is the serial on the machine's label.
+- [ ] The first station attests with the Admin console's customer id as
+      typed in `KIOSK_GOOGLE_CUSTOMER_ID` (with or without its leading `C`;
+      on a mismatch the API logs the id Google returned), and the
+      `devicePermanentId` shown in Administration › Kiosk stations is the
+      serial on the machine's label.
 - [ ] The Admin console paths and labels on this page are the ones on the
       screen; the ones marked **(unverified)** are corrected here.
 - [ ] **Proof B**: a real Safe Exam Browser sends the

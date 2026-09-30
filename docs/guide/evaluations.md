@@ -150,12 +150,12 @@ What the students do:
 - On their home, the card of a stations-only exam says **Enter a station's code**, for a student who prefers typing the code to scanning it.
 - After the hand-in, the station goes back to its start screen by itself. The results are read later from the portal.
 
-A student without a phone reads the station's code to you, and you assign it to them from the exam's dashboard: the same pairing, approved by you instead of their phone. They still sit as themselves.
+A student without a phone reads the station's code to you. On the exam's dashboard, their row has an **Assign a station** button (a monitor with a check) while the exam is open: type the **Code shown on the station** and press **Assign**. The dialog confirms with the station's name, and the station opens the exam for them: the same pairing, approved by you instead of their phone. They still sit as themselves.
 
-On the dashboard, a student on a station is shown with the station's name. A **suspended** station (Google refused to vouch for it, or it stopped checking in) keeps the answers already saved but refuses new ones until it passes its next check, which lifts the suspension by itself; if it does not recover, move the student to another station. When the platform cannot reach Google, nothing is suspended and the exam goes on.
+On the dashboard, a student on a station is shown with the station's name beside theirs. A red **suspended** pill (Google refused to vouch for the station, or it stopped checking in) means the answers already saved are kept but new ones are refused until the station passes its next check, which lifts the suspension by itself; you are also told once, "…'s station is suspended: it could not prove its integrity.". The student's screen says **This station is suspended**. If it does not recover within a minute, move the student to another station. An amber **not attested** pill means the platform cannot reach Google: nothing is suspended and the exam goes on.
 
-!!! note
-    The supervisor's assignment and the suspension alerts arrive with the last step of the kiosk work (ADR-051 §6–7). Rehearse on a station with a seat of your own (**Join as student**) before the first real exam.
+!!! tip
+    Rehearse on a station with a seat of your own (**Join as student**) before the first real exam.
 
 ## Step 3: Launch
 

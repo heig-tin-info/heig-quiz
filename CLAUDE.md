@@ -84,6 +84,8 @@ mockups/      circuit.html, the origin of qt-circuit's schematic editor;
               categorize.html, the origin of qt-categorize's board;
               uml.html, the origin of the diagram engine's editor;
               grading.html, the origin of the grading table (ADR-044)
+extensions/   kiosk-attestation/, the companion Chrome extension of the kiosk
+              stations (ADR-051)
 infra/        Keycloak development realm
 extensions/   the kiosk stations' companion Chrome extension (ADR-051)
 ```
@@ -145,8 +147,9 @@ Never work around these, not even "temporarily".
 3. **The development login never exists in production.** `AUTH_DEV_LOGIN=1`
    under `NODE_ENV=production` makes `config.ts` throw and the process refuse
    to start, exactly like a dev secret. The same refusal covers a
-   `pglite://` database. The OIDC path (Keycloak in dev, Switch edu-ID in
-   production) is the real one and stays intact.
+   `pglite://` database and `KIOSK_ATTESTATION=mock` (ADR-051). The OIDC
+   path (Keycloak in dev, Switch edu-ID in production) is the real one and
+   stays intact.
 4. **Content reaches a student only through the student view of its kind.**
    **Question content never reaches a student except through `toStudent`.**
    One point of exit, in the `studentView` service of the `live` module: it
@@ -182,6 +185,10 @@ Never work around these, not even "temporarily".
    asks. A claimed enrollment reads its own classroom (student payload);
    anyone else gets the 404 of a missing classroom. The journal's routes
    serve portal sessions only, never a `seb` session (ADR-027).
+   **A `kiosk` session** (ADR-051), like a `seb` one, is confined to one
+   evaluation; it is worth nothing without its station's `quiz_kiosk`
+   cookie beside it (`trustRefusal`, `auth/trust.ts`), and it ends with
+   the attempt.
 7. **Every HTTP input is validated by a schema from `packages/contracts`,**
    and the client uses the same schema. A route change breaks both sides at
    compile time.
