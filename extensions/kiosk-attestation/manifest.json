@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "HEIG Quiz — kiosk attestation",
+  "description": "Lets the HEIG Quiz exam page attest a managed ChromeOS kiosk station (ADR-051).",
+  "version": "1.0.0",
+  "minimum_chrome_version": "110",
+  "permissions": ["enterprise.platformKeys"],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "externally_connectable": {
+    "matches": ["https://quiz.chevallier.io/*", "https://quiz.dev.chevallier.io/*"]
+  }
+}
