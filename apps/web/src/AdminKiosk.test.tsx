@@ -6,6 +6,7 @@ import type { KioskDevice } from "@quiz/contracts";
 
 import { KioskSection } from "./AdminKiosk";
 import { configKey } from "./queryKeys";
+import { elapse, flowingClock } from "./test/clock";
 import { fail, makeQueryClient, mockFetch, ok, renderWithProviders } from "./test/render";
 
 const CONFIG = "GET /app/api/config";
@@ -44,8 +45,9 @@ describe("the kiosk stations section (ADR-051 §5)", () => {
     const { calls } = mockFetch({});
     const queryClient = makeQueryClient();
     queryClient.setQueryData(configKey, { devLogin: false, kiosk: null });
+    flowingClock();
     renderWithProviders(<KioskSection />, { queryClient });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await elapse(20);
     expect(screen.queryByText(/kiosk stations/i)).toBeNull();
     expect(calls).toEqual([]);
   });

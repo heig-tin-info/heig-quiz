@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AttemptOrLobby, AttemptView, LobbyView, ServerEvent } from "@quiz/contracts";
 
+import { makeAttemptView } from "../test/attempt-fixtures";
+import { elapse, flowingClock } from "../test/clock";
 import { mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { AttemptPage } from "./Attempt";
 
@@ -32,69 +34,17 @@ const lobbyView: LobbyView = {
   serverNow: "2026-09-20T10:00:00.000Z",
 };
 
-const attemptView: AttemptView = {
+/** The paper once started: one unanswered `mcq`, a minute after the lobby. */
+const attemptView: AttemptView = makeAttemptView({
   attempt: {
     id: ATTEMPT,
-    state: "in_progress",
     startedAt: "2026-09-20T10:01:00.000Z",
     deadlineAt: "2026-09-20T10:21:00.000Z",
-    lastItemId: null,
     serverNow: "2026-09-20T10:01:00.000Z",
-    preview: false,
-    readOnly: false,
   },
-  evaluation: {
-    id: EVAL,
-    title: "Quiz 3 — Pointeurs",
-    mode: "exam",
-    state: "running",
-    settings: {
-      navigation: "free",
-      presentation: "zen",
-      lobby: "manual",
-      shuffleItems: false,
-      shuffleChoices: false,
-      timing: "duration",
-      showProgressBar: true,
-      logVisibility: true,
-      requireFullscreen: false,
-    },
-    feedbackPolicy: {
-      when: "on_release",
-      showAnswer: true,
-      showKey: false,
-      showExplanation: false,
-      showHiddenCaseNames: true,
-      showTeacherComment: true,
-    },
-    pausedAt: null,
-    totalPoints: 1,
-  },
-  items: [
-    {
-      id: "i1",
-      position: 1,
-      points: 1,
-      type: "mcq",
-      milestone: false,
-      bonus: false,
-      student: {
-        prompt: "Quelle expression donne l'adresse de `x` ?",
-        mode: "single",
-        choices: [
-          { id: 0, text: "&x" },
-          { id: 1, text: "*x" },
-        ],
-      },
-      answer: null,
-      revision: 0,
-      markedDone: false,
-      skipped: false,
-      flagged: false,
-      locked: false,
-    },
-  ],
-};
+  evaluation: { id: EVAL },
+  settings: { shuffleChoices: false },
+});
 
 /** jsdom has no EventSource; the start of an evaluation arrives on one. */
 const streams: FakeStream[] = [];
@@ -185,6 +135,7 @@ describe("/take/:id", () => {
   });
 
   it("re-enters the evaluation exactly once: the entry POST never feeds itself", async () => {
+    flowingClock();
     const { calls, start, queryClient } = render();
     expect(await screen.findByText("Salle d'attente")).toBeInTheDocument();
     expect(entryCalls(calls)).toHaveLength(1);
@@ -199,9 +150,7 @@ describe("/take/:id", () => {
     // the POST goes out again. `App` no longer mounts the hint refresh on this
     // route (`live.test.tsx`); this asserts the other half — that the player,
     // once mounted, asks for nothing more on its own.
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
+    await elapse(50);
     expect(entryCalls(calls)).toHaveLength(2);
 
     // And a refetch that IS asked for stays a single round trip.

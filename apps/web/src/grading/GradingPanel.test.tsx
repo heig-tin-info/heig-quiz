@@ -13,6 +13,7 @@ import {
   makeQueue,
   makeSteps,
 } from "../test/grading-fixtures";
+import { elapse, flowingClock } from "../test/clock";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 
 /*
@@ -234,8 +235,9 @@ describe("GradingPanel — an essay to grade by hand", () => {
     await table();
     await userEvent.keyboard("{ArrowDown}");
     expect(rowOf("a1")).toHaveAttribute("aria-current", "true");
-    await userEvent.keyboard("v");
-    await new Promise((r) => setTimeout(r, 50));
+    const user = flowingClock();
+    await user.keyboard("v");
+    await elapse(50);
     expect(calls.some((c) => c.url.endsWith("/validate"))).toBe(false);
   });
 });

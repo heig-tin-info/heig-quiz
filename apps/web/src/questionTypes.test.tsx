@@ -208,19 +208,46 @@ describe("question type strings", () => {
     }
   });
 
-  it("translates the editor strings of every type", () => {
+  /*
+   * What the host hands each surface, in French: no key leaks through as a
+   * raw `qt.…` string, and the words are the dictionary's, not the package's
+   * English defaults. The wording itself is the dictionaries' business
+   * (`i18n.unused.test.ts` and the key-by-key case above keep them whole).
+   */
+  const SURFACES = [
+    ["editor", editorStrings],
+    ["player", playerStrings],
+    ["review", reviewStrings],
+  ] as const;
+  const CANVASES = [
+    ["circuit canvas", circuitCanvasStrings],
+    ["diagram canvas", diagramCanvasStrings],
+    ["circuit component kinds", circuitKindLabels],
+  ] as const;
+  const rawKey = /^(qt|mcq|issue)\.[\w.]+$/;
+  const sentences = (strings: object) =>
+    Object.entries(strings).filter((e): e is [string, string] => typeof e[1] === "string");
+
+  it.each(QUESTION_TYPE_IDS)("%s: every surface's strings reach French, with no raw key", (id) => {
+    for (const [surface, byType] of SURFACES) {
+      const fr = sentences(byType[id](makeT("fr")));
+      const en = Object.fromEntries(sentences(byType[id](makeT("en"))));
+      for (const [key, value] of fr) expect(value, `${id} ${surface} ${key}`).not.toMatch(rawKey);
+      expect(fr.some(([key, value]) => value !== en[key]), `${id} ${surface}`).toBe(true);
+    }
+  });
+
+  // A number's separator is behaviour, not wording: "4,5" is what a French student types.
+  it("gives the rich player the locale's decimal separator", () => {
     const t = makeT("fr");
-    expect(editorStrings.mcq(t).prompt).toBe("Énoncé");
-    expect(editorStrings.short(t).matchers).toBe("Réponses acceptées");
-    expect(editorStrings.cloze(t).text).toBe("Texte à trous");
-    expect(editorStrings.code(t).template).toBe("Code de départ");
-    expect(editorStrings.circuit(t).reference).toBe("Circuit de référence");
-    expect(editorStrings.codeimage(t).useAsTarget).toBe("Utiliser comme cible");
-    expect(editorStrings.rich(t).rubric).toBe("Grille de correction");
-    expect(editorStrings.diagram(t)["kind.flow"]).toBe("Organigramme");
-    expect(diagramCanvasStrings(t)["tool.decision"]).toBe("Décision");
-    // The page count's separator is a translation like any other.
-    expect(playerStrings.rich(t).decimal).toBe(",");
+    expect(playerStrings.rich(t).decimal).toBe(t("qt.rich.p.decimal"));
+  });
+
+  it.each(CANVASES)("the %s reaches French, with no raw key", (_, strings) => {
+    const fr = sentences(strings(makeT("fr")));
+    const en = Object.fromEntries(sentences(strings(makeT("en"))));
+    for (const [key, value] of fr) expect(value, key).not.toMatch(rawKey);
+    expect(fr.some(([key, value]) => value !== en[key])).toBe(true);
   });
 
   it("gives codeimage code's program sentences, with its own on top", () => {
@@ -233,10 +260,10 @@ describe("question type strings", () => {
     expect(p.imageSection).toBe(t("qt.codeimage.p.imageSection"));
     const r = reviewStrings.codeimage(t);
     // The review shows the player's panel, and keeps its own score line.
-    expect(r.viewDiff).toBe("Différence");
+    expect(r.viewDiff).toBe(t("qt.codeimage.p.viewDiff"));
     expect(r.score).toBe(t("qt.code.r.score", { points: "{points}", max: "{max}" }));
     expect(plural(p, "warningMissing", 1, { count: 1 })).toBe(
-      "La sortie s'est arrêtée 1 pixel avant la fin de l'image.",
+      t("qt.codeimage.p.warningMissing.one", { count: 1 }),
     );
   });
 
@@ -253,7 +280,6 @@ describe("question type strings", () => {
       expect(canvas.kind("R")).toBe(kinds.R);
       expect(fmt(canvas.componentCount, { used: 3, max: 10 })).toBe("3 / 10");
     }
-    expect(circuitKindLabels(makeT("fr")).R).toBe("Résistance");
   });
 
   it("hands the parameterized sentences of the code type over as templates", () => {
@@ -290,7 +316,7 @@ describe("question type strings", () => {
     expect(plural(editorStrings.code(t), "lockedRegions", 1)).toBe(t("qt.code.e.lockedRegions.one", { n: 1 }));
     expect(plural(editorStrings.code(t), "lockedRegions", 4)).toBe(t("qt.code.e.lockedRegions", { n: 4 }));
     expect(fmt(playerStrings.circuit(t).srcStep, { from: "0", to: "5", atMs: "1" })).toBe(
-      "Échelon 0 → 5 V à 1 ms",
+      t("qt.circuit.p.srcStep", { from: "0", to: "5", atMs: "1" }),
     );
     expect(plural(circuitCanvasStrings(t), "hintSelection", 2)).toBe(
       t("qt.circuit.c.hintSelection", { n: 2 }),

@@ -1,9 +1,9 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import type { ByQuestion } from "@quiz/contracts";
 import { clozeStudentTemplate, parseCloze } from "@quiz/domain/cloze";
 
+import { byQuestionItem, makeByQuestion } from "../test/grading-fixtures";
 import { renderWithProviders } from "../test/render";
 import { ByQuestionView } from "./ByQuestionView";
 
@@ -13,33 +13,9 @@ import { ByQuestionView } from "./ByQuestionView";
  * scale, always revealed — and the type's own review for any other question.
  */
 
-function question(over: Partial<ByQuestion> & Pick<ByQuestion, "item">): ByQuestion {
-  return {
-    papers: 0,
-    student: null,
-    solution: null,
-    explanation: null,
-    outcomes: { correct: 0, partial: 0, wrong: 0, blank: 0 },
-    distribution: [],
-    casePassRate: [],
-    successRate: null,
-    avgMs: null,
-    ...over,
-  };
-}
 
-const item = (position: number, type: string) => ({
-  id: `i${position}`,
-  position,
-  internalName: `q-${position}`,
-  type,
-  points: 1,
-  bonus: false,
-  successRate: null,
-});
-
-const MCQ = question({
-  item: item(0, "mcq"),
+const MCQ = makeByQuestion({
+  item: byQuestionItem(0, "mcq"),
   student: {
     prompt: "What is `sizeof(char)`?",
     choices: [
@@ -57,8 +33,8 @@ const MCQ = question({
   successRate: 0.6,
 });
 
-const CLOZE = question({
-  item: item(1, "cloze"),
+const CLOZE = makeByQuestion({
+  item: byQuestionItem(1, "cloze"),
   student: clozeStudentTemplate(parseCloze("Free with {{free}}."), 0, "i1", false),
   solution: { blanks: [{ index: 0, expected: "free" }] },
   outcomes: { correct: 2, partial: 0, wrong: 1, blank: 1 },
@@ -69,14 +45,14 @@ const CLOZE = question({
   successRate: 0.5,
 });
 
-const SHORT_UNANSWERED = question({
-  item: item(2, "short"),
+const SHORT_UNANSWERED = makeByQuestion({
+  item: byQuestionItem(2, "short"),
   student: { prompt: "What does `7 / 2` print?" },
   solution: { expected: ["3"] },
 });
 
-const CODE = question({
-  item: item(3, "code"),
+const CODE = makeByQuestion({
+  item: byQuestionItem(3, "code"),
   student: { prompt: "Write `sum`.", language: "c", template: "", regions: [] },
   solution: { referenceSolution: "return a + b;" },
   outcomes: { correct: 2, partial: 0, wrong: 1, blank: 0 },

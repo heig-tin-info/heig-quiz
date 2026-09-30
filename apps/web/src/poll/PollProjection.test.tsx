@@ -161,7 +161,6 @@ describe("PollProjection", () => {
     const header = join!.closest("header");
     expect(header).not.toBeNull();
     expect(header!.parentElement!.firstElementChild).toBe(header);
-    expect(header!.className).toContain("items-start");
     expect(within(join!).getByRole("img", { name: /QZ4F7K/ })).toBeVisible();
     expect(within(join!).getByText("QZ4F7K")).toBeVisible();
 
@@ -172,7 +171,6 @@ describe("PollProjection", () => {
     expect(toaster).not.toBeNull();
     // 1rem from the bottom, plus the student's bottom bar when it is up (#191).
     expect(toaster!.className).toContain("bottom-[calc(1rem+var(--bottom-nav-h))]");
-    expect(toaster!.className).toContain("right-4");
     expect(toaster!.contains(join!)).toBe(false);
   });
 

@@ -12,6 +12,8 @@ import type {
 
 import App from "./App";
 import { resetEventStream } from "./realtime/useEventStream";
+import { elapse, flowingClock } from "./test/clock";
+import { makeMe } from "./test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "./test/render";
 
 /*
@@ -35,20 +37,16 @@ import { mockFetch, ok, renderWithProviders } from "./test/render";
 
 const EVAL = "11111111-1111-4111-8111-111111111111";
 
-const me: Me = {
+const me: Me = makeMe({
   id: "33333333-3333-4333-8333-333333333333",
   email: "lea.rochat@heig-vd.ch",
   givenName: "Léa",
   familyName: "Rochat",
   role: "student",
   lastLoginAt: null,
-  avatarUrl: null,
-  hasUploadedAvatar: false,
   locale: "fr",
   dateFormat: null,
-  mcqPolicy: null,
-  coach: { enabled: false, seen: [] },
-};
+});
 
 const lobby: AttemptOrLobby = {
   kind: "lobby",
@@ -139,10 +137,9 @@ describe("the blanket hint refresh", () => {
     // Every stream this screen opened is the player's own watch stream; none
     // of them is the shell's hint stream, and a hint pushed down any of them
     // must change nothing.
+    flowingClock();
     for (const stream of streams) stream.hint();
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
+    await elapse(50);
 
     expect(countOf(calls, "POST", entry)).toBe(1);
     expect(calls.length).toBe(before);
@@ -196,12 +193,11 @@ describe("a notification arriving", () => {
     const { calls } = render(`/evaluations/${EVAL}/live`, teacher);
     await waitFor(() => expect(countOf(calls, "GET", "/app/api/notifications?limit=30")).toBe(1));
 
+    flowingClock();
     inbox.unshift(released("n1"));
     streams[0]!.hint(["notifications"]);
     await waitFor(() => expect(countOf(calls, "GET", "/app/api/notifications?limit=30")).toBe(2));
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
+    await elapse(50);
     expect(screen.queryByText(/Les résultats de/)).toBeNull();
   });
 });

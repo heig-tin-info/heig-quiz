@@ -14,6 +14,7 @@ import type {
 
 import { attemptEntryKey, attemptKey } from "../queryKeys";
 import type { Route } from "../router";
+import { makeMe } from "../test/fixtures";
 import { makeQueryClient, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { buttonClass } from "../ui";
 import { AttemptPage } from "./Attempt";
@@ -33,20 +34,16 @@ const FIRST = "22222222-2222-4222-8222-222222222222";
 const SECOND = "33333333-3333-4333-8333-333333333333";
 const ITEM = "44444444-4444-4444-8444-444444444444";
 
-const me: Me = {
+const me: Me = makeMe({
   id: "u1",
   email: "lea.perret@heig-vd.ch",
   givenName: "Léa",
   familyName: "Perret",
   role: "student",
   lastLoginAt: null,
-  avatarUrl: null,
-  hasUploadedAvatar: false,
   locale: "fr",
   dateFormat: null,
-  mcqPolicy: null,
-  coach: { enabled: false, seen: [] },
-};
+});
 
 type Keep = "best" | "last";
 

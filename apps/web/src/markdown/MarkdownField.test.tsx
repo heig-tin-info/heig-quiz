@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { elapse, flowingClock } from "../test/clock";
 import { renderWithProviders } from "../test/render";
 import { MarkdownField } from "./MarkdownField";
 
@@ -185,8 +186,9 @@ describe("MarkdownField — Source pane images", () => {
     renderWithProviders(<Host initial="" onUploadImage={onUploadImage} />);
     await openSource();
     const pdf = new File(["x"], "notes.pdf", { type: "application/pdf" });
+    flowingClock();
     fireEvent.paste(area(), { clipboardData: { files: [pdf], items: [], getData: () => "" } });
-    await new Promise((r) => setTimeout(r, 10));
+    await elapse(10);
     expect(onUploadImage).not.toHaveBeenCalled();
   });
 });

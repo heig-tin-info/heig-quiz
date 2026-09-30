@@ -1,4 +1,5 @@
 import type {
+  ByQuestion,
   EvaluationDetail,
   Grading,
   GradingEntry,
@@ -291,3 +292,34 @@ export function makeFeedback(over: Partial<Extract<StudentFeedback, { available:
     ...over,
   };
 }
+
+/** One question of the Results "Questions" tab and of the projected correction (F-RES-03). */
+export function makeByQuestion(over: Partial<ByQuestion> & Pick<ByQuestion, "item">): ByQuestion {
+  return {
+    papers: 0,
+    student: null,
+    solution: null,
+    explanation: null,
+    outcomes: { correct: 0, partial: 0, wrong: 0, blank: 0 },
+    distribution: [],
+    casePassRate: [],
+    successRate: null,
+    avgMs: null,
+    ...over,
+  };
+}
+
+/** The `item` of a `ByQuestion`: one point, named `q-<position>` unless told otherwise. */
+export const byQuestionItem = (
+  position: number,
+  type: string,
+  internalName = `q-${position}`,
+): ByQuestion["item"] => ({
+  id: `i${position}`,
+  position,
+  internalName,
+  type,
+  points: 1,
+  bonus: false,
+  successRate: null,
+});

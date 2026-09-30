@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AttemptOrLobby, AttemptView } from "@quiz/contracts";
 
+import { makeAttemptItem, makeAttemptView } from "../test/attempt-fixtures";
+import { elapse, flowingClock } from "../test/clock";
 import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { AttemptPage } from "./Attempt";
 
@@ -39,108 +41,31 @@ vi.mock("./QuestionHost", async (importOriginal) => {
 const EVAL = "e1";
 const ATTEMPT = "a1";
 
-const attemptView = (over: Partial<AttemptView["attempt"]> = {}): AttemptView => ({
-  attempt: {
-    id: ATTEMPT,
-    state: "in_progress",
-    startedAt: "2026-09-20T09:50:00.000Z",
-    deadlineAt: "2026-09-20T10:20:00.000Z",
-    lastItemId: "i2",
-    serverNow: "2026-09-20T10:00:00.000Z",
-    preview: false,
-    readOnly: false,
-    ...over,
-  },
-  evaluation: {
-    id: EVAL,
-    title: "Quiz 3 — Pointeurs",
-    mode: "exam",
-    state: "running",
-    settings: {
-      navigation: "free",
-      presentation: "zen",
-      lobby: "manual",
-      shuffleItems: false,
-      shuffleChoices: true,
-      timing: "duration",
-      showProgressBar: true,
-      logVisibility: true,
-      requireFullscreen: false,
-    },
-    feedbackPolicy: {
-      when: "on_release",
-      showAnswer: true,
-      showKey: false,
-      showExplanation: false,
-      showHiddenCaseNames: true,
-      showTeacherComment: true,
-    },
-    pausedAt: null,
-    totalPoints: 4,
-  },
-  items: [
-    {
-      id: "i1",
-      position: 1,
-      points: 2,
-      type: "mcq",
-      milestone: false,
-      bonus: false,
-      student: {
-        prompt: "Quelle expression donne l'adresse de `x` ?",
-        mode: "single",
-        choices: [
-          { id: 0, text: "&x" },
-          { id: 1, text: "*x" },
-        ],
-      },
-      answer: { selected: [1] },
-      revision: 3,
-      markedDone: false,
-      skipped: false,
-      flagged: false,
-      locked: false,
-    },
-    {
-      id: "i2",
-      position: 2,
-      points: 1,
-      type: "short",
-      milestone: false,
-      bonus: false,
-      student: {
-        prompt: "Combien d'octets pour un `int` ?",
-        kind: "number",
-        constraints: { minLength: 0, maxLength: 255, integer: true, min: 0 },
-      },
-      answer: { text: "4" },
-      revision: 2,
-      markedDone: false,
-      skipped: false,
-      flagged: false,
-      locked: false,
-    },
-    {
-      id: "i3",
-      position: 3,
-      points: 1,
-      type: "short",
-      milestone: false,
-      bonus: false,
-      student: {
-        prompt: "Et pour un `char` ?",
-        kind: "number",
-        constraints: { minLength: 0, maxLength: 255, integer: true, min: 0 },
-      },
-      answer: null,
-      revision: 0,
-      markedDone: false,
-      skipped: false,
-      flagged: false,
-      locked: false,
-    },
-  ],
-});
+const numberConstraints = { minLength: 0, maxLength: 255, integer: true, min: 0 };
+
+/** Three questions, reopened on the second: an answered mcq, an answered and an empty short. */
+const attemptView = (over: Partial<AttemptView["attempt"]> = {}): AttemptView =>
+  makeAttemptView({
+    attempt: { id: ATTEMPT, lastItemId: "i2", ...over },
+    evaluation: { id: EVAL },
+    items: [
+      makeAttemptItem({ id: "i1", position: 1, points: 2, answer: { selected: [1] }, revision: 3 }),
+      makeAttemptItem({
+        id: "i2",
+        position: 2,
+        type: "short",
+        student: { prompt: "Combien d'octets pour un `int` ?", kind: "number", constraints: numberConstraints },
+        answer: { text: "4" },
+        revision: 2,
+      }),
+      makeAttemptItem({
+        id: "i3",
+        position: 3,
+        type: "short",
+        student: { prompt: "Et pour un `char` ?", kind: "number", constraints: numberConstraints },
+      }),
+    ],
+  });
 
 const entry = (view: AttemptView): AttemptOrLobby => ({ kind: "attempt", view });
 
@@ -341,9 +266,8 @@ describe("the zen player", () => {
     );
   });
 
-  // Real timers, because the debounce is the thing under test. Mounting the
-  // lazy player, typing and waiting 300 ms costs more than the 5 s default.
-  it("autosaves a change, debounced, with a growing revision", { timeout: 15_000 }, async () => {
+  // Real timers, because the debounce is the thing under test.
+  it("autosaves a change, debounced, with a growing revision", async () => {
     const view = attemptView();
     const saves: unknown[] = [];
     mockFetch({
@@ -402,7 +326,6 @@ describe("the zen player", () => {
    */
   it(
     "still autosaves when the player is mounted twice by StrictMode",
-    { timeout: 15_000 },
     async () => {
       const view = attemptView();
       const saves: unknown[] = [];
@@ -823,7 +746,6 @@ describe("the zen player", () => {
 
     it(
       "goes home from an exercise without handing in, once the pending answer is saved",
-      { timeout: 15_000 },
       async () => {
         const view = exercise();
         const saves: unknown[] = [];
@@ -848,12 +770,15 @@ describe("the zen player", () => {
     );
 
     /** Home pressed with "2" typed and still in its debounce. */
-    const typeThenHome = async () => {
-      await userEvent.type(await screen.findByLabelText("Votre réponse"), "2");
-      await userEvent.click(screen.getByRole("button", { name: "Revenir à mes quiz" }));
+    const typeThenHome = async (user: ReturnType<typeof userEvent.setup> = userEvent.setup()) => {
+      await user.type(await screen.findByLabelText("Votre réponse"), "2");
+      await user.click(screen.getByRole("button", { name: "Revenir à mes quiz" }));
     };
 
-    it("asks before leaving when an answer cannot be saved, Stay focused", { timeout: 15_000 }, async () => {
+    /** The leave bound is 6 s of wall clock: jumped, on a flowing clock. */
+    const pastTheLeaveBound = () => elapse(6_000);
+
+    it("asks before leaving when an answer cannot be saved, Stay focused", async () => {
       stubs(exercise(), {
         [`PUT /app/api/attempts/${ATTEMPT}/answers/i2`]: fail(500, { error: "boom" }),
       });
@@ -875,7 +800,7 @@ describe("the zen player", () => {
       await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "home" }));
     });
 
-    it("says the evaluation is paused when the save met a 410 paused", { timeout: 15_000 }, async () => {
+    it("says the evaluation is paused when the save met a 410 paused", async () => {
       stubs(exercise(), {
         [`PUT /app/api/attempts/${ATTEMPT}/answers/i2`]: fail(410, {
           error: "attempt_closed",
@@ -891,7 +816,7 @@ describe("the zen player", () => {
       expect(within(dialog).queryByText(/connexion/)).toBeNull();
     });
 
-    it("says the attempt is closed when the save met a 410 closed", { timeout: 15_000 }, async () => {
+    it("says the attempt is closed when the save met a 410 closed", async () => {
       stubs(exercise(), {
         [`PUT /app/api/attempts/${ATTEMPT}/answers/i2`]: fail(410, {
           error: "attempt_closed",
@@ -914,23 +839,26 @@ describe("the zen player", () => {
       );
     };
 
-    it("stops waiting for a hung save after a few seconds, and never fires twice", { timeout: 20_000 }, async () => {
+    it("stops waiting for a hung save after a few seconds, and never fires twice", async () => {
+      const user = flowingClock();
       const { fetchMock } = stubs(exercise());
       hangSaves(fetchMock);
       const navigate = vi.fn();
       renderWith(navigate);
-      await typeThenHome();
+      await typeThenHome(user);
       const home = screen.getByRole("button", { name: "Revenir à mes quiz" });
       // Leaving is under way: Home reads as disabled but keeps the focus,
       // and a second press asks nothing more.
       await waitFor(() => expect(home).toHaveAttribute("aria-disabled", "true"));
       expect(home).toHaveFocus();
-      await userEvent.click(home);
+      await user.click(home);
+      expect(screen.queryByRole("dialog")).toBeNull();
       // The bound is 6 s: the question is asked, not a dead button.
-      const dialog = await screen.findByRole("dialog", {}, { timeout: 8_000 });
+      await pastTheLeaveBound();
+      const dialog = await screen.findByRole("dialog");
       expect(screen.getAllByRole("dialog")).toHaveLength(1);
       expect(within(dialog).getByText(/risquent d'être perdues/)).toBeInTheDocument();
-      await userEvent.click(within(dialog).getByRole("button", { name: "Rester" }));
+      await user.click(within(dialog).getByRole("button", { name: "Rester" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       // Back where the student was: on Home, enabled again.
       await waitFor(() => expect(home).toHaveFocus());
@@ -938,7 +866,8 @@ describe("the zen player", () => {
       expect(navigate).not.toHaveBeenCalledWith({ view: "home" });
     });
 
-    it("asks nothing once the player is gone (Home, then Back)", { timeout: 20_000 }, async () => {
+    it("asks nothing once the player is gone (Home, then Back)", async () => {
+      const user = flowingClock();
       const { fetchMock } = stubs(exercise());
       hangSaves(fetchMock);
       function Away() {
@@ -953,11 +882,11 @@ describe("the zen player", () => {
         );
       }
       renderWithProviders(<Away />, { locale: "fr", route: `/take/${EVAL}` });
-      await typeThenHome();
-      await userEvent.click(screen.getByRole("button", { name: "back" }));
+      await typeThenHome(user);
+      await user.click(screen.getByRole("button", { name: "back" }));
       expect(screen.queryByText("Question 2")).toBeNull();
       // Past the 6 s bound: the confirmation stays shut on the next page.
-      await new Promise((resolve) => setTimeout(resolve, 6_500));
+      await elapse(6_500);
       expect(screen.queryByRole("dialog")).toBeNull();
     });
   });
@@ -1075,7 +1004,6 @@ describe("the zen player's connection", () => {
 
   it(
     "journals one reconnect and replays the unacked answer on a reopen, not on the first open",
-    { timeout: 15_000 },
     async () => {
       vi.stubGlobal("EventSource", FakeStream);
       const view = attemptView();

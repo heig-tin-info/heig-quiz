@@ -4,24 +4,21 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { EvaluationCard, Me, StudentHome as StudentHomeData } from "@quiz/contracts";
 
+import { makeMe } from "../test/fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { StudentHome } from "./StudentHome";
 import { SEB_DOWNLOAD_URL } from "./SebLaunchModal";
 
-const me: Me = {
+const me: Me = makeMe({
   id: "u1",
   email: "lea.perret@heig-vd.ch",
   givenName: "Léa",
   familyName: "Perret",
   role: "student",
   lastLoginAt: null,
-  avatarUrl: null,
-  hasUploadedAvatar: false,
   locale: "fr",
   dateFormat: null,
-  mcqPolicy: null,
-  coach: { enabled: false, seen: [] },
-};
+});
 
 const card = (over: Partial<EvaluationCard>): EvaluationCard => ({
   id: "e1",

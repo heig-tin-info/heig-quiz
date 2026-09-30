@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PollPublicView } from "@quiz/contracts";
 
+import { makeMe } from "../test/fixtures";
 import { mockFetch, ok, fail, renderWithProviders } from "../test/render";
 import { PollJoin } from "./PollJoin";
 import { matchesExpected } from "./PollJoinReveal";
@@ -11,20 +12,7 @@ import { matchesExpected } from "./PollJoinReveal";
 const CODE = "QZ4F7K";
 const URL = `/app/api/p/${CODE}`;
 
-const me = {
-  id: "u1",
-  email: "marie@heig-vd.ch",
-  givenName: "Marie",
-  familyName: "Dupont",
-  role: "student" as const,
-  lastLoginAt: null,
-  avatarUrl: null,
-  hasUploadedAvatar: false,
-  locale: null,
-  dateFormat: null,
-  mcqPolicy: null,
-  coach: { enabled: false, seen: [] },
-};
+const me = makeMe({ id: "u1", role: "student", lastLoginAt: null, locale: null, dateFormat: null });
 
 const mcqStudent = {
   prompt: "Que vaut sizeof(char) ?",
