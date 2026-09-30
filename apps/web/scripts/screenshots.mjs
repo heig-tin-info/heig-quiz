@@ -896,7 +896,7 @@ const scenes = [
   { name: "admin-empty", role: "admin", path: "/admin?empty=1" },
   { name: "admin-error", role: "admin", path: "/admin?fail=1", settle: 2500 },
   { name: "admin-loading", role: "admin", path: "/admin?slow=1", settle: 300 },
-  // F-ADMIN-05: the scheduled tasks, one of each state.
+  // F-ADMIN-06: the scheduled tasks, one of each state.
   { name: "admin-tasks", role: "admin", path: "/admin?tab=tasks" },
   { name: "admin-tasks-error", role: "admin", path: "/admin?tab=tasks&fail=1", settle: 2500 },
   // F-JRN-07 (M4-04): the journal reader. `?journal=1` gives PRG1-2026 (r1)

@@ -31,7 +31,7 @@ export const adminTeachersKey = ["admin-teachers"] as const;
  */
 export const adminUsersKey = [...adminTeachersKey, "users"] as const;
 /**
- * The scheduled tasks (F-ADMIN-05): under `adminTeachersKey` too, so the
+ * The scheduled tasks (F-ADMIN-06): under `adminTeachersKey` too, so the
  * `admin` hint another administrator's change raises reaches this list.
  */
 export const adminTasksKey = [...adminTeachersKey, "tasks"] as const;

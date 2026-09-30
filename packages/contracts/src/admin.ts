@@ -1,5 +1,5 @@
 /**
- * `admin` route schemas (F-ADMIN-01, F-ADMIN-05): the teacher grants, the
+ * `admin` route schemas (F-ADMIN-01, F-ADMIN-06): the teacher grants, the
  * list of every account on the platform, and the scheduled tasks.
  */
 import { z } from "zod";
@@ -52,7 +52,7 @@ export const AdminUser = z.object({
 export type AdminUser = z.infer<typeof AdminUser>;
 
 /**
- * The scheduled tasks (F-ADMIN-05; D10, merge task M2-05): the minutes-scale
+ * The scheduled tasks (F-ADMIN-06; D10, merge task M2-05): the minutes-scale
  * periodic work of the server, which an administrator sees, pauses,
  * re-periods and runs now. The catalog lives in the server
  * (`SCHEDULED_TASKS`, `apps/api/src/modules/system/catalog.ts`); its keys are this closed

@@ -697,7 +697,7 @@ on("DELETE", "/app/api/admin/teachers/:gid", (m) => {
   return undefined;
 });
 
-// The scheduled tasks (F-ADMIN-05, D10): one of each state — ok, a failure,
+// The scheduled tasks (F-ADMIN-06, D10): one of each state — ok, a failure,
 // one still running, one paused on a changed period.
 const MIN = 60_000;
 function task(

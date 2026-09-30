@@ -239,4 +239,4 @@ A classroom's course documentation, kept in one GitHub repository and read in th
 | F-ADMIN-02 | Runner status: available languages, queue, mean time, errors. | P1 | M |
 | F-ADMIN-03 | Global settings: LLM providers, default drill duration, announcement message. | P2 | S |
 | F-ADMIN-04 | Audit log of sensitive actions: deletion, re-grading, role change, release of results. | P1 | S |
-| F-ADMIN-05 | Scheduled tasks: the server's periodic housekeeping, each with its status, last run, duration and last message; the administrator pauses a task, changes its period and runs it now. The clock of live evaluations is not among them (D10, 05 §5.4, Clock). | P1 | S |
+| F-ADMIN-06 | Scheduled tasks: the server's periodic housekeeping, each with its status, last run, duration and last message; the administrator pauses a task, changes its period and runs it now. The clock of live evaluations is not among them (D10, 05 §5.4, Clock). | P1 | S |

@@ -45,7 +45,7 @@ const TABS: readonly Tab[] = ["people", "tasks"];
 /**
  * Administration, one tab per concern, the open one in `?tab=`: the people
  * (the teacher grants, then every account) and the scheduled tasks
- * (F-ADMIN-05). A tab is one entry of `TABS` and one panel below.
+ * (F-ADMIN-06). A tab is one entry of `TABS` and one panel below.
  */
 export function AdminPage() {
   const t = useT();

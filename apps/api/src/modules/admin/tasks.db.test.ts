@@ -1,5 +1,5 @@
 /**
- * The admin routes of the scheduled tasks (F-ADMIN-05, D10): the list, the
+ * The admin routes of the scheduled tasks (F-ADMIN-06, D10): the list, the
  * configuration and "Run now", on a real application. The test server has
  * no queue (`JOBS_DISABLED=1`), so a run-now runs inline and its outcome is
  * in the response. The rows exist because `buildApp` seeds them at boot.

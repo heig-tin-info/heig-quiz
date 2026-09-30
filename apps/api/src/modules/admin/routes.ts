@@ -34,7 +34,7 @@ import { listUsers } from "./service.js";
  * teachers in the database. Granting is done by email; identity and last
  * login fill in at the first login. Grant and revoke take effect immediately
  * on an existing account (the role is also recomputed at every login).
- * The admin also sees and steers the scheduled tasks (F-ADMIN-05), whose
+ * The admin also sees and steers the scheduled tasks (F-ADMIN-06), whose
  * table the `system` module owns.
  */
 export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
@@ -136,7 +136,7 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     return reply.code(204).send();
   });
 
-  // --- Scheduled tasks (F-ADMIN-05, D10): the catalog is code, the rows are
+  // --- Scheduled tasks (F-ADMIN-06, D10): the catalog is code, the rows are
   // its configuration and last state (`modules/system`, seeded at boot). A
   // key the catalog does not hold is a 404, like any missing entity.
   const taskOf = (params: unknown) => {

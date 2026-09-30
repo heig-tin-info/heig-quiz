@@ -55,7 +55,7 @@ const PERIODS = [1, 5, 10, 15, 30, 60, 120, 360, 720, 1440, 10080];
 const RUNNING_POLL_MS = 5_000;
 
 /**
- * The scheduled tasks (F-ADMIN-05, D10): the minutes-scale housekeeping of
+ * The scheduled tasks (F-ADMIN-06, D10): the minutes-scale housekeeping of
  * the server — what it is, whether it is on, how often it runs, how its last
  * run went. The clock of the live evaluations is not here, and cannot be
  * switched off from anywhere.
@@ -195,7 +195,7 @@ export function TasksSection() {
                         ) : null}
                       </div>
                       {r.lastMessage ? (
-                        // Operator data, in English like a log line (F-ADMIN-05).
+                        // Operator data, in English like a log line (F-ADMIN-06).
                         <div
                           lang="en"
                           title={r.lastMessage}
