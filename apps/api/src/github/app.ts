@@ -69,6 +69,11 @@ export function githubApp(config: AppConfig): App | null {
       ? new App({
           appId: config.GITHUB_APP_ID,
           privateKey: readFileSync(config.GITHUB_APP_PRIVATE_KEY_PATH, "utf8"),
+          // The App's own user-to-server OAuth: the account link (M2-03).
+          oauth: {
+            clientId: config.GITHUB_APP_CLIENT_ID,
+            clientSecret: config.GITHUB_APP_CLIENT_SECRET,
+          },
           Octokit: ThrottledOctokit,
         })
       : null;

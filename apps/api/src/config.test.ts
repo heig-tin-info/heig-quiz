@@ -261,6 +261,13 @@ describe("the GitHub App (N-SEC-16)", () => {
     expect(() => loadConfig({ ...PROD, ...APP, GITHUB_APP_SLUG: "" })).toThrow(/GITHUB_APP_SLUG/);
   });
 
+  it("refuses a missing OAuth client id or secret (account linking)", () => {
+    expect(() => loadConfig({ ...PROD, ...APP, GITHUB_APP_CLIENT_ID: "" })).toThrow(/GITHUB_APP_CLIENT_ID/);
+    expect(() => loadConfig({ ...PROD, ...APP, GITHUB_APP_CLIENT_SECRET: " " })).toThrow(
+      /GITHUB_APP_CLIENT_SECRET/,
+    );
+  });
+
   it("is off without an App id, whatever else is set: nothing to refuse", () => {
     const { GITHUB_APP_ID: _id, ...withoutId } = APP;
     expect(() => loadConfig({ ...PROD, ...withoutId, GITHUB_WEBHOOK_SECRET: "short" })).not.toThrow();

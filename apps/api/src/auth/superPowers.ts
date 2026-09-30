@@ -10,38 +10,24 @@
  * them on and off.
  */
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import type { SuperPowersState } from "@quiz/contracts";
 
 import { audit } from "../audit.js";
 import { iso } from "../clock.js";
 import { sessions } from "../db/schema.js";
-import { adminGuard, mayHoldSuperPowers } from "../modules/guards.js";
+import { adminGuard, ownSessionGuard } from "../modules/guards.js";
 import { accessRevoked } from "../modules/realtime/bus.js";
 import { SESSION_COOKIE, SUPER_POWERS_MS, hashToken, superPowersEnded } from "./session.js";
 
 const PATH = "/app/api/me/super-powers";
 
-/**
- * An admin, in a session that may hold Super Powers (`mayHoldSuperPowers`):
- * never a Bearer token (an MCP assistant never holds them), never a session
- * somebody else acts through, never a `seb` one.
- */
-function sessionAdminGuard(app: FastifyInstance) {
-  const requireAdmin = adminGuard(app);
-  return async (req: FastifyRequest, reply: FastifyReply) => {
-    const denied = await requireAdmin(req, reply);
-    if (denied) return denied;
-    if (!mayHoldSuperPowers(req.user!, req.auth)) {
-      return reply.code(403).send({ error: "session_required" });
-    }
-    return undefined;
-  };
-}
-
 export async function superPowersRoutes(app: FastifyInstance) {
-  const guard = sessionAdminGuard(app);
+  // An admin (`403 forbidden` otherwise), in a session that may hold Super
+  // Powers (`mayHoldSuperPowers`): `403 session_required` for a Bearer
+  // token, a delegated or a confined session.
+  const guard = [adminGuard(app), ownSessionGuard(app)];
   const thisSession = (req: FastifyRequest) =>
     eq(sessions.sidHash, hashToken(req.cookies[SESSION_COOKIE] ?? ""));
 

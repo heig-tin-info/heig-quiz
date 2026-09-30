@@ -121,3 +121,10 @@ export type GithubAccountState = z.infer<typeof GithubAccountState>;
 export const GITHUB_LINK_OUTCOMES = ["linked", "conflict", "error"] as const;
 export const GithubLinkOutcome = z.enum(GITHUB_LINK_OUTCOMES);
 export type GithubLinkOutcome = z.infer<typeof GithubLinkOutcome>;
+
+/**
+ * The `409` body of a request that needs the user's GitHub account when
+ * GitHub no longer has it (deleted) or the link is gone: the web offers
+ * "Relink GitHub" (05-web §5.3). Returned by the API's `linkedLogin` (M2-03).
+ */
+export const GITHUB_ACCOUNT_STALE = { error: "github_account_stale" } as const;

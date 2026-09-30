@@ -14,8 +14,9 @@
  *  - `/pair?code=…` and `/app/api/pair/<code>`: a kiosk station's user code
  *    (ADR-051 §8), in the query of the phone's page and in the path of the
  *    route that reads it;
- *  - and either of them as the `next=` (or `returnTo=`) of a login round
- *    trip, which carries the page to come back to, token included.
+ *  - and any of them as the `next=` (or `returnTo=`) of a login round
+ *    trip, or the `return=` of a GitHub account link, which carries the page
+ *    to come back to, token included.
  *
  * And the GitHub tokens (N-SEC-16), wherever they appear in a text:
  * `redactTokens` is the one pattern table, used by the git wrapper
@@ -39,7 +40,7 @@ const SECRET_PREFIXES: readonly string[] = [
 const PAIR_PAGE = /^\/pair\/*\?/;
 
 /** The query parameters that hold another URL of the app. */
-const RETURN_PARAMS: readonly string[] = ["next", "returnTo"];
+const RETURN_PARAMS: readonly string[] = ["next", "returnTo", "return"];
 
 /** The part of `url` kept before the mask, or undefined when it carries no secret. */
 const secret = (url: string) =>
