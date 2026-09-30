@@ -34,6 +34,8 @@ Which claims edu-ID actually releases for HEIG-VD accounts, the picture included
 
 The teacher imports a spreadsheet with, for each student, last name, first name, e-mail address and, where it applies, an extra-time percentage (`packages/domain/src/roster.ts`). The teacher may add a free-form note about a student, which the student never sees (`apps/api/src/db/org.ts`).
 
+The class list is the only way into a classroom: the join code a student could type has been removed (ADR-053). A student's seat is attached to their account at sign-in, when one of the addresses edu-ID sends matches the address on the list (`apps/api/src/auth/claims.ts`).
+
 ### While the platform is used
 
 | Data | Detail |
@@ -41,6 +43,8 @@ The teacher imports a spreadsheet with, for each student, last name, first name,
 | Answers | Saved as they are typed, with the questions marked for review |
 | Attempts | Start time, deadline, hand-in, extra time granted, last sign of life |
 | Attempt journal | Tab changes, loss of window focus, reconnections, pauses and extensions (`apps/web/src/attempt/signals.ts`) |
+| Time on each question | When a question was first shown and how long it stayed on screen, measured by the server (ADR-039) |
+| Drill | For each question a student practises: the scheduler's state, and every review with its rating, whether it was right, the active time, the answer given and the device class (touch screen or mouse) (ADR-041, `apps/api/src/db/drill.ts`) |
 | Gradings | Points, the teacher's comment, the history of changes |
 | Released grades | A snapshot of the grades at the moment of release |
 | Profile picture | If the user uploads one |
@@ -49,7 +53,9 @@ The teacher imports a spreadsheet with, for each student, last name, first name,
 
 The attempt journal is kept for every evaluation, whether its **Log tab changes** setting is on or off (see [Known limits](#known-limits-and-planned-improvements)).
 
-The IP address is not stored in the database, with one exception: a refused Safe Exam Browser access writes it to the audit log. It does appear in the technical log of every request (`apps/api/src/redact.ts`). The platform records neither the browser in use, nor keystrokes, nor any audience measurement.
+The time on each question never leaves the server: no screen shows it, to the student or to the teacher; only the pool statistics use it, as an aggregate (see [Statistics](#statistics-and-anonymisation)).
+
+The IP address is not stored in the database, with one exception: a refused Safe Exam Browser access writes it to the audit log. It does appear in the technical log of every request (`apps/api/src/redact.ts`). The platform records neither the browser in use (only the drill's device class above), nor keystrokes, nor any audience measurement.
 
 ## Purposes
 
@@ -60,10 +66,11 @@ The data is used to:
 - grade, automatically or by the teacher, and release the results;
 - let the teacher follow an evaluation as it runs, the attempt journal included;
 - send notifications, when they are enabled;
-- produce per-evaluation statistics for the teacher (see [Statistics](#statistics-and-anonymisation));
+- schedule the drill, the spaced practice of questions already met in an evaluation, and show the teacher each student's drill activity;
+- produce statistics: per evaluation for the teacher, and per question in a pool (see [Statistics](#statistics-and-anonymisation));
 - keep a trace of changes (the audit log) and diagnose failures (the technical log).
 
-The code contains no advertising or commercial use, and no data is sent to an AI model for grading: that feature is not active (`apps/api/src/modules/grading/jobs.ts`).
+The code contains no advertising or commercial use, and no data is sent to an AI model. The grading pass can ask a model for a proposal on an essay, but the only service the code contains is a development stub, which the server refuses to start with in production (`LLM_PROVIDER` in `apps/api/src/config.ts`, ADR-045). When a real provider is added, what a request carries is fixed already: the rubric, the model answer, the student's answer and the maximum points, with no name, address or identifier (ADR-045 §3, N-DATA-05). The model's justification would be shown to the teacher only.
 
 ## Who reaches what
 
@@ -77,11 +84,19 @@ A teacher reaches the data of a course only if they are on that course's staff. 
 
 Within a staff, every member has the same rights, over every classroom of the course, past years included. Any staff member may add a colleague to it. A teacher who is not on a course's staff sees nothing of its students.
 
+When a classroom has the drill, its staff see each student's drill activity: the questions practised, the sessions, the recall rate and its progress week by week (`apps/api/src/modules/drill/teacher.ts`). Students are told so in their drill tab. A student may leave the drill of a classroom: from then on nothing more is counted, what was recorded before stays visible, and the teacher sees that and when the student left (ADR-041 §8).
+
+A teacher who can read a question pool, including a pool shared with them or a public one, sees the statistics of its questions, aggregated over every exam that used them, other teachers' classes included (see [Statistics](#statistics-and-anonymisation)).
+
+Profile pictures uploaded by users are served only to someone who already sees that person: a colleague on a course staff, the staff of a course where the person sits a classroom, the person themselves and the administrator (`seesUser` in `apps/api/src/modules/guards.ts`). A student never receives another student's picture.
+
 A teacher who connects an AI assistant to the platform (see [AI assistants](assistants.md)) gives it access to courses, pools and evaluations, including the names and addresses of a course's staff. No tool of the assistant reaches a classroom's list of students.
 
 ### The application administrator
 
-One account, named in the server configuration, holds the administrator role (`apps/api/src/roles.ts`). It reaches every course and every classroom, sees the list of all accounts, and may open a one-hour read-only view of a student's account to help them (ADR-034). The start and the end of that view are written to the audit log; the student is not told.
+One account, named in the server configuration, holds the administrator role (`apps/api/src/roles.ts`). It reaches every course and every classroom, and sees the list of all accounts, with their pictures.
+
+To help a student with a problem they report, the administrator may open a view of that student's account (ADR-034): a one-time link, valid five minutes, opens at most one hour as the student. In production that view is read only: it cannot answer or submit anything (`apps/api/src/auth/plugin.ts`). Its start and its end are written to the audit log under the administrator's name. The student is not notified; the student help says, in general terms, that an administrator can open such a view (`apps/web/src/help/student-home.md`).
 
 ### The system administrator
 
@@ -100,7 +115,7 @@ The platform runs at the hosting provider Hetzner, on two virtual machines (`doc
 
 The specification says "a server in Europe" (`docs/spec/03-exigences-non-fonctionnelles.md`, N-DATA-01). Both machines are in Hetzner datacenters in Europe. An older decision (ADR-009) mentions hosting in Switzerland; it predates the move to Hetzner and no longer describes the situation.
 
-A staging environment runs on the same machine and receives a copy of the production data that is **not anonymised**, to test under real conditions (ADR-028). Only the platform's administrators can reach it, and its reference configuration turns off e-mail and Teams notifications (`.env.staging.example`).
+A staging environment runs on the same machine, under a separate system account, and receives a copy of the production data that is **not anonymised**, to test under real conditions (ADR-028). Only the addresses on its sign-in allowlist, the platform's administrators, can sign in, and its reference configuration turns off e-mail and Teams notifications (`.env.staging.example`, `docs/development/deployment.md` §8).
 
 External services called:
 
@@ -109,25 +124,39 @@ External services called:
 | Switch edu-ID | The sign-in (it is the one that sends the identity) |
 | Scaleway Transactional Email (Paris region by default) | The recipient's address, the title of the evaluation or the name of the pool concerned; no grade, according to the code (`apps/api/src/modules/notifications/`) |
 | Microsoft Teams | For a linked account, a notification with the title concerned; limited to the authorised organisations |
-| The host of the edu-ID picture | A browser showing a portrait that was not uploaded loads it directly from the address edu-ID provided |
+| The host of the edu-ID picture | A browser showing a portrait that was not uploaded loads it directly from the address edu-ID provided, without sending the page's address |
+| An AI model | Nothing: no provider is configured (see [Purposes](#purposes)) |
 
-Whether e-mail and Teams are enabled in production: **To be confirmed**. The platform loads no analytics script, and no font or library from a third party: everything is served by the server itself.
+E-mails and Teams messages carry titles, names of classrooms and pools, and counts; they never carry a grade or a question's content: "your grade changed" says that it changed, not what it is (`apps/api/src/modules/notifications/templates.ts`). Whether e-mail and Teams are enabled in production: **To be confirmed**. The platform loads no analytics script, and no font or library from a third party: everything is served by the server itself.
+
+### GitHub and the journal (planned)
+
+The merge of heig-classroom into the platform (ADR-035) will bring a classroom journal published from a GitHub repository (ADR-049) and a link between a platform account and a GitHub account. None of it runs today: the database has the journal's tables, but no code fills them and no route serves them, and there is no GitHub connection. What the specification plans, for when it lands:
+
+- for a linked account, the GitHub identifier and login (N-DATA-02); linking is never a way to sign in;
+- a copy of the journal repository's pages and the files they reference, kept per classroom, deleted with the journal or the classroom; the repository itself is not the platform's data (N-DATA-03);
+- the platform talks to GitHub through its own GitHub App only; its keys stay out of the repository and the database, the access tokens GitHub issues are kept in memory, never stored nor logged, and the token of an account link is used once to read the account, then discarded (N-SEC-16 to N-SEC-18).
+
+This section will describe what is in place once it is.
 
 ## Retention and what happens to the data after the studies
 
-**No retention period is defined or enforced today.** The data stays until a teacher deletes it (`docs/spec/03-exigences-non-fonctionnelles.md`, N-DATA-03). In particular, nothing happens automatically when a student completes or leaves their studies.
+**One retention period is enforced: five years for the drill.** A drill review is deleted five years after it was made, and a question's drill card five years after its last review; the server checks every six hours (`apps/api/src/modules/drill/jobs.ts`, ADR-041, N-DATA-03). Every other piece of data stays until a teacher deletes it (N-DATA-03). In particular, nothing happens automatically when a student completes or leaves their studies.
 
 What is deleted, and when:
 
 | Action | Effect |
 | --- | --- |
-| Deleting an evaluation | Its attempts, answers, attempt journals and gradings are deleted |
-| Deleting a classroom or a course | The same for all its evaluations, plus the class list |
+| Deleting an evaluation | Its attempts, answers, attempt journals, gradings and notifications are deleted, and the drill cards it gave rise to, with their reviews |
+| Deleting a classroom or a course | The same for all its evaluations, plus the class list and the classroom's drill data |
+| "Remove these questions from the drill" on an evaluation | The drill cards it gave rise to and their reviews are deleted |
 | Archiving a classroom | Nothing is deleted: the classroom is only hidden |
-| Removing a student from the class list | Their seat goes; their attempts, answers and grades stay in the database |
+| Removing a student from the class list | Their seat goes; their attempts, answers, grades and drill data stay in the database |
+| A student leaving the drill of a classroom | Nothing is deleted |
 | Expired sessions | Deleted automatically, every ten minutes |
+| Expired authorisations of AI assistants | Deleted automatically, every hour (`apps/api/src/auth/oauth/service.ts`) |
 
-What is never deleted automatically: the accounts (there is no account deletion), the e-mail addresses and edu-ID information kept, and the audit log, which in particular keeps the name and address of a student removed from a classroom.
+What is never deleted automatically: the accounts (there is no account deletion), the e-mail addresses and edu-ID information kept, the notifications, and the audit log, which in particular keeps the name and address of a student removed from a classroom.
 
 After a deletion, the data remains in the backups until they rotate: 30 days for the daily database copies, 7 days for the Hetzner backups of the machine (`compose.prod.yml`, `docs/development/deployment.md`). The staging copy keeps it until its next refresh.
 
@@ -135,15 +164,25 @@ The retention period the institution wants after the studies: **To be confirmed*
 
 ## Statistics and anonymisation
 
-The statistics the platform shows are computed **per evaluation**, when they are displayed, from the nominative data: mean, grade distribution, success rate of each question, distribution of the answers (`apps/api/src/modules/results/service.ts`). Only the course's staff sees them. The CSV export of the results is nominative.
+No statistic is stored: every one is computed, when it is displayed, from the nominative data. There are two kinds.
 
-There is no separate or anonymised statistics store. As a consequence:
+**Per evaluation.** Mean, grade distribution, success rate of each question, distribution of the answers (`apps/api/src/modules/results/service.ts`). Only the course's staff sees them. The CSV export of the results is nominative. As a consequence:
 
 - deleting an evaluation deletes its statistics too;
 - as long as they exist, the statistics stay linked to the people;
 - no minimum group size is applied: in a small classroom, a grade distribution or a success rate may let someone recognise a student.
 
-Per-question statistics over several years and aggregated pool statistics, which the specification plans (F-STAT-01, N-DATA-06), are not implemented. The "difficulty" of a question is a value chosen by its author, not a computation over results.
+While an exercise runs, the teacher may publish its correction (ADR-050): the class view of the correction then shows the same aggregates over the papers handed in so far, with no names, and it may be projected in class. For a short-answer question, the distribution lists the answers as typed. Each student sees only their own correction.
+
+**Per question, in a pool** (ADR-038, ADR-039, ADR-042, ADR-043). For each question: its success rate, the time students spend on it, how well it separates stronger and weaker students, and, for a multiple-choice question, the share of each option. They count every exam that used the question, every year and every classroom, never an exercise, never a staff member's test (`apps/api/src/modules/stats/`). They are aggregated, to serve N-DATA-06:
+
+- below ten answers, the server sends nothing (`QUESTION_STATS_MIN_N` in `packages/domain/src/stats.ts`);
+- no minimum, maximum or standard deviation is shown, and option shares are whole percentages;
+- anyone who can read the pool sees them, other teachers included.
+
+One residual risk is accepted (ADR-038): someone who reads a question's figures just before and just after one more answer is counted can deduce that answer's points, without knowing whose it is.
+
+The drill's view for the teacher is per student, by the product owner's choice (ADR-041 §8); no minimum group size applies there either.
 
 During an evaluation, the teacher's dashboard may show a pseudonym (an adjective and an animal) instead of the name, for instance when it is projected in class (`packages/domain/src/pseudonym.ts`). It is a display choice: the data in the database stays nominative.
 
@@ -155,7 +194,8 @@ Sign-in and sessions:
 - the session is a random value of which the server keeps only a hash; the cookie is out of reach of the page's JavaScript, sent over HTTPS only in production, and expires at most 12 hours after the last activity with the reference configuration (`apps/api/src/auth/session.ts`, `.env.prod.example`);
 - requests that change something are protected against cross-site request forgery (`apps/api/src/auth/plugin.ts`);
 - the development sign-in, which lets anyone pick a fictitious identity, stops the server from starting in production (`apps/api/src/config.ts`);
-- API tokens and the authorisations given to AI assistants are stored as hashes only (ADR-022, ADR-023).
+- API tokens and the authorisations given to AI assistants are stored as hashes only (ADR-022, ADR-023);
+- the site's content security policy admits only the site's own scripts (`apps/api/src/csp.ts`).
 
 Network and storage:
 
@@ -164,7 +204,7 @@ Network and storage:
 - secrets (passwords, keys) are in files reserved to the service account, never in the repository or the database (ADR-010);
 - students' code runs in containers with no network, no secret, no access to the machine's files, and limits on memory, processes and time (`apps/runner/README.md`).
 
-What is not in place or not established: disk and backup encryption is not described in the repository (**To be confirmed**); the daily database copies sit on the machine itself and are not encrypted; no retention period for technical logs is configured in the repository (**To be confirmed** on the machine).
+What is not in place or not established: disk and backup encryption is not described in the repository (**To be confirmed**); the daily database copies sit on the machine itself and are not encrypted, and only the provider's backup of the whole machine is kept elsewhere; no retention period for technical logs is configured in the repository (**To be confirmed** on the machine).
 
 ## Students' rights and whom to contact
 
@@ -175,6 +215,8 @@ What the platform lets a student do today:
 | See their profile | Yes: name, e-mail address, role, last sign-in (**Settings**) |
 | See their results and gradings | Yes, once the teacher has released them, as far as the evaluation allows |
 | See their attempt journal | No: only the teacher sees it |
+| See their drill activity as the teacher sees it | No: the student sees their own sessions, not the teacher's view |
+| Stop the drill | Yes, per classroom: nothing more is counted; what was recorded stays visible to the teacher and is kept five years |
 | Export their data | No: there is no export for students |
 | Correct their name or address | Not in the platform: they come from edu-ID and are updated at every sign-in; a mistake in the class list is corrected by the teacher |
 | Delete their data | Only their profile picture and their Teams link |
@@ -189,35 +231,33 @@ The following points are known and tracked in issue [#274](https://github.com/he
 
 Retention and deletion:
 
-- no retention period, no purge after a student leaves;
+- no retention period except the drill's five years, no purge after a student leaves;
 - no deletion or anonymisation of accounts: the column meant to mark an account as anonymised exists, but no code sets it;
-- removing a student from a classroom does not delete their attempts or grades;
+- removing a student from a classroom does not delete their attempts, grades or drill data;
 - the edu-ID information is kept unfiltered and with no time limit;
 - the audit log is never purged and contains names and addresses.
 
 Statistics:
 
-- every statistic is nominative; no anonymised version is produced or kept;
-- no minimum group size: small classrooms are re-identifiable.
+- the per-evaluation statistics apply no minimum group size: small classrooms are re-identifiable;
+- the pool statistics have a threshold of ten answers, but comparing them before and after one new answer reveals that answer's points.
 
 Access and traceability:
 
 - reads are not traced, neither the teachers' nor the administrator's;
 - direct access to the machine and the database is not traced by the platform;
 - the audit log is described as unmodifiable by the application, but the production configuration does not enforce it;
-- the student is not told that an administrator opened a view of their account;
-- any signed-in user can fetch another user's uploaded picture if they know that user's internal identifier;
+- the student is not notified when an administrator opens a view of their account; only the student help mentions the possibility;
 - a personal API token carries all its owner's rights and may never expire.
 
 Informing the student:
 
-- the application has no "Data and privacy" page yet (N-DATA-07), and no data export (N-DATA-04);
+- the application has no "Data and privacy" page yet (N-DATA-07), and no data export (N-DATA-04); the drill's notice lives in the drill tab only;
 - the student is not told in the interface that tab changes and loss of focus are recorded, and does not see that journal;
 - an evaluation's **Log tab changes** setting has no effect: the journal is always kept.
 
 Hosting and security:
 
-- the daily database copies sit on the machine they protect, unencrypted; the copy off the machine is not in place;
+- the daily database copies sit on the machine they protect, unencrypted; their copy off the machine is not in place (the provider's backup of the whole machine, kept seven days, is);
 - staging holds a copy of the real data that is not anonymised; only administrators reach it;
-- the site's content security policy (CSP) does not restrict where scripts come from;
 - disk encryption and the retention of technical logs remain to be confirmed.
