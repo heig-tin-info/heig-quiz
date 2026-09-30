@@ -194,7 +194,14 @@ describe("runProcess", () => {
       return { exitCode: 3 };
     }) as never;
     const result = await runProcess({ ...base, module: emptyModule() });
-    expect(result).toMatchObject({ exitCode: 3, stdout: "out", stderr: "err", oom: false, truncated: false, memoryCapped: false });
+    expect(result).toMatchObject({
+      exitCode: 3,
+      stdout: "out",
+      stderr: "err",
+      oom: false,
+      truncated: false,
+      memoryCapped: false,
+    });
   });
 
   it("caps the memory of a module that imports it, at memoryMb", async () => {

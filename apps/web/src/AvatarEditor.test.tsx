@@ -1,3 +1,10 @@
+/**
+ * The profile-picture editor: pick an image, frame a square of it, save a
+ * 256 px JPEG; or remove the current picture. jsdom draws nothing and
+ * decodes no image, so the canvas and `Image` are doubles that record what
+ * the editor asks of them — which square of the source ends up on screen
+ * and in the upload is the behaviour under test.
+ */
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -6,14 +13,6 @@ import { AvatarMime } from "@quiz/contracts";
 
 import { AvatarEditor } from "./AvatarEditor";
 import { fail, mockFetch, noContent, renderWithProviders } from "./test/render";
-
-/*
- * The profile-picture editor: pick an image, frame a square of it, save a
- * 256 px JPEG; or remove the current picture. jsdom draws nothing and
- * decodes no image, so the canvas and `Image` are doubles that record what
- * the editor asks of them — which square of the source ends up on screen
- * and in the upload is the behaviour under test.
- */
 
 const AVATAR = "/app/api/me/avatar";
 

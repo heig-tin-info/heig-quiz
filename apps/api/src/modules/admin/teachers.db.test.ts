@@ -96,13 +96,13 @@ describe("POST /app/api/admin/teachers", () => {
     expect(audits[0]!.payload).toEqual({ email: "future.teacher@heig.test" });
   });
 
-  // SUSPECTED BUG (roles.ts, `syncUserRole`): for an account "from before the
+  // Issue #410 (roles.ts, `syncUserRole`): for an account "from before the
   // address set" (no `user_emails` row), the fallback finds the owner by its
   // verified login address, but then recomputes the role through
   // `roleForUser`, which reads `knownEmails` (the address set, empty here) —
   // so the grant never reaches it and the account stays a student until a
-  // login fills its set. Marked `fails` until the fallback feeds the login
-  // address to the rule.
+  // login fills its set. Marked `fails` until #410 is fixed: the fallback
+  // must feed the login address to the rule.
   it.fails("promotes at once an account from before the address set (login address only)", async () => {
     const legacy = await server.signIn("student", "legacy.teacher@heig.test");
     expect((await grant("legacy.teacher@heig.test")).statusCode).toBe(201);

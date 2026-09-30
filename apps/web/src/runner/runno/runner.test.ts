@@ -430,7 +430,11 @@ describe("the wall clock", () => {
         worker.send({ type: "case.start", index: 0 });
         worker.crash("Out of memory");
       });
-    const running = runnoRunner.run(request({ cases: [{ name: "a", args: [], stdin: "" }, { name: "b", args: [], stdin: "" }] }));
+    const cases = [
+      { name: "a", args: [], stdin: "" },
+      { name: "b", args: [], stdin: "" },
+    ];
+    const running = runnoRunner.run(request({ cases }));
     await vi.runAllTimersAsync();
     const outcome = await running;
     expect(outcome.cases[0]).toMatchObject({ exitCode: null, timedOut: false, oom: true });

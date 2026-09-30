@@ -46,7 +46,8 @@ async function newQuestion(name: string, pool = poolId): Promise<string> {
 async function published(name: string, n: number): Promise<string> {
   const id = await newQuestion(name);
   for (let v = 1; v <= n; v++) {
-    expect((await call(owner, "PUT", `/app/api/questions/${id}/draft`, { config: { statement: "S", answer: `v${v}` } })).statusCode).toBe(200);
+    const config = { statement: "S", answer: `v${v}` };
+    expect((await call(owner, "PUT", `/app/api/questions/${id}/draft`, { config })).statusCode).toBe(200);
     expect((await call(owner, "POST", `/app/api/questions/${id}/publish`, {})).statusCode).toBe(201);
   }
   return id;
@@ -101,7 +102,9 @@ describe("POST /questions/:id/publish — the refusals", () => {
   it("refuses an invalid draft with 422 and its issues, and publishes nothing", async () => {
     const id = await newQuestion("invalid draft");
     // Stored anyway (decision D16): a half-written question may be saved.
-    const saved = await call(owner, "PUT", `/app/api/questions/${id}/draft`, { config: { statement: "S", answer: "" } });
+    const saved = await call(owner, "PUT", `/app/api/questions/${id}/draft`, {
+      config: { statement: "S", answer: "" },
+    });
     expect(saved.statusCode).toBe(200);
     expect(saved.json()).toMatchObject({ valid: false });
 
@@ -189,16 +192,27 @@ describe("versions: read, restore, deprecate", () => {
 
   it("answers a stranger 404 on every version route, and changes nothing", async () => {
     const id = await published("versions guarded", 1);
-    for (const [method, url, payload] of [
-      ["GET", `/app/api/questions/${id}/versions`, undefined],
-      ["GET", `/app/api/questions/${id}/versions/1`, undefined],
-      ["POST", `/app/api/questions/${id}/versions/1/restore`, undefined],
-      ["POST", `/app/api/questions/${id}/versions/1/deprecate`, { note: "hijack" }],
-      ["POST", `/app/api/questions/${id}/stats/reset`, undefined],
-    ] as const) {
+    const missing = crypto.randomUUID();
+    const routes = (q: string) =>
+      [
+        ["GET", `/app/api/questions/${q}/versions`, undefined],
+        ["GET", `/app/api/questions/${q}/versions/1`, undefined],
+        ["POST", `/app/api/questions/${q}/versions/1/restore`, undefined],
+        ["POST", `/app/api/questions/${q}/versions/1/deprecate`, { note: "hijack" }],
+        ["POST", `/app/api/questions/${q}/stats/reset`, undefined],
+      ] as const;
+    const guarded = routes(id);
+    const absent = routes(missing);
+    for (let i = 0; i < guarded.length; i++) {
+      const [method, url, payload] = guarded[i]!;
       const res = await call(stranger, method, url, payload);
+      // Indistinguishable from a question that does not exist (invariant 6).
+      const [, missingUrl, missingPayload] = absent[i]!;
+      const none = await call(stranger, method, missingUrl, missingPayload);
       expect(res.statusCode).toBe(404);
+      expect(none.statusCode).toBe(404);
       expect(res.json()).toEqual({ error: "not_found" });
+      expect(res.json()).toEqual(none.json());
     }
     const [row] = await server.app.db
       .select()
@@ -262,7 +276,9 @@ describe("DELETE /questions/:id", () => {
 
   it("answers a stranger 404 and deletes nothing", async () => {
     const id = await newQuestion("guarded delete");
-    expect((await call(stranger, "DELETE", `/app/api/questions/${id}?hard=1`)).statusCode).toBe(404);
+    const res = await call(stranger, "DELETE", `/app/api/questions/${id}?hard=1`);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: "not_found" });
     expect(await server.app.db.select().from(questions).where(eq(questions.id, id))).toHaveLength(1);
   });
 });
@@ -296,6 +312,7 @@ describe("POST /questions/:id/copy", () => {
     const theirs = await newPool(stranger, "Stranger's other pool");
     const res = await call(stranger, "POST", `/app/api/questions/${id}/copy`, { targetPoolId: theirs });
     expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: "not_found" });
   });
 
   it("refuses a body without a valid target (400)", async () => {

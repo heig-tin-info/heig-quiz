@@ -1,12 +1,4 @@
-import { describe, expect, it } from "vitest";
-
-import type { EvaluationDetail } from "@quiz/contracts";
-
-import { DICTS, loadLocale, type TFunction } from "../i18n";
-import { makeEvaluationDetail, makeItemRow } from "../test/live-fixtures";
-import { launchChecks, readiness, type LaunchCheck } from "./launchChecks";
-
-/*
+/**
  * The pre-flight checklist of #152 as data, without a render: which rows a
  * detail yields, at which level, in which order, with which fix. The line
  * between `blocker` and the rest is the server's (`guardTransition`), so
@@ -15,6 +7,13 @@ import { launchChecks, readiness, type LaunchCheck } from "./launchChecks";
  * `t` echoes the key and its variables, so an assertion names the message
  * chosen rather than its wording; one test reads the real dictionaries.
  */
+import { describe, expect, it } from "vitest";
+
+import type { EvaluationDetail } from "@quiz/contracts";
+
+import { DICTS, loadLocale, type TFunction } from "../i18n";
+import { makeEvaluationDetail, makeItemRow } from "../test/live-fixtures";
+import { launchChecks, readiness, type LaunchCheck } from "./launchChecks";
 
 await loadLocale("fr");
 
@@ -70,7 +69,10 @@ describe("launchChecks: a ready evaluation", () => {
 
   it("uses the singular forms for one item, one student, one unlinked account", () => {
     const rows = checks(
-      makeEvaluationDetail({ items: [makeItemRow(0, { points: 3 })], roster: { enrolled: 1, unlinked: 1, conflicts: 0 } }),
+      makeEvaluationDetail({
+        items: [makeItemRow(0, { points: 3 })],
+        roster: { enrolled: 1, unlinked: 1, conflicts: 0 },
+      }),
     );
     expect(one(rows, "items").title).toBe('launch.items.one {"points":3}');
     expect(one(rows, "roster")).toMatchObject({ title: "launch.roster.one", detail: "launch.roster.unlinkedOne" });
@@ -176,9 +178,8 @@ describe("launchChecks: the warnings, each with its fix", () => {
     });
     // Up to date, or already taken by someone: no row.
     expect(byId(checks(detailWith({ originRevision: 3 }, { templateRevision: 3 })), "template")).toEqual([]);
-    expect(byId(checks(detailWith({ originRevision: 1 }, { templateRevision: 3, attemptCount: 1 })), "template")).toEqual(
-      [],
-    );
+    const taken = detailWith({ originRevision: 1 }, { templateRevision: 3, attemptCount: 1 });
+    expect(byId(checks(taken), "template")).toEqual([]);
   });
 
   it("warns about an empty roster instead of counting it", () => {
@@ -204,7 +205,10 @@ describe("launchChecks: the warnings, each with its fix", () => {
 
   it("warns about a kiosk exam on a platform without the kiosk path (ADR-051 §2)", () => {
     const kioskExam = detailWith({}, {}, { kiosk: true });
-    expect(one(checks(kioskExam, false), "kiosk")).toMatchObject({ level: "warning", title: "launch.kiosk.unavailable" });
+    expect(one(checks(kioskExam, false), "kiosk")).toMatchObject({
+      level: "warning",
+      title: "launch.kiosk.unavailable",
+    });
     expect(byId(checks(kioskExam, true), "kiosk")).toEqual([]);
     expect(byId(checks(makeEvaluationDetail(), false), "kiosk")).toEqual([]);
   });
@@ -212,7 +216,8 @@ describe("launchChecks: the warnings, each with its fix", () => {
 
 describe("launchChecks: the rules and access lines", () => {
   it("names the navigation, the order, one attempt, and negative marking when on", () => {
-    const rules = one(checks(detailWith({}, {}, { navigation: "free", shuffleItems: true, negativeMarking: true })), "rules");
+    const settings = { navigation: "free", shuffleItems: true, negativeMarking: true } as const;
+    const rules = one(checks(detailWith({}, {}, settings)), "rules");
     expect(rules.level).toBe("info");
     expect(rules.title).toBe("Eval.summary.navigation.free, launch.rules.shuffled");
     expect(rules.detail).toBe("launch.rules.oneAttempt · launch.rules.negative");
@@ -223,7 +228,9 @@ describe("launchChecks: the rules and access lines", () => {
   });
 
   it("describes the retakes of an exercise, bounded or not; an exam ignores them", () => {
-    const retakes = (maxAttempts: number | null) => ({ retakes: { enabled: true, keep: "last" as const, maxAttempts } });
+    const retakes = (maxAttempts: number | null) => ({
+      retakes: { enabled: true, keep: "last" as const, maxAttempts },
+    });
     expect(one(checks(detailWith({ mode: "exercise" }, {}, retakes(null))), "rules").detail).toBe(
       "launch.rules.unlimited.last",
     );

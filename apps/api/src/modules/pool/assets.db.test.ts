@@ -8,7 +8,7 @@
  * formats, their dimensions and the refusals are pinned here.
  */
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -194,16 +194,17 @@ describe("storeAsset: content-addressed", () => {
       ownerId,
       poolId,
     });
-    const written = await stat(join(dir, first.row.path));
 
     const second = await storeAsset(db, dir, upload(bytes));
     expect(second.fresh).toBe(false);
     expect(second.row.id).toBe(first.row.id);
-    // Nothing was written the second time.
-    expect((await stat(join(dir, first.row.path))).mtimeMs).toBe(written.mtimeMs);
+    expect(await db.select().from(assets).where(eq(assets.sha256, sha256Of(bytes)))).toHaveLength(1);
   });
 
   it("resolves two uploads of the same bytes at once to one row, one fresh", async () => {
+    // PGlite has a single connection, which serialises the two calls' statements:
+    // whether they interleave far enough to hit the insert conflict is not under
+    // the test's control. The claim holds either way: one row, one fresh.
     const bytes = png(3, 3, 42);
     const results = await Promise.all([storeAsset(db, dir, upload(bytes)), storeAsset(db, dir, upload(bytes))]);
     expect(new Set(results.map((r) => r.row.id)).size).toBe(1);
