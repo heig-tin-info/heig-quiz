@@ -371,7 +371,7 @@ describe("what the pairing refuses", () => {
 
   it("wrong codes previewed by GET: never counted, so no other site can lock a student out", async () => {
     const { evaluationId, student } = await running();
-    const station = await kioskStation(server.app.db);
+    const station = await kioskStation(server.app);
     const auth = await authorize(station);
     // A GET rides a cross-site navigation with the portal cookie.
     for (let i = 0; i < PAIR_MAX_FAILURES * 2; i += 1) {
