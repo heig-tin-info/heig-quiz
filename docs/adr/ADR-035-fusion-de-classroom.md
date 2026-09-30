@@ -204,7 +204,9 @@ production dump before it runs once for real.
   course's staff, and owner-only actions become staff actions.
 - The cutover is a short freeze with a written rollback; until its point of
   no return the classroom database stays untouched.
-- `@heig-platform/ui` is not created; issue #143 closes with this ADR.
+- `@heig-platform/ui` is not created. Issue #143 stays open until the
+  merge is complete: it closes at the decommission of classroom (task
+  M9-01 of `docs/merge/`), not with this ADR.
 
 ## Rejected alternatives
 

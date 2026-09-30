@@ -139,11 +139,15 @@ for Quiz.
    separate switch: the classroom has a journal exactly when it has a
    repository, and the Journal tab exists exactly then.
 3. **Which repositories (D27): any repository of the classroom's
-   organization**, as in classroom. Accepted risk: any staff member of a
-   connected classroom makes Quiz's App read that repository and write
-   into it (browser edits), whatever their own rights on GitHub. Every
-   choice and every write is audited (`journal.*`, in Quiz's closed
-   union), and the commits are authored as the teacher.
+   organization**, as in classroom. Combined with D04 (staff widened from
+   the classroom to the whole course), this means **any staff member of a
+   course can make Quiz's App read and write any repository of the
+   organizations linked to that course's classrooms** (by choosing it as
+   a classroom's journal, then editing in the browser), whatever their own
+   rights on GitHub. The product owner accepted this risk (2026-09-30). It
+   is mitigated by the audit trail — every choice and every write is
+   audited (`journal.*`, in Quiz's closed union) — and by the commits
+   being authored as the teacher who made them.
 4. **Quiz's own GitHub App (D23).** The journal reads and writes through
    Quiz's App, not classroom's; a separate staging App serves a test
    organization. The journal therefore goes live in Quiz's production
