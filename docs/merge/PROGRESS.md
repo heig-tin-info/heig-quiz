@@ -56,7 +56,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M2-01 | `github` schema and contracts | todo | M1-02, D02, M0-04, M0-05 | | | |
+| M2-01 | `github` schema and contracts | in progress | M1-02, D02, M0-04, M0-05 | `merge/M2-01-github-schema` | | |
 | M2-02 | Installations, org link, healing | todo | M2-01 | | | |
 | M2-03 | GitHub account linking | todo | M2-01 | | | |
 | M2-04 | Webhook intake, registry, deliveries | todo | M2-02 | | | |
