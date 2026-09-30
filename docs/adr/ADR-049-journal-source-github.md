@@ -183,8 +183,11 @@ for Quiz.
    (invariant 6): the course's staff read everything, a claimed
    enrollment reads the student view, anyone else gets the 404. The
    student view is the journal's one exit (no draft, no page before its
-   `visible_from`, no markdown, blob sha nor warning). The staff test
-   seat (ADR-018) and impersonation (ADR-034) get the student payload.
+   `visible_from`, no markdown, blob sha nor warning). The staff get the
+   staff payload unless the request asks for the student payload (a
+   teacher in the student view on their staff seat, ADR-018); that
+   parameter can only narrow, never widen. An impersonation session
+   (ADR-034) gets the student payload whatever it asks (spec 05 §5.7).
 10. **The defects found in classroom's journal are fixed in the port**
     (`docs/merge/04-journal.md` §4.3):
     - **J1** — an asset is served to a student only if a page visible to

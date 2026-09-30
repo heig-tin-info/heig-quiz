@@ -38,8 +38,9 @@ which items you skipped.
    under `NODE_ENV=production`.
 4. **Student views (`toStudent`, the journal).** Any new field in a
    question type's config, any new route or SSE event sending question
-   data to a student: the only exit is `studentView` in the `live` module. A new config field that holds answer
-   material must be stripped by `toStudent` AND covered by that type's test
+   data to a student: the only exit is `studentView` in the `live` module.
+   A new config field that holds answer material must be stripped by
+   `toStudent` AND covered by that type's test
    (forbidden-key list and search for the answer values, spec 05 §5.7).
    **Journal**: any route, SSE event or asset handler serving journal data
    to a student goes through the `journal` module's student view. The
@@ -60,13 +61,15 @@ which items you skipped.
    entity, never a 403 that leaks existence. Look for a load followed by an
    `if (!allowed)`: that is the pattern the invariant forbids.
    **Student branch**: a classroom route a student reads loads through
-   `readableClassroom`: staff through `staffAccess`, a claimed enrollment
-   of the caller gets the student payload, the staff test seat (ADR-018),
-   an impersonation session (ADR-034) and an explicit student-view request
-   get the student payload (a request parameter may narrow, never widen),
-   anyone else the 404. A branch that hands the staff payload to a test
-   seat or an impersonation session is a blocker. Journal routes serve
-   portal sessions only: a `seb` session must not reach them (ADR-027).
+   `readableClassroom`. The course's staff (through `staffAccess`) get the
+   staff payload, unless the request asks for the student payload (a
+   teacher in the student view on their staff seat, ADR-018); that
+   parameter can only narrow, never widen. An impersonation session
+   (ADR-034) gets the student payload whatever it asks. A claimed
+   enrollment of the caller gets the student payload; anyone else the 404.
+   Blockers: an impersonation session receiving the staff payload, or the
+   narrowing parameter widening the payload. Journal routes serve portal
+   sessions only: a `seb` session must not reach them (ADR-027).
 7. **Contracts.** Every new body, query or params is a zod schema in
    `packages/contracts`, used by the route AND by the client.
 8. **Pure rules in `packages/domain`,** with unit tests, no DB access.
@@ -81,8 +84,9 @@ which items you skipped.
     none`, the `containerArgs` flags asserted by `src/engine.test.ts`,
     `--remote` always, nothing mounted, file names sanitized, the source
     rebuilt server-side from the template; a project's source fetched by
-    the server at the frozen sha, never uploaded by a client. 11 and 12
-    bind `apps/runner` only (`apps/codespace` has its own `CLAUDE.md`).
+    the server at the frozen sha, never uploaded by a client. Invariants
+    11 and 12 of `CLAUDE.md` bind `apps/runner` only (`apps/codespace` has
+    its own `CLAUDE.md`).
 12. **GitHub** (only if `apps/api/src/github/`, `modules/github`,
     `modules/journal`, `config.ts`, the redaction or the deploy changed):
     invariant 15 of `CLAUDE.md`. No installation token, user token, App
@@ -92,9 +96,12 @@ which items you skipped.
     refusals in `config.ts` for an unreadable key file, a webhook secret
     under 32 characters or a missing App slug, each with a test; no
     `GITHUB_*` ⇒ GitHub off and boot unaffected; `/webhooks/github`
-    verifies the HMAC over the raw body in constant time before any work;
-    only Quiz's own App, and nothing that would let staging hold the
-    production App or keep a production installation id (N-SEC-16..18).
+    verifies the HMAC over the raw body in constant time before any work
+    (401 otherwise), acknowledges and ignores a delivery id already seen,
+    and answers in under 100 ms with the work queued; the setup return
+    verifies the installation with the App's JWT before storing it; only
+    Quiz's own App, and nothing that would let staging hold the production
+    App or keep a production installation id (N-SEC-16..18).
 13. **Migrations.** A schema change comes with its generated migration
     (`pnpm db:generate`), and the migration is safe on a table with data
     (a NOT NULL column has a default or a backfill).

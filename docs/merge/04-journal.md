@@ -116,10 +116,12 @@ Plumbing: `/webhooks/github` dispatch, queue `journal.ingest`, SSE family
 - **Access (invariant 6)**: a `readableClassroom` loader in
   `Q:modules/guards.ts` — staff = `staffAccess(user, classroom.course_id)`;
   student = an enrollment with `user_id = me`. This is Quiz's first
-  student-readable classroom route: the staff test seat (ADR-018) and
-  impersonation (ADR-034) must get the **student payload**, not the staff
-  one (classroom hides the teacher's buttons in student view but still
-  returns drafts).
+  student-readable classroom route: the staff get the staff payload
+  unless the request asks for the **student payload** (a teacher in the
+  student view on their staff seat, ADR-018), a parameter that can only
+  narrow, never widen; an impersonation session (ADR-034) gets the student
+  payload whatever it asks (spec 05 §5.7; classroom hides the teacher's
+  buttons in student view but still returns drafts).
 - **Contracts (invariant 7)**: zod bodies and payloads in
   `packages/contracts/src/journal.ts` (classroom declared TS interfaces and
   inline zod).

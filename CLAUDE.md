@@ -50,10 +50,7 @@ The screens as they ship are in the user guide's screenshots
 ```
 apps/
   api/        Fastify: modules, SSE, jobs, ticker, Drizzle schema + migrations;
-              the merge adds src/github/ (GitHub App adapters),
-              modules/github (org link, account link, webhooks) and
-              modules/journal (ADR-049), then modules/project and
-              modules/gradebook (docs/merge/)
+              to come: src/github/, modules/github|journal|project|gradebook
   web/        React SPA (Vite, Tailwind, TanStack Query)
   runner/     code execution in hardened Podman containers (@quiz/runner)
 packages/
@@ -156,12 +153,14 @@ Never work around these, not even "temporarily".
    full configuration passed through `toStudent`, by forbidden-key list AND
    by searching the serialized output for the answer-key values
    (`docs/spec/05-architecture.md`, 5.7).
-   **The journal's one exit is the student view of the `journal` module**:
+   **The journal's one exit is the student view of the `journal` module**
+   (M4-01/M4-02):
    no draft page, no page whose `visible_from` has not passed (the
    database's clock), no markdown, no blob sha, no warning, no count of what
    is hidden; an asset only when a page of that payload references it
    (N-SEC-12, N-SEC-13). Tested by a draft, a future page and an asset
-   referenced by them only, searched for in every student response.
+   referenced by them only, searched for in every student response, for
+   each student caller (05 §5.7).
 5. **The server owns the clock.** A deadline is closed by the ticker, never
    by a client. The receipt time of a write is the server's, never the
    browser's. A write arriving after `deadline + 3 s` is refused with
@@ -173,12 +172,13 @@ Never work around these, not even "temporarily".
    a 404 indistinguishable from a missing entity.
    **The student branch** is `readableClassroom`, in the same file (merge
    task M4-02 creates it), for the classroom routes a student reads: the
-   staff through `staffAccess` (staff payload); a claimed enrollment reads
-   its own classroom (student payload); the staff test seat (ADR-018), an
-   impersonation session (ADR-034) and an explicit student-view request get
-   the student payload — that request can only narrow, never widen; anyone
-   else gets the 404 of a missing classroom. The journal's routes serve
-   portal sessions only, never a `seb` session (ADR-027).
+   course's staff (through `staffAccess`) get the staff payload, unless the
+   request asks for the student payload (a teacher in the student view on
+   their staff seat, ADR-018); that parameter can only narrow, never widen.
+   An impersonation session (ADR-034) gets the student payload whatever it
+   asks. A claimed enrollment reads its own classroom (student payload);
+   anyone else gets the 404 of a missing classroom. The journal's routes
+   serve portal sessions only, never a `seb` session (ADR-027).
 7. **Every HTTP input is validated by a schema from `packages/contracts`,**
    and the client uses the same schema. A route change breaks both sides at
    compile time.
@@ -228,20 +228,21 @@ internal bridge).
 
 ### GitHub invariant (ADR-035, N-SEC-16..18)
 
-15. **Quiz's own GitHub App, and its secrets never at rest.** Quiz talks to
+15. **Quiz's own GitHub App, and its secrets never at rest.** None of this
+    code exists yet; each part lands with the task named. Quiz talks to
     GitHub only through its own App (D23), never heig-classroom's; staging
     has a separate App on a test organization and never holds the
-    production one (a production dump restored into staging loses every
-    installation id). The App key, webhook secret and client secret stay
-    out of the repository and the database (ADR-010); installation tokens
-    live in memory only; no token is ever stored nor logged (the redaction
-    knows `x-access-token:` and `gh?_`); the user token of an account link
-    reads the account once and is discarded. Under `NODE_ENV=production`,
-    `config.ts` refuses to start with an App id whose key file is
-    unreadable, a webhook secret under 32 characters or no App slug; with
-    no `GITHUB_*` set the GitHub features are off and the rest starts.
-    `/webhooks/github` trusts nothing before its HMAC over the raw body is
-    verified in constant time.
+    production one (N-SEC-18; M2-06). The App key, webhook secret and
+    client secret stay out of the repository and the database (ADR-010);
+    installation tokens live in memory only; no token is ever stored nor
+    logged, and the redaction knows `x-access-token:` and `gh?_` (M1-02);
+    the user token of an account link reads the account once and is
+    discarded (M2-03). Under `NODE_ENV=production`, `config.ts` refuses to
+    start with an App id whose key file is unreadable, a webhook secret
+    under 32 characters or no App slug; with no `GITHUB_*` set the GitHub
+    features are off and the rest starts (M1-02). `/webhooks/github`
+    trusts nothing before its HMAC over the raw body is verified in
+    constant time (M2-04).
 
 ## Development
 
