@@ -1,17 +1,22 @@
 import { BarChart3, CheckCheck, Play } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { useT } from "../i18n";
 import { useSearchParam, type Route } from "../router";
 import {
   Alert,
+  ASIDE_MIN_WIDTH,
   Button,
   Card,
+  cx,
   EmptyState,
+  pageBox,
   PageError,
   PageHeader,
+  PANE_GAP,
   QueryError,
   Skeleton,
+  useMinWidth,
 } from "../ui";
 import { AnswerPanel } from "./AnswerPanel";
 import { gradingColumns, sortColumns } from "./columns";
@@ -50,7 +55,11 @@ import { useGradingView } from "./view";
  * On top, which question and where each stands (`QuestionBar`); under it
  * the filters, the names switch and the screen's one accent action
  * (`GradingToolbar`); then the table (`GradingTable`), the key pinned as its
- * first row, and the answer panel (`AnswerPanel`) a row opens.
+ * first row, and the answer panel (`AnswerPanel`) a row opens. From
+ * `ASIDE_MIN_WIDTH` that panel docks beside the table, which narrows and
+ * stays readable, clickable and walkable (↑ / ↓, ← / →); the page widens by
+ * the pane's width (`pageBox`), as the pool's does for its question. Under
+ * it, the panel is a sheet over the table.
  *
  * Anonymised by default at every visit, never remembered: the server sends
  * no name at all, and the rows stand in an order drawn once per visit, so
@@ -80,6 +89,8 @@ export function GradingPanel({
   const [regrading, setRegrading] = useState(false);
   /** Where the selection last stood in the table, for a row that just left it. */
   const lastIndex = useRef(-1);
+  /** The answer pane's width when the window docks it; null, a sheet. */
+  const pane = useMinWidth(ASIDE_MIN_WIDTH) ? ANSWER_PANE_WIDTH : null;
 
   const data = useGradingData(evaluationId, itemParam || null, !anonymise);
   const { items, item, index, entries } = data;
@@ -147,6 +158,18 @@ export function GradingPanel({
     setSelected(next);
     if (panel) setPanel({ key: next, adjust: toGrade(next) });
   };
+  // Closed from inside the pane (its ✕), the focus would fall to the page:
+  // it goes back to the row the pane showed. A sheet gives it back itself.
+  const close = () => {
+    setPanel(null);
+    if (!pane) return;
+    requestAnimationFrame(() => {
+      if (document.activeElement !== document.body) return;
+      document
+        .querySelector<HTMLElement>(`tr[data-row="${CSS.escape(selected ?? "")}"]`)
+        ?.focus({ preventScroll: true });
+    });
+  };
   const selectedEntry = entries.find((e) => entryKey(e) === selected) ?? null;
   // V takes what the batch would take, one row at a time: never a placeholder.
   const validateOne = (entry: (typeof entries)[number]) => {
@@ -154,7 +177,8 @@ export function GradingPanel({
   };
 
   useGradingKeys({
-    panelOpen: panel !== null,
+    panel: panel === null ? "none" : pane ? "pane" : "sheet",
+    onClose: close,
     onQuestion: (delta) => goTo(index + delta),
     onRow: move,
     onOpen: () => {
@@ -171,13 +195,15 @@ export function GradingPanel({
   if (data.evaluation.isLoading) return <GradingSkeleton />;
   if (data.evaluation.isError) {
     return (
-      <PageError
-        title={t("grading.loadFailed")}
-        error={data.evaluation.error}
-        onRetry={() => void data.evaluation.refetch()}
-        retrying={data.evaluation.isFetching}
-        fallback={t("error.server")}
-      />
+      <Page>
+        <PageError
+          title={t("grading.loadFailed")}
+          error={data.evaluation.error}
+          onRetry={() => void data.evaluation.refetch()}
+          retrying={data.evaluation.isFetching}
+          fallback={t("error.server")}
+        />
+      </Page>
     );
   }
 
@@ -196,14 +222,14 @@ export function GradingPanel({
   );
   if (!item || data.evaluation.data?.attemptCount === 0) {
     return (
-      <div className="space-y-6">
+      <Page className="space-y-6">
         {header}
         <Card>
           <EmptyState icon={CheckCheck} title={t("grading.empty.noAttempt.title")}>
             {t("grading.empty.noAttempt.body")}
           </EmptyState>
         </Card>
-      </div>
+      </Page>
     );
   }
 
@@ -223,9 +249,33 @@ export function GradingPanel({
   // run are the question's, never the whole evaluation's (the palette's).
   const waiting = entries.filter(needsPass).length;
   const state = data.states.get(item.id);
+  const answer = target ? (
+    <AnswerPanel
+      evaluationId={evaluationId}
+      target={target}
+      item={item}
+      number={index + 1}
+      named={!anonymise}
+      pane={pane}
+      columns={columns}
+      student={first?.student ?? null}
+      explanation={data.explanation}
+      onClose={close}
+      onMove={move}
+      onAdjust={(on) => setPanel((p) => (p ? { ...p, adjust: on } : p))}
+      onValidate={validateOne}
+      validating={actions.validate.isPending}
+      // A sheet never opens another sheet: the panel steps aside.
+      onRegrade={() => {
+        setPanel(null);
+        setRegrading(true);
+      }}
+      onEdit={onEdit}
+    />
+  ) : null;
 
   return (
-    <div className="space-y-5">
+    <Page pane={answer ? pane : null}>
       {header}
       <QuestionBar items={items} index={index} states={data.states} onJump={goTo} />
       <GradingToolbar
@@ -265,68 +315,48 @@ export function GradingPanel({
           }
         />
       ) : null}
-      <Card className="overflow-hidden">
-        {data.queue.isError ? (
-          <div className="p-4">
-            <QueryError
-              title={t("grading.loadFailed")}
-              error={data.queue.error}
-              onRetry={() => void data.queue.refetch()}
-              retrying={data.queue.isFetching}
-              fallback={t("error.server")}
+      <div className="flex items-start" style={{ gap: PANE_GAP }}>
+        <Card className="min-w-0 flex-1 overflow-hidden">
+          {data.queue.isError ? (
+            <div className="p-4">
+              <QueryError
+                title={t("grading.loadFailed")}
+                error={data.queue.error}
+                onRetry={() => void data.queue.refetch()}
+                retrying={data.queue.isFetching}
+                fallback={t("error.server")}
+              />
+            </div>
+          ) : data.queue.isLoading ? (
+            <TableSkeleton />
+          ) : (
+            <GradingTable
+              label={t("grading.table.label", { n: index + 1 })}
+              columns={columns}
+              sortable={sortable}
+              rows={rows}
+              maxPoints={item.points}
+              named={!anonymise}
+              sort={sort}
+              onSort={(key) => setSort((s) => nextSort(s, key))}
+              selected={selected}
+              onOpen={open}
+              onValidate={validateOne}
+              validating={actions.validate.isPending}
+              onRegrade={() => setRegrading(true)}
+              newVersion={item.stale}
+              onEdit={onEdit}
+              empty={
+                view.stateFilter === "todo" && view.source === ANY
+                  ? t("grading.empty.body")
+                  : t("grading.empty.filtered")
+              }
             />
-          </div>
-        ) : data.queue.isLoading ? (
-          <TableSkeleton />
-        ) : (
-          <GradingTable
-            label={t("grading.table.label", { n: index + 1 })}
-            columns={columns}
-            sortable={sortable}
-            rows={rows}
-            maxPoints={item.points}
-            named={!anonymise}
-            sort={sort}
-            onSort={(key) => setSort((s) => nextSort(s, key))}
-            selected={selected}
-            onOpen={open}
-            onValidate={validateOne}
-            validating={actions.validate.isPending}
-            onRegrade={() => setRegrading(true)}
-            newVersion={item.stale}
-            onEdit={onEdit}
-            empty={
-              view.stateFilter === "todo" && view.source === ANY
-                ? t("grading.empty.body")
-                : t("grading.empty.filtered")
-            }
-          />
-        )}
-      </Card>
-
-      {target ? (
-        <AnswerPanel
-          evaluationId={evaluationId}
-          target={target}
-          item={item}
-          number={index + 1}
-          named={!anonymise}
-          columns={columns}
-          student={first?.student ?? null}
-          explanation={data.explanation}
-          onClose={() => setPanel(null)}
-          onMove={move}
-          onAdjust={(on) => setPanel((p) => (p ? { ...p, adjust: on } : p))}
-          onValidate={validateOne}
-          validating={actions.validate.isPending}
-          // A sheet never opens another sheet: the panel steps aside.
-          onRegrade={() => {
-            setPanel(null);
-            setRegrading(true);
-          }}
-          onEdit={onEdit}
-        />
-      ) : null}
+          )}
+        </Card>
+        {pane ? answer : null}
+      </div>
+      {pane ? null : answer}
       {regrading ? (
         <RegradeSheet
           evaluationId={evaluationId}
@@ -335,6 +365,26 @@ export function GradingPanel({
           onClose={() => setRegrading(false)}
         />
       ) : null}
+    </Page>
+  );
+}
+
+/** The docked answer pane's width, which the page widens by (`pageBox`). */
+const ANSWER_PANE_WIDTH = "36rem";
+
+/** The screen's box, a `WIDE` route's: the reading width, widened by a docked pane. */
+function Page({
+  pane = null,
+  className = "space-y-5",
+  children,
+}: {
+  pane?: string | null;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cx("w-full", className)} style={pageBox(pane)}>
+      {children}
     </div>
   );
 }
@@ -342,11 +392,11 @@ export function GradingPanel({
 /** The shape of what is coming: the header, the question bar and a few rows. */
 function GradingSkeleton() {
   return (
-    <div className="space-y-5">
+    <Page>
       <Skeleton className="h-9 w-48" />
       <Skeleton className="h-24 w-full" />
       <TableSkeleton />
-    </div>
+    </Page>
   );
 }
 

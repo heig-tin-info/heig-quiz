@@ -27,6 +27,33 @@ export function GateFrame({ children }: { children: ReactNode }) {
  */
 export const PAGE_COLUMN = { cap: "70rem", gutter: "2rem" } as const;
 
+/** The gap between a page's content and the pane docked beside it. */
+export const PANE_GAP = "1.5rem";
+
+const READING = `(${PAGE_COLUMN.cap} - 2 * ${PAGE_COLUMN.gutter})`;
+
+/**
+ * The box of a `WIDE` route that draws its own width: the shell drops its
+ * cap and this box draws it instead, from the same `PAGE_COLUMN`, so that a
+ * docked pane (`pane`, its CSS width, or null) can widen the page by exactly
+ * its own width and `PANE_GAP` — the pool's question, the grading screen's
+ * answer. Every column comes back on a very wide screen; on a narrower one, a
+ * table gives them up by `T`'s priorities, measured on its own container.
+ *
+ * The widened box does not re-centre: it keeps the content's left edge where
+ * it was and grows to the right, and only moves left by what the window lacks
+ * — a row clicked on a 27" screen stays under the pointer.
+ */
+export function pageBox(pane: string | null): CSSProperties {
+  if (pane === null) return { maxWidth: `calc${READING}`, marginInline: "auto" };
+  const widened = `(${READING} + ${PANE_GAP} + ${pane})`;
+  return {
+    maxWidth: `calc${widened}`,
+    marginLeft: `max(0px, min((100% - ${READING}) / 2, 100% - ${widened}))`,
+    marginRight: 0,
+  };
+}
+
 /** `PAGE_COLUMN` as the custom properties `max-w-(--page-cap)` and `sm:px-(--page-gutter)` read. */
 export const pageColumnVars = {
   "--page-cap": PAGE_COLUMN.cap,

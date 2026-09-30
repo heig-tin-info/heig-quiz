@@ -42,10 +42,12 @@ question with what each still asks for, the chevrons, and the evaluation's
 questions as the student player's stepper, `ProgressSegments` reused as it
 is). Under it, a table: a row per answer, the verdict first, the answer
 spread over columns, the points, the row's actions. The question's key is
-pinned as the first row. A row opens a side panel (a `Sheet`) with the
-answer in full — the type's own `Review`, the explanation, the history — and
-the adjustment form inline, where the one comment the student may read is
-written.
+pinned as the first row. A row opens a side panel with the answer in
+full — the type's own `Review`, the explanation, the history — and the
+adjustment form inline, where the one comment the student may read is
+written. From 1280 px it docks beside the table (a `Pane`), which narrows
+and stays readable, clickable and walkable; on a narrower window it is a
+`Sheet` over the table.
 
 The by-student traversal is removed everywhere: `?by=student`, the steps
 per student, `GradingQueue.order`, `GradingSteps.order`. The API keeps its

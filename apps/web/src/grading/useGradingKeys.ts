@@ -5,8 +5,14 @@ import { useShortcuts } from "../shortcuts";
 import { isTyping } from "../ui";
 
 export interface GradingKeyActions {
-  /** The answer panel is open: ↑ / ↓ then move it, and ← / → stay put. */
-  panelOpen: boolean;
+  /**
+   * Where the answer panel stands. A `sheet` is a dialog over the table:
+   * ↑ / ↓ move it, ← / → and Enter stay put, Escape is its own. A `pane`
+   * docks beside the table, which keeps every key; Escape closes it.
+   */
+  panel: "none" | "sheet" | "pane";
+  /** Escape, while the panel is a pane. */
+  onClose: () => void;
   /** ← / →: the previous or the next question. */
   onQuestion: (delta: number) => void;
   /** ↑ / ↓: the previous or the next row, the expected row first. */
@@ -22,7 +28,7 @@ export interface GradingKeyActions {
 /**
  * The grading screen's keyboard (docs/08 §8.5, ADR-044): ← / → change the
  * question, ↑ / ↓ the row, Enter opens it, V validates it, A adjusts it;
- * Escape is the panel's own (a sheet closes on it). Bare keys, because
+ * Escape closes the panel. Bare keys, because
  * nothing on this screen is typed into — except a field, which owns the
  * keyboard while it has the focus, and any OTHER layer (a confirmation, the
  * re-grade sheet) that is up over the table or the panel.
@@ -41,16 +47,17 @@ export function useGradingKeys(actions: GradingKeyActions) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const a = latest.current;
+      const sheet = a.panel === "sheet";
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (isTyping(document.activeElement)) return;
-      // Our own panel is one dialog; anything more is a layer over it.
+      // Our own panel, as a sheet, is one dialog; anything more is a layer over it.
       const dialogs = document.querySelectorAll('[role="dialog"]').length;
-      if (dialogs > (a.panelOpen ? 1 : 0)) return;
+      if (dialogs > (sheet ? 1 : 0)) return;
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       switch (key) {
         case "ArrowLeft":
         case "ArrowRight":
-          if (a.panelOpen) return;
+          if (sheet) return;
           e.preventDefault();
           a.onQuestion(key === "ArrowLeft" ? -1 : 1);
           return;
@@ -62,11 +69,16 @@ export function useGradingKeys(actions: GradingKeyActions) {
         case "Enter": {
           // A focused control (a button, a row) answers Enter itself.
           const focused = document.activeElement;
-          if (a.panelOpen || (focused instanceof HTMLElement && focused !== document.body)) return;
+          if (sheet || (focused instanceof HTMLElement && focused !== document.body)) return;
           e.preventDefault();
           a.onOpen();
           return;
         }
+        case "Escape":
+          if (a.panel !== "pane") return;
+          e.preventDefault();
+          a.onClose();
+          return;
         case "v":
           e.preventDefault();
           a.onValidate();

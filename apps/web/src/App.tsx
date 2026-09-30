@@ -280,10 +280,11 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
  * shell. The live dashboard: its grid is a matrix that grows with the
  * number of questions, and at 70 rem it scrolled sideways between two empty
  * margins (#93). The pool: it keeps the cap itself, and widens past it by the
- * width of the question pane when that pane docks beside the list. Every
- * other page keeps the cap.
+ * width of the question pane when that pane docks beside the list. The
+ * grading screen: the same, by the width of the answer pane beside its
+ * table. Every other page keeps the cap.
  */
-const WIDE: ReadonlySet<Route["view"]> = new Set(["live", "pool"]);
+const WIDE: ReadonlySet<Route["view"]> = new Set(["live", "pool", "grading"]);
 
 /**
  * The views where a notification arriving never toasts (ADR-030 §h): every
