@@ -22,9 +22,9 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import { CheckCircle2, GraduationCap } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 
-import type { DrillSession, Me, StudentClassroom, StudentHome as StudentHomeData } from "@quiz/contracts";
+import type { DrillSession, Me, StudentHome as StudentHomeData } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useDrillAvailability } from "../drill/api";
@@ -32,13 +32,12 @@ import { sessionCourses, sessionLine } from "../drill/format";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import { Card, EmptyState, PageHeader, QueryError, SectionHeading, Skeleton, useNow } from "../ui";
-import { studentClassroomsKey, studentHomeKey } from "../queryKeys";
+import { studentHomeKey } from "../queryKeys";
 import { HOME_SECTION } from "./bottomNavSlots";
 import {
   ActivityRow,
-  ClassroomCard,
+  ClassroomList,
   EvaluationRow,
-  JoinCard,
   openLine,
   pastLine,
   PollRow,
@@ -71,16 +70,13 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
     queryKey: studentHomeKey,
     queryFn: () => api("/app/api/student/home"),
   });
-  const rooms = useQuery<StudentClassroom[]>({
-    queryKey: studentClassroomsKey,
-    queryFn: () => api("/app/api/student/classrooms"),
-  });
-
   const actions = useCardActions(navigate);
   // The ONE scroll of the bottom bar's section slot (#191): to the section
   // the address names once the lists are drawn, and back to the top when a
-  // slot cleared it. Optional call: `scrollIntoView` does not exist under jsdom.
-  const drawn = !home.isLoading && !rooms.isLoading;
+  // slot cleared it. The classrooms come after the one anchored section
+  // (Past), so their loading moves nothing above it. Optional call:
+  // `scrollIntoView` does not exist under jsdom.
+  const drawn = !home.isLoading;
   const hash = window.location.hash;
   const lastHash = useRef(hash);
   useEffect(() => {
@@ -177,26 +173,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
 
       <section className="space-y-3">
         <SectionHeading title={t("shome.classrooms")} />
-        {rooms.isLoading ? (
-          <Skeleton className="h-20 w-full" />
-        ) : rooms.isError ? (
-          <QueryError
-            title={t("shome.classrooms")}
-            error={rooms.error}
-            onRetry={() => void rooms.refetch()}
-            retrying={rooms.isFetching}
-            fallback={t("error.server")}
-          />
-        ) : (rooms.data ?? []).length === 0 ? (
-          <Card>
-            <EmptyState icon={GraduationCap} title={t("shome.rooms.empty.title")}>
-              {t("shome.rooms.empty.body")}
-            </EmptyState>
-          </Card>
-        ) : (
-          rooms.data!.map((room) => <ClassroomCard key={room.id} room={room} navigate={navigate} />)
-        )}
-        <JoinCard />
+        <ClassroomList navigate={navigate} />
       </section>
 
       {actions.modal}

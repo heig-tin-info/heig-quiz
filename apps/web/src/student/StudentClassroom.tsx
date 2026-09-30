@@ -73,17 +73,15 @@ type Header = StudentClassroomPage["classroom"];
 export function mostUrgent({ polls, open }: Pick<StudentActivities, "polls" | "open">): string | null {
   const ranked = [
     ...open.map((card) => {
-      const due = Date.parse(card.deadlineAt ?? card.closesAt ?? "");
-      const rank = finished(card) ? 3 : Number.isNaN(due) ? 2 : 0;
-      return { id: card.id, rank, due: Number.isNaN(due) ? 0 : due };
+      const due = card.deadlineAt ?? card.closesAt;
+      const rank = finished(card) ? 3 : due === null ? 2 : 0;
+      return { id: card.id, rank, due: due === null ? 0 : Date.parse(due) };
     }),
     ...polls.map((poll) => ({ id: poll.id, rank: 1, due: 0 })),
   ];
-  let best: (typeof ranked)[number] | null = null;
-  for (const it of ranked) {
-    if (best === null || it.rank < best.rank || (it.rank === best.rank && it.due < best.due)) best = it;
-  }
-  return best?.id ?? null;
+  // `Array.prototype.sort` is stable: ties keep the server's order.
+  ranked.sort((a, b) => a.rank - b.rank || a.due - b.due);
+  return ranked[0]?.id ?? null;
 }
 
 const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404;
@@ -217,7 +215,7 @@ function ClassroomHeader({ room, onCourses }: { room: Header; onCourses: () => v
           ) : null}
         </>
       }
-      actions={room.timeBonusPercent > 0 ? <BonusBadge percent={room.timeBonusPercent} /> : undefined}
+      actions={<BonusBadge percent={room.timeBonusPercent} />}
     />
   );
 }
@@ -254,13 +252,13 @@ function Activities({ activities, navigate }: { activities: StudentActivities; n
           </Card>
         ) : null}
         {polls.map((poll) => (
-          <PollRow key={poll.id} poll={poll} navigate={navigate} primary={poll.id === urgent} where={false} />
+          <PollRow key={poll.id} poll={poll} navigate={navigate} primary={poll.id === urgent} showWhere={false} />
         ))}
         {open.map((card) => (
           <EvaluationRow
             key={card.id}
             card={card}
-            where={false}
+            showWhere={false}
             line={openLine(card, now, t)}
             action={actions.open(card, card.id === urgent)}
           />
@@ -271,7 +269,7 @@ function Activities({ activities, navigate }: { activities: StudentActivities; n
         <section className="space-y-3">
           <SectionHeading title={t("shome.upcoming")} />
           {upcoming.map((card) => (
-            <EvaluationRow key={card.id} card={card} where={false} line={upcomingLine(card, now, t)} />
+            <EvaluationRow key={card.id} card={card} showWhere={false} line={upcomingLine(card, now, t)} />
           ))}
         </section>
       ) : null}
@@ -283,7 +281,7 @@ function Activities({ activities, navigate }: { activities: StudentActivities; n
             <EvaluationRow
               key={card.id}
               card={card}
-              where={false}
+              showWhere={false}
               line={pastLine(card, t)}
               action={actions.review(card)}
             />

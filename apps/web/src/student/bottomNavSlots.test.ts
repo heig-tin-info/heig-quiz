@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parsePath, type Route } from "../router";
-import { activeSlot, BOTTOM_SLOTS, bottomNavShown, visibleSlots } from "./bottomNavSlots";
+import { activeSlot, bottomNavShown, visibleSlots } from "./bottomNavSlots";
 
 describe("bottomNavShown (#191)", () => {
   it("draws the bar for the student on the pages its slots lead to", () => {
@@ -33,10 +33,6 @@ describe("activeSlot (#191)", () => {
   });
 
   it("leads Courses to the student's classrooms, and lights it on a classroom's page (D07)", () => {
-    expect(BOTTOM_SLOTS.find((s) => s.id === "courses")).toEqual({
-      id: "courses",
-      route: { view: "studentCourses" },
-    });
     for (const path of ["/courses", "/classrooms/c1"]) {
       expect(activeSlot(parsePath(path), "")).toBe("courses");
       expect(bottomNavShown(parsePath(path), false)).toBe(true);

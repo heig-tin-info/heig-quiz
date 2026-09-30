@@ -1,7 +1,7 @@
 /**
  * The cards the student's pages share: the activity rows (an evaluation, a
- * running poll), their one-line captions, the classroom card and the join
- * card. The home (`StudentHome`) lists them across every classroom, the
+ * running poll), their one-line captions, and the list of classrooms with its
+ * join card. The home (`StudentHome`) lists them across every classroom, the
  * classroom page (`StudentClassroom`) for one, the Courses page
  * (`StudentCourses`) the classrooms (F-ORG-14, F-ORG-15).
  *
@@ -9,8 +9,9 @@
  * primary, since the home lights every open card and the classroom page only
  * its most urgent one.
  */
+import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
-import { CalendarClock, School } from "lucide-react";
+import { CalendarClock, GraduationCap, School } from "lucide-react";
 
 import { formatPoints } from "@quiz/domain";
 import type {
@@ -24,8 +25,20 @@ import { api } from "../api";
 import { feedbackLink } from "../grading";
 import { formatDuration, useT, type TFunction } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
+import { studentClassroomsKey } from "../queryKeys";
 import type { Route } from "../router";
-import { Badge, Button, Card, Field, isoDateParts, isoDateTime, pressable } from "../ui";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  isoDateParts,
+  isoDateTime,
+  pressable,
+  QueryError,
+  Skeleton,
+} from "../ui";
 import { useRetake } from "./retake";
 import { SebLaunchModal } from "./SebLaunchModal";
 
@@ -177,23 +190,23 @@ export function ActivityRow({
   );
 }
 
-/** `where` is left out on the classroom's own page, where every row is of that classroom. */
+/** `showWhere` is false on the classroom's own page, where every row is of that classroom. */
 export function EvaluationRow({
   card,
   line,
   action,
-  where = true,
+  showWhere = true,
 }: {
   card: EvaluationCardData;
   line: string | null;
   action?: RowAction | undefined;
-  where?: boolean;
+  showWhere?: boolean;
 }) {
   const t = useT();
   return (
     <ActivityRow
       title={card.title}
-      where={where ? `${card.courseCode} · ${card.classroomName}` : undefined}
+      where={showWhere ? `${card.courseCode} · ${card.classroomName}` : undefined}
       line={line}
       badge={{ label: t(MODE_KEY[card.mode]), accent: card.mode === "exam" }}
       action={action}
@@ -211,18 +224,18 @@ export function PollRow({
   poll,
   navigate,
   primary = true,
-  where = true,
+  showWhere = true,
 }: {
   poll: StudentPollCard;
   navigate: (r: Route) => void;
   primary?: boolean;
-  where?: boolean;
+  showWhere?: boolean;
 }) {
   const t = useT();
   return (
     <ActivityRow
       title={t("shome.poll.title")}
-      where={where ? `${poll.courseCode} · ${poll.classroomName}` : undefined}
+      where={showWhere ? `${poll.courseCode} · ${poll.classroomName}` : undefined}
       line={t("shome.poll.line")}
       badge={{ label: t(MODE_KEY.poll), accent: false }}
       action={{
@@ -310,7 +323,7 @@ export function BonusBadge({ percent }: { percent: number }) {
  * (D07). The course, the period and the teachers name it; the time bonus is
  * the one thing in it about the student.
  */
-export function ClassroomCard({
+function ClassroomCard({
   room,
   navigate,
 }: {
@@ -345,8 +358,45 @@ export function ClassroomCard({
   );
 }
 
+/**
+ * The student's classrooms, each a door to its page, and the join card under
+ * them — the home's "My classrooms" and the Courses page (F-ORG-14) alike.
+ * Its four states are its own; the caller frames it (a section, a page).
+ */
+export function ClassroomList({ navigate }: { navigate: (r: Route) => void }) {
+  const t = useT();
+  const rooms = useQuery<StudentClassroom[]>({
+    queryKey: studentClassroomsKey,
+    queryFn: () => api("/app/api/student/classrooms"),
+  });
+  return (
+    <>
+      {rooms.isLoading ? (
+        <Skeleton className="h-20 w-full" />
+      ) : rooms.isError ? (
+        <QueryError
+          title={t("shome.classrooms")}
+          error={rooms.error}
+          onRetry={() => void rooms.refetch()}
+          retrying={rooms.isFetching}
+          fallback={t("error.server")}
+        />
+      ) : (rooms.data ?? []).length === 0 ? (
+        <Card>
+          <EmptyState icon={GraduationCap} title={t("shome.rooms.empty.title")}>
+            {t("shome.rooms.empty.body")}
+          </EmptyState>
+        </Card>
+      ) : (
+        rooms.data!.map((room) => <ClassroomCard key={room.id} room={room} navigate={navigate} />)
+      )}
+      <JoinCard />
+    </>
+  );
+}
+
 /** Joining a classroom with the code the teacher gave. */
-export function JoinCard() {
+function JoinCard() {
   const t = useT();
   const toast = useToast();
   const toastError = useErrorToast();

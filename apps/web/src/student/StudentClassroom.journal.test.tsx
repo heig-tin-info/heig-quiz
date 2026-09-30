@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Journal, JournalPage, StudentClassroomPage } from "@quiz/contracts";
 
-import { mockFetch, ok, renderWithProviders } from "../test/render";
+import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 
 /*
  * The Journal tab of the student classroom page (F-ORG-15, F-JRN-07) with
@@ -74,6 +74,20 @@ describe("the student classroom page's Journal tab, CLASSROOM_PAGES on", () => {
     expect(screen.getByText("PRG1-2026")).toBeVisible();
     expect(calls.every((c) => !c.url.includes("/journal") || c.url.endsWith("view=student"))).toBe(true);
 
+    await userEvent.click(screen.getByRole("tab", { name: "Activities" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" });
+  });
+
+  it("keeps the breadcrumb and the tabs when the journal fails to load", async () => {
+    mockFetch({
+      "GET /app/api/student/classrooms/r1": ok(page(true)),
+      "GET /app/api/classrooms/r1/journal?view=student": fail(500, { message: "Boom" }),
+    });
+    const navigate = vi.fn();
+    renderWithProviders(<StudentClassroom id="r1" tab="journal" navigate={navigate} />);
+    expect(await screen.findByRole("heading", { level: 1, name: "Could not load the journal" })).toBeVisible();
+    expect(screen.getByText("Boom")).toBeVisible();
+    expect(await screen.findByText("PRG1-2026")).toBeVisible();
     await userEvent.click(screen.getByRole("tab", { name: "Activities" }));
     expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" });
   });

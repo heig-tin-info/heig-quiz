@@ -178,12 +178,14 @@ export function JournalReader({
       );
     }
     return (
-      <PageError
-        title={t("journal.loadError")}
-        error={journal.error}
-        onRetry={() => void journal.refetch()}
-        retrying={journal.isFetching}
-      />
+      <Frame header={header}>
+        <PageError
+          title={t("journal.loadError")}
+          error={journal.error}
+          onRetry={() => void journal.refetch()}
+          retrying={journal.isFetching}
+        />
+      </Frame>
     );
   }
 
@@ -471,6 +473,11 @@ function ArticleSkeleton() {
   );
 }
 
+/**
+ * `role="status"` sits on the placeholder, not on the whole: a caller's
+ * `header` is live content (a breadcrumb, tabs), and a status region is
+ * announced as a whole and holds no controls.
+ */
 function ReaderSkeleton({ layout, header }: { layout: Layout; header: ReactNode }) {
   const t = useT();
   return (

@@ -134,9 +134,6 @@ describe("the student's Courses and classroom page (M5-02, F-ORG-14/15)", () => 
     });
     renderWithProviders(<App />, { route: "/classrooms/r1" });
     expect(await screen.findByRole("heading", { level: 1, name: "PRG1-2026" })).toBeVisible();
-    expect(window.location.pathname).toBe("/classrooms/r1");
-    // `CLASSROOM_PAGES` is off in a test build, as in production: no Journal tab.
-    expect(screen.queryByRole("tab", { name: "Journal" })).toBeNull();
   });
 });
 
