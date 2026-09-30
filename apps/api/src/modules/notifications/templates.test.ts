@@ -169,46 +169,39 @@ describe("helpers", () => {
   });
 });
 
-describe("the teacher kinds of step 5 (#198)", () => {
-  it("sends grading_ready to the grading page, with the count of proposals", () => {
-    const ready = {
-      kind: "grading_ready",
-      evaluationId: EVAL,
-      evaluationTitle: "Test 0",
-    } as const;
-    expect(notificationPath({ ...ready, count: 3 })).toBe(`/evaluations/${EVAL}/grading`);
-    expect(renderNotification({ ...ready, count: 3 }, "en", "https://quiz.test").subject).toBe(
-      "3 proposals to validate: Test 0",
-    );
-    expect(renderNotification({ ...ready, count: 1 }, "fr", "https://quiz.test").subject).toBe(
-      "Une proposition à valider : Test 0",
-    );
-  });
-
-  it("sends pool_question_added to the pool, counted", () => {
-    const added = { kind: "pool_question_added", poolId: POOL, poolName: "PRG" } as const;
-    expect(notificationPath({ ...added, count: 5 })).toBe(`/pools/${POOL}`);
-    expect(renderNotification({ ...added, count: 5 }, "en", "https://quiz.test").subject).toBe(
-      "5 questions published in PRG",
-    );
-    expect(renderNotification({ ...added, count: 1 }, "fr", "https://quiz.test").subject).toBe(
-      "Une question publiée dans PRG",
-    );
+/*
+ * The counted kinds of #198 (steps 5 and 6): where each one sends, its
+ * subject for several in English, and its singular sentence in French.
+ */
+describe("the counted kinds of #198", () => {
+  it.each([
+    {
+      payload: { kind: "grading_ready", evaluationId: EVAL, evaluationTitle: "Test 0" },
+      path: `/evaluations/${EVAL}/grading`,
+      several: [3, "3 proposals to validate: Test 0"],
+      one: "Une proposition à valider : Test 0",
+    },
+    {
+      payload: { kind: "pool_question_added", poolId: POOL, poolName: "PRG" },
+      path: `/pools/${POOL}`,
+      several: [5, "5 questions published in PRG"],
+      one: "Une question publiée dans PRG",
+    },
+    {
+      payload: { kind: "activity_scheduled", classroomId: CLASSROOM, classroomName: "PRG1-2026" },
+      path: "/",
+      several: [16, "16 exercises scheduled in PRG1-2026"],
+      one: "Un exercice planifié dans PRG1-2026",
+    },
+  ] as const)("sends $payload.kind to its page, counted", ({ payload, path, several: [count, subject], one }) => {
+    const of = (n: number) => ({ ...payload, count: n }) as NotificationPayload;
+    expect(notificationPath(of(count))).toBe(path);
+    expect(renderNotification(of(count), "en", "https://quiz.test").subject).toBe(subject);
+    expect(renderNotification(of(1), "fr", "https://quiz.test").subject).toBe(one);
   });
 });
 
-describe("the student kinds of step 6 (#198)", () => {
-  it("sends activity_scheduled to the student home, counted per classroom", () => {
-    const scheduled = { kind: "activity_scheduled", classroomId: CLASSROOM, classroomName: "PRG1-2026" } as const;
-    expect(notificationPath({ ...scheduled, count: 16 })).toBe("/");
-    expect(renderNotification({ ...scheduled, count: 16 }, "en", "https://quiz.test").subject).toBe(
-      "16 exercises scheduled in PRG1-2026",
-    );
-    expect(renderNotification({ ...scheduled, count: 1 }, "fr", "https://quiz.test").subject).toBe(
-      "Un exercice planifié dans PRG1-2026",
-    );
-  });
-
+describe("activity_available (#198 step 6)", () => {
   it("sends activity_available to the page that lets the student in", () => {
     const available = { kind: "activity_available", activityKind: "evaluation", activityId: EVAL, activityTitle: "Série 3" } as const;
     expect(notificationPath(available)).toBe(`/take/${EVAL}`);

@@ -117,7 +117,8 @@ describe("the Teams app package", () => {
         "results_updated",
       ]),
     );
-    expect(TEAMS_APP_VERSION).toBe("2.1.0");
+    // Semver, as Teams wants it; the value itself is bumped by hand.
+    expect(TEAMS_APP_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
     expect(new Set(types.map((a) => a.type)).size).toBe(types.length);
     for (const a of types) {
       expect(a.type).toMatch(/^[a-z][A-Za-z]+$/);

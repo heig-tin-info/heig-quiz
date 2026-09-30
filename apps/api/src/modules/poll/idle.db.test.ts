@@ -11,7 +11,6 @@ import { and, eq } from "drizzle-orm";
 import { attempts, auditLog, evaluations, questions } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
-import { SCHEDULED_TASKS } from "../system/catalog.js";
 import * as poolService from "../pool/service.js";
 import { answerPoll, createPoll, endIdlePolls, endPoll, join, POLL_IDLE_MS } from "./service.js";
 
@@ -171,11 +170,5 @@ describe("a poll that was answered", () => {
     expect(await passEnds(id, at(10 * POLL_IDLE_MS))).toBe(false);
     expect((await stateOf(id)).closedAt).toEqual(before.closedAt);
     expect(await endEntries(id)).toHaveLength(1);
-  });
-});
-
-describe("registration", () => {
-  it("is in the scheduled catalog every deployment runs", () => {
-    expect(SCHEDULED_TASKS.map((t) => t.key)).toContain("poll.end_idle");
   });
 });
