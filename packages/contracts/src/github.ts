@@ -110,3 +110,14 @@ export const GithubAccountState = z.object({
   relevant: z.boolean(),
 });
 export type GithubAccountState = z.infer<typeof GithubAccountState>;
+
+/**
+ * The closed outcome of a link round trip (F-GH-05, M2-03), the `?github=`
+ * the callback appends to the page the user started from: `linked`, or
+ * `conflict` (the GitHub account is already another user's), or `error`
+ * (refused at GitHub, a stale or forged state, GitHub unreachable). The web
+ * words it as a toast through `t()`.
+ */
+export const GITHUB_LINK_OUTCOMES = ["linked", "conflict", "error"] as const;
+export const GithubLinkOutcome = z.enum(GITHUB_LINK_OUTCOMES);
+export type GithubLinkOutcome = z.infer<typeof GithubLinkOutcome>;

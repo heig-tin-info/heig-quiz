@@ -61,6 +61,16 @@ export type AuditAction =
   | "evaluation.start"
   | "evaluation.state"
   | "evaluation.update"
+  /**
+   * F-GH-05 (M2-03): a user linked their GitHub account, or unlinked it;
+   * subject the user, `payload.githubUserId` and `payload.login`. Never a token.
+   */
+  | "github.linked"
+  | "github.unlinked"
+  /** The GitHub account read is already another user's (`payload.githubUserId`): nothing written. */
+  | "github.link_conflict"
+  /** A linked account's login changed on GitHub, followed by its id (`payload.from`, `payload.to`). */
+  | "github.renamed"
   | "grading.override"
   | "grading.regrade"
   | "grading.run"
