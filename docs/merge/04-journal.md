@@ -130,7 +130,7 @@ Plumbing: `/webhooks/github` dispatch, queue `journal.ingest`, SSE family
 | # | Defect | Fix |
 | --- | --- | --- |
 | J1 | Assets of draft or not-yet-visible pages are readable by any enrolled student (the asset route checks membership, not the referencing page's visibility) | serve an asset to a student only if a page visible to students references it |
-| J2 | Concurrent ingestions: `singletonKey` dedups queued jobs only; save and Refresh call `ingestJournal` directly; mirror writes not transactional | every ingestion through the queue or under an advisory lock per journal; `mirror()` in one transaction |
+| J2 | Concurrent ingestions: `singletonKey` dedups queued jobs only; save and Refresh call `ingestJournal` directly; mirror writes not transactional | every ingestion through the queue or under an advisory lock per classroom journal row; `mirror()` in one transaction |
 | J3 | `attach` ignores `rootPath` when it reuses an existing (repo, ref) mirror | disappears with D03: no mirror is shared, each classroom row has its own root path |
 | J4 | No SSE hint when `visible_from` passes | a ticker sweep (`everyMs` 60 s, on the bare ticker) that emits the hint when a page becomes visible |
 | J5 | Warnings are server-built English sentences | codes + parameters |

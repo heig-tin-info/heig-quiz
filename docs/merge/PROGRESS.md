@@ -8,7 +8,8 @@ separate commit on `main`. Protocol: [`README.md`](README.md).
 
 - **Phase**: M0 — decisions and paper; **the journal track first**
   (`01-strategy.md` §1.3, "The journal first").
-- **Next actions**: D03, D07, D14, D15, D23, D24, D25 settled 2026-09-30.
+- **Next actions**: D03, D07, D14, D15, D23, D24, D25, D27 settled
+  2026-09-30.
   The journal track starts: M0-03 (ADR-035 accepted with the D23 amendment,
   classroom ADR-015 imported under the next free number), M0-04 for
   the journal, Courses and Settings-tab requirements, and M0-05, then M1-01…05 (M1-06
@@ -35,7 +36,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M0-01 | Settle blocking decisions | in progress | — | | | D01, D02, D04, D08, D16 settled 2026-09-28; D09 awaits confirmation |
+| M0-01 | Settle blocking decisions | in progress | — | | | D01, D02, D04, D08, D16 settled 2026-09-28; D03, D07, D14, D15, D23–D25, D27 settled 2026-09-30; D09 awaits confirmation |
 | M0-02 | Measure production (read-only) | done | PO go | `plan/merge-classroom` | #268 | `measures-2026-09-28.md`: pairwise edu-ID subs (login adoption needed), workspace unused by real classes, 3 classes to merge into existing Quiz classrooms, 0 pending staff; App permissions not checked |
 | M0-03 | ADRs (035 accepted, imports, amendments) | todo | M0-01 | | | |
 | M0-04 | Spec amendments | todo | M0-01 | | | |
@@ -56,7 +57,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M2-01 | `github` schema and contracts | todo | M1-02, D02 | | | |
+| M2-01 | `github` schema and contracts | todo | M1-02, D02, M0-04, M0-05 | | | |
 | M2-02 | Installations, org link, healing | todo | M2-01 | | | |
 | M2-03 | GitHub account linking | todo | M2-01 | | | |
 | M2-04 | Webhook intake, registry, deliveries | todo | M2-02 | | | |
@@ -158,7 +159,8 @@ what moved, what the next session must know.
   live before the cutover. D03 (one journal per classroom = one
   repository), D07 (Courses route to the classroom page), D14, D15 on the
   suggestion, D23 (Quiz's own GitHub App), D24 (classroom Settings tab),
-  D25 (WYSIWYG editor, gated by a round trip on real journals). Plan
+  D25 (WYSIWYG editor, gated by a round trip on real journals), D27 (any
+  repository of the organization). Plan
   amended in the same PR.
 
 - 2026-09-28 — planning session, continued: product owner settled D01

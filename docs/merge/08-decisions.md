@@ -103,7 +103,9 @@ Status values: `open`, `settled`, `superseded`.
   (activities, journal, grades); it is the one visible change before the
   cutover, shipped in M5.
 - Blocks: M5-02.
-- **Status**: settled 2026-09-30 (product owner, conversation): (a), and
+- **Status**: settled 2026-09-30 (product owner, conversation): (a) — no
+  longer the one visible change before the cutover, since the journal
+  goes live early too — and
   the student navigation says it. **Courses** lists the student's
   classrooms; a classroom opens its page — the activities of that
   classroom, its journal when it has one, later its projects.

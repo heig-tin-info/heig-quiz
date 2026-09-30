@@ -168,7 +168,7 @@ files it ports; writes en + fr for every string.
 ## M2 — GitHub substrate
 
 ### M2-01 — `github` schema and contracts
-- **Depends on**: M1-02, D02.
+- **Depends on**: M1-02, D02, M0-04, M0-05.
 - **Create**: `Q:db/github.ts` (`github_organizations`,
   `github_classroom_links`, `github_accounts`, `webhook_deliveries`,
   `push_receipts`), one additive migration; `packages/contracts/src/github.ts`;
@@ -237,8 +237,8 @@ files it ports; writes en + fr for every string.
   classroom to GitHub" sheet (org picker, install, live status) and the
   checks of §5.3; header badge; the user Settings GitHub card (shown only
   when relevant), return toast, palette entry. §5.3.
-- **Scenes**: `classroom-settings`, `classroom-settings-github-connect|
-  installed|checks-warn|org-missing`, `settings-github-linked|unlinked`.
+- **Scenes**: `classroom-settings`,
+  `classroom-settings-github-connect|installed|checks-warn|org-missing`, `settings-github-linked|unlinked`.
 
 ## M3 — Projects
 

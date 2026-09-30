@@ -166,8 +166,8 @@ own App (D23) since M2/M4; what remains dark sits behind its switch
 
 **C — Freeze and migrate (target ≤ 1 h).**
 1. Caddy maintenance fragment on `classroom.chevallier.io`: a bilingual 503
-   with `Retry-After`; `/webhooks/github` answers 503 (GitHub records the
-   failures, `reconcile.deliveries` replays them); pause the uptime probe;
+   with `Retry-After`; `/webhooks/github` answers 503 (classroom's App
+   is idle from then on; Quiz's App received its own deliveries); pause the uptime probe;
    `docker compose stop app` (Postgres stays up). If the rehearsal takes
    > 2 h, build a read-only flag in classroom instead (M8-03b).
 2. Dumps: `pg_dump -Fc hgc` ⇒ `backups/pre-merge-<ts>.dump`, a pre-migration

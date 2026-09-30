@@ -48,7 +48,7 @@ PR.
 | I41 | **SSE `classroom:` topic reaches students unfiltered** in Quiz: per-repo hints there reintroduce classroom #38 (DoS, grade leak) | per-repo hints to `course:` + `user:` topics only; a test that a student never receives another student's hint | M3-09 |
 | I42 | Forged CI grades (classroom H5) | indicative until a teacher release; the gradebook shows the source | M3-08, M5-03 |
 | I43 | Journal assets of hidden pages readable (J1) | visibility-aware asset route | M4-02 |
-| I44 | Concurrent journal ingestions (J2), `rootPath` ignored on attach (J3) | queue or advisory lock + transaction; key on root path | M4-02 |
+| I44 | Concurrent journal ingestions (J2); J3 dropped (D03) | queue or advisory lock per classroom journal row + transaction | M4-02 |
 | I45 | One webhook URL per App: no parallel run | resolved by D23: Quiz has its own App, both run in parallel; organizations install Quiz's before the cutover | M2-06, M8-05 |
 | I46 | Launch tokens logged by the codespace's Caddy | mask the query string | M6-05 |
 | I47 | Engine VM: no backups, 2 sessions of capacity, runner and codespace compete | resize, cgroup slices, off-VM backups | M6-05 |
@@ -58,10 +58,10 @@ PR.
 | I51 | Rate limits: 5 000 req/h per installation; anonymous org checks share the VM's 60/h | keep `noRateLimitWait`, SWR cache, backoff, hint coalescing; Quiz's 1-s live streams never trigger a GitHub fetch | M3-08 |
 | I52 | `node:24-slim` has no git | add `git` + `ca-certificates` | M1-02 |
 | I53 | App VM memory (1 vCPU / 2 GB) grows before classroom goes away | watch it through M3–M8; net gain after cutover | M8-05 |
-| I54 | Rulesets `hgc-protect` and `hgc-deadline-lock` may name classroom's App as a bypass actor: Quiz's App (D23) could not then lock, revert nor dispatch | check on the M8-06 rehearsal; the import rewrites the bypass list to Quiz's App | M8-06 |
 | I54 | Dev in-process queue has no retries; no webhooks in dev | tests call handlers directly; Refresh / mock paths | M2-04, M4-02 |
 | I55 | The audit table is append-only in production | dry-run until clean | M8-06 |
 | I56 | Classroom keeps changing until the cutover | sync point in `PROGRESS.md`; forward fixes | every phase |
+| I57 | Rulesets `hgc-protect` and `hgc-deadline-lock` may name classroom's App as a bypass actor: Quiz's App (D23) could not then lock, revert nor dispatch | check on the M8-06 rehearsal; the import rewrites the bypass list to Quiz's App | M8-06 |
 
 ## 7.4 Words
 
