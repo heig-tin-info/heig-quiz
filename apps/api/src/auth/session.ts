@@ -8,6 +8,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, eq, isNotNull, lt, lte, type SQL } from "drizzle-orm";
 
 import type { SessionKind } from "@quiz/contracts";
+import { isTrustedClient, type TrustedClient } from "@quiz/domain";
 
 import { audit } from "../audit.js";
 import type { Db } from "../db/client.js";
@@ -103,11 +104,13 @@ export const delegated = (auth: Pick<SessionAuth, "actorUserId"> | null): boolea
   (auth?.actorUserId ?? null) !== null;
 
 /**
- * A confined session (ADR-027, ADR-051): `seb` or `kiosk`, opened to sit ONE
- * evaluation, `evaluationId`, and nothing else.
+ * A confined session (ADR-027, ADR-051): one of a trusted client's kinds
+ * (`TRUSTED_CLIENTS`: `seb`, `kiosk`), opened to sit ONE evaluation,
+ * `evaluationId`, and nothing else.
  */
-export const confined = (auth: Pick<SessionAuth, "kind"> | null): boolean =>
-  auth?.kind === "seb" || auth?.kind === "kiosk";
+export const confined = <A extends Pick<SessionAuth, "kind">>(
+  auth: A | null | undefined,
+): auth is A & { kind: TrustedClient } => auth != null && isTrustedClient(auth.kind);
 
 /**
  * The lifetime of each kind: fixed hours, never renewed — or null for

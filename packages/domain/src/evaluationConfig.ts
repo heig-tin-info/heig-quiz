@@ -210,8 +210,18 @@ export function negativeMarkingAllowedFor(mode: EvaluationModeName): boolean {
   return mode !== "poll";
 }
 
-/** A confined client an exam may require (ADR-051): Safe Exam Browser, or a kiosk station. */
-export type TrustedClient = "seb" | "kiosk";
+/**
+ * The confined clients an exam may require (ADR-051 §2): Safe Exam Browser,
+ * or a kiosk station — each also the kind of the confined session it opens.
+ * THE list: `@quiz/contracts` builds `TrustedClient` and `SESSION_KINDS` from
+ * it, and the API's `confined()` reads it.
+ */
+export const TRUSTED_CLIENTS = ["seb", "kiosk"] as const;
+export type TrustedClient = (typeof TRUSTED_CLIENTS)[number];
+
+/** Whether a session kind is a trusted client's, i.e. a confined session. */
+export const isTrustedClient = (kind: string): kind is TrustedClient =>
+  (TRUSTED_CLIENTS as readonly string[]).includes(kind);
 
 /**
  * The trusted clients an evaluation accepts (ADR-027, ADR-051 §2), in this
@@ -226,10 +236,8 @@ export function trustedClientsOf(
   settings: { safeExamBrowser?: boolean | undefined; kiosk?: boolean | undefined },
 ): TrustedClient[] {
   if (mode !== "exam") return [];
-  const clients: TrustedClient[] = [];
-  if (settings.safeExamBrowser === true) clients.push("seb");
-  if (settings.kiosk === true) clients.push("kiosk");
-  return clients;
+  const on: Record<TrustedClient, boolean | undefined> = { seb: settings.safeExamBrowser, kiosk: settings.kiosk };
+  return TRUSTED_CLIENTS.filter((client) => on[client] === true);
 }
 
 /**

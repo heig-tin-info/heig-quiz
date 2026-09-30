@@ -8,6 +8,7 @@ import {
   isConfigFieldWritable,
   negativeMarkingAllowedFor,
   negativeMarkingOn,
+  isTrustedClient,
   scoresNegatively,
   trustedClientsOf,
 } from "./evaluationConfig.js";
@@ -67,6 +68,11 @@ describe("trusted clients (ADR-027, ADR-051 §2)", () => {
     expect(trustedClientsOf("exam", { safeExamBrowser: true })).toEqual(["seb"]);
     expect(trustedClientsOf("exam", { kiosk: true })).toEqual(["kiosk"]);
     expect(trustedClientsOf("exam", { kiosk: true, safeExamBrowser: true })).toEqual(["seb", "kiosk"]);
+  });
+
+  it("names the confined session kinds, and only them", () => {
+    expect(["seb", "kiosk"].every(isTrustedClient)).toBe(true);
+    expect(["portal", "impersonation", ""].some(isTrustedClient)).toBe(false);
   });
 
   it("is empty on any other mode, whatever the row says", () => {

@@ -6,6 +6,8 @@
 
 import { z } from "zod";
 
+import { TRUSTED_CLIENTS } from "@quiz/domain";
+
 import { McqPolicy } from "./evaluation.js";
 
 /** Display format for date-times; null falls back to ISO (`2026-09-01 08:00`). */
@@ -38,7 +40,7 @@ export interface PublicConfig {
  * confined kinds, the trusted clients an exam may require. A route accepts
  * `portal` (and so `impersonation`) only unless it declares otherwise.
  */
-export const SESSION_KINDS = ["portal", "seb", "impersonation", "kiosk"] as const;
+export const SESSION_KINDS = ["portal", "impersonation", ...TRUSTED_CLIENTS] as const;
 export type SessionKind = (typeof SESSION_KINDS)[number];
 
 export interface Me {

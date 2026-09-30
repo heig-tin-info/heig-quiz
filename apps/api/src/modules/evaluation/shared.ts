@@ -97,6 +97,16 @@ export class NegativeMarkingNotAllowed extends EvaluationError {
 }
 
 /**
+ * ADR-051 §2: the platform has no kiosk path (`KIOSK_ATTESTATION=off`), so an
+ * exam that only a kiosk station may sit could never be sat.
+ */
+export class KioskUnavailable extends EvaluationError {
+  constructor() {
+    super("kiosk_unavailable", 422, "kiosk stations are not available on this platform (ADR-051)");
+  }
+}
+
+/**
  * F-EVAL-11 (#78): `immediate` feedback in an exam, or in an exercise given a
  * waiting room — both sat in class (`isInClass` in `@quiz/domain`).
  */

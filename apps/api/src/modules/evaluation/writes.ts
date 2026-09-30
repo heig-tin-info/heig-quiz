@@ -45,6 +45,7 @@ import {
   RunningLocked,
   RetakesNotAllowed,
   NegativeMarkingNotAllowed,
+  KioskUnavailable,
   FeedbackNotAllowed,
   PollFeedbackLocked,
   NoPublishedVersion,
@@ -220,7 +221,15 @@ export async function patchEvaluation(
   db: DbOrTx,
   row: EvaluationRecord,
   patch: EvaluationPatch,
-  ctx: { attemptCount: number; now: Date },
+  ctx: {
+    attemptCount: number;
+    now: Date;
+    /**
+     * ADR-051 §2: the kiosk path exists (`KIOSK_ATTESTATION` is not `off`),
+     * as the route knows from the configuration. Absent: it does not.
+     */
+    kioskAvailable?: boolean;
+  },
 ): Promise<EvaluationRecord> {
   const lock = configLock(row.state, ctx.attemptCount);
   if (Object.keys(patch).some((k) => !isConfigFieldWritable(lock, k))) {
@@ -241,6 +250,10 @@ export async function patchEvaluation(
     if (negativeMarkingOf(settings) && !negativeMarkingAllowedFor(row.mode)) {
       throw new NegativeMarkingNotAllowed(row.mode);
     }
+    // No kiosk path, no kiosk exam (ADR-051 §2): switching it on is refused,
+    // switching it off — or patching anything else — always passes, so an
+    // exam left on after the platform turned the kiosk off can be fixed.
+    if (patch.settings.kiosk === true && ctx.kioskAvailable !== true) throw new KioskUnavailable();
     next.settings = settings;
   }
   if (patch.gradingScale !== undefined) next.gradingScale = patch.gradingScale;

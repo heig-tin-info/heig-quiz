@@ -2521,6 +2521,8 @@ export const en = {
   "launch.rules.upTo.best": "Up to {n} attempts, the best one counts",
   "launch.rules.upTo.last": "Up to {n} attempts, the last one counts",
   "launch.rules.negative": "negative marking",
+  "launch.kiosk.unavailable": "Kiosk stations are not available",
+  "launch.kiosk.unavailable.detail": "This exam accepts kiosk stations, but the platform no longer offers them: no station can be paired. Turn the setting off, or have Safe Exam Browser accepted.",
   "launch.access.ip": "IP restriction",
   "launch.access.open": "Open to the classroom",
   "launch.access.open.detail": "Every student of the classroom can enter.",

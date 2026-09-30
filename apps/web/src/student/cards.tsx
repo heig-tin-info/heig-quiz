@@ -116,12 +116,12 @@ const kioskOnly = (card: EvaluationCardData): boolean =>
   card.trustedClients.includes("kiosk") && !card.trustedClients.includes("seb");
 
 /**
- * The line of an open card: the retake count once done, where to sit it for
- * a kiosk-only exam, the time left otherwise.
+ * The line of an open card: where to sit it for a kiosk-only exam, the
+ * retake count once done, the time left otherwise.
  */
 export function openLine(card: EvaluationCardData, now: number, t: TFunction): string | null {
-  if (card.retakes !== null && finished(card)) return retakeLine(card, t);
-  return kioskOnly(card) ? t("shome.kiosk") : timingLine(card, now, t);
+  if (kioskOnly(card)) return t("shome.kiosk");
+  return card.retakes !== null && finished(card) ? retakeLine(card, t) : timingLine(card, now, t);
 }
 
 /**
@@ -273,6 +273,10 @@ export function useCardActions(navigate: (r: Route) => void): {
 
   /** The one button of an open card; none for an exam sat on a kiosk station only. */
   const open = (card: EvaluationCardData, primary: boolean): RowAction | undefined => {
+    // ADR-051: sat on a kiosk station only — the station starts it, once
+    // paired from the phone; nothing opens here, not even a retake (the
+    // card's line says where to go).
+    if (kioskOnly(card)) return undefined;
     const r = card.retakes;
     if (r !== null && finished(card) && r.canRetake) {
       return {
@@ -289,9 +293,6 @@ export function useCardActions(navigate: (r: Route) => void): {
     if (card.trustedClients.includes("seb")) {
       return { label: t("shome.seb"), primary, onClick: () => setSebFor(card) };
     }
-    // ADR-051: sat on a kiosk station only — the station starts it, once
-    // paired from the phone; nothing to open here (the card's line says so).
-    if (card.trustedClients.includes("kiosk")) return undefined;
     return {
       label: primaryAction(card, t),
       primary,

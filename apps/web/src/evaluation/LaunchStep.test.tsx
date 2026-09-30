@@ -124,6 +124,18 @@ describe("LaunchStep checklist (#152)", () => {
     expect(screen.queryByText(/kiosk stations/i)).toBeNull();
   });
 
+  it("warns when the exam accepts kiosk stations the platform no longer offers (ADR-051)", async () => {
+    const settings = { ...makeEvaluationDetail().evaluation.settings, kiosk: true };
+    mockFetch({ "GET /app/api/config": ok({ devLogin: false, kiosk: false }) });
+    const { unmount } = render(withEvaluation({ settings }));
+    expect(await screen.findByText("Kiosk stations are not available")).toBeInTheDocument();
+    unmount();
+    const { calls } = mockFetch({ "GET /app/api/config": ok({ devLogin: false, kiosk: true }) });
+    render(withEvaluation({ settings }));
+    await waitFor(() => expect(calls.some((c) => c.url === "/app/api/config")).toBe(true));
+    expect(screen.queryByText("Kiosk stations are not available")).toBeNull();
+  });
+
   it("warns on an empty roster, and blocks on a common end already past (#178)", async () => {
     mockFetch({});
     const past = {

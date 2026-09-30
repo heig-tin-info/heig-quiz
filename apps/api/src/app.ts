@@ -176,7 +176,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(orgPlugin, { config });
   await app.register(poolPlugin, { config });
   await app.register(pollPlugin, { config });
-  await app.register(evaluationPlugin);
+  await app.register(evaluationPlugin, { config });
   await app.register(activityPlugin);
   await app.register(livePlugin);
   await app.register(previewPlugin);

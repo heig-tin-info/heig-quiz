@@ -47,7 +47,7 @@ export type CheckFix =
   | { kind: "pullTemplate" };
 
 export interface LaunchCheck {
-  id: "items" | "stale" | "template" | "roster" | "conflicts" | "timing" | "feedback" | "rules" | "access";
+  id: "items" | "stale" | "template" | "roster" | "conflicts" | "timing" | "feedback" | "rules" | "access" | "kiosk";
   level: CheckLevel;
   title: string;
   detail: string;
@@ -269,6 +269,26 @@ function accessCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
 }
 
 /**
+ * ADR-051 §2: an exam switched to kiosk stations on a platform that no longer
+ * has the kiosk path (the server refuses the switch without it, so only a
+ * platform that turned it off afterwards gets here). No station can pair, so
+ * the exam can only be sat through SEB, or not at all.
+ */
+function kioskChecks(detail: EvaluationDetail, t: TFunction, kioskAvailable: boolean): LaunchCheck[] {
+  const { evaluation } = detail;
+  if (kioskAvailable || !trustedClientsOf(evaluation.mode, evaluation.settings).includes("kiosk")) return [];
+  return [
+    {
+      id: "kiosk",
+      level: "warning",
+      title: t("launch.kiosk.unavailable"),
+      detail: t("launch.kiosk.unavailable.detail"),
+      fix: { kind: "step", step: "timing" },
+    },
+  ];
+}
+
+/**
  * Every row, the ones that need the teacher first: blockers, then warnings,
  * then the rest in reading order (content, people, time, rules).
  */
@@ -277,6 +297,8 @@ export function launchChecks(
   t: TFunction,
   now: number,
   formatDate: (iso: string) => string,
+  /** The platform's kiosk path (`PublicConfig.kiosk`); true while unknown. */
+  kioskAvailable: boolean,
 ): LaunchCheck[] {
   const { evaluation } = detail;
   const rows: LaunchCheck[] = [
@@ -309,6 +331,7 @@ export function launchChecks(
     },
     rulesCheck(detail, t),
     accessCheck(detail, t),
+    ...kioskChecks(detail, t, kioskAvailable),
   ];
   const rank: Record<CheckLevel, number> = { blocker: 0, warning: 1, ok: 2, info: 2 };
   // `sort` is stable: rows of one rank keep their reading order.

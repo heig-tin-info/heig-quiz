@@ -9,6 +9,8 @@
  */
 import { z } from "zod";
 
+import { TRUSTED_CLIENTS } from "@quiz/domain";
+
 /** F-EVAL-01. `poll` is accepted by the column and refused by every route (decision D7). */
 export const EvaluationMode = z.enum(["exam", "exercise", "poll"]);
 export type EvaluationMode = z.infer<typeof EvaluationMode>;
@@ -120,12 +122,13 @@ export const safeExamBrowserOf = (settings: { safeExamBrowser?: boolean | undefi
   settings.safeExamBrowser === true;
 
 /**
- * A confined client an exam may require (ADR-051 §2): Safe Exam Browser or a
- * kiosk station — the confined session kinds. `trustedClientsOf`
- * (`@quiz/domain`) computes an evaluation's list.
+ * A confined client an exam may require (ADR-051 §2), on the wire. The list
+ * is `@quiz/domain`'s `TRUSTED_CLIENTS`, re-exported here; `trustedClientsOf`
+ * computes an evaluation's.
  */
-export const TrustedClient = z.enum(["seb", "kiosk"]);
+export const TrustedClient = z.enum(TRUSTED_CLIENTS);
 export type TrustedClient = z.infer<typeof TrustedClient>;
+export { TRUSTED_CLIENTS };
 
 /** The kiosk-station switch of an evaluation's settings (ADR-051); absent is off. */
 export const kioskOf = (settings: { kiosk?: boolean | undefined }): boolean => settings.kiosk === true;

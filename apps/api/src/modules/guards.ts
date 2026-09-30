@@ -798,10 +798,9 @@ export function sitRefusal(
 ): "client" | "ip" | null {
   const clients = trustedClients(evaluation);
   const auth = req.auth;
-  const refused =
-    auth?.evaluationId != null
-      ? auth.evaluationId !== evaluation.id || !clients.some((c) => c === auth.kind)
-      : !staffWatch && clients.length > 0;
+  const refused = confined(auth)
+    ? auth.evaluationId !== evaluation.id || !clients.includes(auth.kind)
+    : !staffWatch && clients.length > 0;
   if (refused) return "client";
   if (!staffWatch && !ipAllowed(evaluation.ipAllowlist, req.ip)) return "ip";
   return null;

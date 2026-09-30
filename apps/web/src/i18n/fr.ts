@@ -2517,6 +2517,8 @@ export const fr: Record<keyof Dict, string> = {
   "launch.rules.upTo.best": "Jusqu'à {n} tentatives, la meilleure compte",
   "launch.rules.upTo.last": "Jusqu'à {n} tentatives, la dernière compte",
   "launch.rules.negative": "points négatifs",
+  "launch.kiosk.unavailable": "Les postes kiosque ne sont pas disponibles",
+  "launch.kiosk.unavailable.detail": "Cet examen accepte les postes kiosque, mais la plateforme ne les propose plus : aucun poste ne peut être appairé. Désactivez le réglage, ou acceptez Safe Exam Browser.",
   "launch.access.ip": "restriction d'adresse IP",
   "launch.access.open": "Ouverte à la classe",
   "launch.access.open.detail": "Tous les étudiants de la classe peuvent entrer.",
