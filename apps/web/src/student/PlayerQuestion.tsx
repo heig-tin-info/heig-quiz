@@ -12,7 +12,7 @@ import type {
 } from "@quiz/qt-code/client";
 
 import type { RunFn, RunResult } from "../attempt/run";
-import { useT } from "../i18n";
+import { useT, type TFunction } from "../i18n";
 import { runCode, runCodeImage } from "../runner/codeRun";
 import { Badge } from "../ui";
 import { isAnswered, QuestionHost } from "./QuestionHost";
@@ -113,7 +113,8 @@ export function QuestionHeading({
 }: {
   /** Zero-based position in the paper. */
   index: number;
-  points: number;
+  /** Absent on a wide screen: the side column says it, beside the list. */
+  points?: number;
   validated: boolean;
   mark: AnswerMark;
 }) {
@@ -147,9 +148,14 @@ export function QuestionHeading({
           {t("player.skipped")}
         </Badge>
       ) : null}
-      <span className="ml-auto text-[13px] text-fg-muted">
-        {points === 1 ? t("player.point") : t("player.points", { n: points })}
-      </span>
+      {points === undefined ? null : (
+        <span className="ml-auto text-[13px] text-fg-muted">{pointsLabel(t, points)}</span>
+      )}
     </div>
   );
+}
+
+/** "1 point", "3 points": what a question is worth. */
+export function pointsLabel(t: TFunction, points: number): string {
+  return points === 1 ? t("player.point") : t("player.points", { n: points });
 }
