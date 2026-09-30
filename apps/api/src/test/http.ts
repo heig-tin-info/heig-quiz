@@ -14,9 +14,8 @@ import { buildApp } from "../app.js";
 import { TestClock } from "../clock.js";
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../auth/session.js";
 import { loadConfig } from "../config.js";
-import { createDb } from "../db/client.js";
 import { users } from "../db/schema.js";
-import { MIGRATIONS_DIR } from "../paths.js";
+import { migratedPglite } from "./template.js";
 
 /**
  * A request body `app.inject` accepts. The inject helpers of the route tests
@@ -62,10 +61,9 @@ export async function testServer(env: Record<string, string> = {}): Promise<Test
     LOG_LEVEL: "fatal",
     ...env,
   });
-  // The real migration chain, exactly as `server.ts` applies it at boot.
-  const handle = createDb(config.DATABASE_URL);
-  await handle.migrate(MIGRATIONS_DIR);
-  await handle.close();
+  // The real migration chain, as `server.ts` applies it at boot, run once
+  // per test run and copied into this server's directory (test/template.ts).
+  await (await migratedPglite(join(dir, "db"))).close();
 
   const app = await buildApp({ config, clock });
   await app.ready();

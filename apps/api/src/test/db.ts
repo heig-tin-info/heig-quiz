@@ -1,21 +1,20 @@
 /**
  * In-memory Postgres for DB-dependent tests: PGlite + the real drizzle
- * migrations (the exact SQL production runs at start, MIGRATE_ON_START).
+ * migrations (the exact SQL production runs at start, MIGRATE_ON_START),
+ * applied once per run and copied for each caller (test/template.ts).
  * `testApp()` returns a minimal FastifyInstance stub carrying `db` and a
  * silent logger — enough for the modules under test.
  */
-import { fileURLToPath } from "node:url";
-
-import { PGlite } from "@electric-sql/pglite";
+import type { PGlite } from "@electric-sql/pglite";
 import type { Logger } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
 import type { FastifyInstance } from "fastify";
 
 import { TestClock } from "../clock.js";
 import type { Db } from "../db/client.js";
 import * as schema from "../db/schema.js";
 import { UnavailableRunner } from "../modules/runner/unavailable.js";
+import { migratedPglite } from "./template.js";
 
 /**
  * A PGlite client seen as the application's {@link Db}: the very view
@@ -38,13 +37,8 @@ export async function testDatabase(): Promise<{ db: Db; client: PGlite }> {
   // that mocks one of them (`vi.mock`) must have finished loading first.
   const { registerDrillHooks } = await import("../modules/drill/service.js");
   registerDrillHooks();
-  const client = new PGlite();
-  const db = pgliteDb(client);
-  // The PGlite migrator on the handle it wraps, exactly as `createDb` does.
-  await migrate(db as never, {
-    migrationsFolder: fileURLToPath(new URL("../../drizzle", import.meta.url)),
-  });
-  return { db, client };
+  const client = await migratedPglite();
+  return { db: pgliteDb(client), client };
 }
 
 export async function testDb(): Promise<Db> {

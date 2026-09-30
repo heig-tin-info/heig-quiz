@@ -18,7 +18,8 @@ jobs:
           context: .
           tags: ghcr.io/heig-tin-info/quiz:latest
           outputs: type=docker,dest=/tmp/quiz-image.tar
-          cache-from: type=gha
+          # The layers ci.yml's `image` job caches for this image.
+          cache-from: type=gha,scope=quiz
       - uses: actions/upload-artifact@v7
         with:
           name: quiz-image

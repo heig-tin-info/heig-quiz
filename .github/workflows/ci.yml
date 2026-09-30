@@ -18,33 +18,122 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  checks:
+  # Whether this run tests the code at all. On a pull request that changes
+  # only prose (docs/, mockups/, a Markdown file outside the sources), the
+  # jobs below are skipped and `checks` still reports success, so a docs PR
+  # is never blocked. On a push to main everything always runs: nothing is
+  # deployed that the full suite did not pass. The Markdown under a `src/`
+  # is code: apps/web imports its help pages (help.tsx).
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ github.event_name != 'pull_request' || steps.filter.outputs.code == 'true' || steps.filter.outputs.src-prose == 'true' }}
+    steps:
+      - id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v4
+        with:
+          # A file counts for `code` when it matches EVERY pattern below.
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!docs/**'
+              - '!mockups/**'
+              - '!**/*.md'
+            src-prose:
+              - '{apps,packages}/*/src/**/*.md'
+
+  # The whole build (the SPA and the API included) and the typecheck: what
+  # the image will be made of must compile, whatever the tests say.
+  build-typecheck:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
+      - uses: ./.github/actions/setup
       # The browser runtimes `pnpm build` downloads (77 MB), keyed on the
       # script whose pinned digests name them.
       - uses: actions/cache@v6
         with:
           path: apps/web/public/runtimes
           key: web-runtimes-${{ hashFiles('apps/web/scripts/fetch-runtimes.mjs') }}
-      - run: pnpm install --frozen-lockfile
       # Strict, so a partial download fails here instead of being cached.
       - run: node apps/web/scripts/fetch-runtimes.mjs --strict
       - run: pnpm build
       - run: pnpm typecheck
-      # Every package's `test`, the runner's unit suite included. Its
-      # integration suite (`test:integration`, real containers) is NOT run
-      # here, so that an image build never holds up every PR: it has its own
-      # workflow, runner-integration.yml (#234).
-      - run: pnpm test
+
+  # The API's and the SPA's suites, three shards each, run side by side: in
+  # one job, the API's db tests (each loading a PGlite, src/test/template.ts)
+  # and the SPA's jsdom tests took six minutes. Each shard builds only the
+  # workspace packages its app imports (the tests resolve them through
+  # dist/), which costs less than waiting for `build`.
+  test-app:
+    name: test-${{ matrix.pkg }} (${{ matrix.shard }}/3)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [api, web]
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: pnpm --filter "@quiz/${{ matrix.pkg }}^..." build
+      - run: pnpm --filter "@quiz/${{ matrix.pkg }}" test --shard=${{ matrix.shard }}/3
+
+  # Every other package's `test`: the question types, domain, contracts, ui,
+  # diagram, docrender, registry, the runner's unit suite, and the kiosk
+  # extension's plain-Node tests (extensions/kiosk-attestation). The runner's
+  # integration suite (`test:integration`, real containers) is NOT run here,
+  # so that an image build never holds up every PR: it has its own workflow,
+  # runner-integration.yml (#234).
+  test-rest:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: pnpm -r --filter "!@quiz/api" --filter "!@quiz/web" build
+      - run: pnpm -r --filter "!@quiz/api" --filter "!@quiz/web" test
+      # Not a workspace package: no dependency, no build (its README).
+      - run: node --test extensions/kiosk-attestation/*.test.mjs
+
+  # The ONE required status check (the `main` ruleset names `checks`), and
+  # what `image` waits for. It passes when every job above passed, or when
+  # they were all skipped because a pull request changed prose only; a
+  # failed, cancelled or unexpectedly skipped job fails it.
+  checks:
+    if: always()
+    needs: [changes, build-typecheck, test-app, test-rest]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          CHANGES: ${{ needs.changes.result }}
+          CODE: ${{ needs.changes.outputs.code }}
+          RESULTS: ${{ needs.build-typecheck.result }} ${{ needs.test-app.result }} ${{ needs.test-rest.result }}
+        run: |
+          echo "changes: $CHANGES (code: $CODE); build-typecheck, test-app, test-rest: $RESULTS"
+          [ "$CHANGES" = success ] || exit 1
+          for result in $RESULTS; do
+            case "$result" in
+              success) ;;
+              skipped) [ "$CODE" = false ] || exit 1 ;;
+              *) exit 1 ;;
+            esac
+          done
 
   # Production images, built HERE and pushed to GHCR: the VM must never build.
+  # The two images are independent, so they build side by side, each with a
+  # buildx layer cache of its own (`scope`): sharing one scope, each export
+  # replaced the other's and the next build of either started cold.
   image:
     needs: checks
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -52,11 +141,29 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        include:
+          - image: quiz
+            file: Dockerfile
+          # The runner service: a second, small image. It carries no engine,
+          # only the pinned `podman-remote` client that talks to the VM's
+          # rootful socket (apps/runner/README.md).
+          - image: quiz-runner
+            file: apps/runner/Dockerfile
     steps:
       - uses: actions/checkout@v7
-      # The commit date, baked into the SPA beside the sha (#179).
+      # The commit and its date, baked into the SPA and the API (#179,
+      # ADR-055); the runner's Dockerfile takes neither.
       - id: commit
-        run: echo "date=$(git log -1 --format=%cI)" >> "$GITHUB_OUTPUT"
+        if: matrix.image == 'quiz'
+        run: |
+          {
+            echo "args<<EOF"
+            echo "COMMIT_SHA=$GITHUB_SHA"
+            echo "COMMIT_DATE=$(git log -1 --format=%cI)"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
@@ -66,29 +173,15 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: .
+          file: ${{ matrix.file }}
           push: true
-          build-args: |
-            COMMIT_SHA=${{ github.sha }}
-            COMMIT_DATE=${{ steps.commit.outputs.date }}
+          build-args: ${{ steps.commit.outputs.args }}
           # :latest for the regular deploy, :<sha> kept for rollbacks.
           tags: |
-            ghcr.io/heig-tin-info/quiz:latest
-            ghcr.io/heig-tin-info/quiz:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      # The runner service: a second, small image. It carries no engine, only
-      # the pinned `podman-remote` client that talks to the VM's rootful
-      # socket (apps/runner/README.md).
-      - uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: apps/runner/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/heig-tin-info/quiz-runner:latest
-            ghcr.io/heig-tin-info/quiz-runner:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ghcr.io/heig-tin-info/${{ matrix.image }}:latest
+            ghcr.io/heig-tin-info/${{ matrix.image }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
 
   # Deploy, in two steps (ADR-028): every push to main goes to STAGING
   # (quiz.dev.chevallier.io) automatically; the SAME sha goes to PRODUCTION

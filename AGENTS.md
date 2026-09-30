@@ -21,8 +21,9 @@ deploying, not for editing.
 
 ## 2. `main` receives merges, never edits
 
-- Push your branch and open a pull request; the `checks` job runs there
-  (build, typecheck, tests, frozen lockfile) before anything reaches `main`.
+- Push your branch and open a pull request; the `checks` status runs there
+  (build, typecheck, tests, frozen lockfile, in parallel jobs) before
+  anything reaches `main`.
 - Merge when green. The deploy jobs run on `main` only, so neither staging
   nor production ever sees a commit the checks did not pass.
 - Rebase often (`git pull --rebase origin main` on your branch): small diffs,
