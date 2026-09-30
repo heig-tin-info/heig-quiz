@@ -190,11 +190,23 @@ async function pendingPairing(db: Db | Tx, userCode: string, now: Date) {
 /**
  * The pending pairing `code` names, looked up under the user's pairing lock
  * after the failure count: parallel guesses would otherwise all read the same
- * count and slip past the limit together. A code that names no pending
- * pairing is a failure, audited in the same transaction (reason `code`); the
- * code itself is never written. Throws {@link PairRateLimited} over the limit.
+ * count and slip past the limit together. Throws {@link PairRateLimited} over
+ * the limit.
+ *
+ * With `count`, a code that names no pending pairing is a failure, audited in
+ * the same transaction (reason `code`); the code itself is never written.
+ * Only the approving POST counts: it carries the CSRF header. A GET rides any
+ * cross-site navigation with the portal cookie, so a counted GET would let
+ * another site lock a student out of pairing; the preview reads the count
+ * and writes nothing (its own guesses are bounded by the route's limiter).
  */
-async function pendingByCode(db: Db, userId: string, code: string, now: Date) {
+async function pendingByCode(
+  db: Db,
+  userId: string,
+  code: string,
+  now: Date,
+  { count: counted }: { count: boolean },
+) {
   const outcome = await db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`kiosk-pair:${userId}`}, 0))`,
@@ -217,7 +229,7 @@ async function pendingByCode(db: Db, userId: string, code: string, now: Date) {
     }
     const canonical = normalizeUserCode(code);
     const found = canonical === null ? null : await pendingPairing(tx, canonical, now);
-    if (!found) {
+    if (!found && counted) {
       await audit(tx, {
         actorUserId: userId,
         actorType: "user",
@@ -236,7 +248,8 @@ async function pendingByCode(db: Db, userId: string, code: string, now: Date) {
 
 /**
  * `GET /pair/:code`: the station the code names and the exams the user can
- * start on it; null when the code names no pending pairing (a failure).
+ * start on it; null when the code names no pending pairing (not counted:
+ * see {@link pendingByCode}).
  */
 export async function previewPairing(
   db: Db,
@@ -244,7 +257,7 @@ export async function previewPairing(
   code: string,
   now: Date,
 ): Promise<{ label: string; evaluations: PairableEvaluation[] } | null> {
-  const found = await pendingByCode(db, userId, code, now);
+  const found = await pendingByCode(db, userId, code, now, { count: false });
   if (!found) return null;
   return { label: found.device.label!, evaluations: await pairableEvaluations(db, userId, now) };
 }
@@ -267,7 +280,7 @@ export async function approvePairing(
   input: { userId: string; code: string; evaluationId: string },
   now: Date,
 ): Promise<ApproveOutcome> {
-  const found = await pendingByCode(db, input.userId, input.code, now);
+  const found = await pendingByCode(db, input.userId, input.code, now, { count: true });
   if (!found) return { kind: "not_found" };
   const pairable = await pairableEvaluations(db, input.userId, now);
   if (!pairable.some((e) => e.id === input.evaluationId)) return { kind: "evaluation" };

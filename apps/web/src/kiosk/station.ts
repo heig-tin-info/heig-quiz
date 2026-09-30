@@ -5,6 +5,7 @@
  */
 import {
   DEVICE_CODE_GRANT,
+  type KioskAttestVerify,
   type KioskAttested,
   type KioskChallenge,
   type KioskDeviceAuthorization,
@@ -76,7 +77,7 @@ export function mockDeviceId(): string {
 async function attestationOf(
   kiosk: NonNullable<PublicConfig["kiosk"]>,
   challenge: string,
-): Promise<{ response: string } | { error: string }> {
+): Promise<KioskAttestVerify> {
   if (kiosk.mock) return { response: `mock:${mockDeviceId()}` };
   if (!kiosk.extensionId) return { error: "extension_not_configured" };
   try {
@@ -97,7 +98,8 @@ export async function attest(kiosk: PublicConfig["kiosk"]): Promise<StationTroub
   if (!kiosk) return "unavailable";
   try {
     const { challenge } = await post<KioskChallenge>("/app/api/kiosk/attest/challenge");
-    const verdict = await post<KioskAttested>("/app/api/kiosk/attest/verify", await attestationOf(kiosk, challenge));
+    const body = (await attestationOf(kiosk, challenge)) satisfies KioskAttestVerify;
+    const verdict = await post<KioskAttested>("/app/api/kiosk/attest/verify", body);
     return verdict.station.status === "active" ? null : "not_recognised";
   } catch (err) {
     return status(err) === 403 ? "not_recognised" : "unavailable";

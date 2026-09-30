@@ -17,6 +17,7 @@ import { testServer, type Payload, type TestServer } from "../../test/http.js";
 import { kioskStation, type TestStation } from "../../test/kiosk.js";
 import { seedLive } from "../../test/live.js";
 import { PAIR_MAX_FAILURES } from "./pairing.js";
+import { PAIR_PREVIEW_LIMIT } from "./routes.js";
 
 let server: TestServer;
 let restore: () => void;
@@ -213,6 +214,9 @@ describe("the whole pairing, station → phone → station", () => {
       headers: (await server.signIn("admin")).headers,
       payload: { status: "retired" },
     });
+    // Ended at once, not at its next request: the row (and so its stream) is gone.
+    const held = await server.app.db.select().from(sessions).where(eq(sessions.deviceId, station.deviceId));
+    expect(held).toHaveLength(0);
     expect((await me(headers)).statusCode).toBe(401);
   });
 });
@@ -347,8 +351,7 @@ describe("what the pairing refuses", () => {
     const station = await kioskStation(server.app.db);
     const auth = await authorize(station);
     for (let i = 0; i < PAIR_MAX_FAILURES; i += 1) {
-      const code = i % 2 === 0 ? "BBBB-BBBB" : "not a code";
-      expect((await preview(student.headers, code)).statusCode).toBe(404);
+      expect((await approve(student.headers, "BBBB-BBBB", evaluationId)).statusCode).toBe(404);
     }
     const limited = await preview(student.headers, auth.user_code);
     expect(limited.statusCode).toBe(429);
@@ -364,6 +367,36 @@ describe("what the pairing refuses", () => {
     server.clock.advance(10 * 60_000 + 1_000);
     const later = await authorize(station);
     expect((await approve(student.headers, later.user_code, evaluationId)).statusCode).toBe(200);
+  });
+
+  it("wrong codes previewed by GET: never counted, so no other site can lock a student out", async () => {
+    const { evaluationId, student } = await running();
+    const station = await kioskStation(server.app.db);
+    const auth = await authorize(station);
+    // A GET rides a cross-site navigation with the portal cookie.
+    for (let i = 0; i < PAIR_MAX_FAILURES * 2; i += 1) {
+      const code = i % 2 === 0 ? "CCCC-CCCC" : "not a code";
+      expect((await preview(student.headers, code)).statusCode).toBe(404);
+    }
+    const refused = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "kiosk.pair_refused"), eq(auditLog.actorUserId, student.id)));
+    expect(refused).toHaveLength(0);
+    expect((await preview(student.headers, auth.user_code)).statusCode).toBe(200);
+    expect((await approve(student.headers, auth.user_code, evaluationId)).statusCode).toBe(200);
+  });
+
+  it(`more than ${PAIR_PREVIEW_LIMIT} previews in a minute are slowed down, not counted`, async () => {
+    const { student } = await running();
+    for (let i = 0; i < PAIR_PREVIEW_LIMIT; i += 1) {
+      expect((await preview(student.headers, "DDDD-DDDD")).statusCode).toBe(404);
+    }
+    const slowed = await preview(student.headers, "DDDD-DDDD");
+    expect(slowed.statusCode).toBe(429);
+    expect(Number(slowed.headers["retry-after"])).toBeGreaterThan(0);
+    server.clock.advance(60_000);
+    expect((await preview(student.headers, "DDDD-DDDD")).statusCode).toBe(404);
   });
 });
 

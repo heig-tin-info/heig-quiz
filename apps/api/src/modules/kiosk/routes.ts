@@ -41,7 +41,7 @@ import {
 
 import { audit, tracer, type AuditAction } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { delegated } from "../../auth/session.js";
+import { delegated, endStationSessions } from "../../auth/session.js";
 import { users } from "../../db/schema.js";
 import { adminGuard } from "../guards.js";
 import { csrfRefused, emptyBody, invalid, notFound, sendFailure } from "../http.js";
@@ -71,11 +71,22 @@ const STATION = { sessions: [] } as const;
  */
 export const ATTEST_LIMIT = 240;
 
+/**
+ * Pairing previews (`GET /pair/:code`) per user per minute. The GET counts no
+ * refusal in the audit (a cross-site navigation must not lock a student out,
+ * ADR-051 §7), so this in-memory budget is what bounds guessing through it:
+ * a student types a code a few times, a script gets 30 of 27⁸ per minute. A
+ * page that forces navigations can at worst hold the preview for a minute;
+ * the counted limit stays on the approving POST.
+ */
+export const PAIR_PREVIEW_LIMIT = 30;
+
 export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const secure = opts.config.NODE_ENV === "production";
   const requireAdmin = adminGuard(app, { hidden: true });
   const trace = tracer(app);
   const attempts = new FixedWindowLimiter(ATTEST_LIMIT, 60_000);
+  const previews = new FixedWindowLimiter(PAIR_PREVIEW_LIMIT, 60_000);
 
   /** The 429 of an address over its budget, with its `retry-after`; null otherwise. */
   const throttled = (req: FastifyRequest, reply: FastifyReply) => {
@@ -249,6 +260,10 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
   app.get("/app/api/pair/:code", { preHandler: phone }, async (req, reply) => {
     const params = PairCodeParam.safeParse(req.params);
     if (!params.success) return pairingNotFound(reply);
+    const retryAfterS = previews.hit(req.user!.id, app.clock.now().getTime());
+    if (retryAfterS !== null) {
+      return reply.header("retry-after", String(retryAfterS)).code(429).send({ error: "rate_limited" });
+    }
     try {
       const found = await previewPairing(app.db, req.user!.id, params.data.code, app.clock.now());
       if (!found) return pairingNotFound(reply);
@@ -301,6 +316,8 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
       const changed = await updateDevice(app.db, params.data.id, body.data);
       if (!changed) return notFound(reply);
       await auditChange(req, changed.before, changed.after);
+      // A retired station's sitting ends now, its stream with it.
+      if (changed.after.status === "retired") await endStationSessions(app.db, changed.after.id);
       return changed.after;
     } catch (err) {
       return sendFailure(reply, err, app.clock.now());

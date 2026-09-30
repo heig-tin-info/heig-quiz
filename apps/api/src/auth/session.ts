@@ -428,6 +428,15 @@ export async function endKioskSessions(
   );
 }
 
+/**
+ * ADR-051 §5: the session a station holds, deleted and its event stream
+ * closed — a retired station sits nothing more, not even until its next
+ * request.
+ */
+export async function endStationSessions(db: Db, deviceId: string): Promise<void> {
+  await endSessions(db, eq(sessions.deviceId, deviceId), "revoked");
+}
+
 export async function deleteSession(db: Db, token: string, now: Date = new Date()) {
   await endSessions(db, eq(sessions.sidHash, hashToken(token)), "logout", now);
 }
