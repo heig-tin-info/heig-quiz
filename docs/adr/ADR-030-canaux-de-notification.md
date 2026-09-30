@@ -732,7 +732,7 @@ Step 6 (`activity_scheduled`, `activity_available`) settled:
   (`enrollments.user_id` set, `staff` false); an unclaimed roster line has
   nobody to tell. `activity_available` carries
   `{ evaluationId, evaluationTitle }` (kind-neutral since migration 0037,
-  I58), no `closesAt` (it would need a date
+  I58–I60), no `closesAt` (it would need a date
   rendered in the recipient's time zone in the e-mail) and nothing of the
   content. `activity_scheduled` opens the student home, `activity_available`
   the attempt page (`/take/<id>`), where the server decides between the

@@ -20,7 +20,7 @@ PR.
 | I10 | `scheduled_tasks` (admin-configurable, restart-safe) vs in-memory `everyMs` | port the table (D10) | M2-05 |
 | I11 | Classroom e-mail kinds and unsubscribe links vs ADR-030 notification kinds and channels | new kinds with per-kind defaults; unsubscribe ⇒ settings redirect | M3-09, M8-02 |
 | I12 | Two closed audit unions; ~70 classroom actions; imported history | project/github actions added to Quiz's union; history into `legacy_classroom_audit_log` (D11) | M3-*, M8-01 |
-| I13 | Poll = an evaluation mode, anonymous polls have no classroom | not an activity kind of its own; `listForClassroom` never returns anonymous polls | M1-03 |
+| I13 | Poll = an evaluation mode, anonymous polls have no classroom | not an activity kind of its own; a poll is listed as `kind: "evaluation"`; the future classroom list (M1-03 "As delivered") never returns anonymous polls | M1-03 |
 | I14 | Roster `status` column vs `user_id IS NULL` | derived | M1-06 |
 | I15 | Classroom `domain/roster.ts` duplicates Quiz's | keep Quiz's (classroom's + time bonus), port classroom's tests if they add cases | M1-01 |
 | I16 | GitHub wire names carry classroom's words: the `GRADE` annotation title, the `grade-final` / `grade-milestone` dispatch events and their `client_payload` keys (`assignment_id`, `milestone_id`, `milestone`), read by the `grading.yml` already in student repositories | kept verbatim on the wire; Quiz's identifiers use §7.4's words (`extractScore`, `planFinalReviewDispatch`, `planCheckpointReviewDispatch`, `checkpointDueAt`) — renaming the wire would break every live repository | M1-01, M3-04, M3-05 |
