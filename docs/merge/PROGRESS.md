@@ -101,7 +101,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M5-01 | API: the student's classroom | todo | M1-03 | | | |
+| M5-01 | API: the student's classroom | in progress | M1-03 | `merge/M5-01-student-classroom-api` | | |
 | M5-02 | Web: student Courses route and classroom page | todo | M5-01, D07 | | | |
 | M5-03 | Gradebook module | todo | M3-08, D06 | | | |
 | M5-04 | Web: Grades tabs | todo | M5-03 | | | |
