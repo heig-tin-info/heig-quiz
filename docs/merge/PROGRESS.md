@@ -90,7 +90,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M4-01 | `packages/docrender`, schema, contracts | todo | M1-01, D03, D14, D15 | | | |
+| M4-01 | `packages/docrender`, schema, contracts | in progress | M1-01, D03, D14, D15 | `merge/M4-01-docrender` | | |
 | M4-02 | Read side and ingestion | todo | M4-01, M2-02, M2-04 | | | |
 | M4-03 | Writes | todo | M4-02, M2-03 | | | |
 | M4-04 | Web: reader | todo | M4-02, M1-04, M1-05 | | | |
