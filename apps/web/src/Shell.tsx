@@ -29,12 +29,11 @@ import { sectionOf, type Route } from "./router";
 import {
   activeCourseOf,
   CourseNavTree,
-  inCourseSection,
   inNavigation,
   useCourseNavState,
 } from "./CourseNav";
 import type { NavCycle } from "./navTree";
-import { inPoolSection, PoolNavTree, usePoolNavState } from "./pool/PoolNav";
+import { PoolNavTree, usePoolNavState } from "./pool/PoolNav";
 import { shortcutCaps, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
 import { setThemeChoice, useResolvedTheme, useThemeChoice } from "./theme";
 import {
@@ -254,13 +253,12 @@ function Nav({
           label={teacherUi ? t("nav.courses") : t("shome.title")}
           active={section === "home"}
           coach="nav.home"
-          expanded={teacherUi ? courseNav.state !== "collapsed" : undefined}
-          // The pools' rule (below): from outside the section the click goes
-          // to the course list; from inside it — the list, a classroom — it
-          // cycles collapsed → active course → all courses (CourseNav.tsx).
+          expanded={teacherUi ? courseNav.state === "all" : undefined}
+          // The pools' rule (below): the click goes to the course list; on
+          // the list itself it toggles the active course / all courses.
           onClick={() =>
             teacherUi
-              ? courseNav.press(inCourseSection(route), () => go({ view: "home" }))
+              ? courseNav.press(route.view === "home", () => go({ view: "home" }))
               : go({ view: "home" })
           }
         />
@@ -274,13 +272,12 @@ function Nav({
               // a question is read inside its pool, not beside it.
               active={section === "pools"}
               coach="nav.pools"
-              expanded={poolNav.state !== "collapsed"}
-              // One row, two jobs, and they never collide: from outside the
-              // section the click NAVIGATES (and unfolds a collapsed tree);
-              // from inside it cycles collapsed → active pool → all pools.
-              // So a teacher reading a question cannot lose it by folding the
-              // tree, and nobody needs a second control to see their pools.
-              onClick={() => poolNav.press(inPoolSection(route), () => go({ view: "pools" }))}
+              expanded={poolNav.state === "all"}
+              // One row, two jobs, and they never collide: anywhere but the
+              // pool list the click NAVIGATES there, as every sidebar row
+              // does; on the list, where there is nowhere left to go, it
+              // toggles the active pool / all pools (useNavCycle).
+              onClick={() => poolNav.press(route.view === "pools", () => go({ view: "pools" }))}
             />
             {/* The tree of the pool being read, or every pool the teacher can
                 reach — the state the row above cycles through (PoolNav.tsx).

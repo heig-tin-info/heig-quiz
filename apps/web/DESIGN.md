@@ -314,9 +314,10 @@ under a `border-t border-line` hairline, like the shortcut strip: it is apart
 from the navigation, and it looks apart.
 
 "Courses" and "Question pools" disclose a tree under their row, and both
-behave alike (`useNavCycle`, #154): collapsed → the one being read → all,
-remembered per browser; a click from outside the section navigates (and
-opens a collapsed tree), a click from inside it cycles. In a tree the current
+behave alike (`useNavCycle`, #154): the one being read, or all of them,
+remembered per browser. Like every sidebar row, a click navigates to the
+section's list page, from wherever the reader is; only a click on that list
+page, where there is nowhere left to go, toggles the tree. In a tree the current
 row is marked by weight (`font-semibold text-fg`), never by `accent-soft`:
 the one accent chip of the column belongs to the current page's row, and a
 classroom shown both in the course tree and in the flat section would

@@ -10,14 +10,13 @@ import { cx, Tip, useTruncated } from "./ui";
 /**
  * The "Courses" section of the application sidebar (#154): the course →
  * classroom hierarchy, walked from the sidebar the way the pools are
- * (pool/PoolNav.tsx), with the same three states and the same click rule
+ * (pool/PoolNav.tsx), with the same two states and the same click rule
  * (`useNavCycle`):
  *
- *   collapsed → the row alone;
- *   active    → the course being read (its page, or one of its
- *               classrooms), with its classrooms;
- *   all       → every course the teacher is on the staff of, the one being
- *               read unfolded.
+ *   active → the course being read (its page, or one of its classrooms),
+ *            with its classrooms;
+ *   all    → every course the teacher is on the staff of, the one being
+ *            read unfolded.
  *
  * A course row OPENS the course page (F-ORG-12), like a pool row opens the
  * pool: the page lists the course's classrooms, and once it is up the course
@@ -39,17 +38,6 @@ import { cx, Tip, useTruncated } from "./ui";
 
 export function useCourseNavState(): NavCycle {
   return useNavCycle("quiz-courses-nav");
-}
-
-/**
- * "Inside" the courses section: the course list (the teacher home), the page
- * of one course, and a classroom page, whatever its tab (`?tab=` is not a
- * route of its own). The evaluation screens are not in it: the sidebar
- * cannot name their course without fetching the evaluation, and there a
- * click on "Courses" should take the teacher back to the list anyway.
- */
-export function inCourseSection(route: Route): boolean {
-  return route.view === "home" || route.view === "course" || route.view === "classroom";
 }
 
 /**
@@ -194,7 +182,6 @@ export function CourseNavTree({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
-  if (state === "collapsed") return null;
   const activeId = activeCourseOf(courses.data ?? [], route);
   const row = (course: CourseSummary) => (
     <CourseRow
@@ -207,8 +194,8 @@ export function CourseNavTree({
 
   if (state === "active") {
     // Nothing to show off a course or classroom page, or once the list says
-    // the page is in no course of the caller's. Not `inCourseSection`: the
-    // course list is in the section, but it is no ONE course to unfold.
+    // the page is in no course of the caller's: the course list is in the
+    // section, but it is no ONE course to unfold.
     if ((route.view !== "course" && route.view !== "classroom") || (courses.data && !activeId)) {
       return null;
     }

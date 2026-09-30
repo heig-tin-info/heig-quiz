@@ -4,7 +4,7 @@ import type { PoolSummary } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
-import { sectionOf, type Route } from "../router";
+import type { Route } from "../router";
 import { NavTree, navRowClass, useNavCycle, type NavCycle } from "../navTree";
 import { cx } from "../ui";
 import { SidebarCategories } from "./CategoryTree";
@@ -13,32 +13,24 @@ import { PoolIcon } from "./PoolIcon";
 import { poolsKey } from "../queryKeys";
 
 /**
- * The "Question pools" section of the application sidebar, and the three
- * states its navigation row cycles through (asked for by the product owner):
+ * The "Question pools" section of the application sidebar, and the two
+ * states its navigation row toggles between (asked for by the product owner):
  *
- *   collapsed → the row alone, whatever page is open;
- *   active    → the pool being read, with its categories (what the sidebar
- *               always did);
- *   all       → every pool the teacher can reach, the one being read expanded.
+ *   active → the pool being read, with its categories (what the sidebar
+ *            always did);
+ *   all    → every pool the teacher can reach, the one being read expanded.
  *
  * "All" exists for ONE gesture: dragging a question onto another pool moves it
  * there (ADR-017), and a target you cannot see is not a target. It is also the
  * shortest way between two pools, which is otherwise a trip through /pools.
  *
- * The cycle, its memory and the navigate-vs-cycle click are `useNavCycle`
- * (navTree.tsx), shared with the "Courses" row: from anywhere else the click
- * NAVIGATES to the pools (and opens the section if it was collapsed), and only
- * a click made while already inside the pool section cycles. A teacher
- * reading a question therefore never loses it by folding the tree.
+ * The state, its memory and the navigate-or-toggle click are `useNavCycle`
+ * (navTree.tsx), shared with the "Courses" row: the click NAVIGATES to the
+ * pool list, and only a click made on that list toggles.
  */
 
 export function usePoolNavState(): NavCycle {
   return useNavCycle("quiz-pools-nav");
-}
-
-/** True while the reader is inside the pool section, whichever of its pages. */
-export function inPoolSection(route: Route): boolean {
-  return sectionOf(route) === "pools";
 }
 
 /**
@@ -115,7 +107,6 @@ export function PoolNavTree({
     enabled: state === "all",
   });
 
-  if (state === "collapsed") return null;
   if (state === "active") {
     return currentPool ? (
       <SidebarCategories poolId={currentPool} route={route} navigate={navigate} />

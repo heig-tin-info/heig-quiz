@@ -13,39 +13,37 @@ import { Skeleton, usePersistentChoice } from "./ui";
 // --- The cycle of the row ---
 
 /**
- *   collapsed → the row alone, whatever page is open;
- *   active    → the thing being read (a pool, a course), unfolded;
- *   all       → every one the teacher can reach, the one being read unfolded.
+ *   active → the thing being read (a pool, a course), unfolded — nothing on
+ *            the section's own list page, where there is no ONE thing;
+ *   all    → every one the teacher can reach, the one being read unfolded.
  *
- * The cycle is a viewer's HABIT: remembered in `localStorage` under `key`,
- * never in the URL or on the server.
+ * The state is a viewer's HABIT: remembered in `localStorage` under `key`,
+ * never in the URL or on the server. (A third state, "collapsed", was dropped:
+ * it can only be chosen on the list page, where it looks exactly like
+ * "active". A stored "collapsed" reads as "active".)
  */
-export type NavCycleState = "collapsed" | "active" | "all";
+export type NavCycleState = "active" | "all";
 
-const ORDER: readonly NavCycleState[] = ["collapsed", "active", "all"];
+const ORDER: readonly NavCycleState[] = ["active", "all"];
 
 export interface NavCycle {
   state: NavCycleState;
   /**
-   * The row's click. Navigation and disclosure share it without fighting:
-   * from INSIDE the section it cycles, so a reader cannot lose the page they
-   * are on by folding the tree; from anywhere else it opens the row (when it
-   * was collapsed) and calls `arrive`, so nobody needs a second control to
-   * reach the section.
+   * The row's click. Like every other row of the sidebar it takes the reader
+   * to the section — its list page — from wherever they are, deep inside the
+   * section included. Only a click made ON that list page, where there is
+   * nowhere left to go, toggles the state.
    */
-  press: (inside: boolean, arrive: () => void) => void;
+  press: (onListPage: boolean, arrive: () => void) => void;
 }
 
 export function useNavCycle(key: string): NavCycle {
   const [state, write] = usePersistentChoice(key, ORDER, "active");
   return {
     state,
-    press: (inside, arrive) => {
-      if (inside) write(ORDER[(ORDER.indexOf(state) + 1) % ORDER.length]!);
-      else {
-        if (state === "collapsed") write("active");
-        arrive();
-      }
+    press: (onListPage, arrive) => {
+      if (onListPage) write(state === "all" ? "active" : "all");
+      else arrive();
     },
   };
 }
