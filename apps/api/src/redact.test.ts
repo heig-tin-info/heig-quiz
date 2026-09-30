@@ -33,6 +33,9 @@ describe("the request log", () => {
       expect(redactUrl(url), url).not.toContain("GHJK");
     }
     expect(redactUrl(`/pair?code=${code}`)).toBe("/pair?…");
+    for (const variant of [`/pair/?code=${code}`, `/pair//?x=1&code=${code}`, `/app/auth/login?next=${encodeURIComponent(`/pair/?code=${code}`)}`]) {
+      expect(redactUrl(variant), variant).not.toContain("GHJK");
+    }
     expect(redactUrl(`/app/api/pair/${code}`)).toBe("/app/api/pair/…");
     // The approval carries its code in the body, and the page without one has nothing to hide.
     expect(redactUrl("/app/api/pair")).toBe("/app/api/pair");

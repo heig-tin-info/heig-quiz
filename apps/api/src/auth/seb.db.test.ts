@@ -14,7 +14,8 @@ import { routesOf, testServer, type Method, type TestServer } from "../test/http
 import { seedLive } from "../test/live.js";
 import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
 import { CONFIG_KEY_HEADER, configKeyHash, configKeyHeaderFor, launchConfigKey, requestUrl } from "./seb.js";
-import { CSRF_COOKIE, SESSION_COOKIE } from "./session.js";
+import { kioskStation } from "../test/kiosk.js";
+import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "./session.js";
 
 type Who = { id: string; headers: Record<string, string> };
 /** Fixed headers, or those of one URL: a `seb` session's Config Key header hashes the URL. */
@@ -220,6 +221,76 @@ describe("the seb session (ADR-027)", () => {
     expect((await call("POST", `/app/api/evaluations/${exam.evaluationId}/attempt`, student.headers)).statusCode).toBe(404);
     expect((await call("GET", `/app/api/attempts/${attemptId}`, student.headers)).statusCode).toBe(404);
     expect((await call("GET", `/app/api/events?watch=attempt:${attemptId}`, student.headers)).statusCode).toBe(404);
+  });
+});
+
+/**
+ * The same confinement for a `kiosk` session (ADR-051 §1, §7), which is only
+ * worth something beside its station's `quiz_kiosk` cookie: with it, the
+ * sweep above; without it, not even the sitting routes know the session.
+ */
+describe("the kiosk session (ADR-051)", () => {
+  let station: Awaited<ReturnType<typeof kioskStation>>;
+  let session: Record<string, string>;
+  let kioskExam: Awaited<ReturnType<typeof seedLive>>;
+
+  beforeAll(async () => {
+    kioskExam = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [student.id],
+      mode: "exam",
+      settings: { kiosk: true },
+    });
+    const started = await call("POST", `/app/api/evaluations/${kioskExam.evaluationId}/start`, teacher.headers, {
+      confirm: true,
+    });
+    expect(started.statusCode, started.body).toBe(200);
+    station = await kioskStation(server.app.db);
+    // What the station's poll opens once a phone approved it.
+    const s = await createSession(server.app.db, student.id, 12, {
+      kind: "kiosk",
+      actorUserId: null,
+      evaluationId: kioskExam.evaluationId,
+      deviceId: station.deviceId,
+    });
+    session = { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
+  });
+
+  const withStation = () => ({ ...session, cookie: `${session.cookie}; ${station.cookie}` });
+  const url = (path: string) => path.replace(/:\w+/g, "00000000-0000-4000-8000-000000000000").replace("*", "x");
+  const everyRoute = () =>
+    routesOf(server.app.printRoutes({ commonPrefix: false })).filter(
+      ({ path }) => !/^\/app\/auth\/(login|callback)$/.test(path),
+    );
+
+  it("sits its own evaluation from its station", async () => {
+    expect((await call("GET", "/app/api/me", withStation())).json().session).toEqual({
+      kind: "kiosk",
+      evaluationId: kioskExam.evaluationId,
+      readOnly: false,
+    });
+    expect((await call("POST", `/app/api/evaluations/${kioskExam.evaluationId}/attempt`, withStation())).statusCode).toBe(200);
+  });
+
+  it("is no session at all, with its station, on every route that does not declare it", async () => {
+    const stationOnly = { cookie: station.cookie };
+    for (const { method, path } of everyRoute()) {
+      if (SITTING_ROUTES.has(`${method} ${path}`)) continue;
+      const [asKiosk, asNobody] = await Promise.all([
+        call(method, url(path), withStation()),
+        call(method, url(path), stationOnly),
+      ]);
+      expect(asKiosk.statusCode, `${method} ${path}`).toBe(asNobody.statusCode);
+    }
+  });
+
+  it("is no session at all, without its station, even on the sitting routes", async () => {
+    for (const { method, path } of everyRoute()) {
+      if (!SITTING_ROUTES.has(`${method} ${path}`)) continue;
+      const [alone, asNobody] = await Promise.all([call(method, url(path), session), call(method, url(path), {})]);
+      expect(alone.statusCode, `${method} ${path}`).toBe(asNobody.statusCode);
+      expect(alone.statusCode, `${method} ${path}`).toBe(401);
+    }
   });
 });
 

@@ -21,7 +21,7 @@ import {
   type EvaluationRecord,
 } from "../evaluation/service.js";
 import { closeShown, endAttempts, openAttemptsOf } from "./dwell.js";
-import { endEvaluationStations } from "./stations.js";
+import { endKioskSessions } from "../../auth/session.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import {
@@ -228,7 +228,7 @@ async function afterClose(
   for (const attempt of open) events.attemptClosed(next.id, attempt, closedBy, now);
   events.stateChanged(next, now);
   // Every station seated for it goes back to pairing, a waiting one included.
-  await endEvaluationStations(db, next.id);
+  await endKioskSessions(db, next.id);
   if (app) await enqueueEvaluationGrading(app, { evaluationId: next.id });
   return next;
 }

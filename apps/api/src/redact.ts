@@ -25,18 +25,16 @@ import { IMPERSONATION_PATH } from "./auth/impersonation.js";
 import { LAUNCH_PATH } from "./auth/seb.js";
 
 /** Everything after one of these prefixes is a secret. */
-const SECRET_PREFIXES: readonly string[] = [
-  LAUNCH_PATH,
-  IMPERSONATION_PATH,
-  "/teams/link",
-  "/pair?",
-  "/app/api/pair/",
-];
+const SECRET_PREFIXES: readonly string[] = [LAUNCH_PATH, IMPERSONATION_PATH, "/teams/link", "/app/api/pair/"];
+/** The phone's page with any query, however its path is spelled (`/pair?`, `/pair/?`, `/pair//?`). */
+const PAIR_PAGE = /^\/pair\/*\?/;
 
 /** The query parameters that hold another URL of the app. */
 const RETURN_PARAMS: readonly string[] = ["next", "returnTo"];
 
-const secret = (url: string) => SECRET_PREFIXES.find((prefix) => url.startsWith(prefix));
+/** The part of `url` kept before the mask, or undefined when it carries no secret. */
+const secret = (url: string) =>
+  SECRET_PREFIXES.find((prefix) => url.startsWith(prefix)) ?? PAIR_PAGE.exec(url)?.[0];
 
 /**
  * `text` with every GitHub token masked: the installation token of an

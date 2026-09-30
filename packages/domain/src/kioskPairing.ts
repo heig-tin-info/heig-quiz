@@ -54,6 +54,16 @@ export function normalizeUserCode(input: string): string | null {
   return dashed(raw);
 }
 
+/**
+ * What a student is typing, shaped as they type it: upper case, only letters
+ * and digits, at most 8, and the dash after the fourth. It does not judge the
+ * symbols — {@link normalizeUserCode} does, on submit.
+ */
+export function formatUserCode(input: string): string {
+  const raw = input.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, USER_CODE_LENGTH);
+  return raw.length > 4 ? dashed(raw) : raw;
+}
+
 // --- The state machine -----------------------------------------------------
 
 export const PAIRING_STATES = ["pending", "approved", "consumed", "expired"] as const;

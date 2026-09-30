@@ -156,7 +156,7 @@ describe("the whole pairing, station → phone → station", () => {
     const body = PairPreview.parse(looked.json());
     expect(body.station).toEqual({ label: "Poste n° 12" });
     expect(body.evaluations.map((e) => e.id)).toEqual([evaluationId]);
-    expect(body.evaluations[0]).toMatchObject({ state: "running", title: "Test évaluation" });
+    expect(body.evaluations[0]).toMatchObject({ title: "Test évaluation" });
 
     const ok = await approve(student.headers, auth.user_code, evaluationId);
     expect(ok.statusCode, ok.body).toBe(200);

@@ -26,7 +26,6 @@ import { audit, type AuditAction } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
 import { auditLog, kioskDevices, kioskPairings } from "../../db/schema.js";
 import { studentHome } from "../live/service.js";
-import type { KioskDeviceRow } from "./service.js";
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
@@ -44,18 +43,8 @@ export async function pairableEvaluations(
 ): Promise<PairableEvaluation[]> {
   const home = await studentHome(db, userId, now);
   return home.open
-    .filter(
-      (c) =>
-        c.trustedClients.includes("kiosk") &&
-        (c.state === "lobby" || c.state === "running" || c.state === "paused"),
-    )
-    .map((c) => ({
-      id: c.id,
-      title: c.title,
-      classroomName: c.classroomName,
-      courseCode: c.courseCode,
-      state: c.state as PairableEvaluation["state"],
-    }));
+    .filter((c) => c.trustedClients.includes("kiosk"))
+    .map((c) => ({ id: c.id, title: c.title, classroomName: c.classroomName, courseCode: c.courseCode }));
 }
 
 // --- The station -------------------------------------------------------------
@@ -199,21 +188,13 @@ async function pendingPairing(db: Db | Tx, userCode: string, now: Date) {
 }
 
 /**
- * Runs `step` under the user's pairing lock, after the failure count: parallel
- * guesses would otherwise all read the same count and slip past the limit
- * together. A code that names no pending pairing is a failure, audited in the
- * same transaction (reason `code`); the code itself is never written.
+ * The pending pairing `code` names, looked up under the user's pairing lock
+ * after the failure count: parallel guesses would otherwise all read the same
+ * count and slip past the limit together. A code that names no pending
+ * pairing is a failure, audited in the same transaction (reason `code`); the
+ * code itself is never written. Throws {@link PairRateLimited} over the limit.
  */
-async function withCodeLimit<T>(
-  db: Db,
-  userId: string,
-  code: string,
-  now: Date,
-  step: (
-    tx: Tx,
-    found: { pairing: typeof kioskPairings.$inferSelect; device: KioskDeviceRow },
-  ) => Promise<T>,
-): Promise<T | null> {
+async function pendingByCode(db: Db, userId: string, code: string, now: Date) {
   const outcome = await db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`kiosk-pair:${userId}`}, 0))`,
@@ -246,12 +227,11 @@ async function withCodeLimit<T>(
         payload: { reason: "code" },
         at: now,
       });
-      return { value: null } as const;
     }
-    return { value: await step(tx, found) } as const;
+    return { found } as const;
   });
   if ("limited" in outcome) throw new PairRateLimited(outcome.limited);
-  return outcome.value;
+  return outcome.found;
 }
 
 /**
@@ -264,9 +244,9 @@ export async function previewPairing(
   code: string,
   now: Date,
 ): Promise<{ label: string; evaluations: PairableEvaluation[] } | null> {
-  const station = await withCodeLimit(db, userId, code, now, async (_tx, found) => found.device.label!);
-  if (station === null) return null;
-  return { label: station, evaluations: await pairableEvaluations(db, userId, now) };
+  const found = await pendingByCode(db, userId, code, now);
+  if (!found) return null;
+  return { label: found.device.label!, evaluations: await pairableEvaluations(db, userId, now) };
 }
 
 export type ApproveOutcome =
@@ -276,37 +256,38 @@ export type ApproveOutcome =
 
 /**
  * `POST /pair`: the student approves the pairing for one of their pairable
- * exams. One conditional UPDATE from `pending`, so a code approved twice
- * (two phones, one code) is approved once. An exam the student cannot start
- * there is refused (reason `evaluation`), and does not count as a wrong code.
+ * exams. The code is checked first (the limit, then the pairing); one
+ * conditional UPDATE from `pending` then approves it, so a code approved
+ * twice (two phones, one code) is approved once. An exam the student cannot
+ * start there is refused (reason `evaluation`), and does not count as a
+ * wrong code.
  */
 export async function approvePairing(
   db: Db,
   input: { userId: string; code: string; evaluationId: string },
   now: Date,
 ): Promise<ApproveOutcome> {
+  const found = await pendingByCode(db, input.userId, input.code, now);
+  if (!found) return { kind: "not_found" };
   const pairable = await pairableEvaluations(db, input.userId, now);
-  const allowed = pairable.some((e) => e.id === input.evaluationId);
-  const result = await withCodeLimit(db, input.userId, input.code, now, async (tx, found) => {
-    if (!allowed) return { kind: "evaluation" } as const;
-    const [approved] = await tx
-      .update(kioskPairings)
-      .set({
-        state: "approved",
-        userId: input.userId,
-        evaluationId: input.evaluationId,
-        approvedBy: input.userId,
-        approvedAt: now,
-      })
-      .where(and(eq(kioskPairings.id, found.pairing.id), eq(kioskPairings.state, "pending")))
-      .returning({ id: kioskPairings.id });
-    if (!approved) return { kind: "not_found" } as const;
-    return {
-      kind: "approved",
-      pairingId: approved.id,
-      deviceId: found.device.id,
-      label: found.device.label!,
-    } as const;
-  });
-  return result ?? { kind: "not_found" };
+  if (!pairable.some((e) => e.id === input.evaluationId)) return { kind: "evaluation" };
+  const [approved] = await db
+    .update(kioskPairings)
+    .set({
+      state: "approved",
+      userId: input.userId,
+      evaluationId: input.evaluationId,
+      approvedBy: input.userId,
+      approvedAt: now,
+    })
+    .where(
+      and(
+        eq(kioskPairings.id, found.pairing.id),
+        eq(kioskPairings.state, "pending"),
+        gt(kioskPairings.expiresAt, now),
+      ),
+    )
+    .returning({ id: kioskPairings.id });
+  if (!approved) return { kind: "not_found" };
+  return { kind: "approved", pairingId: approved.id, deviceId: found.device.id, label: found.device.label! };
 }

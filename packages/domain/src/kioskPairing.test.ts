@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   PAIRING_STATES,
   USER_CODE_ALPHABET,
+  formatUserCode,
   generateUserCode,
   normalizeUserCode,
   pairingStateAt,
@@ -58,6 +59,12 @@ describe("the user code", () => {
     expect(normalizeUserCode(" bc df  gh-jk ")).toBe("BCDF-GHJK");
     expect(normalizeUserCode("BCDF--GHJK")).toBe("BCDF-GHJK");
     expect(normalizeUserCode("-BCDF-GHJK-")).toBe("BCDF-GHJK");
+  });
+
+  it("is shaped as it is typed", () => {
+    expect(formatUserCode("bcdf")).toBe("BCDF");
+    expect(formatUserCode("bcdfg")).toBe("BCDF-G");
+    expect(formatUserCode(" bc df-gh jk xx")).toBe("BCDF-GHJK");
   });
 
   it("refuses what cannot be a code", () => {

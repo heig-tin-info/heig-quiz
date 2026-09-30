@@ -58,8 +58,8 @@ import {
   studentEvaluationRows,
   totalPointsByEvaluation,
 } from "../evaluation/service.js";
-import { endAttempts } from "./dwell.js";
-import { endStationSittings } from "./stations.js";
+import { endAttempts, seated } from "./dwell.js";
+import { endKioskSessions } from "../../auth/session.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import { scoreOf, studentAttempts, tallyByAttempt } from "../grading/service.js";
@@ -1178,7 +1178,7 @@ export async function submitAttempt(
   );
   const row = (await attemptById(db, attempt.id))!;
   events.attemptClosed(evaluation.id, row, "student", now);
-  await endStationSittings(db, finished);
+  await endKioskSessions(db, evaluation.id, seated(finished));
   if (app && finished.length > 0) await gradeAtHandIn(app, evaluation, [row.id]);
   return row;
 }
@@ -1205,7 +1205,7 @@ export async function closeAttempt(
   );
   const row = (await attemptById(db, attempt.id))!;
   events.attemptClosed(evaluation.id, row, "teacher", now);
-  await endStationSittings(db, closed);
+  await endKioskSessions(db, evaluation.id, seated(closed));
   // The pass of the evaluation's close has already run, and it ran while this
   // attempt was open: grade it now, alone (the pass never touches a cell a
   // teacher validated). Not on a `released` evaluation, whose grades are

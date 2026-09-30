@@ -403,23 +403,26 @@ async function endSessions(
 }
 
 /**
- * ADR-051 §7: the confined sessions of `kind` that sit `evaluationId` — of
- * one user, or of everybody when `userId` is absent (the evaluation closed) —
- * deleted, and their event streams closed; the user's portal sessions (the
- * phone) are untouched. `live` calls it wherever an attempt ends, for the
- * `kiosk` kind only: a `seb` session outlives the submit (ADR-027). The
- * streams of exactly these sessions close; the user's others stay.
+ * ADR-051 §7: the `kiosk` sessions that sit `evaluationId` — of these users,
+ * or of everybody when `userIds` is absent (the evaluation closed) —
+ * deleted in one statement, and their event streams closed. The users'
+ * other sessions stay: the phone's portal, and a `seb` session, which
+ * outlives the submit (ADR-027). `live` calls it wherever an attempt ends,
+ * after it has emitted `attempt.closed`, so the station's stream carries
+ * that frame before it closes.
  */
-export async function endConfinedSessions(
+export async function endKioskSessions(
   db: Db,
-  input: { userId?: string; evaluationId: string; kind: TrustedClient },
+  evaluationId: string,
+  userIds?: readonly string[],
 ): Promise<void> {
+  if (userIds !== undefined && userIds.length === 0) return;
   await endSessions(
     db,
     and(
-      eq(sessions.kind, input.kind),
-      eq(sessions.evaluationId, input.evaluationId),
-      input.userId === undefined ? undefined : eq(sessions.userId, input.userId),
+      eq(sessions.kind, "kiosk"),
+      eq(sessions.evaluationId, evaluationId),
+      userIds === undefined ? undefined : inArray(sessions.userId, [...userIds]),
     )!,
     "ended",
   );

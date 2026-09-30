@@ -118,7 +118,6 @@ export const PairableEvaluation = z.object({
   title: z.string(),
   classroomName: z.string(),
   courseCode: z.string(),
-  state: z.enum(["lobby", "running", "paused"]),
 });
 export type PairableEvaluation = z.infer<typeof PairableEvaluation>;
 
