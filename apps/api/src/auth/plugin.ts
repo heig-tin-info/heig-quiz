@@ -20,6 +20,7 @@ import { returnToOf, safeReturnTo } from "./returnTo.js";
 import { MCP_PATH } from "./oauth/service.js";
 import { oauthRoutes } from "./oauth/routes.js";
 import { sebRoutes } from "./seb.js";
+import { trustRefused } from "./trust.js";
 import { apiTokenRoutes } from "./tokenRoutes.js";
 import { findTokenUser, isApiToken } from "./tokens.js";
 import {
@@ -28,11 +29,13 @@ import {
   PORTAL,
   SESSION_COOKIE,
   SITTING,
+  confined,
   createSession,
   delegated,
   serves,
   deleteSession,
   findSessionUser,
+  type NewSession,
   type SessionAuth,
   type SessionState,
 } from "./session.js";
@@ -92,6 +95,14 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   // Development, and never production (invariant 3): the persona picker, and
   // an impersonation session that may write (ADR-034). One test, one place.
   const development = config.AUTH_DEV_LOGIN && config.NODE_ENV !== "production";
+  /**
+   * The attributes of both session cookies, wherever they are set. A
+   * confined session's are `Strict` (ADR-051 §4): nothing cross-site ever
+   * carries one. The portal's stay `Lax`: the OIDC callback is a cross-site
+   * navigation (N-SEC-01).
+   */
+  const cookieBase = (auth: Pick<SessionAuth, "kind">) =>
+    ({ path: "/", sameSite: confined(auth) ? "strict" : "lax", secure }) as const;
 
   // --- Session resolution on every request ---
   app.decorateRequest("user", null);
@@ -141,6 +152,11 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // session is not there at all — anonymous, so a 401 wherever a session
     // is required, and public routes and static files unaffected.
     if (!serves(req.routeOptions.config.sessions, found.auth.kind)) return;
+    // ADR-051 §1: a confined session is worth something only from the client
+    // it was opened in, checked on every request; refused, it is not there.
+    if (confined(found.auth) && (await trustRefused(app.db, config, { ...found, userId: found.user.id }, req))) {
+      return;
+    }
     // ADR-034: outside development, a session acting as a student reads and
     // never writes — every route, by construction, whether or not it calls
     // `requireSession`. Signing out is the one write it keeps.
@@ -162,7 +178,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // Mirror the sliding renewal on the cookies, else the browser drops them
     // while the server-side session is still alive.
     if (found.renewedTo) {
-      const base = { path: "/", sameSite: "lax", secure } as const;
+      const base = cookieBase(found.auth);
       reply.setCookie(SESSION_COOKIE, token, {
         ...base,
         httpOnly: true,
@@ -197,9 +213,9 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
    */
   app.decorate(
     "openSession",
-    async (reply: FastifyReply, user: SessionUser, auth: SessionAuth = PORTAL) => {
+    async (reply: FastifyReply, user: SessionUser, auth: NewSession = PORTAL) => {
       const session = await createSession(app.db, user.id, config.SESSION_TTL_HOURS, auth);
-      const base = { path: "/", sameSite: "lax", secure } as const;
+      const base = cookieBase(auth);
       reply.setCookie(SESSION_COOKIE, session.token, {
         ...base,
         httpOnly: true,
@@ -418,7 +434,7 @@ declare module "fastify" {
       reply: FastifyReply,
     ) => Promise<FastifyReply | undefined>;
     /** Mints the session cookies for `user` (the single sign-in path); a portal session by default. */
-    openSession: (reply: FastifyReply, user: SessionUser, auth?: SessionAuth) => Promise<void>;
+    openSession: (reply: FastifyReply, user: SessionUser, auth?: NewSession) => Promise<void>;
     /** The value of {@link INTERNAL_CALL_HEADER} for this process. */
     internalCallSecret: string;
   }

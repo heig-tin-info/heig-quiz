@@ -149,6 +149,25 @@ export const DashboardAttemptEvent = z.object({
 });
 export type DashboardAttemptEvent = z.infer<typeof DashboardAttemptEvent>;
 
+/**
+ * What a supervisor is alerted to about one student's row (ADR-051 §4, §6).
+ * `session_superseded`: a new SEB or kiosk session replaced the student's
+ * previous one. The kiosk states (`kiosk_suspended`, `kiosk_unavailable`,
+ * `kiosk_resumed`) join this list with step 7.
+ */
+export const DashboardAlertKind = z.enum(["session_superseded"]);
+export type DashboardAlertKind = z.infer<typeof DashboardAlertKind>;
+
+/** Staff connections only: an alert on one student's row of the dashboard. */
+export const DashboardAlertEvent = z.object({
+  type: z.literal("dashboard.alert"),
+  evaluationId: z.uuid(),
+  userId: z.uuid(),
+  kind: DashboardAlertKind,
+  at: z.iso.datetime(),
+});
+export type DashboardAlertEvent = z.infer<typeof DashboardAlertEvent>;
+
 /** A student in the lobby legitimately receives this one. */
 export const LobbyCountEvent = z.object({
   type: z.literal("lobby.count"),
@@ -251,6 +270,7 @@ export const ServerEvent = z.discriminatedUnion("type", [
   DashboardCellEvent,
   DashboardPresenceEvent,
   DashboardAttemptEvent,
+  DashboardAlertEvent,
   LobbyCountEvent,
   RunnerResultEvent,
   GradingProgressEvent,
@@ -293,6 +313,7 @@ export const STAFF_ONLY_EVENTS = [
   "dashboard.cell",
   "dashboard.presence",
   "dashboard.attempt",
+  "dashboard.alert",
   "poll.tally",
 ] as const;
 

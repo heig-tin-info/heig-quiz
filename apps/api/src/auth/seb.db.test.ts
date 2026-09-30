@@ -5,18 +5,20 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { registerForTests } from "@quiz/registry/server";
 
-import { launchTickets } from "../db/schema.js";
+import { auditLog, launchTickets, sessions } from "../db/schema.js";
 import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
 import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
-import { CONFIG_KEY_HEADER, configKeyHeaderFor } from "./seb.js";
+import { CONFIG_KEY_HEADER, configKeyHash, configKeyHeaderFor, launchConfigKey, requestUrl } from "./seb.js";
 import { CSRF_COOKIE, SESSION_COOKIE } from "./session.js";
 
 type Who = { id: string; headers: Record<string, string> };
+/** Fixed headers, or those of one URL: a `seb` session's Config Key header hashes the URL. */
+type Headers = Record<string, string> | ((url: string) => Record<string, string>);
 
 /** The routes that declare `SITTING` (ADR-027), and no others. */
 const SITTING_ROUTES = new Set([
@@ -42,12 +44,13 @@ let student: Who;
 let exam: Awaited<ReturnType<typeof seedLive>>;
 let other: Awaited<ReturnType<typeof seedLive>>;
 
-const call = (
-  method: Method,
-  url: string,
-  headers: Record<string, string>,
-  payload: object = {},
-) => server.app.inject({ method, url, headers, ...(method === "GET" ? {} : { payload }) });
+const call = (method: Method, url: string, headers: Headers, payload: object = {}) =>
+  server.app.inject({
+    method,
+    url,
+    headers: typeof headers === "function" ? headers(url) : headers,
+    ...(method === "GET" ? {} : { payload }),
+  });
 
 /** Downloads a `.seb` and returns the start URL written in it. */
 async function download(evaluationId: string, who: Who = student): Promise<string> {
@@ -61,8 +64,8 @@ async function download(evaluationId: string, who: Who = student): Promise<strin
 const launch = (startUrl: string, header = configKeyHeaderFor(startUrl)) =>
   server.app.inject({ method: "GET", url: new URL(startUrl).pathname, headers: { [CONFIG_KEY_HEADER]: header } });
 
-/** The session headers a successful launch set. */
-function sessionOf(res: Awaited<ReturnType<typeof launch>>): Record<string, string> {
+/** The session cookies a successful launch set, and its CSRF header. */
+function cookiesOf(res: Awaited<ReturnType<typeof launch>>): Record<string, string> {
   const jar = Object.fromEntries(res.cookies.map((c) => [c.name, c.value]));
   return {
     cookie: `${SESSION_COOKIE}=${jar[SESSION_COOKIE]}; ${CSRF_COOKIE}=${jar[CSRF_COOKIE]}`,
@@ -70,9 +73,27 @@ function sessionOf(res: Awaited<ReturnType<typeof launch>>): Record<string, stri
   };
 }
 
+/**
+ * The headers SEB sends on every request of the session a launch opened: its
+ * cookies, and the Config Key hash of that very URL (ADR-051 §3).
+ */
+function sessionOf(res: Awaited<ReturnType<typeof launch>>, startUrl: string): (url: string) => Record<string, string> {
+  const cookies = cookiesOf(res);
+  const key = launchConfigKey(startUrl);
+  return (url) => ({ ...cookies, [CONFIG_KEY_HEADER]: configKeyHash(requestUrl(startUrl, url), key) });
+}
+
+/** Downloads a `.seb` and opens it as SEB would. */
+async function sebSession(evaluationId: string) {
+  const startUrl = await download(evaluationId);
+  return sessionOf(await launch(startUrl), startUrl);
+}
+
 beforeAll(async () => {
   restore = registerForTests(fakeShort);
-  server = await testServer();
+  // Enforced, as it will be after proof B: every sitting request below must
+  // carry its Config Key header (ADR-051 §3).
+  server = await testServer({ SEB_CONFIG_KEY_ENFORCE: "1" });
   teacher = await server.signIn("teacher");
   student = await server.signIn("student");
   const seed = (settings: object) =>
@@ -143,14 +164,14 @@ describe("the launch ticket", () => {
 });
 
 describe("the seb session (ADR-027)", () => {
-  let seb: Record<string, string>;
+  let seb: (url: string) => Record<string, string>;
   let attemptId: string;
   let otherAttemptId: string;
 
   beforeAll(async () => {
-    seb = sessionOf(await launch(await download(exam.evaluationId)));
+    seb = await sebSession(exam.evaluationId);
     // An attempt of the OTHER evaluation, entered through its own launch.
-    const otherSeb = sessionOf(await launch(await download(other.evaluationId)));
+    const otherSeb = await sebSession(other.evaluationId);
     otherAttemptId = (await call("POST", `/app/api/evaluations/${other.evaluationId}/attempt`, otherSeb)).json().view.attempt.id;
   });
 
@@ -182,7 +203,10 @@ describe("the seb session (ADR-027)", () => {
     // with the `seb` session and with none. Outside the routes that declare
     // `SITTING`, the two answers must be the same — a route that opens up to
     // `seb` without being listed here fails this test.
-    const anonymous = { "x-csrf-token": seb["x-csrf-token"]! };
+    const anonymous = (url: string) => {
+      const { cookie: _, ...rest } = seb(url);
+      return rest;
+    };
     for (const { method, path } of routesOf(server.app.printRoutes({ commonPrefix: false }))) {
       // The OIDC round trip reaches for the identity provider; neither serves `seb`.
       if (SITTING_ROUTES.has(`${method} ${path}`) || /^\/app\/auth\/(login|callback)$/.test(path)) continue;
@@ -196,5 +220,101 @@ describe("the seb session (ADR-027)", () => {
     expect((await call("POST", `/app/api/evaluations/${exam.evaluationId}/attempt`, student.headers)).statusCode).toBe(404);
     expect((await call("GET", `/app/api/attempts/${attemptId}`, student.headers)).statusCode).toBe(404);
     expect((await call("GET", `/app/api/events?watch=attempt:${attemptId}`, student.headers)).statusCode).toBe(404);
+  });
+});
+
+describe("the Config Key of every request (ADR-051 §3), enforced", () => {
+  let seb: (url: string) => Record<string, string>;
+  let attemptId: string;
+  let bare: Record<string, string>;
+
+  beforeAll(async () => {
+    const sitting = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [student.id],
+      mode: "exam",
+      settings: { safeExamBrowser: true },
+    });
+    await call("POST", `/app/api/evaluations/${sitting.evaluationId}/start`, teacher.headers, { confirm: true });
+    seb = await sebSession(sitting.evaluationId);
+    attemptId = (await call("POST", `/app/api/evaluations/${sitting.evaluationId}/attempt`, seb)).json().view.attempt.id;
+    const { [CONFIG_KEY_HEADER]: _, ...rest } = seb("/");
+    bare = rest;
+  });
+
+  it("refuses a sitting route without the header or with another URL's, and serves its own", async () => {
+    const url = `/app/api/attempts/${attemptId}`;
+    expect((await call("GET", url, bare)).statusCode).toBe(401);
+    expect((await call("GET", url, { ...bare, [CONFIG_KEY_HEADER]: seb("/app/api/me")[CONFIG_KEY_HEADER]! })).statusCode).toBe(401);
+    expect((await call("GET", url, seb)).statusCode).toBe(200);
+  });
+
+  it("checks the event stream too, on its URL as sent (percent-encoded)", async () => {
+    const url = `/app/api/events?watch=attempt%3A${attemptId}`;
+    expect((await call("GET", url, bare)).statusCode).toBe(401);
+    // The header of the decoded URL is another URL's.
+    const decoded = seb(`/app/api/events?watch=attempt:${attemptId}`);
+    expect((await call("GET", url, decoded)).statusCode).toBe(401);
+    const hangUp = new AbortController();
+    const res = await server.app.inject({ method: "GET", url, headers: seb(url), payloadAsStream: true, signal: hangUp.signal });
+    expect(res.statusCode).toBe(200);
+    res.stream().destroy();
+    hangUp.abort();
+  });
+});
+
+describe("a new confined session (ADR-051 §4)", () => {
+  it("sets Strict cookies", async () => {
+    const res = await launch(await download(exam.evaluationId));
+    const byName = Object.fromEntries(res.cookies.map((c) => [c.name, c]));
+    expect(byName[SESSION_COOKIE]?.sameSite).toBe("Strict");
+    expect(byName[CSRF_COOKIE]?.sameSite).toBe("Strict");
+  });
+
+  it("supersedes the previous seb session of the pair, its stream included, and never the portal", async () => {
+    const pair = and(eq(sessions.userId, student.id), eq(sessions.evaluationId, exam.evaluationId), eq(sessions.kind, "seb"));
+    const first = await sebSession(exam.evaluationId);
+    expect(await server.app.db.select().from(sessions).where(pair)).toHaveLength(1);
+    const watch = `/app/api/events?watch=lobby:${exam.evaluationId}`;
+    const hangUp = new AbortController();
+    const stream = await server.app.inject({ method: "GET", url: watch, headers: first(watch), payloadAsStream: true, signal: hangUp.signal });
+    expect(stream.statusCode).toBe(200);
+    const ended = new Promise<void>((resolve) => stream.stream().on("end", resolve).resume());
+    const dashboard = new AbortController();
+    const staff = await server.app.inject({
+      method: "GET",
+      url: `/app/api/events?watch=evaluation:${exam.evaluationId}`,
+      headers: teacher.headers,
+      payloadAsStream: true,
+      signal: dashboard.signal,
+    });
+    let frames = "";
+    staff.stream().on("data", (chunk: Buffer) => (frames += chunk.toString("utf8")));
+
+    const second = await sebSession(exam.evaluationId);
+    await ended;
+    expect(await server.app.db.select().from(sessions).where(pair)).toHaveLength(1);
+    expect((await call("GET", "/app/api/me", first)).statusCode).toBe(401);
+    expect((await call("GET", "/app/api/me", second)).statusCode).toBe(200);
+    expect((await call("GET", "/app/api/me", student.headers)).statusCode).toBe(200);
+    const [row] = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "auth.session_superseded"), eq(auditLog.actorUserId, student.id)))
+      .orderBy(auditLog.id)
+      .limit(1);
+    expect(row).toMatchObject({ subjectType: "evaluation", subjectId: exam.evaluationId });
+    expect(row!.payload).toEqual({ kinds: ["seb"], by: "seb" });
+    await new Promise((resolve) => setImmediate(resolve));
+    const alert = /^event: dashboard\.alert\ndata: (.+)$/m.exec(frames);
+    expect(JSON.parse(alert![1]!)).toMatchObject({
+      type: "dashboard.alert",
+      evaluationId: exam.evaluationId,
+      userId: student.id,
+      kind: "session_superseded",
+    });
+    staff.stream().destroy();
+    dashboard.abort();
+    hangUp.abort();
   });
 });

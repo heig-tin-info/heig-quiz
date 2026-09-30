@@ -131,16 +131,35 @@ export const configKey = (config: Plist): string => sha256(sebJson(config));
 /** The header SEB sends on every request: `sha256(absolute URL + Config Key)`. */
 export const CONFIG_KEY_HEADER = "x-safeexambrowser-configkeyhash";
 
-/** What SEB sends on the launch that starts at `url` (the tests send it too). */
-export const configKeyHeaderFor = (url: string): string => sha256(url + configKey(sebConfig(url)));
+/**
+ * The absolute URL SEB hashed for a request: the origin of `PUBLIC_URL`
+ * followed by the path and query AS RECEIVED (`req.raw.url`). Never
+ * re-encoded through `URL`: SEB hashes the URL it requested, byte for byte,
+ * and `new URL` would normalise a percent-encoding it did not send.
+ */
+export const requestUrl = (publicUrl: string, rawUrl: string): string =>
+  new URL(publicUrl).origin + rawUrl;
 
-/** Whether `header` is the Config Key hash of the launch that starts at `url`. */
-export function configKeyMatches(url: string, header: unknown): boolean {
+/** THE hash of SEB's header, for the launch and for every later request. */
+export const configKeyHash = (absoluteUrl: string, configKeyHex: string): string =>
+  sha256(absoluteUrl + configKeyHex);
+
+/**
+ * Whether `header` is the Config Key hash of `absoluteUrl` under the key
+ * `configKeyHex`. Timing-safe: digests of both sides have equal lengths, so
+ * the comparison never short-circuits.
+ */
+export function configKeyHashMatches(absoluteUrl: string, configKeyHex: string, header: unknown): boolean {
   if (typeof header !== "string") return false;
-  // Digests of both sides: equal lengths, so the comparison never short-circuits.
   const digest = (text: string) => createHash("sha256").update(text).digest();
-  return timingSafeEqual(digest(configKeyHeaderFor(url)), digest(header.toLowerCase()));
+  return timingSafeEqual(digest(configKeyHash(absoluteUrl, configKeyHex)), digest(header.toLowerCase()));
 }
+
+/** The Config Key of the launch that starts at `url`: what a `seb` session stores. */
+export const launchConfigKey = (url: string): string => configKey(sebConfig(url));
+
+/** What SEB sends on the launch that starts at `url` (the tests send it too). */
+export const configKeyHeaderFor = (url: string): string => configKeyHash(url, launchConfigKey(url));
 
 // --- The routes ----------------------------------------------------------------
 
@@ -196,15 +215,18 @@ export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
       return reply.redirect("/?seb=invalid", 303);
     };
     const now = app.clock.now();
-    const url = new URL(req.url, config.PUBLIC_URL).href;
-    if (!configKeyMatches(url, req.headers[CONFIG_KEY_HEADER])) return refuse("config_key");
+    // The start URL of the `.seb` IS this request's URL; its Config Key is
+    // kept on the session, to check every later request (ADR-051 §3).
+    const url = requestUrl(config.PUBLIC_URL, req.raw.url ?? req.url);
+    const sebConfigKey = launchConfigKey(url);
+    if (!configKeyHashMatches(url, sebConfigKey, req.headers[CONFIG_KEY_HEADER])) return refuse("config_key");
     const ticket = await consumeLaunchTicket(app.db, "seb", req.params.secret, now);
     if (!ticket) return refuse("ticket");
     // The ticket is a few minutes old: the seat, and the requirement, are checked again now.
     const evaluation = await sebSeat(app.db, ticket.userId, ticket.auth.evaluationId!);
     const [user] = await app.db.select().from(users).where(eq(users.id, ticket.userId));
     if (!evaluation || !user) return refuse("seat", ticket.id);
-    await app.openSession(reply, user, ticket.auth);
+    await app.openSession(reply, user, { ...ticket.auth, sebConfigKey });
     await audit(app.db, {
       actorUserId: ticket.auth.actorUserId ?? user.id,
       actorType: "user",

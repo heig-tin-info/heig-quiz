@@ -755,6 +755,7 @@ configuration.
 | `OIDC_CLIENT_SECRET` | unset | with a private key configured the secret is never sent and is not checked; without one, `client_secret` authentication applies and the `not-for-production` placeholder is refused |
 | `SUPER_ADMIN_EMAIL` | one address | the only account managed through the environment; teachers are managed from the admin screen |
 | `LOGIN_ALLOWLIST` | unset (staging: the testers' addresses) | when set, only these addresses and the super administrator may sign in |
+| `SEB_CONFIG_KEY_ENFORCE` | unset (`0`) until proof B, then `1` | the Config Key header on every request of a Safe Exam Browser session ([ADR-051](../adr/ADR-051-postes-kiosque-attestes.md) §3): off, a mismatch is only audited (`auth.seb_config_key_mismatch`); on, the request is anonymous. The launch refuses a bad header either way |
 | `SESSION_TTL_HOURS` | `12` | idle timeout with sliding expiry, at most 720 |
 | `TRUSTED_PROXIES` | default `loopback,172.16.0.0/12` | the addresses the API accepts `X-Forwarded-For` from: native Caddy on loopback and the Docker bridge; `req.ip` feeds the room restriction and the attempt journal, so never list a range a student machine can sit on |
 | `OAUTH_CIMD_HOSTS` | default `claude.ai,claude.com,chatgpt.com` | the only hosts whose OAuth Client ID Metadata Documents the server fetches ([ADR-023](../adr/ADR-023-serveur-oauth-pour-mcp.md)); `PUBLIC_URL` is the OAuth issuer, so it must be the exact public origin |

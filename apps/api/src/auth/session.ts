@@ -5,7 +5,7 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 
-import { and, eq, isNotNull, lt, lte, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lt, lte, or, type SQL } from "drizzle-orm";
 
 import type { SessionKind } from "@quiz/contracts";
 import { isTrustedClient, type TrustedClient } from "@quiz/domain";
@@ -13,7 +13,7 @@ import { isTrustedClient, type TrustedClient } from "@quiz/domain";
 import { audit } from "../audit.js";
 import type { Db } from "../db/client.js";
 import { sessions, users } from "../db/schema.js";
-import { accessRevoked } from "../modules/realtime/bus.js";
+import * as bus from "../modules/realtime/bus.js";
 
 export const SESSION_COOKIE = "quiz_session";
 export const CSRF_COOKIE = "quiz_csrf";
@@ -73,7 +73,7 @@ export async function superPowersEnded(db: Db, userId: string, reason: SuperPowe
     subjectId: userId,
     payload: { reason },
   });
-  accessRevoked([userId]);
+  bus.accessRevoked([userId]);
 }
 
 /**
@@ -112,6 +112,21 @@ export const confined = <A extends Pick<SessionAuth, "kind">>(
   auth: A | null | undefined,
 ): auth is A & { kind: TrustedClient } => auth != null && isTrustedClient(auth.kind);
 
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+const CONFINED_KINDS = ["seb", "kiosk"] as const satisfies readonly SessionKind[];
+
+/**
+ * What opening a session records beside its {@link SessionAuth}: the proof a
+ * confined session is later checked against on every request (ADR-051 §1,
+ * `trust.ts`). The Config Key of a `seb` launch (hex), the station of a
+ * `kiosk` one; absent on every other kind.
+ */
+export interface NewSession extends SessionAuth {
+  sebConfigKey?: string | null;
+  deviceId?: string | null;
+}
+
 /**
  * The lifetime of each kind: fixed hours, never renewed — or null for
  * SESSION_TTL_HOURS with sliding renewal. A `seb` session outlives any sitting;
@@ -145,18 +160,68 @@ export async function createSession(
   db: Db,
   userId: string,
   ttlHours: number,
-  auth: SessionAuth = PORTAL,
+  auth: NewSession = PORTAL,
 ) {
   const token = newToken();
   const csrf = newToken();
+  const now = new Date();
   const hours = FIXED_HOURS[auth.kind] ?? ttlHours;
-  const expiresAt = new Date(Date.now() + hours * 3_600_000);
+  const expiresAt = new Date(now.getTime() + hours * 3_600_000);
   // Field by field: a session is never born with Super Powers (ADR-054).
-  const { kind, actorUserId, evaluationId } = auth;
-  await db
-    .insert(sessions)
-    .values({ sidHash: hashToken(token), userId, expiresAt, kind, actorUserId, evaluationId });
+  const row = {
+    sidHash: hashToken(token),
+    userId,
+    expiresAt,
+    kind: auth.kind,
+    actorUserId: auth.actorUserId,
+    evaluationId: auth.evaluationId,
+    sebConfigKey: auth.sebConfigKey ?? null,
+    deviceId: auth.deviceId ?? null,
+  };
+  const superseded = await db.transaction(async (tx) => {
+    const gone = confined(auth) ? await supersede(tx, userId, auth) : [];
+    await tx.insert(sessions).values(row);
+    return gone;
+  });
+  if (superseded.length > 0) {
+    // After the commit: a stream closed earlier could reconnect on a session
+    // the rollback kept.
+    bus.sessionsEnded(superseded.map((s) => s.sidHash));
+    bus.dashboardAlert({ evaluationId: auth.evaluationId!, userId, kind: "session_superseded", at: now });
+  }
   return { token, csrf, expiresAt };
+}
+
+/**
+ * One confined session at a time (ADR-051 §4): opening one for (user,
+ * evaluation) deletes every other confined session of that pair, and every
+ * session still holding its station, expired rows included — before the
+ * insert, in its transaction, so the partial unique index on `device_id`
+ * holds. Portal and impersonation sessions are never touched: the phone that
+ * approves a pairing is one, and so is a teacher's portal beside a SEB
+ * rehearsal. The audit names the kinds removed, never a token.
+ */
+async function supersede(tx: Tx, userId: string, auth: NewSession) {
+  const pair = and(
+    eq(sessions.userId, userId),
+    eq(sessions.evaluationId, auth.evaluationId!),
+    inArray(sessions.kind, CONFINED_KINDS),
+  )!;
+  const gone = await tx
+    .delete(sessions)
+    .where(auth.deviceId ? or(pair, eq(sessions.deviceId, auth.deviceId)) : pair)
+    .returning({ sidHash: sessions.sidHash, kind: sessions.kind });
+  if (gone.length > 0) {
+    await audit(tx, {
+      actorUserId: userId,
+      actorType: "user",
+      action: "auth.session_superseded",
+      subjectType: "evaluation",
+      subjectId: auth.evaluationId!,
+      payload: { kinds: gone.map((s) => s.kind), by: auth.kind },
+    });
+  }
+  return gone;
 }
 
 export async function findSessionUser(
@@ -175,6 +240,8 @@ export async function findSessionUser(
         evaluationId: sessions.evaluationId,
         superPowersUntil: sessions.superPowersUntil,
       },
+      sebConfigKey: sessions.sebConfigKey,
+      deviceId: sessions.deviceId,
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
@@ -224,7 +291,15 @@ export async function findSessionUser(
       .where(eq(sessions.sidHash, row.sidHash));
   }
   // The renewal above moves `expires_at` alone: it never touches Super Powers.
-  return { user: row.user, auth, renewedTo };
+  return {
+    user: row.user,
+    auth,
+    renewedTo,
+    /** The session's id as the server knows it: how its streams are found (`bus.sessionsEnded`). */
+    sidHash: row.sidHash,
+    sebConfigKey: row.sebConfigKey,
+    deviceId: row.deviceId,
+  };
 }
 
 /**

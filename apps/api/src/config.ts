@@ -129,6 +129,19 @@ const EnvSchema = z.object({
    */
   KIOSK_ATTESTATION: z.enum(["google", "mock", "off"]).default("off"),
 
+  /**
+   * Safe Exam Browser's Config Key header, checked on every request of a
+   * `seb` session (ADR-051 §3). Off — the default — a mismatch is only
+   * audited (`auth.seb_config_key_mismatch`) and the request proceeds; on,
+   * the request is anonymous. Turned on once a real SEB has been seen sending
+   * the header on `fetch` and `EventSource` (proof B). The launch refuses a
+   * bad header either way.
+   */
+  SEB_CONFIG_KEY_ENFORCE: z
+    .string()
+    .default("")
+    .transform((v) => v === "1" || v === "true"),
+
   /** Signs the login state cookies (not the sessions, which live in the database). */
   COOKIE_SECRET: z.string().min(16).default("dev-cookie-secret-change-me"),
   /**

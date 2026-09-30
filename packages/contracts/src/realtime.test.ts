@@ -35,6 +35,7 @@ const STAFF_ONLY: Record<ServerEventName, boolean> = {
   "dashboard.cell": true,
   "dashboard.presence": true,
   "dashboard.attempt": true,
+  "dashboard.alert": true,
   "lobby.count": false,
   "runner.result": false,
   "grading.progress": false,
@@ -64,9 +65,15 @@ describe("isStaffOnly", () => {
     }
   });
 
-  it("drops the four staff frames and keeps the nine others", () => {
+  it("drops the five staff frames and keeps the nine others", () => {
     const staff = declared.filter((name) => isStaffOnly({ type: name } as ServerEvent));
-    expect(staff).toEqual(["dashboard.cell", "dashboard.presence", "dashboard.attempt", "poll.tally"]);
+    expect(staff).toEqual([
+      "dashboard.cell",
+      "dashboard.presence",
+      "dashboard.attempt",
+      "dashboard.alert",
+      "poll.tally",
+    ]);
   });
 
   it("agrees with STAFF_ONLY_EVENTS", () => {
