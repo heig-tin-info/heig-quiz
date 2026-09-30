@@ -6,19 +6,22 @@
  */
 import type { FastifyRequest } from "fastify";
 
+import type { TrustedClient } from "@quiz/domain";
+
 import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import type { Db } from "../db/client.js";
+import { KIOSK_COOKIE, deviceByCredential, type KioskDeviceRow } from "../modules/kiosk/service.js";
 import { CONFIG_KEY_HEADER, configKeyHashMatches, requestUrl } from "./seb.js";
-import type { TrustedClient } from "@quiz/domain";
-
 import type { SessionAuth } from "./session.js";
 
 /**
- * Why a confined session's request is not trusted. `kiosk_unverified` is the
- * stub's (below); steps 4 and 7 replace it with the kiosk's real reasons.
+ * Why a confined session's request is not trusted: SEB's Config Key does not
+ * match; the request does not come from the station the kiosk session was
+ * opened on (no `quiz_kiosk` cookie, or not that device's); that station is
+ * no longer `active`.
  */
-export type TrustRefusal = "seb_config_key" | "kiosk_unverified";
+export type TrustRefusal = "seb_config_key" | "kiosk_station" | "kiosk_inactive";
 
 /** What the session hook knows of a confined session: its kind, and what it was opened with. */
 export interface TrustedSession {
@@ -32,6 +35,18 @@ export interface TrustRequest {
   /** The absolute URL, path and query as received (`requestUrl`). */
   url: string;
   headers: FastifyRequest["headers"];
+  /** The station the request's `quiz_kiosk` cookie names (`deviceByCredential`); null without one. */
+  station: KioskDeviceRow | null;
+}
+
+/**
+ * ADR-051 §6, STEP 7's HOOK: whether the station's attestation suspends its
+ * sitting (refused, or silent for 12 minutes). Until step 7 writes the rule,
+ * no attestation state refuses anything here; the station's cookie and its
+ * `active` status (below) still do.
+ */
+export function kioskAttestationRefusal(_device: KioskDeviceRow): TrustRefusal | null {
+  return null;
 }
 
 /**
@@ -48,12 +63,17 @@ export function trustRefusal(session: TrustedSession, request: TrustRequest): Tr
         configKeyHashMatches(request.url, session.sebConfigKey, request.headers[CONFIG_KEY_HEADER])
         ? null
         : "seb_config_key";
-    case "kiosk":
-      // STUB, FAILS CLOSED — ADR-051 §1, §5, §6: the station's `quiz_kiosk`
-      // cookie, an `active` device, an attestation neither refused nor
-      // silent. Steps 4 and 7 write the rule; until then a kiosk session is
-      // never trusted, whoever opened it.
-      return "kiosk_unverified";
+    case "kiosk": {
+      // ADR-051 §1: the session cookie alone is worth nothing. The request
+      // carries the station's own cookie, and the station it names is the
+      // session's device — so the session cannot be carried to another
+      // machine — still `active`. Fails closed on a missing or rotated
+      // cookie, and on another station's.
+      const station = request.station;
+      if (station === null || station.id !== session.deviceId) return "kiosk_station";
+      if (station.status !== "active") return "kiosk_inactive";
+      return kioskAttestationRefusal(station);
+    }
   }
 }
 
@@ -84,9 +104,12 @@ export async function trustRefused(
   session: TrustedSession & { sidHash: string; userId: string },
   req: FastifyRequest,
 ): Promise<boolean> {
+  const station =
+    session.auth.kind === "kiosk" ? await deviceByCredential(db, req.cookies[KIOSK_COOKIE]) : null;
   const refusal = trustRefusal(session, {
     url: requestUrl(config.PUBLIC_URL, req.raw.url ?? req.url),
     headers: req.headers,
+    station,
   });
   if (refusal === null) return false;
   // Only the Config Key has an audit-only mode; every other refusal refuses.

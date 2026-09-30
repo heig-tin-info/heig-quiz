@@ -1,9 +1,12 @@
 import { lazy, Suspense, useEffect, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { LogOut } from "lucide-react";
 
-import type { Me } from "@quiz/contracts";
+import type { KioskStation, Me } from "@quiz/contracts";
 
-import { useMe, usePublicConfig } from "./api";
+import { api, useMe, usePublicConfig } from "./api";
+import { toKiosk, useStationSessionWatch } from "./kiosk/navigation";
+import { kioskStationKey } from "./queryKeys";
 import { Logo } from "./Header";
 import { type Dict, useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
@@ -181,6 +184,9 @@ const TeamsLinkPage = lazy(() =>
 const TeamsTabPage = lazy(() =>
   import("./notifications/TeamsTabPage").then((m) => ({ default: m.TeamsTabPage })),
 );
+// ADR-051 §7: the station's screen (drawn with no session) and the phone's pairing page.
+const KioskPage = lazy(() => import("./kiosk/KioskPage").then((m) => ({ default: m.KioskPage })));
+const PairPage = lazy(() => import("./pair/PairPage").then((m) => ({ default: m.PairPage })));
 const ActivitiesPage = lazy(() =>
   import("./activities/ActivitiesPage").then((m) => ({ default: m.ActivitiesPage })),
 );
@@ -228,6 +234,8 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   oauthConsent: (r, c) => <OAuthConsent id={r.id} me={c.me} />,
   teamsLink: (_, c) => <TeamsLinkPage me={c.me} onSettings={() => c.navigate({ view: "settings" })} />,
   teamsTab: () => null,
+  kiosk: () => null,
+  pair: (_, c) => <PairPage me={c.me} navigate={c.navigate} />,
   // Invariant 3: the gallery exists in development only. The
   // route parses in every build; this is what refuses to render it.
   devUi: (_, c) => (import.meta.env.DEV ? <DevGallery /> : <TeacherHome navigate={c.navigate} />),
@@ -306,6 +314,7 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
   "join",
   "oauthConsent",
   "teamsLink",
+  "pair",
 ]);
 
 /**
@@ -350,6 +359,17 @@ function SignedOut({ route, navigate }: { route: Route; navigate: (r: Route) => 
       </Suspense>
     );
   }
+  // The phone's pairing page (ADR-051 §7) signs in and comes back with its code.
+  if (route.view === "pair") {
+    return (
+      <Suspense fallback={<Spinner className="py-24" />}>
+        <PairPage me={null} />
+      </Suspense>
+    );
+  }
+  // A kiosk station whose session just ended (ADR-051 §7) goes back to its
+  // pairing screen rather than to a sign-in nobody can use there.
+  if (route.view === "attempt") return <StationOrLanding />;
   // An assistant's sign-in (ADR-023) must come back to its consent page.
   if (route.view === "oauthConsent") {
     return (
@@ -362,13 +382,44 @@ function SignedOut({ route, navigate }: { route: Route; navigate: (r: Route) => 
 }
 
 /**
+ * A signed-out `/take/:id`. On a kiosk station — the browser holds the
+ * station's cookie, which only the server can read — it is a sitting whose
+ * session ended (submitted, closed, expired): back to `/kiosk`. Anywhere
+ * else it is the landing page. Asked only where the platform has stations.
+ */
+function StationOrLanding() {
+  const config = usePublicConfig();
+  const kiosk = config.data?.kiosk != null;
+  const station = useQuery({
+    queryKey: kioskStationKey,
+    queryFn: () => api<KioskStation>("/app/api/kiosk/station"),
+    enabled: kiosk,
+    retry: false,
+  });
+  const isStation = station.isSuccess;
+  useEffect(() => {
+    if (isStation) toKiosk();
+  }, [isStation]);
+  if (config.isLoading || (kiosk && (station.isLoading || isStation))) return null;
+  return <Landing />;
+}
+
+/**
  * ADR-027, ADR-051 §7: what a confined session (`seb`, `kiosk`) shows outside
  * its evaluation — after the submit, or on leaving the waiting room. Safe
  * Exam Browser is closed from its own frame; the one action here is going
- * back to the exam. (The kiosk page, ADR-051 step 6, returns to `/kiosk` on
- * its own and is not expected to land here.)
+ * back to the exam. A kiosk station has nothing to show outside its exam:
+ * it goes back to its own screen.
  */
-function ConfinedElsewhere({ onBack }: { onBack: () => void }) {
+function ConfinedElsewhere({ kiosk, onBack }: { kiosk: boolean; onBack: () => void }) {
+  useEffect(() => {
+    if (kiosk) toKiosk();
+  }, [kiosk]);
+  if (kiosk) return null;
+  return <SebElsewhere onBack={onBack} />;
+}
+
+function SebElsewhere({ onBack }: { onBack: () => void }) {
   const t = useT();
   return (
     <main className="mx-auto w-full max-w-160 px-4 py-16 sm:px-6">
@@ -414,6 +465,15 @@ export default function App() {
       </Suspense>
     );
   }
+  // ADR-051 §7: a kiosk station has no session to wait for; it attests
+  // itself and shows its code.
+  if (route.view === "kiosk") {
+    return (
+      <Suspense fallback={<Spinner className="py-24" />}>
+        <KioskPage />
+      </Suspense>
+    );
+  }
   return <SessionApp route={route} navigate={navigate} />;
 }
 
@@ -433,6 +493,11 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   // hints at all.
   // ADR-027: a `seb` session has one evaluation, and no other page.
   const confinedTo = me.data?.session?.evaluationId ?? null;
+  // ADR-051 §7: a station's session ends with the attempt, or with the
+  // evaluation — sometimes while the page only waits (a lobby the teacher
+  // closed). Its stream dropping is how the page learns it.
+  const onStation = me.data?.session?.kind === "kiosk";
+  useStationSessionWatch(onStation);
   useLiveUpdates(
     me.data != null && confinedTo === null && route.view !== "attempt",
     confinedTo !== null || QUIET.has(route.view),
@@ -470,7 +535,10 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
         {renderPage({ view: "attempt", evaluationId: confinedTo }, { me: me.data, navigate, teacherUi: false })}
       </Suspense>
     ) : (
-      <ConfinedElsewhere onBack={() => navigate({ view: "attempt", evaluationId: confinedTo })} />
+      <ConfinedElsewhere
+        kiosk={onStation}
+        onBack={() => navigate({ view: "attempt", evaluationId: confinedTo })}
+      />
     );
   }
   const shown: Route = onTeacherRoute ? { view: "home" } : route;

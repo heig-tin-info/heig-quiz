@@ -1145,7 +1145,8 @@ nothing else on it leaves the system.
   product uses, multiplied by the room: the viewport IS the projector, so the
   sizes are measured against it rather than picked from the 12–28 px scale.
   Nothing else in `apps/web` may use a `clamp()` type size, except the
-  correction projection below, which is the same wall.
+  correction projection below, which is the same wall, and the kiosk
+  station, read from two metres (below).
   The question's own step is picked from its LENGTH (`questionScale`): a
   one-line question gets the full 68 px, and two longer steps follow, because
   a four-line question at 68 px pushes the last bars off the wall — and
@@ -1575,6 +1576,41 @@ draws before the session gate, so it carries its own door.
   GRADED surface (it always prints a score line, and `short` reads its verdict
   from grading details) and a poll produces none of that. A poll reveals the
   two facts it has — which answer is right, and which one this browser sent.
+
+## The kiosk station (`/kiosk`) and the phone's pairing (`/pair`)
+
+ADR-051 §7. A school Chromebook locked on `/kiosk` is read from a chair two
+metres away, by a student holding a phone, and nobody clicks it. It is the
+second screen, after the projections, where the 12–28 px scale does not
+apply, and it borrows their rule: **type sizes in `clamp()` of the
+viewport**, which here is the station's own screen (1366 × 768 for most of
+them). Nothing else of the screen leaves the system.
+
+- **The code is the one thing on screen.** `XXXX-XXXX` in mono,
+  `clamp(56px, 7.5vw, 112px)` at 700 with `0.04em` tracking, never wrapped:
+  it is typed letter by letter, and the mono face keeps `8` from `B` apart.
+  The station's name above it is the page's heading at
+  `clamp(28px, 3.4vw, 48px)` — the student compares it with the name on
+  their phone, so it is read second, and smaller than the code.
+- **No accent at all.** There is nothing to click on a kiosk; the one red
+  element of a screen is the thing to click, so a station shows none.
+- The code and the QR share one `surface` sheet (`rounded-sheet`, hairline),
+  the QR on the left at `clamp(160px, 20vw, 280px)`. It is `PollQr`, the
+  projection's tile, white in both themes for the same reason. The two steps
+  under the sheet are an ordered list at `clamp(17px, 1.5vw, 22px)`.
+- The countdown to the next code is `fg-muted`, tabular, and ticks each
+  second through the app's one clock (`useNow`).
+- **A station that cannot show a code says so in one sentence** —
+  "Station not recognised" or "The station cannot start", then "Call the
+  supervisor." — with no technical detail: the audit holds the reason. It
+  stays on screen while the station tries again every 30 seconds; it does
+  not flash back to "Starting" between tries.
+
+The phone's page, `/pair`, is an ordinary gate page (`GateFrame`, 460 px):
+the code field (mono, formatted as it is typed), then the station's name in
+a `surface-2` panel at 20 px bold — the thing to check against the screen —
+and the exams as one radio group. ONE primary action at a time: Continue
+while there is only a code, then "Start on this station".
 
 ## The launch checklist (evaluation, step 3)
 

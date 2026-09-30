@@ -39,6 +39,10 @@ export interface EndedAttempt {
   userId: string | null;
 }
 
+/** The accounts of ended attempts (a guest's has none): whose `kiosk` sessions end with them (ADR-051 §7). */
+export const seated = (ended: readonly EndedAttempt[]): string[] =>
+  ended.flatMap((a) => (a.userId === null ? [] : [a.userId]));
+
 type EndedListener = (db: Db, ended: readonly EndedAttempt[], now: Date) => Promise<unknown>;
 const endedListeners = new Set<EndedListener>();
 

@@ -25,6 +25,7 @@ import { Button, Card, EmptyState, QueryError, Spinner } from "../ui";
 import { Lobby } from "./Lobby";
 import { Player } from "./Player";
 import { attemptEntryKey } from "../queryKeys";
+import { toKiosk } from "../kiosk/navigation";
 
 const errorCode = (error: unknown): string | null =>
   error instanceof ApiError ? ((error.body as { error?: string })?.error ?? null) : null;
@@ -59,7 +60,9 @@ export function AttemptPage({
       api<AttemptOrLobby>(`/app/api/evaluations/${evaluationId}/attempt`, { method: "POST" }),
   });
 
-  const home = () => navigate({ view: "home" });
+  // ADR-051 §7: a kiosk station has no home but its own screen.
+  const station = me.data?.session?.kind === "kiosk";
+  const home = station ? toKiosk : () => navigate({ view: "home" });
   /*
    * The one way out of the student view from inside an attempt (ADR-018
    * addendum). This route renders OUTSIDE the Shell — an exam is the one
@@ -146,6 +149,7 @@ export function AttemptPage({
       initial={data.view}
       onHome={home}
       onResults={(attemptId, options) => navigate(feedbackLink(attemptId).route, options)}
+      station={station}
       {...(exitStudentView ? { onExitStudentView: exitStudentView } : {})}
     />
   );

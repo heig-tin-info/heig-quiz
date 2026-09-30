@@ -13,6 +13,7 @@ import { api } from "../api";
 import { useT } from "../i18n";
 import { attemptFeedbackKey } from "../queryKeys";
 import { Spinner } from "../ui";
+import { STATION_END_MS } from "../kiosk/navigation";
 import { ClosedScreen } from "./ClosedScreen";
 import type { OnResults } from "./Player";
 
@@ -33,15 +34,24 @@ export function PlayerEnd({
   initial,
   onHome,
   onResults,
+  station = false,
 }: {
   reason: AttemptClosed["reason"];
   initial: AttemptView;
   onHome: () => void;
   onResults?: OnResults | undefined;
+  /**
+   * Sat on a kiosk station (ADR-051 §7): its session ended with the attempt,
+   * so nothing more can be read from here. The closed screen stays a few
+   * seconds, drawn from what the page already holds, then `onHome` takes the
+   * station back to its own screen.
+   */
+  station?: boolean;
 }) {
   const t = useT();
   const preview = initial.attempt.preview;
-  const retakes = !preview && retakesOn(initial.evaluation.mode, retakesOf(initial.evaluation.settings));
+  const retakes =
+    !preview && !station && retakesOn(initial.evaluation.mode, retakesOf(initial.evaluation.settings));
   const toResults =
     retakes && onResults !== undefined && (reason === "submitted" || reason === "deadline");
   const forwarded = useRef(false);
@@ -55,7 +65,7 @@ export function PlayerEnd({
   // to show (`immediate`). The page's own route answers, so the rule stays
   // the server's one; the answer also warms the page it leads to. A teacher
   // preview has no attempt of its own, so nothing is asked for it.
-  const asked = !preview && onResults !== undefined && !toResults;
+  const asked = !preview && !station && onResults !== undefined && !toResults;
   const feedback = useQuery<StudentFeedback>({
     queryKey: attemptFeedbackKey(initial.attempt.id),
     queryFn: () => api(`/app/api/attempts/${initial.attempt.id}/feedback`),
@@ -63,12 +73,22 @@ export function PlayerEnd({
     retry: false,
   });
 
+  // The latest `onHome`, so that a parent's re-render does not restart the wait.
+  const home = useRef(onHome);
+  home.current = onHome;
+  useEffect(() => {
+    if (!station) return;
+    const id = setTimeout(() => home.current(), STATION_END_MS);
+    return () => clearTimeout(id);
+  }, [station]);
+
   if (toResults) return <Spinner label={t("player.loading")} className="py-24" />;
   return (
     <ClosedScreen
       reason={reason}
       title={initial.evaluation.title}
       onHome={onHome}
+      {...(station ? { note: t("kiosk.returning") } : {})}
       // Held until the answer settles; an error leaves Back to home alone.
       actionsHeld={asked && feedback.isLoading}
       {...(asked && feedback.data?.available === true

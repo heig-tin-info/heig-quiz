@@ -19,6 +19,8 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["adminUsersKey", keys.adminUsersKey, ["admin-teachers", "users"]],
     ["adminTasksKey", keys.adminTasksKey, ["admin-teachers", "tasks"]],
     ["adminKioskKey", keys.adminKioskKey, ["admin-kiosk-devices"]],
+    ["kioskStationKey", keys.kioskStationKey, ["kiosk-station"]],
+    ["pairPreviewKey", keys.pairPreviewKey("BCDF-GHJK"), ["pair-preview", "BCDF-GHJK"]],
     ["apiTokensKey", keys.apiTokensKey, ["api-tokens"]],
     ["connectionsKey", keys.connectionsKey, ["oauth-connections"]],
     ["oauthRequestKey", keys.oauthRequestKey("q1"), ["oauth-request", "q1"]],

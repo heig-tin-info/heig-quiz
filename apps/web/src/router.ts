@@ -112,6 +112,18 @@ export type Route =
    * all — Teams frames it, and the platform's cookies do not follow.
    */
   | { view: "teamsTab" }
+  /**
+   * A kiosk station's screen (ADR-051 §7): a school Chromebook locked on
+   * `/kiosk` attests itself, then shows its code and QR until a phone pairs
+   * it. Drawn with no session and without waiting on `/me` (App.tsx).
+   */
+  | { view: "kiosk" }
+  /**
+   * The phone's half of the pairing (ADR-051 §7): the code of the station in
+   * front of the student, from the QR (`?code=`, which the page reads itself)
+   * or typed; then the exam to open there.
+   */
+  | { view: "pair" }
   // WP10: grading + results
   /**
    * The teacher's grading panel for one evaluation; `item`, the question it
@@ -419,6 +431,14 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     match: (parts) => (parts.length === 1 && parts[0] === "teams" ? { view: "teamsTab" } : null),
     studentSafe: true,
   },
+  // ADR-051 §7: the station's screen, `/kiosk` exactly — the kiosk policy's
+  // start URL — and the phone's pairing page.
+  kiosk: {
+    path: () => "/kiosk",
+    match: (parts) => (parts.length === 1 && parts[0] === "kiosk" ? { view: "kiosk" } : null),
+    studentSafe: true,
+  },
+  pair: fixed("pair", { view: "pair" }, true),
   // WP10: the student's feedback on one attempt — the ONE student results page.
   feedback: {
     path: (r) => `/attempts/${r.attemptId}/feedback`,

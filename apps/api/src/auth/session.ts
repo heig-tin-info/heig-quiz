@@ -353,7 +353,7 @@ export async function findSessionUser(
 async function dropSessions(
   db: Db | Tx,
   where: SQL,
-  reason: "logout" | "expired" | "revoked" | "superseded",
+  reason: "logout" | "expired" | "revoked" | "superseded" | "ended",
   now: Date = new Date(),
 ) {
   const gone = await db.delete(sessions).where(where).returning({
@@ -394,12 +394,47 @@ async function dropSessions(
 async function endSessions(
   db: Db,
   where: SQL,
-  reason: "logout" | "expired" | "revoked",
+  reason: "logout" | "expired" | "revoked" | "ended",
   now: Date = new Date(),
 ): Promise<number> {
   const gone = await dropSessions(db, where, reason, now);
   bus.sessionsEnded(gone.map((s) => s.sidHash));
   return gone.length;
+}
+
+/**
+ * ADR-051 §7: the `kiosk` sessions that sit `evaluationId` — of these users,
+ * or of everybody when `userIds` is absent (the evaluation closed) —
+ * deleted in one statement, and their event streams closed. The users'
+ * other sessions stay: the phone's portal, and a `seb` session, which
+ * outlives the submit (ADR-027). `live` calls it wherever an attempt ends,
+ * after it has emitted `attempt.closed`, so the station's stream carries
+ * that frame before it closes.
+ */
+export async function endKioskSessions(
+  db: Db,
+  evaluationId: string,
+  userIds?: readonly string[],
+): Promise<void> {
+  if (userIds !== undefined && userIds.length === 0) return;
+  await endSessions(
+    db,
+    and(
+      eq(sessions.kind, "kiosk"),
+      eq(sessions.evaluationId, evaluationId),
+      userIds === undefined ? undefined : inArray(sessions.userId, [...userIds]),
+    )!,
+    "ended",
+  );
+}
+
+/**
+ * ADR-051 §5: the session a station holds, deleted and its event stream
+ * closed — a retired station sits nothing more, not even until its next
+ * request.
+ */
+export async function endStationSessions(db: Db, deviceId: string): Promise<void> {
+  await endSessions(db, eq(sessions.deviceId, deviceId), "revoked");
 }
 
 export async function deleteSession(db: Db, token: string, now: Date = new Date()) {

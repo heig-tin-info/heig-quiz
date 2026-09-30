@@ -70,3 +70,75 @@ export const KioskDevicePatch = z
     message: "Nothing to change",
   });
 export type KioskDevicePatch = z.infer<typeof KioskDevicePatch>;
+
+// --- The pairing (ADR-051 §7, RFC 8628) ----------------------------------------
+
+/**
+ * `POST /app/api/kiosk/device_authorization`: the RFC's fields, as the RFC
+ * spells them, and the station's label for its own screen.
+ */
+export const KioskDeviceAuthorization = z.object({
+  device_code: z.string(),
+  user_code: z.string(),
+  verification_uri: z.string(),
+  verification_uri_complete: z.string(),
+  expires_in: z.number().int().positive(),
+  interval: z.number().int().positive(),
+  label: z.string(),
+});
+export type KioskDeviceAuthorization = z.infer<typeof KioskDeviceAuthorization>;
+
+export const DEVICE_CODE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
+
+/** `POST /app/api/kiosk/token`: the station's poll (RFC 8628 §3.4). */
+export const KioskTokenRequest = z.strictObject({
+  grant_type: z.literal(DEVICE_CODE_GRANT),
+  device_code: z.string().min(1).max(128),
+});
+export type KioskTokenRequest = z.infer<typeof KioskTokenRequest>;
+
+/** The 400 of a poll (RFC 8628 §3.5, and RFC 6749 §5.2 for an unknown code). */
+export const KIOSK_TOKEN_ERRORS = [
+  "authorization_pending",
+  "slow_down",
+  "expired_token",
+  "access_denied",
+  "invalid_grant",
+] as const;
+export const KioskTokenError = z.object({ error: z.enum(KIOSK_TOKEN_ERRORS) });
+export type KioskTokenError = z.infer<typeof KioskTokenError>;
+
+/** An approved poll: the station now holds a `kiosk` session, and goes to its exam. */
+export const KioskTokenApproved = z.object({ redirect: z.string() });
+export type KioskTokenApproved = z.infer<typeof KioskTokenApproved>;
+
+/** What `/pair` offers: an exam the student can start on the station now. */
+export const PairableEvaluation = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  classroomName: z.string(),
+  courseCode: z.string(),
+});
+export type PairableEvaluation = z.infer<typeof PairableEvaluation>;
+
+/** `GET /app/api/pair/:code`: the station to compare with the screen, and the exams. */
+export const PairPreview = z.object({
+  station: z.object({ label: z.string() }),
+  evaluations: z.array(PairableEvaluation),
+});
+export type PairPreview = z.infer<typeof PairPreview>;
+
+/** `/app/api/pair/:code`: the code as typed; the route normalizes it. */
+export const PairCodeParam = z.object({ code: z.string().min(1).max(32) });
+export type PairCodeParam = z.infer<typeof PairCodeParam>;
+
+/** `POST /app/api/pair`: the student approves the pairing for one exam. */
+export const PairApprove = z.strictObject({
+  code: z.string().min(1).max(32),
+  evaluationId: z.uuid(),
+});
+export type PairApprove = z.infer<typeof PairApprove>;
+
+/** The approval, answered with the station's label. */
+export const PairApproved = z.object({ station: z.object({ label: z.string() }) });
+export type PairApproved = z.infer<typeof PairApproved>;

@@ -122,11 +122,14 @@ export function Player({
   onHome,
   onResults,
   onExitStudentView,
+  station = false,
 }: {
   initial: AttemptView;
   onHome: () => void;
   /** WP10: opens the student's own feedback on this attempt. */
   onResults: OnResults;
+  /** Sat on a kiosk station (ADR-051 §7): the end returns to the station's screen by itself. */
+  station?: boolean;
   /**
    * Given only to a TEACHER walking their own test attempt (ADR-018
    * addendum): the exam screen carries no teacher chrome — that is the point
@@ -207,6 +210,7 @@ export function Player({
       onHome={() => void leave()}
       homeBusy={leaving}
       onResults={onResults}
+      station={station}
       {...(onExitStudentView ? { onExitStudentView } : {})}
     />
   );
@@ -221,6 +225,7 @@ export function PlayerView({
   onExitStudentView,
   banner,
   homeBusy = false,
+  station = false,
 }: {
   initial: AttemptView;
   session: PlayerSession;
@@ -232,6 +237,8 @@ export function PlayerView({
   onExitStudentView?: () => void;
   /** Above the question, before the offline alert: the preview's own banner. */
   banner?: ReactNode;
+  /** Sat on a kiosk station: see {@link PlayerEnd}. */
+  station?: boolean;
 }) {
   const t = useT();
   const { state, dispatch, sync: saverSync, closed, paused } = session;
@@ -289,7 +296,13 @@ export function PlayerView({
 
   if (closed !== null) {
     return (
-      <PlayerEnd reason={closed.reason} initial={initial} onHome={onHome} onResults={onResults} />
+      <PlayerEnd
+        reason={closed.reason}
+        initial={initial}
+        onHome={onHome}
+        onResults={onResults}
+        station={station}
+      />
     );
   }
 
