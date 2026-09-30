@@ -50,7 +50,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M1-02 | GitHub adapters, config, image | todo | M0-03 | | | |
 | M1-03 | `ActivityKind`, `ActivitySummary` union | review | M0-03 | `merge/M1-03-activity-kind` | #373 | `ActivitySummary` is a union on `kind` (`"evaluation"`, `mode` kept): M1-05 relies on it. `ActivityKind<K>` = `kind` + `listForTeacher` over `KINDS` (`modules/activity/`); M5-01 adds `studentCards`, M5-03 `gradebookEntries`, M3-05 `deadlines`, each through `KINDS`, a classroom id only after the route loaded the classroom (card, "As delivered"). `activity_available` = `{activityKind, activityId, activityTitle}` (migration 0037; I58–I60) |
 | M1-04 | Missing primitives, long-form styles | review | M0-05 | `merge/M1-04-primitives` | #374 | From `./ui`: `GithubIcon({className})` (an `IconType`); `OrgAvatar({login, src?, size?: "xs"\|"sm"\|"md", className?})` (`src` a same-origin URL from the API, M2-02; none ⇒ initials; never github.com); `Progress({label, className?})` (indeterminate only; a known count is a `SegmentedBar`); `Initials` takes `text` and `shape`. Journal HTML wears `md-body md-doc` (`MarkdownView className="md-doc"` client-side); DESIGN.md › Long-form reading |
-| M1-05 | Web routes and mock skeleton | todo | M1-03 | | | |
+| M1-05 | Web routes and mock skeleton | in progress | M1-03 | `merge/M1-05-web-routes` | | |
 | M1-06 | Import script skeleton, identity, login adoption | todo | D04, D08 | | | |
 
 ## M2 — GitHub substrate
