@@ -36,26 +36,6 @@ export async function listActivities(
 ): Promise<EvaluationActivitySummary[]> {
   const cutoff = new Date(now.getTime() - OLD_POLL_DAYS * 86_400_000);
   const oldPoll = sql`(${ownedPollSql()} and ${evaluations.state} in ('closed', 'grading', 'released') and coalesce(${evaluations.closedAt}, ${evaluations.createdAt}) < ${cutoff.toISOString()}::timestamptz)`;
-  return summaries(
-    db,
-    and(isNull(evaluations.courseId), isNull(classrooms.archivedAt), not(oldPoll), access)!,
-  );
-}
-
-/**
- * The evaluations of ONE classroom, as the same rows: the caller has loaded
- * the classroom already (invariant 6), so the classroom is the whole scope.
- * Never an anonymous poll (it has no classroom) nor a template (it belongs to
- * a course), whatever its age; an archived classroom still lists its own.
- */
-export async function listClassroomActivities(
-  db: Db,
-  classroomId: string,
-): Promise<EvaluationActivitySummary[]> {
-  return summaries(db, eq(evaluations.classroomId, classroomId));
-}
-
-async function summaries(db: Db, where: SQL): Promise<EvaluationActivitySummary[]> {
   const rows = await db
     .select({
       id: evaluations.id,
@@ -74,7 +54,7 @@ async function summaries(db: Db, where: SQL): Promise<EvaluationActivitySummary[
     .from(evaluations)
     .leftJoin(classrooms, eq(classrooms.id, evaluations.classroomId))
     .leftJoin(courses, eq(courses.id, classrooms.courseId))
-    .where(where)
+    .where(and(isNull(evaluations.courseId), isNull(classrooms.archivedAt), not(oldPoll), access))
     .orderBy(desc(evaluations.createdAt));
   return rows.map((r) => ({
     kind: "evaluation" as const,

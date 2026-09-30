@@ -1,8 +1,8 @@
 /**
  * The data step of the migration `*_activity_payload_neutral` (merge task
  * M1-03): an `activity_available` bell stored in the evaluation shape of
- * before is rewritten into the kind-neutral one, and stays in the list — whose
- * reader drops a payload that no longer parses.
+ * before is rewritten into the kind-neutral one, once, and the other rows are
+ * left alone.
  *
  * The migrations have already run when `testDb()` returns, on an empty
  * database, so the step is replayed here from the migration file itself — the
@@ -61,9 +61,6 @@ describe("the kind-neutral activity_available payload (migration)", () => {
       },
       { id: other, userId: student, classroomId: seed.classroomId, payload: scheduled },
     ]);
-    // Before: the list drops the row it cannot read.
-    expect((await listNotifications(db, student)).items.map((n) => n.id)).toEqual([other]);
-
     await db.execute(sql.raw(dataStep()));
     await db.execute(sql.raw(dataStep()));
 

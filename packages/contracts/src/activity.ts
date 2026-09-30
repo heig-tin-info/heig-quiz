@@ -49,5 +49,14 @@ export type EvaluationActivitySummary = z.infer<typeof EvaluationActivitySummary
 export const ActivitySummary = z.discriminatedUnion("kind", [EvaluationActivitySummary]);
 export type ActivitySummary = z.infer<typeof ActivitySummary>;
 
+/** The kinds and the union's members are one list: `true` or a compile error. */
+type SameKinds = [ActivityKindName] extends [ActivitySummary["kind"]]
+  ? [ActivitySummary["kind"]] extends [ActivityKindName]
+    ? true
+    : false
+  : false;
+const SAME_KINDS: SameKinds = true;
+void SAME_KINDS;
+
 export const ActivityList = z.array(ActivitySummary);
 export type ActivityList = z.infer<typeof ActivityList>;

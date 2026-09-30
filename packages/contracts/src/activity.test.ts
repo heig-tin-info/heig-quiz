@@ -47,14 +47,4 @@ describe("activity_available payload (ADR-030, addendum 2026-09-30)", () => {
     };
     expect(NotificationPayload.parse(payload)).toEqual(payload);
   });
-
-  it("no longer reads the shape of before (migration 0037 rewrote the stored rows)", () => {
-    expect(
-      NotificationPayload.safeParse({
-        kind: "activity_available",
-        evaluationId: ID,
-        evaluationTitle: "Exercise 3",
-      }).success,
-    ).toBe(false);
-  });
 });

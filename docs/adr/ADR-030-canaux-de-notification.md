@@ -41,14 +41,9 @@ kind (§1), rendered in the recipient's language (§2), with per-kind
 defaults (addendum 2026-09-28, b). Classroom's e-mails are not ported as
 e-mails: they become kinds. Settled with the merge (card M1-03): the `activity_*`
 payloads become kind-neutral (`{activityKind, activityId,
-activityTitle}`) before the project kinds are built (M1-03). Done in M1-03
-for `activity_available`, the one `activity_*` kind that named an
-evaluation: migration `0037_activity_payload_neutral` rewrote the stored
-bells, and a delivery job still carrying the old shape is dropped with a
-warning, as the bell drops a row that no longer parses. Its Teams template
-parameter stays `{evaluationTitle}` (the installed app declares it; renaming
-it is a `TEAMS_APP_VERSION` bump every user re-uploads). `activity_scheduled`
-names no activity (a count per classroom) and is unchanged. Classroom's
+activityTitle}`) before the project kinds are built (M1-03). Done for
+`activity_available` by migration `0037_activity_payload_neutral`; what it
+leaves evaluation-shaped is I58–I60 of `docs/merge/07-incompatibilities.md`. Classroom's
 old unsubscribe links are planned to land on Quiz's notification settings
 (`docs/merge/06-codespace-seb-infra.md` §6.6).
 The list of project kinds and which ones e-mail by default — the
@@ -736,8 +731,8 @@ Step 6 (`activity_scheduled`, `activity_available`) settled:
 - **Recipients** are the claimed student seats of the classroom
   (`enrollments.user_id` set, `staff` false); an unclaimed roster line has
   nobody to tell. `activity_available` carries
-  `{ evaluationId, evaluationTitle }` (kind-neutral since M1-03:
-  `{ activityKind, activityId, activityTitle }`), no `closesAt` (it would need a date
+  `{ evaluationId, evaluationTitle }` (kind-neutral since migration 0037,
+  I58), no `closesAt` (it would need a date
   rendered in the recipient's time zone in the e-mail) and nothing of the
   content. `activity_scheduled` opens the student home, `activity_available`
   the attempt page (`/take/<id>`), where the server decides between the

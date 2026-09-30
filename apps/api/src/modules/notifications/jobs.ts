@@ -56,9 +56,8 @@ export async function deliver(deps: DeliveryDeps, job: DeliveryJob): Promise<voi
     .where(eq(users.id, job.userId))
     .limit(1);
   if (!user || user.anonymizedAt) return;
-  // A job enqueued by an older version may carry a shape the catalogue no
-  // longer has (M1-03 made `activity_available` kind-neutral): dropped, as
-  // the bell drops such a row — a retry would meet the same payload.
+  // Never deliver a payload the catalogue cannot read: dropped, as the bell
+  // drops such a row — a retry would meet the same payload.
   const parsed = NotificationPayload.safeParse(job.payload);
   if (!parsed.success) {
     deps.log.warn({ userId: job.userId, kind: job.payload.kind }, "notification payload no longer parses, not delivered");
