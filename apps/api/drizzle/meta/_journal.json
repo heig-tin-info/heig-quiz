@@ -330,6 +330,13 @@
       "when": 1790794902231,
       "tag": "0046_kiosk_watch",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790798670227,
+      "tag": "0047_health_check_states",
+      "breakpoints": true
     }
   ]
 }
