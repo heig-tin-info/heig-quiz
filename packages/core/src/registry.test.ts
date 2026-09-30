@@ -8,7 +8,7 @@ const fake = { id: "mcq" } as const;
 
 describe("question type ids", () => {
   it("lists the four MVP types, the circuit type, the codeimage type and the essay", () => {
-    expect(QUESTION_TYPE_IDS).toEqual(["mcq", "short", "cloze", "code", "circuit", "codeimage", "rich", "categorize"]);
+    expect(QUESTION_TYPE_IDS).toEqual(["mcq", "short", "cloze", "code", "circuit", "codeimage", "rich", "categorize", "diagram"]);
   });
 });
 

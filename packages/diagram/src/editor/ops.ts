@@ -18,6 +18,7 @@ import {
   MAX_INK_POINTS,
   MAX_LINKS,
   MAX_VIA,
+  freshCopy,
   newId,
   type DiagramLink,
   type DiagramNode,
@@ -216,15 +217,7 @@ export function duplicateSelection(scene: Scene, kind: DiagramKind, selection: R
   const picked = scene.nodes.filter((n) => selection.has(n.id));
   const between = scene.links.filter((l) => selection.has(l.a) && selection.has(l.b));
   if (picked.length === 0 || scene.nodes.length + picked.length > KINDS[kind].maxNodes || scene.links.length + between.length > MAX_LINKS) return null;
-  const map = new Map(picked.map((n) => [n.id, newId()] as const));
-  const nodes = picked.map((n) => ({ ...structuredClone(n), id: map.get(n.id) as string, x: n.x + 40, y: n.y + 40 }));
-  const links = between.map((l) => ({
-    ...structuredClone(l),
-    id: newId(),
-    a: map.get(l.a) as string,
-    b: map.get(l.b) as string,
-    ...(l.via ? { via: l.via.map((v) => ({ x: v.x + 40, y: v.y + 40 })) } : {}),
-  }));
+  const { nodes, links } = freshCopy({ nodes: picked, links: between }, 40);
   return { scene: { nodes: [...scene.nodes, ...nodes], links: [...scene.links, ...links] }, ids: new Set([...nodes, ...links].map((x) => x.id)) };
 }
 

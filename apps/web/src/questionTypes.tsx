@@ -56,6 +56,13 @@ import {
   categorizePlayerStrings,
   categorizeReviewStrings,
 } from "@quiz/qt-categorize/client";
+import { diagramStrings as DIAGRAM_CANVAS_STRINGS, type DiagramStrings } from "@quiz/diagram/client";
+import {
+  diagramEditorStrings,
+  diagramGradingStrings,
+  diagramPlayerStrings,
+  diagramReviewStrings,
+} from "@quiz/qt-diagram/client";
 import {
   clozeEditorStrings,
   clozeGradingStrings,
@@ -222,6 +229,7 @@ export const editorStrings = {
   }),
   rich: (t: TFunction) => translated(t, richEditorStrings, "qt.rich.e"),
   categorize: (t: TFunction) => translated(t, categorizeEditorStrings, "qt.categorize.e"),
+  diagram: (t: TFunction) => translated(t, diagramEditorStrings, "qt.diagram.e"),
 };
 
 /**
@@ -246,6 +254,31 @@ export const circuitCanvasStrings = (t: TFunction): CanvasStrings => {
   };
 };
 
+/**
+ * The diagram engine's own dictionary (`qt.diagram.c.*`): the tools'
+ * accessible names, the inspector, the text pane — the words of the canvas
+ * that the editor, the player and the review all draw (ADR-046 §1).
+ */
+export const diagramCanvasStrings = (t: TFunction): DiagramStrings =>
+  translated(t, DIAGRAM_CANVAS_STRINGS, "qt.diagram.c");
+
+/**
+ * The canvas dictionary a type's surfaces take beside their `strings`
+ * (`canvasStrings`), for the types that have a canvas. Every host — the
+ * editor, the player and the review here, the student's `QuestionHost` —
+ * reads this one table.
+ */
+export const CANVAS_STRINGS_OF: Partial<Record<QuestionTypeId, (t: TFunction) => unknown>> = {
+  circuit: circuitCanvasStrings,
+  diagram: diagramCanvasStrings,
+};
+
+/** The `canvasStrings` prop of a type's surface, or no prop at all. */
+export function canvasStringsProp(id: string, t: TFunction): { canvasStrings?: unknown } {
+  const strings = CANVAS_STRINGS_OF[id as QuestionTypeId];
+  return strings === undefined ? {} : { canvasStrings: strings(t) };
+}
+
 export const playerStrings = {
   mcq: (t: TFunction) => translated(t, mcqPlayerStrings, "qt.mcq.p"),
   short: (t: TFunction) => translated(t, shortPlayerStrings, "qt.short.p"),
@@ -258,6 +291,7 @@ export const playerStrings = {
   }),
   rich: (t: TFunction) => translated(t, richPlayerStrings, "qt.rich.p"),
   categorize: (t: TFunction) => translated(t, categorizePlayerStrings, "qt.categorize.p"),
+  diagram: (t: TFunction) => translated(t, diagramPlayerStrings, "qt.diagram.p"),
 };
 
 export const reviewStrings = {
@@ -274,6 +308,7 @@ export const reviewStrings = {
   }),
   rich: (t: TFunction) => translated(t, richReviewStrings, "qt.rich.r"),
   categorize: (t: TFunction) => translated(t, categorizeReviewStrings, "qt.categorize.r"),
+  diagram: (t: TFunction) => translated(t, diagramReviewStrings, "qt.diagram.r"),
 };
 
 /**
@@ -294,6 +329,7 @@ export const gradingStrings: Record<QuestionTypeId, (t: TFunction) => Record<str
   }),
   circuit: (t) => translated(t, CIRCUIT_GRADING_STRINGS, "qt.circuit.g"),
   rich: (t) => translated(t, richGradingStrings, "qt.rich.g"),
+  diagram: (t) => translated(t, diagramGradingStrings, "qt.diagram.g"),
 };
 
 // --- Hosts -----------------------------------------------------------------
@@ -525,7 +561,7 @@ interface EditorHostProps {
   disabled?: boolean;
   issues?: readonly ConfigIssue[];
   strings?: unknown;
-  /** `circuit` only: the canvas ships a dictionary of its own (`qt.circuit.c.*`). */
+  /** `circuit` and `diagram`: the canvas ships a dictionary of its own (`qt.<type>.c.*`). */
   canvasStrings?: unknown;
   /** `circuit` only: the component names, keyed by kind (`qt.circuit.kind.*`). */
   kindLabels?: unknown;
@@ -535,6 +571,7 @@ interface EditorHostProps {
   uploadAsset?: (file: File) => Promise<string>;
   aside?: HTMLElement | null;
   ungraded?: boolean;
+  published?: boolean;
   onTry?: (config: unknown) => Promise<TryOutcome>;
   /** `code` only: `CodeEditorProps.onTryInBrowser`. */
   onTryInBrowser?: (config: CodeConfig) => Promise<RunnerOutcome | "unavailable">;
@@ -569,6 +606,7 @@ export function QuestionEditorHost({
   uploadAsset,
   aside,
   ungraded,
+  published,
   onTry,
 }: {
   t: TFunction;
@@ -591,6 +629,8 @@ export function QuestionEditorHost({
   aside?: HTMLElement | null;
   /** No marks to give (the poll launcher): `EditorProps.ungraded`. */
   ungraded?: boolean;
+  /** The question has a published version: `EditorProps.published`. */
+  published?: boolean;
   /**
    * `code` and `circuit`: runs (or simulates) the teacher's own answer. The
    * screen decides where it runs — `src/runner/` picks the browser or the
@@ -611,15 +651,15 @@ export function QuestionEditorHost({
         {...(disabled === undefined ? {} : { disabled })}
         {...(issues === undefined ? {} : { issues })}
         strings={strings}
-        {...(client.id === "circuit"
-          ? { canvasStrings: circuitCanvasStrings(t), kindLabels: circuitKindLabels(t) }
-          : {})}
+        {...canvasStringsProp(client.id, t)}
+        {...(client.id === "circuit" ? { kindLabels: circuitKindLabels(t) } : {})}
         renderMarkdown={renderBlock}
         renderHelp={renderHelp}
         RichText={LazyRichText}
         {...(uploadAsset === undefined ? {} : { uploadAsset })}
         {...(aside === undefined ? {} : { aside })}
         {...(ungraded === undefined ? {} : { ungraded })}
+        {...(published === undefined ? {} : { published })}
         {...(onTry === undefined ? {} : { onTry })}
         {...(onTry !== undefined && client.id === "code"
           ? { onTryInBrowser: tryReferenceInBrowser }
@@ -692,7 +732,7 @@ export function QuestionPlayerHost({
           onChange={onChange}
           readOnly={readOnly}
           strings={playerStrings[client.id](t)}
-          {...(client.id === "circuit" ? { canvasStrings: circuitCanvasStrings(t) } : {})}
+          {...canvasStringsProp(client.id, t)}
           renderMarkdown={renderInline}
           {...(client.id === "cloze" ? { renderText: ClozeMarkdownText } : {})}
           RichText={LazyRichText}
@@ -765,7 +805,7 @@ export function QuestionReviewHost({
           audience={audience}
           {...(sections === undefined ? {} : { sections })}
           strings={reviewStrings[client.id](t)}
-          {...(client.id === "circuit" ? { canvasStrings: circuitCanvasStrings(t) } : {})}
+          {...canvasStringsProp(client.id, t)}
           renderMarkdown={renderInline}
           {...(client.id === "cloze" ? { renderText: ClozeMarkdownText } : {})}
         />

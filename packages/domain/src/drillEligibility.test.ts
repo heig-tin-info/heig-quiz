@@ -34,5 +34,6 @@ describe("isDrillEligible", () => {
   it("refuses a type outside the scope, however it is graded", () => {
     expect(isDrillEligible("rich", graded())).toBe(false);
     expect(isDrillEligible("code", graded())).toBe(false);
+    expect(isDrillEligible("diagram", graded())).toBe(false);
   });
 });

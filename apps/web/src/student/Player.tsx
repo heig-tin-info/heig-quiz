@@ -55,6 +55,7 @@ import { currentItem, isLocked, neighbour, segmentsOf } from "../attempt/playerR
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { Button, Card, useMinWidth } from "../ui";
+import { ExpandChrome, type ExpandChromeValue } from "./ExpandLayer";
 import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay } from "./PausedOverlay";
 import { PlayerActions } from "./PlayerActions";
@@ -265,6 +266,12 @@ export function PlayerView({
   const next = neighbour(state, 1);
   // The palette of the exam screen (W15): only what the footer and the bar
   // already carry.
+  // The bar of a question's expand layer: the same clock and badge as the
+  // shell's, through a context so the memoised question does not re-render.
+  const chrome = useMemo<ExpandChromeValue>(
+    () => ({ deadlineAt: session.deadlineAt, clock: session.clock, paused, sync }),
+    [session.deadlineAt, session.clock, paused, sync],
+  );
   const commands = usePlayerCommands({
     next,
     previous,
@@ -308,7 +315,7 @@ export function PlayerView({
     ) : null;
 
   return (
-    <>
+    <ExpandChrome.Provider value={chrome}>
       <PlayerShell
         title={initial.evaluation.title}
         deadlineAt={session.deadlineAt}
@@ -385,7 +392,7 @@ export function PlayerView({
         onCancel={controls.cancelSubmit}
         onConfirm={controls.handIn}
       />
-    </>
+    </ExpandChrome.Provider>
   );
 }
 

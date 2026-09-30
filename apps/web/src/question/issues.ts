@@ -32,6 +32,8 @@ const KNOWN: Record<string, keyof Dict> = {
   "codeimage.target_missing": "issue.codeimage.target_missing",
   "codeimage.target_size": "issue.codeimage.target_size",
   "codeimage.target_value": "issue.codeimage.target_value",
+  "diagram.reference_missing": "issue.diagram.reference_missing",
+  "diagram.kind_mismatch": "issue.diagram.kind_mismatch",
 };
 
 /** The generic zod codes, by what they measured: `too_small` of a string, of an array… */

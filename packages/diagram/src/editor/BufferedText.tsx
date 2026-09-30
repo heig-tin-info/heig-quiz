@@ -38,7 +38,11 @@ export function BufferedText({
       }}
       onBlur={() => setLocal(null)}
       onKeyDown={(e) => {
-        if (e.key === "Escape") e.currentTarget.blur();
+        // Consumed: a host layer around the editor must not close on it.
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.currentTarget.blur();
+        }
         if (tabIndents && e.key === "Tab" && !e.shiftKey) {
           e.preventDefault();
           const el = e.currentTarget;

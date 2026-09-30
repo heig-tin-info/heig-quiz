@@ -84,7 +84,12 @@ export function Inspector({ kind, scene, item, onEdit, onReverse, focus, onFocus
   const text = {
     onFocus: begin,
     spellCheck: false,
-    onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => (e.key === "Enter" || e.key === "Escape") && e.currentTarget.blur(),
+    /* consumed: a host layer around the editor (the student's expand layer) must not close on it */
+    onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key !== "Enter" && e.key !== "Escape") return;
+      e.preventDefault();
+      e.currentTarget.blur();
+    },
   };
 
   if (isLink(item)) {

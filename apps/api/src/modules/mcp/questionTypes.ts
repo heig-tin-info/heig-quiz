@@ -138,6 +138,50 @@ const GUIDES: Record<string, TypeGuide> = {
       policy: "inherit",
     },
   },
+  diagram: {
+    summary:
+      "Diagram: the student draws a diagram of one notation (UML class, use case, state machine, entity-relationship, flowchart, finite automaton, graph, free drawing), graded by hand against a reference.",
+    rules: [
+      "`prompt` and `rubric` are Markdown. `rubric` is never shown to the student; the `reference` is shown when the evaluation shows the expected answer.",
+      "`kind` is `class`, `usecase`, `state`, `er`, `flow`, `automaton`, `graph` or `free`, and the reference and the starter may only hold that kind's elements (`t`) and links (`type`): class → `class` / `assoc`, `nav`, `inh`, `impl`, `dep`, `agg`, `comp`; usecase → `actor`, `usecase`, `system` / `assoc`, `incl`, `ext`, `inh`; state → `initial`, `state`, `final` / `strans`; er → `entity` / `erel`; flow → `terminal`, `action`, `decision` / `flow`; automaton → `astate` / `trans`; graph → `vertex` / `edge`, `arc`; free → `rect`, `square`, `circle`, `ellipse`, `triangle` (with `w`, `h`) and no link.",
+      "A diagram is a SCENE, `{ nodes, links }`, never a text: there is no PlantUML, Mermaid or DOT over this API. A node is `{ id, t, x, y, name?, body? }`; a link is `{ id, type, a, b, name?, ma?, mb? }` where `a` and `b` are node ids.",
+      "Every `id` is OPAQUE: 4 to 40 lowercase letters and digits (use 8 random ones), unique across the nodes AND the links of a scene. The starter reaches the student with its ids: never reuse the reference's ids in the starter.",
+      "`x` and `y` are the top-left corner on a grid of 20 (multiples of 20). Leave about 200 between elements, left to right or top to bottom; the lines are routed on display.",
+      "`body` holds lines: a class's members (`+ area() : double`, `---` starts the next compartment, `{static}` and `{abstract}` at the end of a member), an entity's attributes (`id : int PK`), a state's activities (`entry / light on`). `stereo` (without guillemets) and `abstract: true` are for a class only.",
+      "A link's `name` is its label: a transition's `event [guard] / action`, an automaton's symbols, a graph's weight, a flowchart's `oui` / `non` leaving a decision, an association's name. `ma` and `mb` are the multiplicities (class: `1`, `0..*`) or cardinalities (er: `1`, `0..1`, `1..*`, `0..*`) at `a` and at `b`.",
+      "An automaton state carries `initial: true` and/or `accept: true`. A use-case `system` boundary takes `w` and `h`.",
+      "The `reference` must hold at least one element to publish. The `starter` is optional: what the student starts from (a few elements to complete), else an empty canvas.",
+      "Limits: 80 elements (200 shapes for `free`), 160 links, 120 characters a name, 40 body lines of 200 characters, no line break or control character in any text.",
+    ],
+    example: {
+      configVersion: 1,
+      prompt: "Dessinez la **machine d'états** d'une porte qu'on peut ouvrir, fermer et verrouiller avec un code.",
+      kind: "state",
+      reference: {
+        nodes: [
+          { id: "d4q8m1zc", t: "initial", x: 60, y: 120 },
+          { id: "h2w7k9vr", t: "state", x: 180, y: 120, name: "Fermée" },
+          { id: "p5n3x0ta", t: "state", x: 480, y: 0, name: "Ouverte", body: ["entry / allumer la lampe"] },
+          { id: "b8e1r6yu", t: "state", x: 480, y: 220, name: "Verrouillée" },
+        ],
+        links: [
+          { id: "f0c7s2ln", type: "strans", a: "d4q8m1zc", b: "h2w7k9vr" },
+          { id: "g6j4t8wo", type: "strans", a: "h2w7k9vr", b: "p5n3x0ta", name: "ouvrir" },
+          { id: "m9a2v5ke", type: "strans", a: "p5n3x0ta", b: "h2w7k9vr", name: "fermer" },
+          { id: "q1x8d3hs", type: "strans", a: "h2w7k9vr", b: "b8e1r6yu", name: "verrouiller [code ok]" },
+          { id: "u7z0p4ci", type: "strans", a: "b8e1r6yu", b: "h2w7k9vr", name: "déverrouiller [code ok]" },
+        ],
+      },
+      starter: {
+        nodes: [
+          { id: "w3k6e9ab", t: "initial", x: 60, y: 120 },
+          { id: "y5r2n7cd", t: "state", x: 180, y: 120, name: "Fermée" },
+        ],
+        links: [{ id: "z8t1m4ef", type: "strans", a: "w3k6e9ab", b: "y5r2n7cd" }],
+      },
+      rubric: "- **1 pt** : trois états, l'état initial vers Fermée.\n- **1 pt** : les quatre transitions, avec la garde du code.",
+    },
+  },
   circuit: {
     summary: "Circuit: the student draws a schematic, graded by an ngspice simulation.",
     rules: [

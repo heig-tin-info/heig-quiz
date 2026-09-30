@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useT } from "./i18n";
 import { MarkdownField } from "./markdown/MarkdownField";
 import { MarkdownView } from "./markdown/MarkdownView";
+import { diagramCanvasStrings } from "./questionTypes";
 import {
   Actions,
   Button,
@@ -414,7 +415,7 @@ export function DevGallery() {
         <div className="grid items-start gap-4 lg:grid-cols-2">
           {(["state", "automaton", "er", "flow"] as const).map((k) => (
             <Card key={k}>
-              <DiagramView kind={k} value={EXAMPLES[k]} maxHeight={260} />
+              <DiagramView kind={k} value={EXAMPLES[k]} maxHeight={260} strings={diagramCanvasStrings(t)} />
             </Card>
           ))}
         </div>
@@ -453,7 +454,7 @@ function DiagramEditorDemo() {
         name="dev-diagram-kind"
         label={t("dev.ui.diagramKind")}
         value={kind}
-        options={DIAGRAM_KINDS.map((k) => ({ value: k, label: t(`diagram.kind.${k}`) }))}
+        options={DIAGRAM_KINDS.map((k) => ({ value: k, label: t(`qt.diagram.e.kind.${k}`) }))}
         onChange={setKind}
         size="sm"
         wrap
@@ -465,6 +466,7 @@ function DiagramEditorDemo() {
         onChange={(next) => setScenes((all) => ({ ...all, [kind]: next }))}
         withText
         height={480}
+        strings={diagramCanvasStrings(t)}
       />
     </div>
   );
