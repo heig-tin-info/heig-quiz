@@ -1,6 +1,7 @@
-import { formatGrade, isPassing } from "@quiz/domain";
+import { isPassing } from "@quiz/domain";
 import type { ResultRow, ResultsStats } from "@quiz/contracts";
 
+import { Grade } from "../Grade";
 import { useT } from "../i18n";
 import { Stat } from "../ui";
 
@@ -21,10 +22,10 @@ export function StatsRow({ stats, rows }: { stats: ResultsStats; rows: ResultRow
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <Stat
         label={t("results.stat.mean")}
-        value={formatGrade(stats.mean)}
+        value={<Grade value={stats.mean} />}
         hint={t("results.stat.students", { n: stats.count })}
       />
-      <Stat label={t("results.stat.median")} value={formatGrade(stats.median)} />
+      <Stat label={t("results.stat.median")} value={<Grade value={stats.median} />} />
       <Stat label={t("results.stat.stdev")} value={stats.stdev.toFixed(2)} />
       <Stat
         label={t("results.stat.passRate")}

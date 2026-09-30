@@ -201,7 +201,7 @@ export function PollJoin({
   // --- The gate: this poll wants to know who is answering ------------------
 
   if (view.me.loginRequired)
-    return <LoginGate code={code} title={view.title} />;
+    return <LoginGate code={code} />;
 
   const ended = view.state === "ended";
   // What the teacher shows — the key, the votes — never closes the vote:
@@ -225,12 +225,9 @@ export function PollJoin({
   return (
     <div className="flex min-h-dvh flex-col bg-canvas">
       <main className="mx-auto w-full max-w-140 flex-1 px-4 py-6 sm:px-6">
-        <p className="text-[12px] font-medium uppercase tracking-wide text-fg-faint">
-          {t("join.eyebrow")}
-        </p>
-        <h1 className="mt-0.5 text-base font-semibold leading-tight">
-          {view.title}
-        </h1>
+        {/* "Poll", never the evaluation's title: that is the question's
+            internal name, which a student never reads (invariant 4, #305). */}
+        <h1 className="text-base font-semibold leading-tight">{t("join.eyebrow")}</h1>
 
         {ended ? (
           <div className="mt-5">
@@ -332,17 +329,13 @@ export function PollJoin({
  * it exactly as `Landing` offers it — the two are the same decision, so they
  * read the same way, and both carry a `next` back to this very code.
  */
-function LoginGate({ code, title }: { code: string; title: string }) {
+function LoginGate({ code }: { code: string }) {
   const t = useT();
   return (
     <SignInGate
       next={`/p/${code}`}
-      header={
-        <p className="text-[12px] font-medium uppercase tracking-wide text-fg-faint">
-          {t("join.eyebrow")}
-        </p>
-      }
-      title={title}
+      header={null}
+      title={t("join.eyebrow")}
       body={t("join.login.body")}
       action={t("join.login.action")}
     />

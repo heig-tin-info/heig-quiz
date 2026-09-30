@@ -36,12 +36,14 @@ import type {
   StudentFeedback,
   StudentResultItem,
 } from "@quiz/contracts";
+import { JUSTIFICATION_KEY } from "@quiz/contracts";
 import {
   attemptTotal,
   debrief,
   describe,
   gradeFromPoints,
   histogram,
+  isEvaluationOver,
   retakeRefusal,
   round2,
   type AttemptTally,
@@ -117,12 +119,8 @@ export class NotOver extends ResultsError {
   }
 }
 
-/** Closed, being graded or released: what the web calls `isGraded`. */
-function isOver(evaluation: EvaluationRecord): boolean {
-  return (
-    evaluation.state === "closed" || evaluation.state === "grading" || evaluation.state === "released"
-  );
-}
+/** Closed, being graded or released: the rule the web reads too (`isEvaluationOver`). */
+const isOver = (evaluation: EvaluationRecord): boolean => isEvaluationOver(evaluation.state);
 
 // --- The grade table ------------------------------------------------------
 
@@ -292,6 +290,19 @@ export async function resultsView(db: Db, evaluation: EvaluationRecord): Promise
 
 // --- Release (F-RES-04, F-GRADE-09) --------------------------------------
 
+type ReleasedListener = (db: Db, evaluation: EvaluationRecord, now: Date) => Promise<unknown>;
+const releasedListeners = new Set<ReleasedListener>();
+
+/**
+ * Called after every commit of {@link releaseResults}, the first release and
+ * a re-release alike. The `drill` module registers here (ADR-041 §1), so
+ * that `results` never imports it. A listener that throws is logged and
+ * ignored: the release has committed.
+ */
+export function onResultsReleased(listener: ReleasedListener): void {
+  releasedListeners.add(listener);
+}
+
 /**
  * The release, in ONE transaction: the frozen snapshot and the instant are
  * written together, and the state moves to `released`. Idempotent — releasing
@@ -307,6 +318,9 @@ export async function releaseResults(
   if (!isOver(evaluation)) {
     throw new NotReleasable("an evaluation is released once it is closed");
   }
+  // A poll is never released (06, row 16): it would write a grade for the
+  // whole classroom under a title that is its question's internal name (#305).
+  if (evaluation.mode === "poll") throw new NotReleasable("a poll is never released");
   const computed = await computeResults(db, evaluation);
   const releasedAt = evaluation.releasedAt ?? now;
   const snapshot: ReleasedGrades = {
@@ -326,6 +340,16 @@ export async function releaseResults(
       })),
   };
   await setRelease(db, evaluation.id, { releasedAt, releasedGrades: snapshot }, now);
+  // ADR-041 §1: an exam's questions become drill cards at the release, never
+  // before — the drill module listens here. Best-effort like the
+  // notification below.
+  for (const listener of releasedListeners) {
+    try {
+      await listener(db, evaluation, now);
+    } catch (err) {
+      console.error(`results: a release listener of ${evaluation.id} failed`, err);
+    }
+  }
   // F-GRADE-09: the students are told — on the FIRST release only. A
   // re-release keeps the original `released_at`, the date they were told
   // about, and telling them twice would announce nothing new. Only a student
@@ -532,6 +556,17 @@ export function resultsState(
   return "pending";
 }
 
+/**
+ * Whether the feedback policy shows THE KEY to a student whose attempt is in
+ * `attemptState`, now: the rule {@link studentFeedback} applies, for the
+ * drill, which never shows a key earlier than the exercise would (ADR-041
+ * §13).
+ */
+export function keyShownTo(evaluation: EvaluationRecord, attemptState: string): boolean {
+  const policy = feedbackOf(evaluation);
+  return policy.showKey && feedbackAvailable(policy, evaluation, attemptState).ok;
+}
+
 /** Whether a student may see anything at all right now. */
 function feedbackAvailable(
   policy: FeedbackPolicy,
@@ -694,7 +729,9 @@ export async function studentFeedback(
  *      key-bearing field and forgets the hook still cannot publish it.
  *
  * `showKey` means the teacher chose to publish the key: the details travel
- * whole, both layers off.
+ * whole, both layers off — but for an LLM's justification
+ * (`JUSTIFICATION_KEY`), which is the teacher's under every policy
+ * (ADR-045, open question 27) and is stripped first.
  *
  * The list is its OWN, not `FORBIDDEN_STUDENT_KEYS` (`live/studentView.ts`):
  * what carries a key in a grading breakdown is these five fields, and
@@ -712,7 +749,8 @@ export const FORBIDDEN_DETAIL_KEYS: readonly string[] = [
   "referenceSolution",
 ];
 
-const forbiddenDetailKeys = new Set(FORBIDDEN_DETAIL_KEYS);
+const forbiddenDetailKeys = new Set([...FORBIDDEN_DETAIL_KEYS, JUSTIFICATION_KEY]);
+const teacherOnlyDetailKeys = new Set([JUSTIFICATION_KEY]);
 
 /**
  * The one exception of layer 2, and it is the published half of a `code`
@@ -731,7 +769,7 @@ export function filterDetails(
   policy: FeedbackPolicy,
 ): unknown {
   if (details === null || details === undefined) return null;
-  if (policy.showKey) return details;
+  if (policy.showKey) return stripKeys(details, teacherOnlyDetailKeys);
   const hook = typeOf(type).studentDetails;
   const shaped = hook ? hook(details, policy) : details;
   return stripKeys(shaped, forbiddenDetailKeys, publishedExpected);

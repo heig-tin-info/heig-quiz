@@ -18,6 +18,7 @@ It works **as you**, with your rights and nothing more: it reaches the courses y
 | Link a pool to a course | Read students' answers or grades |
 | Create an exam or an exercise **as a draft**, and fill it with questions | Manage your API tokens |
 | Launch a live poll, when you ask for one | |
+| Read your questions' statistics, as the pool shows them (anonymous figures over ten answers or more) | |
 
 An evaluation made by an assistant is always a draft: you check it, set its schedule, and open it yourself. Everything an assistant writes is recorded in the audit log as done through an API token or a connected assistant.
 

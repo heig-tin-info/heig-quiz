@@ -19,6 +19,15 @@ when the distance between them stays under the **tolerance**, expressed as a
 share of the reference's peak-to-peak swing: 5 % is forgiving, 1 % asks for
 the exact component values.
 
+A stimulus set to **Bode plot** sweeps a band of frequencies instead, around
+the DC bias you give, and compares the gain and the phase of the output. It
+passes when the student's curve stays within the **gain tolerance** (1 dB by
+default) and the **phase tolerance** (10°, or none) of yours at every
+frequency. Where your curve falls more than the **floor** (60 dB) under its
+own peak, the student's output only has to stay as low. A Bode plot is a
+small-signal view: keep it for filters and amplifiers working in their linear
+range.
+
 This mode needs a reference circuit and at least one stimulus, and the
 question will not publish without them. A student whose circuit cannot be
 turned into a netlist — a floating pin, a value out of range — scores nothing

@@ -2,9 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Hourglass, RotateCcw } from "lucide-react";
 
 import type { FeedbackPending, RetakeStatus, StudentFeedback } from "@quiz/contracts";
-import { formatGrade, formatPoints } from "@quiz/domain";
+import { formatPoints } from "@quiz/domain";
 
 import { api } from "../api";
+import { Grade } from "../Grade";
 import { useT, type Dict } from "../i18n";
 import type { Route } from "../router";
 import { MarkdownView } from "../markdown/MarkdownView";
@@ -213,7 +214,7 @@ export function Feedback({
       {header(data.evaluation.releasedAt)}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Stat label={t("feedback.grade")} value={formatGrade(data.grade)} />
+        <Stat label={t("feedback.grade")} value={<Grade value={data.grade} />} />
         <Stat
           label={t("feedback.points")}
           value={`${formatPoints(data.points)} / ${data.totalPoints}`}

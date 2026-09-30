@@ -64,8 +64,12 @@ export function makeEntry(over: Partial<GradingEntry> = {}): GradingEntry {
     answerId: "ans1",
     attemptId: "a1",
     itemId: "i1",
-    label: "Swift Otter",
+    // Anonymous, as the server sends it by default (ADR-044).
+    label: null,
+    guest: null,
     staff: false,
+    attemptNumber: null,
+    kept: true,
     answer: { selected: [1] },
     student: MCQ_STUDENT,
     solution: MCQ_SOLUTION,
@@ -79,7 +83,6 @@ export function makeQueue(entries: GradingEntry[], over: Partial<GradingQueue> =
   const proposed = entries.filter((e) => e.grading?.state === "proposed").length;
   const validated = entries.filter((e) => e.grading?.state === "validated").length;
   return {
-    order: "question",
     // `position` is 0-based, exactly as the API stores and serves it.
     items: [{ id: "i1", position: 0, internalName: "sizeof-ptr", type: "mcq", points: 2 }],
     entries,
@@ -94,27 +97,17 @@ export function makeQueue(entries: GradingEntry[], over: Partial<GradingQueue> =
 }
 
 /**
- * `GET …/grading/steps`: one step per key, each with its three counters.
- * Labels default to the key; `total` defaults to what is validated plus
- * proposed, so a step reads "all validated" unless it says otherwise.
+ * `GET …/grading/steps`: one step per question, each with its two counters.
+ * `total` defaults to `validated`, so a step reads "all validated" unless it
+ * says otherwise.
  */
 export function makeSteps(
-  order: GradingSteps["order"],
   steps: (Partial<GradingSteps["steps"][number]> & { key: string })[],
 ): GradingSteps {
   return {
-    order,
     steps: steps.map((s) => {
       const validated = s.validated ?? 0;
-      const proposed = s.proposed ?? 0;
-      return {
-        label: s.key,
-        staff: false,
-        ...s,
-        validated,
-        proposed,
-        total: s.total ?? validated + proposed,
-      };
+      return { ...s, validated, total: s.total ?? validated };
     }),
   };
 }
@@ -160,6 +153,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
       modifiedAfterRelease: false,
       createdAt: "2026-09-01T08:00:00.000Z",
       originRevision: null,
+      allowDrill: false,
     },
     items: [
       {

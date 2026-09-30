@@ -81,6 +81,52 @@ describe("PollProjection", () => {
     expect(screen.queryByText("Correct answer")).toBeNull();
   });
 
+  it("names the keys of the theme and the full screen, and answers T", async () => {
+    mockFetch({ [`GET ${POLL}`]: ok(view()) });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    const theme = await screen.findByRole("button", { name: "Light theme" });
+    expect(theme).toHaveAttribute("aria-keyshortcuts", "T");
+    expect(screen.getByRole("button", { name: "Full screen" })).toHaveAttribute(
+      "aria-keyshortcuts",
+      "F",
+    );
+    await userEvent.hover(theme);
+    expect(await screen.findByText("Light theme (T)")).toBeInTheDocument();
+
+    await userEvent.keyboard("t");
+    expect(await screen.findByRole("button", { name: "Dark theme" })).toBeVisible();
+    expect(document.documentElement).not.toHaveClass("dark");
+  });
+
+  it("turns an ended mcq into a donut with Space, and only then", async () => {
+    mockFetch({ [`GET ${POLL}`]: ok(view({ evaluation: { state: "closed" } as never })) });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    await screen.findByText("75%");
+    expect(screen.queryByRole("list", { name: "Donut chart" })).toBeNull();
+
+    await userEvent.keyboard(" ");
+    const legend = await screen.findByRole("list", { name: "Donut chart" });
+    // Every choice in the legend, with its share; the total in the hole.
+    expect(within(legend).getByText("four")).toBeVisible();
+    expect(within(legend).getByText("75%")).toBeVisible();
+    expect(screen.getByText("8")).toBeVisible();
+    const toggle = screen.getByRole("button", { name: "Donut chart" });
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(toggle).toHaveAttribute("aria-keyshortcuts", "Space");
+
+    await userEvent.keyboard(" ");
+    expect(screen.queryByRole("list", { name: "Donut chart" })).toBeNull();
+  });
+
+  it("offers no donut while the room is still voting", async () => {
+    mockFetch({ [`GET ${POLL}`]: ok(view()) });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    await screen.findByText("75%");
+    expect(screen.queryByRole("button", { name: "Donut chart" })).toBeNull();
+    await userEvent.keyboard(" ");
+    expect(screen.queryByRole("list", { name: "Donut chart" })).toBeNull();
+  });
+
   it("writes where the poll is held without a second request", async () => {
     const { calls } = mockFetch({ [`GET ${POLL}`]: ok(view()) });
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
@@ -124,7 +170,8 @@ describe("PollProjection", () => {
     // used to land on the QR the room was scanning.
     const toaster = document.querySelector('[aria-live="polite"][aria-relevant="additions"]');
     expect(toaster).not.toBeNull();
-    expect(toaster!.className).toContain("bottom-4");
+    // 1rem from the bottom, plus the student's bottom bar when it is up (#191).
+    expect(toaster!.className).toContain("bottom-[calc(1rem+var(--bottom-nav-h))]");
     expect(toaster!.className).toContain("right-4");
     expect(toaster!.contains(join!)).toBe(false);
   });
@@ -202,6 +249,10 @@ describe("PollProjection", () => {
     expect(screen.getByText("eight")).toBeVisible();
     expect(screen.queryByText("75%")).toBeNull();
     expect(screen.queryByText("6 votes")).toBeNull();
+    // ...but the bar and the figures keep their place, so showing the votes
+    // fills the rows in without pushing them apart.
+    const row = screen.getByText("four").closest("li")!;
+    expect(row.querySelectorAll(".invisible[aria-hidden]")).toHaveLength(3);
     expect(screen.getByRole("switch", { name: "Show votes" })).not.toBeChecked();
     // The footer still says how many answered: that is when to move on.
     expect(screen.getByText("8 answers received")).toBeVisible();

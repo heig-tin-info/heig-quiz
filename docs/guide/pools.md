@@ -66,9 +66,33 @@ Anything else is free text. Several `tag:` words add up, and two `version:` boun
 
 ### Row actions and bulk actions
 
-Each row shows the type as an icon, the internal name, the tags, the difficulty as five dots, the published version and the last change. A click opens the editor; the three icons at the end of the row are **Edit**, **Duplicate** and **Delete**.
+Each row shows the type as an icon, the internal name, the tags, the difficulty as five dots, the published version and the last change. The three icons at the end of the row are **Edit**, **Duplicate** and **Delete**.
 
-Tick several rows and a bar appears at the bottom: **Add a tag**, **Move to a category**, **Delete**. Deleting hides the questions from the lists; the results already recorded are kept.
+A click on a row shows the question as a student will read it, in a panel beside the list; on a narrower window the panel takes the list's place, and **Back to the list** returns to the row you left. The version shown is the latest published one, the one an evaluation would take, or the draft of a question never published; a line says so when the draft has changes not yet published. From the keyboard, P shows the focused row and Space stars it (below); on a wide window ↑ and ↓ move from row to row and show each one, opening the panel if it was closed. Escape or the **×** closes it. With the panel open, the table drops the columns it has no room for (version, last change, tags), and gets them back when it closes. To edit, press Enter on the row, double-click it, click its pencil or **Open in the editor** in the panel.
+
+Tick several rows and a bar appears at the bottom: **Star**, **Add a tag**, **Move to a category**, **Move to another pool**, **Delete**. Deleting hides the questions from the lists; the results already recorded are kept.
+
+### Favourites
+
+Before a test, browse the pool and star the questions you want: the star in front of a question's name, Space on the focused row, or **Star** in the bottom bar for the ticked rows (it reads **Unstar** when they are all starred already). A star is yours alone: a colleague who shares the pool never sees it and cannot clear it, and a reader may star as well, since a star changes nothing in the pool.
+
+Then, in the evaluation or the template, **Add questions** shows the favourites of the pool on display first, above the whole list (they step aside while you search or filter). **Add favourites** adds every one that can be added and says what it left out: a question never published, one kept after a poll without a correct answer, or one already in the list. The notice then offers **Unstar these**, to start the next test from a clean slate; nothing is unstarred unless you ask.
+
+**Clear favourites**, the crossed-out star beside the question count above the list, removes all your stars in that pool after a confirmation that counts them. A question moved to another pool keeps its star; a copy starts without one; a deleted question's star comes back only if the question does.
+
+### Question statistics
+
+A question answered at least ten times shows a chart icon after its name. It opens its **Statistics**: the **Success rate**, the mean share of the points students earned on it, and the number of **Answers counted**. Every version of the question counts, in exams and exercises (the attempt kept, when a student retook one); a teacher's own test attempt does not, and a blank answer counts 0. A question the student never opened (the time ran out before they got to it) is left out rather than counted 0. Under negative marking the rate can fall below zero.
+
+Below, **Time spent** says how long students keep the question on screen in exams: the **Median time**, with the middle half of the students between two durations, the **Mean time** and the number of **Timed answers**. The server measures it, not the browser, and a stretch without activity counts ten minutes at most, so a forgotten tab does not inflate it. It shows from ten timed exam answers; until then the panel says so.
+
+Last, **Discrimination** says whether the question separates the students: do those who did well on the rest of the exam also do well on it? The **Discrimination index** runs from −1 to 1, with its reading: **Good** from 0.3, **Fair** from 0.2, **Weak** below. A question marked **Inverse** (below zero) is answered better by the weaker students than by the stronger ones: check its answer key and its wording first. The line under the value says how many exams and attempts it rests on. Only exams count, and in each exam only the attempts graded in full (no proposal left to validate); an exam counts once it has at least five other questions and ten such attempts. Until one does, the panel says so.
+
+On a multiple-choice question, **Choices picked** lists its choices with the share of students who ticked each, a bar per choice, and the correct ones marked **Correct**; **No answer** is the share who ticked nothing. A wrong choice nobody picks is not doing its job as a distractor: rewrite it or drop it. A wrong choice picked more often than the right one points to a misconception, or to a wrong answer key. The shares count the same answers as the success rate, but only those given to versions whose choices (their text and which are correct) are the current version's: change a choice, or the key, and the answers given before no longer count — until the change is undone. They show from ten such answers. When several choices may be ticked, the shares add up to more than 100 %.
+
+**Reset statistics** (contributors and owners) starts the count again: only attempts started afterwards count. Nothing is deleted; grades and results stay as they are.
+
+The statistics also filter the list. At the bottom of **Filters**, **Statistics** takes a range of **Success rate** in percent (a bound below zero finds the questions that take points away under negative marking) and, once some question has a time, a range of **Median time** in seconds. Leave a box empty for no bound on that side. Each range becomes a chip under the search, like the other filters. While a bound is set, a question without the figure it reads (fewer than ten answers, or no time yet) is hidden; switch on **Include questions without statistics** to keep them. The list then loads the whole pool at once, and the count says how many questions pass.
 
 ## Creating a question
 

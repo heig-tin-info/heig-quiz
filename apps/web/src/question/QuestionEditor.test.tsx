@@ -735,6 +735,56 @@ describe("QuestionEditor — opened from an evaluation (#127)", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "template", id: TEMPLATE });
   });
 
+  /*
+   * ADR-044, addendum: opened from the grading screen, the way back — and
+   * Publish itself — lead to that screen, on the question it was on.
+   */
+  const ITEM = "0f0e0d0c-0b0a-4908-8706-0504030201aa";
+  // Its words name no title: nothing but the question and its pool is fetched.
+  const fromGrading = () => {
+    const { calls } = mockFetch(routes(mcqDetail()));
+    const navigate = vi.fn();
+    renderWithProviders(<QuestionEditor id="q1" navigate={navigate} />, {
+      route: `/questions/q1?fromGrading=${EVAL}&item=${ITEM}`,
+    });
+    return { navigate, calls };
+  };
+
+  it("leads back to the grading screen, on the question it was opened from", async () => {
+    const user = userEvent.setup();
+    const { navigate, calls } = fromGrading();
+    await user.click(await screen.findByRole("button", { name: "Back to grading" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "grading", evaluationId: EVAL, item: ITEM });
+    expect(calls.some((c) => c.url.startsWith("/app/api/evaluations/"))).toBe(false);
+  });
+
+  it("goes back to the grading screen once published: the fix was made to re-grade", async () => {
+    const user = userEvent.setup();
+    const { navigate } = fromGrading();
+    await screen.findByRole("button", { name: "Back to grading" });
+    await user.click(screen.getByRole("button", { name: "Publish" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Publish" }));
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith({ view: "grading", evaluationId: EVAL, item: ITEM }),
+    );
+  });
+
+  it("stays in the editor once published from anywhere else", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch(routes(mcqDetail()));
+    const navigate = vi.fn();
+    renderWithProviders(<QuestionEditor id="q1" navigate={navigate} />);
+    await user.click(await screen.findByRole("button", { name: "Publish" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Publish" }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.url === "/app/api/questions/q1/publish")).toBe(true),
+    );
+    expect(await screen.findByText("Version 1 published.")).toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it("leads back to the pool without one", async () => {
     const user = userEvent.setup();
     mockFetch(routes(mcqDetail()));

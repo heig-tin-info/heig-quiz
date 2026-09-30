@@ -14,8 +14,10 @@ import {
   QuestionPatch,
   QuestionSearch,
   VersionParam,
+  type StatsReset,
 } from "@quiz/contracts";
 
+import { iso, isoOrNull } from "../../clock.js";
 import { questions } from "../../db/schema.js";
 import { findAccessiblePool, requirePoolRole } from "../guards.js";
 import { invalid } from "../http.js";
@@ -31,9 +33,9 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
     { preHandler: requireTeacher },
     teacher(
       { params: IdParam, query: QuestionSearch, load: inPool() },
-      async ({ reply, query, scope: pool }) => {
+      async ({ req, reply, query, scope: pool }) => {
         try {
-          return await service.listQuestions(app.db, pool.id, query);
+          return await service.listQuestions(app.db, pool.id, req.user!.id, query);
         } catch (error) {
           // A cursor is only valid for the order that produced it: a client that
           // changes column mid-scroll starts the list again rather than reading a
@@ -218,6 +220,25 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       });
       poolChanged(scope.pool.id);
       return version;
+    }),
+  );
+
+  /**
+   * F-STAT-05 (ADR-038): the question's statistics start again from now.
+   * Nothing is deleted; the reads are the `stats` module's.
+   */
+  app.post(
+    "/app/api/questions/:id/stats/reset",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: onQuestion("contributor") }, async ({ req, scope }) => {
+      const now = app.clock.now();
+      await service.resetQuestionStats(app.db, scope.question.id, now);
+      await trace(req, "question.stats_reset", "question", scope.question.id, {
+        poolId: scope.pool.id,
+        previousSince: isoOrNull(scope.question.statsSince),
+      });
+      poolChanged(scope.pool.id);
+      return { since: iso(now) } satisfies StatsReset;
     }),
   );
 

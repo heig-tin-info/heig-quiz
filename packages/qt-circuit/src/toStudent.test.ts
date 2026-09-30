@@ -18,6 +18,7 @@ import {
   SECRET_REFERENCE_NAME,
   SECRET_REFERENCE_VALUE,
   SECRET_RUBRIC,
+  SECRET_BODE,
   SECRET_TOLERANCE,
   circuitConfig,
 } from "./test/fixtures.js";
@@ -39,6 +40,11 @@ const FORBIDDEN_KEYS = [
   "policy",
   "reference",
   "tolerance",
+  // The Bode envelope (ADR-040) sits beside the tolerance, and leaves with it.
+  "bode",
+  "magDb",
+  "floorDb",
+  "phaseDeg",
 ];
 
 const SECRET_VALUES = [
@@ -47,6 +53,7 @@ const SECRET_VALUES = [
   SECRET_HIDDEN_STIMULUS,
   SECRET_RUBRIC,
   String(SECRET_TOLERANCE),
+  ...Object.values(SECRET_BODE).map(String),
   "Csecret",
   // The hidden stimulus is a 5 V step at 1 ms: its shape is part of the key.
   "\"step\"",
@@ -82,7 +89,7 @@ describe("circuitServer.toStudent", () => {
       source: { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 },
       sourceOhms: 0,
       load: { kind: "open" },
-      analysis: { stopMs: 5, skipMs: 0, points: 500 },
+      analysis: { kind: "tran", stopMs: 5, skipMs: 0, points: 500 },
       points: 1,
     });
     expect(student.hiddenCount).toBe(1);
@@ -113,6 +120,29 @@ describe("circuitServer.toStudent", () => {
     expect(none.canSimulate).toBe(false);
     expect(none.visibleStimuli).toEqual([]);
     expect(none.hiddenCount).toBe(1);
+  });
+
+  it("publishes an AC sweep's band, never the envelope that grades it", () => {
+    const ac = circuitConfig({
+      stimuli: [
+        {
+          name: "Bode",
+          source: { kind: "dc", volts: 0 },
+          load: { kind: "open" },
+          analysis: { kind: "ac", fStartHz: 10, fStopHz: 1e5, pointsPerDecade: 20 },
+        },
+      ],
+    });
+    const sweep = circuitServer.toStudent(ac, view);
+    expect(sweep.visibleStimuli[0]?.analysis).toEqual({
+      kind: "ac",
+      fStartHz: 10,
+      fStopHz: 1e5,
+      pointsPerDecade: 20,
+    });
+    const text = JSON.stringify(sweep);
+    for (const key of ["bode", "magDb", "floorDb", "phaseDeg"]) expect(text).not.toContain(`"${key}"`);
+    for (const secret of Object.values(SECRET_BODE)) expect(text).not.toContain(String(secret));
   });
 
   it("is stable: the same config gives the same view whatever the seed", () => {

@@ -6,7 +6,7 @@ import type { CategoryNode, QuestionMeta, QuestionPatch } from "@quiz/contracts"
 import { api } from "../api";
 import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
-import { Card, Field, SectionHeading, Segmented, Select } from "../ui";
+import { Card, Field, FieldLabel, SectionHeading, Segmented, Select } from "../ui";
 import { categoryPaths } from "../pool/categories";
 import { TagInput } from "./TagInput";
 import { poolKey, questionKey } from "../queryKeys";
@@ -79,8 +79,9 @@ export function MetaPanel({
         ))}
       </Select>
 
-      <div className="space-y-1.5">
-        <span className="text-[13px] font-medium">{t("question.meta.difficulty")}</span>
+      {/* Laid out like `Field`: the label row, then the control, 6 px apart. */}
+      <div className="flex flex-col items-start gap-1.5">
+        <FieldLabel>{t("question.meta.difficulty")}</FieldLabel>
         <div>
           <Segmented
             name="difficulty"

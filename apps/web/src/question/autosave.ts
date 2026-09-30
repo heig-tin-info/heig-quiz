@@ -22,8 +22,13 @@ export const AUTOSAVE_DELAY_MS = 500;
 export interface Autosave {
   /** What `SyncBadge` shows: saved / saving / offline. */
   state: SyncState;
-  /** `Ctrl+S`: sends what is pending now instead of waiting for the delay. */
-  flush: () => void;
+  /**
+   * `Ctrl+S`: sends what is pending now instead of waiting for the delay.
+   * Resolves once the server has acknowledged the LATEST value — `true` —
+   * or a save failed — `false`; never rejects. A caller that reads the draft
+   * back from the server (the try routes) awaits it.
+   */
+  flush: () => Promise<boolean>;
   /** True while something is typed but not yet acknowledged. */
   dirty: boolean;
 }
@@ -58,12 +63,20 @@ export function useAutosave<T>({
   const latest = useRef(value);
   const pending = useRef(false);
   const inFlight = useRef(false);
+  /** The `flush()` promises waiting for the chain of saves to settle. */
+  const waiters = useRef<((saved: boolean) => void)[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveRef = useRef(save);
   // Refs, not dependencies: the effect below must fire on a value change and
   // on nothing else, or a new `save` closure would restart the debounce.
   saveRef.current = save;
   latest.current = value;
+
+  const settle = useCallback((saved: boolean) => {
+    const settled = waiters.current;
+    waiters.current = [];
+    for (const resolve of settled) resolve(saved);
+  }, []);
 
   const run = useCallback(() => {
     if (!pending.current || inFlight.current) return;
@@ -77,6 +90,7 @@ export function useAutosave<T>({
         else {
           setDirty(false);
           setState("saved");
+          settle(true);
         }
       },
       () => {
@@ -85,9 +99,10 @@ export function useAutosave<T>({
         // Ctrl+S sends it again rather than losing it.
         pending.current = true;
         setState("offline");
+        settle(false);
       },
     );
-  }, []);
+  }, [settle]);
 
   // The last value the server handed over (`adopt`): matched by reference.
   const adopted = useRef<{ value: T } | null>(null);
@@ -123,12 +138,15 @@ export function useAutosave<T>({
     };
   }, [value, delay, enabled, run]);
 
-  const flush = useCallback(() => {
+  const flush = useCallback((): Promise<boolean> => {
     if (timer.current) {
       clearTimeout(timer.current);
       timer.current = null;
     }
+    if (!pending.current && !inFlight.current) return Promise.resolve(true);
+    const settled = new Promise<boolean>((resolve) => waiters.current.push(resolve));
     run();
+    return settled;
   }, [run]);
 
   return { state, flush, dirty, adopt };

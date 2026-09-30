@@ -311,7 +311,6 @@ function pollPublicView(poll: MockPoll): PollPublicView {
   const loginRequired = !poll.anonymous && me === null;
   return {
     code: poll.code,
-    title: poll.title,
     state: poll.state,
     settings: { anonymous: poll.anonymous, revealed, votes: votesOn(poll) },
     question: { type: poll.type, student: poll.student },
@@ -469,7 +468,7 @@ function seedPollEvaluation(tp: MockTeacherPoll, alias: string): void {
   e.items = [
     {
       id: uuid(),
-      position: 1,
+      position: 0,
       points: 1,
       milestone: false,
       questionId: uuid(),

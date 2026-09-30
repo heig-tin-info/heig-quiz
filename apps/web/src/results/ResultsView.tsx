@@ -19,6 +19,7 @@ import type {
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
+import { isGraded } from "../evaluation/common";
 import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
@@ -128,6 +129,11 @@ export function ResultsView({
     retry: false,
   });
   const classroomId = evaluation.data?.evaluation.classroomId ?? null;
+  // The correction exists once the evaluation is over: `isGraded` is the
+  // server's own `not_over` rule (`isEvaluationOver`, @quiz/domain), and the
+  // state is already here — no by-question fetch just to decide a button.
+  const presentable =
+    evaluation.data !== undefined && isGraded(evaluation.data.evaluation.state) && (view?.items.length ?? 0) > 0;
 
   const links = gradingLinks(evaluationId);
   useScreenCommands([
@@ -194,6 +200,12 @@ export function ResultsView({
             <Button variant="secondary" onClick={() => navigate(links.grading)}>
               <ClipboardCheck /> {t("results.grading")}
             </Button>
+            {presentable ? (
+              // The Questions tab on a beamer, for the correction in class.
+              <Button variant="secondary" onClick={() => navigate({ view: "correction", evaluationId })}>
+                <Presentation /> {t("results.present")}
+              </Button>
+            ) : null}
             <Button onClick={() => void ask(true)} loading={releasing}>
               <Send /> {t(view.released ? "results.release.again" : "results.release")}
             </Button>
@@ -274,20 +286,7 @@ export function ResultsView({
           fallback={t(isNotOver(byQuestion.error) ? "results.byQuestion.notOver" : "error.server")}
         />
       ) : (
-        <div className="space-y-4">
-          {/* The same questions, on a beamer, for the correction in class. */}
-          {byQuestion.data?.length ? (
-            <div className="flex justify-end">
-              <Button
-                variant="secondary"
-                onClick={() => navigate({ view: "correction", evaluationId })}
-              >
-                <Presentation /> {t("results.byQuestion.project")}
-              </Button>
-            </div>
-          ) : null}
-          <ByQuestionView questions={byQuestion.data ?? []} />
-        </div>
+        <ByQuestionView questions={byQuestion.data ?? []} />
       )}
     </div>
   );

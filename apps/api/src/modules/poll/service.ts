@@ -731,7 +731,6 @@ export async function publicView(
         )[0]?.payload ?? null);
   return {
     code: evaluation.accessCode ?? "",
-    title: evaluation.title,
     state,
     settings,
     question: { type: item.question.type as PollType, student: studentOf(item) },

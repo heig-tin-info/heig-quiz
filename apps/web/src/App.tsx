@@ -18,7 +18,7 @@ import {
   studentRouteFor,
   useStudentView,
 } from "./studentView";
-import { Button, Card, EmptyState, LinkButton, setDateFormat, Spinner } from "./ui";
+import { Button, Card, EmptyState, ErrorText, LinkButton, setDateFormat, Spinner } from "./ui";
 import { configKey } from "./queryKeys";
 
 // One chunk per page: a student never downloads the teacher UI and vice versa.
@@ -31,6 +31,8 @@ const AttemptPage = lazy(() =>
   import("./student/Attempt").then((m) => ({ default: m.AttemptPage })),
 );
 const Feedback = lazy(() => import("./student/Feedback").then((m) => ({ default: m.Feedback })));
+// ADR-041 (#317): the student's drill, its own chunk like every page.
+const DrillPage = lazy(() => import("./drill/DrillPage").then((m) => ({ default: m.DrillPage })));
 const CoursePage = lazy(() =>
   import("./course/CoursePage").then((m) => ({ default: m.CoursePage })),
 );
@@ -130,9 +132,9 @@ function Landing() {
         {/* ADR-027: a SEB launch that was refused lands here, in SEB; and
             ADR-034: so does a used or expired impersonation link. */}
         {refused ? (
-          <p role="alert" className="mt-4 text-sm text-danger">
+          <ErrorText role="alert" className="mt-4">
             {t(refused)}
-          </p>
+          </ErrorText>
         ) : null}
         <LinkButton href="/app/auth/login" variant="primary" size="lg" className="mt-8 w-full">
           {t("landing.signin")}
@@ -209,6 +211,9 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // checking the student view opens the same page a student does. It is the
   // ONE student results page: WP9's `/results/:id` is gone.
   feedback: (r, c) => <Feedback attemptId={r.attemptId} navigate={c.navigate} />,
+  // ADR-041 (#317): a student page; the teacher UI has no drill of its own.
+  drill: (_, c) =>
+    c.teacherUi ? <TeacherHome navigate={c.navigate} /> : <DrillPage navigate={c.navigate} />,
   // WP9: student player — the attempt takes the whole screen (`FULL_SCREEN`).
   attempt: (r, c) => <AttemptPage evaluationId={r.evaluationId} navigate={c.navigate} />,
   join: (r, c) => <PollJoin code={r.code} me={c.me} navigate={c.navigate} />,
@@ -272,11 +277,13 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
 
 /**
  * The views drawn inside the frame but WITHOUT the reading-width cap of the
- * shell. The live dashboard only: its grid is a matrix that grows with the
+ * shell. The live dashboard: its grid is a matrix that grows with the
  * number of questions, and at 70 rem it scrolled sideways between two empty
- * margins (#93). Every other page keeps the cap.
+ * margins (#93). The pool: it keeps the cap itself, and widens past it by the
+ * width of the question pane when that pane docks beside the list. Every
+ * other page keeps the cap.
  */
-const WIDE: ReadonlySet<Route["view"]> = new Set(["live"]);
+const WIDE: ReadonlySet<Route["view"]> = new Set(["live", "pool"]);
 
 /**
  * The views where a notification arriving never toasts (ADR-030 §h): every
@@ -455,7 +462,9 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
     <ImpersonationBanner me={me.data}>
     <Shell
       me={me.data}
-      route={route}
+      // The page on screen: a student on a teacher's address reads the home,
+      // and the navigation must say so (the sidebar's row, the bottom bar).
+      route={shown}
       navigate={navigate}
       teacherUi={teacherUi}
       studentView={inStudentView}

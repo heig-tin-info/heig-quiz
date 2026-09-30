@@ -20,7 +20,18 @@ import type { Evaluation, EvaluationDetail } from "@quiz/contracts";
 import { api } from "../api";
 import { useT } from "../i18n";
 import type { Route } from "../router";
-import { Alert, Button, Card, cx, Field, FormDialog, isoDateTime, useNow, type IconType } from "../ui";
+import {
+  Alert,
+  Button,
+  Card,
+  cx,
+  ErrorText,
+  Field,
+  FormDialog,
+  isoDateTime,
+  useNow,
+  type IconType,
+} from "../ui";
 import { launchChecks, lobbyKey, readiness, type LaunchCheck } from "./launchChecks";
 import { LobbyPreviewColumn, LobbyPreviewRow } from "./LobbyPreview";
 import { PullTemplateDialog } from "./templatePull";
@@ -228,7 +239,7 @@ function Checklist({
        * button beside it, and ONE status line above them. One DOM for both,
        * so a label or a disabled state can never differ between the two.
        */}
-      <div className="sticky bottom-0 z-20 -mx-4 border-t border-line bg-surface px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-2.5 sm:static sm:mx-0 sm:flex sm:items-center sm:gap-4 sm:rounded-card sm:border sm:px-5 sm:py-4">
+      <div data-bottom-dock="" className="sticky bottom-0 z-20 -mx-4 border-t border-line bg-surface px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-2.5 sm:static sm:mx-0 sm:flex sm:items-center sm:gap-4 sm:rounded-card sm:border sm:px-5 sm:py-4">
         <p role="status" className="text-center text-[13px] text-fg-muted sm:flex-1 sm:text-left">
           {status}
         </p>
@@ -438,7 +449,7 @@ function ScheduleDialog({
       canSubmit={opensAt !== null && !past}
       error={
         schedule.error ? (
-          <p className="text-[13px] text-danger">{transitionErrorMessage(schedule.error, t)}</p>
+          <ErrorText>{transitionErrorMessage(schedule.error, t)}</ErrorText>
         ) : null
       }
     >
@@ -470,7 +481,7 @@ function ScheduleDialog({
           autoFocus
         />
       )}
-      {past ? <p className="text-[13px] text-danger">{t("launch.schedule.past")}</p> : null}
+      {past ? <ErrorText>{t("launch.schedule.past")}</ErrorText> : null}
       <p className="text-sm text-fg-muted">
         {t("launch.when.scheduled")} {t(lobbyKey(evaluation.settings.lobby))}
       </p>

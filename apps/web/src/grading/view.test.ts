@@ -1,20 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { ALL_PARTS_SHOWN } from "./parts";
 import { GRADING_VIEW_DEFAULTS, parseGradingView, type GradingView } from "./view";
 
 /*
  * Issue #110: what is read back from storage is validated field by field.
- * Nothing stored, garbage, or one bad field never costs the others.
+ * Nothing stored, garbage, or one bad field never costs the others — and a
+ * value stored by the previous panel (ADR-044) reads gracefully.
  */
 
-const CHOSEN: GradingView = {
-  order: "student",
-  stateFilter: "proposed",
-  source: "llm",
-  confidence: "low",
-  parts: { ...ALL_PARTS_SHOWN, prompt: false, comment: false },
-};
+const CHOSEN: GradingView = { stateFilter: "todo", source: "llm", confidence: "low" };
 
 describe("parseGradingView", () => {
   it("gives the defaults when nothing is stored", () => {
@@ -34,25 +28,30 @@ describe("parseGradingView", () => {
 
   it("falls back field by field, keeping the valid ones", () => {
     const view = parseGradingView(
-      JSON.stringify({
-        order: "student",
-        stateFilter: "everything",
-        source: 42,
-        confidence: "high",
-        parts: { prompt: false, solution: "no", comment: null },
-      }),
+      JSON.stringify({ stateFilter: "everything", source: 42, confidence: "high" }),
     );
-    expect(view).toEqual({
-      order: "student",
-      stateFilter: "all",
-      source: "any",
-      confidence: "high",
-      parts: { ...ALL_PARTS_SHOWN, prompt: false },
-    });
+    expect(view).toEqual({ stateFilter: "all", source: "any", confidence: "high" });
   });
 
-  it("never carries the names switch, even when one was stored", () => {
-    const view = parseGradingView(JSON.stringify({ ...CHOSEN, showNames: true }));
-    expect(view).not.toHaveProperty("showNames");
+  it("reads the previous panel's stored view: order and parts dropped, proposed kept", () => {
+    const old = {
+      order: "student",
+      stateFilter: "proposed",
+      source: "auto",
+      confidence: "any",
+      parts: { prompt: false, explanation: true, solution: true, comment: false },
+    };
+    expect(parseGradingView(JSON.stringify(old))).toEqual({
+      stateFilter: "todo",
+      source: "auto",
+      confidence: "any",
+    });
+    // Its third state had no control left: it reads as everything.
+    expect(parseGradingView(JSON.stringify({ stateFilter: "validated" })).stateFilter).toBe("all");
+  });
+
+  it("never carries a names switch, even when one was stored", () => {
+    const view = parseGradingView(JSON.stringify({ ...CHOSEN, showNames: true, anonymise: false }));
+    expect(view).toEqual(CHOSEN);
   });
 });

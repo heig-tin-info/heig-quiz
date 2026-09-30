@@ -16,6 +16,10 @@
       "types": "./dist/rng.d.ts",
       "default": "./dist/rng.js"
     },
+    "./reasons": {
+      "types": "./dist/reasons.d.ts",
+      "default": "./dist/reasons.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

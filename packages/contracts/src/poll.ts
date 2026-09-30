@@ -167,7 +167,12 @@ export type PollQuestionPick = z.infer<typeof PollQuestionPick>;
  * linked to that classroom's course; the classroom is loaded through the
  * staff predicate, and an unreachable one is a 404.
  */
-export const PollPoolSearch = QuestionSearch.omit({ categoryId: true, includeDeleted: true }).extend({
+export const PollPoolSearch = QuestionSearch.omit({
+  categoryId: true,
+  includeDeleted: true,
+  // Favourites are a pool's (F-POOL-10); the launcher searches across pools.
+  starred: true,
+}).extend({
   classroomId: z.uuid().optional(),
 });
 export type PollPoolSearch = z.infer<typeof PollPoolSearch>;
@@ -263,11 +268,11 @@ export type PollTeacherView = z.infer<typeof PollTeacherView>;
  * `solution` is null while the key is not revealed; `me` says where THIS
  * browser stands. Neither switch closes the vote: while `state` is
  * `running`, the phone keeps its answer control (ADR-014, addendum
- * 2026-09-29).
+ * 2026-09-29). It carries no title: a poll's title is its question's
+ * internal name, which never reaches a student (invariant 4, #305).
  */
 export const PollPublicView = z.object({
   code: z.string(),
-  title: z.string(),
   state: z.enum(["running", "ended"]),
   settings: PollSettings,
   question: z.object({

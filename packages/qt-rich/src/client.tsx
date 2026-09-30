@@ -7,13 +7,14 @@
 import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
 import { typeIcon } from "@quiz/ui";
+import { richGrading } from "./grading.js";
 import { isRichAnswered } from "./schema.js";
 import type { RichAnswer, RichConfig, RichDetails, RichSolution, RichStudent } from "./schema.js";
 
 type RichClient = QuestionTypeClient<RichConfig, RichAnswer, RichStudent, RichSolution, RichDetails>;
 
 /** A page with its lines of text, the last one short: something to write. */
-const RichIcon = typeIcon(<path d="M6 3h12v18H6zM9 8h6M9 12h6M9 16h3" />, "size-4");
+const RichIcon = typeIcon(<path d="M5.5 3H15l3.5 3.5V21h-13zM15 3v3.5h3.5M8.5 11h7M8.5 14.5h7M8.5 18h4" />, "size-4");
 
 export const richClient: RichClient = {
   id: "rich",
@@ -27,9 +28,10 @@ export const richClient: RichClient = {
 
   emptyAnswer: () => ({ text: "" }),
   isAnswered: isRichAnswered,
+  grading: richGrading,
 };
 
 /* The surfaces stay out of the values exported here, or the `lazy` above is undone (see qt-short). */
-export { richEditorStrings, richPlayerStrings, richReviewStrings } from "./strings.js";
+export { richEditorStrings, richGradingStrings, richPlayerStrings, richReviewStrings } from "./strings.js";
 export { emptyRichDraft } from "./schema.js";
 export type { RichAnswer, RichConfig, RichDetails, RichFormat, RichSolution, RichStudent } from "./schema.js";

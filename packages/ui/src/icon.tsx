@@ -53,11 +53,25 @@ export function typeIcon(
  * The six dots of a drag handle. Shared because every reorderable list of
  * the question surfaces draws the same one (the mcq choices, the categorize
  * cards), and two copies of it had already drifted by a stroke width.
+ *
+ * FILLED discs, not the zero-length strokes the outline set draws dots
+ * with: at 14 px a 1.6 stroke is a sub-pixel speck, which several browsers
+ * anti-aliased into nothing, and the handle looked like an empty gap.
  */
 export function GripIcon({ className = "size-3.5" }: { className?: string | undefined }): ReactNode {
   return (
-    <StrokeIcon className={className} strokeWidth={1.6}>
-      <path d="M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01" />
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true" focusable="false">
+      {[6, 12, 18].flatMap((cy) => [9, 15].map((cx) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={1.75} />))}
+    </svg>
+  );
+}
+
+/** A circled exclamation mark: what marks an error line ({@link ErrorText}). */
+export function AlertIcon({ className = "size-3.5" }: { className?: string | undefined }): ReactNode {
+  return (
+    <StrokeIcon className={className} strokeWidth={2}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5.5M12 16.5h.01" />
     </StrokeIcon>
   );
 }

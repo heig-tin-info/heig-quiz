@@ -5,7 +5,8 @@
  * and not a service call that already holds a boolean.
  *
  * Hidden by default, the name on request: the real name travels only when
- * `anonymous=0` is asked for, and never, anywhere in the body, otherwise.
+ * `anonymous=0` is asked for, and never, anywhere in the body, otherwise —
+ * not even as a pseudonym: an anonymous entry has no label (ADR-044).
  */
 import { randomUUID } from "node:crypto";
 
@@ -25,7 +26,7 @@ let restore: () => void;
 let teacher: { id: string; headers: Record<string, string> };
 let evaluationId: string;
 let firstItemId: string;
-let firstAttemptId: string;
+const studentIds: string[] = [];
 
 /** Two students as an identity provider fills them: given and family names. */
 const STUDENTS = [
@@ -41,7 +42,6 @@ beforeAll(async () => {
   teacher = await server.signIn("teacher");
   const db = server.app.db;
 
-  const studentIds: string[] = [];
   for (const student of STUDENTS) {
     const id = randomUUID();
     await db.insert(users).values({
@@ -66,7 +66,6 @@ beforeAll(async () => {
   evaluation = await live.closeEvaluation(db, evaluation, server.clock.now());
   evaluationId = evaluation.id;
   firstItemId = seed.itemIds[0]!;
-  firstAttemptId = attemptIds[0]!;
 });
 afterAll(async () => {
   await server.close();
@@ -75,48 +74,45 @@ afterAll(async () => {
 
 const get = (url: string) => server.app.inject({ method: "GET", url, headers: teacher.headers });
 
-/** Every read of the panel that names a student, with the switch as given. */
+/** Every read of the panel that could name a student, with the switch as given. */
 async function namedReads(anonymous: string) {
   const base = `/app/api/evaluations/${evaluationId}/grading`;
   const urls = [
-    `${base}/steps?by=student&anonymous=${anonymous}`,
-    `${base}?by=question&itemId=${firstItemId}&anonymous=${anonymous}`,
-    `${base}?by=student&attemptId=${firstAttemptId}&anonymous=${anonymous}`,
+    `${base}?itemId=${firstItemId}&anonymous=${anonymous}`,
+    `${base}?anonymous=${anonymous}`,
+    `${base}/steps`,
   ];
   const replies = await Promise.all(urls.map(get));
   for (const reply of replies) expect(reply.statusCode).toBe(200);
-  const [steps, byQuestion, byStudent] = replies.map((r) => r.json());
+  const [oneItem, whole] = replies.map((r) => r.json());
   return {
     raw: replies.map((r) => r.body).join("\n"),
-    steps: (steps.steps as { label: string }[]).map((s) => s.label),
-    byQuestion: (byQuestion.entries as { label: string }[]).map((e) => e.label),
-    byStudent: (byStudent.entries as { label: string }[]).map((e) => e.label),
+    oneItem: (oneItem.entries as { label: string | null }[]).map((e) => e.label),
+    whole: (whole.entries as { label: string | null }[]).map((e) => e.label),
   };
 }
 
 describe("grading routes — names (F-GRADE-03, #119)", () => {
   it("anonymous=0 labels every student with their real name", async () => {
     const named = await namedReads("0");
-    expect(named.steps).toEqual(NAMES);
-    expect(named.byQuestion).toEqual(NAMES);
-    expect(named.byStudent).toEqual([NAMES[0], NAMES[0]]);
+    expect(named.oneItem).toEqual(NAMES);
+    expect(named.whole).toEqual([...NAMES, ...NAMES]);
   });
 
-  it("anonymous=1, and no parameter at all, never carry a real name", async () => {
+  it("anonymous=1, and no parameter at all, never carry a name, not even a pseudonym", async () => {
     const named = await namedReads("0");
     for (const reads of [await namedReads("1"), await namedReads("")]) {
-      // The same students, in the same places, under pseudonyms.
-      expect(reads.steps).toHaveLength(named.steps.length);
-      expect(reads.byQuestion).toHaveLength(named.byQuestion.length);
-      for (const label of [...reads.steps, ...reads.byQuestion, ...reads.byStudent]) {
-        expect(label).not.toBe("—");
-      }
-      // And not a trace of a name, a family name or an address in the body.
+      // The same answers, in the same places, with no label at all.
+      expect(reads.oneItem).toEqual(named.oneItem.map(() => null));
+      expect(reads.whole).toEqual(named.whole.map(() => null));
+      // And not a trace of a name, a family name, an address or an account
+      // id anywhere in the bodies.
       for (const student of STUDENTS) {
         expect(reads.raw).not.toContain(student.givenName);
         expect(reads.raw).not.toContain(student.familyName);
         expect(reads.raw).not.toContain(`${student.givenName.toLowerCase()}@heig.test`);
       }
+      for (const userId of studentIds) expect(reads.raw).not.toContain(userId);
     }
   });
 });

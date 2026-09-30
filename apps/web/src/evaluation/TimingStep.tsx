@@ -5,6 +5,7 @@ import { TransitionRefusal, type EvaluationDetail, type EvaluationPatch } from "
 import { configLock, isConfigFieldWritable } from "@quiz/domain";
 
 import { ApiError } from "../api";
+import { EvaluationDrillSetting } from "../drill/EvaluationDrillSetting";
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import {
@@ -13,6 +14,7 @@ import {
   Button,
   Card,
   cx,
+  ErrorText,
   Field,
   FormError,
   isoDateTime,
@@ -107,9 +109,9 @@ function PresetCard({
 function MissingNote({ field }: { field: TimingField }) {
   const t = useT();
   return (
-    <p id={`${TIMING_FIELD_ID[field]}-missing`} className="max-w-52 text-[13px] text-danger">
+    <ErrorText id={`${TIMING_FIELD_ID[field]}-missing`} className="max-w-52">
       {t(missingTimingKey(field))}
-    </p>
+    </ErrorText>
   );
 }
 
@@ -414,6 +416,10 @@ export function TimingStep({
         }
         advancedRows={<AccessCodeRow accessCode={accessCode} patch={patch} />}
       />
+
+      {/* ADR-041 §2 (#317): its own writer, editable until the release —
+          not one of the settings `patch` saves, nor frozen with them. */}
+      {mode !== "poll" ? <EvaluationDrillSetting evaluation={detail.evaluation} /> : null}
     </div>
   );
 }

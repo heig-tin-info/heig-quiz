@@ -4,7 +4,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import {
   EvaluationSettings,
@@ -19,6 +19,7 @@ import {
   retakesOf,
 } from "@quiz/contracts";
 import {
+  allowDrillWritable,
   configLock,
   isConfigFieldWritable,
   isFeedbackAllowed,
@@ -38,6 +39,7 @@ import {
   type EvaluationRecord,
   type ItemRecord,
   type DbOrTx,
+  EvaluationError,
   Locked,
   RunningLocked,
   RetakesNotAllowed,
@@ -79,6 +81,8 @@ export async function createEvaluation(
     title: string;
     mode: EvaluationMode;
     preset?: "exam" | "exercise" | undefined;
+    /** ADR-041 §2: the teacher's choice at creation; absent is the mode's default. */
+    allowDrill?: boolean | undefined;
     createdBy: string;
   },
 ): Promise<EvaluationRecord> {
@@ -97,7 +101,8 @@ export async function createEvaluation(
     title: input.title,
     mode: input.mode,
     state: "draft",
-    settings: preset.settings,
+    settings:
+      input.allowDrill === undefined ? preset.settings : { ...preset.settings, allowDrill: input.allowDrill },
     gradingScale: defaultGradingScale(),
     feedbackPolicy: preset.feedbackPolicy,
     mcqPolicy,
@@ -347,6 +352,42 @@ export async function setPollSettings(
     .where(eq(evaluations.id, id));
 }
 
+/** `409 allow_drill_locked`: "Allow drill" is editable until the release, and never on a poll. */
+export class AllowDrillLocked extends EvaluationError {
+  constructor(reason: "released" | "poll") {
+    super("allow_drill_locked", 409, `Allow drill cannot change on this evaluation (${reason})`, { reason });
+  }
+}
+
+/**
+ * `drill`'s switch on an evaluation (ADR-041 §10, item 3): `settings.allowDrill`,
+ * writable whatever the configuration lock says — attempts and a run do not
+ * freeze it — until the release, whose cards it decides. The one write of
+ * the settings outside {@link patchEvaluation}. A poll never has it.
+ */
+export async function setAllowDrill(
+  db: DbOrTx,
+  row: EvaluationRecord,
+  allowDrill: boolean,
+  now: Date,
+): Promise<EvaluationRecord> {
+  // The one rule (`@quiz/domain`); the conditional update below closes the
+  // race with a release landing between the load and the write.
+  if (!allowDrillWritable(row.mode, row.state)) {
+    throw new AllowDrillLocked(row.mode === "poll" ? "poll" : "released");
+  }
+  const [updated] = await db
+    .update(evaluations)
+    .set({
+      settings: sql`${evaluations.settings} || jsonb_build_object('allowDrill', ${allowDrill}::boolean)`,
+      updatedAt: now,
+    })
+    .where(and(eq(evaluations.id, row.id), sql`${evaluations.state} <> 'released'`))
+    .returning();
+  if (!updated) throw new AllowDrillLocked("released");
+  return updated;
+}
+
 /** `results.releaseResults`: the frozen grades (ADR-012) and the state they imply. */
 export async function setRelease(
   db: DbOrTx,
@@ -460,6 +501,45 @@ export async function flagReleasedEvaluationsOf(
         ),
       ),
     );
+}
+
+/**
+ * The states in which an evaluation's grading can be finished: after its
+ * close. Also the states the migration `0033_grading_ready_claim` backfills.
+ */
+const GRADED_STATES = ["closed", "grading", "released"] as const;
+
+/**
+ * The claim of `grading_ready` (#286): true for exactly one caller per
+ * completed grid. Refused before the close — a retake graded alone mid-run
+ * (ADR-025) completes nothing — and read by the UPDATE
+ * itself, so the state and the marker are those of the row NOW, not those
+ * of a record the caller loaded when its job started. A closed evaluation
+ * never runs again (`closed → draft` needs no attempt, and clears the
+ * marker), so a claim taken is always the claim of the current close.
+ */
+export async function claimGradingReady(db: DbOrTx, id: string, now: Date): Promise<boolean> {
+  const rows = await db
+    .update(evaluations)
+    .set({ gradingReadyAt: now })
+    .where(
+      and(
+        eq(evaluations.id, id),
+        isNull(evaluations.gradingReadyAt),
+        inArray(evaluations.state, [...GRADED_STATES]),
+      ),
+    )
+    .returning({ id: evaluations.id });
+  return rows.length > 0;
+}
+
+/**
+ * Gives the evaluation its `grading_ready` again: a re-grade empties an
+ * item's cells, and the pass that fills them completes a new grid. Called in
+ * the re-grade's own transaction.
+ */
+export async function clearGradingReady(db: DbOrTx, id: string): Promise<void> {
+  await db.update(evaluations).set({ gradingReadyAt: null }).where(eq(evaluations.id, id));
 }
 
 /**

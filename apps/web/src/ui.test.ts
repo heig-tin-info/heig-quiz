@@ -207,6 +207,13 @@ describe("listboxIndex", () => {
     expect(listboxIndex("ArrowUp", 0, 0)).toBe(0);
   });
 
+  it("stops at both ends without wrap", () => {
+    expect(listboxIndex("ArrowDown", 2, 3, { wrap: false })).toBe(2);
+    expect(listboxIndex("ArrowUp", 0, 3, { wrap: false })).toBe(0);
+    expect(listboxIndex("ArrowDown", 0, 3, { wrap: false })).toBe(1);
+    expect(listboxIndex("ArrowUp", 2, 3, { wrap: false })).toBe(1);
+  });
+
   it("leaves Home and End to a text field unless the list owns them", () => {
     expect(listboxIndex("Home", 2, 3)).toBeNull();
     expect(listboxIndex("End", 0, 3)).toBeNull();
@@ -233,5 +240,12 @@ describe("rovingIndex", () => {
   it("owns nothing on an empty strip, nor the vertical arrows", () => {
     expect(rovingIndex("ArrowRight", 0, 0)).toBeNull();
     expect(rovingIndex("ArrowDown", 0, 3)).toBeNull();
+  });
+
+  it("moves a row in a grid, and stays put at its edges", () => {
+    expect(rovingIndex("ArrowDown", 1, 8, 4)).toBe(5);
+    expect(rovingIndex("ArrowUp", 5, 8, 4)).toBe(1);
+    expect(rovingIndex("ArrowUp", 1, 8, 4)).toBe(1);
+    expect(rovingIndex("ArrowDown", 6, 8, 4)).toBe(6);
   });
 });

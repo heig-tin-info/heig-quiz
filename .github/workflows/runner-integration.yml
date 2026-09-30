@@ -1,0 +1,83 @@
+name: Runner integration
+
+# The Podman integration suite of apps/runner (`test:integration`): real
+# containers, under the real seccomp profile, on a ROOTFUL socket so that
+# `--userns=auto` is the production one (#234). A workflow of its own, not a
+# job of ci.yml: it never holds up `checks`, and nothing in the deploy chain
+# (image → deploy-staging → deploy-production) waits for it or shares its
+# concurrency group.
+#
+# A PR that touches the runner (profile, engine, images) runs it, and so does
+# a weekly run, which catches Alpine's package updates (a new rustc, a new
+# ngspice). The images are built cold every time: no GitHub Actions cache,
+# which this repository shares with the deploy's buildx layers and which a
+# 1+ GB archive per PR would evict. A cache saved by the scheduled run only
+# can come back if the cold build proves slow on GitHub.
+
+on:
+  pull_request:
+    paths:
+      - "apps/runner/**"
+      - "packages/core/src/runner.ts"
+      - ".github/workflows/runner-integration.yml"
+  schedule:
+    # Mondays 04:17 UTC, off the hour to dodge the scheduler's rush.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-integration-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  podman:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PODMAN_SOCKET: /run/podman/podman.sock
+      PODMAN_REMOTE_URL: unix:///run/podman/podman.sock
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The runner and what it imports (@quiz/core), nothing else: no SPA, no
+      # browser runtimes.
+      - run: pnpm --filter "@quiz/runner..." build
+
+      # The rootful engine, as on the code VM. `--userns=auto` carves its
+      # ranges from the `containers` entry of /etc/subuid and /etc/subgid,
+      # which the Ubuntu package does not create; production has it. The
+      # socket is handed to the job's user so the suite (and build.sh) can
+      # drive it with `--remote`, exactly as the service does (invariant 13).
+      # Nothing about the SANDBOX containers is relaxed: they get the flags of
+      # `containerArgs()`, asserted by engine.test.ts.
+      - name: Start the rootful Podman socket
+        run: |
+          podman --version
+          for f in /etc/subuid /etc/subgid; do
+            grep -q '^containers:' "$f" || echo 'containers:2147483647:2147483648' | sudo tee -a "$f" >/dev/null
+          done
+          sudo systemctl start podman.socket
+          sudo chmod o+x /run/podman
+          sudo chown "$(id -u)" "$PODMAN_SOCKET"
+          podman --remote --url "$PODMAN_REMOTE_URL" info --format '{{.Host.Security.Rootless}} {{.Host.CgroupsVersion}} {{.Host.OCIRuntime.Name}}'
+
+      # Every language, rust included: build.sh's default list.
+      - name: Build the language images
+        run: apps/runner/images/build.sh
+
+      # Strict: the suite fails, instead of skipping, when Podman is not
+      # reachable, when a language of the contract has no image, or when the
+      # engine is rootless or without --userns=auto (src/test/integration.ts).
+      - name: Integration suite
+        run: RUNNER_INTEGRATION_STRICT=1 pnpm --filter @quiz/runner test:integration

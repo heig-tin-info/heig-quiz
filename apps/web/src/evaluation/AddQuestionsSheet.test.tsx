@@ -72,6 +72,7 @@ const row = (over: Partial<QuestionPage["items"][number]>): QuestionPage["items"
   latestNumber: 1,
   hasDraftChanges: false,
   keyless: false,
+  starred: false,
   updatedAt: "2026-09-18T08:00:00.000Z",
   deprecated: false,
   deletedAt: null,
@@ -101,13 +102,21 @@ function questions(filters: string, reply: ReturnType<typeof ok>, pool = "p1") {
   return { [`GET /app/api/pools/${pool}/questions${query}`]: reply };
 }
 
+/** The favourites query of a pool (`pool/stars.tsx`), apart from the list's. */
+const STARRED = (pool = "p1") => `GET /app/api/pools/${pool}/questions?starred=1&limit=200`;
+
 function routes(over: Record<string, ReturnType<typeof ok>> = {}) {
   return {
     "GET /app/api/evaluations/e1/pools": ok(POOLS),
     ...questions("", ok(PAGE)),
+    [STARRED()]: ok(EMPTY),
+    [STARRED("p2")]: ok(EMPTY),
     ...over,
   };
 }
+
+/** A request of the LIST, not of the favourites shelf. */
+const isListCall = (c: RecordedCall) => c.url.includes("/questions") && !c.url.includes("starred=1");
 
 /**
  * The filter parameters of the last questions request, as ordered pairs.
@@ -119,7 +128,7 @@ function routes(over: Record<string, ReturnType<typeof ok>> = {}) {
  * of one filter state are two cache entries.
  */
 function lastQuestionQuery(calls: RecordedCall[]): [string, string][] {
-  const call = [...calls].reverse().find((c) => c.url.includes("/questions"));
+  const call = [...calls].reverse().find(isListCall);
   if (call === undefined) throw new Error("no questions request was made");
   const params = new URLSearchParams(call.url.split("?")[1] ?? "");
   params.delete("limit");
@@ -129,7 +138,7 @@ function lastQuestionQuery(calls: RecordedCall[]): [string, string][] {
 /** Every questions request so far, each as its parsed parameters. */
 function questionQueries(calls: RecordedCall[]): [string, string][][] {
   return calls
-    .filter((c) => c.url.includes("/questions"))
+    .filter(isListCall)
     .map((c) => {
       const params = new URLSearchParams(c.url.split("?")[1] ?? "");
       params.delete("limit");
@@ -269,7 +278,7 @@ describe("AddQuestionsSheet — the filters", () => {
 
     await user.type(screen.getByLabelText("Search a question…"), "ptr");
     await waitFor(() =>
-      expect(calls.filter((c) => c.url.includes("/questions")).at(-1)?.url).toBe(
+      expect(calls.filter(isListCall).at(-1)?.url).toBe(
         `/app/api/pools/p1/questions?q=ptr&limit=${PAGE_SIZE}`,
       ),
     );
@@ -669,5 +678,82 @@ describe("AddQuestionsSheet — the preview", () => {
     } finally {
       vi.stubGlobal("matchMedia", matchMedia);
     }
+  });
+});
+
+/*
+ * The favourites of the shown pool (F-POOL-10): a section of their own above
+ * the list, "Add favourites" that adds what it can and says what it skipped,
+ * and the offer — never the act — of unstarring what was just added.
+ */
+describe("AddQuestionsSheet — favourites", () => {
+  const FAVOURITES: QuestionPage = {
+    items: [
+      row({ id: "q1", type: "code", internalName: "ptr-arith-01", starred: true }),
+      row({ id: "q2", internalName: "ptr-null-check", latestNumber: null, starred: true }),
+      row({ id: "q5", internalName: "sizeof-char", starred: true }),
+    ],
+    nextCursor: null,
+    total: 3,
+  };
+  const withFavourites = (over: Record<string, ReturnType<typeof ok>> = {}, existing = new Set<string>()) =>
+    setup({ [STARRED()]: ok(FAVOURITES), ...over }, { existing });
+
+  it("lists the starred questions first, in a section of their own", async () => {
+    withFavourites();
+    const section = await screen.findByRole("region", { name: "Favourites" });
+    expect(within(section).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(section).getByText("sizeof-char")).toBeVisible();
+    // The list below is unchanged: a favourite appears in both.
+    expect(screen.getAllByText("ptr-arith-01")).toHaveLength(2);
+    expect(screen.getByText("All questions")).toBeVisible();
+  });
+
+  it("steps aside while a filter is set", async () => {
+    const user = userEvent.setup();
+    withFavourites(questions("?type=code", ok(PAGE)));
+    await screen.findByRole("region", { name: "Favourites" });
+    await user.selectOptions(screen.getByLabelText("Type"), "code");
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Favourites" })).toBeNull());
+  });
+
+  it("adds what it can in one call, says what it skipped, and offers to unstar", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const queryClient = makeQueryClient();
+    const stubs = mockFetch(
+      routes({
+        [STARRED()]: ok(FAVOURITES),
+        "POST /app/api/evaluations/e1/items": ok({}),
+        "DELETE /app/api/questions/star": { status: 204 },
+      }),
+    );
+    renderWithProviders(
+      <AddQuestionsSheet target={evaluationTarget("e1")} existing={new Set(["q5"])} onClose={onClose} />,
+      { queryClient },
+    );
+    await screen.findByRole("region", { name: "Favourites" });
+
+    await user.click(screen.getByRole("button", { name: "Add favourites" }));
+    expect(
+      await screen.findByText("1 added, 2 skipped: 1 not published, 1 already in the list"),
+    ).toBeVisible();
+    expect(stubs.calls.find((c) => c.method === "POST")).toMatchObject({
+      url: "/app/api/evaluations/e1/items",
+      body: { questionIds: ["q1"] },
+    });
+    // Offered, not done: nothing was unstarred yet, and the sheet stays.
+    expect(stubs.calls.some((c) => c.method === "DELETE")).toBe(false);
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Unstar these" }));
+    await waitFor(() =>
+      expect(stubs.calls.find((c) => c.method === "DELETE")).toMatchObject({
+        url: "/app/api/questions/star",
+        body: { questionIds: ["q1"] },
+      }),
+    );
+    expect(await screen.findByText(/Their stars are removed\./)).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Unstar these" })).toBeNull();
   });
 });

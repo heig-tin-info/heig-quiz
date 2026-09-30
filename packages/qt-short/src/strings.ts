@@ -89,3 +89,11 @@ export const shortReviewStrings = {
 } as const;
 
 export type ShortReviewStringKey = keyof typeof shortReviewStrings;
+
+/** The words of the grading table's one column (ADR-044). */
+export const shortGradingStrings = {
+  answer: "Answer",
+  empty: "empty",
+} as const;
+
+export type ShortGradingStringKey = keyof typeof shortGradingStrings;

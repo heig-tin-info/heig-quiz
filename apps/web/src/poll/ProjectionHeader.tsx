@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   BookmarkCheck,
   BookmarkPlus,
+  ChartPie,
   Maximize2,
   Minimize2,
   Moon,
@@ -119,6 +120,8 @@ export function ProjectionHeader({
   onKeep,
   keepPending,
   onOpenQuestion,
+  donut,
+  onToggleDonut,
 }: {
   view: PollTeacherView;
   phase: ProjectionPhase;
@@ -137,6 +140,9 @@ export function ProjectionHeader({
   keepPending: boolean;
   /** Opens the kept question in its pool's editor. */
   onOpenQuestion: () => void;
+  /** The donut's state, or null when it is not offered (not an ended mcq with its votes shown). */
+  donut: boolean | null;
+  onToggleDonut: () => void;
 }) {
   const t = useT();
   const ended = phase === "ended";
@@ -224,14 +230,26 @@ export function ProjectionHeader({
               <BookmarkCheck />
             </IconButton>
           ) : null}
+          {donut === null ? null : (
+            <IconButton
+              label={t("poll.donut")}
+              shortcut="Space"
+              active={donut}
+              onClick={onToggleDonut}
+            >
+              <ChartPie />
+            </IconButton>
+          )}
           <IconButton
             label={dark ? t("menu.lightTheme") : t("menu.darkTheme")}
+            shortcut="T"
             onClick={onToggleTheme}
           >
             {dark ? <Sun /> : <Moon />}
           </IconButton>
           <IconButton
             label={fullscreen ? t("poll.exitFullscreen") : t("poll.fullscreen")}
+            shortcut="F"
             onClick={onToggleFullscreen}
           >
             {fullscreen ? <Minimize2 /> : <Maximize2 />}

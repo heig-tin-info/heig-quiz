@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  allowDrillWritable,
   configLock,
+  drillAllowedOn,
   isConfigEditable,
   isConfigFieldWritable,
   negativeMarkingAllowedFor,
@@ -98,5 +100,40 @@ describe("negative marking (ADR-026)", () => {
     // `settings` is structural: locked by the run and by the first attempt.
     expect(isConfigFieldWritable("running", "settings")).toBe(false);
     expect(isConfigFieldWritable("attempts", "settings")).toBe(false);
+  });
+});
+
+describe("drillAllowedOn (ADR-041 §2)", () => {
+  it("defaults to on for an exercise and off for an exam", () => {
+    expect(drillAllowedOn("exercise", undefined)).toBe(true);
+    expect(drillAllowedOn("exam", undefined)).toBe(false);
+  });
+
+  it("follows the teacher's choice either way", () => {
+    expect(drillAllowedOn("exam", true)).toBe(true);
+    expect(drillAllowedOn("exercise", false)).toBe(false);
+  });
+
+  it("never allows a poll, whatever its row says", () => {
+    expect(drillAllowedOn("poll", true)).toBe(false);
+    expect(drillAllowedOn("poll", undefined)).toBe(false);
+  });
+});
+
+describe("allowDrillWritable (ADR-041 §10, item 3)", () => {
+  it("stays writable until the release, whatever else is frozen", () => {
+    for (const state of ["draft", "scheduled", "lobby", "running", "paused", "closed", "grading"] as const) {
+      expect(allowDrillWritable("exam", state)).toBe(true);
+      expect(allowDrillWritable("exercise", state)).toBe(true);
+    }
+  });
+
+  it("freezes at the release", () => {
+    expect(allowDrillWritable("exam", "released")).toBe(false);
+    expect(allowDrillWritable("exercise", "released")).toBe(false);
+  });
+
+  it("is never writable on a poll", () => {
+    expect(allowDrillWritable("poll", "draft")).toBe(false);
   });
 });

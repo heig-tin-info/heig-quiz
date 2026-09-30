@@ -224,6 +224,14 @@ async function topicsOf(app: FastifyInstance, req: FastifyRequest): Promise<Set<
   return topics;
 }
 
+/**
+ * A poll's own views are the staff's: its phones read `/app/api/p/:code`
+ * and nothing else, and its title is its question's internal name, which a
+ * student never reads (invariant 4, #305).
+ */
+const studentOnPoll = (scope: { evaluation: { mode: string }; staff: boolean }): boolean =>
+  scope.evaluation.mode === "poll" && !scope.staff;
+
 /** `?watch=` is authorised against the subject itself, and 404s otherwise. */
 async function resolveWatch(
   app: FastifyInstance,
@@ -239,7 +247,7 @@ async function resolveWatch(
   const [kind, id] = [subject.slice(0, separator), subject.slice(separator + 1)];
   if (kind === "evaluation") {
     const scope = await findReachableEvaluation(app.db, req.user!, id);
-    if (!scope) return null;
+    if (!scope || studentOnPoll(scope)) return null;
     return {
       watch: { kind: "evaluation", evaluationId: id },
       evaluation: scope.evaluation,
@@ -253,7 +261,7 @@ async function resolveWatch(
     // draws the waiting room, so it receives no `dashboard.*` whoever opened
     // it, and it counts as present when its user holds a seat.
     const scope = await findReachableEvaluation(app.db, req.user!, id);
-    if (!scope) return null;
+    if (!scope || studentOnPoll(scope)) return null;
     const seat = await live.participantOf(app.db, scope.evaluation, req.user!.id);
     return {
       watch: { kind: "lobby", evaluationId: id },

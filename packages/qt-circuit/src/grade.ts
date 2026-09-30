@@ -17,15 +17,27 @@ import { RunnerRequest, type RunnerOutcome } from "@quiz/core/server";
 import { round2 } from "@quiz/domain/round";
 
 import { extractNets, formatIssue, hasPaletteViolation } from "./netlist.js";
-import { buildBareNetlist, buildNetlist, decimate, parseSpiceOutput, type Harness } from "./spice.js";
 import {
+  buildBareNetlist,
+  buildNetlist,
+  decimate,
+  parseSpiceOutput,
+  type AnalysisKind,
+  type Harness,
+  type SeriesOf,
+} from "./spice.js";
+import {
+  DB_FLOOR,
   totalStimulusPoints,
+  type AcSeries,
+  type BodeTolerance,
   type CircuitAnswer,
   type CircuitConfig,
   type CircuitDetails,
   type CircuitStudent,
   type SeriesSet,
   type StimulusDetail,
+  type TranSeries,
 } from "./schema.js";
 
 /** Runner output kept in `gradings.details` is capped: a 64 KB log is not a grade. */
@@ -184,7 +196,7 @@ function interpolate(xs: readonly number[], ys: readonly number[], x: number): n
  * does not move (a constant output) divides by 1, which turns the tolerance
  * into an absolute one in volts rather than a division by nothing.
  */
-export function compareSeries(student: SeriesSet, expected: SeriesSet): number | null {
+export function compareSeries(student: TranSeries, expected: TranSeries): number | null {
   if (student.t.length === 0 || expected.t.length === 0) return null;
   let sum = 0;
   for (const [i, t] of expected.t.entries()) {
@@ -195,6 +207,75 @@ export function compareSeries(student: SeriesSet, expected: SeriesSet): number |
   const rms = Math.sqrt(sum / expected.t.length);
   const swing = Math.max(...expected.vout) - Math.min(...expected.vout);
   return rms / (swing < 1e-9 ? 1 : swing);
+}
+
+/** How a Bode plot sat in the reference's envelope: {@link StimulusDetail}'s `envelope`. */
+export type BodeEnvelope = NonNullable<StimulusDetail["envelope"]>;
+
+/** A phase difference reduced modulo 360° to (−180°, 180°]. */
+export function wrapDegrees(delta: number): number {
+  const d = ((delta % 360) + 360) % 360;
+  return d > 180 ? d - 360 : d;
+}
+
+/**
+ * The envelope rule of an AC stimulus (ADR-040): does the student's Bode plot
+ * stay inside a band around the reference's, at EVERY frequency?
+ *
+ * The floor is RELATIVE: `floorDb` under the reference's own peak, so the rule
+ * means the same on a unity-gain filter and on a ×100 amplifier. Where the
+ * reference is at or above the floor, the magnitudes must agree within
+ * `magDb` and — unless it is `null` — the phases within `phaseDeg`, their
+ * difference taken modulo 360°. Below the floor the reference is "nothing
+ * gets through", which a student meets with ANY small enough output: the
+ * bound is one-sided (at most `floor + magDb`) and the phase, which is noise
+ * down there, is not compared.
+ *
+ * Both runs come from the same `.ac` line, so they share one frequency grid
+ * and are compared point for point. `null` when they do not — a different
+ * length or a different frequency — which the caller reports as a failure
+ * rather than guessing an alignment.
+ */
+export function compareBode(
+  student: AcSeries,
+  expected: AcSeries,
+  tolerance: BodeTolerance,
+): BodeEnvelope | null {
+  const n = expected.f.length;
+  if (n === 0 || student.f.length !== n) return null;
+  const sameGrid = expected.f.every((f, i) => {
+    const g = student.f[i] ?? Number.NaN;
+    return Math.abs(g - f) <= Math.abs(f) * 1e-6;
+  });
+  if (!sameGrid) return null;
+
+  const floor = Math.max(...expected.magDb) - tolerance.floorDb;
+  const phase = tolerance.phaseDeg;
+  let worstDb = 0;
+  let worstDeg = 0;
+  let outside = 0;
+  for (let i = 0; i < n; i += 1) {
+    const want = expected.magDb[i] ?? floor;
+    const got = student.magDb[i] ?? Number.NaN;
+    // Above the floor the gap counts both ways; below it only an output that
+    // rises past the floor does. Either way the bound is `magDb`.
+    const gap = want >= floor ? Math.abs(got - want) : Math.max(0, got - floor);
+    let pass = Number.isFinite(gap) && gap <= tolerance.magDb;
+    worstDb = Math.max(worstDb, Number.isFinite(gap) ? gap : Infinity);
+    if (phase !== null && want >= floor) {
+      const turned = student.phaseDeg[i] ?? Number.NaN;
+      const delta = Math.abs(wrapDegrees(turned - (expected.phaseDeg[i] ?? 0)));
+      pass = pass && Number.isFinite(delta) && delta <= phase;
+      worstDeg = Math.max(worstDeg, Number.isFinite(delta) ? delta : 180);
+    }
+    if (!pass) outside += 1;
+  }
+  return {
+    // JSON has no infinity: a gap that is not a number is as far off as the floor allows.
+    worstDb: Number.isFinite(worstDb) ? worstDb : -DB_FLOOR,
+    worstDeg: phase === null ? null : worstDeg,
+    outside,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -210,24 +291,34 @@ export interface SimulationResult {
   log?: string;
 }
 
-interface CaseReading {
-  series: SeriesSet | null;
+/** One run that printed its table: decimated for storage and the plot, and whole for a rule that needs it. */
+interface Run<S extends SeriesSet> {
+  series: S;
+  full: S;
+}
+
+interface CaseReading<S extends SeriesSet = SeriesSet> {
+  /** `null` when the case produced no table. */
+  run: Run<S> | null;
   reason?: string;
   log?: string;
 }
 
 /** One case of an outcome: the table it printed, or why there is none. */
-function readCase(run: RunnerOutcome["cases"][number] | undefined): CaseReading {
-  if (run === undefined) return { series: null, reason: "not_run" };
-  const parsed = parseSpiceOutput(run.stdout);
+function readCase<K extends AnalysisKind>(
+  run: RunnerOutcome["cases"][number] | undefined,
+  kind: K,
+): CaseReading<SeriesOf<K>> {
+  if (run === undefined) return { run: null, reason: "not_run" };
+  const parsed = parseSpiceOutput(run.stdout, kind);
   if (parsed !== null && run.exitCode === 0 && !run.timedOut) {
-    return { series: decimate(parsed) };
+    return { run: { series: decimate(parsed), full: parsed } };
   }
   // ngspice exits 0 after refusing a deck, so a missing table is as much a
   // failure as a non-zero exit; the tail of both streams is what tells the
   // teacher which line it choked on.
   return {
-    series: null,
+    run: null,
     reason: run.timedOut ? "spice_timeout" : "spice_failed",
     log: tail(`${run.stderr}\n${run.stdout}`.trim()),
   };
@@ -245,12 +336,13 @@ export function parseSimulation(
 ): SimulationResult[] {
   const n = student.visibleStimuli.length;
   return student.visibleStimuli.map((stimulus, k) => {
-    const read = readCase(outcome.cases[k]);
-    const reference = student.showExpected ? readCase(outcome.cases[n + k]) : null;
+    const kind = stimulus.analysis.kind;
+    const read = readCase(outcome.cases[k], kind);
+    const reference = student.showExpected ? readCase(outcome.cases[n + k], kind) : null;
     return {
       name: stimulus.name,
-      series: read.series,
-      expected: reference?.series ?? null,
+      series: read.run?.series ?? null,
+      expected: reference?.run?.series ?? null,
       ...(read.reason === undefined ? {} : { reason: read.reason }),
       ...(read.log === undefined ? {} : { log: read.log }),
     };
@@ -339,7 +431,8 @@ export function gradeCircuit(
   }
 
   if (config.grading.mode === "llm") {
-    // Phase 2. The MVP grading worker rejects this with `llm_unavailable`.
+    // The grading pass hands it to the LLM service (ADR-045), or writes a
+    // proposal with reason `llm_not_configured` when the process has none.
     const harness = harnessOf(config);
     const first = config.stimuli[0];
     const studentText =
@@ -361,6 +454,9 @@ export function gradeCircuit(
         answer: studentText,
         maxPoints: ctx.itemPoints,
       },
+      // The shape every circuit review reads, so the panel draws the
+      // schematic beside the model's proposal (no stimulus was run).
+      details: { ...baseDetails(config, diagnosis, "none"), reason: "llm" },
     };
   }
 
@@ -403,6 +499,51 @@ export function gradeCircuit(
   }
 }
 
+interface Verdict {
+  ok: boolean;
+  error: number | null;
+  envelope?: BodeEnvelope;
+  reason?: string;
+}
+
+type Rule<K extends AnalysisKind> = (
+  student: Run<SeriesOf<K>>,
+  reference: Run<SeriesOf<K>>,
+  grading: CircuitConfig["grading"],
+) => Verdict;
+
+/**
+ * The pass rule of each analysis kind. A transient is compared on its stored
+ * samples, as it always was (ADR-019); an AC sweep on the FULL tables, since
+ * a resonance peak that decimation steps over is exactly what the envelope
+ * is there to catch (ADR-044).
+ */
+const RULES: { [K in AnalysisKind]: Rule<K> } = {
+  tran: (student, reference, grading) => {
+    const error = compareSeries(student.series, reference.series);
+    return { ok: error !== null && error <= grading.tolerance, error };
+  },
+  ac: (student, reference, grading) => {
+    const envelope = compareBode(student.full, reference.full, grading.bode);
+    if (envelope === null) return { ok: false, error: null, reason: "grid_mismatch" };
+    return { ok: envelope.outside === 0, error: null, envelope };
+  },
+};
+
+/** One stimulus's verdict. With no reference run (`manual` without a reference) a table is all it takes. */
+function judge<K extends AnalysisKind>(
+  kind: K,
+  student: CaseReading<SeriesOf<K>>,
+  reference: CaseReading<SeriesOf<K>> | null,
+  grading: CircuitConfig["grading"],
+): Verdict {
+  if (student.run === null) return { ok: false, error: null };
+  if (reference === null) return { ok: true, error: null };
+  if (reference.run === null) return { ok: false, error: null };
+  const rule: Rule<K> = RULES[kind];
+  return rule(student.run, reference.run, grading);
+}
+
 /**
  * Second half: the runner has spoken. Pure, total, and the only place a
  * `circuit` score is decided.
@@ -438,30 +579,26 @@ export function finalizeRunnerCircuit(
 
   let referenceFailed = false;
   const stimuli: StimulusDetail[] = config.stimuli.map((stimulus, i) => {
-    const student = readCase(outcome.cases[indexOf("student", i)]);
+    const kind = stimulus.analysis.kind;
+    const student = readCase(outcome.cases[indexOf("student", i)], kind);
     const expectedIndex = indexOf("reference", i);
-    const reference = expectedIndex < 0 ? null : readCase(outcome.cases[expectedIndex]);
-    if (reference !== null && reference.series === null) referenceFailed = true;
+    const reference = expectedIndex < 0 ? null : readCase(outcome.cases[expectedIndex], kind);
+    if (reference !== null && reference.run === null) referenceFailed = true;
 
-    const error =
-      student.series !== null && reference?.series != null
-        ? compareSeries(student.series, reference.series)
-        : null;
-    const ok =
-      student.series !== null &&
-      (reference === null || (error !== null && error <= config.grading.tolerance));
+    const verdict = judge(kind, student, reference, config.grading);
     const reason =
       student.reason ??
-      (reference !== null && reference.series === null ? "reference_failed" : undefined);
+      (reference !== null && reference.run === null ? "reference_failed" : verdict.reason);
 
     return {
       name: stimulus.name,
       visible: stimulus.visible,
       points: stimulus.points,
-      ok,
-      error,
-      series: student.series,
-      expected: reference?.series ?? null,
+      ok: verdict.ok,
+      error: verdict.error,
+      ...(verdict.envelope === undefined ? {} : { envelope: verdict.envelope }),
+      series: student.run?.series ?? null,
+      expected: reference?.run?.series ?? null,
       ...(reason === undefined ? {} : { reason }),
       ...(student.log === undefined ? {} : { log: student.log }),
     };
@@ -535,6 +672,9 @@ export function studentDetails(
           points: s.points,
           ok: s.ok,
           error: s.error,
+          // The distance to the envelope is a verdict, like `error`; the
+          // curves it was measured on are the key.
+          ...(s.envelope === undefined ? {} : { envelope: s.envelope }),
           series: null,
           expected: null,
           ...(s.reason === undefined ? {} : { reason: s.reason }),

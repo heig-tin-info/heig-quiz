@@ -25,7 +25,7 @@ import { Plot, SchematicEditor, type CanvasStrings } from "./canvas/index.js";
 import { parseSimulation, type SimulationResult } from "./grade.js";
 import { formatValue, LIBRARY, PORT_IDS, type PortId } from "./library.js";
 import { extractNets, type NetlistIssue } from "./netlist.js";
-import type { CircuitAnswer, CircuitStudent, Load, Source, StudentStimulus } from "./schema.js";
+import { biasOf, type CircuitAnswer, type CircuitStudent, type Load, type Source, type StudentStimulus } from "./schema.js";
 import { PLAYER_STRINGS, type CircuitPlayerStrings } from "./strings.js";
 import { badge, buttonClass, card, cx, hint, isLocked, markdown, sectionTitle } from "@quiz/ui";
 
@@ -123,11 +123,27 @@ function describeLoad(load: Load, s: CircuitPlayerStrings): string {
   }
 }
 
+/**
+ * `Bode 10Hz → 100kHz · bias 0 V · open output` for an AC stimulus: the
+ * analysis first, because it says what the plot will be, then the operating
+ * point the circuit is linearised around.
+ */
 function describeStimulus(stimulus: StudentStimulus, s: CircuitPlayerStrings): string {
+  const { analysis, source } = stimulus;
+  if (analysis.kind === "ac") {
+    return [
+      fmt(s.sweep, {
+        from: `${formatValue(analysis.fStartHz)}Hz`,
+        to: `${formatValue(analysis.fStopHz)}Hz`,
+      }),
+      fmt(s.srcBias, { volts: formatValue(biasOf(source)) }),
+      describeLoad(stimulus.load, s),
+    ].join(" · ");
+  }
   return [
-    describeSource(stimulus.source, s),
+    describeSource(source, s),
     describeLoad(stimulus.load, s),
-    fmt(s.window, { ms: formatValue(stimulus.analysis.stopMs) }),
+    fmt(s.window, { ms: formatValue(analysis.stopMs) }),
   ].join(" · ");
 }
 

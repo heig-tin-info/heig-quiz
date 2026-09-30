@@ -57,7 +57,9 @@ const MENU_FLIP_MARGIN = 280;
  * first row and ArrowUp on the last. An empty list keeps `active`, so the
  * caller still owns the key (the arrows must not move a caret meanwhile).
  * Home and End jump only when `ends` is set: in a text field that owns its
- * caret (a tag or teacher combobox) they belong to the field.
+ * caret (a tag or teacher combobox) they belong to the field. `wrap: false`
+ * stops the arrows at both ends instead (the pool's rows: the last row is the
+ * last LOADED one, and wrapping to the top would hide that more exist).
  *
  * Only the index: each call site keeps its own `preventDefault` and its own
  * side effects (opening the list, focusing a row), which is where the
@@ -67,11 +69,12 @@ export function listboxIndex(
   key: string,
   active: number,
   count: number,
-  { ends = false }: { ends?: boolean } = {},
+  { ends = false, wrap = true }: { ends?: boolean; wrap?: boolean } = {},
 ): number | null {
   if (key === "ArrowDown" || key === "ArrowUp") {
     if (count === 0) return active;
     if (active < 0) return key === "ArrowDown" ? 0 : count - 1;
+    if (!wrap) return Math.min(Math.max(active + (key === "ArrowDown" ? 1 : -1), 0), count - 1);
     return (active + (key === "ArrowDown" ? 1 : count - 1)) % count;
   }
   if (ends && key === "Home") return 0;
@@ -82,10 +85,21 @@ export function listboxIndex(
 /**
  * The next stop of a horizontal roving-tabindex strip (`Tabs`,
  * `ProgressSegments`): ArrowRight / ArrowLeft with wrap, Home / End to the
- * ends. Null for any other key, and for an empty strip.
+ * ends. Null for any other key, and for an empty strip. A grid (the question
+ * type tiles) passes its `columns`: ArrowDown / ArrowUp then move a row, and
+ * stay put at the first or last one.
  */
-export function rovingIndex(key: string, current: number, count: number): number | null {
+export function rovingIndex(
+  key: string,
+  current: number,
+  count: number,
+  columns?: number,
+): number | null {
   if (count === 0) return null;
+  if (columns !== undefined && (key === "ArrowDown" || key === "ArrowUp")) {
+    const next = current + (key === "ArrowDown" ? columns : -columns);
+    return next >= 0 && next < count ? next : current;
+  }
   if (key === "ArrowRight") return (current + 1 + count) % count;
   if (key === "ArrowLeft") return (current - 1 + count) % count;
   if (key === "Home") return 0;

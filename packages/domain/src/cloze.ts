@@ -443,13 +443,19 @@ export function matchBlank(blank: ClozeBlank, given: string | null, caseSensitiv
   }
 }
 
+/**
+ * What joins a blank's accepted alternatives in `describeBlank`: a reader
+ * that lists them one by one (the grading table) splits on it.
+ */
+export const BLANK_ALTERNATIVES_SEPARATOR = " | ";
+
 /** Human rendering of the key, for the teacher panel and the revealed solution. */
 export function describeBlank(blank: ClozeBlank): string {
   switch (blank.kind) {
     case "text":
-      return blank.answers.join(" | ");
+      return blank.answers.join(BLANK_ALTERNATIVES_SEPARATOR);
     case "select":
-      return blank.correct.map((i) => blank.options[i] ?? "").join(" | ");
+      return blank.correct.map((i) => blank.options[i] ?? "").join(BLANK_ALTERNATIVES_SEPARATOR);
     case "number":
       if (blank.tolerance === 0) return String(blank.value);
       return blank.mode === "rel"

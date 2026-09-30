@@ -34,7 +34,7 @@ Press **Start the poll**. The poll is running from that instant and the projecti
 
 ## The projection
 
-The projection is the one screen of the product that is not a page: no sidebar, no header, dark by default because a beamer throws light. Put this window on the beamer and press the full-screen button at the top right, or the `F` key.
+The projection is the one screen of the product that is not a page: no sidebar, no header, dark by default because a beamer throws light. Put this window on the beamer and press the full-screen button at the top right, or the `F` key. The sun or moon button beside it, or the `T` key, switches between the dark and the light theme; hovering either button names its key.
 
 <figure markdown="span">
   ![The projection of a running poll: the question in large type, its choices with the votes hidden, the join code and its QR code](../assets/screenshots/poll-projection-light.png#only-light)
@@ -93,6 +93,8 @@ Revealing is reversible: switch **Reveal answer** off and the key is hidden agai
 ## Ending the poll
 
 **End poll**, at the top right, asks for confirmation and stops the poll: no further answer is accepted, and a phone whose answer arrives too late is told so. The header reads **Poll ended** and the primary action becomes **Run again**, which starts a fresh poll on the same question in the same classroom, with an empty tally and a new code.
+
+Once a multiple-choice poll has ended and its votes are shown, the chart button beside the theme toggle, or the `Space` key, swaps the bars for one large donut: each choice in its own colour with its letter on its slice, the total of the votes in the middle, and a legend with every percentage. Press `Space` again for the bars. It changes only the wall; the phones keep what the switches give them.
 
 <figure markdown="span">
   ![The projection after the end: Poll ended in the header, the whole tally with the correct answer marked, and Run again as the primary action](../assets/screenshots/poll-ended-light.png#only-light)

@@ -26,6 +26,7 @@ import {
   Badge,
   Button,
   cx,
+  ErrorText,
   IconButton,
   inputClass,
   inputSize,
@@ -136,7 +137,7 @@ function Row({
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
-          {err ? <p className="mt-1 text-xs text-danger">{err}</p> : null}
+          {err ? <ErrorText small className="mt-1">{err}</ErrorText> : null}
           {form.email !== entry.email && entry.status === "claimed" ? (
             <p className="mt-1 text-xs text-warning">{t("roster.emailChangeWarning")}</p>
           ) : null}

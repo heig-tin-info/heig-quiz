@@ -114,7 +114,7 @@ export function buildCommands(ctx: CommandContext): Command[] {
   const commands: Command[] = [
     {
       id: "nav:home",
-      // Same label and icon as the first row of the sidebar: the palette must
+      // Same label and icon as the sidebar row it duplicates: the palette must
       // name things the way the screen behind it does.
       // WP9: student player — same label as the sidebar row it duplicates.
       label: ctx.teacherUi ? t("nav.courses") : t("shome.title"),

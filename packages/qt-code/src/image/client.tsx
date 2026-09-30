@@ -7,6 +7,7 @@ import { lazy } from "react";
 
 import type { QuestionTypeClient } from "@quiz/core/client";
 import { typeIcon } from "@quiz/ui";
+import { codeimageGrading } from "./grading.js";
 import { isCodeImageAnswered } from "./schema.js";
 
 import type {
@@ -21,8 +22,8 @@ import type {
 const CodeImageIcon = typeIcon(
   <>
     <rect x="3" y="3" width="18" height="18" rx="2" />
-    <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
-    <path d="M9 9h6v6H9z" fill="currentColor" stroke="none" />
+    <path d="M3 9h18M3 15h18M9 3v18M15 3v18" opacity=".55" />
+    <path d="M9 3h6v18H9zM3 9h18v6H3z" fill="currentColor" stroke="none" />
   </>,
 );
 
@@ -48,4 +49,5 @@ export const codeimageClient: QuestionTypeClient<
   },
 
   isAnswered: isCodeImageAnswered,
+  grading: codeimageGrading,
 };

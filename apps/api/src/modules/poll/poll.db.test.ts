@@ -381,6 +381,10 @@ describe("the public page (F-AUTH-05)", () => {
     for (const forbidden of FORBIDDEN_STUDENT_KEYS) {
       expect(serialized, `public view leaked "${forbidden}"`).not.toContain(`"${forbidden}"`);
     }
+    // Nor by another road: the poll's title is the question's internal name,
+    // and the public view carries no title at all (#305).
+    expect(body).not.toHaveProperty("title");
+    expect(view.body).not.toContain("Capitale VD");
   });
 
   it("is a 404 on an unknown code, exactly like a missing one", async () => {
@@ -652,6 +656,25 @@ describe("a classroom's poll: its roster and its staff, signed in", () => {
     });
     expect(refused.statusCode).toBe(403);
     expect(refused.json().error).toBe("csrf");
+  });
+
+  // The poll's title is its question's internal name (#305): no student road
+  // may lead to the evaluation's own views.
+  it("refuses a rostered student the evaluation's live streams, with the 404 of a missing one", async () => {
+    for (const watch of [`lobby:${namedId}`, `evaluation:${namedId}`]) {
+      const stream = await get(`/app/api/events?watch=${encodeURIComponent(watch)}`, rostered.headers);
+      expect(stream.statusCode, watch).toBe(404);
+      expect(stream.body).not.toContain("Capitale VD");
+    }
+  });
+
+  it("is never released, even by a direct call once ended (06, row 16)", async () => {
+    expect((await post(`/app/api/evaluations/${namedId}/poll/end`, teacher.headers)).statusCode).toBe(200);
+    const released = await post(`/app/api/evaluations/${namedId}/release`, teacher.headers, { confirm: true });
+    expect(released.statusCode).toBe(409);
+    expect(released.json().error).toBe("not_releasable");
+    const [row] = await server.app.db.select().from(evaluations).where(eq(evaluations.id, namedId));
+    expect(row!.releasedAt).toBeNull();
   });
 });
 

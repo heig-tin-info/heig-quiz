@@ -1,9 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import type { SeriesSet } from "../schema.js";
+import type { AcSeries, SeriesSet } from "../schema.js";
 
-import { Plot, formatTick, niceTicks } from "./Plot.js";
+import { Plot, formatTick, logTicks, niceTicks, phaseTicks } from "./Plot.js";
 
 /** One millisecond of a 1 kHz sine into a resistive load. */
 function sine(points = 60, scale = 1): SeriesSet {
@@ -82,6 +82,80 @@ describe("Plot", () => {
   it("takes the host's words", () => {
     render(<Plot series={null} strings={{ plotEmpty: "Lancez une simulation." }} />);
     expect(screen.getByText("Lancez une simulation.")).toBeInTheDocument();
+  });
+});
+
+/** Three decades of a first-order low-pass, corner at 1 kHz. */
+function bode(): AcSeries {
+  const f: number[] = [];
+  const magDb: number[] = [];
+  const phaseDeg: number[] = [];
+  for (let i = 0; i <= 30; i += 1) {
+    const freq = 10 ** (1 + i / 10);
+    f.push(freq);
+    magDb.push(-10 * Math.log10(1 + (freq / 1000) ** 2));
+    phaseDeg.push((-Math.atan(freq / 1000) * 180) / Math.PI);
+  }
+  return { kind: "ac", f, magDb, phaseDeg };
+}
+
+describe("Plot, Bode", () => {
+  it("draws the magnitude and the phase of v(out), and no input", () => {
+    const { container } = render(<Plot series={bode()} />);
+    expect(paths(container)).toEqual(["vout", "vout-phase"]);
+    expect(screen.queryByText("v(in)")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show current" })).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Bode plot of the output" })).toBeInTheDocument();
+  });
+
+  it("overlays the reference on both panels", () => {
+    const { container } = render(<Plot series={bode()} expected={bode()} />);
+    expect(paths(container).sort()).toEqual(["expected", "expected-phase", "vout", "vout-phase"]);
+    expect(screen.getByText("expected v(out)")).toBeInTheDocument();
+  });
+
+  it("labels a logarithmic frequency axis, once, in engineering notation", () => {
+    render(<Plot series={bode()} />);
+    expect(screen.getByText("Hz")).toBeInTheDocument();
+    expect(screen.getByText("dB")).toBeInTheDocument();
+    expect(screen.getByText("°")).toBeInTheDocument();
+    for (const tick of ["10", "100", "1k", "10k"]) expect(screen.getAllByText(tick)).toHaveLength(1);
+  });
+
+  it("scales the phase on the points the magnitude panel shows, not on the noise under it", () => {
+    const noisy = bode();
+    noisy.f.push(1e5, 1e6);
+    noisy.magDb.push(-250, -300);
+    noisy.phaseDeg.push(-3600, -7200);
+    render(<Plot series={noisy} />);
+    expect(screen.queryByText("-3600")).not.toBeInTheDocument();
+    expect(screen.queryByText("-720")).not.toBeInTheDocument();
+  });
+
+  it("ignores a transient offered as the reference of a sweep", () => {
+    const { container } = render(<Plot series={bode()} expected={sine()} />);
+    expect(paths(container)).toEqual(["vout", "vout-phase"]);
+  });
+});
+
+describe("logTicks", () => {
+  it("ticks every decade of a wide sweep", () => {
+    expect(logTicks(10, 1e5)).toEqual([10, 100, 1000, 1e4, 1e5]);
+  });
+
+  it("adds 2 and 5 on a narrow one", () => {
+    expect(logTicks(100, 1e4)).toEqual([100, 200, 500, 1000, 2000, 5000, 1e4]);
+  });
+
+  it("does not loop on a degenerate band", () => {
+    expect(logTicks(0, 10)).toEqual([0]);
+  });
+});
+
+describe("phaseTicks", () => {
+  it("steps by 15, 30, 45 or 90 degrees", () => {
+    expect(phaseTicks(-90, 0)).toEqual([-90, -75, -60, -45, -30, -15, 0]);
+    expect(phaseTicks(-200, 10)).toEqual([-180, -135, -90, -45, 0]);
   });
 });
 

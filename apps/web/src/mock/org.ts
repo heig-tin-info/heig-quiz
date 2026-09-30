@@ -83,6 +83,8 @@ export interface Room {
   createdAt: string;
   archivedAt: string | null;
   roster: RosterEntry[];
+  /** ADR-041 §6: when the teacher turned the drill on (`mock/drill.ts` writes it). */
+  drillEnabledAt?: string | null;
 }
 
 export interface Course {
@@ -448,6 +450,7 @@ const classroomDetail = (r: Room): ClassroomDetail => {
     periodStart: r.periodStart,
     periodEnd: r.periodEnd,
     archivedAt: r.archivedAt,
+    drillEnabled: (r.drillEnabledAt ?? null) !== null,
     course: { id: c.id, name: c.name, code: c.code },
     roster: r.roster,
   };

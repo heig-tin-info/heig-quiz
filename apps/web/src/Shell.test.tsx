@@ -7,9 +7,10 @@ import type { CourseSummary, PoolDetail, PoolSummary } from "@quiz/contracts";
 
 import { ModeBanner, Shell } from "./Shell";
 import { resetShortcuts, useShortcuts } from "./shortcuts";
-import { modKey } from "./ui";
+import { modKey, PAGE_COLUMN } from "./ui";
 import { makeClassroomSummary, makeCourseSummary, makeMe } from "./test/fixtures";
 import { makeQueryClient, renderWithProviders } from "./test/render";
+import { drillClassroomsKey, drillSessionKey } from "./queryKeys";
 import type { Route } from "./router";
 
 /*
@@ -72,6 +73,7 @@ function renderShell({
   path,
   wide,
   children,
+  drill,
 }: {
   route?: Route;
   courses?: CourseSummary[];
@@ -92,11 +94,36 @@ function renderShell({
   wide?: boolean;
   /** What the frame wraps; a screen registering its own shortcuts, here. */
   children?: ReactNode;
+  /** Seeds the student's drill (#317): its classrooms, and today's card count. */
+  drill?: { rooms: number; cards: number };
 } = {}) {
   const queryClient = makeQueryClient();
   queryClient.setQueryData(["courses"], courses);
   if (pool) queryClient.setQueryData(["pool", pool.pool.id], pool);
   if (poolList) queryClient.setQueryData(["pools"], poolList);
+  if (drill) {
+    queryClient.setQueryData(
+      drillClassroomsKey,
+      Array.from({ length: drill.rooms }, (_, i) => ({
+        classroomId: `r${i}`,
+        classroomName: `Room ${i}`,
+        courseCode: "PRG1",
+        courseName: "Programmation C",
+        optedOutAt: null,
+      })),
+    );
+    queryClient.setQueryData(drillSessionKey("fine"), {
+      cards: Array.from({ length: drill.cards }, (_, i) => ({
+        id: `k${i}`,
+        type: "mcq",
+        courseCode: "PRG1",
+        courseName: "Programmation C",
+        isNew: false,
+      })),
+      budgetMs: 600_000,
+      nextDueAt: null,
+    });
+  }
   renderWithProviders(
     <Shell
       me={me}
@@ -122,13 +149,15 @@ const classroomsSection = () => within(sidebar()).getByText("Classrooms").parent
 describe("Shell content width (#93)", () => {
   it("caps the page at the reading width by default", () => {
     renderShell();
-    expect(screen.getByRole("main")).toHaveClass("max-w-280");
+    const main = screen.getByRole("main");
+    expect(main).toHaveClass("max-w-(--page-cap)");
+    expect(main.style.getPropertyValue("--page-cap")).toBe(PAGE_COLUMN.cap);
   });
 
   it("lets a wide route take the whole content area", () => {
     renderShell({ route: { view: "live", id: "e1" }, wide: true });
     const main = screen.getByRole("main");
-    expect(main).not.toHaveClass("max-w-280");
+    expect(main).not.toHaveClass("max-w-(--page-cap)");
     expect(main).toHaveClass("max-w-none");
   });
 });
@@ -278,6 +307,24 @@ describe("Shell sidebar", () => {
     // WP9: "Home" is the student heading; the teacher sections are gone.
     expect(nav.getByRole("button", { name: "Home" })).toBeInTheDocument();
     expect(nav.queryByRole("button", { name: /^Classroom 1(?!\d)/ })).toBeNull();
+  });
+
+  // ADR-041 (#317): the student's Drill row, once a classroom has the drill on.
+  it("gives the student a Drill row, with today's dot, only when a classroom has the drill", () => {
+    renderShell({ teacherUi: false, me: makeMe({ role: "student" }), drill: { rooms: 1, cards: 2 } });
+    const row = within(sidebar()).getByRole("button", { name: /^Drill/ });
+    expect(within(row).getByText("Today's drill is available")).toBeInTheDocument();
+  });
+
+  it("draws no Drill row without a classroom whose drill is on", () => {
+    renderShell({ teacherUi: false, me: makeMe({ role: "student" }), drill: { rooms: 0, cards: 0 } });
+    expect(within(sidebar()).queryByRole("button", { name: /^Drill/ })).toBeNull();
+  });
+
+  it("keeps the row but drops the dot on a day with nothing to review", () => {
+    renderShell({ teacherUi: false, me: makeMe({ role: "student" }), drill: { rooms: 1, cards: 0 } });
+    const row = within(sidebar()).getByRole("button", { name: "Drill" });
+    expect(within(row).queryByText("Today's drill is available")).toBeNull();
   });
 });
 
@@ -938,5 +985,62 @@ describe("Shell course tree", () => {
       "aria-expanded",
     );
     expect(within(sidebar()).queryByRole("button", { name: "PRG1" })).toBeNull();
+  });
+});
+
+describe("Shell student bottom bar (#191)", () => {
+  const bar = () => screen.queryByRole("navigation", { name: "Main navigation" });
+  const student = { teacherUi: false, canSwitchView: false, me: makeMe({ role: "student" }) };
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("stays out of the teacher's frame, and the drawer stays", () => {
+    renderShell();
+    expect(bar()).toBeNull();
+    expect(screen.getByRole("button", { name: "Open menu" })).toBeInTheDocument();
+  });
+
+  it("gives the student four labelled slots, the current one marked", () => {
+    renderShell(student);
+    const nav = within(bar()!);
+    expect(nav.getAllByRole("link").map((a) => a.textContent)).toEqual([
+      "Activities",
+      "Courses",
+      "Grades",
+      "Profile",
+    ]);
+    expect(nav.getByRole("link", { name: "Activities" })).toHaveAttribute("aria-current", "page");
+    expect(nav.getByRole("link", { name: "Courses" })).not.toHaveAttribute("aria-current");
+    expect(nav.getByRole("link", { name: "Grades" })).toHaveAttribute("href", "/#past");
+    expect(nav.getByRole("link", { name: "Profile" })).toHaveAttribute("href", "/settings");
+  });
+
+  it("marks Grades on a feedback page", () => {
+    renderShell({ ...student, route: { view: "feedback", attemptId: "a1" } });
+    expect(within(bar()!).getByRole("link", { name: "Grades" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("does not repeat itself in the top bar: no drawer, no Settings in the avatar", async () => {
+    renderShell(student);
+    expect(screen.queryByRole("button", { name: "Open menu" })).toBeNull();
+    // Two account menus exist, the sidebar's and the phone's; the last is the phone's.
+    const avatars = screen.getAllByRole("button", { name: "User menu" });
+    await userEvent.click(avatars[avatars.length - 1]!);
+    expect(screen.queryByRole("menuitem", { name: "Settings" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
+  });
+
+  it("navigates, and a section slot names its place in the address", async () => {
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    const { navigate } = renderShell({ ...student, route: { view: "settings" } });
+    await userEvent.click(within(bar()!).getByRole("link", { name: "Courses" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "home" });
+    expect(window.location.hash).toBe("#classrooms");
+    await userEvent.click(within(bar()!).getByRole("link", { name: "Profile" }));
+    expect(navigate).toHaveBeenLastCalledWith({ view: "settings" });
+    expect(window.location.hash).toBe("");
   });
 });

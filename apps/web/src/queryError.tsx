@@ -2,7 +2,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 
 import { apiErrorMessage } from "./api";
 import { useT } from "./i18n";
-import { Button } from "./ui/controls";
+import { Button, ErrorText } from "./ui/controls";
 import { Alert } from "./ui/feedback";
 import { PageHeader } from "./ui/page";
 
@@ -111,6 +111,6 @@ export function FormError({
       {message}
     </Alert>
   ) : (
-    <p className="text-[13px] text-danger">{message}</p>
+    <ErrorText>{message}</ErrorText>
   );
 }

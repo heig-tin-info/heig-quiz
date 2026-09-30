@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { AvatarMime } from "@quiz/contracts";
@@ -7,11 +7,21 @@ import { AvatarMime } from "@quiz/contracts";
 import { audit } from "../audit.js";
 import { avatars } from "../db/schema.js";
 import { publish } from "../events.js";
+import { seesUser } from "./guards.js";
 import { INERT_IMAGE_HEADERS, sniffImage } from "./pool/assets.js";
 
 /** `AvatarMime` is the one list (B-19); `app.ts` parses the same set. */
 const ACCEPTED: ReadonlySet<string> = new Set<string>(AvatarMime.options);
 const MAX_BYTES = 1_000_000; // cropped to 256x256 client-side: ~30-80 KB in practice
+
+/**
+ * The URL of a user's uploaded picture, `?v=` busting the cache on change.
+ * The one place it is written: any NEW caller that shows it to someone else
+ * must be covered by `seesUser` in `guards.ts`, or the picture 404s there.
+ */
+export function avatarUrl(userId: string, updatedAt: Date): string {
+  return `/app/api/users/${userId}/avatar?v=${updatedAt.getTime()}`;
+}
 
 /**
  * Uploaded avatar (cropped client-side, circular preview). Takes precedence
@@ -95,8 +105,11 @@ export async function avatarPlugin(app: FastifyInstance) {
       const [row] = await app.db
         .select()
         .from(avatars)
-        .where(eq(avatars.userId, params.data.uid))
+        .where(
+          and(eq(avatars.userId, params.data.uid), seesUser(req.user!, params.data.uid)),
+        )
         .limit(1);
+      // No picture and a picture the caller may not see answer alike (#318).
       if (!row) return reply.code(404).send({ error: "not_found" });
       return reply
         .type(row.contentType)

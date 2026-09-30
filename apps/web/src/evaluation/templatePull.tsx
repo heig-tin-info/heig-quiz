@@ -13,7 +13,7 @@ import { isEmptyDiff } from "@quiz/domain";
 import { api, ApiError } from "../api";
 import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
-import { Badge, FormDialog, FormError, QueryError, Skeleton } from "../ui";
+import { Badge, ErrorText, FormDialog, FormError, QueryError, Skeleton } from "../ui";
 import { evaluationKey, evaluationsKey, templatePullKey } from "../queryKeys";
 import { instantiateError, itemNames } from "./templates";
 
@@ -174,7 +174,7 @@ export function PullTemplateDialog({
       canSubmit={data !== undefined && !blocked}
       error={
         refusal ? (
-          <p className="text-[13px] text-danger">{refusal}</p>
+          <ErrorText>{refusal}</ErrorText>
         ) : (
           <FormError error={pull.error} fallback={t("templatePull.failed")} />
         )
@@ -218,9 +218,9 @@ export function PullTemplateDialog({
             </p>
           ) : null}
           {blocked ? (
-            <p className="text-[13px] text-danger">
+            <ErrorText>
               {t("templates.unlinked", { names: itemNames(data.unlinkedItems) })}
-            </p>
+            </ErrorText>
           ) : null}
         </>
       )}

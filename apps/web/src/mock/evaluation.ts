@@ -113,11 +113,22 @@ function itemSource(): MockQuestion[] {
    * evaluations the grading panel is built from carry one (issue #192).
    */
   const essay = published.filter((q) => q.type === "rich");
-  // The categorize question follows the essay, sixth (docs/04 §4.13).
+  // The categorize question follows the essay, sixth (docs/04 §4.13), and
+  // the code-to-picture one comes seventh, so the two finished evaluations
+  // give the grading table every type of question (ADR-044).
   const categorize = published.filter((q) => q.type === "categorize");
-  const rest = primary.filter((q) => q.type !== "rich" && q.type !== "categorize");
+  const codeimage = published.filter((q) => q.type === "codeimage");
+  const rest = primary.filter((q) => !["rich", "categorize", "codeimage"].includes(q.type));
   if (primary.length === 0) return published;
-  return [...rest.slice(0, 2), ...circuit, ...rest.slice(2, 3), ...essay, ...categorize, ...rest.slice(3)];
+  return [
+    ...rest.slice(0, 2),
+    ...circuit,
+    ...rest.slice(2, 3),
+    ...essay,
+    ...categorize,
+    ...codeimage,
+    ...rest.slice(3),
+  ];
 }
 
 const studentConfigOf = (q: MockQuestion): unknown => studentView(q, frozenConfig(q));
@@ -389,7 +400,9 @@ function makeItems(count: number): MockItem[] {
     const frozen = i % 3 === 0 && latest.number > 1 ? latest.number - 1 : latest.number;
     return {
       id: uuid(),
-      position: i + 1,
+      // 0-based, as `evaluation_items.position` is on the wire: every screen
+      // numbers from 1 itself.
+      position: i,
       points: q.type === "code" ? 3 : 1 + (i % 3),
       // Two section breaks, the first early enough that the four-item draft
       // shows one: the milestone separator is a shape of the list and has to
@@ -566,11 +579,12 @@ export const EVAL_ROOM = "r1";
  * resolve to, which is what the screenshot script deep-links to.
  */
 evaluations.push(
-  makeEvaluation(EVAL_ROOM, "Quiz 0 — prise en main", "closed", 5, {
+  // Eight items: the eighth is the cloze, so the correction draws its blanks.
+  makeEvaluation(EVAL_ROOM, "Quiz 0 — prise en main", "closed", 8, {
     startedAt: iso(-20 * D),
     closedAt: iso(-20 * D + H),
   }),
-  makeEvaluation(EVAL_ROOM, "Test d'entrée", "released", 6, {
+  makeEvaluation(EVAL_ROOM, "Test d'entrée", "released", 7, {
     startedAt: iso(-60 * D),
     closedAt: iso(-60 * D + H),
     releasedAt: iso(-59 * D),
@@ -783,6 +797,10 @@ export const toEvaluation = (e: MockEvaluation) => ({
   mode: e.mode,
   state: e.state,
   settings: e.settings,
+  // The server's `drillAllowed` (ADR-041 §2): the setting, else the mode's default.
+  allowDrill:
+    e.mode !== "poll" &&
+    (typeof e.settings["allowDrill"] === "boolean" ? e.settings["allowDrill"] : e.mode === "exercise"),
   gradingScale: e.gradingScale,
   feedbackPolicy: e.feedbackPolicy,
   mcqPolicy: e.mcqPolicy,
@@ -1213,7 +1231,7 @@ if (!flags.empty) {
       durationS: 45 * 60,
     });
     series.shell.items = series.shell.items.filter((i) => inLinkedPool(i, room.courseId));
-    series.shell.items.forEach((i, index) => (i.position = index + 1));
+    series.shell.items.forEach((i, index) => (i.position = index));
     series.shell.items[0]!.points += 1;
     const stale = series.shell.items.find((i) => (i.latestVersionNumber ?? 0) > i.versionNumber);
     if (stale) stale.versionNumber = stale.latestVersionNumber!;
@@ -1406,7 +1424,7 @@ function addItemsTo(e: MockEvaluation, questionIds: string[]): void {
     }
     e.items.push({
       id: uuid(),
-      position: e.items.length + 1,
+      position: e.items.length,
       points: q.type === "code" ? 3 : 1,
       milestone: false,
       questionId: q.id,
@@ -1430,12 +1448,12 @@ function patchItemOf(e: MockEvaluation, itemId: string, body: Record<string, unk
 
 function reorderItemsOf(e: MockEvaluation, order: string[]): void {
   e.items.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
-  e.items.forEach((i, index) => (i.position = index + 1));
+  e.items.forEach((i, index) => (i.position = index));
 }
 
 function removeItemOf(e: MockEvaluation, itemId: string): void {
   e.items = e.items.filter((i) => i.id !== itemId);
-  e.items.forEach((i, index) => (i.position = index + 1));
+  e.items.forEach((i, index) => (i.position = index));
 }
 
 on("POST", "/app/api/evaluations/:id/items/update-versions", (m, body) => {

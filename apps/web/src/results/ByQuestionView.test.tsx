@@ -1,0 +1,126 @@
+import { screen, within } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
+import type { ByQuestion } from "@quiz/contracts";
+import { clozeStudentTemplate, parseCloze } from "@quiz/domain/cloze";
+
+import { renderWithProviders } from "../test/render";
+import { ByQuestionView } from "./ByQuestionView";
+
+/*
+ * The Results "Questions" tab (F-RES-03): the teacher's reading of the
+ * correction projection — the same choices, rows and blanks at the page's
+ * scale, always revealed — and the type's own review for any other question.
+ */
+
+function question(over: Partial<ByQuestion> & Pick<ByQuestion, "item">): ByQuestion {
+  return {
+    student: null,
+    solution: null,
+    explanation: null,
+    outcomes: { correct: 0, partial: 0, wrong: 0, blank: 0 },
+    distribution: [],
+    casePassRate: [],
+    successRate: null,
+    avgMs: null,
+    ...over,
+  };
+}
+
+const item = (position: number, type: string) => ({
+  id: `i${position}`,
+  position,
+  internalName: `q-${position}`,
+  type,
+  points: 1,
+  successRate: null,
+});
+
+const MCQ = question({
+  item: item(0, "mcq"),
+  student: {
+    prompt: "What is `sizeof(char)`?",
+    choices: [
+      { id: 0, text: "`1` byte" },
+      { id: 1, text: "`2` bytes" },
+    ],
+    mode: "single",
+  },
+  solution: { correct: [0] },
+  outcomes: { correct: 3, partial: 0, wrong: 1, blank: 1 },
+  distribution: [
+    { key: "0", label: "0", count: 3, correct: true, part: null },
+    { key: "1", label: "1", count: 1, correct: false, part: null },
+  ],
+  successRate: 0.6,
+});
+
+const CLOZE = question({
+  item: item(1, "cloze"),
+  student: clozeStudentTemplate(parseCloze("Free with {{free}}."), 0, "i1", false),
+  solution: { blanks: [{ index: 0, expected: "free" }] },
+  outcomes: { correct: 2, partial: 0, wrong: 1, blank: 1 },
+  distribution: [
+    { key: "0:free", label: "free", count: 2, correct: true, part: 0 },
+    { key: "0:delete", label: "delete", count: 1, correct: false, part: 0 },
+  ],
+  successRate: 0.5,
+});
+
+const SHORT_UNANSWERED = question({
+  item: item(2, "short"),
+  student: { prompt: "What does `7 / 2` print?" },
+  solution: { expected: ["3"] },
+});
+
+const CODE = question({
+  item: item(3, "code"),
+  student: { prompt: "Write `sum`.", language: "c", template: "", regions: [] },
+  solution: { referenceSolution: "return a + b;" },
+  outcomes: { correct: 2, partial: 0, wrong: 1, blank: 0 },
+  casePassRate: [{ name: "visible-1", label: "visible-1", passed: 2, total: 3 }],
+});
+
+describe("ByQuestionView", () => {
+  it("draws an mcq as the projection does, revealed, its choices in markdown", async () => {
+    renderWithProviders(<ByQuestionView questions={[MCQ]} />);
+    const choices = await screen.findByRole("list");
+    const [key, distractor] = within(choices).getAllByRole("listitem");
+    // Inline code, never raw backticks; the count of papers at the end.
+    expect(key!.textContent).toBe("A1 byte3");
+    expect(key!.querySelector("code")).toHaveTextContent("1");
+    expect(screen.queryByText(/`/)).toBeNull();
+    // Revealed: each bar names its verdict.
+    expect(within(key!).getByRole("img")).toHaveAccessibleName("correct answer · ticked: 3");
+    expect(within(distractor!).getByRole("img")).toHaveAccessibleName("wrong answer · ticked: 1");
+    // Nothing of an empty student copy: no "Missed", no score, no second list.
+    expect(screen.queryByText(/Missed/)).toBeNull();
+    expect(screen.queryByText(/Score/)).toBeNull();
+    expect(screen.queryByText("Answer distribution")).toBeNull();
+  });
+
+  it("draws a cloze's blanks with their key and a right / wrong bar", async () => {
+    renderWithProviders(<ByQuestionView questions={[CLOZE]} />);
+    const hole = (await screen.findByText("free")).parentElement!;
+    expect(within(hole).getByRole("img")).toHaveAccessibleName("correct: 2 · wrong: 1");
+  });
+
+  it("draws a short answer's key itself, even with nobody to count", async () => {
+    renderWithProviders(<ByQuestionView questions={[SHORT_UNANSWERED]} />);
+    expect(await screen.findByText("Nobody answered this question.")).toBeVisible();
+    expect(screen.getByText("Expected answer")).toBeVisible();
+    // Never the empty student copy of the type's review.
+    expect(screen.queryByText(/Score/)).toBeNull();
+  });
+
+  it("leaves any other type's statement to its review, with the program below", async () => {
+    renderWithProviders(<ByQuestionView questions={[CODE]} />);
+    expect(await screen.findByText("Not answered.")).toBeVisible();
+    expect(screen.getByRole("region", { name: "Reference solution" })).toHaveTextContent("return a + b;");
+    // Printed once: the review keeps it for a graded answer.
+    expect(screen.getAllByText("return a + b;")).toHaveLength(1);
+    const cases = screen.getByRole("list", { name: "Test cases" });
+    expect(within(cases).getByText("2 of 3")).toBeVisible();
+    expect(within(cases).getByRole("img")).toHaveAccessibleName("passed: 2 · failed: 1");
+  });
+});

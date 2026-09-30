@@ -615,16 +615,22 @@ describe("the screens with several attempts", () => {
     await sit(app, evaluation, items, student, [true, true]);
     await sit(app, evaluation, items, student, [false, true], await retake(app, evaluation, student));
     await sit(app, evaluation, items, seed.studentIds[1]!, [true, true]);
-    const queue = await gradingQueue(db, await reload(db, evaluation.id), {
-      by: "student",
-      anonymous: false,
-    });
-    const labels = [...new Set(queue.entries.map((e) => e.label))];
-    expect(labels).toHaveLength(3);
-    expect(labels.filter((l) => l.endsWith(" · #1"))).toHaveLength(1);
-    expect(labels.filter((l) => l.endsWith(" · #2"))).toHaveLength(1);
-    // A student with one attempt carries no number.
-    expect(labels.filter((l) => !l.includes("#"))).toHaveLength(1);
+    const record = await reload(db, evaluation.id);
+    const queue = await gradingQueue(db, record, { anonymous: true });
+    // One row per attempt, numbered only for the student who retook — and
+    // the number travels anonymous too, where no name does (ADR-044).
+    const rows = new Map(queue.entries.map((e) => [e.attemptId, e]));
+    expect(rows.size).toBe(3);
+    const numbered = [...rows.values()].filter((e) => e.attemptNumber !== null);
+    expect(numbered.map((e) => e.attemptNumber).sort()).toEqual([1, 2]);
+    expect(numbered.every((e) => e.label === null)).toBe(true);
+    // Exactly one of the two counts for the student (ADR-025).
+    expect(numbered.filter((e) => e.kept)).toHaveLength(1);
+    const single = [...rows.values()].find((e) => e.attemptNumber === null)!;
+    expect(single.kept).toBe(true);
+    // Named, the label is the name alone: the number is no longer glued to it.
+    const named = await gradingQueue(db, record, { anonymous: false });
+    expect(named.entries.every((e) => e.label !== null && !e.label.includes("#"))).toBe(true);
     expect(queue.counts.total).toBe(3 * items.length);
   });
 });

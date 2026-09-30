@@ -122,11 +122,14 @@ export function CorrectionProjection({
       } else if (k === "f") {
         e.preventDefault();
         toggleFullscreen();
+      } else if (k === "t") {
+        e.preventDefault();
+        toggleTheme();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [current, go, toggleFullscreen]);
+  }, [current, go, toggleFullscreen, toggleTheme]);
 
   const back = () => navigate({ view: "results", evaluationId });
   const title = evaluation.data?.evaluation.title;
@@ -204,11 +207,16 @@ export function CorrectionProjection({
               {t("correction.explanation")}
             </Button>
           ) : null}
-          <IconButton label={dark ? t("menu.lightTheme") : t("menu.darkTheme")} onClick={toggleTheme}>
+          <IconButton
+            label={dark ? t("menu.lightTheme") : t("menu.darkTheme")}
+            shortcut="T"
+            onClick={toggleTheme}
+          >
             {dark ? <Sun /> : <Moon />}
           </IconButton>
           <IconButton
             label={fullscreen ? t("poll.exitFullscreen") : t("poll.fullscreen")}
+            shortcut="F"
             onClick={toggleFullscreen}
           >
             {fullscreen ? <Minimize2 /> : <Maximize2 />}
