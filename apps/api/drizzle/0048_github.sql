@@ -18,16 +18,11 @@ CREATE TABLE "github_organizations" (
 	"github_org_id" bigint,
 	"login" text NOT NULL,
 	"installation_id" bigint,
-	"status" text DEFAULT 'uninstalled' NOT NULL,
+	"status" text DEFAULT 'active' NOT NULL,
 	"plan" text,
-	"avatar_source_url" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "github_organizations_github_org_id_unique" UNIQUE("github_org_id"),
 	CONSTRAINT "github_organizations_login_unique" UNIQUE("login"),
-	CONSTRAINT "github_organizations_installation_id_unique" UNIQUE("installation_id"),
-	CONSTRAINT "github_organizations_status_ck" CHECK ("github_organizations"."status" IN ('installed', 'suspended', 'uninstalled', 'deleted')),
-	CONSTRAINT "github_organizations_installation_ck" CHECK (("github_organizations"."installation_id" IS NOT NULL) = ("github_organizations"."status" IN ('installed', 'suspended')))
+	CONSTRAINT "github_organizations_installation_id_unique" UNIQUE("installation_id")
 );
 --> statement-breakpoint
 CREATE TABLE "push_receipts" (

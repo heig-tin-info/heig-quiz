@@ -23,14 +23,16 @@ const ORGS: GithubOrg[] = [
     id: "0190d3c4-0000-7000-8000-00000000a001",
     login: "heig-tin-info",
     avatarUrl: null,
-    status: "installed",
+    installed: true,
+    status: "active",
     plan: "team",
   },
   {
     id: "0190d3c4-0000-7000-8000-00000000a002",
     login: "heig-emb-lab",
     avatarUrl: null,
-    status: "installed",
+    installed: true,
+    status: "active",
     plan: "free",
   },
 ];
@@ -40,7 +42,7 @@ const LINKS: Record<string, GithubClassroomLink> = {
   r1: {
     org: ORGS[0]!,
     linkedAt: iso(-20 * D),
-    checks: { app: "ok", plan: "ok", llmSecret: "present" },
+    checks: { allRepositories: true, llmSecret: "present" },
   },
 };
 

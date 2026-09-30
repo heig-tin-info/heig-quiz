@@ -21,7 +21,6 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
-  check,
   index,
   jsonb,
   pgTable,
@@ -39,53 +38,31 @@ import { classrooms } from "./org.js";
 /**
  * One organization known to Quiz's App (D23): learnt from the App's setup
  * return, an installation event, or the import of heig-classroom (M8-01).
- * Never deleted: an uninstalled or deleted organization keeps its row, and
- * its links, with the status saying so (F-GH-03).
+ * Never deleted. Two independent facts, each held by one column only:
+ *   - whether Quiz's App is installed: `installation_id` null or not;
+ *   - whether the organization still exists on GitHub: `status`.
  */
-export const githubOrganizations = pgTable(
-  "github_organizations",
-  {
-    id: uuid("id").primaryKey(),
-    /** GitHub's id of the organization; null for an imported row not yet resolved. */
-    githubOrgId: bigint("github_org_id", { mode: "number" }).unique(),
-    login: text("login").notNull().unique(),
-    /**
-     * The installation of QUIZ's App (D23), never heig-classroom's; null
-     * until the organization installs it. Every staging refresh from
-     * production clears it (N-SEC-18, M2-06), and sets the status to
-     * `uninstalled` with it (the CHECK below).
-     */
-    installationId: bigint("installation_id", { mode: "number" }).unique(),
-    status: text("status", { enum: GITHUB_ORG_STATUSES }).notNull().default("uninstalled"),
-    /** GitHub's billing plan (`free`, `team`, ...), read through the App; null while unread. */
-    plan: text("plan"),
-    /**
-     * Where the SERVER fetches the avatar from (the installation's
-     * `account.avatar_url`). Never sent to a browser: the API serves the
-     * image same-origin (M2-02), so a viewer's IP never reaches GitHub.
-     */
-    avatarSourceUrl: text("avatar_source_url"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
-    // Written by raw SQL too (the staging refresh, M2-06): the list is closed here as well.
-    check(
-      "github_organizations_status_ck",
-      sql`${t.status} IN (${sql.raw(GITHUB_ORG_STATUSES.map((s) => `'${s}'`).join(", "))})`,
-    ),
-    check(
-      "github_organizations_installation_ck",
-      sql`(${t.installationId} IS NOT NULL) = (${t.status} IN ('installed', 'suspended'))`,
-    ),
-  ],
-);
+export const githubOrganizations = pgTable("github_organizations", {
+  id: uuid("id").primaryKey(),
+  /** GitHub's id of the organization; null for an imported row not yet resolved. */
+  githubOrgId: bigint("github_org_id", { mode: "number" }).unique(),
+  login: text("login").notNull().unique(),
+  /**
+   * The installation of QUIZ's App (D23), never heig-classroom's; null
+   * while the App is not installed. Every staging refresh from production
+   * nulls it (N-SEC-18, M2-06), and that alone makes the row uninstalled.
+   */
+  installationId: bigint("installation_id", { mode: "number" }).unique(),
+  status: text("status", { enum: GITHUB_ORG_STATUSES }).notNull().default("active"),
+  /** GitHub's billing plan (`free`, `team`, ...), read through the App; null while unread. */
+  plan: text("plan"),
+});
 
 /**
  * A classroom's organization (F-GH-01, D02): at most one per classroom, by
  * its primary key; any number of classrooms per organization. Deleting the
  * classroom drops the link; an organization is never deleted, so its links
- * outlive an uninstallation, and the check shows it.
+ * outlive an uninstallation.
  */
 export const githubClassroomLinks = pgTable(
   "github_classroom_links",

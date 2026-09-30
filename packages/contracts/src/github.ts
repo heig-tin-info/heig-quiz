@@ -3,43 +3,45 @@
  * docs/merge/03-github-projects.md §3.3, docs/merge/05-web.md §5.3). Written
  * by merge task M2-01; served by M2-02 (organizations, a classroom's link)
  * and M2-03 (the user's account link), read by M2-07 (the classroom's
- * Settings, the user Settings card).
+ * Settings, the user Settings card). The connect body belongs to M2-02 and
+ * the link's return outcome to M2-03, each written with its handler.
  *
- * Every status and check value is a closed enum: the web app words each one
- * through `t()` (invariant 1), the API never sends a sentence.
+ * Every state is a closed value: the web app words it through `t()`
+ * (invariant 1), the API never sends a sentence. Each fact is sent once: the
+ * installation line and the plan line of the checks (F-GH-03) are derived by
+ * the web from the organization itself (`installed`, `status`, `plan`).
  *
  * No payload here carries a token, a secret, or an address the browser would
- * load from github.com: an organization's avatar is a same-origin URL
- * (M2-02 serves it), so a viewer's IP never reaches GitHub.
+ * load from github.com: an organization's avatar is served by the API itself,
+ * so a viewer's IP never reaches GitHub.
  */
 import { z } from "zod";
 
 // ---------------------------------------------------------- organizations
 
 /**
- * What Quiz knows of an organization's installation of its App (D23):
- *   - `installed` — the App is installed and active;
- *   - `suspended` — installed, but suspended by the organization's owner;
- *   - `uninstalled` — known to Quiz (a link, an import, a past installation)
- *     without an installation of Quiz's App, including a staging copy whose
- *     installation ids were cleared (N-SEC-18);
- *   - `deleted` — the organization no longer exists on GitHub.
- * An installation id is held exactly when the status is `installed` or
- * `suspended` (a CHECK of `github_organizations`).
+ * Whether the organization still exists on GitHub. Whether Quiz's App is
+ * installed on it is another fact, `GithubOrg.installed`.
  */
-export const GITHUB_ORG_STATUSES = ["installed", "suspended", "uninstalled", "deleted"] as const;
+export const GITHUB_ORG_STATUSES = ["active", "deleted"] as const;
 export const GithubOrgStatus = z.enum(GITHUB_ORG_STATUSES);
 export type GithubOrgStatus = z.infer<typeof GithubOrgStatus>;
 
-/** A same-origin address (`/app/api/...`): never an absolute URL, never github.com. */
-const SameOriginUrl = z.string().regex(/^\/(?!\/)/, "a same-origin path");
+/**
+ * The one address of an organization's avatar: the API's own route (M2-02),
+ * `/app/api/github/orgs/<id>/avatar`. Nothing else is accepted, so no
+ * payload can make the browser load an image from elsewhere.
+ */
+export const GITHUB_ORG_AVATAR_PATH = /^\/app\/api\/github\/orgs\/[0-9a-f-]{36}\/avatar$/;
 
 /** An organization known to Quiz's App: an entry of the picker, the connected one. */
 export const GithubOrg = z.object({
   id: z.uuid(),
   login: z.string().min(1),
-  /** Served by the API itself (M2-02); null ⇒ the web draws the initials (`OrgAvatar`). */
-  avatarUrl: SameOriginUrl.nullable(),
+  /** Null ⇒ the web draws the initials (`OrgAvatar`). */
+  avatarUrl: z.string().regex(GITHUB_ORG_AVATAR_PATH).nullable(),
+  /** Quiz's App holds an installation on the organization. */
+  installed: z.boolean(),
   status: GithubOrgStatus,
   /** GitHub's billing plan (`free`, `team`, ...); null while unread. */
   plan: z.string().nullable(),
@@ -49,46 +51,16 @@ export type GithubOrg = z.infer<typeof GithubOrg>;
 // ---------------------------------------------------------- a classroom's link
 
 /**
- * The installation check, the only blocking one (F-GH-03): the App installed
- * with access to every repository.
- *   - `ok` — installed, active, "All repositories";
- *   - `not_installed` — the organization has no installation of Quiz's App;
- *   - `suspended` — installed but suspended;
- *   - `selected_repositories` — installed on a selection only;
- *   - `org_deleted` — the organization is gone from GitHub.
+ * What the organization alone does not say (F-GH-03), read from GitHub when
+ * the classroom's Settings open:
+ *   - `allRepositories` — the installation covers every repository; null
+ *     when it could not be read (not installed, GitHub silent);
+ *   - `llmSecret` — the `ANTHROPIC_API_KEY` organization secret for the LLM
+ *     review of projects; `unknown` when the App cannot read secrets.
  */
-export const GITHUB_APP_CHECK_STATES = [
-  "ok",
-  "not_installed",
-  "suspended",
-  "selected_repositories",
-  "org_deleted",
-] as const;
-export const GithubAppCheck = z.enum(GITHUB_APP_CHECK_STATES);
-export type GithubAppCheck = z.infer<typeof GithubAppCheck>;
-
-/**
- * The plan check, a warning at most: on `free`, no rulesets and no
- * organization secrets for private repositories. `unknown` when GitHub did
- * not answer.
- */
-export const GITHUB_PLAN_CHECK_STATES = ["ok", "free", "unknown"] as const;
-export const GithubPlanCheck = z.enum(GITHUB_PLAN_CHECK_STATES);
-export type GithubPlanCheck = z.infer<typeof GithubPlanCheck>;
-
-/**
- * The `ANTHROPIC_API_KEY` organization secret, for the LLM review of
- * projects: `unknown` when the App cannot read the organization's secrets.
- */
-export const GITHUB_SECRET_CHECK_STATES = ["present", "missing", "unknown"] as const;
-export const GithubSecretCheck = z.enum(GITHUB_SECRET_CHECK_STATES);
-export type GithubSecretCheck = z.infer<typeof GithubSecretCheck>;
-
-/** The checks of a connected classroom (F-GH-03), re-read when its Settings open. */
 export const GithubChecks = z.object({
-  app: GithubAppCheck,
-  plan: GithubPlanCheck,
-  llmSecret: GithubSecretCheck,
+  allRepositories: z.boolean().nullable(),
+  llmSecret: z.enum(["present", "missing", "unknown"]),
 });
 export type GithubChecks = z.infer<typeof GithubChecks>;
 
@@ -118,12 +90,6 @@ export const GithubClassroom = z.object({
 });
 export type GithubClassroom = z.infer<typeof GithubClassroom>;
 
-/** `PUT /app/api/classrooms/:id/github`: connect the classroom to an organization Quiz knows. */
-export const GithubConnectBody = z.strictObject({
-  orgId: z.uuid(),
-});
-export type GithubConnectBody = z.infer<typeof GithubConnectBody>;
-
 // ---------------------------------------------------------- the user's account
 
 /** A user's linked GitHub account (F-GH-05): the login is followed when it changes. */
@@ -144,12 +110,3 @@ export const GithubAccountState = z.object({
   relevant: z.boolean(),
 });
 export type GithubAccountState = z.infer<typeof GithubAccountState>;
-
-/**
- * How the account-linking round trip ended, as `/app/auth/github/callback`
- * returns it to the page it started from (`?github=<outcome>`, F-GH-05):
- * linked, the GitHub account already linked to another user, or failed.
- */
-export const GITHUB_LINK_OUTCOMES = ["linked", "conflict", "error"] as const;
-export const GithubLinkOutcome = z.enum(GITHUB_LINK_OUTCOMES);
-export type GithubLinkOutcome = z.infer<typeof GithubLinkOutcome>;

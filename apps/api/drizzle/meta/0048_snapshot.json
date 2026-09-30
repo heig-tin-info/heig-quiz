@@ -1,5 +1,5 @@
 {
-  "id": "5486125f-3c89-4380-b36a-f9a29b92db1d",
+  "id": "8ff76bf5-8624-419d-8e90-573d881e9fb6",
   "prevId": "cc4e8cff-c546-484c-ac00-a1555a0832d7",
   "version": "7",
   "dialect": "postgresql",
@@ -5963,33 +5963,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'uninstalled'"
+          "default": "'active'"
         },
         "plan": {
           "name": "plan",
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "avatar_source_url": {
-          "name": "avatar_source_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
         }
       },
       "indexes": {},
@@ -6019,16 +5999,7 @@
         }
       },
       "policies": {},
-      "checkConstraints": {
-        "github_organizations_status_ck": {
-          "name": "github_organizations_status_ck",
-          "value": "\"github_organizations\".\"status\" IN ('installed', 'suspended', 'uninstalled', 'deleted')"
-        },
-        "github_organizations_installation_ck": {
-          "name": "github_organizations_installation_ck",
-          "value": "(\"github_organizations\".\"installation_id\" IS NOT NULL) = (\"github_organizations\".\"status\" IN ('installed', 'suspended'))"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.push_receipts": {
