@@ -194,6 +194,29 @@ describe("EvaluationPreviewPage", () => {
     expect(screen.getByText("Explanation")).toBeInTheDocument();
   });
 
+  it("shows the points of the question on screen without handing in", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({
+      [`POST ${URL}`]: ok(preview(5)),
+      [`POST ${URL}/grade`]: ok(correction(5)),
+    });
+    renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
+    await user.click(await screen.findByRole("radio", { name: "&x" }));
+    await user.click(screen.getByRole("button", { name: "Show the points" }));
+
+    expect(await screen.findByText("This question: 2 / 2 points")).toBeInTheDocument();
+    // The one answer on screen, graded by the preview's own route.
+    expect(calls.find((c) => c.url === `${URL}/grade`)).toMatchObject({
+      body: { seed: 5, answers: { [I1]: { selected: [0] } } },
+    });
+    // Still the walk, not the correction.
+    expect(screen.queryByRole("heading", { name: "Preview correction" })).toBeNull();
+
+    // Another answer, stale points: they go away until asked again.
+    await user.click(screen.getByRole("radio", { name: "*x" }));
+    expect(screen.queryByText("This question: 2 / 2 points")).toBeNull();
+  });
+
   it("restarts with a new seed from the correction", async () => {
     const user = userEvent.setup();
     let seeds = 0;

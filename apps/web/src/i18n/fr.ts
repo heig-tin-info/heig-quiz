@@ -2662,6 +2662,9 @@ export const fr: Record<keyof Dict, string> = {
   "preview.restart.title": "Recommencer l'aperçu ?",
   "preview.restart.message":
     "Vos réponses sont effacées et un nouvel ordre est tiré au hasard.",
+  "preview.points.show": "Afficher les points",
+  "preview.points.value": "Cette question : {points} / {max} points",
+  "preview.points.failed": "Les points n'ont pas pu être calculés.",
   "preview.gradeFailed": "La correction a échoué",
   "preview.gradeFailedBody": "Vos réponses sont toujours là. Rendez à nouveau la copie.",
   "preview.empty.title": "Cette évaluation n'a pas encore de question",
