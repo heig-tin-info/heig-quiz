@@ -91,9 +91,34 @@ export interface ReadOptions {
 }
 export const HTTP_READ: ReadOptions = { noRateLimitWait: true };
 
-export interface OrgInstallation {
+/**
+ * One installation of Quiz's App on an organization, as GitHub describes it
+ * (`GET /app/installations/{id}`, `/orgs/{org}/installation`, the listing).
+ */
+export interface AppInstallation {
   installationId: number;
   githubOrgId: number;
+  login: string;
+  /** `repository_selection: "all"`: the App reaches every repository (F-GH-03). */
+  allRepositories: boolean;
+}
+
+interface RawInstallation {
+  id: number;
+  account: { id?: number; login?: string; type?: string } | null;
+  repository_selection?: string;
+}
+
+/** An organization's installation, or null for a user's (or a malformed one). */
+function orgInstallation(data: RawInstallation): AppInstallation | null {
+  const account = data.account;
+  if (!account?.login || account.id === undefined || account.type !== "Organization") return null;
+  return {
+    installationId: data.id,
+    githubOrgId: account.id,
+    login: account.login,
+    allRepositories: data.repository_selection === "all",
+  };
 }
 
 export interface InstallationClient {
@@ -117,16 +142,24 @@ export async function installationClient(
   });
 }
 
-/** Organizations where the App is installed (classroom creation dropdown). */
-export async function listInstalledOrgs(config: AppConfig): Promise<string[]> {
+/**
+ * Organizations where the App is installed (the connect sheet's picker),
+ * every page, sorted by login; users' installations left out. Throws when
+ * GitHub fails.
+ */
+export async function listInstalledOrgs(
+  config: AppConfig,
+  read: ReadOptions = {},
+): Promise<AppInstallation[]> {
   const app = githubApp(config);
   if (!app) return [];
-  const logins: string[] = [];
-  for await (const { installation } of app.eachInstallation.iterator()) {
-    const account = installation.account as { login?: string; type?: string } | null;
-    if (account?.login && account.type === "Organization") logins.push(account.login);
-  }
-  return logins.sort();
+  const all = (await app.octokit.paginate(app.octokit.rest.apps.listInstallations, {
+    per_page: 100,
+    request: read,
+  })) as RawInstallation[];
+  return all
+    .flatMap((raw) => orgInstallation(raw) ?? [])
+    .sort((a, b) => a.login.localeCompare(b.login));
 }
 
 /** Does the organization exist on GitHub? Authenticated through the App
@@ -212,12 +245,17 @@ export async function fetchOrgLlmSecret(
   }
 }
 
-/** GET /orgs/{org}/installation; null if the App is not installed there. */
+/**
+ * GET /orgs/{org}/installation; null if the App is not installed there. The
+ * login is only what GitHub resolves TODAY: the caller compares the
+ * returned `githubOrgId` with the one it holds (a login can be reused by
+ * another organization).
+ */
 export async function resolveOrgInstallation(
   config: AppConfig,
   orgLogin: string,
   read: ReadOptions = {},
-): Promise<OrgInstallation | null> {
+): Promise<AppInstallation | null> {
   const app = githubApp(config);
   if (!app) return null;
   try {
@@ -225,42 +263,11 @@ export async function resolveOrgInstallation(
       org: orgLogin,
       request: read,
     });
-    return {
-      installationId: data.id,
-      githubOrgId: (data.account as { id: number }).id,
-    };
+    return orgInstallation(data as RawInstallation);
   } catch (err) {
     if ((err as { status?: number }).status === 404) return null;
     throw err;
   }
-}
-
-/**
- * One installation of Quiz's App on an organization, as the App JWT reads it
- * (Quiz addition, M2-02): what the setup return verifies, the organization
- * listing, and the healing's "installed on every repository" check.
- */
-export interface AppInstallation extends OrgInstallation {
-  login: string;
-  /** `repository_selection: "all"`: the App reaches every repository (F-GH-03). */
-  allRepositories: boolean;
-}
-
-interface RawInstallation {
-  id: number;
-  account: { id?: number; login?: string; type?: string } | null;
-  repository_selection?: string;
-}
-
-function orgInstallation(data: RawInstallation): AppInstallation | null {
-  const account = data.account;
-  if (!account?.login || account.id === undefined || account.type !== "Organization") return null;
-  return {
-    installationId: data.id,
-    githubOrgId: account.id,
-    login: account.login,
-    allRepositories: data.repository_selection === "all",
-  };
 }
 
 /**
@@ -285,24 +292,4 @@ export async function fetchInstallation(
     if ((err as { status?: number }).status === 404) return null;
     throw err;
   }
-}
-
-/** Every organization installation of the App, all pages; throws when GitHub fails. */
-export async function listInstallations(
-  config: AppConfig,
-  read: ReadOptions = {},
-): Promise<AppInstallation[]> {
-  const app = githubApp(config);
-  if (!app) return [];
-  const all: RawInstallation[] = [];
-  for (let page = 1; ; page += 1) {
-    const { data } = await app.octokit.request("GET /app/installations", {
-      per_page: 100,
-      page,
-      request: read,
-    });
-    all.push(...(data as RawInstallation[]));
-    if (data.length < 100) break;
-  }
-  return all.flatMap((raw) => orgInstallation(raw) ?? []);
 }

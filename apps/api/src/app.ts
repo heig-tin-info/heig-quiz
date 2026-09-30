@@ -31,7 +31,6 @@ import { avatarPlugin } from "./modules/avatar.js";
 import { drillPlugin } from "./modules/drill/routes.js";
 import { registerDrillHooks } from "./modules/drill/service.js";
 import { evaluationPlugin } from "./modules/evaluation/routes.js";
-import { githubApp } from "./github/app.js";
 import { githubPlugin } from "./modules/github/routes.js";
 import { gradingPlugin } from "./modules/grading/routes.js";
 import { registerGradingJobs } from "./modules/grading/jobs.js";

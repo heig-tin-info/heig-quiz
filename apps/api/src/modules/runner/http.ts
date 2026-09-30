@@ -24,6 +24,8 @@ import {
   type RunnerService,
 } from "@quiz/core/server";
 
+import { readCapped } from "../../cappedBody.js";
+
 /** The `fetch` surface used here; injectable so a test can point it at a local server. */
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -73,21 +75,10 @@ const MAX_HEALTH_BYTES = 64 * 1024;
  */
 async function cappedJson(res: Response, maxBytes: number): Promise<unknown> {
   if (res.body === null) throw new RunnerUnavailable("bad_response");
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > maxBytes) {
-      await reader.cancel().catch(() => undefined);
-      throw new RunnerUnavailable("response_too_large");
-    }
-    chunks.push(value);
-  }
+  const bytes = await readCapped(res, maxBytes);
+  if (bytes === null) throw new RunnerUnavailable("response_too_large");
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    return JSON.parse(bytes.toString("utf8"));
   } catch {
     throw new RunnerUnavailable("bad_response");
   }

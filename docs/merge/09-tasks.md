@@ -265,25 +265,34 @@ files it ports; writes en + fr for every string.
   registered in `app.ts` only when `githubApp(config)` is non-null (as the
   kiosk plugin), so without an App no route exists. Choices the next tasks
   inherit:
-  - Routes: `GET /app/api/github/orgs` (teacher role, 403 otherwise);
+  - Routes: `GET /app/api/github/orgs` and
+    `GET /app/api/github/orgs/:id/avatar` (teacher role, 403 otherwise);
     `GET|PUT|DELETE /app/api/classrooms/:id/github` (session +
     `accessibleClassroom`: 404 off the staff; PUT answers the
     `GithubClassroom`, DELETE 204; 409 `journal_attached` (D28) or
     `app_not_installed`, `GITHUB_CONNECT_REFUSALS`, worded in `api.ts`);
     `GET /setup/github/installed` (`GithubSetupQuery`; 303 to
-    `/classrooms/<state>/settings` when `state` is a uuid, `/` otherwise);
-    `GET /app/api/github/orgs/:id/avatar`.
-  - Healing and the listing are cached in memory `HEAL_TTL_MS` (60 s) per
-    organization; the setup return drops the cache. The listing is
+    `/classrooms/<state>/settings` when `state` is a uuid, `/` otherwise;
+    20 per 10 min per address, then 429).
+  - The healing is cached in memory `HEAL_TTL_MS` (60 s) per organization;
+    the setup return drops it. The listing is not cached and is
     authoritative: an installation GitHub no longer lists is cleared.
   - `recordInstallation(db, installation, via)` (service) is the one writer
-    of an installed organization (create, follow a rename by id, audit):
-    M2-04's `installation` handler calls it. Adapters gained
-    `fetchInstallation`, `listInstallations` and an optional `ReadOptions`
-    (`HTTP_READ` = `noRateLimitWait`) on the four HTTP-read adapters.
+    of an installed organization: M2-04's `installation` handler calls it.
+    It matches by `github_org_id`, by login only a row without one (an
+    import), and never takes over a row holding the login under another
+    id: that row is marked `deleted`, its login moved aside (I65).
+    Adapters: `listInstalledOrgs`, `resolveOrgInstallation` and the new
+    `fetchInstallation` return `AppInstallation`; an optional `ReadOptions`
+    (`HTTP_READ` = `noRateLimitWait`) on the HTTP-read adapters.
   - Avatar derived, not stored: fetched from `avatars.githubusercontent.com`
-    (`redirect: "error"`, 5 s, PNG/JPEG/GIF/WebP whose bytes match, 256 KB
-    cap), cached in memory 24 h (10 min for a failure, 500 entries).
+    (`redirect: "error"`, 5 s, `AvatarMime` whose bytes match, 256 KB cap
+    through `readCapped` of `cappedBody.ts`), cached in memory 24 h; a
+    failure is not kept.
+  - Test support for M2-04: `github/testing.ts` (the App key, the fake
+    GitHub, `orgsRoute`); `auth/testing.ts` (the seb and impersonation
+    sessions of the route walks, used by `seb.db.test.ts`,
+    `impersonation.db.test.ts` and `modules/github/walks.db.test.ts`).
   - Audit: `github_org.link|unlink|installation_resolved|installation_deleted|renamed|deleted`.
   - SSE: the setup return hints `classrooms` on `course:<id>` (the linked
     classrooms' courses and `state`'s), never `classroom:`.

@@ -11,23 +11,24 @@
  *
  * Every GitHub read here serves an HTTP request, so it passes `HTTP_READ`:
  * a rate limit fails at once and the stored state is served (§3.1, #37).
- * The callers check `githubApp(config)` first: without an App the routes
- * answer 404 and nothing here is reached.
+ * The routes exist only when Quiz's App is configured (`app.ts`).
  */
 import { randomUUID } from "node:crypto";
 
 import type { FastifyBaseLogger } from "fastify";
-import { and, desc, eq, isNotNull, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 
-import type {
-  GITHUB_CONNECT_REFUSALS,
-  GithubChecks,
-  GithubClassroom,
-  GithubOrg,
-  GithubSetupQuery,
+import {
+  AvatarMime,
+  type GITHUB_CONNECT_REFUSALS,
+  type GithubChecks,
+  type GithubClassroom,
+  type GithubOrg,
+  type GithubSetupQuery,
 } from "@quiz/contracts";
 
 import { audit } from "../../audit.js";
+import { readCapped } from "../../cappedBody.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import {
@@ -41,7 +42,7 @@ import {
   fetchOrgLlmSecret,
   fetchOrgPlan,
   HTTP_READ,
-  listInstallations,
+  listInstalledOrgs,
   orgExistsOnGithub,
   resolveOrgInstallation,
   type AppInstallation,
@@ -53,31 +54,33 @@ import { installationChanged } from "./events.js";
 type OrgRow = typeof githubOrganizations.$inferSelect;
 
 /**
- * How long a healing, or the listing of the installations, stands before
- * GitHub is asked again. The classroom's Settings are opened, refreshed by
- * every SSE hint and re-opened; one minute keeps that from costing a GitHub
- * round trip (and a write) each time, while a teacher who just fixed
- * something on GitHub sees it on the next open after a minute. The setup
- * return drops the cache of the organization it touched.
+ * How long a healing stands before GitHub is asked again (03 §3.1). The
+ * classroom's Settings are opened, refreshed by every SSE hint and
+ * re-opened; one minute keeps that from costing GitHub round trips (and
+ * writes) each time, while a teacher who just fixed something on GitHub
+ * sees it on the next open after a minute. The setup return drops the
+ * cache of the organization it touched.
  */
 export const HEAL_TTL_MS = 60_000;
 
 const UNKNOWN_CHECKS: GithubChecks = { allRepositories: null, llmSecret: "unknown" };
 
+interface Healed {
+  org: OrgRow;
+  checks: GithubChecks;
+}
+
 // ---------------------------------------------------------------- caches
 
-/** The checks of one organization's last healing, by row id; the promise is shared by concurrent reads. */
-const healed = new Map<string, { at: number; checks: Promise<GithubChecks> }>();
-/** The last synchronisation of the installation listing. */
-let listing: { at: number; done: Promise<void> } | null = null;
+/** The last healing of each organization, by row id; the promise is shared by concurrent reads. */
+const healed = new Map<string, { at: number; result: Promise<Healed> }>();
 /** Avatars by GitHub's organization id (below). */
-const avatars = new Map<number, { at: number; ttl: number; image: Promise<OrgAvatar | null> }>();
+const avatars = new Map<number, { at: number; image: Promise<OrgAvatar | null> }>();
 
 /** Test hook: every cache of this module emptied. */
 export function resetGithubCaches(): void {
   healed.clear();
   avatars.clear();
-  listing = null;
 }
 
 // ---------------------------------------------------------------- views
@@ -103,7 +106,11 @@ function installUrl(config: AppConfig, classroomId: string): string {
 
 function systemAudit(
   db: Db | Tx,
-  action: "github_org.installation_resolved" | "github_org.installation_deleted" | "github_org.renamed" | "github_org.deleted",
+  action:
+    | "github_org.installation_resolved"
+    | "github_org.installation_deleted"
+    | "github_org.renamed"
+    | "github_org.deleted",
   orgId: string,
   payload: Record<string, unknown>,
 ) {
@@ -125,29 +132,65 @@ async function patchOrg(db: Db, id: string, patch: Partial<Omit<OrgRow, "id">>):
   return row!;
 }
 
+const sameLogin = (login: string) => sql`lower(${githubOrganizations.login}) = lower(${login})`;
+
+/**
+ * Every OTHER row holding `login` gives it up. A login is not an identity:
+ * GitHub frees the login of a deleted or renamed organization, and another
+ * organization may take it. The row that held it is therefore never
+ * re-pointed at the newcomer — its classrooms would silently follow an
+ * organization their staff never chose. It is marked `deleted`, its
+ * installation cleared, and its login moved aside (`<login>~<row id>`) so
+ * the UNIQUE lets the newcomer have its own row. Its links stay on it; if
+ * it was only renamed, its next installation (matched by id) brings it back
+ * under its new login.
+ */
+async function retireLoginHolders(db: Db, login: string, keep: string | null): Promise<void> {
+  const holders = await db
+    .select()
+    .from(githubOrganizations)
+    .where(and(sameLogin(login), keep === null ? undefined : ne(githubOrganizations.id, keep)));
+  for (const holder of holders) {
+    await patchOrg(db, holder.id, {
+      login: `${holder.login}~${holder.id}`,
+      status: "deleted",
+      installationId: null,
+    });
+    await systemAudit(db, "github_org.deleted", holder.id, {
+      reason: "login_reused",
+      login: holder.login,
+      installationId: holder.installationId,
+    });
+  }
+}
+
 /**
  * The row of an organization GitHub has just shown installed, created or
  * brought up to date: the installation, the login (a rename is followed by
  * the immutable id), `active`. Idempotent: a second call with the same
  * installation writes and audits nothing.
+ *
+ * Matched by `github_org_id`; by login only for a row that has no id yet
+ * (imported by M8-01). A row holding the login under ANOTHER id is never
+ * taken over ({@link retireLoginHolders}).
  */
 export async function recordInstallation(
   db: Db,
   inst: AppInstallation,
   via: "setup_url" | "listing" | "healing",
 ): Promise<OrgRow> {
-  // The id first; the login for a row imported before its id was known
-  // (M8-01). GitHub's logins are case-insensitive.
-  const candidates = await db
+  const [byId] = await db
     .select()
     .from(githubOrganizations)
-    .where(
-      or(
-        eq(githubOrganizations.githubOrgId, inst.githubOrgId),
-        sql`lower(${githubOrganizations.login}) = lower(${inst.login})`,
-      ),
-    );
-  const known = candidates.find((r) => r.githubOrgId === inst.githubOrgId) ?? candidates[0];
+    .where(eq(githubOrganizations.githubOrgId, inst.githubOrgId));
+  const [imported] = byId
+    ? []
+    : await db
+        .select()
+        .from(githubOrganizations)
+        .where(and(isNull(githubOrganizations.githubOrgId), sameLogin(inst.login)));
+  const known = byId ?? imported;
+  await retireLoginHolders(db, inst.login, known?.id ?? null);
   let row: OrgRow;
   if (!known) {
     const [created] = await db
@@ -209,25 +252,20 @@ async function refreshPlan(config: AppConfig, db: Db, org: OrgRow): Promise<OrgR
 
 /**
  * `GET /app/api/github/orgs`: the organizations where Quiz's App is
- * installed. GitHub's listing is authoritative, and is written back (a new
- * installation recorded, a vanished one cleared) at most once per
- * {@link HEAL_TTL_MS}; when GitHub fails, the stored rows answer.
+ * installed. GitHub's listing is authoritative and is written back on each
+ * call (a new installation recorded, a vanished one cleared); when GitHub
+ * fails, the stored rows answer.
  */
 export async function installedOrgs(
   db: Db,
   config: AppConfig,
-  now: Date,
   log: FastifyBaseLogger,
 ): Promise<GithubOrg[]> {
-  if (!listing || now.getTime() - listing.at >= HEAL_TTL_MS) {
-    listing = {
-      at: now.getTime(),
-      done: syncInstallations(db, config).catch((err: unknown) => {
-        log.warn({ err }, "listing the GitHub App's installations failed");
-      }),
-    };
+  try {
+    await syncInstallations(db, config);
+  } catch (err) {
+    log.warn({ err }, "listing the GitHub App's installations failed");
   }
-  await listing.done;
   const rows = await db
     .select()
     .from(githubOrganizations)
@@ -239,7 +277,7 @@ export async function installedOrgs(
 }
 
 async function syncInstallations(db: Db, config: AppConfig): Promise<void> {
-  const found = await listInstallations(config, HTTP_READ);
+  const found = await listInstalledOrgs(config, HTTP_READ);
   for (const inst of found) await recordInstallation(db, inst, "listing");
   const listed = found.map((i) => i.installationId);
   const gone = await db
@@ -263,34 +301,44 @@ async function syncInstallations(db: Db, config: AppConfig): Promise<void> {
  * The lazy healing of a linked organization (§3.1, F-GH-03), once per
  * {@link HEAL_TTL_MS}: whatever GitHub says is written back to the row, and
  * the checks the row does not hold are returned. A GitHub failure leaves
- * the row as stored and the checks unknown.
+ * the row as stored and the checks unknown. Within the TTL the row is the
+ * one just read, the checks those of the last healing.
  */
-function checksOf(
+async function healedOrg(
   db: Db,
   config: AppConfig,
   org: OrgRow,
   now: Date,
   log: FastifyBaseLogger,
-): Promise<GithubChecks> {
+): Promise<Healed> {
   const hit = healed.get(org.id);
-  if (hit && now.getTime() - hit.at < HEAL_TTL_MS) return hit.checks;
-  const checks = heal(db, config, org).catch((err: unknown) => {
+  if (hit && now.getTime() - hit.at < HEAL_TTL_MS) return { org, checks: (await hit.result).checks };
+  const result = heal(db, config, org).catch((err: unknown) => {
     log.warn({ err, org: org.login }, "healing a GitHub organization failed");
-    return UNKNOWN_CHECKS;
+    return { org, checks: UNKNOWN_CHECKS };
   });
-  healed.set(org.id, { at: now.getTime(), checks });
-  return checks;
+  healed.set(org.id, { at: now.getTime(), result });
+  return result;
 }
 
-async function heal(db: Db, config: AppConfig, stored: OrgRow): Promise<GithubChecks> {
+async function heal(db: Db, config: AppConfig, stored: OrgRow): Promise<Healed> {
   let org = stored;
-  // A missing installation is looked for by the organization's login.
-  const installationId =
-    org.installationId ??
-    (await resolveOrgInstallation(config, org.login, HTTP_READ))?.installationId ??
-    null;
+  // One call: the stored installation, else one looked for by the login.
   const inst =
-    installationId === null ? null : await fetchInstallation(config, installationId, HTTP_READ);
+    org.installationId !== null
+      ? await fetchInstallation(config, org.installationId, HTTP_READ)
+      : await resolveOrgInstallation(config, org.login, HTTP_READ);
+  if (inst && org.githubOrgId !== null && inst.githubOrgId !== org.githubOrgId) {
+    // The login now names ANOTHER organization: ours was deleted or renamed
+    // away. The newcomer is recorded under its own row, which retires ours;
+    // ours is never re-pointed.
+    await recordInstallation(db, inst, "healing");
+    const [retired] = await db
+      .select()
+      .from(githubOrganizations)
+      .where(eq(githubOrganizations.id, org.id));
+    return { org: retired!, checks: UNKNOWN_CHECKS };
+  }
   if (!inst) {
     if (org.installationId !== null) {
       org = await patchOrg(db, org.id, { installationId: null });
@@ -304,13 +352,16 @@ async function heal(db: Db, config: AppConfig, stored: OrgRow): Promise<GithubCh
       org = await patchOrg(db, org.id, { status });
       if (status === "deleted") await systemAudit(db, "github_org.deleted", org.id, {});
     }
-    return UNKNOWN_CHECKS;
+    return { org, checks: UNKNOWN_CHECKS };
   }
   org = await refreshPlan(config, db, await recordInstallation(db, inst, "healing"));
   const secret = await fetchOrgLlmSecret(config, inst.installationId, org.login, HTTP_READ);
   return {
-    allRepositories: inst.allRepositories,
-    llmSecret: secret === "ok" ? "present" : (secret ?? "unknown"),
+    org,
+    checks: {
+      allRepositories: inst.allRepositories,
+      llmSecret: secret === "ok" ? "present" : (secret ?? "unknown"),
+    },
   };
 }
 
@@ -337,13 +388,8 @@ export async function classroomGithub(
     .limit(1);
   let view: GithubClassroom["link"] = null;
   if (link) {
-    const checks = await checksOf(db, config, link.org, now, log);
-    // The healing may have written the row: read it again.
-    const [org] = await db
-      .select()
-      .from(githubOrganizations)
-      .where(eq(githubOrganizations.id, link.org.id));
-    view = { org: orgView(org!), linkedAt: link.linkedAt.toISOString(), checks };
+    const { org, checks } = await healedOrg(db, config, link.org, now, log);
+    view = { org: orgView(org), linkedAt: link.linkedAt.toISOString(), checks };
   }
   return {
     link: view,
@@ -466,7 +512,6 @@ export async function completeSetup(
   if (!inst) return;
   let org = await recordInstallation(db, inst, "setup_url");
   healed.delete(org.id);
-  listing = null;
   try {
     // Read while the installation is fresh: the `free` warning shows at once.
     org = await refreshPlan(config, db, org);
@@ -495,26 +540,18 @@ export async function completeSetup(
  * DERIVED, not stored: the address is `avatars.githubusercontent.com/u/<id>`
  * from the immutable `github_org_id`, the image is fetched server-side and
  * kept in memory. No column and no migration; an organization that changes
- * its picture shows the new one within a day, with no refresh job; the
- * cache is bounded (a handful of organizations, a few KB each) and a
- * restart only refetches. A store would need all of that written.
+ * its picture shows the new one within a day, with no refresh job; the keys
+ * are the organizations' rows, a handful, and a restart only refetches. A
+ * failed fetch is not kept: the next request tries again.
  */
 export interface OrgAvatar {
   bytes: Buffer;
   mime: string;
 }
-/** What is served: the declared type must be one of these AND match the bytes. */
-const AVATAR_TYPES: ReadonlySet<string> = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-]);
+/** What is served: the uploaded avatars' list (`AvatarMime`), the bytes matching the declared type. */
+const AVATAR_TYPES: ReadonlySet<string> = new Set<string>(AvatarMime.options);
 export const AVATAR_MAX_BYTES = 256 * 1024;
 const AVATAR_TTL_MS = 24 * 3_600_000;
-/** A failed fetch is not retried for this long. */
-const AVATAR_MISS_TTL_MS = 10 * 60_000;
-const AVATAR_CACHE_MAX = 500;
 /** The size asked of GitHub: the largest `OrgAvatar` drawn, at 2x. */
 const AVATAR_SIZE = 96;
 
@@ -531,23 +568,18 @@ export async function orgAvatar(
   if (!org || org.githubOrgId === null) return null;
   const key = org.githubOrgId;
   const hit = avatars.get(key);
-  if (hit && now.getTime() - hit.at < hit.ttl) return hit.image;
+  if (hit && now.getTime() - hit.at < AVATAR_TTL_MS) return hit.image;
   const entry = {
     at: now.getTime(),
-    ttl: AVATAR_TTL_MS,
     image: downloadAvatar(key).catch((err: unknown) => {
       log.warn({ err, githubOrgId: key }, "fetching an organization's avatar failed");
       return null;
     }),
   };
-  void entry.image.then((image) => {
-    if (!image) entry.ttl = AVATAR_MISS_TTL_MS;
-  });
-  avatars.delete(key);
   avatars.set(key, entry);
-  // Oldest first out: a Map iterates in insertion order.
-  if (avatars.size > AVATAR_CACHE_MAX) avatars.delete(avatars.keys().next().value!);
-  return entry.image;
+  const image = await entry.image;
+  if (!image && avatars.get(key) === entry) avatars.delete(key);
+  return image;
 }
 
 async function downloadAvatar(githubOrgId: number): Promise<OrgAvatar | null> {
@@ -556,27 +588,11 @@ async function downloadAvatar(githubOrgId: number): Promise<OrgAvatar | null> {
     // Never followed elsewhere: the one host, or nothing.
     { redirect: "error", signal: AbortSignal.timeout(5_000) },
   );
-  if (!res.ok || !res.body) return null;
+  if (!res.ok) return null;
   const declared = (res.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
   if (!AVATAR_TYPES.has(declared)) return null;
-  const bytes = await readCapped(res.body, AVATAR_MAX_BYTES);
+  const bytes = await readCapped(res, AVATAR_MAX_BYTES);
   // The bytes decide, not the header (as for an uploaded avatar).
   if (!bytes || sniffImage(bytes)?.mime !== declared) return null;
   return { bytes, mime: declared };
-}
-
-async function readCapped(body: ReadableStream<Uint8Array>, max: number): Promise<Buffer | null> {
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) return Buffer.concat(chunks);
-    size += value.byteLength;
-    if (size > max) {
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(value);
-  }
 }

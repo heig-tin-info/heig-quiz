@@ -13,10 +13,15 @@ import { GithubConnectBody, GithubSetupQuery, IdParam } from "@quiz/contracts";
 
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
+import { FixedWindowLimiter } from "../../limiter.js";
 import { accessibleClassroom, teacherGuard } from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
 import { INERT_IMAGE_HEADERS } from "../pool/assets.js";
 import * as service from "./service.js";
+
+/** The setup return, per address: an install or two a minute is the real use. */
+export const SETUPS_PER_WINDOW = 20;
+const SETUP_WINDOW_MS = 10 * 60_000;
 
 export async function githubPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
@@ -25,6 +30,7 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
   const requireTeacher = teacherGuard(app);
   const requireSession = (req: FastifyRequest, reply: FastifyReply) =>
     app.requireSession(req, reply);
+  const setups = new FixedWindowLimiter(SETUPS_PER_WINDOW, SETUP_WINDOW_MS);
 
   /**
    * A classroom of the caller's staff (invariant 6): a student, a teacher
@@ -38,22 +44,21 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
 
   /** The organizations the connect sheet offers (F-GH-02). */
   app.get("/app/api/github/orgs", { preHandler: requireTeacher }, async (req) =>
-    service.installedOrgs(app.db, config, app.clock.now(), req.log),
+    service.installedOrgs(app.db, config, req.log),
   );
 
   /**
    * An organization's avatar, fetched and cached by the server and served
    * from here: the browser never loads it from GitHub, and is never
-   * redirected there. Staff only; a student gets the 404 of a missing image.
+   * redirected there. The staff's, like the listing that names it: a
+   * student gets 403.
    */
   app.get(
     "/app/api/github/orgs/:id/avatar",
-    { preHandler: requireSession },
+    { preHandler: requireTeacher },
     async (req, reply) => {
       const params = IdParam.safeParse(req.params);
-      if (!params.success || (req.user!.role !== "teacher" && req.user!.role !== "admin")) {
-        return notFound(reply);
-      }
+      if (!params.success) return notFound(reply);
       const image = await service.orgAvatar(app.db, params.data.id, app.clock.now(), req.log);
       if (!image) return notFound(reply);
       return reply
@@ -112,6 +117,11 @@ export async function githubPlugin(app: FastifyInstance, opts: { config: AppConf
    * only, so the redirect is always an in-app path: never an open redirect.
    */
   app.get("/setup/github/installed", async (req, reply) => {
+    // Public, and each call reaches GitHub: counted per address.
+    const wait = setups.hit(req.ip, app.clock.now().getTime());
+    if (wait !== null) {
+      return reply.code(429).header("retry-after", String(wait)).send({ error: "rate_limited" });
+    }
     const query = GithubSetupQuery.parse(req.query ?? {});
     try {
       await service.completeSetup(app.db, config, query, req.log);

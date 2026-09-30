@@ -1,12 +1,9 @@
 /**
- * The `github` module (M2-02) against a fake GitHub: a real RSA key signs
- * the App's JWT, and a stubbed global fetch answers the routes the adapters
- * call and the avatar host. No network is ever reached.
+ * The `github` module (M2-02) against a fake GitHub (`github/testing.ts`):
+ * a real RSA key signs the App's JWT, and a stubbed global fetch answers the
+ * routes the adapters call and the avatar host. No network is ever reached.
  */
-import { generateKeyPairSync, randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,21 +17,18 @@ import {
   githubClassroomLinks,
   githubOrganizations,
 } from "../../db/schema.js";
+import {
+  appKey,
+  AVATAR_HOST,
+  avatarRoute,
+  fakeGithub,
+  orgsRoute,
+  type FakeOrg,
+} from "../../github/testing.js";
 import { testServer, type Payload, type TestServer } from "../../test/http.js";
 import { addStaff, createClassroom, createCourse } from "../org/service.js";
+import { SETUPS_PER_WINDOW } from "./routes.js";
 import { HEAL_TTL_MS, resetGithubCaches } from "./service.js";
-
-// ---------------------------------------------------------------- fake GitHub
-
-interface FakeOrg {
-  githubOrgId: number;
-  login: string;
-  installationId: number | null;
-  selection: "all" | "selected";
-  plan: string;
-  secret: boolean;
-  exists: boolean;
-}
 
 /** The smallest header `sniffImage` reads as a PNG. */
 const PNG = Buffer.concat([
@@ -42,76 +36,27 @@ const PNG = Buffer.concat([
   Buffer.alloc(8),
   Buffer.from([0, 0, 0, 1, 0, 0, 0, 1]),
 ]);
+const png = () => new Response(PNG, { status: 200, headers: { "content-type": "image/png" } });
 
+const gh = fakeGithub();
+const key = appKey();
 let orgs: FakeOrg[] = [];
-let avatar: () => Response = () => png();
-const calls: string[] = [];
+let avatar: () => Response = png;
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
-function png(): Response {
-  return new Response(PNG, { status: 200, headers: { "content-type": "image/png" } });
-}
-const notFound = () => json({ message: "Not Found" }, 404);
-const account = (o: FakeOrg) => ({ id: o.githubOrgId, login: o.login, type: "Organization" });
-const installation = (o: FakeOrg) => ({
-  id: o.installationId,
-  account: account(o),
-  repository_selection: o.selection,
-});
-const byLogin = (login: string) =>
-  orgs.find((o) => o.exists && o.login.toLowerCase() === decodeURIComponent(login).toLowerCase());
-
-function github(method: string, path: string): Response {
-  let m: RegExpExecArray | null;
-  if (method === "POST" && /^\/app\/installations\/\d+\/access_tokens$/.test(path)) {
-    return json({ token: "ghs_fake", expires_at: new Date(Date.now() + 3_600_000).toISOString() }, 201);
-  }
-  if (method !== "GET") return notFound();
-  if (path === "/app/installations") {
-    return json(orgs.filter((o) => o.installationId !== null).map(installation));
-  }
-  if ((m = /^\/app\/installations\/(\d+)$/.exec(path))) {
-    const o = orgs.find((x) => x.installationId === Number(m![1]));
-    return o ? json(installation(o)) : notFound();
-  }
-  if ((m = /^\/orgs\/([^/]+)\/installation$/.exec(path))) {
-    const o = byLogin(m[1]!);
-    return o?.installationId ? json(installation(o)) : notFound();
-  }
-  if ((m = /^\/orgs\/([^/]+)\/actions\/secrets\/ANTHROPIC_API_KEY$/.exec(path))) {
-    return byLogin(m[1]!)?.secret ? json({ name: "ANTHROPIC_API_KEY" }) : notFound();
-  }
-  if ((m = /^\/orgs\/([^/]+)$/.exec(path))) {
-    const o = byLogin(m[1]!);
-    return o ? json({ ...account(o), plan: { name: o.plan } }) : notFound();
-  }
-  return notFound();
-}
-
-const fetchStub = vi.fn(async (input: string | URL | Request, init: RequestInit = {}) => {
-  const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
-  const method = (init.method ?? "GET").toUpperCase();
-  calls.push(`${method} ${url.host}${url.pathname}`);
-  if (url.host === "avatars.githubusercontent.com") return avatar();
-  if (url.host === "api.github.com") return github(method, url.pathname);
-  throw new Error(`unexpected request to ${url.href}`);
+const installedOrg = (githubOrgId: number, login: string, installationId: number, more: Partial<FakeOrg> = {}): FakeOrg => ({
+  githubOrgId,
+  login,
+  installationId,
+  selection: "all",
+  plan: "team",
+  secret: true,
+  exists: true,
+  ...more,
 });
 
 // ---------------------------------------------------------------- the world
 
 type Caller = Awaited<ReturnType<TestServer["signIn"]>>;
-
-const dir = mkdtempSync(join(tmpdir(), "quiz-github-"));
-const pem = join(dir, "app.pem");
-writeFileSync(
-  pem,
-  generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ type: "pkcs1", format: "pem" }),
-);
 
 let server: TestServer;
 let teacher: Caller;
@@ -142,10 +87,23 @@ async function orgRow(values: Partial<typeof githubOrganizations.$inferInsert> &
   return row!;
 }
 
+async function orgById(id: string) {
+  const [row] = await server.app.db.select().from(githubOrganizations).where(eq(githubOrganizations.id, id));
+  return row!;
+}
+
 async function link(classroomId: string, orgId: string) {
   await server.app.db
     .insert(githubClassroomLinks)
     .values({ classroomId, orgId, linkedBy: teacher.id, linkedAt: server.clock.now() });
+}
+
+async function linkedOrgOf(classroomId: string) {
+  const [row] = await server.app.db
+    .select({ orgId: githubClassroomLinks.orgId })
+    .from(githubClassroomLinks)
+    .where(eq(githubClassroomLinks.classroomId, classroomId));
+  return row?.orgId;
 }
 
 async function audits(action: string, subjectId: string) {
@@ -156,10 +114,10 @@ async function audits(action: string, subjectId: string) {
 }
 
 beforeAll(async () => {
-  vi.stubGlobal("fetch", fetchStub);
+  vi.stubGlobal("fetch", gh.fetch);
   server = await testServer({
     GITHUB_APP_ID: "1",
-    GITHUB_APP_PRIVATE_KEY_PATH: pem,
+    GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
     GITHUB_APP_SLUG: "quiz-test",
   });
   [teacher, colleague, outsider, student] = await Promise.all([
@@ -176,14 +134,15 @@ beforeAll(async () => {
 afterAll(async () => {
   await server.close();
   vi.unstubAllGlobals();
-  rmSync(dir, { recursive: true, force: true });
+  key.remove();
 });
 
 beforeEach(() => {
   resetGithubCaches();
   orgs = [];
-  avatar = () => png();
-  calls.length = 0;
+  avatar = png;
+  gh.reset();
+  gh.routes = [orgsRoute(() => orgs), avatarRoute(() => avatar())];
 });
 
 // ---------------------------------------------------------------- tests
@@ -210,7 +169,7 @@ describe("without Quiz's App", () => {
         });
         expect(res.statusCode, `${method} ${url}`).toBe(404);
       }
-      expect(calls).toEqual([]);
+      expect(gh.calls).toEqual([]);
     } finally {
       await bare.close();
     }
@@ -225,7 +184,7 @@ describe("the setup return", () => {
     const res = await setup(`installation_id=9999&state=${room}`);
     expect(res.statusCode).toBe(303);
     expect(res.headers.location).toBe(`/classrooms/${room}/settings`);
-    expect(calls).toContain("GET api.github.com/app/installations/9999");
+    expect(gh.calls).toContain("GET api.github.com/app/installations/9999");
     const rows = await server.app.db
       .select()
       .from(githubOrganizations)
@@ -234,7 +193,7 @@ describe("the setup return", () => {
   });
 
   it("records a confirmed installation once, however often GitHub returns", async () => {
-    orgs = [{ githubOrgId: 601, login: "heig-setup", installationId: 81, selection: "all", plan: "free", secret: false, exists: true }];
+    orgs = [installedOrg(601, "heig-setup", 81, { plan: "free", secret: false })];
     for (let i = 0; i < 2; i += 1) {
       expect((await setup("installation_id=81&setup_action=install")).statusCode).toBe(303);
     }
@@ -254,13 +213,31 @@ describe("the setup return", () => {
       expect(res.headers.location, state).toBe("/");
     }
   });
+
+  it("never hands a known organization's row to another one that took its login", async () => {
+    const room = await classroom("setup-reused");
+    const ours = await orgRow({ login: "heig-reused-setup", githubOrgId: 1201 });
+    await link(room, ours.id);
+    orgs = [installedOrg(1202, "heig-reused-setup", 161)];
+    expect((await setup("installation_id=161")).statusCode).toBe(303);
+
+    const retired = await orgById(ours.id);
+    expect(retired).toMatchObject({ githubOrgId: 1201, status: "deleted", installationId: null });
+    expect(retired.login).toBe(`heig-reused-setup~${ours.id}`);
+    expect(await linkedOrgOf(room)).toBe(ours.id);
+    const [newcomer] = await server.app.db
+      .select()
+      .from(githubOrganizations)
+      .where(eq(githubOrganizations.githubOrgId, 1202));
+    expect(newcomer).toMatchObject({ login: "heig-reused-setup", installationId: 161 });
+    expect(newcomer!.id).not.toBe(ours.id);
+    expect(await audits("github_org.deleted", ours.id)).toHaveLength(1);
+  });
 });
 
 describe("the organizations", () => {
   it("lists those where the App is installed, with a same-origin avatar", async () => {
-    orgs = [
-      { githubOrgId: 701, login: "heig-listed", installationId: 91, selection: "all", plan: "team", secret: true, exists: true },
-    ];
+    orgs = [installedOrg(701, "heig-listed", 91)];
     const stale = await orgRow({ login: "heig-gone", githubOrgId: 702, installationId: 92 });
     const res = await call("GET", "/app/api/github/orgs", teacher);
     expect(res.statusCode).toBe(200);
@@ -289,10 +266,7 @@ describe("a classroom's link", () => {
     other = await orgRow({ login: "heig-other", githubOrgId: 802, installationId: 102 });
   });
   beforeEach(() => {
-    orgs = [
-      { githubOrgId: 801, login: "heig-link", installationId: 101, selection: "all", plan: "team", secret: true, exists: true },
-      { githubOrgId: 802, login: "heig-other", installationId: 102, selection: "all", plan: "team", secret: true, exists: true },
-    ];
+    orgs = [installedOrg(801, "heig-link", 101), installedOrg(802, "heig-other", 102)];
   });
 
   it("is a 404 for anyone off the course's staff", async () => {
@@ -309,7 +283,7 @@ describe("a classroom's link", () => {
       expect((await call("GET", `/app/api/classrooms/${room}/github`, who)).statusCode).toBe(404);
       expect((await call("DELETE", `/app/api/classrooms/${room}/github`, who)).statusCode).toBe(404);
     }
-    expect(await server.app.db.select().from(githubClassroomLinks).where(eq(githubClassroomLinks.classroomId, room))).toEqual([]);
+    expect(await linkedOrgOf(room)).toBeUndefined();
   });
 
   it("offers the install page with the classroom as `state`", async () => {
@@ -377,7 +351,7 @@ describe("the lazy healing", () => {
     const room = await classroom("heal");
     const imported = await orgRow({ login: "heig-imported" });
     await link(room, imported.id);
-    orgs = [{ githubOrgId: 901, login: "heig-imported", installationId: 111, selection: "selected", plan: "team", secret: false, exists: true }];
+    orgs = [installedOrg(901, "heig-imported", 111, { selection: "selected", secret: false })];
 
     const read = async () => (await call("GET", `/app/api/classrooms/${room}/github`, teacher)).json<GithubClassroom>();
     const first = await read();
@@ -389,21 +363,21 @@ describe("the lazy healing", () => {
     expect(await audits("github_org.installation_resolved", imported.id)).toHaveLength(1);
 
     // Within the minute: the stored row and the cached checks, no GitHub call.
-    calls.length = 0;
+    gh.calls.length = 0;
     orgs[0]!.secret = true;
     expect((await read()).link!.checks.llmSecret).toBe("missing");
-    expect(calls).toEqual([]);
+    expect(gh.calls).toEqual([]);
 
     server.clock.advance(HEAL_TTL_MS);
     expect((await read()).link!.checks.llmSecret).toBe("present");
-    expect(calls.length).toBeGreaterThan(0);
+    expect(gh.calls.length).toBeGreaterThan(0);
   });
 
   it("follows a renamed organization by its id", async () => {
     const room = await classroom("heal-rename");
     const renamed = await orgRow({ login: "heig-old", githubOrgId: 911, installationId: 121, plan: "team" });
     await link(room, renamed.id);
-    orgs = [{ githubOrgId: 911, login: "heig-new", installationId: 121, selection: "all", plan: "team", secret: true, exists: true }];
+    orgs = [installedOrg(911, "heig-new", 121)];
     const res = await call("GET", `/app/api/classrooms/${room}/github`, teacher);
     expect(res.json<GithubClassroom>().link!.org.login).toBe("heig-new");
     expect(await audits("github_org.renamed", renamed.id)).toHaveLength(1);
@@ -422,26 +396,55 @@ describe("the lazy healing", () => {
     expect(await audits("github_org.installation_deleted", gone.id)).toHaveLength(1);
     expect(await audits("github_org.deleted", gone.id)).toHaveLength(1);
   });
+
+  it("never re-points a known organization at another one that took its login", async () => {
+    const room = await classroom("heal-reused");
+    // Ours (id 1101) is uninstalled; GitHub now gives its login to 1102, installed.
+    const ours = await orgRow({ login: "heig-reused", githubOrgId: 1101 });
+    await link(room, ours.id);
+    orgs = [installedOrg(1102, "heig-reused", 151)];
+
+    const res = await call("GET", `/app/api/classrooms/${room}/github`, teacher);
+    expect(res.json<GithubClassroom>().link).toMatchObject({
+      org: { id: ours.id, installed: false, status: "deleted" },
+      checks: { allRepositories: null, llmSecret: "unknown" },
+    });
+    expect(await orgById(ours.id)).toMatchObject({ githubOrgId: 1101, installationId: null, status: "deleted" });
+    // The classroom stays on its own organization, now deleted.
+    expect(await linkedOrgOf(room)).toBe(ours.id);
+    const [newcomer] = await server.app.db
+      .select()
+      .from(githubOrganizations)
+      .where(eq(githubOrganizations.githubOrgId, 1102));
+    expect(newcomer).toMatchObject({ login: "heig-reused", installationId: 151 });
+    expect(newcomer!.id).not.toBe(ours.id);
+    expect(await audits("github_org.installation_resolved", ours.id)).toEqual([]);
+  });
 });
 
 describe("an organization's avatar", () => {
   let org: { id: string };
   const get = (who: Caller) => call("GET", `/app/api/github/orgs/${org.id}/avatar`, who);
+  const avatarInits = () => gh.inits.filter((_, i) => gh.calls[i]!.includes(AVATAR_HOST));
 
   beforeAll(async () => {
     org = await orgRow({ login: "heig-avatar", githubOrgId: 1001, installationId: 141 });
   });
 
-  it("is fetched by the server and served from here, cached", async () => {
+  it("is fetched by the server and served from here, inert, cached", async () => {
     const res = await get(teacher);
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toBe("image/png");
+    expect(res.headers["content-type"]).not.toMatch(/svg/);
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect(res.headers["content-security-policy"]).toBe("default-src 'none'; sandbox");
     expect(res.headers.location).toBeUndefined();
     expect(res.rawPayload.equals(PNG)).toBe(true);
-    expect(calls).toEqual(["GET avatars.githubusercontent.com/u/1001"]);
+    expect(gh.calls).toEqual([`GET ${AVATAR_HOST}/u/1001`]);
+    // Never follows GitHub elsewhere.
+    expect(avatarInits().map((i) => i.redirect)).toEqual(["error"]);
     await get(colleague);
-    expect(calls).toHaveLength(1);
+    expect(gh.calls).toHaveLength(1);
   });
 
   it("never sends the browser to GitHub: a redirect or a non-image upstream is a 404", async () => {
@@ -450,14 +453,18 @@ describe("an organization's avatar", () => {
     expect(redirected.statusCode).toBe(404);
     expect(redirected.headers.location).toBeUndefined();
 
-    resetGithubCaches();
+    // A failure is not kept: the next request asks again.
+    avatar = () => new Response("<svg xmlns='http://www.w3.org/2000/svg'/>", { status: 200, headers: { "content-type": "image/svg+xml" } });
+    expect((await get(teacher)).statusCode).toBe(404);
+
     avatar = () => new Response("<html></html>", { status: 200, headers: { "content-type": "text/html" } });
     expect((await get(teacher)).statusCode).toBe(404);
 
-    resetGithubCaches();
     // Declared an image, but the bytes are not one.
     avatar = () => new Response("<svg onload=alert(1)>", { status: 200, headers: { "content-type": "image/png" } });
     expect((await get(teacher)).statusCode).toBe(404);
+    expect(avatarInits().every((i) => i.redirect === "error")).toBe(true);
+    expect(avatarInits()).toHaveLength(4);
   });
 
   it("is refused past its size cap", async () => {
@@ -469,8 +476,24 @@ describe("an organization's avatar", () => {
     expect((await get(teacher)).statusCode).toBe(404);
   });
 
-  it("is the staff's: a student gets the 404 of a missing image", async () => {
-    expect((await get(student)).statusCode).toBe(404);
-    expect(calls).toEqual([]);
+  it("is the staff's, like the listing: a student is refused", async () => {
+    expect((await get(student)).statusCode).toBe(403);
+    expect(gh.calls).toEqual([]);
+  });
+});
+
+// Last: it spends this address's allowance of the setup return.
+describe("the setup return's rate limit", () => {
+  it("answers 429 past its allowance per address, before calling GitHub", async () => {
+    let limited = 0;
+    for (let i = 0; i < SETUPS_PER_WINDOW + 1; i += 1) {
+      if ((await call("GET", "/setup/github/installed?installation_id=77")).statusCode === 429) limited += 1;
+    }
+    expect(limited).toBeGreaterThan(0);
+    const calls = gh.calls.length;
+    const res = await call("GET", "/setup/github/installed?installation_id=77");
+    expect(res.statusCode).toBe(429);
+    expect(res.headers["retry-after"]).toBeDefined();
+    expect(gh.calls.length).toBe(calls);
   });
 });

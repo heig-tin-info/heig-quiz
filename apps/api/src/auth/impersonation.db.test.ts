@@ -20,7 +20,8 @@ import { seedLive, type Seeded } from "../test/live.js";
 import { redactUrl } from "../redact.js";
 import { IMPERSONATION_PATH } from "./impersonation.js";
 import { issueLaunchTicket } from "./launch.js";
-import { CSRF_COOKIE, SESSION_COOKIE, purgeExpiredSessions } from "./session.js";
+import { purgeExpiredSessions } from "./session.js";
+import { issueImpersonation, openImpersonation } from "./testing.js";
 
 type Who = { id: string; headers: Record<string, string> };
 /** A classroom with one student, taught by `teacher`, watched over by `admin`. */
@@ -55,25 +56,11 @@ const linkUrl = (w: World, entryId = w.entryId) =>
   `/app/api/classrooms/${w.seed.classroomId}/roster/${entryId}/impersonation`;
 
 /** Asks for a link as `who`; the path of the link, or the status code. */
-async function issue(w: World, who: Who = w.admin, entryId = w.entryId) {
-  const res = await call(w.server, "POST", linkUrl(w, entryId), who.headers);
-  return res.statusCode === 200 ? new URL(res.json().url as string).pathname : res.statusCode;
-}
+const issue = (w: World, who: Who = w.admin, entryId = w.entryId) =>
+  issueImpersonation(w.server, who.headers, w.seed.classroomId, entryId);
 
 /** Opens a link in a browser with no session; the session headers, or null. */
-async function open(w: World, path: string): Promise<Record<string, string> | null> {
-  const res = await w.server.app.inject({ method: "GET", url: path });
-  expect(res.statusCode).toBe(303);
-  if (res.headers.location !== "/") {
-    expect(res.headers.location).toBe("/?impersonation=invalid");
-    return null;
-  }
-  const jar = Object.fromEntries(res.cookies.map((c) => [c.name, c.value]));
-  return {
-    cookie: `${SESSION_COOKIE}=${jar[SESSION_COOKIE]}; ${CSRF_COOKIE}=${jar[CSRF_COOKIE]}`,
-    "x-csrf-token": jar[CSRF_COOKIE]!,
-  };
-}
+const open = (w: World, path: string) => openImpersonation(w.server, path);
 
 async function auditRows(w: World, action: "impersonation.started" | "impersonation.ended") {
   return w.server.app.db.select().from(auditLog).where(eq(auditLog.action, action));

@@ -1,0 +1,120 @@
+/**
+ * The route walks of `seb.db.test.ts` and `impersonation.db.test.ts`, on a
+ * server built WITH Quiz's App: the `github` module's routes exist only
+ * then, so the walks of those files, run without an App, never see them.
+ *
+ * - a `seb` session is no session at all on every route of the module
+ *   (ADR-027): it answers exactly as an anonymous request;
+ * - an impersonation session writes nothing (ADR-034), and reads no
+ *   classroom's GitHub link, not even its student's classroom (invariant 6).
+ */
+import { eq } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+import { registerForTests } from "@quiz/registry/server";
+
+import {
+  everyRoute,
+  issueImpersonation,
+  openImpersonation,
+  openSebSession,
+  SITTING_ROUTES,
+  walkUrl,
+} from "../../auth/testing.js";
+import { enrollments } from "../../db/schema.js";
+import { appKey, fakeGithub } from "../../github/testing.js";
+import { fakeShort } from "../../test/fakeType.js";
+import { testServer, type Method, type TestServer } from "../../test/http.js";
+import { seedLive, type Seeded } from "../../test/live.js";
+
+const key = appKey();
+const gh = fakeGithub();
+let restore: () => void;
+let server: TestServer;
+let seed: Seeded;
+let student: { id: string; headers: Record<string, string> };
+
+const call = (method: Method, url: string, headers: Record<string, string>, payload: object = {}) =>
+  server.app.inject({ method, url, headers, ...(method === "GET" ? {} : { payload }) });
+
+/** The routes the App adds: the `github` module's. */
+const githubRoutes = () => everyRoute(server).filter(({ path }) => path.includes("github"));
+
+beforeAll(async () => {
+  restore = registerForTests(fakeShort);
+  vi.stubGlobal("fetch", gh.fetch);
+  server = await testServer({
+    GITHUB_APP_ID: "1",
+    GITHUB_APP_PRIVATE_KEY_PATH: key.pem,
+    GITHUB_APP_SLUG: "quiz-test",
+    SEB_CONFIG_KEY_ENFORCE: "1",
+  });
+  server.clock.set("2026-09-21T08:00:00.000Z");
+  const teacher = await server.signIn("teacher");
+  student = await server.signIn("student");
+  seed = await seedLive(server.app.db, {
+    teacherId: teacher.id,
+    studentIds: [student.id],
+    mode: "exam",
+    settings: { safeExamBrowser: true },
+  });
+  const started = await call("POST", `/app/api/evaluations/${seed.evaluationId}/start`, teacher.headers, {
+    confirm: true,
+  });
+  expect(started.statusCode, started.body).toBe(200);
+});
+
+afterAll(async () => {
+  await server.close();
+  vi.unstubAllGlobals();
+  key.remove();
+  restore();
+});
+
+it("walks the github module's routes (the App is on)", () => {
+  expect(githubRoutes().length).toBeGreaterThanOrEqual(6);
+});
+
+describe("a seb session (ADR-027)", () => {
+  it("is no session at all on every route of the module", async () => {
+    const seb = await openSebSession(server, seed.evaluationId, student.headers);
+    for (const { method, path } of githubRoutes()) {
+      if (SITTING_ROUTES.has(`${method} ${path}`)) continue;
+      const url = walkUrl(path);
+      const { cookie: _, ...anonymous } = seb(url);
+      const [asSeb, asNobody] = await Promise.all([
+        call(method, url, seb(url)),
+        call(method, url, anonymous),
+      ]);
+      expect(asSeb.statusCode, `${method} ${path}`).toBe(asNobody.statusCode);
+    }
+  });
+});
+
+describe("an impersonation session (ADR-034)", () => {
+  let as: Record<string, string>;
+
+  beforeAll(async () => {
+    const admin = await server.signInWithSuperPowers();
+    const [entry] = await server.app.db
+      .select({ id: enrollments.id })
+      .from(enrollments)
+      .where(eq(enrollments.userId, student.id));
+    const path = await issueImpersonation(server, admin.headers, seed.classroomId, entry!.id);
+    as = (await openImpersonation(server, path as string))!;
+  });
+
+  it("writes nothing, on every route of the module", async () => {
+    for (const { method, path } of githubRoutes()) {
+      if (method === "GET") continue;
+      const res = await call(method, walkUrl(path), as);
+      expect(res.statusCode, `${method} ${path}`).toBe(403);
+      expect(res.json().error, `${method} ${path}`).toBe("impersonation_read_only");
+    }
+  });
+
+  it("reads no GitHub link, not even of the student's own classroom", async () => {
+    const res = await call("GET", `/app/api/classrooms/${seed.classroomId}/github`, as);
+    expect(res.statusCode).toBe(404);
+  });
+});
