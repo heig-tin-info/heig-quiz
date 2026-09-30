@@ -2666,6 +2666,9 @@ export const en = {
   "preview.restart.title": "Restart the preview?",
   "preview.restart.message":
     "Your answers are thrown away and a new random order is drawn.",
+  "preview.points.show": "Show the points",
+  "preview.points.value": "This question: {points} / {max} points",
+  "preview.points.failed": "The points could not be computed.",
   "preview.gradeFailed": "The grading failed",
   "preview.gradeFailedBody": "Your answers are still here. Try handing in again.",
   "preview.empty.title": "This evaluation has no questions yet",
