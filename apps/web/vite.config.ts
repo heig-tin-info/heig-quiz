@@ -3,9 +3,10 @@ import react from "@vitejs/plugin-react";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { availableParallelism } from "node:os";
 import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
+
+import { coverage, maxWorkers } from "../../vitest.shared.js";
 
 /**
  * `virtual:lucide-aliases`: alias -> canonical lucide names, so the pool icon
@@ -104,7 +105,13 @@ export default defineConfig({
   test: {
     // Capped so several agents testing at once cannot exhaust a
     // workstation's RAM (apps/api/vitest.config.ts says why).
-    maxWorkers: Number(process.env.VITEST_MAX_WORKERS) || Math.max(1, Math.min(6, availableParallelism() - 1)),
+    maxWorkers,
+    // The dev mock backend, the dictionaries and the component gallery are
+    // data or development screens, not code a test should be asked to reach.
+    coverage: {
+      ...coverage,
+      exclude: [...coverage.exclude, "src/mock/**", "src/i18n/en.ts", "src/i18n/fr.ts", "src/DevGallery.tsx"],
+    },
     // Vitest 4 removed `environmentMatchGlobs`; test projects are its
     // replacement. Two of them, so the pure-logic suite keeps running in
     // `node` (fast, no DOM to boot) while the component suite gets jsdom,

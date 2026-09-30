@@ -1,0 +1,45 @@
+# The test coverage of every workspace package, apart from `checks`: it runs
+# the suites unsharded with V8 coverage on, so it is the slowest job and never
+# holds up a merge or a deploy. It fails when a package falls under its floor
+# in coverage.floors.json (scripts/coverage-summary.mjs), prints the table in
+# the run's summary and keeps the HTML reports as an artifact.
+name: Coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "mockups/**"
+      - "**/*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      # The packages the suites resolve through dist/; the SPA itself is not
+      # built (its tests run from the sources, as in ci.yml's test-app).
+      - run: pnpm -r --filter "!@quiz/web" build
+      # CI has the RAM the workstation lacks: the packages run side by side,
+      # not one at a time as `pnpm test:coverage` does locally.
+      - run: pnpm -r test --coverage
+      - run: node scripts/coverage-summary.mjs
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: |
+            apps/*/coverage/
+            packages/*/coverage/
+          retention-days: 14

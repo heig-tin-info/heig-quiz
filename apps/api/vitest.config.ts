@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
-import { maxWorkers } from "../../vitest.shared.js";
+import { coverage, maxWorkers } from "../../vitest.shared.js";
 
 /**
  * Every `*.db.test.ts` file boots its own PGlite, loaded with the migrated
@@ -25,5 +25,7 @@ export default defineConfig({
     testTimeout: 60_000,
     hookTimeout: 120_000,
     maxWorkers,
+    // The demo world is a development script, never served.
+    coverage: { ...coverage, exclude: [...coverage.exclude, "src/seed.ts", "src/seed/**"] },
   },
 });
