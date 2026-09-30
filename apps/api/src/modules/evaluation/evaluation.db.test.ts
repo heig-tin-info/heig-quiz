@@ -3,7 +3,13 @@
  *
  * What is asserted here is the part a screenshot cannot show: the state
  * machine including the moves it REFUSES, the version freeze of F-EVAL-03,
- * and the two doors that close as soon as a student has an attempt.
+ * and the two doors that close as soon as a student has an attempt. The
+ * guards themselves, on plain rows, are `stateMachine.test.ts`; here, what
+ * the service and the routes do with them.
+ *
+ * One server for the whole file: every test seeds its own course, classroom
+ * and evaluation (`seedLive`) and signs in its own accounts, so none sees
+ * another's rows.
  */
 import { randomUUID } from "node:crypto";
 
@@ -23,8 +29,7 @@ import {
   evaluations,
   questions,
 } from "../../db/schema.js";
-import { testDb } from "../../test/db.js";
-import { type Payload, testServer } from "../../test/http.js";
+import { type Payload, type TestServer, testServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { loadConfig, typeOf } from "../pool/config.js";
@@ -32,6 +37,7 @@ import * as pollService from "../poll/service.js";
 import * as poolService from "../pool/service.js";
 import * as service from "./service.js";
 
+let server: TestServer;
 let db: Db;
 let restore: () => void;
 const clock = new TestClock();
@@ -41,9 +47,13 @@ const points = (type: string, version: { config: unknown; configVersion: number 
 
 beforeAll(async () => {
   restore = registerForTests(fakeShort);
-  db = await testDb();
+  server = await testServer();
+  db = server.app.db;
 });
-afterAll(() => restore());
+afterAll(async () => {
+  await server.close();
+  restore();
+});
 
 /** Gives the evaluation an attempt, which is what freezes its structure. */
 async function addAttempt(evaluationId: string, userId: string): Promise<string> {
@@ -51,12 +61,6 @@ async function addAttempt(evaluationId: string, userId: string): Promise<string>
   await db.insert(attempts).values({ id, evaluationId, userId, seed: 1 });
   return id;
 }
-
-/** What readiness reads of an ordinary item list of two questions. */
-const TWO_ITEMS = [
-  { points: 1, bonus: false },
-  { points: 1, bonus: false },
-];
 
 describe("state machine (§5.1)", () => {
   it("walks draft → scheduled → lobby → running ⇄ paused → closed", async () => {
@@ -80,25 +84,6 @@ describe("state machine (§5.1)", () => {
     expect(row.closedAt).not.toBeNull();
   });
 
-  it("refuses the illegal transitions", async () => {
-    const seed = await seedLive(db);
-    const draft = await reload(db, seed.evaluationId);
-    // draft → paused, draft → closed, closed → running: not in the table.
-    expect(service.isLegalTransition("draft", "paused")).toBe(false);
-    expect(service.isLegalTransition("closed", "running")).toBe(false);
-    expect(service.isLegalTransition("released", "draft")).toBe(false);
-    await expect(service.transition(db, draft, "paused" as never, clock.now())).rejects.toThrow(
-      service.IllegalTransition,
-    );
-  });
-
-  it("refuses to schedule an evaluation with no question", async () => {
-    const seed = await seedLive(db, { questions: 0 });
-    const row = await reload(db, seed.evaluationId);
-    await expect(service.transition(db, row, "scheduled", clock.now())).rejects.toMatchObject({
-      code: "illegal_transition",
-    });
-  });
 
   /*
    * #152: the ticker opens a scheduled evaluation at `opensAt` and at nothing
@@ -106,288 +91,99 @@ describe("state machine (§5.1)", () => {
    * its reason, for the launch step to translate.
    */
   it("refuses to schedule without an opening time, and says so (#152)", async () => {
-    const server = await testServer();
-    try {
-      const teacher = await server.signIn("teacher");
-      const seed = await seedLive(server.app.db, { teacherId: teacher.id });
-      const url = `/app/api/evaluations/${seed.evaluationId}`;
-      const schedule = () =>
-        server.app.inject({
-          method: "POST",
-          url: `${url}/state`,
-          headers: teacher.headers,
-          payload: { to: "scheduled" },
-        });
-
-      const refused = await schedule();
-      expect(refused.statusCode).toBe(409);
-      expect(TransitionRefusal.parse(refused.json())).toMatchObject({
-        error: "illegal_transition",
-        reason: "opens_at_missing",
-      });
-
-      const opensAt = new Date(clock.now().getTime() + 24 * 3_600_000).toISOString();
-      const patched = await server.app.inject({
-        method: "PATCH",
-        url,
+    const teacher = await server.signIn("teacher");
+    const seed = await seedLive(server.app.db, { teacherId: teacher.id });
+    const url = `/app/api/evaluations/${seed.evaluationId}`;
+    const schedule = () =>
+      server.app.inject({
+        method: "POST",
+        url: `${url}/state`,
         headers: teacher.headers,
-        payload: { opensAt },
+        payload: { to: "scheduled" },
       });
-      expect(patched.statusCode).toBe(200);
-      const scheduled = await schedule();
-      expect(scheduled.statusCode).toBe(200);
-      expect(scheduled.json()).toMatchObject({ state: "scheduled", opensAt });
-    } finally {
-      await server.close();
-    }
+
+    const refused = await schedule();
+    expect(refused.statusCode).toBe(409);
+    expect(TransitionRefusal.parse(refused.json())).toMatchObject({
+      error: "illegal_transition",
+      reason: "opens_at_missing",
+    });
+
+    const opensAt = new Date(clock.now().getTime() + 24 * 3_600_000).toISOString();
+    const patched = await server.app.inject({
+      method: "PATCH",
+      url,
+      headers: teacher.headers,
+      payload: { opensAt },
+    });
+    expect(patched.statusCode).toBe(200);
+    const scheduled = await schedule();
+    expect(scheduled.statusCode).toBe(200);
+    expect(scheduled.json()).toMatchObject({ state: "scheduled", opensAt });
   });
 
   it("counts the roster for the launch checklist, never a staff seat (#152)", async () => {
-    const server = await testServer();
-    try {
-      const teacher = await server.signIn("teacher");
-      const seed = await seedLive(server.app.db, { teacherId: teacher.id, students: 2 });
-      const seat = (extra: Partial<typeof enrollments.$inferInsert>) =>
-        server.app.db.insert(enrollments).values({
-          id: randomUUID(),
-          classroomId: seed.classroomId,
-          nom: "Nom",
-          prenom: "Prénom",
-          email: `${randomUUID()}@heig.test`,
-          ...extra,
-        });
-      // One student who never signed in and whom the import flagged, and a
-      // staff seat without an account: only the first one counts.
-      await seat({ conflictFlag: true });
-      await seat({ staff: true });
-
-      const detail = await server.app.inject({
-        method: "GET",
-        url: `/app/api/evaluations/${seed.evaluationId}`,
-        headers: teacher.headers,
+    const teacher = await server.signIn("teacher");
+    const seed = await seedLive(server.app.db, { teacherId: teacher.id, students: 2 });
+    const seat = (extra: Partial<typeof enrollments.$inferInsert>) =>
+      server.app.db.insert(enrollments).values({
+        id: randomUUID(),
+        classroomId: seed.classroomId,
+        nom: "Nom",
+        prenom: "Prénom",
+        email: `${randomUUID()}@heig.test`,
+        ...extra,
       });
-      expect(detail.statusCode).toBe(200);
-      expect(detail.json().roster).toEqual({ enrolled: 3, unlinked: 1, conflicts: 1 });
-    } finally {
-      await server.close();
-    }
-  });
+    // One student who never signed in and whom the import flagged, and a
+    // staff seat without an account: only the first one counts.
+    await seat({ conflictFlag: true });
+    await seat({ staff: true });
 
-  it("refuses to schedule an exam whose timing says nothing (F-EVAL-04)", async () => {
-    const seed = await seedLive(db, { durationS: null });
-    const row = await reload(db, seed.evaluationId);
-    await expect(service.transition(db, row, "scheduled", clock.now())).rejects.toMatchObject({
-      code: "illegal_transition",
+    const detail = await server.app.inject({
+      method: "GET",
+      url: `/app/api/evaluations/${seed.evaluationId}`,
+      headers: teacher.headers,
     });
-    // The same evaluation with a common end instead of a duration passes.
-    await db
-      .update(evaluations)
-      .set({
-        settings: { ...service.settingsOf(row), timing: "deadline" },
-        opensAt: new Date(clock.now().getTime() + 60_000),
-        closesAt: new Date(clock.now().getTime() + 3_600_000),
-      })
-      .where(eq(evaluations.id, row.id));
-    const fixed = await reload(db, seed.evaluationId);
-    expect((await service.transition(db, fixed, "scheduled", clock.now())).state).toBe("scheduled");
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().roster).toEqual({ enrolled: 3, unlinked: 1, conflicts: 1 });
   });
 
-  /*
-   * #76: the take-home preset writes a common end but no opening time, and
-   * the opening time is the base of the extra time in that timing (D8). The
-   * refusal names the field, so the screen can say which one to fill.
-   */
-  it("refuses to open a common-end evaluation without its opening time, and says which field (#76)", async () => {
-    const server = await testServer();
-    try {
-      const teacher = await server.signIn("teacher");
-      const seed = await seedLive(server.app.db, {
-        teacherId: teacher.id,
-        mode: "exercise",
-        durationS: null,
-        settings: { timing: "deadline", lobby: "skip" },
-        closesAt: new Date(clock.now().getTime() + 7 * 24 * 3_600_000),
-      });
-      const url = `/app/api/evaluations/${seed.evaluationId}`;
-      const open = () =>
-        server.app.inject({
-          method: "POST",
-          url: `${url}/state`,
-          headers: teacher.headers,
-          payload: { to: "lobby" },
-        });
 
-      const refused = await open();
-      expect(refused.statusCode).toBe(409);
-      expect(TransitionRefusal.parse(refused.json())).toMatchObject({
-        error: "illegal_transition",
-        reason: "timing_incomplete",
-        missing: ["opensAt"],
-      });
-
-      const patched = await server.app.inject({
-        method: "PATCH",
-        url,
-        headers: teacher.headers,
-        payload: { opensAt: clock.now().toISOString() },
-      });
-      expect(patched.statusCode).toBe(200);
-      expect((await open()).statusCode).toBe(200);
-    } finally {
-      await server.close();
-    }
-  });
-
-  /*
-   * #178: a time already past, by the server's clock. A common end reached
-   * before the evaluation opens would close it at the ticker's next pass; a
-   * schedule for a past instant would open it there. The instant itself is
-   * past: `<=`, not `<`.
-   */
-  it("refuses to schedule or open once the common end has passed (#178)", async () => {
-    const seed = await seedLive(db, {
+  it("keeps a scheduled evaluation schedulable when it is patched (#178, #254)", async () => {
+    const teacher = await server.signIn("teacher");
+    const now = server.clock.now();
+    const hour = 3_600_000;
+    const seed = await seedLive(server.app.db, {
+      teacherId: teacher.id,
       durationS: null,
       settings: { timing: "deadline" },
-      opensAt: new Date(clock.now().getTime() - 3_600_000),
-      closesAt: clock.now(),
+      opensAt: new Date(now.getTime() + hour),
+      closesAt: new Date(now.getTime() + 2 * hour),
     });
-    const row = await reload(db, seed.evaluationId);
-    for (const to of ["scheduled", "lobby", "running"] as const) {
-      expect(() =>
-        service.guardTransition(row, to, { items: TWO_ITEMS, attemptCount: 0, now: clock.now() }),
-      ).toThrow(expect.objectContaining({ details: { reason: "closes_at_past" } }));
-    }
-    const justBefore = new Date(clock.now().getTime() - 1);
-    for (const to of ["lobby", "running"] as const) {
-      expect(() =>
-        service.guardTransition(row, to, { items: TWO_ITEMS, attemptCount: 0, now: justBefore }),
-      ).not.toThrow();
-    }
-    // A resume is not a start: it moves the common end by the pause itself.
-    const paused = { ...row, state: "paused" as const };
-    expect(() =>
-      service.guardTransition(paused, "running", { items: TWO_ITEMS, attemptCount: 0, now: clock.now() }),
-    ).not.toThrow();
-  });
-
-  it("refuses to schedule at an opening time already past, and says so (#178)", async () => {
-    const server = await testServer();
-    try {
-      const teacher = await server.signIn("teacher");
-      const now = server.clock.now();
-      const seed = await seedLive(server.app.db, { teacherId: teacher.id, opensAt: now });
-      const schedule = () =>
-        server.app.inject({
-          method: "POST",
-          url: `/app/api/evaluations/${seed.evaluationId}/state`,
-          headers: teacher.headers,
-          payload: { to: "scheduled" },
-        });
-
-      const refused = await schedule();
-      expect(refused.statusCode).toBe(409);
-      expect(TransitionRefusal.parse(refused.json())).toMatchObject({
-        error: "illegal_transition",
-        reason: "opens_at_past",
+    await service.applyState(server.app.db, await reload(server.app.db, seed.evaluationId), "scheduled", now);
+    const patch = (payload: Record<string, unknown>) =>
+      server.app.inject({
+        method: "PATCH",
+        url: `/app/api/evaluations/${seed.evaluationId}`,
+        headers: teacher.headers,
+        payload,
       });
 
-      server.clock.set(new Date(now.getTime() - 1));
-      expect((await schedule()).statusCode).toBe(200);
-    } finally {
-      await server.close();
-    }
-  });
-
-  it("keeps a scheduled evaluation out of the past when it is patched (#178)", async () => {
-    const server = await testServer();
-    try {
-      const teacher = await server.signIn("teacher");
-      const now = server.clock.now();
-      const hour = 3_600_000;
-      const seed = await seedLive(server.app.db, {
-        teacherId: teacher.id,
-        durationS: null,
-        settings: { timing: "deadline" },
-        opensAt: new Date(now.getTime() + hour),
-        closesAt: new Date(now.getTime() + 2 * hour),
-      });
-      await service.applyState(server.app.db, await reload(server.app.db, seed.evaluationId), "scheduled", now);
-      const patch = (payload: Record<string, unknown>) =>
-        server.app.inject({
-          method: "PATCH",
-          url: `/app/api/evaluations/${seed.evaluationId}`,
-          headers: teacher.headers,
-          payload,
-        });
-
-      const opens = await patch({ opensAt: now.toISOString() });
-      expect(opens.statusCode).toBe(409);
-      expect(TransitionRefusal.parse(opens.json()).reason).toBe("opens_at_past");
-      const closes = await patch({ closesAt: now.toISOString() });
-      expect(closes.statusCode).toBe(409);
-      expect(TransitionRefusal.parse(closes.json()).reason).toBe("closes_at_past");
-      expect((await patch({ opensAt: new Date(now.getTime() + 1).toISOString() })).statusCode).toBe(200);
-    } finally {
-      await server.close();
-    }
-  });
-
-  it("keeps a scheduled evaluation startable when a time is cleared (#254)", async () => {
-    const server = await testServer();
-    try {
-      const teacher = await server.signIn("teacher");
-      const now = server.clock.now();
-      const hour = 3_600_000;
-      const scheduled = async (overrides: Parameters<typeof seedLive>[1]) => {
-        const seed = await seedLive(server.app.db, { teacherId: teacher.id, ...overrides });
-        await service.applyState(server.app.db, await reload(server.app.db, seed.evaluationId), "scheduled", now);
-        return (payload: Record<string, unknown>) =>
-          server.app.inject({
-            method: "PATCH",
-            url: `/app/api/evaluations/${seed.evaluationId}`,
-            headers: teacher.headers,
-            payload,
-          });
-      };
-
-      const deadline = await scheduled({
-        durationS: null,
-        settings: { timing: "deadline" },
-        opensAt: new Date(now.getTime() + hour),
-        closesAt: new Date(now.getTime() + 2 * hour),
-      });
-      for (const field of ["opensAt", "closesAt"] as const) {
-        const cleared = await deadline({ [field]: null });
-        expect(cleared.statusCode).toBe(409);
-        expect(TransitionRefusal.parse(cleared.json())).toMatchObject({
-          reason: "timing_incomplete",
-          missing: [field],
-        });
-      }
-      // Switching to a per-student timing without a duration is as incomplete.
-      const noDuration = await deadline({ settings: { timing: "duration" } });
-      expect(TransitionRefusal.parse(noDuration.json())).toMatchObject({
-        reason: "timing_incomplete",
-        missing: ["durationS"],
-      });
-
-      // Per student, the opening time is what the ticker opens it at (#152).
-      const duration = await scheduled({ durationS: 1800, opensAt: new Date(now.getTime() + hour) });
-      const cleared = await duration({ opensAt: null });
-      expect(cleared.statusCode).toBe(409);
-      expect(TransitionRefusal.parse(cleared.json()).reason).toBe("opens_at_missing");
-      expect((await duration({ closesAt: null })).statusCode).toBe(200);
-    } finally {
-      await server.close();
-    }
-  });
-
-  it("refuses to pause anything but an exam", async () => {
-    const seed = await seedLive(db, { mode: "exercise" });
-    const row = await service.applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
-    expect(() =>
-      service.guardTransition(row, "paused", { items: TWO_ITEMS, attemptCount: 0, now: clock.now() }),
-    ).toThrow(service.IllegalTransition);
+    const opens = await patch({ opensAt: now.toISOString() });
+    expect(opens.statusCode).toBe(409);
+    expect(TransitionRefusal.parse(opens.json()).reason).toBe("opens_at_past");
+    const closes = await patch({ closesAt: now.toISOString() });
+    expect(closes.statusCode).toBe(409);
+    expect(TransitionRefusal.parse(closes.json()).reason).toBe("closes_at_past");
+    // The rule is applied to the MERGED row: a timing switched by the patch
+    // without the duration it needs is refused as well (#254).
+    const noDuration = await patch({ settings: { timing: "duration" } });
+    expect(noDuration.statusCode).toBe(409);
+    expect(TransitionRefusal.parse(noDuration.json())).toMatchObject({
+      reason: "timing_incomplete",
+      missing: ["durationS"],
+    });
+    expect((await patch({ opensAt: new Date(now.getTime() + 1).toISOString() })).statusCode).toBe(200);
   });
 
   it("reopens a closed evaluation only while no attempt exists", async () => {
@@ -587,42 +383,37 @@ describe("the item list freezes once the evaluation is opened (issue #79)", () =
   });
 
   it("answers 409 items_frozen on every item route of a running evaluation", async () => {
-    const server = await testServer();
-    try {
-      const teacher = await server.signIn("teacher");
-      const mine = await seedLive(server.app.db, { teacherId: teacher.id, questions: 2 });
-      await server.app.db
-        .update(evaluations)
-        .set({ state: "running", startedAt: server.clock.now() })
-        .where(eq(evaluations.id, mine.evaluationId));
-      const base = `/app/api/evaluations/${mine.evaluationId}`;
-      const itemUrl = `${base}/items/${mine.itemIds[0]}`;
-      const frozen = {
-        error: "items_frozen",
-        message: "the evaluation has been opened: its questions are frozen",
-      };
-      const writes: [string, "POST" | "PATCH" | "PUT" | "DELETE", string, Payload | undefined][] = [
-        ["add items", "POST", `${base}/items`, { questionIds: mine.questionIds.slice(0, 1) }],
-        ["patch item", "PATCH", itemUrl, { points: 3, bonus: false }],
-        ["reorder", "PUT", `${base}/items/order`, { itemIds: [...mine.itemIds].reverse() }],
-        ["delete item", "DELETE", itemUrl, undefined],
-        ["update versions", "POST", `${base}/items/update-versions`, {}],
-      ];
-      for (const [name, method, url, payload] of writes) {
-        const res = await server.app.inject({
-          method,
-          url,
-          headers: teacher.headers,
-          ...(payload === undefined ? {} : { payload }),
-        });
-        expect(res.statusCode, name).toBe(409);
-        expect(res.json(), name).toEqual(frozen);
-      }
-      const detail = await server.app.inject({ method: "GET", url: base, headers: teacher.headers });
-      expect(detail.json().items).toHaveLength(2);
-    } finally {
-      await server.close();
+    const teacher = await server.signIn("teacher");
+    const mine = await seedLive(server.app.db, { teacherId: teacher.id, questions: 2 });
+    await server.app.db
+      .update(evaluations)
+      .set({ state: "running", startedAt: server.clock.now() })
+      .where(eq(evaluations.id, mine.evaluationId));
+    const base = `/app/api/evaluations/${mine.evaluationId}`;
+    const itemUrl = `${base}/items/${mine.itemIds[0]}`;
+    const frozen = {
+      error: "items_frozen",
+      message: "the evaluation has been opened: its questions are frozen",
+    };
+    const writes: [string, "POST" | "PATCH" | "PUT" | "DELETE", string, Payload | undefined][] = [
+      ["add items", "POST", `${base}/items`, { questionIds: mine.questionIds.slice(0, 1) }],
+      ["patch item", "PATCH", itemUrl, { points: 3, bonus: false }],
+      ["reorder", "PUT", `${base}/items/order`, { itemIds: [...mine.itemIds].reverse() }],
+      ["delete item", "DELETE", itemUrl, undefined],
+      ["update versions", "POST", `${base}/items/update-versions`, {}],
+    ];
+    for (const [name, method, url, payload] of writes) {
+      const res = await server.app.inject({
+        method,
+        url,
+        headers: teacher.headers,
+        ...(payload === undefined ? {} : { payload }),
+      });
+      expect(res.statusCode, name).toBe(409);
+      expect(res.json(), name).toEqual(frozen);
     }
+    const detail = await server.app.inject({ method: "GET", url: base, headers: teacher.headers });
+    expect(detail.json().items).toHaveLength(2);
   });
 });
 
@@ -784,64 +575,59 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
   });
 
   it("says so in the detail and answers 409 running_locked over HTTP", async () => {
-    const server = await testServer();
-    try {
-      const teacher = await server.signIn("teacher");
-      const mine = await seedLive(server.app.db, { teacherId: teacher.id });
-      const base = `/app/api/evaluations/${mine.evaluationId}`;
-      const before = await server.app.inject({ method: "GET", url: base, headers: teacher.headers });
-      expect(before.json().editable).toBe(true);
+    const teacher = await server.signIn("teacher");
+    const mine = await seedLive(server.app.db, { teacherId: teacher.id });
+    const base = `/app/api/evaluations/${mine.evaluationId}`;
+    const before = await server.app.inject({ method: "GET", url: base, headers: teacher.headers });
+    expect(before.json().editable).toBe(true);
 
-      await server.app.db
-        .update(evaluations)
-        .set({ state: "running", startedAt: server.clock.now() })
-        .where(eq(evaluations.id, mine.evaluationId));
-      const during = await server.app.inject({ method: "GET", url: base, headers: teacher.headers });
-      expect(during.json().editable).toBe(false);
-      expect(during.json().attemptCount).toBe(0);
+    await server.app.db
+      .update(evaluations)
+      .set({ state: "running", startedAt: server.clock.now() })
+      .where(eq(evaluations.id, mine.evaluationId));
+    const during = await server.app.inject({ method: "GET", url: base, headers: teacher.headers });
+    expect(during.json().editable).toBe(false);
+    expect(during.json().attemptCount).toBe(0);
 
-      const res = await server.app.inject({
-        method: "PATCH",
-        url: base,
-        headers: teacher.headers,
-        payload: { durationS: 60 },
-      });
-      expect(res.statusCode).toBe(409);
-      expect(res.json()).toEqual({
-        error: "running_locked",
-        message: "the evaluation is running: its configuration is locked until it closes",
-      });
+    const res = await server.app.inject({
+      method: "PATCH",
+      url: base,
+      headers: teacher.headers,
+      payload: { durationS: 60 },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({
+      error: "running_locked",
+      message: "the evaluation is running: its configuration is locked until it closes",
+    });
 
-      const restricted = await server.app.inject({
-        method: "PATCH",
-        url: base,
-        headers: teacher.headers,
-        payload: { ipAllowlist: ["10.20."] },
-      });
-      expect(restricted.statusCode).toBe(200);
-      expect(restricted.json().evaluation.ipAllowlist).toEqual(["10.20."]);
+    const restricted = await server.app.inject({
+      method: "PATCH",
+      url: base,
+      headers: teacher.headers,
+      payload: { ipAllowlist: ["10.20."] },
+    });
+    expect(restricted.statusCode).toBe(200);
+    expect(restricted.json().evaluation.ipAllowlist).toEqual(["10.20."]);
 
-      // A stale client's access code (ADR-053) is stripped: alone, it is
-      // nothing to update, never a code stored.
-      const stale = await server.app.inject({
-        method: "PATCH",
-        url: base,
-        headers: teacher.headers,
-        payload: { accessCode: "letmein" },
-      });
-      expect(stale.statusCode).toBe(400);
+    // A stale client's access code (ADR-053) is stripped: alone, it is
+    // nothing to update, never a code stored.
+    const stale = await server.app.inject({
+      method: "PATCH",
+      url: base,
+      headers: teacher.headers,
+      payload: { accessCode: "letmein" },
+    });
+    expect(stale.statusCode).toBe(400);
 
-      const keyless = await server.app.inject({
-        method: "PATCH",
-        url: base,
-        headers: teacher.headers,
-        payload: { feedbackPolicy: { showKey: false } },
-      });
-      expect(keyless.statusCode).toBe(200);
-      expect(keyless.json().evaluation.feedbackPolicy.showKey).toBe(false);
-    } finally {
-      await server.close();
-    }
+    const keyless = await server.app.inject({
+      method: "PATCH",
+      url: base,
+      headers: teacher.headers,
+      payload: { feedbackPolicy: { showKey: false } },
+    });
+    expect(keyless.statusCode).toBe(200);
+    expect(keyless.json().evaluation.feedbackPolicy.showKey).toBe(false);
   });
 });
 
@@ -952,39 +738,34 @@ describe("patch and duplicate", () => {
    * patch did not name came back at its default and overwrote the stored one.
    */
   it("a patch changes the fields it names and nothing else (#71)", async () => {
-    const server = await testServer();
-    try {
-      const teacher = await server.signIn("teacher");
-      const seed = await seedLive(server.app.db, { teacherId: teacher.id, mode: "exercise" });
-      const url = `/app/api/evaluations/${seed.evaluationId}`;
-      const send = (payload: Payload) =>
-        server.app.inject({ method: "PATCH", url, headers: teacher.headers, payload });
+    const teacher = await server.signIn("teacher");
+    const seed = await seedLive(server.app.db, { teacherId: teacher.id, mode: "exercise" });
+    const url = `/app/api/evaluations/${seed.evaluationId}`;
+    const send = (payload: Payload) =>
+      server.app.inject({ method: "PATCH", url, headers: teacher.headers, payload });
 
-      // The take-home preset: a common end, no waiting room, feedback right away.
-      const homework = await send({
-        settings: { timing: "deadline", lobby: "skip", presentation: "continuous" },
-        feedbackPolicy: { when: "immediate", showKey: true },
-      });
-      expect(homework.statusCode).toBe(200);
+    // The take-home preset: a common end, no waiting room, feedback right away.
+    const homework = await send({
+      settings: { timing: "deadline", lobby: "skip", presentation: "continuous" },
+      feedbackPolicy: { when: "immediate", showKey: true },
+    });
+    expect(homework.statusCode).toBe(200);
 
-      const shuffled = await send({ settings: { shuffleItems: true } });
-      expect(shuffled.statusCode).toBe(200);
-      expect(shuffled.json().evaluation.settings).toMatchObject({
-        shuffleItems: true,
-        timing: "deadline",
-        lobby: "skip",
-        presentation: "continuous",
-      });
+    const shuffled = await send({ settings: { shuffleItems: true } });
+    expect(shuffled.statusCode).toBe(200);
+    expect(shuffled.json().evaluation.settings).toMatchObject({
+      shuffleItems: true,
+      timing: "deadline",
+      lobby: "skip",
+      presentation: "continuous",
+    });
 
-      const keyless = await send({ feedbackPolicy: { showExplanation: true } });
-      expect(keyless.json().evaluation.feedbackPolicy).toMatchObject({
-        when: "immediate",
-        showKey: true,
-        showExplanation: true,
-      });
-    } finally {
-      await server.close();
-    }
+    const keyless = await send({ feedbackPolicy: { showExplanation: true } });
+    expect(keyless.json().evaluation.feedbackPolicy).toMatchObject({
+      when: "immediate",
+      showKey: true,
+      showExplanation: true,
+    });
   });
 
   it("duplicates the items on the SAME frozen versions (F-EVAL-14)", async () => {
@@ -1023,39 +804,34 @@ describe("the pool module sees the freeze", () => {
 
 describe("duplicate into another classroom, over HTTP (invariant 6)", () => {
   it("answers 404 to a classroom the caller is not staff of", async () => {
-    const server = await testServer();
-    try {
-      const teacher = await server.signIn("teacher");
-      const mine = await seedLive(server.app.db, { teacherId: teacher.id });
-      // A classroom of a course someone else teaches.
-      const theirs = await seedLive(server.app.db);
-      const duplicate = (classroomId: string) =>
-        server.app.inject({
-          method: "POST",
-          url: `/app/api/evaluations/${mine.evaluationId}/duplicate`,
-          headers: teacher.headers,
-          payload: { classroomId, title: "Copy" },
-        });
-      const denied = await duplicate(theirs.classroomId);
-      expect(denied.statusCode).toBe(404);
-      expect(denied.json()).toEqual({ error: "not_found" });
-      // Into a classroom of another course of their OWN, the questions must
-      // come from pools that course links (F-EVAL-01), as `addItems` asks.
-      const other = await seedLive(server.app.db, { teacherId: teacher.id });
-      const unlinked = await duplicate(other.classroomId);
-      expect(unlinked.statusCode).toBe(422);
-      expect(unlinked.json().error).toBe("template_pool_unlinked");
-      expect(unlinked.json().items.map((i: { questionId: string }) => i.questionId)).toEqual(
-        mine.questionIds,
-      );
-      // Once that course draws from the pool, the same call goes through.
-      await server.app.db
-        .insert(coursePools)
-        .values({ courseId: other.courseId, poolId: mine.poolId });
-      expect((await duplicate(other.classroomId)).statusCode).toBe(201);
-    } finally {
-      await server.close();
-    }
+    const teacher = await server.signIn("teacher");
+    const mine = await seedLive(server.app.db, { teacherId: teacher.id });
+    // A classroom of a course someone else teaches.
+    const theirs = await seedLive(server.app.db);
+    const duplicate = (classroomId: string) =>
+      server.app.inject({
+        method: "POST",
+        url: `/app/api/evaluations/${mine.evaluationId}/duplicate`,
+        headers: teacher.headers,
+        payload: { classroomId, title: "Copy" },
+      });
+    const denied = await duplicate(theirs.classroomId);
+    expect(denied.statusCode).toBe(404);
+    expect(denied.json()).toEqual({ error: "not_found" });
+    // Into a classroom of another course of their OWN, the questions must
+    // come from pools that course links (F-EVAL-01), as `addItems` asks.
+    const other = await seedLive(server.app.db, { teacherId: teacher.id });
+    const unlinked = await duplicate(other.classroomId);
+    expect(unlinked.statusCode).toBe(422);
+    expect(unlinked.json().error).toBe("template_pool_unlinked");
+    expect(unlinked.json().items.map((i: { questionId: string }) => i.questionId)).toEqual(
+      mine.questionIds,
+    );
+    // Once that course draws from the pool, the same call goes through.
+    await server.app.db
+      .insert(coursePools)
+      .values({ courseId: other.courseId, poolId: mine.poolId });
+    expect((await duplicate(other.classroomId)).statusCode).toBe(201);
   });
 });
 
@@ -1066,74 +842,69 @@ describe("duplicate into another classroom, over HTTP (invariant 6)", () => {
  */
 describe("the order of the refusals, over HTTP", () => {
   it("refuses session, params, scope, body, then maps the service error", async () => {
-    const server = await testServer();
-    try {
-      const teacher = await server.signIn("teacher");
-      const student = await server.signIn("student");
-      const stranger = await server.signIn("teacher");
-      const mine = await seedLive(server.app.db, { teacherId: teacher.id });
-      const itemUrl = `/app/api/evaluations/${mine.evaluationId}/items/${mine.itemIds[0]}`;
-      const patch = (url: string, headers: Record<string, string>, payload: Payload) =>
-        server.app.inject({ method: "PATCH", url, headers, payload });
-      const badBody = { points: "many" };
+    const teacher = await server.signIn("teacher");
+    const student = await server.signIn("student");
+    const stranger = await server.signIn("teacher");
+    const mine = await seedLive(server.app.db, { teacherId: teacher.id });
+    const itemUrl = `/app/api/evaluations/${mine.evaluationId}/items/${mine.itemIds[0]}`;
+    const patch = (url: string, headers: Record<string, string>, payload: Payload) =>
+      server.app.inject({ method: "PATCH", url, headers, payload });
+    const badBody = { points: "many" };
 
-      expect((await patch("/app/api/evaluations/x/items/y", {}, badBody)).statusCode).toBe(401);
-      expect((await patch("/app/api/evaluations/x/items/y", student.headers, badBody)).statusCode).toBe(403);
+    expect((await patch("/app/api/evaluations/x/items/y", {}, badBody)).statusCode).toBe(401);
+    expect((await patch("/app/api/evaluations/x/items/y", student.headers, badBody)).statusCode).toBe(403);
 
-      const badParams = await patch("/app/api/evaluations/x/items/y", teacher.headers, badBody);
-      expect(badParams.statusCode).toBe(404);
-      expect(badParams.json()).toEqual({ error: "not_found" });
+    const badParams = await patch("/app/api/evaluations/x/items/y", teacher.headers, badBody);
+    expect(badParams.statusCode).toBe(404);
+    expect(badParams.json()).toEqual({ error: "not_found" });
 
-      // Off the staff, the scope's 404 wins over the malformed body.
-      const offStaff = await patch(itemUrl, stranger.headers, badBody);
-      expect(offStaff.statusCode).toBe(404);
-      expect(offStaff.json()).toEqual({ error: "not_found" });
-      const offStaffCreate = await server.app.inject({
-        method: "POST",
-        url: `/app/api/classrooms/${mine.classroomId}/evaluations`,
-        headers: stranger.headers,
-        payload: {},
+    // Off the staff, the scope's 404 wins over the malformed body.
+    const offStaff = await patch(itemUrl, stranger.headers, badBody);
+    expect(offStaff.statusCode).toBe(404);
+    expect(offStaff.json()).toEqual({ error: "not_found" });
+    const offStaffCreate = await server.app.inject({
+      method: "POST",
+      url: `/app/api/classrooms/${mine.classroomId}/evaluations`,
+      headers: stranger.headers,
+      payload: {},
+    });
+    expect(offStaffCreate.statusCode).toBe(404);
+
+    const malformed = await patch(itemUrl, teacher.headers, badBody);
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.json().error).toBe("validation");
+
+    // Once an attempt exists, every content write refuses with the service's
+    // own 409 — which also proves each route hands the REAL attempt count to
+    // the service (a route passing `{ attemptCount: 0 }` would answer 200).
+    await server.app.db
+      .insert(attempts)
+      .values({ id: randomUUID(), evaluationId: mine.evaluationId, userId: mine.studentIds[0]!, seed: 1 });
+    const base = `/app/api/evaluations/${mine.evaluationId}`;
+    const locked = { error: "locked", message: "an attempt exists: the structure is frozen" };
+    const writes: [string, "POST" | "PATCH" | "PUT" | "DELETE", string, Payload | undefined, unknown][] = [
+      ["patch evaluation", "PATCH", base, { durationS: 600 }, locked],
+      ["add items", "POST", `${base}/items`, { questionIds: mine.questionIds.slice(0, 1) }, locked],
+      ["patch item", "PATCH", itemUrl, { points: 3, bonus: false }, locked],
+      ["reorder", "PUT", `${base}/items/order`, { itemIds: [...mine.itemIds].reverse() }, locked],
+      ["delete item", "DELETE", itemUrl, undefined, locked],
+      [
+        "update versions",
+        "POST",
+        `${base}/items/update-versions`,
+        {},
+        { error: "attempts_exist", message: "versions cannot be updated once an attempt exists" },
+      ],
+    ];
+    for (const [name, method, url, payload, expected] of writes) {
+      const res = await server.app.inject({
+        method,
+        url,
+        headers: teacher.headers,
+        ...(payload === undefined ? {} : { payload }),
       });
-      expect(offStaffCreate.statusCode).toBe(404);
-
-      const malformed = await patch(itemUrl, teacher.headers, badBody);
-      expect(malformed.statusCode).toBe(400);
-      expect(malformed.json().error).toBe("validation");
-
-      // Once an attempt exists, every content write refuses with the service's
-      // own 409 — which also proves each route hands the REAL attempt count to
-      // the service (a route passing `{ attemptCount: 0 }` would answer 200).
-      await server.app.db
-        .insert(attempts)
-        .values({ id: randomUUID(), evaluationId: mine.evaluationId, userId: mine.studentIds[0]!, seed: 1 });
-      const base = `/app/api/evaluations/${mine.evaluationId}`;
-      const locked = { error: "locked", message: "an attempt exists: the structure is frozen" };
-      const writes: [string, "POST" | "PATCH" | "PUT" | "DELETE", string, Payload | undefined, unknown][] = [
-        ["patch evaluation", "PATCH", base, { durationS: 600 }, locked],
-        ["add items", "POST", `${base}/items`, { questionIds: mine.questionIds.slice(0, 1) }, locked],
-        ["patch item", "PATCH", itemUrl, { points: 3, bonus: false }, locked],
-        ["reorder", "PUT", `${base}/items/order`, { itemIds: [...mine.itemIds].reverse() }, locked],
-        ["delete item", "DELETE", itemUrl, undefined, locked],
-        [
-          "update versions",
-          "POST",
-          `${base}/items/update-versions`,
-          {},
-          { error: "attempts_exist", message: "versions cannot be updated once an attempt exists" },
-        ],
-      ];
-      for (const [name, method, url, payload, expected] of writes) {
-        const res = await server.app.inject({
-          method,
-          url,
-          headers: teacher.headers,
-          ...(payload === undefined ? {} : { payload }),
-        });
-        expect(res.statusCode, name).toBe(409);
-        expect(res.json(), name).toEqual(expected);
-      }
-    } finally {
-      await server.close();
+      expect(res.statusCode, name).toBe(409);
+      expect(res.json(), name).toEqual(expected);
     }
   });
 });
