@@ -80,6 +80,10 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   correction_published: "error.correctionPublished",
   // F-ADMIN-06: "Run now" on a task whose run is still going.
   task_running: "error.taskRunning",
+  // F-GH-04, D28: a classroom's organization is held by its journal; and a
+  // connect to an organization the App is not (or no longer) installed on.
+  journal_attached: "error.githubJournalAttached",
+  app_not_installed: "error.githubAppNotInstalled",
   // ADR-054: a second switch-on while they run, and an action that needs them.
   super_powers_active: "error.superPowersActive",
   super_powers_required: "error.superPowersRequired",

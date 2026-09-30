@@ -81,6 +81,16 @@ export function githubApp(config: AppConfig): App | null {
   return app;
 }
 
+/**
+ * What a read serving an HTTP request passes as `request` (§3.1, #37): a
+ * rate limit is answered at once, and the caller falls back to the stored
+ * state. Background jobs pass nothing and wait it out once.
+ */
+export interface ReadOptions {
+  noRateLimitWait?: boolean;
+}
+export const HTTP_READ: ReadOptions = { noRateLimitWait: true };
+
 export interface OrgInstallation {
   installationId: number;
   githubOrgId: number;
@@ -125,11 +135,15 @@ export async function listInstalledOrgs(config: AppConfig): Promise<string[]> {
 export async function orgExistsOnGithub(
   login: string,
   config?: AppConfig,
+  read: ReadOptions = {},
 ): Promise<boolean | null> {
   const app = config ? githubApp(config) : null;
   if (app) {
     try {
-      await app.octokit.request("GET /orgs/{org}", { org: login, request: { retries: 0 } });
+      await app.octokit.request("GET /orgs/{org}", {
+        org: login,
+        request: { retries: 0, ...read },
+      });
       return true;
     } catch (err) {
       const status = (err as { status?: number }).status;
@@ -159,10 +173,11 @@ export async function fetchOrgPlan(
   config: AppConfig,
   installationId: number,
   orgLogin: string,
+  read: ReadOptions = {},
 ): Promise<string | null> {
   try {
     const { octokit } = await installationClient(config, installationId);
-    const { data } = await octokit.request("GET /orgs/{org}", { org: orgLogin });
+    const { data } = await octokit.request("GET /orgs/{org}", { org: orgLogin, request: read });
     const plan = (data as { plan?: { name?: string } }).plan?.name;
     return plan ? plan.toLowerCase() : null;
   } catch {
@@ -182,13 +197,14 @@ export async function fetchOrgLlmSecret(
   config: AppConfig,
   installationId: number,
   orgLogin: string,
+  read: ReadOptions = {},
 ): Promise<"ok" | "missing" | null> {
   try {
     const { octokit } = await installationClient(config, installationId);
     await octokit.request("GET /orgs/{org}/actions/secrets/{secret_name}", {
       org: orgLogin,
       secret_name: "ANTHROPIC_API_KEY",
-      request: { retries: 0 },
+      request: { retries: 0, ...read },
     });
     return "ok";
   } catch (err) {
@@ -200,12 +216,14 @@ export async function fetchOrgLlmSecret(
 export async function resolveOrgInstallation(
   config: AppConfig,
   orgLogin: string,
+  read: ReadOptions = {},
 ): Promise<OrgInstallation | null> {
   const app = githubApp(config);
   if (!app) return null;
   try {
     const { data } = await app.octokit.request("GET /orgs/{org}/installation", {
       org: orgLogin,
+      request: read,
     });
     return {
       installationId: data.id,
@@ -215,4 +233,76 @@ export async function resolveOrgInstallation(
     if ((err as { status?: number }).status === 404) return null;
     throw err;
   }
+}
+
+/**
+ * One installation of Quiz's App on an organization, as the App JWT reads it
+ * (Quiz addition, M2-02): what the setup return verifies, the organization
+ * listing, and the healing's "installed on every repository" check.
+ */
+export interface AppInstallation extends OrgInstallation {
+  login: string;
+  /** `repository_selection: "all"`: the App reaches every repository (F-GH-03). */
+  allRepositories: boolean;
+}
+
+interface RawInstallation {
+  id: number;
+  account: { id?: number; login?: string; type?: string } | null;
+  repository_selection?: string;
+}
+
+function orgInstallation(data: RawInstallation): AppInstallation | null {
+  const account = data.account;
+  if (!account?.login || account.id === undefined || account.type !== "Organization") return null;
+  return {
+    installationId: data.id,
+    githubOrgId: account.id,
+    login: account.login,
+    allRepositories: data.repository_selection === "all",
+  };
+}
+
+/**
+ * GET /app/installations/{id} with the App JWT: null when GitHub does not
+ * know the installation (404) or it is not an organization's; any other
+ * failure throws. The one proof the setup return accepts (N-SEC-17).
+ */
+export async function fetchInstallation(
+  config: AppConfig,
+  installationId: number,
+  read: ReadOptions = {},
+): Promise<AppInstallation | null> {
+  const app = githubApp(config);
+  if (!app) return null;
+  try {
+    const { data } = await app.octokit.request("GET /app/installations/{installation_id}", {
+      installation_id: installationId,
+      request: read,
+    });
+    return orgInstallation(data as RawInstallation);
+  } catch (err) {
+    if ((err as { status?: number }).status === 404) return null;
+    throw err;
+  }
+}
+
+/** Every organization installation of the App, all pages; throws when GitHub fails. */
+export async function listInstallations(
+  config: AppConfig,
+  read: ReadOptions = {},
+): Promise<AppInstallation[]> {
+  const app = githubApp(config);
+  if (!app) return [];
+  const all: RawInstallation[] = [];
+  for (let page = 1; ; page += 1) {
+    const { data } = await app.octokit.request("GET /app/installations", {
+      per_page: 100,
+      page,
+      request: read,
+    });
+    all.push(...(data as RawInstallation[]));
+    if (data.length < 100) break;
+  }
+  return all.flatMap((raw) => orgInstallation(raw) ?? []);
 }

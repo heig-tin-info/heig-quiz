@@ -79,6 +79,8 @@ export const fr: Record<keyof Dict, string> = {
   "error.save": "Impossible d'enregistrer cette modification.",
   "error.noEmail": "Votre compte n'a pas d'adresse e-mail à laquelle envoyer.",
   "error.taskRunning": "Cette tâche est déjà en cours : attendez son résultat.",
+  "error.githubJournalAttached": "Cette classe a un journal : retirez d'abord le journal, puis changez son organisation GitHub.",
+  "error.githubAppNotInstalled": "L'app GitHub de Quiz n'est pas installée sur cette organisation. Installez-la, puis réessayez.",
   "error.superPowersActive": "Les Super Powers sont déjà actifs. Désactivez-les d'abord pour recommencer une heure.",
   "error.superPowersRequired": "Cette action demande les Super Powers. Activez-les d'abord dans les réglages.",
   "error.impersonationReadOnly": "Vous agissez en tant qu'étudiant, en lecture seule : rien ne peut être modifié depuis cette fenêtre.",

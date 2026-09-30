@@ -31,6 +31,8 @@ import { avatarPlugin } from "./modules/avatar.js";
 import { drillPlugin } from "./modules/drill/routes.js";
 import { registerDrillHooks } from "./modules/drill/service.js";
 import { evaluationPlugin } from "./modules/evaluation/routes.js";
+import { githubApp } from "./github/app.js";
+import { githubPlugin } from "./modules/github/routes.js";
 import { gradingPlugin } from "./modules/grading/routes.js";
 import { registerGradingJobs } from "./modules/grading/jobs.js";
 import { createKioskAttestor } from "./modules/kiosk/attestation.js";
@@ -187,6 +189,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(adminPlugin, { config });
   await app.register(avatarPlugin);
   await app.register(orgPlugin, { config });
+  // Without Quiz's GitHub App (D23) none of its routes exists: a 404.
+  if (githubApp(config)) await app.register(githubPlugin, { config });
   await app.register(poolPlugin, { config });
   await app.register(pollPlugin, { config });
   if (app.kioskAttestor) await app.register(kioskPlugin, { config });

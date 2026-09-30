@@ -90,6 +90,35 @@ export const GithubClassroom = z.object({
 });
 export type GithubClassroom = z.infer<typeof GithubClassroom>;
 
+/**
+ * `PUT /app/api/classrooms/:id/github` (staff): connect the classroom to an
+ * organization where Quiz's App is installed, or change it (F-GH-01).
+ * Refused `409` with one of {@link GITHUB_CONNECT_REFUSALS}.
+ */
+export const GithubConnectBody = z.strictObject({ orgId: z.uuid() });
+export type GithubConnectBody = z.infer<typeof GithubConnectBody>;
+
+/**
+ * The `409` codes of a connect or a disconnect, worded by the web app:
+ *   - `journal_attached` — the classroom has a journal; it is removed first
+ *     (F-GH-04, D28);
+ *   - `app_not_installed` — Quiz's App is not installed on that
+ *     organization, or the organization no longer exists.
+ */
+export const GITHUB_CONNECT_REFUSALS = ["journal_attached", "app_not_installed"] as const;
+
+/**
+ * The query GitHub sends to the App's Setup URL, `/setup/github/installed`
+ * (no session): the installation to verify with the App's JWT, and `state`,
+ * the classroom the install link was opened from. `state` is only ever read
+ * as a classroom id, never as an address.
+ */
+export const GithubSetupQuery = z.object({
+  installation_id: z.coerce.number().int().positive().optional().catch(undefined),
+  state: z.uuid().optional().catch(undefined),
+});
+export type GithubSetupQuery = z.infer<typeof GithubSetupQuery>;
+
 // ---------------------------------------------------------- the user's account
 
 /** A user's linked GitHub account (F-GH-05): the login is followed when it changes. */

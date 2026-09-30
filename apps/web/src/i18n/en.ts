@@ -82,6 +82,8 @@ export const en = {
   "error.save": "Could not save this change.",
   "error.noEmail": "Your account has no e-mail address to send to.",
   "error.taskRunning": "This task is already running: wait for its outcome.",
+  "error.githubJournalAttached": "This classroom has a journal: remove the journal first, then change its GitHub organization.",
+  "error.githubAppNotInstalled": "Quiz's GitHub App is not installed on this organization. Install it, then try again.",
   "error.superPowersActive": "Super Powers are already on. Switch them off first to start a new hour.",
   "error.superPowersRequired": "This takes Super Powers. Switch them on in Settings first.",
   "error.impersonationReadOnly": "You are acting as a student, read only: nothing can be changed from this window.",
