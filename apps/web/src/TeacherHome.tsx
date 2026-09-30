@@ -205,7 +205,11 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
           </table>
         </Card>
       ) : (
-        <div className="space-y-4">
+        // Two columns once each card keeps ~500 px: at `xl` the sidebar is
+        // there and the page is capped, so `lg` would leave a card too narrow
+        // for its title line and its classroom rows. A grid row stretches its
+        // cards to one height, and the card pins its pools to the bottom.
+        <div className="grid gap-4 xl:grid-cols-2">
           {rows.map((c) => (
             <CourseCard key={c.id} course={c} navigate={navigate} />
           ))}
