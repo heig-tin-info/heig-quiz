@@ -39,10 +39,12 @@ export type Route =
   /**
    * `from`: the evaluation the editor was opened from (issue #127), carried
    * in `?from=` so the way back survives a reload; `fromTemplate`, likewise,
-   * a template (F-EVAL-25), in `?fromTemplate=`. The editor reads them off
-   * the query string (`useSearchParam`); `parsePath` never sees them.
+   * a template (F-EVAL-25), in `?fromTemplate=`; `fromGrading` and `item`,
+   * the grading screen of an evaluation and the question it was on (ADR-044,
+   * addendum). The editor reads them off the query string
+   * (`useSearchParam`); `parsePath` never sees them.
    */
-  | { view: "question"; id: string; from?: string; fromTemplate?: string }
+  | ({ view: "question"; id: string } & QuestionOrigin)
   /**
    * What a student would see for ONE question, in a page of its own
    * (docs/spec/08 §8.2, "See what the student sees"). The editor opens it in
@@ -87,22 +89,38 @@ export type Route =
    */
   | { view: "teamsTab" }
   // WP10: grading + results
-  /** The teacher's grading panel for one evaluation. */
-  | { view: "grading"; evaluationId: string }
+  /**
+   * The teacher's grading panel for one evaluation; `item`, the question it
+   * opens on, travels in `?item=` (the panel reads and keeps it there).
+   */
+  | { view: "grading"; evaluationId: string; item?: string }
   /** The teacher's results table for one evaluation. */
   | { view: "results"; evaluationId: string }
   /** The correction of a graded evaluation, projected in class (F-RES-03, ADR-033). */
   | { view: "correction"; evaluationId: string }
   /** The student's own feedback on one finished attempt (the ONE such page). */
   | { view: "feedback"; attemptId: string }
+  /** The student's drill (ADR-041, #317): today's session and the classrooms it draws from. */
+  | { view: "drill" }
   /** Development only: the gallery of the shared primitives (App.tsx gates it). */
   | { view: "devUi" };
+
+/**
+ * The query parameters that tell the question editor where it was opened
+ * from, and on which item: one list, which the route writes in one loop and
+ * the editor reads (`QuestionEditor`'s `ORIGINS`).
+ */
+export const QUESTION_ORIGIN_PARAMS = ["from", "fromTemplate", "fromGrading", "item"] as const;
+export type QuestionOrigin = Partial<Record<(typeof QUESTION_ORIGIN_PARAMS)[number], string>>;
 
 /** The one member of `Route` whose `view` is `V`. */
 export type RouteOf<V extends Route["view"]> = Extract<Route, { view: V }>;
 
 /** The sidebar sections (`Shell`'s `Nav`): the row that stays lit while a view is up. */
-export type NavSection = "home" | "activities" | "pools" | "polls" | "admin";
+export type NavSection = "home" | "activities" | "pools" | "polls" | "admin" | "drill";
+
+/** The slots of the student's bottom bar on a phone (`student/bottomNavSlots.ts`, #191). */
+export type BottomSlotId = "activities" | "courses" | "drill" | "grades" | "profile";
 
 /**
  * Everything the app knows about one view, in one place: how it is written
@@ -121,6 +139,11 @@ export interface RouteSpec<V extends Route["view"]> {
   studentSafe: boolean;
   /** The sidebar row lit while this view is up; absent when none is. */
   section?: NavSection;
+  /**
+   * The student bottom bar's slot lit while this view is up. A view without
+   * one has no bar (DESIGN.md, "The student's bottom bar").
+   */
+  bottomSlot?: BottomSlotId;
   /**
    * Present on the teacher screens of ONE evaluation that link to each other
    * (the palette's "grading" and "results" entries): the evaluation's id.
@@ -181,8 +204,14 @@ function evaluationIdOf(route: RouteOf<EvaluationTailView | "evaluation">): stri
  * `results` and `evaluationPreview`. `home` matches nothing: it is the fallback.
  */
 export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
-  home: { path: () => "/", match: () => null, studentSafe: true, section: "home" },
-  settings: fixed("settings", { view: "settings" }, true),
+  home: {
+    path: () => "/",
+    match: () => null,
+    studentSafe: true,
+    section: "home",
+    bottomSlot: "activities",
+  },
+  settings: { ...fixed("settings", { view: "settings" }, true), bottomSlot: "profile" },
   admin: { ...fixed("admin", { view: "admin" }), section: "admin" },
   course: {
     path: (r) => `/courses/${r.id}`,
@@ -228,8 +257,10 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   question: {
     path: (r) => {
       const query = new URLSearchParams();
-      if (r.from) query.set("from", r.from);
-      if (r.fromTemplate) query.set("fromTemplate", r.fromTemplate);
+      for (const name of QUESTION_ORIGIN_PARAMS) {
+        const value = r[name];
+        if (value) query.set(name, value);
+      }
       const q = query.toString();
       return `/questions/${r.id}${q ? `?${q}` : ""}`;
     },
@@ -275,6 +306,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: true,
   },
   // ADR-030: the tab itself, `/teams` exactly — the manifest's `contentUrl`.
+  // `apps/api/src/csp.ts` keys the Teams framing on this exact path.
   teamsTab: {
     path: () => "/teams",
     match: (parts) => (parts.length === 1 && parts[0] === "teams" ? { view: "teamsTab" } : null),
@@ -288,6 +320,13 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
         ? { view: "feedback", attemptId }
         : null,
     studentSafe: true,
+    bottomSlot: "grades",
+  },
+  // ADR-041 (#317): the student's drill, the centre slot of the bottom bar.
+  drill: {
+    ...fixed("drill", { view: "drill" }, true),
+    section: "drill",
+    bottomSlot: "drill",
   },
   // WP8 + WP10: ONE place decides what follows an evaluation id, so a new
   // tail is an entry here and nowhere else.
@@ -295,9 +334,13 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   evaluationPreview: evaluationTail("preview", (id) => ({ view: "evaluationPreview", id })),
   // The projection IS the poll: the launcher's row stays lit while it is up.
   poll: evaluationTail("poll", (id) => ({ view: "poll", id }), { section: "polls" }),
-  grading: evaluationTail("grading", (evaluationId) => ({ view: "grading", evaluationId }), {
-    evaluationId: evaluationIdOf,
-  }),
+  grading: {
+    ...evaluationTail("grading", (evaluationId) => ({ view: "grading", evaluationId }), {
+      evaluationId: evaluationIdOf,
+    }),
+    path: (r) =>
+      `/evaluations/${r.evaluationId}/grading${r.item ? `?item=${encodeURIComponent(r.item)}` : ""}`,
+  },
   results: evaluationTail("results", (evaluationId) => ({ view: "results", evaluationId }), {
     evaluationId: evaluationIdOf,
   }),
@@ -333,6 +376,11 @@ function specOf(view: Route["view"]): RouteSpec<Route["view"]> {
 
 export function routeToPath(r: Route): string {
   return specOf(r.view).path(r);
+}
+
+/** The bottom bar's slot `route` lights, or `null` when the view has no bar. */
+export function bottomSlotOf(route: Route): BottomSlotId | null {
+  return specOf(route.view).bottomSlot ?? null;
 }
 
 /** The sidebar section `route` belongs to, or `null` when it lights no row. */

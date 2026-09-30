@@ -13,6 +13,7 @@ import {
 import type { Db } from "../../db/client.js";
 import {
   classrooms,
+  courseStaff,
   courses,
   enrollments,
   NOTIFICATION_FOLD_TARGETS,
@@ -461,15 +462,36 @@ describe("preferences", () => {
       });
     const kinds = async (userId: string) => (await service.notificationSettings(db, userId, true)).kinds;
 
-    expect(await kinds(frank)).toEqual(notificationKindsFor("teacher", false));
+    expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false }));
     await seat(true);
-    expect(await kinds(frank)).toEqual(notificationKindsFor("teacher", false));
+    expect(await kinds(frank)).toEqual(notificationKindsFor({ role: "teacher", studentSeat: false, courseSeat: false }));
     await seat(false);
     expect(await kinds(frank)).toEqual([...NOTIFICATION_KINDS]);
 
     const gina = await seedUser("gina@heig.test");
     await db.update(users).set({ role: "student" }).where(eq(users.id, gina));
-    expect(await kinds(gina)).toEqual(notificationKindsFor("student", false));
+    expect(await kinds(gina)).toEqual(notificationKindsFor({ role: "student", studentSeat: false, courseSeat: false }));
+  });
+
+  /*
+   * #287: the course kinds go to course staff seats only (`tellStaff`,
+   * `staffOf`). A seatless admin does not see them, since for them the row
+   * would control nothing; a seated one does.
+   */
+  it("lists the course kinds to a seated admin, never to a seatless admin", async () => {
+    const course = ["student_joined", "roster_conflict", "grading_ready"];
+    const kinds = async (userId: string) => (await service.notificationSettings(db, userId, true)).kinds;
+
+    const ines = await seedUser("ines@heig.test");
+    await db.update(users).set({ role: "admin" }).where(eq(users.id, ines));
+    const shown = await kinds(ines);
+    expect(shown).toEqual(expect.arrayContaining(["pool_shared", "pool_ownership", "pool_question_added"]));
+    for (const kind of course) expect(shown).not.toContain(kind);
+
+    const courseId = randomUUID();
+    await db.insert(courses).values({ id: courseId, name: "Seated", code: `C-${courseId.slice(0, 8)}` });
+    await db.insert(courseStaff).values({ courseId, userId: ines });
+    expect(await kinds(ines)).toEqual(expect.arrayContaining(course));
   });
 });
 

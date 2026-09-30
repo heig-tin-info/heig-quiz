@@ -15,7 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import type { Evaluation, EvaluationPatch, TemplatePatch } from "@quiz/contracts";
 
-import type { RouteOf } from "../router";
+import type { QuestionOrigin } from "../router";
 
 import {
   courseTemplatesKey,
@@ -49,7 +49,7 @@ export interface EditTarget<P = unknown> {
   /** What else a write changes: a template's row on its course page (count, points, revision). */
   readonly alsoKeys: readonly (readonly unknown[])[];
   /** Where the question editor leads back to: `?from=` or `?fromTemplate=`. */
-  readonly questionFrom: Pick<RouteOf<"question">, "from" | "fromTemplate">;
+  readonly questionFrom: Pick<QuestionOrigin, "from" | "fromTemplate">;
   /** Type only, never set: the body of this target's `PATCH`. */
   readonly patchBody?: P;
 }

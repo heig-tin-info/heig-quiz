@@ -1,3 +1,5 @@
+import { DiagramEditor, DiagramView } from "@quiz/diagram/client";
+import { DIAGRAM_KINDS, EXAMPLES, type DiagramKind, type Scene } from "@quiz/diagram/server";
 import { Plot, SchematicEditor, SchematicView, withRoutes, type PlotProps, type SchematicEditorProps } from "@quiz/qt-circuit/canvas";
 import { Pencil, Trash2, UserMinus } from "lucide-react";
 import { useState } from "react";
@@ -17,6 +19,7 @@ import {
   ProgressSegments,
   Ring,
   SectionHeading,
+  Segmented,
   SyncBadge,
   VerdictCell,
   useNow,
@@ -181,6 +184,24 @@ function circuitSeries(gain: number, slew: number): CircuitSeries {
 
 const CIRCUIT_SERIES = circuitSeries(-2, 0.35);
 const CIRCUIT_EXPECTED = circuitSeries(-2, 0);
+
+/** Four decades of an inverting amplifier of gain −10 with a pole at `cornerHz` (ADR-044). */
+function circuitBode(cornerHz: number): CircuitSeries {
+  const f: number[] = [];
+  const magDb: number[] = [];
+  const phaseDeg: number[] = [];
+  for (let i = 0; i <= 80; i += 1) {
+    const freq = 10 * 10 ** (i / 20);
+    const ratio = freq / cornerHz;
+    f.push(freq);
+    magDb.push(20 - 10 * Math.log10(1 + ratio * ratio));
+    phaseDeg.push(180 - (Math.atan(ratio) * 180) / Math.PI);
+  }
+  return { kind: "ac", f, magDb, phaseDeg };
+}
+
+const CIRCUIT_BODE = circuitBode(7000);
+const CIRCUIT_BODE_EXPECTED = circuitBode(10_000);
 
 /** A section of the gallery: a heading and a row of specimens. */
 function Row({ title, children }: { title: string; children: React.ReactNode }) {
@@ -384,6 +405,22 @@ export function DevGallery() {
       </section>
 
       <section className="space-y-3">
+        <SectionHeading title={t("dev.ui.diagramEditor")} />
+        <DiagramEditorDemo />
+      </section>
+
+      <section className="space-y-3">
+        <SectionHeading title={t("dev.ui.diagramView")} />
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          {(["state", "automaton", "er", "flow"] as const).map((k) => (
+            <Card key={k}>
+              <DiagramView kind={k} value={EXAMPLES[k]} maxHeight={260} />
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-3">
         <SectionHeading title={t("dev.ui.circuitEditor")} />
         <CircuitEditorDemo />
       </section>
@@ -396,10 +433,39 @@ export function DevGallery() {
           </Card>
           <div className="space-y-4">
             <Plot series={CIRCUIT_SERIES} expected={CIRCUIT_EXPECTED} title={t("dev.ui.sine")} height={200} />
+            <Plot series={CIRCUIT_BODE} expected={CIRCUIT_BODE_EXPECTED} title={t("dev.ui.bode")} height={180} />
             <Plot series={null} height={120} />
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+/** The diagram editor (ADR-046), one kind at a time, with the teacher's text tab. */
+function DiagramEditorDemo() {
+  const t = useT();
+  const [kind, setKind] = useState<DiagramKind>("class");
+  const [scenes, setScenes] = useState<Record<DiagramKind, Scene>>(() => ({ ...EXAMPLES }));
+  return (
+    <div className="space-y-3">
+      <Segmented
+        name="dev-diagram-kind"
+        label={t("dev.ui.diagramKind")}
+        value={kind}
+        options={DIAGRAM_KINDS.map((k) => ({ value: k, label: t(`diagram.kind.${k}`) }))}
+        onChange={setKind}
+        size="sm"
+        wrap
+      />
+      <DiagramEditor
+        key={kind}
+        kind={kind}
+        value={scenes[kind]}
+        onChange={(next) => setScenes((all) => ({ ...all, [kind]: next }))}
+        withText
+        height={480}
+      />
     </div>
   );
 }

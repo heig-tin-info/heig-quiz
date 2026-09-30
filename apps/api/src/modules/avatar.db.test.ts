@@ -1,10 +1,15 @@
 /**
- * The uploaded avatar: its type is read from the bytes, and it is served so
- * that a browser can never treat it as a document.
+ * The uploaded avatar: its type is read from the bytes, it is served so that
+ * a browser can never treat it as a document, and only to someone who
+ * already sees its owner somewhere in the application (#318).
  */
+import { randomUUID } from "node:crypto";
+
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { enrollments } from "../db/schema.js";
 import { testServer, type TestServer } from "../test/http.js";
+import { addStaff, createClassroom, createCourse } from "./org/service.js";
 
 type Caller = Awaited<ReturnType<TestServer["signIn"]>>;
 
@@ -18,13 +23,23 @@ const PNG = Buffer.concat([
   Buffer.from([0, 0, 0, 1, 0, 0, 0, 1]),
 ]);
 
-function put(body: Buffer, contentType: string) {
+function put(body: Buffer, contentType: string, as: Caller = student) {
   return server.app.inject({
     method: "PUT",
     url: "/app/api/me/avatar",
-    headers: { ...student.headers, "content-type": contentType },
+    headers: { ...as.headers, "content-type": contentType },
     payload: body,
   });
+}
+
+async function fetchAvatar(of: Caller, as: Caller) {
+  return (
+    await server.app.inject({
+      method: "GET",
+      url: `/app/api/users/${of.id}/avatar`,
+      headers: as.headers,
+    })
+  ).statusCode;
 }
 
 beforeAll(async () => {
@@ -55,5 +70,78 @@ describe("avatar", () => {
     expect(res.headers["content-type"]).toBe("image/png");
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
     expect(res.headers["content-security-policy"]).toBe("default-src 'none'; sandbox");
+  });
+
+  describe("audience (#318)", () => {
+    // `teacher` and `colleague` share the staff of PRG1, where `student` sits
+    // a classroom; `outsider` teaches another course; `stranger` and
+    // `classmate` are students, the latter in the same classroom.
+    let teacher: Caller;
+    let colleague: Caller;
+    let outsider: Caller;
+    let stranger: Caller;
+    let classmate: Caller;
+    let admin: Caller;
+    let bare: Caller;
+
+    beforeAll(async () => {
+      const db = server.app.db;
+      [teacher, colleague, outsider, stranger, classmate, admin, bare] = await Promise.all([
+        server.signIn("teacher"),
+        server.signIn("teacher"),
+        server.signIn("teacher"),
+        server.signIn("student"),
+        server.signIn("student"),
+        server.signIn("admin"),
+        server.signIn("teacher"),
+      ]);
+      const course = (await createCourse(db, { name: "Prog 1", code: "PRG1" }, teacher.id))!;
+      await addStaff(db, course.id, colleague.id);
+      await createCourse(db, { name: "Other", code: "OTH1" }, outsider.id);
+      const room = await createClassroom(db, course.id, { name: "PRG1-A", period: "2026" });
+      await db.insert(enrollments).values(
+        [student, classmate].map((s, i) => ({
+          id: randomUUID(),
+          classroomId: room.id,
+          nom: `N${i}`,
+          prenom: `P${i}`,
+          email: `s${i}@heig.test`,
+          userId: s.id,
+        })),
+      );
+      for (const who of [student, teacher, colleague]) {
+        expect((await put(PNG, "image/png", who)).statusCode).toBe(204);
+      }
+    });
+
+    it("serves a picture to its owner and to an admin", async () => {
+      expect(await fetchAvatar(teacher, teacher)).toBe(200);
+      expect(await fetchAvatar(student, admin)).toBe(200);
+      expect(await fetchAvatar(teacher, admin)).toBe(200);
+    });
+
+    it("serves a staff member's picture to a fellow member of that staff", async () => {
+      expect(await fetchAvatar(teacher, colleague)).toBe(200);
+      expect(await fetchAvatar(colleague, teacher)).toBe(200);
+    });
+
+    it("serves a student's picture to the staff of a course where they sit a classroom", async () => {
+      expect(await fetchAvatar(student, teacher)).toBe(200);
+      expect(await fetchAvatar(student, colleague)).toBe(200);
+    });
+
+    it("answers anyone else the 404 of a missing picture", async () => {
+      for (const who of [outsider, stranger, classmate]) {
+        expect(await fetchAvatar(student, who)).toBe(404);
+        expect(await fetchAvatar(teacher, who)).toBe(404);
+      }
+      // A student never sees their teacher's face: no screen shows it to them.
+      expect(await fetchAvatar(teacher, student)).toBe(404);
+    });
+
+    it("still answers 404 for someone with no picture, whoever asks", async () => {
+      expect(await fetchAvatar(bare, bare)).toBe(404);
+      expect(await fetchAvatar(bare, admin)).toBe(404);
+    });
   });
 });

@@ -63,6 +63,11 @@ export interface CanvasStrings {
   plotTime: string;
   plotVoltage: string;
   plotCurrent: string;
+  plotFrequency: string;
+  plotMagnitude: string;
+  plotPhase: string;
+  /** Accessible name of a Bode plot that has no title. */
+  bodeLabel: string;
   seriesVin: string;
   seriesVout: string;
   seriesExpected: string;
@@ -117,6 +122,10 @@ export const CANVAS_STRINGS: CanvasStrings = {
   plotTime: "ms",
   plotVoltage: "V",
   plotCurrent: "mA",
+  plotFrequency: "Hz",
+  plotMagnitude: "dB",
+  plotPhase: "°",
+  bodeLabel: "Bode plot of the output",
   seriesVin: "v(in)",
   seriesVout: "v(out)",
   seriesExpected: "expected v(out)",

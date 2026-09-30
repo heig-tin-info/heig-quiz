@@ -199,6 +199,31 @@ describe("save, list, instantiate, delete", () => {
     expect(entry?.action).toBe("template.create");
   });
 
+  it("links the source to the template it gave, relinking an instance and auditing the origin it loses", async () => {
+    const { teacher, seed } = await world();
+    const first = await saveTemplate(teacher, seed.evaluationId);
+    expect(await service.byId(server.app.db, seed.evaluationId)).toMatchObject({
+      originTemplateId: first.id,
+      originRevision: 1,
+    });
+
+    const second = await saveTemplate(teacher, seed.evaluationId);
+    expect(await service.byId(server.app.db, seed.evaluationId)).toMatchObject({
+      originTemplateId: second.id,
+      originRevision: 1,
+    });
+    const entries = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(inArray(auditLog.subjectId, [first.id, second.id]));
+    const payloadOf = (id: string) => entries.find((e) => e.subjectId === id)?.payload;
+    expect(payloadOf(first.id)).toMatchObject({ from: seed.evaluationId, previousOrigin: null });
+    expect(payloadOf(second.id)).toMatchObject({
+      from: seed.evaluationId,
+      previousOrigin: { templateId: first.id, revision: 1 },
+    });
+  });
+
   it("refuses to save a poll as a template (422)", async () => {
     const { teacher, seed } = await world();
     const { evaluation } = await service.createPollEvaluation(server.app.db, {

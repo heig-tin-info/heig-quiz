@@ -17,7 +17,6 @@ A type is a TypeScript package that exports a `QuestionType` object:
 | `Player` | React component for answering. Receives the student configuration, the current answer, an `onChange` callback. |
 | `Review` | React component for review: answer, key, grading, for the teacher and for the student feedback. |
 | `toCanonical` / `fromCanonical` | Conversion from and to the canonical format, if it differs from the raw configuration. |
-| `toDrillGrade(grading)` | Optional. Converts a grading into a recall rating from 1 to 4 for FSRS. |
 | `configVersion`, `migrate(config, from)` | Version of the configuration schema and upgrade on read. Lets a type evolve without an SQL migration, see 5.2. |
 | `generate(ctx)` | Optional. The type's LLM templates for "Generate the answer", "Generate the explanation", "Generate a variant", see 8.2. |
 | `searchText(config)` | Text indexed for the full-text search of the pool. |
@@ -26,6 +25,7 @@ Rules:
 
 - A type has no tables. Its configuration and its answers live in JSONB in the core tables.
 - A type makes no direct network call. It goes through `ctx.runner` and `ctx.llm`.
+- A type has no drill hook (ADR-041 §4). A question is drillable when its type is in the drill's scope — `mcq`, `short`, `cloze` and `categorize` in v1, `DRILL_TYPES` in `@quiz/domain` — and `grade` settles its answer automatically and finally: graded at once, not pending a runner or an LLM, not a proposal for the teacher. The drill takes its correctness from `grade`'s points and its time from the review.
 - The phase 1 types live in the monorepo under `packages/qt-*`, with two entry points `server` and `client`, see 5.2. Loading is static, through two registries.
 
 ## 4.2 Canonical format
@@ -242,6 +242,8 @@ Shown as **Essay** / « Rédaction » in the interface; the id `rich` is the one
 
 **Scoring, later**: `grade` returns `pending: 'llm'`. The LLM service receives the statement, the rubric, the reference, the anonymised answer, and must reply in JSON: points per criterion, short justification per criterion, confidence `low` / `medium` / `high`. The teacher validates in the grading panel (F-LLM-01..04). A rubric of criteria with `label`, `points` and `description`, used as the grading form, comes with it.
 
+*Amendment (ADR-045): the path exists, with a development stub as its only provider. `grade` returns `pending: 'llm'` when the process has an LLM service (`GradeContext.llm`, `LLM_PROVIDER`) and the question has a rubric or a model answer; the request holds the rubric, the model answer, the answer text and the item's points, not yet the statement nor a per-criterion reply. The pass writes the reply as an `llm` proposal with its confidence, the justification in its details for the teacher only (open question 27). Without a service, v1's manual scoring above is unchanged.*
+
 ## 4.9 Code image `codeimage`
 
 A variant of `code` (ADR-021): the same program, judged by the **picture it prints** instead of by test cases. It lives inside `packages/qt-code` (`src/image/`), registered as its own type beside `code`. Brought forward from phase 3.
@@ -282,11 +284,9 @@ config:
 - **Answer**: `{ regions[] }`, as `code`.
 - **Points**: `defaultPoints` proposes 1. The class debrief shows the distribution of pixel accuracy (100 %, 90–99 %, 50–89 %, 1–49 %, 0 %).
 
-## 4.10 Drawing `drawing`, phase 3
+## 4.10 Drawing `drawing`, replaced
 
-Minimalist canvas: rectangle, ellipse, line, arrow, freehand stroke, text. Select, move, delete, undo. Candidate technical base: Excalidraw in embedded mode, which avoids writing an editor.
-
-**Answer**: JSON scene and PNG rendering generated client-side at every autosave. **Scoring**: LLM with vision on the PNG, rubric of criteria like `rich`. Otherwise manual.
+The free-form drawing type planned for phase 3 (an embedded Excalidraw, graded by LLM vision on a PNG) is **replaced by the `diagram` type** (§4.14, ADR-046): its free-form needs are the `free` kind of a diagram, a canvas of basic shapes and freehand strokes. The id `drawing` was never shipped and is not reserved.
 
 ## 4.11 Schematic `circuit`
 
@@ -307,7 +307,7 @@ config:
       source: { kind: sine, amplitude: 1, frequencyHz: 1000, offset: 0 }
       sourceOhms: 50         # series resistance of the source; 0 = ideal
       load: { kind: resistor, ohms: 10000 }    # or { kind: open }, { kind: capacitor, farads: 1e-9 }
-      analysis: { stopMs: 5, skipMs: 1, points: 500 }
+      analysis: { stopMs: 5, skipMs: 1, points: 500 }    # a transient: `kind: tran` is the default
       points: 1
       visible: true
     - name: "10 kHz"           # same shape; visible: false = run at grading only
@@ -315,10 +315,16 @@ config:
       load: { kind: open }
       points: 1
       visible: false
+    - name: "Bode"             # an AC sweep (ADR-040): the source is the DC bias
+      source: { kind: dc, volts: 0 }
+      load: { kind: open }
+      analysis: { kind: ac, fStartHz: 10, fStopHz: 100000, pointsPerDecade: 20 }
+      points: 1
   reference: { components: [...], wires: [...] }     # the teacher's own circuit: the key
   grading:
     mode: simulation         # manual (default), simulation, llm (phase 2)
-    tolerance: 0.05          # simulation: the per-stimulus pass threshold
+    tolerance: 0.05          # simulation, transient stimuli: the pass threshold
+    bode: { magDb: 1, floorDb: 60, phaseDeg: 10 }    # simulation, AC stimuli: the envelope
     rubric: "..."            # manual and llm: the criteria
   showExpected: false        # overlay the reference's curve on the visible stimuli
   simulationsPerMinute: 10   # N-SEC-07, the budget of the Simulate button
@@ -327,18 +333,18 @@ config:
 - **The palette** lists the kinds the student may place, out of the sixteen of the library (R, C, L, four diodes, four bipolars and MOSFETs, an op-amp, and the `GND`, `VCC`, `VEE` terminals). `maxComponents` caps what is placed: a terminal names a net, it is not a part, so it does not count.
 - **Supplies**: `vcc` and `vee` publish a rail at the voltage the teacher wrote; `null` removes the symbol from the palette. The op-amp is ideal and clamped to those rails.
 - **`commonGround`** (default on) makes `in-` and `out-` the reference node. Off, they are two independent nets the student has to wire, and a `GND` symbol is what names the reference.
-- **A stimulus is a test case**: a name, a source (`dc`, `sine`, `pulse`, `step`), a source resistance, a load (`open`, `resistor`, `capacitor`), a transient window (`stopMs`, `skipMs` to drop the settling, `points` samples kept), points, and `visible`. A hidden stimulus is only run at grading, exactly like a hidden case of a `code` question (docs/06 Q8 applies to its name).
+- **A stimulus is a test case**: a name, a source (`dc`, `sine`, `pulse`, `step`), a source resistance, a load (`open`, `resistor`, `capacitor`), an analysis, points, and `visible`. The analysis is either a transient window (`kind: tran`, the default: `stopMs`, `skipMs` to drop the settling, `points` samples kept) or an AC sweep (`kind: ac`, ADR-040: `fStartHz` to `fStopHz`, 0.01 Hz to 1 GHz, `pointsPerDecade` 5 to 200, at most 2000 points). An AC stimulus needs a `dc` source, whose `volts` is the bias the circuit is linearised around (`circuit.ac_needs_dc_source` otherwise): the EMF is `DC <volts> AC 1`, and what is measured is the Bode plot of `v(out)` against it, the source resistance and the load included. A hidden stimulus is only run at grading, exactly like a hidden case of a `code` question (docs/06 Q8 applies to its name).
 - **The reference** is a schematic, not a netlist and not a waveform: the teacher draws the circuit they expect. A `simulation` grading without a reference, or without a stimulus, is refused at publication (`circuit.simulation_needs_reference`, `circuit.simulation_needs_stimulus`).
 - **Three grading modes**:
     - `manual` (default): the teacher reads the schematic — and, when there are stimuli, the simulated curves — and grades by hand;
     - `simulation`: both circuits are simulated under every stimulus and the OUTPUT WAVEFORMS are compared (below);
     - `llm`: phase 2, the netlist and the rubric go to the LLM service.
-- **The grading rule of `simulation`** (ADR-019): the student's schematic and the reference are each turned into a SPICE netlist, run through ngspice for each stimulus, and `v(out)` is compared sample by sample. A stimulus passes when the normalised RMS distance between the two output voltages is at or under `tolerance` times the reference's peak-to-peak swing; its points are then earned whole, and the total is the sum of the stimuli that passed. **What is compared is behaviour, never topology**: a circuit drawn differently, with merged resistors or another ordering, that produces the same output is a correct answer.
+- **The grading rule of `simulation`** (ADR-019): the student's schematic and the reference are each turned into a SPICE netlist, run through ngspice for each stimulus, and `v(out)` is compared sample by sample. A TRANSIENT stimulus passes when the normalised RMS distance between the two output voltages is at or under `tolerance` times the reference's peak-to-peak swing. An AC stimulus passes when the student's Bode plot stays, at EVERY frequency of the sweep, inside an envelope around the reference's (ADR-040): with the floor at the reference's peak minus `bode.floorDb`, a frequency where the reference is at or above the floor needs the magnitudes within `bode.magDb` and — unless `bode.phaseDeg` is `null` — the phases, compared modulo 360°, within `bode.phaseDeg`; below the floor the student's output only has to stay under the floor plus `bode.magDb`, and the phase is not compared. The envelope is checked on the full ngspice table, both runs sharing one frequency grid; the details store the decimated curves and the worst gap (`envelope: { worstDb, worstDeg, outside }`, `error` null). Either way a stimulus's points are then earned whole, and the total is the sum of the stimuli that passed. **What is compared is behaviour, never topology**: a circuit drawn differently, with merged resistors or another ordering, that produces the same output is a correct answer.
 - **When the REFERENCE fails to simulate**, or the runner is unreachable, the grading is stored `proposed` with the reason, never `validated`: an unrunnable question is the teacher's problem, not a zero for the student. A student circuit that fails to simulate is a failed stimulus with its machine reason (`floating_pin`, `spice_failed`), which is information, not an incident.
 - **`showExpected`** overlays the reference's output on the student's plot, for the visible stimuli only. It needs a reference, and it is what decides whether the reference's curve may travel in a grading's details at all.
 - **Answer**: `{ schematic }` — the components with their position, orientation, designator and value, and the wires with their routed polyline. **No netlist is ever stored, and none ever comes from the browser**: it is rebuilt server-side from the stored schematic and the stimulus, every time (invariant 14). Values are parsed case-sensitively, because SPICE reads `1M` as milli and `1Meg` as mega.
-- **Player button**: "Simulate" runs the student's own circuit under the VISIBLE stimuli and plots `v(in)`, `v(out)` and the load current, with the reference's curve beside them when `showExpected` is on. It goes through `POST /app/api/attempts/:id/simulate`, is budgeted by `simulationsPerMinute` per attempt, and is refused once the attempt is closed like any other write. The button is absent when the question has no visible stimulus.
-- **What `toStudent` strips** (invariant 4): the reference, the hidden stimuli (only their count and their total points remain), the tolerance, the rubric and the grading mode. What stays is what the student needs to draw and to simulate: the prompt, the palette, the supplies, `commonGround`, the visible stimuli and the budget.
+- **Player button**: "Simulate" runs the student's own circuit under the VISIBLE stimuli and plots `v(in)`, `v(out)` and the load current — or, for an AC stimulus, the Bode plot of `v(out)`, magnitude above phase on a logarithmic frequency axis — with the reference's curve beside them when `showExpected` is on. It goes through `POST /app/api/attempts/:id/simulate`, is budgeted by `simulationsPerMinute` per attempt, and is refused once the attempt is closed like any other write. The button is absent when the question has no visible stimulus.
+- **What `toStudent` strips** (invariant 4): the reference, the hidden stimuli (only their count and their total points remain), the tolerance, the Bode envelope (`magDb`, `floorDb`, `phaseDeg`: the whole grading block goes), the rubric and the grading mode. A visible AC stimulus keeps its sweep, which the Simulate button needs. What stays is what the student needs to draw and to simulate: the prompt, the palette, the supplies, `commonGround`, the visible stimuli and the budget.
 - **The key** (`toSolution`) is the reference schematic alone: the stimuli and the grading block are no part of it (ADR-037).
 - **Points**: the sum of the stimuli's points; `defaultPoints` proposes it.
 
@@ -395,4 +401,68 @@ config:
 
 **Review**: the student's board with each card marked right or wrong and, when the key is published, where each card was expected.
 
-**Dashboard and more**: the live cell shows "placed/total", figures only. Not pollable, no drill rating, no `aggregate` (the hook would only see opaque ids).
+**Dashboard and more**: the live cell shows "placed/total", figures only. Not pollable, no `aggregate` (the hook would only see opaque ids).
+
+## 4.14 Diagram `diagram`
+
+Shown as **Diagram** / « Diagramme » in the interface. The student draws a diagram of a notation the teacher chose: a UML class diagram, a state machine, an entity-relationship model, a flowchart, an automaton, and so on. It replaces the drawing type of §4.10. Brought forward outside the phases (ADR-046); the origin of its editor is `mockups/uml.html`.
+
+Two packages, so that the editor serves more than one type (ADR-046 §1):
+
+- `packages/diagram` (`@quiz/diagram`) is the **engine**: the scene model, the catalogue of kinds, the orthogonal router and the side anchoring, the straight-line layout and the text serialisers (`./server`, no React), and the `DiagramEditor` / `DiagramView` components (`./client`), whose text pane holds the parsers. It depends on `@quiz/core` and `@quiz/ui` and never imports a `qt-*` package.
+- `packages/qt-diagram` is the **question type**, registered in both registries.
+
+**Kinds** (all eight in v1). The kind is chosen once per question; the student's toolbox holds that kind's elements and nothing else.
+
+| Kind | Elements | Links | Lines | Text form |
+|---|---|---|---|---|
+| `class` | class: name, stereotype, abstract, body lines cut into compartments by `---`, `{static}` underlines, `{abstract}` italicises | association, navigable association, inheritance, realisation, dependency, aggregation, composition; a name and a multiplicity at each end | orthogonal | PlantUML |
+| `usecase` | actor, use case, system boundary (contains, never blocks a line) | association, «include», «extend», generalisation | orthogonal | PlantUML |
+| `state` | initial state, state (name and internal activities), final state | transition labelled `event [guard] / action` | orthogonal | Mermaid `stateDiagram-v2` |
+| `er` | entity: attributes `name : type`, `PK` underlines | relationship with a crow's-foot cardinality at each end (`1`, `0..1`, `1..*`, `0..*`) and a verb | orthogonal | Mermaid `erDiagram` |
+| `flow` | start/end, action, decision | arrow with a label (`oui`, `non`) shown where it leaves | orthogonal | Mermaid `flowchart` |
+| `automaton` | state, with an initial and an accepting flag | transition labelled by its symbols | straight | Graphviz DOT |
+| `graph` | vertex | edge, arc; a weight | straight | Graphviz DOT |
+| `free` | freehand stroke, line, square, rectangle, circle, ellipse, triangle; a shape may carry a short label | none | — | none |
+
+- **Orthogonal** lines are routed on the grid of 20 by the A* router of `circuit` (a turn penalty, the boxes as obstacles, a small cost for running along another line). An end attaches to a **side** of its element, the side that best faces the other end while that side has a free grid point; the ends sharing a side spread along it in the order of their targets, so that they do not cross. A decision gives one end per vertex. Ends on an ellipse, a diamond or a circle slide onto the shape.
+- **Straight** lines join two circles centre to centre, bend apart into curves when several join the same pair, and loop over the top of an element that points to itself.
+- A line may carry **elbows** (`via`, at most 16), which the router must pass through; the student adds one by double-clicking the line.
+
+**Configuration** (`configVersion: 1`):
+
+```yaml
+config:
+  prompt: markdown
+  kind: class                  # one of the eight kinds above
+  reference: { nodes: [...], links: [...] }   # the teacher's diagram: the key
+  starter: { nodes: [...], links: [...] }     # optional: what the student starts from
+  rubric: markdown             # the criteria, teacher-only
+```
+
+- **The scene is the record** (ADR-046 §2): elements with their position on the grid and their content, links with their ends, their elbows, their name and end labels; a `free` scene holds shapes and strokes. The text form is DERIVED from the scene by the kind's serialiser, never stored. The server never parses a text written in a browser.
+- **The starter** is optional. The editor offers "Copy the reference into the starter", after which the teacher removes what the student must add; the starter is then edited on its own. A draft may lack a reference; publication refuses a question without one (`diagram.reference_missing`) and a reference or starter holding an element or link the kind does not have (`diagram.kind_mismatch`).
+- **Ids are opaque**: the editor mints random ones. A starter reaches the student with its ids, so an id must say nothing (the rule of `categorize`, ADR-036).
+- **Limits**: 80 elements, 160 links, 16 elbows a link, 120 characters a name, 40 body lines of 200 characters, 50 000 characters of text in all; for `free`, 200 shapes and 4 000 stroke points in all; coordinates within ±20 000. No text holds a control character (a new line in a name would forge the text form). The autosave sends the whole answer every 300 ms, so the answer is bounded like `rich`'s. The editor refuses an edit that would break a limit.
+
+**Student** (`toStudent`, invariant 4): the prompt, the kind and the starter. The reference and the rubric never leave. **The text form is not shown to the student in v1**: the text tab exists for the teacher only (editor and review).
+
+**Answer**: `{ scene }`, the student's scene, which starts as a copy of the starter (or empty). `answerSchema` enforces the limits; `answerMisfit` refuses an element or a link that the question's kind does not have (`422 answer_invalid`, key `diagram.answer_misfit`). `isAnswered`: the scene differs from the starter.
+
+**Scoring, v1**: manual, like `rich`. `grade` proposes 0 points (`state: proposed`, `details.reason: manual`) for an answer, and a validated 0 for none, or for the untouched starter (`reason: empty`). The grading panel shows the student's diagram beside the reference, and, for the teacher, both text forms side by side, where a difference is easier to see than on the canvas.
+
+**Scoring, later** (not v1, ADR-046 §5): a proposal computed per kind, always `proposed`, never a diff of the texts (an ordering or a renaming would read as a mistake): the equivalence of two deterministic automata, which is decidable and the one kind that could be validated outright; vertices, edges and weights for a graph; classes, members and links matched by name, with partial credit, for `class` and `er`. And the LLM service (F-LLM-01..04, Q13), fed with the TEXT forms of the reference and of the answer, which costs no vision; `free` would go by a rendering. Both wait for their own ADR.
+
+**The key** (`toSolution`): the reference and the rubric; `studentSolution` keeps the reference alone (ADR-037).
+
+**Editor**: a grid of cards, one per kind, each with its icon and, for the teacher, its name and one line on what it draws. Changing the kind of a draft empties the reference and the starter, after a confirmation. Then the reference canvas with its text tab (editable by the teacher, parsed on every keystroke; a line in error is named and the diagram is left as it was), the starter, the rubric. `defaultPoints` proposes 1.
+
+**Player**: the canvas inline, under the prompt, and an **Expand** button that opens it over the page with a margin of 16 px. The overlay keeps a thin bar: the remaining time, the save state, and its one primary action, "Back to the questions" (Escape too). It is a layer of the page, not the browser's full screen: the student keeps the clock the server runs (invariant 5), and Safe Exam Browser (ADR-027) is not asked to change its window. Both views edit the same answer, which the autosave sends as usual. On a narrow screen the inline canvas is a preview and the overlay is where one draws.
+
+- **The toolbox shows icons only**: the student is expected to know the notation, and a label would give it away. Every icon carries an accessible name, and every string of the editor comes from the host's dictionary in `en` and `fr` through the package's `strings` props, as for `circuit` (N-I18N-01).
+- Double-click on the grid places the kind's usual element; drag from the border of an element to another links them; double-click on an element edits it, on a line adds an elbow, on an elbow removes it; wheel to zoom, right-drag to pan, Ctrl Z / Ctrl Y to undo and redo.
+
+**Review**: the student's diagram and, when the key is published, the reference beside it; the teacher also sees the text forms.
+
+**Dashboard and more**: the live cell shows the number of elements and links, figures only. Not pollable, no drill rating, no `aggregate`.
+

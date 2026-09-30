@@ -190,4 +190,32 @@ describe.skipIf(!host.has("spice"))("spice in a real container", () => {
     // Whatever `shell` managed to spawn, the root filesystem is read-only.
     expect(output).not.toContain("quiz-pwned created");
   });
+
+  it("cannot create a namespace or mount from a `.control` shell", async () => {
+    // ngspice has no syscall of its own to ask with; `shell` is its door to
+    // the rest of the image (busybox's `unshare` and `mount`), so the negative
+    // isolation probe of `podman.int.test.ts` is asked through it. The
+    // message is the filter's: ENOSYS, or `setns`'s EPERM.
+    const probeNetlist = [
+      "* namespace attempt",
+      "V1 a 0 1",
+      "R1 a 0 1k",
+      ".op",
+      ".control",
+      "shell unshare -U true",
+      "shell unshare -U -n true",
+      "shell mount -t tmpfs none /tmp",
+      "echo probe-done",
+      ".endc",
+      ".end",
+      "",
+    ].join("\n");
+    const outcome = await run(
+      request([{ name: "s0.cir", content: probeNetlist }], [{ name: "s0", args: ["s0.cir"], stdin: "" }]),
+    );
+    const output = `${outcome.cases[0]!.stdout}${outcome.cases[0]!.stderr}`;
+    expect(output).toContain("probe-done");
+    const refusals = output.match(/(unshare|mount)\b.*(Function not implemented|Operation not permitted)/g);
+    expect(refusals, output).toHaveLength(3);
+  });
 });

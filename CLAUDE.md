@@ -66,7 +66,8 @@ docs/
   guide/      the user guide
   development/  the developer pages, deployment runbook included
 mockups/      circuit.html, the origin of qt-circuit's schematic editor;
-              categorize.html, the origin of qt-categorize's board
+              categorize.html, the origin of qt-categorize's board;
+              grading.html, the origin of the grading table (ADR-044)
 infra/        Keycloak development realm
 ```
 
@@ -207,9 +208,12 @@ idempotent and builds everything through the ORDINARY SERVICES, never by raw
 inserts: course PRG1, classroom PRG1-2026, six students, two pools with
 eighteen published questions of all eight types, and four evaluations — one
 `draft`, one `scheduled`, one exercise in `lobby`, and `Test 0 — bases du C`
-closed, answered by five of the six students, graded by the real grading pass
-and left UNRELEASED so the panel has proposals to validate. Keyed on internal
-names and titles, so a second run writes nothing.
+closed, nine questions of all eight types answered by five of the six
+students, graded by the real grading pass (no runner: code, picture and
+circuit answers wait for one; essays proposed by the stub LLM when
+`LLM_PROVIDER=stub`, refused in production like the dev login) and left
+UNRELEASED so the panel has proposals to validate. Keyed on internal names
+and titles, so a second run writes nothing.
 
 `pnpm smoke` (`scripts/smoke.sh`) needs a running API and a seeded database.
 It walks one whole life of an evaluation over HTTP — login, author, publish,

@@ -1,4 +1,4 @@
-import { Copy, Pencil, Trash2 } from "lucide-react";
+import { BarChart3, Copy, Pencil, Trash2 } from "lucide-react";
 import type { DragEvent } from "react";
 
 import type { QuestionRow } from "@quiz/contracts";
@@ -10,7 +10,6 @@ import {
   Checkbox,
   cx,
   IconButton,
-  pressable,
   RelativeTime,
   Skeleton,
   T,
@@ -21,16 +20,23 @@ import {
 } from "../ui";
 import type { QuestionGroup } from "./QuestionGroups";
 import type { QuestionSort, SortDir } from "./filters";
+import { StarButton } from "./stars";
+import { entryKey, type RowProps } from "./useQuestionBrowse";
 
 /**
  * The questions of a pool, as the table of the pool screen.
  *
  * The internal name is dominant and monospaced (it is what a teacher types in
  * the palette), the type is the ICON in front of it, the difficulty is five
- * dots — a shape, never a colour — and the actions are last. A click on the
- * row opens the EDITOR: reading a question means opening it, and the
- * inspection panel that used to intercept the click was one step between the
- * teacher and the only thing they came for.
+ * dots — a shape, never a colour — and the actions are last.
+ *
+ * A pool is BROWSED to choose a question — a colleague's, a public one — and
+ * a name alone does not say what a question asks. So a row has two gestures
+ * (`useQuestionBrowse`): a click, ↑/↓ and P LOOK, showing the question as a
+ * student reads it in a pane beside the list (`PoolView`); Enter, a
+ * double-click and the pencil EDIT. Space and the star at the start of the
+ * name STAR it — the caller's own favourite (F-POOL-10), a reader's too, so
+ * the star sits in the name cell and not among the actions a reader lacks.
  *
  * The type lost its column and became a 20 px glyph at the left of the name.
  * A badge repeating "Multiple choice" on forty rows is forty copies of a word
@@ -113,6 +119,35 @@ export function VersionCell({ row }: { row: QuestionRow }) {
   );
 }
 
+/**
+ * The chart icon that opens a question's statistics (ADR-038), drawn only for
+ * a question the pool's statistics list — ten answers or more. It sits after
+ * the name rather than among the row's actions: a reader, who has no action
+ * column, must reach it too. It stops the click, which would open the editor.
+ */
+export function StatsButton({ row, onOpen }: { row: QuestionRow; onOpen: () => void }) {
+  const t = useT();
+  return (
+    <span onClick={(e) => e.stopPropagation()} className="inline-flex">
+      <IconButton size="sm" label={t("pool.stats.open", { name: row.internalName })} onClick={onOpen}>
+        <BarChart3 />
+      </IconButton>
+    </span>
+  );
+}
+
+/**
+ * What the table and the cards take to draw {@link StatsButton}: the opener
+ * of a row's statistics, undefined when the question has none to show.
+ */
+export type StatsFor = (row: QuestionRow) => (() => void) | undefined;
+
+/** {@link StatsButton} when the row has statistics, nothing otherwise. */
+export function RowStatsButton({ row, statsFor }: { row: QuestionRow; statsFor?: StatsFor | undefined }) {
+  const open = statsFor?.(row);
+  return open ? <StatsButton row={row} onOpen={open} /> : null;
+}
+
 export function QuestionTableSkeleton({ rows = 5 }: { rows?: number }) {
   return (
     <div className="space-y-2 p-4">
@@ -128,6 +163,7 @@ export function QuestionTable({
   checked,
   onToggleCheck,
   onToggleAll,
+  rowProps,
   onEdit,
   onDuplicate,
   onDelete,
@@ -136,6 +172,8 @@ export function QuestionTable({
   onSort,
   onDragStart,
   readOnly = false,
+  statsFor,
+  onStar,
 }: {
   /** One section per "group by" value; `none` hands over a single unlabelled one. */
   groups: QuestionGroup[];
@@ -143,7 +181,9 @@ export function QuestionTable({
   checked: ReadonlySet<string>;
   onToggleCheck: (id: string) => void;
   onToggleAll: () => void;
-  /** Opening the question: the row itself, and the pencil. */
+  /** Looking and walking: the click, the keys, the roving focus (`useQuestionBrowse`). */
+  rowProps: (key: string, row: QuestionRow) => RowProps;
+  /** Opening the editor: the pencil (the row's Enter and double-click go through `rowProps`). */
   onEdit: (row: QuestionRow) => void;
   onDuplicate: (row: QuestionRow) => void;
   onDelete: (row: QuestionRow) => void;
@@ -157,6 +197,10 @@ export function QuestionTable({
   onDragStart?: (event: DragEvent, row: QuestionRow) => void;
   /** A pool the caller only reads: no tick boxes, no row actions (F-POOL-05). */
   readOnly?: boolean;
+  /** Absent while the statistics load or when they failed. */
+  statsFor?: StatsFor | undefined;
+  /** The row's star (F-POOL-10), for every role. */
+  onStar: (row: QuestionRow) => void;
 }) {
   const t = useT();
   const rows = groups.flatMap((g) => g.rows);
@@ -220,12 +264,11 @@ export function QuestionTable({
             )}
             {group.rows.map((row) => (
               <tr
-                key={`${group.key}:${row.id}`}
-                onClick={() => onEdit(row)}
-                {...pressable(() => onEdit(row), "row")}
+                key={entryKey(group, row)}
+                {...rowProps(entryKey(group, row), row)}
                 draggable={onDragStart !== undefined}
                 onDragStart={onDragStart ? (event) => onDragStart(event, row) : undefined}
-                className={cx(T.row, T.rowHover, "cursor-pointer")}
+                className={cx(T.row, T.rowHover, "cursor-pointer aria-[current=true]:bg-accent-soft")}
               >
                 {readOnly ? null : (
                   <td className={T.td} onClick={(e) => e.stopPropagation()}>
@@ -240,9 +283,13 @@ export function QuestionTable({
                 )}
                 <td className={cx(T.td, "whitespace-nowrap")}>
                   <span className="flex items-center gap-2">
+                    <StarButton row={row} onToggle={() => onStar(row)} />
                     <TypeGlyph type={row.type} />
-                    <span className="font-mono font-bold">{row.internalName}</span>
+                    <span className="font-mono font-bold group-aria-[current=true]:text-accent">
+                      {row.internalName}
+                    </span>
                     {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
+                    <RowStatsButton row={row} statsFor={statsFor} />
                   </span>
                 </td>
                 <td className={cx(T.td, "max-w-56", T.colHigh)}>
@@ -269,7 +316,15 @@ export function QuestionTable({
                 </td>
                 {readOnly ? null : (
                   <td
-                    className={cx(T.td, "text-right", T.stickyEnd)}
+                    className={cx(
+                      T.td,
+                      "text-right",
+                      T.stickyEnd,
+                      // The row's tint laid OVER an opaque fill, hovered or not:
+                      // in dark mode `accent-soft` is translucent, and as the
+                      // fill it would let the scrolled cells show through.
+                      "group-aria-[current=true]:bg-surface group-aria-[current=true]:bg-[linear-gradient(var(--accent-soft),var(--accent-soft))]",
+                    )}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <span className="inline-flex items-center gap-0.5">

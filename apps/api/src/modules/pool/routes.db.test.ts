@@ -1036,6 +1036,32 @@ describe("pool sharing", () => {
     expect(row.memberCount).toBe(0);
   });
 
+  it("lets a reader, named or of a public pool, preview a question as a student sees it", async () => {
+    // The pool screen previews a clicked row: a role that may only READ must
+    // still get the student view, and an outsider still gets the bare 404.
+    const preview = (question: string, who: Actor) =>
+      server.app.inject({
+        method: "POST",
+        url: `/app/api/questions/${question}/preview`,
+        headers: who.headers,
+        payload: { source: "draft" },
+      });
+    const inShared = (await writeQuestion(shared, poolOwner, "previewed by a reader")).json().meta.id;
+    expect((await preview(inShared, reader)).statusCode).toBe(200);
+    expect((await preview(inShared, outsider)).statusCode).toBe(404);
+
+    const open = (
+      await server.app.inject({
+        method: "POST",
+        url: "/app/api/pools",
+        headers: poolOwner.headers,
+        payload: { name: "Public preview pool", visibility: "public" },
+      })
+    ).json().id;
+    const inPublic = (await writeQuestion(open, poolOwner, "previewed by anyone")).json().meta.id;
+    expect((await preview(inPublic, outsider)).statusCode).toBe(200);
+  });
+
   it("links a pool to a course only for a contributor of it, and keeps a link already made", async () => {
     const courseOf = async (...staff: Actor[]) => {
       const courseId = crypto.randomUUID();

@@ -166,6 +166,7 @@ export async function tryApplyState(
     next.startedAt = null;
     next.pausedAt = null;
     next.closedAt = null;
+    next.gradingReadyAt = null;
   }
   const updated = await db
     .update(evaluations)

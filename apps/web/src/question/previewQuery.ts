@@ -8,7 +8,8 @@ import { questionPreviewKey } from "../queryKeys";
  * seed 0, built by `studentView` on the server). One request and one cache
  * entry per (question, source), for every surface that shows it: the editor's
  * Try panel, its version history, the student preview page, and the
- * evaluation's question picker. Spread into `useQuery`, so a key can never
+ * reading pane of the evaluation's question picker and of the pool screen
+ * (`QuestionPreview`). Spread into `useQuery`, so a key can never
  * drift from the body it caches.
  */
 export const questionPreviewQuery = (id: string, source: "draft" | number) => ({

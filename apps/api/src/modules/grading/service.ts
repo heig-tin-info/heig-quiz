@@ -27,11 +27,11 @@ import type {
   GradingQuery,
   GradingQueue,
   GradingSteps,
-  GradingStepsQuery,
   GradingSource,
   GradingState,
   Verdict,
 } from "@quiz/contracts";
+import { reasonOf } from "@quiz/contracts";
 import {
   attemptTotal,
   isBatchable,
@@ -39,7 +39,6 @@ import {
   overridePointsRange,
   round2,
   scoresNegatively,
-  uniquePseudonyms,
 } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
@@ -52,6 +51,7 @@ import {
   joinedItems,
   negativeMarkingEnabled,
   retargetItemVersion,
+  clearGradingReady,
   staffAttemptIds,
   type EvaluationRecord,
   type JoinedItem,
@@ -59,7 +59,7 @@ import {
 import { solutionViewOf, studentViewOf } from "../live/studentView.js";
 import { loadConfig } from "../pool/config.js";
 import { watchReleasedGrades } from "../results/service.js";
-import { tallyByAttempt } from "./kept.js";
+import { keptAttempts, tallyByAttempt } from "./kept.js";
 
 export type GradingRecord = typeof gradings.$inferSelect;
 
@@ -287,10 +287,9 @@ export function verdictOf(row: Pick<GradingRecord, "points" | "maxPoints" | "sta
   return outcomeOf(row.points, row.maxPoints);
 }
 
-/** The cells of an evaluation a read is about: all of them, or one item's, or one attempt's. */
+/** The cells of an evaluation a read is about: all of them, or one item's. */
 interface CellScope {
   itemId?: string | undefined;
-  attemptId?: string | undefined;
 }
 
 /** The `WHERE` of a {@link CellScope} on `gradings` joined to its attempts. */
@@ -298,14 +297,13 @@ const gradingsIn = (evaluationId: string, scope: CellScope) =>
   and(
     eq(attempts.evaluationId, evaluationId),
     scope.itemId ? eq(gradings.itemId, scope.itemId) : undefined,
-    scope.attemptId ? eq(gradings.attemptId, scope.attemptId) : undefined,
   );
 
 /**
  * Every grading of an evaluation that is still standing (`validated` or
  * `proposed`), keyed by cell. One query: the dashboard, the results and the
  * panel all need the same map and none of them may issue a query per cell.
- * The panel narrowed to one item or one attempt reads only those cells.
+ * The panel narrowed to one item reads only that item's cells.
  */
 export async function standingGradings(
   db: Db,
@@ -366,38 +364,34 @@ export async function progressOf(db: Db, evaluationId: string): Promise<GradingP
   return { done, total, pending: { runner, llm }, failed };
 }
 
-/** `details.reason`, the one field every machine-written grading carries. */
-export function reasonOf(details: unknown): string | null {
-  if (details && typeof details === "object" && "reason" in details) {
-    const reason = (details as { reason: unknown }).reason;
-    return typeof reason === "string" ? reason : null;
-  }
-  return null;
-}
 
 // --- The panel (F-GRADE-03) ----------------------------------------------
 
 type AttemptRecord = typeof attempts.$inferSelect;
 
 interface Roster {
-  userId: string;
-  displayName: string;
-  pseudonym: string;
+  /** The name the panel shows when the teacher asks for names; null for a guest. */
+  displayName: string | null;
+  /** A guest's number among the evaluation's guests (ADR-014); null for an account. */
+  guest: number | null;
+  /** Which of the student's attempts this is; null for a student with one. */
+  attemptNumber: number | null;
 }
 
 /**
- * The name and the pseudonym of each attempt. `attemptRows` is EVERY attempt
- * of the evaluation, oldest first, as the caller already loaded them: the
- * pseudonyms, the guests' numbers and the " · #2" of a retake depend on all
- * of them, whatever the panel shows.
+ * The name and the attempt number of each attempt. `attemptRows` is EVERY
+ * attempt of the evaluation, oldest first, as the caller already loaded
+ * them: the guests' numbers and whether a student retook the exercise depend
+ * on all of them, whatever the panel shows.
+ *
+ * No pseudonym any more (ADR-044): an anonymous panel carries no label at
+ * all, and the retake number travels on its own (`GradingEntry.attemptNumber`)
+ * instead of as a " · #2" suffix of a name it would outlive.
  */
 async function rosterOf(
   db: Db,
-  evaluationId: string,
   attemptRows: readonly Pick<AttemptRecord, "id" | "userId" | "attemptNumber">[],
 ): Promise<Map<string, Roster>> {
-  // Deduplicated: a student who retook an exercise holds several attempts
-  // (F-EVAL-15), and a repeated id would draw them a second pseudonym.
   const userIds = [
     ...new Set(attemptRows.map((r) => r.userId).filter((id): id is string => id !== null)),
   ];
@@ -414,45 +408,29 @@ async function rosterOf(
           .from(users)
           .where(inArray(users.id, userIds));
   const person = new Map(people.map((p) => [p.id, p]));
-  // An attempt of a poll may belong to a GUEST, whose `user_id` is null
-  // (ADR-014): it keeps its row, named "Guest n" below, rather than leave the
-  // panel a graded answer with no owner at all.
-  const rows = attemptRows.map((a) => {
-    const who = a.userId === null ? undefined : person.get(a.userId);
-    return {
-      attemptId: a.id,
-      userId: a.userId,
-      attemptNumber: a.attemptNumber,
-      givenName: who?.givenName ?? null,
-      familyName: who?.familyName ?? null,
-      email: who?.email ?? null,
-    };
-  });
-  const pseudonyms = uniquePseudonyms(evaluationId, userIds);
   const attemptsOf = new Map<string, number>();
-  for (const r of rows) if (r.userId) attemptsOf.set(r.userId, (attemptsOf.get(r.userId) ?? 0) + 1);
-  /**
-   * Which of a retaking student's attempts this is, as " · #2" — a number,
-   * so the same label reads in both languages. Nothing for a student who
-   * took one attempt, which is every student of every exam.
-   */
-  const nth = (r: (typeof rows)[number]): string =>
-    r.userId !== null && (attemptsOf.get(r.userId) ?? 0) > 1 ? ` · #${r.attemptNumber}` : "";
+  for (const r of attemptRows) {
+    if (r.userId) attemptsOf.set(r.userId, (attemptsOf.get(r.userId) ?? 0) + 1);
+  }
+  // An attempt of a poll may belong to a GUEST, whose `user_id` is null
+  // (ADR-014): it keeps its row, numbered among the guests, rather than
+  // leave the panel a graded answer with no owner at all. The number, not a
+  // name: the web words it in the reader's language.
   let guests = 0;
   return new Map(
-    rows.map((r) => {
+    attemptRows.map((r): [string, Roster] => {
       if (r.userId === null) {
         guests += 1;
-        const name = `Guest ${guests}`;
-        return [r.attemptId, { userId: r.attemptId, displayName: name, pseudonym: name }];
+        return [r.id, { displayName: null, guest: guests, attemptNumber: null }];
       }
+      const who = person.get(r.userId);
       return [
-        r.attemptId,
+        r.id,
         {
-          userId: r.userId,
           displayName:
-            (`${r.givenName ?? ""} ${r.familyName ?? ""}`.trim() || (r.email ?? "")) + nth(r),
-          pseudonym: (pseudonyms.get(r.userId) ?? "—") + nth(r),
+            `${who?.givenName ?? ""} ${who?.familyName ?? ""}`.trim() || (who?.email ?? r.userId),
+          guest: null,
+          attemptNumber: (attemptsOf.get(r.userId) ?? 0) > 1 ? r.attemptNumber : null,
         },
       ];
     }),
@@ -500,24 +478,26 @@ interface QueueContext {
   roster: Map<string, Roster>;
   /** The teacher's own test walks (ADR-018). */
   staffAttempts: ReadonlySet<string>;
+  /** The attempt that counts for each student who retook (ADR-025). */
+  kept: ReadonlySet<string>;
   /** Each item's config, parsed once for every attempt that shows it. */
   configs: Map<string, unknown>;
 }
 
 /**
  * The reads of the panel: one query each, never one per cell, and only for
- * the selected cells — a panel narrowed to one item or one attempt does not
- * load the answers and the history of the whole evaluation.
+ * the selected cells — a panel narrowed to one item does not load the
+ * answers and the history of the whole evaluation.
  */
 async function loadQueueContext(
   db: Db,
   evaluation: EvaluationRecord,
   attemptRows: readonly AttemptRecord[],
-  selection: { attempts: readonly AttemptRecord[]; items: readonly JoinedItem[]; scope: CellScope },
+  selection: { items: readonly JoinedItem[]; scope: CellScope },
 ): Promise<QueueContext> {
   const { scope } = selection;
-  const [answerRows, standing, history, roster, staffAttempts] = await Promise.all([
-    selection.attempts.length === 0 || selection.items.length === 0
+  const [answerRows, standing, history, roster, staffAttempts, kept] = await Promise.all([
+    attemptRows.length === 0 || selection.items.length === 0
       ? []
       : db
           .select()
@@ -526,17 +506,19 @@ async function loadQueueContext(
             and(
               inArray(
                 answers.attemptId,
-                selection.attempts.map((a) => a.id),
+                attemptRows.map((a) => a.id),
               ),
               scope.itemId ? eq(answers.itemId, scope.itemId) : undefined,
             ),
           ),
     standingGradings(db, evaluation.id, scope),
     historyOf(db, evaluation.id, scope),
-    rosterOf(db, evaluation.id, attemptRows),
+    rosterOf(db, attemptRows),
     // The teacher's own test walk is corrected like any other — they asked
     // for it — but the panel says whose it is (ADR-018).
     staffAttemptIds(db, evaluation),
+    // Only worth a read when somebody retook: otherwise every attempt counts.
+    attemptRows.some((a) => a.attemptNumber > 1) ? keptAttempts(db, evaluation) : null,
   ]);
   return {
     answers: new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a])),
@@ -544,10 +526,13 @@ async function loadQueueContext(
     history,
     roster,
     staffAttempts,
+    kept: new Set(
+      kept === null ? attemptRows.map((a) => a.id) : [...kept.values()].map((a) => a.id),
+    ),
     // Only when some cell will show them: an empty panel never parsed a
     // config, and must not start failing on one that no longer loads.
     configs: new Map(
-      (selection.attempts.length === 0 ? [] : selection.items).map((i) => [
+      (attemptRows.length === 0 ? [] : selection.items).map((i) => [
         i.item.id,
         loadConfig(i.question.type, {
           config: i.version.config,
@@ -558,7 +543,13 @@ async function loadQueueContext(
   };
 }
 
-/** One cell of the panel. The views still come from `studentViewOf`/`solutionViewOf` (invariant 4). */
+/**
+ * One cell of the panel. The views still come from `studentViewOf`/`solutionViewOf` (invariant 4).
+ *
+ * Anonymous (the default), nothing in it names the student: no label, no
+ * user id. The attempt id stays — it names an attempt, and it is what every
+ * write of the panel addresses.
+ */
 function entryOf(
   { attempt, item }: { attempt: AttemptRecord; item: JoinedItem },
   grading: GradingRecord | null,
@@ -574,9 +565,11 @@ function entryOf(
     answerId: answer?.id ?? null,
     attemptId: attempt.id,
     itemId: item.item.id,
-    // A guest has no account behind it: `rosterOf` names it "Guest n".
-    label: anonymous ? (who?.pseudonym ?? "—") : (who?.displayName ?? attempt.userId ?? "—"),
+    label: anonymous ? null : (who?.displayName ?? null),
+    guest: anonymous ? null : (who?.guest ?? null),
     staff: context.staffAttempts.has(attempt.id),
+    attemptNumber: who?.attemptNumber ?? null,
+    kept: context.kept.has(attempt.id),
     answer: answer?.payload ?? null,
     student: studentViewOf(item.question.type, config, view),
     solution: solutionViewOf(item.question.type, config, view),
@@ -586,12 +579,12 @@ function entryOf(
 }
 
 /**
- * `GET /evaluations/:id/grading` (§4.5). Ordered by question (every student's
- * answer to one question, which is how a teacher actually corrects) or by
- * student (the quiz in order, for a dispute).
+ * `GET /evaluations/:id/grading` (§4.5): every student's answer to one
+ * question — which is how a teacher actually corrects, and the only way
+ * through the panel since ADR-044 — or to every question, item after item.
  *
- * The counts are those of the SELECTION (item, attempt), before the state
- * filter: they are accumulated in the same walk that builds the entries.
+ * The counts are those of the SELECTION (the item): every state is sent,
+ * and the panel filters in the browser.
  */
 export async function gradingQueue(
   db: Db,
@@ -607,34 +600,25 @@ export async function gradingQueue(
       .orderBy(asc(attempts.createdAt)),
   ]);
   const items = query.itemId ? allItems.filter((i) => i.item.id === query.itemId) : allItems;
-  const selected = query.attemptId
-    ? attemptRows.filter((a) => a.id === query.attemptId)
-    : attemptRows;
   const context = await loadQueueContext(db, evaluation, attemptRows, {
-    attempts: selected,
     items,
-    scope: { itemId: query.itemId, attemptId: query.attemptId },
+    scope: { itemId: query.itemId },
   });
-
-  const pairs: { attempt: AttemptRecord; item: JoinedItem }[] =
-    query.by === "student"
-      ? selected.flatMap((attempt) => items.map((item) => ({ attempt, item })))
-      : items.flatMap((item) => selected.map((attempt) => ({ attempt, item })));
 
   const entries: GradingEntry[] = [];
   let validated = 0;
   let proposed = 0;
-  for (const pair of pairs) {
-    const grading = context.standing.get(pairKey(pair.attempt.id, pair.item.item.id)) ?? null;
-    if (grading?.state === "validated") validated += 1;
-    else if (grading?.state === "proposed") proposed += 1;
-    if (query.state && grading?.state !== query.state) continue;
-    entries.push(entryOf(pair, grading, context, query.anonymous));
+  for (const item of items) {
+    for (const attempt of attemptRows) {
+      const grading = context.standing.get(pairKey(attempt.id, item.item.id)) ?? null;
+      if (grading?.state === "validated") validated += 1;
+      else if (grading?.state === "proposed") proposed += 1;
+      entries.push(entryOf({ attempt, item }, grading, context, query.anonymous));
+    }
   }
 
-  const total = items.length * selected.length;
+  const total = items.length * attemptRows.length;
   return {
-    order: query.by,
     items: items.map((i) => ({
       id: i.item.id,
       position: i.item.position,
@@ -650,81 +634,35 @@ export async function gradingQueue(
 }
 
 /**
- * `GET /evaluations/:id/grading/steps` (#107). The path of a traversal with
- * the state of every step, for the step picker: one step per item by
- * question, one per attempt by student, in the order the queue walks them.
+ * `GET /evaluations/:id/grading/steps` (#107). One step per question, in the
+ * evaluation's order, with the state of its cells, for the question selector.
  *
- * Counted from the same standing gradings as the queue's `counts`, so a step
- * reads "2 to validate" here exactly when its queue would say so. No answer,
- * no view and no history is loaded: this is three counters per step.
+ * Counted from the same validated gradings as the queue's `counts`, so a
+ * step reads "2 to validate" here exactly when its queue would say so. No
+ * answer, no view and no history is loaded: this is two counters per step.
  */
-export async function gradingSteps(
-  db: Db,
-  evaluation: EvaluationRecord,
-  query: GradingStepsQuery,
-): Promise<GradingSteps> {
+export async function gradingSteps(db: Db, evaluation: EvaluationRecord): Promise<GradingSteps> {
   const items = await joinedItems(db, evaluation.id);
   const attemptRows = await db
-    .select({ id: attempts.id, userId: attempts.userId, attemptNumber: attempts.attemptNumber })
+    .select({ id: attempts.id })
     .from(attempts)
-    .where(eq(attempts.evaluationId, evaluation.id))
-    .orderBy(asc(attempts.createdAt));
-  // The state of each standing cell and nothing else — not the details, the
-  // comment or the history `standingGradings` carries for the queue. Same
-  // rule: superseded ones are history, and a validated grading outranks a
-  // proposal on the same cell.
+    .where(eq(attempts.evaluationId, evaluation.id));
+  // The validated cells and nothing else — not the details, the comment or
+  // the history `standingGradings` carries for the queue: a question is done
+  // when each of its cells holds a validated grading.
   const rows = await db
-    .select({ attemptId: gradings.attemptId, itemId: gradings.itemId, state: gradings.state })
+    .select({ attemptId: gradings.attemptId, itemId: gradings.itemId })
     .from(gradings)
     .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
-    .where(and(eq(attempts.evaluationId, evaluation.id), ne(gradings.state, "superseded")));
-  const standing = new Map<PairKey, "validated" | "proposed">();
-  for (const row of rows) {
-    const key = pairKey(row.attemptId, row.itemId);
-    if (standing.get(key) !== "validated") standing.set(key, row.state as "validated" | "proposed");
-  }
+    .where(and(eq(attempts.evaluationId, evaluation.id), eq(gradings.state, "validated")));
+  const validated = new Set(rows.map((row) => pairKey(row.attemptId, row.itemId)));
 
-  const tally = (cells: PairKey[]) => {
-    let validated = 0;
-    let proposed = 0;
-    for (const key of cells) {
-      const state = standing.get(key);
-      if (state === "validated") validated += 1;
-      else if (state === "proposed") proposed += 1;
-    }
-    return { total: cells.length, validated, proposed };
-  };
-
-  if (query.by === "question") {
-    return {
-      order: "question",
-      steps: items.map((item) => ({
-        key: item.item.id,
-        label: item.question.internalName,
-        staff: false,
-        ...tally(attemptRows.map((a) => pairKey(a.id, item.item.id))),
-      })),
-    };
-  }
-
-  const [roster, staff] = await Promise.all([
-    rosterOf(db, evaluation.id, attemptRows),
-    staffAttemptIds(db, evaluation),
-  ]);
   return {
-    order: "student",
-    steps: attemptRows.map((attempt) => {
-      const who = roster.get(attempt.id);
-      return {
-        key: attempt.id,
-        // The same rule as `entryOf`: the step and its answers carry one name.
-        label: query.anonymous
-          ? (who?.pseudonym ?? "—")
-          : (who?.displayName ?? attempt.userId ?? "—"),
-        staff: staff.has(attempt.id),
-        ...tally(items.map((item) => pairKey(attempt.id, item.item.id))),
-      };
-    }),
+    steps: items.map((item) => ({
+      key: item.item.id,
+      total: attemptRows.length,
+      validated: attemptRows.filter((a) => validated.has(pairKey(a.id, item.item.id))).length,
+    })),
   };
 }
 
@@ -879,7 +817,7 @@ export async function batchValidate(
  */
 export async function regradeItem(
   db: Db,
-  item: { itemId: string; questionId: string },
+  item: { evaluationId: string; itemId: string; questionId: string },
   input: { note: string; toVersionNumber?: number | undefined },
 ): Promise<string | null> {
   return db.transaction(async (tx) => {
@@ -903,6 +841,9 @@ export async function regradeItem(
       .update(gradings)
       .set({ state: "superseded" })
       .where(and(eq(gradings.itemId, item.itemId), ne(gradings.state, "superseded")));
+    // The item's cells are empty again: the pass that refills them completes a
+    // new grid, and the staff hear of it (`ready.ts`, #286).
+    await clearGradingReady(tx, item.evaluationId);
     return note;
   });
 }
@@ -1032,6 +973,7 @@ export function pointsAcrossRegrade(
 // The kept attempt of each student (F-EVAL-15, ADR-025), in `./kept.ts`.
 export {
   keptAttempts,
+  keptAttemptsOf,
   scoreOf,
   studentAttempts,
   tallyByAttempt,

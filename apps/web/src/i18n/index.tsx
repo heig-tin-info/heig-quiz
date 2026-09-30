@@ -172,6 +172,26 @@ export function useT(): TFunction {
   return useContext(I18nContext).t;
 }
 
+/** A number with exactly `digits` decimals, in the notation of `locale`: "0.42", "0,42". */
+export function formatDecimal(value: number, digits: number, locale: Locale): string {
+  return new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+}
+
+/**
+ * "45 s", "2 min 05 s", "1 h 12 min": a span of seconds, compact, two units
+ * at most, and never broken across two lines (the spaces are non-breaking).
+ */
+export function formatSpan(seconds: number, t: TFunction): string {
+  const total = Math.max(0, Math.round(seconds));
+  const text =
+    total < 60
+      ? t("dur.s", { n: total })
+      : total < 3600
+        ? t("dur.minSec", { m: Math.floor(total / 60), s: String(total % 60).padStart(2, "0") })
+        : t("dur.hourMin", { h: Math.floor(total / 3600), m: Math.floor((total % 3600) / 60) });
+  return text.replace(/ /g, "\u00a0");
+}
+
 /** "4 days, 2 hours and 23 minutes" — localized, largest three units. */
 export function formatDuration(ms: number, t: TFunction): string {
   const total = Math.max(0, Math.floor(ms / 1000));

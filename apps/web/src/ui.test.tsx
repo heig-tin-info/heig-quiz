@@ -924,9 +924,10 @@ describe("FormError", () => {
     renderWithProviders(
       <FormError error={new ApiError(409, { message: "Code already taken" })} fallback="x" />,
     );
-    const line = screen.getByText("Code already taken");
-    expect(line.tagName).toBe("P");
+    // The message sits beside the circled "!" of `ErrorText`, inside its <p>.
+    const line = screen.getByText("Code already taken").closest("p");
     expect(line).toHaveClass("text-danger");
+    expect(line?.querySelector("svg[aria-hidden='true']")).not.toBeNull();
   });
 
   it("becomes a titled alert, falling back to the translated error.server", () => {

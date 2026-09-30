@@ -32,7 +32,7 @@ On the course card, click **New classroom**. A classroom has a **Name**, such as
 
 ### The classroom screen
 
-The eyebrow above the title names the course and goes back to it. The title is the classroom's name, followed by the page's help **?** and by the period. Under the title, two tabs, and the primary action at the right of the title changes with the tab, always in the same place: **Add students** on the roster, **New evaluation** on the evaluations.
+The eyebrow above the title names the course and goes back to it. The title is the classroom's name, followed by the page's help **?** and by the period. Under the title, three tabs, and the primary action at the right of the title changes with the tab, always in the same place: **Add students** on the roster, **New evaluation** on the evaluations; the **Drill** tab is a read view and has none.
 
 <figure markdown="span">
   ![A classroom, on its evaluations tab](../assets/screenshots/classroom-evaluations-light.png#only-light)
@@ -49,6 +49,8 @@ The eyebrow above the title names the course and goes back to it. The title is t
 </figure>
 
 **Roster** is the class list: **Last name**, **First name**, **E-mail**, **Status**, **Extra time** and **Last sign-in**. The count on the tab is the headcount. Click a column header to sort.
+
+**Drill** is the classroom's spaced practice. With the drill off, the tab says so above the **Drill** switch that turns it on. With it on, one row per student: the **Recall, 30 days** — the share of reviews of questions the student had already practised that were not failed, a question's first review left out — with an arrow when it rose or fell against the 30 days before, the **Sessions** (days with a review), the **Questions seen**, the **Reviews, 30 days** and the **Last activity**. A student who opted out carries an **Opted out on** badge with the date: nothing after it is counted, what came before stays. Click a row for that student's weeks: reviews per week, and the recall rate per week against the scheduler's 90 % target. Below the table, **Mastery per tag**: for each tag, the chance today that the students still recall a question they practised, weakest first. Only the questions a student first met in this classroom count here. Students are told in their drill tab that you see this activity, which is kept five years.
 
 ## Importing the roster
 

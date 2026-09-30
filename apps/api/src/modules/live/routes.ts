@@ -329,14 +329,29 @@ export async function livePlugin(app: FastifyInstance) {
     ),
   );
 
+  /**
+   * F-LIVE-06, ADR-039: the question on screen, or none. The bookmark of a
+   * reload and the dwell of the statistics, both on the server's clock; a
+   * delegated session (ADR-034) moves the bookmark only.
+   */
   app.post(
     "/app/api/attempts/:id/position",
-    sit,
-    student({ params: IdParam, body: PositionBody, load: own }, async ({ reply, now, body, scope }) => {
-      service.assertOpen(scope.evaluation, scope.attempt, now);
-      await service.setPosition(app.db, scope.attempt, body.itemId, now);
-      return reply.code(204).send();
-    }),
+    // `{ itemId }`: a uuid or null.
+    { ...sit, bodyLimit: 1024 },
+    student(
+      { params: IdParam, body: PositionBody, load: own },
+      async ({ req, reply, now, body, scope }) => {
+        service.assertOpen(scope.evaluation, scope.attempt, now);
+        await service.reportShown(app.db, {
+          evaluation: scope.evaluation,
+          attempt: scope.attempt,
+          itemId: body.itemId,
+          now,
+          track: !delegated(req.auth),
+        });
+        return reply.code(204).send();
+      },
+    ),
   );
 
   /** F-LIVE-10. */

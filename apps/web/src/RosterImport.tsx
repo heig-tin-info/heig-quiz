@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { api, ApiError } from "./api";
 import { HelpIcon } from "./help";
 import { useT } from "./i18n";
-import { Button, cx, Field, Sheet, Textarea } from "./ui";
+import { Button, cx, ErrorText, Field, Sheet, Textarea } from "./ui";
 import { classroomKey } from "./queryKeys";
 
 type Cell = string | number | null;
@@ -108,13 +108,13 @@ export function RosterImport({ classroomId, onClose }: { classroomId: string; on
             ) : importErrors.length > 0 ? (
               // The lines themselves are under the drop zone; the footer says
               // how many there are, so the sheet never fails in silence.
-              <span className="text-sm text-danger">
+              <ErrorText as="span">
                 {importErrors.length === 1
                   ? t("import.rejected.one")
                   : t("import.rejected", { n: importErrors.length })}
-              </span>
+              </ErrorText>
             ) : importRoster.isError ? (
-              <span className="text-sm text-danger">{t("import.failed")}</span>
+              <ErrorText as="span">{t("import.failed")}</ErrorText>
             ) : null}
           </span>
           <Button variant="secondary" onClick={onClose}>

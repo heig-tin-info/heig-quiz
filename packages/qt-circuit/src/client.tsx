@@ -10,6 +10,7 @@ import { lazy } from "react";
 
 import type { QuestionTypeClient } from "@quiz/core/client";
 import { typeIcon } from "@quiz/ui";
+import { circuitGrading } from "./grading.js";
 import { isCircuitAnswered } from "./schema.js";
 
 import { LIBRARY } from "./library.js";
@@ -60,6 +61,7 @@ export const circuitClient: QuestionTypeClient<
   },
 
   isAnswered: isCircuitAnswered,
+  grading: circuitGrading,
 
   /**
    * The budget, which is the one number a teacher scanning the dashboard can
@@ -102,6 +104,7 @@ export type { CircuitEditorProps } from "./Editor.js";
 export {
   CANVAS_STRINGS,
   EDITOR_STRINGS,
+  GRADING_STRINGS,
   KIND_LABELS,
   PLAYER_STRINGS,
   REVIEW_STRINGS,

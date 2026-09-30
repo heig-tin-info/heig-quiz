@@ -9,7 +9,7 @@ import { itemPreviewKey } from "../queryKeys";
 import type { EditTarget } from "./editTarget";
 import { typeLabel } from "../questionTypes";
 import { Alert, Sheet } from "../ui";
-import { PreviewedQuestion } from "./PreviewedQuestion";
+import { PreviewedQuestion } from "../question/PreviewedQuestion";
 
 /**
  * The Preview of a row of the question list (issue #127): ONE item, as a

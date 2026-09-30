@@ -4,10 +4,12 @@
  *
  * No React in this import graph: the API and the grading worker load it.
  *
- * v1 is graded BY HAND. `grade` proposes 0 points for every written answer —
- * the precedent is `circuit` in `manual` mode — and the teacher settles it in
- * the grading panel, the answer beside the rubric and the model answer. The
- * LLM path of the spec (`pending: 'llm'`) stays for a later iteration.
+ * Graded BY HAND unless the process has an LLM service: `grade` proposes 0
+ * points for every written answer — the precedent is `circuit` in `manual`
+ * mode — and the teacher settles it in the grading panel, the answer beside
+ * the rubric and the model answer. With a service (`GradeContext.llm`, only
+ * the development stub yet) and something to grade against, the essay goes
+ * to it instead (`pending: 'llm'`, docs/spec/04 §4.8, F-GRADE-02).
  */
 import { ConfigMigrationError, type QuestionTypeServer } from "@quiz/core/server";
 import {
@@ -95,15 +97,32 @@ export const richServer: QuestionTypeServer<
   },
 
   /**
-   * Nothing written is worth 0, and that IS the grade. Anything else is a
-   * proposal of 0 points that a teacher must settle (F-GRADE-01).
+   * Nothing written is worth 0, and that IS the grade. Anything else goes to
+   * the LLM service when there is one and a rubric or a model answer to
+   * grade against — the request holds the criteria and the text, nothing
+   * that names the student (F-LLM-04) — and is otherwise a proposal of 0
+   * points that a teacher must settle (F-GRADE-01).
    */
-  grade(_config, answer, ctx) {
+  grade(config, answer, ctx) {
     const chars = answer === null ? 0 : countChars(answer.text);
-    const written = answer !== null && isRichAnswered(answer);
-    return written
-      ? { kind: "graded", points: 0, maxPoints: ctx.itemPoints, details: { reason: "manual", chars }, state: "proposed" }
-      : { kind: "graded", points: 0, maxPoints: ctx.itemPoints, details: { reason: "empty", chars } };
+    if (answer === null || !isRichAnswered(answer)) {
+      return { kind: "graded", points: 0, maxPoints: ctx.itemPoints, details: { reason: "empty", chars } };
+    }
+    const reference = config.reference?.trim() ?? "";
+    if (ctx.llm !== undefined && (config.rubric.trim() !== "" || reference !== "")) {
+      return {
+        kind: "pending",
+        via: "llm",
+        request: {
+          rubric: config.rubric,
+          ...(reference === "" ? {} : { reference }),
+          answer: answer.text,
+          maxPoints: ctx.itemPoints,
+        },
+        details: { reason: "llm", chars },
+      };
+    }
+    return { kind: "graded", points: 0, maxPoints: ctx.itemPoints, details: { reason: "manual", chars }, state: "proposed" };
   },
 
   /**

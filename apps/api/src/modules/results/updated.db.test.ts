@@ -236,7 +236,11 @@ describe("results_updated across a regrade (F-GRADE-06)", () => {
     const now = built.app.clock.now();
     const note = await grading.regradeItem(
       db,
-      { itemId: built.itemIds[item]!, questionId: built.questionIds[item]! },
+      {
+        evaluationId: built.evaluationId,
+        itemId: built.itemIds[item]!,
+        questionId: built.questionIds[item]!,
+      },
       { note: "key fixed" },
     );
     await service.markModifiedAfterRelease(db, await reload(db, built.evaluationId), now);
@@ -274,7 +278,11 @@ describe("results_updated across a regrade (F-GRADE-06)", () => {
     const now = built.app.clock.now();
     await grading.regradeItem(
       db,
-      { itemId: built.itemIds[0]!, questionId: built.questionIds[0]! },
+      {
+        evaluationId: built.evaluationId,
+        itemId: built.itemIds[0]!,
+        questionId: built.questionIds[0]!,
+      },
       { note: "key fixed" },
     );
     await service.markModifiedAfterRelease(db, await reload(db, built.evaluationId), now);

@@ -45,8 +45,8 @@ import { anyPoolKey, pollKey, pollQuestionsKey, poolsKey } from "../queryKeys";
  *
  * The way in — the host, the session code and the QR — lives in the TOP right
  * corner. It used to sit at the bottom right, under the distribution, which
- * is also where the app's toasts are pinned (`notify.tsx`, `fixed bottom-4
- * right-4`): a student joining mid-lecture threw a notice straight over the
+ * is also where the app's toasts are pinned (`notify.tsx`, fixed at the
+ * bottom right): a student joining mid-lecture threw a notice straight over the
  * code the rest of the room was trying to scan. The two corners are now
  * opposite ones, and neither has to know about the other.
  *

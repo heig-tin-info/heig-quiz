@@ -27,6 +27,29 @@ describe("WP10 routes", () => {
   });
 
   /*
+   * The question the grading screen opens on, and the editor's way back to
+   * it (ADR-044, addendum), travel in the query string: the path parses to
+   * the same screen, the query keeps the rest across a reload.
+   */
+  it("carries the question of the grading screen, and the editor's way back to it", () => {
+    const grading = new URL(
+      routeToPath({ view: "grading", evaluationId: "e1", item: "i2" }),
+      "http://quiz.test",
+    );
+    expect(grading.pathname + grading.search).toBe("/evaluations/e1/grading?item=i2");
+    expect(parsePath(grading.pathname)).toEqual({ view: "grading", evaluationId: "e1" });
+
+    const editor = new URL(
+      routeToPath({ view: "question", id: "q1", fromGrading: "e1", item: "i2" }),
+      "http://quiz.test",
+    );
+    expect(editor.pathname).toBe("/questions/q1");
+    expect(editor.searchParams.get("fromGrading")).toBe("e1");
+    expect(editor.searchParams.get("item")).toBe("i2");
+    expect(parsePath(editor.pathname)).toEqual({ view: "question", id: "q1" });
+  });
+
+  /*
    * The tails of `/evaluations/:id/…` are parsed in ONE place (router.ts), and
    * `evaluation` — WP8's configuration screen — is the fallback, so a path
    * with no tail, or an unknown one, lands there rather than on the home.

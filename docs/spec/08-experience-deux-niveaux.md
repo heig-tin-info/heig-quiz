@@ -64,6 +64,8 @@ The actions are provided by the mounted screens, through a command registry in `
 | Global | `Ctrl+K` | Palette |
 | Global | `?` | List of shortcuts |
 | Global | `g` then `p` / `c` / `s` | Go to the pool / the courses / the settings |
+| Pool | `P` | Preview the focused question in the reading pane (Enter opens the editor) |
+| Pool | `Space` | Star or unstar the focused question, a personal favourite found again in the question picker (F-POOL-10) |
 | Editor | `Ctrl+S` | Save the draft, already automatic, reassures |
 | Editor | `Ctrl+Shift+P` | Publish |
 | Editor | `Ctrl+Shift+M` | Toggle WYSIWYG / source |
@@ -73,7 +75,7 @@ The actions are provided by the mounted screens, through a command registry in `
 | Student player | `Ctrl+Enter` | "Validate and continue", where the navigation has one (`forward_only`, a checkpoint question in `milestones`); it opens the same confirmation as the button. Nothing in `free`, where a question is answered as soon as it holds an answer (issue #89) |
 | Dashboard | `n` `r` `s` | Toggle names / answers / results |
 | Dashboard | `Space` | Pause / resume |
-| Grading | `v` `→` | Validate and move on to the next |
+| Grading | `←` `→` · `↑` `↓` · `Enter` · `V` · `A` | Previous / next question · previous / next answer · open it · validate it · adjust it (ADR-044) |
 
 ## 8.6 Features that make the difference
 
@@ -84,7 +86,7 @@ The actions are provided by the mounted screens, through a command registry in `
 - **Image difference** for `codeimage`: the target, the student's image and a green / red difference, one grid or two side by side, with the share of correct pixels.
 - **Attempt history** for support: reconstruction of the sequence of revisions of an answer with server timestamps.
 - **Preview of five instantiations** for a question with random values, with a "freeze" button.
-- **Statistics in the pool**: on a question's card, success rate and average time per version, to pick the right question at a glance.
+- **Statistics in the pool**: on a question's row or card, success rate and time spent per question, to pick the right question at a glance (ADR-038, ADR-039); the filter sheet bounds both, to find the questions that are too easy, too hard or too long (F-STAT-03).
 - **Paste from Moodle**: a GIFT file dropped on the pool is imported, the non-convertible questions are listed.
 - **Batch grading**: filter by confidence, by question, by gap between the LLM proposal and the average score.
 - **Zen mode** for the student, one question per screen, progress bar, no unnecessary chrome.

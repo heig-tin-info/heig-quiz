@@ -13,6 +13,7 @@ import {
   Card,
   cx,
   EmptyState,
+  ErrorText,
   Field,
   IconButton,
   PageHeader,
@@ -119,9 +120,9 @@ export function AdminPage() {
             <UserPlus /> {t("admin.grant")}
           </Button>
           {grant.isError ? (
-            <p className="basis-full text-[13px] text-danger">
+            <ErrorText className="basis-full">
               {apiErrorMessage(grant.error, t("error.save"))}
-            </p>
+            </ErrorText>
           ) : null}
         </form>
 

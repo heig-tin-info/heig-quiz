@@ -42,6 +42,21 @@ export function findTarget(selector: string): HTMLElement | null {
 
 const modalOpen = () => document.querySelector('[aria-modal="true"]') != null;
 
+/**
+ * The bottom of the readable band: the top of a `data-bottom-dock` bar on the
+ * window's edge, else the window's bottom (DESIGN.md, "Coach marks"). A
+ * target inside such a bar is pointed at where it is.
+ */
+export function visibleBottom(target?: Element | null): number {
+  let bottom = window.innerHeight;
+  if (target?.closest("[data-bottom-dock]")) return bottom;
+  for (const el of document.querySelectorAll<HTMLElement>("[data-bottom-dock]")) {
+    const r = el.getBoundingClientRect();
+    if (r.height > 0 && r.bottom >= window.innerHeight - 1) bottom = Math.min(bottom, r.top);
+  }
+  return bottom;
+}
+
 const reducedMotion = () =>
   typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -295,8 +310,14 @@ function Bubble({
     const first = findTarget(step.target);
     if (first) {
       const r = first.getBoundingClientRect();
-      if (r.top < 64 || r.bottom > window.innerHeight - 64) {
-        first.scrollIntoView({ block: "center", behavior: reducedMotion() ? "auto" : "smooth" });
+      const bottom = visibleBottom(first);
+      if (r.top < 64 || r.bottom > bottom - 64) {
+        // `scrollIntoView` knows nothing of a fixed bar over the page.
+        const behavior = reducedMotion() ? "auto" : "smooth";
+        const dock = window.innerHeight - bottom;
+        if (dock > 0) {
+          window.scrollBy({ top: r.top + r.height / 2 - bottom / 2, behavior });
+        } else first.scrollIntoView({ block: "center", behavior });
       }
     }
     let raf = 0;
@@ -309,18 +330,19 @@ function Bubble({
       const tailEl = tail.current;
       if (!a || !b || !ringEl || !tailEl) return;
       const el = findTarget(step.target);
-      const hide = !el || modalOpen();
+      const r = el?.getBoundingClientRect();
+      const bottom = visibleBottom(el);
+      const hide = !el || !r || r.top >= bottom || modalOpen();
       a.style.visibility = hide ? "hidden" : "visible";
       ringEl.style.opacity = hide ? "0" : "1";
-      if (!el || hide) return;
-      const r = el.getBoundingClientRect();
+      if (!el || !r || hide) return;
       const p = place(
         r,
         { width: b.offsetWidth, height: b.offsetHeight },
-        { width: window.innerWidth, height: window.innerHeight },
+        { width: window.innerWidth, height: bottom },
         step.placement,
       );
-      const key = `${p.side}:${[p.x, p.y, p.tail, r.left, r.top, r.width, r.height].map(Math.round).join()}`;
+      const key = `${p.side}:${[p.x, p.y, p.tail, r.left, r.top, r.width, r.height, bottom].map(Math.round).join()}`;
       if (key === lastKey) return;
       lastKey = key;
 
@@ -344,14 +366,20 @@ function Bubble({
 
       const pad = 6;
       const radius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 8;
-      // Kept inside the viewport: a sidebar row touches its left edge.
+      // Kept inside the viewport (a sidebar row touches its left edge) and
+      // above a bottom dock.
       const left = Math.max(2, r.left - pad);
       const right = Math.min(window.innerWidth - 2, r.right + pad);
+      const top = r.top - pad;
+      const height = Math.max(0, Math.min(r.bottom + pad, bottom - 2) - top);
       Object.assign(ringEl.style, {
-        transform: `translate3d(${Math.round(left)}px, ${Math.round(r.top - pad)}px, 0)`,
+        transform: `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`,
         width: `${Math.round(right - left)}px`,
-        height: `${Math.round(r.height + pad * 2)}px`,
-        borderRadius: `${Math.min(radius + pad, (r.height + pad * 2) / 2)}px`,
+        height: `${Math.round(height)}px`,
+        borderRadius: `${Math.min(radius + pad, height / 2)}px`,
+        // Visibility, not opacity: the frame loop owns the opacity (hidden
+        // under a dialog) and resets it on every frame.
+        visibility: height > 0 ? "" : "hidden",
       });
 
       // The very first placement lands; only the later ones glide.

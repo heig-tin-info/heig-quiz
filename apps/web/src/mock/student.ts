@@ -224,7 +224,7 @@ const studentPayloads: Record<number, unknown> = {
         source: { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 },
         sourceOhms: 0,
         load: { kind: "resistor", ohms: 1_000_000 },
-        analysis: { stopMs: 5, skipMs: 0, points: 500 },
+        analysis: { kind: "tran", stopMs: 5, skipMs: 0, points: 500 },
         points: 2,
       },
     ],
@@ -356,7 +356,7 @@ export const studentAttemptView = (): AttemptView => ({
     const stored = studentAnswers.get(studentItem(n));
     return {
       id: studentItem(n),
-      position: n,
+      position: n - 1,
       points: n === 4 ? 5 : n === 5 || n === 7 ? 3 : n === 3 ? 1 : 2,
       type:
         n === 1
@@ -637,7 +637,8 @@ on("POST", "/app/api/attempts/:id/answers/:itemId/flag", (m, body) => {
 });
 
 on("POST", "/app/api/attempts/:id/position", (_m, body) => {
-  studentPosition = String(body.itemId);
+  // `null`: no question on screen; the bookmark stays (ADR-039).
+  if (typeof body.itemId === "string") studentPosition = body.itemId;
   return undefined;
 });
 

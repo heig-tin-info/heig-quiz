@@ -256,6 +256,81 @@ export interface QuestionTypeClient<
    * the server's `summarizeAnswer` of the cell.
    */
   summarize?(answer: TAnswer | null, student: TStudent): string;
+  /**
+   * The columns this type gives the grading table (ADR-044): one table per
+   * question, a row per answer, and the answer spread over columns a teacher
+   * can scan and sort — a choice per column, a blank per column. REQUIRED:
+   * the host has no column of its own to fall back on, so a type without
+   * columns does not compile.
+   */
+  readonly grading: QuestionTypeGrading<TStudent, TAnswer, TSolution, TDetails>;
+}
+
+/**
+ * What one answer of the grading table carries into a cell. `details` is the
+ * standing grading's breakdown (`null` before the pass settled the cell), so
+ * a cell may say which part was right; `answer` is `null` for a student who
+ * gave none.
+ */
+export interface GradingCellInput<TAnswer, TDetails> {
+  answer: TAnswer | null;
+  details: TDetails | null;
+}
+
+/**
+ * One column of the grading table.
+ *
+ * A column is keyed by the CANONICAL identity of what it shows (the choice's
+ * canonical index, the blank's index), never by a position a shuffle decided:
+ * the grading queue sends every view with `shuffle: false`, so row after row
+ * the same column is the same choice. The key of the question reaches a
+ * column once, through `columns()`.
+ *
+ * The cells are functions returning nodes rather than components: the type's
+ * client module already imports React, and this module only names the type.
+ */
+export interface GradingColumn<TAnswer = unknown, TDetails = unknown> {
+  /** Stable within the question: the sort of the table is keyed on it. */
+  readonly key: string;
+  /** Plain text and short ("A · Une adresse…"); the whole of it goes in `title`. */
+  readonly label: string;
+  readonly title?: string;
+  /** A column of marks rather than words (a tick box per choice). */
+  readonly align?: "center";
+  /** The student's answer in this column. */
+  cell(input: GradingCellInput<TAnswer, TDetails>): ReactNode;
+  /** The expected answer in this column: the pinned first row of the table. */
+  expected(): ReactNode;
+  /**
+   * What the column sorts by, as a NORMALISED string (`gradingSortKey`): two
+   * answers a teacher would call the same give the same key. It is also the
+   * key that will group identical answers, so it depends on the answer
+   * alone — never on the student, the grading or the order of the rows.
+   */
+  sortKey(answer: TAnswer | null): string;
+}
+
+export interface QuestionTypeGrading<TStudent, TAnswer, TSolution, TDetails> {
+  /**
+   * The columns of one question, from the question as its students saw it
+   * and its key (`null` when the host has none). `strings` are the type's
+   * grading words translated by the host (N-I18N-01), merged with the type's
+   * English defaults like every other dictionary of a type.
+   */
+  columns(
+    student: TStudent,
+    solution: TSolution | null,
+    strings?: Readonly<Record<string, string>>,
+  ): GradingColumn<TAnswer, TDetails>[];
+}
+
+/**
+ * The normal form of an answer's text for sorting and grouping: Unicode NFC,
+ * case folded, inner whitespace collapsed, ends trimmed. "Malloc " and
+ * "malloc" are one answer to a teacher scanning a column.
+ */
+export function gradingSortKey(text: string | null | undefined): string {
+  return (text ?? "").normalize("NFC").toLocaleLowerCase("en").replace(/\s+/g, " ").trim();
 }
 
 export { QUESTION_TYPE_IDS } from "./contract.js";

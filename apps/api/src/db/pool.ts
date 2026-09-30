@@ -172,6 +172,13 @@ export const questions = pgTable(
     createdBy: uuid("created_by").references(() => users.id),
     /** Set when the question was copied from another one (`POST /copy`). */
     originQuestionId: uuid("origin_question_id"),
+    /**
+     * Where the question's statistics start (ADR-038): only answers of
+     * attempts started at or after it are counted; null counts every one.
+     * Written only by the reset — no answer, grading or attempt is ever
+     * deleted for it.
+     */
+    statsSince: timestamp("stats_since", { withTimezone: true }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -308,5 +315,33 @@ export const questionVersionAssets = pgTable(
   (t) => [
     primaryKey({ columns: [t.versionId, t.assetId] }),
     index("question_version_assets_asset_idx").on(t.assetId),
+  ],
+);
+
+/**
+ * A question one teacher starred (F-POOL-10, ADR-040): a personal bookmark,
+ * never a state of the question. Nobody else sees it, a colleague cannot
+ * clear it, and it records nothing in the audit log.
+ *
+ * Keyed on the QUESTION, not the pool: "the favourites of a pool" is a join
+ * on `questions.pool_id`, so a question moved to another pool keeps its star
+ * and a copy (a new question) starts without one. A soft-deleted question's
+ * row stays, and every reader hides it until the question is restored.
+ */
+export const questionStars = pgTable(
+  "question_stars",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    questionId: uuid("question_id")
+      .notNull()
+      .references(() => questions.id, { onDelete: "cascade" }),
+    starredAt: timestamp("starred_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.questionId] }),
+    // The cascade of a hard-deleted question looks its stars up by question.
+    index("question_stars_question_idx").on(t.questionId),
   ],
 );

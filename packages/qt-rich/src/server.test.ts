@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isGraded } from "@quiz/core/server";
+import { isGraded, type LlmService } from "@quiz/core/server";
 import { richServer } from "./server.js";
 import { config, gradeContext, SECRET_CONFIG } from "./test/fixtures.js";
 
@@ -24,11 +24,42 @@ describe("grade", () => {
     }
   });
 
-  it("never asks the runner nor the LLM", async () => {
-    const result = await richServer.grade(config(), { text: "x" }, gradeContext(1));
+  it("never asks the runner, nor an LLM the process does not have", async () => {
+    const result = await richServer.grade(SECRET_CONFIG, { text: "x" }, gradeContext(1));
     expect(result.kind).toBe("graded");
   });
+
+  it("sends a written answer to the LLM service when there is one", async () => {
+    const ctx = { ...gradeContext(4), llm: unusedLlm };
+    const result = await richServer.grade(SECRET_CONFIG, { text: "The guard page." }, ctx);
+    expect(result).toEqual({
+      kind: "pending",
+      via: "llm",
+      request: {
+        rubric: SECRET_CONFIG.rubric,
+        reference: SECRET_CONFIG.reference,
+        answer: "The guard page.",
+        maxPoints: 4,
+      },
+      details: { reason: "llm", chars: 15 },
+    });
+  });
+
+  it("keeps an essay with nothing to grade against, and a blank one, off the LLM", async () => {
+    const ctx = { ...gradeContext(4), llm: unusedLlm };
+    const bare = await richServer.grade(config(), { text: "The guard page." }, ctx);
+    expect(isGraded(bare) && bare.details.reason).toBe("manual");
+    const blank = await richServer.grade(SECRET_CONFIG, { text: "  " }, ctx);
+    expect(isGraded(blank) && blank.details.reason).toBe("empty");
+  });
 });
+
+/** `grade` only checks that a service exists; the grading pass is the one that calls it. */
+const unusedLlm: LlmService = {
+  grade() {
+    throw new Error("the rich type must never call the LLM itself");
+  },
+};
 
 describe("answerMisfit", () => {
   it("refuses an answer over the question's limit", () => {

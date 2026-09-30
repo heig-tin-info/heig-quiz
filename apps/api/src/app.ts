@@ -18,15 +18,19 @@ import { authPlugin } from "./auth/plugin.js";
 import { requestLog } from "./redact.js";
 import { systemClock } from "./clock.js";
 import type { AppConfig } from "./config.js";
+import { registerSecurityHeaders } from "./csp.js";
 import { createDb } from "./db/client.js";
 import { publish } from "./events.js";
 import { adminPlugin } from "./modules/admin/routes.js";
 import { adminGuard } from "./modules/guards.js";
 import { avatarPlugin } from "./modules/avatar.js";
+import { drillPlugin } from "./modules/drill/routes.js";
+import { registerDrillHooks } from "./modules/drill/service.js";
 import { evaluationPlugin } from "./modules/evaluation/routes.js";
 import { gradingPlugin } from "./modules/grading/routes.js";
 import { registerGradingJobs } from "./modules/grading/jobs.js";
 import { livePlugin } from "./modules/live/routes.js";
+import { createLlm } from "./modules/llm/index.js";
 import { previewPlugin } from "./modules/preview/routes.js";
 import { mcpPlugin } from "./modules/mcp/routes.js";
 import { registerNotificationJobs } from "./modules/notifications/jobs.js";
@@ -38,6 +42,7 @@ import { flushCoalescers } from "./modules/realtime/bus.js";
 import { realtimePlugin } from "./modules/realtime/routes.js";
 import { resultsPlugin } from "./modules/results/routes.js";
 import { createRunner, runnerCheck } from "./modules/runner/index.js";
+import { statsPlugin } from "./modules/stats/routes.js";
 import { startJobs } from "./jobs.js";
 import { startTicker } from "./ticker.js";
 
@@ -73,6 +78,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   // One runner for the whole process, chosen once by RUNNER_MODE. Everything
   // that grades code takes `app.runner` and never reads the configuration.
   app.decorate("runner", createRunner(config));
+  // At most one LLM service, chosen once by LLM_PROVIDER; null sends nothing.
+  app.decorate("llm", createLlm(config));
   app.addHook("onClose", async () => {
     // Anything still inside a coalescing window is emitted before the bus
     // goes away, so a shutdown never eats the last dashboard frame.
@@ -93,6 +100,9 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     req.log.error({ err, cause: err.cause }, "request failed");
     return reply.code(status).send({ error: "internal_error" });
   });
+
+  // The CSP and the framing header, on every response (N-SEC-02, `csp.ts`).
+  registerSecurityHeaders(app);
 
   // Roster import: the CSV arrives as-is in req.body.
   app.addContentTypeParser(["text/csv", "text/plain"], { parseAs: "string" }, (_req, body, done) =>
@@ -168,6 +178,11 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(previewPlugin);
   await app.register(gradingPlugin);
   await app.register(resultsPlugin);
+  await app.register(statsPlugin);
+  await app.register(drillPlugin);
+  // The drill listens to the release and to the end of an attempt (ADR-041
+  // §1): wired here, once, never by an import's side effect.
+  registerDrillHooks();
   await app.register(notificationsPlugin, { config });
   await app.register(mcpPlugin, { config });
 

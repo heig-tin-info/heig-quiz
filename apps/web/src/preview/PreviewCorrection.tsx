@@ -14,9 +14,10 @@
 import { AlertTriangle, ArrowLeft, Eye, PenLine, RotateCcw } from "lucide-react";
 
 import type { PreviewCorrection, PreviewItemStatus } from "@quiz/contracts";
-import { formatGrade, formatPoints } from "@quiz/domain";
+import { formatPoints } from "@quiz/domain";
 
 import { machineReason } from "../grading/labels";
+import { Grade } from "../Grade";
 import { useT, type Dict } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { QuestionReviewHost } from "../questionTypes";
@@ -68,7 +69,7 @@ export function PreviewCorrectionView({
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Stat label={t("feedback.grade")} value={formatGrade(correction.grade)} />
+        <Stat label={t("feedback.grade")} value={<Grade value={correction.grade} />} />
         <Stat
           label={t("feedback.points")}
           value={`${formatPoints(correction.points)} / ${correction.totalPoints}`}

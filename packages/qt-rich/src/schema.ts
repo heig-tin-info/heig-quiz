@@ -103,10 +103,12 @@ export type RichSolution = z.infer<typeof RichSolutionSchema>;
 
 /**
  * `manual`: a person grades it, the 0 points are a placeholder. `empty`:
- * nothing was written, and the 0 is the grade.
+ * nothing was written, and the 0 is the grade. `llm`: the essay went to the
+ * LLM service, whose points and confidence are the grading's own fields; its
+ * justification sits in the details, teacher-only (F-GRADE-02, ADR-045).
  */
 export const RichDetailsSchema = z.object({
-  reason: z.enum(["manual", "empty"]),
+  reason: z.enum(["manual", "empty", "llm"]),
   chars: z.number().int().min(0),
 });
 export type RichDetails = z.infer<typeof RichDetailsSchema>;
