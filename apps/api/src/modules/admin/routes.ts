@@ -6,6 +6,7 @@ import { eq, sql } from "drizzle-orm";
 import {
   ScheduledTaskParams,
   ScheduledTaskPatch,
+  SystemStatusQuery,
   TASK_INTERVAL_MAX_MINUTES,
   TASK_INTERVAL_MIN_MINUTES,
   TeacherGrantCreate,
@@ -26,6 +27,7 @@ import {
   listScheduledTasks,
   scheduledTask,
   scheduledTaskRow,
+  systemStatus,
 } from "../system/service.js";
 import { listUsers } from "./service.js";
 
@@ -134,6 +136,14 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     });
     publish("admin", ["admin"]);
     return reply.code(204).send();
+  });
+
+  // --- System status (N-OPS-03, ADR-055): every check of the registry,
+  // behind a short cache; `?fresh=1` is the screen's Refresh.
+  app.get("/app/api/admin/system", { preHandler: requireAdmin }, async (req, reply) => {
+    const query = SystemStatusQuery.safeParse(req.query ?? {});
+    if (!query.success) return reply.code(400).send({ error: "validation" });
+    return systemStatus(app, config, { fresh: query.data.fresh === "1" });
   });
 
   // --- Scheduled tasks (F-ADMIN-06, D10): the catalog is code, the rows are

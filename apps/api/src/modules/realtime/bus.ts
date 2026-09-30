@@ -42,6 +42,22 @@ import {
 } from "../../events.js";
 import { Coalescer } from "./coalesce.js";
 
+/**
+ * The SSE streams open in this process: the routes add and remove theirs,
+ * the idle sweep, the shutdown and an `end` message (`sessionsEnded`) close
+ * them, and the metrics and the system status read the count (N-OPS-02,
+ * N-OPS-03).
+ */
+export interface OpenStream {
+  /** Last write the socket actually accepted; drives the idle close. */
+  lastWriteAt: number;
+  /** The session that opened it (`sid_hash`), closed by an `end` message; null for a bearer token. */
+  sid: string | null;
+  close: () => void;
+}
+export const openStreams = new Set<OpenStream>();
+export const openStreamCount = (): number => openStreams.size;
+
 /** PLAN-MVP §4.8 routing table. */
 const CELL_WINDOW_MS = 250;
 const PRESENCE_WINDOW_MS = 1000;

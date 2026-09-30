@@ -107,5 +107,7 @@ export {
   autoOpenScheduled,
   autoStartFullLobbies,
   autoCloseDue,
+  overdueAttempts,
+  overdueEvaluations,
   sweepPresence,
 } from "./ticker.js";

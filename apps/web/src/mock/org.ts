@@ -12,6 +12,10 @@ import type {
   ImpersonationLink,
   RosterEntry,
   StudentClassroom,
+  CheckDetail,
+  CheckValue,
+  SystemCheck,
+  SystemStatus,
 } from "@quiz/contracts";
 import { addMonths, currentOrNextSemester, semesterMonths } from "@quiz/domain";
 import {
@@ -781,3 +785,101 @@ on("POST", "/app/api/admin/tasks/:key/run", (m) => {
   return found;
 });
 
+// The system status (N-OPS-03, F-ADMIN-07, ADR-055). By default a healthy
+// production: every check OK. `?degraded=1`: a dead clock and its symptoms,
+// a failed job, a late task, a stale backup and a disk filling up.
+const GB = 1_000_000_000;
+function systemStatus(): SystemStatus {
+  const at = iso(0);
+  const bad = flags.degraded;
+  const check = (
+    key: SystemCheck["key"],
+    section: SystemCheck["section"],
+    status: SystemCheck["status"],
+    value: SystemCheck["value"],
+    cause: SystemCheck["cause"] = null,
+    details: SystemCheck["details"] = [],
+  ): SystemCheck => ({ key, section, status, value, cause, details, checkedAt: at });
+  const count = (n: number) => ({ kind: "count" as const, n });
+  const queue = (name: string, waiting: number, failed: number, oldestMs: number | null): CheckDetail => ({
+    subject: { kind: "name", name },
+    values: [
+      { meaning: "waiting", value: count(waiting) },
+      { meaning: "failed", value: count(failed) },
+      ...(oldestMs === null ? [] : [{ meaning: "oldest" as const, value: { kind: "duration" as const, ms: oldestMs } }]),
+    ],
+    cause: null,
+  });
+  const named = (name: string, ...values: CheckValue[]): CheckDetail => ({
+    subject: { kind: "name", name },
+    values: values.map((value) => ({ meaning: null, value })),
+    cause: null,
+  });
+  const table = (name: string, n: number) => named(name, { kind: "bytes", n });
+  return {
+    checkedAt: at,
+    checks: [
+      bad
+        ? check("ticker", "live", "fail", { kind: "duration", ms: 4 * 60_000 + 12_000 }, "ticker.stale")
+        : check("ticker", "live", "ok", { kind: "duration", ms: 420 }),
+      bad
+        ? check("attempts.overdue", "live", "fail", count(7), "attempts.overdue")
+        : check("attempts.overdue", "live", "ok", count(0)),
+      bad
+        ? check("evaluations.overdue", "live", "fail", count(1), "evaluations.overdue")
+        : check("evaluations.overdue", "live", "ok", count(0)),
+      bad
+        ? check("tasks", "live", "warn", count(2), "tasks.attention", [
+            {
+              subject: { kind: "task", key: "oauth.purge" },
+              values: [{ meaning: null, value: { kind: "at", iso: iso(-25 * MIN) } }],
+              cause: "tasks.error",
+            },
+            {
+              subject: { kind: "task", key: "sessions.purge" },
+              values: [{ meaning: null, value: { kind: "at", iso: iso(-3 * H) } }],
+              cause: "tasks.overdue",
+            },
+          ])
+        : check("tasks", "live", "ok", count(0)),
+      check("jobs", "live", bad ? "warn" : "ok", count(bad ? 3 : 0), bad ? "jobs.failed" : null, [
+        queue("grading.evaluation", bad ? 2 : 0, bad ? 3 : 0, bad ? 95_000 : null),
+        queue("notifications.email", 0, 0, null),
+      ]),
+      bad ? check("runner", "live", "fail", null, "runner.down") : check("runner", "live", "ok", null),
+      check("evaluations.live", "live", "ok", count(bad ? 1 : 0), bad ? "evaluations.live" : null),
+      check("connections.live", "live", "ok", count(bad ? 58 : 12)),
+      check("database", "storage", "ok", { kind: "duration", ms: 2 }),
+      check("database.size", "storage", "ok", { kind: "bytes", n: 184_300_000 }, null, [
+        table("answers", 61_200_000),
+        table("attempt_events", 38_900_000),
+        table("pgboss.job_common", 22_400_000),
+        table("question_versions", 9_800_000),
+        table("audit_log", 4_100_000),
+      ]),
+      check("database.connections", "storage", "ok", { kind: "share", part: 14, total: 40, bytes: false }),
+      bad
+        ? check("disk", "storage", "warn", { kind: "share", part: 4.1 * GB, total: 38.4 * GB, bytes: true }, "disk.low")
+        : check("disk", "storage", "ok", { kind: "share", part: 21.7 * GB, total: 38.4 * GB, bytes: true }),
+      check(
+        "backup",
+        "storage",
+        bad ? "warn" : "ok",
+        { kind: "at", iso: iso(bad ? -31 * H : -7 * H) },
+        bad ? "backup.stale" : null,
+        [named("quiz-2026-09-30.dump", { kind: "bytes", n: 41_800_000 })],
+      ),
+    ],
+    deployment: {
+      commitSha: "8cc9a4a9f1e2d3c4b5a6978877665544332211ff",
+      commitDate: iso(-5 * H),
+      migration: "0042_scheduled_tasks",
+      startedAt: iso(-2 * D),
+      node: "v24.9.0",
+      workerMode: "all",
+      nodeEnv: "production",
+      host: "quiz.chevallier.io",
+    },
+  };
+}
+on("GET", "/app/api/admin/system", () => systemStatus());

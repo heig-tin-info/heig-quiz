@@ -192,6 +192,34 @@ export function formatSpan(seconds: number, t: TFunction): string {
   return text.replace(/ /g, "\u00a0");
 }
 
+/**
+ * A measured duration, compact: "12 ms" under a second, then
+ * {@link formatSpan} ("45 s", "2 min 05 s", "1 h 12 min").
+ */
+export function formatMs(ms: number, t: TFunction): string {
+  return ms < 1000 ? t("dur.ms", { n: Math.round(ms) }) : formatSpan(ms / 1000, t);
+}
+
+/**
+ * A size in bytes, decimal units, in the notation of `locale`: "940 B",
+ * "4.1 GB", "4,1 Go". One decimal under ten units, none above.
+ */
+export function formatBytes(bytes: number, locale: Locale): string {
+  const units = ["byte", "kilobyte", "megabyte", "gigabyte", "terabyte"];
+  let n = Math.max(0, bytes);
+  let i = 0;
+  while (n >= 1000 && i < units.length - 1) {
+    n /= 1000;
+    i++;
+  }
+  return new Intl.NumberFormat(locale, {
+    style: "unit",
+    unit: units[i],
+    unitDisplay: "short",
+    maximumFractionDigits: n < 10 && i > 0 ? 1 : 0,
+  }).format(n);
+}
+
 /** "4 days, 2 hours and 23 minutes" — localized, largest three units. */
 export function formatDuration(ms: number, t: TFunction): string {
   const total = Math.max(0, Math.floor(ms / 1000));

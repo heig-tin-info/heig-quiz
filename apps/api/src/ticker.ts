@@ -31,6 +31,7 @@ import type { ScheduledTaskKey } from "@quiz/contracts";
 import type { AppConfig } from "./config.js";
 import { expireSuperPowers } from "./auth/session.js";
 import { KIOSK_TASKS } from "./modules/kiosk/jobs.js";
+import { perApp } from "./perApp.js";
 import { LIVE_TASKS } from "./modules/live/jobs.js";
 import { scheduledTasksTick } from "./modules/system/jobs.js";
 
@@ -82,6 +83,19 @@ export const TICK_TASKS: TickTask[] = [
   scheduledTasksTick(),
 ];
 
+/**
+ * When each application's ticker last COMPLETED a pass (wall clock, ms), for
+ * the system status (N-OPS-03): a pass that hangs, or a loop that stopped,
+ * shows as a growing lag. No entry: this process runs no ticker
+ * (`WORKER_MODE=web`).
+ */
+const lastPass = perApp<number>();
+
+/** The end of the last completed pass of this app's ticker; `undefined` without one. */
+export function lastTickOf(app: FastifyInstance): number | undefined {
+  return lastPass.get(app);
+}
+
 export function startTicker(
   app: FastifyInstance,
   config: AppConfig,
@@ -89,6 +103,7 @@ export function startTicker(
 ) {
   let running = false;
   const lastRun = new Map<string, number>();
+  lastPass.set(app, Date.now());
 
   const tick = async () => {
     if (running) return; // no overlap
@@ -104,6 +119,7 @@ export function startTicker(
           app.log.error({ err, task: task.name }, "ticker task failed");
         }
       }
+      lastPass.set(app, Date.now());
     } finally {
       running = false;
     }

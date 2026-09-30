@@ -23,6 +23,7 @@ export * from "./finalScore.js";
 export * from "./format.js";
 export * from "./grade.js";
 export * from "./groupRepo.js";
+export * from "./health.js";
 export * from "./ipAllowlist.js";
 export * from "./itemList.js";
 export * from "./kioskAttestation.js";

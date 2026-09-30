@@ -41,6 +41,12 @@ export const adminKioskKey = ["admin-kiosk-devices"] as const;
 export const kioskStationKey = ["kiosk-station"] as const;
 /** What a station's code names, on the phone (ADR-051 §7): the station and the exams. */
 export const pairPreviewKey = (code: string) => ["pair-preview", code] as const;
+/**
+ * The system status (N-OPS-03, ADR-055): a key of its own, NOT under
+ * `adminTeachersKey`, so the `admin` hint of every finished task does not
+ * refetch it; it polls on its own clock instead.
+ */
+export const adminSystemKey = ["admin-system"] as const;
 /** The caller's personal API tokens (settings). */
 export const apiTokensKey = ["api-tokens"] as const;
 /** The assistants connected through OAuth (settings, ADR-023). */

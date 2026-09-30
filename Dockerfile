@@ -41,6 +41,11 @@ WORKDIR /app
 COPY --from=build /out /app
 USER node
 ENV STATIC_DIR=/app/web MIGRATE_ON_START=1 PORT=3000
+# The same commit for the API, which names it on the admin's system status
+# (ADR-055). Last, so a new commit only rebuilds this metadata layer.
+ARG COMMIT_SHA
+ARG COMMIT_DATE
+ENV COMMIT_SHA=${COMMIT_SHA} COMMIT_DATE=${COMMIT_DATE}
 EXPOSE 3000
 # Healthy on a 200 from /healthz (503 when the database is down), unhealthy on
 # anything else or no answer. Bash's /dev/tcp rather than curl, so the image

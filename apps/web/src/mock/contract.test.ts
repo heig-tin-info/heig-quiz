@@ -28,6 +28,7 @@ import {
   ActivitySummary,
   AdminScheduledTask,
   AdminUser,
+  SystemStatus,
   AttemptInspect,
   AttemptOrLobby,
   ByQuestion,
@@ -359,6 +360,7 @@ const CHECKED: Case[] = [
   each("/app/api/admin/kiosk-devices", "/app/api/admin/kiosk-devices", KioskDevice),
   one("/app/api/kiosk/station", "/app/api/kiosk/station", KioskStation),
   one("/app/api/pair/:code", "/app/api/pair/BCDF-GHJK", PairPreview),
+  one("/app/api/admin/system", "/app/api/admin/system", SystemStatus),
   each("/app/api/polls", "/app/api/polls", PollSummary),
   // The Activities section (#190).
   each("/app/api/activities", "/app/api/activities", ActivitySummary),
