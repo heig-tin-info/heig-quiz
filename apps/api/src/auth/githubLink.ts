@@ -128,7 +128,7 @@ async function readAccount(app: App, code: string, log: FastifyBaseLogger): Prom
  * (the user token) is not redacted by Octokit — only its header is.
  */
 function failure(err: unknown) {
-  const { name, status, message } = err as { name?: unknown; status?: unknown; message?: unknown };
+  const { name, status, message } = (err ?? {}) as { name?: unknown; status?: unknown; message?: unknown };
   return { name, status, message };
 }
 
