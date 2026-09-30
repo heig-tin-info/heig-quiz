@@ -8,7 +8,7 @@ import { typeLabel } from "../questionTypes";
 import { routeToPath } from "../router";
 import { Alert, IconButton, LinkButton } from "../ui";
 import { PreviewedQuestion, type StudentQuestion } from "./PreviewedQuestion";
-import { questionPreviewQuery } from "./previewQuery";
+import { questionPreviewQuery, questionSolutionQuery } from "./previewQuery";
 
 /**
  * What the two uses say differently: the picker speaks of the version "Add"
@@ -112,7 +112,16 @@ export function QuestionPreview(
       ) : row.hasDraftChanges ? (
         <p className="text-[13px] text-fg-muted">{t("question.preview.newerDraft")}</p>
       ) : null}
-      <PreviewedQuestion query={query} />
+      {/*
+       * One mount per question: the pane stays while ↓ walks the list, and
+       * the teacher's answer and a shown key belong to the question left.
+       * "Show answers" only in the picker, the scope agreed for it.
+       */}
+      <PreviewedQuestion
+        key={`${row.id}:${source}`}
+        query={query}
+        solution={props.mode === "pick" ? questionSolutionQuery(row.id, source) : undefined}
+      />
     </div>
   );
 }

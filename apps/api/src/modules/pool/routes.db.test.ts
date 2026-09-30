@@ -435,6 +435,39 @@ describe("POST /questions/:id/try (F-QST-09)", () => {
     expect(JSON.stringify(res.json())).not.toContain("secret-key");
   });
 
+  it("serves the key of the preview on its own route, never with the preview", async () => {
+    const id = await createQuestion("keyed");
+    await server.app.inject({
+      method: "PUT",
+      url: `/app/api/questions/${id}/draft`,
+      headers: owner.headers,
+      payload: { config: { statement: "Visible", answer: "secret-key" } },
+    });
+    const res = await server.app.inject({
+      method: "POST",
+      url: `/app/api/questions/${id}/preview/solution`,
+      headers: owner.headers,
+      payload: { source: "draft" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ solution: { answer: "secret-key" } });
+    const off = await server.app.inject({
+      method: "POST",
+      url: `/app/api/questions/${id}/preview/solution`,
+      headers: stranger.headers,
+      payload: { source: "draft" },
+    });
+    expect(off.statusCode).toBe(404);
+    const student = await server.signIn("student");
+    const refused = await server.app.inject({
+      method: "POST",
+      url: `/app/api/questions/${id}/preview/solution`,
+      headers: student.headers,
+      payload: { source: "draft" },
+    });
+    expect(refused.statusCode).toBe(403);
+  });
+
   it("emits no refresh hint for a preview or a try: a read behind a POST", async () => {
     const id = await createQuestion("silent-read");
     const hints: string[] = [];

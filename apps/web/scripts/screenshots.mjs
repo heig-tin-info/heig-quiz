@@ -213,6 +213,7 @@ const scenes = [
   // Issue #127: one item as the student sees it, at its frozen version, and
   // the editor opened from a row with its way back to the evaluation.
   { name: "eval-config-item-preview", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^preview /i }).first().click() },
+  { name: "eval-config-item-preview-answers", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /^preview /i }).nth(1).click(); await p.getByRole("button", { name: /show answers|afficher les réponses/i }).click(); await p.waitForTimeout(600); } },
   { name: "eval-config-item-edit", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^edit /i }).first().click() },
   { name: "eval-config-picker", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /add questions/i }).first().click() },
   // The picker with a question looked at (issue #207): docked beside the list
@@ -697,6 +698,8 @@ const scenes = [
   { name: "editor-codeimage-try", role: "teacher", path: "/questions/q16", settle: 5000, act: async (p) => { await p.getByRole("button", { name: /try the reference solution|essayer la solution de référence/i }).click(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).waitFor(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).scrollIntoViewIfNeeded(); } },
   // "Student preview": a page of its own, opened by the editor in a new tab.
   { name: "question-preview", role: "teacher", path: "/questions/q2/preview", settle: 3000 },
+  // "Show answers": the player replaced by the type's review of the key.
+  { name: "question-preview-answers", role: "teacher", path: "/questions/q2/preview", settle: 1500, act: (p) => p.getByRole("button", { name: /show answers|afficher les réponses/i }).click() },
   { name: "question-preview-code", role: "teacher", path: "/questions/q1/preview", settle: 8000 },
   { name: "editor-publish", role: "teacher", path: "/questions/q2", fold: true, act: (p) => p.keyboard.press("Control+Shift+P") },
   { name: "editor-versions", role: "teacher", path: "/questions/q1?tab=versions", settle: 3000 },

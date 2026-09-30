@@ -528,6 +528,15 @@ export const PreviewResult = z.object({
 });
 export type PreviewResult = z.infer<typeof PreviewResult>;
 
+/**
+ * The key of a teacher's preview, asked for by its "Show answers" button and
+ * never sent with the preview itself: the one a student reads once the key
+ * is shown (`studentSolutionView`, ADR-037), for the same view as the player.
+ * `POST /questions/:id/preview/solution` and `GET …/preview/items/:itemId/solution`.
+ */
+export const PreviewSolution = z.object({ solution: z.unknown() });
+export type PreviewSolution = z.infer<typeof PreviewSolution>;
+
 /** Teacher rehearsal (F-QST-09): graded in process, never persisted. */
 export const TryBody = z.object({
   source: VersionSource.default("draft"),

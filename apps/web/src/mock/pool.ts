@@ -2641,6 +2641,10 @@ on("POST", "/app/api/questions/:id/preview", (m, body) => {
   }
   return { type: q.type, student: studentView(q, config), itemPoints: 1 };
 });
+on("POST", "/app/api/questions/:id/preview/solution", (m) => {
+  const q = questionOr404(m.groups!.id!);
+  return { solution: studentSolutionOf(q, solutionOf(q)) };
+});
 on("POST", "/app/api/questions/:id/try", (m, body) => {
   const q = questionOr404(m.groups!.id!);
   const source = body.source ?? "draft";

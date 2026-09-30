@@ -1,7 +1,8 @@
 /**
  * HTTP surface of the teacher's stateless evaluation preview (issue #75,
  * ADR-018 fourth addendum). Four POSTs under `/app/api/evaluations/:id/preview`,
- * and one GET for a single item (issue #127), with its twin for a template.
+ * and one GET for a single item (issue #127) and one for its key, each with its
+ * twin for a template.
  *
  * Every one of them is a teacher route: the evaluation is LOADED through
  * `loadEvaluation` (a template through `loadTemplate`), so a caller off the
@@ -29,6 +30,7 @@ import {
   type EvaluationPreview,
   type ItemPreview,
   type PreviewCorrection,
+  type PreviewSolution,
   type RunAccepted,
 } from "@quiz/contracts";
 import type { RunnerOutcome } from "@quiz/core/server";
@@ -98,6 +100,29 @@ export async function previewPlugin(app: FastifyInstance) {
       },
       ({ params, scope }): Promise<ItemPreview> =>
         service.itemPreview(app.db, scope.template, params.itemId),
+    ),
+  );
+
+  /** The key of one item preview, for its "Show answers", and its template twin. */
+  app.get(
+    "/app/api/evaluations/:id/preview/items/:itemId/solution",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: ItemParam, load: staffEvaluation },
+      ({ params, scope }): Promise<PreviewSolution> =>
+        service.itemSolution(app.db, scope.evaluation, params.itemId),
+    ),
+  );
+  app.get(
+    "/app/api/templates/:id/preview/items/:itemId/solution",
+    { preHandler: requireTeacher },
+    teacher(
+      {
+        params: ItemParam,
+        load: (req, reply, p) => loadTemplate(app, req, reply, p.id),
+      },
+      ({ params, scope }): Promise<PreviewSolution> =>
+        service.itemSolution(app.db, scope.template, params.itemId),
     ),
   );
 

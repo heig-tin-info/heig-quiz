@@ -4,7 +4,14 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 
-import { IdParam, PreviewBody, TryBody, issuesOf, type TryResult } from "@quiz/contracts";
+import {
+  IdParam,
+  PreviewBody,
+  TryBody,
+  issuesOf,
+  type PreviewSolution,
+  type TryResult,
+} from "@quiz/contracts";
 import {
   RunnerBusy,
   RunnerUnavailable,
@@ -14,7 +21,7 @@ import {
 } from "@quiz/core/server";
 
 import { questions } from "../../db/schema.js";
-import { studentViewOf } from "../live/studentView.js";
+import { studentSolutionViewOf, studentViewOf, teacherPreviewView } from "../live/studentView.js";
 import { tryLoadConfig, typeOf } from "./config.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
@@ -64,13 +71,29 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
           // between two reloads (decision D19). It goes through the ONE student
           // exit of the API (`live/studentView.ts`), like every other payload a
           // student could ever see (invariant 4, WP5).
-          student: studentViewOf(scope.question.type, loaded.config, {
-            seed: 0,
-            itemId: scope.question.id,
-            shuffle: false,
-          }),
+          student: studentViewOf(scope.question.type, loaded.config, teacherPreviewView(scope.question.id)),
           itemPoints: t.defaultPoints(loaded.config),
         };
+      },
+    ),
+  );
+
+  /**
+   * The key of the same view, for the preview's "Show answers": asked for on
+   * the click, so the preview above never carries it. The key a student reads
+   * once it is shown (ADR-037), not the teacher's whole solution.
+   */
+  app.post(
+    "/app/api/questions/:id/preview/solution",
+    { preHandler: requireTeacher, config: { readOnly: true } },
+    teacher(
+      { params: IdParam, body: PreviewBody, optionalBody: true, load: onQuestion() },
+      async ({ reply, body, scope }) => {
+        const loaded = await configOf(reply, scope.question, body.source);
+        if (!loaded) return reply;
+        return {
+          solution: studentSolutionViewOf(scope.question.type, loaded.config, teacherPreviewView(scope.question.id)),
+        } satisfies PreviewSolution;
       },
     ),
   );
@@ -96,7 +119,7 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
             body.answer === undefined || body.answer === null
               ? null
               : t.answerSchema.parse(body.answer);
-          const view = { seed: 0, itemId: scope.question.id, shuffle: false };
+          const view = teacherPreviewView(scope.question.id);
           const base: FinalizeContext = {
             seed: 0,
             itemId: scope.question.id,

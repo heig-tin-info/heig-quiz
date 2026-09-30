@@ -18,6 +18,7 @@ import type {
   PreviewCorrection,
   PreviewCorrectionItem,
   PreviewItemStatus,
+  PreviewSolution,
 } from "@quiz/contracts";
 import { gradeFromPoints, round2 } from "@quiz/domain";
 
@@ -130,6 +131,21 @@ on("GET", "/app/api/evaluations/:id/preview/items/:itemId", (m) =>
 );
 on("GET", "/app/api/templates/:id/preview/items/:itemId", (m) =>
   itemPreview(templateOr404(m.groups!.id!).shell, m.groups!.itemId!),
+);
+
+/** The key of that item preview, as a student reads it once shown (ADR-037). */
+function itemSolution(e: MockEvaluation, itemId: string): PreviewSolution {
+  const item = e.items.find((i) => i.id === itemId);
+  const q = item ? itemQuestion(item) : null;
+  if (!item || !q) throw new MockError(404, "not_found");
+  return { solution: studentSolutionOf(q, solutionOf(q)) };
+}
+
+on("GET", "/app/api/evaluations/:id/preview/items/:itemId/solution", (m) =>
+  itemSolution(evaluationOr404(m.groups!.id!), m.groups!.itemId!),
+);
+on("GET", "/app/api/templates/:id/preview/items/:itemId/solution", (m) =>
+  itemSolution(templateOr404(m.groups!.id!).shell, m.groups!.itemId!),
 );
 
 on("POST", "/app/api/evaluations/:id/preview/run", () => {

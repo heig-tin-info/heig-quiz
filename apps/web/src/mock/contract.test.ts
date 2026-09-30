@@ -45,6 +45,7 @@ import {
   GradingQueue,
   GradingSteps,
   ItemPreview,
+  PreviewSolution,
   ItemVersions,
   NotificationList,
   NotificationSettings,
@@ -209,6 +210,13 @@ const CHECKED: Case[] = [
       ItemPreview,
     ),
   ),
+  ...templateItems.map((itemId) =>
+    one(
+      "/app/api/templates/:id/preview/items/:itemId/solution",
+      `/app/api/templates/${templateIds[0]}/preview/items/${itemId}/solution`,
+      PreviewSolution,
+    ),
+  ),
   each(
     "/app/api/classrooms/:id/evaluations",
     `/app/api/classrooms/${classroomId}/evaluations`,
@@ -262,6 +270,13 @@ const CHECKED: Case[] = [
       "/app/api/evaluations/:id/preview/items/:itemId",
       `/app/api/evaluations/${runningId}/preview/items/${itemId}`,
       ItemPreview,
+    ),
+  ),
+  ...runningItems.map((itemId) =>
+    one(
+      "/app/api/evaluations/:id/preview/items/:itemId/solution",
+      `/app/api/evaluations/${runningId}/preview/items/${itemId}/solution`,
+      PreviewSolution,
     ),
   ),
   one(

@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
@@ -50,6 +51,48 @@ describe("StudentPreviewPage", () => {
       url: "/app/api/questions/q1/preview",
       body: { source: "draft" },
     });
+  });
+
+  /*
+   * "Show answers" asks for the key on the click, never before, and replaces
+   * the player with the type's review of what the teacher ticked; "Hide
+   * answers" gives the player back with the tick still there.
+   */
+  it("shows the answers on demand, and hides them again with the answer kept", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({
+      "POST /app/api/questions/q1/preview": ok(PREVIEW),
+      "POST /app/api/questions/q1/preview/solution": ok({ solution: { correct: [1] } }),
+    });
+    renderWithProviders(<StudentPreviewPage id="q1" />);
+    await user.click(await screen.findByRole("radio", { name: "NULL" }));
+    expect(calls.map((c) => c.url)).toEqual(["/app/api/questions/q1/preview"]);
+
+    await user.click(screen.getByRole("button", { name: "Show answers" }));
+    expect(await screen.findByText("Missed")).toBeInTheDocument();
+    expect(screen.getByText("Incorrect")).toBeInTheDocument();
+    expect(screen.queryByRole("radio")).toBeNull();
+    expect(calls[1]).toMatchObject({
+      method: "POST",
+      url: "/app/api/questions/q1/preview/solution",
+      body: { source: "draft" },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Hide answers" }));
+    expect(screen.getByRole("radio", { name: "NULL" })).toBeChecked();
+  });
+
+  it("offers no answers for a type whose key it does not show yet", async () => {
+    mockFetch({
+      "POST /app/api/questions/q1/preview": ok({
+        type: "short",
+        student: { prompt: "Le mot-clé ?" },
+        itemPoints: 1,
+      }),
+    });
+    renderWithProviders(<StudentPreviewPage id="q1" />);
+    expect(await screen.findByText("Preview — nothing is saved")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show answers" })).toBeNull();
   });
 
   /*
