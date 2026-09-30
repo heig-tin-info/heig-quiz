@@ -173,9 +173,9 @@ Never work around these, not even "temporarily".
    **The student branch** is `readableClassroom`, in the same file (its
    rule is the pure `classroomPayload`), for the classroom routes a student
    reads: the course's staff (through `staffAccess`) get the staff payload,
-   unless the
-   request asks for the student payload (a teacher in the student view on
-   their staff seat, ADR-018); that parameter can only narrow, never widen.
+   unless the request asks for the student payload (a teacher in the
+   student view on their staff seat, ADR-018); that parameter can only
+   narrow, never widen.
    An impersonation session (ADR-034) gets the student payload whatever it
    asks. A claimed enrollment reads its own classroom (student payload);
    anyone else gets the 404 of a missing classroom. The journal's routes

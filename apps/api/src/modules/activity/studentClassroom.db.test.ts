@@ -2,9 +2,9 @@
  * The student's classrooms over the real application (F-ORG-14, F-ORG-15,
  * merge task M5-01): the Courses list and the classroom page. What they must
  * never carry — a draft, another student's data, another classroom's — and
- * who reads the page: the 404 matrix of `readableClassroom` (invariant 6),
- * the teacher with or without the student view, an impersonation session
- * and a `seb` session.
+ * who reads the page: the route's 404 (the loader's matrix is in
+ * `readableClassroom.db.test.ts`), the staff, an impersonation session and a
+ * `seb` session.
  */
 import { randomUUID } from "node:crypto";
 
@@ -161,10 +161,10 @@ afterAll(async () => {
 const get = (url: string, headers: Record<string, string>) =>
   server.app.inject({ method: "GET", url, headers });
 
-const pageUrl = (id: string, query = "") => `/app/api/student/classrooms/${id}${query}`;
+const pageUrl = (id: string) => `/app/api/student/classrooms/${id}`;
 
-async function page(headers: Record<string, string>, id = mine.classroomId, query = "") {
-  const res = await get(pageUrl(id, query), headers);
+async function page(headers: Record<string, string>, id = mine.classroomId) {
+  const res = await get(pageUrl(id), headers);
   expect(res.statusCode, res.body).toBe(200);
   return { body: res.body, page: StudentClassroomPage.parse(res.json()) };
 }
@@ -239,52 +239,29 @@ describe("GET /app/api/student/classrooms/:id", () => {
     expect(p.hasJournal).toBe(false);
   });
 
-  describe("the 404 of a missing classroom", () => {
-    const cases: [string, () => [string, Record<string, string>]][] = [
-      ["an unknown id", () => [randomUUID(), student.headers]],
-      ["a malformed id", () => ["not-a-uuid", student.headers]],
-      ["a classroom of another course", () => [other.classroomId, student.headers]],
-      ["an unclaimed roster line", () => [mine.classroomId, unclaimed.headers]],
-      ["a teacher without a seat on the course", () => [mine.classroomId, outsider.headers]],
-      ["the same, asking for the student view", () => [`${mine.classroomId}?view=student`, outsider.headers]],
-    ];
-    it.each(cases)("%s", async (_name, args) => {
-      const [id, headers] = args();
-      const res = await get(pageUrl(id), headers);
-      expect(res.statusCode).toBe(404);
-      expect(res.json()).toEqual({ error: "not_found" });
-    });
-
-    it("is the same body for a missing classroom and a forbidden one", async () => {
-      const [missing, forbidden] = await Promise.all([
-        get(pageUrl(randomUUID()), student.headers),
-        get(pageUrl(other.classroomId), student.headers),
-      ]);
-      expect(forbidden.statusCode).toBe(missing.statusCode);
-      expect(forbidden.body).toBe(missing.body);
-    });
+  it.each([
+    ["an unknown id", (): string => randomUUID()],
+    ["a malformed id", (): string => "not-a-uuid"],
+    ["a classroom of another course", (): string => other.classroomId],
+  ] as const)("answers the 404 of a missing classroom for %s", async (_name, id) => {
+    const res = await get(pageUrl(id()), student.headers);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: "not_found" });
   });
 
   describe("the staff read the student payload", () => {
-    it("a teacher without a seat: the header, no cards, with or without ?view=student", async () => {
-      const plain = await page(teacher.headers);
-      const narrowed = await page(teacher.headers, mine.classroomId, "?view=student");
-      expect(narrowed.page).toEqual(plain.page);
-      expect(plain.page.classroom).toMatchObject({ id: mine.classroomId, timeBonusPercent: 0 });
-      expect(titles(plain.page)).toEqual({ open: [], upcoming: [], past: [] });
-      expect(plain.body).not.toContain("draft exam");
+    it("a teacher without a seat: the header, no cards", async () => {
+      const { body, page: p } = await page(teacher.headers);
+      expect(p.classroom).toMatchObject({ id: mine.classroomId, timeBonusPercent: 0 });
+      expect(titles(p)).toEqual({ open: [], upcoming: [], past: [] });
+      expect(body).not.toContain("draft exam");
     });
 
     it("a teacher on their staff seat sees what a student sees, never a draft", async () => {
-      const { body, page: p } = await page(seatedTeacher.headers, mine.classroomId, "?view=student");
+      const { body, page: p } = await page(seatedTeacher.headers);
       expect(titles(p)).toEqual(titles((await page(student.headers)).page));
       expect(body).not.toContain("draft exam");
       expect(body).not.toContain(classmateAttempt);
-    });
-
-    it("an admin reaches any classroom, with the student payload", async () => {
-      const { page: p } = await page(admin.headers, other.classroomId);
-      expect(titles(p)).toEqual({ open: [], upcoming: [], past: [] });
     });
   });
 
@@ -293,12 +270,6 @@ describe("GET /app/api/student/classrooms/:id", () => {
       const as = await sessionOf(student.id, { kind: "impersonation", actorUserId: admin.id });
       const [theirs, ours] = await Promise.all([page(student.headers), page(as)]);
       expect(ours.body.replace(/"serverNow":"[^"]+"/, "")).toBe(theirs.body.replace(/"serverNow":"[^"]+"/, ""));
-    });
-
-    it("an impersonation session gets the 404 wherever the student has no seat", async () => {
-      const as = await sessionOf(student.id, { kind: "impersonation", actorUserId: admin.id });
-      expect((await get(pageUrl(other.classroomId), as)).statusCode).toBe(404);
-      expect((await get(pageUrl(other.classroomId, "?view=student"), as)).statusCode).toBe(404);
     });
 
     it("a seb session is nobody on this route (ADR-027)", async () => {

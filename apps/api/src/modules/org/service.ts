@@ -13,7 +13,7 @@ import { randomInt, randomUUID } from "node:crypto";
 
 import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 
-import type { EnrollmentPatch, StudentClassroom } from "@quiz/contracts";
+import type { EnrollmentPatch, StudentClassroom, StudentClassroomPage } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
 import {
@@ -652,7 +652,7 @@ export async function studentClassroomHeader(
     course: CourseRecord;
     seat: { timeBonusPercent: number } | null;
   },
-): Promise<StudentClassroom & { archived: boolean }> {
+): Promise<StudentClassroomPage["classroom"]> {
   const teachers = await teachersOf(db, [scope.course.id]);
   const facts = { ...scope, timeBonusPercent: scope.seat?.timeBonusPercent ?? 0 };
   return { ...studentCard(facts, teachers), archived: scope.room.archivedAt !== null };

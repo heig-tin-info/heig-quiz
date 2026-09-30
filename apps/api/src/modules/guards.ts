@@ -363,13 +363,12 @@ export async function findReadableClassroom(
   classroomId: string,
   { studentView }: { studentView: boolean },
 ): Promise<ReadableClassroom | null> {
-  if (auth?.kind === "seb") return null;
   const [row] = await db
     .select({
       room: classrooms,
       course: courses,
       seat: { id: enrollments.id, timeBonusPercent: enrollments.timeBonusPercent },
-      staff: user.role === "admin" ? sql<boolean>`true` : sql<boolean>`${staffAccessOfClassroom(user.id)}`,
+      staff: sql<boolean>`${accessWhere(user, staffAccessOfClassroom(user.id)) ?? sql`true`}`,
     })
     .from(classrooms)
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
@@ -381,7 +380,7 @@ export async function findReadableClassroom(
     .limit(1);
   if (!row) return null;
   const payload = classroomPayload({
-    seb: false,
+    seb: auth?.kind === "seb",
     delegated: delegated(auth),
     staff: row.staff,
     seat: row.seat !== null,

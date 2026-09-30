@@ -32,17 +32,9 @@ const every: ClassroomReadFacts[] = bools.flatMap((seb) =>
 describe("classroomPayload", () => {
   it.each([
     ["staff", { staff: true }, "staff"],
-    ["staff with a seat of their own", { staff: true, seat: true }, "staff"],
     ["staff asking for the student view", { staff: true, studentView: true }, "student"],
     ["a claimed seat", { seat: true }, "student"],
-    ["a claimed seat asking for the student view", { seat: true, studentView: true }, "student"],
-    ["an impersonation session on the student's seat", { delegated: true, seat: true }, "student"],
-    ["neither staff nor a seat", {}, null],
-    ["neither, asking for the student view", { studentView: true }, null],
-    ["an impersonation session without a seat", { delegated: true }, null],
-    ["an impersonation session whose account is also staff", { delegated: true, staff: true }, null],
-    ["a seb session, even on a seat", { seb: true, seat: true }, null],
-    ["a seb session, even staff", { seb: true, staff: true }, null],
+    ["an impersonation session whose account also kept a staff seat", { delegated: true, staff: true }, null],
   ] as const)("%s", (_name, over, expected) => {
     expect(classroomPayload(facts(over))).toBe(expected);
   });

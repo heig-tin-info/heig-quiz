@@ -398,6 +398,8 @@ files it ports; writes en + fr for every string.
   staff only on an explicit request that narrows, 05 §5.7), passing
   `studentView` from a `?view=student` query schema of the contracts; fixes
   J1–J4 of §4.3; webhook registration; queue `journal.ingest`.
+- **Move**: the `hasJournal` read of the student's classroom page
+  (`activity/service.ts`, M5-01) into `modules/journal/service.ts`.
 - **From M4-01**: ingestion stores `cleanSource(md)` (no NUL) as
   `markdown`, and renders each page twice (`html_staff` with every page in
   `ctx.pages`, `html_student` with the student-visible ones only,
@@ -468,21 +470,9 @@ files it ports; writes en + fr for every string.
   through `ActivityKind.studentCards`, `hasJournal`, `hasProjects`; loaded
   by the student's own enrollment (404 otherwise).
 - **Tests**: leak test (no draft, no other student's data); 404 matrix.
-- **As delivered** (#377): `readableClassroom(app, req, reply, params,
-  { studentView })` and its finder `findReadableClassroom(db, caller, auth,
-  id, { studentView })` in `modules/guards.ts`, the rule a pure
-  `classroomPayload(facts)` (its table in the doc comment); it returns
-  `{ room, course, seat, payload }` or the 404. A `seb` session is refused
-  twice: by the route's default `portal` config (401, anonymous) and by the
-  finder (null). `GET /student/classrooms` already existed (`org`); it now
-  leaves archived classrooms out (F-ORG-03, F-ORG-14) and `StudentClassroom`
-  is a zod schema, in `contracts/src/student.ts` with the page's.
-  `GET /student/classrooms/:id` lives in the `activity` module and always
-  asks for the student payload: staff reading it get the student payload
-  too, drawn through their own seat (none without a seat: the header and
-  empty groups). `ActivityKind.studentCards` for evaluations is the student
-  home narrowed by `classroomId` (`studentEvaluationRows`'s optional
-  argument), cards tagged `kind: "evaluation"`.
+- **As delivered** (#377): payloads in `contracts/src/student.ts`;
+  `readableClassroom(app, req, reply, params, { studentView })` in
+  `modules/guards.ts`, its rule the pure `classroomPayload`.
 
 ### M5-02 — Web: student classroom page
 - **Depends on**: M5-01, D07.
