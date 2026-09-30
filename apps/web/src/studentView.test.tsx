@@ -75,6 +75,8 @@ describe("where the switch lands", () => {
 
   it("stays put on a page that is already a student page", () => {
     expect(studentRouteFor({ view: "settings" })).toEqual({ view: "settings" });
+    // F-ORG-15: the classroom's address is also its student page (M5-02).
+    expect(studentRouteFor({ view: "classroom", id: "c1" })).toEqual({ view: "classroom", id: "c1" });
     expect(studentRouteFor({ view: "feedback", attemptId: "a1" })).toEqual({
       view: "feedback",
       attemptId: "a1",
@@ -87,6 +89,6 @@ describe("where the switch lands", () => {
     expect(studentRouteFor({ view: "grading", evaluationId: "e1" })).toEqual({ view: "home" });
     expect(studentRouteFor({ view: "results", evaluationId: "e1" })).toEqual({ view: "home" });
     expect(studentRouteFor({ view: "pool", id: "p1" })).toEqual({ view: "home" });
-    expect(studentRouteFor({ view: "classroom", id: "c1" })).toEqual({ view: "home" });
+    expect(studentRouteFor({ view: "course", id: "k1" })).toEqual({ view: "home" });
   });
 });

@@ -32,6 +32,13 @@ const AttemptPage = lazy(() =>
   import("./student/Attempt").then((m) => ({ default: m.AttemptPage })),
 );
 const Feedback = lazy(() => import("./student/Feedback").then((m) => ({ default: m.Feedback })));
+// F-ORG-14, F-ORG-15 (M5-02): the student's Courses and classroom page.
+const StudentCourses = lazy(() =>
+  import("./student/StudentCourses").then((m) => ({ default: m.StudentCourses })),
+);
+const StudentClassroom = lazy(() =>
+  import("./student/StudentClassroom").then((m) => ({ default: m.StudentClassroom })),
+);
 // ADR-041 (#317): the student's drill, its own chunk like every page.
 const DrillPage = lazy(() => import("./drill/DrillPage").then((m) => ({ default: m.DrillPage })));
 const CoursePage = lazy(() =>
@@ -232,29 +239,29 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   admin: (_, c) => (c.me.role === "admin" ? <AdminPage /> : <TeacherHome navigate={c.navigate} />),
   course: (r, c) => <CoursePage id={r.id} navigate={c.navigate} />,
   template: (r, c) => <TemplateEditor id={r.id} navigate={c.navigate} />,
-  // F-ORG-15: one address, two pages. The student's is a placeholder until
-  // M5-02, and a student reaches it only under `CLASSROOM_PAGES`.
+  // F-ORG-15: one address, two pages; the student's opens on its Activities.
   classroom: (r, c) =>
     c.teacherUi ? (
       <ClassroomView id={r.id} navigate={c.navigate} />
     ) : (
-      <ComingSoon title="soon.classroom" navigate={c.navigate} />
+      <StudentClassroom id={r.id} tab="activities" navigate={c.navigate} />
     ),
-  // The pages of the classroom merge, placeholders until their screens ship
-  // (`CLASSROOM_PAGES`, `router.ts`). A teacher's Courses is the home.
+  // F-ORG-14: the student's classrooms. A teacher's Courses is the home.
   studentCourses: (_, c) =>
-    c.teacherUi ? (
-      <TeacherHome navigate={c.navigate} />
-    ) : (
-      <ComingSoon title="nav.courses" navigate={c.navigate} />
-    ),
+    c.teacherUi ? <TeacherHome navigate={c.navigate} /> : <StudentCourses navigate={c.navigate} />,
+  // The pages of the classroom merge, placeholders until their screens ship
+  // (`CLASSROOM_PAGES`, `router.ts`).
   classroomSettings: (_, c) => (
     <ComingSoon title="soon.classroomSettings" navigate={c.navigate} />
   ),
-  // F-JRN-07: both roles; the student UI asks for the student payload.
-  classroomJournal: (r, c) => (
-    <JournalReader classroomId={r.id} path={r.path} navigate={c.navigate} studentView={!c.teacherUi} />
-  ),
+  // F-JRN-07: both roles. The student's is the Journal tab of their
+  // classroom page, which asks for the student payload.
+  classroomJournal: (r, c) =>
+    c.teacherUi ? (
+      <JournalReader classroomId={r.id} path={r.path} navigate={c.navigate} studentView={false} />
+    ) : (
+      <StudentClassroom id={r.id} tab="journal" path={r.path} navigate={c.navigate} />
+    ),
   classroomGrades: (_, c) => <ComingSoon title="bnav.grades" navigate={c.navigate} />,
   project: (_, c) => <ComingSoon title="soon.project" navigate={c.navigate} />,
   projectGroups: (_, c) => <ComingSoon title="soon.projectGroups" navigate={c.navigate} />,

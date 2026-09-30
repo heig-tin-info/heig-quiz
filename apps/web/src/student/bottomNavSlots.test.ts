@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parsePath, type Route } from "../router";
-import { activeSlot, bottomNavShown, visibleSlots } from "./bottomNavSlots";
+import { activeSlot, BOTTOM_SLOTS, bottomNavShown, visibleSlots } from "./bottomNavSlots";
 
 describe("bottomNavShown (#191)", () => {
   it("draws the bar for the student on the pages its slots lead to", () => {
@@ -26,9 +26,21 @@ describe("activeSlot (#191)", () => {
 
   it("lights Activities on the home, and the section the address names", () => {
     expect(activeSlot(home, "")).toBe("activities");
-    expect(activeSlot(home, "#classrooms")).toBe("courses");
     expect(activeSlot(home, "#past")).toBe("grades");
     expect(activeSlot(home, "#elsewhere")).toBe("activities");
+    // No longer an anchor of the home (D07): Courses is a page.
+    expect(activeSlot(home, "#classrooms")).toBe("activities");
+  });
+
+  it("leads Courses to the student's classrooms, and lights it on a classroom's page (D07)", () => {
+    expect(BOTTOM_SLOTS.find((s) => s.id === "courses")).toEqual({
+      id: "courses",
+      route: { view: "studentCourses" },
+    });
+    for (const path of ["/courses", "/classrooms/c1"]) {
+      expect(activeSlot(parsePath(path), "")).toBe("courses");
+      expect(bottomNavShown(parsePath(path), false)).toBe(true);
+    }
   });
 
   it("keeps Grades lit on a feedback page and Profile on the settings", () => {

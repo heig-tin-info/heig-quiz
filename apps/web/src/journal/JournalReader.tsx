@@ -98,6 +98,7 @@ export function JournalReader({
   path,
   navigate,
   studentView,
+  header: outerHeader,
 }: {
   classroomId: string;
   /** The page named by the address; absent for the journal's home. */
@@ -109,6 +110,12 @@ export function JournalReader({
    * only narrow).
    */
   studentView: boolean;
+  /**
+   * Drawn in place of the reader's own breadcrumb, in every state: the
+   * student classroom page's compact header and tabs (§5.2), under which the
+   * reader is that page's Journal tab.
+   */
+  header?: ReactNode;
 }) {
   const t = useT();
   const view: View = studentView ? "student" : "staff";
@@ -151,9 +158,9 @@ export function JournalReader({
   const extraWide = useMinWidth(1280);
   const layout: Layout = extraWide ? "extraWide" : wide ? "wide" : "phone";
 
-  if (journal.isPending) return <ReaderSkeleton layout={layout} />;
+  if (journal.isPending) return <ReaderSkeleton layout={layout} header={outerHeader} />;
 
-  const header = (
+  const header = outerHeader ?? (
     <ReaderHeader
       onClassroom={() => navigate({ view: "classroom", id: classroomId })}
       aside={staffJournal?.repository ? <SyncState repository={staffJournal.repository} /> : null}
@@ -464,12 +471,12 @@ function ArticleSkeleton() {
   );
 }
 
-function ReaderSkeleton({ layout }: { layout: Layout }) {
+function ReaderSkeleton({ layout, header }: { layout: Layout; header: ReactNode }) {
   const t = useT();
   return (
-    <div className="space-y-6" role="status" aria-label={t("common.loading")}>
-      <Skeleton className="h-4 w-40" />
-      <div className={GRID[layout]}>
+    <div className="space-y-6">
+      {header ?? <Skeleton className="h-4 w-40" />}
+      <div className={GRID[layout]} role="status" aria-label={t("common.loading")}>
         {layout === "phone" ? (
           <Skeleton className="h-14 w-full" />
         ) : (

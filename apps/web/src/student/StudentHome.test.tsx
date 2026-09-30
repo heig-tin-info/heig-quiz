@@ -272,6 +272,33 @@ describe("the student home", () => {
     expect(await screen.findByText("Vous avez rejoint PRG1-2026.")).toBeInTheDocument();
   });
 
+  // D07 (M5-02): a classroom card is the door to the classroom's page.
+  it("opens the classroom's page from its card, by click and by keyboard", async () => {
+    mockFetch({
+      "GET /app/api/student/home": ok(home),
+      "GET /app/api/student/classrooms": ok([
+        {
+          id: "r1",
+          name: "PRG1-2026",
+          period: "2026-A",
+          courseName: "Programmation C",
+          courseCode: "PRG1",
+          teachers: ["Prof Démo"],
+          timeBonusPercent: 25,
+        },
+      ]),
+    });
+    const { navigate } = render();
+    const door = await screen.findByRole("link", { name: "PRG1-2026" });
+    expect(within(door).getByText("Temps supplémentaire : +25 %")).toBeInTheDocument();
+    await userEvent.click(door);
+    expect(navigate).toHaveBeenLastCalledWith({ view: "classroom", id: "r1" });
+    navigate.mockClear();
+    door.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" });
+  });
+
   describe("an exercise with retakes (F-EVAL-15)", () => {
     const retaking = (over: Partial<EvaluationCard["retakes"] & object> = {}) =>
       card({

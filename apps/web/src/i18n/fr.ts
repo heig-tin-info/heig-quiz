@@ -2041,6 +2041,15 @@ export const fr: Record<keyof Dict, string> = {
   "shome.rooms.empty.body": "Rejoignez votre classe avec le code donné par votre enseignant.",
   "shome.teachers": "Enseigné par {names}",
   "shome.bonus": "Temps supplémentaire : +{n} %",
+  // M5-02 (F-ORG-14, F-ORG-15): the student's Courses and classroom page.
+  "scourses.subtitle": "Les classes dont vous faites partie. Ouvrez-en une pour ses activités.",
+  "sroom.loadError": "Impossible de charger cette classe",
+  "sroom.backToCourses": "Retour aux cours",
+  "sroom.tabs": "Sections de la classe",
+  "sroom.tab.activities": "Activités",
+  "sroom.tab.journal": "Journal",
+  "sroom.empty.title": "Rien à faire dans cette classe pour l'instant",
+  "sroom.empty.body": "Une évaluation apparaît ici dès que votre enseignant l'ouvre.",
   "join.hint": "Saisissez le code donné par votre enseignant.",
   "join.label": "Code de la classe",
   "join.placeholder": "PRG1-2026",
@@ -3378,7 +3387,6 @@ export const fr: Record<keyof Dict, string> = {
   // The pages of the classroom merge before their screens (M1-05, `ComingSoon.tsx`).
   "soon.title": "Bientôt disponible",
   "soon.body": "Cette page est en préparation. Tout le reste fonctionne comme avant.",
-  "soon.classroom": "Classe",
   "soon.classroomSettings": "Réglages de la classe",
   "soon.project": "Projet",
   "soon.projectGroups": "Groupes du projet",

@@ -184,15 +184,16 @@ export interface RouteSpec<V extends Route["view"]> {
 
 /**
  * The gate of the classroom merge's routes (ADR-035, `docs/merge/05-web.md`
- * §5.1–§5.2) whose routes exist before their screens do: the student's
- * Courses and classroom page, the classroom's Settings, Journal and Grades
- * tabs, the project pages. Each renders a placeholder (`ComingSoon`) until
- * its task ships the real screen (M2-07, M4-04, M5-02, M5-04, M3-12).
+ * §5.1–§5.2) whose routes exist before their screens, or their API, do: the
+ * classroom's Settings, Journal and Grades tabs, the project pages. Each
+ * renders a placeholder (`ComingSoon`) until its task ships the real screen
+ * (M2-07, M5-04, M3-12); the Journal's reader exists (M4-04) and waits for
+ * its API (M4-02), and so does the student classroom page's Journal tab.
  *
- * Off in a production build: the `preview` routes do not parse and a student
- * on `/classrooms/:id` still lands on the home. On in the browser mock
+ * Off in a production build: the `preview` routes do not parse, and the
+ * student classroom page shows its Activities alone. On in the browser mock
  * (`VITE_MOCK=1`), and wherever `VITE_CLASSROOM_PAGES=1` is set at build time.
- * The student branch of `classroom` leaves it with M5-02.
+ * The student's Courses and classroom page left it with M5-02.
  */
 export const CLASSROOM_PAGES =
   import.meta.env.VITE_MOCK === "1" || import.meta.env.VITE_CLASSROOM_PAGES === "1";
@@ -274,14 +275,14 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     section: "home",
   },
   // F-ORG-14 (D07): `/courses` alone, the student's classrooms. A teacher's
-  // Courses is the home; `/courses/:id` is one course (above).
+  // Courses is the home; `/courses/:id` is one course (above). No sidebar
+  // row: the student's has no Courses entry, and lighting Home would name
+  // the wrong page.
   studentCourses: {
     path: () => "/courses",
     match: ([head, id]) => (head === "courses" && !id ? { view: "studentCourses" } : null),
     studentSafe: true,
-    section: "home",
     bottomSlot: "courses",
-    preview: true,
   },
   // The classroom's tabs that are routes (§5.2). Before `classroom`, which
   // takes any tail after the id.
@@ -312,11 +313,11 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     preview: true,
   },
   // Role-dispatched (F-ORG-15): the teacher's classroom, or the student's page
-  // of it — a student reaches it only while `CLASSROOM_PAGES` is on (M5-02).
+  // of it (M5-02), whose Activities tab it is.
   classroom: {
     path: (r) => `/classrooms/${r.id}${r.tab ? `?tab=${r.tab}` : ""}`,
     match: ([head, id]) => (head === "classrooms" && id ? { view: "classroom", id } : null),
-    studentSafe: CLASSROOM_PAGES,
+    studentSafe: true,
     bottomSlot: "courses",
   },
   // M3-12: declared, no screen links to them yet. `projectGroups` first:

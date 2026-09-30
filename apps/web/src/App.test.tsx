@@ -101,6 +101,45 @@ describe("the frame's view switch", () => {
   });
 });
 
+describe("the student's Courses and classroom page (M5-02, F-ORG-14/15)", () => {
+  it("keeps the teacher view on /courses", async () => {
+    const { calls } = render("/courses");
+    expect(
+      await screen.findByText("A course holds its staff, its classrooms and its question pool."),
+    ).toBeVisible();
+    expect(window.location.pathname).toBe("/courses");
+    expect(calls.some((c) => c.url.startsWith("/app/api/student/"))).toBe(false);
+  });
+
+  it("opens the student's page of a classroom at the teacher's address, in every build", async () => {
+    vi.stubGlobal("EventSource", FakeStream);
+    mockFetch({
+      "GET /app/api/me": ok(makeMe({ role: "student" })),
+      "GET /app/api/student/classrooms/r1": ok({
+        classroom: {
+          id: "r1",
+          name: "PRG1-2026",
+          period: "2026-A",
+          courseName: "Programmation C",
+          courseCode: "PRG1",
+          teachers: [],
+          timeBonusPercent: 0,
+          archived: false,
+        },
+        activities: { polls: [], open: [], upcoming: [], past: [] },
+        hasJournal: true,
+        hasProjects: false,
+        serverNow: new Date().toISOString(),
+      }),
+    });
+    renderWithProviders(<App />, { route: "/classrooms/r1" });
+    expect(await screen.findByRole("heading", { level: 1, name: "PRG1-2026" })).toBeVisible();
+    expect(window.location.pathname).toBe("/classrooms/r1");
+    // `CLASSROOM_PAGES` is off in a test build, as in production: no Journal tab.
+    expect(screen.queryByRole("tab", { name: "Journal" })).toBeNull();
+  });
+});
+
 describe("a Safe Exam Browser session (ADR-027)", () => {
   it("shows its own evaluation and nothing else of the portal", async () => {
     vi.stubGlobal("EventSource", FakeStream);

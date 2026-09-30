@@ -15,13 +15,13 @@ export interface BottomSlot {
   anchor?: string;
 }
 
-/** The anchors of the student home's sections, written once for both sides. */
-export const HOME_SECTION = { courses: "classrooms", grades: "past" } as const;
+/** The anchor of the student home's Grades section (until M5-04), written once for both sides. */
+export const HOME_SECTION = { grades: "past" } as const;
 
 /** In the order they are drawn; Drill (#317) in the middle. */
 export const BOTTOM_SLOTS: readonly BottomSlot[] = [
   { id: "activities", route: { view: "home" } },
-  { id: "courses", route: { view: "home" }, anchor: HOME_SECTION.courses },
+  { id: "courses", route: { view: "studentCourses" } },
   { id: "drill", route: { view: "drill" } },
   { id: "grades", route: { view: "home" }, anchor: HOME_SECTION.grades },
   { id: "profile", route: { view: "settings" } },
