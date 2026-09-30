@@ -491,6 +491,20 @@ export const DashboardCell = z.object({
 });
 export type DashboardCell = z.infer<typeof DashboardCell>;
 
+/**
+ * How a student sits the exam (ADR-051 §8), from their live confined session:
+ * `portal` when there is none, `seb`, or `kiosk` with the station's label.
+ * `alert`: the station's attestation suspends the sitting (refused, silent)
+ * or cannot be checked (Google unavailable); null otherwise, and always null
+ * off a station. Staff only, like the whole dashboard.
+ */
+export const DashboardAccess = z.object({
+  kind: z.enum(["portal", "seb", "kiosk"]),
+  station: z.string().nullable(),
+  alert: z.enum(["suspended", "unavailable"]).nullable(),
+});
+export type DashboardAccess = z.infer<typeof DashboardAccess>;
+
 export const DashboardRow = z.object({
   attemptId: z.uuid().nullable(),
   /** The roster entry behind the row: the one key every row has. */
@@ -524,6 +538,7 @@ export const DashboardRow = z.object({
   points: z.number().nullable(),
   maxPoints: z.number(),
   cells: z.array(DashboardCell),
+  access: DashboardAccess,
 });
 export type DashboardRow = z.infer<typeof DashboardRow>;
 

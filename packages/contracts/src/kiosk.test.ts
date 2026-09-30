@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { KioskAttestVerify, KioskDevicePatch } from "./kiosk.js";
+import { KioskAssign, KioskAttestVerify, KioskDevicePatch } from "./kiosk.js";
 
 describe("KioskAttestVerify", () => {
   it("takes a response, or the extension's failure, never both nor neither", () => {
@@ -26,5 +26,15 @@ describe("KioskDevicePatch", () => {
     expect(KioskDevicePatch.safeParse({ status: "unnamed" }).success).toBe(false);
     expect(KioskDevicePatch.safeParse({}).success).toBe(false);
     expect(KioskDevicePatch.safeParse({ label: "x", extra: 1 }).success).toBe(false);
+  });
+});
+
+describe("KioskAssign", () => {
+  it("takes the code as typed and the student, nothing else", () => {
+    const userId = "5cd2417b-7d2c-4e58-8a13-9c4b2f7e0007";
+    expect(KioskAssign.parse({ userCode: "bcdf-ghjk", userId })).toEqual({ userCode: "bcdf-ghjk", userId });
+    expect(KioskAssign.safeParse({ userCode: "", userId }).success).toBe(false);
+    expect(KioskAssign.safeParse({ userCode: "BCDF-GHJK", userId: "x" }).success).toBe(false);
+    expect(KioskAssign.safeParse({ userCode: "BCDF-GHJK", userId, evaluationId: userId }).success).toBe(false);
   });
 });

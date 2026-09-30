@@ -25,6 +25,7 @@ export * from "./grade.js";
 export * from "./groupRepo.js";
 export * from "./ipAllowlist.js";
 export * from "./itemList.js";
+export * from "./kioskAttestation.js";
 export * from "./kioskPairing.js";
 export * from "./lockedTemplate.js";
 export * from "./mcqScore.js";
