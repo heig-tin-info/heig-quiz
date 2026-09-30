@@ -29,7 +29,7 @@ declare module "vitest" {
 }
 
 /** The real migration chain, through the PGlite migrator `createDb` uses. */
-export async function migrateFresh(client: PGlite): Promise<void> {
+async function migrateFresh(client: PGlite): Promise<void> {
   await migrate(drizzle(client) as never, { migrationsFolder: MIGRATIONS_DIR });
 }
 

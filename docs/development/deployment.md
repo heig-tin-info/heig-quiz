@@ -247,12 +247,13 @@ RUNNER_TOKEN="$(sed -n 's/^RUNNER_TOKEN=//p' .env.prod)" \
 `.github/workflows/ci.yml` has four stages:
 
 1. **checks**, on every push and pull request: parallel jobs run
-   `pnpm build` with `pnpm typecheck` (`build`), the API's tests in three
-   shards (`test-api`), the SPA's in three (`test-web`), and every other
-   package's, the runner's unit suite included (`test-rest`). The `checks`
-   job aggregates them: it is the one required status. A pull request that
-   changes only prose (`docs/`, `mockups/`, Markdown outside a `src/`)
-   skips the jobs and passes `checks`; a push to `main` always runs them all.
+   `pnpm build` with `pnpm typecheck` (`build-typecheck`), the API's and the
+   SPA's tests in three shards each (`test-app`), and every other package's,
+   the runner's unit suite and the kiosk extension's included (`test-rest`).
+   The `checks` job aggregates them: it is the one required status. A pull
+   request that changes only prose (`docs/`, `mockups/`, Markdown outside a
+   `src/`) skips the jobs and passes `checks`; a push to `main` always runs
+   them all.
 2. **image**, on a push to `main` only: both images are built side by side
    with `docker/build-push-action`, each with a buildx layer cache of its own
    (`type=gha`, one `scope` per image), and pushed to GHCR twice each, as

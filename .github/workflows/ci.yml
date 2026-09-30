@@ -49,7 +49,7 @@ jobs:
 
   # The whole build (the SPA and the API included) and the typecheck: what
   # the image will be made of must compile, whatever the tests say.
-  build:
+  build-typecheck:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
@@ -67,42 +67,30 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
 
-  # The API's suite, in three shards run side by side: its db tests each load
-  # a PGlite (src/test/template.ts), and one runner took six minutes for them.
-  # Each shard builds only the workspace packages the API imports (the tests
-  # resolve them through dist/), which costs less than waiting for `build`.
-  test-api:
+  # The API's and the SPA's suites, three shards each, run side by side: in
+  # one job, the API's db tests (each loading a PGlite, src/test/template.ts)
+  # and the SPA's jsdom tests took six minutes. Each shard builds only the
+  # workspace packages its app imports (the tests resolve them through
+  # dist/), which costs less than waiting for `build`.
+  test-app:
+    name: test-${{ matrix.pkg }} (${{ matrix.shard }}/3)
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        pkg: [api, web]
         shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
-      - run: pnpm --filter "@quiz/api^..." build
-      - run: pnpm --filter @quiz/api test --shard=${{ matrix.shard }}/3
-
-  # The SPA's suite (jsdom for the components), sharded like the API's: in
-  # two shards, the first one alone took 110 s.
-  test-web:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
-      - run: pnpm --filter "@quiz/web^..." build
-      - run: pnpm --filter @quiz/web test --shard=${{ matrix.shard }}/3
+      - run: pnpm --filter "@quiz/${{ matrix.pkg }}^..." build
+      - run: pnpm --filter "@quiz/${{ matrix.pkg }}" test --shard=${{ matrix.shard }}/3
 
   # Every other package's `test`: the question types, domain, contracts, ui,
-  # diagram, docrender, registry, and the runner's unit suite. The runner's
+  # diagram, docrender, registry, the runner's unit suite, and the kiosk
+  # extension's plain-Node tests (extensions/kiosk-attestation). The runner's
   # integration suite (`test:integration`, real containers) is NOT run here,
   # so that an image build never holds up every PR: it has its own workflow,
   # runner-integration.yml (#234).
@@ -115,6 +103,8 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm -r --filter "!@quiz/api" --filter "!@quiz/web" build
       - run: pnpm -r --filter "!@quiz/api" --filter "!@quiz/web" test
+      # Not a workspace package: no dependency, no build (its README).
+      - run: node --test extensions/kiosk-attestation/*.test.mjs
 
   # The ONE required status check (the `main` ruleset names `checks`), and
   # what `image` waits for. It passes when every job above passed, or when
@@ -122,15 +112,15 @@ jobs:
   # failed, cancelled or unexpectedly skipped job fails it.
   checks:
     if: always()
-    needs: [changes, build, test-api, test-web, test-rest]
+    needs: [changes, build-typecheck, test-app, test-rest]
     runs-on: ubuntu-latest
     steps:
       - env:
           CHANGES: ${{ needs.changes.result }}
           CODE: ${{ needs.changes.outputs.code }}
-          RESULTS: ${{ needs.build.result }} ${{ needs.test-api.result }} ${{ needs.test-web.result }} ${{ needs.test-rest.result }}
+          RESULTS: ${{ needs.build-typecheck.result }} ${{ needs.test-app.result }} ${{ needs.test-rest.result }}
         run: |
-          echo "changes: $CHANGES (code: $CODE); build, test-api, test-web, test-rest: $RESULTS"
+          echo "changes: $CHANGES (code: $CODE); build-typecheck, test-app, test-rest: $RESULTS"
           [ "$CHANGES" = success ] || exit 1
           for result in $RESULTS; do
             case "$result" in
