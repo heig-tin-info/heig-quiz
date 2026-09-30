@@ -53,6 +53,7 @@ import {
   JournalPage,
   KioskDevice,
   KioskStation,
+  PairPreview,
   NotificationList,
   NotificationSettings,
   ApiToken,
@@ -80,7 +81,7 @@ import {
   TemplateDetail,
   TemplatePullPreview,
 } from "@quiz/contracts";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 // jsdom has no `fetch`; the mock wraps whatever is there and only defers to
 // it for a URL outside `/app/`, which this test never asks for.
@@ -357,6 +358,7 @@ const CHECKED: Case[] = [
   each("/app/api/admin/tasks", "/app/api/admin/tasks", AdminScheduledTask),
   each("/app/api/admin/kiosk-devices", "/app/api/admin/kiosk-devices", KioskDevice),
   one("/app/api/kiosk/station", "/app/api/kiosk/station", KioskStation),
+  one("/app/api/pair/:code", "/app/api/pair/BCDF-GHJK", PairPreview),
   each("/app/api/polls", "/app/api/polls", PollSummary),
   // The Activities section (#190).
   each("/app/api/activities", "/app/api/activities", ActivitySummary),
@@ -441,6 +443,15 @@ const UNCHECKED = [
   "/app/api/github/orgs",
   "/app/api/classrooms/:id/github",
 ];
+
+// ADR-051 §7: one pending pairing (the mock keeps it in localStorage, which
+// the setup clears before every test), so `/app/api/pair/:code` names a station.
+beforeEach(() => {
+  localStorage.setItem(
+    "quiz-mock-kiosk-pairing",
+    JSON.stringify({ deviceCode: "d", userCode: "BCDF-GHJK", expiresAt: Date.now() + 60_000, state: "pending", evaluationId: null }),
+  );
+});
 
 describe("the mock answers what the contracts describe", () => {
   it.each(CHECKED.map((c) => [c.path, c] as const))("GET %s", async (path, c) => {

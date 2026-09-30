@@ -66,6 +66,17 @@ const ATTEMPT_PAST = "22222222-2222-4222-8222-222222222223";
 /** The mock's draft made from a template that has moved since (F-EVAL-26). */
 const TEMPLATE_INSTANCE = "eeeeeeee-0000-4000-8000-000000000026";
 
+/** A pending pairing of the mock's station n° 7, code BCDF-GHJK (ADR-051 §7). */
+const KIOSK_PAIRING = {
+  "quiz-mock-kiosk-pairing": JSON.stringify({
+    deviceCode: "mock-device",
+    userCode: "BCDF-GHJK",
+    expiresAt: Date.now() + 3_600_000,
+    state: "pending",
+    evaluationId: null,
+  }),
+};
+
 const scenes = [
   // The Activities section (#190): the three views, the states.
   { name: "activities", role: "teacher", path: "/activities" },
@@ -549,6 +560,14 @@ const scenes = [
   { name: "poll-projection-opinion-revealed", role: "teacher", path: "/evaluations/poll-opinion/poll?votes=1", fold: true },
   // The participant's half, as a GUEST: no session at all, which is what a
   // phone in the room has (`?as=guest` in src/mock/poll.ts).
+  // ADR-051 §7: the kiosk station's screen, and the phone that pairs it. The
+  // mock keeps the one pending pairing in localStorage (mock/kiosk.ts), so
+  // the phone's scenes seed it.
+  { name: "kiosk-station", role: "student", path: "/kiosk", settle: 1500, fold: true },
+  { name: "pair", role: "student", path: "/pair?code=BCDF-GHJK", ls: KIOSK_PAIRING },
+  { name: "pair-code", role: "student", path: "/pair" },
+  { name: "pair-invalid", role: "student", path: "/pair?code=CCCC-DDDD", ls: KIOSK_PAIRING },
+  { name: "pair-none", role: "student", path: "/pair?code=BCDF-GHJK&empty=1", ls: KIOSK_PAIRING },
   { name: "join-mcq", role: "teacher", path: "/p/QZ4F7K?as=guest" },
   { name: "join-revealed", role: "teacher", path: "/p/QZ4F7K?as=guest&revealed=1" },
   // Votes and key both shown while the poll runs: the question and Send stay

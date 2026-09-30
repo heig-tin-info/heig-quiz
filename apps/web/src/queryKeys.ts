@@ -37,6 +37,10 @@ export const adminUsersKey = [...adminTeachersKey, "users"] as const;
 export const adminTasksKey = [...adminTeachersKey, "tasks"] as const;
 /** The kiosk station registry (ADR-051 §5). */
 export const adminKioskKey = ["admin-kiosk-devices"] as const;
+/** Whether this browser is a kiosk station: its `quiz_kiosk` cookie, read by the server. */
+export const kioskStationKey = ["kiosk-station"] as const;
+/** What a station's code names, on the phone (ADR-051 §7): the station and the exams. */
+export const pairPreviewKey = (code: string) => ["pair-preview", code] as const;
 /** The caller's personal API tokens (settings). */
 export const apiTokensKey = ["api-tokens"] as const;
 /** The assistants connected through OAuth (settings, ADR-023). */

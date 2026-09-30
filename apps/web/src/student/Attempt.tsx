@@ -59,7 +59,11 @@ export function AttemptPage({
       api<AttemptOrLobby>(`/app/api/evaluations/${evaluationId}/attempt`, { method: "POST" }),
   });
 
-  const home = () => navigate({ view: "home" });
+  // ADR-051 §7: a kiosk station has no home but its own screen.
+  const station = me.data?.session?.kind === "kiosk";
+  const home = station
+    ? () => window.location.replace("/kiosk")
+    : () => navigate({ view: "home" });
   /*
    * The one way out of the student view from inside an attempt (ADR-018
    * addendum). This route renders OUTSIDE the Shell — an exam is the one
@@ -146,6 +150,7 @@ export function AttemptPage({
       initial={data.view}
       onHome={home}
       onResults={(attemptId, options) => navigate(feedbackLink(attemptId).route, options)}
+      station={station}
       {...(exitStudentView ? { onExitStudentView: exitStudentView } : {})}
     />
   );

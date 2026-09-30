@@ -137,7 +137,7 @@ describe("the student home", () => {
     expect(screen.queryByText(/poste kiosque/)).toBeNull();
   });
 
-  it("opens nothing on an exam sat on a kiosk station only, and says where to sit it (ADR-051)", async () => {
+  it("opens no attempt on an exam sat on a kiosk station only: it says where, and leads to the pairing (ADR-051)", async () => {
     mockFetch({
       "GET /app/api/student/home": ok({ ...home, open: [card({ trustedClients: ["kiosk"] })] }),
       "GET /app/api/student/classrooms": ok([]),
@@ -146,8 +146,9 @@ describe("the student home", () => {
     const line = await screen.findByText(
       "Passez cet examen sur un poste kiosque : scannez le code affiché sur le poste.",
     );
-    expect(within(line.closest("div.rounded-card") as HTMLElement).queryByRole("button")).toBeNull();
-    expect(navigate).not.toHaveBeenCalled();
+    const row = line.closest("div.rounded-card") as HTMLElement;
+    await userEvent.click(within(row).getByRole("button", { name: "Saisir le code d'un poste" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "pair" });
   });
 
   it("says “resume” on an attempt already started", async () => {

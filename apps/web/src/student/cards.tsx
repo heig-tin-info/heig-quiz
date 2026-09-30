@@ -259,7 +259,7 @@ export function PollRow({
  * SEB instructions, to render once on the page.
  */
 export function useCardActions(navigate: (r: Route) => void): {
-  open: (card: EvaluationCardData, primary: boolean) => RowAction | undefined;
+  open: (card: EvaluationCardData, primary: boolean) => RowAction;
   review: (card: EvaluationCardData) => RowAction | undefined;
   modal: ReactNode;
 } {
@@ -271,12 +271,14 @@ export function useCardActions(navigate: (r: Route) => void): {
   // Issue #270: the SEB card opens its instructions; the file comes from there.
   const [sebFor, setSebFor] = useState<EvaluationCardData | null>(null);
 
-  /** The one button of an open card; none for an exam sat on a kiosk station only. */
-  const open = (card: EvaluationCardData, primary: boolean): RowAction | undefined => {
+  /** The one button of an open card. */
+  const open = (card: EvaluationCardData, primary: boolean): RowAction => {
     // ADR-051: sat on a kiosk station only — the station starts it, once
-    // paired from the phone; nothing opens here, not even a retake (the
-    // card's line says where to go).
-    if (kioskOnly(card)) return undefined;
+    // paired from the phone; nothing opens here, not even a retake. The
+    // button is the pairing page, for a code typed rather than scanned.
+    if (kioskOnly(card)) {
+      return { label: t("shome.kioskPair"), primary, onClick: () => navigate({ view: "pair" }) };
+    }
     const r = card.retakes;
     if (r !== null && finished(card) && r.canRetake) {
       return {

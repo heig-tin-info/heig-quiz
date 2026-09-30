@@ -46,6 +46,7 @@ export function ClosedScreen({
   onHome,
   onResults,
   actionsHeld = false,
+  note,
 }: {
   reason: AttemptClosed["reason"];
   /** The evaluation's own title, so the page still says what ended. */
@@ -64,6 +65,8 @@ export function ClosedScreen({
    * under the student's cursor when See my results arrives.
    */
   actionsHeld?: boolean;
+  /** One more sentence under the body: what happens next on its own (a kiosk station's return). */
+  note?: string;
 }) {
   const t = useT();
   const copy = COPY[reason];
@@ -95,6 +98,7 @@ export function ClosedScreen({
         >
           <span className="mb-1 block font-medium text-fg">{title}</span>
           {t(copy.body)}
+          {note ? <span className="mt-2 block text-fg-faint">{note}</span> : null}
         </EmptyState>
       </Card>
     </main>
