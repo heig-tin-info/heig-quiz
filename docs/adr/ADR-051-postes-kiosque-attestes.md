@@ -190,6 +190,12 @@ is deprecated):
   lost or expired cookie, another device's); the previous one then stops
   naming it at once. That cookie is the station's identity, never a user's;
   §1 requires it beside a `kiosk` session.
+  The trade-off is accepted: a copied `quiz_kiosk` cookie is not invalidated
+  by the station's next re-attestation. It is `HttpOnly` on a locked kiosk,
+  worth nothing without the session cookie of a live kiosk session (which
+  ends with the sitting), and dies with the station's retirement or a new
+  credential. Rotating on every attestation was dropped: it answered the
+  in-flight writes 401 and could drop a station out of its attempt.
 - The service account authenticates with the OAuth 2.0 JWT-bearer grant
   and the scope `https://www.googleapis.com/auth/verifiedaccess`. Its key is
   a file named by `KIOSK_VA_KEY_FILE`, outside the repository and the

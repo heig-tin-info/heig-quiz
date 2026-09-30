@@ -35,6 +35,7 @@ nav = [
     { "Repository layout" = "development/repository.md" },
     { "Deployment" = "development/deployment.md" },
     { "Microsoft Teams setup" = "development/teams.md" },
+    { "Kiosk stations (Chromebooks)" = "kiosk.md" },
     { "Architecture" = "development/architecture.md" },
     { "Writing the documentation" = "development/documentation.md" },
     { "Screenshots" = "development/screenshots.md" },
