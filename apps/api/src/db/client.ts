@@ -18,6 +18,9 @@ import * as schema from "./schema.js";
  */
 export type Db = NodePgDatabase<typeof schema>;
 
+/** The handle inside `db.transaction(...)`: the same builders, one connection. */
+export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
 interface DbHandle {
   db: Db;
   /** True when running on the embedded, single-process database. */

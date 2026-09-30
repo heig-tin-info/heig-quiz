@@ -11,11 +11,12 @@ import { and, eq } from "drizzle-orm";
 import { registerForTests } from "@quiz/registry/server";
 
 import { auditLog, kioskDevices, sessions } from "../db/schema.js";
+import { subscribe, type BusMessage } from "../events.js";
 import { fakeShort } from "../test/fakeType.js";
 import { testServer, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
 import { CONFIG_KEY_HEADER, configKeyHash, requestUrl } from "./seb.js";
-import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "./session.js";
+import { CSRF_COOKIE, SESSION_COOKIE, createSession, deleteSession } from "./session.js";
 
 /** A Config Key as a launch stores it. */
 const KEY = "9d98ce221dd52eccf27cad6a01bcd49b14d3d718a9eeeb3be94f0e231a5787ae";
@@ -104,17 +105,69 @@ describe("the Config Key of every request, audit-only (ADR-051 §3)", () => {
 describe("a new kiosk session supersedes by station too (ADR-051 §4)", () => {
   it("deletes every session holding its device, expired ones included, and nothing else", async () => {
     const deviceId = randomUUID();
-    await server.app.db.insert(kioskDevices).values({ id: deviceId, googleDeviceId: `mock-${deviceId}`, status: "active" });
+    await server.app.db
+      .insert(kioskDevices)
+      .values({ id: deviceId, googleDeviceId: `mock-${deviceId}`, status: "active", label: "Poste n° 7" });
     const other = await server.signIn("student");
     const kiosk = { kind: "kiosk", actorUserId: null, evaluationId, deviceId } as const;
     await createSession(server.app.db, other.id, 12, kiosk);
     await server.app.db.update(sessions).set({ expiresAt: new Date(0) }).where(eq(sessions.deviceId, deviceId));
+    const heard: BusMessage[] = [];
+    const unsubscribe = subscribe((message) => heard.push(message));
     await createSession(server.app.db, studentId, 12, kiosk);
+    unsubscribe();
     const held = await server.app.db.select().from(sessions).where(eq(sessions.deviceId, deviceId));
     expect(held.map((s) => s.userId)).toEqual([studentId]);
     // The other student's portal is untouched.
     expect((await get("/app/api/me", other.headers)).statusCode).toBe(200);
     // This student's kiosk session superseded their seb one on the same evaluation.
     expect((await get("/app/api/me", cookies)).statusCode).toBe(401);
+
+    // One entry and one alert per removed (user, evaluation), each naming its own student.
+    const rows = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "auth.session_superseded"), eq(auditLog.actorUserId, studentId)));
+    expect(rows.map((r) => r.payload)).toEqual(
+      expect.arrayContaining([
+        { userId: other.id, kinds: ["kiosk"], by: "kiosk", device: "Poste n° 7" },
+        { userId: studentId, kinds: ["seb"], by: "kiosk", device: "Poste n° 7" },
+      ]),
+    );
+    expect(rows).toHaveLength(2);
+    const alerts = heard.flatMap((m) => (m.kind === "data" && m.event.type === "dashboard.alert" ? [m] : []));
+    expect(alerts.map((m) => m.audience)).toEqual(["staff", "staff"]);
+    expect(alerts.map((m) => (m.event as { userId: string }).userId).sort()).toEqual([other.id, studentId].sort());
+    expect(heard.filter((m) => m.kind === "end")).toEqual([{ kind: "end", sessions: expect.any(Array) }]);
+  });
+});
+
+describe("the end of a session ends its event streams, and only its own", () => {
+  it("closes the stream of a signed-out session, never another session's", async () => {
+    const auth = { kind: "seb", actorUserId: null, evaluationId, sebConfigKey: KEY } as const;
+    const open = async (token: string, url = `/app/api/events?watch=lobby:${evaluationId}`) => {
+      const hangUp = new AbortController();
+      const res = await server.app.inject({
+        method: "GET",
+        url,
+        headers: { cookie: `${SESSION_COOKIE}=${token}` },
+        payloadAsStream: true,
+        signal: hangUp.signal,
+      });
+      expect(res.statusCode).toBe(200);
+      let ended = false;
+      res.stream().on("end", () => (ended = true)).resume();
+      return { ended: () => ended, stop: () => (res.stream().destroy(), hangUp.abort()) };
+    };
+    const signedOut = await createSession(server.app.db, studentId, 12, auth);
+    const doomed = await open(signedOut.token);
+    // The same student's portal, streaming beside it.
+    const other = await open((await createSession(server.app.db, studentId, 12)).token, "/app/api/events");
+    await deleteSession(server.app.db, signedOut.token);
+    for (let i = 0; i < 6 && !doomed.ended(); i++) await new Promise((resolve) => setImmediate(resolve));
+    expect(doomed.ended()).toBe(true);
+    expect(other.ended()).toBe(false);
+    doomed.stop();
+    other.stop();
   });
 });

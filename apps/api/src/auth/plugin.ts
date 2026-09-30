@@ -63,6 +63,12 @@ declare module "fastify" {
     auth: SessionState | null;
     /** `user` and its reach (ADR-054), set with it; null when anonymous. Read through `callerOf`. */
     caller: Caller | null;
+    /**
+     * The browser session's id as the server stores it (`sid_hash`, never the
+     * token): what ends its event streams (`bus.sessionsEnded`). Null
+     * whenever `auth` is.
+     */
+    sid: string | null;
   }
   interface FastifyContextConfig {
     /**
@@ -109,6 +115,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   app.decorateRequest("authVia", null);
   app.decorateRequest("auth", null);
   app.decorateRequest("caller", null);
+  app.decorateRequest("sid", null);
   const internalSecret = randomBytes(32).toString("base64url");
   app.decorate("internalCallSecret", internalSecret);
   const isInternalCall = (req: FastifyRequest) => {
@@ -154,7 +161,11 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     if (!serves(req.routeOptions.config.sessions, found.auth.kind)) return;
     // ADR-051 §1: a confined session is worth something only from the client
     // it was opened in, checked on every request; refused, it is not there.
-    if (confined(found.auth) && (await trustRefused(app.db, config, { ...found, userId: found.user.id }, req))) {
+    const { auth, sidHash, sebConfigKey, deviceId } = found;
+    if (
+      confined(auth) &&
+      (await trustRefused(app.db, config, { auth, sidHash, sebConfigKey, deviceId, userId: found.user.id }, req))
+    ) {
       return;
     }
     // ADR-034: outside development, a session acting as a student reads and
@@ -175,6 +186,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     req.authVia = "session";
     req.auth = found.auth;
     req.caller = callerFor(found.user, found.auth, app.clock.now());
+    req.sid = found.sidHash;
     // Mirror the sliding renewal on the cookies, else the browser drops them
     // while the server-side session is still alive.
     if (found.renewedTo) {

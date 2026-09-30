@@ -28,7 +28,7 @@ import { WatchSubject, isStaffOnly, type ServerEvent } from "@quiz/contracts";
 import { iso } from "../../clock.js";
 import { classrooms, courses, enrollments, evaluations, pools } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
-import { SESSION_COOKIE, SITTING, delegated, hashToken } from "../../auth/session.js";
+import { SITTING, delegated } from "../../auth/session.js";
 import {
   accessWhere,
   callerOf,
@@ -447,10 +447,9 @@ export async function realtimePlugin(app: FastifyInstance) {
     res.write(":connected\n\n");
 
     let closed = false;
-    const cookie = req.authVia === "session" ? req.cookies[SESSION_COOKIE] : undefined;
     const stream: Stream = {
       userId: me.id,
-      sid: cookie ? hashToken(cookie) : null,
+      sid: req.sid,
       staff,
       participant,
       topics,

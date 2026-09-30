@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
-import type { Db } from "./db/client.js";
+import type { Db, Tx } from "./db/client.js";
 import { auditLog } from "./db/schema.js";
 
 /**
@@ -130,7 +130,7 @@ export type AuditAction =
  * role has neither UPDATE nor DELETE on this table.
  */
 export async function audit(
-  db: Db | Parameters<Parameters<Db["transaction"]>[0]>[0],
+  db: Db | Tx,
   entry: {
     actorUserId?: string | null;
     actorType: "user" | "system" | "api_key";

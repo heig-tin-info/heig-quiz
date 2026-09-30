@@ -304,7 +304,7 @@ describe("a new confined session (ADR-051 §4)", () => {
       .orderBy(auditLog.id)
       .limit(1);
     expect(row).toMatchObject({ subjectType: "evaluation", subjectId: exam.evaluationId });
-    expect(row!.payload).toEqual({ kinds: ["seb"], by: "seb" });
+    expect(row!.payload).toEqual({ userId: student.id, kinds: ["seb"], by: "seb" });
     await new Promise((resolve) => setImmediate(resolve));
     const alert = /^event: dashboard\.alert\ndata: (.+)$/m.exec(frames);
     expect(JSON.parse(alert![1]!)).toMatchObject({

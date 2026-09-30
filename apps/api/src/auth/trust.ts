@@ -10,14 +10,19 @@ import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import type { Db } from "../db/client.js";
 import { CONFIG_KEY_HEADER, configKeyHashMatches, requestUrl } from "./seb.js";
+import type { TrustedClient } from "@quiz/domain";
+
 import type { SessionAuth } from "./session.js";
 
-/** Why a confined session's request is not trusted. Steps 4 and 7 add the kiosk's reasons. */
-export type TrustRefusal = "seb_config_key";
+/**
+ * Why a confined session's request is not trusted. `kiosk_unverified` is the
+ * stub's (below); steps 4 and 7 replace it with the kiosk's real reasons.
+ */
+export type TrustRefusal = "seb_config_key" | "kiosk_unverified";
 
-/** What the session hook knows of the session: its kind, and what it was opened with. */
+/** What the session hook knows of a confined session: its kind, and what it was opened with. */
 export interface TrustedSession {
-  auth: SessionAuth;
+  auth: SessionAuth & { kind: TrustedClient };
   sebConfigKey: string | null;
   deviceId: string | null;
 }
@@ -44,12 +49,11 @@ export function trustRefusal(session: TrustedSession, request: TrustRequest): Tr
         ? null
         : "seb_config_key";
     case "kiosk":
-      // STUB — ADR-051 §1, §5, §6: the station's `quiz_kiosk` cookie, an
-      // `active` device, an attestation neither refused nor silent. Filled
-      // by steps 4 and 7; until then no kiosk session can be opened.
-      return null;
-    default:
-      return null;
+      // STUB, FAILS CLOSED — ADR-051 §1, §5, §6: the station's `quiz_kiosk`
+      // cookie, an `active` device, an attestation neither refused nor
+      // silent. Steps 4 and 7 write the rule; until then a kiosk session is
+      // never trusted, whoever opened it.
+      return "kiosk_unverified";
   }
 }
 
