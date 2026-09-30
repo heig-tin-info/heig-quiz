@@ -682,6 +682,10 @@ const scenes = [
   { name: "editor-rich", role: "teacher", path: "/questions/q17", settle: 3000 },
   { name: "editor-categorize", role: "teacher", path: "/questions/q18", settle: 3000 },
   // A column left unnamed and a card emptied: the autosave's issues, on the fields and under the board.
+  // The tray emptied of its distractor: it takes no room above the "new card" field.
+  { name: "editor-categorize-empty-tray", role: "teacher", path: "/questions/q18", settle: 3000, act: async (p) => { await p.locator("li", { hasText: "string" }).getByRole("button", { name: /^Remove card/ }).click(); await p.waitForTimeout(500); } },
+  // ...and opens again while a card is dragged, to take it back (the pointer stays down).
+  { name: "editor-categorize-empty-tray-drag", role: "teacher", path: "/questions/q18", settle: 3000, act: async (p) => { await p.locator("li", { hasText: "string" }).getByRole("button", { name: /^Remove card/ }).click(); const grip = p.locator("li", { hasText: "double" }).getByRole("button", { name: /^Move card/ }); const b = await grip.boundingBox(); await p.mouse.move(b.x + 5, b.y + 5); await p.mouse.down(); await p.mouse.move(b.x + 20, b.y - 20, { steps: 4 }); await p.mouse.move(b.x + 40, b.y - 110, { steps: 8 }); await p.waitForTimeout(300); } },
   { name: "editor-categorize-issues", role: "teacher", path: "/questions/q18", settle: 3000, act: async (p) => { await p.getByRole("textbox", { name: "Column name 2" }).fill(""); await p.getByRole("textbox", { name: "Text of card 1" }).fill(""); await p.waitForTimeout(2500); } },
   { name: "editor-codeimage-try", role: "teacher", path: "/questions/q16", settle: 5000, act: async (p) => { await p.getByRole("button", { name: /try the reference solution|essayer la solution de référence/i }).click(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).waitFor(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).scrollIntoViewIfNeeded(); } },
   // "Student preview": a page of its own, opened by the editor in a new tab.

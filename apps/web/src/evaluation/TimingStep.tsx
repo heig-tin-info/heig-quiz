@@ -14,6 +14,7 @@ import {
   Button,
   Card,
   cx,
+  ErrorText,
   Field,
   FormError,
   isoDateTime,
@@ -108,9 +109,9 @@ function PresetCard({
 function MissingNote({ field }: { field: TimingField }) {
   const t = useT();
   return (
-    <p id={`${TIMING_FIELD_ID[field]}-missing`} className="max-w-52 text-[13px] text-danger">
+    <ErrorText id={`${TIMING_FIELD_ID[field]}-missing`} className="max-w-52">
       {t(missingTimingKey(field))}
-    </p>
+    </ErrorText>
   );
 }
 

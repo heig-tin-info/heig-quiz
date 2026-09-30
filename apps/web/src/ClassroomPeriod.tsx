@@ -9,7 +9,7 @@ import {
 } from "@quiz/domain";
 
 import { useT, type TFunction } from "./i18n";
-import { Field, FieldLabel, ToggleChip } from "./ui";
+import { ErrorText, Field, FieldLabel, ToggleChip } from "./ui";
 
 /**
  * The period of a classroom as the forms edit it (F-ORG-03, #156): a free
@@ -154,7 +154,7 @@ export function PeriodFields({
           />
         </div>
         {invalid ? (
-          <p className="text-[13px] text-danger">{t("classrooms.datesInvalid")}</p>
+          <ErrorText>{t("classrooms.datesInvalid")}</ErrorText>
         ) : undated ? null : (
           <p className="text-xs text-fg-faint">{t("classrooms.datesHint")}</p>
         )}

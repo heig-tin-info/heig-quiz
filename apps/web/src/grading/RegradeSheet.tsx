@@ -8,7 +8,7 @@ import { api } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { gradingItemVersionsKey } from "../queryKeys";
-import { Alert, Badge, FormError, QueryError, Skeleton, Textarea, cx, isoDateTime } from "../ui";
+import { Alert, Badge, cx, ErrorText, FormError, isoDateTime, QueryError, Skeleton, Textarea } from "../ui";
 import { useGradingInvalidate } from "./useGradingInvalidate";
 import { ValidatedSheet } from "./ValidatedSheet";
 
@@ -119,7 +119,7 @@ export function RegradeSheet({
               aria-invalid={touched && noteInvalid}
             />
             {touched && noteInvalid ? (
-              <p className="text-[13px] text-danger">{t("grading.regrade.noteRequired")}</p>
+              <ErrorText>{t("grading.regrade.noteRequired")}</ErrorText>
             ) : null}
           </div>
           <VersionPicker state={versions} chosen={chosen} onPick={setPicked} />

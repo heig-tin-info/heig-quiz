@@ -11,7 +11,7 @@ import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { useToast } from "../notify";
 import { emptyAnswerOf, QuestionPlayerHost, QuestionReviewHost, typeLabel } from "../questionTypes";
-import { Button, Field, FormError, IconButton, NotePanel, Sheet, Textarea } from "../ui";
+import { Button, ErrorText, Field, FormError, IconButton, NotePanel, Sheet, Textarea } from "../ui";
 import { RowMarks } from "./GradingTable";
 import { GradingHistory } from "./GradingHistory";
 import { gradingStateLabel, machineReason, sourceLabel, whoOf } from "./labels";
@@ -359,7 +359,7 @@ function AdjustForm({
         aria-invalid={touched && pointsInvalid}
       />
       {touched && pointsInvalid ? (
-        <p className="text-[13px] text-danger">{t("grading.override.pointsInvalid", range)}</p>
+        <ErrorText>{t("grading.override.pointsInvalid", range)}</ErrorText>
       ) : null}
       <div className="space-y-1.5">
         <Textarea
@@ -371,7 +371,7 @@ function AdjustForm({
           aria-invalid={touched && commentInvalid}
         />
         {touched && commentInvalid ? (
-          <p className="text-[13px] text-danger">{t("grading.override.commentRequired")}</p>
+          <ErrorText>{t("grading.override.commentRequired")}</ErrorText>
         ) : (
           <p className="text-xs text-fg-muted">
             {t("grading.override.commentHelp")} {t("grading.override.subtitle")}
