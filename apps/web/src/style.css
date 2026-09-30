@@ -368,6 +368,17 @@ html.dark {
   animation: menu-in 0.16s var(--ease-out-emphasized);
 }
 
+/* The indeterminate `Progress` (ui/feedback.tsx): a third of the track slides
+   from just off its left edge to just off its right one — 300 % of its own
+   width is the whole track. */
+@keyframes progress-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+.progress-indeterminate {
+  animation: progress-slide 1.2s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .toast-enter,
   .toast-leave,
@@ -377,6 +388,12 @@ html.dark {
   .sheet-panel,
   .menu-panel {
     animation-duration: 0.01ms;
+  }
+  /* Still "busy", without the motion: the whole track, faintly. */
+  .progress-indeterminate {
+    animation: none;
+    width: 100%;
+    opacity: 0.35;
   }
   * {
     transition-duration: 0.01ms !important;
@@ -511,6 +528,51 @@ html.dark {
 
 .md-body.md-sm { font-size: 13px; line-height: 1.5; }
 .md-body.md-sm p, .md-body.md-sm ul, .md-body.md-sm ol, .md-body.md-sm pre { margin-bottom: 8px; }
+
+/* `.md-doc`: long-form reading, the journal (DESIGN.md › Long-form reading).
+   A modifier, never the default: a question's prose keeps everything above.
+   The page IS the document, so its headings enter one step higher than in a
+   question card (h1 at the 28 px page-title step); the measure is capped at
+   72 characters and the leading opened to 1.75, because a page is read for
+   minutes, not scanned. Colours and radii are the `.md-body` ones — tokens,
+   so dark mode follows by itself. */
+.md-body.md-doc {
+  font-size: 14px;
+  line-height: 1.75;
+}
+/* The measure caps what is READ — prose, lists, quotes, headings. A code
+   block or a table is scanned, and keeps the column's width: capping it
+   would only make it scroll sooner. */
+.md-body.md-doc > p,
+.md-body.md-doc > ul,
+.md-body.md-doc > ol,
+.md-body.md-doc > blockquote,
+.md-body.md-doc > h1, .md-body.md-doc > h2, .md-body.md-doc > h3,
+.md-body.md-doc > h4, .md-body.md-doc > h5, .md-body.md-doc > h6 { max-width: 72ch; }
+.md-body.md-doc p,
+.md-body.md-doc ul,
+.md-body.md-doc ol,
+.md-body.md-doc blockquote,
+.md-body.md-doc pre,
+.md-body.md-doc table { margin: 0 0 16px; }
+.md-body.md-doc h1, .md-body.md-doc h2, .md-body.md-doc h3,
+.md-body.md-doc h4, .md-body.md-doc h5, .md-body.md-doc h6 {
+  /* Generous above, tight below: a heading belongs to what follows it. */
+  margin: 32px 0 12px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.md-body.md-doc h1 { font-size: 28px; letter-spacing: -0.02em; }
+.md-body.md-doc h2 { font-size: 20px; }
+.md-body.md-doc h3 { font-size: 16px; }
+.md-body.md-doc h4, .md-body.md-doc h5, .md-body.md-doc h6 { font-size: 14px; font-weight: 600; }
+.md-body.md-doc hr { margin: 32px 0; }
+/* Code is scanned, not read: it keeps the tighter leading. */
+.md-body.md-doc pre { line-height: 1.6; }
+.md-body.md-doc .md-math-display { margin: 16px 0; }
+/* After the heading rules, which would otherwise outrank `.md-body > :first-child`. */
+.md-body.md-doc > :first-child { margin-top: 0; }
+.md-body.md-doc > :last-child { margin-bottom: 0; }
 
 /* WP9: student player. `.md-inline` is the variant that renders INSIDE a host
    element which already is a paragraph or a label — a question prompt, one

@@ -28,6 +28,23 @@ export function Skeleton({ className = "h-4 w-full" }: { className?: string }) {
 }
 
 /**
+ * A job that takes seconds and whose length is unknown, as a thin bar under
+ * its label (DESIGN.md › Progress): a third of the track slides across, and
+ * no number is invented. One `progressbar`, named by the label, busy, with no
+ * value. A known count is a `SegmentedBar` with an `info` part.
+ */
+export function Progress({ label, className }: { label: string; className?: string }) {
+  return (
+    <div role="progressbar" aria-label={label} aria-busy="true" className={cx("space-y-1.5", className)}>
+      <p className="truncate text-[13px] text-fg-muted">{label}</p>
+      <div className="h-1 overflow-hidden rounded-full bg-surface-3">
+        <div className="progress-indeterminate h-full w-1/3 rounded-full bg-info" />
+      </div>
+    </div>
+  );
+}
+
+/**
  * The loading state of a whole page, in one shape: a title bar (plus the
  * tabs or toolbar row under it, `header="title-and-bar"`), then the body — a
  * block, or a summary strip over a block (`body="summary-and-block"`, for a

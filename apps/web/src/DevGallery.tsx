@@ -1,7 +1,7 @@
 import { DiagramEditor, DiagramView } from "@quiz/diagram/client";
 import { DIAGRAM_KINDS, EXAMPLES, type DiagramKind, type Scene } from "@quiz/diagram/server";
 import { Plot, SchematicEditor, SchematicView, withRoutes, type PlotProps, type SchematicEditorProps } from "@quiz/qt-circuit/canvas";
-import { Pencil, Trash2, UserMinus } from "lucide-react";
+import { Pencil, Trash2, UserMinus, Users } from "lucide-react";
 import { useState } from "react";
 
 import { useT } from "./i18n";
@@ -13,10 +13,13 @@ import {
   Button,
   Card,
   Countdown,
+  GithubIcon,
+  OrgAvatar,
   PeopleStack,
   PersonPill,
   Popover,
   PageHeader,
+  Progress,
   ProgressSegments,
   Ring,
   SectionHeading,
@@ -122,6 +125,50 @@ Ce qui suit est retiré par l'assainissement, et doit rester visible comme du te
 
 <img src="https://evil.example/pixel.png" onerror="alert(1)">`;
 
+
+/** A journal page (ADR-049), to see `.md-doc` beside the question prose above. */
+const LONG_FORM = `# Semaine 3 — Les pointeurs
+
+Un pointeur est une variable qui contient l'adresse d'une autre variable. Cette
+page reprend ce que nous avons vu en classe, avec les exemples du laboratoire,
+et prépare le test de la semaine prochaine. Lisez-la en entier avant le
+laboratoire : la dernière section contient les exercices à rendre.
+
+## Déclarer et déréférencer
+
+L'opérateur \`&\` donne l'adresse d'une variable, l'opérateur \`*\` lit ce qui se
+trouve à une adresse. Les deux sont inverses l'un de l'autre, ce qui se vérifie
+sur un exemple :
+
+\`\`\`c
+int x = 42;
+int *p = &x;      // p contient l'adresse de x
+printf("%d\\n", *p); /* affiche 42 */
+\`\`\`
+
+### Ce qu'il faut retenir
+
+- un pointeur a un type, celui de ce qu'il désigne ;
+- \`*p\` et \`x\` désignent le même objet tant que \`p == &x\` ;
+- un pointeur non initialisé ne désigne rien de sûr.
+
+> Un pointeur nul n'est pas un pointeur non initialisé : le premier ne désigne
+> rien, le second désigne n'importe quoi.
+
+---
+
+#### Exercices
+
+1. Écrivez une fonction \`swap\` qui échange deux entiers.
+2. Expliquez pourquoi \`swap(a, b)\` ne peut pas fonctionner sans pointeurs.`;
+
+/** The padding of the M1-04 rows, inside the shared `Row` card. */
+const M104_ROW = "flex flex-wrap items-center gap-6 p-4 sm:p-5";
+
+/** An organization's picture, drawn here so the gallery needs no network. */
+const ORG_PICTURE = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#1268a0"/><path d="M1 1h2v2H1zM5 1h2v2H5zM3 3h2v2H3zM1 5h2v2H1zM5 5h2v2H5z" fill="#e8f2f9"/></svg>',
+)}`;
 
 /* --- WP12, the `circuit` canvas -------------------------------------------
    The editor, the read-only view and the waveform plot, on one page, so the
@@ -438,6 +485,68 @@ export function DevGallery() {
             <Plot series={null} height={120} />
           </div>
         </div>
+      </section>
+
+      {/* M1-04, the primitives of the classroom merge. Last, so that the
+          sections above keep their place in the screenshot; padded inside,
+          without touching the shared `Row`. */}
+      <Row title={t("dev.ui.brand")}>
+        <div className={M104_ROW}>
+          <Specimen name="beside lucide">
+            <span className="flex items-center gap-2 text-fg-muted">
+              <Pencil className="size-4" />
+              <GithubIcon className="size-4" />
+              <Users className="size-4" />
+            </span>
+          </Specimen>
+          <Specimen name="size-5, fg">
+            <GithubIcon className="size-5 text-fg" />
+          </Specimen>
+          <Specimen name="button">
+            <Button size="sm" variant="secondary">
+              <GithubIcon /> GitHub
+            </Button>
+          </Specimen>
+          <Specimen name="actions">
+            <Actions label="GitHub" items={[{ label: "GitHub", icon: GithubIcon }]} />
+          </Specimen>
+        </div>
+      </Row>
+
+      <Row title={t("dev.ui.orgAvatar")}>
+        <div className={M104_ROW}>
+          {(["xs", "sm", "md"] as const).map((size) => (
+            <Specimen key={size} name={`${size}, picture`}>
+              <OrgAvatar login="heig-tin-info" src={ORG_PICTURE} size={size} />
+            </Specimen>
+          ))}
+          {(["xs", "sm", "md"] as const).map((size) => (
+            <Specimen key={size} name={`${size}, initials`}>
+              <OrgAvatar login="heig-tin-info" size={size} />
+            </Specimen>
+          ))}
+          <Specimen name="failed">
+            <OrgAvatar login="prg1-2026" src="/missing-org-avatar.png" size="md" />
+          </Specimen>
+          <Specimen name="beside a name">
+            <span className="flex items-center gap-2 text-sm font-medium">
+              <OrgAvatar login="heig-tin-info" /> heig-tin-info
+            </span>
+          </Specimen>
+        </div>
+      </Row>
+
+      <Row title={t("dev.ui.progress")}>
+        <div className="w-full max-w-md p-4 sm:p-5">
+          <Progress label={t("dev.ui.progressExplore")} />
+        </div>
+      </Row>
+
+      <section className="space-y-3">
+        <SectionHeading title={t("dev.ui.longForm")} />
+        <Card className="p-4 sm:p-6">
+          <MarkdownView source={LONG_FORM} className="md-doc" />
+        </Card>
       </section>
     </div>
   );

@@ -7,10 +7,12 @@
 //             arithmetic (listboxIndex, rovingIndex), on layers.
 //   controls  buttons and form controls.
 //   table     sortable tables: useSortableTable, the styles `T`, TableHead.
-//   identity  a person as a picture or initials (PersonAvatar, Avatar).
+//   identity  a person or an organization as a picture or initials
+//             (PersonAvatar, Avatar, OrgAvatar), and the GitHub mark
+//             (GithubIcon).
 //   dates     the account's date format, absolute and relative times, and a
 //             percentage in the interface language.
-//   feedback  Spinner, Skeleton, Kbd, Badge, Alert, EmptyState.
+//   feedback  Spinner, Skeleton, Progress, Kbd, Badge, Alert, EmptyState.
 //   page      surfaces and page structure: Card, PageHeader, Tabs…
 //             The six above are on layers and import no other sibling,
 //             except page, which reads rovingIndex from menu.
