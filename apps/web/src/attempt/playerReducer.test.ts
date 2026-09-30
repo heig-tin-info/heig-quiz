@@ -249,6 +249,16 @@ describe("playerReducer: replacing one item (ADR-018, sixth addendum)", () => {
     expect(next.items[1]).toBe(state.items[1]);
   });
 
+  it("reopens a validated question it replaces in forward_only", () => {
+    let state = load(view("forward_only", [item(1), item(2)], "i1"));
+    state = playerReducer(state, { type: "done", itemId: "i1", done: true });
+    expect(isLocked(state, "i1")).toBe(true);
+    const next = playerReducer(state, { type: "replace", item: item(1, { student: { prompt: "new" } }) });
+    expect(next.items[0]?.markedDone).toBe(false);
+    expect(isLocked(next, "i1")).toBe(false);
+    expect(canReach(next, 0)).toBe(true);
+  });
+
   it("ignores an item the walk does not hold", () => {
     const state = load(view("free", [item(1)]));
     expect(playerReducer(state, { type: "replace", item: item(9) })).toBe(state);

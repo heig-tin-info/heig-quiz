@@ -218,7 +218,7 @@ function PreviewWalk({
     }
     onRestart();
   };
-  const edit = usePreviewEdit({ evaluationId, preview: walk.preview, session, onRestart });
+  const edit = usePreviewEdit({ evaluationId, preview: walk.preview, session, askRestart });
 
   return (
     <>
@@ -246,7 +246,7 @@ function PreviewWalk({
             {current ? (
               <PreviewPoints
                 // A new question, a clean slate: no points of another one linger.
-                key={current.id}
+                key={`${current.id}:${current.generation ?? 0}`}
                 evaluationId={evaluationId}
                 seed={walk.preview.seed}
                 itemId={current.id}

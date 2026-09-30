@@ -224,7 +224,10 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
         item.id === id
           ? {
               ...toItem(action.item),
-              markedDone: item.markedDone,
+              // New content, no answer: nothing is validated any more. Kept
+              // done, the question would stay locked (forward_only,
+              // milestones) with no answer in it.
+              markedDone: false,
               flagged: item.flagged,
               generation: (item.generation ?? 0) + 1,
             }

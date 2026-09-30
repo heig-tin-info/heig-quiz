@@ -54,12 +54,13 @@ export function usePreviewEdit({
   evaluationId,
   preview,
   session,
-  onRestart,
+  askRestart,
 }: {
   evaluationId: string;
   preview: EvaluationPreview;
   session: PlayerSession;
-  onRestart: () => void;
+  /** The banner's Restart, confirmation included: answers are never dropped silently. */
+  askRestart: () => Promise<void>;
 }): { editButton: ReactNode; notice: ReactNode } {
   const t = useT();
   const qc = useQueryClient();
@@ -129,7 +130,7 @@ export function usePreviewEdit({
           icon={TriangleAlert}
           title={t("preview.changed.title")}
           action={
-            <Button variant="secondary" size="sm" onClick={onRestart}>
+            <Button variant="secondary" size="sm" onClick={() => void askRestart()}>
               {t("preview.restart")}
             </Button>
           }

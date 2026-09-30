@@ -156,10 +156,9 @@ export async function startPreview(
   seed: number,
 ): Promise<EvaluationPreview> {
   const settings = settingsOf(evaluation);
-  const [view, items] = await Promise.all([
-    live.previewView(db, evaluation, now, seed),
-    joinedItems(db, evaluation.id),
-  ]);
+  // One read: the view and the versions it is checked against are the same items.
+  const items = await joinedItems(db, evaluation.id);
+  const view = await live.previewView(db, evaluation, now, seed, items);
   return {
     seed,
     durationS: previewDurationS({
