@@ -585,6 +585,54 @@ function LayerClose({ onClose }: { onClose: () => void }) {
 }
 
 /**
+ * A layer's header (mark, title, subtitle, moves, close), its body and its
+ * footer: the one column a dialog, a sheet and a docked `Pane` share.
+ */
+function LayerColumn({
+  title,
+  subtitle,
+  onClose,
+  footer,
+  leading,
+  actions,
+  titleId,
+  headerClass,
+  bodyClass,
+  footerClass,
+  children,
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  onClose: () => void;
+  footer?: ReactNode;
+  leading?: ReactNode;
+  actions?: ReactNode;
+  titleId: string;
+  headerClass: string;
+  bodyClass: string;
+  footerClass: string;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <div className={headerClass}>
+        {leading ? <div className="mt-1 shrink-0">{leading}</div> : null}
+        <div className="min-w-0 flex-1">
+          <h2 id={titleId} className="text-lg font-bold tracking-tight">
+            {title}
+          </h2>
+          {subtitle ? <p className="mt-0.5 text-sm text-fg-muted">{subtitle}</p> : null}
+        </div>
+        {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
+        <LayerClose onClose={onClose} />
+      </div>
+      <div className={bodyClass}>{children}</div>
+      {footer ? <div className={footerClass}>{footer}</div> : null}
+    </>
+  );
+}
+
+/**
  * The shell `Modal` and `Sheet` share: a portalled backdrop, the dialog panel
  * registered on the layer stack, the title row with its close button, the
  * body and the optional footer. The two callers supply every class string, so
@@ -633,21 +681,12 @@ function LayerShell({
   const titleId = useId();
   useLayer(panel, onClose);
   const column = (
-    <>
-      <div className={headerClass}>
-        {leading ? <div className="mt-1 shrink-0">{leading}</div> : null}
-        <div className="min-w-0 flex-1">
-          <h2 id={titleId} className="text-lg font-bold tracking-tight">
-            {title}
-          </h2>
-          {subtitle ? <p className="mt-0.5 text-sm text-fg-muted">{subtitle}</p> : null}
-        </div>
-        {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
-        <LayerClose onClose={onClose} />
-      </div>
-      <div className={bodyClass}>{children}</div>
-      {footer ? <div className={footerClass}>{footer}</div> : null}
-    </>
+    <LayerColumn
+      {...{ title, subtitle, onClose, footer, leading, actions, titleId }}
+      {...{ headerClass, bodyClass, footerClass }}
+    >
+      {children}
+    </LayerColumn>
   );
   return createPortal(
     <div
@@ -736,6 +775,12 @@ export function Modal({
   );
 }
 
+/** A sheet's column, shared with the `Pane` that docks the same content. */
+const SHEET_HEADER = "flex items-start gap-3 border-b border-line px-6 pb-4 pt-5";
+const SHEET_BODY = "min-h-0 flex-1 overflow-y-auto";
+const SHEET_FOOTER =
+  "flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-6 py-3";
+
 /** The narrowest window that holds a docked `Sheet` aside beside a `lg` drawer. */
 export const ASIDE_MIN_WIDTH = 1280;
 
@@ -803,11 +848,61 @@ export function Sheet({
           docked ? cx("shrink-0", width === "lg" ? "w-190" : "w-150") : "flex-1",
         ),
       }}
-      headerClass="flex items-start gap-3 border-b border-line px-6 pb-4 pt-5"
-      bodyClass={cx("min-h-0 flex-1 overflow-y-auto", !flush && "px-6 py-5")}
-      footerClass="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-6 py-3"
+      headerClass={SHEET_HEADER}
+      bodyClass={cx(SHEET_BODY, !flush && "px-6 py-5")}
+      footerClass={SHEET_FOOTER}
     >
       {children}
     </LayerShell>
+  );
+}
+
+/**
+ * A `Sheet` that does not cover the page: the same header, body and footer,
+ * docked in the page's flow beside what opened it, which stays readable and
+ * clickable. Sticky under the top of the window, as tall as it at most, its
+ * body scrolling on its own. Not a dialog — no focus trap, no Escape of its
+ * own: the screen that docks it closes it, and a sheet may open over it.
+ *
+ * The screen docks it only when the window has room (`ASIDE_MIN_WIDTH`),
+ * widens its box by `width` (`pageBox`), and falls back to the `Sheet`
+ * otherwise.
+ */
+export function Pane({
+  width,
+  title,
+  subtitle,
+  onClose,
+  children,
+  footer,
+  leading,
+  actions,
+}: {
+  /** A CSS width, the one the screen widens its box by. */
+  width: string;
+  title: string;
+  subtitle?: ReactNode;
+  onClose: () => void;
+  children: ReactNode;
+  footer?: ReactNode;
+  leading?: ReactNode;
+  actions?: ReactNode;
+}) {
+  const titleId = useId();
+  return (
+    <aside
+      aria-labelledby={titleId}
+      style={{ width }}
+      className="sticky top-8 flex max-h-[calc(100dvh-4rem)] shrink-0 flex-col overflow-hidden rounded-card border border-line bg-surface"
+    >
+      <LayerColumn
+        {...{ title, subtitle, onClose, footer, leading, actions, titleId }}
+        headerClass={SHEET_HEADER}
+        bodyClass={cx(SHEET_BODY, "px-6 py-5")}
+        footerClass={SHEET_FOOTER}
+      >
+        {children}
+      </LayerColumn>
+    </aside>
   );
 }

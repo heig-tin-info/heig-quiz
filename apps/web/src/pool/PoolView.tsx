@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Eye, Plus, StarOff } from "lucide-react";
-import { useEffect, useMemo, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent } from "react";
 
 import type {
   CategoryNode,
@@ -24,7 +24,8 @@ import {
   ASIDE_MIN_WIDTH,
   Badge,
   Button,
-  PAGE_COLUMN,
+  pageBox,
+  PANE_GAP,
   PageError,
   PageHeader,
   PageSkeleton,
@@ -67,8 +68,8 @@ import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
  * The question shown sits in a master/detail pane, not in a Sheet: the list
  * stays where it is and keeps working (↑/↓ walk it, the pane follows, P shows
  * the focused row). From `ASIDE_MIN_WIDTH` the pane docks to the right and
- * the page widens past its reading cap by exactly the pane's width (below,
- * `DOCKED_BOX`); under it, the pane takes the list's place with a Back
+ * the page widens past its reading cap by exactly the pane's width
+ * (`pageBox`); under it, the pane takes the list's place with a Back
  * button, as in the question picker. There is no empty pane: it appears on
  * the first look, and which question it shows is the screen's state, never
  * the URL's.
@@ -132,27 +133,8 @@ import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
  * `total`, which knows nothing of the bounds.
  */
 
-/**
- * The page's own width. The pool is a `WIDE` route: the shell drops its cap
- * and this box draws it instead, from the same `PAGE_COLUMN`, so that the
- * docked pane can widen the page by exactly its own width and gap. Every
- * column comes back on a very wide screen; on a narrower one, the table gives
- * them up by `T`'s priorities, measured on its own container.
- *
- * The widened box does not re-centre: it keeps the list's left edge where it
- * was and grows to the right, and only moves left by what the window lacks —
- * a row clicked on a 27" screen stays under the pointer.
- */
+/** The docked question pane's width; the page widens by it (`pageBox`). */
 const PANE_WIDTH = "30rem";
-const PANE_GAP = "1.5rem";
-const READING = `(${PAGE_COLUMN.cap} - 2 * ${PAGE_COLUMN.gutter})`;
-const WIDENED = `(${READING} + ${PANE_GAP} + ${PANE_WIDTH})`;
-const READING_BOX: CSSProperties = { maxWidth: `calc${READING}`, marginInline: "auto" };
-const DOCKED_BOX: CSSProperties = {
-  maxWidth: `calc${WIDENED}`,
-  marginLeft: `max(0px, min((100% - ${READING}) / 2, 100% - ${WIDENED}))`,
-  marginRight: 0,
-};
 
 const VIEW_KEY = "quiz-pool-view";
 const VIEWS: readonly ListView[] = ["cards", "list"];
@@ -371,7 +353,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const readOnly = detail.role === "reader";
 
   return (
-    <div className="w-full space-y-6" style={shown && docked ? DOCKED_BOX : READING_BOX}>
+    <div className="w-full space-y-6" style={pageBox(shown && docked ? PANE_WIDTH : null)}>
       <PageHeader
         help="pool"
         eyebrow={

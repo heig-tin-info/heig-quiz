@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Check, PencilLine, RefreshCcw } from "lucide-react";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, type ComponentProps, type ReactNode } from "react";
 
 import type { GradingColumn } from "@quiz/core/client";
 import { justificationOf, type Grading, type GradingEntry } from "@quiz/contracts";
@@ -11,7 +11,17 @@ import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { useToast } from "../notify";
 import { emptyAnswerOf, QuestionPlayerHost, QuestionReviewHost, typeLabel } from "../questionTypes";
-import { Button, ErrorText, Field, FormError, IconButton, NotePanel, Sheet, Textarea } from "../ui";
+import {
+  Button,
+  ErrorText,
+  Field,
+  FormError,
+  IconButton,
+  NotePanel,
+  Pane,
+  Sheet,
+  Textarea,
+} from "../ui";
 import { RowMarks } from "./GradingTable";
 import { GradingHistory } from "./GradingHistory";
 import { gradingStateLabel, machineReason, sourceLabel, whoOf } from "./labels";
@@ -27,6 +37,8 @@ interface PanelProps {
   /** The question's number, from 1. */
   number: number;
   named: boolean;
+  /** The width of the pane it docks as beside the table; null, a sheet over it. */
+  pane: string | null;
   columns: GradingColumn[];
   /** The question as its students saw it: the expected panel's statement. */
   student: unknown;
@@ -42,11 +54,12 @@ interface PanelProps {
 }
 
 /**
- * The answer panel (ADR-044): one row of the table, read in full in a
- * sheet on the right — the question as the student saw it with their answer
- * and its verdict (the type's own `Review`), the explanation, the history,
- * and what the teacher does with it: validate the proposal, or adjust the
- * points with a comment.
+ * The answer panel (ADR-044): one row of the table, read in full on the
+ * right — docked beside the table when the window has room, so the table
+ * stays readable and clickable, in a sheet over it otherwise — the question
+ * as the student saw it with their answer and its verdict (the type's own
+ * `Review`), the explanation, the history, and what the teacher does with
+ * it: validate the proposal, or adjust the points with a comment.
  *
  * It is keyed on the ENTRY, never on a row's index: an answer validated
  * under "To validate" leaves the table, and the panel keeps showing it, now
@@ -72,7 +85,8 @@ export function AnswerPanel(props: PanelProps) {
   );
   if (target.kind === "expected") {
     return (
-      <Sheet
+      <Frame
+        pane={props.pane}
         title={t("grading.panel.question", { n: props.number })}
         subtitle={
           <>
@@ -97,10 +111,18 @@ export function AnswerPanel(props: PanelProps) {
         }
       >
         <ExpectedBody {...props} />
-      </Sheet>
+      </Frame>
     );
   }
-  return <EntrySheet {...props} target={target} moves={moves} />;
+  return <EntryPanel {...props} target={target} moves={moves} />;
+}
+
+/** A `Pane` beside the table, or a `Sheet` over it: the same content either way. */
+function Frame({
+  pane,
+  ...props
+}: Omit<ComponentProps<typeof Sheet>, "width" | "flush" | "aside"> & { pane: string | null }) {
+  return pane ? <Pane width={pane} {...props} /> : <Sheet {...props} />;
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -148,11 +170,12 @@ function ExpectedBody({ item, columns, student, explanation }: PanelProps) {
   );
 }
 
-function EntrySheet({
+function EntryPanel({
   evaluationId,
   target,
   item,
   named,
+  pane,
   explanation,
   onClose,
   onAdjust,
@@ -197,7 +220,8 @@ function EntrySheet({
     : t("grading.entry.state.ungraded");
 
   return (
-    <Sheet
+    <Frame
+      pane={pane}
       title={named ? whoOf(t, entry) : t("grading.panel.anonymous")}
       subtitle={
         <span className="flex flex-wrap items-center gap-1.5">
@@ -291,7 +315,7 @@ function EntrySheet({
           <GradingHistory history={entry.history} />
         </Section>
       </div>
-    </Sheet>
+    </Frame>
   );
 }
 

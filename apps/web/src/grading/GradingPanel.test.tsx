@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GradingEntry } from "@quiz/contracts";
 
@@ -265,6 +265,68 @@ describe("GradingPanel — the answer panel", () => {
     // not the next student's, which took its place in the table.
     await waitFor(() => expect(within(panel).getByText(/validated/)).toBeInTheDocument());
     expect(within(panel).getByText(/2 \/ 2 pts/)).toBeInTheDocument();
+  });
+
+  describe("on a wide window", () => {
+    const matchMedia = window.matchMedia;
+    beforeEach(() => {
+      vi.stubGlobal("matchMedia", (query: string) => ({
+        ...matchMedia(query),
+        matches: query === "(min-width: 1280px)",
+      }));
+    });
+    afterEach(() => {
+      vi.stubGlobal("matchMedia", matchMedia);
+    });
+
+    it("docks beside the table, which stays clickable and walkable, and closes on Escape", async () => {
+      mockFetch(routes([proposal("a1", 2), proposal("a2", 1)]));
+      renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+      await table();
+
+      await userEvent.click(rowOf("a1"));
+      const pane = await screen.findByRole("complementary", { name: "Anonymous answer" });
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(within(pane).getByText(/2 \/ 2 pts/)).toBeInTheDocument();
+
+      // Another row, clicked in the table the pane leaves open.
+      await userEvent.click(rowOf("a2"));
+      expect(await within(pane).findByText(/1 \/ 2 pts/)).toBeInTheDocument();
+      // The arrows walk the table with the pane open, in the visit's shuffled order.
+      const a1First =
+        rowOf("a1").compareDocumentPosition(rowOf("a2")) & Node.DOCUMENT_POSITION_FOLLOWING;
+      await userEvent.keyboard(a1First ? "{ArrowUp}" : "{ArrowDown}");
+      expect(await within(pane).findByText(/2 \/ 2 pts/)).toBeInTheDocument();
+
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("complementary")).toBeNull();
+    });
+
+    it("gives the focus back to the row when the pane is closed from inside", async () => {
+      mockFetch(routes([proposal("a1", 2)]));
+      renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+      await table();
+      await userEvent.click(rowOf("a1"));
+      const pane = await screen.findByRole("complementary", { name: "Anonymous answer" });
+
+      await userEvent.click(within(pane).getByRole("button", { name: "Close" }));
+      expect(screen.queryByRole("complementary")).toBeNull();
+      await waitFor(() => expect(rowOf("a1")).toHaveFocus());
+    });
+
+    it("lets ← / → change the question with the pane open, closing it", async () => {
+      mockFetch(routes([proposal("a1", 2)]));
+      renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+      await table();
+      await userEvent.click(rowOf("a1"));
+      await screen.findByRole("complementary", { name: "Anonymous answer" });
+
+      await userEvent.keyboard("{ArrowRight}");
+      expect(
+        await screen.findByRole("table", { name: "Answers to question 2" }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("complementary")).toBeNull();
+    });
   });
 
   it("shows an AI proposal's justification to the teacher, marked as never shown to the student", async () => {
