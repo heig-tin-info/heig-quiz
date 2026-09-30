@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   DRILL_FSRS_WEIGHTS,
-  DRILL_TARGET_RETENTION,
   drillRetrievability,
   isNewDrillCard,
   newDrillCard,
@@ -11,6 +10,7 @@ import {
   type DrillCard,
   type DrillRating,
 } from "./drillSchedule.js";
+import { DRILL_TARGET_RETENTION } from "./drillSession.js";
 
 const DAY = 86_400_000;
 const t0 = new Date("2026-10-01T08:00:00Z");

@@ -113,6 +113,11 @@ beforeAll(async () => {
   });
   // Alice sits another classroom of the same teacher: its cards are its own (28 (j)).
   other = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [alice.id], mode: "exercise", questions: 1 });
+  // A dated period, September to January: its weeks span it.
+  await server.app.db
+    .update(classrooms)
+    .set({ periodStart: "2026-09", periodEnd: "2027-01" })
+    .where(eq(classrooms.id, other.classroomId));
   for (const s of [seed, other]) {
     const on = await server.app.inject({
       method: "PUT",
@@ -154,7 +159,8 @@ afterAll(async () => {
 
 describe("the teacher's view of the drill: access", () => {
   it("is the classroom staff's alone: another teacher gets a 404, a student a 403", async () => {
-    for (const path of ["activity", "progress", "mastery"]) {
+    const [seat] = await server.app.db.select().from(enrollments).where(eq(enrollments.classroomId, seed.classroomId));
+    for (const path of ["activity", `progress?student=${seat!.id}`, "mastery"]) {
       expect((await get(`${base()}/${path}`, stranger)).statusCode).toBe(404);
       expect((await get(`${base()}/${path}`, alice)).statusCode).toBe(403);
       expect((await get(`${base()}/${path}`, teacher)).statusCode).toBe(200);
@@ -170,6 +176,7 @@ describe("the teacher's view of the drill: access", () => {
     expect((await get(`${base()}/progress?student=${foreign!.id}`, teacher)).statusCode).toBe(404);
     expect((await get(`${base()}/progress?student=${randomUUID()}`, teacher)).statusCode).toBe(404);
     expect((await get(`${base()}/progress?student=nope`, teacher)).statusCode).toBe(400);
+    expect((await get(`${base()}/progress`, teacher)).statusCode).toBe(400);
     const [seat] = await server.app.db.select().from(enrollments).where(eq(enrollments.classroomId, seed.classroomId));
     expect((await get(`${base()}/progress?student=${seat!.id}`, stranger)).statusCode).toBe(404);
   });
@@ -184,7 +191,7 @@ describe("the teacher's view of the drill: activity", () => {
       questionsSeen: 2,
       sessions: 5,
       lastReviewAt: "2026-11-19T08:00:00.000Z",
-      reviews: { last7: 2, last30: 2, all: 5 },
+      reviews: { last30: 2, all: 5 },
       optedOutAt: null,
     });
   });
@@ -232,18 +239,18 @@ describe("the teacher's view of the drill: activity", () => {
 });
 
 describe("the teacher's view of the drill: progression", () => {
-  async function progress(query = "") {
-    const res = await get(`${base()}/progress${query}`, teacher);
+  async function weeksOf(s: Seeded, userId: string) {
+    const [seat] = await server.app.db
+      .select()
+      .from(enrollments)
+      .where(and(eq(enrollments.classroomId, s.classroomId), eq(enrollments.userId, userId)));
+    const res = await get(`/app/api/classrooms/${s.classroomId}/drill/progress?student=${seat!.id}`, teacher);
     expect(res.statusCode).toBe(200);
     return DrillProgress.parse(res.json()).weeks;
   }
 
   it("buckets one student's reviews by Zurich week, every week of the drill's span included", async () => {
-    const [seat] = await server.app.db
-      .select()
-      .from(enrollments)
-      .where(and(eq(enrollments.classroomId, seed.classroomId), eq(enrollments.userId, alice.id)));
-    const weeks = await progress(`?student=${seat!.id}`);
+    const weeks = await weeksOf(seed, alice.id);
     // No dated period: from the week the drill was enabled to this one.
     expect(weeks.map((w) => w.weekStart)).toEqual([
       "2026-10-05",
@@ -254,39 +261,25 @@ describe("the teacher's view of the drill: progression", () => {
       "2026-11-09",
       "2026-11-16",
     ]);
-    expect(weeks[0]).toEqual({
-      weekStart: "2026-10-05",
-      reviews: 2,
-      sessions: 2,
-      questions: 2,
-      students: 1,
-      recall: { repeated: 0, recalled: 0 },
-    });
-    expect(weeks[1]).toMatchObject({ reviews: 1, recall: { repeated: 1, recalled: 0 } });
-    expect(weeks[2]).toMatchObject({ reviews: 0, students: 0 });
+    expect(weeks[0]).toEqual({ weekStart: "2026-10-05", reviews: 2, recall: { repeated: 0, recalled: 0 } });
+    expect(weeks[1]).toEqual({ weekStart: "2026-10-12", reviews: 1, recall: { repeated: 1, recalled: 0 } });
+    expect(weeks[2]).toMatchObject({ reviews: 0 });
     expect(weeks[6]).toMatchObject({ reviews: 2, recall: { repeated: 2, recalled: 2 } });
   });
 
-  it("sums the whole classroom without `student`, the opted-out review left out", async () => {
-    const weeks = await progress();
-    // Week of 5 Oct: Alice 2, Bob 2 (both days), Carol 1.
-    expect(weeks[0]).toMatchObject({ reviews: 5, sessions: 5, students: 3 });
-    // Week of 26 Oct: only Carol's review after her opt-out, which is hidden.
-    expect(weeks[3]).toMatchObject({ reviews: 0 });
+  it("leaves out the weeks after an opt-out, the ones before kept (28 (k))", async () => {
+    const weeks = await weeksOf(seed, carol.id);
+    expect(weeks[0]).toMatchObject({ reviews: 1 });
+    expect(weeks[1]).toMatchObject({ reviews: 1, recall: { repeated: 1, recalled: 1 } });
+    // Week of 26 Oct: only her review after the opt-out, which is hidden.
+    expect(weeks[3]).toMatchObject({ weekStart: "2026-10-26", reviews: 0 });
   });
 
   it("spans the classroom's dated period when it has one", async () => {
-    await server.app.db
-      .update(classrooms)
-      .set({ periodStart: "2026-09", periodEnd: "2027-01" })
-      .where(eq(classrooms.id, seed.classroomId));
-    const weeks = await progress();
+    // `other` is dated September to January: from the week of 1 September to this one.
+    const weeks = await weeksOf(other, alice.id);
     expect(weeks[0]!.weekStart).toBe("2026-08-31");
-    expect(weeks.at(-1)!.weekStart).toBe("2026-11-16");
-    await server.app.db
-      .update(classrooms)
-      .set({ periodStart: null, periodEnd: null })
-      .where(eq(classrooms.id, seed.classroomId));
+    expect(weeks.at(-1)).toMatchObject({ weekStart: "2026-11-16", reviews: 2 });
   });
 });
 

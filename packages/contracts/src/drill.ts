@@ -162,7 +162,7 @@ export const DrillStudentActivity = z.object({
   /** Distinct days (Europe/Zurich) with a review. */
   sessions: z.number().int(),
   lastReviewAt: z.iso.datetime().nullable(),
-  reviews: z.object({ last7: z.number().int(), last30: z.number().int(), all: z.number().int() }),
+  reviews: z.object({ last30: z.number().int(), all: z.number().int() }),
   recall: z.object({
     last30: DrillRecall,
     /** Days 30 to 60 before now: what the trend compares the last 30 days with. */
@@ -173,27 +173,22 @@ export const DrillStudentActivity = z.object({
 });
 export type DrillStudentActivity = z.infer<typeof DrillStudentActivity>;
 
-/** `GET /classrooms/:id/drill/progress?student=`: one student's weeks (an enrollment id), or the whole classroom's. */
-export const DrillProgressQuery = z.object({ student: z.uuid().optional() });
+/** `GET /classrooms/:id/drill/progress?student=`: one student's weeks, by their enrollment id. */
+export const DrillProgressQuery = z.object({ student: z.uuid() });
 export type DrillProgressQuery = z.infer<typeof DrillProgressQuery>;
 
 export const DrillWeek = z.object({
   /** The Monday of the week (Europe/Zurich), `YYYY-MM-DD`. */
   weekStart: z.iso.date(),
   reviews: z.number().int(),
-  /** Distinct days with a review; summed over the students for the whole classroom. */
-  sessions: z.number().int(),
-  /** Distinct cards reviewed that week. */
-  questions: z.number().int(),
-  /** Students with a review that week. */
-  students: z.number().int(),
   recall: DrillRecall,
 });
 export type DrillWeek = z.infer<typeof DrillWeek>;
 
 /**
- * Every week of the classroom's dated period up to today — or, without one,
- * from the drill's start — empty weeks included, so the trend reads.
+ * One student's weeks over the classroom's dated period up to today — or,
+ * without one, from the drill's start — empty weeks included, so the trend
+ * reads.
  */
 export const DrillProgress = z.object({ weeks: z.array(DrillWeek) });
 export type DrillProgress = z.infer<typeof DrillProgress>;

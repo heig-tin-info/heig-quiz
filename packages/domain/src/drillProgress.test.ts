@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  drillLocalDate,
   drillProgressRange,
   drillRecallCounts,
   drillRecallRate,
   drillRecallTrend,
-  drillWeekOf,
   drillWeekStarts,
   DRILL_MAX_WEEKS,
   type DrillReviewFact,
@@ -60,21 +58,12 @@ describe("drillRecallRate and drillRecallTrend", () => {
 });
 
 describe("the weeks", () => {
-  it("counts a date on the Zurich clock", () => {
-    // 23:30 UTC on 4 October is already the 5th in Zurich (UTC+2).
-    expect(drillLocalDate(new Date("2026-10-04T23:30:00Z"))).toBe("2026-10-05");
-    expect(drillLocalDate(new Date("2026-12-31T22:59:00Z"))).toBe("2026-12-31");
-  });
-
-  it("starts a week on Monday", () => {
-    expect(drillWeekOf("2026-10-05")).toBe("2026-10-05"); // a Monday
-    expect(drillWeekOf("2026-10-11")).toBe("2026-10-05"); // the Sunday after
-    expect(drillWeekOf("2027-01-01")).toBe("2026-12-28"); // across the year
-  });
-
-  it("lists every week of a range, empty ones included, capped at the latest weeks", () => {
+  it("lists the Monday of every week of a range, capped at the latest weeks", () => {
+    // A Wednesday to a Tuesday: the weeks start on Mondays.
     expect(drillWeekStarts("2026-10-07", "2026-10-20")).toEqual(["2026-10-05", "2026-10-12", "2026-10-19"]);
-    expect(drillWeekStarts("2026-10-07", "2026-10-07")).toEqual(["2026-10-05"]);
+    // A Sunday is the end of its week; a range across the new year.
+    expect(drillWeekStarts("2026-10-11", "2026-10-11")).toEqual(["2026-10-05"]);
+    expect(drillWeekStarts("2026-12-30", "2027-01-01")).toEqual(["2026-12-28"]);
     const long = drillWeekStarts("2020-01-01", "2026-10-07");
     expect(long).toHaveLength(DRILL_MAX_WEEKS);
     expect(long.at(-1)).toBe("2026-10-05");

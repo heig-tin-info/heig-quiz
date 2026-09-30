@@ -10,14 +10,6 @@
  * reference definition is {@link drillRecallCounts}, and the database test
  * holds the two to the same numbers.
  */
-import { DRILL_TIME_ZONE } from "./drillSession.js";
-
-/**
- * The share of cards the scheduler aims to have remembered when they come
- * due (ADR-041 §5): what a recall rate near target means the schedule works.
- */
-export const DRILL_TARGET_RETENTION = 0.9;
-
 /** A review counts as recalled from this rating on: anything but 1 Again. */
 export const DRILL_RECALLED_MIN_RATING = 2;
 
@@ -96,13 +88,8 @@ const DAY_MS = 86_400_000;
 const toDate = (d: IsoDate) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10));
 const fromDate = (ms: number): IsoDate => new Date(ms).toISOString().slice(0, 10);
 
-/** The calendar date of an instant on the drill's clock (Europe/Zurich), where its days are counted. */
-export function drillLocalDate(at: Date, timeZone: string = DRILL_TIME_ZONE): IsoDate {
-  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
-}
-
 /** The Monday of the week holding `date`: a week runs Monday to Sunday, as PostgreSQL's `date_trunc('week')`. */
-export function drillWeekOf(date: IsoDate): IsoDate {
+function weekOf(date: IsoDate): IsoDate {
   const ms = toDate(date);
   const weekday = (new Date(ms).getUTCDay() + 6) % 7;
   return fromDate(ms - weekday * DAY_MS);
@@ -113,8 +100,8 @@ export const DRILL_MAX_WEEKS = 104;
 
 /** The Mondays of every week from the one holding `from` to the one holding `to`, both included. */
 export function drillWeekStarts(from: IsoDate, to: IsoDate): IsoDate[] {
-  const first = toDate(drillWeekOf(from));
-  const last = toDate(drillWeekOf(to));
+  const first = toDate(weekOf(from));
+  const last = toDate(weekOf(to));
   const weeks: IsoDate[] = [];
   for (let ms = last; ms >= first && weeks.length < DRILL_MAX_WEEKS; ms -= 7 * DAY_MS) weeks.push(fromDate(ms));
   return weeks.reverse();
@@ -129,7 +116,7 @@ export function drillWeekStarts(from: IsoDate, to: IsoDate): IsoDate[] {
 export function drillProgressRange(input: {
   periodStart: string | null;
   periodEnd: string | null;
-  /** Local dates (`drillLocalDate`). */
+  /** Local dates (`drillLocalDate` of `drillSession.ts`). */
   enabledOn: IsoDate | null;
   firstReviewOn: IsoDate | null;
   today: IsoDate;

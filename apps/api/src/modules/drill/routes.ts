@@ -178,7 +178,7 @@ export async function drillPlugin(app: FastifyInstance) {
     ),
   );
 
-  /** The weeks of one student's progression (`?student=`, an enrollment id), or of the whole classroom. */
+  /** The weeks of one student's progression (`?student=`, an enrollment id of this classroom). */
   app.get(
     "/app/api/classrooms/:id/drill/progress",
     { preHandler: requireTeacher },

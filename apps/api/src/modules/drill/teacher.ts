@@ -13,6 +13,10 @@
  *     any window or opt-out cut, and left out of the recall rate — the
  *     definition of `drillRecallCounts` (`@quiz/domain`), which the database
  *     test holds this SQL to;
+ *   - no read filters deleted questions: a card exists only for a question
+ *     an evaluation holds, which the pool refuses to delete, soft or hard
+ *     (`isQuestionInUse`), and deleting the evaluation takes the cards and
+ *     their reviews with it (the cascade of 28 (a));
  *   - each read is a bounded number of queries, whatever the class size.
  */
 import { and, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
@@ -29,7 +33,7 @@ import { drillRetrievability } from "@quiz/domain/drillSchedule";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { drillCards, drillReviews, enrollments, questions, questionTags } from "../../db/schema.js";
+import { drillCards, drillReviews, enrollments, questionTags } from "../../db/schema.js";
 
 const DAY_MS = 86_400_000;
 
@@ -41,7 +45,7 @@ const studentSeat = (classroomId: string) => and(eq(enrollments.classroomId, cla
  * they belong to and whether each is its card's first. The window function
  * runs on the card's whole history, then the opt-out cut applies.
  */
-function visibleReviews(db: Db, classroomId: string, seat?: SQL) {
+function visibleReviews(db: Db, classroomId: string) {
   const ranked = db
     .select({
       cardId: drillReviews.cardId,
@@ -72,7 +76,6 @@ function visibleReviews(db: Db, classroomId: string, seat?: SQL) {
         studentSeat(classroomId),
         eq(enrollments.userId, ranked.userId),
         or(isNull(enrollments.drillOptedOutAt), sql`${ranked.reviewedAt} < ${enrollments.drillOptedOutAt}`),
-        seat,
       ),
     )
     .as("visible");
@@ -98,7 +101,6 @@ const localDay = (v: Visible) => sql`(${v.reviewedAt} at time zone ${ZONE})::dat
 /** One row per student seat of the classroom: two queries, whatever its size. */
 export async function classroomActivity(db: Db, classroomId: string, now: Date): Promise<DrillStudentActivity[]> {
   const v = visibleReviews(db, classroomId);
-  const d7 = new Date(now.getTime() - 7 * DAY_MS);
   const d30 = new Date(now.getTime() - 30 * DAY_MS);
   const d60 = new Date(now.getTime() - 60 * DAY_MS);
   const [seats, stats] = await Promise.all([
@@ -118,7 +120,6 @@ export async function classroomActivity(db: Db, classroomId: string, now: Date):
         questionsSeen: sql<number>`count(distinct ${v.cardId})::int`,
         sessions: sql<number>`count(distinct ${localDay(v)})::int`,
         lastReviewAt: sql<Date>`max(${v.reviewedAt})`.mapWith(drillReviews.reviewedAt),
-        last7: count(since(v, d7)),
         last30: count(since(v, d30)),
         all: sql<number>`count(*)::int`,
         r30: recallOf(v, since(v, d30)),
@@ -139,7 +140,7 @@ export async function classroomActivity(db: Db, classroomId: string, now: Date):
       questionsSeen: s?.questionsSeen ?? 0,
       sessions: s?.sessions ?? 0,
       lastReviewAt: s ? iso(s.lastReviewAt) : null,
-      reviews: { last7: s?.last7 ?? 0, last30: s?.last30 ?? 0, all: s?.all ?? 0 },
+      reviews: { last30: s?.last30 ?? 0, all: s?.all ?? 0 },
       recall: { last30: s?.r30 ?? none, previous30: s?.rPrev ?? none, all: s?.rAll ?? none },
       optedOutAt: isoOrNull(seat.optedOutAt),
     };
@@ -147,58 +148,40 @@ export async function classroomActivity(db: Db, classroomId: string, now: Date):
 }
 
 /**
- * The weeks of the progression, for one student seat or, without one, the
- * whole classroom. Null when the seat is not a student seat of the
+ * One student seat's weeks. Null when the seat is not a student seat of the
  * classroom: the route's 404.
  */
 export async function classroomProgress(
   db: Db,
   classroom: { id: string; periodStart: string | null; periodEnd: string | null; drillEnabledAt: Date | null },
-  enrollmentId: string | undefined,
+  enrollmentId: string,
   now: Date,
 ): Promise<DrillProgress | null> {
-  if (enrollmentId !== undefined) {
-    const [seat] = await db
-      .select({ id: enrollments.id })
-      .from(enrollments)
-      .where(and(studentSeat(classroom.id), eq(enrollments.id, enrollmentId)));
-    if (!seat) return null;
-  }
-  const v = visibleReviews(db, classroom.id, enrollmentId === undefined ? undefined : eq(enrollments.id, enrollmentId));
+  const [seat] = await db
+    .select({ id: enrollments.id })
+    .from(enrollments)
+    .where(and(studentSeat(classroom.id), eq(enrollments.id, enrollmentId)));
+  if (!seat) return null;
+  const v = visibleReviews(db, classroom.id);
   const week = sql<string>`to_char(date_trunc('week', ${localDay(v)}), 'YYYY-MM-DD')`;
   const rows = await db
-    .select({
-      weekStart: week,
-      reviews: sql<number>`count(*)::int`,
-      sessions: sql<number>`count(distinct (${v.userId}, ${localDay(v)}))::int`,
-      questions: sql<number>`count(distinct ${v.cardId})::int`,
-      students: sql<number>`count(distinct ${v.userId})::int`,
-      recall: recallOf(v),
-    })
+    .select({ weekStart: week, reviews: sql<number>`count(*)::int`, recall: recallOf(v) })
     .from(v)
+    .where(eq(v.enrollmentId, seat.id))
     .groupBy(week);
 
-  const first = rows.map((r) => r.weekStart).sort()[0] ?? null;
   const range = drillProgressRange({
     periodStart: classroom.periodStart,
     periodEnd: classroom.periodEnd,
     enabledOn: classroom.drillEnabledAt ? drillLocalDate(classroom.drillEnabledAt) : null,
-    firstReviewOn: first,
+    firstReviewOn: rows.map((r) => r.weekStart).sort()[0] ?? null,
     today: drillLocalDate(now),
   });
   if (!range) return { weeks: [] };
   const byWeek = new Map(rows.map((r) => [r.weekStart, r]));
   return {
     weeks: drillWeekStarts(range.from, range.to).map(
-      (weekStart) =>
-        byWeek.get(weekStart) ?? {
-          weekStart,
-          reviews: 0,
-          sessions: 0,
-          questions: 0,
-          students: 0,
-          recall: { repeated: 0, recalled: 0 },
-        },
+      (weekStart) => byWeek.get(weekStart) ?? { weekStart, reviews: 0, recall: { repeated: 0, recalled: 0 } },
     ),
   };
 }
@@ -216,7 +199,6 @@ export async function classroomMastery(db: Db, classroomId: string, now: Date): 
     .select({ card: drillCards, tag: questionTags.tag })
     .from(drillCards)
     .innerJoin(enrollments, and(studentSeat(classroomId), eq(enrollments.userId, drillCards.userId)))
-    .innerJoin(questions, and(eq(questions.id, drillCards.questionId), isNull(questions.deletedAt)))
     .leftJoin(questionTags, eq(questionTags.questionId, drillCards.questionId))
     .where(and(eq(drillCards.classroomId, classroomId), isNotNull(drillCards.lastReviewAt)));
 
