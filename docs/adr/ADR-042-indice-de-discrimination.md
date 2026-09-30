@@ -39,10 +39,12 @@ score and the test total. Four facts constrain it here:
 ### 1. Population: ADR-038's counted answers, exams only, graded in full
 
 The index reads EXACTLY the answers the success rate counts (ADR-038 §2 and
-ADR-039 §5, one query, one `countedAttempt()` predicate, one kept filter):
+ADR-039 §5, one query, one `countedAttempt()` predicate):
 validated, of a student account, not a staff seat, finished, started, at or
 after the question's `stats_since`, and not "never reached" on a tracked
-attempt. Then two stricter rules:
+attempt. *(Since 2026-09-30 those answers are of exams only, ADR-038 §2, so
+the first rule below is now the success rate's own.)* Then two stricter
+rules:
 
 - **Exams only.** An exercise is done over days with retakes and help; its
   "rest of the test" is not a measure of the student.

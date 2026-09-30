@@ -275,11 +275,15 @@ describe("the distractor analysis (ADR-043)", () => {
     expect(await distractorsOf(seed, q)).toMatchObject({ n: 10, options: [{ share: 70 }, { share: 20 }, { share: 10 }] });
   });
 
-  it("counts what the success rate counts: exercises, not polls nor staff seats, since the reset", async () => {
+  it("counts what the success rate counts: exams, not exercises, polls nor staff seats, since the reset", async () => {
     const seed = await seedLive(db, { students: 12, questions: 0 });
     const q = await mcqQuestion(seed, mcq(SINGLE));
     const students = seed.studentIds;
-    await sit(await evaluationOf(seed, q, "exercise"), students, SEVEN_TWO_ONE);
+    // An exercise alone is never counted, whatever its number of answers.
+    await sit(await evaluationOf(seed, q, "exercise"), students, Array.from({ length: 10 }, () => [2]));
+    expect(await distractorsOf(seed, q)).toBeUndefined();
+    const exam = await evaluationOf(seed, q);
+    await sit(exam, students, SEVEN_TWO_ONE);
     // A poll on the question, and the teacher's own walk from a staff seat.
     await sit(await evaluationOf(seed, q, "poll"), students, Array.from({ length: 10 }, () => [2]));
     await db.insert(enrollments).values({
@@ -291,7 +295,6 @@ describe("the distractor analysis (ADR-043)", () => {
       userId: seed.teacherId,
       staff: true,
     });
-    const exam = await evaluationOf(seed, q);
     await sit(exam, [seed.teacherId], [[2]]);
 
     expect(await distractorsOf(seed, q)).toMatchObject({ n: 10, options: [{ share: 70 }, { share: 20 }, { share: 10 }] });
@@ -299,7 +302,7 @@ describe("the distractor analysis (ADR-043)", () => {
     // After a reset, only attempts started since count: the ten above are gone.
     await poolService.resetQuestionStats(db, q, new Date("2026-09-05T08:00:00.000Z"));
     const later = new Date("2026-09-06T08:00:00.000Z");
-    await sit(exam, students.slice(0, 10), Array.from({ length: 10 }, () => [1]), { startedAt: later });
+    await sit(await evaluationOf(seed, q), students.slice(0, 10), Array.from({ length: 10 }, () => [1]), { startedAt: later });
     expect(await distractorsOf(seed, q)).toMatchObject({ n: 10, options: [{ share: 0 }, { share: 100 }, { share: 0 }] });
   });
 });

@@ -6,27 +6,26 @@
  * of the answers counted, with their number `n`, shown only from
  * `QUESTION_STATS_MIN_N` answers on — the threshold is applied HERE, so a
  * smaller `n` never leaves the server. An answer is counted when it is the
- * validated grading of a question's item, in an exam or an exercise, on a
- * finished attempt of a student account that is not a staff seat (ADR-018),
- * started at or after the question's `stats_since`, and on the student's
- * KEPT attempt (ADR-025). A blank or skipped question counts 0; a question
- * the student never had on screen is left out (ADR-039) — except on the
- * attempts from before the dwell was measured (`display_tracked` false),
- * where it still counts 0; a student with no attempt is not counted.
+ * validated grading of a question's item, in an EXAM (never an exercise,
+ * ADR-038 §2), on a finished attempt of a student account that is not a
+ * staff seat (ADR-018), started at or after the question's `stats_since`.
+ * A blank or skipped question counts 0; a question the student never had on
+ * screen is left out (ADR-039) — except on the attempts from before the
+ * dwell was measured (`display_tracked` false), where it still counts 0; a
+ * student with no attempt is not counted.
  *
  * The TIME spent on a question (ADR-039) is its own series, with its own
  * threshold (`QUESTION_TIME_MIN_N`): the dwell of every answer of an EXAM
  * that was on screen, blanks and skips included, since the time on the
  * question is what the exam cost whatever the answer. It is shown on a
- * question that already qualifies on `n`, never alone. An exam has one
- * attempt, so there is no kept attempt to pick; a grading is not needed —
- * the time was spent whatever the points.
+ * question that already qualifies on `n`, never alone. A grading is not
+ * needed — the time was spent whatever the points.
  *
- * The DISCRIMINATION index (ADR-042) reads the same counted answers, exams
- * only, and keeps an attempt only when every OTHER item of the exam has a
- * validated grading too: the rest of the test must be a grade, not a
- * proposal. Per exam, the corrected point-biserial of `@quiz/domain`; over
- * the exams, Fisher's z. Null when no exam qualifies.
+ * The DISCRIMINATION index (ADR-042) reads the same counted answers and
+ * keeps an attempt only when every OTHER item of the exam has a validated
+ * grading too: the rest of the test must be a grade, not a proposal. Per
+ * exam, the corrected point-biserial of `@quiz/domain`; over the exams,
+ * Fisher's z. Null when no exam qualifies.
  *
  * The DISTRACTORS of a multiple-choice question (ADR-043) read the same
  * counted answers too, narrowed to the versions that carry the latest
@@ -69,17 +68,18 @@ import {
   questions,
 } from "../../db/schema.js";
 import { isStaffAttempt } from "../evaluation/service.js";
-import { keptAttemptsOf, pairKey, type PairKey } from "../grading/service.js";
+import { pairKey, type PairKey } from "../grading/service.js";
 import { answeredBy } from "../live/service.js";
 import { tryLoadConfig, typeOf } from "../pool/config.js";
 
 /**
- * What makes an attempt count, whatever the series: a finished attempt of a
- * student account that is not a staff seat, started at or after the
- * question's `stats_since`.
+ * What makes an attempt count, whatever the series: a finished attempt of an
+ * exam, by a student account that is not a staff seat, started at or after
+ * the question's `stats_since`.
  */
 function countedAttempt(): SQL {
   return and(
+    eq(evaluations.mode, "exam"),
     isNotNull(attempts.userId),
     inArray(attempts.state, ["submitted", "expired"]),
     isNotNull(attempts.startedAt),
@@ -94,13 +94,12 @@ function countedAttempt(): SQL {
  * Every question of the pool that has enough answers, with the instant its
  * statistics start from and its time; the others are absent.
  *
- * Three queries for the candidates and the evaluations they come from, two
- * for the kept attempts, one for the time, two for the discrimination, one
- * for the versions of the multiple-choice questions (their answers come with
- * the candidates). Every answer travels to the process; should a
- * pool's history grow too large for that, the same filters pre-aggregate in
- * SQL (`count`, `avg(points / max_points)` by question) and only the
- * attempts of students who retook an exercise are fetched one by one.
+ * One query for the counted answers, one for the time, two for the
+ * discrimination, one for the versions of the multiple-choice questions
+ * (their answers come with the counted ones). Every answer travels to the
+ * process; should a pool's history grow too large for that, the same
+ * filters pre-aggregate in SQL (`count`, `avg(points / max_points)` by
+ * question).
  */
 export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQuestionStats> {
   const rows = await db
@@ -111,7 +110,6 @@ export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQue
       since: questions.statsSince,
       attemptId: attempts.id,
       evaluationId: evaluations.id,
-      mode: evaluations.mode,
       itemId: evaluationItems.id,
       points: gradings.points,
       maxPoints: gradings.maxPoints,
@@ -136,7 +134,6 @@ export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQue
     .where(
       and(
         eq(questions.poolId, poolId),
-        inArray(evaluations.mode, ["exam", "exercise"]),
         countedAttempt(),
         // Not reached (ADR-039): a question never on screen says nothing of
         // its difficulty. Only a tracked attempt can tell.
@@ -144,28 +141,16 @@ export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQue
       ),
     );
 
-  const evaluationIds = [...new Set(rows.map((r) => r.evaluationId))];
-  const kept = new Set<string>();
-  if (evaluationIds.length > 0) {
-    const found = await db.select().from(evaluations).where(inArray(evaluations.id, evaluationIds));
-    for (const byUser of (await keptAttemptsOf(db, found)).values()) {
-      for (const attempt of byUser.values()) kept.add(attempt.id);
-    }
-  }
-
-  // Only the kept attempt counts — never a fallback to another attempt when
-  // the kept one's grading of the item is still a proposal.
-  const counted = rows.filter((row) => kept.has(row.attemptId));
   const scored = new Map<string, ScoredAnswer[]>();
   const sinceOf = new Map<string, Date | null>();
-  for (const row of counted) {
+  for (const row of rows) {
     push(scored, row.questionId, row);
     sinceOf.set(row.questionId, row.since);
   }
 
   const dwells = await dwellsOf(db, poolId);
-  const discriminations = await discriminationsOf(db, counted.filter((row) => row.mode === "exam"));
-  const distractors = await distractorsOf(db, counted.filter((row) => row.type === DISTRACTOR_TYPE));
+  const discriminations = await discriminationsOf(db, rows);
+  const distractors = await distractorsOf(db, rows.filter((row) => row.type === DISTRACTOR_TYPE));
   const items: PoolQuestionStats["items"] = [];
   for (const [questionId, list] of scored) {
     const shown = shownItemStats(itemStats(list));
@@ -203,7 +188,6 @@ async function dwellsOf(db: Db, poolId: string): Promise<Map<string, number[]>> 
     .where(
       and(
         eq(questions.poolId, poolId),
-        eq(evaluations.mode, "exam"),
         countedAttempt(),
         eq(attempts.displayTracked, true),
         // A positive dwell: the question was on screen (the series' one filter).
@@ -226,11 +210,11 @@ interface CountedExamAnswer extends ScoredAnswer {
 /**
  * The per-exam samples of the discrimination index (ADR-042), by question.
  *
- * `counted` are the answers the success rate counts, of exams only: the
- * population rules live in {@link countedAttempt}, the not-reached rule and
- * the kept filter, once. An attempt enters an exam's sample only when every
- * other item worth something has a VALIDATED grading on it; the rest of the
- * test is the ratio of its points to its maximum, over those other items.
+ * `counted` are the answers the success rate counts: the population rules
+ * live in {@link countedAttempt} and the not-reached rule, once. An attempt
+ * enters an exam's sample only when every other item worth something has a
+ * VALIDATED grading on it; the rest of the test is the ratio of its points
+ * to its maximum, over those other items.
  */
 async function discriminationsOf(
   db: Db,
@@ -316,10 +300,10 @@ interface Choices {
  * are all of type {@link DISTRACTOR_TYPE}: an entry per question, null below
  * the threshold.
  *
- * `counted` are the answers the success rate counts — the same rows, kept
- * attempts and not-reached rule, exams and exercises alike —, narrowed here
- * to the published versions whose options (text and key, in order) are
- * the LATEST published version's, wherever they stand (`sameAsLatest`).
+ * `counted` are the answers the success rate counts, with the same
+ * population and not-reached rule, narrowed here to the published versions
+ * whose options (text and key, in order) are the LATEST published
+ * version's, wherever they stand (`sameAsLatest`).
  * The counting is the type's own `aggregate` (ADR-033), through the
  * registry, and "picked nothing" is `answeredBy`, both as the class debrief
  * of the results module reads them; the options are read through the one

@@ -3,11 +3,11 @@
  * attempts on an exercise is the student's result, `best` or `last`.
  *
  * The rule is `@quiz/domain#keptAttempt`; this file only feeds it the
- * validated points of each attempt. The results, the CSV, the release, the
- * per-question statistics and the student's own cards all read it from here,
- * so they can never disagree on which attempt counts. An evaluation where
- * every student holds one attempt — every exam, every exercise without
- * retakes — costs one query and no points at all.
+ * validated points of each attempt. The results, the CSV, the release and
+ * the student's own cards all read it from here, so they can never disagree
+ * on which attempt counts. An evaluation where every student holds one
+ * attempt — every exam, every exercise without retakes — costs one query and
+ * no points at all.
  *
  * Imported through `./service.ts`. It reads `attempts` (the `live` module's)
  * by select and `gradings` (this module's), and writes nothing.
@@ -105,48 +105,27 @@ async function talliesFor(
 }
 
 /**
- * The kept attempt of every account on each of `evaluations`, keyed by
- * evaluation id then user id, in two queries whatever their number. With one
- * attempt per student it is simply that attempt, and costs no points.
+ * The kept attempt of every account on `evaluation`, keyed by user id, in
+ * two queries at most. With one attempt per student it is simply that
+ * attempt, and costs no points.
  */
-export async function keptAttemptsOf(
-  db: Db,
-  evaluations: readonly EvaluationRecord[],
-): Promise<Map<string, Map<string, AttemptRecord>>> {
-  if (evaluations.length === 0) return new Map();
-  const rows = await db
-    .select()
-    .from(attempts)
-    .where(inArray(attempts.evaluationId, evaluations.map((e) => e.id)))
-    .orderBy(asc(attempts.attemptNumber));
-  const byEvaluation = new Map<string, AttemptRecord[]>();
-  for (const row of rows) {
-    const list = byEvaluation.get(row.evaluationId) ?? [];
-    list.push(row);
-    byEvaluation.set(row.evaluationId, list);
-  }
-  const groups = new Map(
-    evaluations.map((e) => [e.id, byUser(byEvaluation.get(e.id) ?? [])] as const),
-  );
-  const tallies = await talliesFor(db, [...groups.values()].flatMap((users) => [...users.values()]));
-  const out = new Map<string, Map<string, AttemptRecord>>();
-  for (const evaluation of evaluations) {
-    const kept = new Map<string, AttemptRecord>();
-    for (const [userId, list] of groups.get(evaluation.id)!) {
-      const row = keptAmong(evaluation, list, tallies);
-      if (row) kept.set(userId, row);
-    }
-    out.set(evaluation.id, kept);
-  }
-  return out;
-}
-
-/** {@link keptAttemptsOf} for one evaluation, keyed by user id. */
 export async function keptAttempts(
   db: Db,
   evaluation: EvaluationRecord,
 ): Promise<Map<string, AttemptRecord>> {
-  return (await keptAttemptsOf(db, [evaluation])).get(evaluation.id)!;
+  const rows = await db
+    .select()
+    .from(attempts)
+    .where(eq(attempts.evaluationId, evaluation.id))
+    .orderBy(asc(attempts.attemptNumber));
+  const groups = byUser(rows);
+  const tallies = await talliesFor(db, groups.values());
+  const kept = new Map<string, AttemptRecord>();
+  for (const [userId, list] of groups) {
+    const row = keptAmong(evaluation, list, tallies);
+    if (row) kept.set(userId, row);
+  }
+  return kept;
 }
 
 /** One student's attempts on one evaluation, and the one that counts. */

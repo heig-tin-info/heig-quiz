@@ -183,7 +183,7 @@ describe("QuestionStatsSheet", () => {
       <QuestionStatsSheet poolId="p1" row={ROW} stats={{ ...STATS, distractors: null }} canReset onClose={vi.fn()} />,
     );
     expect(
-      screen.getByText("The choices picked show from 10 answers given to versions with the current choices."),
+      screen.getByText("The choices picked show from 10 exam answers given to versions with the current choices."),
     ).toBeInTheDocument();
     unmount();
     renderWithProviders(<QuestionStatsSheet poolId="p1" row={ROW} stats={STATS} canReset onClose={vi.fn()} />);

@@ -13,6 +13,9 @@ Amended by ADR-039: the time spent (§8) and the "not reached" rule (§2).
 Extended by ADR-042: the discrimination index, over the same counted answers.
 Extended by ADR-043: the distractors of a multiple-choice question, over the
 same counted answers.
+Amended 2026-09-30, decided by the product owner: the success rate and its
+`n` count EXAMS only, never an exercise (§2), so the kept attempt of an
+exercise (ADR-025) no longer enters the statistics.
 
 ## Context
 
@@ -32,7 +35,8 @@ Four facts constrain the answer:
 - Negative marking (ADR-026) makes a question's mean fraction negative when
   it takes away more than it gives.
 - An exercise with retakes (F-EVAL-15, ADR-025) holds several attempts per
-  student, of which one is the student's result.
+  student, of which one is the student's result. *(2026-09-30: moot for the
+  statistics, which no longer read exercises, §2.)*
 
 ## Decision
 
@@ -50,16 +54,22 @@ One answer is counted when all of these hold:
 - its grading is `validated` (a proposal alone is not a grade; a superseded
   grading is replaced by the validated one, so a cell counts once);
 - its item froze a version of the question;
-- the evaluation is an `exam` or an `exercise` — never a `poll`;
+- the evaluation is an `exam` — never an `exercise`, never a `poll`;
 - the attempt belongs to a student account (no guest), is `submitted` or
   `expired`, and has a `started_at`;
 - the attempt is not a teacher's test walk from a staff seat (ADR-018);
-- on an exercise where the student holds several attempts, it is the KEPT
-  one (`best` or `last`, ADR-025) — and when the kept attempt's grading of
-  this item is not validated yet, the student is not counted at all, never
-  replaced by another of their attempts;
 - the item is worth something (`max_points > 0`);
 - the attempt started at or after the question's `stats_since` (§6).
+
+*Amendment (2026-09-30, decided by the product owner): exams only. This
+section first counted exercises too, on the student's kept attempt (`best`
+or `last`, ADR-025). An exercise is practice done at home, over days, with
+notes, classmates or an AI at hand: its success rate measures the help
+available, not the question. The time spent (ADR-039) and the
+discrimination (ADR-042) already counted exams only; the success rate, `n`
+and the distractors (ADR-043) now do too — one rule for every statistic of
+a question. An exam holds one attempt per student, so there is no kept
+attempt to pick, and the kept-attempt rule left the statistics code.*
 
 A blank, skipped or unanswered question counts 0: its grading is a
 validated 0 (F-GRADE-01). A student with no attempt at all is NOT counted,
@@ -123,8 +133,9 @@ resets at the start of the year.
 ### 7. Where the code lives
 
 - The READS are a new `stats` module (`apps/api/src/modules/stats/`),
-  depending on `grading` (the kept attempts), `evaluation` (the staff
-  predicate) and the guards. Not in `pool`: `grading` already reaches
+  depending on `grading` (the kept attempts; since 2026-09-30, only its
+  `(attempt, item)` key), `evaluation` (the staff predicate) and the
+  guards. Not in `pool`: `grading` already reaches
   `pool` through `evaluation`, and `pool` depending on `grading` would close
   the cycle.
 - The RESET is a write to `questions`, which belongs to `pool`: it is
@@ -140,6 +151,8 @@ resets at the start of the year.
 - `isStaffAttempt` (`evaluation`) is THE staff-attempt predicate, which
   `staffAttemptIds` now reads too; `keptAttemptsOf` (`grading`) is the kept
   rule over several evaluations, which `keptAttempts` calls for one.
+  *(2026-09-30: `keptAttemptsOf` is gone with the exercises of §2;
+  `keptAttempts` reads one evaluation again.)*
 
 ### 8. Next: the time spent
 
@@ -155,11 +168,10 @@ exist today.
 
 - The pool's table and cards show a chart icon after the name of every
   question with statistics; it opens a side panel, for a reader too.
-- One query gathers the candidates, one loads their evaluations, two find
-  the kept attempts (the points only of students who hold several). Every
-  counted answer travels to the process. Should a pool's history outgrow
-  that, the same filters pre-aggregate in SQL, and only the attempts of
-  students who retook an exercise are fetched one by one.
+- One query gathers the counted answers (exams only since 2026-09-30, so
+  no kept attempt to find). Every counted answer travels to the process.
+  Should a pool's history outgrow that, the same filters pre-aggregate in
+  SQL (`count`, `avg(points / max_points)` by question).
 - The filters on statistics that F-STAT-03 promises are still to do.
   *Done 2026-09-29: the pool's filter sheet bounds the rate and the median
   time in the page, on this route's answer — no route of their own.*
@@ -192,4 +204,8 @@ without them. Nothing else reads `stats_since`, and nothing was deleted.
   statistics button must not be able to touch them.
 - **Aggregation in SQL.** The kept-attempt rule lives in `@quiz/domain` and
   reads whole-attempt totals; rewriting it in SQL would be a second
-  definition of it. Kept as the fallback of the Consequences.
+  definition of it. Kept as the fallback of the Consequences — simpler since
+  2026-09-30, the statistics no longer reading a kept attempt.
+- **Exercises in the success rate** (the first version of §2). Replaced on
+  2026-09-30: an exercise's rate measures the help at hand, not the
+  question.

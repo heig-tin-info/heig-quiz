@@ -12,6 +12,7 @@ multiple-choice reading were delegated). With `sameAsLatest` and
 `DistractorStats` in `@quiz/contracts/stats`. No migration, no change to the
 `QuestionType` contract. Revises F-STAT-02 (docs/spec/02). Extends ADR-038
 (what is counted), with the not-reached rule of ADR-039.
+Amended 2026-09-30 with ADR-038 §2: exams only, never an exercise (§1).
 
 ## Context
 
@@ -35,13 +36,13 @@ an answer stores canonical indices into it (decision D3).
 ### 1. Population: ADR-038's counted answers, narrowed to the current options
 
 The analysis reads EXACTLY the answers the success rate counts (ADR-038 §2,
-one query, one `countedAttempt()` predicate, the kept-attempt filter, and
-ADR-039's not-reached rule): a validated grading, of a student account, not
-a staff seat, on a finished and started attempt, at or after the question's
-`stats_since`, the kept attempt of an exercise. **Exams and exercises
-alike**, like `p`: which option a student picks is a property of the
-options, not of the conditions of the test — unlike the discrimination
-(ADR-042), which needs a whole exam's total.
+one query, one `countedAttempt()` predicate, and ADR-039's not-reached
+rule): a validated grading, of a student account, not a staff seat, on a
+finished and started attempt of an EXAM, at or after the question's
+`stats_since`.
+
+*Amended 2026-09-30 with ADR-038 §2: exams only, for the reason given
+there. This section first counted exercises too, on their kept attempt.*
 
 Then one narrowing: only the answers given to the published versions whose
 options are **identical** to the latest published version's, wherever they

@@ -640,9 +640,9 @@ export const fr: Record<keyof Dict, string> = {
   "pool.filter.unit.seconds": "s",
   "pool.filter.withoutStats":"Inclure les questions sans statistiques",
   "pool.filter.statsHint":
-    "Le taux en pour cent (négatif possible sous points négatifs), le temps en secondes. Une question a des statistiques dès {n} réponses.",
+    "Le taux en pour cent (négatif possible sous points négatifs), le temps en secondes. Une question a des statistiques dès {n} réponses d'examen.",
   "pool.filter.statsNone":
-    "Aucune question de ce pool n'a encore de statistiques : elles apparaissent dès {n} réponses.",
+    "Aucune question de ce pool n'a encore de statistiques d'examen (moins de {n} réponses chacune).",
   "pool.filter.statsError": "Les statistiques n'ont pas pu être chargées.",
   "pool.filter.rate.between": "Réussite de {min} à {max} %",
   "pool.filter.rate.from": "Réussite dès {n} %",
@@ -685,7 +685,7 @@ export const fr: Record<keyof Dict, string> = {
   "pool.stats.successRate": "Taux de réussite",
   "pool.stats.answers": "Réponses comptées",
   "pool.stats.scope":
-    "Tentatives retenues des examens et exercices, toutes versions de la question, sans les essais des enseignants. Une réponse vide compte 0 ; une question jamais ouverte n'est pas comptée.",
+    "Examens uniquement, jamais les exercices, toutes versions de la question, sans les essais des enseignants. Une réponse vide compte 0 ; une question jamais ouverte n'est pas comptée.",
   "pool.stats.negative": "Sous zéro : les points négatifs ont retiré plus qu'ils n'ont donné.",
   "pool.stats.since": "Depuis le {date}",
   "pool.stats.sinceAlways": "Depuis la première utilisation",
@@ -716,7 +716,7 @@ export const fr: Record<keyof Dict, string> = {
   "pool.stats.choicesBasis": "Part de {n} réponses, sur les versions dont les choix sont ceux-ci.",
   "pool.stats.choicesMultiple": "Plusieurs choix peuvent être cochés : le total dépasse donc 100\u202f%.",
   "pool.stats.choicesScope": "Un mauvais choix que personne ne coche ne trompe personne : reformulez-le ou retirez-le. Un mauvais choix plus coché que la bonne réponse signale une idée fausse répandue, ou une erreur dans le corrigé.",
-  "pool.stats.choicesNone": "Les choix des étudiants s'affichent dès {min} réponses données à des versions aux choix actuels.",
+  "pool.stats.choicesNone": "Les choix des étudiants s'affichent dès {min} réponses d'examen données à des versions aux choix actuels.",
   "pool.stats.reset": "Réinitialiser les statistiques",
   "pool.stats.resetTitle": "Réinitialiser les statistiques de {name} ?",
   "pool.stats.resetBody":

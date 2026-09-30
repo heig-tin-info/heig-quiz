@@ -171,8 +171,8 @@ export const TOOLS: Tool[] = [
     description:
       "How students did on a pool's questions, to pick or fix one (ADR-038). One entry per question with " +
       "enough answers: a question absent from `items` has fewer than ten counted answers, and its figures " +
-      "are withheld, not zero. `n` answers counted, every version pooled, over exams " +
-      "and exercises of EVERY class that used the question (not only the teacher's own); `p` is the mean " +
+      "are withheld, not zero. `n` answers counted, every version pooled, over the exams " +
+      "(never an exercise) of EVERY class that used the question (not only the teacher's own); `p` is the mean " +
       "share of the points earned, from 0 to 1, and may be NEGATIVE under negative marking; `since` is the " +
       "last reset (null: never). `time` is the time spent on the question in exams, in whole seconds " +
       "(median, P25, P75, mean, over `time.n` answers), or null below ten timed answers. `discrimination` is " +
