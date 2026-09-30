@@ -53,37 +53,39 @@ export function useKioskStation(
         timers.add(id);
       });
 
-    /** Codes, one after the other, until one is approved (`done`) or the station cannot go on. */
-    async function pair(): Promise<StationTrouble | "done"> {
-      while (alive) {
-        const auth = await authorize();
-        if (!alive) break;
-        if (typeof auth === "string") return auth;
-        const expiresAt = Date.now() + auth.expires_in * 1000;
-        setPhase({ kind: "code", auth, expiresAt });
-        let interval = auth.interval;
-        for (;;) {
-          await sleep(interval * 1000);
-          if (!alive) return "done";
-          if (Date.now() >= expiresAt) break;
-          const answer = await pollToken(auth.device_code);
-          if (!alive) return "done";
-          if ("redirect" in answer) {
-            setPhase({ kind: "opening" });
-            opener.current(answer.redirect);
-            return "done";
-          }
-          if (answer.error === "authorization_pending") continue;
-          if (answer.error === "slow_down") {
-            interval += SLOW_DOWN_STEP_S;
-            continue;
-          }
-          if (answer.error === "not_recognised") return answer.error;
-          // expired_token, access_denied, invalid_grant: a fresh code.
-          break;
+    /**
+     * One code, polled until it is approved (`done`), dies (`renew`: the loop
+     * attests again before the next, so a station that waits for an hour is
+     * never silent when it is paired, ADR-051 §6), or the station cannot go on.
+     */
+    async function pair(): Promise<StationTrouble | "done" | "renew"> {
+      const auth = await authorize();
+      if (!alive) return "done";
+      if (typeof auth === "string") return auth;
+      const expiresAt = Date.now() + auth.expires_in * 1000;
+      setPhase({ kind: "code", auth, expiresAt });
+      let interval = auth.interval;
+      for (;;) {
+        await sleep(interval * 1000);
+        if (!alive) return "done";
+        if (Date.now() >= expiresAt) break;
+        const answer = await pollToken(auth.device_code);
+        if (!alive) return "done";
+        if ("redirect" in answer) {
+          setPhase({ kind: "opening" });
+          opener.current(answer.redirect);
+          return "done";
         }
+        if (answer.error === "authorization_pending") continue;
+        if (answer.error === "slow_down") {
+          interval += SLOW_DOWN_STEP_S;
+          continue;
+        }
+        if (answer.error === "not_recognised") return answer.error;
+        // expired_token, access_denied, invalid_grant: a fresh code.
+        return "renew";
       }
-      return "done";
+      return "renew";
     }
 
     void (async () => {
@@ -92,6 +94,7 @@ export function useKioskStation(
       while (alive) {
         const trouble = (await attest(config.current)) ?? (await pair());
         if (!alive || trouble === "done") return;
+        if (trouble === "renew") continue;
         setPhase({ kind: trouble });
         await sleep(KIOSK_RETRY_MS);
       }

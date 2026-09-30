@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users, Wifi, WifiOff } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   TransitionRefusal,
@@ -79,21 +79,17 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   /**
    * What a supervisor must not miss about one student (ADR-051 §4, §6): the
    * row itself says it (its access and alert), and two of them are also said
-   * once, out loud — a session opened elsewhere, a station suspended.
+   * once, out loud — a session opened elsewhere, a station suspended — naming
+   * the row as the grid does. The stream always calls the latest handler.
    */
-  const nameRef = useRef<(userId: string) => string | null>(() => null);
-  const onAlert = useCallback(
-    (event: DashboardAlertEvent) => {
-      if (event.kind !== "session_superseded" && event.kind !== "kiosk_suspended") return;
-      const name = nameRef.current(event.userId);
-      if (name === null) return;
-      toast(
-        t(event.kind === "session_superseded" ? "live.alert.superseded" : "live.alert.suspended", { name }),
-        event.kind === "session_superseded" ? "warning" : "error",
-      );
-    },
-    [toast, t],
-  );
+  const onAlert = (event: DashboardAlertEvent, row: DashboardRow) => {
+    if (event.kind !== "session_superseded" && event.kind !== "kiosk_suspended") return;
+    const superseded = event.kind === "session_superseded";
+    toast(
+      t(superseded ? "live.alert.superseded" : "live.alert.suspended", { name: nameOf(row) }),
+      superseded ? "warning" : "error",
+    );
+  };
 
   const { query, clock, connected } = useDashboard(id, toggles.answers, toggles.results, onAlert);
   // The grid fits the class on one screen (#227): the row height is what the
@@ -208,11 +204,6 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         : t("live.row.anonymous", { n: numbers.get(row.seatId) ?? 0 }),
     [toggles.names, numbers, t],
   );
-  const rows = state?.view.rows;
-  nameRef.current = (userId) => {
-    const row = rows?.find((r) => r.userId === userId);
-    return row ? nameOf(row) : null;
-  };
 
   // ADR-051 §7: the exam accepts the kiosk, and the platform offers it.
   const config = usePublicConfig();

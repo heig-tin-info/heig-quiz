@@ -1,6 +1,7 @@
 /**
  * The attestation of a station while it sits an exam (ADR-051 §6): the
- * attempt page re-attests every ten minutes and right before the submit,
+ * attempt page re-attests every ten minutes, and before a submit the server
+ * found stale,
  * through the very flow the station's screen uses (`station.ts`). The server
  * records each attempt against the station's cookie and decides what it
  * means; the page only learns the verdict from its writes:
@@ -13,7 +14,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { KIOSK_SUSPENDED_EVENT, kioskAttestationStale, usePublicConfig } from "../api";
+import { KIOSK_SUSPENDED_EVENT, refusedWith, usePublicConfig } from "../api";
 import { attest } from "./station";
 import { KIOSK_RETRY_MS } from "./useKioskStation";
 
@@ -23,7 +24,7 @@ export const REATTEST_MS = 10 * 60_000;
 export interface StationAttestation {
   /** A write was refused because the station is suspended, and no attestation has lifted it yet. */
   suspended: boolean;
-  /** Runs the submit after a re-attestation, and once more after another if the server found it stale. */
+  /** Runs the submit; when the server finds the station's check stale, re-attests and runs it once more. */
   guardSubmit: <T>(submit: () => Promise<T>) => Promise<T>;
 }
 
@@ -58,12 +59,10 @@ export function useStationAttestation(active: boolean): StationAttestation {
 
   const guardSubmit = useCallback(
     async <T,>(submit: () => Promise<T>): Promise<T> => {
-      if (!active) return submit();
-      await reattest();
       try {
         return await submit();
       } catch (error) {
-        if (!kioskAttestationStale(error)) throw error;
+        if (!active || !refusedWith(error, "kiosk_attestation_stale")) throw error;
         await reattest();
         return submit();
       }

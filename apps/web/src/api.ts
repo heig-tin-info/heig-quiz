@@ -33,16 +33,9 @@ export class ApiError extends Error {
  */
 export const KIOSK_SUSPENDED_EVENT = "quiz:kiosk-suspended";
 
-/** A `423` of a suspended kiosk station, or of a submit that needs a fresh attestation. */
-export const kioskSuspended = (error: unknown): boolean =>
-  error instanceof ApiError &&
-  error.status === 423 &&
-  (error.body as { error?: string } | null)?.error === "kiosk_suspended";
-
-export const kioskAttestationStale = (error: unknown): boolean =>
-  error instanceof ApiError &&
-  error.status === 423 &&
-  (error.body as { error?: string } | null)?.error === "kiosk_attestation_stale";
+/** Whether `error` is the API's refusal `code` (the `error` field of its body). */
+export const refusedWith = (error: unknown, code: string): boolean =>
+  error instanceof ApiError && (error.body as { error?: string } | null)?.error === code;
 
 export async function api<T>(
   path: string,
@@ -68,7 +61,7 @@ export async function api<T>(
   if (!res.ok) {
     const error = new ApiError(res.status, await res.json().catch(() => null));
     // ADR-051 §6: whichever write learnt it, the station's page is told once.
-    if (kioskSuspended(error)) window.dispatchEvent(new Event(KIOSK_SUSPENDED_EVENT));
+    if (refusedWith(error, "kiosk_suspended")) window.dispatchEvent(new Event(KIOSK_SUSPENDED_EVENT));
     throw error;
   }
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);

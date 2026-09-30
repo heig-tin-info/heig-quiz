@@ -47,6 +47,7 @@
  * where the student decides to try again (ADR-025 addendum, issue #121).
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ShieldAlert } from "lucide-react";
 
 import type { AttemptView } from "@quiz/contracts";
 import { answerMark, mayValidate } from "@quiz/domain";
@@ -59,7 +60,7 @@ import { useT } from "../i18n";
 import { Button, Card, useMinWidth } from "../ui";
 import { ExpandChrome, type ExpandChromeValue } from "./ExpandLayer";
 import { OfflineBanner } from "./OfflineBanner";
-import { PausedOverlay, StationSuspendedOverlay } from "./PausedOverlay";
+import { PausedOverlay, ScreenOverlay } from "./PausedOverlay";
 import { useStationAttestation } from "../kiosk/useStationAttestation";
 import { PlayerActions } from "./PlayerActions";
 import { PlayerEnd } from "./PlayerEnd";
@@ -214,7 +215,13 @@ export function Player({
   );
   return (
     <>
-      <StationSuspendedOverlay show={attestation.suspended && closed === null} />
+      {/* ADR-051 §6: the station could not prove its integrity; its writes are refused. */}
+      <ScreenOverlay
+        show={attestation.suspended && closed === null}
+        icon={ShieldAlert}
+        title={t("player.suspended.title")}
+        body={t("player.suspended.body")}
+      />
       <PlayerView
         initial={initial}
         session={session}

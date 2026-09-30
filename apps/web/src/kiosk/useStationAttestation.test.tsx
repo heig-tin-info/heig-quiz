@@ -53,7 +53,7 @@ describe("useStationAttestation", () => {
     await waitFor(() => expect(result.current.suspended).toBe(false));
   });
 
-  it("re-attests before the submit, and retries once a stale one", async () => {
+  it("re-attests only after a stale submit, and retries it once", async () => {
     const { calls } = mockFetch({ ...CONFIG, ...ATTESTED });
     const { result } = renderHook(() => useStationAttestation(true), { wrapper: providers() });
     // The public configuration names the attestation mode: read it first.
@@ -69,7 +69,7 @@ describe("useStationAttestation", () => {
     });
     expect(outcome).toBe("submitted");
     expect(submit).toHaveBeenCalledTimes(2);
-    expect(calls.filter((c) => c.url === "/app/api/kiosk/attest/verify")).toHaveLength(2);
+    expect(calls.filter((c) => c.url === "/app/api/kiosk/attest/verify")).toHaveLength(1);
   });
 
   it("submits untouched off a station", async () => {

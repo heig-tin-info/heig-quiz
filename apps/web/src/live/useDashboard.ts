@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 
-import { DashboardView, type DashboardAlertEvent } from "@quiz/contracts";
+import { DashboardView, type DashboardAlertEvent, type DashboardRow } from "@quiz/contracts";
 
 import { api } from "../api";
 import { applyGridEvent, initialGrid, type GridState } from "../realtime/grid";
@@ -38,8 +38,11 @@ export function useDashboard(
   id: string,
   includeAnswers: boolean,
   includeResults: boolean,
-  /** A `dashboard.alert` for this evaluation (ADR-051 §4, §6), after the grid has taken it in. */
-  onAlert?: (event: DashboardAlertEvent) => void,
+  /**
+   * A `dashboard.alert` for this evaluation (ADR-051 §4, §6), after the grid
+   * has taken it in, with the row it concerns as the grid now holds it.
+   */
+  onAlert?: (event: DashboardAlertEvent, row: DashboardRow) => void,
 ): DashboardStream {
   const qc = useQueryClient();
   const clock = useServerClock();
@@ -61,10 +64,6 @@ export function useDashboard(
         ),
       ),
   });
-
-  // The latest handler: a new function from the caller does not reopen the stream.
-  const alertRef = useRef(onAlert);
-  alertRef.current = onAlert;
 
   const refresh = useCallback(() => {
     void qc.invalidateQueries({ queryKey: key });
@@ -95,9 +94,11 @@ export function useDashboard(
     onEvent: (event) => {
       qc.setQueryData<GridState>(key, (prev) => (prev ? applyGridEvent(prev, event) : prev));
       if (event.type === "dashboard.alert" && event.evaluationId === id) {
-        // A new confined session changes how the student sits: re-read the rows.
-        if (event.kind === "session_superseded") refresh();
-        alertRef.current?.(event);
+        const row = qc.getQueryData<GridState>(key)?.view.rows.find((r) => r.userId === event.userId);
+        // How the student sits changed — a new confined session, or a station
+        // the grid does not show yet (it just paired): re-read the rows.
+        if (event.kind === "session_superseded" || row?.access.kind !== "kiosk") refresh();
+        if (row) onAlert?.(event, row);
       }
       // The student wrote something, or their attempt changed state: the
       // paper cached for that attempt (the cell tooltip's, the modal's) is

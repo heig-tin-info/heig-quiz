@@ -116,7 +116,8 @@ describe("the station's loop (ADR-051 §7)", () => {
     expect(result.current).toMatchObject({ kind: "code", auth: { device_code: "dc-2" } });
     await advance(2_000); // dc-2 answers expired_token: a third code at once
     expect(result.current).toMatchObject({ kind: "code", auth: { device_code: "dc-3" } });
-    expect(count(calls, "/app/api/kiosk/attest/verify")).toBe(1);
+    // Each new code comes after an attestation: a station that waits is never silent (ADR-051 §6).
+    expect(count(calls, "/app/api/kiosk/attest/verify")).toBe(3);
   });
 
   it("says a station out of the registry is not recognised, and tries again every 30 s", async () => {

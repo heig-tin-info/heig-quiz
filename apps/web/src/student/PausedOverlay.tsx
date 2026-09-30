@@ -12,12 +12,17 @@
  * behind it is inert and read-only anyway, and trapping focus in a panel with
  * no control is a dead end for a keyboard.
  */
-import { PauseCircle, ShieldAlert, type LucideIcon } from "lucide-react";
+import { PauseCircle, type LucideIcon } from "lucide-react";
 
 import { useT } from "../i18n";
 
-/** What covers the question while the student cannot write: a sentence of what, one of why nothing is lost. */
-function ScreenOverlay({ show, icon: Icon, title, body }: { show: boolean; icon: LucideIcon; title: string; body: string }) {
+/**
+ * What covers the question while the student cannot write: a sentence of
+ * what, one of why nothing is lost. The pause below, and a suspended kiosk
+ * station (ADR-051 §6, `Player`): same rules — no action, what was saved is
+ * kept, and it lifts by itself.
+ */
+export function ScreenOverlay({ show, icon: Icon, title, body }: { show: boolean; icon: LucideIcon; title: string; body: string }) {
   if (!show) return null;
   return (
     <div
@@ -37,22 +42,4 @@ function ScreenOverlay({ show, icon: Icon, title, body }: { show: boolean; icon:
 export function PausedOverlay({ show }: { show: boolean }) {
   const t = useT();
   return <ScreenOverlay show={show} icon={PauseCircle} title={t("player.paused.title")} body={t("player.paused.body")} />;
-}
-
-/**
- * ADR-051 §6: the kiosk station this exam is sat on could not prove its
- * integrity, and the server refuses its writes. The same rules as the pause:
- * no action (the supervisor acts, not the student), what was saved is kept,
- * and it lifts by itself once an attestation is accepted.
- */
-export function StationSuspendedOverlay({ show }: { show: boolean }) {
-  const t = useT();
-  return (
-    <ScreenOverlay
-      show={show}
-      icon={ShieldAlert}
-      title={t("player.suspended.title")}
-      body={t("player.suspended.body")}
-    />
-  );
 }
