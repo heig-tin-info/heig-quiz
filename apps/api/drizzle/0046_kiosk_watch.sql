@@ -1,0 +1,1 @@
+ALTER TABLE "kiosk_devices" ADD COLUMN "watch" text DEFAULT 'ok' NOT NULL;
