@@ -90,7 +90,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
 | M4-01 | `packages/docrender`, schema, contracts | done | M1-01, D03, D14, D15 | `merge/M4-01-docrender` | #371 | `@quiz/docrender`: `renderPage(md, {classroomId, pagePath, fallbackTitle, pages, assets, oversized?})` → `{title (plain text or null), frontMatter, html, toc, draft, visibleFrom, warnings, assets}` — call it TWICE per page (`pages` = all ⇒ `html_staff`, = student-visible ⇒ `html_student`), store `cleanSource(md)`; `placePage`/`buildNav`/`homePage`/`relativeHref`/`resolveRelative`, `journalRepoName`, `journalAssetUrl`, `assetContentType`, `@quiz/docrender/highlight`. Contracts (read half; the write bodies moved to M4-03, see its card): `Journal{Student,Staff}`, `JournalPage{Student,Staff}`, `JournalViewQuery`, `JournalPageParams`/`JournalAssetParams`, `JOURNAL_ASSETS_PATH`, `safeJournalPath`, `isJournalPagePath`, `hasControlChar`/`CONTROL_CHAR`, `JournalWarning`, `JournalSyncStatus`, `JournalSyncError`, `JournalRepository`. Tables `classroom_journals`, `journal_pages` (`html_staff`, `html_student`, `asset_paths` for J1), `journal_assets`; migration `0038_journal` |
-| M4-02 | Read side and ingestion | todo | M4-01, M2-02, M2-04 | | | |
+| M4-02 | Read side and ingestion | review | M4-01, M2-02, M2-04 | `merge/M4-02-journal-read` | #414 | `modules/journal` (only with an App): `GET /classrooms/:id/journal`, `pages/*`, `JOURNAL_ASSETS_PATH/*` on `readableClassroom`, student exit `studentView.ts`; ingestion under a per-classroom advisory lock (J2), `requestIngest` for M4-03's Refresh and saves; push/repository handlers; J4 TickTask `journal.visible_from` (`student_rendered_at`, migration 0049); SSE hint `journal`; no audit action; card M4-02, "As delivered" |
 | M4-03 | Writes | todo | M4-02, M2-03 | | | |
 | M4-04 | Web: reader | done | M4-02, M1-04, M1-05 | `merge/M4-04-journal-reader` | #378 | `apps/web/src/journal/`: `JournalReader({classroomId, path?, navigate, studentView})` (the page; student UI ⇒ `?view=student`; keys `journalKey(id, view)` ⊃ `journalPageKey(id, view, path)`), `JournalNav`, `JournalToc`, `JournalArticle` (+ `journalLinkTarget`), `words.ts` (`warningText`, `SYNC_ERRORS`, keyed by the contract unions). No staff action yet (sync state only, in `ReaderHeader`'s `aside`): M4-05 adds Refresh there (invalidate `journalKey`), M4-06 adds Edit (primary) and the editor (both cards say so). `isPlainClick` lives in `./ui` (controls, beside `LinkButton`). Route still `preview: true` (no API until M4-02); M5-02 mounts the reader under the student classroom header. SSE `journal` hint ⇒ invalidate `["journal", id]` (M4-02) |
 | M4-05 | Web: Journal section of Settings, teacher tab | todo | M4-03, M2-07, D24 | | | |
@@ -153,6 +153,9 @@ In the critical path only if D09 finds online assignments in production.
 
 Newest first. One line per session that changed the state: date, who,
 what moved, what the next session must know.
+
+- 2026-10-01 — M4-02 (#414): the journal's read side and ingestion in
+  review. Next: M4-03 (writes, Refresh through `requestIngest`).
 
 - 2026-09-30 22:20 — classroom-merge session: rows of the tasks merged
   today set to `done` (M0-05, M1-01…05, M2-05, M4-01, M4-04, M5-01, M5-02);

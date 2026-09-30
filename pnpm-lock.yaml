@@ -47,6 +47,9 @@ importers:
       '@quiz/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@quiz/docrender':
+        specifier: workspace:*
+        version: link:../../packages/docrender
       '@quiz/domain':
         specifier: workspace:*
         version: link:../../packages/domain

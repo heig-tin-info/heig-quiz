@@ -79,7 +79,9 @@ seed README, attach, invite, ingest), `POST base/attach`, `DELETE base`
 `POST base/pages`, `DELETE base/pages/*`, `POST base/assets/*` (raw ≤ 5 MB,
 content type matches the extension); `GET /app/api/journals/:jid/assets/*`.
 Plumbing: `/webhooks/github` dispatch, queue `journal.ingest`, SSE family
-`journal` (classroom-wide), nine audit actions `journal.*`.
+`journal` (classroom-wide), nine audit actions `journal.*` (in the port,
+all of them staff writes of M4-03: the ingestion, the webhooks and the J4
+sweep audit nothing, their outcome is the row's sync state).
 
 ## 4.2 What the port requires
 
@@ -149,6 +151,22 @@ Plumbing: `/webhooks/github` dispatch, queue `journal.ingest`, SSE family
 | J5 | Warnings are server-built English sentences | codes + parameters |
 | J6 | `.md-body` collides with Quiz's question prose styles | `.md-body.md-doc` modifier (long-form: h1 28 px, 72-ch measure, 1.75 leading) |
 | J7 | Quiz dev runs on PGlite without webhooks nor pg-boss | Refresh is the dev path; the mock serves rendered HTML fixtures |
+
+As ported (M4-02, after review): `journal.ingest` is a `standard` queue
+with no dedupe, and J2 is optimistic, with no lock held while GitHub is
+read. (1) A snapshot: the row's `version`, the stored pages' blob shas and
+markdown, the cached assets' shas. (2) Outside any transaction: the head,
+the tree, the blobs that moved, every page rendered, each GitHub call
+bounded (no retry, no rate-limit wait, 30 s; a rate limit or a timeout is
+`github_unavailable`, retried by the queue). (3) One short transaction:
+`SELECT … FOR UPDATE` on the `classroom_journals` row, the copy written
+only if `version` is unchanged, `version + 1`. A failure is its own
+compare-and-set on `version`. Every writer of the row bumps `version` (an
+ingestion, its failure, a rename, a deletion), so a result built from a
+stale snapshot is never committed: the ingestion runs once more from a
+fresh snapshot, then re-sends its job. The J4 sweep locks the row with
+`FOR UPDATE SKIP LOCKED` and skips a journal being written; it bumps
+nothing, since an ingestion re-renders every student page when it writes.
 
 Note on J2 (quiz #273): in pg-boss 12 a `singletonKey` without
 `singletonSeconds` dedupes nothing on a `standard` queue, which is what a

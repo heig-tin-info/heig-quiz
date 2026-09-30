@@ -35,6 +35,8 @@ import { registerGithubJobs } from "./modules/github/jobs.js";
 import { githubPlugin } from "./modules/github/routes.js";
 import { gradingPlugin } from "./modules/grading/routes.js";
 import { registerGradingJobs } from "./modules/grading/jobs.js";
+import { registerJournalJobs } from "./modules/journal/jobs.js";
+import { journalPlugin } from "./modules/journal/routes.js";
 import { createKioskAttestor } from "./modules/kiosk/attestation.js";
 import { kioskPlugin } from "./modules/kiosk/routes.js";
 import { livePlugin } from "./modules/live/routes.js";
@@ -196,6 +198,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   if (app.kioskAttestor) await app.register(kioskPlugin, { config });
   await app.register(evaluationPlugin, { config });
   await app.register(activityPlugin);
+  // The journal (M4-02) is copied from GitHub: no App, no journal route.
+  if (githubApp(config)) await app.register(journalPlugin, { config });
   await app.register(livePlugin);
   await app.register(previewPlugin);
   await app.register(gradingPlugin);
@@ -248,6 +252,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     // The webhook worker (M2-04), only with Quiz's App: without it there is no intake.
     if (githubApp(config)) {
       await step("github jobs registration", () => registerGithubJobs(app, started, config));
+      await step("journal jobs registration", () => registerJournalJobs(app, started, config));
     }
   }
   // The rows of the scheduled catalog (D10), once. A database down at boot

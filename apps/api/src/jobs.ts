@@ -50,6 +50,17 @@ export const SYSTEM_TASK_QUEUE = "system.task";
 export const GITHUB_WEBHOOK_QUEUE = "github.webhook";
 
 /**
+ * One rebuild of a classroom's journal copy (spec 05 §5.11, merge task
+ * M4-02): `{ classroomId }`, sent by the push handler (and by M4-03's
+ * Refresh and saves). A `standard` queue, no dedupe: two jobs of one
+ * classroom never commit over each other: each writes only if the row's
+ * `version` is still the one it read before calling GitHub (fix J2,
+ * `modules/journal/ingest.ts`), in pg-boss and in the in-process queue
+ * alike. Retried three times with backoff when GitHub was unavailable.
+ */
+export const JOURNAL_INGEST_QUEUE = "journal.ingest";
+
+/**
  * No `singletonKey`, on purpose (#273). Our queues are pg-boss `standard`
  * queues (`createQueue` passes no policy, and pg-boss 12 refuses to change a
  * policy after creation), on which a key without `singletonSeconds` dedupes

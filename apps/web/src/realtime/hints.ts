@@ -58,6 +58,8 @@ export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
   results: EVALUATION_ROOTS,
   admin: ["admin-teachers", "me"],
   notifications: ["notifications", "notification-settings"],
+  // The journal's copy was synchronised, or a page became visible (M4-02).
+  journal: ["journal"],
   mutation: "all",
 };
 

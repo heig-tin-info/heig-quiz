@@ -6,13 +6,11 @@
  * `KINDS` is a plain list, not a registry: a kind is added here by hand, in
  * the same pull request as its module (the projects, M3-02).
  */
-import { eq } from "drizzle-orm";
-
 import type { ActivitySummary, StudentActivities, StudentClassroomPage } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
-import { classroomJournals } from "../../db/schema.js";
 import type { Caller, ReadableClassroom } from "../guards.js";
+import { hasJournal } from "../journal/service.js";
 import { studentClassroomHeader } from "../org/service.js";
 import { evaluationActivity } from "./evaluation.js";
 
@@ -43,8 +41,7 @@ async function studentCards(
  * `GET /student/classrooms/:id` (F-ORG-15): the student payload of a
  * classroom `scope` loaded through `readableClassroom`, whoever the caller
  * is — a student, a teacher in the student view, an impersonation session.
- * The journal's row is the `journal` module's; it is only read here, for
- * whether the tab exists.
+ * Whether the Journal tab exists is the `journal` module's answer.
  */
 export async function studentClassroomPage(
   db: Db,
@@ -55,16 +52,12 @@ export async function studentClassroomPage(
   const [classroom, activities, journal] = await Promise.all([
     studentClassroomHeader(db, scope),
     studentCards(db, caller, scope.room.id, now),
-    db
-      .select({ id: classroomJournals.classroomId })
-      .from(classroomJournals)
-      .where(eq(classroomJournals.classroomId, scope.room.id))
-      .limit(1),
+    hasJournal(db, scope.room.id),
   ]);
   return {
     classroom,
     activities,
-    hasJournal: journal.length > 0,
+    hasJournal: journal,
     hasProjects: false,
     serverNow: now.toISOString(),
   };

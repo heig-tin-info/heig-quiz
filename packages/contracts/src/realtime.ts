@@ -246,6 +246,9 @@ export const HintEvent = z.object({
       "grading",
       "admin",
       "notifications",
+      // A classroom's journal copy changed: a synchronisation, or a page's
+      // `visible_from` passed (M4-02). On `classroom:<id>`, no data.
+      "journal",
       "mutation",
     ]),
   ),

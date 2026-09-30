@@ -38,6 +38,7 @@ export type EventType =
   | "grading"
   | "admin"
   | "notifications"
+  | "journal"
   | "mutation";
 
 /**

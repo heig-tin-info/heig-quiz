@@ -1,7 +1,8 @@
 /**
  * The route walks of `seb.db.test.ts` and `impersonation.db.test.ts`, on a
- * server built WITH Quiz's App: the `github` module's routes exist only
- * then, so the walks of those files, run without an App, never see them.
+ * server built WITH Quiz's App: the `github` and `journal` modules' routes
+ * exist only then, so the walks of those files, run without an App, never
+ * see them.
  *
  * - a `seb` session is no session at all on every route of the module
  *   (ADR-027): it answers exactly as an anonymous request;
@@ -47,8 +48,9 @@ const delivery = (headers: Record<string, string> = {}) =>
 const call = (method: Method, url: string, headers: Record<string, string>, payload: object = {}) =>
   server.app.inject({ method, url, headers, ...(method === "GET" ? {} : { payload }) });
 
-/** The routes the App adds: the `github` module's. */
-const githubRoutes = () => everyRoute(server).filter(({ path }) => path.includes("github"));
+/** The routes the App adds: the `github` module's and the journal's (M4-02). */
+const githubRoutes = () =>
+  everyRoute(server).filter(({ path }) => path.includes("github") || path.includes("/journal"));
 
 beforeAll(async () => {
   restore = registerForTests(fakeShort);
@@ -82,8 +84,11 @@ afterAll(async () => {
   restore();
 });
 
-it("walks the github module's routes (the App is on)", () => {
+it("walks the github module's and the journal's routes (the App is on)", () => {
   expect(githubRoutes().length).toBeGreaterThanOrEqual(6);
+  // Fastify's tree prints the journal's two wildcard routes (pages, assets)
+  // as one `journal*`: `journal.db.test.ts` walks those two by hand.
+  expect(githubRoutes().some(({ path }) => path.endsWith("/journal"))).toBe(true);
 });
 
 describe("a seb session (ADR-027)", () => {
