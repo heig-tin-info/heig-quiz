@@ -142,6 +142,16 @@ files it ports; writes en + fr for every string.
   (`{activityKind, activityId, activityTitle}`) before they are built.
 - **Acceptance**: `/activities` and every screen unchanged (screenshots
   identical); contract tests updated.
+- **As delivered** (#373): `ActivityKind<K>` has `kind` and
+  `listForTeacher` only, over a plain `KINDS` list in
+  `modules/activity/service.ts`, which serves `GET /activities`. Each other
+  member lands with the first task that calls it through `KINDS`:
+  `studentCards` with M5-01, `gradebookEntries` with M5-03, `deadlines`
+  with M3-05 (wired to the ticker there), the classroom list with the task
+  that first needs a mixed-kind classroom list. **Rule**: a method that
+  takes a classroom id is reached only after the route has loaded the
+  classroom through `staffAccess` or `readableClassroom`; its reviewer
+  checks it. `activity_available` is kind-neutral (migration 0037; I58–I60).
 
 ### M1-04 — Missing primitives and long-form styles
 - **Depends on**: M0-05. ‖ M1-01…03.

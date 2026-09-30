@@ -19,7 +19,7 @@
  */
 import { and, desc, eq, isNull, not, sql, type SQL } from "drizzle-orm";
 
-import type { ActivitySummary } from "@quiz/contracts";
+import type { EvaluationActivitySummary } from "@quiz/contracts";
 import { isTakeHome } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
@@ -33,7 +33,7 @@ export async function listActivities(
   db: Db,
   access: SQL,
   now: Date,
-): Promise<ActivitySummary[]> {
+): Promise<EvaluationActivitySummary[]> {
   const cutoff = new Date(now.getTime() - OLD_POLL_DAYS * 86_400_000);
   const oldPoll = sql`(${ownedPollSql()} and ${evaluations.state} in ('closed', 'grading', 'released') and coalesce(${evaluations.closedAt}, ${evaluations.createdAt}) < ${cutoff.toISOString()}::timestamptz)`;
   const rows = await db
@@ -57,6 +57,7 @@ export async function listActivities(
     .where(and(isNull(evaluations.courseId), isNull(classrooms.archivedAt), not(oldPoll), access))
     .orderBy(desc(evaluations.createdAt));
   return rows.map((r) => ({
+    kind: "evaluation" as const,
     id: r.id,
     title: r.title,
     mode: r.mode,

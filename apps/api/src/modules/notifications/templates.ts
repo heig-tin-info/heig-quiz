@@ -237,6 +237,10 @@ function varsOf(payload: NotificationPayload, t: Record<Key, string>): Record<st
     case "roster_conflict":
       return { classroomName: payload.classroomName, count: String(payload.count) };
     case "activity_available":
+      // The sentences name an exercise, and `{evaluationTitle}` is a template
+      // parameter of the Teams app its users installed: renaming it would
+      // need a new TEAMS_APP_VERSION that every one of them re-uploads.
+      return { evaluationTitle: payload.activityTitle };
     case "deadline_approaching":
     case "results_updated":
       return { evaluationTitle: payload.evaluationTitle };
@@ -287,9 +291,13 @@ export function notificationPath(payload: NotificationPayload): string {
     // student in (the server decides between the lobby and the player).
     case "activity_scheduled":
       return "/";
-    case "activity_available":
     case "deadline_approaching":
       return `/take/${payload.evaluationId}`;
+    case "activity_available":
+      switch (payload.activityKind) {
+        case "evaluation":
+          return `/take/${payload.activityId}`;
+      }
   }
 }
 

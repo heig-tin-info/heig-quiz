@@ -164,8 +164,9 @@ describe("activity_available", () => {
 
     const payload = {
       kind: "activity_available",
-      evaluationId: seed.evaluationId,
-      evaluationTitle: "Test évaluation",
+      activityKind: "evaluation",
+      activityId: seed.evaluationId,
+      activityTitle: "Test évaluation",
     };
     for (const student of seed.studentIds) {
       const rows = await rowsOf(student, "activity_available");
@@ -175,7 +176,7 @@ describe("activity_available", () => {
     expect(await rowsOf(seed.teacherId, "activity_available")).toEqual([]);
     // No Teams link, so e-mail alone: one job per student, the payload as the
     // bell's. (The ticker opens the other tests' exercises too: the database is shared.)
-    const mine = sent.filter((j) => j.payload.kind === "activity_available" && j.payload.evaluationId === seed.evaluationId);
+    const mine = sent.filter((j) => j.payload.kind === "activity_available" && j.payload.activityId === seed.evaluationId);
     expect(mine.map((j) => [j.userId, j.channel, j.payload])).toEqual(
       seed.studentIds.map((id) => [id, "email", payload]),
     );

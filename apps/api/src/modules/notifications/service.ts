@@ -161,7 +161,7 @@ export async function notifyMany(
           id: randomUUID(),
           userId: d.userId,
           poolId: "poolId" in d.payload ? d.payload.poolId : null,
-          evaluationId: "evaluationId" in d.payload ? d.payload.evaluationId : null,
+          evaluationId: evaluationIdOf(d.payload),
           classroomId: "classroomId" in d.payload ? d.payload.classroomId : null,
           payload: d.payload,
         }
@@ -236,6 +236,17 @@ function notificationJson(row: NotificationRow): Notification {
     createdAt: row.createdAt.toISOString(),
     readAt: row.readAt?.toISOString() ?? null,
   };
+}
+
+/**
+ * The evaluation a payload is about, lifted into `evaluation_id` so deleting
+ * the evaluation deletes the bell (a foreign key): its `evaluationId`, or the
+ * `activityId` of a kind-neutral payload about an evaluation.
+ */
+function evaluationIdOf(payload: NotificationPayload): string | null {
+  if ("evaluationId" in payload) return payload.evaluationId;
+  if ("activityKind" in payload && payload.activityKind === "evaluation") return payload.activityId;
+  return null;
 }
 
 /**

@@ -673,6 +673,15 @@ describe("the delivery job", () => {
     );
   });
 
+  it("drops a job whose payload is of a shape the catalogue no longer has (M1-03)", async () => {
+    const judy = await seedUser("judith@heig.test");
+    const { deps, mails, warnings } = fakes();
+    const stale = { kind: "activity_available", evaluationId: randomUUID(), evaluationTitle: "Série 3" };
+    await deliver(deps, { userId: judy, channel: "email", payload: stale as unknown as NotificationPayload });
+    expect(mails).toEqual([]);
+    expect(warnings).toEqual([{ userId: judy, kind: "activity_available" }]);
+  });
+
   it("notifies the linked Teams account in its feed, in the account's language, and nothing once unlinked", async () => {
     const ken = await seedUser("ken@heig.test");
     await db.update(users).set({ locale: "fr" }).where(eq(users.id, ken));

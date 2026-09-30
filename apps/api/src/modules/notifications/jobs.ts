@@ -13,6 +13,8 @@ import type { FastifyInstance } from "fastify";
 
 import { eq } from "drizzle-orm";
 
+import { NotificationPayload } from "@quiz/contracts";
+
 import { teamsEnabled, type AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { users } from "../../db/schema.js";
@@ -54,7 +56,15 @@ export async function deliver(deps: DeliveryDeps, job: DeliveryJob): Promise<voi
     .where(eq(users.id, job.userId))
     .limit(1);
   if (!user || user.anonymizedAt) return;
-  const message = renderNotification(job.payload, mailLocale(user.locale), deps.webUrl);
+  // Never deliver a payload the catalogue cannot read: dropped, as the bell
+  // drops such a row — a retry would meet the same payload.
+  const parsed = NotificationPayload.safeParse(job.payload);
+  if (!parsed.success) {
+    deps.log.warn({ userId: job.userId, kind: job.payload.kind }, "notification payload no longer parses, not delivered");
+    return;
+  }
+  const payload = parsed.data;
+  const message = renderNotification(payload, mailLocale(user.locale), deps.webUrl);
 
   if (job.channel === "email") {
     if (!user.email) return;
@@ -79,7 +89,7 @@ export async function deliver(deps: DeliveryDeps, job: DeliveryJob): Promise<voi
   try {
     await deps.teams.notify(
       { tenantId: link.tenantId, aadObjectId: link.aadObjectId },
-      teamsActivity(deps.teamsAppId, job.payload, message),
+      teamsActivity(deps.teamsAppId, payload, message),
     );
   } catch (err) {
     // The app is not installed for that user (or its permission was not

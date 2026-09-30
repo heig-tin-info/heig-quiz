@@ -21,6 +21,7 @@ import type { AppConfig } from "./config.js";
 import { registerSecurityHeaders } from "./csp.js";
 import { createDb } from "./db/client.js";
 import { publish } from "./events.js";
+import { activityPlugin } from "./modules/activity/routes.js";
 import { adminPlugin } from "./modules/admin/routes.js";
 import { adminGuard } from "./modules/guards.js";
 import { avatarPlugin } from "./modules/avatar.js";
@@ -174,6 +175,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(poolPlugin, { config });
   await app.register(pollPlugin, { config });
   await app.register(evaluationPlugin);
+  await app.register(activityPlugin);
   await app.register(livePlugin);
   await app.register(previewPlugin);
   await app.register(gradingPlugin);

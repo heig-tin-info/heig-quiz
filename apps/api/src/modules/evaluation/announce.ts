@@ -80,7 +80,12 @@ async function announceAvailable(db: Db, row: EvaluationRecord, classroomId: str
     db,
     students.map((userId) => ({
       userId,
-      payload: { kind: "activity_available", evaluationId: row.id, evaluationTitle: row.title },
+      payload: {
+        kind: "activity_available",
+        activityKind: "evaluation",
+        activityId: row.id,
+        activityTitle: row.title,
+      },
       ...(takeHome ? {} : { channels: ["bell"] as const }),
     })),
   );
