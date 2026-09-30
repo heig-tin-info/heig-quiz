@@ -40,8 +40,11 @@ describe("upsertPersona", () => {
 
   it("is idempotent: signing in twice keeps one account", async () => {
     const first = await upsertPersona(app, student);
+    const accounts = (await app.db.select().from(users)).length;
     const second = await upsertPersona(app, student);
     expect(second.id).toBe(first.id);
+    // Not one account more, under any sub.
+    expect(await app.db.select().from(users)).toHaveLength(accounts);
     expect(await app.db.select().from(users).where(eq(users.oidcSub, devSub(student)))).toHaveLength(1);
   });
 

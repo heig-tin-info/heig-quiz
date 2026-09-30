@@ -85,6 +85,7 @@ async function handIn() {
 const audited = async (action: string) =>
   server.app.db.select().from(auditLog).where(eq(auditLog.action, action));
 
+// Sequential steps of one scenario on one seed: each test starts where the previous one left off.
 describe("the drill over HTTP", () => {
   it("lets the classroom's staff, and nobody else, switch the drill on", async () => {
     const url = `/app/api/classrooms/${seed.classroomId}/drill`;

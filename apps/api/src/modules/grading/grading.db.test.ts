@@ -886,13 +886,17 @@ describe("the grading pass writes in batches (D-01)", () => {
     // statement, and the driver's transactions counted underneath.
     const statements: string[] = [];
     const logged = pgliteDb(client, { logQuery: (query) => statements.push(query) });
-    const transactions = vi.spyOn(client, "transaction");
     const app = await testApp(logged);
     app.clock.set(NOW.toISOString());
 
-    await runEvaluationGrading(app, { evaluationId: evaluation.id });
-    const transactionCount = transactions.mock.calls.length;
-    transactions.mockRestore();
+    const transactions = vi.spyOn(client, "transaction");
+    let transactionCount: number;
+    try {
+      await runEvaluationGrading(app, { evaluationId: evaluation.id });
+      transactionCount = transactions.mock.calls.length;
+    } finally {
+      transactions.mockRestore();
+    }
 
     // Before D-01: 50 transactions, 50 UPDATE + 50 INSERT.
     const writes = statements.filter((s) => /^(update|insert into) "gradings"/i.test(s));

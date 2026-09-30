@@ -646,8 +646,7 @@ describe("POST /evaluations/:id/retake", () => {
   it("answers the new attempt, a 409 with the reason, and a 404 to a stranger", async () => {
     const student = await server.signIn("student");
     const stranger = await server.signIn("student");
-    const sdb = server.app.db;
-    const seed = await seedLive(sdb, {
+    const seed = await seedLive(db, {
       mode: "exercise",
       studentIds: [student.id],
       questions: 1,
@@ -658,7 +657,7 @@ describe("POST /evaluations/:id/retake", () => {
         retakes: { enabled: true, keep: "best", maxAttempts: 2 },
       },
     });
-    await applyState(sdb, await reload(sdb, seed.evaluationId), "running", server.clock.now());
+    await applyState(db, await reload(db, seed.evaluationId), "running", server.clock.now());
     const post = (url: string, headers: Record<string, string>, payload?: Payload) =>
       server.app.inject({ method: "POST", url, headers, ...(payload === undefined ? {} : { payload }) });
 

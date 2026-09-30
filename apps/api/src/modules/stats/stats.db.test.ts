@@ -573,6 +573,7 @@ describe("the discrimination index (ADR-042)", () => {
 
 type Session = Awaited<ReturnType<TestServer["signIn"]>>;
 
+// Sequential steps of one scenario on one seed: the reset of the last test follows the reads before it.
 describe("the routes of the statistics (ADR-038)", () => {
   let seed: Seeded;
   let owner: Session;
