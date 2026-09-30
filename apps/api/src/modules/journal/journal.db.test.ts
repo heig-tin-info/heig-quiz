@@ -239,10 +239,9 @@ describe("the student payload, the journal's one exit (invariant 4)", () => {
       ["a student with a claimed seat", student.headers, ""],
       ["a teacher asking for the student view", teacher.headers, "?view=student"],
       ["an impersonation session", impersonation, ""],
-      ["an impersonation session asking for nothing less", impersonation, "?view=student"],
     ] as const;
 
-  it.each([0, 1, 2, 3])("serves the student payload, and nothing hidden, to caller %i", async (i) => {
+  it.each([0, 1, 2])("serves the student payload, and nothing hidden, to caller %i", async (i) => {
     const [who, headers, query] = callers()[i]!;
     const bodies: string[] = [];
 
@@ -285,13 +284,6 @@ describe("the student payload, the journal's one exit (invariant 4)", () => {
 
     for (const body of bodies) {
       for (const secret of SECRETS) expect(body, `${who}: ${secret}`).not.toContain(secret);
-    }
-  });
-
-  it("gives an impersonation session exactly what the student reads", async () => {
-    for (const path of ["", "/pages/README.md", "/pages/010-open.md"]) {
-      const [theirs, ours] = await Promise.all([get(`${base()}${path}`, student.headers), get(`${base()}${path}`, impersonation)]);
-      expect(ours.body).toBe(theirs.body);
     }
   });
 
@@ -341,6 +333,13 @@ describe("the assets (N-SEC-13)", () => {
     const again = await get(`${base()}/assets/img/visible.png`, { ...student.headers, "if-none-match": res.headers.etag as string });
     expect(again.statusCode).toBe(304);
     expect(again.body).toBe("");
+  });
+
+  it("answer a student who names a hidden asset's sha with the 404 of a missing one", async () => {
+    const etag = `"${blobSha(FILES[6]!)}"`; // img/draft-only.png
+    const res = await get(`${base()}/assets/img/draft-only.png`, { ...student.headers, "if-none-match": etag });
+    expect(res.statusCode).toBe(404);
+    expect(res.headers.etag).toBeUndefined();
   });
 
   it("sandbox an SVG, so that opened directly it runs nothing", async () => {

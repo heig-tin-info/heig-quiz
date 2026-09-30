@@ -10,6 +10,11 @@
  * file path of the journal ever goes into a URL here; the writes, which do
  * (the Contents API), build theirs with `encodeJournalPath`.
  *
+ * Every call is BOUNDED ({@link bounded}, {@link once}): no retry of
+ * Octokit's, no waiting out a rate limit, {@link GITHUB_TIMEOUT_MS} at
+ * most. A rate limit or a timeout is `github_unavailable`, which the queue
+ * retries with backoff — never an ingestion blocked for an hour.
+ *
  * Every failure is a {@link JournalRepoError} carrying a `JournalSyncError`
  * code the web app words (invariant 1), or `empty`, which is not a failure:
  * a repository with no commit has no pages.
@@ -17,6 +22,11 @@
 import type { Octokit } from "octokit";
 
 import type { JournalSyncError } from "@quiz/contracts";
+
+import { githubStatus } from "../../github/app.js";
+
+/** The longest the ingestion waits on one GitHub call, the token included. */
+export const GITHUB_TIMEOUT_MS = 30_000;
 
 /** One file of the repository tree, as the ingestion needs it. */
 export interface TreeEntry {
@@ -51,22 +61,35 @@ export class JournalRepoError extends Error {
   }
 }
 
-const statusOf = (err: unknown): number | undefined => (err as { status?: number }).status;
+/** A request's options: no retry, no rate-limit wait, a deadline. */
+const once = () => ({
+  request: { retries: 0, noRateLimitWait: true, signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS) },
+});
 
 /**
- * No automatic retry of Octokit's own: the queue retries a job whose
- * failure is GitHub's (`github_unavailable`), and nothing else is worth one.
+ * `work`, or a timeout after {@link GITHUB_TIMEOUT_MS}: for the calls that
+ * take no per-request option (the installation token's fetch).
  */
-const ONCE = { request: { retries: 0 } } as const;
+export function bounded<T>(work: Promise<T>): Promise<T> {
+  const signal = AbortSignal.timeout(GITHUB_TIMEOUT_MS);
+  return Promise.race([
+    work,
+    new Promise<never>((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason as Error), { once: true });
+    }),
+  ]);
+}
 
 /**
- * The code of a failure GitHub answered, or of no answer at all. A 403 or a
- * 429 that says the quota is spent is GitHub being unavailable for now, not
- * a refusal: the next push, a Refresh or a retry catches up (N-RES-07).
+ * The code of a failure GitHub answered, or of no answer at all (a timeout,
+ * the network). A 403 or a 429 that says the quota is spent is GitHub being
+ * unavailable for now, not a refusal: the queue's retry, the next push or a
+ * Refresh catches up (N-RES-07). A 404 of the installation's token is
+ * `repo_not_found` too: the App no longer reaches the repository.
  */
 export function syncErrorOf(err: unknown): JournalSyncError {
   if (err instanceof JournalRepoError && err.code !== "empty") return err.code;
-  const status = statusOf(err);
+  const status = githubStatus(err);
   const headers = (err as { response?: { headers?: Record<string, string> } }).response?.headers;
   if (status === 429 || (status === 403 && headers?.["x-ratelimit-remaining"] === "0")) {
     return "github_unavailable";
@@ -85,7 +108,7 @@ export async function resolveRepo(octokit: Octokit, githubRepoId: number): Promi
   try {
     const { data } = await octokit.request("GET /repositories/{repository_id}", {
       repository_id: githubRepoId,
-      ...ONCE,
+      ...once(),
     });
     const { full_name: fullName, name, owner } = data as {
       full_name: string;
@@ -94,7 +117,7 @@ export async function resolveRepo(octokit: Octokit, githubRepoId: number): Promi
     };
     return { owner: owner.login, name, fullName };
   } catch (err) {
-    if (statusOf(err) === 404) {
+    if (githubStatus(err) === 404) {
       throw new JournalRepoError("repo_not_found", `repository ${githubRepoId} is not reachable`);
     }
     throw err;
@@ -113,13 +136,14 @@ export async function readTree(octokit: Octokit, repo: ResolvedRepo, ref: string
       owner: repo.owner,
       repo: repo.name,
       ref,
-      ...ONCE,
+      ...once(),
     });
     commitSha = data.sha;
   } catch (err) {
+    const status = githubStatus(err);
     // 409 is GitHub's "this repository is empty": no pages, not a failure.
-    if (statusOf(err) === 409) throw new JournalRepoError("empty", `${repo.fullName} has no commit`);
-    if (statusOf(err) === 404 || statusOf(err) === 422) {
+    if (status === 409) throw new JournalRepoError("empty", `${repo.fullName} has no commit`);
+    if (status === 404 || status === 422) {
       throw new JournalRepoError("ref_not_found", `${repo.fullName} has no branch ${ref}`);
     }
     throw err;
@@ -129,7 +153,7 @@ export async function readTree(octokit: Octokit, repo: ResolvedRepo, ref: string
     repo: repo.name,
     tree_sha: commitSha,
     recursive: "1",
-    ...ONCE,
+    ...once(),
   });
   if (tree.truncated) {
     throw new JournalRepoError("too_large", `the tree of ${repo.fullName} is too large to read at once`);
@@ -152,7 +176,7 @@ export async function readBlob(octokit: Octokit, repo: ResolvedRepo, sha: string
     owner: repo.owner,
     repo: repo.name,
     file_sha: sha,
-    ...ONCE,
+    ...once(),
   });
   return Buffer.from(data.content, data.encoding as BufferEncoding);
 }

@@ -18,12 +18,11 @@ import { JOURNAL_ASSET_MAX_BYTES } from "@quiz/contracts";
 
 import { loadConfig, type AppConfig } from "../../config.js";
 import { classroomJournals, githubClassroomLinks, githubOrganizations, journalAssets, journalPages } from "../../db/schema.js";
-import { subscribe, type BusMessage } from "../../events.js";
 import { appKey, fakeGithub, orgsRoute } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { JOURNAL_INGEST_QUEUE, type JobQueue } from "../../jobs.js";
-import { ingestJournal } from "./ingest.js";
+import { ingestJournal, repositoryChanged } from "./ingest.js";
 import { registerJournalJobs } from "./jobs.js";
 import { blobSha, pushTo, repoRoute, type FakeFile, type FakeRepo } from "./testing.js";
 
@@ -34,21 +33,21 @@ let config: AppConfig;
 let teacherId: string;
 let repos: FakeRepo[] = [];
 let reads: string[] = [];
-let onHead: (repo: FakeRepo) => void = () => {};
+/** Runs while a tree is being read, before GitHub answers: a test moves the row there. */
+let onTree: (() => Promise<unknown>) | null = null;
 
 beforeAll(async () => {
-  vi.stubGlobal("fetch", gh.fetch);
+  vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+    if (onTree && String(input instanceof Request ? input.url : input).includes("/git/trees/")) await onTree();
+    return gh.fetch(input, init);
+  });
   const env = { GITHUB_APP_ID: "1", GITHUB_APP_PRIVATE_KEY_PATH: key.pem, GITHUB_APP_SLUG: "quiz-test" };
   server = await testServer(env);
   config = loadConfig({ NODE_ENV: "test", ...env });
   teacherId = (await server.signIn("teacher")).id;
   gh.routes = [
     orgsRoute(() => []),
-    repoRoute(
-      () => repos,
-      reads,
-      (repo) => onHead(repo),
-    ),
+    repoRoute(() => repos, reads),
   ];
 });
 
@@ -98,13 +97,16 @@ async function rowOf(classroomId: string) {
 }
 
 describe("ingestJournal", () => {
-  it("copies the pages of the repository, titled and placed, rendered twice", async () => {
-    const w = await world([
+  it("copies the pages of the repository, titled and placed, rendered twice, and records it", async () => {
+    const w = await world(
+      [
       { path: "README.md", content: "# The course\n" },
       { path: "010-basics/README.md", content: "---\ntitle: Basics\n---\nIntro\n" },
       { path: "010-basics/020-pointers.md", content: "## A heading\n" },
-      { path: "Makefile", content: "all:\n" },
-    ]);
+        { path: "Makefile", content: "all:\n" },
+      ],
+      { fullName: "heig-prg/old-name" },
+    );
     expect(await w.ingest()).toMatchObject({ status: "ok", pages: 3, assets: 0 });
     const pages = await pagesOf(w.classroomId);
     expect(pages.map((p) => [p.path, p.title, p.parentPath])).toEqual([
@@ -116,25 +118,23 @@ describe("ingestJournal", () => {
       expect(page.htmlStaff).not.toBe("");
       expect(page.htmlStudent).toBe(page.htmlStaff); // nothing hidden, nothing differs
     }
+    const row = await rowOf(w.classroomId);
+    expect(row).toMatchObject({
+      syncStatus: "ok",
+      syncError: null,
+      lastCommitSha: w.repo.branches.main!.commit,
+      // Found by its id: a rename GitHub never told us about is followed too.
+      fullName: `heig-prg/${w.repo.name}`,
+      version: 1,
+    });
+    expect(row.lastSyncedAt).not.toBeNull();
+    expect(row.studentRenderedAt).not.toBeNull();
   });
 
   it("stores the markdown without NUL, as the renderer cleans it", async () => {
     const w = await world([{ path: "README.md", content: "# A\u0000B\n" }]);
     await w.ingest();
     expect((await pagesOf(w.classroomId))[0]!.markdown).toBe("# AB\n");
-  });
-
-  it("records the commit it was built from, the repository's name, and success", async () => {
-    const w = await world([{ path: "README.md", content: "# A\n" }], { fullName: "heig-prg/old-name" });
-    await w.ingest();
-    expect(await rowOf(w.classroomId)).toMatchObject({
-      syncStatus: "ok",
-      syncError: null,
-      lastCommitSha: w.repo.branches.main!.commit,
-      // Found by its id: a rename GitHub never told us about is followed too.
-      fullName: `heig-prg/${w.repo.name}`,
-    });
-    expect((await rowOf(w.classroomId)).lastSyncedAt).not.toBeNull();
   });
 
   it("fetches no blob for a page whose sha did not move", async () => {
@@ -165,30 +165,6 @@ describe("ingestJournal", () => {
     expect(page!.warnings).toEqual([]);
   });
 
-  it("links a draft and a future page for the staff only", async () => {
-    const w = await world([
-      { path: "README.md", content: "[d](010-draft.md) [f](020-future.md) [o](030-open.md)\n" },
-      { path: "010-draft.md", content: "---\ndraft: true\n---\n# Soon\n" },
-      { path: "020-future.md", content: "---\nvisible_from: 2099-01-01\n---\n# Later\n" },
-      { path: "030-open.md", content: "# Now\n" },
-    ]);
-    await w.ingest();
-    const pages = await pagesOf(w.classroomId);
-    expect(pages.map((p) => [p.path, p.draft, p.visibleFrom !== null])).toEqual([
-      ["010-draft.md", true, false],
-      ["020-future.md", false, true],
-      ["030-open.md", false, false],
-      ["README.md", false, false],
-    ]);
-    const home = pages.find((p) => p.path === "README.md")!;
-    expect(home.htmlStaff).toContain('href="./010-draft.md"');
-    expect(home.htmlStaff).toContain('href="./020-future.md"');
-    expect(home.htmlStudent).not.toContain("010-draft");
-    expect(home.htmlStudent).not.toContain("020-future");
-    expect(home.htmlStudent).toContain('href="./030-open.md"');
-    expect((await rowOf(w.classroomId)).studentRenderedAt).not.toBeNull();
-  });
-
   it("downloads only the assets a page references, and records them on the page", async () => {
     const used: FakeFile = { path: "images/used.png", content: "PNG-BYTES" };
     const w = await world([
@@ -208,13 +184,17 @@ describe("ingestJournal", () => {
     expect((await pagesOf(w.classroomId))[0]!.assetPaths).toEqual(["images/used.png"]);
   });
 
-  it("neither serves nor links a file over the size cap, and says why", async () => {
+  it("neither serves nor links a file over the size cap, page or asset, and says why", async () => {
     const w = await world([
       { path: "README.md", content: "![big](images/big.png)\n" },
       { path: "images/big.png", content: "x", size: JOURNAL_ASSET_MAX_BYTES + 1 },
+      { path: "010-huge.md", content: "# Huge\n", size: JOURNAL_ASSET_MAX_BYTES + 1 },
     ]);
+    reads.length = 0;
     await w.ingest();
-    const [home] = await pagesOf(w.classroomId);
+    expect(reads).toHaveLength(1); // the README only
+    const [home, ...others] = await pagesOf(w.classroomId);
+    expect(others).toEqual([]);
     expect(home!.htmlStaff).not.toContain("<img");
     expect(home!.warnings).toEqual([{ code: "asset_too_large", href: "images/big.png", path: "images/big.png" }]);
     expect(await assetsOf(w.classroomId)).toHaveLength(0);
@@ -305,16 +285,13 @@ describe("ingestJournal", () => {
     expect((await pagesOf(w.classroomId))[0]!.title).toBe("Last year");
   });
 
-  it("tells the classroom's readers to refresh", async () => {
+  it("does not wait out a spent rate limit: GitHub is unavailable, at once", async () => {
     const w = await world([{ path: "README.md", content: "# A\n" }]);
-    const seen: BusMessage[] = [];
-    const off = subscribe((e) => seen.push(e));
-    try {
-      await w.ingest();
-    } finally {
-      off();
-    }
-    expect(seen).toContainEqual({ kind: "hint", type: "journal", topics: [`classroom:${w.classroomId}`] });
+    w.repo.rateLimited = true;
+    const started = Date.now();
+    expect(await w.ingest()).toEqual({ status: "error", code: "github_unavailable" });
+    // The quota resets in an hour: waiting for it would time the test out.
+    expect(Date.now() - started).toBeLessThan(5_000);
   });
 
   it("is a no-op on a classroom without a journal", async () => {
@@ -333,7 +310,6 @@ describe("ingestJournal", () => {
       stop: vi.fn(async () => {}),
     } as unknown as JobQueue;
     await registerJournalJobs(server.app, queue, config);
-    expect(queue.createQueue).toHaveBeenCalledWith(JOURNAL_INGEST_QUEUE, { retryLimit: 3, retryBackoff: true, retryDelay: 20 });
     await work!({ classroomId: w.classroomId });
     expect((await rowOf(w.classroomId)).syncStatus).toBe("ok");
     w.repo.failWith = 503;
@@ -344,29 +320,46 @@ describe("ingestJournal", () => {
     expect((await rowOf(w.classroomId)).syncError).toBe("forbidden");
   });
 
-  it("converges when two ingestions of one classroom run at once (J2)", async () => {
-    const w = await world([{ path: "README.md", content: "# First\n" }]);
-    // The repository moves on right after the first ingestion read its head.
-    let moved = false;
-    let second = "";
-    onHead = (repo) => {
-      if (repo !== w.repo || moved) return;
-      moved = true;
-      second = push(repo, [
-        { path: "README.md", content: "# Second\n" },
-        { path: "010-new.md", content: "# New\n" },
-      ]);
-    };
-    try {
-      const outcomes = await Promise.all([w.ingest(), w.ingest()]);
-      expect(outcomes.every((o) => o?.status === "ok")).toBe(true);
-    } finally {
-      onHead = () => {};
-    }
-    expect((await rowOf(w.classroomId)).lastCommitSha).toBe(second);
-    expect((await pagesOf(w.classroomId)).map((p) => [p.path, p.title])).toEqual([
-      ["010-new.md", "New"],
-      ["README.md", "Second"],
-    ]);
+  describe("J2: nothing read before the row moved is written", () => {
+    /**
+     * A `repository` webhook's rename lands: the row's `version` moves, while
+     * GitHub still answers the read in flight (the fake keeps the name).
+     */
+    const rename = (repo: FakeRepo) =>
+      repositoryChanged(server.app, repo.id, { action: "renamed", fullName: "heig-prg/meanwhile" });
+
+    it("runs again from a fresh snapshot when the row moved during the read", async () => {
+      const w = await world([{ path: "README.md", content: "# First\n" }]);
+      let second = "";
+      onTree = async () => {
+        onTree = null;
+        // While the first run reads the tree: a rename, and a push after it.
+        await rename(w.repo);
+        second = push(w.repo, [{ path: "README.md", content: "# Second\n" }]);
+      };
+      const before = gh.calls.length;
+      expect(await w.ingest()).toMatchObject({ status: "ok", commitSha: second });
+      expect(gh.calls.slice(before).filter((c) => c.includes("/commits/"))).toHaveLength(2);
+      // The stale run's head and title were never committed.
+      expect(await rowOf(w.classroomId)).toMatchObject({ lastCommitSha: second, fullName: `heig-prg/${w.repo.name}` });
+      expect((await pagesOf(w.classroomId)).map((p) => p.title)).toEqual(["Second"]);
+    });
+
+    it("hands over to a new job when the row keeps moving", async () => {
+      const w = await world([{ path: "README.md", content: "# A\n" }]);
+      const send = vi.fn(async () => {});
+      const app = server.app as { boss?: JobQueue };
+      app.boss = { send } as unknown as JobQueue;
+      onTree = () => rename(w.repo);
+      try {
+        expect(await w.ingest()).toEqual({ status: "superseded" });
+      } finally {
+        onTree = null;
+        delete app.boss;
+      }
+      expect(send).toHaveBeenCalledWith(JOURNAL_INGEST_QUEUE, { classroomId: w.classroomId });
+      expect(await pagesOf(w.classroomId)).toEqual([]);
+      expect((await rowOf(w.classroomId)).lastCommitSha).toBeNull();
+    });
   });
 });

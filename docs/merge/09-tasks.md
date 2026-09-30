@@ -632,11 +632,16 @@ files it ports; writes en + fr for every string.
     headers, an SVG's CSP gets `; sandbox`. J1: a student's asset needs a
     page `visibleToStudents()` whose `asset_paths` holds it.
   - Ingestion (`ingestJournal(app, config, classroomId)` → `{status: "ok",
-    commitSha, pages, assets} | {status: "error", code} | null`): one
-    transaction, `pg_advisory_xact_lock` per classroom first (J2, reads
-    inside the lock), the copy in a savepoint, a failure GitHub answered
-    written as a `JournalSyncError` under the same lock with the pages
-    kept. The repository is resolved by id (`GET /repositories/{id}`, a
+    commitSha, pages, assets} | {status: "error", code} | {status:
+    "superseded"} | null`), J2 without a lock during GitHub reads (04 §4.3,
+    "As ported"): snapshot of `classroom_journals.version`, GitHub read and
+    pages rendered outside any transaction (every call bounded: no retry,
+    `noRateLimitWait`, 30 s, the token fetch raced against the same
+    deadline), then one short transaction, `SELECT … FOR UPDATE` and a
+    write only if `version` is unchanged (`+ 1`); a failure is its own
+    compare-and-set, the pages kept. Lost twice: the job is re-sent
+    (`superseded`). Every writer of the row bumps `version`. A page or an
+    asset over 5 MB is not copied. The repository is resolved by id (`GET /repositories/{id}`, a
     missed rename is followed); 409 = empty repository (copy emptied, ok);
     404/422 on the branch = `ref_not_found`; no file under `root_path` =
     `root_not_found`; truncated tree = `too_large`; 403/401 or no active
@@ -645,7 +650,8 @@ files it ports; writes en + fr for every string.
     rendered from `cleanSource(md)`, `html_staff` first, then
     `html_student` of every page by `renderStudentPages` (the visible set
     read by `visibleToStudents()`), which stamps the new column
-    `classroom_journals.student_rendered_at` (migration `0049`).
+    `classroom_journals.student_rendered_at` (migration `0049`, which
+    also adds `version`).
   - `requestIngest(app, config, classroomId)` (service) sends
     `journal.ingest` (`standard`, no dedupe, 3 retries), or ingests inline
     without a queue: **M4-03's Refresh and its re-ingestion after a save
@@ -654,12 +660,17 @@ files it ports; writes en + fr for every string.
     `requestIngest` for every row of `github_repo_id` on that branch whose
     `last_commit_sha` differs from `after` (a deleted branch is ingested
     and ends `ref_not_found`); `repository` `renamed` → `full_name`,
-    `deleted` → `error`/`repo_not_found`, each row under its lock.
+    `deleted` → `error`/`repo_not_found`, one statement bumping `version`.
   - J4: `TickTask` `journal.visible_from` (60 s) → `sweepVisibleFrom`:
     the classrooms with a non-draft page whose `visible_from` is past and
     later than `student_rendered_at` get `html_student` re-rendered (no
-    GitHub call) and the hint; a journal an ingestion holds is skipped
-    (`pg_try_advisory_xact_lock`).
+    GitHub call) and the hint, under the row's `FOR UPDATE SKIP LOCKED` (a
+    journal being written is skipped).
+  - Assets: `INERT_IMAGE_HEADERS` of the pool plus the cache line, with
+    N-SEC-13's CSP (not `sandbox` for every asset: a PDF viewer does not
+    run in a sandboxed document); an SVG adds `; sandbox`.
+  - `githubStatus(err)` (`github/app.ts`) is the one reader of a GitHub
+    error's status.
   - SSE: hint kind `journal` (contracts `HintEvent`, `events.ts`, the web's
     `HINT_ROOTS` → `["journal"]`) on `classroom:<id>`.
   - `hasJournal(db, classroomId)` moved to `modules/journal/service.ts`;

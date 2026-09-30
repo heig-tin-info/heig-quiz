@@ -2,7 +2,7 @@
  * What sets the journal's copy moving, apart from a staff action (M4-03):
  *
  * - the `journal.ingest` worker (queue policy in `jobs.ts`: `standard`, the
- *   serialisation is the ingestion's lock, fix J2);
+ *   ingestion's compare-and-set on the row's `version` is fix J2);
  * - the webhook handlers, registered on `github`'s registry (M2-04; `github`
  *   never imports this module): a `push` fans out to every classroom row
  *   holding the repository on the pushed branch, a `repository` event

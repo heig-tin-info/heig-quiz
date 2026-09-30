@@ -91,6 +91,12 @@ export interface ReadOptions {
 }
 export const HTTP_READ: ReadOptions = { noRateLimitWait: true };
 
+/** The HTTP status GitHub answered with, when the error is an answer of GitHub's. */
+export function githubStatus(err: unknown): number | undefined {
+  const status = (err as { status?: unknown } | null)?.status;
+  return typeof status === "number" ? status : undefined;
+}
+
 /**
  * One installation of Quiz's App on an organization, as GitHub describes it
  * (`GET /app/installations/{id}`, `/orgs/{org}/installation`, the listing).
@@ -185,7 +191,7 @@ export async function orgExistsOnGithub(
       });
       return true;
     } catch (err) {
-      const status = (err as { status?: number }).status;
+      const status = githubStatus(err);
       if (status === 404) return false;
       // fall through to the anonymous lookup
     }
@@ -247,7 +253,7 @@ export async function fetchOrgLlmSecret(
     });
     return "ok";
   } catch (err) {
-    return (err as { status?: number }).status === 404 ? "missing" : null;
+    return githubStatus(err) === 404 ? "missing" : null;
   }
 }
 
@@ -271,7 +277,7 @@ export async function resolveOrgInstallation(
     });
     return orgInstallation(data as RawInstallation);
   } catch (err) {
-    if ((err as { status?: number }).status === 404) return null;
+    if (githubStatus(err) === 404) return null;
     throw err;
   }
 }
@@ -295,7 +301,7 @@ export async function fetchInstallation(
     });
     return orgInstallation(data as RawInstallation);
   } catch (err) {
-    if ((err as { status?: number }).status === 404) return null;
+    if (githubStatus(err) === 404) return null;
     throw err;
   }
 }
@@ -338,7 +344,7 @@ export async function recentHookDeliveries(config: AppConfig): Promise<HookDeliv
       deliveredAt: new Date(d.delivered_at),
     }));
   } catch (err) {
-    if ((err as { status?: number }).status === 404) return [];
+    if (githubStatus(err) === 404) return [];
     throw err;
   }
 }

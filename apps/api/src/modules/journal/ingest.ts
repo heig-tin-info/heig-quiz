@@ -7,17 +7,19 @@
  * re-ingestion after a browser save) — never on a page view. Idempotent:
  * replayed on the same commit it rewrites the same rows.
  *
- * **Serialised per classroom (fix J2, N-RES-07).** An ingestion is one
- * transaction that first takes a transaction-scoped advisory lock on the
- * classroom's row, then reads the head, the tree and the blobs that moved,
- * and writes the whole copy. Two ingestions of one classroom therefore
- * never interleave, whoever sends them (the queue, a test, a direct call),
- * and the later one reads a head at least as new as the earlier's: they
- * converge on the repository's state. The GitHub reads happen inside the
- * transaction on purpose: taken outside it, a slow ingestion of an old head
- * could commit after a fast one of the new head and win. A failure is
- * written under the same lock (the copy's own work runs in a savepoint), so
- * a late error never overwrites a newer success.
+ * **No lock is held while GitHub is read (fix J2, N-RES-07).** An ingestion
+ * is optimistic, in three steps:
+ *  1. a SNAPSHOT of the classroom's row (its `version`), of the stored
+ *     pages' blob shas and markdown and of the cached assets' shas;
+ *  2. the FETCH, outside any transaction: the head, the tree, the blobs that
+ *     moved, every page rendered — GitHub calls all bounded (`repo.ts`);
+ *  3. ONE short transaction that locks the row (`SELECT … FOR UPDATE`) and
+ *     writes the copy only if its `version` is still the snapshot's, bumping
+ *     it. A failure is written the same way, by a compare-and-set of its own.
+ * Every other writer of the row bumps `version` too (a rename, a deletion,
+ * another ingestion), so a result built from a stale snapshot is never
+ * committed: the ingestion runs once more from a fresh snapshot, and if it
+ * loses again, re-sends its job (or, without a queue, says so).
  *
  * Four decisions carry the cost (classroom's, kept):
  *  1. a blob is fetched only when its sha moved — the tree gives every sha;
@@ -41,7 +43,7 @@ import { isJournalPagePath, JOURNAL_ASSET_MAX_BYTES, safeJournalPath, type Journ
 import { assetContentType, cleanSource, placePage, prettifyName, renderPage } from "@quiz/docrender";
 
 import type { AppConfig } from "../../config.js";
-import type { Tx } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import {
   classroomJournals,
   githubClassroomLinks,
@@ -50,141 +52,80 @@ import {
   journalPages,
 } from "../../db/schema.js";
 import { installationClient } from "../../github/app.js";
+import { JOURNAL_INGEST_QUEUE } from "../../jobs.js";
 import { redactTokens } from "../../redact.js";
 import { journalChanged } from "./events.js";
-import { JournalRepoError, readBlob, readTree, resolveRepo, syncErrorOf, type TreeEntry } from "./repo.js";
+import {
+  bounded,
+  JournalRepoError,
+  readBlob,
+  readTree,
+  resolveRepo,
+  syncErrorOf,
+  type TreeEntry,
+} from "./repo.js";
 import { visibleToStudents } from "./studentView.js";
 
 export type IngestOutcome =
   | { status: "ok"; commitSha: string | null; pages: number; assets: number }
-  | { status: "error"; code: JournalSyncError };
+  | { status: "error"; code: JournalSyncError }
+  /** Another writer moved the row twice under this ingestion: its job was sent again. */
+  | { status: "superseded" };
 
-// ---------------------------------------------------------------- the lock
+/** Runs of one ingestion before it hands over to a new job: the first, and one more. */
+const ATTEMPTS = 2;
 
-/**
- * The per-classroom lock of fix J2, held until the transaction ends. With
- * `wait: false` it is only tried: the J4 sweep skips a journal an ingestion
- * holds (that ingestion renders the students' pages itself).
- */
-async function lockJournal(tx: Tx, classroomId: string, { wait = true } = {}): Promise<boolean> {
-  const key = sql`hashtextextended(${`journal:${classroomId}`}, 0)`;
-  if (wait) {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(${key})`);
-    return true;
-  }
-  const result = (await tx.execute(sql`SELECT pg_try_advisory_xact_lock(${key}) AS locked`)) as unknown as {
-    rows: { locked: boolean }[];
-  };
-  return result.rows[0]?.locked === true;
+// ---------------------------------------------------------------- 1. the snapshot
+
+interface Snapshot {
+  row: typeof classroomJournals.$inferSelect;
+  /** Null: the organization is not installed, or not active. */
+  installationId: number | null;
+  pages: Map<string, { id: string; blobSha: string; markdown: string }>;
+  assets: Map<string, string>;
 }
 
-// ---------------------------------------------------------------- the ingestion
-
-/**
- * Rebuilds one classroom's copy. Returns null when the classroom has no
- * journal (removed since the job was sent). A failure GitHub answered is
- * recorded on the row (`sync_status = error`, the code) and RETURNED, the
- * pages kept; the queue's worker decides what is worth a retry. Anything
- * else (a database failure) is thrown, the row untouched.
- */
-export async function ingestJournal(
-  app: FastifyInstance,
-  config: AppConfig,
-  classroomId: string,
-): Promise<IngestOutcome | null> {
-  const outcome = await app.db.transaction(async (tx) => {
-    await lockJournal(tx, classroomId);
-    const [target] = await tx
-      .select({
-        row: classroomJournals,
-        installationId: githubOrganizations.installationId,
-        orgStatus: githubOrganizations.status,
-      })
-      .from(classroomJournals)
-      .leftJoin(githubClassroomLinks, eq(githubClassroomLinks.classroomId, classroomJournals.classroomId))
-      .leftJoin(githubOrganizations, eq(githubOrganizations.id, githubClassroomLinks.orgId))
-      .where(eq(classroomJournals.classroomId, classroomId));
-    if (!target) return null;
-    const now = app.clock.now();
-    try {
-      // A savepoint: a failure undoes the copy's half-written rows, never the lock.
-      return await tx.transaction(async (inner) => {
-        const installationId = target.orgStatus === "active" ? target.installationId : null;
-        if (installationId === null) {
-          throw new JournalRepoError("forbidden", "the classroom's organization has no installation");
-        }
-        return await synchronise(inner, config, target.row, installationId, now);
-      });
-    } catch (err) {
-      if (!(err instanceof JournalRepoError) && typeof (err as { status?: unknown }).status !== "number") {
-        throw err;
-      }
-      const code = syncErrorOf(err);
-      app.log.warn(
-        { classroomId, code, error: redactTokens(String((err as Error).message ?? err)) },
-        "journal synchronisation failed",
-      );
-      await tx
-        .update(classroomJournals)
-        .set({ syncStatus: "error", syncError: code, lastSyncedAt: now, updatedAt: now })
-        .where(eq(classroomJournals.classroomId, classroomId));
-      return { status: "error", code } satisfies IngestOutcome;
-    }
-  });
-  if (outcome) journalChanged([classroomId]);
-  return outcome;
-}
-
-/** An installation's client; GitHub refusing the token is the App's access, not an outage. */
-async function clientFor(config: AppConfig, installationId: number) {
-  try {
-    return (await installationClient(config, installationId)).octokit;
-  } catch (err) {
-    const status = (err as { status?: number }).status;
-    if (status !== undefined && status >= 400 && status < 500) {
-      throw new JournalRepoError("forbidden", "the installation's token was refused");
-    }
-    throw err;
-  }
-}
-
-async function synchronise(
-  tx: Tx,
-  config: AppConfig,
-  row: typeof classroomJournals.$inferSelect,
-  installationId: number,
-  now: Date,
-): Promise<IngestOutcome> {
-  const octokit = await clientFor(config, installationId);
-  const repo = await resolveRepo(octokit, row.githubRepoId);
-  let tree: Awaited<ReturnType<typeof readTree>> | null;
-  try {
-    tree = await readTree(octokit, repo, row.ref);
-  } catch (err) {
-    // A repository with no commit has no pages: the honest copy is empty.
-    if (!(err instanceof JournalRepoError && err.code === "empty")) throw err;
-    tree = null;
-  }
-  const root = row.rootPath.replace(/^\/+|\/+$/g, "");
-  if (tree && root && !tree.entries.some((e) => e.path.startsWith(`${root}/`))) {
-    throw new JournalRepoError("root_not_found", `${repo.fullName} has no folder ${root}`);
-  }
-  const counts = await mirror(tx, row.classroomId, root, tree?.entries ?? [], now, (sha) =>
-    readBlob(octokit, repo, sha),
-  );
-  await renderStudentPages(tx, row.classroomId);
-  await tx
-    .update(classroomJournals)
-    .set({
-      fullName: repo.fullName,
-      lastCommitSha: tree?.commitSha ?? null,
-      lastSyncedAt: now,
-      syncStatus: "ok",
-      syncError: null,
-      updatedAt: now,
+async function snapshot(db: Db, classroomId: string): Promise<Snapshot | null> {
+  const [target] = await db
+    .select({
+      row: classroomJournals,
+      installationId: githubOrganizations.installationId,
+      orgStatus: githubOrganizations.status,
     })
-    .where(eq(classroomJournals.classroomId, row.classroomId));
-  return { status: "ok", commitSha: tree?.commitSha ?? null, ...counts };
+    .from(classroomJournals)
+    .leftJoin(githubClassroomLinks, eq(githubClassroomLinks.classroomId, classroomJournals.classroomId))
+    .leftJoin(githubOrganizations, eq(githubOrganizations.id, githubClassroomLinks.orgId))
+    .where(eq(classroomJournals.classroomId, classroomId));
+  if (!target) return null;
+  const [pages, assets] = await Promise.all([
+    db
+      .select({ id: journalPages.id, path: journalPages.path, blobSha: journalPages.blobSha, markdown: journalPages.markdown })
+      .from(journalPages)
+      .where(eq(journalPages.classroomId, classroomId)),
+    db
+      .select({ path: journalAssets.path, blobSha: journalAssets.blobSha })
+      .from(journalAssets)
+      .where(eq(journalAssets.classroomId, classroomId)),
+  ]);
+  return {
+    row: target.row,
+    installationId: target.orgStatus === "active" ? target.installationId : null,
+    pages: new Map(pages.map((p) => [p.path, p])),
+    assets: new Map(assets.map((a) => [a.path, a.blobSha])),
+  };
+}
+
+// ---------------------------------------------------------------- 2. the fetch
+
+/** What the transaction writes: everything already read and rendered. */
+interface Copy {
+  fullName: string;
+  commitSha: string | null;
+  pages: (typeof journalPages.$inferInsert & { moved: boolean })[];
+  /** The assets whose blob moved, downloaded. */
+  downloads: { path: string; blobSha: string; data: Buffer }[];
+  /** Every asset a page references: the ones kept. */
+  referenced: string[];
 }
 
 /**
@@ -207,43 +148,44 @@ function classifyAssets(entries: readonly TreeEntry[], root: string) {
   return { assets, oversized };
 }
 
-/**
- * The copy itself: pages upserted (staff rendering) and removed, referenced
- * assets downloaded when their blob moved, the rest dropped. `html_student`
- * is written by {@link renderStudentPages} right after, from the rows.
- */
-async function mirror(
-  tx: Tx,
-  classroomId: string,
-  root: string,
-  entries: readonly TreeEntry[],
-  now: Date,
-  blob: (sha: string) => Promise<Buffer>,
-): Promise<{ pages: number; assets: number }> {
+/** GitHub read and every page rendered, with no database access at all. */
+async function fetchCopy(config: AppConfig, snap: Snapshot): Promise<Copy> {
+  if (snap.installationId === null) {
+    throw new JournalRepoError("forbidden", "the classroom's organization has no installation");
+  }
+  const { octokit } = await bounded(installationClient(config, snap.installationId));
+  const repo = await resolveRepo(octokit, snap.row.githubRepoId);
+  let tree: Awaited<ReturnType<typeof readTree>> | null;
+  try {
+    tree = await readTree(octokit, repo, snap.row.ref);
+  } catch (err) {
+    // A repository with no commit has no pages: the honest copy is empty.
+    if (!(err instanceof JournalRepoError && err.code === "empty")) throw err;
+    tree = null;
+  }
+  const root = snap.row.rootPath.replace(/^\/+|\/+$/g, "");
+  const entries = tree?.entries ?? [];
+  if (tree && root && !entries.some((e) => e.path.startsWith(`${root}/`))) {
+    throw new JournalRepoError("root_not_found", `${repo.fullName} has no folder ${root}`);
+  }
   const { assets, oversized } = classifyAssets(entries, root);
+  // A page over the size cap is not copied, like an asset: a link to it is a missing target.
   const placed = entries.flatMap((entry) => {
-    const place = placePage(entry.path, root);
+    const place = entry.size > JOURNAL_ASSET_MAX_BYTES ? null : placePage(entry.path, root);
     return place ? [{ entry, place }] : [];
   });
   const pagePaths = new Set(placed.map((p) => p.place.path));
   const assetPaths = new Set(assets.keys());
+  const blob = (sha: string) => readBlob(octokit, repo, sha);
 
-  const known = new Map(
-    (
-      await tx
-        .select({ id: journalPages.id, path: journalPages.path, blobSha: journalPages.blobSha, markdown: journalPages.markdown })
-        .from(journalPages)
-        .where(eq(journalPages.classroomId, classroomId))
-    ).map((p) => [p.path, p]),
-  );
-
+  const pages: Copy["pages"] = [];
   const referenced = new Set<string>();
   for (const { entry, place } of placed) {
-    const before = known.get(place.path);
+    const before = snap.pages.get(place.path);
     const moved = before?.blobSha !== entry.sha;
     const markdown = moved ? cleanSource((await blob(entry.sha)).toString("utf8")) : before!.markdown;
     const page = renderPage(markdown, {
-      classroomId,
+      classroomId: snap.row.classroomId,
       pagePath: place.path,
       fallbackTitle: place.fallbackTitle,
       pages: pagePaths,
@@ -251,7 +193,10 @@ async function mirror(
       oversized,
     });
     for (const path of page.assets) referenced.add(path);
-    const values = {
+    pages.push({
+      id: before?.id ?? randomUUID(),
+      classroomId: snap.row.classroomId,
+      path: place.path,
       parentPath: place.parentPath,
       sortKey: place.sortKey,
       title: page.title,
@@ -259,54 +204,156 @@ async function mirror(
       blobSha: entry.sha,
       markdown,
       htmlStaff: page.html,
+      htmlStudent: "",
       toc: page.toc,
       draft: page.draft,
       visibleFrom: page.visibleFrom,
       warnings: page.warnings,
       assetPaths: page.assets,
-      // Only when the blob moved: a neighbour's change is no change of this page.
-      ...(moved ? { updatedAt: now } : {}),
-    };
-    await tx
-      .insert(journalPages)
-      .values({ id: before?.id ?? randomUUID(), classroomId, path: place.path, htmlStudent: "", ...values })
-      .onConflictDoUpdate({ target: [journalPages.classroomId, journalPages.path], set: values });
+      moved,
+    });
   }
-  await tx
-    .delete(journalPages)
-    .where(
-      pagePaths.size
-        ? and(eq(journalPages.classroomId, classroomId), notInArray(journalPages.path, [...pagePaths]))
-        : eq(journalPages.classroomId, classroomId),
-    );
 
-  const cached = new Map(
-    (
-      await tx
-        .select({ path: journalAssets.path, blobSha: journalAssets.blobSha })
-        .from(journalAssets)
-        .where(eq(journalAssets.classroomId, classroomId))
-    ).map((a) => [a.path, a.blobSha]),
-  );
+  const downloads: Copy["downloads"] = [];
   for (const path of referenced) {
     const entry = assets.get(path)!;
-    if (cached.get(path) === entry.sha) continue;
+    if (snap.assets.get(path) === entry.sha) continue;
     const data = await blob(entry.sha);
-    if (data.length > JOURNAL_ASSET_MAX_BYTES) continue; // the tree lied about the size
-    const values = { blobSha: entry.sha, contentType: assetContentType(path), size: data.length, data, updatedAt: now };
-    await tx
-      .insert(journalAssets)
-      .values({ id: randomUUID(), classroomId, path, ...values })
-      .onConflictDoUpdate({ target: [journalAssets.classroomId, journalAssets.path], set: values });
+    if (data.length <= JOURNAL_ASSET_MAX_BYTES) downloads.push({ path, blobSha: entry.sha, data });
   }
-  await tx
-    .delete(journalAssets)
+  return {
+    fullName: repo.fullName,
+    commitSha: tree?.commitSha ?? null,
+    pages,
+    downloads,
+    referenced: [...referenced],
+  };
+}
+
+// ---------------------------------------------------------------- 3. the write
+
+/**
+ * The row locked, and `true` if its `version` is still `expected`: the
+ * compare half of every compare-and-set of this module.
+ */
+async function lockedAt(tx: Tx, classroomId: string, expected: number): Promise<boolean> {
+  const [row] = await tx
+    .select({ version: classroomJournals.version })
+    .from(classroomJournals)
+    .where(eq(classroomJournals.classroomId, classroomId))
+    .for("update");
+  return row?.version === expected;
+}
+
+const bumped = () => sql`${classroomJournals.version} + 1`;
+
+/** The copy written in one short transaction, or false when the row moved since the snapshot. */
+async function commitCopy(db: Db, snap: Snapshot, copy: Copy, now: Date): Promise<boolean> {
+  const classroomId = snap.row.classroomId;
+  return db.transaction(async (tx) => {
+    if (!(await lockedAt(tx, classroomId, snap.row.version))) return false;
+    for (const { moved, ...page } of copy.pages) {
+      // `updated_at` only when the blob moved: a neighbour's change is no change of this page.
+      const { id: _id, classroomId: _c, path: _p, htmlStudent: _h, ...values } = page;
+      const set = moved ? { ...values, updatedAt: now } : values;
+      await tx
+        .insert(journalPages)
+        .values({ ...page, updatedAt: now })
+        .onConflictDoUpdate({ target: [journalPages.classroomId, journalPages.path], set });
+    }
+    const kept = copy.pages.map((p) => p.path);
+    await tx
+      .delete(journalPages)
+      .where(
+        kept.length
+          ? and(eq(journalPages.classroomId, classroomId), notInArray(journalPages.path, kept))
+          : eq(journalPages.classroomId, classroomId),
+      );
+    for (const { path, blobSha, data } of copy.downloads) {
+      const values = { blobSha, contentType: assetContentType(path), size: data.length, data, updatedAt: now };
+      await tx
+        .insert(journalAssets)
+        .values({ id: randomUUID(), classroomId, path, ...values })
+        .onConflictDoUpdate({ target: [journalAssets.classroomId, journalAssets.path], set: values });
+    }
+    await tx
+      .delete(journalAssets)
+      .where(
+        copy.referenced.length
+          ? and(eq(journalAssets.classroomId, classroomId), notInArray(journalAssets.path, copy.referenced))
+          : eq(journalAssets.classroomId, classroomId),
+      );
+    await renderStudentPages(tx, classroomId);
+    await tx
+      .update(classroomJournals)
+      .set({
+        fullName: copy.fullName,
+        lastCommitSha: copy.commitSha,
+        lastSyncedAt: now,
+        syncStatus: "ok",
+        syncError: null,
+        updatedAt: now,
+        version: bumped(),
+      })
+      .where(eq(classroomJournals.classroomId, classroomId));
+    return true;
+  });
+}
+
+/** A failure recorded by its own compare-and-set, the pages kept; false when the row moved. */
+async function commitFailure(db: Db, snap: Snapshot, code: JournalSyncError, now: Date): Promise<boolean> {
+  const updated = await db
+    .update(classroomJournals)
+    .set({ syncStatus: "error", syncError: code, lastSyncedAt: now, updatedAt: now, version: bumped() })
     .where(
-      referenced.size
-        ? and(eq(journalAssets.classroomId, classroomId), notInArray(journalAssets.path, [...referenced]))
-        : eq(journalAssets.classroomId, classroomId),
-    );
-  return { pages: placed.length, assets: referenced.size };
+      and(
+        eq(classroomJournals.classroomId, snap.row.classroomId),
+        eq(classroomJournals.version, snap.row.version),
+      ),
+    )
+    .returning({ classroomId: classroomJournals.classroomId });
+  return updated.length > 0;
+}
+
+// ---------------------------------------------------------------- the ingestion
+
+/**
+ * Rebuilds one classroom's copy. Returns null when the classroom has no
+ * journal (removed since the job was sent). A failure GitHub answered, or
+ * GitHub not answering in time, is recorded on the row (`sync_status =
+ * error`, the code) and RETURNED, the pages kept; the queue's worker decides
+ * what is worth a retry. A database failure is thrown.
+ */
+export async function ingestJournal(
+  app: FastifyInstance,
+  config: AppConfig,
+  classroomId: string,
+): Promise<IngestOutcome | null> {
+  for (let attempt = 0; attempt < ATTEMPTS; attempt += 1) {
+    const snap = await snapshot(app.db, classroomId);
+    if (!snap) return null;
+    let copy: Copy | null = null;
+    let code: JournalSyncError | null = null;
+    try {
+      copy = await fetchCopy(config, snap);
+    } catch (err) {
+      code = syncErrorOf(err);
+      app.log.warn(
+        { classroomId, code, error: redactTokens(String((err as Error)?.message ?? err)) },
+        "journal synchronisation failed",
+      );
+    }
+    const now = app.clock.now();
+    const written = copy ? await commitCopy(app.db, snap, copy, now) : await commitFailure(app.db, snap, code!, now);
+    if (!written) continue; // the row moved under us: from a fresh snapshot
+    journalChanged([classroomId]);
+    return copy
+      ? { status: "ok", commitSha: copy.commitSha, pages: copy.pages.length, assets: copy.referenced.length }
+      : { status: "error", code: code! };
+  }
+  // Lost every time: a later job starts over, after whatever keeps moving the row.
+  await app.boss?.send(JOURNAL_INGEST_QUEUE, { classroomId });
+  return { status: "superseded" };
 }
 
 // ---------------------------------------------------------------- the student rendering
@@ -317,7 +364,8 @@ async function mirror(
  * {@link visibleToStudents} holds for linkable NOW (the database's clock),
  * and stamps the row with that `now()`. The assets are the ones the pages
  * reference (their `asset_paths`, which the staff rendering resolved
- * against the repository): the same links as at ingestion.
+ * against the repository): the same links as at ingestion. Called with the
+ * row locked.
  */
 async function renderStudentPages(tx: Tx, classroomId: string): Promise<void> {
   const pages = await tx
@@ -353,8 +401,10 @@ async function renderStudentPages(tx: Tx, classroomId: string): Promise<void> {
  * their students' pages were last rendered get them rendered again (the
  * links to the newly visible page appear) and their readers a `journal`
  * hint, so the page shows up without a reload (F-JRN-08). Run by the
- * ticker every minute (`jobs.ts`); a journal an ingestion holds is skipped,
- * that ingestion renders it. Returns the classrooms re-rendered.
+ * ticker every minute (`jobs.ts`). The row is locked briefly, `SKIP
+ * LOCKED`: a journal an ingestion is writing is skipped, that ingestion
+ * renders it. No `version` bump: an ingestion in flight re-renders every
+ * student page when it writes. Returns the classrooms re-rendered.
  */
 export async function sweepVisibleFrom(app: FastifyInstance): Promise<string[]> {
   const due = await app.db
@@ -376,7 +426,12 @@ export async function sweepVisibleFrom(app: FastifyInstance): Promise<string[]> 
   const rendered: string[] = [];
   for (const { classroomId } of due) {
     const done = await app.db.transaction(async (tx) => {
-      if (!(await lockJournal(tx, classroomId, { wait: false }))) return false;
+      const [row] = await tx
+        .select({ id: classroomJournals.classroomId })
+        .from(classroomJournals)
+        .where(eq(classroomJournals.classroomId, classroomId))
+        .for("update", { skipLocked: true });
+      if (!row) return false;
       await renderStudentPages(tx, classroomId);
       return true;
     });
@@ -392,42 +447,28 @@ export async function sweepVisibleFrom(app: FastifyInstance): Promise<string[]> 
  * The repository was renamed (followed: the copy keeps working, and the
  * ingestion also follows it by id) or deleted (`sync_status = error`,
  * `repo_not_found`, the pages kept: the classroom still reads its course
- * while the staff find out). Every row holding the repository, each under
- * its lock so an ingestion in flight cannot overwrite it. Returns the
- * classrooms touched.
+ * while the staff find out). Every row holding the repository, in one
+ * statement that bumps `version`, so an ingestion in flight does not commit
+ * over it. Returns the classrooms touched.
  */
 export async function repositoryChanged(
   app: FastifyInstance,
   githubRepoId: number,
   change: { action: "renamed"; fullName: string } | { action: "deleted" },
 ): Promise<string[]> {
-  const rows = await app.db
-    .select({ classroomId: classroomJournals.classroomId })
-    .from(classroomJournals)
-    .where(eq(classroomJournals.githubRepoId, githubRepoId));
-  const touched: string[] = [];
-  for (const { classroomId } of rows) {
-    const now = app.clock.now();
-    const changed = await app.db.transaction(async (tx) => {
-      await lockJournal(tx, classroomId);
-      const updated = await tx
-        .update(classroomJournals)
-        .set(
-          change.action === "renamed"
-            ? { fullName: change.fullName, updatedAt: now }
-            : { syncStatus: "error", syncError: "repo_not_found", lastSyncedAt: now, updatedAt: now },
-        )
-        .where(
-          and(
-            eq(classroomJournals.classroomId, classroomId),
-            eq(classroomJournals.githubRepoId, githubRepoId),
-          ),
-        )
-        .returning({ classroomId: classroomJournals.classroomId });
-      return updated.length > 0;
-    });
-    if (changed) touched.push(classroomId);
-  }
-  journalChanged(touched);
-  return touched;
+  const now = app.clock.now();
+  const touched = await app.db
+    .update(classroomJournals)
+    .set({
+      ...(change.action === "renamed"
+        ? { fullName: change.fullName }
+        : { syncStatus: "error" as const, syncError: "repo_not_found" as const, lastSyncedAt: now }),
+      updatedAt: now,
+      version: bumped(),
+    })
+    .where(eq(classroomJournals.githubRepoId, githubRepoId))
+    .returning({ classroomId: classroomJournals.classroomId });
+  const ids = touched.map((r) => r.classroomId);
+  journalChanged(ids);
+  return ids;
 }

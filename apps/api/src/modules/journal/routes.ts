@@ -25,24 +25,28 @@ import {
 import type { AppConfig } from "../../config.js";
 import { readableClassroom } from "../guards.js";
 import { notFound, studentRoute } from "../http.js";
+import { INERT_IMAGE_HEADERS } from "../pool/assets.js";
 import { registerJournalHandlers } from "./jobs.js";
 import * as service from "./service.js";
 import * as studentView from "./studentView.js";
 
 /**
- * The asset headers of N-SEC-13: revalidated on every use against the blob
- * sha, no script nor anything but inline style from a document, no sniffing.
+ * The asset headers: the pool's inert ones (`nosniff`, inline), revalidated
+ * on every use against the blob sha, with N-SEC-13's policy — no script,
+ * nothing but inline style. Not the pool's `sandbox` for every asset: a
+ * journal serves PDF handouts, and a browser's PDF viewer does not run in a
+ * sandboxed document.
  */
 const ASSET_HEADERS = {
+  ...INERT_IMAGE_HEADERS,
   "cache-control": "private, max-age=0, must-revalidate",
   "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",
-  "x-content-type-options": "nosniff",
 } as const;
 
 /**
  * An SVG is a document a browser runs scripts from when it is opened
- * directly: sandboxed, it runs nothing and has no origin, while an `<img>`
- * of a page still draws it.
+ * directly: sandboxed, as the pool's images are, it runs nothing and has no
+ * origin, while an `<img>` of a page still draws it.
  */
 const SVG_HEADERS = {
   ...ASSET_HEADERS,
@@ -69,7 +73,9 @@ export async function journalPlugin(app: FastifyInstance, _opts: { config: AppCo
     session,
     read({ params: IdParam, query: JournalViewQuery, load }, async ({ reply, scope }) => {
       if (scope.payload === "staff") return service.staffJournal(app.db, scope.room);
-      return (await studentView.studentJournal(app.db, scope.room.id)) ?? notFound(reply);
+      // No journal is, for a student, no journal to read: a 404.
+      if (!(await service.hasJournal(app.db, scope.room.id))) return notFound(reply);
+      return studentView.studentJournal(app.db, scope.room.id);
     }),
   );
 

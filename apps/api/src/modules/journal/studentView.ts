@@ -22,7 +22,7 @@ import { JournalPageStudent, JournalStudent } from "@quiz/contracts";
 import { buildNav, homePage } from "@quiz/docrender";
 
 import type { Db } from "../../db/client.js";
-import { classroomJournals, journalPages } from "../../db/schema.js";
+import { journalPages } from "../../db/schema.js";
 
 /** A page a student may read: published, and past its `visible_from` (the database's `now()`). */
 export function visibleToStudents(): SQL {
@@ -32,13 +32,8 @@ export function visibleToStudents(): SQL {
   )!;
 }
 
-/** `GET /classrooms/:id/journal`, student payload; null (a 404) while the classroom has no journal. */
-export async function studentJournal(db: Db, classroomId: string): Promise<JournalStudent | null> {
-  const [journal] = await db
-    .select({ id: classroomJournals.classroomId })
-    .from(classroomJournals)
-    .where(eq(classroomJournals.classroomId, classroomId));
-  if (!journal) return null;
+/** `GET /classrooms/:id/journal`, student payload, for a classroom the route found holding a journal. */
+export async function studentJournal(db: Db, classroomId: string): Promise<JournalStudent> {
   const pages = await db
     .select({
       path: journalPages.path,

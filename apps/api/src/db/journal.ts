@@ -68,6 +68,13 @@ export const classroomJournals = pgTable(
      * since is not linked in them yet, and the sweep renders them again.
      */
     studentRenderedAt: timestamp("student_rendered_at", { withTimezone: true }),
+    /**
+     * Bumped by every write of the row or of its copy (an ingestion, its
+     * failure, a rename, a deletion): an ingestion reads GitHub with no lock
+     * held, then writes only if the version it started from is still the
+     * row's (fix J2, `modules/journal/ingest.ts`).
+     */
+    version: integer("version").notNull().default(0),
     syncStatus: text("sync_status", { enum: JOURNAL_SYNC_STATUSES }).notNull().default("pending"),
     /** Why the last synchronisation failed: a `JournalSyncError` code, worded by the web app. */
     syncError: text("sync_error").$type<JournalSyncError>(),

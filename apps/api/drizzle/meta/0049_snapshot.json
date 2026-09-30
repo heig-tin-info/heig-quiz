@@ -1,5 +1,5 @@
 {
-  "id": "c788afe9-e93d-4418-9261-3c1f3f3d6b07",
+  "id": "3e7c1928-513b-49c8-bd34-6ae1211c365b",
   "prevId": "8ff76bf5-8624-419d-8e90-573d881e9fb6",
   "version": "7",
   "dialect": "postgresql",
@@ -5406,6 +5406,13 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "sync_status": {
           "name": "sync_status",

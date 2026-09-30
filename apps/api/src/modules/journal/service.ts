@@ -30,7 +30,11 @@ type JournalRow = typeof classroomJournals.$inferSelect;
 
 /** Whether the classroom has a journal (F-JRN-01): its Journal tab exists exactly then. */
 export async function hasJournal(db: Db, classroomId: string): Promise<boolean> {
-  return (await journalRow(db, classroomId)) !== null;
+  const [row] = await db
+    .select({ id: classroomJournals.classroomId })
+    .from(classroomJournals)
+    .where(eq(classroomJournals.classroomId, classroomId));
+  return row !== undefined;
 }
 
 async function journalRow(db: Db, classroomId: string): Promise<JournalRow | null> {
@@ -142,7 +146,7 @@ export async function journalAsset(db: Db, classroomId: string, path: string, pa
  * webhook's push handler calls it, and M4-03's Refresh and saves will.
  * Without a queue (`JOBS_DISABLED=1`, a queue failed at boot) the ingestion
  * runs here, awaited, its failure recorded on the row by the ingestion
- * itself. Serialisation is the ingestion's own lock, not the queue's.
+ * itself. J2 is the ingestion's compare-and-set, not the queue's.
  */
 export async function requestIngest(app: FastifyInstance, config: AppConfig, classroomId: string): Promise<void> {
   if (app.boss) {

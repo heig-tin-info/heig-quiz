@@ -152,14 +152,21 @@ sweep audit nothing, their outcome is the row's sync state).
 | J6 | `.md-body` collides with Quiz's question prose styles | `.md-body.md-doc` modifier (long-form: h1 28 px, 72-ch measure, 1.75 leading) |
 | J7 | Quiz dev runs on PGlite without webhooks nor pg-boss | Refresh is the dev path; the mock serves rendered HTML fixtures |
 
-As ported (M4-02): `journal.ingest` is a `standard` queue with no dedupe,
-and the serialisation is the ingestion's own: one transaction per
-ingestion, whose first statement is `pg_advisory_xact_lock` on the
-classroom's row, and which reads the head, the tree and the blobs inside
-that lock, so a slow ingestion of an old head can never commit after a
-fast one of the new head. The copy's writes run in a savepoint; a failure
-GitHub answered is written under the same lock. The J4 sweep only tries
-the lock and skips a journal an ingestion holds.
+As ported (M4-02, after review): `journal.ingest` is a `standard` queue
+with no dedupe, and J2 is optimistic, with no lock held while GitHub is
+read. (1) A snapshot: the row's `version`, the stored pages' blob shas and
+markdown, the cached assets' shas. (2) Outside any transaction: the head,
+the tree, the blobs that moved, every page rendered, each GitHub call
+bounded (no retry, no rate-limit wait, 30 s; a rate limit or a timeout is
+`github_unavailable`, retried by the queue). (3) One short transaction:
+`SELECT … FOR UPDATE` on the `classroom_journals` row, the copy written
+only if `version` is unchanged, `version + 1`. A failure is its own
+compare-and-set on `version`. Every writer of the row bumps `version` (an
+ingestion, its failure, a rename, a deletion), so a result built from a
+stale snapshot is never committed: the ingestion runs once more from a
+fresh snapshot, then re-sends its job. The J4 sweep locks the row with
+`FOR UPDATE SKIP LOCKED` and skips a journal being written; it bumps
+nothing, since an ingestion re-renders every student page when it writes.
 
 Note on J2 (quiz #273): in pg-boss 12 a `singletonKey` without
 `singletonSeconds` dedupes nothing on a `standard` queue, which is what a

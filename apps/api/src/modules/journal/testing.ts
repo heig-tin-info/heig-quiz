@@ -31,21 +31,28 @@ export interface FakeRepo {
   truncated?: boolean;
   /** A status GitHub answers every route of the repository with (a 500, a 403). */
   failWith?: number;
+  /** GitHub answers every route of the repository with its spent quota: 403, `x-ratelimit-remaining: 0`. */
+  rateLimited?: boolean;
 }
 
 export const blobSha = (file: FakeFile): string =>
   file.sha ?? createHash("sha1").update(file.content).digest("hex");
 
-/**
- * The routes of `repos()`. `reads` receives the sha of every blob read;
- * `onHead` runs when a branch's head is read (a test moves the repository
- * there, between two ingestions).
- */
-export function repoRoute(
-  repos: () => FakeRepo[],
-  reads: string[] = [],
-  onHead: (repo: FakeRepo) => void = () => {},
-): Route {
+/** GitHub's answer once the installation's quota is spent, for an hour. */
+function rateLimitedAnswer(): Response {
+  return new Response(JSON.stringify({ message: "API rate limit exceeded" }), {
+    status: 403,
+    headers: {
+      "content-type": "application/json",
+      "x-ratelimit-limit": "5000",
+      "x-ratelimit-remaining": "0",
+      "x-ratelimit-reset": String(Math.floor(Date.now() / 1000) + 3600),
+    },
+  });
+}
+
+/** The routes of `repos()`. `reads` receives the sha of every blob read. */
+export function repoRoute(repos: () => FakeRepo[], reads: string[] = []): Route {
   const byName = (owner: string, name: string) =>
     repos().find((r) => r.exists !== false && r.owner === owner && r.name === name);
   return (url, init) => {
@@ -55,6 +62,7 @@ export function repoRoute(
     if ((m = /^\/repositories\/(\d+)$/.exec(path))) {
       const repo = repos().find((r) => r.exists !== false && r.id === Number(m![1]));
       if (!repo) return undefined;
+      if (repo.rateLimited) return rateLimitedAnswer();
       if (repo.failWith) return json({ message: "failure" }, repo.failWith);
       return json({ id: repo.id, name: repo.name, full_name: `${repo.owner}/${repo.name}`, owner: { login: repo.owner } });
     }
@@ -66,14 +74,8 @@ export function repoRoute(
     const heads = () => [...Object.values(repo.branches), ...(repo.history ?? [])];
     if ((m = /^commits\/(.+)$/.exec(rest))) {
       const branch = repo.branches[m[1]!];
-      const answer =
-        Object.keys(repo.branches).length === 0
-          ? json({ message: "Git Repository is empty." }, 409)
-          : branch
-            ? json({ sha: branch.commit })
-            : json({ message: "No commit found" }, 422);
-      onHead(repo); // after the answer: the repository moves on behind this reader
-      return answer;
+      if (Object.keys(repo.branches).length === 0) return json({ message: "Git Repository is empty." }, 409);
+      return branch ? json({ sha: branch.commit }) : json({ message: "No commit found" }, 422);
     }
     if ((m = /^git\/trees\/([^/]+)$/.exec(rest))) {
       const branch = heads().find((b) => b.commit === m![1]);
