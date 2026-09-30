@@ -305,6 +305,12 @@ export const fr: Record<keyof Dict, string> = {
   "admin.task.health.checks": "Contrôles de santé",
   "admin.task.health.checks.desc":
     "Exécute les contrôles de l'état du système et prévient les administrateurs quand l'un échoue deux fois de suite, puis quand il se rétablit.",
+  "admin.task.reconcile.deliveries": "Événements GitHub",
+  "admin.task.reconcile.deliveries.desc":
+    "Rejoue les événements GitHub restés non traités, et demande à GitHub de renvoyer ceux qu'il n'a pas pu livrer ces dernières 24 heures.",
+  "admin.task.deliveries.purge": "Conservation des événements GitHub",
+  "admin.task.deliveries.purge.desc":
+    "Efface le contenu des événements GitHub traités il y a plus de 30 jours, et en garde la trace.",
   "admin.kiosk": "Postes kiosque",
   "admin.kiosk.hint":
     "Les Chromebooks de l'école qui se sont attestés. Nommez un poste pour que les étudiants puissent s'y appairer ; retirez-le pour le mettre hors service.",

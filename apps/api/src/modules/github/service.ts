@@ -177,7 +177,7 @@ async function retireLoginHolders(db: Db, login: string, keep: string | null): P
 export async function recordInstallation(
   db: Db,
   inst: AppInstallation,
-  via: "setup_url" | "listing" | "healing",
+  via: "setup_url" | "listing" | "healing" | "webhook",
 ): Promise<OrgRow> {
   const [byId] = await db
     .select()
@@ -293,6 +293,94 @@ async function syncInstallations(db: Db, config: AppConfig): Promise<void> {
   for (const { id } of gone) {
     await systemAudit(db, "github_org.installation_deleted", id, { via: "listing" });
   }
+}
+
+// ---------------------------------------------------------------- webhook events
+
+/**
+ * What the `installation`, `installation_repositories` and `organization`
+ * handlers (`handlers.ts`, M2-04) write. GitHub signed the delivery, so what
+ * it says is recorded without asking GitHub again; each writer is
+ * idempotent (ADR-011): a replay writes and audits nothing more.
+ */
+
+/** Quiz's App uninstalled or suspended on an organization: the row forgets the installation. */
+export async function clearInstallation(
+  db: Db,
+  installationId: number,
+  action: "deleted" | "suspend",
+): Promise<OrgRow | null> {
+  const [row] = await db
+    .update(githubOrganizations)
+    .set({ installationId: null })
+    .where(eq(githubOrganizations.installationId, installationId))
+    .returning();
+  if (!row) return null; // unknown, or already cleared: a replay
+  await systemAudit(db, "github_org.installation_deleted", row.id, {
+    via: "webhook",
+    action,
+    installationId,
+  });
+  return row;
+}
+
+/**
+ * An organization renamed on GitHub, followed by its immutable id; a row
+ * already holding the new login under another id is retired, never taken
+ * over ({@link retireLoginHolders}). Null when the organization is unknown.
+ */
+export async function renameOrg(db: Db, githubOrgId: number, login: string): Promise<OrgRow | null> {
+  const [row] = await db
+    .select()
+    .from(githubOrganizations)
+    .where(eq(githubOrganizations.githubOrgId, githubOrgId));
+  if (!row || row.login === login) return row ?? null;
+  await retireLoginHolders(db, login, row.id);
+  const renamed = await patchOrg(db, row.id, { login });
+  await systemAudit(db, "github_org.renamed", row.id, { from: row.login, to: login, via: "webhook" });
+  return renamed;
+}
+
+/**
+ * An organization deleted on GitHub: `deleted`, its installation gone with
+ * it. The row and its links stay (they are the history of its classrooms).
+ */
+export async function markOrgDeleted(db: Db, githubOrgId: number): Promise<OrgRow | null> {
+  const [row] = await db
+    .select()
+    .from(githubOrganizations)
+    .where(eq(githubOrganizations.githubOrgId, githubOrgId));
+  if (!row || (row.status === "deleted" && row.installationId === null)) return row ?? null;
+  const deleted = await patchOrg(db, row.id, { status: "deleted", installationId: null });
+  await systemAudit(db, "github_org.deleted", row.id, {
+    via: "webhook",
+    installationId: row.installationId,
+  });
+  return deleted;
+}
+
+/**
+ * An organization changed outside a request: its healing is dropped, so the
+ * next open reads GitHub again, and the staff of its classrooms get the
+ * hint that turns their Settings (F-GH-02).
+ */
+export async function orgChanged(db: Db, orgId: string): Promise<void> {
+  healed.delete(orgId);
+  const rooms = await db
+    .select({ courseId: classrooms.courseId })
+    .from(githubClassroomLinks)
+    .innerJoin(classrooms, eq(classrooms.id, githubClassroomLinks.classroomId))
+    .where(eq(githubClassroomLinks.orgId, orgId));
+  installationChanged(rooms.map((r) => r.courseId));
+}
+
+/** The organization row holding an installation, if any. */
+export async function orgOfInstallation(db: Db, installationId: number): Promise<OrgRow | null> {
+  const [row] = await db
+    .select()
+    .from(githubOrganizations)
+    .where(eq(githubOrganizations.installationId, installationId));
+  return row ?? null;
 }
 
 // ---------------------------------------------------------------- healing
@@ -596,3 +684,18 @@ async function downloadAvatar(githubOrgId: number): Promise<OrgAvatar | null> {
   if (!bytes || sniffImage(bytes)?.mime !== declared) return null;
   return { bytes, mime: declared };
 }
+
+// ---------------------------------------------------------------- the webhook registry
+
+/**
+ * What other modules register on the webhook intake (M2-04): the journal
+ * its push handler (M4-02), projects their receipts (M3). Defined in
+ * `deliveries.ts`; reached through this entry, like the rest of the module.
+ */
+export {
+  onEvent,
+  onReceipt,
+  type ReceiptTracker,
+  type WebhookDelivery,
+  type WebhookHandler,
+} from "./deliveries.js";

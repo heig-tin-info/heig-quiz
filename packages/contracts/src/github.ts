@@ -119,6 +119,28 @@ export const GithubSetupQuery = z.object({
 });
 export type GithubSetupQuery = z.infer<typeof GithubSetupQuery>;
 
+// ---------------------------------------------------------- webhook deliveries
+
+/**
+ * The headers of a GitHub webhook delivery (`POST /webhooks/github`, spec 05
+ * §5.11), read only AFTER its signature is verified (N-SEC-17): the
+ * delivery's id, GitHub's GUID and the deduplication key, and the event's
+ * name. The signature header itself is read by the HMAC check, not here.
+ */
+export const GithubWebhookHeaders = z.object({
+  "x-github-delivery": z.guid(),
+  "x-github-event": z.string().min(1).max(100),
+});
+export type GithubWebhookHeaders = z.infer<typeof GithubWebhookHeaders>;
+
+/**
+ * The body of a delivery, once its signature is verified: a JSON object. Its
+ * shape is GitHub's and depends on the event; each handler reads the fields
+ * it needs through its own schema.
+ */
+export const GithubWebhookBody = z.record(z.string(), z.unknown());
+export type GithubWebhookBody = z.infer<typeof GithubWebhookBody>;
+
 // ---------------------------------------------------------- the user's account
 
 /** A user's linked GitHub account (F-GH-05): the login is followed when it changes. */
