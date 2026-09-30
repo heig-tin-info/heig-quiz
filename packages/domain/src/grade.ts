@@ -28,9 +28,50 @@ export function gradeFromPoints(points: number, total: number, scale: Scale): nu
   return Math.min(MAX_GRADE, Math.max(MIN_GRADE, roundToTenth(raw, scale.rounding ?? "nearest")));
 }
 
-/** True when the grade is a pass (4.0 in the Swiss system). */
+
+/**
+ * A grade in tenths, as it is WRITTEN (`formatGrade`): a class mean of 3.96
+ * reads "4.0" and must be judged as a 4.0, not as a fail in disguise.
+ * Integers, so that a bound like 4.3 is never missed by a float hair.
+ */
+const tenths = (grade: number) => Math.round(grade * 10);
+
+/** True when the grade, as written, is a pass (4.0 in the Swiss system). */
 export function isPassing(grade: number): boolean {
-  return grade >= 4;
+  return tenths(grade) >= 40;
+}
+
+/**
+ * How a grade reads at a glance: below the pass mark, just above it, or
+ * comfortably above. A screen colours a grade by this (red, orange, plain
+ * ink), the same way for the teacher and for the student.
+ */
+export type GradeBand = "fail" | "borderline" | "pass";
+
+export function gradeBand(grade: number): GradeBand {
+  if (!isPassing(grade)) return "fail";
+  return tenths(grade) < 45 ? "borderline" : "pass";
+}
+
+/**
+ * The ECTS letter a Swiss grade corresponds to, as HEIG-VD maps it: F below
+ * 3.5, FX up to the pass mark, then E, D, C, B and A. The lower bound of each
+ * letter is inclusive, and the grade is compared as written (one decimal).
+ */
+export type GradeLetter = "F" | "FX" | "E" | "D" | "C" | "B" | "A";
+
+const LETTERS: readonly [fromTenths: number, letter: GradeLetter][] = [
+  [58, "A"],
+  [53, "B"],
+  [48, "C"],
+  [43, "D"],
+  [40, "E"],
+  [35, "FX"],
+];
+
+export function gradeLetter(grade: number): GradeLetter {
+  const g = tenths(grade);
+  return LETTERS.find(([from]) => g >= from)?.[1] ?? "F";
 }
 
 /**

@@ -163,6 +163,10 @@ export type ConfigLock = "running" | "attempts";
 /** The states in which students are sitting the evaluation. */
 export const CONFIG_LIVE_STATES: readonly EvaluationStateName[] = ["running", "paused"];
 
+/** Whether students are sitting the evaluation ({@link CONFIG_LIVE_STATES}). */
+export const isLiveState = (state: string): boolean =>
+  (CONFIG_LIVE_STATES as readonly string[]).includes(state);
+
 /** The fields of `EvaluationPatch` each lock leaves writable. */
 const WRITABLE_UNDER: Record<ConfigLock, readonly string[]> = {
   running: ["title", "accessCode", "ipAllowlist", "feedbackPolicy"],
@@ -215,6 +219,29 @@ export function safeExamBrowserOn(
   safeExamBrowser: boolean | undefined,
 ): boolean {
   return mode === "exam" && safeExamBrowser === true;
+}
+
+/**
+ * Whether the questions of this evaluation become drill cards (ADR-041 §2):
+ * the teacher's choice when there is one, else ON for an exercise and OFF
+ * for an exam; never on a poll, whose questions are opinions or warm-ups
+ * (ADR-041 §10).
+ */
+export function drillAllowedOn(mode: EvaluationModeName, allowDrill: boolean | undefined): boolean {
+  if (!drillModeOf(mode)) return false;
+  return allowDrill ?? mode === "exercise";
+}
+
+/** A poll never feeds the drill: the half of both rules below and above. */
+const drillModeOf = (mode: EvaluationModeName): boolean => mode !== "poll";
+
+/**
+ * Whether "Allow drill" may still change (ADR-041 §10, item 3): until the
+ * release, and never on a poll. The API's writer, the settings screen and the
+ * mock all ask this one rule.
+ */
+export function allowDrillWritable(mode: EvaluationModeName, state: EvaluationStateName): boolean {
+  return drillModeOf(mode) && state !== "released";
 }
 
 /** Whether this evaluation scores its choice questions negatively. */

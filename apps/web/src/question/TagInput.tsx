@@ -7,7 +7,7 @@ import type { PoolTag } from "@quiz/contracts";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
-import { ComboboxList, ComboboxOption, cx, inputClass, Tip, useCombobox } from "../ui";
+import { ComboboxList, ComboboxOption, cx, ErrorText, inputClass, Tip, useCombobox } from "../ui";
 import { poolTagsKey } from "../queryKeys";
 
 /**
@@ -226,7 +226,7 @@ export function TagInput({
             {vocabulary.isPending ? (
               <p className="px-2.5 py-2 text-[13px] text-fg-faint">{t("common.loading")}</p>
             ) : vocabulary.isError ? (
-              <p className="px-2.5 py-2 text-[13px] text-danger">{t("question.tag.loadFailed")}</p>
+              <ErrorText className="px-2.5 py-2">{t("question.tag.loadFailed")}</ErrorText>
             ) : null}
 
             {suggestions.map((suggestion, index) => {

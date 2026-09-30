@@ -20,6 +20,8 @@ describe("IssueList", () => {
     );
     const items = screen.getAllByRole("listitem");
     expect(items.map((li) => li.textContent)).toEqual(["prompt.empty", "prompt.too_long"]);
-    expect(screen.getByRole("list").className).toContain("text-danger");
+    expect(items[0]!.className).toContain("text-danger");
+    // The circled "!" that marks a line as an error, hidden from assistive technology.
+    expect(items[0]!.querySelector("svg[aria-hidden='true']")).not.toBeNull();
   });
 });

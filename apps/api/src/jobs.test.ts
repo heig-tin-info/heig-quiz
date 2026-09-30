@@ -56,11 +56,11 @@ describe("the grading.evaluation queue, as pg-boss sees it", () => {
     const { calls, queue } = recorder();
     const app = { boss: queue } as unknown as FastifyInstance;
     await enqueueEvaluationGrading(app, { evaluationId: "e", attemptIds: ["a"] });
-    await enqueueEvaluationGrading(app, { evaluationId: "e", announce: true });
+    await enqueueEvaluationGrading(app, { evaluationId: "e" });
     const sent = calls.filter((c) => c.op === "send");
     expect(sent.map((c) => c.data)).toEqual([
       { evaluationId: "e", attemptIds: ["a"] },
-      { evaluationId: "e", announce: true },
+      { evaluationId: "e" },
     ]);
     for (const c of sent) expect(c.options ?? {}).not.toHaveProperty("singletonKey");
   });

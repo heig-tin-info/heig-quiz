@@ -1,5 +1,5 @@
 /** Section 2 of the mock — see `index.ts` for the layout. */
-import { PoolColor, type ZodIssueLite } from "@quiz/contracts";
+import { PoolColor, type QuestionStats, type ZodIssueLite } from "@quiz/contracts";
 import {
   clozeStudentTemplate,
   describeBlank,
@@ -414,7 +414,7 @@ const circuitConfig = (
       source: { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 },
       sourceOhms: 0,
       load: { kind: "resistor", ohms: 1_000_000 },
-      analysis: { stopMs: 5, skipMs: 0, points: 500 },
+      analysis: { kind: "tran", stopMs: 5, skipMs: 0, points: 500 },
       points: 2,
       visible: true,
     },
@@ -423,7 +423,7 @@ const circuitConfig = (
       source: { kind: "sine", amplitude: 1, frequencyHz: 10_000, offset: 0 },
       sourceOhms: 0,
       load: { kind: "resistor", ohms: 1_000_000 },
-      analysis: { stopMs: 1, skipMs: 0, points: 500 },
+      analysis: { kind: "tran", stopMs: 1, skipMs: 0, points: 500 },
       points: 1,
       visible: false,
     },
@@ -432,6 +432,7 @@ const circuitConfig = (
   grading: {
     mode: "manual",
     tolerance: 0.05,
+    bode: { magDb: 1, floorDb: 60, phaseDeg: 10 },
     rubric:
       "Résistance en série, condensateur en parallèle sur la sortie, produit R·C cohérent avec 1 kHz.",
   },
@@ -721,17 +722,20 @@ export const RICH_CONFIG: Record<string, unknown> = {
  * `mockups/categorize.html`. Three columns, eight targets and one distractor
  * (`string`, which C does not have). The ids are opaque, as the editor mints them.
  */
+/**
+ * Eight cards: the most the grading table gives a column each
+ * (`CATEGORIZE_GRADING_MAX_COLUMNS`), so the mock's table shows them.
+ */
 export const CATEGORIZE_CONFIG: Record<string, unknown> = {
   configVersion: 1,
   prompt: "Classez chaque type C selon ce qu'il représente.",
   columns: [
-    { id: "k3v8a1c2", label: "Entier", cards: ["m1x0q7ta", "m4r2b9zc", "m8n5c3ud"] },
+    { id: "k3v8a1c2", label: "Entier", cards: ["m1x0q7ta", "m8n5c3ud"] },
     { id: "p7w2d5e9", label: "Virgule flottante", cards: ["m2t6e1vf", "m9y3f8wg"] },
     { id: "r5j8g1h4", label: "Pointeur", cards: ["m6u4h2xh", "m0i7j5yi", "m3o1k9zj"] },
   ],
   cards: [
     { id: "m1x0q7ta", text: "`int`" },
-    { id: "m4r2b9zc", text: "`unsigned long`" },
     { id: "m8n5c3ud", text: "`size_t`" },
     { id: "m2t6e1vf", text: "`double`" },
     { id: "m9y3f8wg", text: "`float`" },
@@ -749,7 +753,7 @@ export const CATEGORIZE_CONFIG: Record<string, unknown> = {
 /** A student's partly right answer to {@link CATEGORIZE_CONFIG}, the one of the mockup. */
 export const CATEGORIZE_ANSWER = {
   columns: {
-    k3v8a1c2: ["m1x0q7ta", "m8n5c3ud", "m4r2b9zc", "m0i7j5yi"],
+    k3v8a1c2: ["m1x0q7ta", "m8n5c3ud", "m0i7j5yi"],
     p7w2d5e9: ["m2t6e1vf", "m9y3f8wg"],
     r5j8g1h4: ["m6u4h2xh", "m3o1k9zj", "m5p2l6ak"],
   },
@@ -1082,11 +1086,11 @@ export const questions: MockQuestion[] = [
     explanation: "Chaque ordre ajoute -20 dB/décade ; le second ordre en donne -40.",
   }),
   /*
-   * The `codeimage` question (ADR-021), unpublished so the evaluations built
-   * from the published questions stay as they are. Its target is set: the
-   * editor shows it, and "Try the reference solution" answers through
-   * `tryAnswer` with the picture the reference draws. Last in the list, so
-   * the ids of the questions above do not move.
+   * The `codeimage` question (ADR-021). Its target is set: the editor shows
+   * it, and "Try the reference solution" answers through `tryAnswer` with the
+   * picture the reference draws. Published, and spliced seventh by
+   * `itemSource` (`evaluation.ts`), so the grading table has one to show.
+   * Last in the list, so the ids of the questions above do not move.
    */
   makeQuestion({
     poolId: "p1",
@@ -1099,6 +1103,7 @@ export const questions: MockQuestion[] = [
     tags: ["boucles", "image"],
     config: codeimageConfig(),
     explanation: "La distance au bord le plus proche est min(x, y, 15 − x, 15 − y).",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 4 }],
   }),
   /*
    * The `rich` question, an essay graded by hand (issue #192). Last in the
@@ -1301,6 +1306,17 @@ if (flags.many) {
 }
 if (flags.empty) stripPool();
 
+/**
+ * The questions this browser's teacher starred (F-POOL-10): a personal set,
+ * so one `Set` for the one user the mock plays. Three of `p1` to start with —
+ * one of them a draft, so the picker's "Add favourites" has something to skip.
+ */
+export const stars = new Set<string>(
+  questions
+    .filter((q) => ["ptr-arith-01", "malloc-tableau", "strcpy-overflow"].includes(q.internalName))
+    .map((q) => q.id),
+);
+
 // --- Views -----------------------------------------------------------------
 
 const liveQuestions = (poolId: string) => questions.filter((q) => q.poolId === poolId);
@@ -1382,6 +1398,7 @@ const questionRow = (q: MockQuestion) => ({
   deprecated: q.versions.at(-1)?.deprecatedAt !== null && q.versions.length > 0,
   deletedAt: q.deletedAt,
   keyless: isKeyless(q),
+  starred: stars.has(q.id) && q.deletedAt === null,
 });
 
 /**
@@ -1890,6 +1907,31 @@ export const questionOr404 = (id: string) => {
   return q;
 };
 
+/**
+ * `PUT` / `DELETE /questions/star`, registered before `/questions/:id`: the
+ * mock matches in order, and `star` would otherwise read as an id.
+ */
+for (const method of ["PUT", "DELETE"] as const) {
+  on(method, "/app/api/questions/star", (_m, body) => {
+    const ids = (body.questionIds as string[] | undefined) ?? [];
+    for (const id of ids) questionOr404(id);
+    for (const id of ids) {
+      if (method === "PUT") stars.add(id);
+      else stars.delete(id);
+    }
+    return undefined;
+  });
+}
+
+on("DELETE", "/app/api/pools/:id/stars", (m) => {
+  const pool = poolOr404(m.groups!.id!);
+  let cleared = 0;
+  for (const q of liveQuestions(pool.id)) {
+    if (q.deletedAt === null && stars.delete(q.id)) cleared += 1;
+  }
+  return { cleared };
+});
+
 // `?scope=all` (an admin's switch) adds the private pools of other teachers.
 on("GET", "/app/api/pools", (_m, _b, url) =>
   pools
@@ -2059,8 +2101,9 @@ const notificationSettings: NotificationSettings = {
     ...structuredClone(DEFAULT_CHANNEL_ENABLED),
     pool_shared: { ...DEFAULT_CHANNEL_ENABLED.pool_shared, email: false },
   },
-  // The mock's teacher and admin hold no student seat: the staff kinds only.
-  kinds: notificationKindsFor(me?.role ?? "student", false),
+  // The mock's teacher and admin hold a course seat and no student seat:
+  // the staff kinds only.
+  kinds: notificationKindsFor({ role: me?.role ?? "student", studentSeat: false, courseSeat: true }),
   email: me?.email ?? "",
   teams: { available: true, linkedAt: null, teamsName: null, teamsUsername: null },
 };
@@ -2189,6 +2232,7 @@ export function searchQuestions(candidates: MockQuestion[], params: URLSearchPar
   const q = (params.get("q") ?? "").trim().toLowerCase();
   const categoryId = params.get("categoryId");
   const includeDeleted = params.get("includeDeleted") === "1";
+  const starred = params.get("starred") === "1";
   // `versionMin` / `versionMax` are bounds on the highest PUBLISHED number,
   // so a draft-only question (no number at all) matches neither of them.
   const versionMin = params.get("versionMin");
@@ -2215,6 +2259,7 @@ export function searchQuestions(candidates: MockQuestion[], params: URLSearchPar
 
   return candidates
     .filter((question) => includeDeleted || question.deletedAt === null)
+    .filter((question) => !starred || (stars.has(question.id) && question.deletedAt === null))
     .filter((question) => list.length === 0 || list.includes(question.type))
     .filter((question) => tags.length === 0 || question.tags.some((x) => tags.includes(x)))
     .filter((question) => difficulties.length === 0 || difficulties.includes(question.difficulty))
@@ -2377,6 +2422,109 @@ on("POST", "/app/api/questions/:id/versions/:number/deprecate", (m, body) => {
   version.deprecatedAt = iso(0);
   version.deprecationNote = String(body.note ?? "");
   return versionRow(version);
+});
+/**
+ * The id of a mock question, by its pool and internal name; "" under
+ * `?empty=1`, where the pool holds none and the entry keyed on it is never read.
+ */
+const mockQuestionId = (poolId: string, name: string) =>
+  liveQuestions(poolId).find((q) => q.internalName === name)?.id ?? "";
+
+/**
+ * The item analysis of ADR-038, as the server shapes it: only the questions
+ * with ten answers or more appear. The first three questions of `p1` carry
+ * a high, a NEGATIVE and a middling rate; the first of `p3` — the pool this
+ * browser only reads — one more, so the reader's panel (no reset) is on
+ * screen too. Every other question is below the threshold. The time spent
+ * (ADR-039) shows on the first and the third; the second and `p3`'s have too
+ * few timed exam answers for it. The discrimination (ADR-042) is good on the
+ * first, INVERSE on the second, weak on the third and absent on `p3`'s.
+ * The distractors (ADR-043) of the second, a single-choice question: a
+ * wrong option picked more than the key, and one nobody picks; `fopen-modes`
+ * shows a multiple-choice question's (the shares add up past 100), and
+ * `array-decay` an mcq with too few answers on its current choices.
+ */
+const questionStats = new Map<string, QuestionStats>([
+  ...liveQuestions("p1")
+    .slice(0, 3)
+    .map((q, i) => [q.id, [
+      {
+        n: 24,
+        p: 0.73,
+        since: null,
+        time: { n: 21, meanS: 95, medianS: 80, p25S: 52, p75S: 121 },
+        discrimination: { r: 0.46, evaluations: 2, n: 21 },
+      },
+      {
+        n: 12,
+        p: -0.08,
+        since: null,
+        time: null,
+        discrimination: { r: -0.18, evaluations: 1, n: 12 },
+        distractors: {
+          n: 12,
+          multiple: false,
+          options: [
+            { text: "`NULL`", correct: false, share: 50 },
+            { text: "Une valeur indéterminée : le lire est un comportement indéfini", correct: true, share: 33 },
+            { text: "`0` sur toute machine conforme à C17", correct: false, share: 8 },
+            { text: "L'adresse de la fonction englobante", correct: false, share: 0 },
+          ],
+          none: 8,
+        },
+      },
+      {
+        n: 31,
+        p: 0.41,
+        since: iso(-40 * D),
+        time: { n: 30, meanS: 540, medianS: 412, p25S: 260, p75S: 700 },
+        discrimination: { r: 0.12, evaluations: 3, n: 30 },
+      },
+    ][i]!] as const),
+  [
+    mockQuestionId("p1", "fopen-modes"),
+    {
+      n: 20,
+      p: 0.62,
+      since: null,
+      time: null,
+      discrimination: null,
+      distractors: {
+        n: 20,
+        multiple: true,
+        options: [
+          { text: '`"a"`', correct: true, share: 85 },
+          { text: '`"a+"`', correct: true, share: 70 },
+          { text: '`"w"`', correct: false, share: 15 },
+          { text: '`"w+"`', correct: false, share: 5 },
+        ],
+        none: 5,
+      },
+    },
+  ],
+  [
+    mockQuestionId("p1", "array-decay"),
+    { n: 15, p: 0.6, since: null, time: null, discrimination: null, distractors: null },
+  ],
+  ...liveQuestions("p3")
+    .slice(0, 1)
+    .map((q) => [q.id, { n: 18, p: 0.56, since: null, time: null, discrimination: null }] as const),
+]);
+
+on("GET", "/app/api/pools/:id/question-stats", (m) => {
+  const pool = poolOr404(m.groups!.id!);
+  return {
+    items: liveQuestions(pool.id).flatMap((q) => {
+      const stats = questionStats.get(q.id);
+      return stats ? [{ questionId: q.id, ...stats }] : [];
+    }),
+  };
+});
+on("POST", "/app/api/questions/:id/stats/reset", (m) => {
+  const q = questionOr404(m.groups!.id!);
+  if (poolSummary(poolOr404(q.poolId)).role === "reader") throw new MockError(403, "Read-only access");
+  questionStats.delete(q.id);
+  return { since: iso(0) };
 });
 on("DELETE", "/app/api/questions/:id", (m) => {
   const q = questionOr404(m.groups!.id!);

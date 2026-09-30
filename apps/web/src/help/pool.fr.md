@@ -41,9 +41,15 @@ déplacer, Entrée pour insérer, Échap pour fermer.
 
 Une ligne par question : le type en icône devant le nom interne (survolez-la
 pour son nom), les tags, la difficulté en cinq points, la version publiée, la
-dernière modification en distance — survolez-la pour la date exacte. Un clic
-ouvre l'éditeur. Chaque ligne porte modifier, dupliquer et supprimer à son
-extrémité.
+dernière modification en distance — survolez-la pour la date exacte. Chaque
+ligne porte modifier, dupliquer et supprimer à son extrémité.
+
+Un clic montre la question telle qu'un étudiant la lira, dans un panneau à
+côté de la liste (à sa place sur une fenêtre étroite, avec **Retour à la
+liste**). Au clavier, P montre la ligne qui a le focus ; sur une fenêtre
+large, ↑ et ↓ passent d'une ligne à l'autre et montrent chacune, en ouvrant
+le panneau au besoin. Échap ou le × le ferme. Entrée, un double-clic, le
+crayon ou **Ouvrir dans l'éditeur** ouvre l'éditeur.
 
 Cliquer un en-tête de colonne trie toute la banque, pas seulement les
 questions déjà chargées ; recliquer inverse l'ordre. Par défaut : la dernière
@@ -55,17 +61,28 @@ catégorie) et le **tri**, seul endroit d'où trier par type puisqu'il a perdu
 sa colonne. Une question portant trois tags apparaît dans les trois sections.
 Tout cela est retenu pour la prochaine visite.
 
+## Favoris
+
+L'étoile devant le nom d'une question en fait l'un de VOS favoris ; Espace
+fait de même sur la ligne qui a le focus, et **Favori** dans la barre du bas
+sur les lignes cochées. Personne d'autre ne voit vos étoiles — un collègue
+qui partage la banque a les siennes — et un lecteur peut aussi en mettre.
+Quand vous remplissez une évaluation ou un modèle, **Ajouter des questions**
+montre d'abord les favoris de la banque affichée, et **Ajouter les favoris**
+les ajoute d'un coup. **Effacer les favoris**, l'étoile barrée à côté du nombre de questions,
+retire toutes les étoiles que vous y avez mises.
+
 ## Une banque partagée avec vous
 
 Si votre siège sur la banque est **lecteur**, l'écran montre les questions et
 aucune action : ni nouvelle question, ni modification, ni duplication, ni
 suppression, ni cases à cocher. Ouvrir une question reste possible — la lire,
-c'est l'ouvrir.
+c'est l'ouvrir — et la mettre en favori aussi.
 
 ## Plusieurs à la fois
 
-Cochez les lignes : une barre apparaît en bas — ajouter un tag, les déplacer
-dans une catégorie, les supprimer. Elle rend compte une fois, à la fin.
+Cochez les lignes : une barre apparaît en bas — les mettre en favori, ajouter
+un tag, les déplacer dans une catégorie, les supprimer. Elle rend compte une fois, à la fin.
 
 ## Nouvelle question, versions
 

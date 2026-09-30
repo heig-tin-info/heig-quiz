@@ -31,6 +31,13 @@ export function pgliteDb(client: PGlite, logger?: Logger): Db {
  * spy on the driver underneath (statements, transactions).
  */
 export async function testDatabase(): Promise<{ db: Db; client: PGlite }> {
+  // The production wiring of `buildApp`: the drill's hooks on the release and
+  // the end of an attempt, so no db test depends on what it happens to import.
+  // Imported here, at the call, and not at the top of this file: the drill
+  // service pulls in `results`, `live` and `notifications`, and a test file
+  // that mocks one of them (`vi.mock`) must have finished loading first.
+  const { registerDrillHooks } = await import("../modules/drill/service.js");
+  registerDrillHooks();
   const client = new PGlite();
   const db = pgliteDb(client);
   // The PGlite migrator on the handle it wraps, exactly as `createDb` does.
@@ -64,6 +71,8 @@ export async function testApp(existing?: Db): Promise<FastifyInstance & { clock:
     // The default runner everywhere (decision D14). A test that wants
     // outcomes assigns its own double to `app.runner`.
     runner: new UnavailableRunner("test"),
+    // No LLM provider, as in production; a test that wants one assigns it.
+    llm: null,
     log: { info: silent, warn: silent, error: silent, debug: silent },
   } as unknown as FastifyInstance & { clock: TestClock };
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   EVALUATION_STATES,
+  isEvaluationOver,
   itemListLock,
   type EvaluationStateName,
 } from "./itemList.js";
@@ -36,5 +37,11 @@ describe("itemListLock (issue #79)", () => {
   it("says nothing when the list is editable", () => {
     expect(itemListLock("draft", 0)).toBeNull();
     expect(itemListLock("scheduled", 0)).toBeNull();
+  });
+});
+
+describe("isEvaluationOver (ADR-033)", () => {
+  it("holds from the close on, and never before", () => {
+    expect(EVALUATION_STATES.filter(isEvaluationOver)).toEqual(["closed", "grading", "released"]);
   });
 });

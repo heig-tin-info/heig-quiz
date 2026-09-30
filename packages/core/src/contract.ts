@@ -70,8 +70,13 @@ export interface PendingRunnerResult {
 export interface PendingLlmResult {
   kind: "pending";
   via: "llm";
-  /** Phase 2. The MVP grading worker rejects this with `llm_unavailable`. */
+  /**
+   * Handed to `app.llm` by the grading pass; with no service configured the
+   * pass writes a proposal with reason `llm_not_configured` instead.
+   */
   request: LlmGradeRequest;
+  /** The type's own details, stored beside the model's points (as a runner result's). */
+  details?: unknown;
 }
 
 export type GradeResult<D = unknown> = GradedResult<D> | PendingRunnerResult | PendingLlmResult;
@@ -155,7 +160,11 @@ export interface GradeContext {
   now: Date;
   /** Always present; may be the unavailable stub (throws `RunnerUnavailable`). */
   runner: RunnerService;
-  /** Phase 2; undefined in MVP. */
+  /**
+   * The LLM grading service, when the process has one (`LLM_PROVIDER`; only
+   * the development stub exists yet). A type that can grade without it — the
+   * essay, by hand — returns `pending: "llm"` only when it is present.
+   */
   llm?: LlmService;
   /**
    * Per-type settings of the EVALUATION being graded, keyed by type id — what

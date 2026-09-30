@@ -54,6 +54,15 @@ export function isoDateParts(iso: string): { date: string; time: string } {
 }
 
 /**
+ * A share, 0 to 1, as a whole percentage in the interface language: "85%",
+ * "85 %". Beside the date formats because it is the same kind of thing — a
+ * number written the way the reader's language writes it.
+ */
+export function percent(rate: number, locale: "en" | "fr"): string {
+  return new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 }).format(rate);
+}
+
+/**
  * "30 minutes ago", "il y a 2 jours", "in 3 hours" — `Intl.RelativeTimeFormat`
  * in the interface language, with the largest unit that is not zero. Under a
  * minute it is "just now" (a key, since Intl has no word for it). Pure, so

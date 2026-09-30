@@ -83,6 +83,11 @@ export const classrooms = pgTable(
      */
     joinCodeEnabled: boolean("join_code_enabled").notNull().default(false),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
+    /**
+     * When the teacher enabled the drill for this classroom (ADR-041 §6);
+     * null while it is off. Written by `setClassroomDrill` only.
+     */
+    drillEnabledAt: timestamp("drill_enabled_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -121,6 +126,13 @@ export const enrollments = pgTable(
     timeBonusPercent: integer("time_bonus_percent").notNull().default(0),
     /** Free-form teacher note about this student (never shown to them). */
     note: text("note"),
+    /**
+     * When the student opted out of this classroom's drill (ADR-041 §6);
+     * null while they are in. Their activity from then on is hidden from the
+     * teacher, what came before stays visible (06, question 28 (k)).
+     * Written by `setDrillOptOut` only.
+     */
+    drillOptedOutAt: timestamp("drill_opted_out_at", { withTimezone: true }),
   },
   (t) => [
     uniqueIndex("enrollments_classroom_email_uq").on(t.classroomId, t.email),

@@ -23,7 +23,8 @@
     "@monaco-editor/react": "^4.7.0",
     "@quiz/core": "workspace:*",
     "@quiz/domain": "workspace:*",
-    "@quiz/ui": "workspace:*"
+    "@quiz/ui": "workspace:*",
+    "monaco-editor": "0.55.1"
   },
   "peerDependencies": {
     "react": "^19.0.0",

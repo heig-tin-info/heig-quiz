@@ -29,6 +29,17 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ ...PROD, AUTH_DEV_LOGIN: "0" })).not.toThrow();
   });
 
+  it("refuses the stub LLM provider in production", () => {
+    expect(() => loadConfig({ ...PROD, LLM_PROVIDER: "stub" })).toThrow(/LLM_PROVIDER/);
+    // Off, or absent, it boots.
+    expect(() => loadConfig({ ...PROD, LLM_PROVIDER: "none" })).not.toThrow();
+    expect(loadConfig(PROD).LLM_PROVIDER).toBe("none");
+  });
+
+  it("lets the stub LLM provider through outside production", () => {
+    expect(loadConfig({ NODE_ENV: "development", LLM_PROVIDER: "stub" }).LLM_PROVIDER).toBe("stub");
+  });
+
   it("refuses the embedded database in production", () => {
     expect(() => loadConfig({ ...PROD, DATABASE_URL: "pglite://.data/pglite" })).toThrow(
       /pglite/,

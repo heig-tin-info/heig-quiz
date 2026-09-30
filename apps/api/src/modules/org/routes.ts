@@ -292,6 +292,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       periodStart: scope.room.periodStart,
       periodEnd: scope.room.periodEnd,
       archivedAt: scope.room.archivedAt?.toISOString() ?? null,
+      drillEnabled: scope.room.drillEnabledAt !== null,
       course: { id: scope.course.id, name: scope.course.name, code: scope.course.code },
       roster: await rosterView(app.db, scope.room.id),
     })),

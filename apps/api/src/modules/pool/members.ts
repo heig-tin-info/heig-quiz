@@ -5,12 +5,22 @@ import type { PoolCandidates, PoolMember, PoolMembers, PoolRole } from "@quiz/co
 import { displayName } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { poolMembers, pools, userEmails, users } from "../../db/schema.js";
+import { STAFF_ROLES, poolMembers, pools, userEmails, users } from "../../db/schema.js";
 import { audit } from "../../audit.js";
 import { notify, notifyMany } from "../notifications/service.js";
 import { accessRevoked, userTopic } from "../realtime/bus.js";
 import { poolPeopleChanged } from "./events.js";
 import { type PoolRow, qualified } from "./shared.js";
+
+/**
+ * The accounts that may hold a pool seat, and so hear of a pool: the stored
+ * role, as `decideRole` (`roles.ts`) computed it, is staff. A deliberate
+ * demotion deletes the seats (`vacateSeats`), but a LOGIN that stores
+ * `student` keeps them (ADR-013, rule 5), and a demoted owner nobody could
+ * inherit from keeps `pools.owner_id`: such an account holds a claim, never
+ * the rights nor the news.
+ */
+const isStaff = inArray(users.role, [...STAFF_ROLES]);
 
 /**
  * The people of a pool: the `pools.owner_id` account FIRST, then the members
@@ -97,7 +107,7 @@ export async function findTeacherByEmail(db: Db, email: string) {
           sql`lower(${users.email}) = ${normalized}`,
           sql`EXISTS (SELECT 1 FROM ${userEmails} WHERE ${qualified(userEmails.userId)} = ${qualified(users.id)} AND ${qualified(userEmails.email)} = ${normalized} AND ${qualified(userEmails.verified)})`,
         ),
-        inArray(users.role, ["teacher", "admin"]),
+        isStaff,
       ),
     )
     .limit(1);
@@ -115,7 +125,7 @@ export async function findTeacherById(db: Db, userId: string) {
       role: users.role,
     })
     .from(users)
-    .where(and(eq(users.id, userId), inArray(users.role, ["teacher", "admin"])))
+    .where(and(eq(users.id, userId), isStaff))
     .limit(1);
   return row ?? null;
 }
@@ -139,7 +149,7 @@ export async function listCandidates(db: Db, pool: PoolRow, q: string): Promise<
     .from(users)
     .where(
       and(
-        inArray(users.role, ["teacher", "admin"]),
+        isStaff,
         sql`${users.id} <> ${pool.ownerId}`,
         sql`NOT EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${pool.id} AND ${qualified(poolMembers.userId)} = ${qualified(users.id)})`,
         sql`lower(${users.givenName} || ' ' || ${users.familyName} || ' ' || ${users.email}) LIKE ${needle}`,
@@ -212,7 +222,10 @@ export async function removeMember(db: Db, poolId: string, userId: string): Prom
 
 /**
  * The topics a change of the pool's people must reach: the owner and every
- * member (or only the members of `roles`), on their OWN topic.
+ * member (or only the members of `roles`), on their OWN topic — staff only
+ * (`isStaff`): a demoted member has no settings row to silence the pool with.
+ * It is also the realtime audience of `topicsOf` (`routeContext.ts`), and
+ * dropping demoted accounts from those hints is intended.
  *
  * `pool:<id>` is not enough here — a connection subscribes to the pools it
  * could reach WHEN IT OPENED, so the colleague who has just been named is
@@ -223,7 +236,7 @@ export async function poolAudience(
   pool: Pick<PoolRow, "id" | "ownerId">,
   roles?: readonly PoolRole[],
 ): Promise<string[]> {
-  const rows = await db
+  const members = db
     .select({ userId: poolMembers.userId })
     .from(poolMembers)
     .where(
@@ -232,7 +245,11 @@ export async function poolAudience(
         roles ? inArray(poolMembers.role, [...roles]) : undefined,
       ),
     );
-  return [...new Set([pool.ownerId, ...rows.map((r) => r.userId)])];
+  const rows = await db
+    .select({ userId: users.id })
+    .from(users)
+    .where(and(isStaff, or(eq(users.id, pool.ownerId), inArray(users.id, members))));
+  return rows.map((r) => r.userId);
 }
 
 /**
@@ -272,8 +289,32 @@ export async function tellPoolOfPublication(db: Db, poolId: string, authorId: st
 }
 
 /**
+ * A member demoted to student loses every seat they held (ADR-013, rule 5),
+ * for good: a later promotion gives nothing back, a colleague has to invite
+ * them again. Called by `storeRole` after `transferOnLoss`, from the same
+ * deliberate actions and never from a login. One statement, so all the seats
+ * go or none, and idempotent; the audiences of the pools concerned are told
+ * their people changed. The caller closes the account's own streams.
+ */
+export async function vacateSeats(db: Db, userId: string): Promise<void> {
+  const removed = await db
+    .delete(poolMembers)
+    .where(eq(poolMembers.userId, userId))
+    .returning({ poolId: poolMembers.poolId });
+  if (removed.length === 0) return;
+  const touched = await db
+    .select({ id: pools.id, ownerId: pools.ownerId })
+    .from(pools)
+    .where(inArray(pools.id, removed.map((r) => r.poolId)));
+  for (const pool of touched) {
+    poolPeopleChanged((await poolAudience(db, pool)).map(userTopic));
+  }
+}
+
+/**
  * Succession (F-POOL-05): the pools owned by an account that has just lost
- * the teacher role pass to their FIRST member, then the next, and so on.
+ * the teacher role pass to their FIRST member who is still staff (`isStaff`),
+ * then the next, and so on.
  *
  * "Removed from the system" is never a deletion here — an account is kept for
  * its audit trail and its past attempts. What happens is that the role is
@@ -282,7 +323,7 @@ export async function tellPoolOfPublication(db: Db, poolId: string, authorId: st
  * route that does not exist.
  *
  * One transaction per pool, and idempotent: a pool whose owner is anyone else
- * is left alone, and a pool with NO member keeps its owner — it stays
+ * is left alone, and a pool with NO staff member keeps its owner — it stays
  * readable by the staff of the courses it is linked to, and an admin can
  * still dispose of it. Nothing is ever orphaned to nobody.
  */
@@ -313,7 +354,8 @@ export async function transferOnLoss(
       const [first] = await tx
         .select({ userId: poolMembers.userId })
         .from(poolMembers)
-        .where(eq(poolMembers.poolId, pool.id))
+        .innerJoin(users, eq(users.id, poolMembers.userId))
+        .where(and(eq(poolMembers.poolId, pool.id), isStaff))
         .orderBy(asc(poolMembers.createdAt), asc(poolMembers.userId))
         .limit(1);
       if (!first) return null;

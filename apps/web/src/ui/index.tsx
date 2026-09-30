@@ -8,7 +8,8 @@
 //   controls  buttons and form controls.
 //   table     sortable tables: useSortableTable, the styles `T`, TableHead.
 //   identity  a person as a picture or initials (PersonAvatar, Avatar).
-//   dates     the account's date format, absolute and relative times.
+//   dates     the account's date format, absolute and relative times, and a
+//             percentage in the interface language.
 //   feedback  Spinner, Skeleton, Kbd, Badge, Alert, EmptyState.
 //   page      surfaces and page structure: Card, PageHeader, Tabs…
 //             The six above are on layers and import no other sibling,

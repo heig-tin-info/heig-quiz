@@ -170,7 +170,8 @@ describe("PollProjection", () => {
     // used to land on the QR the room was scanning.
     const toaster = document.querySelector('[aria-live="polite"][aria-relevant="additions"]');
     expect(toaster).not.toBeNull();
-    expect(toaster!.className).toContain("bottom-4");
+    // 1rem from the bottom, plus the student's bottom bar when it is up (#191).
+    expect(toaster!.className).toContain("bottom-[calc(1rem+var(--bottom-nav-h))]");
     expect(toaster!.className).toContain("right-4");
     expect(toaster!.contains(join!)).toBe(false);
   });

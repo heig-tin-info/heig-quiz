@@ -26,6 +26,7 @@ import {
   users,
 } from "../../db/schema.js";
 import { emailIn, knownEmails } from "../../identity.js";
+import { avatarUrl } from "../avatar.js";
 import { accessRevoked } from "../realtime/bus.js";
 
 export { claimEnrollments } from "./roster.js";
@@ -132,9 +133,7 @@ export async function listCourses(db: Db, access: SQL | undefined, viewerId: str
         givenName: s.givenName,
         familyName: s.familyName,
         email: s.email,
-        avatarUrl: s.avatarAt
-          ? `/app/api/users/${s.userId}/avatar?v=${s.avatarAt.getTime()}`
-          : s.pictureUrl,
+        avatarUrl: s.avatarAt ? avatarUrl(s.userId, s.avatarAt) : s.pictureUrl,
       })),
   }));
 }
@@ -179,6 +178,20 @@ export async function updateCourse(
 
 export async function deleteCourse(db: Db, courseId: string): Promise<void> {
   await db.delete(courses).where(eq(courses.id, courseId));
+}
+
+/**
+ * The account holds a seat on at least one course staff: what makes a
+ * teacher (`decideRole`) and what the course kinds of notification are sent
+ * to (`tellStaff`, `staffOf`).
+ */
+export async function holdsCourseSeat(db: Db, userId: string): Promise<boolean> {
+  const [seat] = await db
+    .select({ courseId: courseStaff.courseId })
+    .from(courseStaff)
+    .where(eq(courseStaff.userId, userId))
+    .limit(1);
+  return seat !== undefined;
 }
 
 /** The course's staff, for the course detail. */
@@ -307,6 +320,65 @@ export async function setArchived(db: Db, classroomId: string, archived: boolean
 
 export async function deleteClassroom(db: Db, classroomId: string): Promise<void> {
   await db.delete(classrooms).where(eq(classrooms.id, classroomId));
+}
+
+// --- The drill switches (ADR-041 §6) -------------------------------------------
+//
+// The two columns belong to this module's tables; the `drill` module reaches
+// them through these writers only (CLAUDE.md, Conventions).
+
+/**
+ * The teacher's switch: the drill on (`drill_enabled_at`, kept at its first
+ * instant when switched on again) or off. Returns the stored instant.
+ */
+export async function setClassroomDrill(
+  db: Db,
+  classroomId: string,
+  enabled: boolean,
+  now: Date,
+): Promise<Date | null> {
+  const [row] = await db
+    .update(classrooms)
+    .set({
+      drillEnabledAt: enabled
+        ? sql`coalesce(${classrooms.drillEnabledAt}, ${now.toISOString()}::timestamptz)`
+        : null,
+      updatedAt: now,
+    })
+    .where(eq(classrooms.id, classroomId))
+    .returning({ drillEnabledAt: classrooms.drillEnabledAt });
+  return row?.drillEnabledAt ?? null;
+}
+
+/**
+ * A student's opt-out of one classroom's drill, on their own claimed student
+ * seat. Opting out keeps the first instant (what the teacher's view hides
+ * from); opting back in clears it. `undefined` when the user holds no such
+ * seat.
+ */
+export async function setDrillOptOut(
+  db: Db,
+  classroomId: string,
+  userId: string,
+  optedOut: boolean,
+  now: Date,
+): Promise<{ optedOutAt: Date | null } | undefined> {
+  const [row] = await db
+    .update(enrollments)
+    .set({
+      drillOptedOutAt: optedOut
+        ? sql`coalesce(${enrollments.drillOptedOutAt}, ${now.toISOString()}::timestamptz)`
+        : null,
+    })
+    .where(
+      and(
+        eq(enrollments.classroomId, classroomId),
+        eq(enrollments.userId, userId),
+        eq(enrollments.staff, false),
+      ),
+    )
+    .returning({ optedOutAt: enrollments.drillOptedOutAt });
+  return row;
 }
 
 // --- Roster entries -----------------------------------------------------------

@@ -43,14 +43,14 @@ export function CourseCard({
   const { items, staffActions, newClassroom, dialogs } = useCourseActions(course);
 
   return (
-    <Card className="p-5">
+    <Card className="flex min-w-0 flex-col p-5">
       {/* The staff belongs to the title line and not to a row of its own: who
           teaches a course is part of naming it, and the hairline-separated
           strip it used to live in said "STAFF" to announce three discs. */}
       <SectionHeading
         icon={Library}
         title={
-          <span className="flex flex-wrap items-center gap-2">
+          <span className="flex min-w-0 flex-wrap items-center gap-2">
             <CourseLink course={course} navigate={navigate} />
             <span className="text-[13px] font-normal text-fg-faint">{course.code}</span>
             <HiddenBadge course={course} />
@@ -67,7 +67,7 @@ export function CourseCard({
         }
       />
 
-      <div className="mt-4 space-y-1.5">
+      <div className="mt-4 flex-1 space-y-1.5">
         {course.classrooms.length === 0 ? (
           <p className="text-sm text-fg-muted">{t("classrooms.empty")}</p>
         ) : (

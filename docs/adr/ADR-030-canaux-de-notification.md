@@ -322,7 +322,11 @@ backfill. The grid is served resolved (`NotificationMatrix`, every kind ×
 every channel); the settings list only the kinds the account can receive
 (`kinds`, from `notificationKindsFor` and `NOTIFICATION_AUDIENCE`, #277):
 the student-seat kinds for a student, or for a teacher or an admin while
-they hold a claimed student seat; the staff kinds for a teacher or an admin.
+they hold a claimed student seat; the pool kinds for a teacher or an admin;
+the course kinds (`student_joined`, `roster_conflict`, `grading_ready`,
+sent to `course_staff` seats only) for a teacher, whose seat may come, and
+for an admin only while they hold one (#287). The pool kinds reach only
+members whose role is still teacher or admin, like the succession.
 
 ### 6. `results_released`
 
@@ -640,18 +644,28 @@ Step 5 (`grading_ready`, `pool_question_added`) settled:
 
 - **`grading_ready` is sent when the grid is complete**: every (attempt ×
   item) cell holds a validated or proposed grading, so no runner job is still
-  out. A pass that sends empty cells to the runner says nothing (its runner
-  jobs are enqueued once its batch is written), and the runner job that fills
-  the last empty cell does. The guard against duplicates: the pass announces only
-  when it filled a cell that had no grading at all, or when it is the pass of
-  the close (`announce` on the job — an exercise with retakes may have
-  graded every attempt, alone, while it ran); a runner job only when its own
-  cell had none. A pass run again with nothing new tells nobody; a re-grade
-  empties its item's cells, so its pass tells again if proposals remain.
-  Nothing is sent while the evaluation is `running` or `paused` — its state
-  re-read at the moment of telling, not the row the job loaded, since a
-  runner job picked up during the run may complete the grid after the close
-  — nor for a poll. The count is every proposal standing on the evaluation, placeholders
+  out. It is sent ONCE per completed grid (#286): every pass and every
+  runner job, after its own write has committed, reads the grid as it
+  stands; if it is complete, it claims `evaluations.grading_ready_at` with
+  one conditional UPDATE, and only the claimant tells the staff. Of two
+  writers racing on the last cells, the one that commits last sees both
+  writes, and one claim wins: a runner job landing inside a pass's
+  read-to-write window neither doubles the notice nor loses it (the earlier
+  guard — flags on the pass and on "the cell had no grading" — did both). A
+  pass run again with nothing new finds the claim taken and tells nobody; a
+  re-grade empties its item's cells and gives the claim back, so its pass
+  tells again if proposals remain; a reopening to `draft` clears it too.
+  The notice is at most once, not exactly once: the claim is taken before
+  the send, so a crash between the two drops it — best-effort by design;
+  claiming after the send would reopen the duplicate. The migration that
+  added the marker backfilled it on every evaluation already `closed`,
+  `grading` or `released`, accepting to lose the notice of one whose grid
+  was still incomplete at the deploy (runner jobs in flight, or a legacy
+  `in_progress` attempt left open after the close, #95).
+  Nothing is sent while the evaluation is `running` or `paused` — the claim
+  reads the state of the row at the moment of telling, not the row the job
+  loaded, since a runner job picked up during the run may complete the grid
+  after the close — nor for a poll. The count is every proposal standing on the evaluation, placeholders
   included (they need the teacher too). Recipients are `staffOf`, the course's
   staff seats: the pass is asynchronous, so the teacher who closed the
   evaluation is told too. Not folded. Best-effort: a failure is logged and

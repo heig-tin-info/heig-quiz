@@ -103,10 +103,19 @@ export interface CircuitEditorStrings {
   loadOhms: string;
   loadFarads: string;
 
+  analysisKind: string;
+  analysisTran: string;
+  analysisAc: string;
+  acHint: string;
+  bias: string;
   analysis: string;
   stopMs: string;
   skipMs: string;
   samples: string;
+  sweep: string;
+  fStartHz: string;
+  fStopHz: string;
+  pointsPerDecade: string;
   hidden: string;
   points: string;
 
@@ -118,6 +127,7 @@ export interface CircuitEditorStrings {
   tryFailed: string;
   tryNeedsReference: string;
   tryNeedsStimulus: string;
+  tryInvalidDraft: string;
   tryDone: string;
   "tryDone.one": string;
 
@@ -130,6 +140,11 @@ export interface CircuitEditorStrings {
   modeLlmHint: string;
   tolerance: string;
   toleranceHint: string;
+  bodeMagDb: string;
+  bodeFloorDb: string;
+  bodePhase: string;
+  bodePhaseDeg: string;
+  bodeHint: string;
   rubric: string;
   rubricHint: string;
   showExpected: string;
@@ -198,10 +213,20 @@ export const EDITOR_STRINGS: CircuitEditorStrings = {
   loadOhms: "Load (Ω)",
   loadFarads: "Load (F)",
 
+  analysisKind: "Analysis",
+  analysisTran: "Waveform",
+  analysisAc: "Bode plot",
+  acHint:
+    "A Bode plot linearises the circuit around its DC bias: a saturated op-amp or an unbiased diode gives a meaningless one. A sharp resonance built with non-standard values may also miss the envelope.",
+  bias: "Bias (V)",
   analysis: "Transient",
   stopMs: "Stop (ms)",
   skipMs: "Skip (ms)",
   samples: "Samples",
+  sweep: "Frequency sweep",
+  fStartHz: "From (Hz)",
+  fStopHz: "To (Hz)",
+  pointsPerDecade: "Points per decade",
   hidden: "Hidden",
   points: "Points",
 
@@ -214,6 +239,7 @@ export const EDITOR_STRINGS: CircuitEditorStrings = {
   tryFailed: "The reference circuit could not be simulated. Check its wiring and its values.",
   tryNeedsReference: "Draw the reference circuit first.",
   tryNeedsStimulus: "Add a stimulus first: there is nothing to simulate the circuit with.",
+  tryInvalidDraft: "The question has errors, flagged on this page. Fix them, then simulate.",
   tryDone: "{n} stimuli simulated.",
   "tryDone.one": "1 stimulus simulated.",
 
@@ -228,6 +254,12 @@ export const EDITOR_STRINGS: CircuitEditorStrings = {
   tolerance: "Tolerance",
   toleranceHint:
     "A stimulus passes when the distance to the reference output stays under this share of its swing.",
+  bodeMagDb: "Gain tolerance (dB)",
+  bodeFloorDb: "Floor (dB below the peak)",
+  bodePhase: "Compare the phase",
+  bodePhaseDeg: "Phase tolerance (°)",
+  bodeHint:
+    "A Bode plot passes when the gain stays within the tolerance of the reference at every frequency, and the phase too when it is compared. Below the floor the output only has to stay low.",
   rubric: "Criteria",
   rubricHint: "What you are looking for, in your own words.",
   showExpected: "Show the expected waveform",
@@ -274,6 +306,8 @@ export interface CircuitPlayerStrings {
   loadResistor: string;
   loadCapacitor: string;
   window: string;
+  sweep: string;
+  srcBias: string;
 
   simulate: string;
   simulating: string;
@@ -315,6 +349,8 @@ export const PLAYER_STRINGS: CircuitPlayerStrings = {
   loadResistor: "load {value}Ω",
   loadCapacitor: "load {value}F",
   window: "{ms} ms",
+  sweep: "Bode {from} → {to}",
+  srcBias: "bias {volts} V",
 
   simulate: "Simulate",
   simulating: "Simulating…",
@@ -370,6 +406,9 @@ export interface CircuitReviewStrings {
   notRun: string;
   error: string;
   errorPercent: string;
+  /** An AC stimulus's error: the worst gap to the reference's Bode plot. */
+  envelopeGap: string;
+  envelopeGapPhase: string;
   reason: string;
   reasonNotSimulated: string;
   reasonSpiceFailed: string;
@@ -417,6 +456,8 @@ export const REVIEW_STRINGS: CircuitReviewStrings = {
   notRun: "Not run",
   error: "Error",
   errorPercent: "{percent} %",
+  envelopeGap: "{db} dB",
+  envelopeGapPhase: "{db} dB · {deg}°",
   reason: "Reason",
   reasonNotSimulated: "Not simulated",
   reasonSpiceFailed: "The simulator refused this circuit",
@@ -431,4 +472,44 @@ export const REVIEW_STRINGS: CircuitReviewStrings = {
   runnerBusy: "The simulator was busy; this answer is waiting for a manual grade.",
   runnerError: "The circuit could not be simulated; it is waiting for a manual grade.",
   runnerNone: "This circuit was not simulated.",
+};
+
+/**
+ * The words of the grading table's one circuit column (ADR-044): what the
+ * schematic holds, and how its simulation went. The drawing itself stays
+ * in the answer panel.
+ */
+/* A type, not an interface: the grading contract takes it as a `Record<string, string>`. */
+export type CircuitGradingStrings = {
+  schematic: string;
+  parts: string;
+  "parts.one": string;
+  wires: string;
+  "wires.one": string;
+  /** The stimuli passed, out of all of them. */
+  stimuli: string;
+  "stimuli.one": string;
+  /** The chip's tooltip when some failed: `{names}` lists them. */
+  failed: string;
+  /** Not simulated, and the netlist read problems in the wiring. */
+  issues: string;
+  "issues.one": string;
+  /** No verdict yet: the simulator owes it. */
+  atSimulator: string;
+  notSimulated: string;
+};
+
+export const GRADING_STRINGS: CircuitGradingStrings = {
+  schematic: "Schematic",
+  parts: "{n} parts",
+  "parts.one": "1 part",
+  wires: "{n} wires",
+  "wires.one": "1 wire",
+  stimuli: "{passed}/{total} stimuli",
+  "stimuli.one": "{passed}/{total} stimulus",
+  failed: "Failed: {names}",
+  issues: "{n} wiring problems",
+  "issues.one": "1 wiring problem",
+  atSimulator: "simulator…",
+  notSimulated: "Not simulated",
 };

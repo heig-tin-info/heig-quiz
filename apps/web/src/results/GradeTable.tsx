@@ -1,8 +1,9 @@
 import { GraduationCap } from "lucide-react";
 
 import type { ResultRow, ResultRowState } from "@quiz/contracts";
-import { formatGrade, formatPoints } from "@quiz/domain";
+import { formatPoints } from "@quiz/domain";
 
+import { Grade } from "../Grade";
 import { formatDuration, useT, type Dict, type TFunction } from "../i18n";
 import { Badge, cx, T, TableHead, useSortableTable, type Column, type Tone } from "../ui";
 
@@ -94,7 +95,7 @@ export function GradeTable({ rows }: { rows: ResultRow[] }) {
                 {formatPoints(row.points)}
               </td>
               <td className={cx(T.td, "text-right font-semibold tabular-nums")}>
-                {formatGrade(row.grade)}
+                <Grade value={row.grade} />
               </td>
               <td className={cx(T.td, "text-right tabular-nums text-fg-muted", T.colLow)}>
                 {row.durationS === null ? "—" : formatDuration(row.durationS * 1000, t)}

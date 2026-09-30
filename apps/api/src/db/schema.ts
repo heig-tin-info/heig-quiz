@@ -14,3 +14,4 @@ export * from "./evaluation.js";
 export * from "./live.js";
 export * from "./grading.js";
 export * from "./notifications.js";
+export * from "./drill.js";

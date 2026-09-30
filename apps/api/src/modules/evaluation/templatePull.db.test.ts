@@ -229,11 +229,12 @@ describe("pulling a revision (F-EVAL-26)", () => {
     expect(await row()).toMatchObject({ originRevision: 1, templateRevision: 2 });
     expect((await pull(w)).statusCode).toBe(200);
     expect(await row()).toMatchObject({ originRevision: 2, templateRevision: 2 });
-    // The evaluation the template was saved from is no instance of it.
+    // The evaluation the template was saved from is linked to it at rev. 1
+    // (F-EVAL-18), and behind it like any instance.
     const source = EvaluationSummary.array()
       .parse((await call(w.teacher, "GET", `/app/api/classrooms/${w.seed.classroomId}/evaluations`)).json())
       .find((r) => r.id === w.seed.evaluationId)!;
-    expect(source).toMatchObject({ originRevision: null, templateRevision: null });
+    expect(source).toMatchObject({ originRevision: 1, templateRevision: 2 });
   });
 
   it("records only the revision when the template moved in its settings alone", async () => {

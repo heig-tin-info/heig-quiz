@@ -18,11 +18,14 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
+import type { LlmService } from "@quiz/core/server";
+
 import { PERSONAS, upsertPersona, type Persona } from "./auth/dev.js";
 import { systemClock } from "./clock.js";
 import { loadConfig } from "./config.js";
 import { createDb, type Db } from "./db/client.js";
 import { classrooms, courseStaff, courses, enrollments } from "./db/schema.js";
+import { createLlm } from "./modules/llm/index.js";
 import { createClassroom } from "./modules/org/service.js";
 import { UnavailableRunner } from "./modules/runner/unavailable.js";
 import { MIGRATIONS_DIR } from "./paths.js";
@@ -45,7 +48,7 @@ const TIME_BONUS: Record<string, number> = { lea: 25 };
  * configuration, not a failure — the grading pass then runs inline
  * (`modules/grading/jobs.ts`), which is what lets the seed wait for it.
  */
-function seedApp(db: Db, log: (msg: string) => void): FastifyInstance {
+function seedApp(db: Db, llm: LlmService | null, log: (msg: string) => void): FastifyInstance {
   const noop = () => {};
   return {
     db,
@@ -54,6 +57,10 @@ function seedApp(db: Db, log: (msg: string) => void): FastifyInstance {
     // No container engine is assumed: a `code` answer is graded as a
     // proposal with reason `runner_unavailable` (decision D14).
     runner: new UnavailableRunner("seed"),
+    // The process's own LLM provider (`LLM_PROVIDER`): the development stub
+    // proposes a grade with a confidence for every essay, `none` leaves them
+    // to the teacher. Never the stub in production — `config.ts` refuses it.
+    llm,
     log: {
       info: noop,
       warn: noop,
@@ -63,8 +70,12 @@ function seedApp(db: Db, log: (msg: string) => void): FastifyInstance {
   } as unknown as FastifyInstance;
 }
 
-export async function seed(db: Db, log: (msg: string) => void = console.log) {
-  const app = seedApp(db, log);
+export async function seed(
+  db: Db,
+  log: (msg: string) => void = console.log,
+  llm: LlmService | null = null,
+) {
+  const app = seedApp(db, llm, log);
   const now = systemClock.now();
 
   const [course] = await db
@@ -138,7 +149,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const config = loadConfig();
   const handle = createDb(config.DATABASE_URL);
   await handle.migrate(MIGRATIONS_DIR);
-  await seed(handle.db);
+  await seed(handle.db, console.log, createLlm(config));
   await handle.close();
   console.log("seed done");
 }

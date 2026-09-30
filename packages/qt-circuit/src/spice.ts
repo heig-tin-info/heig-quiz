@@ -21,8 +21,11 @@ import {
 } from "./library.js";
 import { extractNets, pinKey, type NetlistIssue } from "./netlist.js";
 import {
+  DB_FLOOR,
   SERIES_MAX_POINTS,
-  type Analysis,
+  biasOf,
+  type AcAnalysis,
+  type AcSeries,
   type Load,
   type Schematic,
   type SchematicComponent,
@@ -30,6 +33,8 @@ import {
   type Source,
   type Stimulus,
   type Supplies,
+  type TranAnalysis,
+  type TranSeries,
 } from "./schema.js";
 
 /** What the teacher wraps around the box: the rails, and how the two sides reference each other. */
@@ -161,6 +166,18 @@ export function sourceSpec(source: Source): string {
   }
 }
 
+/**
+ * The source of an AC sweep: its DC bias, and a unit small-signal amplitude.
+ *
+ * With `AC 1` on the EMF, `v(out)` IS the transfer — the source resistance
+ * and the load included — so no division is needed after the run. Only a
+ * `dc` source is valid under AC (`circuit.ac_needs_dc_source`); anything else
+ * reaching here is a draft, biased at 0 V so the deck stays runnable.
+ */
+export function acSourceSpec(source: Source): string {
+  return `DC ${spiceNumber(biasOf(source))} AC 1`;
+}
+
 /** The load between `out` and the measuring source: `Rload` or `Cload`. */
 function loadLine(load: Load): string {
   switch (load.kind) {
@@ -176,11 +193,20 @@ function loadLine(load: Load): string {
 }
 
 /** `.tran step stop skip`: `points` samples are kept between `skip` and `stop`. */
-export function tranLine(analysis: Analysis): string {
+export function tranLine(analysis: TranAnalysis): string {
   const stop = analysis.stopMs / 1000;
   const skip = analysis.skipMs / 1000;
   const step = (stop - skip) / analysis.points;
   return `.tran ${spiceNumber(step)} ${spiceNumber(stop)} ${spiceNumber(skip)}`;
+}
+
+/**
+ * `.ac dec n fstart fstop`: log-spaced, so the student's run and the
+ * reference's, built from the same analysis, land on the SAME frequencies —
+ * the envelope compares them point for point, with no resampling.
+ */
+export function acLine(analysis: AcAnalysis): string {
+  return `.ac dec ${analysis.pointsPerDecade} ${spiceNumber(analysis.fStartHz)} ${spiceNumber(analysis.fStopHz)}`;
 }
 
 /** The rails an op-amp saturates at, with the ±15 V fallback of {@link DEFAULT_OPAMP_RAIL}. */
@@ -206,6 +232,28 @@ const CONTROL_BLOCK = [
   "run",
   "linearize v(in) v(out) i(Vmeas)",
   "wrdata /dev/stdout v(in) v(out) i(Vmeas)",
+  ".endc",
+  ".end",
+];
+
+/**
+ * The control block of an AC sweep, verified on ngspice 42 like the other.
+ *
+ * `linearize` is transient-only and the grid is already the `.ac` one, so it
+ * is gone. The table holds the MAGNITUDE, not dB: `db()` of a node that is
+ * exactly 0 V — an output wired to nothing — is an ngspice error that prints
+ * no table at all, while `mag()` prints 0 and the parser floors it. The phase
+ * is `cph`, ngspice's continuous phase, unwrapped along the sweep: an
+ * inverting amplifier reads 180° throughout instead of jumping at ±180°.
+ */
+const AC_CONTROL_BLOCK = [
+  ".control",
+  "set wr_vecnames",
+  "set wr_singlescale",
+  "run",
+  "let vmag = mag(v(out))",
+  "let vph = cph(v(out)) * 180 / pi",
+  "wrdata /dev/stdout vmag vph",
   ".endc",
   ".end",
 ];
@@ -377,7 +425,8 @@ export function buildNetlist(
 
   const inRef = harness.commonGround ? "0" : "inn";
   const outRef = harness.commonGround ? "0" : "outn";
-  const spec = sourceSpec(stimulus.source);
+  const analysis = analysisDeck(stimulus.analysis.kind, stimulus.analysis, stimulus.source);
+  const spec = analysis.source;
   if (stimulus.sourceOhms > 0) {
     lines.push(`Vin src ${inRef} ${spec}`);
     lines.push(`Rs src in ${spiceNumber(stimulus.sourceOhms)}`);
@@ -390,8 +439,7 @@ export function buildNetlist(
   // which is the only current the student's plot ever shows.
   lines.push(`Vmeas outl ${outRef} 0`);
 
-  lines.push(tranLine(stimulus.analysis));
-  lines.push(...CONTROL_BLOCK);
+  lines.push(analysis.line, ...analysis.control);
 
   return { text: `${lines.join("\n")}\n`, issues: devices.issues };
 }
@@ -416,54 +464,124 @@ export function buildBareNetlist(
 // Parsing ngspice's batch output
 // ---------------------------------------------------------------------------
 
-/** The four columns `wrdata` prints, lowercased: the header the parser keys on. */
+/** The four columns a transient's `wrdata` prints, lowercased: the header the parser keys on. */
 export const OUTPUT_COLUMNS: readonly string[] = ["time", "v(in)", "v(out)", "i(vmeas)"];
+
+/** The three columns of an AC sweep's `wrdata`, per {@link AC_CONTROL_BLOCK}. */
+export const AC_OUTPUT_COLUMNS: readonly string[] = ["frequency", "vmag", "vph"];
 
 const NUMBER_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 /**
- * Reads the table out of `ngspice -b`'s stdout.
+ * Reads a `wrdata` table out of `ngspice -b`'s stdout, one array per column.
  *
  * Batch mode prints a banner, the operating point and assorted notes around
- * the table, so the parser looks for the `wr_vecnames` header line and then
- * takes every following line that is four numbers. `null` when there is no
+ * the table, so the reader looks for the `wr_vecnames` header line and then
+ * takes every following line that is as many numbers. `null` when there is no
  * header or no row at all — which is how a failed run is recognised, since
  * ngspice may exit 0 after refusing a deck.
  */
-export function parseSpiceOutput(stdout: string): SeriesSet | null {
+function readTable(stdout: string, columns: readonly string[]): number[][] | null {
   const lines = stdout.split("\n");
   let start = -1;
   for (const [index, line] of lines.entries()) {
     const tokens = line.trim().split(/\s+/);
-    if (tokens.length !== OUTPUT_COLUMNS.length) continue;
-    if (tokens.every((t, i) => t.toLowerCase() === OUTPUT_COLUMNS[i])) {
+    if (tokens.length !== columns.length) continue;
+    if (tokens.every((t, i) => t.toLowerCase() === columns[i])) {
       start = index + 1;
       break;
     }
   }
   if (start < 0) return null;
 
-  const t: number[] = [];
-  const vin: number[] = [];
-  const vout: number[] = [];
-  const iout: number[] = [];
+  const table: number[][] = columns.map(() => []);
+  let rows = 0;
   for (let i = start; i < lines.length; i += 1) {
     const raw = lines[i];
     if (raw === undefined) break;
     const trimmed = raw.trim();
     if (trimmed === "") continue;
     const tokens = trimmed.split(/\s+/);
-    if (tokens.length !== 4 || !tokens.every((tok) => NUMBER_RE.test(tok))) {
-      if (t.length > 0) break;
+    if (tokens.length !== columns.length || !tokens.every((tok) => NUMBER_RE.test(tok))) {
+      if (rows > 0) break;
       continue;
     }
-    t.push(Number(tokens[0]));
-    vin.push(Number(tokens[1]));
-    vout.push(Number(tokens[2]));
-    iout.push(Number(tokens[3]));
+    tokens.forEach((tok, c) => table[c]?.push(Number(tok)));
+    rows += 1;
   }
-  if (t.length === 0) return null;
-  return { t, vin, vout, iout };
+  return rows === 0 ? null : table;
+}
+
+/** A magnitude in dB, floored at {@link DB_FLOOR}: a dead output is very low, not −∞. */
+const toDb = (magnitude: number): number =>
+  magnitude > 0 ? Math.max(DB_FLOOR, 20 * Math.log10(magnitude)) : DB_FLOOR;
+
+// ---------------------------------------------------------------------------
+// One entry per analysis kind
+// ---------------------------------------------------------------------------
+
+/** What each analysis kind is made of, and what its run prints. */
+interface AnalysisTypes {
+  tran: { analysis: TranAnalysis; series: TranSeries };
+  ac: { analysis: AcAnalysis; series: AcSeries };
+}
+export type AnalysisKind = keyof AnalysisTypes;
+export type SeriesOf<K extends AnalysisKind> = AnalysisTypes[K]["series"];
+type AnalysisOf<K extends AnalysisKind> = AnalysisTypes[K]["analysis"];
+
+/**
+ * Everything that differs between a transient and an AC sweep, in one place:
+ * how the source is driven, the analysis line, the control block, the
+ * header its table prints, and how that table becomes a series set.
+ */
+interface AnalysisSpec<K extends AnalysisKind> {
+  source: (source: Source) => string;
+  line: (analysis: AnalysisOf<K>) => string;
+  control: readonly string[];
+  columns: readonly string[];
+  toSeries: (table: number[][]) => SeriesOf<K>;
+}
+
+const ANALYSES: { [K in AnalysisKind]: AnalysisSpec<K> } = {
+  tran: {
+    source: sourceSpec,
+    line: tranLine,
+    control: CONTROL_BLOCK,
+    columns: OUTPUT_COLUMNS,
+    toSeries: ([t = [], vin = [], vout = [], iout = []]) => ({ t, vin, vout, iout }),
+  },
+  ac: {
+    source: acSourceSpec,
+    line: acLine,
+    control: AC_CONTROL_BLOCK,
+    columns: AC_OUTPUT_COLUMNS,
+    toSeries: ([f = [], magnitude = [], phaseDeg = []]) => ({
+      kind: "ac",
+      f,
+      magDb: magnitude.map(toDb),
+      phaseDeg,
+    }),
+  },
+};
+
+/** The harness lines an analysis contributes to a deck: the source spec, the analysis line, the control block. */
+function analysisDeck<K extends AnalysisKind>(
+  kind: K,
+  analysis: AnalysisOf<K>,
+  source: Source,
+): { source: string; line: string; control: readonly string[] } {
+  const spec: AnalysisSpec<K> = ANALYSES[kind];
+  return { source: spec.source(source), line: spec.line(analysis), control: spec.control };
+}
+
+/**
+ * The series set of one run — a transient's waveforms or an AC sweep's Bode
+ * plot — read with the header of the analysis its deck was built with.
+ */
+export function parseSpiceOutput<K extends AnalysisKind>(stdout: string, kind: K): SeriesOf<K> | null {
+  const spec: AnalysisSpec<K> = ANALYSES[kind];
+  const table = readTable(stdout, spec.columns);
+  return table === null ? null : spec.toSeries(table);
 }
 
 /**
@@ -471,22 +589,16 @@ export function parseSpiceOutput(stdout: string): SeriesSet | null {
  *
  * A 2000-point transient is stored in `gradings.details` and sent to a
  * browser; the plot cannot show more than a few hundred points anyway, and
- * the row must stay small enough to be read back with the grading.
+ * the row must stay small enough to be read back with the grading. A sweep
+ * is log-spaced, so the same even pick keeps it log-spaced.
  */
-export function decimate(series: SeriesSet, max: number = SERIES_MAX_POINTS): SeriesSet {
-  const n = series.t.length;
+export function decimate<S extends SeriesSet>(series: S, max: number = SERIES_MAX_POINTS): S {
+  const columns = Object.values(series).filter((v): v is number[] => Array.isArray(v));
+  const n = columns[0]?.length ?? 0;
   if (n <= max || max < 2) return series;
-  const pick = <T>(a: readonly T[], i: number): T | undefined => a[i];
-  const t: number[] = [];
-  const vin: number[] = [];
-  const vout: number[] = [];
-  const iout: number[] = [];
-  for (let k = 0; k < max; k += 1) {
-    const i = Math.round((k * (n - 1)) / (max - 1));
-    t.push(pick(series.t, i) ?? 0);
-    vin.push(pick(series.vin, i) ?? 0);
-    vout.push(pick(series.vout, i) ?? 0);
-    iout.push(pick(series.iout, i) ?? 0);
-  }
-  return { t, vin, vout, iout };
+  const kept = Array.from({ length: max }, (_v, k) => Math.round((k * (n - 1)) / (max - 1)));
+  // Every array is a column of the same table; `kind`, when there is one, is copied.
+  return Object.fromEntries(
+    Object.entries(series).map(([key, v]) => [key, Array.isArray(v) ? kept.map((i) => (v[i] as number | undefined) ?? 0) : v]),
+  ) as S;
 }

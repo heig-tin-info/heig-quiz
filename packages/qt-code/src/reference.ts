@@ -53,7 +53,7 @@ const hasNextMarker = (reference: string): boolean => reference.split("\n").some
  * The stored text cut on its `@@next` lines, as written: one string per
  * piece, no region count assumed. Without a marker it is one piece.
  */
-function pieces(reference: string): string[] {
+export function referencePieces(reference: string): string[] {
   const found: string[][] = [[]];
   for (const line of reference.split("\n")) {
     if (isNextMarkerLine(line)) found.push([]);
@@ -88,7 +88,7 @@ export function referenceRegions(config: ReferenceSource): string[] | null {
   // One region and no separator: the whole reference, byte for byte.
   if (regions.length === 1 && !hasNextMarker(reference)) return [reference];
 
-  const cut = pieces(reference);
+  const cut = referencePieces(reference);
   if (cut.length !== regions.length) return null;
   return cut.map((piece, i) => pieceToRegion(piece, regions[i]!));
 }
@@ -117,7 +117,7 @@ export function referenceEditorView(
   if (regions.length === 0) return { regions: [], extra: 0 };
 
   const single = regions.length === 1 && !hasNextMarker(reference);
-  const cut = single ? [reference] : pieces(reference);
+  const cut = single ? [reference] : referencePieces(reference);
 
   return {
     regions: regions.map((segment, i) => {

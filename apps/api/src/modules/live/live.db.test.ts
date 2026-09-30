@@ -1217,7 +1217,7 @@ describe("restoring an attempt (F-LIVE-06)", () => {
       revision: 4,
       now: clock.now(),
     });
-    await service.setPosition(db, attempt, items[2]!.id, clock.now());
+    await service.reportShown(db, { evaluation, attempt, itemId: items[2]!.id, now: clock.now(), track: true });
 
     const reloaded = (await service.attemptById(db, attempt.id))!;
     const first = await service.attemptView(db, evaluation, reloaded, clock.now());

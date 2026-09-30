@@ -10,6 +10,7 @@ import { lazy } from "react";
 
 import type { QuestionTypeClient } from "@quiz/core/client";
 import { typeIcon } from "@quiz/ui";
+import { codeGrading } from "./grading.js";
 import { isCodeAnswered } from "./schema.js";
 
 import type { CodeAnswer, CodeConfig, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
@@ -49,6 +50,7 @@ export const codeClient: QuestionTypeClient<
   },
 
   isAnswered: isCodeAnswered,
+  grading: codeGrading,
 };
 
 /*
@@ -66,7 +68,7 @@ export type { CodeAnswer, CodeConfig, CodeDetails, CodeRuntime, CodeStudent } fr
  */
 export type { CodeEditorProps } from "./Editor.js";
 export type { CodeRunOptions, CodeRunStage } from "./Player.js";
-export { EDITOR_STRINGS, PLAYER_STRINGS, REVIEW_STRINGS } from "./strings.js";
+export { EDITOR_STRINGS, GRADING_STRINGS, PLAYER_STRINGS, REVIEW_STRINGS } from "./strings.js";
 /** The program half both player views share: what a browser request is built from. */
 export type { ProgramConfig, ProgramStudent } from "./schema.js";
 
@@ -87,4 +89,9 @@ export type {
 } from "./image/schema.js";
 export { encodeImage } from "./image/pixels.js";
 export type { CodeImageEditorProps } from "./image/Editor.js";
-export { IMAGE_EDITOR_STRINGS, IMAGE_PLAYER_STRINGS, IMAGE_REVIEW_STRINGS } from "./image/strings.js";
+export {
+  IMAGE_EDITOR_STRINGS,
+  IMAGE_GRADING_STRINGS,
+  IMAGE_PLAYER_STRINGS,
+  IMAGE_REVIEW_STRINGS,
+} from "./image/strings.js";

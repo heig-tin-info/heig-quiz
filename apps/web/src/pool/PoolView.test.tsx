@@ -1,16 +1,20 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PoolDetail, QuestionPage } from "@quiz/contracts";
 
-import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
+import { fail, mockFetch, ok, renderWithProviders, type RecordedCall } from "../test/render";
 import { PoolView } from "./PoolView";
 
 /*
  * The pool screen against a stubbed API: what the table shows, what the
  * filter bar sends, the three actions each row carries, and the bulk bar
  * that only exists once something is ticked.
+ *
+ * A click on a row SHOWS the question (a pane beside the list on a wide
+ * window, in its place on a narrow one); Enter, a double-click and the
+ * pencil open the editor; Space and the row's star star it (F-POOL-10).
  *
  * The category tree is NOT part of this screen any more: it lives in the app
  * sidebar and hands its selection over through the `category` query-string
@@ -58,6 +62,7 @@ const PAGE: QuestionPage = {
       latestNumber: 3,
       hasDraftChanges: true,
       keyless: false,
+      starred: false,
       updatedAt: "2026-09-18T08:00:00.000Z",
       deprecated: false,
       deletedAt: null,
@@ -72,6 +77,7 @@ const PAGE: QuestionPage = {
       latestNumber: null,
       hasDraftChanges: true,
       keyless: false,
+      starred: false,
       updatedAt: "2026-09-10T08:00:00.000Z",
       deprecated: false,
       deletedAt: null,
@@ -81,15 +87,46 @@ const PAGE: QuestionPage = {
   total: 2,
 };
 
+/** The student view of either question, as `POST /questions/:id/preview` builds it. */
+const VIEW = {
+  type: "mcq",
+  student: {
+    prompt: "Que vaut un pointeur non initialisé ?",
+    choices: [
+      { id: 0, text: "NULL" },
+      { id: 1, text: "Une valeur indéterminée" },
+    ],
+    mode: "single",
+  },
+  itemPoints: 2,
+};
+
+const previewCalls = (calls: RecordedCall[]) =>
+  calls.filter((c) => c.method === "POST" && c.url.endsWith("/preview"));
+
+/** The table row that carries a question's name. */
+const rowOf = (name: string) => within(screen.getByRole("table")).getByText(name).closest("tr")!;
+
 const EMPTY_PAGE: QuestionPage = { items: [], nextCursor: null, total: 0 };
+
+/** The caller's favourites of the pool (`pool/stars.tsx`). */
+const STARRED = "GET /app/api/pools/p1/questions?starred=1&limit=200";
 
 function routes(over: Record<string, ReturnType<typeof ok>> = {}) {
   return {
     "GET /app/api/pools/p1": ok(POOL),
     "GET /app/api/pools/p1/questions?limit=25": ok(PAGE),
+    [STARRED]: ok(EMPTY_PAGE),
     ...over,
   };
 }
+
+const previews = (over: Record<string, ReturnType<typeof ok>> = {}) =>
+  routes({
+    "POST /app/api/questions/q1/preview": ok(VIEW),
+    "POST /app/api/questions/q2/preview": ok(VIEW),
+    ...over,
+  });
 
 describe("PoolView", () => {
   it("lists the questions across the full width, without a category tree", async () => {
@@ -204,15 +241,230 @@ describe("PoolView", () => {
     );
   });
 
-  it("opens the editor when the row is clicked", async () => {
+  it("shows the question on a row click, and opens the editor only on Enter", async () => {
     const user = userEvent.setup();
     const navigate = vi.fn();
-    mockFetch(routes());
+    const { calls } = mockFetch(previews());
+    renderWithProviders(<PoolView id="p1" navigate={navigate} />);
+    // A narrow window (jsdom has no width): the preview takes the list's place.
+    await user.click(await screen.findByText("ptr-arith-01"));
+    expect(await screen.findByText("Que vaut un pointeur non initialisé ?")).toBeVisible();
+    expect(navigate).not.toHaveBeenCalled();
+    // The latest PUBLISHED version, and a word about the draft that moved since.
+    expect(previewCalls(calls)).toEqual([
+      expect.objectContaining({ url: "/app/api/questions/q1/preview", body: { source: 3 } }),
+    ]);
+    expect(screen.getByText(/Its draft has unpublished changes/)).toBeVisible();
+    expect(screen.queryByText("ptr-null-check")).toBeNull();
+
+    // Back returns to the list, the focus on the row it came from.
+    expect(screen.getByRole("button", { name: "Back to the list" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(rowOf("ptr-arith-01")).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q1" });
+  });
+
+  it("previews the draft of a question never published, and opens the editor from there", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    const { calls } = mockFetch(previews());
     renderWithProviders(<PoolView id="p1" navigate={navigate} />);
     await user.click(await screen.findByText("ptr-null-check"));
+    expect(await screen.findByText("Never published — this is its draft")).toBeVisible();
+    expect(previewCalls(calls)[0]).toMatchObject({ body: { source: "draft" } });
+    // Same tab: the anchor keeps its href for a middle-click, a plain click navigates.
+    const link = screen.getByRole("link", { name: /Open in the editor/ });
+    expect(link).not.toHaveAttribute("target");
+    await user.click(link);
     expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q2" });
-    // The inspection panel is gone with the click that used to open it.
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("opens the editor on a double-click", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    mockFetch(previews());
+    renderWithProviders(<PoolView id="p1" navigate={navigate} />);
+    // Two quick clicks on the tick box are two ticks, not a way into the editor.
+    await user.dblClick(await screen.findByLabelText("Select ptr-null-check"));
+    expect(navigate).not.toHaveBeenCalled();
+    await user.dblClick(screen.getByText("ptr-null-check"));
+    expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q2" });
+  });
+
+  it("stars the focused row on Space, and neither opens nor ticks it", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    const { calls } = mockFetch(previews({ "PUT /app/api/questions/star": { status: 204 } }));
+    renderWithProviders(<PoolView id="p1" navigate={navigate} />);
+    await screen.findByText("ptr-arith-01");
+    rowOf("ptr-arith-01").focus();
+    await user.keyboard(" ");
+    expect(navigate).not.toHaveBeenCalled();
+    expect(previewCalls(calls)).toEqual([]);
+    expect(screen.getByLabelText("Select ptr-arith-01")).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Star ptr-arith-01" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PUT")).toMatchObject({
+        url: "/app/api/questions/star",
+        body: { questionIds: ["q1"] },
+      }),
+    );
+    // The tick box keeps its own Space.
+    screen.getByLabelText("Select ptr-arith-01").focus();
+    await user.keyboard(" ");
+    expect(screen.getByLabelText("Select ptr-arith-01")).toBeChecked();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("walks the rows with the arrows in the order they are drawn, and stops at the last", async () => {
+    const user = userEvent.setup();
+    mockFetch(previews());
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    // One row in the Tab order.
+    expect(rowOf("ptr-arith-01")).toHaveAttribute("tabindex", "0");
+    expect(rowOf("ptr-null-check")).toHaveAttribute("tabindex", "-1");
+    rowOf("ptr-arith-01").focus();
+    await user.keyboard("{ArrowDown}");
+    expect(rowOf("ptr-null-check")).toHaveFocus();
+    expect(rowOf("ptr-null-check")).toHaveAttribute("tabindex", "0");
+    await user.keyboard("{ArrowDown}");
+    expect(rowOf("ptr-null-check")).toHaveFocus();
+    await user.keyboard("{ArrowUp}");
+    expect(rowOf("ptr-arith-01")).toHaveFocus();
+  });
+
+  it("walks the cards section by section, not in the order the server sent", async () => {
+    const user = userEvent.setup();
+    // By category, the tree's order puts Pointeurs (q2) before its child
+    // Arithmétique (q1): the reverse of the page.
+    localStorage.setItem("quiz-pool-view", "cards");
+    localStorage.setItem("quiz-pool-group", "category");
+    mockFetch(previews());
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    const cardOf = (name: string) =>
+      screen.getByText(name, { selector: "span" }).closest<HTMLElement>("[tabindex]")!;
+    await screen.findByText("ptr-null-check");
+    expect(cardOf("ptr-null-check")).toHaveAttribute("tabindex", "0");
+    cardOf("ptr-null-check").focus();
+    await user.keyboard("{ArrowDown}");
+    expect(cardOf("ptr-arith-01")).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(cardOf("ptr-null-check")).toHaveFocus();
+  });
+
+  it("shows the focused row on P, without a pointer, where the pane takes the list's place", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    mockFetch(previews());
+    renderWithProviders(<PoolView id="p1" navigate={navigate} />);
+    await screen.findByText("ptr-arith-01");
+    expect(rowOf("ptr-arith-01")).toHaveAttribute("aria-keyshortcuts", "P Enter Space");
+    rowOf("ptr-arith-01").focus();
+    await user.keyboard("{ArrowDown}");
+    // On a narrow window the arrows only move: the pane would hide the list.
+    expect(screen.queryByText("Que vaut un pointeur non initialisé ?")).toBeNull();
+    await user.keyboard("p");
+    expect(await screen.findByText("Never published — this is its draft")).toBeVisible();
+    expect(navigate).not.toHaveBeenCalled();
+    await user.keyboard("{Escape}");
+    expect(rowOf("ptr-null-check")).toHaveFocus();
+  });
+
+  it("waits for a second click before a narrow window gives the list away to the pane", async () => {
+    mockFetch(previews());
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByText("ptr-arith-01"));
+      // Not yet: this click may be the first of a double-click.
+      await act(() => vi.advanceTimersByTimeAsync(299));
+      expect(screen.queryByRole("button", { name: "Back to the list" })).toBeNull();
+      await act(() => vi.advanceTimersByTimeAsync(1));
+      expect(screen.getByRole("button", { name: "Back to the list" })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  describe("on a wide window", () => {
+    const matchMedia = window.matchMedia;
+    beforeEach(() => {
+      vi.stubGlobal("matchMedia", (query: string) => ({
+        ...matchMedia(query),
+        matches: query === "(min-width: 1280px)",
+      }));
+    });
+    afterEach(() => {
+      vi.stubGlobal("matchMedia", matchMedia);
+    });
+
+    it("docks the preview beside the list, follows the arrows, and closes on Escape", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch(previews());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-arith-01");
+      // No empty pane before the first look.
+      expect(screen.queryByRole("complementary")).toBeNull();
+
+      await user.click(screen.getByText("ptr-arith-01"));
+      const pane = await screen.findByRole("complementary", { name: "Preview ptr-arith-01" });
+      expect(await within(pane).findByText("Que vaut un pointeur non initialisé ?")).toBeVisible();
+      // The list stays, the row marked as the one shown.
+      expect(rowOf("ptr-arith-01")).toHaveAttribute("aria-current", "true");
+
+      await user.keyboard("{ArrowDown}");
+      expect(rowOf("ptr-null-check")).toHaveFocus();
+      expect(
+        await screen.findByRole("complementary", { name: "Preview ptr-null-check" }),
+      ).toBeVisible();
+      expect(rowOf("ptr-arith-01")).not.toHaveAttribute("aria-current");
+      expect(previewCalls(calls).map((c) => c.url)).toEqual([
+        "/app/api/questions/q1/preview",
+        "/app/api/questions/q2/preview",
+      ]);
+
+      await user.keyboard("{Escape}");
+      expect(screen.queryByRole("complementary")).toBeNull();
+      expect(rowOf("ptr-null-check")).toHaveFocus();
+    });
+
+    it("opens the pane from the keyboard alone: the arrows show the row they reach", async () => {
+      const user = userEvent.setup();
+      mockFetch(previews());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-arith-01");
+      rowOf("ptr-arith-01").focus();
+      await user.keyboard("{ArrowDown}");
+      expect(
+        await screen.findByRole("complementary", { name: "Preview ptr-null-check" }),
+      ).toBeVisible();
+      expect(rowOf("ptr-null-check")).toHaveAttribute("aria-current", "true");
+      await user.keyboard("{Home}");
+      expect(
+        await screen.findByRole("complementary", { name: "Preview ptr-arith-01" }),
+      ).toBeVisible();
+      // The name is announced politely as the question changes, not the body.
+      const pane = screen.getByRole("complementary");
+      expect(
+        within(pane).getByRole("heading", { name: "ptr-arith-01" }).parentElement,
+      ).toHaveAttribute("aria-live", "polite");
+    });
+
+    it("closes with its X and hands the focus back to the row", async () => {
+      const user = userEvent.setup();
+      mockFetch(previews());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await user.click(await screen.findByText("ptr-arith-01"));
+      await user.click(await screen.findByRole("button", { name: "Close the preview" }));
+      expect(screen.queryByRole("complementary")).toBeNull();
+      expect(rowOf("ptr-arith-01")).toHaveFocus();
+    });
   });
 
   it("carries edit, duplicate and delete on every row", async () => {
@@ -223,7 +475,7 @@ describe("PoolView", () => {
     );
     renderWithProviders(<PoolView id="p1" navigate={navigate} />);
     await screen.findByText("ptr-arith-01");
-    // The pencil opens the editor, like the row itself.
+    // The pencil opens the editor, like Enter on the row.
     await user.click(screen.getByRole("button", { name: "Edit ptr-arith-01" }));
     expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q1" });
     // The copy button copies, and does not navigate anywhere on its own.
@@ -325,9 +577,222 @@ describe("PoolView", () => {
     expect(screen.getAllByRole("button", { name: /New question/ }).length).toBeGreaterThan(0);
   });
 
+  it("draws the statistics icon only for the questions that have statistics", async () => {
+    const user = userEvent.setup();
+    mockFetch(
+      routes({
+        "GET /app/api/pools/p1/question-stats": ok({ items: [{ questionId: "q1", n: 24, p: 0.73, since: null }] }),
+      }),
+    );
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    const open = await screen.findByRole("button", { name: "Statistics of ptr-arith-01" });
+    expect(screen.queryByRole("button", { name: "Statistics of ptr-null-check" })).not.toBeInTheDocument();
+    await user.click(open);
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByText("73%")).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: /Reset statistics/ })).toBeInTheDocument();
+  });
+
+  it("shows the statistics on a read-only pool too, without the reset", async () => {
+    const user = userEvent.setup();
+    mockFetch(
+      routes({
+        "GET /app/api/pools/p1": ok({ ...POOL, role: "reader" }),
+        "GET /app/api/pools/p1/question-stats": ok({ items: [{ questionId: "q2", n: 10, p: 0.5, since: null }] }),
+      }),
+    );
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await user.click(await screen.findByRole("button", { name: "Statistics of ptr-null-check" }));
+    const sheet = await screen.findByRole("dialog");
+    expect(await within(sheet).findByText("50%")).toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: /Reset statistics/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps the list when the statistics fail, without any icon", async () => {
+    mockFetch(routes({ "GET /app/api/pools/p1/question-stats": fail(500) }));
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    expect(screen.queryByRole("button", { name: /^Statistics of/ })).not.toBeInTheDocument();
+  });
+
+  describe("the statistics filters (F-STAT-03)", () => {
+    const STATS = {
+      items: [
+        {
+          questionId: "q1",
+          n: 24,
+          p: 0.73,
+          since: null,
+          time: { n: 21, meanS: 95, medianS: 80, p25S: 52, p75S: 121 },
+        },
+      ],
+    };
+    const openSheet = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.click(screen.getByRole("button", { name: /Filters/ }));
+      return screen.findByRole("dialog");
+    };
+
+    it("bounds the rate in the page, hides the questions without statistics until asked", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch(
+        routes({
+          "GET /app/api/pools/p1/question-stats": ok(STATS),
+          "GET /app/api/pools/p1/questions?limit=200": ok(PAGE),
+        }),
+      );
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-null-check");
+      const sheet = await openSheet(user);
+      await user.type(within(sheet).getByLabelText("Success rate, from"), "50");
+      await user.click(within(sheet).getByRole("button", { name: "Done" }));
+
+      await waitFor(() => expect(screen.queryByText("ptr-null-check")).not.toBeInTheDocument());
+      expect(screen.getByText("ptr-arith-01")).toBeInTheDocument();
+      expect(screen.getByText("1 question")).toBeInTheDocument();
+      expect(screen.getByText("Success 50% and up")).toBeInTheDocument();
+      // The bound never travels: the API is asked for the whole search, nothing more.
+      expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?limit=200")).toBe(true);
+      expect(calls.some((c) => /rate|time/.test(c.url))).toBe(false);
+
+      await user.click(within(await openSheet(user)).getByRole("switch", {
+        name: "Include questions without statistics",
+      }));
+      expect(await screen.findByText("ptr-null-check")).toBeInTheDocument();
+    });
+
+    it("follows the cursor to the end by itself while a bound is set", async () => {
+      const user = userEvent.setup();
+      const [first, second] = PAGE.items;
+      const { calls } = mockFetch(
+        routes({
+          "GET /app/api/pools/p1/question-stats": ok({
+            items: [...STATS.items, { ...STATS.items[0]!, questionId: "q2", p: 0.2 }],
+          }),
+          "GET /app/api/pools/p1/questions?limit=200": ok({ items: [first], nextCursor: "c2", total: 2 }),
+          "GET /app/api/pools/p1/questions?limit=200&cursor=c2": ok({
+            items: [second],
+            nextCursor: null,
+            total: 2,
+          }),
+        }),
+      );
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-null-check");
+      const sheet = await openSheet(user);
+      await user.type(within(sheet).getByLabelText("Median time, up to"), "100");
+      await user.click(within(sheet).getByRole("button", { name: "Done" }));
+
+      // The second page arrives without a click; the count is of the rows that pass.
+      await waitFor(() =>
+        expect(calls.some((c) => c.url.endsWith("?limit=200&cursor=c2"))).toBe(true),
+      );
+      expect(await screen.findByText("ptr-null-check")).toBeInTheDocument();
+      expect(screen.getByText("ptr-arith-01")).toBeInTheDocument();
+      expect(screen.getAllByText("2 questions")).toHaveLength(2);
+      expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+    });
+
+    it("says so in the sheet when no question has statistics yet", async () => {
+      const user = userEvent.setup();
+      mockFetch(routes({ "GET /app/api/pools/p1/question-stats": ok({ items: [] }) }));
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-arith-01");
+      const sheet = await openSheet(user);
+      expect(within(sheet).getByText(/No question of this pool has statistics yet/)).toBeInTheDocument();
+      expect(within(sheet).queryByLabelText("Success rate, from")).not.toBeInTheDocument();
+    });
+  });
+
   it("reports a failed listing with a retry", async () => {
     mockFetch({ "GET /app/api/pools/p1": ok(POOL) });
     renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
     expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  describe("favourites (F-POOL-10)", () => {
+    const starButton = (name: string) => screen.getByRole("button", { name: `Star ${name}` });
+
+    it("stars from the row at once, and puts the star back when the server refuses", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch(routes({ "PUT /app/api/questions/star": fail(500) }));
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-arith-01");
+      expect(starButton("ptr-arith-01")).toHaveAttribute("aria-pressed", "false");
+
+      await user.click(starButton("ptr-arith-01"));
+      await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+      // Rolled back, and the list was never refetched for it.
+      await waitFor(() => expect(starButton("ptr-arith-01")).toHaveAttribute("aria-pressed", "false"));
+      expect(calls.filter((c) => c.url === "/app/api/pools/p1/questions?limit=25")).toHaveLength(1);
+    });
+
+    it("lets a reader star", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch(
+        routes({
+          "GET /app/api/pools/p1": ok({ ...POOL, role: "reader" }),
+          "PUT /app/api/questions/star": { status: 204 },
+        }),
+      );
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-arith-01");
+      await user.click(starButton("ptr-null-check"));
+      expect(starButton("ptr-null-check")).toHaveAttribute("aria-pressed", "true");
+      await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+    });
+
+    it("stars the selection from the bulk bar, then offers to unstar it", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch(routes({ "PUT /app/api/questions/star": { status: 204 } }));
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-arith-01");
+      await user.click(screen.getByLabelText("Select ptr-arith-01"));
+      await user.click(screen.getByLabelText("Select ptr-null-check"));
+      const bar = await screen.findByRole("region", { name: "2 selected" });
+      await user.click(within(bar).getByRole("button", { name: "Star" }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === "PUT")).toMatchObject({
+          body: { questionIds: ["q1", "q2"] },
+        }),
+      );
+      expect(within(bar).getByRole("button", { name: "Unstar" })).toBeVisible();
+    });
+
+    it("clears the caller's favourites after a confirm that counts them", async () => {
+      const user = userEvent.setup();
+      const starredPage: QuestionPage = {
+        items: [{ ...PAGE.items[0]!, starred: true }],
+        nextCursor: null,
+        total: 1,
+      };
+      const { calls } = mockFetch(
+        routes({
+          "GET /app/api/pools/p1/questions?limit=25": ok({
+            ...PAGE,
+            items: [{ ...PAGE.items[0]!, starred: true }, PAGE.items[1]!],
+          }),
+          [STARRED]: ok(starredPage),
+          "DELETE /app/api/pools/p1/stars": ok({ cleared: 1 }),
+        }),
+      );
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await user.click(await screen.findByRole("button", { name: "Clear favourites" }));
+      const dialog = await screen.findByRole("dialog");
+      expect(dialog).toHaveTextContent("Remove your star from the 1 question of this pool?");
+      await user.click(within(dialog).getByRole("button", { name: "Clear favourites" }));
+      await waitFor(() =>
+        expect(calls.some((c) => c.method === "DELETE" && c.url === "/app/api/pools/p1/stars")).toBe(
+          true,
+        ),
+      );
+      await waitFor(() => expect(starButton("ptr-arith-01")).toHaveAttribute("aria-pressed", "false"));
+    });
+
+    it("has no Clear favourites while the caller has none here", async () => {
+      mockFetch(routes());
+      renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+      await screen.findByText("ptr-arith-01");
+      expect(screen.queryByRole("button", { name: "Clear favourites" })).toBeNull();
+    });
   });
 });

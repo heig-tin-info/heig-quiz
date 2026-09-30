@@ -1,4 +1,4 @@
-import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { skipToken, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { AlertTriangle, EyeOff, KeyRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -37,7 +37,9 @@ const SHOWS_ANSWERS = new Set(["mcq", "cloze"]);
  * The body of a teacher's preview of ONE question: its points, then the
  * student's rendering through the player's own `QuestionHost` — never a
  * second rendering. Shared by the preview of an item of the evaluation
- * (`ItemPreviewSheet`) and by the picker's reading pane (`AddQuestionsSheet`).
+ * (`ItemPreviewSheet`) and by `QuestionPreview`, the reading pane of the
+ * question picker and of the pool screen. "Show answers" is offered only
+ * where a `solution` is given: the item preview and the picker, not the pool.
  *
  * The teacher may type in the fields — a preview one cannot touch does not
  * answer "does this read right?" — and the answer lives here and dies with
@@ -48,7 +50,7 @@ export function PreviewedQuestion({
   solution,
 }: {
   query: UseQueryResult<StudentQuestion>;
-  solution: SolutionSource;
+  solution?: SolutionSource;
 }) {
   const t = useT();
   if (query.isLoading) {
@@ -83,7 +85,8 @@ export function PlayedQuestion({
   label,
 }: {
   view: StudentQuestion;
-  solution: SolutionSource;
+  /** Where the key comes from; without one, no "Show answers". */
+  solution?: SolutionSource;
   /** The player's own line above the question, where the surface wants it. */
   label?: string;
 }) {
@@ -96,7 +99,11 @@ export function PlayedQuestion({
     setShown(false);
   }, [type, student]);
   // Fresh on every "Show": a draft may have changed in the editor meanwhile.
-  const key = useQuery({ ...solution, enabled: shown });
+  const key = useQuery({
+    queryKey: solution?.queryKey ?? [],
+    queryFn: solution?.queryFn ?? skipToken,
+    enabled: shown,
+  });
 
   return (
     <div className="space-y-3">
@@ -108,7 +115,7 @@ export function PlayedQuestion({
         <p className="text-[13px] text-fg-muted">
           {view.points === 1 ? t("player.point") : t("player.points", { n: view.points })}
         </p>
-        {SHOWS_ANSWERS.has(view.type) ? (
+        {solution && SHOWS_ANSWERS.has(view.type) ? (
           <Button variant="secondary" size="sm" aria-pressed={shown} onClick={() => setShown(!shown)}>
             {shown ? <EyeOff /> : <KeyRound />}
             {shown ? t("preview.answers.hide") : t("preview.answers.show")}

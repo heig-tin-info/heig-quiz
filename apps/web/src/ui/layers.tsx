@@ -68,6 +68,10 @@ export const Z = {
  *
  * A key press that started on a nested control (a link, a menu trigger) is
  * that control's business, so only the element itself answers.
+ *
+ * Not for an element whose click and Enter do different things: the pool's
+ * rows look on a click and edit on Enter, and answer their own keys
+ * (`pool/useQuestionBrowse.ts`).
  */
 export function pressable(onActivate: () => void, role: string = "button") {
   return {
@@ -544,7 +548,7 @@ export function IconButton({
         {...props}
         aria-label={label}
         aria-keyshortcuts={shortcut}
-        aria-pressed={active}
+        aria-pressed={active ?? props["aria-pressed"]}
         className={cx(
           "inline-flex shrink-0 items-center justify-center rounded-full transition-colors duration-150 disabled:pointer-events-none disabled:opacity-40",
           size === "sm" ? "size-7 [&_svg]:size-3.5" : "size-8 [&_svg]:size-4",
@@ -588,12 +592,18 @@ function LayerShell({
   bodyClass,
   footerClass,
   aside,
+  leading,
+  actions,
   children,
 }: {
   title: string;
   subtitle?: ReactNode;
   onClose: () => void;
   footer?: ReactNode;
+  /** Drawn before the title: what the layer is about, as a mark. */
+  leading?: ReactNode;
+  /** Drawn before the close button: the layer's own moves (previous, next). */
+  actions?: ReactNode;
   backdropClass: string;
   panelClass: string;
   headerClass: string;
@@ -616,12 +626,14 @@ function LayerShell({
   const column = (
     <>
       <div className={headerClass}>
+        {leading ? <div className="mt-1 shrink-0">{leading}</div> : null}
         <div className="min-w-0 flex-1">
           <h2 id={titleId} className="text-lg font-bold tracking-tight">
             {title}
           </h2>
           {subtitle ? <p className="mt-0.5 text-sm text-fg-muted">{subtitle}</p> : null}
         </div>
+        {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}
         <LayerClose onClose={onClose} />
       </div>
       <div className={bodyClass}>{children}</div>
@@ -739,6 +751,8 @@ export function Sheet({
   width = "md",
   flush,
   aside,
+  leading,
+  actions,
 }: {
   title: string;
   subtitle?: ReactNode;
@@ -750,6 +764,13 @@ export function Sheet({
   flush?: boolean;
   /** The docked reading pane; it scrolls on its own and owns its padding. */
   aside?: ReactNode;
+  /**
+   * A mark before the title — the verdict of the answer a reading sheet
+   * shows (the grading panel) — and the sheet's own moves before its close
+   * button (previous, next). Both optional; a form sheet has neither.
+   */
+  leading?: ReactNode;
+  actions?: ReactNode;
 }) {
   const docked = aside != null;
   return (
@@ -758,6 +779,8 @@ export function Sheet({
       subtitle={subtitle}
       onClose={onClose}
       footer={footer}
+      leading={leading}
+      actions={actions}
       backdropClass={`layer-backdrop fixed inset-0 ${Z.modal} flex justify-end bg-fg/30 backdrop-blur-[2px]`}
       panelClass={cx(
         "sheet-panel flex h-full border-l border-line bg-surface shadow-sheet focus:outline-none",

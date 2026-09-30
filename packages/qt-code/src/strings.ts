@@ -341,3 +341,39 @@ export const REVIEW_STRINGS: CodeReviewStrings = {
   referenceSolution: "Reference solution",
   yourCode: "Your code",
 };
+
+/**
+ * The words of the grading table's program column (ADR-044), `code`'s and
+ * `codeimage`'s alike: the program clamped to five lines, and the chip that
+ * says how its run went.
+ */
+/* A type, not an interface: the grading contract takes it as a `Record<string, string>`. */
+export type CodeGradingStrings = {
+  program: string;
+  /** The foot of a clamped program. */
+  more: string;
+  "more.one": string;
+  /** The tooltip of a clamped program, and of an unfolded one. */
+  expand: string;
+  collapse: string;
+  /** The cases passed, out of all of them. */
+  tests: string;
+  "tests.one": string;
+  compileFailed: string;
+  /** No verdict yet: the answer waits for the runner (or was never run). */
+  atRunner: string;
+  runFailed: string;
+};
+
+export const GRADING_STRINGS: CodeGradingStrings = {
+  program: "Program",
+  more: "{n} more lines",
+  "more.one": "1 more line",
+  expand: "Show the whole program",
+  collapse: "Fold the program",
+  tests: "{passed}/{total} tests",
+  "tests.one": "{passed}/{total} test",
+  compileFailed: "Does not compile",
+  atRunner: "runner…",
+  runFailed: "Not run",
+};

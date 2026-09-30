@@ -5,6 +5,7 @@ import {
   describe,
   histogram,
   isBatchable,
+  isEvaluationOver,
   negativeMarkingOn,
   parseCloze,
   round2,
@@ -37,6 +38,12 @@ import {
 import {
   ME_TEACHER,
 } from "./org";
+import {
+  IMAGE_REFERENCE,
+  IMAGE_STUDENT_ATTEMPT,
+  codeimageTryDetails,
+  studentAttemptPixels,
+} from "./codeimage";
 import {
   CATEGORIZE_ANSWER,
   CircuitStimulusLike,
@@ -98,7 +105,6 @@ interface MockAttempt {
   lastName: string;
   firstName: string;
   email: string;
-  pseudonym: string;
   state: "submitted" | "expired";
   durationS: number;
   ability: number;
@@ -181,16 +187,28 @@ function mockAnswer(q: MockQuestion, config: Record<string, unknown>, ability: n
     const key = (config.columns ?? []) as { id: string; cards: string[] }[];
     return rand() < ability ? { columns: Object.fromEntries(key.map((c) => [c.id, c.cards])) } : CATEGORIZE_ANSWER;
   }
+  if (q.type === "codeimage") {
+    return { regions: [rand() < ability ? IMAGE_REFERENCE : IMAGE_STUDENT_ATTEMPT] };
+  }
+  // Short programs and long ones, so the table's box shows its five-line
+  // clamp on some rows and not on others.
   const good = rand() < ability;
   return {
-    regions: [
-      good
-        ? "    int s = 0;\n    for (const int *p = t; p < t + n; p++) s += *p;\n    return s;\n"
-        : "    int s = 0;\n    for (size_t i = 0; i <= n; i++) s += t[i];\n    return s;\n",
-    ],
+    regions: [pick(good ? CODE_GOOD : CODE_BAD)],
     lastRun: null,
   };
 }
+
+const CODE_GOOD = [
+  "    int s = 0;\n    for (const int *p = t; p < t + n; p++) s += *p;\n    return s;\n",
+  "    /* parcours par pointeur, sans [] */\n    int s = 0;\n    const int *fin = t + n;\n" +
+    "    for (const int *p = t; p < fin; p++) {\n        s += *p;\n    }\n    return s;\n",
+];
+const CODE_BAD = [
+  "    int s = 0;\n    for (size_t i = 0; i <= n; i++) s += t[i];\n    return s;\n",
+  "    int s = 0;\n    size_t i = 0;\n    while (i <= n) {\n        s = s + *(t + i);\n" +
+    "        i++;\n    }\n    printf(\"%d\\n\", s);\n    return s;\n",
+];
 
 /** `code` never reaches a runner here, so its case-by-case detail is built. */
 function mockCodeDetails(config: Record<string, unknown>, ability: number) {
@@ -287,7 +305,6 @@ function buildGradingWorld(
       lastName: row.lastName,
       firstName: row.firstName,
       email: row.email,
-      pseudonym: row.pseudonym,
       state: row.state === "submitted" ? "submitted" : "expired",
       durationS: 600 + Math.round(rand() * 1500),
       // A class, not a cloud: a few who have it, a few who do not, most in
@@ -324,6 +341,15 @@ function buildGradingWorld(
         const built = mockCodeDetails(config, attempt.ability);
         points = halfPoints(built.fraction * item.points);
         details = built.details;
+      } else if (q.type === "codeimage") {
+        // The mock has no compiler: the picture is the one the program
+        // above would print, drawn by the same function in TypeScript.
+        const good = (answer as { regions: string[] }).regions[0] === IMAGE_REFERENCE;
+        const built = codeimageTryDetails(config, good ? undefined : studentAttemptPixels);
+        // The share of cells right, unrounded: a picture off by its middle
+        // rings is partial credit, not a full mark rounded up.
+        points = round2((built.matching / built.pixelCount) * item.points);
+        details = built;
       } else if (q.type === "circuit") {
         // A circuit is graded on the ITEM's points, not on its stimuli's, so
         // the fraction is what travels — as it does for every other type.
@@ -409,7 +435,7 @@ function buildGradingWorld(
 
       // Runner-pending: no standing grading at all, so the panel shows the
       // cell as still waiting (the `pending` verdict).
-      if (!options.allValidated && q.type === "code" && rand() < 0.1) {
+      if (!options.allValidated && (q.type === "code" || q.type === "codeimage") && rand() < 0.1) {
         gradings.set(key, []);
         return;
       }
@@ -493,8 +519,13 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
     answerId: answer === null ? null : `${key}-ans`,
     attemptId: attempt.id,
     itemId: item.id,
-    label: anonymous ? attempt.pseudonym : attempt.displayName,
+    // Anonymous, no label at all (ADR-044); the names only on request.
+    label: anonymous ? null : attempt.displayName,
+    guest: null,
     staff: attempt.staff,
+    // One attempt per student in this mock: no retake number, and it counts.
+    attemptNumber: null,
+    kept: true,
     answer,
     student: studentView(q, config),
     solution,
@@ -516,21 +547,12 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
 
 on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
   const e = gradingWorldOr404(m.groups!.id!);
-  const by = url.searchParams.get("by") === "student" ? "student" : "question";
   const itemId = url.searchParams.get("itemId");
-  const attemptId = url.searchParams.get("attemptId");
-  const state = url.searchParams.get("state");
   const anonymous = url.searchParams.get("anonymous") !== "0";
   const items = itemId ? e.items.filter((i) => i.id === itemId) : e.items;
-  const attempts = attemptId ? e.attempts.filter((a) => a.id === attemptId) : e.attempts;
-  const pairs =
-    by === "student"
-      ? attempts.flatMap((a) => items.map((i) => ({ a, i })))
-      : items.flatMap((i) => attempts.map((a) => ({ a, i })));
+  const pairs = items.flatMap((i) => e.attempts.map((a) => ({ a, i })));
 
-  const entries = pairs
-    .map(({ a, i }) => gradingEntry(e, a, i, anonymous))
-    .filter((entry) => !state || entry.grading?.state === state);
+  const entries = pairs.map(({ a, i }) => gradingEntry(e, a, i, anonymous));
 
   let validated = 0;
   let proposed = 0;
@@ -540,7 +562,6 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
     else if (g?.state === "proposed") proposed += 1;
   }
   return {
-    order: by,
     items: items.map((i) => ({
       id: i.id,
       position: i.position,
@@ -560,37 +581,16 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
   };
 });
 
-/** The path of a traversal with each step's state (#107): three counters per step. */
-on("GET", "/app/api/evaluations/:id/grading/steps", (m, _body, url) => {
+/** Every question with its state (#107): two counters per question. */
+on("GET", "/app/api/evaluations/:id/grading/steps", (m) => {
   const e = gradingWorldOr404(m.groups!.id!);
-  const by = url.searchParams.get("by") === "student" ? "student" : "question";
-  const anonymous = url.searchParams.get("anonymous") !== "0";
-  const tally = (cells: { a: MockAttempt; i: MockEvalItem }[]) => {
-    let validated = 0;
-    let proposed = 0;
-    for (const { a, i } of cells) {
-      const g = standingGrading(e, a.id, i.id);
-      if (g?.state === "validated") validated += 1;
-      else if (g?.state === "proposed") proposed += 1;
-    }
-    return { total: cells.length, validated, proposed };
-  };
   return {
-    order: by,
-    steps:
-      by === "question"
-        ? e.items.map((i) => ({
-            key: i.id,
-            label: i.internalName,
-            staff: false,
-            ...tally(e.attempts.map((a) => ({ a, i }))),
-          }))
-        : e.attempts.map((a) => ({
-            key: a.id,
-            label: anonymous ? a.pseudonym : a.displayName,
-            staff: a.staff,
-            ...tally(e.items.map((i) => ({ a, i }))),
-          })),
+    steps: e.items.map((i) => ({
+      key: i.id,
+      total: e.attempts.length,
+      validated: e.attempts.filter((a) => standingGrading(e, a.id, i.id)?.state === "validated")
+        .length,
+    })),
   };
 });
 
@@ -846,8 +846,7 @@ function attemptAggregate(type: string, answer: unknown, details: unknown): Item
 
 on("GET", "/app/api/evaluations/:id/results/by-question", (m) => {
   const e = gradingWorldOr404(m.groups!.id!);
-  const state = e.evaluation.state;
-  if (state !== "closed" && state !== "grading" && state !== "released") {
+  if (!isEvaluationOver(e.evaluation.state)) {
     throw new MockPayload(409, { error: "not_over", message: "the evaluation is not over" });
   }
   const view = resultsView(e);

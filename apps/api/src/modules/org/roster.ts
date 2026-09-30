@@ -8,6 +8,7 @@ import { publish } from "../../events.js";
 import type { Db } from "../../db/client.js";
 import { avatars, classrooms, courseStaff, enrollments, userEmails, users } from "../../db/schema.js";
 import { emailIn, knownEmails, normalizeEmail, sharedWithOthers } from "../../identity.js";
+import { avatarUrl } from "../avatar.js";
 import { notifyMany } from "../notifications/service.js";
 import { rosterConflict, studentJoined } from "../realtime/bus.js";
 
@@ -337,8 +338,6 @@ export async function rosterView(db: Db, classroomId: string) {
     ...r,
     lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
     avatarUrl:
-      avatarAt && r.userId
-        ? `/app/api/users/${r.userId}/avatar?v=${avatarAt.getTime()}`
-        : pictureUrl,
+      avatarAt && r.userId ? avatarUrl(r.userId, avatarAt) : pictureUrl,
   }));
 }

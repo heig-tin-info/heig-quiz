@@ -43,8 +43,22 @@ export {
 } from "./styles.js";
 export { breakdownOf, isLocked, markdown } from "./content.js";
 export { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";
-export { GripIcon, StrokeIcon, typeIcon } from "./icon.js";
-export { IssueList } from "./issues.js";
+export {
+  AnswerChip,
+  ChoiceMark,
+  ClampedCode,
+  countTone,
+  Dash,
+  headerOf,
+  NoAnswer,
+  runStatus,
+  WordChip,
+  type AnswerTone,
+  type ChoiceMarkState,
+  type RunStatus,
+} from "./grading.js";
+export { AlertIcon, GripIcon, StrokeIcon, typeIcon } from "./icon.js";
+export { ErrorText, IssueList } from "./issues.js";
 export {
   AsideSection,
   TryPanel,
@@ -57,3 +71,4 @@ export { patchAt, removeAt, RowHead, RowList, RowListHeader } from "./rows.js";
 export { AdvancedDisclosure, EditorSection, PromptSection } from "./sections.js";
 export { PromptField } from "./PromptField.js";
 export { pointsOrDash, ScoreHeader, Verdict, verdictTone } from "./verdict.js";
+export { useHistory, type History } from "./history.js";

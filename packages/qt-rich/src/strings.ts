@@ -52,3 +52,10 @@ export const richReviewStrings = {
 } as const;
 
 export type RichReviewStringKey = keyof typeof richReviewStrings;
+
+/** The words of the grading table's one essay column (ADR-044). */
+export const richGradingStrings = {
+  essay: "Essay",
+} as const;
+
+export type RichGradingStringKey = keyof typeof richGradingStrings;

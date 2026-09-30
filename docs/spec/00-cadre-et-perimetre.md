@@ -36,7 +36,7 @@
 - Languages: interface in French and in English. Question content in the teacher's language.
 - Auth: edu-ID only for named accounts. A session code allows anonymous participation in polls.
 - Data: answers and grades are personal data. See [03-exigences-non-fonctionnelles.md](03-exigences-non-fonctionnelles.md), data section.
-- Browsers: current versions of Chrome, Firefox, Safari, Edge. Mobile and tablet for every type except code and drawing, which remain usable but are optimised for desktop.
+- Browsers: current versions of Chrome, Firefox, Safari, Edge. Mobile and tablet for every type except code and diagram, which remain usable but are optimised for desktop.
 
 ## 0.5 Phases
 
@@ -68,15 +68,15 @@ MoSCoW priority: M = must, S = should, C = could.
 | Expert | `quiz pull` / `push` CLI, raw YAML editing, regex tester, bulk operations | S |
 | Evaluation | Open exercise mode with a deadline, one-question poll mode with a session code | M |
 | Pools | Pools shared between teachers, reader / contributor / owner roles, fork with provenance | S |
-| Statistics | Difficulty and discrimination indices per version, distractor analysis, answer time | S |
-| Drill | FSRS spaced practice, daily / weekly drill, strengths and weaknesses per tag | S |
+| Statistics | Difficulty and discrimination indices per question (ADR-038), distractor analysis, answer time | S |
+| Drill | FSRS spaced practice, a daily drill, strengths and weaknesses per tag | S |
 | Import | GIFT and Moodle XML | C |
 
 ### Phase 3: advanced types and extensibility
 
 | Area | Content | Prio |
 |---|---|---|
-| Questions | Drawing. The schematic type (`circuit`) was brought forward and now ships with a simulation grading, ADR-019; the code-image type (`codeimage`) was brought forward too, as a variant of `code` graded pixel by pixel, ADR-021; the categorize type (`categorize`, cards sorted into columns, with negative marking like `mcq`) was added, ADR-036 | S |
+| Questions | Diagram (`diagram`, eight notations from UML classes to automata, graded by hand in v1; it replaces the drawing type, ADR-046). The schematic type (`circuit`) was brought forward and now ships with a simulation grading, ADR-019; the code-image type (`codeimage`) was brought forward too, as a variant of `code` graded pixel by pixel, ADR-021; the categorize type (`categorize`, cards sorted into columns, with negative marking like `mcq`) was added, ADR-036 | S |
 | Code | TAP unit tests, additional files, locked regions, further languages | S |
 | Plugins | External question packages, loaded at build time | C |
 | Generation | "Generate 10 min quiz" by tags and difficulty | C |
@@ -118,4 +118,5 @@ MoSCoW priority: M = must, S = should, C = could.
 | 2026-09-19 | Target load of 30 per quiz, 100 simultaneous |
 | 2026-09-19 | Real time: SSE plus REST, data-carrying events for the live run, no WebSocket |
 | 2026-09-19 | Two interface levels, novice by default, expert through progressive disclosure |
+| 2026-09-29 | The drawing type is replaced by a structured `diagram` type, graded by hand in v1 (ADR-046) |
 | 2026-09-19 | Start from a pruned copy of heig-classroom: auth, visual identity, SSE, pg-boss, ticker, deployment, Podman hardening from the codespace |

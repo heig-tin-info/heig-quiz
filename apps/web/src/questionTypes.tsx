@@ -34,29 +34,40 @@ import {
 } from "@quiz/registry/client";
 import {
   mcqEditorStrings,
+  mcqGradingStrings,
   mcqPlayerStrings,
   mcqReviewStrings,
 } from "@quiz/qt-mcq/client";
 import {
   shortEditorStrings,
+  shortGradingStrings,
   shortPlayerStrings,
   shortReviewStrings,
 } from "@quiz/qt-short/client";
-import { richEditorStrings, richPlayerStrings, richReviewStrings } from "@quiz/qt-rich/client";
+import {
+  richEditorStrings,
+  richGradingStrings,
+  richPlayerStrings,
+  richReviewStrings,
+} from "@quiz/qt-rich/client";
 import {
   categorizeEditorStrings,
+  categorizeGradingStrings,
   categorizePlayerStrings,
   categorizeReviewStrings,
 } from "@quiz/qt-categorize/client";
 import {
   clozeEditorStrings,
+  clozeGradingStrings,
   clozePlayerStrings,
   clozeReviewStrings,
   type ClozeTextRenderer,
 } from "@quiz/qt-cloze/client";
 import {
   EDITOR_STRINGS,
+  GRADING_STRINGS,
   IMAGE_EDITOR_STRINGS,
+  IMAGE_GRADING_STRINGS,
   IMAGE_PLAYER_STRINGS,
   IMAGE_REVIEW_STRINGS,
   PLAYER_STRINGS,
@@ -72,6 +83,7 @@ import {
 import {
   CANVAS_STRINGS,
   EDITOR_STRINGS as CIRCUIT_EDITOR_STRINGS,
+  GRADING_STRINGS as CIRCUIT_GRADING_STRINGS,
   KIND_LABELS,
   PLAYER_STRINGS as CIRCUIT_PLAYER_STRINGS,
   REVIEW_STRINGS as CIRCUIT_REVIEW_STRINGS,
@@ -82,7 +94,7 @@ import {
   type KindLabels,
 } from "@quiz/qt-circuit/client";
 
-import { api } from "./api";
+import { ApiError, api } from "./api";
 import { HelpIcon } from "./help";
 import type { Dict, TFunction } from "./i18n";
 import { ClozeMarkdownText } from "./markdown/ClozeMarkdownText";
@@ -264,6 +276,26 @@ export const reviewStrings = {
   categorize: (t: TFunction) => translated(t, categorizeReviewStrings, "qt.categorize.r"),
 };
 
+/**
+ * The words of the grading table's columns (`QuestionTypeClient.grading`,
+ * ADR-044): every type gives columns, so every type has words here — a
+ * type added to the registry without them is a compile error.
+ */
+export const gradingStrings: Record<QuestionTypeId, (t: TFunction) => Record<string, string>> = {
+  mcq: (t) => translated(t, mcqGradingStrings, "qt.mcq.g"),
+  short: (t) => translated(t, shortGradingStrings, "qt.short.g"),
+  cloze: (t) => translated(t, clozeGradingStrings, "qt.cloze.g"),
+  categorize: (t) => translated(t, categorizeGradingStrings, "qt.categorize.g"),
+  code: (t) => translated(t, GRADING_STRINGS, "qt.code.g"),
+  // The program half is `code`'s column; the picture adds its own words.
+  codeimage: (t) => ({
+    ...translated(t, GRADING_STRINGS, "qt.code.g"),
+    ...translated(t, IMAGE_GRADING_STRINGS, "qt.codeimage.g"),
+  }),
+  circuit: (t) => translated(t, CIRCUIT_GRADING_STRINGS, "qt.circuit.g"),
+  rich: (t) => translated(t, richGradingStrings, "qt.rich.g"),
+};
+
 // --- Hosts -----------------------------------------------------------------
 
 /** What a lazy chunk shows while it arrives: the shape of what replaces it. */
@@ -296,8 +328,20 @@ export type TryOutcome =
 export interface TryContext {
   /** The question whose DRAFT `POST /questions/:id/try` grades. */
   id: string;
-  /** Saves the local draft now: the try route grades what the server HOLDS. */
-  flush: () => void;
+  /**
+   * Saves the local draft now: the try route grades what the server HOLDS.
+   * `false` when the save failed, and then the server holds an older draft.
+   */
+  flush: () => Promise<boolean>;
+}
+
+/**
+ * The draft goes first, and the request waits for it: a `POST /try` that
+ * overtakes its `PUT /draft` grades the draft of a moment ago — the one
+ * without the component just drawn, or without the reference at all.
+ */
+async function saved(flush: TryContext["flush"]): Promise<void> {
+  if (!(await flush())) throw new Error("the draft could not be saved");
 }
 
 type TryAdapter = (config: unknown) => Promise<TryOutcome>;
@@ -329,8 +373,7 @@ function tryReference({ id, flush }: TryContext): TryAdapter {
     const regions = referenceRegions(config);
     if (regions === null) throw new Error("reference solution does not fit the template");
 
-    // The route grades what the server HOLDS, so the draft goes first.
-    flush();
+    await saved(flush);
     const result = await api<TryResult>(`/app/api/questions/${id}/try`, {
       method: "POST",
       body: JSON.stringify({ source: "draft", answer: { regions } }),
@@ -391,16 +434,28 @@ export async function tryReferenceInBrowser(
 function trySimulateReference({ id, flush }: TryContext): TryAdapter {
   return async (raw) => {
     const config = raw as CircuitConfig;
-    // The route grades what the server HOLDS, so the draft goes first.
-    flush();
-    const result = await api<TryResult>(`/app/api/questions/${id}/try`, {
-      method: "POST",
-      body: JSON.stringify({ source: "draft", answer: { schematic: config.reference } }),
-    });
+    await saved(flush);
+    let result: TryResult;
+    try {
+      result = await api<TryResult>(`/app/api/questions/${id}/try`, {
+        method: "POST",
+        body: JSON.stringify({ source: "draft", answer: { schematic: config.reference } }),
+      });
+    } catch (error) {
+      // The stored draft does not validate: the issues are on the page, and
+      // the teacher must read this as their draft, not as the simulator.
+      if (isConfigInvalid(error)) return "invalid";
+      throw error;
+    }
     if (result.status !== "graded") return "unavailable";
     return { details: result.details as CircuitDetails };
   };
 }
+
+const isConfigInvalid = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  error.status === 422 &&
+  (error.body as { error?: unknown } | null)?.error === "config_invalid";
 
 /**
  * "Try the reference solution" (`CodeImageEditor`): the same two runners as
@@ -429,7 +484,7 @@ function tryDrawReference({ id, flush }: TryContext): TryAdapter {
       }
     }
 
-    flush();
+    await saved(flush);
     const result = await api<TryResult>(`/app/api/questions/${id}/try`, {
       method: "POST",
       body: JSON.stringify({ source: "draft", answer: { regions } }),

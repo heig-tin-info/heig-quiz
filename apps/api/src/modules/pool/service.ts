@@ -24,6 +24,7 @@
  *     indexes (see `db/pool.ts`).
  */
 export type { PoolRow, QuestionRecord } from "./shared.js";
+export { loadConfig, typeOf } from "./config.js";
 export {
   DraftInvalid,
   MissingDraft,
@@ -53,6 +54,7 @@ export {
   removeMember,
   poolAudience,
   transferOnLoss,
+  vacateSeats,
 } from "./members.js";
 export { poolTagNames, poolTags, describeTag } from "./tags.js";
 export { poolsOfCourse, PoolLinkForbidden, setCoursePools } from "./coursePools.js";
@@ -67,6 +69,7 @@ export {
   deleteCategory,
 } from "./categories.js";
 export { InvalidCursor, listQuestions, searchReachableQuestions } from "./questionList.js";
+export { clearPoolStars, starQuestions, unstarQuestions } from "./stars.js";
 export {
   createQuestion,
   createUnsavedQuestion,
@@ -82,6 +85,7 @@ export {
   listVersions,
   restoreVersion,
   deprecateVersion,
+  resetQuestionStats,
   softDeleteQuestion,
   hardDeleteQuestion,
   copyQuestion,

@@ -83,7 +83,7 @@ describe("a failing notification", () => {
     const fixture = await seedCodeEvaluation(db, app.clock.now());
     vi.mocked(notifyMany).mockClear();
     await expect(
-      runEvaluationGrading(app, { evaluationId: fixture.evaluationId, announce: true }),
+      runEvaluationGrading(app, { evaluationId: fixture.evaluationId }),
     ).resolves.toBeUndefined();
     const rows = await db
       .select({ state: gradings.state })

@@ -53,6 +53,13 @@ export const courseKey = (id: string) => ["course", id] as const;
 export const courseTemplatesKey = (id: string | null) => ["course", id, "templates"] as const;
 /** `null` while the id is not known yet: the query is disabled, the key still well-formed. */
 export const classroomKey = (id: string | null) => ["classroom", id] as const;
+/**
+ * The teacher's reads of a classroom's drill (ADR-041 §8): under the
+ * classroom, so turning its drill on or off (which invalidates the
+ * classroom) refreshes them too. `part` is `activity`, `mastery`, or one
+ * student's `progress` (their enrollment id).
+ */
+export const classroomDrillKey = (id: string, part: string) => ["classroom", id, "drill", part] as const;
 
 // --- Pools and questions -----------------------------------------------------
 
@@ -76,6 +83,17 @@ export const poolKey = (id: string | undefined) => ["pool", id] as const;
  */
 export const poolQuestionsKey = (poolId: string, search: string) =>
   ["pool", poolId, "questions", search] as const;
+/**
+ * Every list of a pool's questions, whatever its search: the prefix a star
+ * patches in place (F-POOL-10), rather than refetching every page it holds.
+ */
+export const poolQuestionListsKey = (poolId: string) => ["pool", poolId, "questions"] as const;
+/**
+ * The caller's favourites of a pool (`?starred=1`, F-POOL-10): one query for
+ * the pool screen's "Clear favourites" count and the picker's section. Under
+ * the pool, so whatever refreshes the pool refreshes it too.
+ */
+export const poolStarredKey = (poolId: string) => ["pool", poolId, "starred"] as const;
 export const poolTagsKey = (poolId: string) => ["pool", poolId, "tags"] as const;
 /** `GET /pools/:id/categories`, the tree with its counts: under the pool, like the tags. */
 export const poolCategoriesKey = (poolId: string) => ["pool", poolId, "categories"] as const;
@@ -91,6 +109,12 @@ export function poolCandidatesKey(poolId: string, q?: string) {
     ? (["pool-candidates", poolId] as const)
     : (["pool-candidates", poolId, q] as const);
 }
+
+/**
+ * `GET /pools/:id/question-stats` (ADR-038): under the pool, so a pool hint
+ * — a reset included — refreshes it with the list it decorates.
+ */
+export const poolQuestionStatsKey = (poolId: string) => ["pool", poolId, "question-stats"] as const;
 
 export const questionKey = (id: string) => ["question", id] as const;
 /** `POST /questions/:id/preview` of the draft or of one published version. */
@@ -110,6 +134,8 @@ export const evaluationKey = (id: string) => ["evaluation", id] as const;
 /** The summary of a template pull (F-EVAL-26): under the evaluation, so its refresh reaches it. */
 export const templatePullKey = (id: string) => ["evaluation", id, "pull-template"] as const;
 /** `GET /templates/:id`, the editor of one template (F-EVAL-25). */
+/** "Allow drill" and the cards the evaluation gave rise to (ADR-041 §10). */
+export const evaluationDrillKey = (id: string) => ["evaluation", id, "drill"] as const;
 export const templateKey = (id: string) => ["template", id] as const;
 /**
  * One item at its frozen version (issue #127), under the key of the
@@ -138,15 +164,11 @@ export const attemptInspectPrefix = (evaluationId: string) =>
 
 /** The prefix of every grading read of one evaluation. */
 export const gradingKey = (evaluationId: string) => ["grading", evaluationId] as const;
-/** The steps of a traversal and their state. `anonymous` is the `"0"`/`"1"` the request carries. */
-export const gradingStepsKey = (evaluationId: string, order: string, anonymous: string) =>
-  ["grading", evaluationId, "steps", order, anonymous] as const;
-export const gradingQueueKey = (
-  evaluationId: string,
-  scope: string | null,
-  state: string,
-  anonymous: string,
-) => ["grading", evaluationId, "queue", scope, state, anonymous] as const;
+/** The questions and the state of each (the question selector). */
+export const gradingStepsKey = (evaluationId: string) => ["grading", evaluationId, "steps"] as const;
+/** One question's answers. `anonymous` is the `"0"`/`"1"` the request carries. */
+export const gradingQueueKey = (evaluationId: string, itemId: string | null, anonymous: string) =>
+  ["grading", evaluationId, "queue", itemId, anonymous] as const;
 export const gradingProgressKey = (evaluationId: string) =>
   ["grading", evaluationId, "progress"] as const;
 /** The published versions a regrade of one item may target (issue #106). */
@@ -163,6 +185,18 @@ export const resultsByQuestionKey = (evaluationId: string) =>
 
 export const studentHomeKey = ["student", "home"] as const;
 export const studentClassroomsKey = ["student", "classrooms"] as const;
+/** Every drill read of the student (ADR-041): what an opt-out or a finished session invalidates. */
+export const drillRootKey = ["student", "drill"] as const;
+/** The classrooms whose drill the student is in or opted out of. */
+export const drillClassroomsKey = [...drillRootKey, "classrooms"] as const;
+/** Today's drill session, for one device class (its reference times are that class's). */
+export const drillSessionKey = (device: string) => [...drillRootKey, "session", device] as const;
+/**
+ * One card served (`POST /drill/cards/:id/serve`). Outside the `student`
+ * root on purpose: a hint must not re-serve a card the student already
+ * answered.
+ */
+export const drillServeKey = (cardId: string) => ["drill-serve", cardId] as const;
 export const attemptKey = (attemptId: string) => ["attempt", attemptId] as const;
 export const attemptFeedbackKey = (attemptId: string) =>
   ["attempt", attemptId, "feedback"] as const;

@@ -4,12 +4,12 @@
  *
  * Two decisions live here.
  *
- * 1. **Monaco is lazy** (`React.lazy` on `@monaco-editor/react`, itself loading
- *    the editor from its CDN), so it never enters the initial bundle
- *    (N-PERF-05). Until it resolves — and forever, if it fails to resolve —
- *    the same `<textarea>` is rendered, with the same value and the same
- *    `onChange`. A student whose network blocks the CDN keeps a usable editor
- *    and loses only the syntax colours.
+ * 1. **Monaco is lazy** (`React.lazy` on `@monaco-editor/react` and our own
+ *    Monaco bundle, `./monacoBundle.ts`, served from our origin), so it never
+ *    enters the initial bundle (N-PERF-05). Until it resolves — and forever,
+ *    if it fails to resolve — the same `<textarea>` is rendered, with the
+ *    same value and the same `onChange`. A student whose chunk fails to load
+ *    keeps a usable editor and loses only the syntax colours.
  *
  * 2. **Locked regions are DISPLAY, not a guarantee.** A template with locked
  *    regions is not edited here but in `./LockedEditor.tsx`: one Monaco model
@@ -42,7 +42,12 @@ export const MONACO_LANGUAGE: Record<CodeLanguage, string> = {
 export const LazyMonaco = lazy(async () => {
   // The named export, not the default one: `@monaco-editor/react` ships both
   // and only the named one is typed as a component under NodeNext resolution.
-  const { Editor } = await import("@monaco-editor/react");
+  const [{ Editor, loader }, { monaco }] = await Promise.all([
+    import("@monaco-editor/react"),
+    import("./monacoBundle.js"),
+  ]);
+  // Our own bundle (`./monacoBundle.ts`): the loader then fetches nothing.
+  loader.config({ monaco });
   return { default: Editor };
 });
 

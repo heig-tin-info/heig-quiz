@@ -7,7 +7,8 @@
  */
 import { ConfigMigrationError, type QuestionTypeServer, type StudentView } from "@quiz/core/server";
 import { shuffle, streamSeed } from "@quiz/core/rng";
-import { gradeCategorize, negativeMarkingFrom, placesOf } from "./grade.js";
+import { gradeCategorize, negativeMarkingFrom } from "./grade.js";
+import { placesOf } from "./placement.js";
 import {
   CATEGORIZE_CONFIG_VERSION,
   CategorizeAnswerSchema,

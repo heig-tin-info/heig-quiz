@@ -137,6 +137,97 @@ const CHECKERBOARD_TARGET = Array.from({ length: 16 * 16 }, (_, i) =>
   ((i % 16) + Math.floor(i / 16)) % 2 === 0 ? "0" : "1",
 ).join("");
 
+/**
+ * The RC low-pass of `elec-filtre-rc-passe-bas`: R1 from `in+` to `out+`, C1
+ * from that node down to the `in-` / `out-` rail. Its geometry is on the
+ * 20-unit grid of `packages/qt-circuit/src/library.ts`, so the netlist
+ * extractor reads three nets and raises no issue. The papers below redraw it
+ * with other values.
+ */
+function rcLowPass(r: string, c: string) {
+  return {
+    components: [
+      { id: "c1", kind: "R", x: 300, y: 100, m: [1, 0, 0, 1], name: "R1", value: r },
+      { id: "c2", kind: "C", x: 480, y: 180, m: [0, 1, -1, 0], name: "C1", value: c },
+    ],
+    wires: [
+      {
+        id: "w1",
+        a: { kind: "port", port: "in+" },
+        b: { kind: "pin", c: "c1", p: 0 },
+        via: [],
+        points: [[0, 100], [260, 100]],
+      },
+      {
+        id: "w2",
+        a: { kind: "pin", c: "c1", p: 1 },
+        b: { kind: "port", port: "out+" },
+        via: [],
+        points: [[340, 100], [800, 100]],
+      },
+      {
+        id: "w3",
+        a: { kind: "pin", c: "c2", p: 0 },
+        b: { kind: "free", x: 480, y: 100 },
+        via: [],
+        points: [[480, 160], [480, 100]],
+      },
+      {
+        id: "w4",
+        a: { kind: "pin", c: "c2", p: 1 },
+        b: { kind: "port", port: "in-" },
+        via: [],
+        points: [[480, 200], [480, 400], [0, 400]],
+      },
+      {
+        id: "w5",
+        a: { kind: "free", x: 480, y: 400 },
+        b: { kind: "port", port: "out-" },
+        via: [],
+        points: [[480, 400], [800, 400]],
+      },
+    ],
+  };
+}
+const RC_LOW_PASS = rcLowPass("1.59k", "100n");
+
+/** A checkerboard upside down: every cell the wrong colour. */
+const CHECKERBOARD_INVERTED = `
+int case_noire(int x, int y) {
+    return (x + y) % 2 == 1;
+}
+`;
+
+/** Stripes: only the column counts. */
+const CHECKERBOARD_STRIPES = `
+int case_noire(int x, int y) {
+    return x % 2 == 0;
+}
+`;
+
+/**
+ * The essays of "Test 0", written to fall on every side of a grader's
+ * rubric: complete, partial, a few words, and off the point. With
+ * `LLM_PROVIDER=stub` the stub grader (`modules/llm/stub.ts`) proposes, in
+ * that order, full marks with high confidence, half the points with medium
+ * confidence, zero with low confidence, and zero with high confidence.
+ */
+const ESSAYS = {
+  complete:
+    "Chaque appel de fonction empile un cadre sur la pile : l'adresse de retour et les " +
+    "variables locales. La pile a une taille bornée (quelques Mo), donc une récursion " +
+    "infinie finit par la dépasser. L'écriture suivante touche la page de garde, une page " +
+    "non allouée : le processeur lève une faute de page et le noyau envoie `SIGSEGV`, ce " +
+    "qui arrête le programme.",
+  partial:
+    "Chaque appel récursif empile des données sur la pile, dont la taille est limitée. " +
+    "Au bout d'un moment elle déborde et le programme plante.",
+  brief: "Stack overflow.",
+  offTopic:
+    "Le compilateur détecte la boucle infinie et refuse de générer l'exécutable, " +
+    "d'où l'erreur au lancement.",
+};
+
 // ---------------------------------------------------------------------------
 // Pool 1 — Programmation C (attached to PRG1)
 // ---------------------------------------------------------------------------
@@ -446,8 +537,9 @@ const C_POOL: PoolSpec = {
       explanation:
         "La pile d'un thread a une taille fixe ; une récursion sans fin l'épuise, et " +
         "l'écriture suivante touche la page de garde, ce qui déclenche une erreur de segmentation.",
-      // Graded by hand (issue #192): the rubric and the model answer are what
-      // the grading panel shows beside each answer, never the student.
+      // Graded by hand (issue #192), or proposed by the LLM service when the
+      // process has one (`LLM_PROVIDER=stub` in development): the rubric and
+      // the model answer are what the grader reads, never the student.
       config: {
         configVersion: 1,
         prompt:
@@ -473,23 +565,24 @@ const C_POOL: PoolSpec = {
       difficulty: 2,
       tags: ["types", "pointeurs", "classement"],
       explanation:
-        "`int`, `unsigned long` et `size_t` sont des entiers ; `double` et `float` des " +
+        "`int` et `size_t` sont des entiers ; `double` et `float` des " +
         "flottants ; `char *`, `void *` et `int (*)(void)` (un pointeur de fonction) des " +
         "pointeurs. `string` n'est pas un type C : il n'existe qu'en C++.",
       // ADR-036: the ids are opaque on purpose — the student's view carries
       // them, so they must say nothing about where a card goes. Written by
       // hand rather than minted, so a second seed run writes the same config.
+      // Eight cards: up to eight, the grading table draws a column per card
+      // (ADR-044 §2), which is what the guide shows.
       config: {
         configVersion: 1,
         prompt: "Classez chaque type C dans sa **catégorie**. Un type qui n'existe pas en C reste de côté.",
         columns: [
-          { id: "q7m2xk4a", label: "Entier", cards: ["f3n8wz1c", "u6b0ty9e", "j2r5hd7s"] },
+          { id: "q7m2xk4a", label: "Entier", cards: ["f3n8wz1c", "j2r5hd7s"] },
           { id: "c9t1vp6z", label: "Virgule flottante", cards: ["a4k7mq2x", "y8e3gn5w"] },
           { id: "h5w8re3n", label: "Pointeur", cards: ["p1x6jc0v", "d7s4lb8k", "m0g9fu3t"] },
         ],
         cards: [
           { id: "f3n8wz1c", text: "`int`" },
-          { id: "u6b0ty9e", text: "`unsigned long`" },
           { id: "j2r5hd7s", text: "`size_t`" },
           { id: "a4k7mq2x", text: "`double`" },
           { id: "y8e3gn5w", text: "`float`" },
@@ -508,7 +601,7 @@ const C_POOL: PoolSpec = {
 };
 
 // ---------------------------------------------------------------------------
-// Pool 2 — Électronique (stand-alone: a second pool in the teacher's list)
+// Pool 2 — Électronique (a second pool, shared with a colleague)
 // ---------------------------------------------------------------------------
 
 const DC = "Régime continu";
@@ -517,7 +610,8 @@ const SEMICONDUCTORS = "Semi-conducteurs";
 const ELECTRONICS_POOL: PoolSpec = {
   name: "Électronique",
   icon: "circuit-board",
-  courseCode: null,
+  // Attached to PRG1 too, so "Test 0" may hold its circuit (F-EVAL-01).
+  courseCode: "PRG1",
   // Shared with the administrator persona, so the demo shows a pool from the
   // colleague's side too: `admin@heig-vd.ch` may edit it, not manage it.
   sharedWith: [{ persona: "admin", role: "contributor" }],
@@ -604,10 +698,10 @@ const ELECTRONICS_POOL: PoolSpec = {
        * against — and the single stimulus is visible, so a student who does
        * have a runner may press "Simulate".
        *
-       * The reference is the RC low-pass itself: R1 from `in+` to `out+`,
-       * C1 from that node down to the `in-` / `out-` rail. Its geometry is on
-       * the 20-unit grid of `packages/qt-circuit/src/library.ts`, so the
-       * netlist extractor reads three nets and raises no issue.
+       * The reference is the RC low-pass itself (`RC_LOW_PASS`). With a
+       * stimulus to run, even a manual grading asks the runner for the
+       * curves (ADR-019): without one, the answers of "Test 0" arrive as
+       * proposals with reason `runner_unavailable`.
        */
       config: {
         configVersion: 1,
@@ -629,49 +723,7 @@ const ELECTRONICS_POOL: PoolSpec = {
             visible: true,
           },
         ],
-        reference: {
-          components: [
-            { id: "c1", kind: "R", x: 300, y: 100, m: [1, 0, 0, 1], name: "R1", value: "1.59k" },
-            { id: "c2", kind: "C", x: 480, y: 180, m: [0, 1, -1, 0], name: "C1", value: "100n" },
-          ],
-          wires: [
-            {
-              id: "w1",
-              a: { kind: "port", port: "in+" },
-              b: { kind: "pin", c: "c1", p: 0 },
-              via: [],
-              points: [[0, 100], [260, 100]],
-            },
-            {
-              id: "w2",
-              a: { kind: "pin", c: "c1", p: 1 },
-              b: { kind: "port", port: "out+" },
-              via: [],
-              points: [[340, 100], [800, 100]],
-            },
-            {
-              id: "w3",
-              a: { kind: "pin", c: "c2", p: 0 },
-              b: { kind: "free", x: 480, y: 100 },
-              via: [],
-              points: [[480, 160], [480, 100]],
-            },
-            {
-              id: "w4",
-              a: { kind: "pin", c: "c2", p: 1 },
-              b: { kind: "port", port: "in-" },
-              via: [],
-              points: [[480, 200], [480, 400], [0, 400]],
-            },
-            {
-              id: "w5",
-              a: { kind: "free", x: 480, y: 400 },
-              b: { kind: "port", port: "out-" },
-              via: [],
-              points: [[480, 400], [800, 400]],
-            },
-          ],
-        },
+        reference: RC_LOW_PASS,
         grading: {
           mode: "manual",
           tolerance: 0.05,
@@ -770,12 +822,18 @@ export const EVALUATIONS: EvaluationSpec[] = [
     preset: "exam",
     target: "closed",
     durationS: 2700,
+    // The ORDER matters beyond the seed: `apps/web/scripts/docs-screenshots.mjs`
+    // reaches each grading scene by moving N questions forward.
     questions: [
       "prg1-pointeur-non-initialise",
       "prg1-mot-cle-constante",
       "prg1-octets-chaine-litterale",
       "prg1-boucle-for",
       "prg1-code-somme-tableau",
+      "prg1-classement-types-c",
+      "prg1-image-damier",
+      "elec-filtre-rc-passe-bas",
+      "prg1-redaction-pile",
     ],
   },
 ];
@@ -799,6 +857,16 @@ export const PAPERS: PaperSpec[] = [
       "prg1-octets-chaine-litterale": { text: "5" },
       "prg1-boucle-for": { blanks: ["0", "<", "++"] },
       "prg1-code-somme-tableau": { regions: [SUM_SOLUTION] },
+      "prg1-classement-types-c": {
+        columns: {
+          q7m2xk4a: ["f3n8wz1c", "j2r5hd7s"],
+          c9t1vp6z: ["a4k7mq2x", "y8e3gn5w"],
+          h5w8re3n: ["p1x6jc0v", "d7s4lb8k", "m0g9fu3t"],
+        },
+      },
+      "prg1-image-damier": { regions: [CHECKERBOARD_SOLUTION] },
+      "elec-filtre-rc-passe-bas": { schematic: RC_LOW_PASS },
+      "prg1-redaction-pile": { text: ESSAYS.complete },
     },
   },
   {
@@ -810,6 +878,17 @@ export const PAPERS: PaperSpec[] = [
       "prg1-octets-chaine-litterale": { text: "4" },
       "prg1-boucle-for": { blanks: ["0", "<", "i++"] },
       "prg1-code-somme-tableau": { regions: [SUM_OFF_BY_ONE] },
+      "prg1-classement-types-c": {
+        columns: {
+          q7m2xk4a: ["f3n8wz1c"],
+          c9t1vp6z: ["a4k7mq2x", "y8e3gn5w", "j2r5hd7s"],
+          h5w8re3n: ["p1x6jc0v", "d7s4lb8k", "e2z5oa7r"],
+        },
+      },
+      "prg1-image-damier": { regions: [CHECKERBOARD_INVERTED] },
+      // The right drawing, a capacitor ten times too small: 10 kHz.
+      "elec-filtre-rc-passe-bas": { schematic: rcLowPass("1.59k", "10n") },
+      "prg1-redaction-pile": { text: ESSAYS.partial },
     },
   },
   {
@@ -821,6 +900,19 @@ export const PAPERS: PaperSpec[] = [
       "prg1-octets-chaine-litterale": { text: "5" },
       "prg1-boucle-for": { blanks: ["0", "<", "++"] },
       // The code question was never opened.
+      "prg1-classement-types-c": {
+        columns: {
+          q7m2xk4a: ["f3n8wz1c", "j2r5hd7s", "m0g9fu3t"],
+          c9t1vp6z: ["a4k7mq2x", "y8e3gn5w"],
+          h5w8re3n: ["p1x6jc0v"],
+        },
+      },
+      "prg1-image-damier": { regions: [CHECKERBOARD_STRIPES] },
+      // The resistor alone: no capacitor, no filter.
+      "elec-filtre-rc-passe-bas": {
+        schematic: { components: RC_LOW_PASS.components.slice(0, 1), wires: RC_LOW_PASS.wires.slice(0, 2) },
+      },
+      "prg1-redaction-pile": { text: ESSAYS.brief },
     },
   },
   {
@@ -832,6 +924,17 @@ export const PAPERS: PaperSpec[] = [
       "prg1-octets-chaine-litterale": { text: "5" },
       "prg1-boucle-for": { blanks: ["0", "<=", "++"] },
       "prg1-code-somme-tableau": { regions: [SUM_SOLUTION] },
+      "prg1-classement-types-c": {
+        columns: {
+          q7m2xk4a: ["f3n8wz1c", "j2r5hd7s"],
+          c9t1vp6z: ["a4k7mq2x", "y8e3gn5w"],
+          h5w8re3n: ["p1x6jc0v", "d7s4lb8k", "m0g9fu3t", "e2z5oa7r"],
+        },
+      },
+      // The image question was never opened.
+      // A resistor ten times too large: 100 Hz.
+      "elec-filtre-rc-passe-bas": { schematic: rcLowPass("15.9k", "100n") },
+      "prg1-redaction-pile": { text: ESSAYS.offTopic },
     },
   },
   {
@@ -841,10 +944,17 @@ export const PAPERS: PaperSpec[] = [
       "prg1-pointeur-non-initialise": { selected: [2] },
       "prg1-mot-cle-constante": { text: "CONST" },
       "prg1-octets-chaine-litterale": { text: "5" },
-      // Cloze left blank, code left as the skeleton.
+      // Cloze left blank, code and picture left as the skeleton.
       "prg1-code-somme-tableau": {
         regions: ["\nint somme(const int *t, int n) {\n    return 0;\n}\n"],
       },
+      "prg1-classement-types-c": {
+        columns: { q7m2xk4a: ["f3n8wz1c"], c9t1vp6z: ["y8e3gn5w"] },
+      },
+      "prg1-image-damier": {
+        regions: ["\nint case_noire(int x, int y) {\n    // votre code ici\n    return 0;\n}\n"],
+      },
+      // Circuit and essay left untouched.
     },
   },
   // `gabriel` is absent on purpose: no paper, no attempt.

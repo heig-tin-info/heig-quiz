@@ -2,6 +2,7 @@
  * What every route file of the `pool` module shares: the guards, the audit
  * tracer, the wrapper with the module's failure arms, and the loaders.
  */
+import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import type { PoolRole } from "@quiz/contracts";
@@ -9,7 +10,7 @@ import { QuizCoreError } from "@quiz/core/server";
 
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { pools } from "../../db/schema.js";
+import { pools, questions } from "../../db/schema.js";
 import {
   accessWhere,
   accessibleCategory,
@@ -53,6 +54,19 @@ export function poolRouteContext(app: FastifyInstance, config: AppConfig) {
   const teacher = teacherRoute(app, poolFailure);
 
   /**
+   * The questions of a batch, each with its pool, LOADED under `poolAccess`
+   * in one query (invariant 6). A list that comes back shorter than `ids`
+   * holds a question this caller cannot see, and the routes answer the whole
+   * batch with the 404 a missing id gives. `ids` must be deduplicated.
+   */
+  const questionsInReach = (req: FastifyRequest, ids: string[]) =>
+    app.db
+      .select({ question: questions, pool: pools })
+      .from(questions)
+      .innerJoin(pools, eq(questions.poolId, pools.id))
+      .where(and(inArray(questions.id, ids), mine(req)));
+
+  /**
    * The loaders of this module: the entity under `poolAccess` (404 when it
    * is out of reach, invariant 6), then — for a write — the pool role, whose
    * refusal is `requirePoolRole`'s 403 (the caller may see the pool, just not
@@ -92,7 +106,18 @@ export function poolRouteContext(app: FastifyInstance, config: AppConfig) {
   const topicsOf = async (pool: typeof pools.$inferSelect) =>
     (await service.poolAudience(app.db, pool)).map(userTopic);
 
-  return { config, requireTeacher, trace, mine, teacher, inPool, onQuestion, onCategory, topicsOf };
+  return {
+    config,
+    requireTeacher,
+    trace,
+    mine,
+    teacher,
+    inPool,
+    onQuestion,
+    onCategory,
+    topicsOf,
+    questionsInReach,
+  };
 }
 
 export type PoolRouteContext = ReturnType<typeof poolRouteContext>;
