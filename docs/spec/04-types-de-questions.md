@@ -93,7 +93,7 @@ variables:
 
 The five policies lie in [0, 1]: a question is never worth less than no answer.
 
-**Negative marking** (evaluation setting, ADR-026): f = c/C − w/W, not floored, in [−1, 1]; with a single answer among n choices, +1 for the key and −1/(n − 1) for a distractor. No answer (nothing ticked, "I won't answer", cleared) is 0. Random guessing has an expected value of 0. The per-question points may be negative and are shown as such; the TOTAL of the evaluation is floored at 0 (`attemptTotal`), and the grade is computed from it. The student is told in the waiting room and on each choice question; a `poll` refuses the setting.
+**Negative marking** (evaluation setting, ADR-026): f = c/C − w/W, not floored, in [−1, 1]; with a single answer among n choices, +1 for the key and −1/(n − 1) for a distractor. No answer (nothing ticked, "Leave unanswered", cleared) is 0. Random guessing has an expected value of 0. The per-question points may be negative and are shown as such; the TOTAL of the evaluation is floored at 0 (`attemptTotal`), and the grade is computed from it. The student is told in the waiting room and on each choice question; a `poll` refuses the setting.
 
 The fraction is multiplied by the item's points and rounded to the hundredth.
 

@@ -25,18 +25,24 @@ export function usePlayerControls({
   item,
   readOnly,
   canValidate,
+  blank,
 }: {
   session: PlayerSession;
   item: PlayerItem | undefined;
   readOnly: boolean;
   /** The condition of the Validate button, so `Ctrl+Enter` never asks for more. */
   canValidate: boolean;
+  /** The question holds no answer: the confirmation says it closes empty. */
+  blank: boolean;
 }) {
   const t = useT();
   const toast = useToast();
   const confirm = useConfirm();
   const { state, dispatch, markDone, skip, flag, submit, setAnswer } = session;
   const [submitting, setSubmitting] = useState(false);
+  // The validation step is named for what it closes: an empty question is
+  // left blank, not validated (F-LIVE-08).
+  const validateLabel = t(blank ? "player.validateBlank" : "player.validate");
 
   const validate = useCallback(async () => {
     if (!item || !canValidate) return;
@@ -47,8 +53,8 @@ export function usePlayerControls({
       message:
         state.navigation === "milestones"
           ? t("lobby.nav.milestones.body")
-          : t("player.validate.body"),
-      confirmLabel: t("player.validate"),
+          : t(blank ? "player.validateBlank.body" : "player.validate.body"),
+      confirmLabel: validateLabel,
       // Irreversible: Enter right after Ctrl+Enter must not validate for good.
       focusCancel: true,
     });
@@ -61,7 +67,7 @@ export function usePlayerControls({
         "error",
       );
     }
-  }, [item, canValidate, state.navigation, confirm, t, markDone, toast]);
+  }, [item, canValidate, blank, validateLabel, state.navigation, confirm, t, markDone, toast]);
 
   /** A write that may fail, for a question that is still open. */
   const onOpenItem = useCallback(
@@ -130,6 +136,7 @@ export function usePlayerControls({
   ]);
 
   return {
+    validateLabel,
     submitting,
     openSubmit: () => setSubmitting(true),
     cancelSubmit: () => setSubmitting(false),

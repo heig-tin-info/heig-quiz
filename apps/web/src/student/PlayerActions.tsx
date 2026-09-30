@@ -13,11 +13,13 @@ import { Button } from "../ui";
  * for it (`forward_only`, a checkpoint in `milestones`): in `free` there is
  * nothing irreversible to validate, and a question counts as answered as soon
  * as it holds an answer (issue #89). When it is there, it is THE primary
- * action of the screen.
+ * action of the screen, and on an empty question it says so: "Leave blank
+ * and continue".
  */
 export function PlayerActions({
   manyItems,
   canValidate,
+  validateLabel,
   hasPrevious,
   hasNext,
   nextIsPrimary,
@@ -27,6 +29,8 @@ export function PlayerActions({
   /** One question has no neighbours: both arrows are absent, not disabled. */
   manyItems: boolean;
   canValidate: boolean;
+  /** "Validate and continue", or "Leave blank and continue" on an empty question. */
+  validateLabel: string;
   hasPrevious: boolean;
   hasNext: boolean;
   nextIsPrimary: boolean;
@@ -45,7 +49,7 @@ export function PlayerActions({
       <div className="flex-1" />
       {canValidate ? (
         <Button variant="primary" onClick={onValidate}>
-          {t("player.validate")}
+          {validateLabel}
         </Button>
       ) : null}
       <div className="flex-1" />

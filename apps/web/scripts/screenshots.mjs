@@ -398,17 +398,17 @@ const scenes = [
   { name: "player-single", role: "student", path: `${TAKE}?scene=single` },
   { name: "player-single-answered", role: "student", path: `${TAKE}?scene=single`, act: async (p) => { await p.getByRole("radio").first().check({ force: true }); await p.getByRole("button", { name: /clear my selection/i }).waitFor(); } },
   // Issue #89: the question list with its four states at once — answered,
-  // won't answer, flagged, nothing yet — on the flagged empty question.
+  // left unanswered, flagged, nothing yet — on the flagged empty question.
   { name: "player-marks", role: "student", path: `${TAKE}?scene=marks` },
-  // The same list, the student having said "I won't answer" on the question:
-  // the question's tools (issue #128), flag and won't-answer both pressed.
-  { name: "player-marks-skipped", role: "student", path: `${TAKE}?scene=marks`, act: async (p) => { await p.getByRole("button", { name: /won't answer this question/i }).click(); await p.getByRole("button", { name: /won't answer this question/i, pressed: true }).waitFor(); } },
+  // The same list, the student having left the question unanswered: the flag
+  // in the card's corner and "Leave unanswered" under it, both pressed.
+  { name: "player-marks-skipped", role: "student", path: `${TAKE}?scene=marks`, act: async (p) => { await p.getByRole("button", { name: /^leave unanswered$/i }).click(); await p.getByRole("button", { name: /^leave unanswered$/i, pressed: true }).waitFor(); } },
   // Issue #125: an exercise opens its bar with a Home button; an exam never.
   { name: "player-exercise", role: "student", path: `${TAKE}?scene=exercise`, fold: true },
   // `forward_only`: the first question validated and closed, the explicit
   // "Validate and continue" step as the primary, and its confirmation.
   { name: "player-forward", role: "student", path: `${TAKE}?scene=forward` },
-  { name: "player-forward-confirm", role: "student", path: `${TAKE}?scene=forward`, fold: true, act: async (p) => { await p.getByRole("button", { name: /^validate and continue$/i }).first().click(); await p.getByRole("dialog").waitFor(); } },
+  { name: "player-forward-confirm", role: "student", path: `${TAKE}?scene=forward`, fold: true, act: async (p) => { await p.getByRole("button", { name: /^(validate|leave blank) and continue$/i }).first().click(); await p.getByRole("dialog").waitFor(); } },
   { name: "player-paused", role: "student", path: `${TAKE}?scene=paused`, fold: true },
   { name: "player-timeup", role: "student", path: `${TAKE}?scene=closed` },
 
