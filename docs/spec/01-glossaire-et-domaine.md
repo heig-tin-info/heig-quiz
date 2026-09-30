@@ -31,7 +31,8 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Grading | The result of assessing an answer: points, source, state, justification. Several successive gradings are possible, the last one is authoritative. |
 | Grader | The function of the question type that produces a grading from the configuration and the answer. Synchronous, asynchronous through the runner, or LLM. |
 | Grade | The conversion of an attempt's points into a Swiss grade from 1 to 6 to the tenth, according to the evaluation's grade scale. |
-| Grade scale | The rule converting points into a grade for an evaluation: linear, or linear with a threshold for the 6. |
+| Grade scale | The rule converting points into a grade for an evaluation: linear, 1 + 5 × points / total, capped at 6, with its rounding. The total leaves the bonus items out (ADR-052). |
+| Bonus item | An item of an evaluation whose points are left out of the total: they can only lift a student: under negative marking its score is floored at 0, and the grade stays capped at 6. Set in the builder, locked like the points, labelled "Bonus question" for the student (ADR-052). |
 | Explanation | Markdown text attached to a question version, shown to the student according to the feedback policy, and to the teacher during grading. |
 | Feedback | The disclosure policy: `none`, `on_release`, `immediate`. |
 | Published correction | The correction of an `exercise` published by its teacher while it is still running (F-EVAL-27, ADR-050): the class debrief opens over the papers handed in, and each student's feedback follows the policy as if the results were released. Irreversible; retakes go on. |
@@ -113,7 +114,7 @@ erDiagram
 - **QUESTION**: `id`, `pool_id`, `category_id`, `type`, `internal_name`, `difficulty` 1 to 5, `created_by`, `origin_question_id` for a fork.
 - **QUESTION_VERSION**: `question_id`, `number` null for the draft, `config` JSONB conforming to the type's schema, `explanation`, `published_at`, `published_by`, `change_note`.
 - **EVALUATION**: `id`, `classroom_id`, `course_id` set on a template only (exactly one home: a classroom, a course, or — an anonymous poll — its owner), `revision` on a template, `origin_template_id` and `origin_revision` on an instance, `title`, `mode`, `state`, `settings` JSONB, see [02-exigences-fonctionnelles.md](02-exigences-fonctionnelles.md) F-EVAL, `grading_scale`, `feedback_policy`, `opens_at`, `closes_at`, `duration_s`, `correction_published_at` (an exercise's published correction, ADR-050).
-- **EVALUATION_ITEM**: `evaluation_id`, `position`, `question_version_id`, `points`, `milestone` boolean.
+- **EVALUATION_ITEM**: `evaluation_id`, `position`, `question_version_id`, `points`, `milestone` boolean, `bonus` boolean (ADR-052).
 - **ATTEMPT**: `evaluation_id`, `user_id`, `state`, `started_at`, `deadline_at` computed with the bonus, `submitted_at`, `seed`, `client_events` JSONB for light cheating events.
 - **ANSWER**: `attempt_id`, `item_id`, `payload` JSONB conforming to the type's answer schema, `revision` integer incremented on every autosave, `marked_done` (the question was validated in a locking navigation), `skipped` ("Leave unanswered": left blank on purpose), `flagged` (the student's review flag), `updated_at`.
 - **GRADING**: `answer_id`, `points`, `max_points`, `source` `auto` / `llm` / `manual`, `state` `proposed` / `validated` / `superseded`, `details` JSONB, `graded_by`, `graded_at`, `note` for the annotation of a re-grading.

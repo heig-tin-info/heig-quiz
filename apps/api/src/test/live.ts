@@ -69,22 +69,26 @@ async function makeUser(db: Db, role: "teacher" | "student"): Promise<string> {
   return id;
 }
 
-/** One published question of the fake `short` type, with a known answer. */
-async function publishQuestion(
+/**
+ * One published question: by default of the fake `short` type, with a known
+ * answer (`answer-<name>`); `content` names another type and its config.
+ */
+export async function publishQuestion(
   db: Db,
   poolId: string,
   ownerId: string,
   name: string,
+  content?: { type: string; config: unknown },
 ): Promise<string> {
   const { id } = await poolService.createQuestion(db, {
     poolId,
-    type: "short",
+    type: content?.type ?? "short",
     internalName: name,
     createdBy: ownerId,
   });
   const [question] = await db.select().from(questions).where(eq(questions.id, id));
   await poolService.putDraft(db, question!, {
-    config: { statement: `Statement of ${name}`, answer: `answer-${name}` },
+    config: content?.config ?? { statement: `Statement of ${name}`, answer: `answer-${name}` },
   });
   await poolService.publishQuestion(db, question!, { userId: ownerId });
   return id;

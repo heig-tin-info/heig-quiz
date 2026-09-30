@@ -501,7 +501,7 @@ export async function livePlugin(app: FastifyInstance) {
           // The legality of the move is the evaluation module's table; the
           // side effects on the attempts are this module's.
           evaluationService.guardTransition(scope.evaluation, to, {
-            itemCount: (await evaluationService.itemRows(app.db, scope.evaluation.id)).length,
+            items: await evaluationService.itemRows(app.db, scope.evaluation.id),
             attemptCount: await evaluationService.attemptCount(app.db, scope.evaluation.id),
             now,
           });

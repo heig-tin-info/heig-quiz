@@ -71,7 +71,6 @@ export {
   itemCountsByEvaluation,
   itemRows,
   itemRowsOf,
-  totalPointsOf,
   staleOf,
   staffAttemptIds,
   staffRosterWithAttempt,

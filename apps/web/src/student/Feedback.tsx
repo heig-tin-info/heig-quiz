@@ -22,6 +22,7 @@ import {
   Stat,
 } from "../ui";
 import { attemptFeedbackKey } from "../queryKeys";
+import { BonusLabel } from "../BonusLabel";
 import { useRetake } from "./retake";
 
 /**
@@ -257,6 +258,7 @@ export function Feedback({
                   {/* 0-based on the wire; the player and the panel both count from 1. */}
                   {t("feedback.question", { n: item.position + 1 })}
                 </h2>
+                {item.bonus ? <BonusLabel /> : null}
                 <span className="flex-1" />
                 {item.points === null ? (
                   <Badge tone="zinc">{t("feedback.notGraded")}</Badge>

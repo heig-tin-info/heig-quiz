@@ -26,6 +26,8 @@ export interface PlayerItem {
   points: number;
   type: string;
   milestone: boolean;
+  /** ADR-052: labelled "Bonus question"; its points are not in the total. */
+  bonus: boolean;
   /**
    * VALIDATED: "Validate and continue" in `forward_only`, a crossed
    * checkpoint in `milestones` (F-LIVE-08, issue #89).
@@ -89,6 +91,7 @@ const toItem = (item: AttemptItem): PlayerItem => ({
   points: item.points,
   type: item.type,
   milestone: item.milestone,
+  bonus: item.bonus,
   markedDone: item.markedDone,
   skipped: item.skipped,
   flagged: item.flagged,

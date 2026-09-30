@@ -11,6 +11,10 @@ built.
 Amended 2026-09-29 (F-STAT-03, the follow-up ADR-038 §7 announced): the
 reading tool `get_pool_question_stats` joins the closed list of §C.
 
+Amended by [ADR-052](ADR-052-questions-bonus.md) (2026-09-30): the items
+`get_evaluation` returns carry `bonus`, and `update_evaluation`'s grade
+scale is linear only (its rounding).
+
 ## Context
 
 A teacher wants to ask an assistant — Claude Desktop, Claude Code, ChatGPT,

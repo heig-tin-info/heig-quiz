@@ -625,7 +625,7 @@ export async function gradingQueue(
       internalName: i.question.internalName,
       type: i.question.type,
       points: i.item.points,
-      minPoints: pointsRangeOf(evaluation, i.question.type, i.item.points).min,
+      minPoints: pointsRangeOf(evaluation, i, i.item.points).min,
       explanation: i.version.explanation === "" ? null : i.version.explanation,
     })),
     entries,
@@ -671,15 +671,21 @@ export async function gradingSteps(db: Db, evaluation: EvaluationRecord): Promis
 /**
  * The points a teacher may give an item of type `type` in `evaluation` by
  * hand (F-GRADE-05): `[0, max]`, or `[-max, max]` for a choice question when
- * the evaluation uses negative marking (ADR-026). The grading panel receives
- * the lower bound (`GradingQueueItem.minPoints`), the routes enforce both.
+ * the evaluation uses negative marking (ADR-026) — never for a bonus item,
+ * which is floored at 0 (ADR-052). The grading panel receives the lower
+ * bound (`GradingQueueItem.minPoints`), the routes enforce both.
  */
 function pointsRangeOf(
   evaluation: EvaluationRecord,
-  type: string,
+  item: JoinedItem | null,
   maxPoints: number,
 ): { min: number; max: number } {
-  return overridePointsRange(maxPoints, scoresNegatively(type, negativeMarkingEnabled(evaluation)));
+  const negative = scoresNegatively(
+    item?.question.type ?? "",
+    negativeMarkingEnabled(evaluation),
+    item?.item.bonus ?? false,
+  );
+  return overridePointsRange(maxPoints, negative);
 }
 
 /** Refuses a manual score outside {@link pointsRangeOf} with `422 points_out_of_range`. */
@@ -690,7 +696,7 @@ export async function assertPointsInRange(
   points: number,
 ): Promise<void> {
   const item = await joinedItem(db, evaluation.id, cell.itemId);
-  const range = pointsRangeOf(evaluation, item?.question.type ?? "", cell.maxPoints);
+  const range = pointsRangeOf(evaluation, item, cell.maxPoints);
   const value = round2(points);
   if (value < range.min || value > range.max) throw new PointsOutOfRange(range);
 }

@@ -23,7 +23,7 @@ import type {
   TemplatePullItem,
   TemplatePullPreview,
 } from "@quiz/contracts";
-import { itemListDiff } from "@quiz/domain";
+import { evaluationTotal, itemListDiff } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { evaluationItems, evaluations } from "../../db/schema.js";
@@ -51,7 +51,6 @@ import {
   settingsOf,
   staleOf,
   totalPointsByEvaluation,
-  totalPointsOf,
   unlinkedRefs,
   type DbOrTx,
   type EvaluationRecord,
@@ -200,7 +199,7 @@ export async function templateDetail(
     joined.filter((j) => !inLinkedPool(j.question, linked)).map((j) => j.item.id),
   );
   const items = rows.map((r) => ({ ...r, poolUnlinked: unlinked.has(r.id) }));
-  const totalPoints = totalPointsOf(items);
+  const totalPoints = evaluationTotal(items);
   return {
     template: {
       ...toTemplate(row, items.length, totalPoints),
@@ -223,7 +222,8 @@ export async function templateDetail(
  * Everything of a template whose change is a new revision — its whole
  * content but the title: the configuration, read through the same parsers
  * as everywhere (so a stored row missing a defaulted key equals the same row
- * with it), and the items with their versions, points, order and milestones.
+ * with it), and the items with their versions, points, order, milestones
+ * and bonus flags (ADR-052).
  */
 async function contentOf(db: DbOrTx, row: EvaluationRecord) {
   return {
@@ -240,6 +240,7 @@ async function contentOf(db: DbOrTx, row: EvaluationRecord) {
         questionVersionId: evaluationItems.questionVersionId,
         points: evaluationItems.points,
         milestone: evaluationItems.milestone,
+        bonus: evaluationItems.bonus,
       })
       .from(evaluationItems)
       .where(eq(evaluationItems.evaluationId, row.id))
@@ -385,6 +386,7 @@ const pullItem = (j: JoinedItem): TemplatePullItem => ({
   versionNumber: j.version.number ?? 0,
   points: j.item.points,
   milestone: j.item.milestone,
+  bonus: j.item.bonus,
 });
 
 /**
@@ -463,7 +465,9 @@ export async function pullTemplate(
     // A scheduled evaluation stays scheduled: what it now holds must still
     // pass the move to `scheduled` (no question is `no_items`). The timing is
     // the instance's own and is not touched.
-    if (locked.state === "scheduled") assertReady(locked, "scheduled", theirs.length);
+    if (locked.state === "scheduled") {
+      assertReady(locked, "scheduled", theirs.map((j) => j.item));
+    }
     await replaceItems(tx, locked.id, theirs.map((j) => j.item));
     await tx
       .update(evaluations)

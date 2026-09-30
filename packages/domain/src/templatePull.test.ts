@@ -14,6 +14,7 @@ const item = (position: number, questionId: string, extra: Partial<PullItem> = {
   versionNumber: 1,
   points: 1,
   milestone: false,
+  bonus: false,
   ...extra,
 });
 
@@ -60,6 +61,11 @@ describe("itemListDiff", () => {
     ]);
     expect(diff.reordered).toBe(false);
     expect(isEmptyDiff(diff)).toBe(false);
+  });
+
+  it("sees a bonus flag that changed (ADR-052)", () => {
+    const diff = itemListDiff([item(0, "a")], [item(0, "a", { bonus: true })]);
+    expect(diff.changed.map((c) => c.to.bonus)).toEqual([true]);
   });
 
   it("sees a change of order among the questions both sides hold", () => {

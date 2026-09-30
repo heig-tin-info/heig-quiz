@@ -72,7 +72,8 @@ export function useGradingData(evaluationId: string, itemId: string | null, name
       internalName: i.internalName,
       type: i.type,
       points: i.points,
-      minPoints: overridePointsRange(i.points, scoresNegatively(i.type, negative)).min,
+      // A bonus item never goes below 0 (ADR-052).
+      minPoints: overridePointsRange(i.points, scoresNegatively(i.type, negative, i.bonus)).min,
       questionId: i.questionId,
       canEdit: editable.has(i.questionId),
       stale: stale.has(i.id),

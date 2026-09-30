@@ -54,6 +54,8 @@ export interface EvaluationSpec {
   target: "draft" | "scheduled" | "lobby" | "closed";
   /** `internalName`s, in the order the items must appear. */
   questions: string[];
+  /** Those of `questions` whose item is a bonus (ADR-052). */
+  bonus?: string[];
   durationS?: number;
   /** `scheduled` only: the opening is that many days from the seed run. */
   opensInDays?: number;
@@ -924,6 +926,8 @@ export const EVALUATIONS: EvaluationSpec[] = [
       "prg1-redaction-pile",
       "prg1-organigramme-somme",
     ],
+    // The circuit is electronics in a C test: the natural bonus question.
+    bonus: ["elec-filtre-rc-passe-bas"],
   },
 ];
 

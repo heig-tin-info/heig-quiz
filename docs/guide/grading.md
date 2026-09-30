@@ -182,7 +182,7 @@ Then one row per student on the roster: **Student**, **E-mail**, **Points**, **G
 
 ### The grade
 
-The grade comes from the evaluation's scale, chosen in its advanced options (see [Evaluations](evaluations.md)). **Linear** maps the full total onto the Swiss scale, `1 + 5 × points / total`; **Threshold** names the number of points that earns a 6, `1 + 5 × points / threshold`, capped at 6. Either way the result lies between 1.0 and 6.0 and is rounded to the tenth, to the nearest by default.
+The grade maps the points onto the Swiss scale, `1 + 5 × points / total`, capped at 6. The total leaves out the bonus questions (see [Evaluations](evaluations.md#bonus-questions)), whose points only lift a student: a score may read `21 / 18` and the grade stays 6.0. The result lies between 1.0 and 6.0 and is rounded to the tenth, to the nearest by default. In the CSV export, a bonus question's column is marked `(bonus)` and the total includes its points.
 
 It is computed from the validated gradings, never typed in: adjust one grading in the panel and the row moves. A proposal not yet validated does not count.
 

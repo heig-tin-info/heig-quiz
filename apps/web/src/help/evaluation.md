@@ -22,6 +22,10 @@ space between two rows and click **Add a milestone** to put one there; the ×
 on a separator removes it. A separator belongs to the row above it and
 travels with it when you drag that row.
 
+The **candy** beside the points makes a question a **bonus**: its points leave
+the total and can only lift a student, never below 0, and the student reads
+**Bonus question** on it. At least one question must still count.
+
 The row shows a **refresh** button only when a newer published version of the
 question exists, and a **bin** that takes the item out of this evaluation —
 the question itself stays in its pool.
@@ -36,7 +40,7 @@ question is validated, no waiting room.
 Everything a preset decided stays visible and editable underneath — timing
 (per student, common end, or you close it), the waiting room, feedback. The
 rest lives under **Advanced options**: navigation, presentation, shuffling,
-progress bar, access code, grading scale. Extra time from the roster applies
+progress bar, access code. Extra time from the roster applies
 on top of the duration.
 
 While the evaluation is running or paused, this step is locked until it

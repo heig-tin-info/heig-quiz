@@ -43,7 +43,6 @@ function Harness({
   return (
     <AdvancedDisclosure
       config={detail.evaluation}
-      totalPoints={detail.totalPoints}
       patch={patch}
       disabled={disabled}
       feedbackDisabled={false}

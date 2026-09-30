@@ -162,6 +162,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
         position: 0,
         points: 2,
         milestone: false,
+        bonus: false,
         questionId: "q1",
         questionVersionId: "v1",
         type: "mcq",
@@ -175,6 +176,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
         position: 1,
         points: 3,
         milestone: false,
+        bonus: false,
         questionId: "q2",
         questionVersionId: "v2",
         type: "mcq",
@@ -234,7 +236,7 @@ export function makeResultsView(over: Partial<ResultsView> = {}): ResultsView {
     releasedAt: null,
     modifiedAfterRelease: false,
     items: [
-      { id: "i1", position: 0, internalName: "sizeof-ptr", type: "mcq", points: 5, successRate: 0.6 },
+      { id: "i1", position: 0, internalName: "sizeof-ptr", type: "mcq", points: 5, bonus: false, successRate: 0.6 },
     ],
     rows,
     stats: {

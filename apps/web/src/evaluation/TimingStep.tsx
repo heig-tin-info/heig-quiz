@@ -169,7 +169,6 @@ function DateField({
  */
 export function ConfigSettings({
   config,
-  totalPoints,
   patch,
   presetOf,
   summary,
@@ -181,7 +180,6 @@ export function ConfigSettings({
   holdsCategorize = false,
 }: {
   config: ConfigView;
-  totalPoints: number;
   patch: ConfigPatch;
   /** The body a preset card sends: an evaluation's carries dates, a template's cannot. */
   presetOf: (id: PresetId) => Parameters<ConfigPatch["mutate"]>[0];
@@ -294,7 +292,6 @@ export function ConfigSettings({
 
       <AdvancedDisclosure
         config={config}
-        totalPoints={totalPoints}
         patch={patch}
         disabled={disabled}
         feedbackDisabled={feedbackDisabled}
@@ -376,7 +373,6 @@ export function TimingStep({
 
       <ConfigSettings
         config={detail.evaluation}
-        totalPoints={detail.totalPoints}
         patch={patch}
         presetOf={(id) => presetPatch(id, mode)}
         summary={summary}

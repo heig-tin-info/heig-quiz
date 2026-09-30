@@ -93,21 +93,21 @@ async function award(
 }
 
 describe("the grade table (§7.1, F-RES-01)", () => {
-  it("converts points to the Swiss scale, linear and threshold", async () => {
-    const built = await evaluationWorth(20);
-    await award(built.app, built, 12);
+  it("converts points to the Swiss scale, with the evaluation's rounding", async () => {
+    const built = await evaluationWorth(7);
+    await award(built.app, built, 3);
 
-    const linear = await service.resultsView(db, await reload(db, built.evaluation.id));
-    expect(linear.totalPoints).toBe(20);
-    expect(linear.rows.find((r) => r.attemptId !== null)!.grade).toBe(4);
+    const nearest = await service.resultsView(db, await reload(db, built.evaluation.id));
+    expect(nearest.totalPoints).toBe(7);
+    // 3 / 7 -> 1 + 5 * 0.428… = 3.14…
+    expect(nearest.rows.find((r) => r.attemptId !== null)!.grade).toBe(3.1);
 
     await db
       .update(evaluations)
-      .set({ gradingScale: { kind: "threshold", threshold: 18, rounding: "nearest" } })
+      .set({ gradingScale: { kind: "linear", rounding: "up" } })
       .where(eq(evaluations.id, built.evaluation.id));
-    const threshold = await service.resultsView(db, await reload(db, built.evaluation.id));
-    // 12 / 18 -> 1 + 5 * 0.666… = 4.3
-    expect(threshold.rows.find((r) => r.attemptId !== null)!.grade).toBe(4.3);
+    const up = await service.resultsView(db, await reload(db, built.evaluation.id));
+    expect(up.rows.find((r) => r.attemptId !== null)!.grade).toBe(3.2);
   });
 
   it("gives the absent student a row, zero points and a 1.0", async () => {

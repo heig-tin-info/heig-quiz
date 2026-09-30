@@ -907,10 +907,11 @@ export const EvaluationSettings = z.object({
   logVisibility: z.boolean().default(true),
   requireFullscreen: z.boolean().default(false),
 });
-export const GradingScale = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("linear"), rounding: z.enum(["nearest","up","down"]).default("nearest") }),
-  z.object({ kind: z.literal("threshold"), threshold: z.number().positive(), rounding: z.enum(["nearest","up","down"]).default("nearest") }),
-]);
+// Linear only since ADR-052: the `threshold` kind was replaced by bonus items.
+export const GradingScale = z.object({
+  kind: z.literal("linear"),
+  rounding: z.enum(["nearest","up","down"]).default("nearest"),
+});
 export const FeedbackPolicy = z.object({
   when: z.enum(["none", "on_release", "immediate"]).default("on_release"),
   showAnswer: z.boolean().default(true),          // the student's own answer
@@ -1620,9 +1621,7 @@ packages/domain/src/
 
 ```ts
 export type Rounding = "nearest" | "up" | "down";
-export type Scale =
-  | { kind: "linear"; rounding?: Rounding }
-  | { kind: "threshold"; threshold: number; rounding?: Rounding };
+export type Scale = { kind: "linear"; rounding?: Rounding }; // ADR-052: no `threshold`
 
 export const MIN_GRADE = 1;
 export const MAX_GRADE = 6;
@@ -1637,21 +1636,18 @@ export function roundToTenth(x: number, mode: Rounding = "nearest"): number {
 }
 
 /**
- * points → Swiss grade 1.0 … 6.0 at 0.1.
- *  linear    : 1 + 5 · points / total
- *  threshold : 1 + 5 · points / threshold, capped at 6 (the threshold is the
- *              point count that earns a 6; anything above is still a 6).
+ * points → Swiss grade 1.0 … 6.0 at 0.1: 1 + 5 · points / total, capped at 6.
+ * The total leaves the bonus items out (ADR-052), so points may exceed it.
  * total <= 0 ⇒ 1.0. Negative points (allowNegative) clamp to 1.0.
  */
 export function gradeFromPoints(points: number, total: number, scale: Scale): number {
-  const base = scale.kind === "threshold" ? scale.threshold : total;
-  if (!(base > 0)) return MIN_GRADE;
-  const raw = 1 + 5 * (points / base);
+  if (!(total > 0)) return MIN_GRADE;
+  const raw = 1 + 5 * (points / total);
   return Math.min(MAX_GRADE, Math.max(MIN_GRADE, roundToTenth(raw, scale.rounding ?? "nearest")));
 }
 ```
-Tests: `0/20 → 1.0`, `12/20 linear → 4.0`, `20/20 → 6.0`, `18/20 threshold 18 → 6.0`, `19/20 threshold 18 → 6.0`,
-`9/20 threshold 18 → 3.5`, `-2/20 → 1.0`, `3/7 linear → 3.1` (rounding), `total 0 → 1.0`.
+Tests: `0/20 → 1.0`, `12/20 linear → 4.0`, `20/20 → 6.0`, `21/18 (bonus) → 6.0`,
+`9/18 → 3.5`, `-2/20 → 1.0`, `3/7 linear → 3.1` (rounding), `total 0 → 1.0`.
 
 ### 7.2 Cloze parser — see §2.3. Public surface:
 ```ts

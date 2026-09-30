@@ -40,6 +40,7 @@ const item = (position: number, type: string) => ({
   internalName: `secret-name-${position}`,
   type,
   points: 1,
+  bonus: false,
   successRate: null,
 });
 

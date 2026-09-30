@@ -23,6 +23,11 @@ Survolez l'espace entre deux lignes et cliquez **Ajouter un jalon** pour en
 poser un ; le × d'un séparateur le retire. Un séparateur appartient à la
 ligne au-dessus de lui et la suit quand vous déplacez cette ligne.
 
+Le **bonbon** à côté des points fait d'une question une **question bonus** :
+ses points sortent du total et ne peuvent que monter un étudiant, jamais
+sous 0, et l'étudiant lit **Question bonus** dessus. Au moins une question
+doit encore compter.
+
 La ligne montre un bouton **rafraîchir** seulement lorsqu'une version publiée
 plus récente de la question existe, et une **corbeille** qui retire l'item de
 cette évaluation — la question, elle, reste dans sa banque.
@@ -37,7 +42,7 @@ commune, retour dès qu'une question est validée, pas de salle d'attente.
 Tout ce qu'un préréglage a décidé reste visible et modifiable en dessous —
 le temps (par étudiant, fin commune, ou vous clôturez), la salle d'attente,
 le retour à l'étudiant. Le reste vit sous **Options avancées** : navigation,
-présentation, mélange, barre de progression, code d'accès, barème. Le temps
+présentation, mélange, barre de progression, code d'accès. Le temps
 supplémentaire de la liste s'ajoute à la durée.
 
 Pendant que l'évaluation est en cours ou en pause, cette étape est

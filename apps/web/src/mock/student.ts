@@ -388,6 +388,8 @@ export const studentAttemptView = (): AttemptView => ({
                         ? "categorize"
                         : "diagram",
       milestone: n === 3,
+      // The circuit, a bonus question (ADR-052): the player's label.
+      bonus: n === 5,
       // ADR-026: what `toStudent` adds to a choice question under negative marking.
       student:
         n === 1 && flags.negative

@@ -26,6 +26,7 @@ const item = (n: number, over: Partial<AttemptView["items"][number]> = {}) => ({
   points: 1,
   type: "mcq",
   milestone: false,
+  bonus: false,
   student: {},
   answer: null,
   revision: 0,

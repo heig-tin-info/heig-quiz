@@ -147,6 +147,18 @@ describe("LaunchStep checklist (#152)", () => {
     expect(screen.getByRole("button", { name: /^back to draft$/i })).toBeEnabled();
   });
 
+  it("blocks when every question is a bonus, as the server does (ADR-052)", () => {
+    mockFetch({});
+    render(
+      makeEvaluationDetail({
+        items: [{ ...makeItemRow(0), bonus: true }],
+        totalPoints: 0,
+      }),
+    );
+    expect(screen.getByText(/no question counts towards the total/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeDisabled();
+  });
+
   it("sends a row to the step or the roster that fixes it", async () => {
     const user = userEvent.setup();
     mockFetch({});

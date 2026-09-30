@@ -2,10 +2,16 @@
  * The state machine (§5.1): the table of legal moves, the guards, and the
  * compare-and-set that applies a move to the row.
  */
-import { and, count, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { EvaluationState } from "@quiz/contracts";
-import { missingTimingFields, pastTiming, type PastTiming } from "@quiz/domain";
+import {
+  evaluationTotal,
+  lacksGradedPoints,
+  missingTimingFields,
+  pastTiming,
+  type PastTiming,
+} from "@quiz/domain";
 
 import { isUniqueViolation, type Db } from "../../db/client.js";
 import { evaluationItems, evaluations } from "../../db/schema.js";
@@ -41,8 +47,11 @@ export function isLegalTransition(from: EvaluationState, to: EvaluationState): b
   return TRANSITIONS[from].includes(to);
 }
 
+/** What readiness reads of the item list: how many, and what counts (ADR-052). */
+export type ReadyItems = readonly { points: number; bonus: boolean }[];
+
 interface TransitionContext {
-  itemCount: number;
+  items: ReadyItems;
   attemptCount: number;
   /** The server's clock: a time already past is refused against it (#178). */
   now: Date;
@@ -59,7 +68,7 @@ export function guardTransition(
 ): void {
   const from = row.state;
   if (!isLegalTransition(from, to)) throw new IllegalTransition(from, to);
-  assertReady(row, to, ctx.itemCount);
+  assertReady(row, to, ctx.items);
   refusePastTiming(from, to, pastTimingOf(row, to, ctx.now));
   if (to === "paused" && row.mode !== "exam") {
     throw new IllegalTransition(from, to, "only an exam can be paused");
@@ -80,16 +89,27 @@ export function pastTimingOf(row: EvaluationRecord, to: EvaluationState, now: Da
 
 /**
  * The half of {@link guardTransition} that says whether the evaluation, as
- * it stands, is READY to be in `to`: questions, a complete timing, and an
- * opening time for `scheduled`. Also what a pull of a template revision
+ * it stands, is READY to be in `to`: questions, a total that is not 0 once
+ * the bonus items are left out (ADR-052), a complete timing, and an opening
+ * time for `scheduled`. Also what a pull of a template revision
  * re-checks on a scheduled evaluation (F-EVAL-26), whose questions it
  * replaces while it stays scheduled — with the same refusal.
  */
-export function assertReady(row: EvaluationRecord, to: EvaluationState, itemCount: number): void {
-  if ((to === "scheduled" || to === "lobby" || to === "running") && itemCount === 0) {
-    throw new IllegalTransition(row.state, to, "an evaluation needs at least one question", {
-      reason: "no_items",
-    });
+export function assertReady(row: EvaluationRecord, to: EvaluationState, items: ReadyItems): void {
+  if (to === "scheduled" || to === "lobby" || to === "running") {
+    if (items.length === 0) {
+      throw new IllegalTransition(row.state, to, "an evaluation needs at least one question", {
+        reason: "no_items",
+      });
+    }
+    if (lacksGradedPoints(row.mode, evaluationTotal(items))) {
+      throw new IllegalTransition(
+        row.state,
+        to,
+        "no question counts towards the total: every one is a bonus or worth 0 (ADR-052)",
+        { reason: "no_graded_points" },
+      );
+    }
   }
   assertTimingReady(row, to);
 }
@@ -211,11 +231,11 @@ export async function transition(
 ): Promise<EvaluationRecord> {
   if (row.mode === "poll") throw new PollNotImplemented();
   const items = await db
-    .select({ n: count() })
+    .select({ points: evaluationItems.points, bonus: evaluationItems.bonus })
     .from(evaluationItems)
     .where(eq(evaluationItems.evaluationId, row.id));
   guardTransition(row, to, {
-    itemCount: items[0]?.n ?? 0,
+    items,
     attemptCount: await attemptCount(db, row.id),
     now,
   });

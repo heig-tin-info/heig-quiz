@@ -77,6 +77,7 @@ const attemptView: AttemptView = {
       points: 1,
       type: "mcq",
       milestone: false,
+      bonus: false,
       student: {
         prompt: "Quelle expression donne l'adresse de `x` ?",
         mode: "single",

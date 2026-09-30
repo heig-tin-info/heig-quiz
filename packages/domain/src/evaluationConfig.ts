@@ -258,7 +258,10 @@ export function negativeMarkingOn(
  */
 export const NEGATIVE_MARKING_TYPES: readonly string[] = ["mcq", "categorize"];
 
-/** Whether an item of `type` may score below 0 in an evaluation where it is `on`. */
-export function scoresNegatively(type: string, on: boolean): boolean {
-  return on && NEGATIVE_MARKING_TYPES.includes(type);
+/**
+ * Whether an item of `type` may score below 0 in an evaluation where it is
+ * `on`. Never a bonus item: its score is floored at 0 (`itemPoints`, ADR-052).
+ */
+export function scoresNegatively(type: string, on: boolean, bonus: boolean): boolean {
+  return on && !bonus && NEGATIVE_MARKING_TYPES.includes(type);
 }

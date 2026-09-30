@@ -347,7 +347,13 @@ async function ensureEvaluation(
   const questionIds = spec.questions
     .map((name) => ctx.questionIds.get(name))
     .filter((id): id is string => id !== undefined);
-  await evaluationService.addItems(db, row, questionIds, defaultPoints, { attemptCount: 0 });
+  const items = await evaluationService.addItems(db, row, questionIds, defaultPoints, {
+    attemptCount: 0,
+  });
+  const bonusIds = new Set((spec.bonus ?? []).map((name) => ctx.questionIds.get(name)));
+  for (const item of items.filter((i) => bonusIds.has(i.questionId))) {
+    await evaluationService.patchItem(db, row, item.id, { bonus: true }, { attemptCount: 0 });
+  }
   row = (await evaluationService.byId(db, row.id))!;
 
   if (spec.target === "scheduled" || spec.target === "lobby") {

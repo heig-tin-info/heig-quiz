@@ -38,6 +38,7 @@ import type {
 } from "@quiz/contracts";
 import { JUSTIFICATION_KEY } from "@quiz/contracts";
 import {
+  evaluationTotal,
   attemptTotal,
   correctionPublishRefusal,
   debrief,
@@ -88,7 +89,6 @@ import {
   staffRosterWithAttempt,
   studentEvaluationRows,
   totalPointsByEvaluation,
-  totalPointsOf,
   type CachedGrade,
   type EvaluationRecord,
   type JoinedItem,
@@ -170,7 +170,7 @@ async function computeResults(
   evaluation: EvaluationRecord,
 ): Promise<ComputedResults> {
   const items = await joinedItems(db, evaluation.id);
-  const totalPoints = totalPointsOf(items.map((i) => i.item));
+  const totalPoints = evaluationTotal(items.map((i) => i.item));
   const scale = scaleOf(evaluation);
 
   const roster = await db
@@ -292,6 +292,7 @@ function itemViews(
       internalName: i.question.internalName,
       type: i.question.type,
       points: i.item.points,
+      bonus: i.item.bonus,
       successRate: acc && acc.n > 0 ? round2(acc.sum / acc.n) : null,
     };
   });
@@ -734,13 +735,13 @@ export async function studentFeedback(
     const tally = (await tallyByAttempt(db, [attempt.id])).get(attempt.id);
     return {
       ...pending(gate.reason),
-      score: scoreOf(tally, items.length, totalPointsOf(items.map((i) => i.item))),
+      score: scoreOf(tally, items.length, evaluationTotal(items.map((i) => i.item))),
       ...retake,
     };
   }
 
   const items = await joinedItems(db, evaluation.id);
-  const totalPoints = totalPointsOf(items.map((i) => i.item));
+  const totalPoints = evaluationTotal(items.map((i) => i.item));
   const answerRows = await db.select().from(answers).where(eq(answers.attemptId, attempt.id));
   const byItem = new Map(answerRows.map((a) => [a.itemId, a]));
   const graded = await db
@@ -766,6 +767,7 @@ export async function studentFeedback(
       type: item.question.type,
       points: grading ? grading.points : null,
       maxPoints: item.item.points,
+      bonus: item.item.bonus,
       verdict: grading ? verdictOf(grading) : null,
       student: studentView({
         ...view,

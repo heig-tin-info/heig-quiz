@@ -7,9 +7,10 @@ distribution of the grades. Then one row per student — points, grade to the
 tenth, time used, and the state of their attempt: absent, not started, in
 progress, submitted, or expired at the deadline.
 
-The grade comes from the evaluation's scale, linear or threshold, on the
-Swiss 1 to 6 scale rounded to the tenth. It is computed from the validated
-gradings, so adjusting one in the grading panel moves it.
+The grade is 1 + 5 × points / total on the Swiss 1 to 6 scale, capped at 6
+and rounded to the tenth. The total leaves out the bonus questions, whose
+points only lift a student. It is computed from the validated gradings, so
+adjusting one in the grading panel moves it.
 
 ## Questions
 
@@ -21,7 +22,7 @@ to be scrolled through while going over the paper in class.
 ## Export
 
 **Export CSV** gives one line per student with the points of each item, the
-total and the grade. Semicolons and a UTF-8 byte-order mark, so Excel opens
+total and the grade; a bonus question's column is marked `(bonus)`. Semicolons and a UTF-8 byte-order mark, so Excel opens
 it without a dialog.
 
 ## Publishing

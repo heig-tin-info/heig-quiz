@@ -157,6 +157,7 @@ export async function patchItem(
   const next: Partial<typeof evaluationItems.$inferInsert> = {};
   if (patch.points !== undefined) next.points = patch.points;
   if (patch.milestone !== undefined) next.milestone = patch.milestone;
+  if (patch.bonus !== undefined) next.bonus = patch.bonus;
   await db
     .update(evaluationItems)
     .set(next)
@@ -301,7 +302,7 @@ export async function replaceItems(
 
 /**
  * THE copy of an item list into `evaluationId`: the SAME frozen versions,
- * points, order and milestones, under new ids — copying must never silently
+ * points, order, milestones and bonus flags, under new ids — copying must never silently
  * upgrade a question. Written by `copyEvaluation` and by a template pull
  * (F-EVAL-26), inside the caller's transaction.
  */
@@ -319,6 +320,7 @@ export async function copyItems(
       questionVersionId: item.questionVersionId,
       points: item.points,
       milestone: item.milestone,
+      bonus: item.bonus,
     })),
   );
 }
@@ -332,7 +334,7 @@ export type CopyHome = { classroomId: string } | { courseId: string };
 /**
  * THE copy of an evaluation into a new draft: its settings, grade scale,
  * feedback and MCQ policies, duration, and its items — the SAME frozen
- * versions, points, order and milestones. Duplicate, "Save as template" and
+ * versions, points, order, milestones and bonus flags. Duplicate, "Save as template" and
  * "Instantiate" differ only in the home and the origin. A copy into a
  * course is a template, at revision 1, and carries nothing of a run (dates,
  * access code, IP list); a copy into a classroom keeps them — a template

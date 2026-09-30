@@ -66,6 +66,7 @@ export function transitionErrorMessage(error: unknown, t: TFunction): string {
   if (!refusal.success) return t("error.server");
   const { reason, missing } = refusal.data;
   if (reason === "no_items") return t("eval.launch.needQuestions");
+  if (reason === "no_graded_points") return t("eval.launch.needGradedPoints");
   if (reason === "opens_at_missing") return t("eval.launch.opensAtMissing");
   if (reason === "opens_at_past") return t("launch.schedule.past");
   if (reason === "closes_at_past") return t("eval.launch.closesAtPast");

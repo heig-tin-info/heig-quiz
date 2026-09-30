@@ -196,18 +196,16 @@ export type EvaluationSettings = z.infer<typeof EvaluationSettings>;
 /** The settings of a freshly created evaluation, all defaults applied. */
 export const defaultSettings = (): EvaluationSettings => EvaluationSettings.parse({});
 
-/** F-EVAL-10. */
-export const GradingScale = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("linear"),
-    rounding: z.enum(["nearest", "up", "down"]).default("nearest"),
-  }),
-  z.object({
-    kind: z.literal("threshold"),
-    threshold: z.number().positive(),
-    rounding: z.enum(["nearest", "up", "down"]).default("nearest"),
-  }),
-]);
+/**
+ * F-EVAL-10: grade = 1 + 5 × points / total, capped at 6, rounded to the
+ * tenth. Linear only: the `threshold` kind is gone (ADR-052), and the bonus
+ * items (`ItemRow.bonus`) are how points past the total are given. The
+ * object keeps its `kind` so the jsonb column keeps its shape.
+ */
+export const GradingScale = z.object({
+  kind: z.literal("linear"),
+  rounding: z.enum(["nearest", "up", "down"]).default("nearest"),
+});
 export type GradingScale = z.infer<typeof GradingScale>;
 
 export const defaultGradingScale = (): GradingScale =>
@@ -306,6 +304,11 @@ export const ItemRow = z.object({
   position: z.number().int(),
   points: z.number(),
   milestone: z.boolean(),
+  /**
+   * ADR-052: a bonus item's points are left out of the evaluation's total, so
+   * they can only lift a student; its score is floored at 0.
+   */
+  bonus: z.boolean(),
   questionId: z.uuid(),
   questionVersionId: z.uuid(),
   type: z.string(),
@@ -472,6 +475,8 @@ export const ItemPatch = z
   .object({
     points: z.number().min(0).max(1000).optional(),
     milestone: z.boolean().optional(),
+    /** ADR-052; locked with the points (`assertItemListEditable`). */
+    bonus: z.boolean().optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: "Nothing to update" });
 export type ItemPatch = z.infer<typeof ItemPatch>;
@@ -619,6 +624,7 @@ export const TemplatePullItem = TemplateItemRef.extend({
   versionNumber: z.number().int(),
   points: z.number(),
   milestone: z.boolean(),
+  bonus: z.boolean(),
 });
 export type TemplatePullItem = z.infer<typeof TemplatePullItem>;
 
@@ -626,7 +632,7 @@ export type TemplatePullItem = z.infer<typeof TemplatePullItem>;
  * `GET /evaluations/:id/pull-template` — what pulling the template's current
  * revision would do to the evaluation's QUESTIONS, the only thing a pull
  * replaces: items `added` (in the template only), `removed` (in the
- * evaluation only), `changed` (another version, points or milestone),
+ * evaluation only), `changed` (another version, points, milestone or bonus),
  * whether the order moves, and "rev. `from` → `to`". `unlinkedItems` would
  * refuse the pull (`422 template_pool_unlinked`); `deprecatedItems` only warn.
  */
@@ -676,12 +682,21 @@ export type EvaluationStateBody = z.infer<typeof EvaluationStateBody>;
  * stay scheduled forever (#152). `closes_at_past` refuses to schedule or open
  * an evaluation whose common end has passed, and `opens_at_past` a schedule
  * for a time already past, both against the server's clock (#178).
+ * `no_graded_points` refuses to open an exam or an exercise whose total —
+ * bonus items left out — is 0 (ADR-052).
  */
 export const TransitionRefusal = z.object({
   error: z.literal("illegal_transition"),
   message: z.string(),
   reason: z
-    .enum(["no_items", "timing_incomplete", "opens_at_missing", "closes_at_past", "opens_at_past"])
+    .enum([
+      "no_items",
+      "no_graded_points",
+      "timing_incomplete",
+      "opens_at_missing",
+      "closes_at_past",
+      "opens_at_past",
+    ])
     .optional(),
   missing: z.array(z.enum(["durationS", "opensAt", "closesAt", "timing"])).optional(),
 });
