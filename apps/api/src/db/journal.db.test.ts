@@ -51,7 +51,8 @@ function page(classroomId: string, path: string) {
     title: path,
     blobSha: "a".repeat(40),
     markdown: "# x\n",
-    html: "<h1>x</h1>",
+    htmlStaff: "<h1>x</h1>",
+    htmlStudent: "<h1>x</h1>",
   };
 }
 

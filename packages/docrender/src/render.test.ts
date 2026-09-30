@@ -357,3 +357,56 @@ describe("warnings (J5)", () => {
     for (const w of p.warnings) expect(JournalWarning.parse(w)).toEqual(w);
   });
 });
+
+describe("the student rendering (N-SEC-12)", () => {
+  it("turns a link to a page missing from the context into plain text", () => {
+    const md = "See [the draft](030-draft.md) and [make](../020-tooling/010-make.md).\n";
+    const staff = renderPage(md, ctx({ pages: new Set(["010-basics/030-draft.md", "020-tooling/010-make.md"]) }));
+    const student = renderPage(md, ctx({ pages: new Set(["020-tooling/010-make.md"]) }));
+    expect(staff.html).toContain('href="./030-draft.md"');
+    expect(student.html).not.toContain("030-draft");
+    expect(student.html).toContain("the draft");
+    expect(student.html).toContain('href="../020-tooling/010-make.md"');
+  });
+});
+
+describe("control characters never block a synchronisation", () => {
+  it("drops a link whose decoded path holds a NUL, silently", () => {
+    const p = renderPage("[a](%00x)\n", ctx());
+    expect(p.html).not.toMatch(/<a\b/);
+    expect(p.html).not.toContain("\u0000");
+    expect(p.warnings).toEqual([]);
+  });
+
+  it("strips a NUL byte from the body", () => {
+    const p = renderPage("# Ti\u0000tle\n\nBo\u0000dy\n", ctx());
+    expect(p.html).not.toContain("\u0000");
+    expect(p.title).toBe("Title");
+    expect(p.html).toContain("Body");
+  });
+
+  it("keeps control characters out of the front matter, the title and the warnings", () => {
+    const p = renderPage(
+      '---\ntitle: "A\\u0000B\\u0007C"\nnote: "x\\u0001y\\nz"\nvisible_from: "never\\u0002"\n---\n$\\frac{\u0003$\n',
+      ctx(),
+    );
+    expect(p.title).toBe("A�B�C");
+    expect(p.frontMatter.note).toBe("x�y\nz");
+    for (const w of p.warnings) {
+      for (const v of Object.values(w)) if (typeof v === "string") expect(v).not.toMatch(/[\u0000-\u001f\u007f]/);
+    }
+    expect(codes(p.warnings).sort()).toEqual(["math_error", "visible_from_invalid"]);
+  });
+});
+
+describe("title and TOC are plain text", () => {
+  it("decode entities, keep raw HTML as the text a reader sees", () => {
+    const p = renderPage("# Fish &amp; chips \\< <i>x</i> &#233;&#xE9; &copy;\n", ctx());
+    expect(p.title).toBe("Fish & chips < <i>x</i> éé &copy;");
+    expect(p.toc[0]!.text).toBe(p.title);
+  });
+
+  it("is null when nothing names the page", () => {
+    expect(renderPage("No heading.\n", ctx({ fallbackTitle: null })).title).toBeNull();
+  });
+});

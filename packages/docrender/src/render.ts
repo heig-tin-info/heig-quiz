@@ -22,8 +22,26 @@
  * by a library configured with `trust: false`, never copied out of the page.
  *
  * Warnings are codes with parameters (fix J5): the web app words them.
+ *
+ * TWO renderings per page (orchestrator's decision on the invariant review
+ * of M4-01, `docs/merge/04-journal.md` §4.2): the ingestion calls
+ * `renderPage` once with every page in `ctx.pages` (the staff HTML) and once
+ * with only the pages visible to students at that moment (the student HTML),
+ * so that the HTML a student receives never names a draft or a future page:
+ * a link to one is plain text there. The warnings, the title, the TOC and the
+ * assets are the staff rendering's.
+ *
+ * Nothing that comes out carries a control character: a NUL is dropped from
+ * the source (Postgres `text` refuses it, and it must never block a
+ * synchronisation), and the title, the TOC, the warning parameters and the
+ * front matter's strings have theirs replaced (see `plainText`).
  */
-import type { JournalTocEntry, JournalWarning } from "@quiz/contracts";
+import {
+  hasControlChar,
+  isJournalPagePath,
+  type JournalTocEntry,
+  type JournalWarning,
+} from "@quiz/contracts";
 import { slugify } from "@quiz/domain";
 import katex from "katex";
 import { Marked, type Renderer, type Tokens } from "marked";
@@ -38,9 +56,14 @@ export interface RenderContext {
   classroomId: string;
   /** Journal-relative path of the page being rendered. */
   pagePath: string;
-  /** Title of last resort: the prettified file name. */
-  fallbackTitle: string;
-  /** Journal-relative paths of the pages a link may open. */
+  /** Title of last resort: the prettified file name (null: none, the web words it). */
+  fallbackTitle: string | null;
+  /**
+   * Journal-relative paths of the pages a link may open. For the STUDENT
+   * rendering, only the pages visible to students: a link to any other page
+   * becomes plain text, so a draft's or a future page's path never reaches a
+   * student through the HTML (N-SEC-12).
+   */
   pages: ReadonlySet<string>;
   /** Journal-relative paths of the files the platform serves (under the size limit). */
   assets: ReadonlySet<string>;
@@ -53,7 +76,13 @@ export interface RenderContext {
 }
 
 export interface RenderedPage {
-  title: string;
+  /**
+   * PLAIN TEXT (entities decoded, no control character), rendered as React
+   * text and never as HTML; null when neither the page nor its file name
+   * gives one.
+   */
+  title: string | null;
+  /** Its strings carry no control character but tab and line breaks. */
   frontMatter: Record<string, unknown>;
   html: string;
   toc: JournalTocEntry[];
@@ -67,6 +96,44 @@ export interface RenderedPage {
    * (N-SEC-13).
    */
   assets: string[];
+}
+
+/**
+ * The markdown as the platform keeps it: without NUL, which Postgres `text`
+ * cannot hold. The ingestion stores THIS, not the raw blob.
+ */
+export function cleanSource(source: string): string {
+  return source.replace(/\u0000/g, "");
+}
+
+// eslint-disable-next-line no-control-regex
+const CONTROL_EXCEPT_LINES = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u001f\u007f]/g;
+
+/** One line of plain text: tab and line breaks become spaces, other controls U+FFFD. */
+function oneLine(text: string): string {
+  if (!hasControlChar(text)) return text;
+  return text.replace(/[\t\n\r]/g, " ").replace(CONTROL, "\ufffd");
+}
+
+/** Every string of a YAML value, with its control characters (but tab and line breaks) replaced. */
+function cleanStrings(value: unknown): unknown {
+  if (typeof value === "string") return value.replace(CONTROL_EXCEPT_LINES, "\ufffd");
+  if (Array.isArray(value)) return value.map(cleanStrings);
+  if (value !== null && typeof value === "object" && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k.replace(CONTROL, "\ufffd"), cleanStrings(v)]),
+    );
+  }
+  return value;
+}
+
+/** A warning whose string parameters are single lines without control characters. */
+function cleanWarning(w: JournalWarning): JournalWarning {
+  return Object.fromEntries(
+    Object.entries(w).map(([k, v]) => [k, k !== "code" && typeof v === "string" ? oneLine(v) : v]),
+  ) as JournalWarning;
 }
 
 const FRONT_MATTER = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
@@ -90,7 +157,7 @@ export function splitFrontMatter(source: string): {
     if (typeof parsed !== "object" || Array.isArray(parsed)) {
       return { frontMatter: {}, body, warnings: [{ code: "front_matter_not_mapping" }] };
     }
-    return { frontMatter: parsed as Record<string, unknown>, body, warnings: [] };
+    return { frontMatter: cleanStrings(parsed) as Record<string, unknown>, body, warnings: [] };
   } catch (err) {
     // The line in the FILE: the block starts on the line after the opening `---`.
     const line = err instanceof YAMLParseError ? err.linePos?.[0].line : undefined;
@@ -124,15 +191,47 @@ function asDate(value: unknown): { date: Date | null; warning?: JournalWarning }
   return { date: null, warning: { code: "visible_from_invalid", value: String(value) } };
 }
 
-/** Plain text of an inline token tree: what the table of contents shows. */
+/** The entities `decodeEntities` knows by name; any other stays as typed. */
+const NAMED: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: "\u00a0",
+};
+
+/**
+ * What the reader sees for the entities written in a heading: numeric ones
+ * (`&#233;`, `&#xE9;`) and the named ones of {@link NAMED}. A heading is kept
+ * as TEXT (title, TOC), and text is never parsed as HTML again: an entity left
+ * encoded would show as `&amp;` to a student.
+ */
+function decodeEntities(text: string): string {
+  return text.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (whole, name: string) => {
+    if (name[0] === "#") {
+      const code = name[1] === "x" || name[1] === "X" ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10);
+      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+    }
+    return NAMED[name.toLowerCase()] ?? whole;
+  });
+}
+
+/**
+ * Plain text of an inline token tree: what the table of contents and the
+ * title show — the characters the reader sees (entities decoded; raw HTML as
+ * the text it is shown as), on one line, without control characters.
+ */
 function plainText(tokens: readonly unknown[] | undefined): string {
-  if (!tokens) return "";
-  let out = "";
-  for (const t of tokens as { tokens?: unknown[]; text?: string }[]) {
-    if (t.tokens) out += plainText(t.tokens);
-    else if (typeof t.text === "string") out += t.text;
-  }
-  return out;
+  const collect = (list: readonly unknown[] | undefined): string => {
+    let out = "";
+    for (const t of (list ?? []) as { tokens?: unknown[]; text?: string }[]) {
+      if (t.tokens) out += collect(t.tokens);
+      else if (typeof t.text === "string") out += t.text;
+    }
+    return out;
+  };
+  return oneLine(decodeEntities(collect(tokens)));
 }
 
 /** Heading anchor: the repository slug of its text (`[a-z0-9-]`), unique within the page. */
@@ -166,7 +265,7 @@ const EXTERNAL = /^(https?|mailto):/i;
  * rendering of one page must not be able to leak into the next.
  */
 export function renderPage(source: string, ctx: RenderContext): RenderedPage {
-  const { frontMatter, body, warnings: fmWarnings } = splitFrontMatter(source);
+  const { frontMatter, body, warnings: fmWarnings } = splitFrontMatter(cleanSource(source));
   const warnings: JournalWarning[] = [...fmWarnings];
   const referenced = new Set<string>();
   const toc: JournalTocEntry[] = [];
@@ -264,7 +363,7 @@ export function renderPage(source: string, ctx: RenderContext): RenderedPage {
         const cut = raw.indexOf("#");
         const path = cut === -1 ? raw : raw.slice(0, cut);
         const hash = cut === -1 ? "" : raw.slice(cut);
-        const url = resolve(path, /\.md$/i.test(path) ? "page" : "asset");
+        const url = resolve(path, isJournalPagePath(path) ? "page" : "asset");
         if (!url) return inner;
         return `<a href="${escapeHtml(url + hash)}"${titleAttr}>${inner}</a>`;
       },
@@ -297,7 +396,7 @@ export function renderPage(source: string, ctx: RenderContext): RenderedPage {
   });
 
   const html = marked.parse(body) as string;
-  const fmTitle = typeof frontMatter.title === "string" ? frontMatter.title.trim() : "";
+  const fmTitle = typeof frontMatter.title === "string" ? oneLine(frontMatter.title).trim() : "";
   const { date: visibleFrom, warning } = asDate(frontMatter.visible_from);
   if (warning) warnings.push(warning);
 
@@ -308,7 +407,7 @@ export function renderPage(source: string, ctx: RenderContext): RenderedPage {
     toc,
     draft: asBoolean(frontMatter.draft),
     visibleFrom,
-    warnings,
+    warnings: warnings.map(cleanWarning),
     assets: [...referenced],
   };
 }

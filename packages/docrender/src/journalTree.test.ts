@@ -1,10 +1,10 @@
+import { isJournalPagePath } from "@quiz/contracts";
 import { describe, expect, it } from "vitest";
 
 import {
   buildNav,
   homePage,
   isIndexFile,
-  isPageFile,
   navSortKey,
   placePage,
   prettifyName,
@@ -15,10 +15,10 @@ import {
 
 describe("file classification", () => {
   it("takes markdown files as pages, whatever the case", () => {
-    expect(isPageFile("010-intro.md")).toBe(true);
-    expect(isPageFile("NOTES.MD")).toBe(true);
-    expect(isPageFile("images/a.png")).toBe(false);
-    expect(isPageFile("Makefile")).toBe(false);
+    expect(isJournalPagePath("010-intro.md")).toBe(true);
+    expect(isJournalPagePath("NOTES.MD")).toBe(true);
+    expect(isJournalPagePath("images/a.png")).toBe(false);
+    expect(isJournalPagePath("Makefile")).toBe(false);
   });
 
   it("recognises both landing-page conventions", () => {
@@ -45,8 +45,9 @@ describe("titles", () => {
     expect(prettifyName("010-basics/020-what-is-a-pointer.md")).toBe("What is a pointer");
   });
 
-  it("never returns an empty title", () => {
+  it("never returns an empty title: the raw name, or null when there is none", () => {
     expect(prettifyName("010-.md")).toBe("010-");
+    expect(prettifyName("docs/.md")).toBeNull();
   });
 });
 
@@ -88,6 +89,11 @@ describe("placePage", () => {
     expect(placePage("docs/images/a.png", "docs")).toBeNull();
     expect(placePage("docs/", "docs")).toBeNull();
   });
+
+  it("skips a file no journal route could serve", () => {
+    expect(placePage("a\u0001b.md")).toBeNull();
+    expect(placePage("a%2e%2e.md")).toBeNull();
+  });
 });
 
 describe("resolveRelative", () => {
@@ -116,6 +122,8 @@ describe("resolveRelative", () => {
     expect(resolveRelative("README.md", "#anchor")).toBeNull();
     expect(resolveRelative("README.md", "C:\\secrets")).toBeNull();
     expect(resolveRelative("README.md", "")).toBeNull();
+    expect(resolveRelative("README.md", "a\u0000b.md")).toBeNull();
+    expect(resolveRelative("README.md", "a\nb.md")).toBeNull();
   });
 });
 

@@ -22,12 +22,12 @@
  *   that inserting a page renumbers nothing.
  * - **Titles** never show the prefix: it is ordering, not naming.
  */
-import type { JournalNavNode } from "@quiz/contracts";
-
-/** A markdown page. Anything else in the tree is an asset. */
-export function isPageFile(path: string): boolean {
-  return /\.md$/i.test(path);
-}
+import {
+  hasControlChar,
+  isJournalPagePath,
+  safeJournalPath,
+  type JournalNavNode,
+} from "@quiz/contracts";
 
 /**
  * The landing page of its directory. `README.md` first because github.com
@@ -48,12 +48,14 @@ export function stripOrderPrefix(name: string): string {
 /**
  * The title shown when the file says nothing else: the file name without its
  * prefix and extension, dashes and underscores opened up, first letter
- * capitalised. `010-what-is-a-pointer.md` -> `What is a pointer`.
+ * capitalised. `010-what-is-a-pointer.md` -> `What is a pointer`. Null when
+ * the file name has nothing left to show (`.md`): the web app words it, no
+ * English "Untitled" is stored (invariant 1).
  */
-export function prettifyName(path: string): string {
+export function prettifyName(path: string): string | null {
   const base = (path.split("/").pop() ?? "").replace(/\.md$/i, "");
   const words = stripOrderPrefix(base).replace(/[-_]+/g, " ").trim();
-  if (!words) return base || "Untitled";
+  if (!words) return base || null;
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
@@ -85,12 +87,14 @@ export function parentOf(path: string): string {
  * both on github.com and in the platform.
  *
  * Returns null for anything that is not a plain relative path inside the tree:
- * an absolute path, a URL, a Windows path, or a `../` chain that climbs out of
- * the repository. Null means "do not link it", never "link it somewhere else".
+ * an absolute path, a URL, a Windows path, a control character (a decoded
+ * `%00`), or a `../` chain that climbs out of the repository. Null means "do
+ * not link it", never "link it somewhere else".
  */
 export function resolveRelative(fromPage: string, href: string): string | null {
   const raw = href.trim();
   if (!raw || raw.startsWith("/") || raw.startsWith("#") || raw.includes("\\")) return null;
+  if (hasControlChar(raw)) return null;
   if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return null; // has a scheme
   const out: string[] = parentOf(fromPage).split("/").filter(Boolean);
   for (const part of raw.split("/")) {
@@ -110,8 +114,8 @@ export interface PagePlacement {
   path: string;
   parentPath: string;
   sortKey: string;
-  /** Prefix-stripped, prettified file name: the title of last resort. */
-  fallbackTitle: string;
+  /** Prefix-stripped, prettified file name: the title of last resort (null: none). */
+  fallbackTitle: string | null;
   /** True for the landing page of its directory. */
   index: boolean;
 }
@@ -119,14 +123,16 @@ export interface PagePlacement {
 /**
  * Where one file sits in the navigation. `rootPath` is the sub-directory the
  * journal lives in, stripped from the paths the navigation exposes so that
- * moving a journal into a `docs/` folder does not rename every page.
+ * moving a journal into a `docs/` folder does not rename every page. A file
+ * whose path the journal's routes would refuse (`safeJournalPath`: a control
+ * character, a `%2e`, …) is not placed: no route could serve it.
  */
 export function placePage(repoPath: string, rootPath = ""): PagePlacement | null {
-  if (!isPageFile(repoPath)) return null;
+  if (!isJournalPagePath(repoPath)) return null;
   const prefix = rootPath ? `${rootPath.replace(/\/+$/, "")}/` : "";
   if (prefix && !repoPath.startsWith(prefix)) return null;
   const path = repoPath.slice(prefix.length);
-  if (!path) return null;
+  if (!path || safeJournalPath(path) === null) return null;
   return {
     path,
     parentPath: parentOf(path),
@@ -136,15 +142,12 @@ export function placePage(repoPath: string, rootPath = ""): PagePlacement | null
   };
 }
 
-/** A node of the navigation tree the API hands to the web app. */
-export type NavNode = JournalNavNode;
-
 /** The minimum a page must expose to be placed in the navigation. */
 export interface NavPage {
   path: string;
   parentPath: string;
   sortKey: string;
-  title: string;
+  title: string | null;
 }
 
 /**
@@ -157,7 +160,7 @@ export interface NavPage {
  * the one in a directory NAMES that directory's section. A section without a
  * landing page is a heading that opens nothing rather than a hole in the tree.
  */
-export function buildNav(pages: readonly NavPage[]): NavNode[] {
+export function buildNav(pages: readonly NavPage[]): JournalNavNode[] {
   const byParent = new Map<string, NavPage[]>();
   for (const p of pages) {
     const list = byParent.get(p.parentPath);
@@ -175,8 +178,8 @@ export function buildNav(pages: readonly NavPage[]): NavNode[] {
   /** Last segment of a path: what siblings are compared on, pages and sections alike. */
   const segment = (path: string) => (path.split("/").pop() ?? "").toLowerCase();
 
-  const nodesFor = (parent: string): NavNode[] => {
-    const out: NavNode[] = [];
+  const nodesFor = (parent: string): JournalNavNode[] => {
+    const out: JournalNavNode[] = [];
     for (const page of byParent.get(parent) ?? []) {
       if (isIndexFile(page.path)) continue; // home page, or names its section
       out.push({ path: page.path, title: page.title, pagePath: page.path, children: [] });

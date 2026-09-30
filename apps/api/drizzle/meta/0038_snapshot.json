@@ -1,5 +1,5 @@
 {
-  "id": "fbe7b08e-547c-4abf-b77b-256e45cfeb22",
+  "id": "eed68f8d-c0aa-4317-acc0-a4d5b6018984",
   "prevId": "6b5f0b7d-c99d-4414-ada0-f8332c44c7de",
   "version": "7",
   "dialect": "postgresql",
@@ -5596,7 +5596,7 @@
           "name": "title",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "front_matter": {
           "name": "front_matter",
@@ -5617,8 +5617,14 @@
           "primaryKey": false,
           "notNull": true
         },
-        "html": {
-          "name": "html",
+        "html_staff": {
+          "name": "html_staff",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "html_student": {
+          "name": "html_student",
           "type": "text",
           "primaryKey": false,
           "notNull": true

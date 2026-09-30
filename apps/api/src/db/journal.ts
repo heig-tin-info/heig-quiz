@@ -36,6 +36,7 @@ import {
 import {
   JOURNAL_ASSET_MAX_BYTES,
   JOURNAL_SYNC_STATUSES,
+  type JournalSyncError,
   type JournalTocEntry,
   type JournalWarning,
 } from "@quiz/contracts";
@@ -64,8 +65,8 @@ export const classroomJournals = pgTable(
     lastCommitSha: text("last_commit_sha"),
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
     syncStatus: text("sync_status", { enum: JOURNAL_SYNC_STATUSES }).notNull().default("pending"),
-    /** Why the last synchronisation failed (a code, worded by the web app). */
-    syncError: text("sync_error"),
+    /** Why the last synchronisation failed: a `JournalSyncError` code, worded by the web app. */
+    syncError: text("sync_error").$type<JournalSyncError>(),
     createdBy: uuid("created_by")
       .notNull()
       .references(() => users.id),
@@ -100,11 +101,20 @@ export const journalPages = pgTable(
     parentPath: text("parent_path").notNull(),
     /** What the navigation sorts on: the raw file name, landing page first. */
     sortKey: text("sort_key").notNull(),
-    title: text("title").notNull(),
+    /** Plain text; null when neither the page nor its file name gives one. */
+    title: text("title"),
     frontMatter: jsonb("front_matter").$type<Record<string, unknown>>().notNull().default({}),
     blobSha: text("blob_sha").notNull(),
+    /** The source without NUL (`cleanSource`): what the editor opens. */
     markdown: text("markdown").notNull(),
-    html: text("html").notNull(),
+    /** Rendered with every page linkable: what the staff read. */
+    htmlStaff: text("html_staff").notNull(),
+    /**
+     * Rendered with only the pages visible to students linkable, so that a
+     * draft's or a future page's path never reaches a student (N-SEC-12);
+     * re-rendered from `markdown` by the `visible_from` sweep (J4).
+     */
+    htmlStudent: text("html_student").notNull(),
     toc: jsonb("toc").$type<JournalTocEntry[]>().notNull().default([]),
     /** `draft: true` in the front matter: the staff read it, students do not. */
     draft: boolean("draft").notNull().default(false),

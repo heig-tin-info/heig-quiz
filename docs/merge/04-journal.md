@@ -92,8 +92,18 @@ Plumbing: `/webhooks/github` dispatch, queue `journal.ingest`, SSE family
   | Table | Key columns |
   | --- | --- |
   | `classroom_journals` | PK `classroom_id`, `github_repo_id`, `full_name`, `ref`, `root_path`, `last_commit_sha`, `sync_status`, `sync_error`, `created_by` |
-  | `journal_pages` | unique `(classroom_id, path)`, the columns of §4.1 |
+  | `journal_pages` | unique `(classroom_id, path)`, the columns of §4.1, with `html` split in two (below) and `asset_paths` (the assets the page references, for J1) |
   | `journal_assets` | unique `(classroom_id, path)`, the columns of §4.1 |
+
+  **Two renderings per page** (orchestrator, on the invariant review of
+  M4-01): `html_staff` is rendered with every page linkable, `html_student`
+  with only the pages visible to students at render time (not a draft,
+  `visible_from` null or passed); in `html_student` a link to a hidden page
+  is plain text, so the HTML a student receives never names a draft or a
+  future page (N-SEC-12). Warnings, title, TOC and assets come from the
+  staff rendering. Both are rendered by `renderPage` of
+  `packages/docrender`, from the stored markdown (without NUL,
+  `cleanSource`), so re-rendering needs no GitHub call.
 
   Routes lose the journal id: assets are served at
   `/app/api/classrooms/:id/journal/assets/*`, behind the classroom's own
@@ -135,7 +145,7 @@ Plumbing: `/webhooks/github` dispatch, queue `journal.ingest`, SSE family
 | J1 | Assets of draft or not-yet-visible pages are readable by any enrolled student (the asset route checks membership, not the referencing page's visibility) | serve an asset to a student only if a page visible to students references it |
 | J2 | Concurrent ingestions: `singletonKey` dedups queued jobs only; save and Refresh call `ingestJournal` directly; mirror writes not transactional | every ingestion through the queue or under an advisory lock per classroom journal row; `mirror()` in one transaction |
 | J3 | `attach` ignores `rootPath` when it reuses an existing (repo, ref) mirror | disappears with D03: no mirror is shared, each classroom row has its own root path |
-| J4 | No SSE hint when `visible_from` passes | a ticker sweep (`everyMs` 60 s, on the bare ticker) that emits the hint when a page becomes visible |
+| J4 | No SSE hint when `visible_from` passes | a ticker sweep (`everyMs` 60 s, on the bare ticker) that, when a page becomes visible, re-renders the `html_student` of every page of that classroom's journal from the stored markdown (no GitHub call: links to the newly visible page appear) and emits the hint |
 | J5 | Warnings are server-built English sentences | codes + parameters |
 | J6 | `.md-body` collides with Quiz's question prose styles | `.md-body.md-doc` modifier (long-form: h1 28 px, 72-ch measure, 1.75 leading) |
 | J7 | Quiz dev runs on PGlite without webhooks nor pg-boss | Refresh is the dev path; the mock serves rendered HTML fixtures |

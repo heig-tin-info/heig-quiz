@@ -13,6 +13,7 @@ import {
   JournalStudent,
   JournalUse,
   JournalViewQuery,
+  JournalRepository,
   JournalWarning,
   safeJournalPath,
 } from "./journal.js";
@@ -60,6 +61,10 @@ describe("safeJournalPath (N-SEC-15)", () => {
     ["a\u0000.md", "a NUL"],
     ["a\nb.md", "a newline"],
     ["x".repeat(401), "over 400 characters"],
+    ["%2e%2e/secret.md", "an escaped climb"],
+    ["a/%2E%2e/b.md", "an escaped climb, any case"],
+    ["a%2fb.md", "an escaped slash"],
+    ["a%5Cb.md", "an escaped backslash"],
   ])("refuses %j (%s)", (raw) => {
     expect(safeJournalPath(raw)).toBeNull();
   });
@@ -167,6 +172,10 @@ describe("write bodies", () => {
     });
     expect(JournalUse.safeParse({ name: "notes", rootPath: "../up" }).success).toBe(false);
     expect(JournalUse.safeParse({ name: "notes", ref: "a..b" }).success).toBe(false);
+    for (const ref of ["-main", ".", "a//b", "a/./b", "a/.hidden", "/main", "main/", "x.lock"]) {
+      expect(JournalUse.safeParse({ name: "notes", ref }).success, ref).toBe(false);
+    }
+    expect(JournalUse.safeParse({ name: "notes", ref: "release/2026-autumn.v2" }).success).toBe(true);
     expect(JournalUse.safeParse({ name: "notes", ref: "main; rm" }).success).toBe(false);
     expect(JournalUse.safeParse({ fullName: "org/notes" }).success).toBe(false);
   });
@@ -178,5 +187,24 @@ describe("write bodies", () => {
       markdown: "# x",
       baseSha: SHA,
     });
+  });
+});
+
+describe("the repository state (invariant 1)", () => {
+  const repo = {
+    fullName: "heig-prg/notes",
+    ref: "main",
+    rootPath: "",
+    htmlUrl: "https://github.com/heig-prg/notes",
+    syncStatus: "error",
+    syncError: "ref_not_found",
+    lastSyncedAt: null,
+    lastCommitSha: null,
+    editable: false,
+  };
+
+  it("says why a synchronisation failed as a code, never a sentence", () => {
+    expect(JournalRepository.parse(repo)).toEqual(repo);
+    expect(JournalRepository.safeParse({ ...repo, syncError: "Branch main not found" }).success).toBe(false);
   });
 });

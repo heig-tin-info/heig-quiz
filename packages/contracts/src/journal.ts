@@ -26,24 +26,40 @@ export const JOURNAL_ASSET_MAX_BYTES = 5_000_000;
 /** Longest markdown source a save or a preview carries. */
 export const JOURNAL_MARKDOWN_MAX = 500_000;
 
+/** The C0 control characters and DEL. */
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u001f\u007f]/;
+
+/**
+ * Whether a string holds a control character (C0 or DEL): never part of a
+ * journal path, and never let into a title or a warning parameter.
+ */
+export function hasControlChar(text: string): boolean {
+  return CONTROL.test(text);
+}
+
 /**
  * A path inside the journal's root (N-SEC-15), or null: no `..` nor `.`
  * segment, no empty segment, no leading `/`, no backslash, no control
  * character, at most {@link JOURNAL_PATH_MAX} characters. The route
  * parameters are already URL-decoded by the router, so nothing is decoded
- * here: a `%2e%2e` that survives is a literal file name, and harmless.
+ * here; a percent-escape that would decode to `.`, `/` or a backslash
+ * (`%2e`, `%2f`, `%5c`, in any case) is refused outright, so that no second
+ * decoding downstream can ever turn the path into a traversal.
  */
 export function safeJournalPath(raw: string): string | null {
   if (!raw || raw.length > JOURNAL_PATH_MAX) return null;
   if (raw.startsWith("/") || raw.includes("\\")) return null;
-  // eslint-disable-next-line no-control-regex
-  if (/[\u0000-\u001f\u007f]/.test(raw)) return null;
+  if (hasControlChar(raw) || /%(2e|2f|5c)/i.test(raw)) return null;
   const parts = raw.split("/");
   if (parts.some((p) => p === "" || p === "." || p === "..")) return null;
   return raw;
 }
 
-const isPage = (path: string) => /\.md$/i.test(path);
+/** A page of the journal is a markdown file; any other file is an asset. */
+export function isJournalPagePath(path: string): boolean {
+  return /\.md$/i.test(path);
+}
 
 /** Any file of the journal, by its path relative to the journal's root. */
 export const JournalPath = z
@@ -51,10 +67,10 @@ export const JournalPath = z
   .refine((p) => safeJournalPath(p) !== null, { message: "Not a path inside the journal" });
 
 /** A page: a journal path ending in `.md`. */
-export const JournalPagePath = JournalPath.refine(isPage, { message: "A page is a .md file" });
+export const JournalPagePath = JournalPath.refine(isJournalPagePath, { message: "A page is a .md file" });
 
 /** An asset: a journal path that is not a page. */
-export const JournalAssetPath = JournalPath.refine((p) => !isPage(p), {
+export const JournalAssetPath = JournalPath.refine((p) => !isJournalPagePath(p), {
   message: "An asset is not a .md file",
 });
 
@@ -112,6 +128,11 @@ export const JOURNAL_WARNING_CODES = JournalWarning.options.map(
 // ---------------------------------------------------------------- reading
 
 /** One heading of a page, for its table of contents. */
+/**
+ * One heading of a page, for its table of contents. `text` is PLAIN TEXT
+ * (what the reader sees, entities decoded), rendered as React text, never as
+ * HTML.
+ */
 export const JournalTocEntry = z.strictObject({
   id: z.string(),
   depth: z.number().int().min(1).max(6),
@@ -123,7 +144,8 @@ export type JournalTocEntry = z.infer<typeof JournalTocEntry>;
 export interface JournalNavNode {
   /** Path of the page, or of the directory for a section. */
   path: string;
-  title: string;
+  /** Plain text, rendered as React text; null when the file name gives none (the web words it). */
+  title: string | null;
   /** The page opened by the entry; null for a section without a landing page. */
   pagePath: string | null;
   children: JournalNavNode[];
@@ -131,7 +153,7 @@ export interface JournalNavNode {
 export const JournalNavNode: z.ZodType<JournalNavNode> = z.lazy(() =>
   z.strictObject({
     path: z.string(),
-    title: z.string(),
+    title: z.string().nullable(),
     pagePath: z.string().nullable(),
     children: z.array(JournalNavNode),
   }),
@@ -141,6 +163,22 @@ export const JournalNavNode: z.ZodType<JournalNavNode> = z.lazy(() =>
 export const JOURNAL_SYNC_STATUSES = ["pending", "ok", "error"] as const;
 export const JournalSyncStatus = z.enum(JOURNAL_SYNC_STATUSES);
 export type JournalSyncStatus = z.infer<typeof JournalSyncStatus>;
+
+/**
+ * Why a synchronisation failed, as a code the web app words (invariant 1):
+ * the repository, the branch or the root folder is gone, GitHub did not
+ * answer, the tree is too large to copy, or the App may not read it. M4-02
+ * may add codes.
+ */
+export const JournalSyncError = z.enum([
+  "repo_not_found",
+  "ref_not_found",
+  "root_not_found",
+  "github_unavailable",
+  "too_large",
+  "forbidden",
+]);
+export type JournalSyncError = z.infer<typeof JournalSyncError>;
 
 /** The repository a classroom's journal mirrors, for the staff. */
 export const JournalRepository = z.strictObject({
@@ -153,7 +191,7 @@ export const JournalRepository = z.strictObject({
   htmlUrl: z.string(),
   syncStatus: JournalSyncStatus,
   /** Why the last synchronisation failed, when it did. */
-  syncError: z.string().nullable(),
+  syncError: JournalSyncError.nullable(),
   lastSyncedAt: z.iso.datetime({ offset: true }).nullable(),
   lastCommitSha: z.string().nullable(),
   /** Writes need a copy that knows the head it writes over. */
@@ -190,7 +228,12 @@ export type Journal = z.infer<typeof Journal>;
 
 const pageFields = {
   path: z.string(),
-  title: z.string(),
+  /** Plain text, rendered as React text, never as HTML; null when nothing names the page. */
+  title: z.string().nullable(),
+  /**
+   * The rendered page. The student payload carries the student rendering, in
+   * which a link to a page hidden from students is plain text.
+   */
   html: z.string(),
   toc: z.array(JournalTocEntry),
   updatedAt: z.iso.datetime({ offset: true }),
@@ -226,15 +269,25 @@ export const GithubRepoName = z
   .regex(/^[A-Za-z0-9._-]{1,100}$/, "Not a repository name")
   .refine((n) => n !== "." && n !== "..", { message: "Not a repository name" });
 
-/** A branch name: git's own rules, the ones that matter for a URL and a path. */
+/**
+ * A branch name: the rules of git that matter for a URL, a path and a
+ * command line. No leading `-` (never read as an option), no empty segment
+ * (`//`, a leading or trailing `/`), no `..` anywhere, no segment starting
+ * with `.` (so no `.` nor `/./`), no `.lock` ending.
+ */
 export const GitRef = z
   .string()
   .min(1)
   .max(200)
   .regex(/^[A-Za-z0-9._/-]+$/, "Not a branch name")
-  .refine((r) => !r.startsWith("/") && !r.endsWith("/") && !r.includes("..") && !r.endsWith(".lock"), {
-    message: "Not a branch name",
-  });
+  .refine(
+    (r) =>
+      !r.startsWith("-") &&
+      !r.endsWith(".lock") &&
+      !r.includes("..") &&
+      r.split("/").every((seg) => seg !== "" && !seg.startsWith(".")),
+    { message: "Not a branch name" },
+  );
 
 /**
  * The folder of the repository holding the pages: "" for the root, else a
@@ -242,7 +295,7 @@ export const GitRef = z
  */
 export const JournalRootPath = z
   .string()
-  .max(200)
+  .max(JOURNAL_PATH_MAX)
   .transform((p) => p.trim().replace(/^\/+|\/+$/g, ""))
   .refine((p) => p === "" || safeJournalPath(p) !== null, { message: "Not a folder of the repository" });
 
@@ -308,7 +361,7 @@ export const JournalPreviewBody = z.strictObject({
 export type JournalPreviewBody = z.infer<typeof JournalPreviewBody>;
 
 export const JournalPreview = z.strictObject({
-  title: z.string(),
+  title: z.string().nullable(),
   html: z.string(),
   toc: z.array(JournalTocEntry),
   warnings: z.array(JournalWarning),
