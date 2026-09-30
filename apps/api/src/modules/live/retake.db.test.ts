@@ -15,8 +15,8 @@ import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
 import { attempts, evaluations, gradings } from "../../db/schema.js";
-import { testApp, testDb } from "../../test/db.js";
-import { type Payload, testServer } from "../../test/http.js";
+import { testApp } from "../../test/db.js";
+import { type Payload, type TestServer, testServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import {
@@ -32,14 +32,21 @@ import * as results from "../results/service.js";
 import { answersOf } from "./attempt.js";
 import * as live from "./service.js";
 
+// One server for the file, whose database the service tests share
+// (`testApp(db)`): every test seeds an evaluation of its own.
+let server: TestServer;
 let db: Db;
 let restore: () => void;
 
 beforeAll(async () => {
   restore = registerForTests(fakeShort);
-  db = await testDb();
+  server = await testServer();
+  db = server.app.db;
 });
-afterAll(() => restore());
+afterAll(async () => {
+  await server.close();
+  restore();
+});
 
 async function appFor() {
   const app = await testApp(db);
@@ -637,73 +644,67 @@ describe("the screens with several attempts", () => {
 
 describe("POST /evaluations/:id/retake", () => {
   it("answers the new attempt, a 409 with the reason, and a 404 to a stranger", async () => {
-    const server = await testServer();
-    try {
-      const student = await server.signIn("student");
-      const stranger = await server.signIn("student");
-      const sdb = server.app.db;
-      const seed = await seedLive(sdb, {
-        mode: "exercise",
-        studentIds: [student.id],
-        questions: 1,
-        durationS: null,
-        settings: {
-          timing: "manual",
-          lobby: "skip",
-          retakes: { enabled: true, keep: "best", maxAttempts: 2 },
-        },
-      });
-      await applyState(sdb, await reload(sdb, seed.evaluationId), "running", server.clock.now());
-      const post = (url: string, headers: Record<string, string>, payload?: Payload) =>
-        server.app.inject({ method: "POST", url, headers, ...(payload === undefined ? {} : { payload }) });
+    const student = await server.signIn("student");
+    const stranger = await server.signIn("student");
+    const seed = await seedLive(db, {
+      mode: "exercise",
+      studentIds: [student.id],
+      questions: 1,
+      durationS: null,
+      settings: {
+        timing: "manual",
+        lobby: "skip",
+        retakes: { enabled: true, keep: "best", maxAttempts: 2 },
+      },
+    });
+    await applyState(db, await reload(db, seed.evaluationId), "running", server.clock.now());
+    const post = (url: string, headers: Record<string, string>, payload?: Payload) =>
+      server.app.inject({ method: "POST", url, headers, ...(payload === undefined ? {} : { payload }) });
 
-      const entered = await post(`/app/api/evaluations/${seed.evaluationId}/attempt`, student.headers, {});
-      expect(entered.statusCode).toBe(200);
-      const firstId = entered.json().view.attempt.id as string;
+    const entered = await post(`/app/api/evaluations/${seed.evaluationId}/attempt`, student.headers, {});
+    expect(entered.statusCode).toBe(200);
+    const firstId = entered.json().view.attempt.id as string;
 
-      const early = await post(`/app/api/evaluations/${seed.evaluationId}/retake`, student.headers);
-      expect(early.statusCode).toBe(409);
-      expect(early.json()).toMatchObject({ error: "retake_refused", reason: "unfinished" });
+    const early = await post(`/app/api/evaluations/${seed.evaluationId}/retake`, student.headers);
+    expect(early.statusCode).toBe(409);
+    expect(early.json()).toMatchObject({ error: "retake_refused", reason: "unfinished" });
 
-      await post(`/app/api/attempts/${firstId}/submit`, student.headers, { confirm: true });
-      const again = await post(`/app/api/evaluations/${seed.evaluationId}/retake`, student.headers);
-      expect(again.statusCode).toBe(200);
-      expect(again.json().kind).toBe("attempt");
-      const secondId = again.json().view.attempt.id as string;
-      expect(secondId).not.toBe(firstId);
-      expect(again.json().view.attempt.readOnly).toBe(false);
+    await post(`/app/api/attempts/${firstId}/submit`, student.headers, { confirm: true });
+    const again = await post(`/app/api/evaluations/${seed.evaluationId}/retake`, student.headers);
+    expect(again.statusCode).toBe(200);
+    expect(again.json().kind).toBe("attempt");
+    const secondId = again.json().view.attempt.id as string;
+    expect(secondId).not.toBe(firstId);
+    expect(again.json().view.attempt.readOnly).toBe(false);
 
-      // The first attempt's feedback: the score only, while the exercise is open.
-      const feedback = await server.app.inject({
-        method: "GET",
-        url: `/app/api/attempts/${firstId}/feedback`,
-        headers: student.headers,
-      });
-      expect(feedback.json()).toMatchObject({
-        available: false,
-        reason: "retakes_open",
-        score: { totalPoints: 1 },
-        retake: { attemptCount: 2, maxAttempts: 2, refusal: "unfinished" },
-      });
+    // The first attempt's feedback: the score only, while the exercise is open.
+    const feedback = await server.app.inject({
+      method: "GET",
+      url: `/app/api/attempts/${firstId}/feedback`,
+      headers: student.headers,
+    });
+    expect(feedback.json()).toMatchObject({
+      available: false,
+      reason: "retakes_open",
+      score: { totalPoints: 1 },
+      retake: { attemptCount: 2, maxAttempts: 2, refusal: "unfinished" },
+    });
 
-      await post(`/app/api/attempts/${secondId}/submit`, student.headers, { confirm: true });
-      const max = await post(`/app/api/evaluations/${seed.evaluationId}/retake`, student.headers);
-      expect(max.json()).toMatchObject({ error: "retake_refused", reason: "max_attempts" });
-      // The results page says the same thing the route just did.
-      const last = await server.app.inject({
-        method: "GET",
-        url: `/app/api/attempts/${secondId}/feedback`,
-        headers: student.headers,
-      });
-      expect(last.json()).toMatchObject({
-        reason: "retakes_open",
-        retake: { attemptCount: 2, refusal: "max_attempts" },
-      });
+    await post(`/app/api/attempts/${secondId}/submit`, student.headers, { confirm: true });
+    const max = await post(`/app/api/evaluations/${seed.evaluationId}/retake`, student.headers);
+    expect(max.json()).toMatchObject({ error: "retake_refused", reason: "max_attempts" });
+    // The results page says the same thing the route just did.
+    const last = await server.app.inject({
+      method: "GET",
+      url: `/app/api/attempts/${secondId}/feedback`,
+      headers: student.headers,
+    });
+    expect(last.json()).toMatchObject({
+      reason: "retakes_open",
+      retake: { attemptCount: 2, refusal: "max_attempts" },
+    });
 
-      const denied = await post(`/app/api/evaluations/${seed.evaluationId}/retake`, stranger.headers);
-      expect(denied.statusCode).toBe(404);
-    } finally {
-      await server.close();
-    }
+    const denied = await post(`/app/api/evaluations/${seed.evaluationId}/retake`, stranger.headers);
+    expect(denied.statusCode).toBe(404);
   });
 });

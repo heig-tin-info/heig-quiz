@@ -47,12 +47,14 @@ async function entry(db: Db, id: string) {
   return row!;
 }
 
-describe("claimEnrollments (AU-18/AU-21)", () => {
-  let db: Db;
-  beforeAll(async () => {
-    db = await testDb();
-  });
+// One database for the file: every test seeds its own classroom and
+// addresses of its own, so no claim reaches another test's rows.
+let db: Db;
+beforeAll(async () => {
+  db = await testDb();
+});
 
+describe("claimEnrollments (AU-18/AU-21)", () => {
   it("claims a pending entry whose email matches, case-insensitively", async () => {
     const classroomId = await seedClassroom(db);
     const userId = await seedUser(db, "ada.lovelace@heig.test");
@@ -138,11 +140,6 @@ describe("claimEnrollments (AU-18/AU-21)", () => {
 });
 
 describe("claimForExistingUsers (reverse claim)", () => {
-  let db: Db;
-  beforeAll(async () => {
-    db = await testDb();
-  });
-
   it("attaches an existing account through its institutional address", async () => {
     const classroomId = await seedClassroom(db);
     const userId = await seedUser(db, "leoverdelaw@gmail.test", "leo.verdelaw@heig.test");

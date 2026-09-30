@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import type { FastifyInstance } from "fastify";
+import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { PERSONAS, devSub, upsertPersona } from "./dev.js";
@@ -14,9 +15,15 @@ import { testApp } from "../test/db.js";
 const teacher = PERSONAS.find((p) => p.key === "teacher")!;
 const student = PERSONAS.find((p) => p.key === "lea")!;
 
+// One database for the file: each test reads back only the persona it
+// signed in, so the order of the tests does not matter.
+let app: FastifyInstance;
+beforeAll(async () => {
+  app = await testApp();
+});
+
 describe("upsertPersona", () => {
   it("creates the account, its address set and its role", async () => {
-    const app = await testApp();
     const user = await upsertPersona(app, teacher);
     expect(user.oidcSub).toBe(devSub(teacher));
     expect(user.role).toBe("teacher");
@@ -32,15 +39,16 @@ describe("upsertPersona", () => {
   });
 
   it("is idempotent: signing in twice keeps one account", async () => {
-    const app = await testApp();
     const first = await upsertPersona(app, student);
+    const accounts = (await app.db.select().from(users)).length;
     const second = await upsertPersona(app, student);
     expect(second.id).toBe(first.id);
-    expect(await app.db.select().from(users)).toHaveLength(1);
+    // Not one account more, under any sub.
+    expect(await app.db.select().from(users)).toHaveLength(accounts);
+    expect(await app.db.select().from(users).where(eq(users.oidcSub, devSub(student)))).toHaveLength(1);
   });
 
   it("carries the persona's role, with no grant in the database", async () => {
-    const app = await testApp();
     expect((await upsertPersona(app, student)).role).toBe("student");
     const admin = PERSONAS.find((p) => p.key === "admin")!;
     expect((await upsertPersona(app, admin)).role).toBe("admin");

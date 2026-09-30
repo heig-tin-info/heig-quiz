@@ -46,6 +46,7 @@ import {
 } from "../../db/schema.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
+import { keysOf } from "../../test/keys.js";
 import { reload, seedLive } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import { FORBIDDEN_STUDENT_KEYS } from "../live/studentView.js";
@@ -230,27 +231,6 @@ const shortAnswer = (index: number) => `answer-q${index}`;
 // --- Access -------------------------------------------------------------------
 
 describe("who may preview", () => {
-  it("answers 404 to a teacher off the staff, on all four routes", async () => {
-    const w = await world();
-    const body = { seed: 1, itemId: w.codeItemId, regions: [] };
-    for (const [url, payload] of [
-      [w.url, undefined],
-      [`${w.url}/run`, body],
-      [`${w.url}/simulate`, { seed: 1, itemId: w.codeItemId, answer: {} }],
-      [`${w.url}/grade`, { seed: 1, answers: {} }],
-    ] as const) {
-      const res = await post(url, stranger.headers, payload);
-      expect(res.statusCode, url).toBe(404);
-      expect(res.json()).toEqual({ error: "not_found" });
-    }
-  });
-
-  it("refuses a student outright", async () => {
-    const w = await world();
-    expect((await post(w.url, student.headers)).statusCode).toBe(403);
-    expect((await post(`${w.url}/grade`, student.headers, { seed: 1, answers: {} })).statusCode).toBe(403);
-  });
-
   it("is open in every state, a running and a closed evaluation included", async () => {
     const w = await world();
     expect((await post(w.url, teacher.headers)).statusCode).toBe(200);
@@ -373,17 +353,7 @@ describe("starting a preview", () => {
     ]) {
       expect(serialized, marker).not.toContain(marker);
     }
-    const keys = new Set<string>();
-    const walk = (value: unknown) => {
-      if (Array.isArray(value)) value.forEach(walk);
-      else if (value !== null && typeof value === "object") {
-        for (const [key, child] of Object.entries(value)) {
-          keys.add(key);
-          walk(child);
-        }
-      }
-    };
-    walk((res.json() as EvaluationPreview).view.items.map((i) => i.student));
+    const keys = keysOf((res.json() as EvaluationPreview).view.items.map((i) => i.student));
     for (const key of FORBIDDEN_STUDENT_KEYS) expect(keys.has(key), key).toBe(false);
     // The visible case, on the other hand, IS published (docs/04 §4.7).
     expect(serialized).toContain("visible-1");
@@ -716,17 +686,7 @@ describe("previewing one item", () => {
       ]) {
         expect(res.body, marker).not.toContain(marker);
       }
-      const keys = new Set<string>();
-      const walk = (value: unknown) => {
-        if (Array.isArray(value)) value.forEach(walk);
-        else if (value !== null && typeof value === "object") {
-          for (const [key, child] of Object.entries(value)) {
-            keys.add(key);
-            walk(child);
-          }
-        }
-      };
-      walk((res.json() as ItemPreview).student);
+      const keys = keysOf((res.json() as ItemPreview).student);
       for (const key of FORBIDDEN_STUDENT_KEYS) expect(keys.has(key), key).toBe(false);
     }
   });

@@ -26,15 +26,11 @@ describe("scopeFor", () => {
 });
 
 describe("claimList", () => {
-  it("takes the JSON arrays edu-ID specifies", () => {
-    expect(claimList(["student@heig-vd.ch", "member@heig-vd.ch"])).toEqual([
-      "student@heig-vd.ch",
-      "member@heig-vd.ch",
-    ]);
-  });
-
-  it("also splits the separated strings the SAML bridges hand out", () => {
-    expect(claimList("student, staff;member")).toEqual(["student", "staff", "member"]);
+  it.each([
+    ["the JSON arrays edu-ID specifies", ["student@heig-vd.ch", "member@heig-vd.ch"], ["student@heig-vd.ch", "member@heig-vd.ch"]],
+    ["the separated strings the SAML bridges hand out", "student, staff;member", ["student", "staff", "member"]],
+  ])("takes %s", (_, claim, list) => {
+    expect(claimList(claim)).toEqual(list);
   });
 
   it("ignores what is absent or unusable", () => {
@@ -121,12 +117,11 @@ describe("verifiedAddressesOf", () => {
     swissEduIDLinkedAffiliationMail: ["first.last@heig-vd.ch"],
   };
 
-  it("drops the login address the IdP did not verify", () => {
-    expect(verifiedAddressesOf(claims, false)).toEqual(["first.last@heig-vd.ch"]);
-  });
-
-  it("keeps it once verified", () => {
-    expect(verifiedAddressesOf(claims, true)).toEqual(["boss@heig.test", "first.last@heig-vd.ch"]);
+  it.each([
+    ["drops the login address the IdP did not verify", false, ["first.last@heig-vd.ch"]],
+    ["keeps it once verified", true, ["boss@heig.test", "first.last@heig-vd.ch"]],
+  ])("%s", (_, verified, addresses) => {
+    expect(verifiedAddressesOf(claims, verified)).toEqual(addresses);
   });
 });
 

@@ -16,7 +16,6 @@ import { fakeShort } from "../../test/fakeType.js";
 
 let server: TestServer;
 let owner: Awaited<ReturnType<TestServer["signIn"]>>;
-let stranger: Awaited<ReturnType<TestServer["signIn"]>>;
 let poolId: string;
 let otherPoolId: string;
 let restoreShort: () => void;
@@ -80,7 +79,6 @@ beforeAll(async () => {
   restoreShort = registerForTests(fakeShort);
   server = await testServer();
   owner = await server.signIn("teacher");
-  stranger = await server.signIn("teacher");
   poolId = await newPool("Categories pool");
   otherPoolId = await newPool("Another pool");
   chapter = await newCategory(poolId, "Chapter 1");
@@ -116,11 +114,6 @@ describe("GET /pools/:id/categories", () => {
     expect(body.rootQuestionCount).toBe(1);
   });
 
-  it("answers 404 to a teacher without a seat, like a missing pool", async () => {
-    const res = await read(stranger.headers);
-    expect(res.statusCode).toBe(404);
-    expect(res.json()).toEqual({ error: "not_found" });
-  });
 });
 
 describe("PUT /pools/:id/categories/order", () => {

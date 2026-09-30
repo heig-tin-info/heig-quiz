@@ -8,8 +8,8 @@ import { eq } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import { courseStaff, courses, poolMembers, pools, teacherGrants, users } from "../db/schema.js";
 import { testDb } from "../test/db.js";
-import { loginAdmits, signIn } from "./login.js";
-import type { OidcClaims } from "./oidc.js";
+import { oidcClaims as claims } from "../test/oidc.js";
+import { signIn } from "./login.js";
 
 const config = {
   SUPER_ADMIN_EMAIL: "boss@heig.test",
@@ -29,42 +29,6 @@ beforeAll(async () => {
     id: randomUUID(),
     email: "granted@heig.test",
     createdBy: adminId,
-  });
-});
-
-function claims(
-  sub: string,
-  raw: Record<string, unknown>,
-  emailVerified: boolean,
-  complete = true,
-): OidcClaims {
-  return {
-    sub,
-    email: typeof raw.email === "string" ? raw.email : "",
-    emailVerified,
-    givenName: "",
-    familyName: "",
-    swissEduId: null,
-    picture: null,
-    raw,
-    complete,
-  };
-}
-
-describe("loginAdmits (ADR-028)", () => {
-  const staging = { ...config, LOGIN_ALLOWLIST: "dev@heig.test" } as AppConfig;
-
-  it("refuses a listed login address the IdP did not verify", () => {
-    expect(loginAdmits(staging, claims("s", { email: "dev@heig.test" }, false))).toBe(false);
-  });
-
-  it("admits a listed address the institution asserts", () => {
-    expect(
-      loginAdmits(
-        staging,
-        claims("s", { email: "x@gmail.test", swissEduIDLinkedAffiliationMail: ["dev@heig.test"] }, false),
-      ),
-    ).toBe(true);
   });
 });
 

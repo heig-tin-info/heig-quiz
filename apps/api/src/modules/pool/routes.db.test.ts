@@ -74,50 +74,6 @@ afterAll(async () => {
 });
 
 describe("guards (invariant 6)", () => {
-  it("answers 404, not 403, to a teacher who is not staff of the pool", async () => {
-    for (const url of [`/app/api/pools/${poolId}`, `/app/api/pools/${poolId}/questions`]) {
-      const res = await server.app.inject({ method: "GET", url, headers: stranger.headers });
-      expect(res.statusCode).toBe(404);
-      expect(res.json()).toEqual({ error: "not_found" });
-    }
-  });
-
-  it("does not let a stranger write into the pool either", async () => {
-    const res = await server.app.inject({
-      method: "POST",
-      url: `/app/api/pools/${poolId}/questions`,
-      headers: stranger.headers,
-      payload: { type: "short", internalName: "intruder" },
-    });
-    expect(res.statusCode).toBe(404);
-  });
-
-  it("answers 404 on a question of a pool the teacher cannot reach, read or write", async () => {
-    const id = await createQuestion("guarded question");
-    const read = await server.app.inject({
-      method: "GET",
-      url: `/app/api/questions/${id}`,
-      headers: stranger.headers,
-    });
-    expect(read.statusCode).toBe(404);
-    expect(read.json()).toEqual({ error: "not_found" });
-    const write = await server.app.inject({
-      method: "PATCH",
-      url: `/app/api/questions/${id}`,
-      headers: stranger.headers,
-      payload: { internalName: "hijacked" },
-    });
-    expect(write.statusCode).toBe(404);
-    expect(write.json()).toEqual({ error: "not_found" });
-    // The owner still reaches it, so the 404 above is the predicate, not a miss.
-    const own = await server.app.inject({
-      method: "GET",
-      url: `/app/api/questions/${id}`,
-      headers: owner.headers,
-    });
-    expect(own.statusCode).toBe(200);
-  });
-
   it("refuses a student outright, whatever the pool", async () => {
     const student = await server.signIn("student");
     const res = await server.app.inject({

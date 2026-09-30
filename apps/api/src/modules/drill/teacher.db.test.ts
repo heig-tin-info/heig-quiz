@@ -158,11 +158,10 @@ afterAll(async () => {
 });
 
 describe("the teacher's view of the drill: access", () => {
-  it("is the classroom staff's alone: another teacher gets a 404, a student a 403", async () => {
+  // Another teacher's 404 and a student's 403: `accessSweep.db.test.ts`.
+  it("is served to the classroom's staff, and a 404 for an unknown classroom", async () => {
     const [seat] = await server.app.db.select().from(enrollments).where(eq(enrollments.classroomId, seed.classroomId));
     for (const path of ["activity", `progress?student=${seat!.id}`, "mastery"]) {
-      expect((await get(`${base()}/${path}`, stranger)).statusCode).toBe(404);
-      expect((await get(`${base()}/${path}`, alice)).statusCode).toBe(403);
       expect((await get(`${base()}/${path}`, teacher)).statusCode).toBe(200);
     }
     expect((await get(`/app/api/classrooms/${randomUUID()}/drill/activity`, teacher)).statusCode).toBe(404);

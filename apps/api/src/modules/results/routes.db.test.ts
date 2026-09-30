@@ -122,15 +122,6 @@ describe("the grading panel (§4.5)", () => {
     expect(rerun.json()).toMatchObject({ evaluationId: built.evaluationId });
   });
 
-  it("answers 404 to a teacher of another course and 403 to a student", async () => {
-    expect((await get(`/app/api/evaluations/${built.evaluationId}/grading`, other.headers)).statusCode).toBe(404);
-    expect((await get(`/app/api/evaluations/${built.evaluationId}/results`, other.headers)).statusCode).toBe(404);
-    expect(
-      (await post(`/app/api/evaluations/${built.evaluationId}/release`, other.headers, { confirm: true }))
-        .statusCode,
-    ).toBe(404);
-    expect((await get(`/app/api/evaluations/${built.evaluationId}/results`, student.headers)).statusCode).toBe(403);
-  });
 });
 
 describe("results and the export (§4.6)", () => {
