@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { z } from "zod";
@@ -236,7 +237,66 @@ const EnvSchema = z.object({
         .map((t) => t.trim().toLowerCase())
         .filter((t) => t !== ""),
     ),
+
+  // --- GitHub (ADR-035, N-SEC-16) ---
+
+  /**
+   * Quiz's OWN GitHub App (decision D23): never heig-classroom's, and in
+   * staging a separate App on a test organization (N-SEC-18). All six empty
+   * — the default — means the GitHub features are off and everything else
+   * starts as usual. The key is a PEM file outside the repository and the
+   * database (ADR-010); its path is made absolute below.
+   */
+  GITHUB_APP_ID: z.string().trim().default(""),
+  GITHUB_APP_PRIVATE_KEY_PATH: z.string().trim().default(""),
+  /** The App's URL name: the install link, and the bot login `<slug>[bot]`. */
+  GITHUB_APP_SLUG: z.string().trim().default(""),
+  /** HMAC key of `/webhooks/github` (N-SEC-17). */
+  GITHUB_WEBHOOK_SECRET: z.string().trim().default(""),
+  /** The App's own user-to-server OAuth, for account linking (no OAuth App). */
+  GITHUB_APP_CLIENT_ID: z.string().trim().default(""),
+  GITHUB_APP_CLIENT_SECRET: z.string().trim().default(""),
 });
+
+const GITHUB_KEYS = [
+  "GITHUB_APP_ID",
+  "GITHUB_APP_PRIVATE_KEY_PATH",
+  "GITHUB_APP_SLUG",
+  "GITHUB_WEBHOOK_SECRET",
+  "GITHUB_APP_CLIENT_ID",
+  "GITHUB_APP_CLIENT_SECRET",
+] as const;
+
+/** The shortest webhook secret production accepts (N-SEC-16). */
+export const GITHUB_WEBHOOK_SECRET_MIN = 32;
+
+/**
+ * Production refusals of the GitHub App (N-SEC-16): once ANY `GITHUB_*` is
+ * set, a half-configured App is refused rather than left silently off or
+ * half working. Returns the reason, or null when the configuration stands.
+ */
+function githubRefusal(env: Record<(typeof GITHUB_KEYS)[number], string>): string | null {
+  if (GITHUB_KEYS.every((key) => env[key] === "")) return null;
+  if (env.GITHUB_APP_ID === "") return "GITHUB_APP_ID is required when any GITHUB_* is set";
+  if (!readableFile(env.GITHUB_APP_PRIVATE_KEY_PATH)) {
+    return "GITHUB_APP_PRIVATE_KEY_PATH must be a readable key file";
+  }
+  if (env.GITHUB_APP_SLUG === "") return "GITHUB_APP_SLUG is required";
+  if (env.GITHUB_WEBHOOK_SECRET.length < GITHUB_WEBHOOK_SECRET_MIN) {
+    return `GITHUB_WEBHOOK_SECRET must be at least ${GITHUB_WEBHOOK_SECRET_MIN} characters`;
+  }
+  return null;
+}
+
+function readableFile(path: string): boolean {
+  if (path === "") return false;
+  try {
+    readFileSync(resolve(path));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export type AppConfig = z.infer<typeof EnvSchema>;
 
@@ -289,6 +349,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (teamsEnabled(parsed.data) && parsed.data.TEAMS_ALLOWED_TENANTS.length === 0) {
       throw new Error("Invalid configuration: TEAMS_ALLOWED_TENANTS is required in production when Teams is on");
     }
+    // A GitHub App whose key cannot be read, whose webhook secret can be
+    // brute-forced or whose slug is unknown fails later, on a student's
+    // repository: refuse it at boot instead (N-SEC-16).
+    const github = githubRefusal(parsed.data);
+    if (github) throw new Error(`Invalid configuration: ${github}`);
   }
   // `http` without an address is a runner that is silently never called: the
   // process refuses to start rather than grade every code question by hand
@@ -327,7 +392,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     OIDC_PRIVATE_KEY_PATH: parsed.data.OIDC_PRIVATE_KEY_PATH
       ? resolve(parsed.data.OIDC_PRIVATE_KEY_PATH)
       : "",
+    GITHUB_APP_PRIVATE_KEY_PATH: parsed.data.GITHUB_APP_PRIVATE_KEY_PATH
+      ? resolve(parsed.data.GITHUB_APP_PRIVATE_KEY_PATH)
+      : "",
   };
+}
+
+/**
+ * The GitHub App is configured: its id and a key file are set. Outside
+ * production the key may still be missing on disk, and `githubApp()`
+ * (github/app.ts) then stays off too.
+ */
+export function githubEnabled(
+  config: Pick<AppConfig, "GITHUB_APP_ID" | "GITHUB_APP_PRIVATE_KEY_PATH">,
+): boolean {
+  return config.GITHUB_APP_ID !== "" && config.GITHUB_APP_PRIVATE_KEY_PATH !== "";
 }
 
 /** Scaleway credentials present: e-mails are really sent (otherwise logged). */

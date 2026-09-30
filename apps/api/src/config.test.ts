@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { loadConfig, loginAllowed, mailEnabled, pgliteDir, teamsEnabled } from "./config.js";
+import { afterAll, describe, expect, it } from "vitest";
+
+import { githubEnabled, loadConfig, loginAllowed, mailEnabled, pgliteDir, teamsEnabled } from "./config.js";
 
 /*
  * The configuration is the last place a development convenience can be
@@ -142,5 +146,78 @@ describe("notification channels (ADR-030)", () => {
     // Teams off, or outside production: nothing to refuse.
     expect(() => loadConfig(PROD)).not.toThrow();
     expect(() => loadConfig({ TEAMS_CLIENT_ID: "c", TEAMS_CLIENT_SECRET: "s" })).not.toThrow();
+  });
+});
+
+describe("the GitHub App (N-SEC-16)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "quiz-config-"));
+  const pem = join(dir, "app.private-key.pem");
+  writeFileSync(pem, "-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----\n");
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  const APP = {
+    GITHUB_APP_ID: "123456",
+    GITHUB_APP_PRIVATE_KEY_PATH: pem,
+    GITHUB_APP_SLUG: "heig-quiz",
+    GITHUB_WEBHOOK_SECRET: "w".repeat(32),
+    GITHUB_APP_CLIENT_ID: "Iv23li",
+    GITHUB_APP_CLIENT_SECRET: "client-secret",
+  };
+
+  it("is off with no GITHUB_* at all, in production too, and the rest boots", () => {
+    const config = loadConfig(PROD);
+    expect(githubEnabled(config)).toBe(false);
+    expect(config.GITHUB_APP_ID).toBe("");
+    expect(config.GITHUB_APP_PRIVATE_KEY_PATH).toBe("");
+    // Blank values count as absent.
+    expect(() => loadConfig({ ...PROD, GITHUB_APP_ID: " ", GITHUB_WEBHOOK_SECRET: "" })).not.toThrow();
+  });
+
+  it("boots a complete App in production, the key path made absolute", () => {
+    const config = loadConfig({ ...PROD, ...APP });
+    expect(githubEnabled(config)).toBe(true);
+    expect(config.GITHUB_APP_PRIVATE_KEY_PATH).toBe(pem);
+    const relative = loadConfig({ GITHUB_APP_ID: "1", GITHUB_APP_PRIVATE_KEY_PATH: "secrets/k.pem" });
+    expect(relative.GITHUB_APP_PRIVATE_KEY_PATH).toMatch(/^\/.*\/secrets\/k\.pem$/);
+  });
+
+  it("refuses an App id whose key file is unreadable", () => {
+    expect(() => loadConfig({ ...PROD, ...APP, GITHUB_APP_PRIVATE_KEY_PATH: join(dir, "missing.pem") })).toThrow(
+      /GITHUB_APP_PRIVATE_KEY_PATH/,
+    );
+    expect(() => loadConfig({ ...PROD, ...APP, GITHUB_APP_PRIVATE_KEY_PATH: "" })).toThrow(
+      /GITHUB_APP_PRIVATE_KEY_PATH/,
+    );
+    // A directory is not a key file.
+    expect(() => loadConfig({ ...PROD, ...APP, GITHUB_APP_PRIVATE_KEY_PATH: dir })).toThrow(
+      /GITHUB_APP_PRIVATE_KEY_PATH/,
+    );
+  });
+
+  it("refuses a webhook secret under 32 characters, or none", () => {
+    expect(() => loadConfig({ ...PROD, ...APP, GITHUB_WEBHOOK_SECRET: "w".repeat(31) })).toThrow(
+      /GITHUB_WEBHOOK_SECRET/,
+    );
+    expect(() => loadConfig({ ...PROD, ...APP, GITHUB_WEBHOOK_SECRET: "" })).toThrow(/GITHUB_WEBHOOK_SECRET/);
+    // Surrounding blanks do not count towards the length.
+    expect(() =>
+      loadConfig({ ...PROD, ...APP, GITHUB_WEBHOOK_SECRET: ` ${"w".repeat(31)} ` }),
+    ).toThrow(/GITHUB_WEBHOOK_SECRET/);
+  });
+
+  it("refuses a missing App slug", () => {
+    expect(() => loadConfig({ ...PROD, ...APP, GITHUB_APP_SLUG: "" })).toThrow(/GITHUB_APP_SLUG/);
+  });
+
+  it("refuses a half-configured App: any GITHUB_* set requires the App id", () => {
+    const { GITHUB_APP_ID: _id, ...withoutId } = APP;
+    expect(() => loadConfig({ ...PROD, ...withoutId })).toThrow(/GITHUB_APP_ID/);
+    expect(() => loadConfig({ ...PROD, GITHUB_WEBHOOK_SECRET: "w".repeat(40) })).toThrow(/GITHUB_APP_ID/);
+  });
+
+  it("refuses nothing outside production", () => {
+    expect(() =>
+      loadConfig({ GITHUB_APP_ID: "1", GITHUB_APP_PRIVATE_KEY_PATH: join(dir, "missing.pem"), GITHUB_WEBHOOK_SECRET: "short" }),
+    ).not.toThrow();
   });
 });
