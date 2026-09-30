@@ -2017,7 +2017,7 @@ export const fr: Record<keyof Dict, string> = {
   "templates.deleteConfirm": "Supprimer le modèle « {name} » ? Les évaluations créées à partir de lui continuent de fonctionner.",
   "templates.save": "Enregistrer comme modèle",
   "templates.saveTitle": "Enregistrer comme modèle de {course}",
-  "templates.saveHelp": "Toutes les classes du cours pourront partir de ce modèle. Les questions, les points et les réglages sont gardés ; les dates, le code d'accès et les adresses IP ne le sont pas.",
+  "templates.saveHelp": "Toutes les classes du cours pourront partir de ce modèle. Les questions, les points et les réglages sont gardés ; les dates, le code d'accès et les adresses IP ne le sont pas. Cette évaluation est ensuite liée au modèle.",
   "templates.saved": "Enregistré comme modèle du cours.",
   "templates.saveFailed": "Le modèle n'a pas pu être enregistré.",
   "templates.startFrom": "Partir de",

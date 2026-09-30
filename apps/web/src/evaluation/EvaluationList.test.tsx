@@ -216,6 +216,34 @@ describe("EvaluationList", () => {
       totalPoints: 6,
     };
 
+    it("saves a row as a template from its menu, never a poll's", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch({
+        ...classroom,
+        ...list([
+          summary({ state: "closed", title: "Closed quiz" }),
+          summary({ id: id("evaluation", 2), mode: "poll", state: "closed", title: "A poll" }),
+        ]),
+        [`POST /app/api/evaluations/${EVALUATION_ID}/template`]: ok(template),
+      });
+      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} onNew={vi.fn()} />);
+
+      await user.click(await screen.findByRole("button", { name: /A poll/ }));
+      await waitFor(() => expect(screen.getByRole("menu")).toBeInTheDocument());
+      expect(screen.queryByRole("menuitem", { name: "Save as template" })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: /Closed quiz/ }));
+      await user.click(await screen.findByRole("menuitem", { name: "Save as template" }));
+      const dialog = await screen.findByRole("dialog", { name: /Programmation C/ });
+      await user.click(within(dialog).getByRole("button", { name: "Save as template" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(calls).toContainEqual({
+        url: `/app/api/evaluations/${EVALUATION_ID}/template`,
+        method: "POST",
+        body: { title: "Closed quiz" },
+      });
+    });
+
     it("leaves the dialog unchanged when the course has none", async () => {
       const user = userEvent.setup();
       mockFetch({

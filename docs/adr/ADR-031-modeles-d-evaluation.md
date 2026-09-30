@@ -9,7 +9,8 @@ as template*, the course's list with delete, *Instantiate*), then editing a
 template in place, then pulling a revision into an instance. The promote
 screen is deferred (06 no. 25, issue #229). The rest of the delivery was re-split on
 2026-09-28: see the addendum at the end. The pull (PR B) is delivered; its
-decisions are the second addendum.
+decisions are the second addendum. *Save as template* links its source
+since 2026-09-30: the third addendum.
 
 ## Context
 
@@ -365,3 +366,57 @@ opens the pulled questions. The route is on the evaluation
 template id there is the 404 of a missing evaluation. Audited as
 `template.pull` with `{ templateId, from, to }`; the classroom's refresh hint
 is published as for any item write.
+
+## Addendum (2026-09-30): *Save as template* links its source
+
+Settled with the product owner (issue discussion of 2026-09-30).
+
+### 1. The source becomes an instance of what it gave
+
+*Save as template* now also sets the SOURCE's `origin_template_id` to the new
+template and its `origin_revision` to 1, the template's revision: the
+evaluation counts as made from the template it gave, exactly as if it had
+been instantiated from it. "Instance" (glossary, §1 above) therefore means
+any classroom evaluation linked to a template, whether *Instantiate* made it
+or it gave the template. Everything built on the origin follows unchanged:
+once a colleague edits the template, the source is "behind", and where a
+pull would be accepted (`templatePullable`, PR B §3) it wears the badge and
+its launch checklist the warning. A closed or released source keeps the link
+as a record only: no badge, no pull. The link is also the lineage a future
+promote screen (06 no. 25) would stand on; this does not decide that screen.
+
+### 2. A source that already had an origin is relinked
+
+A source that was itself an instance of another template is relinked to the
+new one: its content is now the new template's, so that is its truer origin.
+The origin it loses is kept in the audit log: `template.create` carries
+`previousOrigin: { templateId, revision } | null` beside `from`, so the log
+alone can rebuild the old link. No new action in the audit union, and no
+entry keyed on the source: `from` names it.
+
+### 3. The transaction
+
+`saveAsTemplate` is one transaction. It locks the source
+`SELECT … FOR NO KEY UPDATE` — the lock its own `UPDATE` of the origin
+takes anyway, and weaker than `FOR UPDATE` so that a running evaluation keeps
+taking attempts (an attempt's foreign key takes `FOR KEY SHARE` on it) —
+re-reads it under that lock, copies it into the course and links it. A pull
+on the same source (PR B §4: old template `FOR SHARE`, then the instance)
+waits on this lock or this waits on it; no template row other than the new
+one is touched, so no lock order can cross `pullTemplate`'s, `editTemplate`'s
+or `deleteTemplate`'s. Item writes on an evaluation take no row lock: one
+landing between the copy and the link makes the source differ from its rev. 1
+without a badge, which is what any later edit of the source does too.
+
+### 4. What is not done
+
+- **No backfill.** Templates saved before this change leave their sources
+  unlinked. The `template.create` rows would allow it, but it would raise
+  badges on evaluations their teachers never linked.
+- **Duplicate** still makes an unlinked copy (F-EVAL-14), of a source as of
+  any instance.
+- **An unlinked pool** is not checked when copying into a course (it is when
+  copying into a classroom). A source holding a question of a pool its course
+  has since unlinked gives a template that *Instantiate* and a pull refuse
+  (`422 template_pool_unlinked`), and the source's badge would open that
+  refusal. Unchanged by this addendum; left as it was.

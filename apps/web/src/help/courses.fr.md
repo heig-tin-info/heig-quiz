@@ -47,8 +47,9 @@ Un modèle est une évaluation gardée par le cours plutôt que par une classe :
 ses questions, ses points et ses réglages, sans dates, code d'accès ni
 adresses IP. **Nouveau modèle**, sur la page du cours, en crée un vide (un
 titre et un mode) ; **Enregistrer comme modèle**, dans le menu d'une
-évaluation, en crée un à partir de cette évaluation. **Utiliser dans une
-classe** part de l'un d'eux pour une nouvelle évaluation.
+évaluation, en crée un à partir de cette évaluation, qui compte dès lors
+comme créée depuis lui (rév. 1). **Utiliser dans une classe** part de l'un
+d'eux pour une nouvelle évaluation.
 
 Un clic sur un modèle ouvre son éditeur : son titre, ses questions (ajouter,
 retirer, réordonner, points, séparations de section, dernière version d'une
@@ -59,10 +60,10 @@ renommer non. Une question dont la banque n'est plus liée au cours y est
 signalée : utiliser le modèle est refusé tant que la banque n'est pas à
 nouveau liée ou la question retirée.
 
-Une évaluation créée depuis un modèle ne le suit pas d'elle-même. Quand le
-modèle a changé depuis, sa ligne dans la classe porte un badge **modèle
-rév. 1 → 3**, et sa liste de contrôle avant lancement un avertissement ; les
-deux ouvrent la même confirmation, qui liste les questions ajoutées, retirées
+Une évaluation créée depuis un modèle — ou enregistrée comme modèle — ne le
+suit pas d'elle-même. Quand le modèle a changé depuis, sa ligne dans la
+classe porte un badge **modèle rév. 1 → 3**, et sa liste de contrôle avant
+lancement un avertissement ; les deux ouvrent la même confirmation, qui liste les questions ajoutées, retirées
 et modifiées et dit si l'ordre change. Confirmer remplace les QUESTIONS de
 l'évaluation par celles du modèle — les changements qui leur ont été faits
 dans cette évaluation sont perdus — et garde tout le reste : titre, dates,
