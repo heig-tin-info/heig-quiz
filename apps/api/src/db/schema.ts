@@ -15,3 +15,4 @@ export * from "./live.js";
 export * from "./grading.js";
 export * from "./notifications.js";
 export * from "./drill.js";
+export * from "./journal.js";

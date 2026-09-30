@@ -230,7 +230,8 @@ export const oauthGrants = pgTable(
   (t) => [index("oauth_grants_user_idx").on(t.userId)],
 );
 
-const bytea = customType<{ data: Buffer }>({
+/** A `bytea` column, read and written as a Buffer (avatars, journal assets). */
+export const bytea = customType<{ data: Buffer }>({
   dataType() {
     return "bytea";
   },
