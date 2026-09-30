@@ -190,22 +190,6 @@ describe("resetting one's own test attempt (ADR-018)", () => {
     expect(reset.json()).toEqual({ deleted: false });
   });
 
-  it("refuses a student outright", async () => {
-    const world = await running();
-    const reset = await del(`/app/api/evaluations/${world.seed.evaluationId}/attempt`, student.headers);
-    expect(reset.statusCode).toBe(403);
-  });
-
-  it("is a 404 for a teacher who is not on the course's staff", async () => {
-    const world = await running();
-    const stranger = await server.signIn("teacher");
-    const reset = await del(
-      `/app/api/evaluations/${world.seed.evaluationId}/attempt`,
-      stranger.headers,
-    );
-    expect(reset.statusCode).toBe(404);
-  });
-
   it("never touches a student's attempt", async () => {
     const db = server.app.db;
     const world = await running();

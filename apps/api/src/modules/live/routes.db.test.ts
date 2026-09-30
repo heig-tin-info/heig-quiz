@@ -69,16 +69,6 @@ describe("the teacher's authoring surface (§4.3)", () => {
     expect(patched.json().evaluation.title).toBe("Contrôle 1");
   });
 
-  it("answers 404, not 403, to a teacher who is not on the staff", async () => {
-    const stranger = await server.signIn("teacher");
-    expect((await get(`/app/api/evaluations/${seed.evaluationId}`, stranger.headers)).statusCode).toBe(404);
-    expect((await get(`/app/api/evaluations/${seed.evaluationId}/dashboard`, stranger.headers)).statusCode).toBe(404);
-  });
-
-  it("refuses a student on every teacher route", async () => {
-    expect((await get(`/app/api/evaluations/${seed.evaluationId}`, student.headers)).statusCode).toBe(403);
-  });
-
   it("previews as a student, without creating an attempt", async () => {
     const preview = await post(`/app/api/evaluations/${seed.evaluationId}/preview`, teacher.headers);
     expect(preview.statusCode).toBe(200);

@@ -230,27 +230,6 @@ const shortAnswer = (index: number) => `answer-q${index}`;
 // --- Access -------------------------------------------------------------------
 
 describe("who may preview", () => {
-  it("answers 404 to a teacher off the staff, on all four routes", async () => {
-    const w = await world();
-    const body = { seed: 1, itemId: w.codeItemId, regions: [] };
-    for (const [url, payload] of [
-      [w.url, undefined],
-      [`${w.url}/run`, body],
-      [`${w.url}/simulate`, { seed: 1, itemId: w.codeItemId, answer: {} }],
-      [`${w.url}/grade`, { seed: 1, answers: {} }],
-    ] as const) {
-      const res = await post(url, stranger.headers, payload);
-      expect(res.statusCode, url).toBe(404);
-      expect(res.json()).toEqual({ error: "not_found" });
-    }
-  });
-
-  it("refuses a student outright", async () => {
-    const w = await world();
-    expect((await post(w.url, student.headers)).statusCode).toBe(403);
-    expect((await post(`${w.url}/grade`, student.headers, { seed: 1, answers: {} })).statusCode).toBe(403);
-  });
-
   it("is open in every state, a running and a closed evaluation included", async () => {
     const w = await world();
     expect((await post(w.url, teacher.headers)).statusCode).toBe(200);

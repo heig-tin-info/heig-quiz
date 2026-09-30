@@ -501,14 +501,6 @@ describe("roster accommodations (F-ORG-07)", () => {
     expect(refused.statusCode).toBe(400);
   });
 
-  it("answers 404 to a teacher who is not staff of the classroom", async () => {
-    const res = await server.app.inject({
-      method: "GET",
-      url: `/app/api/classrooms/${classroomId}`,
-      headers: outsider.headers,
-    });
-    expect(res.statusCode).toBe(404);
-  });
 });
 
 describe("dated period (F-ORG-03, #156)", () => {

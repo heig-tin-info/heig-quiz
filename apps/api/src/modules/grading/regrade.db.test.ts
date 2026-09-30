@@ -251,15 +251,10 @@ describe("the versions of an item, for the regrade sheet", () => {
     expect(ItemVersions.parse(viaItem.json()).versions).toHaveLength(2);
   });
 
-  it("is a 404 off the staff, and for an item of another evaluation", async () => {
+  // Off the staff, and for a student: `accessSweep.db.test.ts`.
+  it("is a 404 for an item of another evaluation", async () => {
     const seed = await twoVersions();
     const elsewhere = await twoVersions();
-    const url = `/app/api/evaluations/${seed.evaluationId}/items/${seed.itemIds[0]}/versions`;
-    const stranger = await get(url, other.headers);
-    expect(stranger.statusCode).toBe(404);
-    expect(stranger.json()).toEqual({ error: "not_found" });
-    expect((await get(url, student.headers)).statusCode).toBe(403);
-
     const foreignItem = await get(
       `/app/api/evaluations/${seed.evaluationId}/items/${elsewhere.itemIds[0]}/versions`,
       teacher.headers,
