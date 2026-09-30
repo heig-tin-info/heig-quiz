@@ -456,7 +456,7 @@ const classroomDetail = (r: Room): ClassroomDetail => {
   };
 };
 
-const studentRooms = (): StudentClassroom[] =>
+export const studentRooms = (): StudentClassroom[] =>
   rooms.slice(0, 2).map((r) => {
     const c = courses.find((x) => x.id === r.courseId)!;
     return {

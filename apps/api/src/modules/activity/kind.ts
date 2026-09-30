@@ -13,13 +13,26 @@
  * that takes a classroom id is reached only after the route has loaded the
  * classroom (`staffAccess` or `readableClassroom`, invariant 6).
  */
-import type { ActivityKindName, ActivitySummary } from "@quiz/contracts";
+import type {
+  ActivityKindName,
+  ActivitySummary,
+  StudentActivities,
+  StudentActivityCard,
+} from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
 import type { Caller } from "../guards.js";
 
 /** The member of the union a kind lists. */
 export type SummaryOf<K extends ActivityKindName> = Extract<ActivitySummary, { kind: K }>;
+
+/** The student's card of a kind. */
+export type CardOf<K extends ActivityKindName> = Extract<StudentActivityCard, { kind: K }>;
+
+/** The groups of the student's classroom page, holding the cards of one kind. */
+export type StudentCardsOf<K extends ActivityKindName> = Pick<StudentActivities, "polls"> & {
+  [G in "open" | "upcoming" | "past"]: CardOf<K>[];
+};
 
 export interface ActivityKind<K extends ActivityKindName> {
   readonly kind: K;
@@ -31,4 +44,13 @@ export interface ActivityKind<K extends ActivityKindName> {
    * filtered afterwards (invariant 6).
    */
   listForTeacher(db: Db, caller: Caller, now: Date): Promise<SummaryOf<K>[]>;
+
+  /**
+   * The Activities tab of the student's classroom page (F-ORG-15): the
+   * caller's own cards in `classroomId`, drawn through the caller's claimed
+   * seat there, so a staff member without one gets none. The student payload
+   * whoever asks: no draft, nothing of another student. Reached only after
+   * the route loaded the classroom through `readableClassroom`.
+   */
+  studentCards(db: Db, caller: Caller, classroomId: string, now: Date): Promise<StudentCardsOf<K>>;
 }

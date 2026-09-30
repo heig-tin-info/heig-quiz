@@ -269,8 +269,11 @@ export async function joinedItem(
  * The attempt is the LATEST one (F-EVAL-15): one row per evaluation, however
  * many retakes. The attempt that COUNTS is the grading module's
  * `studentAttempts` to say.
+ *
+ * `classroomId` narrows it to one of those classrooms (the student's
+ * classroom page, M5-01): the same rows, never a second query shape.
  */
-export function studentEvaluationRows(db: Db, userId: string) {
+export function studentEvaluationRows(db: Db, userId: string, classroomId?: string) {
   return db
     .select({
       evaluation: evaluations,
@@ -286,7 +289,12 @@ export function studentEvaluationRows(db: Db, userId: string) {
       attempts,
       and(eq(attempts.evaluationId, evaluations.id), eq(attempts.userId, userId), isLatestAttempt),
     )
-    .where(eq(enrollments.userId, userId));
+    .where(
+      and(
+        eq(enrollments.userId, userId),
+        classroomId === undefined ? undefined : eq(enrollments.classroomId, classroomId),
+      ),
+    );
 }
 
 /** The total points of each evaluation, in one grouped query. */

@@ -71,6 +71,8 @@ import {
   QuestionPage,
   ResultsView,
   StudentFeedback,
+  StudentClassroom,
+  StudentClassroomPage,
   StudentHome,
   TemplateDetail,
   TemplatePullPreview,
@@ -362,6 +364,11 @@ const CHECKED: Case[] = [
     .map((p) => one("/app/api/p/:code", `/app/api/p/${p.code}`, PollPublicView)),
   one("/app/api/attempts/:id", `/app/api/attempts/${attemptId}`, AttemptOrLobby),
   one("/app/api/student/home", "/app/api/student/home", StudentHome),
+  // M5-01: the Courses list, and the page of each classroom it lists.
+  each("/app/api/student/classrooms", "/app/api/student/classrooms", StudentClassroom),
+  ...["r1", "r2"].map((id) =>
+    one("/app/api/student/classrooms/:id", `/app/api/student/classrooms/${id}`, StudentClassroomPage),
+  ),
   // The journal (F-JRN-07): the staff payload with and without a journal, the
   // student payload (`?view=student`), and every page both ways.
   ...courses
@@ -423,7 +430,6 @@ const UNCHECKED = [
   "/app/api/me", // Me
   "/app/api/courses", // CourseSummary[]
   "/app/api/classrooms/:id", // ClassroomDetail
-  "/app/api/student/classrooms", // StudentClassroom[]
   "/app/api/admin/teachers", // AdminTeacher[]
   // TODO(M2-01): the `github` contracts do not exist yet (mock/github.ts).
   "/app/api/github/orgs",

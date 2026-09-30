@@ -184,19 +184,6 @@ export interface ClassroomDetail {
   roster: RosterEntry[];
 }
 
-// --- Student side ---
-
-export interface StudentClassroom {
-  id: string;
-  name: string;
-  period: string;
-  courseName: string;
-  courseCode: string;
-  /** Teaching staff, for the student to know whom they are working with. */
-  teachers: string[];
-  timeBonusPercent: number;
-}
-
 // --- Administration ---
 
 export interface AdminTeacher {
