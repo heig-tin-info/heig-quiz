@@ -49,6 +49,44 @@ describe("loadConfig", () => {
     expect(loadConfig({ ...PROD, SEB_CONFIG_KEY_ENFORCE: "true" }).SEB_CONFIG_KEY_ENFORCE).toBe(true);
   });
 
+  it("refuses a google kiosk attestation that cannot run, in production", () => {
+    const dir = mkdtempSync(join(tmpdir(), "quiz-kiosk-"));
+    const keyFile = join(dir, "va.json");
+    writeFileSync(keyFile, "{}");
+    const google = {
+      ...PROD,
+      KIOSK_ATTESTATION: "google",
+      KIOSK_VA_KEY_FILE: keyFile,
+      KIOSK_GOOGLE_CUSTOMER_ID: "C01abcdef",
+      KIOSK_ENROLLMENT_DOMAIN: "heig-vd.ch",
+      KIOSK_EXTENSION_ID: "abcdefghijklmnopabcdefghijklmnop",
+    };
+    try {
+      expect(loadConfig(google).KIOSK_VA_KEY_FILE).toBe(keyFile);
+      for (const key of ["KIOSK_GOOGLE_CUSTOMER_ID", "KIOSK_ENROLLMENT_DOMAIN", "KIOSK_EXTENSION_ID"]) {
+        expect(() => loadConfig({ ...google, [key]: "" }), key).toThrow(new RegExp(key));
+        expect(() => loadConfig({ ...google, [key]: "  " }), key).toThrow(new RegExp(key));
+      }
+      expect(() => loadConfig({ ...google, KIOSK_VA_KEY_FILE: "" })).toThrow(/KIOSK_VA_KEY_FILE/);
+      expect(() => loadConfig({ ...google, KIOSK_VA_KEY_FILE: join(dir, "missing.json") })).toThrow(
+        /KIOSK_VA_KEY_FILE/,
+      );
+      // Every problem at once, in one boot error.
+      expect(() =>
+        loadConfig({ ...PROD, KIOSK_ATTESTATION: "google", KIOSK_ENROLLMENT_DOMAIN: "heig-vd.ch" }),
+      ).toThrow(
+        /KIOSK_VA_KEY_FILE is unreadable; KIOSK_GOOGLE_CUSTOMER_ID is missing; KIOSK_EXTENSION_ID is missing/,
+      );
+      // Outside production the checks do not apply: a developer may try the
+      // `google` path with half a configuration and see it answer unavailable.
+      expect(() => loadConfig({ NODE_ENV: "development", KIOSK_ATTESTATION: "google" })).not.toThrow();
+      // Nor do they when the kiosk path is off.
+      expect(() => loadConfig({ ...PROD, KIOSK_ATTESTATION: "off" })).not.toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("refuses the stub LLM provider in production", () => {
     expect(() => loadConfig({ ...PROD, LLM_PROVIDER: "stub" })).toThrow(/LLM_PROVIDER/);
     // Off, or absent, it boots.

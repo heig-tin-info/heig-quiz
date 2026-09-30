@@ -23,10 +23,13 @@ export interface PublicConfig {
   /** The API exposes the persona picker at `/app/auth/dev` (never in prod). */
   devLogin: boolean;
   /**
-   * The kiosk path exists (ADR-051: `KIOSK_ATTESTATION` is not `off`), so an
-   * exam may accept kiosk stations and the setting is offered.
+   * The kiosk path (ADR-051), null when `KIOSK_ATTESTATION` is `off`. Present,
+   * an exam may accept kiosk stations and the setting is offered;
+   * `extensionId` is the companion extension the `/kiosk` page talks to (null
+   * when not configured), and `mock` says the attestation is the development
+   * fixture, which answers `mock:<device id>` instead of asking an extension.
    */
-  kiosk: boolean;
+  kiosk: { extensionId: string | null; mock: boolean } | null;
 }
 
 /**

@@ -46,7 +46,6 @@ import {
 
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { CSRF_COOKIE, CSRF_HEADER } from "../../auth/session.js";
 import { isOwnedPoll, questions } from "../../db/schema.js";
 import {
   accessWhere,
@@ -59,7 +58,7 @@ import {
   poolAccess,
   teacherGuard,
 } from "../guards.js";
-import { emptyBody, invalid, notFound, sendFailure, teacherRoute } from "../http.js";
+import { csrfRefused, emptyBody, invalid, notFound, sendFailure, teacherRoute } from "../http.js";
 import * as live from "../live/service.js";
 import * as poolService from "../pool/service.js";
 import * as service from "./service.js";
@@ -411,20 +410,6 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
   // Public side — no session needed for an anonymous poll (F-AUTH-05); the
   // roster and the staff, signed in, for a classroom's
   // =========================================================================
-
-  /**
-   * The double-submit check, for a route that has no session to require. A
-   * browser that holds a `quiz_csrf` cookie is signed in somewhere on this
-   * origin, and a cross-site POST must not be able to spend that session's
-   * vote; a browser with no such cookie has nothing to steal and is let
-   * through, which is exactly the phone of an anonymous participant.
-   */
-  function csrfRefused(req: FastifyRequest, reply: FastifyReply): FastifyReply | null {
-    const cookie = req.cookies[CSRF_COOKIE];
-    if (!cookie) return null;
-    if (cookie === req.headers[CSRF_HEADER]) return null;
-    return reply.code(403).send({ error: "csrf" });
-  }
 
   /**
    * The poll a code names, with the browser's identity resolved — or

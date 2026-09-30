@@ -35,6 +35,8 @@ export const adminUsersKey = [...adminTeachersKey, "users"] as const;
  * `admin` hint another administrator's change raises reaches this list.
  */
 export const adminTasksKey = [...adminTeachersKey, "tasks"] as const;
+/** The kiosk station registry (ADR-051 §5). */
+export const adminKioskKey = ["admin-kiosk-devices"] as const;
 /** The caller's personal API tokens (settings). */
 export const apiTokensKey = ["api-tokens"] as const;
 /** The assistants connected through OAuth (settings, ADR-023). */

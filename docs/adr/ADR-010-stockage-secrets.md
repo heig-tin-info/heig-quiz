@@ -27,6 +27,15 @@ as `change-me`), set only when phase M6 ships. The runners PAT of
 ADR-007 stays on classroom's runner VM and never reaches Quiz. All of them
 go into the age-encrypted vault of point 2.
 
+**Amended again (2026-09-30, ADR-051, attested kiosk stations):** the Chrome
+Verified Access service account's JSON key (`KIOSK_VA_KEY_FILE`, mounted
+read-only like the edu-ID PEM) joins the list, set only when
+`KIOSK_ATTESTATION=google`; `config.ts` refuses to start in production when
+it is unreadable. The access token it buys lives in memory only and is never
+logged (N-SEC-19). Staging may hold its own service account's key, never
+production's. It goes into the vault of point 2 like the others; rotation is
+Google's two-key procedure (create a new key, deploy, delete the old one).
+
 ## Context
 
 Server secrets: the PEM private key of the GitHub App, the OIDC and GitHub OAuth client

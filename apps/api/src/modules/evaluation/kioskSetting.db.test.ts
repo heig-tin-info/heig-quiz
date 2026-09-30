@@ -93,6 +93,6 @@ describe("with a kiosk path (KIOSK_ATTESTATION=mock)", () => {
 
   it("says the path exists in the public configuration", async () => {
     const res = await server.app.inject({ method: "GET", url: "/app/api/config" });
-    expect(res.json()).toMatchObject({ kiosk: true });
+    expect(res.json()).toMatchObject({ kiosk: { extensionId: null, mock: true } });
   });
 });

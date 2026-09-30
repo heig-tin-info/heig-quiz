@@ -33,6 +33,7 @@ import {
 
 import { audit } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
+import { FixedWindowLimiter } from "../../limiter.js";
 import { invalid, notFound } from "../../modules/http.js";
 import { sessionTeacherGuard } from "../tokenRoutes.js";
 import { ClientRefused, redirectMatches, registerClient, resolveClient } from "./clients.js";
@@ -90,15 +91,11 @@ export async function oauthRoutes(app: FastifyInstance, config: AppConfig) {
 
   // --- Registration (RFC 7591) ----------------------------------------------
 
-  const registrations = new Map<string, { count: number; since: number }>();
+  const registrations = new FixedWindowLimiter(REGISTRATIONS_PER_HOUR, 3_600_000);
   app.post("/app/oauth/register", async (req, reply) => {
-    const now = app.clock.now().getTime();
-    const seen = registrations.get(req.ip);
-    const window = seen && now - seen.since < 3_600_000 ? seen : { count: 0, since: now };
-    if (window.count >= REGISTRATIONS_PER_HOUR) {
+    if (registrations.hit(req.ip, app.clock.now().getTime()) !== null) {
       return reply.code(429).send({ error: "slow_down", error_description: "Too many registrations" });
     }
-    registrations.set(req.ip, { count: window.count + 1, since: window.since });
 
     const body = ClientRegistration.safeParse(req.body ?? {});
     if (!body.success) {

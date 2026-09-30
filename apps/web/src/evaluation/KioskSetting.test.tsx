@@ -7,7 +7,7 @@ import { mockFetch, ok, renderWithProviders } from "../test/render";
 
 /* ADR-051 §2: kiosk stations, an exam's second trusted client, under SEB. */
 
-const config = (kiosk: boolean) => ({ "GET /app/api/config": ok({ devLogin: false, kiosk }) });
+const config = (kiosk: boolean) => ({ "GET /app/api/config": ok({ devLogin: false, kiosk: kiosk ? { extensionId: null, mock: true } : null }) });
 
 describe("the kiosk-station setting", () => {
   it("is offered on an exam where the kiosk path exists, and sends the switch alone", async () => {

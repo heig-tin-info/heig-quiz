@@ -251,7 +251,13 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     "/app/api/config",
     async (): Promise<PublicConfig> => ({
       devLogin: development,
-      kiosk: config.KIOSK_ATTESTATION !== "off",
+      kiosk:
+        config.KIOSK_ATTESTATION === "off"
+          ? null
+          : {
+              extensionId: config.KIOSK_EXTENSION_ID || null,
+              mock: config.KIOSK_ATTESTATION === "mock",
+            },
     }),
   );
 

@@ -69,6 +69,21 @@ export type AuditAction =
   | "impersonation.started"
   /** That session ended: signed out, or expired (`payload.reason`). */
   | "impersonation.ended"
+  /**
+   * ADR-051 §5, §8: a station's attestation accepted, or failed (`payload.reason`
+   * `refused` | `unavailable`). The subject is the station's device id, or
+   * `unknown` when no known station's cookie came with the failure — never the
+   * challenge, the response nor the cookie.
+   */
+  | "kiosk.attested"
+  | "kiosk.attest_failed"
+  /** A device attested for the first time: in the registry, `unnamed`. */
+  | "kiosk.device_registered"
+  /** An admin named or renamed a station (`payload.from`, `payload.to`). */
+  | "kiosk.device_labeled"
+  | "kiosk.device_retired"
+  /** A retired station put back in service by an admin. */
+  | "kiosk.device_reactivated"
   | "oauth.grant"
   | "oauth.refresh_replay"
   | "oauth.revoke"
