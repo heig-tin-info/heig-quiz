@@ -409,7 +409,7 @@ Shown as **Diagram** / « Diagramme » in the interface. The student draws a dia
 
 Two packages, so that the editor serves more than one type (ADR-046 §1):
 
-- `packages/diagram` (`@quiz/diagram`) is the **engine**: the scene model, the catalogue of kinds, the orthogonal router and the side anchoring, the straight-line layout, the text serialisers and parsers (`./server`, no React), and the `DiagramEditor` / `DiagramView` components (`./client`). It depends on `@quiz/core` alone and never imports a `qt-*` package.
+- `packages/diagram` (`@quiz/diagram`) is the **engine**: the scene model, the catalogue of kinds, the orthogonal router and the side anchoring, the straight-line layout and the text serialisers (`./server`, no React), and the `DiagramEditor` / `DiagramView` components (`./client`), whose text pane holds the parsers. It depends on `@quiz/core` and `@quiz/ui` and never imports a `qt-*` package.
 - `packages/qt-diagram` is the **question type**, registered in both registries.
 
 **Kinds** (all eight in v1). The kind is chosen once per question; the student's toolbox holds that kind's elements and nothing else.
@@ -443,7 +443,7 @@ config:
 - **The scene is the record** (ADR-046 §2): elements with their position on the grid and their content, links with their ends, their elbows, their name and end labels; a `free` scene holds shapes and strokes. The text form is DERIVED from the scene by the kind's serialiser, never stored. The server never parses a text written in a browser.
 - **The starter** is optional. The editor offers "Copy the reference into the starter", after which the teacher removes what the student must add; the starter is then edited on its own. A draft may lack a reference; publication refuses a question without one (`diagram.reference_missing`) and a reference or starter holding an element or link the kind does not have (`diagram.kind_mismatch`).
 - **Ids are opaque**: the editor mints random ones. A starter reaches the student with its ids, so an id must say nothing (the rule of `categorize`, ADR-036).
-- **Limits**: 80 elements, 160 links, 16 elbows a link, 120 characters a name, 40 body lines of 200 characters; for `free`, 200 shapes and 4 000 stroke points in all; coordinates within ±20 000. The autosave sends the whole answer every 300 ms, so the answer is bounded like `rich`'s.
+- **Limits**: 80 elements, 160 links, 16 elbows a link, 120 characters a name, 40 body lines of 200 characters, 50 000 characters of text in all; for `free`, 200 shapes and 4 000 stroke points in all; coordinates within ±20 000. No text holds a control character (a new line in a name would forge the text form). The autosave sends the whole answer every 300 ms, so the answer is bounded like `rich`'s. The editor refuses an edit that would break a limit.
 
 **Student** (`toStudent`, invariant 4): the prompt, the kind and the starter. The reference and the rubric never leave. **The text form is not shown to the student in v1**: the text tab exists for the teacher only (editor and review).
 

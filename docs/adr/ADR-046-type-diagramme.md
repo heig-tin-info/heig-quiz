@@ -40,9 +40,11 @@ this type; its behaviour is described in docs/spec/04 §4.14.
     and parsers, all pure and unit-tested;
   - `./client`: `DiagramEditor` and `DiagramView`.
 
-  It depends on `@quiz/core` and nothing else, takes its strings through
-  `strings` props filled by the host in `en` and `fr` (the rule of
-  `qt-circuit`), and never imports a `qt-*` package.
+  It depends on `@quiz/core` and `@quiz/ui` (the class-list helper, and the
+  undo hook of a controlled editor, which moved there from the circuit
+  canvas so the two editors share it), takes its strings through `strings`
+  props filled by the host in `en` and `fr` (the rule of `qt-circuit`), and
+  never imports a `qt-*` package.
 - **`packages/qt-diagram`** is the question type, registered in both
   registries, like every type since ADR-036.
 
@@ -57,12 +59,24 @@ position on the grid and their content, links with their ends, elbows, name
 and end labels. The text form is produced from a scene by the kind's
 serialiser, on demand.
 
-- **The server never parses a text written in a browser.** The parsers live
-  in `@quiz/diagram/server` because they are pure, and the editor runs them;
-  the server runs only the serialisers (for the teacher's review, and later
-  for grading). What reaches the server is a scene, validated by
+- **The server never parses a text written in a browser.** The parsers are
+  pure and live in the package, but `@quiz/diagram/server` exports the
+  serialisers only: an entry that offers no parser cannot be used to run
+  one on student text. The editor reads text through its own modules. The
+  server runs the serialisers (for the teacher's review, and later for
+  grading). What reaches the server is a scene, validated by
   `answerSchema`. This is the spirit of invariant 14: the server works from
   data it can bound and check, not from a program-like text.
+- **A scene is bounded like an essay.** Counts, lengths, and 50 000
+  characters of text in all (the limit of `rich`), since the autosave sends
+  the whole answer every 300 ms; no control character in any text, so an
+  answer cannot forge the structure of the text the server derives from it;
+  and each field only on the types that use it. The editor refuses an edit
+  that would break a limit rather than hand the host an answer the schema
+  would refuse. Every parser reads a line of at most 1 000 characters with
+  patterns that read a run of spaces one way only (linear on a failing
+  line), and the editor parses at most 200 000 characters, so a pasted text
+  cannot freeze the teacher's tab.
 - **The routed polyline is not stored.** Unlike `circuit`, where
   `wire.points` is the geometry the netlist is read from (ADR-019), a
   diagram's meaning is its elements and links; the lines are recomputed on
