@@ -30,6 +30,8 @@ import { registerDrillHooks } from "./modules/drill/service.js";
 import { evaluationPlugin } from "./modules/evaluation/routes.js";
 import { gradingPlugin } from "./modules/grading/routes.js";
 import { registerGradingJobs } from "./modules/grading/jobs.js";
+import { createKioskAttestor } from "./modules/kiosk/attestation.js";
+import { kioskPlugin } from "./modules/kiosk/routes.js";
 import { livePlugin } from "./modules/live/routes.js";
 import { createLlm } from "./modules/llm/index.js";
 import { previewPlugin } from "./modules/preview/routes.js";
@@ -83,6 +85,9 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   app.decorate("runner", createRunner(config));
   // At most one LLM service, chosen once by LLM_PROVIDER; null sends nothing.
   app.decorate("llm", createLlm(config));
+  // At most one station attestor, chosen once by KIOSK_ATTESTATION (ADR-051);
+  // null is `off`, and then no kiosk route exists. A test may swap it.
+  app.decorate("kioskAttestor", createKioskAttestor(config, app.log));
   app.addHook("onClose", async () => {
     // Anything still inside a coalescing window is emitted before the bus
     // goes away, so a shutdown never eats the last dashboard frame.
@@ -176,6 +181,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(orgPlugin, { config });
   await app.register(poolPlugin, { config });
   await app.register(pollPlugin, { config });
+  if (app.kioskAttestor) await app.register(kioskPlugin, { config });
   await app.register(evaluationPlugin, { config });
   await app.register(activityPlugin);
   await app.register(livePlugin);

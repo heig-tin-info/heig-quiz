@@ -30,6 +30,7 @@ import {
   type Column,
 } from "./ui";
 import { TasksSection } from "./AdminTasks";
+import { KioskSection } from "./AdminKiosk";
 import { UsersSection } from "./AdminUsers";
 import { adminTeachersKey } from "./queryKeys";
 import { useSearchParam } from "./router";
@@ -44,7 +45,8 @@ const TABS: readonly Tab[] = ["people", "tasks"];
 
 /**
  * Administration, one tab per concern, the open one in `?tab=`: the people
- * (the teacher grants, then every account) and the scheduled tasks
+ * (the teacher grants, the kiosk stations where the platform has them —
+ * `KioskSection`, ADR-051 — then every account) and the scheduled tasks
  * (F-ADMIN-06). A tab is one entry of `TABS` and one panel below.
  */
 export function AdminPage() {
@@ -67,6 +69,7 @@ export function AdminPage() {
         {tab === "people" ? (
           <>
             <TeachersSection />
+            <KioskSection />
             <UsersSection />
           </>
         ) : (

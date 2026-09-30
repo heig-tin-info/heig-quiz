@@ -49,7 +49,7 @@ export function AdvancedDisclosure({
   const [open, setOpen] = useState(false);
   const { settings, feedbackPolicy, mode, mcqPolicy } = config;
   // ADR-051: the kiosk path exists on this platform (`KIOSK_ATTESTATION`).
-  const kioskOffered = usePublicConfig().data?.kiosk === true;
+  const kioskOffered = usePublicConfig().data?.kiosk != null;
 
   const set = (next: Partial<EvaluationSettings>) => patch.mutate({ settings: next });
   const feedback = (next: Partial<FeedbackPolicy>) => patch.mutate({ feedbackPolicy: next });

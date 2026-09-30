@@ -51,6 +51,8 @@ import {
   encodeJournalPath,
   Journal,
   JournalPage,
+  KioskDevice,
+  KioskStation,
   NotificationList,
   NotificationSettings,
   ApiToken,
@@ -353,6 +355,8 @@ const CHECKED: Case[] = [
   ]),
   each("/app/api/admin/users", "/app/api/admin/users", AdminUser),
   each("/app/api/admin/tasks", "/app/api/admin/tasks", AdminScheduledTask),
+  each("/app/api/admin/kiosk-devices", "/app/api/admin/kiosk-devices", KioskDevice),
+  one("/app/api/kiosk/station", "/app/api/kiosk/station", KioskStation),
   each("/app/api/polls", "/app/api/polls", PollSummary),
   // The Activities section (#190).
   each("/app/api/activities", "/app/api/activities", ActivitySummary),

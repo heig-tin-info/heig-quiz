@@ -53,7 +53,9 @@
  *   github.ts      8.  GitHub: the App's organizations and a classroom's link
  *                      (`?unlinked=1` declared for the account, M2-01);
  *   journal.ts     9.  a classroom's journal, its navigation and its rendered
- *                      pages (`?journal=1`).
+ *                      pages (`?journal=1`);
+ *   kiosk.ts       10. the kiosk stations: the admin's registry, and what a
+ *                      station knows of itself (ADR-051).
  *
  * That list is also the dependency order, and the graph is acyclic: a file
  * reads the ones above it and never the ones below. Two handlers are
@@ -119,6 +121,7 @@ import "./preview";
 import "./drill";
 import "./github";
 import "./journal";
+import "./kiosk";
 import {
   polls,
   findTeacherPoll,

@@ -128,6 +128,20 @@ const EnvSchema = z.object({
    * tests and, like the development login, is refused in production below.
    */
   KIOSK_ATTESTATION: z.enum(["google", "mock", "off"]).default("off"),
+  /**
+   * The `google` attestation (ADR-051 §5, N-SEC-19). The key file is the
+   * Verified Access service account's JSON key — a secret, kept outside the
+   * repository and the database (ADR-010), read only when a token is needed;
+   * the access token it buys lives in memory only. The customer id is the
+   * Workspace whose Chromebooks are admitted, the enrollment domain Google's
+   * `expectedIdentity`, and the extension id the companion extension the
+   * `/kiosk` page talks to. In production all four are required with
+   * `google` (below).
+   */
+  KIOSK_VA_KEY_FILE: z.string().trim().default(""),
+  KIOSK_GOOGLE_CUSTOMER_ID: z.string().trim().default(""),
+  KIOSK_ENROLLMENT_DOMAIN: z.string().trim().default(""),
+  KIOSK_EXTENSION_ID: z.string().trim().default(""),
 
   /**
    * Safe Exam Browser's Config Key header, checked on every request of a
@@ -352,6 +366,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (parsed.data.KIOSK_ATTESTATION === "mock") {
       throw new Error("Invalid configuration: dev KIOSK_ATTESTATION (mock) forbidden in production");
     }
+    // A `google` attestation that cannot run would answer "unavailable" to
+    // every station, and one without the customer id would admit none: refuse
+    // to start rather than discover it on the day of an exam.
+    if (parsed.data.KIOSK_ATTESTATION === "google") {
+      const missing = (
+        ["KIOSK_GOOGLE_CUSTOMER_ID", "KIOSK_ENROLLMENT_DOMAIN", "KIOSK_EXTENSION_ID"] as const
+      ).filter((key) => parsed.data[key] === "");
+      if (missing.length > 0) {
+        throw new Error(`Invalid configuration: ${missing.join(", ")} required when KIOSK_ATTESTATION=google`);
+      }
+      if (!readable(parsed.data.KIOSK_VA_KEY_FILE)) {
+        throw new Error("Invalid configuration: KIOSK_VA_KEY_FILE is unreadable (KIOSK_ATTESTATION=google)");
+      }
+    }
     // A grade no model produced must never reach a real student: the stub
     // provider is a development fixture, whatever the reason given.
     if (parsed.data.LLM_PROVIDER === "stub") {
@@ -413,7 +441,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     GITHUB_APP_PRIVATE_KEY_PATH: parsed.data.GITHUB_APP_PRIVATE_KEY_PATH
       ? resolve(parsed.data.GITHUB_APP_PRIVATE_KEY_PATH)
       : "",
+    KIOSK_VA_KEY_FILE: parsed.data.KIOSK_VA_KEY_FILE ? resolve(parsed.data.KIOSK_VA_KEY_FILE) : "",
   };
+}
+
+/** A path this process can read; an empty one is not. */
+function readable(path: string): boolean {
+  if (path === "") return false;
+  try {
+    accessSync(resolve(path), constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Scaleway credentials present: e-mails are really sent (otherwise logged). */
