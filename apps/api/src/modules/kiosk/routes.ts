@@ -49,10 +49,12 @@ const STATION = { sessions: [] } as const;
 
 /**
  * Attestation calls (challenge and verify together) per client address per
- * minute. A station makes two every ten minutes (ADR-051 §6); a room of
- * stations behind one NAT address shares the budget.
+ * minute. One attestation is two calls, and a station attests every ten
+ * minutes (ADR-051 §6) — but a room of stations sits behind one NAT address
+ * and they all start together: 240 lets about 120 stations attest in the
+ * same minute, and still stops a script from spending the Google quota.
  */
-export const ATTEST_LIMIT = 20;
+export const ATTEST_LIMIT = 240;
 
 export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const secure = opts.config.NODE_ENV === "production";
