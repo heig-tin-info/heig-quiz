@@ -44,11 +44,11 @@ import { useConfigPatch } from "./usePatch";
  * It is a thin page over the evaluation editor's own blocks — `ItemsStep`
  * with its picker and preview, `ConfigSettings` with its presets, retakes
  * and advanced options — handed a `templateTarget` instead of an
- * evaluation's. What a run has and a template does not is simply not
- * passed: no dates (a sentence stands in their place), no access code, no
- * IP list, no launch step, no dashboard, no roster, no duplicate, no staff
- * attempt. The mode is a badge, set at creation; the revision sits beside
- * it, since that number is what a classroom's copy is compared with.
+ * evaluation's. What a run has and a template does not is simply not passed:
+ * no dates (a sentence stands in their place), no IP list, no launch step,
+ * no dashboard, no roster, no duplicate, no staff attempt. The mode is a
+ * badge, set at creation; the revision sits beside it, since that number is
+ * what a classroom's copy is compared with.
  *
  * Two tabs and not the evaluation's three steps: there is nothing to launch,
  * so there is no way forward to walk, only two things to shape.

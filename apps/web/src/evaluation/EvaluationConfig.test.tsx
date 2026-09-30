@@ -523,7 +523,7 @@ describe("EvaluationConfig", () => {
       };
     };
 
-    it("disables everything but the access code and the feedback, nobody entered yet, and says where time is added", async () => {
+    it("disables everything but the feedback, nobody entered yet, and says where time is added", async () => {
       const user = userEvent.setup();
       navigate.mockClear();
       mockFetch(routes(inState("running", 0)));
@@ -543,7 +543,8 @@ describe("EvaluationConfig", () => {
       expect(screen.getByRole("switch", { name: /show the expected answer/i })).toBeEnabled();
       expect(screen.getByRole("switch", { name: /progress bar/i })).toBeDisabled();
       expect(screen.getByText(/feedback policy can still change/i)).toBeInTheDocument();
-      expect(screen.getByRole("textbox", { name: /access code/i })).toBeEnabled();
+      // No access code any more (ADR-053).
+      expect(screen.queryByRole("textbox", { name: /access code/i })).toBeNull();
 
       await user.click(screen.getByRole("button", { name: /^live dashboard$/i }));
       expect(navigate).toHaveBeenCalledWith({ view: "live", id: EVALUATION_ID });

@@ -12,7 +12,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { GRACE_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
-import { attempts, auditLog, evaluations, gradings } from "../../db/schema.js";
+import { attempts, evaluations, gradings } from "../../db/schema.js";
 import { subscribe, type Topic } from "../../events.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
@@ -667,32 +667,23 @@ describe("the room restriction reads the address Caddy saw (H2)", () => {
     expect(refused[0]!.json().error).toBe("ip_not_allowed");
     expect((await get(`/app/api/attempts/${attemptId}`, inRoom)).statusCode).toBe(200);
   });
+});
 
-  it("is settled before the access code: off-site, the right code tells nothing and costs nothing", async () => {
+describe("entering an evaluation after the access code (ADR-053)", () => {
+  it("lets in a stale client that still sends an access code (ADR-053)", async () => {
     const learner = await server.signIn("student");
     const own = await seedLive(server.app.db, {
       teacherId: teacher.id,
       studentIds: [learner.id],
       questions: 1,
     });
-    await server.app.db
-      .update(evaluations)
-      .set({ ipAllowlist: ["10.20."], accessCode: "OPEN" })
-      .where(eq(evaluations.id, own.evaluationId));
     await post(`/app/api/evaluations/${own.evaluationId}/start`, teacher.headers, { confirm: true });
-    const away = { ...learner.headers, "x-forwarded-for": "203.0.113.9" };
-    const url = `/app/api/evaluations/${own.evaluationId}/attempt`;
-
-    for (const accessCode of ["OPEN", "WRONG"]) {
-      const res = await post(url, away, { accessCode });
-      expect(res.statusCode).toBe(403);
-      expect(res.json().error).toBe("ip_not_allowed");
-    }
-    const audited = await server.app.db
-      .select()
-      .from(auditLog)
-      .where(and(eq(auditLog.subjectId, own.evaluationId), eq(auditLog.action, "evaluation.access_code_failed")));
-    expect(audited).toHaveLength(0);
+    // A player loaded before the deploy: the key is stripped, never a 400.
+    const res = await post(`/app/api/evaluations/${own.evaluationId}/attempt`, learner.headers, {
+      accessCode: "OPEN",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().kind).toBe("attempt");
   });
 });
 

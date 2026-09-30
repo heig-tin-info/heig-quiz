@@ -39,11 +39,9 @@ const anyFeedback = {
 
 /** Hands the retake's answer to the attempt route (issue #120). */
 function adoptRetake(qc: QueryClient, evaluationId: string, entry: AttemptOrLobby): void {
-  // Every access code the route may have been entered with (`["attempt",
-  // "enter", id, code]`): a later mount reads the `null` one, and none may
-  // still hold attempt n.
-  qc.removeQueries({ queryKey: ["attempt", "enter", evaluationId] });
-  qc.setQueryData(attemptEntryKey(evaluationId, null), entry);
+  // The route's entry query no longer holds attempt n: a later mount reads
+  // the retake.
+  qc.setQueryData(attemptEntryKey(evaluationId), entry);
   if (entry.kind === "attempt") qc.setQueryData(attemptKey(entry.view.attempt.id), entry);
   // The card (count, button) and every results page (attempts taken, whether
   // one more is allowed) changed with the new attempt.

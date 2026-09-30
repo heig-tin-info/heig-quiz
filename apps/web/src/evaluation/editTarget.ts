@@ -26,7 +26,7 @@ import {
 } from "../queryKeys";
 
 /** The run's own fields, which a template's patch must never carry. */
-type RunField = "opensAt" | "closesAt" | "accessCode" | "ipAllowlist";
+type RunField = "opensAt" | "closesAt" | "ipAllowlist";
 
 /**
  * A template's patch body, closed to the run's fields at compile time: with

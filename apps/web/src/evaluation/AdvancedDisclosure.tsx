@@ -1,14 +1,13 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-import { CategorizePolicy, categorizePolicyOf, McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationPatch, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
+import { CategorizePolicy, categorizePolicyOf, McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
 import { allowedFeedbackWhen, feedbackWhenFor, isInClass } from "@quiz/domain";
 
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
-import { Button, Card, cx, inputClass, inputSize, Segmented, Select, SettingRow, Switch } from "../ui";
+import { Button, Card, Segmented, Select, SettingRow, Switch } from "../ui";
 import type { ConfigPatch, ConfigView } from "./editTarget";
-import type { ConfigWriter } from "./usePatch";
 
 /**
  * Everything docs/spec/08 §8.2 puts under "Options avancées": the eight
@@ -19,8 +18,7 @@ import type { ConfigWriter } from "./usePatch";
  * is a disclosure that is always open, and then it is not a disclosure.
  *
  * It reads and writes the configuration an evaluation and a template share
- * (`ConfigView`, `ConfigPatch`); what only a run has — the access code — is
- * a row the evaluation hands in as `children`, in its place in the list.
+ * (`ConfigView`, `ConfigPatch`).
  */
 export function AdvancedDisclosure({
   config,
@@ -28,7 +26,6 @@ export function AdvancedDisclosure({
   disabled,
   feedbackDisabled,
   holdsCategorize = false,
-  children,
 }: {
   config: ConfigView;
   patch: ConfigPatch;
@@ -37,8 +34,7 @@ export function AdvancedDisclosure({
   /**
    * The feedback policy, as `isConfigFieldWritable` says: it outlives an
    * attempt (it may change until the release) and the run too, so a forgotten
-   * answer key can be hidden mid-exam (#86). The access code is never
-   * disabled — a student locked out mid-exam must be let back in.
+   * answer key can be hidden mid-exam (#86).
    */
   feedbackDisabled: boolean;
   /**
@@ -47,8 +43,6 @@ export function AdvancedDisclosure({
    * reads). A poll never holds one.
    */
   holdsCategorize?: boolean;
-  /** The rows of a run's own (the access code), last. */
-  children?: ReactNode;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -297,44 +291,7 @@ export function AdvancedDisclosure({
             />
           </SettingRow>
         ) : null}
-
-        {children}
-
       </Card>
     </div>
-  );
-}
-
-/**
- * The access code (F-EVAL-12), a row of the advanced options that only a run
- * has: a template leaves it to each evaluation made from it.
- */
-export function AccessCodeRow({
-  accessCode,
-  patch,
-}: {
-  accessCode: string | null;
-  patch: ConfigWriter<EvaluationPatch>;
-}) {
-  const t = useT();
-  const [code, setCode] = useState(accessCode ?? "");
-  return (
-    <SettingRow title={t("eval.accessCode")} desc={t("eval.accessCode.desc")}>
-      <input
-        aria-label={t("eval.accessCode")}
-        placeholder={t("eval.accessCodePlaceholder")}
-        className={cx(inputClass, inputSize.sm, "w-44")}
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        onBlur={() => {
-          const next = code.trim();
-          if (next === (accessCode ?? "")) return;
-          // F-EVAL-12: three characters is the schema's floor; an empty
-          // field means "no code at all", which is a null and not a "".
-          if (next !== "" && next.length < 3) return;
-          patch.mutate({ accessCode: next === "" ? null : next });
-        }}
-      />
-    </SettingRow>
   );
 }

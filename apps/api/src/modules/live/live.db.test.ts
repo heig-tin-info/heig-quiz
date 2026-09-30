@@ -22,7 +22,6 @@ import {
   answers,
   attemptEvents,
   attempts,
-  auditLog,
   enrollments,
   evaluationItems,
   evaluations,
@@ -142,83 +141,6 @@ describe("entering an evaluation (F-LIVE-01)", () => {
     const participant = (await service.participantOf(db, row, seed.studentIds[0]!))!;
     const view = await service.lobbyView(db, row, participant, clock.now());
     expect(LobbyView.parse(view).navigation).toBe("forward_only");
-  });
-
-  // The address half of F-EVAL-12 is the route's (`sitRefusal`), tested in
-  // `routes.db.test.ts`.
-  it("refuses a missing or wrong access code (F-EVAL-12)", async () => {
-    const seed = await seedLive(db);
-    await db
-      .update(evaluations)
-      .set({ accessCode: "OPEN" })
-      .where(eq(evaluations.id, seed.evaluationId));
-    const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
-    const participant = (await service.participantOf(db, row, seed.studentIds[0]!))!;
-    const enter = (accessCode?: string) =>
-      service.enterEvaluation(db, { evaluation: row, participant, accessCode, now: clock.now() });
-    await expect(enter()).rejects.toMatchObject({ code: "access_code_invalid", status: 403 });
-    await expect(enter("OPEM")).rejects.toMatchObject({ code: "access_code_invalid", status: 403 });
-    expect((await enter("OPEN")).kind).toBe("attempt");
-  });
-
-  it("locks the access code after ten wrong ones, each audited, for ten minutes (F-EVAL-12)", async () => {
-    const seed = await seedLive(db);
-    await db
-      .update(evaluations)
-      .set({ accessCode: "OPEN" })
-      .where(eq(evaluations.id, seed.evaluationId));
-    const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
-    const [first, second] = await Promise.all(
-      seed.studentIds.slice(0, 2).map(async (id) => (await service.participantOf(db, row, id))!),
-    );
-    const enter = (participant: service.Participant, accessCode?: string) =>
-      service.enterEvaluation(db, { evaluation: row, participant, accessCode, now: clock.now() });
-
-    // Asking for the code (no code sent: a reload) is not a guess.
-    await expect(enter(first!)).rejects.toMatchObject({ code: "access_code_invalid" });
-    for (let i = 0; i < service.ACCESS_CODE_MAX_FAILURES; i++) {
-      await expect(enter(first!, `WRONG${i}`)).rejects.toMatchObject({ code: "access_code_invalid" });
-    }
-    const failures = await db
-      .select()
-      .from(auditLog)
-      .where(eq(auditLog.action, "evaluation.access_code_failed"));
-    expect(failures.filter((f) => f.subjectId === row.id)).toHaveLength(service.ACCESS_CODE_MAX_FAILURES);
-    // Locked: even the right code is refused now, with its own error, and
-    // told when the oldest failure leaves the window.
-    await expect(enter(first!, "OPEN")).rejects.toMatchObject({
-      code: "access_code_locked",
-      status: 429,
-      retryAfterS: service.ACCESS_CODE_WINDOW_MS / 1000,
-    });
-    // The lock is this student's, not the room's.
-    expect((await enter(second!, "OPEN")).kind).toBe("attempt");
-    // And it lifts by itself once the failures leave the window.
-    clock.advance(service.ACCESS_CODE_WINDOW_MS);
-    expect((await enter(first!, "OPEN")).kind).toBe("attempt");
-  });
-
-  it("counts parallel wrong codes one by one: they cannot slip past the limit together", async () => {
-    const seed = await seedLive(db);
-    await db
-      .update(evaluations)
-      .set({ accessCode: "OPEN" })
-      .where(eq(evaluations.id, seed.evaluationId));
-    const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
-    const participant = (await service.participantOf(db, row, seed.studentIds[0]!))!;
-    const guesses = Array.from({ length: service.ACCESS_CODE_MAX_FAILURES + 5 }, (_, i) =>
-      service
-        .enterEvaluation(db, { evaluation: row, participant, accessCode: `G${i}`, now: clock.now() })
-        .then(() => "entered", (err: { code?: string }) => err.code),
-    );
-    const codes = await Promise.all(guesses);
-    expect(codes.filter((c) => c === "access_code_invalid")).toHaveLength(service.ACCESS_CODE_MAX_FAILURES);
-    expect(codes.filter((c) => c === "access_code_locked")).toHaveLength(5);
-    const failures = await db
-      .select()
-      .from(auditLog)
-      .where(eq(auditLog.subjectId, row.id));
-    expect(failures).toHaveLength(service.ACCESS_CODE_MAX_FAILURES);
   });
 
   it("gives the accommodation its extra seconds (F-ORG-07, F-EVAL-05)", async () => {

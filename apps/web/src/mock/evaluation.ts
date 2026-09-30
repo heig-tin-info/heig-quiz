@@ -1091,7 +1091,6 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
   applyConfigPatch(e, body);
   if ("opensAt" in body) e.opensAt = body.opensAt as string | null;
   if ("closesAt" in body) e.closesAt = body.closesAt as string | null;
-  if ("accessCode" in body) e.accessCode = body.accessCode as string | null;
   return evaluationDetail(e);
 });
 

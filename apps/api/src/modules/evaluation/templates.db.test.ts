@@ -76,7 +76,6 @@ async function world(): Promise<{ teacher: Caller; seed: Seeded }> {
     .set({
       opensAt: new Date("2026-10-01T08:00:00Z"),
       closesAt: new Date("2026-10-01T10:00:00Z"),
-      accessCode: "SECRET",
       ipAllowlist: ["10.0."],
     })
     .where(eq(evaluations.id, seed.evaluationId));

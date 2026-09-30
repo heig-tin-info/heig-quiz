@@ -132,7 +132,6 @@ The shortcuts are listed in the sidebar and under the grid, so a colleague stand
 
 !!! tip "During the exam"
     - Before projecting, check that **Names** and **Answers** are off (they are, unless you turned them on). The grid still shows who is done and who is stuck, as `Student 7`.
-    - If the evaluation has an **Access code**, write it on the board only once the waiting room is open. A student needs it once, at entry.
     - Check the `+25 % time` chips in the waiting room against your list; extra time comes from the roster, not from this screen.
     - A laptop that dies mid-exam: the attempt is still open on the server and its answers are saved. Let the student log in on another machine and continue. If they lost several minutes, **+5 minutes for this student** from the row's actions. If their attempt expired in the meantime, **Reopen this attempt**, then extend it: a reopened attempt keeps its original deadline.
     - Do not close the evaluation from the row of a student by mistake: **Close this attempt** ends one attempt, the red **Close** ends everybody's. Both ask first.

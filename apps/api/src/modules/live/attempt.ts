@@ -4,11 +4,11 @@
  * write gate every student write passes, submitting, and the per-attempt
  * close/reopen (PLAN-MVP §4.4, §4.7). Imported through `./service.ts`.
  */
-import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
 
-import { and, asc, count, desc, eq, gt, inArray, min, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 
 import {
   EvaluationSettings,
@@ -34,10 +34,9 @@ import {
   type RetakeRefusal,
 } from "@quiz/domain";
 
-import { audit, type AuditAction } from "../../audit.js";
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attempts, auditLog, enrollments, evaluations, guestParticipants } from "../../db/schema.js";
+import { answers, attempts, enrollments, evaluations, guestParticipants } from "../../db/schema.js";
 import { DomainError } from "../http.js";
 import {
   feedbackOf,
@@ -182,12 +181,6 @@ class NotOpen extends LiveError {
   }
 }
 
-class AccessCodeInvalid extends LiveError {
-  constructor() {
-    super("access_code_invalid", 403);
-  }
-}
-
 
 export class AnswerInvalid extends LiveError {
   constructor(readonly issues: unknown) {
@@ -228,17 +221,10 @@ export class ItemLocked extends LiveError {
   }
 }
 
-/**
- * A 429 with its `Retry-After`. `access_code_locked` is one (F-EVAL-12):
- * distinct from `access_code_invalid`, so the player stops asking for a
- * code it will refuse anyway.
- */
+/** A 429 with its `Retry-After`. */
 export class RateLimited extends LiveError {
-  constructor(
-    readonly retryAfterS: number,
-    code: "rate_limited" | "access_code_locked" = "rate_limited",
-  ) {
-    super(code, 429);
+  constructor(readonly retryAfterS: number) {
+    super("rate_limited", 429);
   }
 }
 
@@ -632,9 +618,8 @@ export async function ensureAttempt(
  * on the same frozen versions), blank, and started at once: the rule only
  * allows it on a running evaluation.
  *
- * The server decides (`@quiz/domain#retakeRefusal`); the access code is not
- * asked again — the student was admitted by the first attempt — but the
- * network allowlist is, like every entry.
+ * The server decides (`@quiz/domain#retakeRefusal`); the network allowlist
+ * is checked, like every entry.
  *
  * Two clicks racing: both compute n + 1, the unique index lets one row in,
  * and the loser enters the attempt the winner opened (or, if it read after
@@ -1040,78 +1025,6 @@ export async function lobbyView(
 
 // --- Entering an evaluation ----------------------------------------------
 
-/**
- * F-EVAL-12: the wrong access codes a student may type into ONE evaluation
- * within a sliding window before it refuses them. Counted from the audit
- * log, where each failure is written anyway: no counter to keep in step.
- * The lock lifts by itself: a student who mistypes during an exam is held
- * back ten minutes, never locked out of it.
- */
-export const ACCESS_CODE_MAX_FAILURES = 10;
-export const ACCESS_CODE_WINDOW_MS = 10 * 60_000;
-
-const ACCESS_CODE_FAILED = "evaluation.access_code_failed" satisfies AuditAction;
-
-/** Compares two codes in a time that does not depend on where they differ. */
-function sameCode(expected: string, given: string): boolean {
-  const digest = (code: string) => createHash("sha256").update(code).digest();
-  return timingSafeEqual(digest(expected), digest(given));
-}
-
-/**
- * Count, compare and record in ONE transaction, serialized per (evaluation,
- * student) by an advisory lock: parallel guesses would otherwise all read the
- * same count and slip past the limit together.
- */
-async function assertAccessCode(
-  db: Db,
-  evaluation: EvaluationRecord,
-  userId: string,
-  given: string | undefined,
-  now: Date,
-): Promise<void> {
-  const expected = evaluation.accessCode;
-  if (expected === null) return;
-  const refusal = await db.transaction(async (tx) => {
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtext(${evaluation.id}), hashtext(${userId}))`,
-    );
-    const since = new Date(now.getTime() - ACCESS_CODE_WINDOW_MS);
-    const [row] = await tx
-      .select({ n: count(), first: min(auditLog.createdAt) })
-      .from(auditLog)
-      .where(
-        and(
-          eq(auditLog.subjectType, "evaluation"),
-          eq(auditLog.subjectId, evaluation.id),
-          eq(auditLog.action, ACCESS_CODE_FAILED),
-          eq(auditLog.actorUserId, userId),
-          gt(auditLog.createdAt, since),
-        ),
-      );
-    if (row && row.first && row.n >= ACCESS_CODE_MAX_FAILURES) {
-      // Until the oldest failure counted leaves the window.
-      const retryAfterMs = row.first.getTime() + ACCESS_CODE_WINDOW_MS - now.getTime();
-      return new RateLimited(Math.max(1, Math.ceil(retryAfterMs / 1000)), "access_code_locked");
-    }
-    if (given !== undefined && sameCode(expected, given)) return null;
-    // No code at all is the question, not a guess: the player's first call
-    // sends none, and a reload must not count against the student.
-    if (given !== undefined) {
-      await audit(tx, {
-        actorUserId: userId,
-        actorType: "user",
-        action: ACCESS_CODE_FAILED,
-        subjectType: "evaluation",
-        subjectId: evaluation.id,
-        at: now,
-      });
-    }
-    return new AccessCodeInvalid();
-  });
-  if (refusal) throw refusal;
-}
-
 type EnterResult =
   | { kind: "attempt"; view: AttemptView; attempt: AttemptRecord }
   | { kind: "lobby"; view: LobbyView; attempt: AttemptRecord };
@@ -1125,7 +1038,6 @@ export async function enterEvaluation(
   input: {
     evaluation: EvaluationRecord;
     participant: Participant;
-    accessCode?: string | undefined;
     now: Date;
   },
 ): Promise<EnterResult> {
@@ -1135,8 +1047,7 @@ export async function enterEvaluation(
     throw new LiveError("not_implemented", 501, "poll is phase 2");
   }
   // The room restriction (F-EVAL-12) is already settled: `sitRefusal`, in
-  // the route's loader, refused an off-site request before the code is read.
-  await assertAccessCode(db, evaluation, participant.userId, input.accessCode, now);
+  // the route's loader, refused an off-site request.
 
   const open = evaluation.state === "lobby" || evaluation.state === "running" ||
     evaluation.state === "paused";

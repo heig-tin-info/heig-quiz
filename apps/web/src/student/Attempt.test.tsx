@@ -206,7 +206,7 @@ describe("/take/:id", () => {
 
     // And a refetch that IS asked for stays a single round trip.
     await act(async () => {
-      await queryClient.refetchQueries({ queryKey: ["attempt", "enter", EVAL, null] });
+      await queryClient.refetchQueries({ queryKey: ["attempt", "enter", EVAL] });
     });
     await waitFor(() => expect(entryCalls(calls)).toHaveLength(3));
   });
