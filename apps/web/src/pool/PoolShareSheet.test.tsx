@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PoolCandidate, PoolMembers, PoolSummary } from "@quiz/contracts";
 
+import { flowingClock } from "../test/clock";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { PoolShareSheet } from "./PoolShareSheet";
 
@@ -122,6 +123,9 @@ describe("PoolShareSheet", () => {
   });
 
   it("offers the colleagues by name, and invites the one picked by account", async () => {
+    // The combobox closes on a real-time grace after a blur: on a faked clock,
+    // that timer dies with the test instead of firing after the file is torn down.
+    const user = flowingClock();
     const { calls } = mockFetch({
       [`GET ${MEMBERS}`]: ok(list),
       [`GET ${CANDIDATES}?q=`]: ok([grace, linus]),
@@ -133,13 +137,13 @@ describe("PoolShareSheet", () => {
     const field = await screen.findByRole("combobox", { name: "Teacher" });
     // Nothing typed yet: not an address, nothing picked, nothing to send.
     expect(screen.getByRole("button", { name: /Invite/ })).toBeDisabled();
-    await userEvent.type(field, "gra");
-    await userEvent.click(await screen.findByRole("option", { name: /Grace Hopper/ }));
+    await user.type(field, "gra");
+    await user.click(await screen.findByRole("option", { name: /Grace Hopper/ }));
     expect(field).toHaveValue("Grace Hopper");
     expect(screen.getByText("grace.hopper@heig-vd.ch")).toBeVisible();
 
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Role" }), "contributor");
-    await userEvent.click(screen.getByRole("button", { name: /Invite/ }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Role" }), "contributor");
+    await user.click(screen.getByRole("button", { name: /Invite/ }));
     const post = calls.filter((c) => c.method === "POST").at(-1);
     expect(post?.body).toEqual({ userId: "t2", role: "contributor" });
     // The field is emptied for the next colleague.
@@ -147,6 +151,9 @@ describe("PoolShareSheet", () => {
   });
 
   it("still sends an address the list does not know, and names the refusal", async () => {
+    // The combobox closes on a real-time grace after a blur: on a faked clock,
+    // that timer dies with the test instead of firing after the file is torn down.
+    const user = flowingClock();
     const { calls } = mockFetch({
       [`GET ${MEMBERS}`]: ok(list),
       [`GET ${CANDIDATES}?q=`]: ok([grace, linus]),
@@ -159,9 +166,9 @@ describe("PoolShareSheet", () => {
     renderWithProviders(<PoolShareSheet pool={POOL} onClose={vi.fn()} />);
 
     const field = await screen.findByRole("combobox", { name: "Teacher" });
-    await userEvent.type(field, "Nobody@heig-vd.ch");
+    await user.type(field, "Nobody@heig-vd.ch");
     expect(await screen.findByText("No teacher matches “Nobody@heig-vd.ch”.")).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: /Invite/ }));
+    await user.click(screen.getByRole("button", { name: /Invite/ }));
     expect(await screen.findByText("No teacher account with this e-mail.")).toBeVisible();
     const post = calls.filter((c) => c.method === "POST").at(-1);
     // Lower-cased on the way out, exactly as the contract stores it.
