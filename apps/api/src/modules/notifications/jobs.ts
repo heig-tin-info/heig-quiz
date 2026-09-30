@@ -13,7 +13,7 @@ import type { FastifyInstance } from "fastify";
 
 import { eq } from "drizzle-orm";
 
-import { NotificationPayload } from "@quiz/contracts";
+import { NOTIFICATION_AUDIENCE, NotificationPayload } from "@quiz/contracts";
 
 import { teamsEnabled, type AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
@@ -30,7 +30,7 @@ import {
 } from "./outbox.js";
 import { teamsLinkOf } from "./service.js";
 import { createTeamsClient, TeamsError, type TeamsClient } from "./teams.js";
-import { teamsActivity } from "./teamsApp.js";
+import { isTeamsPayload, teamsActivity } from "./teamsApp.js";
 import { tenantAllowed, type AllowedTenants } from "./teamsLink.js";
 import { mailLocale, renderNotification } from "./templates.js";
 
@@ -51,7 +51,7 @@ export interface DeliveryDeps {
 /** Performs one delivery. Exported for the tests, which pass fakes for both transports. */
 export async function deliver(deps: DeliveryDeps, job: DeliveryJob): Promise<void> {
   const [user] = await deps.db
-    .select({ email: users.email, locale: users.locale, anonymizedAt: users.anonymizedAt })
+    .select({ email: users.email, locale: users.locale, anonymizedAt: users.anonymizedAt, role: users.role })
     .from(users)
     .where(eq(users.id, job.userId))
     .limit(1);
@@ -64,6 +64,8 @@ export async function deliver(deps: DeliveryDeps, job: DeliveryJob): Promise<voi
     return;
   }
   const payload = parsed.data;
+  // An admin kind reaches admins only: a role lost since the send is not told.
+  if (NOTIFICATION_AUDIENCE[payload.kind] === "admin" && user.role !== "admin") return;
   const message = renderNotification(payload, mailLocale(user.locale), deps.webUrl);
 
   if (job.channel === "email") {
@@ -77,7 +79,9 @@ export async function deliver(deps: DeliveryDeps, job: DeliveryJob): Promise<voi
     return;
   }
 
-  if (!deps.teams) return;
+  // `notifyMany` never enqueues Teams for a kind `KIND_CHANNELS` keeps out of
+  // it; the guard also narrows the payload to the kinds with an activity type.
+  if (!deps.teams || !isTeamsPayload(payload)) return;
   const link = await teamsLinkOf(deps.db, { userId: job.userId });
   if (!link) return;
   if (!tenantAllowed(deps.tenants, link.tenantId)) {

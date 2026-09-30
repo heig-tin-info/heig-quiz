@@ -300,6 +300,9 @@ export const en = {
     "Reminds students of an evaluation closing within 24 hours.",
   "admin.task.drill.purge": "Drill retention",
   "admin.task.drill.purge.desc": "Deletes drill cards and reviews older than five years.",
+  "admin.task.health.checks": "Health checks",
+  "admin.task.health.checks.desc":
+    "Runs the checks of the System status and tells the administrators when one fails twice in a row, and when it recovers.",
   "admin.kiosk": "Kiosk stations",
   "admin.kiosk.hint":
     "The school's Chromebooks that attested themselves. Name a station to let students pair with it; retire one to take it out of service.",
@@ -330,6 +333,7 @@ export const en = {
   "admin.system.attention.one": "1 check needs attention",
   "admin.system.attention.other": "{n} checks need attention",
   "admin.system.checked": "Checked",
+  "admin.system.failingSince": "First failed",
   "admin.system.unknown.one": "1 check cannot be measured here",
   "admin.system.unknown.other": "{n} checks cannot be measured here",
   "admin.system.status.ok": "OK",
@@ -445,6 +449,9 @@ export const en = {
   "settings.kind.grading_ready.desc": "The automatic grading of an evaluation is finished and proposals await your validation.",
   "settings.kind.pool_question_added": "Question published in a shared pool",
   "settings.kind.pool_question_added.desc": "A colleague publishes a question in a pool you own or contribute to.",
+  "settings.kind.system_alert": "Platform health",
+  "settings.kind.system_alert.desc": "A health check of the platform fails twice in a row, is still failing a day later, or recovers. Not sent to Teams.",
+  "settings.channel.none": "Not sent there",
   "settings.email.title": "Email",
   "settings.email.desc": "Sent to {email}. Nothing to set up.",
   "settings.teams.title": "Microsoft Teams",
@@ -3240,6 +3247,9 @@ export const en = {
   "notif.gradingReady.one": "Grading of “{evaluationTitle}” is finished: a proposal to validate.",
   "notif.poolQuestionAdded": "{n} questions published in “{poolName}”.",
   "notif.poolQuestionAdded.one": "A question published in “{poolName}”.",
+  "notif.systemAlert.failing": "Health checks failing: {checks}.",
+  "notif.systemAlert.still_failing": "Still failing after a day: {checks}.",
+  "notif.systemAlert.recovered": "Back to OK: {checks}.",
   "notif.empty.title": "Nothing new",
   "notif.empty.body": "Shared pools, released results and news of your classrooms show up here.",
 

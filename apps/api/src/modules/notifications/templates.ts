@@ -15,8 +15,10 @@
  * is escaped before it lands in HTML, and the subject line is flattened to
  * one line. The payload carries ids and titles only: nothing here can leak a
  * grade or question content, because nothing of the kind is ever passed in.
+ * A `system_alert` (ADR-055 §5) carries check keys only; their causes and
+ * measures are on the System status page it links to.
  */
-import type { NotificationKind, NotificationPayload } from "@quiz/contracts";
+import type { NotificationKind, NotificationPayload, TeamsNotificationKind } from "@quiz/contracts";
 
 export type MailLocale = "en" | "fr";
 
@@ -64,6 +66,28 @@ const en = {
   "pool_question_added.body": "Colleagues published {count} questions in the pool “{poolName}”.",
   "pool_question_added.body.one": "A colleague published a question in the pool “{poolName}”.",
   "pool_question_added.action": "Open the pool",
+  "system_alert.failing.subject": "{host}: health checks failing",
+  "system_alert.failing.body": "Health checks of {host} failed on two runs in a row: {checks}.",
+  "system_alert.still_failing.subject": "{host}: health checks still failing",
+  "system_alert.still_failing.body": "Health checks of {host} have been failing for more than a day: {checks}.",
+  "system_alert.recovered.subject": "{host}: health checks back to OK",
+  "system_alert.recovered.body": "Health checks of {host} that had failed are OK again: {checks}.",
+  "system_alert.action": "Open the system status",
+  // The checks by name, as the System status page names them
+  // (`admin.system.check.*` in the web's dictionaries).
+  "check.ticker": "Live clock (ticker)",
+  "check.attempts.overdue": "Attempts past their deadline",
+  "check.evaluations.overdue": "Evaluations past their end",
+  "check.tasks": "Scheduled tasks",
+  "check.jobs": "Background jobs failed (24 h)",
+  "check.runner": "Code runner",
+  "check.evaluations.live": "Live evaluations",
+  "check.connections.live": "Real-time connections",
+  "check.database": "Database response",
+  "check.database.size": "Database size",
+  "check.database.connections": "Database connections",
+  "check.disk": "Disk space",
+  "check.backup": "Last backup",
   "role.reader": "reader",
   "role.contributor": "contributor",
   "role.owner": "owner",
@@ -152,6 +176,26 @@ const fr: Record<Key, string> = {
   "pool_question_added.body": "Des collègues ont publié {count} questions dans la banque « {poolName} ».",
   "pool_question_added.body.one": "Un collègue a publié une question dans la banque « {poolName} ».",
   "pool_question_added.action": "Ouvrir la banque",
+  "system_alert.failing.subject": "{host} : contrôles de santé en échec",
+  "system_alert.failing.body": "Des contrôles de santé de {host} ont échoué deux fois de suite : {checks}.",
+  "system_alert.still_failing.subject": "{host} : contrôles de santé toujours en échec",
+  "system_alert.still_failing.body": "Des contrôles de santé de {host} échouent depuis plus d'un jour : {checks}.",
+  "system_alert.recovered.subject": "{host} : contrôles de santé de nouveau OK",
+  "system_alert.recovered.body": "Des contrôles de santé de {host} qui avaient échoué sont de nouveau OK : {checks}.",
+  "system_alert.action": "Ouvrir l'état du système",
+  "check.ticker": "Horloge du direct (ticker)",
+  "check.attempts.overdue": "Tentatives au-delà de leur échéance",
+  "check.evaluations.overdue": "Évaluations au-delà de leur fin",
+  "check.tasks": "Tâches planifiées",
+  "check.jobs": "Tâches de fond en échec (24 h)",
+  "check.runner": "Exécuteur de code",
+  "check.evaluations.live": "Évaluations en cours",
+  "check.connections.live": "Connexions temps réel",
+  "check.database": "Réponse de la base de données",
+  "check.database.size": "Taille de la base de données",
+  "check.database.connections": "Connexions à la base de données",
+  "check.disk": "Espace disque",
+  "check.backup": "Dernière sauvegarde",
   "role.reader": "lecteur",
   "role.contributor": "contributeur",
   "role.owner": "propriétaire",
@@ -248,6 +292,9 @@ function varsOf(payload: NotificationPayload, t: Record<Key, string>): Record<st
       return { evaluationTitle: payload.evaluationTitle, count: String(payload.count) };
     case "pool_question_added":
       return { poolName: payload.poolName, count: String(payload.count) };
+    case "system_alert":
+      // `{host}` is added by `renderNotification`, which knows the address.
+      return { checks: payload.checks.map((key) => t[`check.${key}`]).join(", ") };
   }
 }
 
@@ -264,9 +311,11 @@ const UNCOUNTED_KINDS: ReadonlySet<NotificationKind> = new Set(["results_updated
  * either language.
  */
 function sentenceKey(payload: NotificationPayload, part: "subject" | "body"): Key {
+  // A kind with a state (`system_alert`) has one sentence per state.
+  const state = "state" in payload ? `.${payload.state}` : "";
   const one =
     "count" in payload && payload.count === 1 && !UNCOUNTED_KINDS.has(payload.kind) ? ".one" : "";
-  return `${payload.kind}.${part}${one}` as Key;
+  return `${payload.kind}${state}.${part}${one}` as Key;
 }
 
 /**
@@ -293,6 +342,8 @@ export function notificationPath(payload: NotificationPayload): string {
       return "/";
     case "deadline_approaching":
       return `/take/${payload.evaluationId}`;
+    case "system_alert":
+      return "/admin?tab=system";
     case "activity_available":
       switch (payload.activityKind) {
         case "evaluation":
@@ -339,7 +390,7 @@ export function renderNotification(
 ): RenderedNotification {
   const t = DICTS[locale];
   const kind: NotificationKind = payload.kind;
-  const vars = varsOf(payload, t);
+  const vars: Record<string, string> = { ...varsOf(payload, t), host: hostOf(webUrl) };
   const base = webUrl;
   const link = `${base}${notificationPath(payload)}`;
   const settings = `${base}/settings`;
@@ -365,6 +416,15 @@ export function renderNotification(
   return { subject, text, html, topic, preview };
 }
 
+/** The host of the SPA's address: which platform a system alert is about (production, staging). */
+function hostOf(webUrl: string): string {
+  try {
+    return new URL(webUrl).host;
+  } catch {
+    return webUrl;
+  }
+}
+
 /** The `{name}` placeholders of a template, in order. */
 export function placeholders(template: string): string[] {
   return [...template.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!);
@@ -376,7 +436,9 @@ export function placeholders(template: string): string[] {
  * to it), valued from the payload. Teams fills the text in the language of
  * the recipient's client, so no value here is a translated word.
  */
-export function activityParameters(payload: NotificationPayload): Record<string, string> {
+export function activityParameters(
+  payload: Extract<NotificationPayload, { kind: TeamsNotificationKind }>,
+): Record<string, string> {
   const vars = varsOf(payload, en);
   return Object.fromEntries(
     placeholders(en[`activity.${payload.kind}.template`]).map((name) => [name, oneLine(vars[name] ?? "")]),

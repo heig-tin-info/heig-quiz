@@ -243,6 +243,22 @@ const notifications: Notification[] = [
     createdAt: iso(-3 * H),
     readAt: null,
   },
+  // The administrators' own kind (ADR-055 §5), for the admin persona only:
+  // already read, so the badge of every other admin scene stays as it was.
+  ...(me?.role === "admin"
+    ? [
+        {
+          id: "n6",
+          payload: {
+            kind: "system_alert",
+            state: "failing",
+            checks: ["runner", "disk"],
+          },
+          createdAt: iso(-20 * 60_000),
+          readAt: iso(-15 * 60_000),
+        } satisfies Notification,
+      ]
+    : []),
   {
     id: "n4",
     payload: { kind: "roster_conflict", classroomId: "r1", classroomName: "PRG1-2026", count: 1 },

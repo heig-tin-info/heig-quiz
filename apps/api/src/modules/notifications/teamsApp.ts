@@ -27,7 +27,11 @@
  */
 import { zipSync } from "fflate";
 
-import type { NotificationKind, NotificationPayload } from "@quiz/contracts";
+import {
+  kindChannels,
+  type NotificationPayload,
+  type TeamsNotificationKind,
+} from "@quiz/contracts";
 
 import type { ActivityNotification } from "./teams.js";
 import { TEAMS_COLOR_PNG, TEAMS_OUTLINE_PNG } from "./teamsIcons.js";
@@ -53,7 +57,8 @@ export const TEAMS_TAB_ENTITY = "home";
  * RUNS AHEAD of `NOTIFICATION_KINDS` (ADR-030 §f): every user re-uploads the
  * app for a new version, so the one bump of #198 step 4 already declares the
  * kinds its later steps emit. A kind of the catalogue missing here is a
- * compile error below (and a test).
+ * compile error below (and a test) — unless `KIND_CHANNELS` keeps it out of
+ * Teams (`system_alert`).
  */
 export const TEAMS_ACTIVITY_KINDS = [
   "results_released",
@@ -70,8 +75,8 @@ export const TEAMS_ACTIVITY_KINDS = [
 ] as const;
 type TeamsActivityKind = (typeof TEAMS_ACTIVITY_KINDS)[number];
 
-/** Every kind of the catalogue has its activity type: `true` or a compile error. */
-const CATALOGUE_DECLARED: [NotificationKind] extends [TeamsActivityKind] ? true : false = true;
+/** Every kind Teams may carry has its activity type: `true` or a compile error. */
+const CATALOGUE_DECLARED: [TeamsNotificationKind] extends [TeamsActivityKind] ? true : false = true;
 void CATALOGUE_DECLARED;
 
 /** The activity type of each kind, as the manifest declares it and a delivery names it. */
@@ -201,6 +206,12 @@ export function teamsTabDeepLink(appId: string, payload: NotificationPayload): s
   return `https://teams.microsoft.com/l/entity/${encodeURIComponent(appId)}/${TEAMS_TAB_ENTITY}?context=${encodeURIComponent(context)}`;
 }
 
+/** A payload of a kind Teams may carry (`KIND_CHANNELS`): only those have an activity type. */
+export type TeamsPayload = Extract<NotificationPayload, { kind: TeamsNotificationKind }>;
+export function isTeamsPayload(payload: NotificationPayload): payload is TeamsPayload {
+  return kindChannels(payload.kind).includes("teams");
+}
+
 /**
  * The activity-feed notification of one payload, for one recipient:
  * `message` is the notification rendered in their platform language
@@ -209,7 +220,7 @@ export function teamsTabDeepLink(appId: string, payload: NotificationPayload): s
  */
 export function teamsActivity(
   appId: string,
-  payload: NotificationPayload,
+  payload: TeamsPayload,
   message: Pick<RenderedNotification, "topic" | "preview">,
 ): ActivityNotification {
   return {

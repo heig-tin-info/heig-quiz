@@ -755,6 +755,7 @@ const tasks: AdminScheduledTask[] = [
     lastMessage: "0 cards and 0 reviews deleted",
     lastDurationMs: 95,
   }),
+  task("health.checks", 5, { lastMessage: "10 ok, 2 warn, 1 unknown", lastDurationMs: 64 }),
 ];
 const taskOf = (m: RegExpMatchArray) => {
   const found = tasks.find((x) => x.key === m.groups!.key);
@@ -799,7 +800,17 @@ function systemStatus(): SystemStatus {
     value: SystemCheck["value"],
     cause: SystemCheck["cause"] = null,
     details: SystemCheck["details"] = [],
-  ): SystemCheck => ({ key, section, status, value, cause, details, checkedAt: at });
+  ): SystemCheck => ({
+    key,
+    section,
+    status,
+    value,
+    cause,
+    details,
+    checkedAt: at,
+    // As the `health.checks` task records it: two runs of five minutes ago at least.
+    failingSince: status === "fail" ? iso(-25 * MIN) : null,
+  });
   const count = (n: number) => ({ kind: "count" as const, n });
   const queue = (name: string, waiting: number, failed: number, oldestMs: number | null): CheckDetail => ({
     subject: { kind: "name", name },

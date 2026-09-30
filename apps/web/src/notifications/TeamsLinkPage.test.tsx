@@ -35,6 +35,7 @@ const linked: NotificationSettings = {
     roster_conflict: { bell: true, email: true, teams: true },
     grading_ready: { bell: true, email: true, teams: true },
     pool_question_added: { bell: true, email: false, teams: false },
+    system_alert: { bell: true, email: true, teams: false },
   },
   kinds: ["results_released"],
   email: "marie.dupont@heig-vd.ch",

@@ -23,6 +23,8 @@ import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import {
   DEFAULT_CHANNEL_ENABLED,
+  kindChannels,
+  NOTIFICATION_AUDIENCE,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_KINDS,
   notificationKindsFor,
@@ -52,6 +54,9 @@ import { enqueueDeliveries, teamsOpen, type ExternalChannel } from "./outbox.js"
 import { teamsLinkedUsers, teamsLinkOf } from "./teamsLink.js";
 
 const DEFAULT_LIMIT = 30;
+
+/** The kinds only an admin receives (`NOTIFICATION_AUDIENCE`). */
+const ADMIN_KINDS = NOTIFICATION_KINDS.filter((kind) => NOTIFICATION_AUDIENCE[kind] === "admin");
 
 type NotificationRow = typeof notifications.$inferSelect;
 
@@ -143,8 +148,10 @@ export async function notifyMany(
   const wantedBy = await channelsFor(db, userIds, [...new Set(parsed.map((d) => d.payload.kind))]);
   const planned = parsed.map((d) => {
     const chosen = wantedBy(d.userId, d.payload.kind);
+    // The kind's own channels bound the delivery's too (`KIND_CHANNELS`).
+    const allowed = kindChannels(d.payload.kind);
     const wanted = Object.fromEntries(
-      NOTIFICATION_CHANNELS.map((c) => [c, chosen[c] && d.channels.includes(c)]),
+      NOTIFICATION_CHANNELS.map((c) => [c, chosen[c] && d.channels.includes(c) && allowed.includes(c)]),
     ) as Record<NotificationChannel, boolean>;
     return { userId: d.userId, payload: d.payload, wanted };
   });
@@ -259,17 +266,30 @@ export async function listNotifications(
   userId: string,
   limit: number = DEFAULT_LIMIT,
 ): Promise<NotificationList> {
+  // The admin kinds (`system_alert`) only while the account is still admin:
+  // a demoted account neither sees nor counts the platform's health.
+  const [account] = await db.select({ role: users.role }).from(users).where(eq(users.id, userId)).limit(1);
+  const visible =
+    account?.role === "admin"
+      ? eq(notifications.userId, userId)
+      : and(
+          eq(notifications.userId, userId),
+          sql`${notifications.payload}->>'kind' not in (${sql.join(
+            ADMIN_KINDS.map((kind) => sql`${kind}`),
+            sql`, `,
+          )})`,
+        );
   const [rows, [counted]] = await Promise.all([
     db
       .select()
       .from(notifications)
-      .where(eq(notifications.userId, userId))
+      .where(visible)
       .orderBy(desc(notifications.createdAt), desc(notifications.id))
       .limit(limit),
     db
       .select({ n: sql<number>`count(*)::int` })
       .from(notifications)
-      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt))),
+      .where(and(visible, isNull(notifications.readAt))),
   ]);
   const items: Notification[] = [];
   for (const row of rows) {

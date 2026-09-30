@@ -96,6 +96,12 @@ describe("routeToPath / parsePath", () => {
     expect(parsePath("/questions/q-1")).toEqual({ view: "question", id: "q-1" });
   });
 
+  it("opens the Administration on a tab from a system alert, the page reading it off the query", () => {
+    expect(routeToPath({ view: "admin", tab: "system" })).toBe("/admin?tab=system");
+    expect(routeToPath({ view: "admin" })).toBe("/admin");
+    expect(parsePath("/admin")).toEqual({ view: "admin" });
+  });
+
   it("parses the development gallery; App.tsx is what refuses it in production", () => {
     expect(parsePath("/dev/ui")).toEqual({ view: "devUi" });
     expect(parsePath("/dev")).toEqual({ view: "home" });

@@ -67,6 +67,7 @@ export const SCHEDULED_TASK_KEYS = [
   "poll.end_idle",
   "notifications.deadline_reminders",
   "drill.purge",
+  "health.checks",
 ] as const;
 export type ScheduledTaskKey = (typeof SCHEDULED_TASK_KEYS)[number];
 

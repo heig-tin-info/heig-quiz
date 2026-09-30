@@ -18,7 +18,7 @@
  */
 import { boolean, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
-import { SCHEDULED_TASK_STATUSES } from "@quiz/contracts";
+import { CHECK_STATUSES, SCHEDULED_TASK_STATUSES, SYSTEM_CHECK_KEYS } from "@quiz/contracts";
 
 export const scheduledTasks = pgTable("scheduled_tasks", {
   key: text("key").primaryKey(),
@@ -30,4 +30,24 @@ export const scheduledTasks = pgTable("scheduled_tasks", {
   lastMessage: text("last_message"),
   lastDurationMs: integer("last_duration_ms"),
   lastOkAt: timestamp("last_ok_at", { withTimezone: true }),
+});
+
+/**
+ * What the `health.checks` scheduled task keeps of each health check between
+ * two runs (ADR-055 §5), so that a transition is seen across restarts and
+ * processes: the status of the last run, since when it holds and for how
+ * many runs, and the last notice the administrators were sent about it. The
+ * rule that reads and writes it is `nextCheckState` of `@quiz/domain`. Owned
+ * by the `system` module; one row per check key, inserted at the check's
+ * first run. A row whose key left the registry stays, ignored.
+ */
+export const healthCheckStates = pgTable("health_check_states", {
+  key: text("key", { enum: SYSTEM_CHECK_KEYS }).primaryKey(),
+  status: text("status", { enum: CHECK_STATUSES }).notNull(),
+  since: timestamp("since", { withTimezone: true }).notNull(),
+  consecutive: integer("consecutive").notNull(),
+  /** `fail`: an alert is outstanding; `ok`: its recovery was sent; null: nobody was told. */
+  notifiedStatus: text("notified_status", { enum: ["fail", "ok"] }),
+  notifiedAt: timestamp("notified_at", { withTimezone: true }),
+  checkedAt: timestamp("checked_at", { withTimezone: true }).notNull(),
 });

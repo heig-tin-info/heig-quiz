@@ -216,6 +216,12 @@ function CheckRow({ check, open }: { check: SystemCheck; open: Record<"tasks", (
             {t(causeText(check.cause))}
           </p>
         ) : null}
+        {check.failingSince ? (
+          // The `health.checks` task's record (ADR-055 §5): how long, not just now.
+          <p className="text-xs text-danger">
+            {t("admin.system.failingSince")} <RelativeTime iso={check.failingSince} />
+          </p>
+        ) : null}
         {extra.note ? <p className="text-xs text-fg-faint">{t(extra.note)}</p> : null}
         {check.details.length > 0 ? (
           <ul className="space-y-0.5 pt-0.5">

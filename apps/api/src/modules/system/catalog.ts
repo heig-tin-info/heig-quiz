@@ -9,7 +9,9 @@
  * polls left without an answer for 12 hours, `NOTIFICATION_TASKS` reminds
  * the students of an evaluation closing within 24 hours (ADR-030 §d),
  * `DRILL_TASKS` purges the drill data past its five-year retention
- * (N-DATA-03). The GitHub reconciliations (ADR-011) join with the tasks that
+ * (N-DATA-03). `health.checks` is this module's own: the health registry,
+ * run every five minutes, telling the administrators of a check that fails
+ * or recovers (ADR-055 §5, `alerts.ts`). The GitHub reconciliations (ADR-011) join with the tasks that
  * port them (M3-06, M2-04). A new task also adds its key to
  * `SCHEDULED_TASK_KEYS` (`@quiz/contracts`) and its names to the web's
  * dictionaries.
@@ -20,6 +22,7 @@ import type { ScheduledTask } from "../../ticker.js";
 import { DRILL_TASKS } from "../drill/jobs.js";
 import { NOTIFICATION_TASKS } from "../notifications/jobs.js";
 import { POLL_TASKS } from "../poll/jobs.js";
+import { runHealthAlerts } from "./alerts.js";
 
 export const SCHEDULED_TASKS: readonly ScheduledTask[] = [
   {
@@ -37,4 +40,9 @@ export const SCHEDULED_TASKS: readonly ScheduledTask[] = [
   ...POLL_TASKS,
   ...NOTIFICATION_TASKS,
   ...DRILL_TASKS,
+  {
+    key: "health.checks",
+    defaultIntervalMinutes: 5,
+    run: (app, config) => runHealthAlerts(app, config),
+  },
 ];

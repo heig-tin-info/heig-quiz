@@ -10,9 +10,9 @@
  *     cache (`systemStatus`);
  *   - `GET /healthz` runs only the cheap ones that touch no table
  *     (`coarseHealth`) and reduces them to coarse words;
- *   - the `health.checks` scheduled task (next step, ADR-055 §5) will run the
- *     same `runChecks` every few minutes, keep the transitions and mail the
- *     administrators.
+ *   - the `health.checks` scheduled task (`alerts.ts`, ADR-055 §5) runs the
+ *     same `runChecks` every five minutes, keeps the transitions and tells
+ *     the administrators.
  *
  * A check says how bad things are, never who: counts, sizes and durations,
  * no student, no title, no log line (personal data, N-DATA-*).
@@ -21,7 +21,7 @@ import { statfs, stat, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import type { FastifyInstance } from "fastify";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type {
@@ -49,7 +49,8 @@ import {
 } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
-import { evaluations } from "../../db/schema.js";
+import type { Db } from "../../db/client.js";
+import { evaluations, healthCheckStates } from "../../db/schema.js";
 import { MIGRATIONS_DIR } from "../../paths.js";
 import { InProcessQueue } from "../../jobs.js";
 import { lastTickOf } from "../../ticker.js";
@@ -393,6 +394,8 @@ async function runOne(ctx: CheckContext, check: HealthCheck, timeoutMs: number):
     cause: result.cause ?? null,
     details: result.details ?? [],
     checkedAt: new Date().toISOString(),
+    // The task's record, not this run's: `systemStatus` fills it in.
+    failingSince: null,
   };
 }
 
@@ -502,9 +505,34 @@ async function deployment(app: FastifyInstance, config: AppConfig): Promise<Syst
   };
 }
 
+/**
+ * Since when each check that failed at the `health.checks` task's last run
+ * has been failing (`health_check_states`, written by `alerts.ts`).
+ */
+export async function failingSince(db: Db): Promise<Map<SystemCheckKey, Date>> {
+  const rows = await db
+    .select({ key: healthCheckStates.key, since: healthCheckStates.since })
+    .from(healthCheckStates)
+    .where(eq(healthCheckStates.status, "fail"));
+  return new Map(rows.map((row) => [row.key, row.since]));
+}
+
+/**
+ * Since when the checks that fail now have been failing, by the record of
+ * the `health.checks` task: its streak, when its last run saw the check fail
+ * too. Nothing when the database cannot say (its own line says why).
+ */
+async function withFailingSince(app: FastifyInstance, checks: SystemCheck[]): Promise<SystemCheck[]> {
+  if (!checks.some((c) => c.status === "fail")) return checks;
+  const since = await failingSince(app.db).catch(() => new Map<SystemCheckKey, Date>());
+  return checks.map((c) =>
+    c.status === "fail" && since.has(c.key) ? { ...c, failingSince: since.get(c.key)!.toISOString() } : c,
+  );
+}
+
 async function compute(app: FastifyInstance, config: AppConfig): Promise<SystemStatus> {
   const [checks, deployed] = await Promise.all([runChecks(app, config), deployment(app, config)]);
-  return { checkedAt: new Date().toISOString(), checks, deployment: deployed };
+  return { checkedAt: new Date().toISOString(), checks: await withFailingSince(app, checks), deployment: deployed };
 }
 
 /**
