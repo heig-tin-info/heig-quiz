@@ -3,6 +3,7 @@
  * (figures, handouts), copied into the platform when a page references them
  * (D14) and served under the classroom's own access check (D03, N-SEC-13).
  */
+import { JOURNAL_ASSETS_PATH } from "@quiz/contracts";
 
 /**
  * The URL the platform serves a journal asset at. Classroom-scoped: with one
@@ -12,7 +13,7 @@
  */
 export function journalAssetUrl(classroomId: string, path: string): string {
   const encoded = path.split("/").map(encodeURIComponent).join("/");
-  return `/app/api/classrooms/${classroomId}/journal/assets/${encoded}`;
+  return `${JOURNAL_ASSETS_PATH(classroomId)}/${encoded}`;
 }
 
 /** Content types served for the extensions a journal may carry. */

@@ -37,6 +37,7 @@
  * front matter's strings have theirs replaced (see `plainText`).
  */
 import {
+  CONTROL_CHAR,
   hasControlChar,
   isJournalPagePath,
   type JournalTocEntry,
@@ -106,25 +107,32 @@ export function cleanSource(source: string): string {
   return source.replace(/\u0000/g, "");
 }
 
-// eslint-disable-next-line no-control-regex
-const CONTROL_EXCEPT_LINES = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
-// eslint-disable-next-line no-control-regex
-const CONTROL = /[\u0000-\u001f\u007f]/g;
+/** Every control character of a string, for a replacement. */
+const CONTROLS = new RegExp(CONTROL_CHAR.source, "g");
 
-/** One line of plain text: tab and line breaks become spaces, other controls U+FFFD. */
+/**
+ * One line of plain text: tab and line breaks become spaces, other controls
+ * U+FFFD, and a lone surrogate U+FFFD too (`toWellFormed`: Postgres and JSON
+ * encoders refuse half a character).
+ */
 function oneLine(text: string): string {
-  if (!hasControlChar(text)) return text;
-  return text.replace(/[\t\n\r]/g, " ").replace(CONTROL, "\ufffd");
+  const whole = text.toWellFormed();
+  if (!hasControlChar(whole)) return whole;
+  return whole.replace(/[\t\n\r]/g, " ").replace(CONTROLS, "\ufffd");
 }
 
-/** Every string of a YAML value, with its control characters (but tab and line breaks) replaced. */
+/**
+ * Every string of a YAML value, well formed, with its control characters
+ * replaced by U+FFFD \u2014 except tab and line breaks in a value, which a
+ * multi-line YAML string legitimately holds. Keys are single lines.
+ */
 function cleanStrings(value: unknown): unknown {
-  if (typeof value === "string") return value.replace(CONTROL_EXCEPT_LINES, "\ufffd");
+  if (typeof value === "string") {
+    return value.toWellFormed().replace(CONTROLS, (c) => ("\t\n\r".includes(c) ? c : "\ufffd"));
+  }
   if (Array.isArray(value)) return value.map(cleanStrings);
   if (value !== null && typeof value === "object" && !(value instanceof Date)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [k.replace(CONTROL, "\ufffd"), cleanStrings(v)]),
-    );
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [oneLine(k), cleanStrings(v)]));
   }
   return value;
 }
@@ -211,7 +219,8 @@ function decodeEntities(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (whole, name: string) => {
     if (name[0] === "#") {
       const code = name[1] === "x" || name[1] === "X" ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10);
-      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+      const valid = code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff);
+      return valid ? String.fromCodePoint(code) : whole;
     }
     return NAMED[name.toLowerCase()] ?? whole;
   });

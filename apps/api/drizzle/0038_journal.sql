@@ -10,8 +10,7 @@ CREATE TABLE "classroom_journals" (
 	"sync_error" text,
 	"created_by" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "classroom_journals_sync_status_ck" CHECK ("classroom_journals"."sync_status" IN ('pending', 'ok', 'error'))
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "journal_assets" (

@@ -12,6 +12,10 @@
  *   - `staff` — everything, for the course's staff in the teacher's view.
  *
  * Warnings are CODES with parameters (fix J5), translated by the web app.
+ *
+ * Only the read half lives here (what M4-02 serves and M4-04 reads); the
+ * bodies of the writes (create, use, save, add, preview, refresh) are
+ * written by M4-03 with their handlers (`docs/merge/09-tasks.md`).
  */
 import { z } from "zod";
 
@@ -23,19 +27,19 @@ export const JOURNAL_PATH_MAX = 400;
 /** An asset (image, handout) is copied into the platform up to this size (D14, F-JRN-11). */
 export const JOURNAL_ASSET_MAX_BYTES = 5_000_000;
 
-/** Longest markdown source a save or a preview carries. */
-export const JOURNAL_MARKDOWN_MAX = 500_000;
-
-/** The C0 control characters and DEL. */
+/**
+ * The C0 control characters and DEL: the one definition, which a caller
+ * that replaces them builds a global form of (`new RegExp(CONTROL_CHAR.source, "g")`).
+ */
 // eslint-disable-next-line no-control-regex
-const CONTROL = /[\u0000-\u001f\u007f]/;
+export const CONTROL_CHAR = /[\u0000-\u001f\u007f]/;
 
 /**
  * Whether a string holds a control character (C0 or DEL): never part of a
  * journal path, and never let into a title or a warning parameter.
  */
 export function hasControlChar(text: string): boolean {
-  return CONTROL.test(text);
+  return CONTROL_CHAR.test(text);
 }
 
 /**
@@ -77,6 +81,14 @@ export const JournalAssetPath = JournalPath.refine((p) => !isJournalPagePath(p),
 /** `/classrooms/:id/journal/pages/*`. */
 export const JournalPageParams = z.object({ id: z.uuid(), "*": JournalPagePath });
 export type JournalPageParams = z.infer<typeof JournalPageParams>;
+
+/**
+ * Where a classroom's journal assets are served (D03): the route registers
+ * `JOURNAL_ASSETS_PATH(":id") + "/*"`, and the renderer builds the URL of one
+ * asset on it, so the two cannot drift.
+ */
+export const JOURNAL_ASSETS_PATH = (classroomId: string) =>
+  `/app/api/classrooms/${classroomId}/journal/assets`;
 
 /** `/classrooms/:id/journal/assets/*`. */
 export const JournalAssetParams = z.object({ id: z.uuid(), "*": JournalAssetPath });
@@ -120,14 +132,8 @@ export const JournalWarning = z.discriminatedUnion("code", [
 export type JournalWarning = z.infer<typeof JournalWarning>;
 export type JournalWarningCode = JournalWarning["code"];
 
-/** Every warning code, for the web's translation table. */
-export const JOURNAL_WARNING_CODES = JournalWarning.options.map(
-  (o) => o.shape.code.value,
-) as readonly JournalWarningCode[];
-
 // ---------------------------------------------------------------- reading
 
-/** One heading of a page, for its table of contents. */
 /**
  * One heading of a page, for its table of contents. `text` is PLAIN TEXT
  * (what the reader sees, entities decoded), rendered as React text, never as
@@ -159,7 +165,7 @@ export const JournalNavNode: z.ZodType<JournalNavNode> = z.lazy(() =>
   }),
 );
 
-/** The states of a classroom's copy of its repository (also the database's CHECK). */
+/** The states of a classroom's copy of its repository. */
 export const JOURNAL_SYNC_STATUSES = ["pending", "ok", "error"] as const;
 export const JournalSyncStatus = z.enum(JOURNAL_SYNC_STATUSES);
 export type JournalSyncStatus = z.infer<typeof JournalSyncStatus>;
@@ -260,147 +266,3 @@ export type JournalPageStaff = z.infer<typeof JournalPageStaff>;
 
 export const JournalPage = z.discriminatedUnion("view", [JournalPageStudent, JournalPageStaff]);
 export type JournalPage = z.infer<typeof JournalPage>;
-
-// ---------------------------------------------------------------- writing
-
-/** A GitHub repository name (without its organization). */
-export const GithubRepoName = z
-  .string()
-  .regex(/^[A-Za-z0-9._-]{1,100}$/, "Not a repository name")
-  .refine((n) => n !== "." && n !== "..", { message: "Not a repository name" });
-
-/**
- * A branch name: the rules of git that matter for a URL, a path and a
- * command line. No leading `-` (never read as an option), no empty segment
- * (`//`, a leading or trailing `/`), no `..` anywhere, no segment starting
- * with `.` (so no `.` nor `/./`), no `.lock` ending.
- */
-export const GitRef = z
-  .string()
-  .min(1)
-  .max(200)
-  .regex(/^[A-Za-z0-9._/-]+$/, "Not a branch name")
-  .refine(
-    (r) =>
-      !r.startsWith("-") &&
-      !r.endsWith(".lock") &&
-      !r.includes("..") &&
-      r.split("/").every((seg) => seg !== "" && !seg.startsWith(".")),
-    { message: "Not a branch name" },
-  );
-
-/**
- * The folder of the repository holding the pages: "" for the root, else a
- * journal path. Surrounding slashes are dropped, as a teacher types them.
- */
-export const JournalRootPath = z
-  .string()
-  .max(JOURNAL_PATH_MAX)
-  .transform((p) => p.trim().replace(/^\/+|\/+$/g, ""))
-  .refine((p) => p === "" || safeJournalPath(p) !== null, { message: "Not a folder of the repository" });
-
-/** `POST /classrooms/:id/journal`: create a repository (F-JRN-02); the name defaults to the proposal. */
-export const JournalCreate = z.strictObject({ name: GithubRepoName.optional() });
-export type JournalCreate = z.infer<typeof JournalCreate>;
-
-/**
- * `POST /classrooms/:id/journal/use`: use a repository of the classroom's
- * organization (F-JRN-03, D27), on a branch (its default one otherwise) under
- * a root folder (the repository's root otherwise).
- */
-export const JournalUse = z.strictObject({
-  name: GithubRepoName,
-  ref: GitRef.optional(),
-  rootPath: JournalRootPath.optional(),
-});
-export type JournalUse = z.infer<typeof JournalUse>;
-
-/** 409 of a creation on a name already taken: never adopted, a free one proposed. */
-export const JournalNameTaken = z.strictObject({
-  error: z.literal("name_taken"),
-  suggestion: GithubRepoName,
-});
-export type JournalNameTaken = z.infer<typeof JournalNameTaken>;
-
-/**
- * The refusals of the journal's routes that the web app words (the 404s stay
- * plain `not_found`, indistinguishable from a missing classroom):
- * no journal yet, one already set, the classroom not connected, the App not
- * installed, the repository gone, a stale `baseSha`, a page already there, a
- * content type that does not match the extension, a file over the limit.
- */
-export const JournalErrorCode = z.enum([
-  "no_journal",
-  "journal_exists",
-  "not_connected",
-  "app_not_installed",
-  "name_taken",
-  "repository_not_found",
-  "conflict",
-  "page_exists",
-  "type_mismatch",
-  "too_large",
-]);
-export type JournalErrorCode = z.infer<typeof JournalErrorCode>;
-
-/** `POST /classrooms/:id/journal/refresh`: what the synchronisation copied. */
-export const JournalRefreshResult = z.strictObject({
-  commitSha: z.string().nullable(),
-  pages: z.number().int().min(0),
-  assets: z.number().int().min(0),
-  /** Referenced files left out for their size. */
-  oversized: z.array(z.string()),
-});
-export type JournalRefreshResult = z.infer<typeof JournalRefreshResult>;
-
-/** `POST /classrooms/:id/journal/preview`: render markdown not committed yet, as a page at `path`. */
-export const JournalPreviewBody = z.strictObject({
-  path: JournalPagePath,
-  markdown: z.string().max(JOURNAL_MARKDOWN_MAX),
-});
-export type JournalPreviewBody = z.infer<typeof JournalPreviewBody>;
-
-export const JournalPreview = z.strictObject({
-  title: z.string().nullable(),
-  html: z.string(),
-  toc: z.array(JournalTocEntry),
-  warnings: z.array(JournalWarning),
-  draft: z.boolean(),
-  visibleFrom: z.iso.datetime({ offset: true }).nullable(),
-});
-export type JournalPreview = z.infer<typeof JournalPreview>;
-
-/** A git blob sha (SHA-1 or SHA-256, hexadecimal). */
-export const BlobSha = z.string().regex(/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/, "Not a blob sha");
-
-/**
- * `PUT /classrooms/:id/journal/pages/*`: save a page against the blob the
- * editor opened (`baseSha`): a repository that moved meanwhile is a 409
- * `conflict`, never a merge (F-JRN-10).
- */
-export const JournalPageSave = z.strictObject({
-  markdown: z.string().max(JOURNAL_MARKDOWN_MAX),
-  baseSha: BlobSha,
-  /** The commit message; a default one names the page. */
-  message: z.string().trim().min(1).max(200).optional(),
-});
-export type JournalPageSave = z.infer<typeof JournalPageSave>;
-
-export const JournalPageSaved = z.strictObject({
-  path: z.string(),
-  /** The page as the copy knows it after the save; null if the refresh did not land. */
-  blobSha: z.string().nullable(),
-  title: z.string().nullable(),
-});
-export type JournalPageSaved = z.infer<typeof JournalPageSaved>;
-
-/** `POST /classrooms/:id/journal/pages`: add a page, seeded with its title. */
-export const JournalPageCreate = z.strictObject({
-  path: JournalPagePath,
-  title: z.string().trim().min(1).max(200).optional(),
-});
-export type JournalPageCreate = z.infer<typeof JournalPageCreate>;
-
-/** 201 of `POST pages` and of `POST assets/*` (raw body, ≤ {@link JOURNAL_ASSET_MAX_BYTES}). */
-export const JournalFileCreated = z.strictObject({ path: z.string() });
-export type JournalFileCreated = z.infer<typeof JournalFileCreated>;

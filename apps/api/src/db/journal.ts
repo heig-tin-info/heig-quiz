@@ -41,11 +41,9 @@ import {
   type JournalWarning,
 } from "@quiz/contracts";
 
-import { bytea, users } from "./auth.js";
+import { users } from "./auth.js";
+import { bytea } from "./columns.js";
 import { classrooms } from "./org.js";
-
-/** A constant list in a CHECK: DDL takes no parameter. */
-const sqlList = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`).join(", "));
 
 export const classroomJournals = pgTable(
   "classroom_journals",
@@ -73,13 +71,7 @@ export const classroomJournals = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [
-    index("classroom_journals_repo_idx").on(t.githubRepoId),
-    check(
-      "classroom_journals_sync_status_ck",
-      sql`${t.syncStatus} IN (${sqlList(JOURNAL_SYNC_STATUSES)})`,
-    ),
-  ],
+  (t) => [index("classroom_journals_repo_idx").on(t.githubRepoId)],
 );
 
 /**

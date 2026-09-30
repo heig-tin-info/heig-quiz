@@ -410,3 +410,24 @@ describe("title and TOC are plain text", () => {
     expect(renderPage("No heading.\n", ctx({ fallbackTitle: null })).title).toBeNull();
   });
 });
+
+describe("lone surrogates never reach the output", () => {
+  const wellFormed = (s: string) => s === s.toWellFormed();
+
+  it("leaves an entity naming a surrogate as typed", () => {
+    const p = renderPage("# A &#xD800; B &#55296;\n", ctx());
+    expect(p.title).toBe("A &#xD800; B &#55296;");
+    expect(wellFormed(p.toc[0]!.text)).toBe(true);
+  });
+
+  it("replaces one in the front matter's title, values, keys and warnings", () => {
+    const p = renderPage(
+      '---\ntitle: "A\\uD800B"\nvisible_from: "x\\uD800"\n"k\\uDC00": "v\\uD800"\n---\n',
+      ctx(),
+    );
+    expect(p.title).toBe("A�B");
+    expect(p.frontMatter).toMatchObject({ "k�": "v�" });
+    expect(p.warnings).toEqual([{ code: "visible_from_invalid", value: "x�" }]);
+    expect(wellFormed(JSON.stringify(p))).toBe(true);
+  });
+});

@@ -393,9 +393,17 @@ files it ports; writes en + fr for every string.
   impersonation whatever it asks, and for the staff only on an explicit
   request that narrows, 05 §5.7); fixes J1–J4 of §4.3; webhook registration;
   queue `journal.ingest`.
+- **From M4-01**: ingestion stores `cleanSource(md)` (no NUL) as
+  `markdown`, and renders each page twice (`html_staff` with every page in
+  `ctx.pages`, `html_student` with the student-visible ones only,
+  `04-journal.md` §4.2); the asset route is registered on
+  `JOURNAL_ASSETS_PATH(":id")` of the contracts. On top of N-SEC-13's CSP
+  and `nosniff`, the asset route serves an SVG with
+  `Content-Security-Policy: sandbox` (or `Content-Disposition: attachment`),
+  so a committed SVG opened directly runs nothing.
 - **Tests**: port `ingest.db.test`, `journal.db.test`; a student cannot
   fetch an asset referenced only by a draft page; two concurrent ingests
-  converge.
+  converge; an SVG asset carries the sandbox (or attachment) header.
 
 ### M4-03 — Journal writes
 - **Depends on**: M4-02, M2-03.
@@ -404,6 +412,18 @@ files it ports; writes en + fr for every string.
   (the repository is kept), refresh, preview, save with `baseSha`, add,
   delete, upload (committed into the repository); invitations to course
   staff with a linked login.
+- **Contracts**: M4-01 shipped only the read half of
+  `packages/contracts/src/journal.ts`; the write bodies move here, to be
+  shaped by their handlers (lean review of #371): the repository name, the
+  branch, the root folder, `JournalCreate`, `JournalUse`, the name-taken
+  409 with its suggestion, the error codes, the refresh result, the
+  preview body and payload, `baseSha` (a blob sha), the save body and
+  result, the add-a-page body, the created-file payload, the markdown size
+  cap (500 000). Hardening already designed in #371, to write again:
+  a branch refuses a leading `-`, `..` anywhere, an empty segment (`//`,
+  a leading or trailing `/`), a segment starting with `.` (so `.` and
+  `/./`) and a `.lock` ending; the root folder is trimmed of surrounding
+  slashes, capped at `JOURNAL_PATH_MAX` and must pass `safeJournalPath`.
 
 ### M4-04 — Web: journal reader
 - **Depends on**: M4-02 contracts, M1-04, M1-05. ‖ M4-05, M5-02.

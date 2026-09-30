@@ -1,17 +1,13 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
-  JOURNAL_WARNING_CODES,
   Journal,
-  JournalCreate,
   JournalPage,
   JournalPageParams,
-  JournalPageSave,
   JournalPageStaff,
   JournalPageStudent,
   JournalStaff,
   JournalStudent,
-  JournalUse,
   JournalViewQuery,
   JournalRepository,
   JournalWarning,
@@ -137,56 +133,11 @@ describe("the student payloads (N-SEC-12)", () => {
 
 describe("warnings (J5)", () => {
   it("are codes with parameters, and a closed list", () => {
-    expect(JOURNAL_WARNING_CODES).toEqual([
-      "front_matter_yaml",
-      "front_matter_not_mapping",
-      "visible_from_invalid",
-      "raw_html",
-      "external_image",
-      "target_missing",
-      "asset_too_large",
-      "math_error",
-    ]);
     expect(JournalWarning.safeParse({ code: "raw_html" }).success).toBe(true);
     expect(JournalWarning.safeParse({ code: "made_up" }).success).toBe(false);
     expect(
       JournalWarning.safeParse({ code: "raw_html", message: "Raw HTML is shown as text" }).success,
     ).toBe(false);
-  });
-});
-
-describe("write bodies", () => {
-  it("create: an optional repository name", () => {
-    expect(JournalCreate.parse({})).toEqual({});
-    expect(JournalCreate.parse({ name: "prg1-journal" })).toEqual({ name: "prg1-journal" });
-    expect(JournalCreate.safeParse({ name: "org/repo" }).success).toBe(false);
-    expect(JournalCreate.safeParse({ name: ".." }).success).toBe(false);
-  });
-
-  it("use: a repository, an optional branch and root folder", () => {
-    expect(JournalUse.parse({ name: "notes" })).toEqual({ name: "notes" });
-    expect(JournalUse.parse({ name: "notes", ref: "2026-autumn", rootPath: "/docs/" })).toEqual({
-      name: "notes",
-      ref: "2026-autumn",
-      rootPath: "docs",
-    });
-    expect(JournalUse.safeParse({ name: "notes", rootPath: "../up" }).success).toBe(false);
-    expect(JournalUse.safeParse({ name: "notes", ref: "a..b" }).success).toBe(false);
-    for (const ref of ["-main", ".", "a//b", "a/./b", "a/.hidden", "/main", "main/", "x.lock"]) {
-      expect(JournalUse.safeParse({ name: "notes", ref }).success, ref).toBe(false);
-    }
-    expect(JournalUse.safeParse({ name: "notes", ref: "release/2026-autumn.v2" }).success).toBe(true);
-    expect(JournalUse.safeParse({ name: "notes", ref: "main; rm" }).success).toBe(false);
-    expect(JournalUse.safeParse({ fullName: "org/notes" }).success).toBe(false);
-  });
-
-  it("save: the blob the editor opened is required", () => {
-    expect(JournalPageSave.safeParse({ markdown: "# x" }).success).toBe(false);
-    expect(JournalPageSave.safeParse({ markdown: "# x", baseSha: "nope" }).success).toBe(false);
-    expect(JournalPageSave.parse({ markdown: "# x", baseSha: SHA })).toEqual({
-      markdown: "# x",
-      baseSha: SHA,
-    });
   });
 });
 

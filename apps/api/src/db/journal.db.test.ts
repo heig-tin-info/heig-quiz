@@ -87,17 +87,6 @@ describe("classroom_journals", () => {
       .where(eq(classroomJournals.githubRepoId, 777));
     expect(rows.map((r) => r.classroomId).sort()).toEqual([a, b].sort());
   });
-
-  it("refuses a sync status outside pending, ok, error", async () => {
-    const c = await classroom();
-    await journal(c);
-    await expect(
-      db
-        .update(classroomJournals)
-        .set({ syncStatus: "broken" as "ok" })
-        .where(eq(classroomJournals.classroomId, c)),
-    ).rejects.toThrow();
-  });
 });
 
 describe("the copy", () => {

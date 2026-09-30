@@ -1,5 +1,5 @@
 {
-  "id": "eed68f8d-c0aa-4317-acc0-a4d5b6018984",
+  "id": "1395762a-4d39-4f89-b381-c7f5122ac547",
   "prevId": "6b5f0b7d-c99d-4414-ada0-f8332c44c7de",
   "version": "7",
   "dialect": "postgresql",
@@ -5440,12 +5440,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "classroom_journals_sync_status_ck": {
-          "name": "classroom_journals_sync_status_ck",
-          "value": "\"classroom_journals\".\"sync_status\" IN ('pending', 'ok', 'error')"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.journal_assets": {
