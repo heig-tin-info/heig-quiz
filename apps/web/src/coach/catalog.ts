@@ -261,22 +261,6 @@ export const TOURS: readonly CoachTour[] = [
       },
     ],
   },
-  // A student has one thing to learn: where a quiz shows up, and how to
-  // join a poll projected in class.
-  {
-    id: "student-home",
-    views: ["home"],
-    audience: "student",
-    steps: [
-      {
-        id: "student.join",
-        target: at("student.join"),
-        title: "coach.student.join.title",
-        body: "coach.student.join.body",
-        placement: "bottom",
-      },
-    ],
-  },
 ];
 
 /**

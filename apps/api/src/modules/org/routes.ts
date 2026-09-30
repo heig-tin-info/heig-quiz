@@ -1,7 +1,6 @@
 /**
  * HTTP surface of the `org` module (PLAN-MVP §4.1): courses, their staff and
- * pools, classrooms, the roster, the join code (F-ORG-06), and the student's
- * own list of classrooms.
+ * pools, classrooms, the roster, and the student's own list of classrooms.
  *
  * Every database statement lives in `./service.ts` or in the module-local
  * helpers it re-exports (`./roster.ts`, the shared role and pool helpers) —
@@ -22,10 +21,8 @@ import {
   CoursePoolsPut,
   EnrollmentPatch,
   IdParam,
-  JoinParams,
   RosterEntryParams,
   type CourseDetail,
-  type JoinResult,
   type StudentClassroom,
 } from "@quiz/contracts";
 import type { Cell } from "@quiz/domain";
@@ -47,9 +44,8 @@ import {
   teacherGuard,
 } from "../guards.js";
 import { invalid, notFound, teacherRoute } from "../http.js";
-import { studentJoined } from "../realtime/bus.js";
 import { poolsOfCourse, setCoursePools } from "../pool/service.js";
-import { claimForExistingUsers, importRoster, rosterView, tellStaff } from "./roster.js";
+import { claimForExistingUsers, importRoster, rosterView } from "./roster.js";
 import * as service from "./service.js";
 
 const RowsBody = z.object({
@@ -135,8 +131,6 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
           periodStart: r.periodStart,
           periodEnd: r.periodEnd,
           archivedAt: r.archivedAt?.toISOString() ?? null,
-          joinCode: r.joinCode,
-          joinCodeEnabled: r.joinCodeEnabled,
         })),
       };
       return detail;
@@ -302,14 +296,6 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     "/app/api/classrooms/:id",
     { preHandler: requireTeacher },
     teacher({ ...onClassroom, body: ClassroomPatch }, async ({ req, body, scope }) => {
-      // Self-enrolment is a switch of its own: turning it on mints the code
-      // when there is none (F-ORG-06).
-      if (body.joinCodeEnabled !== undefined) {
-        const state = await service.setJoinCode(app.db, scope.room.id, body.joinCodeEnabled);
-        await trace(req, "classroom.join_code", "classroom", scope.room.id, {
-          enabled: state.joinCodeEnabled,
-        });
-      }
       const updated = await service.updateClassroom(app.db, scope.room.id, body);
       const { name, period, periodStart } = body;
       if (name !== undefined || period !== undefined || periodStart !== undefined) {
@@ -470,53 +456,6 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   );
 
   // --- Students ---
-
-  /**
-   * `POST /app/api/join/:code` — the student side (F-ORG-06). Any session
-   * may call it: the code IS the authorization, and a wrong or disabled one
-   * is a plain 404, so the route says nothing about which codes exist.
-   */
-  app.post(
-    "/app/api/join/:code",
-    { preHandler: (req, reply) => app.requireSession(req, reply) },
-    async (req, reply) => {
-      const params = JoinParams.safeParse(req.params);
-      if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const row = await service.classroomByJoinCode(
-        app.db,
-        params.data.code.trim().toUpperCase(),
-      );
-      if (!row || row.room.archivedAt) return reply.code(404).send({ error: "not_found" });
-
-      const me = req.user!;
-      const outcome = await service.joinClassroom(app.db, row.room.id, me);
-      if (!outcome.ok) {
-        return reply.code(409).send({
-          error: "claimed_by_other",
-          message: "This roster entry is already attached to another account",
-        });
-      }
-      if (outcome.status === "joined") {
-        await trace(req, "roster.join", "classroom", row.room.id, { email: me.email });
-        studentJoined({ courseId: row.course.id, userId: me.id });
-        await tellStaff(app.db, {
-          kind: "student_joined",
-          courseId: row.course.id,
-          classroomId: row.room.id,
-          classroomName: row.room.name,
-          count: 1,
-          actorId: me.id,
-        });
-      }
-      const result: JoinResult = {
-        classroomId: row.room.id,
-        classroomName: row.room.name,
-        courseCode: row.course.code,
-        status: outcome.status,
-      };
-      return reply.code(outcome.status === "joined" ? 201 : 200).send(result);
-    },
-  );
 
   /**
    * Student surface. A student sees the classrooms whose roster entry they

@@ -1306,8 +1306,8 @@
         "light": "student-home-light.png",
         "dark": "student-home-dark.png"
       },
-      "takenAt": "2026-09-29T06:27:13.806Z",
-      "commit": "3f472ba",
+      "takenAt": "2026-09-30T17:09:10.905Z",
+      "commit": "c84da7cd",
       "base": "http://localhost:3100"
     },
     {
@@ -1329,8 +1329,8 @@
         "light": "student-home-phone-light.png",
         "dark": "student-home-phone-dark.png"
       },
-      "takenAt": "2026-09-29T06:27:13.806Z",
-      "commit": "3f472ba",
+      "takenAt": "2026-09-30T17:09:10.905Z",
+      "commit": "c84da7cd",
       "base": "http://localhost:3100"
     },
     {

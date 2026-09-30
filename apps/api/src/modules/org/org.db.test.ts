@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import type { CourseDetail, NotificationPayload } from "@quiz/contracts";
+import type { NotificationPayload } from "@quiz/contracts";
 
 import {
   auditLog,
@@ -33,25 +33,6 @@ async function signInStudent(email: string) {
   return student;
 }
 
-async function enableJoinCode(): Promise<string> {
-  const patched = await server.app.inject({
-    method: "PATCH",
-    url: `/app/api/classrooms/${classroomId}`,
-    headers: teacher.headers,
-    payload: { joinCodeEnabled: true },
-  });
-  expect(patched.statusCode).toBe(200);
-  // The code rides on the course detail; there is no route of its own.
-  const detail = await server.app.inject({
-    method: "GET",
-    url: `/app/api/courses/${courseId}`,
-    headers: teacher.headers,
-  });
-  const room = (detail.json() as CourseDetail).classrooms.find((c) => c.id === classroomId);
-  expect(room?.joinCodeEnabled).toBe(true);
-  return room!.joinCode as string;
-}
-
 beforeAll(async () => {
   server = await testServer();
   teacher = await server.signIn("teacher");
@@ -69,100 +50,7 @@ afterAll(async () => {
   await server.close();
 });
 
-describe("join code (F-ORG-06)", () => {
-  it("mints a readable code when self-enrolment is switched on, and keeps it", async () => {
-    const code = await enableJoinCode();
-    expect(code).toMatch(/^[2-9A-HJ-NP-Z]{8}$/);
-    // Switching off and on again hands back the SAME code: the handout the
-    // teacher printed still works.
-    await server.app.inject({
-      method: "PATCH",
-      url: `/app/api/classrooms/${classroomId}`,
-      headers: teacher.headers,
-      payload: { joinCodeEnabled: false },
-    });
-    expect(await enableJoinCode()).toBe(code);
-  });
-
-  it("lets a student join, once, and puts them on the roster", async () => {
-    const code = await enableJoinCode();
-    const student = await signInStudent("new.student@heig.test");
-    const joined = await server.app.inject({
-      method: "POST",
-      url: `/app/api/join/${code}`,
-      headers: student.headers,
-    });
-    expect(joined.statusCode).toBe(201);
-    expect(joined.json()).toMatchObject({ classroomId, courseCode: "PRG1", status: "joined" });
-
-    const again = await server.app.inject({
-      method: "POST",
-      url: `/app/api/join/${code}`,
-      headers: student.headers,
-    });
-    expect(again.statusCode).toBe(200);
-    expect(again.json().status).toBe("already");
-
-    const rows = await server.app.db
-      .select()
-      .from(enrollments)
-      .where(eq(enrollments.userId, student.id));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.userId).toBe(student.id);
-  });
-
-  it("claims the roster line the teacher had already imported, never a second one", async () => {
-    const code = await enableJoinCode();
-    const email = "imported@heig.test";
-    const enrollmentId = randomUUID();
-    await server.app.db
-      .insert(enrollments)
-      .values({ id: enrollmentId, classroomId, nom: "Turing", prenom: "Alan", email });
-    const student = await signInStudent(email);
-
-    const joined = await server.app.inject({
-      method: "POST",
-      url: `/app/api/join/${code}`,
-      headers: student.headers,
-    });
-    expect(joined.json().status).toBe("joined");
-    const rows = await server.app.db
-      .select()
-      .from(enrollments)
-      .where(eq(enrollments.email, email));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.id).toBe(enrollmentId);
-    expect(rows[0]!.userId).toBe(student.id);
-    // The imported name is kept: the roster is the teacher's document.
-    expect(rows[0]!.nom).toBe("Turing");
-  });
-
-  it("refuses a wrong code, and a disabled one, with the same 404", async () => {
-    const code = await enableJoinCode();
-    const student = await signInStudent("late@heig.test");
-    expect(
-      (await server.app.inject({
-        method: "POST",
-        url: "/app/api/join/ZZZZZZZZ",
-        headers: student.headers,
-      })).statusCode,
-    ).toBe(404);
-
-    await server.app.inject({
-      method: "PATCH",
-      url: `/app/api/classrooms/${classroomId}`,
-      headers: teacher.headers,
-      payload: { joinCodeEnabled: false },
-    });
-    const refused = await server.app.inject({
-      method: "POST",
-      url: `/app/api/join/${code}`,
-      headers: student.headers,
-    });
-    expect(refused.statusCode).toBe(404);
-    expect(refused.json()).toEqual({ error: "not_found" });
-  });
-
+describe("classroom access", () => {
   it("is closed to a teacher who is not on the course staff", async () => {
     const res = await server.app.inject({
       method: "GET",
@@ -270,27 +158,17 @@ describe("the student_joined notification", () => {
     expect(joiner.stream.text).toContain('"kinds":["roster"]');
   }
 
-  it("reaches the staff seats only when a student joins by code", async () => {
-    const code = await enableJoinCode();
-    const watched = await watchers();
-    const student = await signInStudent(`joiner-${randomUUID().slice(0, 8)}@heig.test`);
-    const joiner = { id: student.id, stream: await openStream(student.headers) };
-    await settle();
-
-    const joined = await server.app.inject({
-      method: "POST",
-      url: `/app/api/join/${code}`,
-      headers: student.headers,
-    });
-    expect(joined.statusCode).toBe(201);
-    await settle();
-
-    await expectStaffOnly(watched, joiner, "Test student");
-    for (const s of [...Object.values(watched.streams), joiner.stream]) s.close();
-  });
-
   it("reaches the staff seats only when a roster line is claimed at login, folded per classroom", async () => {
+    // A first claim leaves the classroom an unread entry for the second to fold into.
+    const first = `ada-${randomUUID().slice(0, 8)}@heig.test`;
+    await server.app.db
+      .insert(enrollments)
+      .values({ id: randomUUID(), classroomId, nom: "Lovelace", prenom: "Ada", email: first });
+    expect(await claimEnrollments(server.app.db, { id: (await signInStudent(first)).id })).toBe(1);
+    await settle();
+
     const before = await notificationsOf(teacher.id, "student_joined");
+    expect(before.some((n) => !n.read)).toBe(true);
     const unread = before.find((n) => !n.read);
     const email = `grace-${randomUUID().slice(0, 8)}@heig.test`;
     await server.app.db

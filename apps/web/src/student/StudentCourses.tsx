@@ -1,8 +1,7 @@
 /**
  * The student's Courses (F-ORG-14, D07): the classrooms where they hold a
  * claimed seat, archived ones excepted, each card opening the classroom's
- * page — the home's "My classrooms" list (`ClassroomList`), join card
- * included, since joining a classroom is what an empty list asks for.
+ * page — the home's "My classrooms" list (`ClassroomList`).
  *
  * The four decisions:
  *   - Type: the classroom's name is the 15 px line of each card; the course

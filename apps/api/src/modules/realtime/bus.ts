@@ -95,8 +95,8 @@ export function accessRevoked(userIds: readonly (string | null | undefined)[]): 
 }
 
 /**
- * A student took their seat in a classroom (join code, or a roster line
- * claimed at login): the roster screens of the course's staff refresh —
+ * A student took their seat in a classroom (a roster line claimed at
+ * sign-in): the roster screens of the course's staff refresh —
  * `course:` is a topic no student connection holds, never `classroom:`,
  * where every classmate listens (#198) — and the joiner's own list of
  * classrooms. A bare hint: what the staff are TOLD is a `student_joined`

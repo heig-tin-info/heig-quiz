@@ -74,14 +74,6 @@ export const classrooms = pgTable(
      */
     periodStart: text("period_start"),
     periodEnd: text("period_end"),
-    /** Self-enrolment code; null = never minted. */
-    joinCode: text("join_code").unique(),
-    /**
-     * Whether that code is currently accepted (F-ORG-06). Disabling keeps the
-     * code so the same handout works again when the teacher re-opens the
-     * classroom, and refusing is a plain 404 for the student.
-     */
-    joinCodeEnabled: boolean("join_code_enabled").notNull().default(false),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     /**
      * When the teacher enabled the drill for this classroom (ADR-041 §6);

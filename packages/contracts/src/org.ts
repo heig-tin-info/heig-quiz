@@ -1,6 +1,6 @@
 /**
  * `org` route schemas (PLAN-MVP §4.1): courses, their staff and pools,
- * classrooms, the join code and the roster.
+ * classrooms and the roster.
  *
  * This file used to be `classroom.ts`; the names are unchanged, so the web
  * app keeps importing them from the package root.
@@ -85,11 +85,6 @@ export const ClassroomPatch = z
     /** The two months travel together: a patch sets both or neither. */
     periodStart: periodMonths.periodStart.optional(),
     periodEnd: periodMonths.periodEnd.optional(),
-    /**
-     * Self-enrolment switch (F-ORG-06). Turning it on mints a join code if
-     * the classroom has none; turning it off keeps the code but refuses it.
-     */
-    joinCodeEnabled: z.boolean().optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: "Nothing to update" })
   .refine((b) => (b.periodStart === undefined) === (b.periodEnd === undefined), {
@@ -98,19 +93,6 @@ export const ClassroomPatch = z
   })
   .superRefine(checkPeriodMonths);
 export type ClassroomPatch = z.infer<typeof ClassroomPatch>;
-
-/** `POST /app/api/join/:code` — the student side of F-ORG-06. */
-export const JoinParams = z.object({ code: z.string().trim().min(4).max(32) });
-export type JoinParams = z.infer<typeof JoinParams>;
-
-export const JoinResult = z.object({
-  classroomId: z.uuid(),
-  classroomName: z.string(),
-  courseCode: z.string(),
-  /** `joined` on the first pass, `already` when the seat was already claimed. */
-  status: z.enum(["joined", "already"]),
-});
-export type JoinResult = z.infer<typeof JoinResult>;
 
 export const EnrollmentPatch = z
   .object({
@@ -149,8 +131,6 @@ const ClassroomRef = z.object({
   period: z.string(),
   ...periodMonths,
   archivedAt: z.string().nullable(),
-  joinCode: z.string().nullable(),
-  joinCodeEnabled: z.boolean(),
 });
 type ClassroomRef = z.infer<typeof ClassroomRef>;
 
