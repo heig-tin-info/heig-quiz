@@ -15,7 +15,7 @@
  * granularity of the Swiss scale (§7.1).
  */
 import type { ResultsView } from "@quiz/contracts";
-import { round2 } from "@quiz/domain";
+import { round2, slugify } from "@quiz/domain";
 
 /** U+FEFF, which UTF-8 encodes as the three bytes `EF BB BF`. */
 export const BOM = "﻿";
@@ -101,13 +101,5 @@ export function resultsCsv(view: ResultsView): string {
 
 /** The `Content-Disposition` filename: the title, reduced to a safe slug. */
 export function csvFilename(title: string): string {
-  const slug =
-    title
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .replace(/[^a-zA-Z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .toLowerCase()
-      .slice(0, 60) || "results";
-  return `${slug}.csv`;
+  return `${slugify(title) || "results"}.csv`;
 }

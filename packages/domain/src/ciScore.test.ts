@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { extractScore, parseScoreMessage } from "./ciScore.js";
+import { extractScore } from "./ciScore.js";
 
-describe("parseScoreMessage (GR-02)", () => {
+const score = (message: string | null) => ({ title: "GRADE", message });
+
+describe("extractScore, the message", () => {
   it.each([
     ["4.5/6", 4.5, 6],
     ["10/10", 10, 10],
@@ -10,7 +12,7 @@ describe("parseScoreMessage (GR-02)", () => {
     ["  85 / 100  ", 85, 100],
     ["5.25/6.0", 5.25, 6],
   ])("accepts %s", (msg, points, max) => {
-    expect(parseScoreMessage(msg)).toEqual({ status: "ok", points, max });
+    expect(extractScore([score(msg)])).toEqual({ status: "ok", points, max });
   });
 
   it.each([
@@ -23,13 +25,11 @@ describe("parseScoreMessage (GR-02)", () => {
     "4/6 points", // stray suffix
     "",
   ])("rejects %s", (msg) => {
-    expect(parseScoreMessage(msg).status).toBe("malformed");
+    expect(extractScore([score(msg)]).status).toBe("malformed");
   });
 });
 
-describe("extractScore (GR-17)", () => {
-  const score = (message: string) => ({ title: "GRADE", message });
-
+describe("extractScore, the annotations", () => {
   it("single valid annotation", () => {
     expect(extractScore([score("4/6"), { title: "info", message: "x" }])).toEqual({
       status: "ok",
@@ -52,7 +52,7 @@ describe("extractScore (GR-17)", () => {
   });
 
   it("null message treated as malformed", () => {
-    expect(extractScore([{ title: "GRADE", message: null }])).toMatchObject({
+    expect(extractScore([score(null)])).toMatchObject({
       status: "malformed",
     });
   });

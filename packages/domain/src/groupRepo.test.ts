@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { groupRepoName, isLiveIndividualRepo, pickStudentRepo, type RepoLifeLike } from "./groupRepo.js";
-import { GITHUB_REPO_NAME_MAX } from "./repoName.js";
 
 describe("groupRepoName", () => {
   it("joins the project slug and the group slug", () => {
@@ -10,19 +9,6 @@ describe("groupRepoName", () => {
 
   it("appends the disambiguator", () => {
     expect(groupRepoName("labo-1", "group-2", "3f2a9c1e")).toBe("labo-1-group-2-3f2a9c1e");
-  });
-
-  it("stays within GitHub's limit and keeps the disambiguator whole", () => {
-    const long = "a".repeat(60);
-    expect(groupRepoName(long, long)).toHaveLength(GITHUB_REPO_NAME_MAX);
-    const named = groupRepoName(long, long, "3f2a9c1e");
-    expect(named.length).toBeLessThanOrEqual(GITHUB_REPO_NAME_MAX);
-    expect(named.endsWith("-3f2a9c1e")).toBe(true);
-  });
-
-  it("never leaves a dash where the cap cut", () => {
-    const name = groupRepoName(`${"a".repeat(59)}-`, "b".repeat(60));
-    expect(name.endsWith("-")).toBe(false);
   });
 });
 

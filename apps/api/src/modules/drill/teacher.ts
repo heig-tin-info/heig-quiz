@@ -24,7 +24,7 @@ import { and, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { DrillProgress, DrillStudentActivity, DrillTagMastery } from "@quiz/contracts";
 import {
   DRILL_RECALLED_MIN_RATING,
-  DRILL_TIME_ZONE,
+  SCHOOL_TIME_ZONE,
   drillLocalDate,
   drillProgressRange,
   drillWeekStarts,
@@ -95,7 +95,7 @@ const recallOf = (v: Visible, where: SQL = sql`true`) => ({
  * and PostgreSQL matches a GROUP BY to its SELECT by text, placeholders
  * included.
  */
-const ZONE = sql.raw(`'${DRILL_TIME_ZONE}'`);
+const ZONE = sql.raw(`'${SCHOOL_TIME_ZONE}'`);
 const localDay = (v: Visible) => sql`(${v.reviewedAt} at time zone ${ZONE})::date`;
 
 /** One row per student seat of the classroom: two queries, whatever its size. */

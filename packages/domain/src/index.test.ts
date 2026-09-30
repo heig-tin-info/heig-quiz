@@ -48,7 +48,6 @@ describe("@quiz/domain public surface", () => {
       "pickStudentRepo",
       "planCheckpointReviewDispatch",
       "planFinalReviewDispatch",
-      "rateLimitReset",
       "repoName",
       "resolveFinalScore",
       "runKind",

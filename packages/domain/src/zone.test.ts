@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { zonedIso } from "./zone.js";
+import { zonedIso, zoneOffset } from "./zone.js";
 
-describe("zonedIso (GH-42)", () => {
+describe("zonedIso", () => {
   it("formats a summer instant with the +02:00 offset", () => {
     // 2026-07-03T21:59:00Z = 23:59 summer time in Zurich.
     expect(zonedIso(new Date("2026-07-03T21:59:00Z"))).toBe("2026-07-03T23:59:00+02:00");
@@ -17,8 +17,15 @@ describe("zonedIso (GH-42)", () => {
     expect(zonedIso(new Date("2026-07-01T23:30:00Z"))).toBe("2026-07-02T01:30:00+02:00");
   });
 
-  it("drops the milliseconds and writes UTC and negative offsets", () => {
-    expect(zonedIso(new Date("2026-07-03T21:59:00.999Z"), "UTC")).toBe("2026-07-03T21:59:00+00:00");
-    expect(zonedIso(new Date("2026-01-15T11:00:00Z"), "America/St_Johns")).toBe("2026-01-15T07:30:00-03:30");
+  it("drops the milliseconds", () => {
+    expect(zonedIso(new Date("2026-07-03T21:59:00.999Z"))).toBe("2026-07-03T23:59:00+02:00");
+  });
+});
+
+describe("zoneOffset", () => {
+  it("is zero in UTC and negative west of it, half hours included", () => {
+    const at = new Date("2026-01-15T11:00:00Z");
+    expect(zoneOffset(at, "UTC")).toBe(0);
+    expect(zoneOffset(at, "America/St_Johns")).toBe(-(3 * 60 + 30) * 60_000);
   });
 });

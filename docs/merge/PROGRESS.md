@@ -46,7 +46,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M1-01 | Pure domain into `packages/domain` | review | M0-03 | `merge/M1-01-domain` | #370 | `@quiz/domain` gains `ciScore`, `finalScore`, `repoName` (+`slugify`), `groupRepo`, `reviewDispatch`, `github` (`parseStudentIgnore`, `rateLimitReset`), `zone` (`zonedIso`); §7.4 names, wire names kept (I16); M1-02 and M4-01 import these, no copies (I17) |
+| M1-01 | Pure domain into `packages/domain` | review | M0-03 | `merge/M1-01-domain` | #370 | `@quiz/domain` gains `ciScore`, `finalScore`, `repoName` (+`slugify`), `groupRepo`, `reviewDispatch`, `studentIgnore`, `zone` (`SCHOOL_TIME_ZONE`, `zonedIso`); §7.4 names, wire names kept (I16); M1-02 and M4-01 import these, no copies (I17) |
 | M1-02 | GitHub adapters, config, image | todo | M0-03 | | | |
 | M1-03 | `ActivityKind`, `ActivitySummary` union | todo | M0-03 | | | |
 | M1-04 | Missing primitives, long-form styles | todo | M0-05 | | | |

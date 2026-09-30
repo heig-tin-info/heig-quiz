@@ -1,6 +1,6 @@
 /**
  * Final score of a student's project repository (ported from classroom's
- * `finalGrade.ts`, validation flow GR-16): the teacher's adjustment wins,
+ * `finalGrade.ts`): the teacher's adjustment wins,
  * else the authoritative LLM review, else the frozen CI score — and, while
  * nothing is frozen yet, the current CI score.
  *
@@ -23,11 +23,11 @@ export interface ScoreLike {
 export interface FinalScoreInput {
   /** Teacher override (points on the project's scale); null = none. */
   teacherPoints?: number | null;
-  /** GR-16 authoritative review. */
+  /** Authoritative LLM review. */
   llmScore?: ScoreLike | null;
-  /** CI score frozen at the deadline (GR-12). */
+  /** CI score frozen at the deadline. */
   frozenScore?: ScoreLike | null;
-  /** Current CI score (GR-09), fallback while nothing is frozen. */
+  /** Current CI score, fallback while nothing is frozen. */
   score?: ScoreLike | null;
 }
 

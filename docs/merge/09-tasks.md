@@ -101,28 +101,29 @@ files it ports; writes en + fr for every string.
   finalGrade.ts, groupRepo.ts, repoName.ts}` (journal part stays for
   M4-01), `planDispatch`, `planMilestoneDispatch`, `runKind`
   (`C:dispatch.ts`, `C:grading.ts`), `parseStudentIgnore`, `slugify`,
-  `resolveOffset`, `rateLimitReset`; reuse Quiz's Zurich formatter.
+  `resolveOffset`; reuse Quiz's Zurich formatter. (`rateLimitReset` is
+  transport knowledge: it stays in M1-02's `github/metrics.ts`.)
 - **Tests**: the classroom unit tests of these files.
 - **Acceptance**: `@quiz/domain` green; no DB, no `fetch`.
 - **Pitfall**: `domain/roster.ts` exists in both — keep Quiz's, port only
   test cases it lacks.
 - **As delivered** (#370): named with §7.4's words — `ciScore.ts`
-  (`extractScore`, `parseScoreMessage`), `finalScore.ts`
-  (`resolveFinalScore`, `finalPoints`), `repoName.ts` (`repoName`,
-  `slugify`; no `journalRepoName`), `groupRepo.ts`, `reviewDispatch.ts`
+  (`extractScore`), `finalScore.ts` (`resolveFinalScore`, `finalPoints`),
+  `repoName.ts` (`repoName`, `slugify`; no `journalRepoName`; the results
+  CSV filename now uses `slugify`), `groupRepo.ts`, `reviewDispatch.ts`
   (`runKind`, `planFinalReviewDispatch`, `planCheckpointReviewDispatch`,
-  `checkpointDueAt`), `github.ts` (`parseStudentIgnore`,
-  `rateLimitReset`), `zone.ts` (`zonedIso` = classroom's `zurichIso`, on
-  the drill's `zoneOffset`); wire names unchanged (I16). Quiz's roster
-  tests already covered classroom's.
+  `checkpointDueAt`), `studentIgnore.ts` (`parseStudentIgnore`),
+  `zone.ts` (`SCHOOL_TIME_ZONE`, `zoneOffset`, `zonedIso` = classroom's
+  `zurichIso`; `DRILL_TIME_ZONE` gone); wire names unchanged (I16).
+  Quiz's roster tests already covered classroom's.
 
 ### M1-02 — GitHub adapter layer, configuration, image
 - **Depends on**: M0-03. ‖ M1-01.
 - **Port from**: `C:github/*` (app, git, retry, lock, commit, revert,
   provision, collaborators, squash, studentize, sync, metrics) and
-  `verifySignature` ⇒ `Q:apps/api/src/github/`. `parseStudentIgnore`,
-  `rateLimitReset` and `zurichIso` (as `zonedIso`) come from
-  `@quiz/domain` (M1-01, I17), not local copies.
+  `verifySignature` ⇒ `Q:apps/api/src/github/`. `parseStudentIgnore`
+  and `zurichIso` (as `zonedIso`) come from `@quiz/domain` (M1-01, I17),
+  not local copies; `rateLimitReset` stays in `github/metrics.ts`.
 - **Change**: `Q:config.ts` (six `GITHUB_*`, off when empty, production
   refusals §3.3), `Q:redact.ts` (`x-access-token:`, `gh?_`), `Dockerfile`
   (`git`, `ca-certificates`), octokit + lockfile (atomic commit).

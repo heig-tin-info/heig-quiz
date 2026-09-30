@@ -8,7 +8,7 @@ import {
   runKind,
 } from "./reviewDispatch.js";
 
-describe("planFinalReviewDispatch (GR-16)", () => {
+describe("planFinalReviewDispatch", () => {
   const project = { id: "p-1", deadlineAt: new Date("2026-07-03T21:59:00Z") };
 
   it("skips repositories without a frozen run (nothing to review)", () => {
@@ -62,7 +62,7 @@ describe("checkpointDueAt", () => {
   });
 });
 
-describe("runKind (GR-16)", () => {
+describe("runKind", () => {
   it("classifies the dispatched grading run as llm", () => {
     expect(runKind({ event: "repository_dispatch", path: GRADING_WORKFLOW_PATH })).toBe("llm");
   });

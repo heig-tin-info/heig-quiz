@@ -1,6 +1,6 @@
 /**
  * The LLM reviews a project requests from its student repositories (ported
- * from classroom's `dispatch.ts`, `grading.ts` and `milestones.ts`, GR-16).
+ * from classroom's `dispatch.ts`, `grading.ts` and `milestones.ts`).
  *
  * Once a project's score is frozen (deadline + grace, ADR-012), the server
  * fires ONE `repository_dispatch` per student repository carrying the frozen
@@ -20,7 +20,7 @@ export const GRADING_WORKFLOW_PATH = ".github/workflows/grading.yml";
 const DAY_MS = 86_400_000;
 
 /**
- * GR-16: the grading workflow fired by the platform's `repository_dispatch`
+ * The grading workflow fired by the platform's `repository_dispatch`
  * is the authoritative LLM review; every other run is the indicative CI tier
  * — a student workflow listening to `repository_dispatch` cannot impersonate
  * the review.

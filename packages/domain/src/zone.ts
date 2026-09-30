@@ -27,13 +27,13 @@ export function zoneOffset(at: Date, timeZone: string): number {
 }
 
 /**
- * An instant as ISO 8601 with the zone's offset, to the second:
+ * An instant as ISO 8601 with the school's offset, to the second:
  * `2026-07-03T23:59:00+02:00`. What a text written into GitHub carries (a
  * deadline commit message, a workflow input), so that a reader sees the
  * school's local time and a program still reads the exact instant.
  */
-export function zonedIso(at: Date, timeZone: string = SCHOOL_TIME_ZONE): string {
-  const offset = zoneOffset(at, timeZone);
+export function zonedIso(at: Date): string {
+  const offset = zoneOffset(at, SCHOOL_TIME_ZONE);
   const local = new Date(Math.floor(at.getTime() / 1000) * 1000 + offset).toISOString().slice(0, 19);
   const minutes = Math.abs(offset) / 60_000;
   const hh = String(Math.floor(minutes / 60)).padStart(2, "0");

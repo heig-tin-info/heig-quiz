@@ -1,6 +1,6 @@
 /**
- * The score a project's CI reports (ported from classroom's `grade.ts`,
- * GR-02 and GR-17; "score" is points/max, a "grade" is the Swiss 1–6 —
+ * The score a project's CI reports (ported from classroom's `grade.ts`;
+ * "score" is points/max, a "grade" is the Swiss 1–6 —
  * `docs/merge/07-incompatibilities.md` §7.4).
  *
  * Convention: the `grading.yml` workflow of a student repository emits
@@ -31,7 +31,7 @@ export interface AnnotationLike {
 }
 
 /** Parses the message of a GRADE annotation (`"4.5/6"` to points/max). */
-export function parseScoreMessage(message: string): ScoreParse {
+function parseScoreMessage(message: string): ScoreParse {
   const m = SCORE_MESSAGE_RE.exec(message);
   if (!m) return { status: "malformed", message };
   const points = Number(m[1]);
@@ -40,7 +40,7 @@ export function parseScoreMessage(message: string): ScoreParse {
   return { status: "ok", points, max };
 }
 
-/** Applies GR-02 to the full set of annotations of a run. */
+/** Applies these rules to the full set of annotations of a run. */
 export function extractScore(annotations: readonly AnnotationLike[]): ScoreParse {
   const scores = annotations.filter((a) => a.title === SCORE_ANNOTATION_TITLE);
   if (scores.length === 0) return { status: "no_annotation" };
