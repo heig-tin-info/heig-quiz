@@ -2827,6 +2827,9 @@ export const en = {
   "preview.bannerBody":
     "You see exactly what a student gets, in a random order. Your answers stay in this tab; hand in to see the full correction.",
   "preview.restart": "Restart",
+  "preview.answers.show": "Show answers",
+  "preview.answers.hide": "Hide answers",
+  "preview.answers.failed": "The answers could not be loaded",
   "preview.restart.title": "Restart the preview?",
   "preview.restart.message":
     "Your answers are thrown away and a new random order is drawn.",

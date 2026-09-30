@@ -34,6 +34,7 @@ import type {
   PreviewCorrection,
   PreviewCorrectionItem,
   PreviewItemStatus,
+  PreviewSolution,
   RunnerResultEvent,
 } from "@quiz/contracts";
 import {
@@ -60,7 +61,7 @@ import {
 } from "../evaluation/service.js";
 import { verdictOf } from "../grading/service.js";
 import * as live from "../live/service.js";
-import { studentSolutionView, studentView } from "../live/studentView.js";
+import { studentSolutionView, studentView, teacherPreviewView } from "../live/studentView.js";
 import {
   runButton,
   runnableView,
@@ -183,16 +184,37 @@ export async function itemPreview(
   evaluation: EvaluationRecord,
   itemId: string,
 ): Promise<ItemPreview> {
-  const joined = await joinedItem(db, evaluation.id, itemId);
-  if (!joined) throw notFound();
-  const type = joined.question.type;
-  const version = { config: joined.version.config, configVersion: joined.version.configVersion };
+  const { joined, input } = await previewedItem(db, evaluation, itemId);
   return {
     itemId: joined.item.id,
-    type,
+    type: input.type,
     versionNumber: joined.version.number ?? 0,
     points: joined.item.points,
-    student: studentView({ type, version, seed: 0, itemId: joined.item.id, shuffle: false }),
+    student: studentView(input),
+  };
+}
+
+/**
+ * The key of that same item preview, for its "Show answers": the one a
+ * student reads once the key is shown (ADR-037), for the same view.
+ */
+export async function itemSolution(
+  db: Db,
+  evaluation: EvaluationRecord,
+  itemId: string,
+): Promise<PreviewSolution> {
+  const { input } = await previewedItem(db, evaluation, itemId);
+  return { solution: studentSolutionView(input) };
+}
+
+/** One item at its frozen version, in the teacher preview's view. */
+async function previewedItem(db: Db, evaluation: EvaluationRecord, itemId: string) {
+  const joined = await joinedItem(db, evaluation.id, itemId);
+  if (!joined) throw notFound();
+  const version = { config: joined.version.config, configVersion: joined.version.configVersion };
+  return {
+    joined,
+    input: { type: joined.question.type, version, ...teacherPreviewView(joined.item.id) },
   };
 }
 

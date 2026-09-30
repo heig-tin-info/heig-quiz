@@ -377,6 +377,7 @@ describe("access (invariant 6)", () => {
       ["DELETE", `/app/api/templates/${id}/items/${itemId}`, undefined],
       ["POST", `/app/api/templates/${id}/items/update-versions`, {}],
       ["GET", `/app/api/templates/${id}/preview/items/${itemId}`, undefined],
+      ["GET", `/app/api/templates/${id}/preview/items/${itemId}/solution`, undefined],
     ] as const;
 
   it("answers a teacher off the staff the 404 of a missing template, on every route", async () => {
@@ -449,6 +450,7 @@ describe("access (invariant 6)", () => {
       // Preview.
       ["POST", `/app/api/evaluations/${id}/preview`],
       ["GET", `/app/api/evaluations/${id}/preview/items/${itemId}`],
+      ["GET", `/app/api/evaluations/${id}/preview/items/${itemId}/solution`],
       ["POST", `/app/api/evaluations/${id}/preview/run`],
       ["POST", `/app/api/evaluations/${id}/preview/simulate`],
       ["POST", `/app/api/evaluations/${id}/preview/grade`],

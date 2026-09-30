@@ -587,6 +587,8 @@ describe("AddQuestionsSheet — the preview", () => {
       expect.objectContaining({ url: "/app/api/questions/q1/preview", body: { source: 1 } }),
     ]);
     expect(screen.getByText("2 points")).toBeVisible();
+    // The key, on a click of its own: never loaded with the preview.
+    expect(screen.getByRole("button", { name: "Show answers" })).toBeVisible();
     expect(screen.getByRole("link", { name: /Open in the editor/ })).toHaveAttribute(
       "target",
       "_blank",
