@@ -38,7 +38,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | --- | --- | --- | --- | --- | --- | --- |
 | M0-01 | Settle blocking decisions | in progress | — | | | D01, D02, D04, D08, D16 settled 2026-09-28; D03, D07, D14, D15, D23–D25, D27 settled 2026-09-30; D09 awaits confirmation |
 | M0-02 | Measure production (read-only) | done | PO go | `plan/merge-classroom` | #268 | `measures-2026-09-28.md`: pairwise edu-ID subs (login adoption needed), workspace unused by real classes, 3 classes to merge into existing Quiz classrooms, 0 pending staff; App permissions not checked |
-| M0-03 | ADRs (035 accepted, imports, amendments) | todo | M0-01 | | | |
+| M0-03 | ADRs (035 accepted, imports, amendments) | in progress | M0-01 | `merge/M0-03-adrs` | | |
 | M0-04 | Spec amendments | todo | M0-01 | | | |
 | M0-05 | `CLAUDE.md`, `AGENTS.md`, reviewer prompts | todo | M0-03 | | | |
 
