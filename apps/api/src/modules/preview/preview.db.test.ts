@@ -46,6 +46,7 @@ import {
 } from "../../db/schema.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
+import { keysOf } from "../../test/keys.js";
 import { reload, seedLive } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import { FORBIDDEN_STUDENT_KEYS } from "../live/studentView.js";
@@ -352,17 +353,7 @@ describe("starting a preview", () => {
     ]) {
       expect(serialized, marker).not.toContain(marker);
     }
-    const keys = new Set<string>();
-    const walk = (value: unknown) => {
-      if (Array.isArray(value)) value.forEach(walk);
-      else if (value !== null && typeof value === "object") {
-        for (const [key, child] of Object.entries(value)) {
-          keys.add(key);
-          walk(child);
-        }
-      }
-    };
-    walk((res.json() as EvaluationPreview).view.items.map((i) => i.student));
+    const keys = keysOf((res.json() as EvaluationPreview).view.items.map((i) => i.student));
     for (const key of FORBIDDEN_STUDENT_KEYS) expect(keys.has(key), key).toBe(false);
     // The visible case, on the other hand, IS published (docs/04 §4.7).
     expect(serialized).toContain("visible-1");
@@ -695,17 +686,7 @@ describe("previewing one item", () => {
       ]) {
         expect(res.body, marker).not.toContain(marker);
       }
-      const keys = new Set<string>();
-      const walk = (value: unknown) => {
-        if (Array.isArray(value)) value.forEach(walk);
-        else if (value !== null && typeof value === "object") {
-          for (const [key, child] of Object.entries(value)) {
-            keys.add(key);
-            walk(child);
-          }
-        }
-      };
-      walk((res.json() as ItemPreview).student);
+      const keys = keysOf((res.json() as ItemPreview).student);
       for (const key of FORBIDDEN_STUDENT_KEYS) expect(keys.has(key), key).toBe(false);
     }
   });

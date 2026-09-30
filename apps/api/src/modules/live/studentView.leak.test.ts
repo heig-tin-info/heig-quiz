@@ -29,6 +29,7 @@ import {
 } from "@quiz/core/server";
 
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
+import { keysOf } from "../../test/keys.js";
 import { FORBIDDEN_STUDENT_KEYS, studentSolutionView, studentView, stripMetadata } from "./studentView.js";
 
 /**
@@ -232,20 +233,6 @@ function sowSecrets(type: AnyQuestionTypeServer): Sown {
     paths.push(path);
   }
   return { config, markers, paths };
-}
-
-/** Every key name appearing anywhere in a serialised payload. */
-function keysOf(value: unknown, out = new Set<string>()): Set<string> {
-  if (Array.isArray(value)) {
-    for (const child of value) keysOf(child, out);
-    return out;
-  }
-  if (value === null || typeof value !== "object") return out;
-  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    out.add(key);
-    keysOf(child, out);
-  }
-  return out;
 }
 
 /**
