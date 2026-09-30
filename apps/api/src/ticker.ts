@@ -31,6 +31,7 @@ import type { ScheduledTaskKey } from "@quiz/contracts";
 import type { AppConfig } from "./config.js";
 import { expireSuperPowers } from "./auth/session.js";
 import { KIOSK_TASKS } from "./modules/kiosk/jobs.js";
+import { perApp } from "./perApp.js";
 import { LIVE_TASKS } from "./modules/live/jobs.js";
 import { scheduledTasksTick } from "./modules/system/jobs.js";
 
@@ -88,7 +89,7 @@ export const TICK_TASKS: TickTask[] = [
  * shows as a growing lag. No entry: this process runs no ticker
  * (`WORKER_MODE=web`).
  */
-const lastPass = new WeakMap<FastifyInstance, number>();
+const lastPass = perApp<number>();
 
 /** The end of the last completed pass of this app's ticker; `undefined` without one. */
 export function lastTickOf(app: FastifyInstance): number | undefined {
