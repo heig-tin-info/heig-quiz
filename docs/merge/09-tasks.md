@@ -197,6 +197,45 @@ files it ports; writes en + fr for every string.
   import-script steps for these tables.
 - **Acceptance**: migration runs on a production dump copy; idempotency
   indexes tested.
+- **As delivered** (#402): tables in `Q:db/github.ts`, migration
+  `0048_github` (five `CREATE TABLE`, FKs to `users` and `classrooms`
+  only). Production-dump run waived by the orchestrator: create-only
+  migration; staging applies it against a restored production dump at
+  deploy. Choices the next tasks inherit:
+  - `github_organizations`: one column per fact. Installed or not is
+    `installation_id` null or not, nothing else; `status`
+    (`GITHUB_ORG_STATUSES`: `active` / `deleted`) says whether the
+    organization exists on GitHub. No CHECK, no avatar column, no
+    timestamps. Rows are never deleted.
+  - `webhook_deliveries.payload` is nullable: the purge sets it to null
+    and keeps the row (the deduplication outlives it); `received_at` and
+    `push_receipts.received_at` have NO default, the intake writes
+    `app.clock.now()`.
+  - `push_receipts` is keyed on `github_repo_id` (GitHub's repository id),
+    not on a project repository's row: `github` owns no FK into `project`
+    (spec 05 §5.3 amended). M3 joins through `project_repos.github_repo_id`
+    and deletes a repository's receipts itself if it wants them gone.
+  - Contracts (`packages/contracts/src/github.ts`): `GithubOrg` {id,
+    login, `avatarUrl` (the avatar route below, or null), `installed`,
+    `status`, `plan`}, `GithubClassroom` {`link: GithubClassroomLink |
+    null` with `checks: GithubChecks {allRepositories: boolean | null,
+    llmSecret}`, `suggestedOrgId`, `installUrl`}, `GithubAccountState`
+    (`GET /app/api/me/github`). The web mock serves its three GETs on
+    them (`contract.test.ts`, CHECKED).
+- **For M8-01** (no import script yet, M1-06 is off the journal track):
+  `organizations` → `github_organizations` (id kept; `status`
+  `active` ⇒ `active`, `degraded` ⇒ `deleted`; `installation_id` NULL
+  whatever classroom held, D23: the healing of M2-02 resolves Quiz's
+  installation; `github_org_id`, `login`, `plan` copied);
+  `classrooms.org_id` → `github_classroom_links` (`linked_by` = the
+  remapped `teacher_id`, `linked_at` = the classroom's `created_at`);
+  `users.github_*` → `github_accounts` for the rows with a
+  `github_user_id`, on the remapped user (two classroom users merged into
+  one Quiz user with two GitHub ids: report, keep the newer link);
+  `webhook_deliveries`: the last 30 days, all processed at T0;
+  `push_receipts`: `github_repo_id` from `student_repos.github_repo_id`
+  (a receipt whose repository has none is dropped and counted), the id
+  kept, `ON CONFLICT DO NOTHING`.
 
 ### M2-02 — Installations, org link, lazy healing
 - **Depends on**: M2-01. ‖ M2-03.
@@ -213,6 +252,15 @@ files it ports; writes en + fr for every string.
   (M1-04) takes that URL as `src` and shows the initials without one.
 - **Tests**: healing, setup-URL idempotency, connect by a non-staff ⇒ 404.
 - **Acceptance**: `invariant-reviewer` clean; routes 404 when no App.
+- **Contracts** (M2-01): `GET /app/api/github/orgs` ⇒ `GithubOrg[]`;
+  `GET /app/api/classrooms/:id/github` ⇒ `GithubClassroom`. This task
+  writes the `PUT` body, `GithubConnectBody {orgId}` (strict), in
+  `contracts/src/github.ts`. The avatar route is
+  **`GET /app/api/github/orgs/:id/avatar`** (`:id` the row's uuid), the
+  only value `GithubOrg.avatarUrl` accepts (`GITHUB_ORG_AVATAR_PATH`). Its
+  source is derived from `github_org_id`
+  (`avatars.githubusercontent.com/u/<id>`), or kept in a column this task
+  adds if it chooses to store it.
 
 ### M2-03 — GitHub account linking
 - **Depends on**: M2-01. ‖ M2-02.
@@ -221,6 +269,12 @@ files it ports; writes en + fr for every string.
   impersonation and delegated sessions (ADR-034, ADR-027); `github.renamed`;
   the token never stored nor logged.
 - **Acceptance**: return to the `return` path, not `/`.
+- **Contracts** (M2-01): the account's state is
+  `GET /app/api/me/github` ⇒ `GithubAccountState {account, relevant}`
+  (the route name the web mock serves, `?unlinked=1`). This task writes
+  the callback's closed return, `GithubLinkOutcome` (`?github=linked |
+  conflict | error`), in `contracts/src/github.ts`.
+
 
 ### M2-04 — Webhook intake, handler registry, delivery reconciliation
 - **Depends on**: M2-02.
@@ -233,6 +287,11 @@ files it ports; writes en + fr for every string.
   deleted, org renamed/deleted); receipt written with `app.clock`.
 - **Acceptance**: 200 in < 100 ms on a fixture; replay of an unprocessed
   delivery.
+- **Schema** (M2-01): `webhook_deliveries` (insert `ON CONFLICT DO
+  NOTHING` on `delivery_id`; `received_at` = `app.clock.now()`, no
+  default; the purge nulls `payload`, never deletes the row) and
+  `push_receipts` (keyed on `github_repo_id`, `ON CONFLICT DO NOTHING`
+  keeps the first receipt).
 
 ### M2-05 — Periodic tasks (`scheduled_tasks`)
 - **Depends on**: D10 (settled). ‖ M2-02…04. Landed before M1-02: the
@@ -254,6 +313,10 @@ files it ports; writes en + fr for every string.
   into the vault (ADR-010) and the two `.env`; `staging-refresh.sh` nulls
   `installation_id` (and archives projects); tasks no-op without an App (a
   test); ADR-028 note.
+- **Schema** (M2-01): nulling `github_organizations.installation_id` is
+  enough. It is the one column that says "installed" (`status` only says
+  whether the organization exists on GitHub), and no CHECK ties it to
+  another column, so the refresh touches nothing else.
 - **Acceptance**: a staging refresh from a dump holding installations
   leaves no reachable production installation; the production App
   installed on one test organization answers the setup URL of
@@ -266,6 +329,11 @@ files it ports; writes en + fr for every string.
   classroom to GitHub" sheet (org picker, install, live status) and the
   checks of §5.3; header badge; the user Settings GitHub card (shown only
   when relevant), return toast, palette entry. §5.3.
+- **Checks** (M2-01): the installation line is derived from the
+  organization (`installed`, `status: deleted`) and
+  `checks.allRepositories`; the plan line from `org.plan` (`free` ⇒ the
+  warning, null ⇒ unknown); the LLM secret line from `checks.llmSecret`.
+  The API sends each fact once.
 - **Scenes**: `classroom-settings`,
   `classroom-settings-github-connect|installed|checks-warn|org-missing`, `settings-github-linked|unlinked`.
 
