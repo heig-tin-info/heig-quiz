@@ -85,6 +85,7 @@ mockups/      circuit.html, the origin of qt-circuit's schematic editor;
               uml.html, the origin of the diagram engine's editor;
               grading.html, the origin of the grading table (ADR-044)
 infra/        Keycloak development realm
+extensions/   the kiosk stations' companion Chrome extension (ADR-051)
 ```
 
 `packages/qt-mcq`, `qt-short`, `qt-cloze`, `qt-code`, `qt-circuit`, `qt-rich`,
