@@ -201,7 +201,11 @@ Status values: `open`, `settled`, `superseded`.
   session confined to an activity; BEKs optional per activity (Config Key
   only by default); proof B before the first SEB project (§6.3).
 - Blocks: M6-02, M6-07.
-- **Status**: open.
+- **Status**: open. Partly settled for evaluations by ADR-051 (2026-09-30):
+  the Config Key is checked on every request of a `seb` session (audit-only
+  until proof B), and a new confined session supersedes the previous one of
+  the same student and exam. Still open: the session confined to an
+  activity, `packages/seb`, the BEKs per activity.
 
 ### D22 — The classroom-to-course mapping
 - **Question**: for each classroom-classroom in production, which Quiz
