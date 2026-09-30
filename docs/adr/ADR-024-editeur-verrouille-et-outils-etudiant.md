@@ -68,7 +68,7 @@ budget of N-SEC-07 would refuse; the budget itself stays the server's guard.
 default, so stored configs parse unchanged and the config version stays.
 
 A compile-only run (`RunBody.compileOnly`) goes through the same route, the
-same budget and the same journal, with `action: "check"` and no case.
+same budget and the same attempt log, with `action: "check"` and no case.
 (Reversed on 2026-09-25: no "unchanged" rule, no cooldown on Compile, and a
 budget of its own for it — see the addendum.)
 
@@ -123,7 +123,7 @@ Source: issue #129, from a teacher walking the student player.
    `compilesPerMinute(runsPerMinute) = min(60, max(20, 3 × runsPerMinute))`
    (`@quiz/domain/cooldown`), and the test runs count without it: compiling
    never consumes a test run, and a spent test budget still lets the student
-   compile. The journal is unchanged — a compilation is a `run` event with
+   compile. The attempt log is unchanged — a compilation is a `run` event with
    `compileOnly: true` — and that flag is what splits the two counts
    (`countRecentEvents`). The teacher's preview keeps the same rule under two
    in-memory keys. The runner priority of a compilation stays `interactive`.

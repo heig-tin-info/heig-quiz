@@ -367,8 +367,9 @@ files it ports; writes en + fr for every string.
 - **Depends on**: M4-01, M2-02, M2-04.
 - **Port from**: `C:journal/ingest.ts`, `C:journal/repo.ts`, the read
   routes and asset route of `C:modules/journal.ts`.
-- **Create**: `readableClassroom` loader (student payload for the staff
-  test seat and impersonation); fixes J1–J4 of §4.3; webhook registration;
+- **Create**: `readableClassroom` loader (student payload for
+  impersonation whatever it asks, and for the staff only on an explicit
+  request that narrows, 05 §5.7); fixes J1–J4 of §4.3; webhook registration;
   queue `journal.ingest`.
 - **Tests**: port `ingest.db.test`, `journal.db.test`; a student cannot
   fetch an asset referenced only by a draft page; two concurrent ingests

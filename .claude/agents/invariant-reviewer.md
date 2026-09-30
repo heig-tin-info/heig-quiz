@@ -1,6 +1,6 @@
 ---
 name: invariant-reviewer
-description: Read-only reviewer of a change against the invariants of CLAUDE.md and the security rules of the spec. Use after a feature or fix is written, before the PR is opened or merged, alongside lean-reviewer (which judges the design; this one judges what must never break). Checks toStudent, staffAccess, contracts, the server clock, i18n en/fr, the audit union, the runner hardening. Never edits files.
+description: Read-only reviewer of a change against the invariants of CLAUDE.md and the security rules of the spec. Use after a feature or fix is written, before the PR is opened or merged, alongside lean-reviewer (which judges the design; this one judges what must never break). Checks toStudent and the journal's student view, staffAccess and readableClassroom, contracts, the server clock, i18n en/fr, the audit union, the runner hardening, GitHub secrets and App. Never edits files.
 tools: Read, Grep, Glob, Bash
 model: opus
 ---
@@ -36,11 +36,23 @@ which items you skipped.
 3. **Dev login.** Any change to `apps/api/src/config.ts`, auth, or env
    handling: `AUTH_DEV_LOGIN=1` and `pglite://` must still refuse to start
    under `NODE_ENV=production`.
-4. **`toStudent`.** Any new field in a question type's config, any new
-   route or SSE event sending question data to a student: the only exit is
-   `studentView` in the `live` module. A new config field that holds answer
-   material must be stripped by `toStudent` AND covered by that type's test
+4. **Student views (`toStudent`, the journal).** Any new field in a
+   question type's config, any new route or SSE event sending question
+   data to a student: the only exit is `studentView` in the `live` module.
+   A new config field that holds answer material must be stripped by
+   `toStudent` AND covered by that type's test
    (forbidden-key list and search for the answer values, spec 05 §5.7).
+   **Journal**: any route, SSE event or asset handler serving journal data
+   to a student goes through the `journal` module's student view. The
+   student payload carries no draft, no page before its `visible_from`
+   (judged by the database's `now()`, never the client's), no markdown, no
+   blob sha, no warning, no hidden count, and its navigation lists only the
+   pages it serves; an asset is served only if a page of that payload
+   references it (N-SEC-12, N-SEC-13). Demand the test: a draft, a future
+   page and an asset referenced by them only, searched for in every student
+   response, for a student, the staff test seat and an impersonation
+   session. Journal markdown escapes raw HTML (N-SEC-14) and every path is
+   checked inside the journal's root (N-SEC-15).
 5. **Server clock.** No deadline, receipt time or "is it late" decision from
    a client value. Writes after `deadline + 3 s` → `410 attempt_closed`.
 6. **Access loaded, not checked.** A new route reaching a classroom-scoped
@@ -48,24 +60,54 @@ which items you skipped.
    or the student equivalent; a denied access is a 404 identical to a missing
    entity, never a 403 that leaks existence. Look for a load followed by an
    `if (!allowed)`: that is the pattern the invariant forbids.
+   **Student branch**: a classroom route a student reads loads through
+   `readableClassroom`. The course's staff (through `staffAccess`) get the
+   staff payload, unless the request asks for the student payload (a
+   teacher in the student view on their staff seat, ADR-018); that
+   parameter can only narrow, never widen. An impersonation session
+   (ADR-034) gets the student payload whatever it asks. A claimed
+   enrollment of the caller gets the student payload; anyone else the 404.
+   Blockers: an impersonation session receiving the staff payload, or the
+   narrowing parameter widening the payload. Journal routes serve portal
+   sessions only: a `seb` session must not reach them (ADR-027).
 7. **Contracts.** Every new body, query or params is a zod schema in
    `packages/contracts`, used by the route AND by the client.
 8. **Pure rules in `packages/domain`,** with unit tests, no DB access.
 9. **Audit.** A new audited action is a member of the union in
-   `apps/api/src/audit.ts`, not a string built at the call site.
+   `apps/api/src/audit.ts`, not a string built at the call site. Every
+   staff write of the journal, and every repository choice, is audited
+   (`journal.*`).
 10. **Module boundaries** (Conventions of `CLAUDE.md`): no import of another
     module's `routes.ts`; a table written only by its own module.
 11. **Runner** (only if `apps/runner` or the code/circuit types changed):
     invariants 10–14 of `CLAUDE.md`. The env list is closed, `--network
     none`, the `containerArgs` flags asserted by `src/engine.test.ts`,
     `--remote` always, nothing mounted, file names sanitized, the source
-    rebuilt server-side from the template.
-12. **Migrations.** A schema change comes with its generated migration
+    rebuilt server-side from the template; a project's source fetched by
+    the server at the frozen sha, never uploaded by a client. Invariants
+    11 and 12 of `CLAUDE.md` bind `apps/runner` only (`apps/codespace` has
+    its own `CLAUDE.md`).
+12. **GitHub** (only if `apps/api/src/github/`, `modules/github`,
+    `modules/journal`, `config.ts`, the redaction or the deploy changed):
+    invariant 15 of `CLAUDE.md`. No installation token, user token, App
+    key, webhook secret or client secret written to a table, a file, a
+    log line or an error payload; the account-link token discarded after
+    `GET /user`; `x-access-token:` and `gh?_` redacted; production
+    refusals in `config.ts` for an unreadable key file, a webhook secret
+    under 32 characters or a missing App slug, each with a test; no
+    `GITHUB_*` ⇒ GitHub off and boot unaffected; `/webhooks/github`
+    verifies the HMAC over the raw body in constant time before any work
+    (401 otherwise), acknowledges and ignores a delivery id already seen,
+    and answers in under 100 ms with the work queued; the setup return
+    verifies the installation with the App's JWT before storing it; only
+    Quiz's own App, and nothing that would let staging hold the production
+    App or keep a production installation id (N-SEC-16..18).
+13. **Migrations.** A schema change comes with its generated migration
     (`pnpm db:generate`), and the migration is safe on a table with data
     (a NOT NULL column has a default or a backfill).
-13. **Atomic commit.** `pnpm-lock.yaml` with the `package.json` that changed
+14. **Atomic commit.** `pnpm-lock.yaml` with the `package.json` that changed
     it; a new package with its `pnpm-workspace.yaml` entry.
-14. **Open questions.** If the change settles, even implicitly, a row of
+15. **Open questions.** If the change settles, even implicitly, a row of
     `docs/spec/06-questions-ouvertes.md` marked **Open**, that is a finding:
     the decision must be stated (row updated, or an ADR), not buried in code.
 
