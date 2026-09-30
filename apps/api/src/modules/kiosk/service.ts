@@ -133,18 +133,26 @@ export async function updateDevice(
   id: string,
   patch: KioskDevicePatch,
 ): Promise<{ before: KioskDeviceRow; after: KioskDevice } | null> {
-  const [before] = await db.select().from(kioskDevices).where(eq(kioskDevices.id, id));
-  if (!before) return null;
-  const label = patch.label ?? before.label;
-  const status =
-    patch.status ?? (before.status === "unnamed" && patch.label !== undefined ? "active" : before.status);
-  if (status === "active" && label === null) {
-    throw new DomainError("label_required", 409, "A station is named before it is active");
-  }
-  const [after] = await db
-    .update(kioskDevices)
-    .set({ label, status })
-    .where(eq(kioskDevices.id, id))
-    .returning();
-  return { before, after: adminView(after!) };
+  // Locked for the read-decide-write: two admins' patches never compute
+  // their outcome from the same stale row, and `before` is what was replaced.
+  return db.transaction(async (tx) => {
+    const [before] = await tx
+      .select()
+      .from(kioskDevices)
+      .where(eq(kioskDevices.id, id))
+      .for("update");
+    if (!before) return null;
+    const label = patch.label ?? before.label;
+    const status =
+      patch.status ?? (before.status === "unnamed" && patch.label !== undefined ? "active" : before.status);
+    if (status === "active" && label === null) {
+      throw new DomainError("label_required", 409, "A station is named before it is active");
+    }
+    const [after] = await tx
+      .update(kioskDevices)
+      .set({ label, status })
+      .where(eq(kioskDevices.id, id))
+      .returning();
+    return { before, after: adminView(after!) };
+  });
 }

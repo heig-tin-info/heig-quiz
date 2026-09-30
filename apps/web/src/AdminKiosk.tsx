@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, Monitor, Pencil, RotateCcw } from "lucide-react";
 import { useState } from "react";
 
-import type { KioskAttestation, KioskDevice, KioskDevicePatch } from "@quiz/contracts";
+import { KIOSK_LABEL_MAX, KioskDevicePatch, type KioskAttestation, type KioskDevice } from "@quiz/contracts";
 
 import { api, apiErrorMessage, usePublicConfig } from "./api";
 import { useConfirm } from "./confirm";
@@ -37,9 +37,6 @@ const ATTESTATION_TONE: Record<KioskAttestation, Tone> = {
   unavailable: "amber",
   refused: "red",
 };
-
-/** The label field's bounds, those of `KioskDevicePatch`. */
-const LABEL_MAX = 80;
 
 /**
  * The kiosk stations (ADR-051 §5): the school's Chromebooks that attested
@@ -123,17 +120,24 @@ function StationRow({ device: d }: { device: KioskDevice }) {
   const qc = useQueryClient();
   const confirm = useConfirm();
   const toast = useToast();
-  // An unnamed station opens with its name field: naming it is why the admin is here.
-  const [editing, setEditing] = useState(d.status === "unnamed");
+  /**
+   * What the name field is open for: an unnamed station opens with it (naming
+   * it is why the admin is here); `reactivate` is a station retired before it
+   * was ever named, which goes back into service only with a name.
+   */
+  const [editing, setEditing] = useState<"name" | "reactivate" | null>(
+    d.status === "unnamed" ? "name" : null,
+  );
 
   const save = useMutation({
+    // The schema the server validates with builds the body (invariant 7).
     mutationFn: (patch: KioskDevicePatch) =>
       api<KioskDevice>(`/app/api/admin/kiosk-devices/${d.id}`, {
         method: "PATCH",
-        body: JSON.stringify(patch),
+        body: JSON.stringify(KioskDevicePatch.parse(patch)),
       }),
     onSuccess: (next) => {
-      setEditing(next.status === "unnamed");
+      setEditing(next.status === "unnamed" ? "name" : null);
       void qc.invalidateQueries({ queryKey: adminKioskKey });
     },
     onError: (err) => toast(apiErrorMessage(err, t("error.save")), "error"),
@@ -159,14 +163,23 @@ function StationRow({ device: d }: { device: KioskDevice }) {
         {editing ? (
           <NameForm
             initial={d.label ?? ""}
-            primary={d.status === "unnamed"}
+            primary={d.status === "unnamed" || editing === "reactivate"}
+            submitLabel={
+              editing === "reactivate"
+                ? t("admin.kiosk.reactivate")
+                : d.status === "unnamed"
+                  ? t("admin.kiosk.nameAction")
+                  : t("common.save")
+            }
             saving={save.isPending}
-            onSave={(label) => save.mutate({ label })}
-            onCancel={d.status === "unnamed" ? null : () => setEditing(false)}
+            onSave={(label) =>
+              save.mutate(editing === "reactivate" ? { label, status: "active" } : { label })
+            }
+            onCancel={d.status === "unnamed" ? null : () => setEditing(null)}
           />
-        ) : (
+        ) : d.label ? (
           <span className="font-semibold">{d.label}</span>
-        )}
+        ) : null}
         {/* The serial printed on the machine: which Chromebook this row is. */}
         <div className="mt-0.5 font-mono text-xs text-fg-muted">{d.googleDeviceId}</div>
       </td>
@@ -195,12 +208,14 @@ function StationRow({ device: d }: { device: KioskDevice }) {
           <Actions
             label={d.label ?? undefined}
             items={[
-              { label: t("admin.kiosk.rename"), icon: Pencil, onSelect: () => setEditing(true) },
+              { label: t("admin.kiosk.rename"), icon: Pencil, onSelect: () => setEditing("name") },
               d.status === "retired"
                 ? {
                     label: t("admin.kiosk.reactivate"),
                     icon: RotateCcw,
-                    onSelect: () => save.mutate({ status: "active" }),
+                    // Never active without a name: an unnamed one asks for it first.
+                    onSelect: () =>
+                      d.label === null ? setEditing("reactivate") : save.mutate({ status: "active" }),
                   }
                 : { label: t("admin.kiosk.retire"), icon: Archive, danger: true, onSelect: () => void retire() },
             ]}
@@ -213,18 +228,21 @@ function StationRow({ device: d }: { device: KioskDevice }) {
 
 /**
  * The name of a station, typed in its row. `primary` for a station waiting
- * for its first name (the section's one call to action); a rename is a
- * secondary edit that can be cancelled.
+ * for its first name (the section's one call to action) and for a nameless
+ * station going back into service; a rename is a secondary edit that can be
+ * cancelled.
  */
 function NameForm({
   initial,
   primary,
+  submitLabel,
   saving,
   onSave,
   onCancel,
 }: {
   initial: string;
   primary: boolean;
+  submitLabel: string;
   saving: boolean;
   onSave: (label: string) => void;
   onCancel: (() => void) | null;
@@ -244,7 +262,7 @@ function NameForm({
         className={cx(inputClass, inputSize.sm, "w-36 @2xl:w-56")}
         aria-label={t("admin.kiosk.name")}
         placeholder={t("admin.kiosk.namePlaceholder")}
-        maxLength={LABEL_MAX}
+        maxLength={KIOSK_LABEL_MAX}
         value={draft}
         autoFocus={!primary}
         onChange={(e) => setDraft(e.target.value)}
@@ -259,7 +277,7 @@ function NameForm({
         loading={saving}
         disabled={label === "" || label === initial}
       >
-        {primary ? t("admin.kiosk.nameAction") : t("common.save")}
+        {submitLabel}
       </Button>
       {onCancel ? (
         <Button size="sm" variant="ghost" onClick={onCancel}>

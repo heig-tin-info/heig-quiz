@@ -32,7 +32,7 @@ import type { AppConfig } from "../../config.js";
 import { adminGuard } from "../guards.js";
 import { csrfRefused, emptyBody, invalid, notFound, sendFailure } from "../http.js";
 import { AttestationUnavailable } from "./attestation.js";
-import { FixedWindowLimiter } from "./limiter.js";
+import { FixedWindowLimiter } from "../../limiter.js";
 import {
   KIOSK_COOKIE,
   KIOSK_COOKIE_HOURS,
@@ -129,10 +129,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
 
     const known = await deviceByCredential(app.db, req.cookies[KIOSK_COOKIE]);
     if (known) await recordFailed(app.db, known.id, verdict.reason, now);
-    await stationAudit("kiosk.attest_failed", known?.id ?? null, {
-      reason: verdict.reason,
-      ...(known ? { deviceId: known.id } : {}),
-    });
+    await stationAudit("kiosk.attest_failed", known?.id ?? null, { reason: verdict.reason });
     return reply.code(403).send({ error: "not_attested" });
   });
 

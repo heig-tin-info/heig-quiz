@@ -369,15 +369,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     // A `google` attestation that cannot run would answer "unavailable" to
     // every station, and one without the customer id would admit none: refuse
     // to start rather than discover it on the day of an exam.
+    // Every problem in one message: an operator fixes the file once.
     if (parsed.data.KIOSK_ATTESTATION === "google") {
-      const missing = (
-        ["KIOSK_GOOGLE_CUSTOMER_ID", "KIOSK_ENROLLMENT_DOMAIN", "KIOSK_EXTENSION_ID"] as const
-      ).filter((key) => parsed.data[key] === "");
-      if (missing.length > 0) {
-        throw new Error(`Invalid configuration: ${missing.join(", ")} required when KIOSK_ATTESTATION=google`);
-      }
-      if (!readable(parsed.data.KIOSK_VA_KEY_FILE)) {
-        throw new Error("Invalid configuration: KIOSK_VA_KEY_FILE is unreadable (KIOSK_ATTESTATION=google)");
+      const problems = [
+        ...(readable(parsed.data.KIOSK_VA_KEY_FILE) ? [] : ["KIOSK_VA_KEY_FILE is unreadable"]),
+        ...(["KIOSK_GOOGLE_CUSTOMER_ID", "KIOSK_ENROLLMENT_DOMAIN", "KIOSK_EXTENSION_ID"] as const)
+          .filter((key) => parsed.data[key] === "")
+          .map((key) => `${key} is missing`),
+      ];
+      if (problems.length > 0) {
+        throw new Error(`Invalid configuration (KIOSK_ATTESTATION=google): ${problems.join("; ")}`);
       }
     }
     // A grade no model produced must never reach a real student: the stub

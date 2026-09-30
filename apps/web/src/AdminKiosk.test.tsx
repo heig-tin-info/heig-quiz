@@ -120,6 +120,25 @@ describe("the kiosk stations section (ADR-051 §5)", () => {
     );
   });
 
+  it("reactivates a station retired before it was named only with a name, in one patch", async () => {
+    const nameless: KioskDevice = { ...retired, label: null };
+    const { calls } = mockFetch({
+      [CONFIG]: ON,
+      [LIST]: ok([nameless]),
+      [patchOf(nameless)]: ok({ ...nameless, label: "Poste 4", status: "active" }),
+    });
+    renderWithProviders(<KioskSection />);
+    const row = (await screen.findByText(nameless.googleDeviceId)).closest("tr")!;
+    await userEvent.click(within(row).getByRole("button", { name: /reactivate/i }));
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+
+    await userEvent.type(within(row).getByRole("textbox", { name: /station name/i }), "Poste 4");
+    await userEvent.click(within(row).getByRole("button", { name: /^reactivate$/i }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ label: "Poste 4", status: "active" }),
+    );
+  });
+
   it("says so when no station has attested yet, and offers a retry on failure", async () => {
     mockFetch({ [CONFIG]: ON, [LIST]: ok([]) });
     const { unmount } = renderWithProviders(<KioskSection />);

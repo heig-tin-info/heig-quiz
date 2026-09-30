@@ -71,6 +71,12 @@ describe("loadConfig", () => {
       expect(() => loadConfig({ ...google, KIOSK_VA_KEY_FILE: join(dir, "missing.json") })).toThrow(
         /KIOSK_VA_KEY_FILE/,
       );
+      // Every problem at once, in one boot error.
+      expect(() =>
+        loadConfig({ ...PROD, KIOSK_ATTESTATION: "google", KIOSK_ENROLLMENT_DOMAIN: "heig-vd.ch" }),
+      ).toThrow(
+        /KIOSK_VA_KEY_FILE is unreadable; KIOSK_GOOGLE_CUSTOMER_ID is missing; KIOSK_EXTENSION_ID is missing/,
+      );
       // Outside production the checks do not apply: a developer may try the
       // `google` path with half a configuration and see it answer unavailable.
       expect(() => loadConfig({ NODE_ENV: "development", KIOSK_ATTESTATION: "google" })).not.toThrow();

@@ -192,7 +192,9 @@ is deprecated):
   `config.ts` refuses to start with `mock`, and with `google` whose key file
   is unreadable or whose customer id, enrollment domain or extension id is
   missing — exactly like the development login. `mock` accepts a response of
-  the form `mock:<device id>` and nothing else.
+  the form `mock:<device id>` and nothing else; `mock:refuse` and
+  `mock:unavailable` are test fixtures that never attest (they answer a
+  refusal and an unavailable Google).
 
 What the attestation proves: a Chromebook of the school's Workspace, in
 verified boot mode, holds the key. What it does not prove by itself: that

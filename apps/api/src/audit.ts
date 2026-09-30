@@ -71,8 +71,9 @@ export type AuditAction =
   | "impersonation.ended"
   /**
    * ADR-051 §5, §8: a station's attestation accepted, or failed (`payload.reason`
-   * `refused` | `unavailable`, `payload.deviceId` when the station was known) —
-   * the device id only, never the challenge, the response nor the cookie.
+   * `refused` | `unavailable`). The subject is the station's device id, or
+   * `unknown` when no known station's cookie came with the failure — never the
+   * challenge, the response nor the cookie.
    */
   | "kiosk.attested"
   | "kiosk.attest_failed"

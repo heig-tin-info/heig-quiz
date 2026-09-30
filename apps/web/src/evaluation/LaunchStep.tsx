@@ -130,8 +130,7 @@ function Checklist({
   const [scheduling, setScheduling] = useState(false);
   const [pulling, setPulling] = useState(false);
   // ADR-051: while the public configuration is unknown, no kiosk warning.
-  const kioskConfig = usePublicConfig().data?.kiosk;
-  const kioskAvailable = kioskConfig === undefined || kioskConfig !== null;
+  const kioskAvailable = usePublicConfig().data?.kiosk !== null;
   const checks = launchChecks(detail, t, now, isoDateTime, kioskAvailable);
   const { blockers, warnings } = readiness(checks);
   const blocked = blockers > 0;

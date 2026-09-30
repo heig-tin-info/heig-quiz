@@ -11,6 +11,9 @@ export type KioskDeviceStatus = (typeof KIOSK_DEVICE_STATUSES)[number];
 export const KIOSK_ATTESTATIONS = ["ok", "unavailable", "refused"] as const;
 export type KioskAttestation = (typeof KIOSK_ATTESTATIONS)[number];
 
+/** The longest station label an admin may give (`KioskDevicePatch`, the admin's field). */
+export const KIOSK_LABEL_MAX = 80;
+
 /** `POST /app/api/kiosk/attest/challenge` — Verified Access's challenge, base64. */
 export const KioskChallenge = z.object({ challenge: z.string() });
 export type KioskChallenge = z.infer<typeof KioskChallenge>;
@@ -60,7 +63,7 @@ export type KioskDevice = z.infer<typeof KioskDevice>;
 /** `PATCH /app/api/admin/kiosk-devices/:id`. Naming an unnamed station makes it active. */
 export const KioskDevicePatch = z
   .strictObject({
-    label: z.string().trim().min(1).max(80).optional(),
+    label: z.string().trim().min(1).max(KIOSK_LABEL_MAX).optional(),
     status: z.enum(["active", "retired"]).optional(),
   })
   .refine((p) => p.label !== undefined || p.status !== undefined, {

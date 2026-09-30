@@ -12,6 +12,8 @@
  */
 import { char, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
+import { KIOSK_ATTESTATIONS, KIOSK_DEVICE_STATUSES } from "@quiz/contracts";
+
 import { users } from "./auth.js";
 import { evaluations } from "./evaluation.js";
 
@@ -27,14 +29,14 @@ export const kioskDevices = pgTable("kiosk_devices", {
   googleDeviceId: text("google_device_id").notNull().unique(),
   /** What the station's screen and the student's phone show: "Poste de secours n° 7". */
   label: text("label"),
-  status: text("status", { enum: ["unnamed", "active", "retired"] })
+  status: text("status", { enum: KIOSK_DEVICE_STATUSES })
     .notNull()
     .default("unnamed"),
   /** The last attestation Google accepted. */
   attestedAt: timestamp("attested_at", { withTimezone: true }),
   /** The last attempt at an attestation (§6), and what came of it. */
   checkedAt: timestamp("checked_at", { withTimezone: true }),
-  attestation: text("attestation", { enum: ["ok", "unavailable", "refused"] }),
+  attestation: text("attestation", { enum: KIOSK_ATTESTATIONS }),
   /** Hex SHA-256 of the station's `quiz_kiosk` cookie, never the cookie itself. */
   credentialHash: char("credential_hash", { length: 64 }).unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

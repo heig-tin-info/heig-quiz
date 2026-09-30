@@ -136,9 +136,9 @@ describe("the station's attestation (ADR-051 §5)", () => {
 
     const failed = await audits("kiosk.attest_failed", id);
     expect(failed.map((a) => a.payload)).toEqual([
-      { reason: "refused", deviceId: id },
-      { reason: "refused", deviceId: id },
-      { reason: "unavailable", deviceId: id },
+      { reason: "refused" },
+      { reason: "refused" },
+      { reason: "unavailable" },
     ]);
     // The cookie still names the station: a failure does not unregister it.
     expect((await station(credential)).statusCode).toBe(200);
