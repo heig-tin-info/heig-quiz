@@ -3,7 +3,8 @@
 The journal is a classroom's course documentation, written by the staff,
 read by the students. It is **not an activity**: no assessment, no
 tracking, no deadline. Classroom commit `ab98cc0` (52 files, +10 044 lines),
-classroom ADR-015 (to be imported under the next free ADR number).
+classroom ADR-015 (imported as [ADR-049](../adr/ADR-049-journal-source-github.md),
+with an addendum on how the port differs).
 
 ## 4.1 How it works
 

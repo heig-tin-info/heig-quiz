@@ -104,4 +104,4 @@ PR.
 - **07**: frozen as history, pointing to ADR-035 and `docs/merge/`.
 - **08**: a novice path for projects.
 - **ADRs**: 029 superseded; 006, 007, 010, 012, 016, 027, 030 amended;
-  classroom's 011 imported as 011, 013/014/015 as 036/037/038.
+  classroom's 011 imported as 011, 013/014/015 as 047/048/049 (M0-03).

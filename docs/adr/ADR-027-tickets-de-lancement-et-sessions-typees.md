@@ -6,6 +6,28 @@ Accepted (2026-09-26, issue #139, with `apps/api/src/auth/launch.ts`,
 `auth/seb.ts`, `sessions.kind` and the `sits` rule of `modules/guards.ts`).
 Brings Safe Exam Browser back into scope (00 §0.6).
 
+**Addendum (2026-09-30, ADR-035, the classroom merge):** what is settled,
+and what waits for D21 (unified SEB design, open).
+
+- **Settled — the exception for the online workspace.** §1 rejected a
+  self-contained signed token. The portal of the online workspace
+  (ADR-047) is on another VM and has its own database, so the platform
+  reaches it with two HS256-signed messages (a 2-minute service token for
+  the sync, a 5-minute launch token), as classroom does. This is a
+  recorded exception, not a reversal: the portal enforces single use
+  itself (it consumes the token's `jti` by insert before anything else),
+  the launch token grants no role, and nothing else in Quiz uses a signed
+  token for a session.
+- **Waits for D21 — a `seb` session per activity.** The direction of
+  ADR-035 is that a `seb` session is confined to an **activity**
+  (evaluation or project) rather than to an evaluation: a project's
+  session would reach the project page and "Open workspace", nothing
+  else, and the platform would build every `.seb` from a shared
+  `packages/seb`. Until D21 is settled, `sessions.evaluation_id`, `sits`
+  and the routes of §3–4 are unchanged, and no project can require SEB.
+  Whether Browser Exam Keys become optional per activity (§2 rejected a
+  list) is part of D21 too.
+
 ## Context
 
 An exam sat in Safe Exam Browser (SEB) is a separate browser: the portal's

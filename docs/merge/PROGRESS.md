@@ -11,7 +11,7 @@ separate commit on `main`. Protocol: [`README.md`](README.md).
 - **Next actions**: D03, D07, D14, D15, D23, D24, D25, D27 settled
   2026-09-30.
   The journal track starts: M0-03 (ADR-035 accepted with the D23 amendment,
-  classroom ADR-015 imported under the next free number), M0-04 for
+  classroom ADR-015 imported as ADR-049), M0-04 for
   the journal, Courses and Settings-tab requirements, and M0-05, then M1-01…05 (M1-06
   is not on this track) and M4-01 in parallel, then M2-01…04, M2-07, M4-02…06, M5-01/02.
   M2-06 needs the product owner to register Quiz's two GitHub Apps before
@@ -38,7 +38,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | --- | --- | --- | --- | --- | --- | --- |
 | M0-01 | Settle blocking decisions | in progress | — | | | D01, D02, D04, D08, D16 settled 2026-09-28; D03, D07, D14, D15, D23–D25, D27 settled 2026-09-30; D09 awaits confirmation |
 | M0-02 | Measure production (read-only) | done | PO go | `plan/merge-classroom` | #268 | `measures-2026-09-28.md`: pairwise edu-ID subs (login adoption needed), workspace unused by real classes, 3 classes to merge into existing Quiz classrooms, 0 pending staff; App permissions not checked |
-| M0-03 | ADRs (035 accepted, imports, amendments) | todo | M0-01 | | | |
+| M0-03 | ADRs (035 accepted, imports, amendments) | review | M0-01 | `merge/M0-03-adrs` | #365 | ADR-035 Accepted; classroom ADR-011 ⇒ 011, 013 ⇒ 047, 014 ⇒ 048, 015 ⇒ 049 (journal, addendum for D03 and J1–J7); 029 superseded; 006/007/010/012/016/027/030 amended, the D05/D06/D18/D21 parts left open; M0-05 must drop "ADR-007 not applicable" from `CLAUDE.md` |
 | M0-04 | Spec amendments | todo | M0-01 | | | |
 | M0-05 | `CLAUDE.md`, `AGENTS.md`, reviewer prompts | todo | M0-03 | | | |
 
@@ -154,6 +154,9 @@ In the critical path only if D09 finds online assignments in production.
 
 Newest first. One line per session that changed the state: date, who,
 what moved, what the next session must know.
+
+- 2026-09-30 — M0-03 (#365): ADR-035 accepted; classroom ADRs imported as
+  011, 047, 048, 049; amendments on 006, 007, 010, 012, 016, 027, 029, 030.
 
 - 2026-09-30 — product owner, conversation: the journal goes first and
   live before the cutover. D03 (one journal per classroom = one

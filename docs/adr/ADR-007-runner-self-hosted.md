@@ -2,11 +2,22 @@
 
 ## Status
 
-**Not applicable to quiz — see ADR-016 and `apps/runner`.** This record is
-inherited from heig-classroom, where grading runs on GitHub Actions. Quiz has
-no GitHub Actions grading: code is executed by its own runner service
-(`apps/runner`, hardened Podman containers), deployed as ADR-016 describes.
-Kept for the history of the inherited decisions.
+**Applies again, to projects (2026-09-30, ADR-035, the classroom merge).**
+The CI of a project — the `grading.yml` workflow of a student or group
+repository — runs on the self-hosted GitHub Actions runners this record
+describes, on classroom's runner VM, operated as it is today, with the
+registration PAT outside the GitHub App (Quiz's own App, D23, included).
+The code of a question is
+still executed by Quiz's own runner service (`apps/runner`, ADR-016): the
+two never meet, and "runner" alone means `apps/runner`; these are "CI
+runners".
+
+Until 2026-09-30 this record read: *Not applicable to quiz — see ADR-016
+and `apps/runner`. This record is inherited from heig-classroom, where
+grading runs on GitHub Actions. Quiz has no GitHub Actions grading: code is
+executed by its own runner service (`apps/runner`, hardened Podman
+containers), deployed as ADR-016 describes. Kept for the history of the
+inherited decisions.*
 
 Original status in heig-classroom: accepted (2026-07-03, phase 3). Confirmation measurements expected from spike S3 (before M4,
 GH-44.3).

@@ -85,7 +85,7 @@ layers:
 - `redactTokens` (a1e59e0). Teacher e-mail on provision error once per repo;
   invitation e-mail to every invited member.
 
-### Groups (classroom ADR-014 lots 1–2)
+### Groups (classroom ADR-014, now ADR-048, lots 1–2)
 - Groups per assignment, membership by enrollment (UNIQUE(assignment,
   enrollment)); split, singles, copy; advisory max size; free work mode
   only; group mode toggled only in draft.
@@ -134,7 +134,8 @@ layers:
   deleted (degraded, e-mail); `installation` deleted.
 
 ### Grading (`C:grading.ts`, domain `grade.ts`, `finalGrade.ts`, `C:dispatch.ts`)
-- One ingestion path for webhook and reconciliation (ADR-011).
+- One ingestion path for webhook and reconciliation (ADR-011, imported
+  from classroom under the same number).
 - Eligible: selected branch, head not a bot commit; idempotent on (repo,
   run, attempt); GRADE and TESTS annotations only from
   `.github/workflows/grading.yml`'s check suite.
