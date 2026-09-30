@@ -33,11 +33,13 @@ import {
 } from "@quiz/domain";
 
 import type { Dict, TFunction } from "../i18n";
+import type { CheckLevel } from "../ui";
 import { typeLabel } from "../questionTypes";
 import { timingFragment } from "./presetSummary";
 import { missingTiming, missingTimingKey } from "./timing";
 
-export type CheckLevel = "blocker" | "warning" | "ok" | "info";
+/** The shared check levels (`ui`), less `unknown`, plus the rules of the session. */
+export type LaunchLevel = Exclude<CheckLevel, "unknown"> | "info";
 
 /** What a row offers to fix or to look at. */
 export type CheckFix =
@@ -48,7 +50,7 @@ export type CheckFix =
 
 export interface LaunchCheck {
   id: "items" | "stale" | "template" | "roster" | "conflicts" | "timing" | "feedback" | "rules" | "access" | "kiosk";
-  level: CheckLevel;
+  level: LaunchLevel;
   title: string;
   detail: string;
   /** A blocker's reason for the action bar's status line, when it differs from `detail`. */
@@ -333,7 +335,7 @@ export function launchChecks(
     accessCheck(detail, t),
     ...kioskChecks(detail, t, kioskAvailable),
   ];
-  const rank: Record<CheckLevel, number> = { blocker: 0, warning: 1, ok: 2, info: 2 };
+  const rank: Record<LaunchLevel, number> = { blocker: 0, warning: 1, ok: 2, info: 2 };
   // `sort` is stable: rows of one rank keep their reading order.
   return rows.sort((a, b) => rank[a.level] - rank[b.level]);
 }

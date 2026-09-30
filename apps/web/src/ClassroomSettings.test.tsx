@@ -12,8 +12,8 @@ import { fail, mockFetch, noContent, ok, renderWithProviders } from "./test/rend
  * (`/classrooms/:id/settings`), drawn under the classroom's header like the
  * other tabs. It holds what the header held — rename, archive, delete — and
  * the drill switch the Drill tab held. Its GitHub section has its own tests
- * (`github/ClassroomGithub.test.tsx`); here the platform has no App, so the
- * route answers 404 and the section is not drawn.
+ * (`github/ClassroomGithub.test.tsx`), the platform without an App included;
+ * here that route is not stubbed, so it answers 404 and no section is drawn.
  */
 
 afterEach(() => {
@@ -24,12 +24,12 @@ const ROOM = "/app/api/classrooms/r1";
 const SETTINGS = "/classrooms/r1/settings";
 
 function renderSettings(navigate = vi.fn()) {
-  renderWithProviders(<ClassroomView id="r1" navigate={navigate} settings />, { route: SETTINGS });
+  renderWithProviders(<ClassroomView id="r1" navigate={navigate} routeTab="settings" />, { route: SETTINGS });
   return navigate;
 }
 
 describe("the classroom's Settings tab", () => {
-  it("is the selected tab, with its rows and no GitHub section without an App", async () => {
+  it("is the selected tab, with its rows and no primary in the header", async () => {
     mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()) });
     renderSettings();
     expect(await screen.findByRole("tab", { name: /Settings/ })).toHaveAttribute("aria-selected", "true");
@@ -37,8 +37,7 @@ describe("the classroom's Settings tab", () => {
     expect(screen.getByRole("switch", { name: "Drill" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Archive" })).toBeVisible();
     expect(screen.getByRole("button", { name: /Delete classroom/ })).toBeVisible();
-    // No accent on the tab while GitHub is absent, and none in the header.
-    expect(screen.queryByRole("heading", { name: "GitHub" })).toBeNull();
+    // The header's slot is empty on this tab: its one accent is its own.
     expect(screen.queryByRole("button", { name: /Add students|New evaluation/ })).toBeNull();
   });
 
@@ -93,25 +92,18 @@ describe("the classroom's Settings tab", () => {
     expect(await screen.findByText(/Could not rename this classroom/)).toBeVisible();
   });
 
-  it("archives the classroom, and restores an archived one", async () => {
+  it.each([
+    ["archives a classroom", null, "Archive", "archive", "Classroom archived."],
+    ["restores an archived classroom", "2026-09-01T00:00:00.000Z", "Restore", "unarchive", "Classroom restored."],
+  ])("%s", async (_, archivedAt, button, route, done) => {
     const { calls } = mockFetch({
-      [`GET ${ROOM}`]: ok(makeClassroomDetail()),
-      [`POST ${ROOM}/archive`]: noContent(),
+      [`GET ${ROOM}`]: ok(makeClassroomDetail({ archivedAt })),
+      [`POST ${ROOM}/${route}`]: noContent(),
     });
     renderSettings();
-    await userEvent.click(await screen.findByRole("button", { name: "Archive" }));
-    await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url === `${ROOM}/archive`)).toBe(true));
-    expect(await screen.findByText("Classroom archived.")).toBeVisible();
-  });
-
-  it("offers Restore on an archived classroom", async () => {
-    const { calls } = mockFetch({
-      [`GET ${ROOM}`]: ok(makeClassroomDetail({ archivedAt: "2026-09-01T00:00:00.000Z" })),
-      [`POST ${ROOM}/unarchive`]: noContent(),
-    });
-    renderSettings();
-    await userEvent.click(await screen.findByRole("button", { name: "Restore" }));
-    await waitFor(() => expect(calls.some((c) => c.url === `${ROOM}/unarchive`)).toBe(true));
+    await userEvent.click(await screen.findByRole("button", { name: button }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url === `${ROOM}/${route}`)).toBe(true));
+    expect(await screen.findByText(done)).toBeVisible();
   });
 
   it("deletes the classroom after a confirmation, then goes home", async () => {

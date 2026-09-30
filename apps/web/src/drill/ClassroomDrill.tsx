@@ -37,7 +37,7 @@ export function ClassroomDrill({
 }: {
   room: ClassroomDetail;
   /** Opens the classroom's Settings, where the switch is. */
-  onSettings?: () => void;
+  onSettings: () => void;
 }) {
   const t = useT();
   const activity = useClassroomDrillActivity(room.id);
@@ -75,11 +75,9 @@ export function ClassroomDrill({
             icon={Dumbbell}
             title={t("drill.teacher.off.title")}
             action={
-              onSettings ? (
-                <Button variant="secondary" onClick={onSettings}>
-                  {t("drill.teacher.openSettings")}
-                </Button>
-              ) : undefined
+              <Button variant="secondary" onClick={onSettings}>
+                {t("drill.teacher.openSettings")}
+              </Button>
             }
           >
             {t("drill.teacher.off.body")}

@@ -3,15 +3,12 @@ import {
   CalendarClock,
   CalendarX2,
   ChevronRight,
-  CircleCheck,
-  CircleX,
   KeyRound,
   ListChecks,
   MessageSquareText,
   MonitorPlay,
   RefreshCw,
   Rocket,
-  TriangleAlert,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -29,6 +26,7 @@ import {
   Field,
   FormDialog,
   isoDateTime,
+  LEVEL_ICON,
   useNow,
   type IconType,
 } from "../ui";
@@ -99,12 +97,6 @@ export function LaunchStep({
   }
   return <Checklist detail={detail} navigate={navigate} onStep={onStep} />;
 }
-
-const LEVEL_ICON: Record<"blocker" | "warning" | "ok", { icon: IconType; className: string }> = {
-  blocker: { icon: CircleX, className: "text-danger" },
-  warning: { icon: TriangleAlert, className: "text-warning" },
-  ok: { icon: CircleCheck, className: "text-success" },
-};
 
 /** An info row is a rule of the session, not a check: a neutral icon that says which. */
 const INFO_ICON: Partial<Record<LaunchCheck["id"], IconType>> = {

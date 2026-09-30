@@ -20,15 +20,15 @@
  * reads the same query, so it is usually in the cache already).
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, CircleHelp, ExternalLink, XCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ExternalLink } from "lucide-react";
+import { useState } from "react";
 
 import type { ClassroomDetail, GithubClassroom, GithubConnectBody, GithubOrg } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
-import { useErrorToast, useToast } from "../notify";
+import { useToast } from "../notify";
 import { classroomGithubKey } from "../queryKeys";
 import {
   Badge,
@@ -39,18 +39,19 @@ import {
   FormError,
   GithubIcon,
   isoDateParts,
+  LEVEL_ICON,
   LinkButton,
   OrgAvatar,
   Progress,
   QueryError,
+  RadioRow,
   SectionHeading,
   SettingRow,
   Sheet,
   Skeleton,
-  type IconType,
 } from "../ui";
 import { githubAbsent, useClassroomGithub, useGithubOrgs } from "./api";
-import { githubChecks, type CheckLine, type CheckState } from "./checks";
+import { githubChecks, type CheckLine } from "./checks";
 
 export function ClassroomGithub({
   room,
@@ -103,13 +104,6 @@ export function ClassroomGithub({
 }
 
 // ------------------------------------------------------------------ connected
-
-const STATE_ICONS: Record<CheckState, { icon: IconType; className: string }> = {
-  ok: { icon: CheckCircle2, className: "text-success" },
-  warn: { icon: AlertTriangle, className: "text-warning" },
-  blocked: { icon: XCircle, className: "text-danger" },
-  unknown: { icon: CircleHelp, className: "text-fg-faint" },
-};
 
 function Connected({ room, github }: { room: ClassroomDetail; github: GithubClassroom }) {
   const t = useT();
@@ -168,10 +162,10 @@ function Connected({ room, github }: { room: ClassroomDetail; github: GithubClas
 
 function CheckRow({ line, installUrl }: { line: CheckLine; installUrl: string }) {
   const t = useT();
-  const { icon: Icon, className } = STATE_ICONS[line.state];
+  const { icon: Icon, className } = LEVEL_ICON[line.level];
   return (
-    <li className="flex items-start gap-3 py-2 text-sm" data-state={line.state}>
-      <span role="img" aria-label={t(`github.state.${line.state}`)} className={cx("mt-0.5 shrink-0", className)}>
+    <li className="flex items-start gap-3 py-2 text-sm" data-level={line.level}>
+      <span role="img" aria-label={t(`github.level.${line.level}`)} className={cx("mt-0.5 shrink-0", className)}>
         <Icon className="size-4" />
       </span>
       <span className="min-w-0 flex-1 text-fg">{t(line.text, line.vars)}</span>
@@ -206,23 +200,19 @@ function ConnectSheet({
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
-  const toastError = useErrorToast();
   const orgs = useGithubOrgs();
   const [picked, setPicked] = useState<string | null>(github.suggestedOrgId);
-  // The installed organizations when "Install" was clicked: the first one that
-  // appears after it is the new installation, picked for the teacher.
-  const [before, setBefore] = useState<ReadonlySet<string> | null>(null);
-  const [installedOn, setInstalledOn] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!before || !orgs.data) return;
-    const fresh = orgs.data.find((o) => selectable(o) && !before.has(o.id));
-    if (fresh) {
-      setBefore(null);
-      setInstalledOn(fresh.login);
-      setPicked(fresh.id);
-    }
-  }, [before, orgs.data]);
+  // What the list held when "Install" was clicked, and when it was read. The
+  // `classrooms` hint of the setup return refetches it (M2-02); the first
+  // installed organization that was not there is the new installation,
+  // picked for the teacher. Once the list has been read again the wait is
+  // over, new organization or not: a reinstall on one already listed must
+  // not spin forever.
+  const [before, setBefore] = useState<{ ids: ReadonlySet<string>; at: number } | null>(null);
+  const list = orgs.data ?? [];
+  const refetched = before !== null && orgs.dataUpdatedAt > before.at;
+  const fresh = refetched ? list.find((o) => selectable(o) && !before.ids.has(o.id)) : undefined;
+  const effectivePick = picked ?? fresh?.id ?? null;
 
   const connect = useMutation({
     mutationFn: (orgId: string) =>
@@ -235,15 +225,13 @@ function ConnectSheet({
       toast(t("github.connected", { login: next.link?.org.login ?? "" }), "success");
       onClose();
     },
-    onError: toastError("github.connectFailed"),
   });
 
-  const list = orgs.data ?? [];
   // The course's organization first (F-GH-02); the order of the API otherwise.
   const ordered = [...list].sort(
     (a, b) => Number(b.id === github.suggestedOrgId) - Number(a.id === github.suggestedOrgId),
   );
-  const canConnect = picked !== null && list.some((o) => o.id === picked && selectable(o));
+  const canConnect = effectivePick !== null && list.some((o) => o.id === effectivePick && selectable(o));
 
   return (
     <Sheet
@@ -258,7 +246,7 @@ function ConnectSheet({
           <Button
             disabled={!canConnect}
             loading={connect.isPending}
-            onClick={() => picked && connect.mutate(picked)}
+            onClick={() => effectivePick && connect.mutate(effectivePick)}
           >
             {t("github.connectSubmit")}
           </Button>
@@ -290,13 +278,13 @@ function ConnectSheet({
                   key={org.id}
                   org={org}
                   suggested={org.id === github.suggestedOrgId}
-                  checked={picked === org.id}
+                  checked={effectivePick === org.id}
                   onPick={setPicked}
                 />
               ))}
             </Card>
           )}
-          <FormError error={connect.error} />
+          <FormError error={connect.error} title={t("github.connectFailed")} />
         </fieldset>
 
         <div className="space-y-2 border-t border-line pt-5">
@@ -307,8 +295,9 @@ function ConnectSheet({
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => {
-              setBefore(new Set(list.filter(selectable).map((o) => o.id)));
-              setInstalledOn(null);
+              setBefore({ ids: new Set(list.filter(selectable).map((o) => o.id)), at: orgs.dataUpdatedAt });
+              // The new organization is the one to pick, once it appears.
+              setPicked(null);
             }}
           >
             <GithubIcon /> {t("github.install")} <ExternalLink />
@@ -316,11 +305,11 @@ function ConnectSheet({
           {/* The live status: the `classrooms` hint of the setup return
               refetches the list, and the new organization is picked. */}
           <div aria-live="polite">
-            {installedOn ? (
+            {fresh ? (
               <p className="flex items-center gap-2 text-[13px] text-success">
-                <CheckCircle2 className="size-4" /> {t("github.installedOn", { login: installedOn })}
+                <LEVEL_ICON.ok.icon className="size-4" /> {t("github.installedOn", { login: fresh.login })}
               </p>
-            ) : before ? (
+            ) : before && !refetched ? (
               <Progress label={t("github.waiting")} className="pt-1" />
             ) : null}
           </div>
@@ -342,31 +331,26 @@ function OrgOption({
   onPick: (id: string) => void;
 }) {
   const t = useT();
-  const ok = selectable(org);
   return (
-    <label
-      className={cx(
-        "flex items-center gap-3 px-3 py-2.5 transition-colors",
-        !ok ? "cursor-not-allowed opacity-60" : checked ? "cursor-pointer bg-accent-soft" : "cursor-pointer hover:bg-surface-2",
-      )}
+    // `leading-6`: the first line is the avatar's 24 px, so the radio centres on it.
+    <RadioRow
+      name="github-org"
+      value={org.id}
+      checked={checked}
+      disabled={!selectable(org)}
+      onPick={onPick}
+      className="px-3 py-2.5 text-sm leading-6"
     >
-      <input
-        type="radio"
-        name="github-org"
-        value={org.id}
-        checked={checked}
-        disabled={!ok}
-        onChange={() => onPick(org.id)}
-        className="size-4 shrink-0 appearance-none rounded-full border border-line-strong bg-surface transition-[border-width] checked:border-[5px] checked:border-accent"
-      />
-      <OrgAvatar login={org.login} src={org.avatarUrl ?? undefined} />
-      <span className="min-w-0 flex-1 truncate text-sm font-medium">{org.login}</span>
-      {suggested ? <Badge tone="zinc">{t("github.suggested")}</Badge> : null}
-      {org.status === "deleted" ? (
-        <Badge tone="red">{t("github.org.deleted")}</Badge>
-      ) : !org.installed ? (
-        <Badge tone="amber">{t("github.org.notInstalled")}</Badge>
-      ) : null}
-    </label>
+      <span className="flex items-center gap-3">
+        <OrgAvatar login={org.login} src={org.avatarUrl ?? undefined} />
+        <span className="min-w-0 flex-1 truncate font-medium">{org.login}</span>
+        {suggested ? <Badge tone="zinc">{t("github.suggested")}</Badge> : null}
+        {org.status === "deleted" ? (
+          <Badge tone="red">{t("github.org.deleted")}</Badge>
+        ) : !org.installed ? (
+          <Badge tone="amber">{t("github.org.notInstalled")}</Badge>
+        ) : null}
+      </span>
+    </RadioRow>
   );
 }

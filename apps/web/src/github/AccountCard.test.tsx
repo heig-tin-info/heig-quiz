@@ -6,13 +6,10 @@ import type { GithubAccountState } from "@quiz/contracts";
 
 import { mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { GithubAccountCard } from "./AccountCard";
-import { useGithubLinkReturn } from "./linkReturn";
 
 /*
  * The user Settings' GitHub card (F-GH-05): shown only when relevant, Link to
- * the App's authorisation back to this page, or the linked login and Unlink;
- * and the toast of the round trip's return, whose parameter then leaves the
- * address.
+ * the App's authorisation back to this page, or the linked login and Unlink.
  */
 
 afterEach(() => {
@@ -62,33 +59,5 @@ describe("the user Settings' GitHub card", () => {
     await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
     expect(await screen.findByText("GitHub account unlinked.")).toBeVisible();
     expect(await screen.findByRole("link", { name: "Link GitHub" })).toBeVisible();
-  });
-});
-
-function Return({ enabled = true }: { enabled?: boolean }) {
-  useGithubLinkReturn(enabled);
-  return null;
-}
-
-describe("the return of a GitHub link", () => {
-  it.each([
-    ["linked", "GitHub account linked."],
-    ["conflict", "This GitHub account is already linked to another Quiz account."],
-    ["error", "Linking GitHub failed. Try again."],
-  ])("toasts ?github=%s, then drops the parameter and keeps the rest", async (outcome, text) => {
-    renderWithProviders(<Return />, { route: `/classrooms/r1/settings?tab=x&github=${outcome}#top` });
-    expect(await screen.findByText(text)).toBeVisible();
-    expect(window.location.pathname).toBe("/classrooms/r1/settings");
-    expect(window.location.search).toBe("?tab=x");
-    expect(window.location.hash).toBe("#top");
-  });
-
-  it("drops an unknown value without a word, and waits for the session", async () => {
-    renderWithProviders(<Return />, { route: "/settings?github=%3Cb%3Ehi" });
-    await waitFor(() => expect(window.location.search).toBe(""));
-    expect(screen.queryByText(/GitHub/)).toBeNull();
-
-    renderWithProviders(<Return enabled={false} />, { route: "/settings?github=linked" });
-    expect(window.location.search).toBe("?github=linked");
   });
 });

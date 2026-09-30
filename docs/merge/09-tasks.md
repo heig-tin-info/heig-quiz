@@ -458,9 +458,10 @@ files it ports; writes en + fr for every string.
 - **Scenes**: `classroom-settings`,
   `classroom-settings-github-connect|installed|checks-warn|org-missing`, `settings-github-linked|unlinked`.
 - **As delivered** (#408): `classroomSettings` left `CLASSROOM_PAGES` (it
-  parses in every build) and renders `ClassroomView` with `settings`: the
-  Settings tab is a route, the other tabs stay `?tab=`. What the next tasks
-  inherit:
+  parses in every build) and renders `ClassroomView routeTab="settings"`:
+  a tab that is a route is an entry of `ROUTE_TABS` (`ClassroomView.tsx`),
+  the others stay `?tab=`; M4-05 adds the Journal there. What the next
+  tasks inherit:
   - `Q:apps/web/src/ClassroomSettings.tsx`: sections Classroom (Rename in a
     one-field dialog, the drill switch — `ClassroomDrillSetting` is now a
     bare `SettingRow`), GitHub, **the Journal slot (M4-05) — a comment

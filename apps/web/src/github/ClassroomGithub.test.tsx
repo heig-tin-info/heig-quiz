@@ -6,6 +6,7 @@ import type { GithubClassroom, GithubOrg } from "@quiz/contracts";
 
 import { makeClassroomDetail } from "../test/fixtures";
 import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
+import { githubOrgsKey } from "../queryKeys";
 import { ClassroomGithub } from "./ClassroomGithub";
 
 /*
@@ -92,6 +93,57 @@ describe("the classroom's GitHub section", () => {
     expect(onConnecting).toHaveBeenCalledWith(false);
   });
 
+  it("picks the organization an install adds, once the list is read again", async () => {
+    let lists = 0;
+    const { calls } = mockFetch({
+      [`GET ${GITHUB}`]: ok(plain),
+      [`GET ${ORGS}`]: () => ok(lists++ === 0 ? [TIN] : [TIN, EMB]),
+      [`PUT ${GITHUB}`]: ok(connected),
+    });
+    const { queryClient } = renderWithProviders(
+      <ClassroomGithub room={makeClassroomDetail()} connecting onConnecting={vi.fn()} />,
+    );
+    const sheet = await screen.findByRole("dialog");
+    await within(sheet).findAllByRole("radio");
+    await userEvent.click(within(sheet).getByRole("link", { name: /Install the App on GitHub/ }));
+    expect(within(sheet).getByRole("progressbar")).toBeInTheDocument();
+
+    // The setup return's `classrooms` hint refetches the list.
+    await queryClient.invalidateQueries({ queryKey: githubOrgsKey });
+    expect(await within(sheet).findByText("Installed on heig-emb-lab.")).toBeVisible();
+    expect(within(sheet).getByRole("radio", { name: /heig-emb-lab/ })).toBeChecked();
+    expect(within(sheet).queryByRole("progressbar")).toBeNull();
+    await userEvent.click(within(sheet).getByRole("button", { name: "Connect" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ orgId: EMB.id }));
+  });
+
+  it("stops waiting once the list is read again, even with nothing new", async () => {
+    mockFetch({ [`GET ${GITHUB}`]: ok(plain), [`GET ${ORGS}`]: ok([TIN, EMB]) });
+    const { queryClient } = renderWithProviders(
+      <ClassroomGithub room={makeClassroomDetail()} connecting onConnecting={vi.fn()} />,
+    );
+    const sheet = await screen.findByRole("dialog");
+    await within(sheet).findAllByRole("radio");
+    await userEvent.click(within(sheet).getByRole("link", { name: /Install the App on GitHub/ }));
+    expect(within(sheet).getByRole("progressbar")).toBeInTheDocument();
+    await queryClient.invalidateQueries({ queryKey: githubOrgsKey });
+    await waitFor(() => expect(within(sheet).queryByRole("progressbar")).toBeNull());
+    expect(within(sheet).queryByText(/Installed on/)).toBeNull();
+  });
+
+  it("reports a refused connect once, under the list", async () => {
+    mockFetch({
+      [`GET ${GITHUB}`]: ok(plain),
+      [`GET ${ORGS}`]: ok([EMB]),
+      [`PUT ${GITHUB}`]: fail(409, { error: "app_not_installed", message: "not installed" }),
+    });
+    renderSection({ connecting: true });
+    const sheet = await screen.findByRole("dialog");
+    await within(sheet).findAllByRole("radio");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Connect" }));
+    expect(await screen.findAllByText(/is not installed on this organization/)).toHaveLength(1);
+  });
+
   it("keeps Connect disabled until an organization is picked, and sends the one picked", async () => {
     const { calls } = mockFetch({
       [`GET ${GITHUB}`]: ok({ ...plain, suggestedOrgId: null }),
@@ -113,7 +165,7 @@ describe("the classroom's GitHub section", () => {
     expect(await screen.findByText("heig-tin-info")).toBeVisible();
     const checks = screen.getByRole("list", { name: "Checks" });
     const lines = within(checks).getAllByRole("listitem");
-    expect(lines.map((l) => l.getAttribute("data-state"))).toEqual(["ok", "ok", "warn"]);
+    expect(lines.map((l) => l.getAttribute("data-level"))).toEqual(["ok", "ok", "warning"]);
     expect(lines[0]).toHaveTextContent("App installed, with access to all repositories.");
     expect(lines[1]).toHaveTextContent("Plan: team.");
     expect(lines[2]).toHaveTextContent("No ANTHROPIC_API_KEY organization secret");

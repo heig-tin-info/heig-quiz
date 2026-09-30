@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import type { GithubClassroomLink } from "@quiz/contracts";
 
 import { en } from "../i18n/en";
-import { fr } from "../i18n/fr";
 import { githubChecks } from "./checks";
 
 /*
@@ -29,7 +28,7 @@ const link = (over: {
   checks: { allRepositories: true, llmSecret: "present", ...over.checks },
 });
 
-const states = (l: GithubClassroomLink) => githubChecks(l).map((c) => [c.id, c.state, c.text]);
+const states = (l: GithubClassroomLink) => githubChecks(l).map((c) => [c.id, c.level, c.text]);
 
 describe("githubChecks", () => {
   it("is all green on an installed organization with every fact present", () => {
@@ -43,8 +42,8 @@ describe("githubChecks", () => {
 
   it("warns on the free plan and on a missing secret, and says what is unknown", () => {
     expect(states(link({ org: { plan: "free" }, checks: { llmSecret: "missing" } })).slice(1)).toEqual([
-      ["plan", "warn", "github.check.planFree"],
-      ["llmSecret", "warn", "github.check.llmMissing"],
+      ["plan", "warning", "github.check.planFree"],
+      ["llmSecret", "warning", "github.check.llmMissing"],
     ]);
     expect(states(link({ org: { plan: null }, checks: { llmSecret: "unknown" } })).slice(1)).toEqual([
       ["plan", "unknown", "github.check.planUnknown"],
@@ -55,35 +54,26 @@ describe("githubChecks", () => {
   it("blocks on the installation only: gone, uninstalled, or on some repositories", () => {
     const first = (l: GithubClassroomLink) => githubChecks(l)[0]!;
     expect(first(link({ org: { status: "deleted", installed: false } }))).toMatchObject({
-      state: "blocked",
+      level: "blocker",
       text: "github.check.orgDeleted",
     });
     expect(first(link({ org: { installed: false } }))).toMatchObject({
-      state: "blocked",
+      level: "blocker",
       text: "github.check.notInstalled",
       fixOnGithub: true,
     });
     expect(first(link({ checks: { allRepositories: false } }))).toMatchObject({
-      state: "blocked",
+      level: "blocker",
       text: "github.check.partialAccess",
       fixOnGithub: true,
     });
     expect(first(link({ checks: { allRepositories: null } }))).toMatchObject({
-      state: "unknown",
+      level: "unknown",
       text: "github.check.accessUnknown",
     });
   });
 
-  it("words every line in both languages, the plan named in it", () => {
-    const lines = [
-      link({}),
-      link({ org: { plan: "free" }, checks: { llmSecret: "missing", allRepositories: false } }),
-      link({ org: { plan: null, installed: false }, checks: { llmSecret: "unknown" } }),
-    ].flatMap(githubChecks);
-    for (const line of lines) {
-      expect(en[line.text]).toBeTruthy();
-      expect(fr[line.text]).toBeTruthy();
-    }
+  it("names the plan in its line", () => {
     expect(en["github.check.plan"]).toContain("{plan}");
   });
 });

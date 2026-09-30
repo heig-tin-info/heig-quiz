@@ -79,7 +79,7 @@ const base = "/app/api/classrooms/r1/drill";
 describe("the classroom's Drill tab", () => {
   it("says the drill is off, and leads to the switch in Settings", async () => {
     mockFetch({ [`GET ${base}/activity`]: ok([row({ nom: "Cattaneo" })]) });
-    renderWithProviders(<ClassroomDrill room={makeClassroomDetail()} />);
+    renderWithProviders(<ClassroomDrill room={makeClassroomDetail()} onSettings={vi.fn()} />);
     expect(await screen.findByText("The drill is off for this classroom")).toBeVisible();
     expect(screen.queryByRole("switch", { name: "Drill" })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
@@ -87,20 +87,20 @@ describe("the classroom's Drill tab", () => {
 
   it("says nothing happened yet when the drill is on and no one practised", async () => {
     mockFetch({ [`GET ${base}/activity`]: ok([row({ nom: "Cattaneo" })]) });
-    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} />);
+    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} onSettings={vi.fn()} />);
     expect(await screen.findByText("No drill activity yet")).toBeVisible();
     expect(screen.queryByRole("table")).toBeNull();
   });
 
   it("offers a retry when the activity cannot be read", async () => {
     mockFetch({ [`GET ${base}/activity`]: fail(500) });
-    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} />);
+    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} onSettings={vi.fn()} />);
     expect(await screen.findByText("Could not load the drill activity")).toBeVisible();
   });
 
   it("lists the students by name, with the recall rate, its trend and the opt-out's date", async () => {
     mockFetch({ [`GET ${base}/activity`]: ok(ROWS), [`GET ${base}/mastery`]: ok(MASTERY) });
-    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} />);
+    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} onSettings={vi.fn()} />);
     const table = await screen.findByRole("table");
     const names = () => within(table).getAllByRole("button", { name: /^Progression of/ }).map((b) => b.textContent);
     expect(names()).toEqual(["Alder Ada", "Bernard Ada", "Cattaneo Ada"]);
@@ -119,7 +119,7 @@ describe("the classroom's Drill tab", () => {
   it("sorts by the recall rate, a student without one below every rate, and flips on a second click", async () => {
     const user = userEvent.setup();
     mockFetch({ [`GET ${base}/activity`]: ok(ROWS), [`GET ${base}/mastery`]: ok(MASTERY) });
-    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} />);
+    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} onSettings={vi.fn()} />);
     const table = await screen.findByRole("table");
     const names = () => within(table).getAllByRole("button", { name: /^Progression of/ }).map((b) => b.textContent);
 
@@ -131,7 +131,7 @@ describe("the classroom's Drill tab", () => {
 
   it("shows the mastery per tag, weakest first, the untagged questions named as such", async () => {
     mockFetch({ [`GET ${base}/activity`]: ok(ROWS), [`GET ${base}/mastery`]: ok(MASTERY) });
-    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} />);
+    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} onSettings={vi.fn()} />);
     expect(await screen.findByRole("heading", { name: "Mastery per tag" })).toBeVisible();
     expect(screen.getByText("pointeurs")).toBeVisible();
     expect(screen.getByText("58%")).toBeVisible();
@@ -146,7 +146,7 @@ describe("the classroom's Drill tab", () => {
       [`GET ${base}/mastery`]: ok(MASTERY),
       [`GET ${base}/progress?student=${SEAT.Alder}`]: ok(WEEKS),
     });
-    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} />);
+    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} onSettings={vi.fn()} />);
     await user.click(await screen.findByRole("button", { name: "Progression of Ada Alder" }));
 
     const sheet = await screen.findByRole("dialog", { name: "Ada Alder" });
@@ -175,7 +175,7 @@ describe("the classroom's Drill tab", () => {
       [`GET ${base}/mastery`]: ok([]),
       [`GET ${base}/progress?student=${SEAT.Cattaneo}`]: ok({ weeks: WEEKS.weeks.map((w) => ({ ...w, reviews: 0, recall: none })) }),
     });
-    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} />);
+    renderWithProviders(<ClassroomDrill room={makeClassroomDetail({ drillEnabled: true })} onSettings={vi.fn()} />);
     await user.click(await screen.findByRole("button", { name: "Progression of Ada Cattaneo" }));
     const sheet = await screen.findByRole("dialog", { name: "Ada Cattaneo" });
     expect(await within(sheet).findByText("No review over this period.")).toBeVisible();

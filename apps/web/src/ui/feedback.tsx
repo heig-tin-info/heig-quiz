@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { CircleCheck, CircleHelp, CircleX, Loader2, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { useT } from "../i18n";
@@ -106,6 +106,22 @@ export function modKey(): string {
 }
 
 export type Tone = "green" | "amber" | "red" | "zinc" | "accent";
+
+/**
+ * The level of one check of a checklist — the launch step's (#152) and a
+ * classroom's GitHub checks (F-GH-03): `blocker` stops what the list guards,
+ * `warning` is legal but probably not meant, `ok` passed, `unknown` is a
+ * fact nobody could read, never drawn green.
+ */
+export type CheckLevel = "ok" | "warning" | "blocker" | "unknown";
+
+/** The one icon and colour of each level (DESIGN.md › The launch checklist). */
+export const LEVEL_ICON: Record<CheckLevel, { icon: IconType; className: string }> = {
+  blocker: { icon: CircleX, className: "text-danger" },
+  warning: { icon: TriangleAlert, className: "text-warning" },
+  ok: { icon: CircleCheck, className: "text-success" },
+  unknown: { icon: CircleHelp, className: "text-fg-faint" },
+};
 
 const TONES: Record<Tone, string> = {
   green: "bg-success-soft text-success",

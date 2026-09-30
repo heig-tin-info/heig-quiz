@@ -254,7 +254,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   studentCourses: (_, c) =>
     c.teacherUi ? <TeacherHome navigate={c.navigate} /> : <StudentCourses navigate={c.navigate} />,
   // F-ORG-13 (D24): the teacher classroom's Settings tab, a route of its own.
-  classroomSettings: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} settings />,
+  classroomSettings: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} routeTab="settings" />,
   // F-JRN-07: both roles. The student's is the Journal tab of their
   // classroom page, which asks for the student payload.
   classroomJournal: (r, c) =>

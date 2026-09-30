@@ -491,7 +491,8 @@ export function Tabs<V extends string>({
     items.map((it) => `${it.value}\u0000${it.label}\u0000${it.count ?? ""}`).join("|"),
   );
   // The selected tab in sight: a strip wider than a phone opens scrolled to
-  // it rather than to its first tab (a classroom's Settings is its fourth).
+  // it rather than to its first tab — a classroom's Settings is its fourth,
+  // off the strip at 390 px (scene `classroom-settings-github-installed-390`).
   // The strip scrolls, never the page, so no `scrollIntoView`.
   const selectedValue = items[selected]?.value;
   useEffect(() => {

@@ -23,7 +23,7 @@ import { EvaluationList, NewEvaluationModal } from "./evaluation/EvaluationList"
 import { useErrorToast, useToast } from "./notify";
 import { RosterImport } from "./RosterImport";
 import { RosterTable } from "./RosterTable";
-import { useSearchParam, type Navigate } from "./router";
+import { useSearchParam, type Navigate, type Route } from "./router";
 import { useScreenCommands } from "./screenCommands";
 import {
   Badge,
@@ -60,7 +60,16 @@ import { invalidateHint } from "./realtime/hints";
  * empty there too. The header keeps the name and the period.
  */
 
-type Tab = "roster" | "evaluations" | "drill" | "settings";
+export type ClassroomTab = "roster" | "evaluations" | "drill" | "settings";
+type Tab = ClassroomTab;
+
+/**
+ * The tabs that are routes of their own (`/classrooms/:id/<tab>`), not a
+ * `?tab=` on the classroom's address: Settings today, the Journal with M4-05.
+ */
+const ROUTE_TABS: Partial<Record<Tab, (id: string) => Route>> = {
+  settings: (id) => ({ view: "classroomSettings", id }),
+};
 
 /**
  * The period: its dates and its label (F-ORG-03, #156), in a dialog.
@@ -135,12 +144,12 @@ function PeriodLink({ room, onOpen }: { room: ClassroomDetail; onOpen: () => voi
 export function ClassroomView({
   id,
   navigate,
-  settings = false,
+  routeTab,
 }: {
   id: string;
   navigate: Navigate;
-  /** The Settings tab, which is a route (`classroomSettings`) and not a `?tab=`. */
-  settings?: boolean;
+  /** The tab the route names, for a tab that is a route (`ROUTE_TABS`). */
+  routeTab?: Tab;
 }) {
   const t = useT();
   const qc = useQueryClient();
@@ -187,17 +196,18 @@ export function ClassroomView({
     onError: toastError("roster.joinFailed"),
   });
 
-  /** A tab: Settings is a route, the others a `?tab=` on the classroom's own. */
+  /** A tab: a route of its own (`ROUTE_TABS`), or a `?tab=` on the classroom's address. */
   const openTab = (next: Tab) => {
-    if (next === "settings") {
-      navigate({ view: "classroomSettings", id });
+    const route = ROUTE_TABS[next];
+    if (route) {
+      navigate(route(id));
       return;
     }
-    if (settings) navigate({ view: "classroom", id });
+    if (routeTab) navigate({ view: "classroom", id });
     setTab(next);
   };
   const openConnect = () => {
-    if (!settings) navigate({ view: "classroomSettings", id });
+    if (routeTab !== "settings") openTab("settings");
     setConnect("1");
   };
   const link = github.data?.link;
@@ -243,8 +253,8 @@ export function ClassroomView({
   // on; once there are students, the work is in the evaluations. The teacher's
   // own seat does not count: a classroom holding nothing else is still one to
   // fill.
-  const tab: Tab = settings
-    ? "settings"
+  const tab: Tab = routeTab
+    ? routeTab
     : tabParam === "roster" || tabParam === "evaluations" || tabParam === "drill"
       ? tabParam
       : students.length > 0
