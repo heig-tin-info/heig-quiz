@@ -1,11 +1,12 @@
 import { lazy, Suspense, useEffect, type ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { LogOut } from "lucide-react";
 
 import type { KioskStation, Me } from "@quiz/contracts";
 
 import { api, useMe, usePublicConfig } from "./api";
-import { kioskStationKey, meKey } from "./queryKeys";
+import { toKiosk, useStationSessionWatch } from "./kiosk/navigation";
+import { kioskStationKey } from "./queryKeys";
 import { Logo } from "./Header";
 import { type Dict, useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
@@ -192,9 +193,6 @@ const ActivitiesPage = lazy(() =>
 const PollLauncher = lazy(() =>
   import("./poll/PollLauncher").then((m) => ({ default: m.PollLauncher })),
 );
-
-/** How often a kiosk station's page asks whether its session still stands (ADR-051 §7). */
-const STATION_ME_MS = 20_000;
 
 /** What every page of the table may need beside its own route. */
 interface PageContext {
@@ -383,9 +381,6 @@ function SignedOut({ route, navigate }: { route: Route; navigate: (r: Route) => 
   return <Landing />;
 }
 
-/** Back to the station's screen: a full navigation, with no history entry to come back by. */
-const toKiosk = () => window.location.replace("/kiosk");
-
 /**
  * A signed-out `/take/:id`. On a kiosk station — the browser holds the
  * station's cookie, which only the server can read — it is a sitting whose
@@ -498,17 +493,11 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   // hints at all.
   // ADR-027: a `seb` session has one evaluation, and no other page.
   const confinedTo = me.data?.session?.evaluationId ?? null;
-  const onStation = me.data?.session?.kind === "kiosk";
   // ADR-051 §7: a station's session ends with the attempt, or with the
   // evaluation — sometimes while the page only waits (a lobby the teacher
-  // closed). Asking `/me` now and then is how the page learns it is gone,
-  // and `StationOrLanding` then takes it back to `/kiosk`.
-  const qc = useQueryClient();
-  useEffect(() => {
-    if (!onStation) return;
-    const id = setInterval(() => void qc.invalidateQueries({ queryKey: meKey }), STATION_ME_MS);
-    return () => clearInterval(id);
-  }, [onStation, qc]);
+  // closed). Its stream dropping is how the page learns it.
+  const onStation = me.data?.session?.kind === "kiosk";
+  useStationSessionWatch(onStation);
   useLiveUpdates(
     me.data != null && confinedTo === null && route.view !== "attempt",
     confinedTo !== null || QUIET.has(route.view),

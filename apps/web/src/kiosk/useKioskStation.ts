@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { KioskDeviceAuthorization, PublicConfig } from "@quiz/contracts";
+import { SLOW_DOWN_STEP_S } from "@quiz/domain";
 
 import { attest, authorize, pollToken, type StationTrouble } from "./station";
 
@@ -13,8 +14,6 @@ export type KioskPhase =
 
 /** A station that cannot show a code tries again, from the attestation, this often. */
 export const KIOSK_RETRY_MS = 30_000;
-/** What `slow_down` adds to the interval (RFC 8628 §3.5). */
-const SLOW_DOWN_S = 5;
 
 /** Where an approved station goes: a full navigation, so no history entry leads back here. */
 const openExam = (url: string) => window.location.replace(url);
@@ -76,10 +75,10 @@ export function useKioskStation(
           }
           if (answer.error === "authorization_pending") continue;
           if (answer.error === "slow_down") {
-            interval += SLOW_DOWN_S;
+            interval += SLOW_DOWN_STEP_S;
             continue;
           }
-          if (answer.error === "not_recognised") return "unrecognised";
+          if (answer.error === "not_recognised") return answer.error;
           // expired_token, access_denied, invalid_grant: a fresh code.
           break;
         }

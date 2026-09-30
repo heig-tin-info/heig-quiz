@@ -13,7 +13,7 @@ import type {
   PairApproved,
   PairPreview,
 } from "@quiz/contracts";
-import { USER_CODE_ALPHABET, normalizeUserCode } from "@quiz/domain";
+import { generateUserCode, normalizeUserCode } from "@quiz/domain";
 
 import { D, flags, H, iso, MockError, MockPayload, on, rand } from "./runtime";
 import { STUDENT_EVAL } from "./student";
@@ -22,7 +22,7 @@ const devices: KioskDevice[] = flags.empty
   ? []
   : [
       {
-        id: "33333333-3333-4333-8333-000000000001",
+        id: "5cd3281a-0c1e-4a71-9b02-3f6d1e8a0001",
         googleDeviceId: "5CD3281JXQ",
         label: null,
         status: "unnamed",
@@ -31,7 +31,7 @@ const devices: KioskDevice[] = flags.empty
         attestation: "ok",
       },
       {
-        id: "33333333-3333-4333-8333-000000000007",
+        id: "5cd2417b-7d2c-4e58-8a13-9c4b2f7e0007",
         googleDeviceId: "5CD2417KLM",
         label: "Poste de secours n° 7",
         status: "active",
@@ -40,7 +40,7 @@ const devices: KioskDevice[] = flags.empty
         attestation: "ok",
       },
       {
-        id: "33333333-3333-4333-8333-000000000008",
+        id: "5cd2417c-1a9f-4b36-8c24-6e0d3a5b0008",
         googleDeviceId: "5CD2417KLP",
         label: "Poste de secours n° 8",
         status: "active",
@@ -49,7 +49,7 @@ const devices: KioskDevice[] = flags.empty
         attestation: "unavailable",
       },
       {
-        id: "33333333-3333-4333-8333-000000000003",
+        id: "9e7a41d0-3b82-4f15-9d46-2c8e7f1a0003",
         googleDeviceId: "NXHQEEZ001",
         label: "Ancien poste B03",
         status: "retired",
@@ -128,8 +128,7 @@ const refusal = (status: number, error: string) => new MockPayload(status, { err
 on("POST", "/app/api/kiosk/device_authorization", (): KioskDeviceAuthorization => {
   const d = devices.find((x) => x.status === "active");
   if (!d?.label) throw refusal(403, "not_recognised");
-  const symbols = Array.from({ length: 8 }, () => USER_CODE_ALPHABET[Math.floor(rand() * USER_CODE_ALPHABET.length)]);
-  const userCode = `${symbols.slice(0, 4).join("")}-${symbols.slice(4).join("")}`;
+  const userCode = generateUserCode((n) => Uint8Array.from({ length: n }, () => Math.floor(rand() * 256)));
   const deviceCode = `mock-device-${Date.now()}`;
   writePairing({ deviceCode, userCode, expiresAt: Date.now() + 300_000, state: "pending", evaluationId: null });
   const uri = `${window.location.origin}/pair`;
@@ -176,7 +175,6 @@ const pairable = (): PairPreview["evaluations"] =>
           title: "Quiz 3 — Pointeurs et lois fondamentales",
           classroomName: "PRG1-2026",
           courseCode: "PRG1",
-          state: "running",
         },
       ];
 

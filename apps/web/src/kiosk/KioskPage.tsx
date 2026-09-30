@@ -32,7 +32,7 @@ export function KioskPage() {
       <div className="flex flex-1 flex-col items-center justify-center py-8 text-center">
         {phase.kind === "code" ? (
           <CodeScreen auth={phase.auth} expiresAt={phase.expiresAt} />
-        ) : phase.kind === "unrecognised" || phase.kind === "unavailable" ? (
+        ) : phase.kind === "not_recognised" || phase.kind === "unavailable" ? (
           <Trouble kind={phase.kind} />
         ) : (
           <Spinner
@@ -92,17 +92,17 @@ function CodeScreen({ auth, expiresAt }: { auth: KioskDeviceAuthorization; expir
 }
 
 /** No code to show: the station is not a named one, or the platform cannot be reached. It tries again by itself. */
-function Trouble({ kind }: { kind: "unrecognised" | "unavailable" }) {
+function Trouble({ kind }: { kind: "not_recognised" | "unavailable" }) {
   const t = useT();
-  const Icon = kind === "unrecognised" ? MonitorX : CloudOff;
+  const Icon = kind === "not_recognised" ? MonitorX : CloudOff;
   return (
     <div role="alert" className="flex max-w-2xl flex-col items-center gap-4">
       <Icon className="size-14 text-fg-faint" aria-hidden />
       <h1 className="text-[clamp(28px,3.4vw,48px)] leading-tight font-bold tracking-[-0.02em]">
-        {t(kind === "unrecognised" ? "kiosk.unrecognised.title" : "kiosk.unavailable.title")}
+        {t(kind === "not_recognised" ? "kiosk.notRecognised.title" : "kiosk.unavailable.title")}
       </h1>
       <p className="text-[clamp(18px,1.8vw,26px)] text-fg-muted">
-        {t(kind === "unrecognised" ? "kiosk.unrecognised.body" : "kiosk.unavailable.body")}
+        {t(kind === "not_recognised" ? "kiosk.notRecognised.body" : "kiosk.unavailable.body")}
       </p>
     </div>
   );

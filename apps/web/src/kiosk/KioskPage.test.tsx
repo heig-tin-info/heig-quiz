@@ -128,7 +128,7 @@ describe("the station's loop (ADR-051 §7)", () => {
     });
     const { result } = renderHook(() => useKioskStation(MOCK, true, vi.fn()), { wrapper });
     await advance();
-    expect(result.current.kind).toBe("unrecognised");
+    expect(result.current.kind).toBe("not_recognised");
     expect(count(calls, "/app/api/kiosk/device_authorization")).toBe(0);
     await advance(KIOSK_RETRY_MS - 1);
     expect(count(calls, "/app/api/kiosk/attest/challenge")).toBe(1);
@@ -141,7 +141,7 @@ describe("the station's loop (ADR-051 §7)", () => {
     const { calls } = station({ "POST /app/api/kiosk/token": fail(403, { error: "not_recognised" }) });
     const { result } = renderHook(() => useKioskStation(MOCK, true, vi.fn()), { wrapper });
     await advance(2_000);
-    expect(result.current.kind).toBe("unrecognised");
+    expect(result.current.kind).toBe("not_recognised");
     await advance(KIOSK_RETRY_MS);
     expect(count(calls, "/app/api/kiosk/attest/challenge")).toBe(2);
   });
@@ -156,7 +156,7 @@ describe("the station's loop (ADR-051 §7)", () => {
     expect(calls.find((c) => c.url === "/app/api/kiosk/attest/verify")!.body).toEqual({
       error: "extension_unreachable",
     });
-    expect(result.current.kind).toBe("unrecognised");
+    expect(result.current.kind).toBe("not_recognised");
   });
 
   it("asks the extension for a ping, then the machine key's answer", async () => {

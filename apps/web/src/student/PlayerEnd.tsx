@@ -13,11 +13,9 @@ import { api } from "../api";
 import { useT } from "../i18n";
 import { attemptFeedbackKey } from "../queryKeys";
 import { Spinner } from "../ui";
+import { STATION_END_MS } from "../kiosk/navigation";
 import { ClosedScreen } from "./ClosedScreen";
 import type { OnResults } from "./Player";
-
-/** How long a kiosk station shows the closed screen before its own screen (ADR-051 §7). */
-export const STATION_END_MS = 8_000;
 
 /**
  * What the player becomes once the attempt is over — handed in, its time

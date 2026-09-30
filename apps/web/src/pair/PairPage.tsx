@@ -2,8 +2,8 @@ import { useId, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CircleCheck, MonitorSmartphone, TriangleAlert } from "lucide-react";
 
-import type { Me, PairApproved, PairPreview, PairableEvaluation } from "@quiz/contracts";
-import { normalizeUserCode } from "@quiz/domain";
+import type { Me, PairApprove, PairApproved, PairPreview, PairableEvaluation } from "@quiz/contracts";
+import { formatUserCode, normalizeUserCode } from "@quiz/domain";
 
 import { ApiError, api } from "../api";
 import { useT } from "../i18n";
@@ -41,12 +41,6 @@ export function PairPage({ me, navigate }: { me: Me | null; navigate?: Navigate 
   return <Pairing initial={initial} navigate={navigate} />;
 }
 
-/** What the student types, shaped as they type it: upper case, a dash after four. */
-export function formatCode(input: string): string {
-  const raw = input.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
-  return raw.length > 4 ? `${raw.slice(0, 4)}-${raw.slice(4)}` : raw;
-}
-
 const errorOf = (err: unknown) =>
   err instanceof ApiError ? { status: err.status, code: (err.body as { error?: string } | null)?.error } : null;
 
@@ -74,7 +68,10 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
 
   const approve = useMutation({
     mutationFn: (evaluationId: string) =>
-      api<PairApproved>("/app/api/pair", { method: "POST", body: JSON.stringify({ code, evaluationId }) }),
+      api<PairApproved>("/app/api/pair", {
+        method: "POST",
+        body: JSON.stringify({ code: code!, evaluationId } satisfies PairApprove),
+      }),
   });
 
   const submitCode = (e: React.FormEvent) => {
@@ -124,7 +121,7 @@ function Pairing({ initial, navigate }: { initial: string | null; navigate?: Nav
               fullWidth
               value={typed}
               onChange={(e) => {
-                setTyped(formatCode(e.target.value));
+                setTyped(formatUserCode(e.target.value));
                 setMalformed(false);
               }}
               autoFocus

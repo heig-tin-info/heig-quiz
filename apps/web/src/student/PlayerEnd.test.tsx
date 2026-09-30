@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AttemptView } from "@quiz/contracts";
 
 import { mockFetch, renderWithProviders } from "../test/render";
-import { PlayerEnd, STATION_END_MS } from "./PlayerEnd";
+import { STATION_END_MS } from "../kiosk/navigation";
+import { PlayerEnd } from "./PlayerEnd";
 
 const view = {
   attempt: { id: "a1", preview: false },

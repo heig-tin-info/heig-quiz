@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Me, PairPreview } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders, type RouteHandler } from "../test/render";
-import { formatCode, PairPage } from "./PairPage";
+import { PairPage } from "./PairPage";
 
 const me: Me = {
   id: "u1",
@@ -29,7 +29,6 @@ const exam = (id: string, title: string) => ({
   title,
   classroomName: "PRG1-2026",
   courseCode: "PRG1",
-  state: "running" as const,
 });
 
 const preview = (evaluations: PairPreview["evaluations"] = [exam(E1, "Test 1 — pointeurs")]): PairPreview => ({
@@ -45,14 +44,6 @@ function render(routes: Record<string, RouteHandler>, route = "/pair?code=bcdf-g
 }
 
 afterEach(() => vi.unstubAllGlobals());
-
-describe("the code as it is typed", () => {
-  it("is upper-cased, cleaned and dashed after four", () => {
-    expect(formatCode("bcdf")).toBe("BCDF");
-    expect(formatCode("bcdfg")).toBe("BCDF-G");
-    expect(formatCode(" bc df-gh jk xx")).toBe("BCDF-GHJK");
-  });
-});
 
 describe("the phone's pairing page (ADR-051 §7)", () => {
   it("signs a signed-out phone in, and comes back with the code", async () => {

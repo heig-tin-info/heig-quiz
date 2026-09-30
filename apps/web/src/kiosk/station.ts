@@ -9,6 +9,7 @@ import {
   type KioskChallenge,
   type KioskDeviceAuthorization,
   type KioskTokenApproved,
+  type KioskTokenRequest,
   type PublicConfig,
 } from "@quiz/contracts";
 
@@ -16,7 +17,7 @@ import { ApiError, api } from "../api";
 import { readStored, writeStored } from "../ui/state";
 
 /** Why a station cannot show a code: not in the registry (or not named), or the platform is out of reach. */
-export type StationTrouble = "unrecognised" | "unavailable";
+export type StationTrouble = "not_recognised" | "unavailable";
 
 const post = <T>(path: string, body?: unknown) =>
   api<T>(path, { method: "POST", ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -97,9 +98,9 @@ export async function attest(kiosk: PublicConfig["kiosk"]): Promise<StationTroub
   try {
     const { challenge } = await post<KioskChallenge>("/app/api/kiosk/attest/challenge");
     const verdict = await post<KioskAttested>("/app/api/kiosk/attest/verify", await attestationOf(kiosk, challenge));
-    return verdict.station.status === "active" ? null : "unrecognised";
+    return verdict.station.status === "active" ? null : "not_recognised";
   } catch (err) {
-    return status(err) === 403 ? "unrecognised" : "unavailable";
+    return status(err) === 403 ? "not_recognised" : "unavailable";
   }
 }
 
@@ -110,7 +111,7 @@ export async function authorize(): Promise<KioskDeviceAuthorization | StationTro
   try {
     return await post<KioskDeviceAuthorization>("/app/api/kiosk/device_authorization");
   } catch (err) {
-    return status(err) === 403 ? "unrecognised" : "unavailable";
+    return status(err) === 403 ? "not_recognised" : "unavailable";
   }
 }
 
@@ -126,7 +127,7 @@ export async function pollToken(
     return await post<KioskTokenApproved>("/app/api/kiosk/token", {
       grant_type: DEVICE_CODE_GRANT,
       device_code: deviceCode,
-    });
+    } satisfies KioskTokenRequest);
   } catch (err) {
     if (!(err instanceof ApiError)) return { error: "authorization_pending" };
     if (err.status === 403) return { error: "not_recognised" };
