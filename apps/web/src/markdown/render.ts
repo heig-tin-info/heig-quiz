@@ -2,9 +2,8 @@ import DOMPurify from "dompurify";
 import katex from "katex";
 import { Marked, type Tokens } from "marked";
 
+import { TOKEN_KINDS, escapeHtml, highlight } from "@quiz/docrender/highlight";
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
-
-import { TOKEN_KINDS, escapeHtml, highlight } from "./highlight";
 
 /*
  * Markdown -> sanitised HTML for content a student reads: question prompts,

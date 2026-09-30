@@ -1,5 +1,11 @@
 /*
- * A deliberately small code tokenizer for fenced blocks in question prompts.
+ * A deliberately small code tokenizer for fenced blocks: question prompts
+ * (`apps/web/src/markdown/render.ts`), the teacher's editor
+ * (`apps/web/src/markdown/codeHighlight.ts`) and the journal's pages
+ * (`render.ts` of this package). One copy, three readers; it lives here, in a
+ * package with no DOM and no dependency, so that the API can use it at
+ * ingestion (ADR-049 addendum, point 8). `@quiz/docrender/highlight` is its
+ * own entry point: the web app imports it without marked nor KaTeX.
  *
  * Not a highlighter: Prism or Shiki would add 30–100 kB to a bundle a student
  * downloads on a phone in an exam room (N-PERF-05), to colour four or five
@@ -80,11 +86,11 @@ export type TokenKind = (typeof TOKEN_KINDS)[number];
  * class the stylesheet already styles under `.md-body` (`tok-com`, `tok-str`,
  * `tok-kw`, `tok-num`).
  *
- * Offsets and not strings, because this tokenizer has two readers now: the
- * student view, which turns them into `<span>`s (`highlight` below), and the
+ * Offsets and not strings, because this tokenizer has two kinds of reader:
+ * the renderers, which turn them into `<span>`s (`highlight` below), and the
  * teacher's editor, which turns them into ProseMirror decorations over a text
- * it does not own (`codeHighlight.ts`). A decoration is a position range; a
- * highlighter that only returns HTML cannot serve it.
+ * it does not own (`apps/web/src/markdown/codeHighlight.ts`). A decoration is
+ * a position range; a highlighter that only returns HTML cannot serve it.
  */
 export interface CodeToken {
   /** Offset of the first character of the run, in the raw code. */
@@ -160,7 +166,7 @@ export function tokenize(code: string, lang?: string | null): CodeToken[] {
 /**
  * Escaped HTML for one fenced block: the token spans of `tokenize`, everything
  * between them as escaped text. This is what the STUDENT reads, through
- * `render.ts`.
+ * `apps/web/src/markdown/render.ts` and the journal's `render.ts`.
  */
 export function highlight(code: string, lang?: string | null): string {
   const tokens = tokenize(code, lang);

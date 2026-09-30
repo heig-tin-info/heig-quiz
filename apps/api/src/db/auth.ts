@@ -9,7 +9,6 @@ import {
   bigserial,
   boolean,
   char,
-  customType,
   index,
   jsonb,
   pgTable,
@@ -21,6 +20,7 @@ import {
 
 import { SESSION_KINDS } from "@quiz/contracts";
 
+import { bytea } from "./columns.js";
 import { evaluations } from "./evaluation.js";
 
 /**
@@ -229,12 +229,6 @@ export const oauthGrants = pgTable(
   },
   (t) => [index("oauth_grants_user_idx").on(t.userId)],
 );
-
-const bytea = customType<{ data: Buffer }>({
-  dataType() {
-    return "bytea";
-  },
-});
 
 /**
  * Every e-mail address known for an account. Switch edu-ID lets a person

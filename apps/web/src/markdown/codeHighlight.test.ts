@@ -10,8 +10,9 @@ import { Editor } from "@tiptap/core";
 import type { Decoration } from "@tiptap/pm/view";
 import { describe, expect, it } from "vitest";
 
+import { highlight, tokenize } from "@quiz/docrender/highlight";
+
 import { codeHighlightKey } from "./codeHighlight";
-import { highlight, tokenize } from "./highlight";
 import { richTextExtensions } from "./tiptap";
 
 if (typeof Range !== "undefined") {
