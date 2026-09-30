@@ -101,7 +101,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M5-01 | API: the student's classroom | in progress | M1-03 | `merge/M5-01-student-classroom-api` | | |
+| M5-01 | API: the student's classroom | review | M1-03 | `merge/M5-01-student-classroom-api` | #377 | For M5-02: `GET /app/api/student/classrooms` → `StudentClassroom[]` (`{id, name, period, courseName, courseCode, teachers, timeBonusPercent}`, archived classrooms now left out, also on the home); `GET /app/api/student/classrooms/:id` → `StudentClassroomPage` = `{classroom: StudentClassroom & {archived}, activities: {polls: StudentPollCard[], open, upcoming, past: StudentActivityCard[]}, hasJournal, hasProjects: false, serverNow}`, a card = `EvaluationCard` + `kind: "evaluation"` (feeds `EvaluationRow` as is), groups sorted as on the home; all in `contracts/src/student.ts`. Always the student payload, drawn through the caller's own seat: a teacher without a seat gets the header and empty groups (no `?view` needed). 404 `{error:"not_found"}` for anyone neither staff nor seated. `readableClassroom(app, req, reply, params, {studentView})` in `guards.ts` for M4-02's journal routes. Mock: `/student/classrooms/r1|r2`, `?journal=1` gives r1 `hasJournal` |
 | M5-02 | Web: student Courses route and classroom page | todo | M5-01, D07 | | | |
 | M5-03 | Gradebook module | todo | M3-08, D06 | | | |
 | M5-04 | Web: Grades tabs | todo | M5-03 | | | |
