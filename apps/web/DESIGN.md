@@ -565,7 +565,7 @@ live in `ui/state.ts`, each written once.
 - Help of a whole page (`PageHeader`'s `help`, `PageHelpButton`): a round
   34 px button outlined like a secondary one, in the header's action row,
   after the page's actions and before the overflow "…" — never beside the
-  h1. The title is renamed in place, carries badges and wraps on a phone; a
+  h1. "?" and "…" wrap together on a phone, never apart. The title is renamed in place, carries badges and wraps on a phone; a
   "?" riding it never sat right, the action row does not move.
 - Help "?" (`HelpIcon`): **16 px**, `fg-faint` at rest, accent on hover, the
   same beside a 16 px section heading, a dialog title and a 13 px field

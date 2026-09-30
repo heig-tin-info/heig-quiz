@@ -210,22 +210,24 @@ export function ResultsView({
             <Button onClick={() => void ask(true)} loading={releasing}>
               <Send /> {t(view.released ? "results.release.again" : "results.release")}
             </Button>
-            {view.released ? (
-              // One action, so one icon button: `Actions` is what turns a
-              // single-item overflow menu into the thing it always was.
-              <Actions
-                label={t("common.actions")}
-                items={[
-                  {
-                    label: t("results.unrelease"),
-                    icon: Undo2,
-                    danger: true,
-                    onSelect: () => void ask(false),
-                  },
-                ]}
-              />
-            ) : null}
           </>
+        }
+        menu={
+          view.released ? (
+            // One action, so one icon button: `Actions` is what turns a
+            // single-item overflow menu into the thing it always was.
+            <Actions
+              label={t("common.actions")}
+              items={[
+                {
+                  label: t("results.unrelease"),
+                  icon: Undo2,
+                  danger: true,
+                  onSelect: () => void ask(false),
+                },
+              ]}
+            />
+          ) : null
         }
       />
 

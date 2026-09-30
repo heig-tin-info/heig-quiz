@@ -148,8 +148,14 @@ export function PageHeader({
       {right ? (
         <div className="flex flex-wrap items-center gap-2">
           {actions}
-          {help ? <PageHelpButton topic={help} /> : null}
-          {menu}
+          {/* "?" and "…" wrap as one: on a phone the row breaks before them,
+              never between them, so "…" is not left alone on a line. */}
+          {help || menu ? (
+            <span className="flex items-center gap-2">
+              {help ? <PageHelpButton topic={help} /> : null}
+              {menu}
+            </span>
+          ) : null}
         </div>
       ) : null}
     </header>

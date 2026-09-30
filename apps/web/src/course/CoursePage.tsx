@@ -139,13 +139,11 @@ function Course({ course, navigate }: { course: CourseSummary; navigate: (r: Rou
           </span>
         }
         actions={
-          <>
-            <Button onClick={newClassroom}>
-              <Plus /> {t("classrooms.new")}
-            </Button>
-            <Actions items={items} label={t("common.actions")} />
-          </>
+          <Button onClick={newClassroom}>
+            <Plus /> {t("classrooms.new")}
+          </Button>
         }
+        menu={<Actions items={items} label={t("common.actions")} />}
       />
 
       <section className="space-y-3">
