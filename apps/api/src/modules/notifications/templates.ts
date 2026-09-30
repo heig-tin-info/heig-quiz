@@ -73,6 +73,10 @@ const en = {
   "system_alert.recovered.subject": "{host}: health checks back to OK",
   "system_alert.recovered.body": "Health checks of {host} that had failed are OK again: {checks}.",
   "system_alert.action": "Open the system status",
+  // The administrator's "Send me a test e-mail" (ADR-055 §6): no kind, no preference.
+  "test_mail.subject": "{host}: test e-mail",
+  "test_mail.body": "This is a test e-mail from {host}, sent at your request from the System status page. If you are reading it, the platform's e-mail delivery works.",
+  "test_mail.action": "Back to the system status",
   // The checks by name, as the System status page names them
   // (`admin.system.check.*` in the web's dictionaries).
   "check.ticker": "Live clock (ticker)",
@@ -88,6 +92,12 @@ const en = {
   "check.database.connections": "Database connections",
   "check.disk": "Disk space",
   "check.backup": "Last backup",
+  "check.http.errors": "Server errors (24 h)",
+  "check.service.mail": "E-mail",
+  "check.service.signin": "Sign-in (identity provider)",
+  "check.service.teams": "Microsoft Teams",
+  "check.service.llm": "AI grading provider",
+  "check.service.github": "GitHub App",
   "role.reader": "reader",
   "role.contributor": "contributor",
   "role.owner": "owner",
@@ -183,6 +193,9 @@ const fr: Record<Key, string> = {
   "system_alert.recovered.subject": "{host} : contrôles de santé de nouveau OK",
   "system_alert.recovered.body": "Des contrôles de santé de {host} qui avaient échoué sont de nouveau OK : {checks}.",
   "system_alert.action": "Ouvrir l'état du système",
+  "test_mail.subject": "{host} : e-mail de test",
+  "test_mail.body": "Ceci est un e-mail de test de {host}, envoyé à votre demande depuis la page État du système. Si vous le lisez, l'envoi des e-mails de la plateforme fonctionne.",
+  "test_mail.action": "Retour à l'état du système",
   "check.ticker": "Horloge du direct (ticker)",
   "check.attempts.overdue": "Tentatives au-delà de leur échéance",
   "check.evaluations.overdue": "Évaluations au-delà de leur fin",
@@ -196,6 +209,12 @@ const fr: Record<Key, string> = {
   "check.database.connections": "Connexions à la base de données",
   "check.disk": "Espace disque",
   "check.backup": "Dernière sauvegarde",
+  "check.http.errors": "Erreurs serveur (24 h)",
+  "check.service.mail": "E-mail",
+  "check.service.signin": "Connexion (fournisseur d'identité)",
+  "check.service.teams": "Microsoft Teams",
+  "check.service.llm": "Fournisseur de correction par IA",
+  "check.service.github": "Application GitHub",
   "role.reader": "lecteur",
   "role.contributor": "contributeur",
   "role.owner": "propriétaire",
@@ -391,29 +410,74 @@ export function renderNotification(
   const t = DICTS[locale];
   const kind: NotificationKind = payload.kind;
   const vars: Record<string, string> = { ...varsOf(payload, t), host: hostOf(webUrl) };
-  const base = webUrl;
-  const link = `${base}${notificationPath(payload)}`;
-  const settings = `${base}/settings`;
+  const mail = composeMail(t, {
+    subject: sentenceKey(payload, "subject"),
+    body: sentenceKey(payload, "body"),
+    vars,
+    action: t[`${kind}.action`],
+    path: notificationPath(payload),
+    webUrl,
+  });
+  const topic =
+    teamsLine(vars.evaluationTitle ?? vars.poolName ?? vars.classroomName ?? "") || t["app.name.short"];
+  const preview = teamsLine(fill(t[sentenceKey(payload, "body")], vars, plain));
 
-  const subject = oneLine(fill(t[sentenceKey(payload, "subject")], vars, plain));
-  const body = fill(t[sentenceKey(payload, "body")], vars, plain);
-  const action = t[`${kind}.action`];
+  return { ...mail, topic, preview };
+}
 
-  const text = [body, "", `${action}: ${link}`, "", "--", `${t.footer} ${settings}`].join("\n");
+/**
+ * The administrator's test e-mail (ADR-055 §6): the same layout as every
+ * message, naming the platform, and linking back to the System status.
+ */
+export function renderTestMail(locale: MailLocale, webUrl: string): Pick<RenderedNotification, "subject" | "text" | "html"> {
+  const t = DICTS[locale];
+  return composeMail(t, {
+    subject: "test_mail.subject",
+    body: "test_mail.body",
+    vars: { host: hostOf(webUrl) },
+    action: t["test_mail.action"],
+    path: "/admin?tab=system",
+    webUrl,
+    // Not a notification: no preference chose it, so no settings footer.
+    footer: false,
+  });
+}
 
-  const bodyHtml = fill(t[sentenceKey(payload, "body")], vars, escapeHtml);
+/**
+ * One e-mail: its subject on one line, a plain-text part and an HTML part, a
+ * button to `path`, and — unless `footer: false` — the line pointing at the
+ * notification settings.
+ */
+function composeMail(
+  t: Record<Key, string>,
+  m: {
+    subject: Key;
+    body: Key;
+    vars: Record<string, string>;
+    action: string;
+    path: string;
+    webUrl: string;
+    footer?: boolean;
+  },
+): Pick<RenderedNotification, "subject" | "text" | "html"> {
+  const link = `${m.webUrl}${m.path}`;
+  const settings = `${m.webUrl}/settings`;
+  const footer = m.footer ?? true;
+  const subject = oneLine(fill(t[m.subject], m.vars, plain));
+  const body = fill(t[m.body], m.vars, plain);
+  const text = [body, "", `${m.action}: ${link}`, ...(footer ? ["", "--", `${t.footer} ${settings}`] : [])].join(
+    "\n",
+  );
+  const bodyHtml = fill(t[m.body], m.vars, escapeHtml);
+  const footerHtml = footer
+    ? `\n  <p style="font-size:12px;line-height:1.5;color:#71717a;border-top:1px solid #e4e4e7;padding-top:12px;margin:0">${escapeHtml(t.footer)} <a href="${escapeHtml(settings)}" style="color:#71717a">${escapeHtml(t["footer.link"])}</a></p>`
+    : "";
   const html = `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#18181b">
   <p style="font-size:13px;font-weight:600;letter-spacing:.02em;color:#71717a;margin:0 0 16px">HEIG Quiz</p>
   <p style="font-size:15px;line-height:1.6;margin:0 0 20px">${bodyHtml}</p>
-  <p style="margin:0 0 28px"><a href="${escapeHtml(link)}" style="background:#18181b;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:500">${escapeHtml(action)}</a></p>
-  <p style="font-size:12px;line-height:1.5;color:#71717a;border-top:1px solid #e4e4e7;padding-top:12px;margin:0">${escapeHtml(t.footer)} <a href="${escapeHtml(settings)}" style="color:#71717a">${escapeHtml(t["footer.link"])}</a></p>
+  <p style="margin:0 0 28px"><a href="${escapeHtml(link)}" style="background:#18181b;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:500">${escapeHtml(m.action)}</a></p>${footerHtml}
 </div>`;
-
-  const topic =
-    teamsLine(vars.evaluationTitle ?? vars.poolName ?? vars.classroomName ?? "") || t["app.name.short"];
-  const preview = teamsLine(body);
-
-  return { subject, text, html, topic, preview };
+  return { subject, text, html };
 }
 
 /** The host of the SPA's address: which platform a system alert is about (production, staging). */

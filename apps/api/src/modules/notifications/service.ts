@@ -36,9 +36,12 @@ import {
   type NotificationMatrix,
   type NotificationPreferencePut,
   type NotificationSettings,
+  type TestMailResult,
 } from "@quiz/contracts";
 
+import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
+import { errorClass } from "../../serviceHealth.js";
 import {
   enrollments,
   foldKindLiteral,
@@ -50,7 +53,9 @@ import {
 } from "../../db/schema.js";
 import { holdsCourseSeat } from "../org/service.js";
 import { hint, userTopic } from "../realtime/bus.js";
+import { createMailer } from "./mailer.js";
 import { enqueueDeliveries, teamsOpen, type ExternalChannel } from "./outbox.js";
+import { mailLocale, renderTestMail } from "./templates.js";
 import { teamsLinkedUsers, teamsLinkOf } from "./teamsLink.js";
 
 const DEFAULT_LIMIT = 30;
@@ -444,3 +449,25 @@ export async function notificationSettings(
 // is this one.
 
 export { teamsLinkOf, unlinkTeams, type TeamsLink } from "./teamsLink.js";
+
+// --- The administrator's test e-mail (ADR-055 §6) -------------------------
+
+/**
+ * Sends the short test message to one administrator, now, through the
+ * platform's mailer and nothing else: no notification row, no preference,
+ * no queue — the point is to see the transport answer. The mailer records
+ * the outcome for the services' status like any delivery; the caller gets
+ * it back as `sent`, `dry_run` or the failure's class, never its words.
+ */
+export async function sendTestMail(
+  config: AppConfig,
+  log: { info(obj: object, msg: string): void },
+  to: { email: string; locale: string | null },
+): Promise<TestMailResult> {
+  const message = renderTestMail(mailLocale(to.locale), config.WEB_URL);
+  try {
+    return { outcome: await createMailer(config, log).send({ to: to.email, ...message }) };
+  } catch (err) {
+    return { outcome: "error", error: errorClass(err) };
+  }
+}

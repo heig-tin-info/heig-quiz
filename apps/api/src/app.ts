@@ -21,6 +21,7 @@ import type { AppConfig } from "./config.js";
 import { registerSecurityHeaders } from "./csp.js";
 import { createDb } from "./db/client.js";
 import { publish } from "./events.js";
+import { registerHttpMetrics } from "./httpMetrics.js";
 import { activityPlugin } from "./modules/activity/routes.js";
 import { adminPlugin } from "./modules/admin/routes.js";
 import { adminGuard } from "./modules/guards.js";
@@ -111,6 +112,11 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
 
   // The CSP and the framing header, on every response (N-SEC-02, `csp.ts`).
   registerSecurityHeaders(app);
+
+  // The scrape registry, and the HTTP metrics fed by a hook that must come
+  // before every route (N-OPS-02, `httpMetrics.ts`).
+  const registry = new Registry();
+  registerHttpMetrics(app, registry);
 
   // Roster import: the CSV arrives as-is in req.body.
   app.addContentTypeParser(["text/csv", "text/plain"], { parseAs: "string" }, (_req, body, done) =>
@@ -249,7 +255,6 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   }
 
   // --- Observability ---
-  const registry = new Registry();
   collectDefaultMetrics({ register: registry });
   const dbUp = new Gauge({
     name: "quiz_database_up",

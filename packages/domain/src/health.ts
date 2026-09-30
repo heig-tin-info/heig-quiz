@@ -39,6 +39,8 @@ export const HEALTH_THRESHOLDS = {
   connectionsFail: 0.95,
   /** A job waiting this long in a queue that has workers is stuck. */
   jobWaitWarnMs: 10 * 60_000,
+  /** Server errors (5xx) of the last 24 h from which the page asks for a look; never a failure. */
+  serverErrorsWarn: 5,
 } as const;
 
 const T = HEALTH_THRESHOLDS;
@@ -119,4 +121,67 @@ export function connectionsStatus(used: number, max: number): CheckStatus {
 export function jobsStatus(failed24h: number, oldestWaitMs: number | null): CheckStatus {
   if (oldestWaitMs !== null && oldestWaitMs > T.jobWaitWarnMs) return "warn";
   return failed24h > 0 ? "warn" : "ok";
+}
+
+/** 5xx answers of the last day: a few is noise, more needs a look, never an alarm. */
+export function serverErrorsStatus(count: number): CheckStatus {
+  return count >= T.serverErrorsWarn ? "warn" : "ok";
+}
+
+// --- Third-party services, judged from real traffic (ADR-055 §6) ---------
+
+/**
+ * What the process remembers of its calls to one service since it started:
+ * the last success, the last failure, and the failures in a row since the
+ * last success (with the first of them).
+ */
+export interface ServiceRecord {
+  lastOkAt: Date | null;
+  lastErrorAt: Date | null;
+  /** The first failure since the last success; null when the last call succeeded. */
+  failingSince: Date | null;
+  failuresSinceOk: number;
+}
+
+/**
+ * When a service's failures become a failure of the check: the last call
+ * failed, no call has succeeded for `failAfterMs` since the first failure,
+ * and at least `failAfterFailures` calls failed. Before that, a warning.
+ */
+export interface ServicePolicy {
+  failAfterMs: number;
+  failAfterFailures: number;
+}
+
+/**
+ * The third-party services the platform calls, a closed list: the check
+ * keys `service.<name>` of `@quiz/contracts` and the registry's rows derive
+ * from it.
+ */
+export const SERVICE_NAMES = ["mail", "signin", "teams", "llm", "github"] as const;
+export type ServiceName = (typeof SERVICE_NAMES)[number];
+
+/** Two failures with no success for half an hour is the provider, not a blip (a delivery is retried). */
+const DEFAULT_SERVICE_POLICY: ServicePolicy = { failAfterMs: 30 * 60_000, failAfterFailures: 2 };
+
+/** Where a service departs from the default. */
+const SERVICE_POLICY_OVERRIDES: Partial<Record<ServiceName, Partial<ServicePolicy>>> = {
+  // A callback can fail for the person's own reasons (a code used twice).
+  signin: { failAfterFailures: 3 },
+};
+
+export function servicePolicy(name: ServiceName): ServicePolicy {
+  return { ...DEFAULT_SERVICE_POLICY, ...SERVICE_POLICY_OVERRIDES[name] };
+}
+
+/**
+ * A service by its record: `unknown` when it was never called since the
+ * process started, `ok` when its last call succeeded, `fail` when its calls
+ * have kept failing past the policy, `warn` on a failure short of that.
+ */
+export function serviceStatus(record: ServiceRecord, now: Date, policy: ServicePolicy): CheckStatus {
+  if (record.lastOkAt === null && record.lastErrorAt === null) return "unknown";
+  if (record.failingSince === null) return "ok";
+  const failingFor = now.getTime() - record.failingSince.getTime();
+  return failingFor > policy.failAfterMs && record.failuresSinceOk >= policy.failAfterFailures ? "fail" : "warn";
 }

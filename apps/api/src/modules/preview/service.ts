@@ -54,6 +54,7 @@ import {
   previewDurationS,
 } from "@quiz/domain";
 
+import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import type { Db } from "../../db/client.js";
 import { DomainError } from "../http.js";
 import {
@@ -109,31 +110,19 @@ function runnerDown(error: unknown): PreviewError | null {
  * in its journal (N-SEC-07); a preview has no journal and must not grow one,
  * so the window lives here: runs keyed by teacher AND evaluation (one budget
  * for all the items, like an attempt's), compilations likewise under a key
- * of their own, gradings by teacher. It is per process and lost on
- * restart, which is the right weight for a budget that protects the runner
- * from a held-down button, not from a determined colleague.
+ * of their own, gradings by teacher. It protects the runner from a
+ * held-down button, not from a determined colleague (`budget.ts`).
  */
-class Budget {
-  private readonly hits = new Map<string, number[]>();
+const budgets = new Budget();
 
-  /** Spends one unit of `key`, or throws `429 rate_limited`. */
+/** Spends one unit of `key`, or throws `429 rate_limited`. */
+const budget = {
   spend(key: string, limit: number, now: Date): void {
-    const since = now.getTime() - 60_000;
-    const recent = (this.hits.get(key) ?? []).filter((t) => t > since);
-    if (recent.length >= limit) {
-      this.hits.set(key, recent);
-      throw new PreviewError("rate_limited", 429, { retryAfterS: 60 });
+    if (!budgets.spend(key, limit, now)) {
+      throw new PreviewError("rate_limited", 429, { retryAfterS: BUDGET_RETRY_AFTER_S });
     }
-    recent.push(now.getTime());
-    this.hits.set(key, recent);
-    // Keep the map from growing with every teacher who ever pressed a button.
-    if (this.hits.size > 10_000) {
-      for (const [k, v] of this.hits) if (v.every((t) => t <= since)) this.hits.delete(k);
-    }
-  }
-}
-
-const budget = new Budget();
+  },
+};
 
 /** A student's run budget when the question publishes none (`live/runs.ts`). */
 const DEFAULT_RUNS_PER_MINUTE = 10;

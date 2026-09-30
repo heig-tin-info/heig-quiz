@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, type ReactNode } from "react";
 import {
   CircleAlert,
@@ -7,8 +7,10 @@ import {
   CircleX,
   Database,
   GitCommitHorizontal,
+  Plug,
   Radio,
   RefreshCw,
+  Send,
 } from "lucide-react";
 
 import type {
@@ -23,10 +25,12 @@ import type {
   SystemSection,
   SystemStatus,
   SystemStatusQuery,
+  TestMailResult,
 } from "@quiz/contracts";
 
-import { api } from "./api";
+import { api, ApiError, apiErrorMessage } from "./api";
 import { formatBytes, formatDecimal, formatMs, useI18n, useT, type Dict } from "./i18n";
+import { useToast } from "./notify";
 import { adminSystemKey } from "./queryKeys";
 import {
   Alert,
@@ -60,20 +64,23 @@ const STATUS: Record<CheckStatus, { tone: Tone; label: keyof Dict; icon: IconTyp
   unknown: { tone: "zinc", label: "admin.system.status.unknown", icon: CircleHelp },
 };
 
-const SECTIONS: { key: SystemSection; icon: IconType; title: keyof Dict }[] = [
+const SECTIONS: { key: SystemSection; icon: IconType; title: keyof Dict; hint?: keyof Dict }[] = [
   { key: "live", icon: Radio, title: "admin.system.section.live" },
   { key: "storage", icon: Database, title: "admin.system.section.storage" },
+  { key: "services", icon: Plug, title: "admin.system.section.services", hint: "admin.system.servicesHint" },
 ];
 
 /**
- * What a row adds beyond its check, per check: a standing note, and a link
- * shown while the check is not OK. The one place a row differs by its key.
+ * What a row adds beyond its check, per check: a standing note, a link
+ * shown while the check is not OK, and a row action. The one place a row
+ * differs by its key.
  */
-type Extra = { note?: keyof Dict; link?: { label: keyof Dict; open: "tasks" } };
+type Extra = { note?: keyof Dict; link?: { label: keyof Dict; open: "tasks" }; action?: "testMail" };
 const EXTRAS: Partial<Record<SystemCheckKey, Extra>> = {
   // Open question 10 (docs/spec/06) stays open: the page says so.
   backup: { note: "admin.system.backupNote" },
   tasks: { link: { label: "admin.system.openTasks", open: "tasks" } },
+  "service.mail": { action: "testMail" },
 };
 
 /**
@@ -147,7 +154,11 @@ export function SystemSection({ onOpenTasks }: { onOpenTasks: () => void }) {
       <Summary checks={checks} checkedAt={checkedAt} action={refresh} />
       {SECTIONS.map((section) => (
         <section key={section.key} className="space-y-3">
-          <SectionHeading icon={section.icon} title={t(section.title)} />
+          <SectionHeading
+            icon={section.icon}
+            title={t(section.title)}
+            description={section.hint ? t(section.hint) : undefined}
+          />
           <Card>
             <ul className="divide-y divide-line">
               {checks
@@ -235,6 +246,7 @@ function CheckRow({ check, open }: { check: SystemCheck; open: Record<"tasks", (
             {t(extra.link.label)}
           </Button>
         ) : null}
+        {extra.action === "testMail" ? <TestMailButton /> : null}
       </div>
       <div className="text-right">
         <p className="whitespace-nowrap text-[13px] font-semibold tabular-nums">
@@ -245,6 +257,42 @@ function CheckRow({ check, open }: { check: SystemCheck; open: Record<"tasks", (
         </p>
       </div>
     </li>
+  );
+}
+
+const TEST_MAIL_OUTCOME: Record<TestMailResult["outcome"], { text: keyof Dict; tone: "success" | "warning" | "error" }> = {
+  sent: { text: "admin.system.testMail.sent", tone: "success" },
+  dry_run: { text: "admin.system.testMail.dry_run", tone: "warning" },
+  error: { text: "admin.system.testMail.error", tone: "error" },
+};
+
+/**
+ * "Send me a test e-mail" (ADR-055 §6): a secondary action of the e-mail
+ * row, to the signed-in administrator, through the platform's mailer. The
+ * server answers the outcome, and refuses a second within the minute.
+ */
+function TestMailButton() {
+  const t = useT();
+  const toast = useToast();
+  const send = useMutation({
+    mutationFn: () => api<TestMailResult>("/app/api/admin/system/test-mail", { method: "POST" }),
+    onSuccess: (result) => {
+      const outcome = TEST_MAIL_OUTCOME[result.outcome];
+      toast(t(outcome.text, { error: result.outcome === "error" ? result.error : "" }), outcome.tone);
+    },
+    onError: (err) =>
+      toast(
+        err instanceof ApiError && err.status === 429
+          ? t("admin.system.testMail.rate_limited")
+          : apiErrorMessage(err, t("error.server")),
+        "error",
+      ),
+  });
+  return (
+    <Button variant="ghost" size="sm" className="-ml-2" loading={send.isPending} onClick={() => send.mutate()}>
+      {send.isPending ? null : <Send />}
+      {t("admin.system.testMail")}
+    </Button>
   );
 }
 

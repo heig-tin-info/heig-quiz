@@ -84,7 +84,7 @@
 | Id | Requirement |
 |---|---|
 | N-OPS-01 | Deployment by Docker Compose: reverse proxy, application, Postgres database, runner. One command to update. |
-| N-OPS-02 | Structured JSON logs, configurable level. Basic metrics: requests, latency, active real-time connections, runner queue. (The connections: `quiz_sse_connections` on `/metrics`, ADR-055.) |
+| N-OPS-02 | Structured JSON logs, configurable level. Basic metrics: requests, latency, active real-time connections, runner queue. (On `/metrics`: `quiz_http_requests_total` by route template and status class, `quiz_http_request_duration_seconds`, `quiz_sse_connections`; the server errors of the day on the System status page. ADR-055 §7, `docs/development/deployment.md` §7.) |
 | N-OPS-03 | Internal health page: database, runner, disk space, last backup. Delivered as the admin's System status (F-ADMIN-07, [ADR-055](../adr/ADR-055-etat-du-systeme.md)); `/healthz` stays the narrow public probe. |
 | N-OPS-04 | Schema migrations versioned and applied at startup. Always compatible with the previous version to allow a rollback. |
 | N-OPS-05 | No deployment during a running evaluation: the update script refuses when an evaluation is `running` unless a force option is given. |

@@ -16,6 +16,7 @@ import type {
   CheckValue,
   SystemCheck,
   SystemStatus,
+  TestMailResult,
 } from "@quiz/contracts";
 import { addMonths, currentOrNextSemester, semesterMonths } from "@quiz/domain";
 import {
@@ -827,6 +828,14 @@ function systemStatus(): SystemStatus {
     cause: null,
   });
   const table = (name: string, n: number) => named(name, { kind: "bytes", n });
+  const lastFailure = (errorClass: string, at: number, inARow: number): CheckDetail => ({
+    subject: { kind: "name", name: errorClass },
+    values: [
+      { meaning: "lastFailure", value: { kind: "at", iso: iso(at) } },
+      ...(inARow > 0 ? [{ meaning: "failed" as const, value: count(inARow) }] : []),
+    ],
+    cause: null,
+  });
   return {
     checkedAt: at,
     checks: [
@@ -858,6 +867,13 @@ function systemStatus(): SystemStatus {
         queue("notifications.email", 0, 0, null),
       ]),
       bad ? check("runner", "live", "fail", null, "runner.down") : check("runner", "live", "ok", null),
+      bad
+        ? check("http.errors", "live", "warn", count(17), "http.errors", [
+            named("/app/api/evaluations/:id/grading", count(11)),
+            named("/app/api/attempts/:id/answers/:itemId", count(4)),
+            named("unmatched", count(2)),
+          ])
+        : check("http.errors", "live", "ok", count(0)),
       check("evaluations.live", "live", "ok", count(bad ? 1 : 0), bad ? "evaluations.live" : null),
       check("connections.live", "live", "ok", count(bad ? 58 : 12)),
       check("database", "storage", "ok", { kind: "duration", ms: 2 }),
@@ -880,6 +896,23 @@ function systemStatus(): SystemStatus {
         bad ? "backup.stale" : null,
         [named("quiz-2026-09-30.dump", { kind: "bytes", n: 41_800_000 })],
       ),
+      // The services, as this process saw them: e-mail refused by the
+      // provider for three quarters of an hour when degraded.
+      bad
+        ? check("service.mail", "services", "fail", { kind: "at", iso: iso(-3 * H) }, "service.failing", [
+            lastFailure("http_502", -2 * MIN, 6),
+          ])
+        : check("service.mail", "services", "ok", { kind: "at", iso: iso(-12 * MIN) }),
+      check("service.signin", "services", "ok", { kind: "at", iso: iso(-4 * MIN) }, null, [
+        lastFailure("invalid_grant", -5 * H, 0),
+      ]),
+      bad
+        ? check("service.teams", "services", "warn", { kind: "at", iso: iso(-50 * MIN) }, "service.failed_recently", [
+            lastFailure("timeout", -6 * MIN, 1),
+          ])
+        : check("service.teams", "services", "ok", { kind: "at", iso: iso(-50 * MIN) }),
+      check("service.llm", "services", "unknown", null, "service.not_configured"),
+      check("service.github", "services", "unknown", null, "service.unused"),
     ],
     deployment: {
       commitSha: "8cc9a4a9f1e2d3c4b5a6978877665544332211ff",
@@ -894,3 +927,5 @@ function systemStatus(): SystemStatus {
   };
 }
 on("GET", "/app/api/admin/system", () => systemStatus());
+// The mock has no mailer: a dry run, as in development.
+on("POST", "/app/api/admin/system/test-mail", (): TestMailResult => ({ outcome: "dry_run" }));

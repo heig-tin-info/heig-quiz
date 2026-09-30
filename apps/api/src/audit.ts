@@ -148,6 +148,12 @@ export type AuditAction =
   | "superpowers.enabled"
   /** …and they went off: `payload.reason` is `manual`, `expired` or `logout`. */
   | "superpowers.disabled"
+  /**
+   * An admin sent themselves the test e-mail of the System status (ADR-055
+   * §6): actor and subject the admin, `payload.outcome` and `payload.error`
+   * (a class, `http_502`) — never the address.
+   */
+  | "system.test_mail"
   | "tag.describe"
   /** An admin paused, resumed or changed the period of a scheduled task (D10; `payload` the patch). */
   | "task.configure"

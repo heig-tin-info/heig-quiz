@@ -83,6 +83,8 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   // ADR-054: a second switch-on while they run, and an action that needs them.
   super_powers_active: "error.superPowersActive",
   super_powers_required: "error.superPowersRequired",
+  // ADR-055 §6: the test e-mail of an admin account without an address.
+  no_email: "error.noEmail",
 };
 
 /** Server-provided error message of a failed call (or its worded code), or the fallback. */
