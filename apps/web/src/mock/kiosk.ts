@@ -14,6 +14,7 @@ const devices: KioskDevice[] = flags.empty
   : [
       {
         id: "33333333-3333-4333-8333-000000000001",
+        googleDeviceId: "5CD3281JXQ",
         label: null,
         status: "unnamed",
         attestedAt: iso(-2 * H),
@@ -22,6 +23,7 @@ const devices: KioskDevice[] = flags.empty
       },
       {
         id: "33333333-3333-4333-8333-000000000007",
+        googleDeviceId: "5CD2417KLM",
         label: "Poste de secours n° 7",
         status: "active",
         attestedAt: iso(-20 * 60_000),
@@ -30,6 +32,7 @@ const devices: KioskDevice[] = flags.empty
       },
       {
         id: "33333333-3333-4333-8333-000000000008",
+        googleDeviceId: "5CD2417KLP",
         label: "Poste de secours n° 8",
         status: "active",
         attestedAt: iso(-3 * D),
@@ -38,6 +41,7 @@ const devices: KioskDevice[] = flags.empty
       },
       {
         id: "33333333-3333-4333-8333-000000000003",
+        googleDeviceId: "NXHQEEZ001",
         label: "Ancien poste B03",
         status: "retired",
         attestedAt: iso(-40 * D),

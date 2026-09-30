@@ -167,6 +167,8 @@ function StationRow({ device: d }: { device: KioskDevice }) {
         ) : (
           <span className="font-semibold">{d.label}</span>
         )}
+        {/* The serial printed on the machine: which Chromebook this row is. */}
+        <div className="mt-0.5 font-mono text-xs text-fg-muted">{d.googleDeviceId}</div>
       </td>
       <td className={`${T.td} whitespace-nowrap`}>
         <Badge tone={STATUS_TONE[d.status]}>{t(`admin.kiosk.status.${d.status}`)}</Badge>

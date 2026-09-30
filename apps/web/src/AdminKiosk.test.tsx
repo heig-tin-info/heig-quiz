@@ -14,6 +14,7 @@ const ON = ok({ devLogin: false, kiosk: { extensionId: null, mock: true } });
 
 const unnamed: KioskDevice = {
   id: "33333333-3333-4333-8333-000000000001",
+  googleDeviceId: "5CD3281JXQ",
   label: null,
   status: "unnamed",
   attestedAt: "2026-09-30T08:00:00.000Z",
@@ -23,12 +24,14 @@ const unnamed: KioskDevice = {
 const active: KioskDevice = {
   ...unnamed,
   id: "33333333-3333-4333-8333-000000000007",
+  googleDeviceId: "5CD2417KLM",
   label: "Poste de secours n° 7",
   status: "active",
 };
 const retired: KioskDevice = {
   ...unnamed,
   id: "33333333-3333-4333-8333-000000000003",
+  googleDeviceId: "NXHQEEZ001",
   label: "Ancien poste",
   status: "retired",
   attestation: "refused",
@@ -63,6 +66,8 @@ describe("the kiosk stations section (ADR-051 §5)", () => {
     await waitFor(() =>
       expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ label: "Poste 1" }),
     );
+    // The serial on the machine tells the admin which Chromebook the row is.
+    expect(screen.getByText("5CD3281JXQ")).toBeInTheDocument();
     // The named station is a row like any other, no field of its own.
     expect(screen.getByText("Poste de secours n° 7")).toBeInTheDocument();
     expect(screen.getByText(/waiting for a name: 1/i)).toBeInTheDocument();

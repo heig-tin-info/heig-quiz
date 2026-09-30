@@ -15,7 +15,7 @@
  * whatever Google said. The audit knows the reason; it never holds a
  * challenge, a response, a token or a cookie.
  */
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
   IdParam,
@@ -32,6 +32,7 @@ import type { AppConfig } from "../../config.js";
 import { adminGuard } from "../guards.js";
 import { csrfRefused, emptyBody, invalid, notFound, sendFailure } from "../http.js";
 import { AttestationUnavailable } from "./attestation.js";
+import { FixedWindowLimiter } from "./limiter.js";
 import {
   KIOSK_COOKIE,
   KIOSK_COOKIE_HOURS,
@@ -46,10 +47,25 @@ import {
 /** A station is no session kind: every user session is anonymous on its routes. */
 const STATION = { sessions: [] } as const;
 
+/**
+ * Attestation calls (challenge and verify together) per client address per
+ * minute. A station makes two every ten minutes (ADR-051 §6); a room of
+ * stations behind one NAT address shares the budget.
+ */
+export const ATTEST_LIMIT = 20;
+
 export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const secure = opts.config.NODE_ENV === "production";
   const requireAdmin = adminGuard(app, { hidden: true });
   const trace = tracer(app);
+  const attempts = new FixedWindowLimiter(ATTEST_LIMIT, 60_000);
+
+  /** The 429 of an address over its budget, with its `retry-after`; null otherwise. */
+  const throttled = (req: FastifyRequest, reply: FastifyReply) => {
+    const retryAfterS = attempts.hit(req.ip, app.clock.now().getTime());
+    if (retryAfterS === null) return null;
+    return reply.header("retry-after", String(retryAfterS)).code(429).send({ error: "rate_limited" });
+  };
 
   /** What a station did, audited with no actor: a station is not a person. */
   const stationAudit = (action: AuditAction, deviceId: string | null, payload?: object) =>
@@ -67,7 +83,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
   // =========================================================================
 
   app.post("/app/api/kiosk/attest/challenge", { config: STATION }, async (req, reply) => {
-    const refused = csrfRefused(req, reply);
+    const refused = throttled(req, reply) ?? csrfRefused(req, reply);
     if (refused) return refused;
     try {
       return { challenge: await app.kioskAttestor!.challenge() } satisfies KioskChallenge;
@@ -80,7 +96,7 @@ export async function kioskPlugin(app: FastifyInstance, opts: { config: AppConfi
   });
 
   app.post("/app/api/kiosk/attest/verify", { config: STATION }, async (req, reply) => {
-    const refused = csrfRefused(req, reply);
+    const refused = throttled(req, reply) ?? csrfRefused(req, reply);
     if (refused) return refused;
     const body = KioskAttestVerify.safeParse(emptyBody(req.body));
     if (!body.success) return invalid(reply, body.error);

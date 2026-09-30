@@ -41,6 +41,12 @@ export type KioskAttested = z.infer<typeof KioskAttested>;
 /** One row of `GET /app/api/admin/kiosk-devices`. */
 export const KioskDevice = z.object({
   id: z.uuid(),
+  /**
+   * Verified Access's `devicePermanentId`, the hardware serial printed on
+   * the Chromebook: how an admin tells which machine an unnamed row is. Never
+   * in a station's own payload.
+   */
+  googleDeviceId: z.string(),
   label: z.string().nullable(),
   status: z.enum(KIOSK_DEVICE_STATUSES),
   /** The last attestation Google accepted. */

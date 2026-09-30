@@ -101,6 +101,7 @@ const iso = (d: Date | null) => d?.toISOString() ?? null;
 function adminView(d: KioskDeviceRow): KioskDevice {
   return {
     id: d.id,
+    googleDeviceId: d.googleDeviceId,
     label: d.label,
     status: d.status,
     attestedAt: iso(d.attestedAt),

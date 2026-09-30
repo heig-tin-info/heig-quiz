@@ -6,6 +6,7 @@ import { KioskDevice } from "@quiz/contracts";
 
 import { auditLog, kioskDevices } from "../../db/schema.js";
 import { testServer, type Payload, type TestServer } from "../../test/http.js";
+import { ATTEST_LIMIT } from "./routes.js";
 import { KIOSK_COOKIE } from "./service.js";
 
 let server: TestServer;
@@ -25,10 +26,15 @@ function kioskCookie(res: { headers: Record<string, unknown> }) {
   return line ? { value: line.split(";")[0]!.slice(KIOSK_COOKIE.length + 1), line } : null;
 }
 
+/** Each call from its own address, so no test but the limiter's meets the limiter. */
+let host = 0;
+const nextAddress = () => `10.0.${Math.floor(++host / 250)}.${host % 250}`;
+
 const attest = (payload: Payload, credential?: string, headers: Record<string, string> = {}) =>
   server.app.inject({
     method: "POST",
     url: "/app/api/kiosk/attest/verify",
+    remoteAddress: nextAddress(),
     payload,
     headers: { ...headers, ...(credential ? { cookie: `${KIOSK_COOKIE}=${credential}` } : {}) },
   });
@@ -53,7 +59,11 @@ const audits = (action: string, subjectId?: string) =>
 
 describe("the station's attestation (ADR-051 §5)", () => {
   it("hands out a challenge", async () => {
-    const res = await server.app.inject({ method: "POST", url: "/app/api/kiosk/attest/challenge" });
+    const res = await server.app.inject({
+      method: "POST",
+      url: "/app/api/kiosk/attest/challenge",
+      remoteAddress: nextAddress(),
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json().challenge).toMatch(/^[A-Za-z0-9+/]+=*$/);
   });
@@ -168,6 +178,30 @@ describe("the station's attestation (ADR-051 §5)", () => {
     expect(res.json()).toEqual({ error: "csrf" });
   });
 
+  it("limits the attestation calls of one address, challenge and verify together", async () => {
+    const from = (url: string, remoteAddress: string) =>
+      server.app.inject({
+        method: "POST",
+        url,
+        remoteAddress,
+        ...(url.endsWith("verify") ? { payload: { response: "mock:refuse" } } : {}),
+      });
+    for (let i = 0; i < ATTEST_LIMIT / 2; i++) {
+      expect((await from("/app/api/kiosk/attest/challenge", "192.0.2.1")).statusCode).toBe(200);
+      expect((await from("/app/api/kiosk/attest/verify", "192.0.2.1")).statusCode).toBe(403);
+    }
+    server.clock.advance(15_000);
+    const limited = await from("/app/api/kiosk/attest/challenge", "192.0.2.1");
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toEqual({ error: "rate_limited" });
+    expect(limited.headers["retry-after"]).toBe("45");
+    expect((await from("/app/api/kiosk/attest/verify", "192.0.2.1")).statusCode).toBe(429);
+    // Another address has its own budget, and the window reopens.
+    expect((await from("/app/api/kiosk/attest/challenge", "192.0.2.2")).statusCode).toBe(200);
+    server.clock.advance(45_000);
+    expect((await from("/app/api/kiosk/attest/challenge", "192.0.2.1")).statusCode).toBe(200);
+  });
+
   it("answers 404 for a station without a cookie, or with a stranger's", async () => {
     expect((await server.app.inject({ method: "GET", url: "/app/api/kiosk/station" })).statusCode).toBe(404);
     expect((await station("y".repeat(43))).statusCode).toBe(404);
@@ -189,7 +223,12 @@ describe("the station registry (admin)", () => {
     const res = await list(admin.headers);
     expect(res.statusCode).toBe(200);
     const rows = z.array(KioskDevice).parse(res.json());
-    expect(rows.find((r) => r.id === id)).toMatchObject({ status: "unnamed", label: null, attestation: "ok" });
+    expect(rows.find((r) => r.id === id)).toMatchObject({
+      googleDeviceId: "station-list",
+      status: "unnamed",
+      label: null,
+      attestation: "ok",
+    });
     // The stations waiting for a name come first.
     const rank = { unnamed: 0, active: 1, retired: 2 };
     const ranks = rows.map((r) => rank[r.status]);
