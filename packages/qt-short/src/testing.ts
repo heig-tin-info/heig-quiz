@@ -25,7 +25,7 @@ export const SECRET_CONFIG: ShortConfig = ShortConfigSchema.parse({
 });
 
 /** Values that must never appear in the serialised student view. */
-export const SECRET_VALUES = [
+const SECRET_VALUES = [
   "0x1004",
   "^N[0-9]+$",
   "1970-01-01",

@@ -3,18 +3,8 @@ import type { RunnerOutcome } from "@quiz/core/server";
 
 import { CodeConfig, type CodeLanguage } from "../schema.js";
 
-/** The full fixture of the leak test, shared with the registry's contract test. */
-export {
-  C_TEMPLATE,
-  codeConfig,
-  SECRET_COMPILE_ARGS,
-  SECRET_FILE_CONTENT,
-  SECRET_HIDDEN_ARG,
-  SECRET_HIDDEN_EXPECTED,
-  SECRET_HIDDEN_NAME,
-  SECRET_HIDDEN_STDIN,
-  SECRET_REFERENCE,
-} from "../testing.js";
+/** The full fixture of the leak test (`../testing.ts`), shared with the registry's contract test. */
+export * from "../testing.js";
 
 /** A one-case config in the given language, with a marker in its own comment syntax. */
 export function templateFor(language: CodeLanguage): string {

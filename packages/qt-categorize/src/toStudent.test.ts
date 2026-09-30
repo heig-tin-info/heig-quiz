@@ -11,9 +11,9 @@
  * the teacher's (no shuffle) or a permutation (shuffle) — never the key's.
  */
 import { describe, expect, it } from "vitest";
-import { findFixtureLeaks } from "@quiz/core/testing";
+import { findStudentLeaks } from "@quiz/core/testing";
 import { categorizeServer } from "./server.js";
-import { categorizeLeakFixture, SECRET_CONFIG as SECRET } from "./testing.js";
+import { categorizeLeakFixture, SECRET_CONFIG as SECRET } from "./test/fixtures.js";
 
 const views = [
   { seed: 7, itemId: "i", shuffle: true },
@@ -33,7 +33,7 @@ describe("toStudent", () => {
     ({ shuffleCards, view }) => {
       const cfg = { ...SECRET, shuffleCards, shuffleColumns: shuffleCards };
       const student = categorizeServer.toStudent(cfg, view);
-      expect(findFixtureLeaks(student, categorizeLeakFixture)).toEqual([]);
+      expect(findStudentLeaks(student, categorizeLeakFixture)).toEqual([]);
       for (const column of student.columns) expect(Object.keys(column).sort()).toEqual(["id", "label"]);
       expect(categorizeServer.studentSchema.safeParse(student).success).toBe(true);
     },

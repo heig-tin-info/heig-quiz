@@ -9,7 +9,7 @@ describe("findStudentLeaks", () => {
 
   it("reports every leak at once: a floor key, an own key, a secret value", () => {
     const view = { prompt: "p", nested: [{ rubric: "r", unit: "0x1004 bytes" }] };
-    expect(findStudentLeaks(view, { keys: ["unit"], secrets: ["0x1004"] })).toEqual([
+    expect(findStudentLeaks(view, { forbiddenKeys: ["unit"], secrets: ["0x1004"] })).toEqual([
       'forbidden key "rubric"',
       'forbidden key "unit"',
       'secret value "0x1004"',

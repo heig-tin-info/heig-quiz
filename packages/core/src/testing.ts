@@ -30,8 +30,9 @@ export interface StudentLeakFixture<Config = unknown> {
 
 /**
  * Every leak of a student view: a forbidden key (the common floor plus
- * `keys`) or a secret value found in its JSON serialization. Empty when the
- * view is clean.
+ * `forbiddenKeys`) or a secret value found in its JSON serialization. Empty
+ * when the view is clean. A {@link StudentLeakFixture} is a valid second
+ * argument as it stands.
  *
  * Both checks read the SERIALIZED payload, which is what reaches the wire: a
  * key is searched for as `"key"`, a secret as a substring. The second check is
@@ -39,11 +40,14 @@ export interface StudentLeakFixture<Config = unknown> {
  */
 export function findStudentLeaks(
   student: unknown,
-  { keys = [], secrets = [] }: { keys?: readonly string[]; secrets?: readonly string[] },
+  {
+    forbiddenKeys = [],
+    secrets = [],
+  }: { forbiddenKeys?: readonly string[]; secrets?: readonly string[] },
 ): string[] {
   const out = JSON.stringify(student) ?? "";
   const leaks: string[] = [];
-  for (const key of new Set([...COMMON_FORBIDDEN_STUDENT_KEYS, ...keys])) {
+  for (const key of new Set([...COMMON_FORBIDDEN_STUDENT_KEYS, ...forbiddenKeys])) {
     if (out.includes(`"${key}"`)) leaks.push(`forbidden key "${key}"`);
   }
   for (const secret of secrets) {
@@ -53,7 +57,3 @@ export function findStudentLeaks(
   }
   return leaks;
 }
-
-/** {@link findStudentLeaks} for a type's own fixture. */
-export const findFixtureLeaks = (student: unknown, fixture: StudentLeakFixture): string[] =>
-  findStudentLeaks(student, { keys: fixture.forbiddenKeys, secrets: fixture.secrets });

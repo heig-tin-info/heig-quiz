@@ -7,7 +7,7 @@ import type { StudentLeakFixture } from "@quiz/core/testing";
 import { RichConfigSchema, type RichConfig } from "./schema.js";
 
 /** The values only the grader may read: none of them may reach a student. */
-export const SECRET_VALUES = [
+const SECRET_VALUES = [
   "RUBRIC-SECRET-names the guard page",
   "REFERENCE-SECRET-the stack grows down into unmapped memory",
 ] as const;

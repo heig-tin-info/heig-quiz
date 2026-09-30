@@ -186,6 +186,17 @@ back by image tag, not by reverse migration (see
 
 `pnpm test` runs all of them except the runner's integration suite.
 
+The cross-type contract of the question types is one test,
+`packages/registry/src/server.test.ts`: for every registered type it runs
+`toStudent` on the type's FULL configuration (several seeds, shuffle on and
+off) and searches the output for every forbidden key and every secret value,
+and it checks the empty draft, `configVersion` and `migrate`. Each `qt-*`
+package supplies that configuration from `src/testing.ts`, exported as the
+test-only `./testing` subpath (nothing in `apps/*` imports it), with the keys
+and values only it must never publish; the helper is `findStudentLeaks`
+from `@quiz/core/testing`. A new type does not pass without one. The
+package's own `toStudent.test.ts` keeps what is specific to the type.
+
 ### Internationalisation
 
 Everything a user reads goes through `t()` from `apps/web/src/i18n/index.tsx`,

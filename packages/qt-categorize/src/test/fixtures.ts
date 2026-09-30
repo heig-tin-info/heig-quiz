@@ -68,3 +68,6 @@ export function config(over: Partial<CategorizeConfig> = {}): CategorizeConfig {
 export const RIGHT = {
   columns: { [C.int]: [K.int, K.size], [C.float]: [K.double, K.float], [C.ptr]: [K.voidp, K.charp] },
 };
+
+/** The full fixture of the leak test (`../testing.ts`), shared with the registry's contract test. */
+export * from "../testing.js";

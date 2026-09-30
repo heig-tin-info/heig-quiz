@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { findFixtureLeaks } from "@quiz/core/testing";
+import { findStudentLeaks } from "@quiz/core/testing";
 
 import { circuitServer } from "./server.js";
 import {
@@ -17,7 +17,7 @@ import {
   SECRET_TOLERANCE,
   circuitConfig,
   circuitLeakFixture,
-} from "./testing.js";
+} from "./test/fixtures.js";
 
 const view = { seed: 7, itemId: "item-1", shuffle: true };
 
@@ -84,7 +84,7 @@ describe("circuitServer.toStudent", () => {
       fStopHz: 1e5,
       pointsPerDecade: 20,
     });
-    expect(findFixtureLeaks(sweep, circuitLeakFixture)).toEqual([]);
+    expect(findStudentLeaks(sweep, circuitLeakFixture)).toEqual([]);
   });
 
   it("is stable: the same config gives the same view whatever the seed", () => {

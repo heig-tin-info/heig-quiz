@@ -4,7 +4,7 @@
  * for every forbidden key and secret value — is the registry's contract test.
  */
 import { describe, expect, it } from "vitest";
-import { SECRET_CONFIG } from "./testing.js";
+import { SECRET_CONFIG } from "./test/fixtures.js";
 import { richServer } from "./server.js";
 
 describe("toStudent", () => {

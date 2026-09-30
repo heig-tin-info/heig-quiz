@@ -12,7 +12,7 @@ import { CLOZE_CONFIG_VERSION, ClozeConfigSchema, type ClozeConfig } from "./sch
  * fenced code block for two of them, and one more dropdown inside a markdown
  * TABLE CELL, where the `|` of the hole is the case the editor protects.
  */
-export const SECRET_TEXT = [
+const SECRET_TEXT = [
   "La loi de {{Newton|newton}} lie force, masse et accélération : **F = m·a**.",
   "",
   "```c",
@@ -44,7 +44,7 @@ export const SECRET_CONFIG: ClozeConfig = ClozeConfigSchema.parse({
  * `"correct"` proves the index list stayed behind (decision D4: what travels
  * is the canonical option id, never the key).
  */
-export const SECRET_VALUES = ["Newton", "^N$", "+=", "#10", "=NEWTON-MARKER", "=newton"];
+const SECRET_VALUES = ["Newton", "^N$", "+=", "#10", "=NEWTON-MARKER", "=newton"];
 
 export const clozeLeakFixture: StudentLeakFixture<ClozeConfig> = {
   config: SECRET_CONFIG,

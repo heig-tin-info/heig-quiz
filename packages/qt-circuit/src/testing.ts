@@ -91,12 +91,12 @@ export const RIGHT = BOX.width;
 
 /** Distinctive enough that a substring search over the student view cannot miss it. */
 export const SECRET_REFERENCE_NAME = "Rsecret";
-export const SECRET_REFERENCE_VALUE = "123.4k";
+const SECRET_REFERENCE_VALUE = "123.4k";
 export const SECRET_HIDDEN_STIMULUS = "hidden-secret-stimulus";
 export const SECRET_RUBRIC = "SECRET_RUBRIC: the filter must roll off at 20 dB per decade";
 export const SECRET_TOLERANCE = 0.0777;
 /** The Bode envelope: three knobs a student must not learn either (invariant 4). */
-export const SECRET_BODE = { magDb: 1.37, floorDb: 47.5, phaseDeg: 13.25 };
+const SECRET_BODE = { magDb: 1.37, floorDb: 47.5, phaseDeg: 13.25 };
 
 /** The teacher's own circuit: the key. */
 export function referenceSchematic(): Schematic {
@@ -186,11 +186,9 @@ export function circuitConfig(overrides: Record<string, unknown> = {}): CircuitC
  * reads the answer.
  */
 export const circuitLeakFixture: StudentLeakFixture<CircuitConfig> = {
-  // Built on read, not at import: `referenceSchematic` resets the id counter
-  // the other fixtures' components are numbered by.
-  get config() {
-    return circuitConfig();
-  },
+  // Built at import, which moves the id counter: every builder of a
+  // schematic starts with `resetIds()`, so none depends on where it stands.
+  config: circuitConfig(),
   forbiddenKeys: [
     // Out of the floor since R-06 (only `code` publishes it, on purpose); here
     // it still names nothing this type may publish.

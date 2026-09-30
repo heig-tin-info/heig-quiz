@@ -34,33 +34,8 @@ import {
   wire,
 } from "../testing.js";
 
-/**
- * The builders and the full fixture of the leak test live in the `./testing`
- * entry point, shared with the registry's contract test.
- */
-export {
-  at,
-  circuitConfig,
-  component,
-  freeEnd,
-  IDENTITY_M,
-  LEFT,
-  pinEnd,
-  portEnd,
-  RAIL,
-  RAIL_LOW,
-  referenceSchematic,
-  resetIds,
-  RIGHT,
-  ROT90,
-  SECRET_BODE,
-  SECRET_HIDDEN_STIMULUS,
-  SECRET_REFERENCE_NAME,
-  SECRET_REFERENCE_VALUE,
-  SECRET_RUBRIC,
-  SECRET_TOLERANCE,
-  wire,
-} from "../testing.js";
+/** The full fixture of the leak test (`../testing.ts`), shared with the registry's contract test. */
+export * from "../testing.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 

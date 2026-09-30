@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { findStudentLeaks } from "@quiz/core/testing";
-import { mcqLeakFixture, SECRET_CONFIG } from "./testing.js";
+import { mcqLeakFixture, SECRET_CONFIG } from "./test/fixtures.js";
 import { McqConfigSchema } from "./schema.js";
 import { mcqServer } from "./server.js";
 
@@ -58,7 +58,7 @@ describe("toStudent", () => {
     // The flag itself is `true` here, so that one secret of the fixture is
     // out of this search; `"correct"` (the common floor) still covers the key.
     const leaks = findStudentLeaks(student, {
-      keys: mcqLeakFixture.forbiddenKeys,
+      forbiddenKeys: mcqLeakFixture.forbiddenKeys,
       secrets: mcqLeakFixture.secrets.filter((secret) => secret !== "true"),
     });
     expect(leaks).toEqual([]);

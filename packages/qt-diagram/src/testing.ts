@@ -26,10 +26,10 @@ export const STARTER: Scene = {
   links: [],
 };
 
-export const RUBRIC = "RUBRIC-SECRET: inheritance from the abstract class";
+const RUBRIC = "RUBRIC-SECRET: inheritance from the abstract class";
 
 /** The values only the grader may read: none of them may reach a student. */
-export const SECRET_VALUES = [
+const SECRET_VALUES = [
   "SecretFigureRef",
   "SecretCircleRef",
   "secretOrigin",

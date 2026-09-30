@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { SECRET_CONFIG as full, STARTER } from "./testing.js";
+import { SECRET_CONFIG as full, STARTER } from "./test/fixtures.js";
 import { diagramServer } from "./server.js";
 
 describe("toStudent", () => {

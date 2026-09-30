@@ -4,8 +4,8 @@ import type { GradeContext, RunnerService } from "@quiz/core/server";
 import { DiagramConfigSchema, type DiagramConfig } from "../schema.js";
 import { SECRET_CONFIG } from "../testing.js";
 
-/** The key and the starter of the leak test, shared with the registry's contract test. */
-export { REFERENCE, STARTER } from "../testing.js";
+/** The full fixture of the leak test (`../testing.ts`), shared with the registry's contract test. */
+export * from "../testing.js";
 
 const noRunner: RunnerService = {
   run() {

@@ -30,5 +30,5 @@ export function config(over: Partial<RichConfig> = {}): RichConfig {
   });
 }
 
-/** The full fixture of the leak test, shared with the registry's contract test. */
-export { SECRET_CONFIG } from "../testing.js";
+/** The full fixture of the leak test (`../testing.ts`), shared with the registry's contract test. */
+export * from "../testing.js";

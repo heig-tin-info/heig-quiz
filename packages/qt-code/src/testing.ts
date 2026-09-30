@@ -14,7 +14,7 @@ import { CodeConfig } from "./schema.js";
 // ---------------------------------------------------------------------------
 
 /** The C template of PLAN-MVP §2.4: two locked regions, two editable ones. */
-export const C_TEMPLATE = `#include <stdio.h>
+const C_TEMPLATE = `#include <stdio.h>
 // @@lock
 int sum(const int *t, int n)
 {
@@ -40,7 +40,7 @@ export const SECRET_HIDDEN_NAME = "negative-values";
 export const SECRET_HIDDEN_ARG = "--secret-hidden-arg";
 export const SECRET_REFERENCE = "int secret_reference_solution(void) { return 42; }";
 export const SECRET_FILE_CONTENT = "id,answer\n1,0x1004\n";
-export const SECRET_COMPILE_ARGS = "-Wall -Wextra -std=c17 -DSECRET_FLAG";
+const SECRET_COMPILE_ARGS = "-Wall -Wextra -std=c17 -DSECRET_FLAG";
 
 export function codeConfig(): CodeConfig {
   return CodeConfig.parse({
@@ -109,7 +109,7 @@ export const IMG_SECRET_REFERENCE =
 export const IMG_SECRET_COMPILE_ARGS = "-std=c17 -DIMAGE_SECRET_FLAG";
 export const IMG_SECRET_FILE = "seed,0x7e57\n";
 
-export const IMG_TEMPLATE = `// @@lock
+const IMG_TEMPLATE = `// @@lock
 #include <stdio.h>
 
 int main(void) {

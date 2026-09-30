@@ -1,5 +1,5 @@
 import { ConfigMigrationError, UnknownQuestionType, type StudentView } from "@quiz/core/server";
-import { findFixtureLeaks, type StudentLeakFixture } from "@quiz/core/testing";
+import { findStudentLeaks, type StudentLeakFixture } from "@quiz/core/testing";
 import { categorizeLeakFixture } from "@quiz/qt-categorize/testing";
 import { circuitLeakFixture } from "@quiz/qt-circuit/testing";
 import { clozeLeakFixture } from "@quiz/qt-cloze/testing";
@@ -20,8 +20,10 @@ const REGISTERED = ["mcq", "short", "cloze", "code", "circuit", "codeimage", "ri
 type RegisteredId = (typeof REGISTERED)[number];
 
 /**
- * The storage version of every type. Bumping one is a decision — it needs a
- * migration from the previous one (D16) — so it shows up here.
+ * A deliberate CHANGE DETECTOR: the storage version of every type. Bumping
+ * one is a decision — it needs a migration from the previous one (D16), and
+ * every stored config of the type goes through it — so it must show up in a
+ * diff of this file, not only in the package that made it.
  */
 const CONFIG_VERSIONS: Record<RegisteredId, number> = {
   mcq: 2,
@@ -40,7 +42,8 @@ const CONFIG_VERSIONS: Record<RegisteredId, number> = {
  * point: every secret a config of the type can hold, with the keys and values
  * that must never come out of `toStudent`. The record is keyed by the
  * registered ids, so a type added to `REGISTERED` without a fixture does not
- * compile, and one added to the registry alone fails the first contract test.
+ * compile, and one added to the registry alone fails "hold every registered
+ * type".
  */
 const LEAK_FIXTURES: Record<RegisteredId, StudentLeakFixture> = {
   mcq: mcqLeakFixture,
@@ -53,6 +56,14 @@ const LEAK_FIXTURES: Record<RegisteredId, StudentLeakFixture> = {
   categorize: categorizeLeakFixture,
   diagram: diagramLeakFixture,
 };
+
+/**
+ * Keys no type's `toStudent` may emit, beyond the common floor. They stay
+ * out of COMMON_FORBIDDEN_STUDENT_KEYS because the API also STRIPS that floor
+ * from every student payload (`stripMetadata`), feedback included: growing it
+ * is a runtime change, not a test's to make.
+ */
+const CROSS_TYPE_FORBIDDEN_KEYS = ["policy", "tolerance"];
 
 /** Shuffle on and off, under the teacher preview's seed (0) and two attempts'. */
 const VIEWS: StudentView[] = [0, 7, 99].flatMap((seed) =>
@@ -84,13 +95,6 @@ describe("the static registries", () => {
   it("agree with themselves: one client entry per server entry", () => {
     expect(Object.keys(clientRegistry)).toEqual(Object.keys(serverRegistry));
   });
-
-  it("hold no type without a leak fixture", () => {
-    // Read from the registry, not from REGISTERED: a type wired up without a
-    // fixture fails here even before anyone updates the list above.
-    const fixtures: Partial<Record<string, StudentLeakFixture>> = LEAK_FIXTURES;
-    for (const id of registeredServerIds()) expect(fixtures[id], id).toBeDefined();
-  });
 });
 
 /**
@@ -100,13 +104,14 @@ describe("the static registries", () => {
 describe.each(REGISTERED)("the contract of %s", (id) => {
   const type = questionType(id);
   const fixture = LEAK_FIXTURES[id];
+  const forbiddenKeys = [...CROSS_TYPE_FORBIDDEN_KEYS, ...fixture.forbiddenKeys];
 
   it("has a leak fixture that is a valid config, and would catch it served whole", () => {
     expect(type.configSchema.safeParse(fixture.config).success).toBe(true);
     // A fixture whose secrets are not in its config proves nothing: the
     // identity `toStudent` must be reported by value (by key too, except for
     // `cloze`, whose whole key lives inside the authoring text).
-    const leaks = findFixtureLeaks(fixture.config, fixture);
+    const leaks = findStudentLeaks(fixture.config, fixture);
     expect(leaks.some((leak) => leak.startsWith("secret value"))).toBe(true);
   });
 
@@ -123,7 +128,13 @@ describe.each(REGISTERED)("the contract of %s", (id) => {
    */
   it.each(VIEWS)("leaks no key and no secret (seed $seed, shuffle $shuffle)", (view) => {
     const student = type.toStudent(fixture.config, view);
-    expect(findFixtureLeaks(student, fixture)).toEqual([]);
+    expect(findStudentLeaks(student, { forbiddenKeys, secrets: fixture.secrets })).toEqual([]);
+    expect(type.studentSchema.safeParse(student).success).toBe(true);
+  });
+
+  it("serves its empty draft to the preview: no forbidden key, a valid student view", () => {
+    const student = type.toStudent(type.emptyDraft(), { seed: 0, itemId: "item-1", shuffle: true });
+    expect(findStudentLeaks(student, { forbiddenKeys })).toEqual([]);
     expect(type.studentSchema.safeParse(student).success).toBe(true);
   });
 

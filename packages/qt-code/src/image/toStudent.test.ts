@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { IMG_SECRET_FILE, IMG_SECRET_REFERENCE, imageConfig } from "../testing.js";
+import { IMG_SECRET_FILE, IMG_SECRET_REFERENCE, imageConfig } from "./test/fixtures.js";
 import { codeimageServer } from "./server.js";
 
 const view = { seed: 7, itemId: "item-1", shuffle: true };

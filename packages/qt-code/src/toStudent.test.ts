@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { findFixtureLeaks } from "@quiz/core/testing";
+import { findStudentLeaks } from "@quiz/core/testing";
 
 import { CodeConfig } from "./schema.js";
 import { codeServer } from "./server.js";
@@ -19,7 +19,7 @@ import {
   SECRET_HIDDEN_NAME,
   SECRET_HIDDEN_STDIN,
   SECRET_REFERENCE,
-} from "./testing.js";
+} from "./test/fixtures.js";
 
 const view = { seed: 7, itemId: "item-1", shuffle: true };
 
@@ -101,7 +101,7 @@ describe("codeServer.toStudent", () => {
       numeric: { epsilon: 0.001, mode: "rel" },
     });
     expect(Object.keys(published.compare).sort()).toEqual(["ignoreCase", "numeric", "trimTrailing"]);
-    expect(findFixtureLeaks(published, codeLeakFixture)).toEqual([]);
+    expect(findStudentLeaks(published, codeLeakFixture)).toEqual([]);
   });
 
   it("passes the cooldown rule through, a UI pace and nothing of the key", () => {
