@@ -56,11 +56,10 @@ export const classroomKey = (id: string | null) => ["classroom", id] as const;
 /**
  * The teacher's reads of a classroom's drill (ADR-041 §8): under the
  * classroom, so turning its drill on or off (which invalidates the
- * classroom) refreshes them too. `part` is `activity`, `mastery`, or
- * `progress` with the enrollment id of one student.
+ * classroom) refreshes them too. `part` is `activity`, `mastery`, or one
+ * student's `progress` (their enrollment id).
  */
-export const classroomDrillKey = (id: string, part: "activity" | "mastery" | "progress", student?: string) =>
-  student === undefined ? (["classroom", id, "drill", part] as const) : (["classroom", id, "drill", part, student] as const);
+export const classroomDrillKey = (id: string, part: string) => ["classroom", id, "drill", part] as const;
 
 // --- Pools and questions -----------------------------------------------------
 

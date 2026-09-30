@@ -3158,6 +3158,7 @@ export const en = {
   "drill.stat.sessions": "Sessions",
   "drill.stat.reviews": "Reviews",
   "drill.stat.recall": "Recall rate",
+  "drill.stat.recallAll": "Recall rate, all time",
   "drill.stat.recall.hint": "over {n} repeated reviews",
   "drill.chart.reviews": "Reviews per week",
   "drill.chart.recall": "Recall rate per week",

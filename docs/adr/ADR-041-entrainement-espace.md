@@ -332,7 +332,7 @@ confirmation (past activity stays visible; the teacher sees the opt-out).
 - **Three reads, loaded through `staffAccess` on the classroom**:
   `GET /classrooms/:id/drill/activity` (one row per student seat),
   `GET /classrooms/:id/drill/progress?student=` (the weeks of one seat,
-  an enrollment id, or of the whole classroom without it) and
+  by its enrollment id: reviews and recall counts per week) and
   `GET /classrooms/:id/drill/mastery` (per tag). Each is a bounded number
   of queries whatever the class size.
 - **The recall rate** of §10 item 8 is defined once, in `@quiz/domain`
@@ -341,7 +341,7 @@ confirmation (past activity stays visible; the teacher sees the opt-out).
   same thing with a window function, and the database test holds the two
   to the same numbers. The API answers counts (`repeated`, `recalled`),
   never a ratio, so "no repeated review" is not 0 %.
-- **Windows are rolling** from the server's now: 7 and 30 days, and all.
+- **Windows are rolling** from the server's now: 30 days, and all.
   The **trend** compares the last 30 days with the 30 before, only when
   each holds at least 5 repeated reviews, and reads flat within 5 points.
 - **Sessions are Europe/Zurich days** with a review, the drill's day
@@ -355,10 +355,14 @@ confirmation (past activity stays visible; the teacher sees the opt-out).
   cards hold their state from before, and count.
 - **Only the classroom's current student seats** are listed; a card of a
   student no longer on the roster is not counted.
+- **No read filters deleted questions**: a card exists only for a question
+  an evaluation holds, which the pool refuses to delete (soft or hard), and
+  deleting the evaluation cascades to the cards and their reviews (28 (a)).
 - **The screen** is a third tab of the classroom, **Drill**, which also
   takes the classroom's drill switch from the Evaluations tab (§14): off,
   the tab is an empty state above the switch. The per-student progression
-  opens in a sheet, as two small charts over the same weeks (no second
+  opens in a sheet (its recall figure is all time, and says so, beside the
+  table's 30 days), as two small charts over the same weeks (no second
   axis): reviews as bars, the recall rate as a line with the 90 % target.
   The page header has no primary action on this tab.
 

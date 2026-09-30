@@ -15,6 +15,7 @@ import {
   Badge,
   cx,
   isoDateParts,
+  percent,
   RelativeTime,
   T,
   TableHead,
@@ -22,7 +23,6 @@ import {
   useSortableTable,
   type Column,
 } from "../ui";
-import { percent } from "./WeeklyProgress";
 
 type SortKey = "name" | "recall" | "sessions" | "questionsSeen" | "reviews30" | "lastReviewAt";
 
@@ -48,7 +48,7 @@ export function TrendMark({ trend }: { trend: DrillTrend | null }) {
 }
 
 /** "Opted out on 2026-09-12": the opt-out and its date, never a colour alone. */
-export function OptedOutBadge({ at }: { at: string }) {
+function OptedOutBadge({ at }: { at: string }) {
   const t = useT();
   return <Badge tone="zinc">{t("drill.optedOut", { date: isoDateParts(at).date })}</Badge>;
 }

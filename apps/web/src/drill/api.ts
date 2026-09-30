@@ -159,7 +159,7 @@ export function useClassroomDrillActivity(classroomId: string) {
 export function useDrillProgress(classroomId: string, student: string) {
   const query: DrillProgressQuery = { student };
   return useQuery({
-    queryKey: classroomDrillKey(classroomId, "progress", student),
+    queryKey: classroomDrillKey(classroomId, `progress:${student}`),
     queryFn: () =>
       api<DrillProgress>(`/app/api/classrooms/${classroomId}/drill/progress?${new URLSearchParams(query)}`),
   });

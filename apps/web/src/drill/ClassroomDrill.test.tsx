@@ -33,7 +33,7 @@ const row = (over: Partial<DrillStudentActivity> & { nom: string }): DrillStuden
   questionsSeen: 0,
   sessions: 0,
   lastReviewAt: null,
-  reviews: { last7: 0, last30: 0, all: 0 },
+  reviews: { last30: 0, all: 0 },
   recall: { last30: none, previous30: none, all: none },
   optedOutAt: null,
   ...over,
@@ -45,7 +45,7 @@ const ROWS: DrillStudentActivity[] = [
     questionsSeen: 40,
     sessions: 12,
     lastReviewAt: "2026-11-19T08:00:00.000Z",
-    reviews: { last7: 10, last30: 45, all: 120 },
+    reviews: { last30: 45, all: 120 },
     // 90 % now against 70 % before: rising.
     recall: { last30: { repeated: 30, recalled: 27 }, previous30: { repeated: 20, recalled: 14 }, all: { repeated: 60, recalled: 48 } },
   }),
@@ -54,7 +54,7 @@ const ROWS: DrillStudentActivity[] = [
     questionsSeen: 12,
     sessions: 4,
     lastReviewAt: "2026-10-13T08:00:00.000Z",
-    reviews: { last7: 0, last30: 6, all: 20 },
+    reviews: { last30: 6, all: 20 },
     recall: { last30: { repeated: 6, recalled: 3 }, previous30: none, all: { repeated: 10, recalled: 6 } },
     optedOutAt: "2026-10-20T12:00:00.000Z",
   }),
@@ -63,9 +63,9 @@ const ROWS: DrillStudentActivity[] = [
 
 const WEEKS: DrillProgress = {
   weeks: [
-    { weekStart: "2026-10-05", reviews: 12, sessions: 3, questions: 10, students: 1, recall: none },
-    { weekStart: "2026-10-12", reviews: 0, sessions: 0, questions: 0, students: 0, recall: none },
-    { weekStart: "2026-10-19", reviews: 20, sessions: 4, questions: 15, students: 1, recall: { repeated: 10, recalled: 8 } },
+    { weekStart: "2026-10-05", reviews: 12, recall: none },
+    { weekStart: "2026-10-12", reviews: 0, recall: none },
+    { weekStart: "2026-10-19", reviews: 20, recall: { repeated: 10, recalled: 8 } },
   ],
 };
 
@@ -151,13 +151,20 @@ describe("the classroom's Drill tab", () => {
 
     const sheet = await screen.findByRole("dialog", { name: "Ada Alder" });
     expect(within(sheet).getByText(/Opted out of the drill on 2026-10-20/)).toBeVisible();
-    expect(within(sheet).getByText("60%")).toBeVisible(); // 6 of 10 repeated reviews, all time
+    // All time, and said so: the table's figure is the last 30 days'.
+    expect(within(sheet).getByText("Recall rate, all time")).toBeVisible();
+    expect(within(sheet).getByText("60%")).toBeVisible(); // 6 of 10 repeated reviews
     expect(within(sheet).getByText("over 10 repeated reviews")).toBeVisible();
     expect(await within(sheet).findByText("Reviews per week", { selector: "figcaption" })).toBeVisible();
-    // The numbers behind the charts, as a table: a week without repeated reviews has no rate.
-    const data = within(sheet).getByRole("table");
-    const rows = within(data).getAllByRole("row").slice(1);
-    expect(rows.map((r) => r.textContent)).toEqual(["Oct 512—", "Oct 120—", "Oct 192080%"]);
+    // The numbers behind each chart, as a table: a week without repeated reviews has no rate.
+    const [reviews, recall] = within(sheet).getAllByRole("table");
+    const rowsOf = (table: HTMLElement) =>
+      within(table)
+        .getAllByRole("row")
+        .slice(1)
+        .map((r) => r.textContent);
+    expect(rowsOf(reviews!)).toEqual(["Oct 512", "Oct 120", "Oct 1920"]);
+    expect(rowsOf(recall!)).toEqual(["Oct 5—", "Oct 12—", "Oct 1980%"]);
     expect(calls.some((c) => c.url.endsWith(`/progress?student=${SEAT.Alder}`))).toBe(true);
   });
 

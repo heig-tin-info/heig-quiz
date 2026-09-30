@@ -14,11 +14,22 @@ import { Dumbbell, Tag } from "lucide-react";
 import { useState } from "react";
 
 import { useI18n, useT } from "../i18n";
-import { Card, EmptyState, isoDateParts, QueryError, SectionHeading, Sheet, Skeleton, Stat } from "../ui";
+import {
+  Card,
+  EmptyState,
+  isoDateParts,
+  percent,
+  QueryError,
+  SectionHeading,
+  SegmentedBar,
+  Sheet,
+  Skeleton,
+  Stat,
+} from "../ui";
 import { useClassroomDrillActivity, useClassroomDrillMastery, useDrillProgress } from "./api";
 import { ClassroomDrillSetting } from "./ClassroomDrillSetting";
 import { DrillActivityTable, studentName, TrendMark } from "./DrillActivityTable";
-import { percent, WeeklyProgress } from "./WeeklyProgress";
+import { WeeklyProgress } from "./WeeklyProgress";
 
 const hasActivity = (rows: DrillStudentActivity[]) => rows.some((r) => r.reviews.all > 0 || r.optedOutAt !== null);
 
@@ -86,7 +97,7 @@ export function ClassroomDrill({ room }: { room: ClassroomDetail }) {
 }
 
 /** Mastery per tag: one bar per tag, the mean retrievability of the classroom's reviewed cards. */
-export function MasteryPerTag({ classroomId }: { classroomId: string }) {
+function MasteryPerTag({ classroomId }: { classroomId: string }) {
   const t = useT();
   const { locale } = useI18n();
   const mastery = useClassroomDrillMastery(classroomId);
@@ -116,8 +127,9 @@ export function MasteryPerTag({ classroomId }: { classroomId: string }) {
               </p>
               <p className="text-xs text-fg-faint">{t("drill.mastery.counts", { cards: m.cards, students: m.students })}</p>
             </div>
-            <div className="order-last col-span-2 h-2 overflow-hidden rounded-full bg-surface-3 sm:order-none sm:col-span-1" aria-hidden>
-              <div className="h-full rounded-full bg-fg-muted" style={{ width: `${Math.round(m.retrievability * 100)}%` }} />
+            {/* A share with no verdict (`info`): the figure beside it is the reading. */}
+            <div className="order-last col-span-2 sm:order-none sm:col-span-1">
+              <SegmentedBar parts={[{ tone: "info", value: m.retrievability }]} total={1} />
             </div>
             <p className="text-right text-sm font-semibold tabular-nums">{percent(m.retrievability, locale)}</p>
           </div>
@@ -128,7 +140,7 @@ export function MasteryPerTag({ classroomId }: { classroomId: string }) {
 }
 
 /** One student's drill: the figures, the opt-out, and the weekly progression. */
-export function DrillStudentSheet({
+function DrillStudentSheet({
   classroomId,
   row,
   onClose,
@@ -153,7 +165,7 @@ export function DrillStudentSheet({
           <Stat label={t("drill.stat.sessions")} value={row.sessions} />
           <Stat label={t("drill.stat.reviews")} value={row.reviews.all} />
           <Stat
-            label={t("drill.stat.recall")}
+            label={t("drill.stat.recallAll")}
             value={
               <span className="inline-flex items-center gap-2">
                 {rate === null ? "—" : percent(rate, locale)}

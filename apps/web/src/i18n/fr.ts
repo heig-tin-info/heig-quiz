@@ -3150,6 +3150,7 @@ export const fr: Record<keyof Dict, string> = {
   "drill.stat.sessions": "Séances",
   "drill.stat.reviews": "Révisions",
   "drill.stat.recall": "Taux de rappel",
+  "drill.stat.recallAll": "Taux de rappel, depuis le début",
   "drill.stat.recall.hint": "sur {n} révisions répétées",
   "drill.chart.reviews": "Révisions par semaine",
   "drill.chart.recall": "Taux de rappel par semaine",

@@ -337,7 +337,6 @@ const CHECKED: Case[] = [
     `/app/api/classrooms/${classroomId}/drill/activity`,
     DrillStudentActivity,
   ),
-  one("/app/api/classrooms/:id/drill/progress", `/app/api/classrooms/${classroomId}/drill/progress`, DrillProgress),
   one(
     "/app/api/classrooms/:id/drill/progress",
     `/app/api/classrooms/${classroomId}/drill/progress?student=${firstSeat}`,
