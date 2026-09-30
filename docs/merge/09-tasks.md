@@ -457,6 +457,30 @@ files it ports; writes en + fr for every string.
   The API sends each fact once.
 - **Scenes**: `classroom-settings`,
   `classroom-settings-github-connect|installed|checks-warn|org-missing`, `settings-github-linked|unlinked`.
+- **As delivered** (#408): `classroomSettings` left `CLASSROOM_PAGES` (it
+  parses in every build) and renders `ClassroomView` with `settings`: the
+  Settings tab is a route, the other tabs stay `?tab=`. What the next tasks
+  inherit:
+  - `Q:apps/web/src/ClassroomSettings.tsx`: sections Classroom (Rename in a
+    one-field dialog, the drill switch — `ClassroomDrillSetting` is now a
+    bare `SettingRow`), GitHub, **the Journal slot (M4-05) — a comment
+    between GitHub and "Archive and delete"**, then Archive / Delete (both
+    `secondary`; Delete confirms `danger`). The header lost its overflow
+    menu and its rename-in-place; it keeps the name, the period (still a
+    dialog) and, when connected, an org badge.
+  - `Q:apps/web/src/github/`: `api.ts` (`useClassroomGithub`,
+    `useGithubOrgs`, `useGithubAccount`, `githubAbsent` = the 404 of a
+    platform without an App ⇒ no GitHub drawn, `githubLinkHref(returnTo)` —
+    M3-13's "Link my GitHub account" uses it), `checks.ts` (the three lines,
+    pure), `ClassroomGithub.tsx` (section + connect sheet; M3-11's "New
+    project" on an unconnected classroom opens the same sheet by
+    `?connect=1` on `/classrooms/:id/settings`), `AccountCard.tsx`,
+    `linkReturn.ts` (`useGithubLinkReturn`, mounted once in `App.tsx`).
+  - Keys `classroomGithubKey` (under `classroom`), `githubOrgsKey` (root
+    `github`, added to the `classrooms` hint's roots), `meGithubKey` (under
+    `me`). Palette: `classroom-github-connect` through `useScreenCommands`.
+  - Mock: PUT/DELETE of the link, `?ghwarn=1`, `?ghmissing=1`; a disconnect
+    of PRG1-2026 under `?journal=1` answers `409 journal_attached`.
 
 ## M3 — Projects
 
