@@ -302,20 +302,31 @@ Six `GITHUB_*` variables, absent ⇒ off. Production refusals: an App id
 without a readable PEM, a webhook secret shorter than 32 characters, a
 missing slug. `Q:redact.ts` gains `x-access-token:` and `gh?_` patterns.
 
-## 3.4 Reusing the GitHub App at the cutover
+## 3.4 Quiz's own GitHub App (D23)
 
-- **Reuse it.** Installations, installation ids, permissions and the bot
-  identity belong to the App id and key; organizations do not reinstall,
-  collaborator seats and account links stay valid.
-- One webhook URL per App: the switch is atomic; deliveries failed during
-  the switch are replayed by `reconcile.deliveries`.
-- Add the Quiz callback URL ahead of time (an App accepts up to 10). The
-  setup URL is single: it moves at the cutover.
-- **Do not rename the App**: its slug is the bot login used for bot
-  detection. Regenerate a client secret for Quiz (two can coexist). Change
-  no permission at the cutover (every org owner would have to re-approve).
+The first plan reused classroom's App at the cutover; D23 replaced it.
+
+- **Three Apps.** Classroom's (unchanged, serves classroom until the
+  cutover), Quiz's production App (webhook
+  `https://quiz.chevallier.io/webhooks/github`, setup URL and callback on
+  Quiz), and a staging App on a test organization. Each has its own id,
+  key, webhook secret, client id and secret, slug.
+- **Coexistence.** An organization may install classroom's App and Quiz's
+  side by side; each receives its own deliveries. A repository used by
+  both (a journal read by classroom and by Quiz) is harmless: both mirror
+  it, neither writes unless a teacher saves.
+- **Permissions** are those of classroom's App (§3.1), plus organization
+  `Secrets: read` for the LLM secret probe (I50) — decided at registration,
+  since changing a permission later makes every organization owner
+  re-approve.
+- **At the cutover** the organizations still used by classroom install
+  Quiz's App ("All repositories"); the import resolves their installation
+  ids. Account links survive (`github_user_id` is the person's).
+  Collaborator seats, rulesets (`hgc-protect`, `hgc-deadline-lock`) and
+  the repositories stay where they are; Quiz's App, with Administration
+  RW, manages them. Bot detection knows both bot logins (classroom's for
+  commits made before, Quiz's after).
 - **Staging never holds the production App** (ADR-028 restores production
   dumps into staging: with the production key, staging's ticker would lock,
-  commit, revert and dispatch on real student repositories). A separate
-  staging App on a test organization; the staging refresh nulls
-  `installation_id` (M2-06).
+  commit, revert and dispatch on real student repositories). The staging
+  refresh nulls `installation_id` (M2-06).

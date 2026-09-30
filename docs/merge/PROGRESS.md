@@ -6,10 +6,16 @@ separate commit on `main`. Protocol: [`README.md`](README.md).
 
 ## Now
 
-- **Phase**: M0 — decisions and paper.
-- **Next actions**: D01, D02, D04, D08, D16 settled; M0-02 done. Remaining
-  for M0: confirm D09 (workspace after the cutover), then M0-03 (ADRs) and
-  M0-04 (spec) can start; M1-06 now knows login adoption is required.
+- **Phase**: M0 — decisions and paper; **the journal track first**
+  (`01-strategy.md` §1.3, "The journal first").
+- **Next actions**: D03, D07, D14, D15, D23, D24, D25 settled 2026-09-30.
+  The journal track starts: M0-03 (ADR-035 accepted with the D23 amendment,
+  classroom ADR-015 imported under the next free number), M0-04 for
+  the journal, Courses and Settings-tab requirements, and M0-05, then M1-01…05 (M1-06
+  is not on this track) and M4-01 in parallel, then M2-01…04, M2-07, M4-02…06, M5-01/02.
+  M2-06 needs the product owner to register Quiz's two GitHub Apps before
+  the first deploy that sets `GITHUB_*`. D09 still awaits confirmation (not
+  on this track).
 - **Classroom sync point**: `ab98cc0` (classroom `origin/main`,
   2026-09-28). A classroom commit after it touching a ported file must be
   forwarded (see strategy §1.2, principle 6). Check with
@@ -46,7 +52,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M1-05 | Web routes and mock skeleton | todo | M1-03 | | | |
 | M1-06 | Import script skeleton, identity, login adoption | todo | D04, D08 | | | |
 
-## M2 — GitHub substrate (dark)
+## M2 — GitHub substrate
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -55,8 +61,8 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M2-03 | GitHub account linking | todo | M2-01 | | | |
 | M2-04 | Webhook intake, registry, deliveries | todo | M2-02 | | | |
 | M2-05 | Periodic tasks | todo | M1-02, D10 | | | |
-| M2-06 | Staging App and staging safety | todo | M2-01 | | | |
-| M2-07 | Web: GitHub card and connect sheet | todo | M2-02, M2-03, M1-04, M1-05 | | | |
+| M2-06 | Quiz's Apps (production, staging), staging safety | todo | M2-01, D23 | | | |
+| M2-07 | Web: classroom Settings tab, GitHub section, link card | todo | M2-02, M2-03, M1-04, M1-05, D24 | | | |
 
 ## M3 — Projects
 
@@ -87,15 +93,15 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M4-02 | Read side and ingestion | todo | M4-01, M2-02, M2-04 | | | |
 | M4-03 | Writes | todo | M4-02, M2-03 | | | |
 | M4-04 | Web: reader | todo | M4-02, M1-04, M1-05 | | | |
-| M4-05 | Web: teacher tab | todo | M4-03, M2-07 | | | |
-| M4-06 | Web: source editor | todo | M4-05 | | | |
+| M4-05 | Web: Journal section of Settings, teacher tab | todo | M4-03, M2-07, D24 | | | |
+| M4-06 | Web: WYSIWYG editor | todo | M4-05, D25 | | | |
 
 ## M5 — Student classroom page and gradebook
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
 | M5-01 | API: the student's classroom | todo | M1-03 | | | |
-| M5-02 | Web: student classroom page | todo | M5-01, D07 | | | |
+| M5-02 | Web: student Courses route and classroom page | todo | M5-01, D07 | | | |
 | M5-03 | Gradebook module | todo | M3-08, D06 | | | |
 | M5-04 | Web: Grades tabs | todo | M5-03 | | | |
 
@@ -147,6 +153,13 @@ In the critical path only if D09 finds online assignments in production.
 
 Newest first. One line per session that changed the state: date, who,
 what moved, what the next session must know.
+
+- 2026-09-30 — product owner, conversation: the journal goes first and
+  live before the cutover. D03 (one journal per classroom = one
+  repository), D07 (Courses route to the classroom page), D14, D15 on the
+  suggestion, D23 (Quiz's own GitHub App), D24 (classroom Settings tab),
+  D25 (WYSIWYG editor, gated by a round trip on real journals). Plan
+  amended in the same PR.
 
 - 2026-09-28 — planning session, continued: product owner settled D01
   (Project), D02 (per classroom), D04 (widening accepted, risks noted), D16;

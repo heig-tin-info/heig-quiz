@@ -101,26 +101,32 @@ that owns only its column table and reads the released results of each
 kind; a project score reaches it only after a teacher release (ADR-012,
 read literally for projects).
 
-### 4. GitHub is optional and lazy
+### 4. GitHub is optional
 
 - The GitHub features are off when `GITHUB_APP_*` is empty. Production
-  runs with them off until the cutover rehearsal; staging never holds the
-  production App (a separate staging App on a test organization, or none —
-  ADR-028 restores production dumps into staging).
-- A classroom is connected to a GitHub organization **when a teacher first
-  needs it** (first project, first journal), never at creation.
+  turns them on with Quiz's own App as soon as it is registered; staging
+  always has its own App on a test organization and never holds the
+  production one (ADR-028 restores production dumps into staging).
+- A classroom is connected to a GitHub organization **when a teacher
+  chooses to**, from the classroom's Settings, never at creation; using
+  Quiz without GitHub stays the default. A classroom has at most one
+  journal, which is one repository of that organization.
 - A student meets GitHub **only when a project asks for it**: the project
   row walks link account → create repository → accept invitation → open.
   A student with no project sees nothing of GitHub.
-- The same GitHub App is reused (installations belong to the App, not to a
-  URL): organizations do not reinstall at the cutover.
+- Quiz registers its own GitHub App (production, and a separate one for
+  staging); classroom's App keeps serving classroom until the cutover.
+  Both coexist on an organization, so GitHub features reach Quiz's
+  production before the cutover; organizations still used by classroom
+  install Quiz's App before it.
 
 ### 5. Deployable at every step, the data migration last
 
 Every phase before the cutover ships to production through the normal
-pipeline (ADR-028), behind switches that are off or empty, with additive
-migrations only. Until the cutover, a student with no project sees nothing
-new. The migration script is maintained alongside the port (it follows every
+pipeline (ADR-028), with additive migrations only. A feature that needs
+no migrated data (the GitHub substrate, the journal) goes live when it
+ships, for the classrooms whose teacher turns it on; the rest waits behind
+switches that are off or empty. The migration script is maintained alongside the port (it follows every
 schema change of the ported tables) and rehearsed on staging against a
 production dump before it runs once for real.
 
@@ -142,8 +148,8 @@ production dump before it runs once for real.
   the project notification kinds.
 - **Classroom's own ADRs** are imported: its ADR-011 (reconciliation
   handlers) into Quiz's free 011 slot; its ADR-013 (online workspace),
-  ADR-014 (group assignments), ADR-015 (journal) as ADR-036, ADR-037,
-  ADR-038, bodies verbatim, with a status line naming the former number.
+  ADR-014 (group assignments), ADR-015 (journal) under the next free
+  numbers at import time (036–046 are taken since), bodies verbatim, with a status line naming the former number.
   Classroom's 001–010 and 012 are not imported: Quiz's copies are
   authoritative.
 - **The spec**: 07 is frozen as history; 00, 01, 02, 05, 06 and 08 are

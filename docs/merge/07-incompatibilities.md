@@ -49,15 +49,16 @@ PR.
 | I42 | Forged CI grades (classroom H5) | indicative until a teacher release; the gradebook shows the source | M3-08, M5-03 |
 | I43 | Journal assets of hidden pages readable (J1) | visibility-aware asset route | M4-02 |
 | I44 | Concurrent journal ingestions (J2), `rootPath` ignored on attach (J3) | queue or advisory lock + transaction; key on root path | M4-02 |
-| I45 | One webhook URL per App: no parallel run | atomic switch at cutover, reconciliation absorbs the window | M8-07 |
+| I45 | One webhook URL per App: no parallel run | resolved by D23: Quiz has its own App, both run in parallel; organizations install Quiz's before the cutover | M2-06, M8-05 |
 | I46 | Launch tokens logged by the codespace's Caddy | mask the query string | M6-05 |
 | I47 | Engine VM: no backups, 2 sessions of capacity, runner and codespace compete | resize, cgroup slices, off-VM backups | M6-05 |
 | I48 | Seccomp profiles diverged | port the runner's tightenings to codespace, keep `ptrace` | M6-05 |
 | I49 | ADR-027 rejected self-contained signed tokens | cross-VM HS256 kept as a recorded exception (the portal enforces single use) | M0-03, M6-01 |
-| I50 | App permission `Secrets:read` used but undocumented | verify on the live App | M0-02 |
+| I50 | App permission `Secrets:read` used but undocumented | granted to Quiz's App at registration (D23); the probe reports "unknown" on an installation that has not approved it | M2-06 |
 | I51 | Rate limits: 5 000 req/h per installation; anonymous org checks share the VM's 60/h | keep `noRateLimitWait`, SWR cache, backoff, hint coalescing; Quiz's 1-s live streams never trigger a GitHub fetch | M3-08 |
 | I52 | `node:24-slim` has no git | add `git` + `ca-certificates` | M1-02 |
 | I53 | App VM memory (1 vCPU / 2 GB) grows before classroom goes away | watch it through M3–M8; net gain after cutover | M8-05 |
+| I54 | Rulesets `hgc-protect` and `hgc-deadline-lock` may name classroom's App as a bypass actor: Quiz's App (D23) could not then lock, revert nor dispatch | check on the M8-06 rehearsal; the import rewrites the bypass list to Quiz's App | M8-06 |
 | I54 | Dev in-process queue has no retries; no webhooks in dev | tests call handlers directly; Refresh / mock paths | M2-04, M4-02 |
 | I55 | The audit table is append-only in production | dry-run until clean | M8-06 |
 | I56 | Classroom keeps changing until the cutover | sync point in `PROGRESS.md`; forward fixes | every phase |

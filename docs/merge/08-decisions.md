@@ -71,7 +71,12 @@ Status values: `open`, `settled`, `superseded`.
 - **Suggested**: classroom attachment with sharing, as ported; the "Create
   a journal" sheet offers "use the journal of <previous classroom>" first.
 - Blocks: M4-01.
-- **Status**: open.
+- **Status**: settled 2026-09-30 (product owner, conversation): **one
+  journal per classroom, and a journal is a repository**. No shared mirror,
+  no "attach the journal of another classroom". A teacher may point two
+  classrooms at the same repository, provided both classrooms are linked
+  to the same organization (D02); each classroom then keeps its own mirror
+  of it. The model is one row per classroom (`04-journal.md` §4.2).
 
 ### D05 — Project grades
 - **Questions**: are CI scores official? what do students see before the
@@ -98,7 +103,12 @@ Status values: `open`, `settled`, `superseded`.
   (activities, journal, grades); it is the one visible change before the
   cutover, shipped in M5.
 - Blocks: M5-02.
-- **Status**: open.
+- **Status**: settled 2026-09-30 (product owner, conversation): (a), and
+  the student navigation says it. **Courses** lists the student's
+  classrooms; a classroom opens its page — the activities of that
+  classroom, its journal when it has one, later its projects.
+  **Activities** is the summary of the active activities across every
+  classroom (today's home). `05-web.md` §5.2.
 
 ### D09 — Online workspace in the merge's critical path?
 - **Question**: does production have assignments with `work_mode` ≠
@@ -142,13 +152,16 @@ Status values: `open`, `settled`, `superseded`.
 - **Suggested**: `bytea` as ported (a rebuildable read model, ≤ 5 MB per
   asset); revisit if the backup grows noticeably.
 - Blocks: M4-01.
-- **Status**: open.
+- **Status**: settled 2026-09-30 on the suggestion (product owner,
+  conversation): `bytea`, ≤ 5 MB per asset, a read model rebuilt from the
+  repository.
 
 ### D15 — HTML in the journal
 - **Suggested**: keep the journal's rule (raw HTML escaped to text) and
   Quiz's rule for questions (sanitised allow-list), each on its surface.
 - Blocks: M4-01.
-- **Status**: open.
+- **Status**: settled 2026-09-30 on the suggestion (product owner,
+  conversation): each surface keeps its rule.
 
 ### D17 — LLM grading
 - **Suggested**: the merge ports classroom's CI-dispatched LLM review as
@@ -192,3 +205,80 @@ Status values: `open`, `settled`, `superseded`.
   produced by M0-02.
 - Blocks: M8-06.
 - **Status**: open.
+
+## Taken with the journal-first reordering (2026-09-30)
+
+### D23 — Quiz's own GitHub App
+- **Question**: the plan reused classroom's App at the cutover, which kept
+  every GitHub feature dark in Quiz's production until then (one webhook
+  URL per App). Should the journal reach Quiz's production before the
+  cutover?
+- **Answer**: Quiz registers **its own GitHub App** for production, beside
+  a separate staging App on a test organization. Classroom's App is not
+  touched and keeps serving classroom until the cutover. A teacher
+  installs Quiz's App on an organization from the classroom's Settings;
+  both Apps coexist on an organization without interfering. GitHub
+  features go live in production as they ship, per classroom, once a
+  teacher connects one.
+- **Consequences**: supersedes "Reusing the GitHub App at the cutover"
+  (`03-github-projects.md` §3.4), ADR-035's "the same App is reused", and
+  the cutover's App URL switch (I45). At the cutover the organizations
+  still used by classroom install Quiz's App (their owners approve its
+  permissions once); installation ids change, account links do not
+  (`github_user_id` is the person's, not the App's), collaborator seats
+  and rulesets stay on the repositories. Bot detection recognises both
+  bot logins for commits made before the cutover.
+- Blocks: M2-06.
+- **Status**: settled 2026-09-30 (product owner, conversation).
+
+### D24 — The classroom's Settings tab
+- **Answer**: the teacher classroom page gains a **Settings** tab. Its
+  **GitHub** section connects the classroom to an organization (picker,
+  install, the status of the checks of §5.3 of `05-web.md`); its
+  **Journal** section, enabled once the classroom is connected, creates a
+  journal repository, chooses an existing repository of the organization,
+  or removes the journal. There is no separate "journal on" switch: the
+  classroom has a journal when it has a repository, and the Journal tab
+  exists exactly then. Using Quiz without GitHub stays the default.
+- **Consequences**: replaces the lazy "Connect to GitHub" sheet opened
+  from "New project" / "Create a journal" as the only door (the sheet is
+  the same component, the Settings section its home). Rename, archive,
+  delete and the drill switch move to this tab too (product owner,
+  2026-09-30); the header keeps the name and the period.
+- Blocks: M2-07, M4-05.
+- **Status**: settled 2026-09-30 (product owner, conversation).
+
+### D25 — The journal's editor
+- **Answer**: the journal is edited with Quiz's WYSIWYG markdown editor
+  (Tiptap, `apps/web/src/markdown/`) from its first version, with its
+  source mode beside it. Conditions, each a test of M4-06: (1) a round trip
+  (markdown ⇒ editor ⇒ markdown, no edit) over the journals of
+  classroom's production changes nothing but whitespace the task
+  documents; (2) front matter (`title`, `date`, `draft`, `visible_from`)
+  is kept out of the editor and edited as fields; (3) an image is
+  committed into the repository and inserted with a relative path, never
+  as `asset:<id>`; (4) relative links between pages and KaTeX survive; (5)
+  a page that was not edited is never written. If (1) fails on real
+  journals, the source editor ships first and the gap is reported.
+- **Consequences**: removes "the WYSIWYG journal editor" from phase L and
+  from "what stays out" (`01-strategy.md` §1.4).
+- Blocks: M4-06.
+- **Status**: settled 2026-09-30 (product owner, conversation).
+
+### D26 — Projects before the cutover?
+- **Question**: with Quiz's own App (D23), projects too could go live in
+  production before the cutover, classroom by classroom, instead of
+  waiting for the migration.
+- **Suggested**: decide when M3 starts, from how the journal's go-live
+  went.
+- Blocks: M3-14.
+- **Status**: open.
+
+### D27 — Which repositories a journal may use
+- **Answer**: any repository of the classroom's organization, as in
+  classroom. Accepted risk: any staff of a connected classroom makes Quiz's
+  App read that repository and write into it (browser edits), whatever
+  their own rights on GitHub. Every choice and every write is audited
+  (`journal.*`), and the commits are authored as the teacher.
+- Blocks: M4-03, M4-05.
+- **Status**: settled 2026-09-30 (product owner, conversation).
