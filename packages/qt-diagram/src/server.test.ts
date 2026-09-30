@@ -40,13 +40,10 @@ describe("answerMisfit", () => {
     expect(diagramServer.answerMisfit?.(config(), answer(drawn))).toBeNull();
   });
 
-  it("refuses an element of another kind", () => {
-    const state: Scene = { nodes: [{ id: "abcd1234", t: "state", x: 0, y: 0, name: "Idle" }], links: [] };
-    expect(diagramServer.answerMisfit?.(config(), answer(state))).toBe("diagram.answer_misfit");
-  });
-
-  it("refuses a link of another kind", () => {
-    const scene: Scene = { ...drawn, links: [{ id: "stud0002", type: "trans", a: "stud0001", b: "st4rt001" }] };
+  it.each<{ what: string; scene: Scene }>([
+    { what: "an element", scene: { nodes: [{ id: "abcd1234", t: "state", x: 0, y: 0, name: "Idle" }], links: [] } },
+    { what: "a link", scene: { ...drawn, links: [{ id: "stud0002", type: "trans", a: "stud0001", b: "st4rt001" }] } },
+  ])("refuses $what of another kind", ({ scene }) => {
     expect(diagramServer.answerMisfit?.(config(), answer(scene))).toBe("diagram.answer_misfit");
   });
 
@@ -126,8 +123,7 @@ describe("the rest of the contract", () => {
     expect(text).toContain("SecretCircleRef");
   });
 
-  it("migrates its own version and refuses another", () => {
-    expect(diagramServer.migrate(config(), 1)).toEqual(config());
+  it("refuses a version it never emitted", () => {
     expect(() => diagramServer.migrate(config(), 0)).toThrow();
   });
 });

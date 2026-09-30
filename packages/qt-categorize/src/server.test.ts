@@ -194,10 +194,8 @@ describe("shuffle", () => {
 });
 
 describe("the rest of the contract", () => {
-  it("migrates its own version by identity and refuses another", () => {
-    const cfg = config();
-    expect(categorizeServer.migrate(cfg, 1)).toBe(cfg);
-    expect(() => categorizeServer.migrate(cfg, 0)).toThrow();
+  it("refuses a version it never emitted", () => {
+    expect(() => categorizeServer.migrate(config(), 0)).toThrow();
   });
 
   it("searches the prompt, the column names and the cards", () => {

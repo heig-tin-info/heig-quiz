@@ -41,15 +41,12 @@ describe("CategorizeConfigSchema", () => {
     }
   });
 
-  it("refuses a key naming a card that does not exist", () => {
-    const columns = valid.columns.map((c, i) => (i === 0 ? { ...c, cards: [...c.cards, "ghost"] } : c));
-    expect(issues({ ...valid, columns })).toContain("categorize.unknown_card");
-  });
-
-  it("refuses a card in two columns", () => {
-    const shared = valid.columns[0]!.cards[0]!;
-    const columns = valid.columns.map((c, i) => (i === 1 ? { ...c, cards: [...c.cards, shared] } : c));
-    expect(issues({ ...valid, columns })).toContain("categorize.card_twice");
+  it.each([
+    { what: "a key naming a card that does not exist", column: 0, card: () => "ghost", code: "categorize.unknown_card" },
+    { what: "a card in two columns", column: 1, card: () => valid.columns[0]!.cards[0]!, code: "categorize.card_twice" },
+  ])("refuses $what", ({ column, card, code }) => {
+    const columns = valid.columns.map((c, i) => (i === column ? { ...c, cards: [...c.cards, card()] } : c));
+    expect(issues({ ...valid, columns })).toContain(code);
   });
 
   it("refuses a question made of distractors only", () => {
@@ -66,10 +63,9 @@ describe("CategorizeConfigSchema", () => {
     expect(issues({ ...valid, columns: many })).not.toEqual([]);
   });
 
-  it("leaves the empty draft invalid but shaped (D16)", () => {
+  it("shapes the empty draft with two columns (D16)", () => {
     const draft = emptyCategorizeDraft();
     expect(draft.columns).toHaveLength(2);
-    expect(CategorizeConfigSchema.safeParse(draft).success).toBe(false);
   });
 });
 

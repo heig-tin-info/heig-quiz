@@ -8,21 +8,6 @@ import { CLOZE_CONFIG_VERSION, ClozeConfigSchema, emptyClozeDraft } from "./sche
 import { clozeServer, hasSelectBlank } from "./server.js";
 
 describe("the contract", () => {
-  it("is registered under its own id and version", () => {
-    expect(clozeServer.id).toBe("cloze");
-    expect(clozeServer.configVersion).toBe(CLOZE_CONFIG_VERSION);
-  });
-
-  it("emits an EMPTY draft, stored as it stands (D16)", () => {
-    expect(clozeServer.emptyDraft().text).toBe("");
-    expect(clozeServer.configSchema.safeParse(clozeServer.emptyDraft()).success).toBe(false);
-  });
-
-  it("migrates the current version by identity (D16)", () => {
-    const cfg = emptyClozeDraft();
-    expect(clozeServer.migrate(cfg, CLOZE_CONFIG_VERSION)).toBe(cfg);
-  });
-
   /*
    * v1 → v2 is the identity plus the version stamp: the two shapes are the
    * same (schema.ts says why the number moved anyway).

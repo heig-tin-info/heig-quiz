@@ -177,16 +177,14 @@ describe("McqAnswerSchema", () => {
 });
 
 describe("emptyMcqDraft", () => {
-  it("is empty, and therefore does NOT validate (D16)", () => {
+  it("is empty: no prompt, two blank choices (D16)", () => {
     const draft = emptyMcqDraft();
     expect(draft.prompt).toBe("");
     expect(draft.choices.map((c) => c.text)).toEqual(["", ""]);
-    expect(McqConfigSchema.safeParse(draft).success).toBe(false);
   });
 
   it("still carries the shape and the defaults the editor binds to", () => {
     const draft = emptyMcqDraft();
-    expect(draft.configVersion).toBe(MCQ_CONFIG_VERSION);
     expect(draft.mode).toBe("single");
     expect(draft.policy).toBe("inherit");
     expect(correctIndices(draft)).toEqual([0]);

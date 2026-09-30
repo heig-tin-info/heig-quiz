@@ -49,18 +49,5 @@ export function multipleConfig(over: Partial<McqConfig> = {}): McqConfig {
   });
 }
 
-/** The full fixture of the leak test: every secret a config can hold. */
-export const SECRET_CONFIG: McqConfig = McqConfigSchema.parse({
-  configVersion: MCQ_CONFIG_VERSION,
-  prompt: "Let `int *p` point at `0x1000`. What is `p + 1`?",
-  choices: [
-    { text: "0x1001", correct: false },
-    { text: "0x1004", correct: true },
-    { text: "0x1008", correct: false },
-  ],
-  mode: "single",
-  // Not the default: the leak test then has a VALUE to search the student
-  // view for, and not only a key name.
-  policy: "discordance",
-  shuffleChoices: true,
-});
+/** The full fixture of the leak test, shared with the registry's contract test. */
+export { SECRET_CONFIG } from "../testing.js";

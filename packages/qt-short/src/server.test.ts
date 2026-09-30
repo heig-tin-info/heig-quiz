@@ -8,24 +8,8 @@ import { emptyShortDraft, ShortConfigSchema } from "./schema.js";
 import { expectedAnswers, migrateShortV1, shortServer } from "./server.js";
 
 describe("the contract", () => {
-  it("is registered under its own id and version", () => {
-    expect(shortServer.id).toBe("short");
-    expect(shortServer.configVersion).toBe(2);
-  });
-
-  it("emits an EMPTY draft, stored as it stands (D16)", () => {
-    expect(shortServer.emptyDraft().prompt).toBe("");
-    expect(shortServer.configSchema.safeParse(shortServer.emptyDraft()).success).toBe(false);
-  });
-
-  it("migrates a v2 config by identity, invalid draft included (D16)", () => {
-    const cfg = emptyShortDraft();
-    expect(shortServer.migrate(cfg, 2)).toBe(cfg);
-  });
-
   it("refuses a version it never emitted", () => {
     expect(() => shortServer.migrate(emptyShortDraft(), 0)).toThrow(ConfigMigrationError);
-    expect(() => shortServer.migrate(emptyShortDraft(), 3)).toThrow(ConfigMigrationError);
   });
 
   it("defaults an item to one point and is never shuffleable", () => {

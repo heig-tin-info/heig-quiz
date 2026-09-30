@@ -1,31 +1,19 @@
-/** The mandatory leak test (PLAN-MVP §2.5, docs/05 §5.7, N-SEC-04). */
+/**
+ * The type-specific half of the leak test (PLAN-MVP §2.5, docs/05 §5.7,
+ * N-SEC-04). The generic half — the full fixture of `./testing.ts` searched
+ * for every forbidden key and secret value — is the registry's contract test.
+ */
 import { describe, expect, it } from "vitest";
-import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
 
-import { config, SECRET_VALUES, STARTER } from "./test/fixtures.js";
+import { SECRET_CONFIG as full, STARTER } from "./testing.js";
 import { diagramServer } from "./server.js";
-
-/** The shared floor plus what only `diagram` holds: the reference diagram. */
-const FORBIDDEN_KEYS = [...COMMON_FORBIDDEN_STUDENT_KEYS, "reference", "rubric"];
 
 describe("toStudent", () => {
   const view = { seed: 7, itemId: "i", shuffle: true };
-  const full = config();
-
-  it("leaks no key", () => {
-    const out = JSON.stringify(diagramServer.toStudent(full, view));
-    for (const key of FORBIDDEN_KEYS) expect(out).not.toContain(`"${key}"`);
-  });
-
-  it("leaks no value of the reference nor the rubric", () => {
-    const out = JSON.stringify(diagramServer.toStudent(full, view));
-    for (const secret of SECRET_VALUES) expect(out).not.toContain(secret);
-  });
 
   it("keeps exactly the prompt, the kind and the starter", () => {
     const student = diagramServer.toStudent(full, view);
     expect(student).toEqual({ prompt: full.prompt, kind: "class", starter: STARTER });
-    expect(diagramServer.studentSchema.safeParse(student).success).toBe(true);
   });
 
   it("omits the starter when the teacher gave none", () => {

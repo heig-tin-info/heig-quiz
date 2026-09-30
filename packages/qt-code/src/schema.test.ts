@@ -178,7 +178,6 @@ describe("the draft and the migration", () => {
     // config without the field still parses to "backend" (below).
     expect(draft.runtime).toBe("runno");
     expect(draft.cooldown).toBe("fixed");
-    expect(CodeConfig.safeParse(draft).success).toBe(false);
     expect(codeServer.emptyDraft()).toEqual(draft);
   });
 
@@ -187,14 +186,8 @@ describe("the draft and the migration", () => {
     expect(codeServer.migrate(v0, 0).configVersion).toBe(codeServer.configVersion);
   });
 
-  it("refuses a config from the future and an unrepairable one", () => {
-    expect(() => codeServer.migrate(codeConfig(), 99)).toThrow(ConfigMigrationError);
+  it("refuses an older config it cannot repair", () => {
     expect(() => codeServer.migrate({ prompt: "" }, 0)).toThrow(ConfigMigrationError);
-  });
-
-  it("returns a config at the current version untouched, even an empty draft", () => {
-    const draft = codeServer.emptyDraft();
-    expect(codeServer.migrate(draft, codeServer.configVersion)).toBe(draft);
   });
 
   it("defaults the item points to the weight of the cases", () => {

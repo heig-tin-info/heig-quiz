@@ -115,8 +115,10 @@ export interface StudentView {
 /**
  * The FLOOR of the forbidden-key blacklists of invariant 4 (docs/05 §5.7).
  *
- * Every leak test — the five per-type `toStudent.test.ts` and the API's
- * `studentView.leak.test.ts` — starts from this list and adds its own extras.
+ * Every leak test — the registry's contract test over each type's full
+ * fixture (`@quiz/core/testing`, `findStudentLeaks`), the per-type
+ * `toStudent.test.ts` and the API's `studentView.leak.test.ts` — starts from
+ * this list and adds its own extras.
  * Before it existed, six hand-maintained lists disagreed with one another in
  * both directions, so a key one type thought about was missed by the next
  * (audit 2026-09-22, finding P-06).

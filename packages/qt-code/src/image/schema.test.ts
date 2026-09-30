@@ -69,18 +69,13 @@ describe("CodeImageConfig", () => {
     );
   });
 
-  it("starts a draft empty, with the version it will be stored under", () => {
+  it("starts a draft with no target, run in the browser, not publishable", () => {
     const draft = emptyCodeImageConfig();
     expect(draft.target).toBeNull();
     expect(draft.runtime).toBe("runno");
-    expect(draft.configVersion).toBe(codeimageServer.configVersion);
     expect(codeimageServer.publicationIssues!(draft)).not.toEqual([]);
-    expect(codeimageServer.migrate(draft, 1)).toBe(draft);
   });
 
-  it("refuses a config written by a newer platform", () => {
-    expect(() => codeimageServer.migrate(imageConfig(), 2)).toThrow();
-  });
 });
 
 describe("the shared program fields", () => {
