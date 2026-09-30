@@ -14,6 +14,9 @@
  *     ended. A stream computes its topics once, at connection; when access
  *     is lost, closing it is how they are recomputed — the client reconnects
  *     on its own (#248).
+ *   - an END (`publishEndSessions`): the streams opened by these SESSIONS
+ *     (the SHA-256 of their token) are ended, and none of the user's others
+ *     — a deleted session would otherwise keep its stream (ADR-051 §4, §7).
  *
  * Nothing publishes on this module directly except `modules/realtime/bus.ts`,
  * which is the seam the plan names (§10) and the place the coalescers live.
@@ -62,7 +65,8 @@ interface DataEvent {
 export type BusMessage =
   | ({ kind: "hint" } & AppEvent)
   | ({ kind: "data" } & DataEvent)
-  | { kind: "close"; topics: Topic[] };
+  | { kind: "close"; topics: Topic[] }
+  | { kind: "end"; sessions: string[] };
 
 const bus = new EventEmitter();
 bus.setMaxListeners(0); // one SSE connection per tab
@@ -84,6 +88,12 @@ export function publishData(event: ServerEvent, topics: Topic[], audience: Audie
 export function publishClose(topics: Topic[]) {
   if (topics.length === 0) return;
   bus.emit("event", { kind: "close", topics } satisfies BusMessage);
+}
+
+/** Ends the streams opened by these sessions (`sid_hash`). Go through `modules/realtime/bus.ts`. */
+export function publishEndSessions(sidHashes: string[]) {
+  if (sidHashes.length === 0) return;
+  bus.emit("event", { kind: "end", sessions: sidHashes } satisfies BusMessage);
 }
 
 export function subscribe(listener: (e: BusMessage) => void): () => void {

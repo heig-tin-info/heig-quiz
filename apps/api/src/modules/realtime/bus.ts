@@ -16,6 +16,7 @@ import type {
   AttemptState,
   CellStatus,
   ClosedBy,
+  DashboardAlertKind,
   DashboardAttemptEvent,
   DashboardCellEvent,
   DashboardPresenceEvent,
@@ -35,6 +36,7 @@ import {
   publish as publishHint,
   publishClose,
   publishData,
+  publishEndSessions,
   type Audience,
   type EventType,
 } from "../../events.js";
@@ -92,6 +94,39 @@ export function hint(type: EventType, topics: Topic[], except?: string): void {
  */
 export function accessRevoked(userIds: readonly (string | null | undefined)[]): void {
   publishClose(userIds.filter((id): id is string => !!id).map(userTopic));
+}
+
+/**
+ * These sessions were deleted (a confined session superseded, ADR-051 §4; a
+ * kiosk session ended with its attempt, §7). A stream is authorised when it
+ * connects, so theirs are closed here — and only theirs: the user's portal
+ * on the phone beside keeps its own. By `sid_hash`, never by token.
+ */
+export function sessionsEnded(sidHashes: readonly string[]): void {
+  publishEndSessions([...sidHashes]);
+}
+
+/**
+ * Something the supervisor must see on one student's row (ADR-051 §4, §6).
+ * Staff connections only, not coalesced: it is rare, and each one counts.
+ */
+export function dashboardAlert(input: {
+  evaluationId: string;
+  userId: string;
+  kind: DashboardAlertKind;
+  at: Date;
+}): void {
+  emit(
+    {
+      type: "dashboard.alert",
+      evaluationId: input.evaluationId,
+      userId: input.userId,
+      kind: input.kind,
+      at: iso(input.at),
+    },
+    [evaluationTopic(input.evaluationId)],
+    "staff",
+  );
 }
 
 /**

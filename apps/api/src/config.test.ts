@@ -41,6 +41,14 @@ describe("loadConfig", () => {
     expect(loadConfig({ NODE_ENV: "development", KIOSK_ATTESTATION: "mock" }).KIOSK_ATTESTATION).toBe("mock");
   });
 
+  it("reads SEB_CONFIG_KEY_ENFORCE as a switch, off by default (ADR-051 §3)", () => {
+    expect(loadConfig({}).SEB_CONFIG_KEY_ENFORCE).toBe(false);
+    expect(loadConfig({ SEB_CONFIG_KEY_ENFORCE: "0" }).SEB_CONFIG_KEY_ENFORCE).toBe(false);
+    expect(loadConfig({ SEB_CONFIG_KEY_ENFORCE: "yes" }).SEB_CONFIG_KEY_ENFORCE).toBe(false);
+    expect(loadConfig({ SEB_CONFIG_KEY_ENFORCE: "1" }).SEB_CONFIG_KEY_ENFORCE).toBe(true);
+    expect(loadConfig({ ...PROD, SEB_CONFIG_KEY_ENFORCE: "true" }).SEB_CONFIG_KEY_ENFORCE).toBe(true);
+  });
+
   it("refuses the stub LLM provider in production", () => {
     expect(() => loadConfig({ ...PROD, LLM_PROVIDER: "stub" })).toThrow(/LLM_PROVIDER/);
     // Off, or absent, it boots.

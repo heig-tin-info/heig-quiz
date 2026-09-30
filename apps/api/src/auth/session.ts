@@ -5,15 +5,15 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 
-import { and, eq, isNotNull, lt, lte, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lt, lte, or, sql, type SQL } from "drizzle-orm";
 
 import type { SessionKind } from "@quiz/contracts";
-import { isTrustedClient, type TrustedClient } from "@quiz/domain";
+import { TRUSTED_CLIENTS, isTrustedClient, type TrustedClient } from "@quiz/domain";
 
 import { audit } from "../audit.js";
-import type { Db } from "../db/client.js";
-import { sessions, users } from "../db/schema.js";
-import { accessRevoked } from "../modules/realtime/bus.js";
+import type { Db, Tx } from "../db/client.js";
+import { kioskDevices, sessions, users } from "../db/schema.js";
+import * as bus from "../modules/realtime/bus.js";
 
 export const SESSION_COOKIE = "quiz_session";
 export const CSRF_COOKIE = "quiz_csrf";
@@ -73,7 +73,7 @@ export async function superPowersEnded(db: Db, userId: string, reason: SuperPowe
     subjectId: userId,
     payload: { reason },
   });
-  accessRevoked([userId]);
+  bus.accessRevoked([userId]);
 }
 
 /**
@@ -113,6 +113,17 @@ export const confined = <A extends Pick<SessionAuth, "kind">>(
 ): auth is A & { kind: TrustedClient } => auth != null && isTrustedClient(auth.kind);
 
 /**
+ * What opening a session records beside its {@link SessionAuth}: the proof a
+ * confined session is later checked against on every request (ADR-051 §1,
+ * `trust.ts`). The Config Key of a `seb` launch (hex), the station of a
+ * `kiosk` one; absent on every other kind.
+ */
+export interface NewSession extends SessionAuth {
+  sebConfigKey?: string | null;
+  deviceId?: string | null;
+}
+
+/**
  * The lifetime of each kind: fixed hours, never renewed — or null for
  * SESSION_TTL_HOURS with sliding renewal. A `seb` session outlives any sitting;
  * a `kiosk` one is as long but ends with its attempt (ADR-051 §4, §7); an
@@ -145,18 +156,106 @@ export async function createSession(
   db: Db,
   userId: string,
   ttlHours: number,
-  auth: SessionAuth = PORTAL,
+  auth: NewSession = PORTAL,
 ) {
   const token = newToken();
   const csrf = newToken();
+  const now = new Date();
   const hours = FIXED_HOURS[auth.kind] ?? ttlHours;
-  const expiresAt = new Date(Date.now() + hours * 3_600_000);
+  const expiresAt = new Date(now.getTime() + hours * 3_600_000);
   // Field by field: a session is never born with Super Powers (ADR-054).
-  const { kind, actorUserId, evaluationId } = auth;
-  await db
-    .insert(sessions)
-    .values({ sidHash: hashToken(token), userId, expiresAt, kind, actorUserId, evaluationId });
+  const row = {
+    sidHash: hashToken(token),
+    userId,
+    expiresAt,
+    kind: auth.kind,
+    actorUserId: auth.actorUserId,
+    evaluationId: auth.evaluationId,
+    sebConfigKey: auth.sebConfigKey ?? null,
+    deviceId: auth.deviceId ?? null,
+  };
+  if (!confined(auth)) {
+    await db.insert(sessions).values(row);
+    return { token, csrf, expiresAt };
+  }
+  const superseded = await db.transaction(async (tx) => {
+    const gone = await supersede(tx, userId, auth);
+    await tx.insert(sessions).values(row);
+    return gone;
+  });
+  // After the commit: a stream closed earlier could reconnect on a session
+  // the rollback kept.
+  bus.sessionsEnded(superseded.map((s) => s.sidHash));
+  for (const pair of pairsOf(superseded)) {
+    bus.dashboardAlert({ ...pair, kind: "session_superseded", at: now });
+  }
   return { token, csrf, expiresAt };
+}
+
+/** A removed session, as {@link dropSessions} returns it. */
+type Dropped = Awaited<ReturnType<typeof dropSessions>>[number];
+
+/** The distinct (user, evaluation) pairs of removed confined sessions, with their kinds. */
+function pairsOf(gone: readonly Dropped[]) {
+  const pairs = new Map<string, { userId: string; evaluationId: string; kinds: SessionKind[] }>();
+  for (const s of gone) {
+    if (s.evaluationId === null) continue;
+    const key = `${s.userId} ${s.evaluationId}`;
+    const pair = pairs.get(key) ?? { userId: s.userId, evaluationId: s.evaluationId, kinds: [] };
+    pair.kinds.push(s.kind);
+    pairs.set(key, pair);
+  }
+  return [...pairs.values()];
+}
+
+/**
+ * One confined session at a time (ADR-051 §4): opening one for (user,
+ * evaluation) deletes every other confined session of that pair, and every
+ * session still holding its station, expired rows included — before the
+ * insert, in its transaction, so the partial unique index on `device_id`
+ * holds. Portal and impersonation sessions are never touched: the phone that
+ * approves a pairing is one, and so is a teacher's portal beside a SEB
+ * rehearsal. One audit entry per removed (user, evaluation), naming that
+ * pair — a station may have carried another student — with the kinds and
+ * the station's label; never a token.
+ */
+async function supersede(tx: Tx, userId: string, auth: NewSession & { kind: TrustedClient }) {
+  // Two launches of the same pair at once would each delete the other's
+  // (not yet committed) row and both insert: the second waits here for the
+  // first to commit, then sees and removes its session. Namespaced, so it
+  // never shares a key with the access-code lock of the same pair.
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${`confined-session:${userId}:${auth.evaluationId}`}, 0))`,
+  );
+  const pair = and(
+    eq(sessions.userId, userId),
+    eq(sessions.evaluationId, auth.evaluationId!),
+    inArray(sessions.kind, TRUSTED_CLIENTS),
+  )!;
+  const gone = await dropSessions(
+    tx,
+    auth.deviceId ? or(pair, eq(sessions.deviceId, auth.deviceId))! : pair,
+    "superseded",
+  );
+  const device = auth.deviceId
+    ? (await tx.select({ label: kioskDevices.label }).from(kioskDevices).where(eq(kioskDevices.id, auth.deviceId)))[0]
+    : undefined;
+  for (const removed of pairsOf(gone)) {
+    await audit(tx, {
+      actorUserId: userId,
+      actorType: "user",
+      action: "auth.session_superseded",
+      subjectType: "evaluation",
+      subjectId: removed.evaluationId,
+      payload: {
+        userId: removed.userId,
+        kinds: removed.kinds,
+        by: auth.kind,
+        ...(device && { device: device.label }),
+      },
+    });
+  }
+  return gone;
 }
 
 export async function findSessionUser(
@@ -175,6 +274,8 @@ export async function findSessionUser(
         evaluationId: sessions.evaluationId,
         superPowersUntil: sessions.superPowersUntil,
       },
+      sebConfigKey: sessions.sebConfigKey,
+      deviceId: sessions.deviceId,
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
@@ -183,7 +284,7 @@ export async function findSessionUser(
   const row = rows[0];
   if (!row) return null;
   if (row.expiresAt.getTime() <= Date.now()) {
-    await dropSessions(db, eq(sessions.sidHash, row.sidHash), "expired");
+    await endSessions(db, eq(sessions.sidHash, row.sidHash), "expired");
     return null;
   }
   // Super Powers end at their hour by the SERVER's clock (ADR-054): the
@@ -205,7 +306,7 @@ export async function findSessionUser(
       .where(eq(users.id, row.auth.actorUserId!))
       .limit(1);
     if (actor?.role !== "admin") {
-      await dropSessions(db, eq(sessions.sidHash, row.sidHash), "revoked");
+      await endSessions(db, eq(sessions.sidHash, row.sidHash), "revoked");
       return null;
     }
   }
@@ -224,7 +325,15 @@ export async function findSessionUser(
       .where(eq(sessions.sidHash, row.sidHash));
   }
   // The renewal above moves `expires_at` alone: it never touches Super Powers.
-  return { user: row.user, auth, renewedTo };
+  return {
+    user: row.user,
+    auth,
+    renewedTo,
+    /** The session's id as the server knows it: how its streams are found (`bus.sessionsEnded`). */
+    sidHash: row.sidHash,
+    sebConfigKey: row.sebConfigKey,
+    deviceId: row.deviceId,
+  };
 }
 
 /**
@@ -235,22 +344,27 @@ export async function findSessionUser(
  * or loses its actor's right is ended by the system, the admin named in the
  * payload. An ordinary session that expires leaves nothing, as before —
  * except the end of its Super Powers, when they were still on (ADR-054):
- * `logout` if the admin signed out within the hour, `expired` otherwise.
+ * `logout` if the admin signed out within the hour, `expired` otherwise. One
+ * superseded by a new confined session is audited by `supersede`.
+ *
+ * It returns the rows it removed: whoever called it ends their event streams
+ * (`bus.sessionsEnded`) once the deletion is committed ({@link endSessions}).
  */
 async function dropSessions(
-  db: Db,
+  db: Db | Tx,
   where: SQL,
-  reason: "logout" | "expired" | "revoked",
+  reason: "logout" | "expired" | "revoked" | "superseded",
   now: Date = new Date(),
-): Promise<number> {
-  const gone = await db
-    .delete(sessions)
-    .where(where)
-    .returning({
-      userId: sessions.userId,
-      actorUserId: sessions.actorUserId,
-      superPowersUntil: sessions.superPowersUntil,
-    });
+) {
+  const gone = await db.delete(sessions).where(where).returning({
+    sidHash: sessions.sidHash,
+    userId: sessions.userId,
+    actorUserId: sessions.actorUserId,
+    kind: sessions.kind,
+    evaluationId: sessions.evaluationId,
+    deviceId: sessions.deviceId,
+    superPowersUntil: sessions.superPowersUntil,
+  });
   for (const session of gone) {
     if (session.superPowersUntil !== null) {
       const live = reason === "logout" && session.superPowersUntil.getTime() > now.getTime();
@@ -270,11 +384,26 @@ async function dropSessions(
       await audit(db, { actorUserId: session.userId, actorType: "user", action: "auth.logout", ...subject });
     }
   }
+  return gone;
+}
+
+/**
+ * {@link dropSessions} outside a transaction, and the streams of what it
+ * removed closed. Returns how many went.
+ */
+async function endSessions(
+  db: Db,
+  where: SQL,
+  reason: "logout" | "expired" | "revoked",
+  now: Date = new Date(),
+): Promise<number> {
+  const gone = await dropSessions(db, where, reason, now);
+  bus.sessionsEnded(gone.map((s) => s.sidHash));
   return gone.length;
 }
 
 export async function deleteSession(db: Db, token: string, now: Date = new Date()) {
-  await dropSessions(db, eq(sessions.sidHash, hashToken(token)), "logout", now);
+  await endSessions(db, eq(sessions.sidHash, hashToken(token)), "logout", now);
 }
 
 /**
@@ -282,5 +411,5 @@ export async function deleteSession(db: Db, token: string, now: Date = new Date(
  * (`modules/system/catalog.ts`). Returns how many went.
  */
 export async function purgeExpiredSessions(db: Db, now: Date = new Date()): Promise<number> {
-  return dropSessions(db, lt(sessions.expiresAt, now), "expired", now);
+  return endSessions(db, lt(sessions.expiresAt, now), "expired", now);
 }

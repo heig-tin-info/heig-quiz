@@ -6,12 +6,11 @@ import { and, eq, getTableName, sql, type AnyColumn, type SQL } from "drizzle-or
 
 import type { ZodIssueLite } from "@quiz/contracts";
 
-import { isForeignKeyViolation, isUniqueViolation, type Db } from "../../db/client.js";
+import { isForeignKeyViolation, isUniqueViolation, type Db, type Tx } from "../../db/client.js";
 import { DomainError } from "../http.js";
 import { categories, pools, questionVersions, questions } from "../../db/schema.js";
 
-/** The handle inside `db.transaction(...)`: the same builders, one connection. */
-export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+export type { Tx };
 
 export type PoolRow = typeof pools.$inferSelect;
 export type QuestionRecord = typeof questions.$inferSelect;

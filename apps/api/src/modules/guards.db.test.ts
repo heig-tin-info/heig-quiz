@@ -4,8 +4,13 @@
  * against every combination of an exam's two switches, through the entry of
  * a sitting route. Nothing opens a `kiosk` session yet (ADR-051 §10, step 6),
  * so the test opens one directly, the way the pairing will.
+ *
+ * What is under test is `sitRefusal`, not the trust of a confined session
+ * (`auth/trust.ts`, tested in `auth/`): the kiosk's rule is a stub that
+ * refuses every request until steps 4 and 7 write it, so it is set aside
+ * here and every session is trusted.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { eq } from "drizzle-orm";
 import type { SessionKind } from "@quiz/contracts";
@@ -16,6 +21,8 @@ import { evaluations } from "../db/schema.js";
 import { fakeShort } from "../test/fakeType.js";
 import { testServer, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
+
+vi.mock("../auth/trust.js", () => ({ trustRefused: async () => false }));
 
 let server: TestServer;
 let restore: () => void;

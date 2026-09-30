@@ -5,7 +5,7 @@
 import type { EvaluationState, TemplateItemRef } from "@quiz/contracts";
 import { EVALUATION_STATES, itemListLock, type EvaluationStateName, type PastTiming } from "@quiz/domain";
 
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import { evaluationItems, evaluations } from "../../db/schema.js";
 import { DomainError } from "../http.js";
 
@@ -23,7 +23,7 @@ export type ItemRecord = typeof evaluationItems.$inferSelect;
  * A handle or an open transaction: the state change below is also the second
  * half of a withdrawal that must not land alone (`unreleaseResults`).
  */
-export type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
+export type DbOrTx = Db | Tx;
 // --- Failures -------------------------------------------------------------
 
 /** Base of everything this module refuses (`DomainError`, sent by `sendFailure`). */

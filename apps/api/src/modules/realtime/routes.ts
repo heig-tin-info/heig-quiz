@@ -72,6 +72,8 @@ type Watch =
 
 interface Stream {
   userId: string;
+  /** The session that opened it (`sid_hash`), ended by `bus.sessionsEnded`; null for a bearer token. */
+  sid: string | null;
   staff: boolean;
   /**
    * This connection is a BODY IN THE ROOM, and presence counts it (F-LIVE-02,
@@ -165,7 +167,7 @@ class TopicIndex {
   }
 
   /** Delivers one bus message: one serialisation, one write per admitted stream. */
-  dispatch(message: BusMessage): void {
+  dispatch(message: Exclude<BusMessage, { kind: "end" }>): void {
     // Every stream holding at least one of the message's topics, each once.
     const reached = new Set<Stream>();
     for (const topic of message.topics) {
@@ -366,7 +368,12 @@ export async function realtimePlugin(app: FastifyInstance) {
   // ONE bus listener for the whole plugin, routing by topic, rather than one
   // per stream that each tests every message.
   const index = new TopicIndex();
-  const unsubscribe = subscribe((message) => index.dispatch(message));
+  const unsubscribe = subscribe((message) => {
+    if (message.kind !== "end") return index.dispatch(message);
+    // Rare (a superseded or ended confined session): a scan of the open streams.
+    const ended = new Set(message.sessions);
+    for (const stream of [...open]) if (stream.sid !== null && ended.has(stream.sid)) stream.close();
+  });
 
   // One sweep for the whole process: a stream whose writes stopped reaching
   // the socket is dropped, so a dead browser cannot hold a slot for ever.
@@ -442,6 +449,7 @@ export async function realtimePlugin(app: FastifyInstance) {
     let closed = false;
     const stream: Stream = {
       userId: me.id,
+      sid: req.sid,
       staff,
       participant,
       topics,
