@@ -14,6 +14,8 @@ import { cx, rovingIndex } from "../ui";
  * to recognise the type before reading its name; every tile of a row has the
  * height of the tallest (`auto-rows-fr`), so a long hint never makes one card
  * stick out. The arrows move the focus from tile to tile, row by row.
+ * From `sm` up the grid has three or four columns, whichever leaves the
+ * fewest empty cells on the last row (`columnsFor`).
  *
  * It was the inside of `NewQuestionModal`; the poll launcher needs the same
  * grid over a SUBSET of the types (a poll runs `mcq` and `short` only), and
@@ -46,7 +48,7 @@ export function QuestionTypePicker({
   return (
     <div
       onKeyDown={onKeyDown}
-      className={cx("grid auto-rows-fr grid-cols-2 gap-2", types.length > 3 && "sm:grid-cols-4", className)}
+      className={cx("grid auto-rows-fr grid-cols-2 gap-2", WIDE_COLUMNS[columnsFor(types.length)], className)}
     >
       {types.map((id) => {
         const active = value === id;
@@ -69,6 +71,20 @@ export function QuestionTypePicker({
       })}
     </div>
   );
+}
+
+/** Spelled out whole, so Tailwind sees each class. */
+const WIDE_COLUMNS = { 2: "", 3: "sm:grid-cols-3", 4: "sm:grid-cols-4" } as const;
+
+/**
+ * The columns from `sm` up: two for a pair, otherwise three or four,
+ * whichever leaves the fewest empty cells on the last row — four on a tie
+ * (9 → 3, 8 → 4, 7 → 4, 12 → 4).
+ */
+export function columnsFor(count: number): 2 | 3 | 4 {
+  if (count <= 2) return 2;
+  const empty = (c: number) => (c - (count % c)) % c;
+  return empty(3) < empty(4) ? 3 : 4;
 }
 
 /**
