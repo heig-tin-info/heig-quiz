@@ -281,7 +281,7 @@ files it ports; writes en + fr for every string.
     (`DELETE` idempotent, 204). Link, callback and unlink take the user's
     own portal session only: a delegated session gets `403
     session_required` (as Super Powers do), a `seb`/`kiosk` one is nobody
-    there (401, default deny), a Bearer token 403.
+    there (401, default deny), a Bearer token 403 on the unlink.
   - `return`: `linkReturn` = `safeReturnTo`, and `/`, `/app/…` or anything
     refused ⇒ `/settings`. The callback appends `?github=` keeping the
     path's query and fragment; a bad, forged, foreign or expired state
