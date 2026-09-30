@@ -85,7 +85,7 @@ export function SegmentedBar({
   );
 }
 
-const BAR_FILL = { neutral: "bg-fg-muted", danger: "bg-danger", warning: "bg-warning" } as const;
+const BAR_FILL = { danger: "bg-danger", warning: "bg-warning" } as const;
 
 export interface BarDatum {
   key: string;
@@ -97,7 +97,7 @@ export interface BarDatum {
   /** The bar's own tooltip, on hover. */
   title?: string;
   /** A semantic fill instead of the neutral ink (a failing grade range). */
-  tone?: "danger" | "warning";
+  tone?: "danger" | "warning" | undefined;
 }
 
 /**
@@ -139,7 +139,7 @@ export function Bars({
               <span className="text-center text-[11px] tabular-nums text-fg-faint">{b.value || ""}</span>
             ) : null}
             <span
-              className={cx("w-full rounded-t-[4px]", b.value === 0 ? "bg-surface-3" : BAR_FILL[b.tone ?? "neutral"])}
+              className={cx("w-full rounded-t-[4px]", b.value === 0 ? "bg-surface-3" : b.tone ? BAR_FILL[b.tone] : "bg-fg-muted")}
               style={{ height: `${Math.max(b.value === 0 ? 2 : 6, (b.value / top) * 100)}%` }}
             />
           </div>

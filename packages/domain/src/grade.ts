@@ -28,10 +28,6 @@ export function gradeFromPoints(points: number, total: number, scale: Scale): nu
   return Math.min(MAX_GRADE, Math.max(MIN_GRADE, roundToTenth(raw, scale.rounding ?? "nearest")));
 }
 
-/** True when the grade is a pass (4.0 in the Swiss system). */
-export function isPassing(grade: number): boolean {
-  return grade >= 4;
-}
 
 /**
  * A grade in tenths, as it is WRITTEN (`formatGrade`): a class mean of 3.96
@@ -39,6 +35,11 @@ export function isPassing(grade: number): boolean {
  * Integers, so that a bound like 4.3 is never missed by a float hair.
  */
 const tenths = (grade: number) => Math.round(grade * 10);
+
+/** True when the grade, as written, is a pass (4.0 in the Swiss system). */
+export function isPassing(grade: number): boolean {
+  return tenths(grade) >= 40;
+}
 
 /**
  * How a grade reads at a glance: below the pass mark, just above it, or
@@ -48,9 +49,8 @@ const tenths = (grade: number) => Math.round(grade * 10);
 export type GradeBand = "fail" | "borderline" | "pass";
 
 export function gradeBand(grade: number): GradeBand {
-  const g = tenths(grade);
-  if (g < 40) return "fail";
-  return g < 45 ? "borderline" : "pass";
+  if (!isPassing(grade)) return "fail";
+  return tenths(grade) < 45 ? "borderline" : "pass";
 }
 
 /**

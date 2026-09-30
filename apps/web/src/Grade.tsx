@@ -3,12 +3,14 @@ import { formatGrade, gradeBand, gradeLetter, type GradeBand } from "@quiz/domai
 import { useT } from "./i18n";
 import { cx, Tip } from "./ui";
 
-/** Red below the pass mark, orange just above it, the ink around it otherwise. */
-export const GRADE_BAND_TEXT: Record<GradeBand, string> = {
-  fail: "text-danger",
-  borderline: "text-warning",
-  pass: "",
+/** Red below the pass mark, orange just above it, the ink otherwise. */
+export const GRADE_BAND_TONE: Record<GradeBand, "danger" | "warning" | undefined> = {
+  fail: "danger",
+  borderline: "warning",
+  pass: undefined,
 };
+
+const TONE_TEXT = { danger: "text-danger", warning: "text-warning" } as const;
 
 /**
  * A Swiss grade as every screen writes it: one decimal, coloured by its band
@@ -20,9 +22,10 @@ export const GRADE_BAND_TEXT: Record<GradeBand, string> = {
 export function Grade({ value }: { value: number }) {
   const t = useT();
   const label = t(`grade.letter.${gradeLetter(value)}`);
+  const tone = GRADE_BAND_TONE[gradeBand(value)];
   return (
     <Tip label={label}>
-      <span className={GRADE_BAND_TEXT[gradeBand(value)]}>
+      <span className={tone ? TONE_TEXT[tone] : undefined}>
         {formatGrade(value)}
         <span className="sr-only"> ({label})</span>
       </span>

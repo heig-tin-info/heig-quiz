@@ -50,6 +50,8 @@ describe("isPassing", () => {
   it("passes at 4.0", () => {
     expect(isPassing(3.9)).toBe(false);
     expect(isPassing(4)).toBe(true);
+    // As written: a class mean of 3.96 prints "4.0", and is a pass.
+    expect(isPassing(3.96)).toBe(true);
   });
 });
 

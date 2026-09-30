@@ -1,6 +1,7 @@
 import { formatGrade, gradeBand, MAX_GRADE } from "@quiz/domain";
 import type { ResultsStats } from "@quiz/contracts";
 
+import { GRADE_BAND_TONE } from "../Grade";
 import { useT } from "../i18n";
 import { Bars } from "../ui";
 
@@ -9,12 +10,6 @@ export function bucketLabel(bucket: number, step: number): string {
   if (bucket >= MAX_GRADE) return formatGrade(bucket);
   return `${formatGrade(bucket)}–${formatGrade(bucket + step)}`;
 }
-
-const BUCKET_TONE = {
-  fail: { tone: "danger" },
-  borderline: { tone: "warning" },
-  pass: {},
-} as const;
 
 /**
  * The grade distribution, 1.0 to 6.0 in half-grade buckets (F-RES-01),
@@ -42,7 +37,7 @@ export function Histogram({
         tick: Number.isInteger(b.bucket) ? b.bucket.toFixed(0) : "",
         // The buckets are half grades, so 4.0 and 4.5 fall on their edges:
         // a bucket's band is its lower bound's (the letters would not be).
-        ...BUCKET_TONE[gradeBand(b.bucket)],
+        tone: GRADE_BAND_TONE[gradeBand(b.bucket)],
       }))}
     />
   );

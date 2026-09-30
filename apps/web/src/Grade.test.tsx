@@ -17,9 +17,11 @@ describe("Grade", () => {
   ])("writes %s with its band and label", (value, tone, text) => {
     const { container } = renderWithProviders(<Grade value={value} />);
     expect(container).toHaveTextContent(text);
-    const span = screen.getByText(String(value));
-    if (tone) expect(span).toHaveClass(tone);
-    else expect(span.className).toBe("");
+    const grade = screen.getByText(String(value));
+    for (const cls of ["text-danger", "text-warning"]) {
+      if (cls === tone) expect(grade).toHaveClass(cls);
+      else expect(grade).not.toHaveClass(cls);
+    }
   });
 
   it("speaks French in French", () => {
