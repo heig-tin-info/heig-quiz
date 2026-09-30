@@ -9,7 +9,7 @@ import type {
 } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "./api";
-import { useT, type Dict } from "./i18n";
+import { formatMs, useT, type Dict } from "./i18n";
 import { useToast } from "./notify";
 import { adminTasksKey } from "./queryKeys";
 import {
@@ -190,7 +190,7 @@ export function TasksSection() {
                         {r.lastRunAt ? (
                           <span className="whitespace-nowrap text-xs text-fg-muted">
                             <RelativeTime iso={r.lastRunAt} />
-                            {r.lastDurationMs !== null ? ` · ${duration(t, r.lastDurationMs)}` : null}
+                            {r.lastDurationMs !== null ? ` · ${formatMs(r.lastDurationMs, t)}` : null}
                           </span>
                         ) : null}
                       </div>
@@ -255,7 +255,3 @@ function period(t: Translate, minutes: number): string {
   return t("admin.tasks.every.minutes", { n: minutes });
 }
 
-/** 12 → "12 ms", 30004 → "30 s". */
-function duration(t: Translate, ms: number): string {
-  return ms < 1000 ? t("admin.tasks.ms", { n: ms }) : t("dur.s", { n: Math.round(ms / 1000) });
-}

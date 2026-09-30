@@ -30,6 +30,10 @@ import { SYSTEM_TASK_QUEUE } from "../../jobs.js";
 import type { ScheduledTask } from "../../ticker.js";
 import { SCHEDULED_TASKS } from "./catalog.js";
 
+// The health checks (N-OPS-03, ADR-055) live beside, in `health.ts`; this
+// file stays the module's entry.
+export { coarseHealth, runChecks, systemStatus, HEALTH_CHECKS } from "./health.js";
+
 /**
  * A run still `running` this long after its claim is taken for dead (a
  * process that crashed mid-run, an in-process job lost with its process):

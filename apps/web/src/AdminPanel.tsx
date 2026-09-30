@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Library, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
+import { Activity, CalendarClock, Library, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
 import type { AdminTeacher, TeacherGrantCreate } from "@quiz/contracts";
@@ -29,6 +29,7 @@ import {
   useSortableTable,
   type Column,
 } from "./ui";
+import { SystemSection } from "./AdminSystem";
 import { TasksSection } from "./AdminTasks";
 import { KioskSection } from "./AdminKiosk";
 import { UsersSection } from "./AdminUsers";
@@ -40,14 +41,17 @@ type SortKey = "email" | "name" | "lastLoginAt" | "courses" | "grantedAt";
 /** Given and family name; both empty until the grantee first signs in. */
 const nameOf = (r: AdminTeacher): [string, string] => [r.givenName ?? "", r.familyName ?? ""];
 
-type Tab = "people" | "tasks";
-const TABS: readonly Tab[] = ["people", "tasks"];
+type Tab = "people" | "system" | "tasks";
+const TABS: readonly Tab[] = ["people", "system", "tasks"];
 
 /**
  * Administration, one tab per concern, the open one in `?tab=`: the people
  * (the teacher grants, the kiosk stations where the platform has them —
- * `KioskSection`, ADR-051 — then every account) and the scheduled tasks
- * (F-ADMIN-06). A tab is one entry of `TABS` and one panel below.
+ * `KioskSection`, ADR-051 — then every account), the system status
+ * (F-ADMIN-07, next to the tasks it points to) and the scheduled tasks
+ * (F-ADMIN-06). The people stay first and the default: the page's one
+ * primary action, "Grant", is there. A tab is one entry of `TABS` and one
+ * panel below.
  */
 export function AdminPage() {
   const t = useT();
@@ -62,6 +66,7 @@ export function AdminPage() {
         idPrefix="admin"
         items={[
           { value: "people", label: t("admin.tab.people"), icon: Users },
+          { value: "system", label: t("admin.tab.system"), icon: Activity },
           { value: "tasks", label: t("admin.tab.tasks"), icon: CalendarClock },
         ]}
       />
@@ -72,6 +77,8 @@ export function AdminPage() {
             <KioskSection />
             <UsersSection />
           </>
+        ) : tab === "system" ? (
+          <SystemSection onOpenTasks={() => setTab("tasks")} />
         ) : (
           <TasksSection />
         )}

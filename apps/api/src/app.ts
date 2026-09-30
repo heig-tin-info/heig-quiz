@@ -41,13 +41,13 @@ import { notificationsPlugin } from "./modules/notifications/routes.js";
 import { orgPlugin } from "./modules/org/routes.js";
 import { pollPlugin } from "./modules/poll/routes.js";
 import { poolPlugin } from "./modules/pool/routes.js";
-import { flushCoalescers } from "./modules/realtime/bus.js";
+import { flushCoalescers, openStreamCount } from "./modules/realtime/bus.js";
 import { realtimePlugin } from "./modules/realtime/routes.js";
 import { resultsPlugin } from "./modules/results/routes.js";
-import { createRunner, runnerCheck } from "./modules/runner/index.js";
+import { createRunner } from "./modules/runner/index.js";
 import { statsPlugin } from "./modules/stats/routes.js";
 import { registerSystemJobs } from "./modules/system/jobs.js";
-import { seedScheduledTasks } from "./modules/system/service.js";
+import { coarseHealth, seedScheduledTasks } from "./modules/system/service.js";
 import { startJobs, type JobQueue } from "./jobs.js";
 import { startTicker } from "./ticker.js";
 
@@ -257,6 +257,16 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     registers: [registry],
   });
 
+  // N-OPS-02: the active real-time connections, read at scrape time.
+  new Gauge({
+    name: "quiz_sse_connections",
+    help: "Server-sent event streams open in this process",
+    registers: [registry],
+    collect() {
+      this.set(openStreamCount());
+    },
+  });
+
   async function checkDatabase(): Promise<boolean> {
     try {
       await handle.db.execute(sql`SELECT 1`);
@@ -273,13 +283,17 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     // The runner never decides the overall status: `stub` is the default
     // configuration and an unreachable runner only degrades code grading to a
     // manual one (decision D14). A container must not be restarted for that.
-    const runner = await runnerCheck(config, app.runner);
+    // Coarse words only, from the checks that touch no table (ADR-055): the
+    // route is public, and the details are the administrators' page. None
+    // of them changes the HTTP status, which the deploy gate reads.
+    const coarse = await coarseHealth(app, config);
     const body: HealthResponse = {
       status: databaseOk ? "ok" : "degraded",
+      attention: coarse.attention,
       checks: {
         database: databaseOk ? "up" : "down",
         jobs: app.boss ? "up" : "down",
-        runner,
+        ...coarse.checks,
       },
       uptimeSeconds: Math.round(process.uptime()),
     };

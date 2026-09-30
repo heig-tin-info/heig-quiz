@@ -79,6 +79,16 @@ const EnvSchema = z.object({
    * plain `rsync`. Relative to the working directory unless absolute.
    */
   ASSETS_DIR: z.string().default(".data/assets"),
+  /**
+   * The report the `backup` service writes after each dump (ADR-055): a
+   * small JSON file in a directory of its own, mounted read-only here — the
+   * dumps themselves never are. Empty (development, staging): the system
+   * status says "not configured".
+   */
+  BACKUP_STATUS_FILE: z.string().default(""),
+  /** The deployed commit, baked into the image by CI (Dockerfile); empty elsewhere. */
+  COMMIT_SHA: z.string().default(""),
+  COMMIT_DATE: z.string().default(""),
   /** Hard cap on one uploaded image, in bytes (PLAN-MVP §4.2: 5 MB). */
   ASSETS_MAX_BYTES: z.coerce.number().int().min(1024).max(50_000_000).default(5_000_000),
 

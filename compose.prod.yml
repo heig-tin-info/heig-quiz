@@ -26,6 +26,10 @@ services:
       # The bind mount below; the default (`.data/assets`, relative to /app)
       # would live inside the container and vanish with it.
       ASSETS_DIR: /app/assets
+      # The backup service's report of its last dump (ADR-055), read by the
+      # system status and /healthz. Only the report: the dumps themselves
+      # are never mounted into this internet-facing container (N-DATA-03).
+      BACKUP_STATUS_FILE: /app/backup-status/last.json
     ports:
       - "127.0.0.1:3002:3000" # native Caddy -> reverse_proxy localhost:3002
     volumes:
@@ -33,6 +37,8 @@ services:
       # Uploaded question images, content-addressed: a backup is an rsync.
       # Owned by uid 1000 on the host (`node` in the image).
       - ./assets:/app/assets
+      # Written by `backup` (container root), read-only here (deploy.md §6).
+      - ./backup-status:/app/backup-status:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,6 +90,10 @@ services:
 
   # Daily pg_dump to ./backups; 30-day retention. The OFF-VM copy (rclone to
   # object storage) still needs wiring -- see deploy.md, Backups.
+  # After each dump, a one-line report in ./backup-status/last.json (when it
+  # finished, whether it worked, the file and its size), written through a
+  # temporary file so the app never reads half of it (ADR-055). `$$` is a
+  # literal `$` for the shell: compose would interpolate a single one.
   backup:
     image: postgres:17
     restart: always
@@ -91,6 +101,7 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:?}
     volumes:
       - ./backups:/backups
+      - ./backup-status:/backup-status
     depends_on:
       postgres:
         condition: service_healthy
@@ -99,8 +110,16 @@ services:
       - -c
       - |
         while true; do
-          pg_dump -Fc -h postgres -U quiz quiz > "/backups/quiz-$(date +%F).dump.tmp" \
-            && mv "/backups/quiz-$(date +%F).dump.tmp" "/backups/quiz-$(date +%F).dump"
+          file="quiz-$$(date +%F).dump"
+          if pg_dump -Fc -h postgres -U quiz quiz > "/backups/$$file.tmp" \
+            && mv "/backups/$$file.tmp" "/backups/$$file"; then
+            code=0; ok=true; size=$$(stat -c %s "/backups/$$file")
+          else
+            code=$$?; ok=false; size=0; rm -f "/backups/$$file.tmp"
+          fi
+          printf '{"finished_at":"%s","ok":%s,"exit_code":%d,"file":"%s","size_bytes":%d}\n' \
+            "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$ok" "$$code" "$$file" "$$size" \
+            > /backup-status/last.json.tmp && mv /backup-status/last.json.tmp /backup-status/last.json
           ls -1t /backups/quiz-*.dump 2>/dev/null | tail -n +31 | xargs -r rm --
           sleep 86400
         done

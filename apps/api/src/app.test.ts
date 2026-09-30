@@ -4,6 +4,8 @@ import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { HealthResponse } from "@quiz/contracts";
+
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { CSP, TEAMS_TAB_CSP } from "./csp.js";
@@ -59,6 +61,17 @@ describe("app (without a database)", () => {
       // failure, so a machine without a container engine stays healthy.
       checks: { database: "down", runner: "disabled" },
     });
+  });
+
+  it("healthz carries coarse words only, and only the database decides its status (ADR-055)", async () => {
+    const res = await app.inject({ method: "GET", url: "/healthz" });
+    const body = HealthResponse.parse(res.json());
+    // No ticker in `WORKER_MODE=web`, no backup report configured: neither
+    // is a failure, and neither raises the external probe's alarm.
+    expect(body.checks).toMatchObject({ ticker: "none", backup: "unknown" });
+    expect(body.attention).toBe(false);
+    expect(Object.keys(body).sort()).toEqual(["attention", "checks", "status", "uptimeSeconds"]);
+    expect(res.body).not.toContain(config.ASSETS_DIR);
   });
 
   it("a failing route answers a generic 500 and logs the cause", async () => {

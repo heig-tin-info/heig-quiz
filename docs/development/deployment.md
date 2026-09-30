@@ -64,7 +64,7 @@ application VM's address only.
 | Caddy | native package on the host, ports 80 and 443, shared with the neighbours | `Caddyfile`, copied to `/etc/caddy/conf.d/quiz.caddy` |
 | `app` | container, published on `127.0.0.1:3002` only | `Dockerfile`, image `ghcr.io/heig-tin-info/quiz` |
 | `postgres` | container, PostgreSQL 17, volume `pgdata` | `compose.prod.yml` |
-| `backup` | container running a daily `pg_dump -Fc` into `./backups/` | `compose.prod.yml` |
+| `backup` | container running a daily `pg_dump -Fc` into `./backups/`, and its report into `./backup-status/last.json` | `compose.prod.yml` |
 
 `compose.prod.yml` starts these three containers and only those. The runner
 is not in the file. Keycloak is a development identity provider and is not
@@ -109,11 +109,13 @@ its own rootless Docker (§8). `srv`'s directories that hold production data
 
 ```bash
 cd /srv && git clone https://github.com/heig-tin-info/heig-quiz.git quiz && cd quiz
-mkdir -p secrets backups assets
+mkdir -p secrets backups assets backup-status
 # edu-ID: the client shares the classroom's public JWK, so the same key and kid.
 # The classroom's copy belongs to its container's `node`: read it through a container.
 docker run --rm -v /srv/heig-classroom/secrets:/s:ro alpine cat /s/eduid-private-key.pem > secrets/eduid-private-key.pem
 docker run --rm -v "$PWD":/w alpine sh -c 'chown -R 1000:1000 /w/secrets /w/backups /w/assets && chmod 600 /w/secrets/*.pem'
+# backup-status stays srv's (container root, which is who writes it), mode 755:
+# `app` reads the report read-only as `node`. Never chown it to 1000.
 cp .env.prod.example .env.prod && chmod 600 .env.prod
 nano .env.prod    # POSTGRES_PASSWORD, COOKIE_SECRET: openssl rand -base64 32
                   # OIDC_CLIENT_ID: from the SWITCH Resource Registry
@@ -514,6 +516,30 @@ restore it anyway. A rollback holds until the next approved promotion.
 - **A daily `pg_dump -Fc`** from the compose `backup` service into
   `/srv/quiz/backups/quiz-<date>.dump` (30-day retention): a logical dump,
   restorable table by table. It lives on the VM it protects.
+- **The backup report** ([ADR-055](../adr/ADR-055-etat-du-systeme.md)).
+  After each dump the `backup` service writes one line of JSON into
+  `/srv/quiz/backup-status/last.json`: `finished_at`, `ok`, `exit_code`,
+  `file` and `size_bytes`. That directory, and only that one, is mounted
+  read-only into `app` (`BACKUP_STATUS_FILE=/app/backup-status/last.json`).
+  The admin's System status and `/healthz` read it. The dumps themselves are
+  never mounted into `app`: the internet-facing process must not hold data
+  deleted up to 30 days ago (N-DATA-03). The directory belongs to `srv`
+  (container root, the writer), mode 755, **not** to uid 1000. Compose
+  creates it on first start if it is missing, but create it by hand
+  (below) so that its owner and mode are the ones you chose.
+
+```bash
+# once, as srv, when upgrading to the release that brings ADR-055
+cd /srv/quiz && mkdir -p backup-status && chmod 755 backup-status
+C="docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image"
+$C up -d backup app          # the backup restarts and dumps at once: the report appears
+cat backup-status/last.json  # {"finished_at":"…","ok":true,"exit_code":0,…}
+```
+
+A restart of `backup` takes a dump at once (the loop starts with one), so
+expect one extra dump in `backups/` on that day. Staging has no `backup`
+service and no `BACKUP_STATUS_FILE`: its status says "not configured".
+
 - `/srv/quiz/assets/` (question images, content-addressed by sha256) is part
   of what to copy: `rsync` is enough. `./secrets` goes through the vault,
   never through the backup directory.
@@ -554,17 +580,77 @@ deployed.
 
 ## 7. Monitoring
 
-`GET /healthz` answers `200 {"status":"ok"}` when the database answers
-`SELECT 1`, and `503 {"status":"degraded"}` otherwise. Its `checks` object
-reports `database`, `jobs` (whether pg-boss is up) and `runner`, which is
-`up`, `down` (configured but unreachable, or refusing the token) or
-`disabled` (`RUNNER_MODE=stub`). The runner never decides the overall
-status: an unreachable runner only degrades code grading, and a container
-must not be restarted for that. The container `HEALTHCHECK` and an external
-60 s probe on `https://quiz.chevallier.io/healthz` both hit this route.
+### `/healthz`, the public probe
 
-`GET /metrics` is a Prometheus endpoint with the default collectors and a
-`quiz_database_up` gauge. It is never public: a request with
+`GET /healthz` answers `200 {"status":"ok"}` when the database answers
+`SELECT 1`, and `503 {"status":"degraded"}` otherwise. **Only the database
+decides the status code**: the container `HEALTHCHECK` and the deploy gate
+(`up -d --wait`, the CI's wait on staging, ADR-028) read it, and a restart
+or a refused deploy is the wrong answer to anything else. Its `checks`
+object reports, in coarse words only
+([ADR-055](../adr/ADR-055-etat-du-systeme.md)):
+
+| Field | Values | Meaning |
+| --- | --- | --- |
+| `database` | `up`, `down` | `SELECT 1` answers |
+| `jobs` | `up`, `down` | pg-boss started |
+| `runner` | `up`, `down`, `disabled` | `down`: configured but unreachable, or refusing the token; `disabled`: `RUNNER_MODE=stub` |
+| `ticker` | `up`, `stale`, `none` | the live clock completed a pass within 10 s; `none`: no ticker in this process (`WORKER_MODE=web`) |
+| `disk` | `ok`, `low`, `unknown` | under 15 % free where the app writes (the question images, the backup report) is `low` |
+| `backup` | `ok`, `stale`, `unknown` | the last dump's report: `stale` when older than 26 h or failed; `unknown` when not configured (staging, development) |
+
+and one aggregate, `"attention": true` when the ticker is `stale`, the disk
+`low`, the backup `stale` or the runner `down`. Nothing else: no path, no
+size, no name — the route is public. The details are on the admin page.
+These checks run side by side within 1 s, well inside the healthcheck's
+5 s: a runner that does not answer in time reads as `down`.
+
+### The external probe
+
+The primary alarm is an external uptime service (the product owner's
+choice), polling `https://quiz.chevallier.io/healthz` every 60 s (every
+5 min is enough on staging, if it is watched at all). Configure **one HTTP
+keyword monitor**:
+
+- alert when the status code is not 200 (the database, the process, the VM,
+  Caddy, DNS or the certificate);
+- **and** alert when the body does **not** contain the keyword
+  `"attention":false` (no space: the body is compact JSON). That covers a
+  stale ticker, a low disk, a stale or failed backup and a runner down.
+- a timeout of 10 s, and a confirmation of two consecutive failures before
+  alerting, so that a deploy's restart (a few seconds) does not page anyone.
+
+Staging has no backup report (`backup: "unknown"` does not raise
+`attention`) and runs the runner in `stub` (`disabled` does not either), so
+the same keyword works there.
+
+E-mail alerts from the application itself come next (ADR-055 §5): a
+`health.checks` scheduled task will run the same checks every five minutes
+and mail the administrators on a transition to failing.
+
+### The System status page
+
+Administration → **System status** (`GET /app/api/admin/system`, admins
+only) answers "can I run an exam now, and does anything need me?": every
+check with its status (OK, to look at, failing, unknown), its value, when it
+was checked and, when not OK, its cause. Live exam readiness: the ticker's
+lag, attempts and evaluations left open a minute past their end (the
+symptom of a dead ticker, whatever process runs it), scheduled tasks,
+background jobs per queue (waiting, failed in 24 h, oldest wait), the
+runner, the live evaluations and the open real-time connections. Data and
+storage: the database's response time, size and largest tables, the
+connections in use against `max_connections`, the free disk, the last
+backup. Then what is deployed: commit, last migration, start time, Node,
+worker mode, environment. No chart and no log line, on purpose.
+
+The status is cached 20 s by the server; the page polls every 30 s while
+visible, and Refresh recomputes it.
+
+### `/metrics`
+
+`GET /metrics` is a Prometheus endpoint with the default collectors, a
+`quiz_database_up` gauge and `quiz_sse_connections` (the open real-time
+streams of the process, N-OPS-02). It is never public: a request with
 `Authorization: Bearer $METRICS_TOKEN` passes when the token is set, and any
 other request must carry an admin session.
 
@@ -769,6 +855,8 @@ configuration.
 | `RUNNER_TOKEN` | `openssl rand -hex 32`, the same value as `/etc/quiz-runner/env` on the runner VM | sent as `Authorization: Bearer` on every call; required when `RUNNER_MODE=http`, the process does not start without it |
 | `RUNNER_TIMEOUT_MS` | default `30000` | wall-clock budget of one runner call |
 | `LLM_PROVIDER` | unset (`none`) | essays are graded by hand; `stub`, the development fake, makes the process refuse to start |
+| `BACKUP_STATUS_FILE` | `/app/backup-status/last.json`, set by compose | the `backup` service's report of its last dump (§6); empty: the System status says "not configured" |
+| `COMMIT_SHA`, `COMMIT_DATE` | baked into the image by CI | the commit the System status shows; never set by hand |
 | `LOG_LEVEL`, `WORKER_MODE` | `info`, `all` | `web`/`worker` would split the roles without a code change ([ADR-001](../adr/ADR-001-monolithe-modulaire.md)) |
 
 The uploaded question images live in `./assets` on the host, mounted at

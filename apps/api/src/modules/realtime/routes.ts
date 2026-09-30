@@ -70,7 +70,7 @@ type Watch =
   | { kind: "lobby"; evaluationId: string }
   | { kind: "attempt"; attemptId: string; evaluationId: string };
 
-interface Stream {
+interface Stream extends bus.OpenStream {
   userId: string;
   /** The session that opened it (`sid_hash`), ended by `bus.sessionsEnded`; null for a bearer token. */
   sid: string | null;
@@ -103,7 +103,7 @@ interface Stream {
   close: () => void;
 }
 
-const open = new Set<Stream>();
+const open = bus.openStreams;
 /** The applications whose realtime plugin is shutting down. */
 const closing = new WeakSet<FastifyInstance>();
 

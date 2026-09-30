@@ -5,7 +5,7 @@
  */
 import type { FastifyInstance } from "fastify";
 
-import { and, eq, inArray, isNotNull, lte, max, notInArray, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNotNull, lte, max, notInArray, sql, type SQL } from "drizzle-orm";
 import { GRACE_MS } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
@@ -19,6 +19,25 @@ import { type AttemptRecord, enrolledCounts, gradeAtHandIn } from "./attempt.js"
 import { startEvaluation, closeEvaluation } from "./control.js";
 
 // --- Ticker tasks (§5.3) --------------------------------------------------
+
+/**
+ * The attempts step 1 ends at `now` (with `in_progress`, which `endAttempts`
+ * adds): their OWN deadline — accommodation, extensions, retakes, reopenings
+ * and pauses are all already in `deadline_at` — plus the grace has passed,
+ * and their evaluation is not paused. The one definition, shared with the
+ * system status, which asks it about a minute ago (`overdueAttempts`).
+ */
+function dueAttempts(db: Db, now: Date): SQL {
+  const cutoff = new Date(now.getTime() - GRACE_MS);
+  return and(
+    isNotNull(attempts.deadlineAt),
+    lte(attempts.deadlineAt, cutoff),
+    notInArray(
+      attempts.evaluationId,
+      db.select({ id: evaluations.id }).from(evaluations).where(eq(evaluations.state, "paused")),
+    ),
+  )!;
+}
 
 /**
  * Step 1: expire everything past `deadline + GRACE_MS`. One conditional
@@ -36,22 +55,9 @@ export async function expireDueAttempts(
   now: Date,
   app?: FastifyInstance,
 ): Promise<{ id: string; evaluationId: string }[]> {
-  const cutoff = new Date(now.getTime() - GRACE_MS);
   // Their question on screen is credited up to the deadline, which the
   // flush clamps at (ADR-039).
-  const closed = await endAttempts(
-    db,
-    and(
-      isNotNull(attempts.deadlineAt),
-      lte(attempts.deadlineAt, cutoff),
-      notInArray(
-        attempts.evaluationId,
-        db.select({ id: evaluations.id }).from(evaluations).where(eq(evaluations.state, "paused")),
-      ),
-    )!,
-    { state: "expired", closedBy: "server" },
-    now,
-  );
+  const closed = await endAttempts(db, dueAttempts(db, now), { state: "expired", closedBy: "server" }, now);
   for (const row of closed) {
     events.attemptClosed(
       row.evaluationId,
@@ -158,6 +164,19 @@ export async function autoCloseDue(
   now: Date,
   app?: FastifyInstance,
 ): Promise<EvaluationRecord[]> {
+  const moved: EvaluationRecord[] = [];
+  for (const row of await dueToClose(db, now)) {
+    moved.push(await closeEvaluation(db, row, now, "server", app));
+  }
+  return moved;
+}
+
+/**
+ * The evaluations step 4 closes at `now`: `running`, past `closes_at`, and
+ * past the last deadline anybody still holds, plus the grace
+ * (`autoCloseAt`). Shared with the system status (`overdueEvaluations`).
+ */
+async function dueToClose(db: Db, now: Date): Promise<EvaluationRecord[]> {
   const due = await db
     .select()
     .from(evaluations)
@@ -183,13 +202,28 @@ export async function autoCloseDue(
     )
     .groupBy(attempts.evaluationId);
   const latestOf = new Map(latest.map((l) => [l.evaluationId, l.deadlineAt]));
-  const moved: EvaluationRecord[] = [];
-  for (const row of due) {
-    const last = latestOf.get(row.id) ?? null;
-    if (autoCloseAt(row.closesAt!, last).getTime() > now.getTime()) continue;
-    moved.push(await closeEvaluation(db, row, now, "server", app));
-  }
-  return moved;
+  return due.filter(
+    (row) => autoCloseAt(row.closesAt!, latestOf.get(row.id) ?? null).getTime() <= now.getTime(),
+  );
+}
+
+/**
+ * What the ticker should have done `marginMs` ago and has not (N-OPS-03):
+ * the same predicates as steps 1 and 4, asked about `now - marginMs`, so
+ * the system status can never disagree with the ticker about what is due —
+ * only notice that it has not run. Counts only, never who.
+ */
+export async function overdueAttempts(db: Db, now: Date, marginMs: number): Promise<number> {
+  const [row] = await db
+    .select({ n: count() })
+    .from(attempts)
+    .where(and(eq(attempts.state, "in_progress"), dueAttempts(db, new Date(now.getTime() - marginMs))));
+  return row?.n ?? 0;
+}
+
+/** Evaluations still `running` past the moment step 4 closes them (see above). */
+export async function overdueEvaluations(db: Db, now: Date, marginMs: number): Promise<number> {
+  return (await dueToClose(db, new Date(now.getTime() - marginMs))).length;
 }
 
 /** Step 5: connections silent for too long stop counting as present. */
