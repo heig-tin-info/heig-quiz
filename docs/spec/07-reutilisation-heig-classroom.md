@@ -1,5 +1,7 @@
 # 7. Reuse of heig-classroom
 
+> **Frozen as history (2026-09-30).** This page records how the quiz was started from a pruned copy of heig-classroom, in September 2026. Since ADR-035 (2026-09-28) heig-classroom **merges into Quiz**: its GitHub integration, its projects and its journal come over, and its production is migrated at a cutover. What is ported, how and in which order is in [`docs/merge/`](../merge/README.md), and the spec's current state of it in 00 §0.5, F-GH and F-JRN (02), N-SEC-12 to N-SEC-18 (03) and 05 §5.11. Read this page for the origin of a file, never as the plan. The lines that the merge reverses are marked *(reversed by ADR-035)* below; the others are left as written.
+
 The `~/heig-classroom` repository is a project by the same author, in production, with the same stack, the same IdP and the same operating constraints. **The quiz portal starts as a pruned copy of that repository**, rather than from a blank one. The agents that will code the product must read this page before creating anything that already exists there.
 
 ## 7.1 What heig-classroom is
@@ -14,7 +16,7 @@ pnpm monorepo, two applications:
 
 Stack: Node 22, strict TypeScript, Fastify 5, zod 4, Drizzle on PostgreSQL, pg-boss, openid-client, React 19, Vite, Tailwind 4, TanStack Query, vitest, Playwright for the screenshots. Everything is written in English: code, comments, documentation, commits. Only the user interface is translated. **These conventions apply as they are to the quiz portal.**
 
-heig-classroom's ADRs document its choices. ADRs 001 to 010 and 012 were copied into this repository's `docs/adr/`; ADR-011, its reconciliation handlers for GitHub webhooks, was left out, and heig-classroom's later ADRs do not concern the quiz. ADRs 001, 002, 003, 004, 005, 006, 008 and 012 apply without modification to the quiz: modular monolith, Fastify, Postgres and Drizzle, pg-boss, SSE without WebSocket, single ticker for the deadlines, React SPA, two-step freeze. ADR-009 (VM and Compose) and ADR-010 (secrets outside the repository and outside the database) apply with amendments recorded in their status: the runner on another VM (ADR-016), staging on the same VM (ADR-028), the move to Hetzner, and no GitHub secrets. ADR-007 (self-hosted GitHub Actions runners) does not apply: the quiz has its own runner, `apps/runner` (ADR-016). The quiz's own decisions start at ADR-013, whose numbers are independent of heig-classroom's.
+heig-classroom's ADRs document its choices. ADRs 001 to 010 and 012 were copied into this repository's `docs/adr/`; ADR-011, its reconciliation handlers for GitHub webhooks, was left out, and heig-classroom's later ADRs do not concern the quiz. *(Reversed by ADR-035: ADR-011 and the later ADRs the merge needs, the journal's among them, are imported by task M0-03 of `docs/merge/09-tasks.md`.)* ADRs 001, 002, 003, 004, 005, 006, 008 and 012 apply without modification to the quiz: modular monolith, Fastify, Postgres and Drizzle, pg-boss, SSE without WebSocket, single ticker for the deadlines, React SPA, two-step freeze. ADR-009 (VM and Compose) and ADR-010 (secrets outside the repository and outside the database) apply with amendments recorded in their status: the runner on another VM (ADR-016), staging on the same VM (ADR-028), the move to Hetzner, and no GitHub secrets *(reversed by ADR-035: Quiz's own GitHub App brings its key and secrets, N-SEC-16)*. ADR-007 (self-hosted GitHub Actions runners) does not apply: the quiz has its own runner, `apps/runner` (ADR-016). The quiz's own decisions start at ADR-013, whose numbers are independent of heig-classroom's.
 
 ## 7.2 To reuse as-is
 
@@ -27,7 +29,7 @@ heig-classroom's ADRs document its choices. ADRs 001 to 010 and 012 were copied 
 | Development Keycloak | `docker-compose.dev.yml`, `infra/keycloak/hgc-dev-realm.json` | Identical. A real OIDC even in dev, no "current user" through an environment variable. Add a `quiz` client to the realm. |
 | Typed configuration | `apps/server/src/config.ts` | Same zod schema of the environment variables, with the refusal of dev values in production. |
 | Roster import | `packages/domain/src/roster.ts`, `apps/web/src/RosterImport.tsx`, `RosterTable.tsx` | Identical. CSV paste or Excel file drop, permissive detection of the last name, first name and email columns, atomic import. Add the extra time column in percent, F-ORG-07. |
-| Guards and access loaders | `apps/server/src/modules/guards.ts` | Same pattern: a single `staffAccess` predicate, entities are loaded if and only if the user has access to their classroom, otherwise a 404 indistinguishable from a missing entity. |
+| Guards and access loaders | `apps/server/src/modules/guards.ts` | Same pattern: a single `staffAccess` predicate, entities are loaded if and only if the user has access to their classroom, otherwise a 404 indistinguishable from a missing entity. *(Extended by ADR-035: a student branch, `readableClassroom`, for the journal, 05 §5.7.)* |
 | Audit log | `audit.ts`, table `audit_log` | Identical, closed catalogue of actions as a TypeScript union. Covers F-ADMIN-04. |
 | Event bus and SSE | `events.ts`, `modules/events.ts`, `apps/web/src/live.ts` | To reuse with an extension, see 7.3. Events are refresh hints by topic, never data. Native `EventSource` reconnection, TanStack Query refetch, no replay. |
 | Job queue | `jobs.ts`, pg-boss | Identical. Replaces the home-made `jobs` table planned in 5.6. Queues `grading.auto`, `grading.runner`, `grading.llm`, `export.pool`. |
@@ -40,7 +42,7 @@ heig-classroom's ADRs document its choices. ADRs 001 to 010 and 012 were copied 
 | Deployment | `Dockerfile`, `compose.prod.yml`, `Caddyfile`, `deploy.sh`, `deploy.md`, `backup` service | Identical, removing Keycloak from production. The Postgres backup service already exists. |
 | Tests | `apps/server/src/test/db.ts` with PGlite, `*.db.test.ts` conventions | Identical. Database tests without an external Postgres. |
 | Markdown rendering | `apps/web/src/markdown.tsx` | No. It is a minimal rendering for the help, trusted content. The quiz needs a real editor and a sanitised rendering with KaTeX, see 5.1. |
-| GitHub integration | `apps/server/src/github/`, `octokit` | No. Remove. |
+| GitHub integration | `apps/server/src/github/`, `octokit` | No. Remove. *(Reversed by ADR-035: ported into `apps/api/src/github/` and the `github` module, behind Quiz's own App, 05 §5.11.)* |
 | Mailer | `mailer.ts`, `modules/email.ts` | Reused (issue #144, ADR-030). The Scaleway TEM transport, its configuration (`SCW_SECRET_KEY`, `SCW_DEFAULT_PROJECT_ID`, `MAIL_FROM`, `MAIL_FROM_NAME`, `MAIL_REGION`) and its dry run without credentials live in `apps/api/src/modules/notifications/mailer.ts`. Adapted: an e-mail is one channel of `notify`, enqueued as a job, with per-kind preferences shared with the bell and Teams instead of a jsonb column of e-mail preferences, and no unsubscribe link (the settings page is the one place to choose). It carries the release of the results, F-GRADE-09. |
 
 ## 7.3 To adapt
@@ -54,7 +56,7 @@ Writing answers stays in REST, as ADR-005 provides.
 
 **Roles**. heig-classroom treats teacher and assistant as labels without a permission level. The quiz keeps that simplicity: every staff member of a course has the same rights. The global `teacher` role comes from the edu-ID affiliation or from promotion by the admin.
 
-**Schema**. Reuse `users`, `user_emails`, `user_idp_claims`, `sessions`, `audit_log`, `avatars`, `classrooms`, `enrollments`. Remove `organizations`, `assignments`, `student_repos` and everything touching GitHub. Add the tables of [01-glossaire-et-domaine.md](01-glossaire-et-domaine.md). heig-classroom uses UUIDs, so does the quiz, the spec spoke of ULIDs: **UUID v7 is retained**, sortable and generatable client-side.
+**Schema**. Reuse `users`, `user_emails`, `user_idp_claims`, `sessions`, `audit_log`, `avatars`, `classrooms`, `enrollments`. Remove `organizations`, `assignments`, `student_repos` and everything touching GitHub *(reversed by ADR-035: they come back as `github_organizations`, `github_classroom_links`, `github_accounts`, `webhook_deliveries`, `push_receipts`, the journal's tables, and later `projects` and `project_repos`, 05 §5.3)*. Add the tables of [01-glossaire-et-domaine.md](01-glossaire-et-domaine.md). heig-classroom uses UUIDs, so does the quiz, the spec spoke of ULIDs: **UUID v7 is retained**, sortable and generatable client-side.
 
 ## 7.4 Visual identity
 
@@ -89,8 +91,8 @@ Consequence on [05-architecture.md](05-architecture.md), section 5.5: the runner
 
 1. Copy heig-classroom into a new repository, history not kept.
 2. Remove `apps/codespace` after moving `images/c-dev`, `infra/seccomp`, `src/engine` to `apps/runner`.
-3. In `apps/server`: remove `github/`, `modules/webhooks.ts`, `repos.ts`, `sync.ts`, `codespace.ts`, `mailer.ts` for now, and the associated tables. Keep auth, identity, sessions, guards, audit, events, jobs, ticker, config, test.
-4. In `apps/web`: keep `ui.tsx`, `style.css`, `theme.ts`, `i18n.tsx`, `Shell.tsx`, `Header.tsx`, `notify.tsx`, `confirm.tsx`, `RosterImport.tsx`, `RosterTable.tsx`, `SettingsPage.tsx`, `AdminPanel.tsx`, `mock/`, `scripts/`. Remove the assignment screens.
+3. In `apps/server`: remove `github/`, `modules/webhooks.ts`, `repos.ts`, `sync.ts`, `codespace.ts`, `mailer.ts` for now, and the associated tables. *(Done then; the merge ports them back, ADR-035.)* Keep auth, identity, sessions, guards, audit, events, jobs, ticker, config, test.
+4. In `apps/web`: keep `ui.tsx`, `style.css`, `theme.ts`, `i18n.tsx`, `Shell.tsx`, `Header.tsx`, `notify.tsx`, `confirm.tsx`, `RosterImport.tsx`, `RosterTable.tsx`, `SettingsPage.tsx`, `AdminPanel.tsx`, `mock/`, `scripts/`. Remove the assignment screens. *(Their successors are redesigned as project screens by the merge, `docs/merge/05-web.md`.)*
 5. Rename the `@hgc` package scope to a scope of the quiz's own, update `DESIGN.md` and the UI skill.
 6. Create `packages/core` with the `QuestionType` contract and the registry, then `packages/qt-mcq` as the first type, before any evaluation screen.
 7. Check that `pnpm build && pnpm typecheck && pnpm test` passes on the empty skeleton before adding a feature.

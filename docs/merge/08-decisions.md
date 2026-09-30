@@ -284,3 +284,17 @@ Status values: `open`, `settled`, `superseded`.
   (`journal.*`), and the commits are authored as the teacher.
 - Blocks: M4-03, M4-05.
 - **Status**: settled 2026-09-30 (product owner, conversation).
+
+### D28 — Disconnecting a classroom that has a journal
+- **Question**: the journal is a repository of the classroom's organization
+  (D03, D27). What happens to it when a teacher disconnects the classroom
+  from GitHub, or connects it to another organization? Found by M0-04
+  (journal track), spec F-GH-04 and 06 no. 33.
+- **Options**: (a) refused while the classroom has a journal; (b) the
+  journal is removed with the link (its copy dropped, the repository
+  kept); (c) the journal stays, read-only, in error, until removed.
+- **Suggested**: (a), `409` with a message that says to remove the
+  journal first: nothing is lost by surprise, and (b) is one click away.
+  Projects will raise the same question for their repositories.
+- Blocks: M2-02 (disconnect route), M4-03.
+- **Status**: open.

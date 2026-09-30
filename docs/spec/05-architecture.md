@@ -2,7 +2,7 @@
 
 Goal: a single VM, a single database, one repository, operable by one person. Every choice favours simplicity over generality.
 
-**Starting point: the `~/heig-classroom` repository**, same author, same stack, in production. Its ADRs 001 to 010 apply here. What is reused, adapted or dropped is detailed in [07-reutilisation-heig-classroom.md](07-reutilisation-heig-classroom.md).
+**Starting point: the `~/heig-classroom` repository**, same author, same stack, in production. Its ADRs 001 to 010 apply here. What is reused, adapted or dropped is detailed in [07-reutilisation-heig-classroom.md](07-reutilisation-heig-classroom.md). *Amendment (ADR-035, 2026-09-28): heig-classroom now merges into Quiz — its GitHub integration, its projects and its journal come over. The working plan is [`docs/merge/`](../merge/README.md); what this spec already covers of it is the GitHub substrate and the journal (5.11).*
 
 ## 5.1 Technical stack
 
@@ -23,6 +23,8 @@ Goal: a single VM, a single database, one repository, operable by one person. Ev
 | Deployment | Docker Compose, GitHub Actions builds the images, update script on the VM | |
 | i18n | Flat dictionary per locale reused from heig-classroom, `fr` and `en` | |
 | Tests | Vitest, Testing Library, Playwright | |
+| GitHub | Octokit behind Quiz's own GitHub App (D23), with throttling and retry; adapters in `apps/api/src/github/`, ported from heig-classroom | A GitHub App acts for an organization without a personal token, and links accounts without an OAuth App |
+| Journal rendering | marked (GitHub-flavoured markdown), KaTeX, `yaml`, on the server, in `packages/docrender` | Rendered once per synchronisation; the student bundle carries no markdown library |
 
 ## 5.2 Code modularity
 
@@ -50,6 +52,7 @@ quiz/
     core/                QuestionType contract, type registry, pure utilities
     contracts/           zod schemas of the HTTP routes and SSE events, shared api / web
     domain/              pure business rules: grade scale, MCQ policies, cloze, roster, FSRS
+    docrender/           the journal's pure renderer: renderPage, journalTree, repository naming, the code tokenizer (ADR-035)
     canonical/           YAML format, import / export, GIFT and Moodle XML converters
     ui/                  design system: tokens, primitives, quiz components
     qt-mcq/ qt-short/ qt-cloze/ qt-code/ qt-rich/ qt-categorize/ ...   one package per type
@@ -79,6 +82,8 @@ Each module lives in `apps/api/src/modules/<name>/` with `routes.ts` the HTTP ha
 | `canonical` | Import / export, API and CLI | `pool` |
 | `admin` | Users, health, settings, audit | all, read-only |
 | `realtime` | Event bus, SSE streams, presence, topics | |
+| `github` | Quiz's GitHub App: installations and organizations, the classroom ↔ organization link and its checks, GitHub account linking, the webhook intake and its handler registry, delivery reconciliation (5.11) | `auth`, `org` |
+| `journal` | A classroom's journal: its repository, ingestion into the read model, rendering through `docrender`, browser writes, assets, the reader's access (5.11) | `org`, `github` (registers on its webhook registry, which never imports it) |
 
 Rules:
 
@@ -187,6 +192,24 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 
 The drill's switches live on the rows they qualify, and belong to those rows' modules: `classrooms.drill_enabled_at` (the teacher enabled it, null otherwise) and `enrollments.drill_opted_out_at` (the student opted out of that classroom's drill), written by `org`'s `setClassroomDrill` and `setDrillOptOut`; `allowDrill` in the evaluation's `settings` (ADR-041 §2, §6), absent meaning on for an exercise and off for an exam, chosen at creation and then written only by `evaluation`'s `setAllowDrill`, until the release (the settings PATCH does not carry it). `drill_cards` and `drill_reviews` belong to the `drill` module (migration `0036_drill`).
 
+**GitHub**, module `github` (`db/github.ts`, ADR-035)
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `github_organizations` | `github_org_id` unique nullable, `login` unique, `installation_id` unique nullable, `status`, `plan` | One row per organization known to Quiz's App. `installation_id` is Quiz's App's (D23), null until the organization installs it; cleared on staging by every refresh from production (N-SEC-18) |
+| `github_classroom_links` | `classroom_id` pk (FK, cascade), `org_id`, `linked_by`, `linked_at` | At most one organization per classroom (D02); no `id` nor timestamps |
+| `github_accounts` | `user_id` pk (FK, cascade), `github_user_id` unique, `login`, `linked_at` | The GitHub account link. The id is the person's, not the App's; the login is followed when it changes. `users` stays with `auth` |
+| `webhook_deliveries` | `delivery_id` uuid pk (GitHub's `X-GitHub-Delivery`), `event`, `action`, `payload` jsonb, `received_at`, `processed_at`, `error` | The primary key is the deduplication. Partial index `(received_at) WHERE processed_at IS NULL` for the reconciliation. Payloads purged after 30 days |
+| `push_receipts` | `repo_id`, `branch`, `head_sha`, `received_at`, `is_bot`, `forced` | Written synchronously by the intake for the repositories of projects (heig-classroom ADR-012: `received_at` is the server's receipt time, the legal reference of a deadline); unique (repository, head sha). Created with projects, whose repositories it references; the journal writes none |
+
+**Journal**, module `journal` (`db/journal.ts`, `docs/merge/04-journal.md` §4.2): one row per classroom, no shared mirror (D03)
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `classroom_journals` | `classroom_id` pk (FK, cascade), `github_repo_id`, `full_name`, `ref`, `root_path`, `last_commit_sha`, `sync_status` pending / ok / error, `sync_error`, `created_by` | A journal is a repository (D03). Two classrooms on the same repository are two rows, each ingested on its own; a push fans out to every row holding that `github_repo_id` |
+| `journal_pages` | `classroom_id`, `path`, `parent_path`, `sort_key`, `title`, `front_matter` jsonb, `blob_sha`, `markdown`, `html`, `toc` jsonb, `draft` bool, `visible_from` nullable, `warnings` jsonb | unique (classroom, path). The rendered read model; `markdown`, `blob_sha` and `warnings` never leave the staff payload (N-SEC-12) |
+| `journal_assets` | `classroom_id`, `path`, `blob_sha`, `content_type`, `size`, `data` bytea | unique (classroom, path). Only the files a page references, ≤ 5 MB each (D14); a read model rebuilt from the repository |
+
 **Infrastructure**: the `pgboss` schema managed by pg-boss, a `settings` table with jsonb key / value pairs for the global settings, `providers` for the LLM providers with an encrypted key.
 
 ### Critical queries and indexes
@@ -291,7 +314,7 @@ POST /run
 - One image per language, built from `apps/runner/images/`, derived from the codespace's `c-dev` without code-server. Rebuilt every week. *Current state: `c`, `cpp`, `python`, `js` and `spice` are built by default, `rust` on demand (`apps/runner/images/build.sh`).*
 - **`spice` is a language of the runner**: an Alpine image with ngspice, for the `circuit` question type (ADR-019). It is one image, one run plan and the same hardened container as the others — no flag is relaxed for it, no environment variable is added. Nothing is built: a netlist is the program, so `compile` is the "nothing to do" answer and a malformed netlist is a FAILED CASE, not a compile error.
 - **In `spice`, the case's `args` carry the file to simulate.** One request holds one schematic and its stimuli: one file per stimulus (`s0.cir`, `s1.cir`, …) and one case per stimulus, named after it, with `args: ["s0.cir"]`. The argv is therefore `timeout -s KILL <s> ngspice -b s0.cir`, and one container serves every stimulus of one answer. The other languages name their file in the run plan and use `args` for the program's own `argv[1..]`; this convention is what lets both share `execute.ts` unchanged.
-- **`POST /attempts/:id/simulate`** is the student's own run for a type that builds its own request (`QuestionTypeServer.interactiveRequest`): the API forces `priority: "interactive"`, counts it against the question's budget in the attempt journal, and hands the `RunnerOutcome` back raw. It is generic — the live module knows nothing of netlists.
+- **`POST /attempts/:id/simulate`** is the student's own run for a type that builds its own request (`QuestionTypeServer.interactiveRequest`): the API forces `priority: "interactive"`, counts it against the question's budget in the attempt log (`attempt_events`, D16), and hands the `RunnerOutcome` back raw. It is generic — the live module knows nothing of netlists.
 - Each request creates a container with the options of the codespace's `run-hardened.sh`: `--network none`, `--read-only`, `--tmpfs /work:size=32m`, `--memory`, `--cpus 1`, `--pids-limit 64`, `--userns=auto`, `--cap-drop ALL`, `--security-opt no-new-privileges`, seccomp profile `codespace.json`, and `--runtime runsc` if gVisor is installed. The wall-clock time is enforced by the service, which kills the container when it is exceeded. *Amendment: the profile now lives at `apps/runner/infra/seccomp/runner.json`, and the exact, tested flag list is `containerArgs` in `apps/runner/src/engine.ts`, documented in `apps/runner/README.md`, which is the reference.*
 - Compilation then execution of the cases in the same container, sequentially, each with its own limit.
 - Two queues: `interactive` for student runs during an evaluation, `grading` for the final grading, lower priority. Configurable concurrency, 4 by default. Beyond a depth limit, 429 and the client retries.
@@ -312,6 +335,8 @@ A single point of exit of content towards a student: the type's `toStudent`, cal
 
 The key has one student exit too: once the feedback policy shows it (`showKey`), a student reads the type's `toSolution` passed through its optional `studentSolution` hook, in `studentSolutionView` beside `studentView`. The hook drops from the solution what stays the teacher's even under a shown key — the grading criteria of an essay, a short answer's `llm` rubric. Every student-facing reader of a key goes through it (the feedback page, a poll's reveal, the teacher's preview "as a student" and the "Show answers" of a question's preview, which asks for the key on the click only); the teacher's surfaces keep the whole `toSolution` (ADR-037).
 
+**The journal has its own exit**, the student view of the `journal` module. It is Quiz's first classroom route a student reads, so access has a student branch: `readableClassroom` in `apps/api/src/modules/guards.ts` loads the classroom for the course's staff (`staffAccess`, the staff payload) or for a claimed seat of the caller (the student payload), and answers the 404 of a missing classroom to anyone else. A teacher in the student view (their staff seat, ADR-018) and an impersonation session (ADR-034) get the **student payload**, never the staff one. The student payload has no draft, no page before its `visible_from` (judged by the database's `now()`), no markdown, no blob sha, no warning and no hidden count; an asset is served to a student only when a page of that payload references it (N-SEC-12, N-SEC-13). Tests: a draft, a future page and an asset referenced by them only, searched for in every student response, for each of the three student callers.
+
 ## 5.8 Export, import, backup
 
 - Export of a pool: zip archive generated on the fly, `pool.yaml`, category folders, `<internal_name>.yaml`, `assets/`. The same function feeds the API, the CLI and the button in the interface.
@@ -320,7 +345,7 @@ The key has one student exit too: once the feedback policy shows it (`showKey`),
 
 ## 5.9 Deployment
 
-`compose.prod.yml` reused from heig-classroom: `caddy`, `app`, `postgres`, `backup`, plus `runner` with access to the host's Podman socket. *Amendment (ADR-016, ADR-028): `compose.prod.yml` holds `app`, `postgres` and `backup` only. Caddy is native on the host, not a compose service. The `runner` runs on the VM `code.chevallier.io`, behind its own Caddy, and the API reaches it over HTTPS with a shared token (`RUNNER_TOKEN`). A staging environment runs beside production on the same VM, and production is promoted by sha after approval. The current runbook is `docs/development/deployment.md`.* Keycloak is removed from production. `deploy.sh` refuses an update if an evaluation is `running` or `lobby`, unless `--force`. *Amendment (implemented 2026-09-28): in production only, the evaluations `lobby`, `running`, `paused`, or `scheduled` to open within 15 minutes (or opened less than 12 hours ago), a take-home exercise and a session untouched for 12 hours excepted (`scripts/live-evaluations.sql`); the override is the word `force` in the forced SSH command, sent by the CI when the variable `DEPLOY_FORCE_SHA` names the deployed sha. Runbook §5, *The live-evaluation guard*.* Migrations are additive to allow a rollback to the previous image.
+`compose.prod.yml` reused from heig-classroom: `caddy`, `app`, `postgres`, `backup`, plus `runner` with access to the host's Podman socket. *Amendment (ADR-016, ADR-028): `compose.prod.yml` holds `app`, `postgres` and `backup` only. Caddy is native on the host, not a compose service. The `runner` runs on the VM `code.chevallier.io`, behind its own Caddy, and the API reaches it over HTTPS with a shared token (`RUNNER_TOKEN`). A staging environment runs beside production on the same VM, and production is promoted by sha after approval. The current runbook is `docs/development/deployment.md`.* Keycloak is removed from production. `deploy.sh` refuses an update if an evaluation is `running` or `lobby`, unless `--force`. *Amendment (implemented 2026-09-28): in production only, the evaluations `lobby`, `running`, `paused`, or `scheduled` to open within 15 minutes (or opened less than 12 hours ago), a take-home exercise and a session untouched for 12 hours excepted (`scripts/live-evaluations.sql`); the override is the word `force` in the forced SSH command, sent by the CI when the variable `DEPLOY_FORCE_SHA` names the deployed sha. Runbook §5, *The live-evaluation guard*.* Migrations are additive to allow a rollback to the previous image. *Amendment (ADR-035): with GitHub, the proxy also routes two public, unauthenticated paths to the API, `/webhooks/github` (the webhook intake, 5.11) and `/setup/github/installed` (the App's setup return). The App's key, webhook secret and client secret join the secrets outside the repository and the database (ADR-010); the six `GITHUB_*` variables are absent on a machine without an App, which turns the GitHub features off. Staging has its own App on a test organization, and its refresh from a production dump clears every installation id (N-SEC-18, `docs/merge/03-github-projects.md` §3.4).*
 
 ## 5.10 Architecture decisions
 
@@ -335,3 +360,25 @@ The key has one student exit too: once the feedback policy shows it (`showKey`),
 | Markdown editor | Tiptap, markdown as the source of truth, WYSIWYG / source toggle | Two separate editors: two sources of truth |
 | Diagram | Home-made structured editor, `packages/diagram`, on the grid and router of `circuit` (ADR-046) | Embedded Excalidraw: free-form, no notion of an element or a link, its own style |
 | Expert extension | Token REST API, CLI, MCP (shipped: ADR-022, ADR-023) | Outgoing webhooks: no identified consumer |
+| Journal storage | GitHub is the source of truth, Postgres a rendered read model: no clone, the Trees, Blobs and Contents APIs, rendering once per synchronisation (ADR-035, the journal's ADR) | Reading GitHub at every page view: a GitHub outage or rate limit would take the course documentation down |
+| Journal HTML | Raw HTML escaped to text, on the server (D15) | The questions' sanitised allow-list: the journal needs none of it, and escaping is safe by construction |
+
+## 5.11 GitHub and the journal
+
+ADR-035; the plan is `docs/merge/03-github-projects.md` and `docs/merge/04-journal.md`. This section holds what the journal needs; projects add to it later.
+
+**Quiz's GitHub App** (D23). One App per environment, Quiz's own, never heig-classroom's: production, and staging on a test organization. The adapters live in `apps/api/src/github/` (App client, installation tokens cached in memory, throttled Octokit whose background jobs wait out a rate limit once while HTTP reads fail fast). Without the six `GITHUB_*` variables the App is absent: the GitHub routes answer 404, the jobs skip, and boot and `/healthz` are unaffected.
+
+**Connecting a classroom** (F-GH-01 to F-GH-04). `GET /app/api/github/orgs` lists the organizations where the App is installed; `GET|PUT|DELETE /app/api/classrooms/:id/github` reads the link with its checks, connects and disconnects, staff only through `staffAccess`. Installing goes through GitHub's `installations/new?state=<classroomId>`; GitHub returns to `/setup/github/installed`, which verifies the installation with the App's JWT, stores the organization, and sends the teacher back to the classroom; an SSE hint turns the status green. Opening the link heals it lazily: a missing installation resolved, an uninstalled organization re-checked, a null or `free` plan refreshed, the organization secret probed.
+
+**Account linking** (F-GH-05). The App's user-to-server authorisation: a signed state cookie of ten minutes, the code exchanged, `GET /user` read, the token discarded. `/app/auth/github/{link,callback,unlink}`; a clash on `github_user_id` returns `?github=conflict`. A rename is followed through the immutable id and audited.
+
+**Webhook intake.** `POST /webhooks/github`, with a raw-body parser scoped to that route: the HMAC over the raw body in constant time (401), deduplication on `X-GitHub-Delivery` (the `webhook_deliveries` primary key), the synchronous receipt hook for the repositories that need one (projects' push receipts), then one `github.webhook` job, and 200. The worker dispatches through a **handler registry**: the `github` module handles `installation`, `organization` and `repository` events itself, and the modules that care register their handlers (`onEvent`, `onReceipt`) — the journal registers a handler for `push` and `repository` on its repositories; `github` never imports them. A delivery whose handling failed keeps its error; the reconciliation re-enqueues local deliveries left unprocessed and asks GitHub to redeliver its recent failures.
+
+**Ingestion.** `journal.ingest` for one classroom's journal: list the tree under the root folder, fetch the changed blobs, re-render every page (links depend on their neighbours), upsert and delete pages, download the changed referenced assets and drop the unreferenced ones, set `last_commit_sha` and `sync_status = ok`, then an SSE hint `journal` on the classroom's topic. A push whose `after` equals `last_commit_sha` is skipped. Every ingestion — webhook, Refresh, the one after a browser write — goes through the queue or under an advisory lock per journal row, and the copy is written in one transaction (fix J2); the queue's policy is chosen at its creation and mirrored by the in-process queue of development (a `singletonKey` alone dedupes nothing, #273). A renamed repository is followed; a deleted one sets `sync_status = error` and keeps the pages.
+
+**Writes** go to GitHub first, through the Contents API, with the `baseSha` the editor opened as an optimistic lock: a concurrent push is a 409, never a merge, and the teacher's draft stays in the browser. Commits are authored as the teacher. Creating a journal never adopts an existing repository.
+
+**Periodic work** on the bare ticker's `everyMs`, claim and enqueue only: the delivery reconciliation, and a sweep every 60 s that emits the `journal` hint when a page's `visible_from` passes (fix J4). The admin-visible `scheduled_tasks` come with projects (06, question 32).
+
+**Routes** of the journal, base `/app/api/classrooms/:id/journal`, every body and payload a schema of `packages/contracts/src/journal.ts`: `GET` (tree, home path, repository), `GET pages/*`, `GET assets/*` (both roles, `readableClassroom`); staff: `POST` (create), `POST use` (choose a repository of the organization, heig-classroom's `attach`), `DELETE` (remove), `POST refresh`, `POST preview`, `PUT pages/*` (save with `baseSha`), `POST pages`, `DELETE pages/*`, `POST assets/*`. Every staff write is audited (`journal.*`).

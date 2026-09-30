@@ -6,6 +6,7 @@
 - Hosting: one Hetzner VM, Docker Compose deployment, a single node.
 - Users: HES-SO students and teachers authenticated by edu-ID, one admin.
 - Main use: in-class evaluations (20 to 30 students), exercises at home, live polls, individual practice.
+- Since the merge of heig-classroom (ADR-035, 2026-09-28; the working plan is [`docs/merge/`](../merge/README.md)): a classroom may also carry its **journal**, the course documentation kept in a GitHub repository and read in the app, and, later, its **projects**, graded work in student GitHub repositories. GitHub stays optional: a classroom without it is a plain Quiz classroom.
 
 ## 0.2 Why a home-grown system
 
@@ -18,6 +19,7 @@
 | Versioned question pool, shared, exportable as text | Partial | No | Yes |
 | Spaced practice on the questions of the course | No | No | Yes, phase 2 |
 | Free, no advertising, data on a server under our control | Yes | No | Yes |
+| Course notes written in markdown, versioned in git, read by the class in the same app | Pages, not versioned | No | Yes, the journal (ADR-035) |
 
 ## 0.3 Objectives
 
@@ -34,7 +36,8 @@
 - Starting point: the `~/heig-classroom` repository by the same author, in production, provides the edu-ID auth, the design system, the deployment infrastructure and the container hardening. See [07-reutilisation-heig-classroom.md](07-reutilisation-heig-classroom.md).
 - Load: 20 to 30 students per quiz, 100 students simultaneously on the platform, code execution peaks of 30 runs in 10 seconds.
 - Languages: interface in French and in English. Question content in the teacher's language.
-- Auth: edu-ID only for named accounts. A session code allows anonymous participation in polls.
+- Auth: edu-ID only for named accounts. A session code allows anonymous participation in polls. Linking a GitHub account (F-GH-05) is never a way to sign in: it attaches a GitHub identity to an edu-ID account.
+- GitHub: the platform acts on GitHub through its own GitHub App (D23 of `docs/merge/08-decisions.md`), installed by a teacher on an organization; production and staging have separate Apps, and staging never holds the production one (N-SEC-18).
 - Data: answers and grades are personal data. See [03-exigences-non-fonctionnelles.md](03-exigences-non-fonctionnelles.md), data section.
 - Browsers: current versions of Chrome, Firefox, Safari, Edge. Mobile and tablet for every type except code and diagram, which remain usable but are optimised for desktop.
 
@@ -82,6 +85,18 @@ MoSCoW priority: M = must, S = should, C = could.
 | Generation | "Generate 10 min quiz" by tags and difficulty | C |
 | Integrations | MCP server to author from an LLM client. Brought forward and shipped with the personal API tokens (ADR-022, ADR-023) | C |
 
+### Merge of heig-classroom (ADR-035)
+
+Carried by the task cards of [`docs/merge/09-tasks.md`](../merge/09-tasks.md), in the order of [`docs/merge/01-strategy.md`](../merge/01-strategy.md). The journal goes first and goes live in production before the cutover, classroom by classroom, through Quiz's own GitHub App.
+
+| Area | Content | Prio |
+|---|---|---|
+| Classroom | A **Settings** tab on the teacher's classroom page: rename, archive, delete, drill, GitHub, journal (F-ORG-13) | M |
+| GitHub | Connect a classroom to an organization where Quiz's App is installed, with its checks; link one's GitHub account (F-GH) | M |
+| Journal | A classroom's course documentation in one GitHub repository, rendered on the server, read by the class, edited in the browser (F-JRN) | M |
+| Student | A **Courses** route and a classroom page: its activities, its journal, later its projects and grades (F-ORG-14, F-ORG-15) | M |
+| Projects, gradebook, online workspace, unified SEB | Specified with the rest of M0-04, not yet in this spec | M |
+
 ## 0.6 Out of scope
 
 - Heavy proctoring: webcam, device lockdown. (Safe Exam Browser is in scope since ADR-027: an exam may require it, launched from the portal without a second sign-in.)
@@ -92,7 +107,8 @@ MoSCoW priority: M = must, S = should, C = could.
   netlists are the same graph. Pick-and-place is graded by LLM or manually.
 - Management of study plans, credits, absences. The platform exports grades, it does not administer them.
 - Institutional multi-tenancy: a single admin, a single instance.
-- Code editor with a full language server. Monaco with highlighting and shortcuts is enough.
+- Code editor with a full language server. Monaco with highlighting and shortcuts is enough. (This is about the question editors; the online workspace of the merge, ADR-035, is specified with it.)
+- A general-purpose GitHub client: the platform touches GitHub only for what a feature needs (the journal now, projects later). It never deletes a repository when a journal is removed (F-JRN-04).
 - Hot installation of plugins from a remote repository.
 
 ## 0.7 Risks
@@ -105,6 +121,8 @@ MoSCoW priority: M = must, S = should, C = could.
 | Cost or unavailability of the LLM provider | Medium | Deferred grading, never in the critical path of the quiz, key per teacher |
 | Leak of the pool's questions | Medium | The pool is never served to students, only the questions of a running evaluation are, without the key |
 | Scope creep | High | Frozen phases, every new idea goes to phase 3 or out of scope |
+| GitHub unavailable, or its rate limit reached | Medium | The journal is a read model in Postgres: a page view never calls GitHub, an outage only delays the next synchronisation (N-RES-07) |
+| The platform acts on the wrong repositories (a staging copy of production driving real ones, a leaked App key) | High | Quiz's own Apps, one per environment; staging never holds the production App; the key and the webhook secret outside the repository and the database (N-SEC-16, N-SEC-18) |
 
 ## 0.8 Decision log
 
@@ -120,3 +138,5 @@ MoSCoW priority: M = must, S = should, C = could.
 | 2026-09-19 | Two interface levels, novice by default, expert through progressive disclosure |
 | 2026-09-29 | The drawing type is replaced by a structured `diagram` type, graded by hand in v1 (ADR-046) |
 | 2026-09-19 | Start from a pruned copy of heig-classroom: auth, visual identity, SSE, pg-boss, ticker, deployment, Podman hardening from the codespace |
+| 2026-09-28 | heig-classroom merges into Quiz: GitHub integration, projects and the journal come in scope (ADR-035, `docs/merge/`) |
+| 2026-09-30 | The journal first, live before the cutover, through Quiz's own GitHub App; one journal per classroom, a journal is a repository; a Settings tab on the classroom (D03, D07, D23–D25, D27) |

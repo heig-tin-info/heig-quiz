@@ -9,7 +9,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | User | A person authenticated by edu-ID. Carries a global role: `student`, `teacher` or `admin`. The role comes from the edu-ID affiliation attribute, the admin is a configured edu-ID. |
 | Course | A teacher's teaching unit, persistent from one year to the next. E.g. "Programmation C". References one or more pools. |
 | Hidden course | A course a user took out of their own navigation (F-ORG-11). A per-user display state, not a state of the course: the word is "hidden", never "archived", which is a state of a classroom seen by the whole staff. |
-| Classroom | An instance of a course for a group and a period. E.g. "Prog C, class A, autumn 2026". Owns a roster. |
+| Classroom | An instance of a course for a group and a period. E.g. "Prog C, class A, autumn 2026". Owns a roster. May be connected to one GitHub organization and carry one journal (ADR-035). heig-classroom's "classroom" (top-level, bound to an organization) maps to a course plus a classroom here. |
 | Period | When a classroom runs: a free label (`2026-A`, "Autumn 2026") and, optionally, a first and a last month (`YYYY-MM`, both or neither). The HEIG-VD semesters are the presets: autumn N = September N – January N+1, spring N = February – July. A dated classroom is *current* while its months, give or take one month on each side, cover today; an undated one is always current. "Ended" is computed, never written: nothing is archived automatically. |
 | Roster | The list of the students of a classroom, with their accommodations. Fed by CSV import or by self-enrolment with a classroom code. |
 | Pool | A collection of questions. Private to a teacher, or shared with roles. A global public pool is readable by every teacher. |
@@ -19,10 +19,13 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Question version | The content of a question at a point in time: statement, configuration, answer key, explanation. Numbered 1, 2, 3. Immutable once published. |
 | Draft | The version being edited, unnumbered, never usable in an evaluation. Publishing creates the next version. |
 | Question type | A plugin that defines the configuration schema, the answer schema, the editor, the player, the review view and the grader. E.g. `mcq`, `short`, `cloze`, `code`. |
-| Evaluation | An ordered set of question versions with run settings, created in a classroom. A single term: no quiz, assignment, activity or session. |
+| Evaluation | An ordered set of question versions with run settings, created in a classroom. A single term: no quiz, assignment or session. |
+| Activity | What a classroom gives its students to do, with a date and a result: an evaluation (exam, exercise, poll) and, later, a project. The student's **Activities** is the summary of the active activities of all their classrooms. The journal is not an activity. heig-classroom's commit-graph panel is called "repository history", never "activity". |
+| Project | The future activity kind of the merge (D01): graded work in a student or group GitHub repository, a lab as well as a semester project. heig-classroom's "assignment"; the word "assignment" stays forbidden outside migration code. Specified with the rest of M0-04, not in this spec yet. |
 | Evaluation template | An evaluation kept at the course level rather than in a classroom: its questions, points, order, milestones and settings, without dates, access code nor IP list. Never opened, never answered; each classroom's evaluation is made from it by *Instantiate* and records the template and its revision. `exam` and `exercise` only, never `poll` (ADR-031). |
 | Instance | An evaluation linked to a template: instantiated from it into a classroom, or saved as it (*Save as template*, at revision 1). It records the template and the revision it came from, and editing the template never changes it: a newer revision reaches it only when the teacher pulls it (ADR-031). |
 | Evaluation mode | `exam` timed and graded, `exercise` open with a deadline, `poll` one live question. |
+| Attempt log | The server's record of an attempt's events (`attempt_events`): focus and visibility changes, reconnections, IP changes, time added, pauses, runs. Formerly called the attempt's "journal" (D16); "journal" now means the course journal only. |
 | Attempt | A student's participation in an evaluation. Only one per student and per evaluation in phase 1. Carries the start time, the effective end, the state. |
 | Answer | The current state of a student's answer to a question of an evaluation. One record per attempt and per question, updated on every autosave. |
 | Grading | The result of assessing an answer: points, source, state, justification. Several successive gradings are possible, the last one is authoritative. |
@@ -34,6 +37,12 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Drill | An individual practice session generated for a student from the questions seen in class, scheduled by spaced repetition. |
 | Runner | An isolated service that compiles and runs the students' code in a sandbox. |
 | Canonical format | The YAML representation of a question or a pool, independent of the database, used for import, export and external versioning. |
+| Quiz's GitHub App | The GitHub App through which the platform acts on GitHub (D23): it reads and writes the repositories of the organizations that installed it, receives their webhooks, and links GitHub accounts. One App per environment: production, and staging on a test organization. heig-classroom's App is a different one; an organization may install both. |
+| GitHub organization link | The connection of a classroom to one GitHub organization where Quiz's App is installed (D02, `github_classroom_links`). Made from the classroom's Settings by a member of the course's staff; optional; at most one per classroom. A classroom without it is a plain Quiz classroom. |
+| GitHub account link | The attachment of a user's GitHub account (its immutable id and its current login) to their edu-ID account (`github_accounts`). Never a way to sign in. One GitHub account for one user. Needed to be invited as a collaborator to a repository, never to edit a journal in the browser. |
+| Journal | A classroom's course documentation: **one GitHub repository** of the classroom's organization (a branch and an optional root folder), one markdown file per page, written by the staff and read by the students of the classroom. Not an activity: no grade, no deadline, no tracking. At most one per classroom (D03); two classrooms of the same organization may use the same repository, each with its own copy. GitHub is the source of truth; the platform keeps a rendered read model. |
+| Journal page | One markdown file of the journal, rendered on the server. Its place in the navigation comes from its path; its front matter may carry `title`, `date`, `draft: true` (read by the staff only) and `visible_from` (hidden from the students until then). |
+| Journal asset | A file of the journal's repository (an image, a PDF) referenced by one of its pages, copied into the read model (≤ 5 MB, D14). |
 
 ## 1.2 Roles and permissions
 
@@ -48,6 +57,9 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Create, instantiate, delete an evaluation template | No | On own courses | Yes |
 | See the grades of a classroom | Own grades | On own classrooms | Yes |
 | Configure the LLM providers, the runner languages, the admins | No | Own API key | Yes |
+| Connect a classroom to a GitHub organization, create, choose or remove its journal, edit its pages | No | On own classrooms | Yes |
+| Read a classroom's journal | Own classrooms, published pages only | On own classrooms, drafts included | Yes |
+| Link or unlink own GitHub account | Yes | Yes | Yes |
 | Delete a classroom or an evaluation and its data | No | On own classrooms | Yes |
 
 Roles on a shared pool, phase 2: `reader` may read and copy into their own pool, `contributor` may create and publish versions, `owner` manages members and deletes.
@@ -82,6 +94,12 @@ erDiagram
     ANSWER ||--o{ GRADING : graded_by
     USER ||--o{ DRILL_CARD : reviews
     QUESTION ||--o{ DRILL_CARD : scheduled
+    USER ||--o| GITHUB_ACCOUNT : links
+    GITHUB_ORGANIZATION ||--o{ GITHUB_CLASSROOM_LINK : connects
+    CLASSROOM ||--o| GITHUB_CLASSROOM_LINK : connected_to
+    CLASSROOM ||--o| CLASSROOM_JOURNAL : documents
+    CLASSROOM_JOURNAL ||--o{ JOURNAL_PAGE : mirrors
+    CLASSROOM_JOURNAL ||--o{ JOURNAL_ASSET : mirrors
 ```
 
 ### Key attributes
@@ -98,6 +116,11 @@ erDiagram
 - **ATTEMPT**: `evaluation_id`, `user_id`, `state`, `started_at`, `deadline_at` computed with the bonus, `submitted_at`, `seed`, `client_events` JSONB for light cheating events.
 - **ANSWER**: `attempt_id`, `item_id`, `payload` JSONB conforming to the type's answer schema, `revision` integer incremented on every autosave, `marked_done` (the question was validated in a locking navigation), `skipped` ("Leave unanswered": left blank on purpose), `flagged` (the student's review flag), `updated_at`.
 - **GRADING**: `answer_id`, `points`, `max_points`, `source` `auto` / `llm` / `manual`, `state` `proposed` / `validated` / `superseded`, `details` JSONB, `graded_by`, `graded_at`, `note` for the annotation of a re-grading.
+- **GITHUB_ORGANIZATION**: `github_org_id`, `login`, `installation_id` of Quiz's App (null until installed), `status`, `plan`.
+- **GITHUB_CLASSROOM_LINK**: `classroom_id`, `org_id`, `linked_by`, `linked_at`.
+- **GITHUB_ACCOUNT**: `user_id`, `github_user_id` unique, `login`, `linked_at`.
+- **CLASSROOM_JOURNAL**: `classroom_id`, `github_repo_id`, `full_name`, `ref`, `root_path`, `last_commit_sha`, `sync_status`, `sync_error`.
+- **JOURNAL_PAGE**: `path`, `title`, `front_matter`, `draft`, `visible_from`, the rendered `html` and `toc`, `warnings`.
 - **DRILL_CARD**: `user_id`, `question_id`, FSRS parameters `stability`, `difficulty`, `due_at`, `reps`, `lapses`, `last_review_at`; one per student and question, created at the release of an exam or the hand-in of an exercise (ADR-041). Its reviews record the rating, the active time and the device class.
 
 ### Invariants
@@ -108,6 +131,8 @@ erDiagram
 4. An answer has at most one grading in state `validated`. A new grading moves the previous one to `superseded`.
 5. The grade of an attempt is computed from the validated gradings, never stored as the source of truth. It is cached when the results are released.
 6. The content sent to a student never contains the answer key nor the explanation before the feedback policy allows it.
+7. A journal page reaches a student only rendered, and only when it is not a draft and its `visible_from` has passed; an asset only when such a page references it (N-SEC-12, N-SEC-13).
+8. Removing a journal or disconnecting a classroom from GitHub never deletes anything on GitHub.
 
 ## 1.4 Lifecycles
 
@@ -118,5 +143,7 @@ erDiagram
 **Evaluation**: `draft` → `scheduled` → `lobby` waiting room → `running` → `paused` ↔ `running` → `closed` → `grading` → `released`. The `exercise` mode skips `lobby` and `paused`. The `poll` mode goes from `running` to `released` directly.
 
 **Attempt**: `not_started` → `in_progress` → `submitted` by the student or `expired` by the server at the deadline. Both terminal states can be graded.
+
+**Journal**: none → created or chosen (`sync_status` `pending`) → `ok` after each ingestion, `error` when GitHub refused it or the repository is gone (the pages already mirrored stay readable) → removed (the classroom's copy is dropped, the repository kept).
 
 **Grading**: `proposed` → `validated`. An `auto` grading on a fully deterministic type is born `validated`. An `llm` grading is born `proposed`. A manual grading is born `validated`.
