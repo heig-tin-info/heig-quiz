@@ -1,10 +1,20 @@
-import { ClipboardCheck, Clock, Maximize2, Minimize2, Pause, Play, Square } from "lucide-react";
+import {
+  BookCheck,
+  ClipboardCheck,
+  Clock,
+  Maximize2,
+  Minimize2,
+  Pause,
+  Play,
+  Presentation,
+  Square,
+} from "lucide-react";
 
 import type { EvaluationState } from "@quiz/contracts";
 
 import { evaluationStateLabel, isGraded, stateTone } from "../evaluation/common";
 import { useT } from "../i18n";
-import { Badge, Button, ClockCountdown, IconButton, Menu, PageHeader } from "../ui";
+import { Actions, Badge, Button, ClockCountdown, IconButton, Menu, PageHeader } from "../ui";
 
 /**
  * The band a teacher watches from the back of the room: where we are, how
@@ -20,6 +30,11 @@ import { Badge, Button, ClockCountdown, IconButton, Menu, PageHeader } from "../
  * Once the quiz is closed the primary comes back, and it is the correction:
  * the grid is a record at that point, and the teacher's next move is to grade
  * (WP10). There is nothing else to press here, so the squint test is safe.
+ *
+ * An exercise has one more thing a teacher may do while it runs, rarely:
+ * publish its correction without closing it (ADR-050). It is tertiary, so it
+ * lives in the overflow menu; once done, a badge beside the state says so and
+ * the same menu offers the projection instead.
  */
 export interface LiveControls {
   start: () => void;
@@ -37,6 +52,13 @@ export interface LiveControls {
   canPause: boolean;
 }
 
+/** ADR-050: an exercise's correction, published while it runs. */
+export interface CorrectionControls {
+  published: boolean;
+  publish: () => void;
+  present: () => void;
+}
+
 export function LiveHeader({
   title,
   eyebrow,
@@ -48,6 +70,7 @@ export function LiveHeader({
   fullscreen,
   onToggleFullscreen,
   onGoToGrading,
+  correction = null,
 }: {
   title: string;
   eyebrow?: React.ReactNode;
@@ -66,6 +89,8 @@ export function LiveHeader({
   onToggleFullscreen: () => void;
   /** WP10: shown as the primary once the evaluation is closed. */
   onGoToGrading: () => void;
+  /** A running exercise's only (ADR-050); `null` wherever the server refuses it. */
+  correction?: CorrectionControls | null;
 }) {
   const t = useT();
   const running = state === "running";
@@ -107,7 +132,16 @@ export function LiveHeader({
       // every second (W6). The badge sits under it.
       title={title}
       help="live"
-      description={<Badge tone={stateTone(state)}>{evaluationStateLabel(state, t)}</Badge>}
+      description={
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <Badge tone={stateTone(state)}>{evaluationStateLabel(state, t)}</Badge>
+          {correction?.published ? (
+            <Badge tone="zinc" icon={BookCheck}>
+              {t("live.correction.published")}
+            </Badge>
+          ) : null}
+        </span>
+      }
       actions={
         <>
           {/* The ONE clock of the screen (#227), big, beside the controls
@@ -152,6 +186,28 @@ export function LiveHeader({
                 <Square /> {t("live.closeAll")}
               </Button>
             </>
+          ) : null}
+          {correction ? (
+            // One item, whichever: a menu all the same (`menu`), so the
+            // header keeps its shape when the correction is published.
+            <Actions
+              menu
+              label={t("common.actions")}
+              items={[
+                correction.published
+                  ? {
+                      label: t("live.correction.present"),
+                      icon: Presentation,
+                      onSelect: correction.present,
+                    }
+                  : {
+                      label: t("live.correction.publish"),
+                      description: t("live.correction.publish.desc"),
+                      icon: BookCheck,
+                      onSelect: correction.publish,
+                    },
+              ]}
+            />
           ) : null}
           <IconButton
             label={fullscreen ? t("live.exitFullscreen") : t("live.fullscreen")}

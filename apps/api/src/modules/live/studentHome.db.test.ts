@@ -75,7 +75,7 @@ async function handIn(app: App, evaluation: EvaluationRecord, userId: string, at
       })
     ).attempt;
   const submitted = await live.submitAttempt(db, evaluation, current, now);
-  await live.gradeFinishedRetakes(app, evaluation, [submitted.id]);
+  await live.gradeAtHandIn(app, evaluation, [submitted.id]);
   app.clock.advance(1000);
   return submitted;
 }

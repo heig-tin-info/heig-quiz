@@ -100,7 +100,7 @@ export function makeDashboard(rows = 3, items = 4): DashboardView {
       pausedAt: null,
       closesAt: liveAt(20 * 60_000),
       serverNow: liveAt(0),
-      retakes: false,
+      reopenable: true,
     },
     items: itemIds.map((itemId, i) => ({
       id: itemId,
@@ -177,6 +177,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
       closedAt: null,
       releasedAt: null,
       modifiedAfterRelease: false,
+      correctionPublishedAt: null,
       createdAt: liveAt(-HOUR),
       originRevision: null,
       allowDrill: false,

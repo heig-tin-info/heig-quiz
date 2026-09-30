@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ByQuestion } from "@quiz/contracts";
 import { clozeStudentTemplate, parseCloze } from "@quiz/domain/cloze";
 
+import { makeEvaluationDetail } from "../test/grading-fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { BAR_TONES } from "../ui";
 import { CorrectionProjection } from "./CorrectionProjection";
@@ -19,6 +20,7 @@ const BY_QUESTION = "/app/api/evaluations/e1/results/by-question";
 
 function question(over: Partial<ByQuestion> & Pick<ByQuestion, "item">): ByQuestion {
   return {
+    papers: 0,
     student: null,
     solution: null,
     explanation: null,
@@ -186,8 +188,32 @@ describe("CorrectionProjection", () => {
     });
     renderWithProviders(<CorrectionProjection evaluationId="e1" navigate={vi.fn()} />);
     expect(
-      await screen.findByText("The questions and their correction open once the evaluation is closed."),
+      await screen.findByText("The questions and their correction open once the evaluation is closed, or once the correction of an exercise is published."),
     ).toBeVisible();
     expect(screen.queryByText("server words")).toBeNull();
+  });
+
+  /* ADR-050: a published correction of an exercise still open counts the papers handed in. */
+  it("says how many papers are handed in so far while the exercise is open", async () => {
+    const detail = makeEvaluationDetail();
+    detail.evaluation.mode = "exercise";
+    detail.evaluation.state = "running";
+    detail.evaluation.correctionPublishedAt = "2026-09-30T09:00:00.000Z";
+    mockFetch({
+      [`GET ${BY_QUESTION}`]: ok([{ ...MCQ, papers: 4 }, { ...SHORT, papers: 4 }]),
+      "GET /app/api/evaluations/e1": ok(detail),
+    });
+    renderWithProviders(<CorrectionProjection evaluationId="e1" navigate={vi.fn()} />);
+    expect(await screen.findByText(/Handed in so far: 4/)).toBeVisible();
+  });
+
+  it("says nothing of it once the evaluation is closed", async () => {
+    mockFetch({
+      [`GET ${BY_QUESTION}`]: ok([{ ...MCQ, papers: 4 }]),
+      "GET /app/api/evaluations/e1": ok(makeEvaluationDetail()),
+    });
+    renderWithProviders(<CorrectionProjection evaluationId="e1" navigate={vi.fn()} />);
+    await screen.findByRole("region", { name: "Question 1" });
+    expect(screen.queryByText(/handed in so far/i)).toBeNull();
   });
 });

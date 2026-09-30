@@ -13,7 +13,6 @@ import type { Db } from "../../db/client.js";
 import { answers, attemptEvents, attempts, enrollments, users } from "../../db/schema.js";
 import {
   gradeDefaults,
-  retakesEnabled,
   seatsOf,
   settingsOf,
   staffRosterWithAttempt,
@@ -31,7 +30,7 @@ import {
 } from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
 import { solutionView, studentView } from "./studentView.js";
-import { type AttemptRecord, type AnswerRecord, answersOf } from "./attempt.js";
+import { type AttemptRecord, type AnswerRecord, answersOf, reopenRefusal } from "./attempt.js";
 import { answerSummarizer, answeredBy, liveGrader, cellStatus } from "./autosave.js";
 
 // --- Dashboard read model (F-DASH-01..04) ---------------------------------
@@ -227,7 +226,7 @@ export async function dashboardView(
       pausedAt: isoOrNull(evaluation.pausedAt),
       closesAt: isoOrNull(evaluation.closesAt),
       serverNow: iso(input.now),
-      retakes: retakesEnabled(evaluation),
+      reopenable: reopenRefusal(evaluation) === null,
     },
     items: items.map((i) => ({
       id: i.item.id,

@@ -49,6 +49,8 @@ export type AuditAction =
   /** A wrong access code typed by a student (F-EVAL-12), counted for the lockout. */
   | "evaluation.access_code_failed"
   | "evaluation.close"
+  /** The correction of an open exercise published, irreversibly (ADR-050). */
+  | "evaluation.correction_publish"
   | "evaluation.create"
   | "evaluation.delete"
   | "evaluation.duplicate"

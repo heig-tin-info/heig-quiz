@@ -52,7 +52,7 @@ export {
   attemptOf,
   ensureAttempt,
   retakeAttempt,
-  gradeFinishedRetakes,
+  gradeAtHandIn,
   beginAttempt,
   markPresent,
   attemptOrLobbyView,

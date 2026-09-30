@@ -114,8 +114,10 @@ export function StudentGrid({
   //   - `reopenAttempt` only while the evaluation is running or paused, the
   //     only states in which a reopened student can write anything, and it
   //     returns an `in_progress` attempt untouched, so it is offered for a
-  //     finished one only — and never on an exercise with retakes, where the
-  //     student starts a new attempt instead (ADR-025).
+  //     finished one only — and never where the server says no reopen
+  //     (`reopenable`): an exercise with retakes, where the student starts a
+  //     new attempt instead (ADR-025), or one whose correction is published
+  //     (ADR-050).
   const evaluationState: EvaluationState = view.evaluation.state;
   const live = evaluationState === "running" || evaluationState === "paused";
   // #227: the Score column follows the data. Until a grading exists — or the
@@ -218,7 +220,7 @@ export function StudentGrid({
               commonDeadline={commonDeadline}
               showScore={showScore}
               live={live}
-              retakes={view.evaluation.retakes}
+              reopenable={view.evaluation.reopenable}
               paused={paused}
               clock={clock}
               showAnswers={showAnswers}

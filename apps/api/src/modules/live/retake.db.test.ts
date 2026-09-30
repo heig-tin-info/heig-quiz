@@ -108,7 +108,7 @@ async function sit(
     });
   }
   const submitted = await live.submitAttempt(db, evaluation, current, now);
-  await live.gradeFinishedRetakes(app, evaluation, [submitted.id]);
+  await live.gradeAtHandIn(app, evaluation, [submitted.id]);
   app.clock.advance(1000);
   return submitted;
 }
@@ -556,7 +556,7 @@ describe("the screens with several attempts", () => {
       includeAnswers: false,
       includeResults: false,
     });
-    expect(view.evaluation.retakes).toBe(true);
+    expect(view.evaluation.reopenable).toBe(false);
     const row = view.rows.find((r) => r.userId === student)!;
     expect(row.attemptId).toBe(second.id);
     expect(row.state).toBe("in_progress");

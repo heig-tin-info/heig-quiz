@@ -524,11 +524,12 @@ export const DashboardView = z.object({
     closesAt: z.iso.datetime().nullable(),
     serverNow: z.iso.datetime(),
     /**
-     * The exercise allows several attempts (F-EVAL-15): a student starts a
-     * new attempt instead of having one reopened, so the grid offers no
-     * Reopen (ADR-025).
+     * Whether a finished attempt may be reopened (the server's
+     * `reopenRefusal`): not on an exercise with several attempts, where the
+     * student starts a new one instead (F-EVAL-15, ADR-025), nor on one whose
+     * correction is published (ADR-050). The grid offers Reopen only then.
      */
-    retakes: z.boolean(),
+    reopenable: z.boolean(),
   }),
   items: z.array(
     z.object({

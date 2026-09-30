@@ -89,6 +89,7 @@ export {
   setPollSettings,
   setRelease,
   clearRelease,
+  setCorrectionPublished,
   cachedGrade,
   cachedGrades,
   type CachedGrade,

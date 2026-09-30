@@ -306,10 +306,11 @@ describe("StudentGrid — the row actions per state", () => {
     }
   });
 
-  // F-EVAL-15 (ADR-025): the student starts a new attempt instead.
-  it("offers no reopen on an exercise with retakes, and counts the attempts", () => {
+  // F-EVAL-15 (ADR-025): the student starts a new attempt instead; ADR-050:
+  // nor once the correction is published. The server says which (`reopenable`).
+  it("offers no reopen when the server refuses it, and counts the attempts", () => {
     const view = viewIn("running", 2, 2);
-    view.evaluation.retakes = true;
+    view.evaluation.reopenable = false;
     view.rows[0] = { ...view.rows[0]!, state: "submitted", attemptCount: 3 };
     setup(view);
     expect(actionsOf("Nadia Roux 0")).toEqual(["Open the answers"]);

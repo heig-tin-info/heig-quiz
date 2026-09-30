@@ -167,6 +167,9 @@ export async function tryApplyState(
     next.pausedAt = null;
     next.closedAt = null;
     next.gradingReadyAt = null;
+    // `closed → draft` needs no attempt: a correction published during that
+    // run was nobody's, and the next run starts unpublished (ADR-050).
+    next.correctionPublishedAt = null;
   }
   const updated = await db
     .update(evaluations)

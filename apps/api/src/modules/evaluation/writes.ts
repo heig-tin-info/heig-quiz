@@ -20,6 +20,7 @@ import {
 } from "@quiz/contracts";
 import {
   allowDrillWritable,
+  CONFIG_LIVE_STATES,
   configLock,
   isConfigFieldWritable,
   isFeedbackAllowed,
@@ -407,6 +408,31 @@ export async function clearRelease(db: DbOrTx, id: string, now: Date): Promise<v
     .update(evaluations)
     .set({ releasedAt: null, releasedGrades: null, modifiedAfterRelease: false, updatedAt: now })
     .where(eq(evaluations.id, id));
+}
+
+/**
+ * `results.publishCorrection` (ADR-050): stamps the instant the correction
+ * of a running exercise was published. The caller has refused an exam and a
+ * poll with a worded reason; the UPDATE says `exercise` again so that no other
+ * caller can ever stamp an exam, and its other conditions make a close or a
+ * second publication committing in between seen: `true` for
+ * exactly the one call that published, `false` otherwise (already published,
+ * or not running — the caller re-reads the row to say which).
+ */
+export async function setCorrectionPublished(db: DbOrTx, id: string, now: Date): Promise<boolean> {
+  const rows = await db
+    .update(evaluations)
+    .set({ correctionPublishedAt: now, updatedAt: now })
+    .where(
+      and(
+        eq(evaluations.id, id),
+        eq(evaluations.mode, "exercise"),
+        isNull(evaluations.correctionPublishedAt),
+        inArray(evaluations.state, [...CONFIG_LIVE_STATES]),
+      ),
+    )
+    .returning({ id: evaluations.id });
+  return rows.length > 0;
 }
 
 /** A grade read from the frozen snapshot rather than recomputed. */

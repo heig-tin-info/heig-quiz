@@ -34,7 +34,9 @@ import { useRetake } from "./retake";
  * (F-EVAL-15, issues #120, #121), the page an attempt ends on is where the
  * student decides to try again, so it carries **Try again** — or says, in a
  * line, why there is no other attempt. Whether one is allowed is the server's
- * answer (`retake.refusal`), never recomputed here.
+ * answer (`retake.refusal`), never recomputed here. Once the teacher publishes
+ * the correction of such an exercise (ADR-050), the page shows the correction
+ * AND keeps that one action.
  *
  * What is shown is entirely the server's call. `available: false` carries a
  * reason and NO question content at all (deviation W6-9), and on the other
@@ -72,6 +74,18 @@ const REFUSAL: Partial<Record<RetakeStatus["refusal"] & string, keyof Dict>> = {
  */
 const SCORE_POLL_MS = 2_500;
 const SCORE_POLLS = 8;
+
+/** "attempts: n of max", under the score or beside a published correction. */
+function AttemptCount({ retake }: { retake: RetakeStatus }) {
+  const t = useT();
+  return (
+    <p className="text-[13px] text-fg-muted">
+      {retake.maxAttempts === null
+        ? t("shome.attempts", { n: retake.attemptCount })
+        : t("shome.attemptsOf", { n: retake.attemptCount, max: retake.maxAttempts })}
+    </p>
+  );
+}
 
 /** The one action of the results page between two attempts. */
 function RetakeOffer({
@@ -125,9 +139,15 @@ export function Feedback({
     queryFn: () => api(`/app/api/attempts/${attemptId}/feedback`),
     refetchInterval: (query) => {
       const data = query.state.data;
-      return data && !data.available && data.score?.pending && query.state.dataUpdateCount < SCORE_POLLS
-        ? SCORE_POLL_MS
+      // Right after a hand-in the attempt is still being graded — between two
+      // attempts (ADR-025), or with a correction published while the exercise
+      // runs (ADR-050), where nothing is released yet and points come in.
+      const grading = data
+        ? data.available
+          ? data.evaluation.releasedAt === null && data.items.some((item) => item.points === null)
+          : data.score?.pending === true
         : false;
+      return grading && query.state.dataUpdateCount < SCORE_POLLS ? SCORE_POLL_MS : false;
     },
   });
 
@@ -172,7 +192,8 @@ export function Feedback({
       <div className="mx-auto max-w-180 space-y-8">
         {header(null)}
         {/* F-EVAL-15: between two attempts, the score and nothing else
-            (ADR-025); the correction follows once the exercise closes. */}
+            (ADR-025); the correction follows once the exercise closes, or
+            once the teacher publishes it (ADR-050). */}
         {data.score ? (
           <div className="space-y-1.5">
             <Stat
@@ -182,16 +203,7 @@ export function Feedback({
             {data.score.pending ? (
               <p className="text-[13px] text-fg-muted">{t("feedback.scorePending")}</p>
             ) : null}
-            {data.retake ? (
-              <p className="text-[13px] text-fg-muted">
-                {data.retake.maxAttempts === null
-                  ? t("shome.attempts", { n: data.retake.attemptCount })
-                  : t("shome.attemptsOf", {
-                      n: data.retake.attemptCount,
-                      max: data.retake.maxAttempts,
-                    })}
-              </p>
-            ) : null}
+            {data.retake ? <AttemptCount retake={data.retake} /> : null}
           </div>
         ) : null}
         <Card>
@@ -220,6 +232,15 @@ export function Feedback({
           value={`${formatPoints(data.points)} / ${data.totalPoints}`}
         />
       </div>
+
+      {/* The correction of an exercise published while it runs (ADR-050):
+          the retakes go on, so the page still carries the next attempt. */}
+      {data.retake ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <AttemptCount retake={data.retake} />
+          <RetakeOffer retake={data.retake} navigate={navigate} />
+        </div>
+      ) : null}
 
       {data.items.length === 0 ? (
         <Card>

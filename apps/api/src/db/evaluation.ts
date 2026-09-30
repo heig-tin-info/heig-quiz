@@ -137,6 +137,14 @@ export const evaluations = pgTable(
      */
     gradingReadyAt: timestamp("grading_ready_at", { withTimezone: true }),
     releasedAt: timestamp("released_at", { withTimezone: true }),
+    /**
+     * When the teacher published the correction of this exercise while it
+     * still ran (ADR-050): the class debrief opens, and a student's own
+     * correction follows the feedback policy as if released. Set once by the
+     * server's clock (`setCorrectionPublished`), never cleared but by a
+     * return to draft; null on every exam and poll.
+     */
+    correctionPublishedAt: timestamp("correction_published_at", { withTimezone: true }),
     /** Frozen grades at release (ADR-012); written by WP6, never recomputed. */
     releasedGrades: jsonb("released_grades"),
     modifiedAfterRelease: boolean("modified_after_release").notNull().default(false),

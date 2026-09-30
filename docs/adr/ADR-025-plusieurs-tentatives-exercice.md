@@ -7,6 +7,8 @@ Accepted (2026-09-25, issue #92, with `@quiz/domain/retake`,
 `0015_exercise_retakes.sql` and `POST /evaluations/:id/retake`). Settles
 open question 12 of `docs/spec/06-questions-ouvertes.md`. Amended
 2026-09-30 (§3): the pool's question statistics no longer read exercises.
+Amended 2026-09-30 by ADR-050: §4's score-only masking is lifted once the
+teacher publishes the correction of the exercise.
 
 ## Context
 
@@ -115,6 +117,14 @@ is the teacher's consent to the score, without which a retake is pointless.
 Once the evaluation is closed the policy applies unchanged: `immediate`
 shows the correction then, `on_release` at release. The correction of
 attempt 1 would otherwise be the key of attempt 2.
+
+*Amended by ADR-050 (2026-09-30): once the teacher publishes the correction
+of the exercise (`correction_published_at`), the masking is lifted and the
+policy applies as if released — `on_release` and `immediate` show the
+correction, the key per `showKey` — while the retakes go on; under `none`
+the score stays. From then on every attempt is graded at hand-in, retakes
+or not. That the key of attempt n−1 may now help attempt n is accepted: the
+teacher chose to publish.*
 
 ### 5. Teacher screens
 

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ByQuestion, EvaluationDetail } from "@quiz/contracts";
 
 import { api } from "../api";
+import { isLive } from "../evaluation/common";
 import { useT } from "../i18n";
 import { evaluationKey, resultsByQuestionKey } from "../queryKeys";
 import type { Route } from "../router";
@@ -133,6 +134,8 @@ export function CorrectionProjection({
 
   const back = () => navigate({ view: "results", evaluationId });
   const title = evaluation.data?.evaluation.title;
+  const stillOpen = evaluation.data !== undefined && isLive(evaluation.data.evaluation.state);
+  const handedIn = stillOpen ? (list[0]?.papers ?? 0) : null;
 
   if (questions.isLoading) {
     return (
@@ -178,6 +181,13 @@ export function CorrectionProjection({
             {t("correction.title")}
             {title ? ` · ${title}` : null}
           </span>
+          {/* A published correction of an exercise still open (ADR-050):
+              the papers counted are those handed in so far, read on load. */}
+          {handedIn !== null ? (
+            <span className="shrink-0 text-[13px] tabular-nums text-fg-muted max-sm:hidden">
+              · {t("correction.handedIn", { n: handedIn })}
+            </span>
+          ) : null}
         </span>
         <nav aria-label={t("correction.steps")} className="mx-auto flex gap-1.5 max-lg:hidden">
           {list.map((q, index) => (

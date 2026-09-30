@@ -14,6 +14,7 @@
  * Pure: the instant is the caller's.
  */
 import { isInClass, type EvaluationModeName, type LobbyName } from "./evaluationConfig.js";
+import { isEvaluationOpen } from "./itemList.js";
 
 /** A `scheduled` activity is live this long before it opens. */
 export const LIVE_LEAD_MS = 15 * 60_000;
@@ -44,7 +45,7 @@ const ms = (d: Date | string) => new Date(d).getTime();
 export function isLiveNow(row: LiveFacts, now: Date | number): boolean {
   if (row.takeHome) return false;
   const t = typeof now === "number" ? now : now.getTime();
-  if (row.state === "lobby" || row.state === "running" || row.state === "paused") {
+  if (isEvaluationOpen(row.state)) {
     return ms(row.updatedAt) > t - LIVE_STALE_MS;
   }
   if (row.state === "scheduled" && row.opensAt !== null) {

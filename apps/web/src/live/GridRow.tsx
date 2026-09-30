@@ -96,7 +96,7 @@ export const GridRow = memo(function GridRow({
   commonDeadline,
   showScore,
   live,
-  retakes,
+  reopenable,
   paused,
   clock,
   showAnswers,
@@ -121,8 +121,8 @@ export const GridRow = memo(function GridRow({
   showScore: boolean;
   /** The evaluation is running or paused. */
   live: boolean;
-  /** An exercise with retakes: a finished row is retaken, never reopened. */
-  retakes: boolean;
+  /** The server's `reopenable`: false with retakes (ADR-025) or a published correction (ADR-050). */
+  reopenable: boolean;
   /** The evaluation is paused: the countdown freezes with it (W16). */
   paused: boolean;
   /** Server time, stable; the countdown re-reads it on its own tick. */
@@ -330,7 +330,7 @@ export const GridRow = memo(function GridRow({
               <DoorOpen />
             </IconButton>
           ) : null}
-          {finished && live && !retakes ? (
+          {finished && live && reopenable ? (
             <IconButton
               size="sm"
               className={ROW_BUTTON}

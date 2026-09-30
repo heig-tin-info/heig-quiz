@@ -20,7 +20,7 @@
  * written through the `evaluation` module's narrow writers (`setRelease`,
  * `clearRelease`, `setModifiedAfterRelease`), never by an UPDATE of its own.
  */
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, notExists } from "drizzle-orm";
 
 import type {
   ByQuestion,
@@ -39,14 +39,22 @@ import type {
 import { JUSTIFICATION_KEY } from "@quiz/contracts";
 import {
   attemptTotal,
+  correctionPublishRefusal,
   debrief,
   describe,
+  feedbackGate,
   gradeFromPoints,
   histogram,
+  isDebriefOpen,
+  isEvaluationOpen,
   isEvaluationOver,
+  isFinishedAttempt,
   retakeRefusal,
   round2,
   type AttemptTally,
+  type CorrectionPublishRefusal,
+  type FeedbackGate,
+  type FeedbackRefusal,
 } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
@@ -60,6 +68,7 @@ import {
 import { DomainError } from "../http.js";
 import {
   applyState,
+  byId,
   cachedGrade,
   cachedGrades,
   clearRelease,
@@ -71,6 +80,7 @@ import {
   classroomIdOf,
   scaleOf,
   seatsOf,
+  setCorrectionPublished,
   setModifiedAfterRelease,
   setRelease,
   settingsOf,
@@ -121,6 +131,26 @@ export class NotOver extends ResultsError {
 
 /** Closed, being graded or released: the rule the web reads too (`isEvaluationOver`). */
 const isOver = (evaluation: EvaluationRecord): boolean => isEvaluationOver(evaluation.state);
+
+/** The correction of this exercise was published while it ran (ADR-050). */
+const correctionPublished = (evaluation: EvaluationRecord): boolean =>
+  evaluation.correctionPublishedAt !== null;
+
+/** "Publish the correction" on an exam or a poll (ADR-050): never, whatever the state. */
+export class CorrectionNotAllowed extends ResultsError {
+  constructor(reason: Exclude<CorrectionPublishRefusal, "not_open">) {
+    super("correction_not_allowed", 422, `the correction of a ${reason} is never published early`, {
+      reason,
+    });
+  }
+}
+
+/** …and on an exercise that is not running (not yet, or no more). */
+export class CorrectionNotOpen extends ResultsError {
+  constructor() {
+    super("correction_not_open", 409, "only a running exercise publishes its correction early");
+  }
+}
 
 // --- The grade table ------------------------------------------------------
 
@@ -425,22 +455,76 @@ export async function markModifiedAfterRelease(
   return setModifiedAfterRelease(db, evaluation.id, now);
 }
 
+// --- Publishing the correction of a running exercise (ADR-050) ----------
+
+/**
+ * "Publish the correction" of an exercise that still runs: the class
+ * debrief opens ({@link byQuestion}) and each student's own correction
+ * follows the feedback policy as if released ({@link feedbackAvailable}).
+ * Irreversible, and idempotent: a second call — a double click, a colleague
+ * — answers the first publication's instant and does nothing else
+ * (`first: false`), as a re-release keeps the original `released_at`.
+ *
+ * `toGrade` lists the finished attempts nothing has graded yet, for the
+ * caller to send to the grading pass: without retakes, a hand-in waited for
+ * the close. From now on each hand-in is graded alone
+ * (`live.gradeAtHandIn`).
+ */
+export async function publishCorrection(
+  db: Db,
+  evaluation: EvaluationRecord,
+  now: Date,
+): Promise<{ publishedAt: Date; first: boolean; toGrade: string[] }> {
+  const refusal = correctionPublishRefusal(evaluation);
+  if (refusal === "exam" || refusal === "poll") throw new CorrectionNotAllowed(refusal);
+  if (!(await setCorrectionPublished(db, evaluation.id, now))) {
+    // Published already (the first instant is the answer), or not running.
+    const at = (await byId(db, evaluation.id))?.correctionPublishedAt ?? null;
+    if (at === null) throw new CorrectionNotOpen();
+    return { publishedAt: at, first: false, toGrade: [] };
+  }
+  const ungraded = await db
+    .select({ id: attempts.id })
+    .from(attempts)
+    .where(
+      and(
+        eq(attempts.evaluationId, evaluation.id),
+        inArray(attempts.state, ["submitted", "expired"]),
+        notExists(
+          db.select({ id: gradings.id }).from(gradings).where(eq(gradings.attemptId, attempts.id)),
+        ),
+      ),
+    );
+  return { publishedAt: now, first: true, toGrade: ungraded.map((a) => a.id) };
+}
+
 // --- Per-question view (F-RES-03) ----------------------------------------
 
 /**
  * The debrief of every item — the Results "Questions" tab and its projection
  * in class (ADR-033). Only once the evaluation is over: before, a projected
- * key would reach a student still answering, or one about to retake.
+ * key would reach a student still answering, or one about to retake — unless
+ * the teacher published the correction of an exercise, an explicit act
+ * (ADR-050). While it still runs, it counts the FINISHED papers only: the
+ * kept attempt falls back to one in progress when a student has none
+ * finished (ADR-025 §3), and a paper still being written is nobody's result.
  */
 export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<ByQuestion[]> {
-  if (!isOver(evaluation)) throw new NotOver("the debrief of a question waits for the close");
+  if (!isDebriefOpen({ state: evaluation.state, correctionPublished: correctionPublished(evaluation) })) {
+    throw new NotOver("the debrief of a question waits for the close");
+  }
   const items = await joinedItems(db, evaluation.id);
   const validated = await validatedGradings(db, evaluation.id);
   // The class debrief is about the CLASS: the teacher's own rehearsal is not
   // in the success rates and not in the answer distributions (ADR-018).
   const staffAttempts = await staffAttemptIds(db, evaluation);
-  // One attempt per student, the one that counts (ADR-025).
-  const counted = countedAttempts(await keptAttempts(db, evaluation), staffAttempts);
+  // One attempt per student, the one that counts (ADR-025) — handed in, while
+  // the exercise is still open (ADR-050).
+  const kept = await keptAttempts(db, evaluation);
+  const handedIn = isOver(evaluation)
+    ? kept
+    : new Map([...kept].filter(([, attempt]) => isFinishedAttempt(attempt.state)));
+  const counted = countedAttempts(handedIn, staffAttempts);
   const views = itemViews(items, validated, counted);
   const answerRows =
     counted.size === 0
@@ -480,6 +564,7 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
     const { outcomes, successRate, distribution, casePassRate } = debrief(tallies);
     return {
       item: views[index]!,
+      papers: counted.size,
       student: studentView({
         type: item.question.type,
         version,
@@ -506,20 +591,20 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
 // --- Student feedback (F-RES-04, docs/05 §5.7) ---------------------------
 
 /**
- * An exercise that allows retakes, while it still takes them (ADR-025): the
+ * An exercise that allows retakes, while it still takes them (ADR-025) —
+ * lobby, running or paused. Until the correction is published the
  * student reads the SCORE of a finished attempt and nothing else, whatever
  * the policy says — the correction of attempt 1 would be the key of
  * attempt 2. Once the evaluation is closed the teacher's feedback policy
  * decides, unchanged: `immediate` shows the correction, `on_release` waits
  * for the release, `none` shows nothing — the score included.
  * The score is shown under `none` too: a retake without it has no point, and
- * enabling retakes is the teacher's consent to it.
+ * enabling retakes is the teacher's consent to it. Once the teacher publishes
+ * the correction (ADR-050) the policy applies as if released, retakes open
+ * or not (`feedbackGate`); under `none` the score stays.
  */
-function scoreOnly(evaluation: EvaluationRecord): boolean {
-  return (
-    retakesEnabled(evaluation) &&
-    (evaluation.state === "lobby" || evaluation.state === "running" || evaluation.state === "paused")
-  );
+function retakesOpen(evaluation: EvaluationRecord): boolean {
+  return retakesEnabled(evaluation) && isEvaluationOpen(evaluation.state);
 }
 
 /**
@@ -531,7 +616,7 @@ function scoreOnly(evaluation: EvaluationRecord): boolean {
  */
 export function scoreVisible(evaluation: EvaluationRecord, attemptState: string): boolean {
   return feedbackAvailable(feedbackOf(evaluation), evaluation, attemptState).ok
-    || (scoreOnly(evaluation) && attemptState !== "in_progress" && attemptState !== "not_started");
+    || (retakesOpen(evaluation) && attemptState !== "in_progress" && attemptState !== "not_started");
 }
 
 /**
@@ -560,27 +645,31 @@ export function resultsState(
  * Whether the feedback policy shows THE KEY to a student whose attempt is in
  * `attemptState`, now: the rule {@link studentFeedback} applies, for the
  * drill, which never shows a key earlier than the exercise would (ADR-041
- * §13).
+ * §13) — nor later: a published correction (ADR-050) opens both at once.
  */
 export function keyShownTo(evaluation: EvaluationRecord, attemptState: string): boolean {
   const policy = feedbackOf(evaluation);
   return policy.showKey && feedbackAvailable(policy, evaluation, attemptState).ok;
 }
 
-/** Whether a student may see anything at all right now. */
+/**
+ * Whether a student may see anything at all right now: `feedbackGate`
+ * (`@quiz/domain`) fed with this evaluation. A published correction
+ * (ADR-050) counts as the release and lifts the score-only masking; the
+ * drill's `keyShownTo` reads the same answer, so it follows by construction.
+ */
 function feedbackAvailable(
   policy: FeedbackPolicy,
   evaluation: EvaluationRecord,
   attemptState: string,
-):
-  | { ok: true }
-  | { ok: false; reason: "results_pending" | "no_feedback" | "attempt_open" | "retakes_open" } {
-  const open = attemptState === "in_progress" || attemptState === "not_started";
-  if (!open && scoreOnly(evaluation)) return { ok: false, reason: "retakes_open" };
-  if (policy.when === "none") return { ok: false, reason: "no_feedback" };
-  if (open) return { ok: false, reason: "attempt_open" };
-  if (policy.when === "immediate") return { ok: true };
-  return evaluation.releasedAt === null ? { ok: false, reason: "results_pending" } : { ok: true };
+): FeedbackGate {
+  return feedbackGate({
+    when: policy.when,
+    attemptOpen: attemptState === "in_progress" || attemptState === "not_started",
+    retakesOpen: retakesOpen(evaluation),
+    released: evaluation.releasedAt !== null,
+    correctionPublished: correctionPublished(evaluation),
+  });
 }
 
 /**
@@ -626,23 +715,27 @@ export async function studentFeedback(
 ): Promise<StudentFeedback> {
   const policy = feedbackOf(evaluation);
   const gate = feedbackAvailable(policy, evaluation, attempt.state);
+  const pending = (reason: FeedbackRefusal) => ({
+    available: false as const,
+    reason,
+    evaluation: { id: evaluation.id, title: evaluation.title },
+  });
+  if (!gate.ok && gate.reason !== "retakes_open") return pending(gate.reason);
+  // While the exercise takes retakes, the page offers the next attempt — on
+  // the score alone (ADR-025) or beside a published correction (ADR-050).
+  const retake =
+    attempt.userId !== null && retakesOpen(evaluation)
+      ? { retake: await retakeStatus(db, evaluation, attempt.userId, now) }
+      : {};
   if (!gate.ok) {
-    const pending = {
-      available: false as const,
-      reason: gate.reason,
-      evaluation: { id: evaluation.id, title: evaluation.title },
-    };
-    if (gate.reason !== "retakes_open") return pending;
     // The points of THIS attempt, and not one item: no verdict, no answer,
     // no key (ADR-025).
     const items = await joinedItems(db, evaluation.id);
     const tally = (await tallyByAttempt(db, [attempt.id])).get(attempt.id);
     return {
-      ...pending,
+      ...pending(gate.reason),
       score: scoreOf(tally, items.length, totalPointsOf(items.map((i) => i.item))),
-      ...(attempt.userId === null
-        ? {}
-        : { retake: await retakeStatus(db, evaluation, attempt.userId, now) }),
+      ...retake,
     };
   }
 
@@ -710,6 +803,7 @@ export async function studentFeedback(
     totalPoints: hit ? hit.totalPoints : totalPoints,
     grade: hit ? hit.grade : gradeFromPoints(points, totalPoints, scaleOf(evaluation)),
     items: result,
+    ...retake,
   };
 }
 

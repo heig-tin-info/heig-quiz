@@ -154,7 +154,7 @@ You do not have to hand in. When your time is up, the attempt closes by itself a
   <figcaption>Before publication, the page only says the results are not published yet.</figcaption>
 </figure>
 
-For a graded quiz, nothing shows until your teacher publishes the results: the page reads **Results not published yet**. For an exercise, the feedback may be immediate. An evaluation can also be set to show no feedback at all, in which case the page says so and your teacher tells you your grade otherwise.
+For a graded quiz, nothing shows until your teacher publishes the results: the page reads **Results not published yet**. For an exercise, the feedback may be immediate, and your teacher may also publish the correction while the exercise is still open: your results page then shows it, and **Try again** stays there if you may retake. An evaluation can also be set to show no feedback at all, in which case the page says so and your teacher tells you your grade otherwise.
 
 <figure markdown="span">
   ![The results on a phone: grade 6.0, points 11 of 11, then one card per question with the chosen answer, the verdict per blank or per test case and the score](../assets/screenshots/feedback-phone-light.png#only-light){ width="390" }

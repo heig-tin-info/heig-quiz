@@ -1,0 +1,1 @@
+ALTER TABLE "evaluations" ADD COLUMN "correction_published_at" timestamp with time zone;

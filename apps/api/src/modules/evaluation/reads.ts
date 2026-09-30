@@ -130,6 +130,7 @@ export function toEvaluation(row: EvaluationRecord): Evaluation {
     closedAt: isoOrNull(row.closedAt),
     releasedAt: isoOrNull(row.releasedAt),
     modifiedAfterRelease: row.modifiedAfterRelease,
+    correctionPublishedAt: isoOrNull(row.correctionPublishedAt),
     createdAt: iso(row.createdAt),
     originRevision: row.originRevision,
   };
