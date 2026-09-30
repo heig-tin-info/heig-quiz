@@ -27,20 +27,22 @@ describe("cellState — the Results switch", () => {
     expect(cellState(cell, false)).toBe("answered");
   });
 
-  it("has a colour for each of the three verdicts, provisional or not", () => {
-    const of = (verdict: "correct" | "partial" | "wrong", provisional: boolean) =>
-      cellState(makeCell({ itemId: ITEM, status: "done", verdict, provisional }), true);
-    expect(of("correct", true)).toBe("correct");
-    expect(of("partial", true)).toBe("partial");
-    expect(of("wrong", true)).toBe("wrong");
-    expect(of("correct", false)).toBe("correct");
-    expect(of("wrong", false)).toBe("wrong");
+  it.each([
+    ["correct", true],
+    ["partial", true],
+    ["wrong", true],
+    ["correct", false],
+    ["wrong", false],
+  ] as const)("has a colour for the verdict %s (provisional: %s)", (verdict, provisional) => {
+    const cell = makeCell({ itemId: ITEM, status: "done", verdict, provisional });
+    expect(cellState(cell, true)).toBe(verdict);
   });
 
-  it("leaves a cell with no verdict on its progress state", () => {
-    const empty = makeCell({ itemId: ITEM, status: "empty" });
-    expect(cellState(empty, true)).toBe("blank");
-    expect(cellState(makeCell({ itemId: ITEM, status: "done" }), true)).toBe("done");
+  it.each([
+    ["empty", "blank"],
+    ["done", "done"],
+  ] as const)("leaves a %s cell with no verdict on its progress state", (status, shown) => {
+    expect(cellState(makeCell({ itemId: ITEM, status }), true)).toBe(shown);
   });
 });
 
@@ -127,24 +129,19 @@ describe("presence — n of m", () => {
 describe("ownDeadline", () => {
   const close = "2026-09-28T10:00:00.000Z";
 
-  it("is false for the common deadline, however it is written", () => {
-    expect(ownDeadline(close, close)).toBe(false);
-    expect(ownDeadline("2026-09-28T10:00:00Z", close)).toBe(false);
-    expect(ownDeadline("2026-09-28T12:00:00+02:00", close)).toBe(false);
-  });
-
-  it("is true for an extension, a bonus or a late start", () => {
-    expect(ownDeadline("2026-09-28T10:05:00.000Z", close)).toBe(true);
-    expect(ownDeadline("2026-09-28T09:59:59.000Z", close)).toBe(true);
-  });
-
-  it("is true for any deadline when there is no common close", () => {
-    expect(ownDeadline("2026-09-28T10:05:00.000Z", null)).toBe(true);
-  });
-
-  it("is false when the row has no deadline at all", () => {
-    expect(ownDeadline(null, close)).toBe(false);
-    expect(ownDeadline(null, null)).toBe(false);
+  it.each([
+    // The common deadline, however it is written.
+    ["is false for the common deadline", close, close, false],
+    ["is false for the common deadline without milliseconds", "2026-09-28T10:00:00Z", close, false],
+    ["is false for the common deadline in another offset", "2026-09-28T12:00:00+02:00", close, false],
+    // An extension, a bonus or a late start.
+    ["is true for a later deadline", "2026-09-28T10:05:00.000Z", close, true],
+    ["is true for an earlier deadline", "2026-09-28T09:59:59.000Z", close, true],
+    ["is true for any deadline without a common close", "2026-09-28T10:05:00.000Z", null, true],
+    ["is false for no deadline at all", null, close, false],
+    ["is false for no deadline and no common close", null, null, false],
+  ])("%s", (_, own, common, shown) => {
+    expect(ownDeadline(own, common)).toBe(shown);
   });
 });
 

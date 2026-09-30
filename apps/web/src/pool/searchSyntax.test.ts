@@ -16,56 +16,47 @@ import {
  */
 
 describe("parseSearch", () => {
-  it("keeps plain words as the free text", () => {
-    expect(parseSearch("  pointeurs   null ").q).toBe("pointeurs null");
+  it.each([
+    ["keeps plain words as the free text", "  pointeurs   null ", { q: "pointeurs null" }],
+    ["reads a tag with and without its hash", "tag:pointeurs tag:#memoire", { tags: ["pointeurs", "memoire"] }],
+    ["lowercases a tag and never lists it twice", "tag:Memoire tag:memoire", { tags: ["memoire"] }],
+    [
+      "takes a quoted phrase whole, quotes stripped",
+      '"null pointer" tag:"deux mots"',
+      { q: "null pointer", tags: ["deux mots"] },
+    ],
+    ["reads the type ids", "type:mcq type:code", { types: ["mcq", "code"] }],
+    ["leaves an unknown type as text", "type:essay", { types: [], q: "type:essay" }],
+    ["drops a broken difficulty back to text", "difficulty:hard", { q: "difficulty:hard" }],
+    ["is not a token without a value", "tag:", { tags: [], q: "tag:" }],
+    ["intersects two version bounds", "version:>1 version:<5", { versionMin: 2, versionMax: 4 }],
+  ])("%s", (_, line, expected) => {
+    expect(parseSearch(line)).toMatchObject(expected);
   });
 
-  it("reads a tag with and without its hash", () => {
-    expect(parseSearch("tag:pointeurs tag:#memoire").tags).toEqual(["pointeurs", "memoire"]);
+  // Every difficulty form, expanded into the list the API takes and clamped
+  // to the 1…5 scale.
+  it.each([
+    ["difficulty:3", [3]],
+    ["difficulty:>3", [4, 5]],
+    ["difficulty:>=2", [2, 3, 4, 5]],
+    ["difficulty:<3", [1, 2]],
+    ["difficulty:<=2", [1, 2]],
+    ["difficulty:2-4", [2, 3, 4]],
+    ["difficulty:>=0", [1, 2, 3, 4, 5]],
+  ])("expands %s", (line, difficulties) => {
+    expect(parseSearch(line).difficulties).toEqual(difficulties);
   });
 
-  it("lowercases a tag and never lists it twice", () => {
-    expect(parseSearch("tag:Memoire tag:memoire").tags).toEqual(["memoire"]);
-  });
-
-  it("takes a quoted phrase whole, quotes stripped", () => {
-    const parsed = parseSearch('"null pointer" tag:"deux mots"');
-    expect(parsed.q).toBe("null pointer");
-    expect(parsed.tags).toEqual(["deux mots"]);
-  });
-
-  it("reads the four type ids and leaves an unknown one as text", () => {
-    expect(parseSearch("type:mcq type:code").types).toEqual(["mcq", "code"]);
-    const unknown = parseSearch("type:essay");
-    expect(unknown.types).toEqual([]);
-    expect(unknown.q).toBe("type:essay");
-  });
-
-  it("expands every difficulty form into the list the API takes", () => {
-    expect(parseSearch("difficulty:3").difficulties).toEqual([3]);
-    expect(parseSearch("difficulty:>3").difficulties).toEqual([4, 5]);
-    expect(parseSearch("difficulty:>=2").difficulties).toEqual([2, 3, 4, 5]);
-    expect(parseSearch("difficulty:<3").difficulties).toEqual([1, 2]);
-    expect(parseSearch("difficulty:<=2").difficulties).toEqual([1, 2]);
-    expect(parseSearch("difficulty:2-4").difficulties).toEqual([2, 3, 4]);
-  });
-
-  it("clamps a difficulty to the 1…5 scale and drops a broken one", () => {
-    expect(parseSearch("difficulty:>=0").difficulties).toEqual([1, 2, 3, 4, 5]);
-    expect(parseSearch("difficulty:hard").q).toBe("difficulty:hard");
-  });
-
-  it("turns every version form into bounds", () => {
-    expect(parseSearch("version:v1")).toMatchObject({ versionMin: 1, versionMax: 1 });
-    expect(parseSearch("version:1")).toMatchObject({ versionMin: 1, versionMax: 1 });
-    expect(parseSearch("version:>1")).toMatchObject({ versionMin: 2, versionMax: null });
-    expect(parseSearch("version:>=2")).toMatchObject({ versionMin: 2, versionMax: null });
-    expect(parseSearch("version:<3")).toMatchObject({ versionMin: null, versionMax: 2 });
-    expect(parseSearch("version:2-4")).toMatchObject({ versionMin: 2, versionMax: 4 });
-  });
-
-  it("intersects two version bounds", () => {
-    expect(parseSearch("version:>1 version:<5")).toMatchObject({ versionMin: 2, versionMax: 4 });
+  it.each([
+    ["version:v1", 1, 1],
+    ["version:1", 1, 1],
+    ["version:>1", 2, null],
+    ["version:>=2", 2, null],
+    ["version:<3", null, 2],
+    ["version:2-4", 2, 4],
+  ])("turns %s into bounds", (line, versionMin, versionMax) => {
+    expect(parseSearch(line)).toMatchObject({ versionMin, versionMax });
   });
 
   it("reads a whole line of filters and the words left over", () => {
@@ -79,11 +70,6 @@ describe("parseSearch", () => {
       versionMax: null,
     });
   });
-
-  it("is not a token without a value", () => {
-    expect(parseSearch("tag:").tags).toEqual([]);
-    expect(parseSearch("tag:").q).toBe("tag:");
-  });
 });
 
 describe("difficultyValues / versionBounds", () => {
@@ -94,44 +80,37 @@ describe("difficultyValues / versionBounds", () => {
 });
 
 describe("withoutToken", () => {
-  it("takes one tag out and leaves the rest of the line alone", () => {
-    expect(withoutToken("tag:a tag:b segfault", "tag", "a")).toBe("tag:b segfault");
-    expect(withoutToken("tag:#a segfault", "tag", "a")).toBe("segfault");
-  });
-
-  it("takes the whole range when a value it produced is removed", () => {
-    expect(withoutToken("difficulty:>3 ptr", "difficulty", "4")).toBe("ptr");
-    expect(withoutToken("difficulty:>3 ptr", "difficulty", "2")).toBe("difficulty:>3 ptr");
-  });
-
-  it("takes every version token at once, since the chip is one filter", () => {
-    expect(withoutToken("version:>1 version:<5 ptr", "version")).toBe("ptr");
-  });
-
-  it("leaves a line with no such token untouched", () => {
-    expect(withoutToken("segfault", "type", "code")).toBe("segfault");
+  it.each([
+    ["takes one tag out and leaves the rest", "tag:a tag:b segfault", "tag", "a", "tag:b segfault"],
+    ["takes a hashed tag out", "tag:#a segfault", "tag", "a", "segfault"],
+    ["takes the whole range a removed value came from", "difficulty:>3 ptr", "difficulty", "4", "ptr"],
+    ["keeps a range the value is not in", "difficulty:>3 ptr", "difficulty", "2", "difficulty:>3 ptr"],
+    // The version chip is one filter: every version token goes at once.
+    ["takes every version token at once", "version:>1 version:<5 ptr", "version", undefined, "ptr"],
+    ["leaves a line with no such token untouched", "segfault", "type", "code", "segfault"],
+  ] as const)("%s", (_, line, kind, value, expected) => {
+    expect(withoutToken(line, kind, value)).toBe(expected);
   });
 });
 
 describe("completionAt", () => {
-  it("opens on an empty tag token", () => {
-    expect(completionAt("tag:", 4)).toMatchObject({ kind: "tag", prefix: "", hash: false });
+  it.each([
+    ["opens on an empty tag token", "tag:", 4, { kind: "tag", prefix: "", hash: false }],
+    ["carries what follows the colon, hash included", "tag:#poi", 8, { kind: "tag", prefix: "poi", hash: true }],
+    ["carries a type prefix", "type:co", 7, { kind: "type", prefix: "co" }],
+    // Only the token the caret is in.
+    ["answers for the first token under the caret", "tag:a type:m", 5, { kind: "tag", prefix: "a" }],
+    ["answers for the second token under the caret", "tag:a type:m", 12, { kind: "type", prefix: "m" }],
+  ])("%s", (_, line, caret, expected) => {
+    expect(completionAt(line, caret)).toMatchObject(expected);
   });
 
-  it("carries what follows the colon, hash included", () => {
-    expect(completionAt("tag:#poi", 8)).toMatchObject({ kind: "tag", prefix: "poi", hash: true });
-    expect(completionAt("type:co", 7)).toMatchObject({ kind: "type", prefix: "co" });
-  });
-
-  it("stays shut on free text, on a finished token and on the other two kinds", () => {
-    expect(completionAt("pointeurs", 9)).toBe(null);
-    expect(completionAt("tag:a ", 6)).toBe(null);
-    expect(completionAt("difficulty:", 11)).toBe(null);
-  });
-
-  it("only answers for the token the caret is in", () => {
-    expect(completionAt("tag:a type:m", 5)).toMatchObject({ kind: "tag", prefix: "a" });
-    expect(completionAt("tag:a type:m", 12)).toMatchObject({ kind: "type", prefix: "m" });
+  it.each([
+    ["free text", "pointeurs", 9],
+    ["a finished token", "tag:a ", 6],
+    ["a kind it does not complete", "difficulty:", 11],
+  ])("stays shut on %s", (_, line, caret) => {
+    expect(completionAt(line, caret)).toBe(null);
   });
 });
 
@@ -144,18 +123,11 @@ describe("applyCompletion", () => {
     });
   });
 
-  it("keeps the hash the token was written with", () => {
-    const at = completionAt("tag:#poi", 8)!;
-    expect(applyCompletion("tag:#poi", at, "pointeurs").text).toBe("tag:#pointeurs ");
-  });
-
-  it("replaces the whole word when the caret sits in its middle", () => {
-    const at = completionAt("tag:poXnteurs ptr", 6)!;
-    expect(applyCompletion("tag:poXnteurs ptr", at, "pointeurs").text).toBe("tag:pointeurs ptr");
-  });
-
-  it("does not double the space that is already there", () => {
-    const at = completionAt("tag:poi ptr", 7)!;
-    expect(applyCompletion("tag:poi ptr", at, "pointeurs").text).toBe("tag:pointeurs ptr");
+  it.each([
+    ["keeps the hash the token was written with", "tag:#poi", 8, "tag:#pointeurs "],
+    ["replaces the whole word when the caret sits in its middle", "tag:poXnteurs ptr", 6, "tag:pointeurs ptr"],
+    ["does not double the space that is already there", "tag:poi ptr", 7, "tag:pointeurs ptr"],
+  ])("%s", (_, line, caret, expected) => {
+    expect(applyCompletion(line, completionAt(line, caret)!, "pointeurs").text).toBe(expected);
   });
 });

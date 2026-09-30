@@ -14,8 +14,21 @@ import {
 } from "./filters";
 
 describe("questionQuery", () => {
-  it("asks for one page and nothing else when no filter is set", () => {
-    expect(questionQuery(EMPTY_FILTERS)).toBe("?limit=25");
+  // The exact query of a few states, parameter order included.
+  it.each([
+    ["asks for one page and nothing else when no filter is set", EMPTY_FILTERS, undefined, "?limit=25"],
+    ["appends the cursor of the next page", EMPTY_FILTERS, "c-42", "?limit=25&cursor=c-42"],
+    ["appends no cursor for a null one", EMPTY_FILTERS, null, "?limit=25"],
+    ["leaves the category out when every category is wanted", { ...EMPTY_FILTERS, categoryId: null }, undefined, "?limit=25"],
+    ["sends nothing while the sort is the API's own default", EMPTY_FILTERS, undefined, "?limit=25"],
+    [
+      "keeps the parameter order stable, cursor last",
+      { ...EMPTY_FILTERS, sort: "name" as const, dir: "asc" as const },
+      "c-1",
+      "?sort=name&dir=asc&limit=25&cursor=c-1",
+    ],
+  ])("%s", (_, filters, cursor, expected) => {
+    expect(questionQuery(filters, cursor)).toBe(expected);
   });
 
   it("composes every filter into the query the API parses", () => {
@@ -39,14 +52,8 @@ describe("questionQuery", () => {
     expect(params.get("limit")).toBe("25");
   });
 
-  it("leaves the category out when every category is wanted", () => {
-    expect(questionQuery({ ...EMPTY_FILTERS, categoryId: null })).not.toContain("categoryId");
+  it("sends the category when one is picked", () => {
     expect(questionQuery({ ...EMPTY_FILTERS, categoryId: "cat-1" })).toContain("categoryId=cat-1");
-  });
-
-  it("appends the cursor of the next page", () => {
-    expect(questionQuery(EMPTY_FILTERS, "c-42")).toBe("?limit=25&cursor=c-42");
-    expect(questionQuery(EMPTY_FILTERS, null)).toBe("?limit=25");
   });
 
   it("is stable for equal states", () => {
@@ -57,23 +64,23 @@ describe("questionQuery", () => {
 });
 
 describe("activeFilterCount", () => {
-  it("counts every active filter, and the category is not one", () => {
-    expect(activeFilterCount(EMPTY_FILTERS)).toBe(0);
-    expect(activeFilterCount({ ...EMPTY_FILTERS, categoryId: "cat-1" })).toBe(0);
-    expect(
-      activeFilterCount({
-        ...EMPTY_FILTERS,
-        q: "ptr",
-        types: ["code"],
-        tags: ["a", "b"],
-        difficulties: [5],
-        includeDeleted: true,
-      }),
-    ).toBe(6);
-  });
-
-  it("ignores a whitespace-only search", () => {
-    expect(activeFilterCount({ ...EMPTY_FILTERS, q: "   " })).toBe(0);
+  it.each([
+    ["nothing", EMPTY_FILTERS, 0],
+    ["the category, which is not a filter", { ...EMPTY_FILTERS, categoryId: "cat-1" }, 0],
+    [
+      "every active filter",
+      { ...EMPTY_FILTERS, q: "ptr", types: ["code"], tags: ["a", "b"], difficulties: [5], includeDeleted: true },
+      6,
+    ],
+    ["a whitespace-only search as nothing", { ...EMPTY_FILTERS, q: "   " }, 0],
+    // A token of the search field is a filter like a chip.
+    ["two tag tokens of the field", { ...EMPTY_FILTERS, q: "tag:a tag:b" }, 2],
+    ["a version token of the field", { ...EMPTY_FILTERS, q: "version:>2" }, 1],
+    // A statistics range counts once, and "without statistics" alone is none.
+    ["two ranges and without-stats", { ...EMPTY_FILTERS, rateMin: 20, rateMax: 60, timeMin: 30, withoutStats: true }, 2],
+    ["without-stats alone", { ...EMPTY_FILTERS, withoutStats: true }, 0],
+  ])("counts %s", (_, filters, count) => {
+    expect(activeFilterCount(filters)).toBe(count);
   });
 });
 
@@ -85,11 +92,6 @@ describe("toggle", () => {
 });
 
 describe("questionQuery · sort and version", () => {
-  it("sends nothing while the sort is the API's own default", () => {
-    expect(questionQuery(EMPTY_FILTERS)).not.toContain("sort");
-    expect(questionQuery(EMPTY_FILTERS)).not.toContain("dir");
-  });
-
   it("names the column and the direction once either leaves the default", () => {
     const params = new URLSearchParams(
       questionQuery({ ...EMPTY_FILTERS, sort: "name", dir: "asc" }).slice(1),
@@ -112,11 +114,6 @@ describe("questionQuery · sort and version", () => {
     expect(params.get("versionMax")).toBe("4");
   });
 
-  it("keeps the parameter order stable, cursor last", () => {
-    expect(questionQuery({ ...EMPTY_FILTERS, sort: "name", dir: "asc" }, "c-1")).toBe(
-      "?sort=name&dir=asc&limit=25&cursor=c-1",
-    );
-  });
 });
 
 describe("resolveFilters", () => {
@@ -146,11 +143,6 @@ describe("resolveFilters", () => {
     expect(params.get("type")).toBe("mcq");
     expect(params.get("q")).toBe("null pointer");
   });
-
-  it("counts a token of the field as an active filter", () => {
-    expect(activeFilterCount({ ...EMPTY_FILTERS, q: "tag:a tag:b" })).toBe(2);
-    expect(activeFilterCount({ ...EMPTY_FILTERS, q: "version:>2" })).toBe(1);
-  });
 });
 
 describe("the statistics bounds (F-STAT-03)", () => {
@@ -169,14 +161,15 @@ describe("the statistics bounds (F-STAT-03)", () => {
     expect(matchesStats(stats(-0.3), EMPTY_FILTERS)).toBe(true);
   });
 
-  it("bounds the rate in whole percent, inclusive, as the panel shows it", () => {
-    const f = { ...EMPTY_FILTERS, rateMin: 40, rateMax: 73 };
-    expect(matchesStats(stats(0.4), f)).toBe(true);
-    expect(matchesStats(stats(0.73), f)).toBe(true);
-    expect(matchesStats(stats(0.39), f)).toBe(false);
-    expect(matchesStats(stats(0.74), f)).toBe(false);
-    // 0.725 rounds to 73 %, what the panel reads.
-    expect(matchesStats(stats(0.725), { ...EMPTY_FILTERS, rateMin: 73 })).toBe(true);
+  // In whole percent, inclusive, as the panel shows it: 0.725 rounds to 73 %.
+  it.each([
+    [0.4, 40, 73, true],
+    [0.73, 40, 73, true],
+    [0.39, 40, 73, false],
+    [0.74, 40, 73, false],
+    [0.725, 73, null, true],
+  ])("bounds a rate of %s by [%s, %s]: %s", (p, rateMin, rateMax, kept) => {
+    expect(matchesStats(stats(p), { ...EMPTY_FILTERS, rateMin, rateMax })).toBe(kept);
   });
 
   it("reads a range typed backwards as the same span", () => {
@@ -223,11 +216,9 @@ describe("the statistics bounds (F-STAT-03)", () => {
     expect(matchesStats(stats(0.6), f)).toBe(true);
   });
 
-  it("counts each range as one filter, never sends one, and asks for the largest page", () => {
+  it("never sends a range, and asks for the largest page", () => {
     const f = { ...EMPTY_FILTERS, rateMin: 20, rateMax: 60, timeMin: 30, withoutStats: true };
     expect(hasStatsFilter(f)).toBe(true);
-    expect(activeFilterCount(f)).toBe(2);
-    expect(activeFilterCount({ ...EMPTY_FILTERS, withoutStats: true })).toBe(0);
     expect(questionQuery(f)).toBe("?limit=200");
     expect(questionQuery({ ...EMPTY_FILTERS, withoutStats: true })).toBe("?limit=25");
   });
