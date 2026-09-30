@@ -4,7 +4,7 @@ import type { Me } from "@quiz/contracts";
 
 import { cx, Tip, useCoarsePointer } from "./layers";
 
-// Identity: a person as their picture, or their initials.
+// Identity: a person or an organization as their picture, or their initials.
 
 /**
  * A person: their picture, or their initials when there is none OR when it
@@ -121,6 +121,78 @@ export function Initials({
       className={`inline-flex shrink-0 items-center justify-center rounded-full ${colors} ${className}`}
     >
       {initials}
+    </span>
+  );
+}
+
+/**
+ * An organization's initials, from its login: the first letter of the first
+ * two words (`heig-tin-info` ⇒ "HT"), or its first two letters when it is one
+ * word (`octocat` ⇒ "OC").
+ */
+export function orgInitials(login: string): string {
+  const words = login.split(/[-_.\s]+/).filter(Boolean);
+  const letters =
+    words.length > 1 ? `${words[0]!.charAt(0)}${words[1]!.charAt(0)}` : (words[0] ?? "").slice(0, 2);
+  return letters.toUpperCase() || "?";
+}
+
+/**
+ * The three sizes of an organization's picture, each with the corner of the
+ * radius scale that keeps it a soft square (DESIGN.md › OrgAvatar): the
+ * sidebar, a list row, a page header. At 16 px two letters are a smudge, so
+ * the smallest shows one.
+ */
+const ORG_SIZES = {
+  xs: { box: "size-4 rounded-sm text-[9px]", letters: 1 },
+  sm: { box: "size-6 rounded-key text-[10px]", letters: 2 },
+  md: { box: "size-9 rounded-field text-xs", letters: 2 },
+} as const;
+
+/**
+ * An organization (the GitHub owner of a classroom's repositories): its
+ * public picture, or its initials when there is none (`src={null}`) or when
+ * it fails to load. A soft square, never a disc — a disc is a person.
+ * Decorative beside the name; `label` names it when it stands alone.
+ */
+export function OrgAvatar({
+  login,
+  src = `https://github.com/${login}.png?size=96`,
+  size = "sm",
+  label,
+  className,
+}: {
+  /** The organization's login, e.g. `heig-tin-info`. */
+  login: string;
+  /** Defaults to GitHub's public picture of the login; `null` when none is known. */
+  src?: string | null;
+  size?: keyof typeof ORG_SIZES;
+  /** The organization's name, when the picture stands alone and must be announced. */
+  label?: string;
+  className?: string;
+}) {
+  // The URL that failed, so that a new `src` gets its own chance to load.
+  const [failed, setFailed] = useState<string | null>(null);
+  const { box, letters } = ORG_SIZES[size];
+  const frame = cx("inline-flex shrink-0", box, className);
+  if (src && src !== failed) {
+    return (
+      <img
+        src={src}
+        alt={label ?? ""}
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(src)}
+        className={cx(frame, "object-cover")}
+      />
+    );
+  }
+  return (
+    <span
+      role={label ? "img" : undefined}
+      aria-label={label}
+      className={cx(frame, "items-center justify-center bg-surface-3 font-semibold text-fg-muted")}
+    >
+      {orgInitials(login).slice(0, letters)}
     </span>
   );
 }

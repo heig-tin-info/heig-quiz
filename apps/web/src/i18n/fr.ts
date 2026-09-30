@@ -1958,6 +1958,13 @@ export const fr: Record<keyof Dict, string> = {
   "dev.ui.bode": "Bode, amplificateur inverseur",
   "dev.ui.present": "présents",
   "dev.ui.lobby": "{present} étudiants présents sur {enrolled}",
+  // M1-04: the primitives of the classroom merge, in the gallery
+  "dev.ui.brand": "Logo GitHub",
+  "dev.ui.orgAvatar": "Avatar d'organisation",
+  "dev.ui.progress": "Progression",
+  "dev.ui.progressImport": "Import de la liste des étudiants…",
+  "dev.ui.progressExplore": "Exploration du dépôt modèle…",
+  "dev.ui.longForm": "Lecture longue (journal)",
 
   // WP9: student player
   "shome.title": "Accueil",

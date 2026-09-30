@@ -174,6 +174,40 @@ Two pairs stay below their target, on purpose:
   declared once in `style.css` on `:focus-visible`; no component restyles it,
   except the mode banner (below), whose dark fill would swallow a red ring.
 
+## Long-form reading (the journal)
+
+The journal (ADR-049) is the one surface of the product that is a
+*document* rather than a dashboard or a question, and it needs values the
+rest of the app does not. They live in one modifier, `.md-body.md-doc`, on
+top of the `.md-body` every rendered markdown wears (`style.css`); a
+question's prose never carries it, so the question scenes do not move.
+
+- **Measure capped at 72 characters** (`max-width: 72ch`), not the 1120 px
+  content column. That column is right for a table and too wide for prose:
+  past roughly 75 characters the eye loses the line it is returning to.
+- **Leading 1.75** on 14 px body text, against the 1.6 of a question. A
+  page is read for minutes, not scanned for seconds. Code blocks keep 1.6:
+  code is scanned, not read.
+- **Headings enter one step higher**: `h1` at the page-title step (28 px /
+  700 / `-0.02em`), because the page *is* the document and owns its title;
+  `h2` 20 (the sheet-title step), `h3` 16 (the section-title step), `h4`
+  and below 14 at 600. The same scale as everywhere else — in a question,
+  `h1` enters at 20 because it sits inside a card. Headings take 32 px above
+  and 12 below (a heading belongs to what follows it), blocks 16 between
+  them instead of 12, a rule 32 above and below.
+- **Everything else is `.md-body` unchanged**: the same tokens in both
+  themes (no colour of its own, so dark mode follows by itself), the same
+  radii — a code block and an image at `rounded-field` (10 px), inline code
+  at 5 px — not classroom's larger 12/16 scale, which this product left
+  (Shape and elevation). Syntax colour in a code block (`.tok-kw` in
+  accent, `.tok-str` in success) is semantic and does not count as the
+  screen's one accent use.
+
+The rendered HTML comes from the server (`packages/docrender`, D15: the
+journal escapes raw HTML), so, like `.md-body` itself, these are tag
+selectors in `style.css` rather than utility classes — there is no React
+markup to hang a class on.
+
 ## Keyboard and focus
 
 A floating layer is not finished until it behaves. `useLayer` in `ui/layers.tsx`
@@ -407,6 +441,40 @@ live in `ui/state.ts`, each written once.
   the name in the same bubble; initials never do, nor does a touch screen. It
   exists because three places drew "a picture, or initials", and two of them
   had no fallback.
+- OrgAvatar: an organization — a GitHub organization, the owner of a
+  classroom's repositories — as its public picture, or its initials (the
+  first letter of the first two words of the login, `heig-tin-info` ⇒ HT)
+  on `surface-3` in `fg-muted` when there is none or it fails to load, the
+  same fallback as a person. It is a **soft square, not a disc**: a disc is
+  a person, and an organization next to a person must not read as one more
+  face. The corner comes from the radius tokens and grows with the size —
+  `xs` 16 px at 4 px (the sidebar), `sm` 24 px at `rounded-key` (a list
+  row), `md` 36 px at `rounded-field` (a page header) — so the three stay
+  the same shape; one radius at every size would turn the small one into a
+  disc and the large one into a sharp square. At 16 px it writes one letter,
+  not two: two letters at that size are a smudge. Decorative beside the name,
+  named by `label` when it stands alone. By default the picture is
+  `github.com/<login>.png`; a caller that knows none passes `src={null}`.
+- GithubIcon (`ui/brand.tsx`): the GitHub mark, which lucide no longer
+  carries, in `currentColor`. It is an `IconType`, so it goes wherever a
+  lucide icon goes, and it is drawn to the same optical size: its view box
+  leaves the one-twelfth margin a lucide glyph has inside its 24 units, so
+  at `size-4` it sits beside a `Pencil` without looking one step larger.
+  It marks what is GitHub's (a repository link, the "Connect GitHub"
+  button); it is never the accent.
+- Progress: a thin bar (4 px, pill ends, `surface-3` track) under a 13 px
+  `fg-muted` label, for a job that takes seconds — an import, a repository
+  being explored. **Determinate** when the count is known: the fill is the
+  share, and the percentage is written at the right end, tabular, in the
+  interface language ("75%", "75 %"). **Indeterminate** when it is not: a
+  third of the track slides across, and the label alone says what is
+  happening; no number is invented. The fill is `info`, not the accent:
+  progress is the job `info` already does in a `VerdictCell`, and a red
+  bar would be one more red thing on a screen whose red thing is the
+  button. `role="progressbar"`, named by the label, with
+  `aria-valuemin`/`max`/`now` when determinate and `aria-busy` with no
+  value when not. Under reduced motion the indeterminate bar stops sliding
+  and fills the track at low opacity: still "busy", no motion.
 - PersonPill / PeopleStack: a group of people as a row of 24 px discs — the
   staff of a course, the teachers of a classroom. A disc carries the name in a
   `Tip` and nothing else, because a name is all a reader wants while scanning;

@@ -1958,6 +1958,13 @@ export const en = {
   "dev.ui.bode": "Bode, inverting amplifier",
   "dev.ui.present": "present",
   "dev.ui.lobby": "{present} of {enrolled} students present",
+  // M1-04: the primitives of the classroom merge, in the gallery
+  "dev.ui.brand": "GitHub mark",
+  "dev.ui.orgAvatar": "Organization avatar",
+  "dev.ui.progress": "Progress",
+  "dev.ui.progressImport": "Importing the roster…",
+  "dev.ui.progressExplore": "Exploring the template repository…",
+  "dev.ui.longForm": "Long-form reading (journal)",
 
   // WP9: student player
   "shome.title": "Home",

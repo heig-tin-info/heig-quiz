@@ -1,7 +1,8 @@
 import { Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { useT } from "../i18n";
+import { useI18n, useT } from "../i18n";
+import { percent } from "./dates";
 import { cx, type IconType } from "./layers";
 
 // Feedback: loading, key caps, status and notices.
@@ -25,6 +26,57 @@ export function Spinner({ label, className = "py-12" }: { label?: string; classN
 /** Placeholder block for content still loading (lists, cards). */
 export function Skeleton({ className = "h-4 w-full" }: { className?: string }) {
   return <div aria-hidden className={`animate-pulse rounded-md bg-surface-3 ${className}`} />;
+}
+
+/**
+ * A job that takes seconds, as a thin bar under its label (DESIGN.md ›
+ * Progress). With a `value` it is determinate — the fill is the share and
+ * the percentage is written at the right end; without one it is
+ * indeterminate — a third of the track slides across and no number is
+ * invented. Either way it is one `progressbar` named by the label.
+ */
+export function Progress({
+  label,
+  value,
+  max = 100,
+  className,
+}: {
+  /** What is happening, already translated: "Importing the roster…". */
+  label: string;
+  /** Done so far, 0 to `max`; leave it out when the duration is unknown. */
+  value?: number;
+  max?: number;
+  className?: string;
+}) {
+  const { locale } = useI18n();
+  const now = value === undefined ? undefined : Math.min(max, Math.max(0, value));
+  const share = now === undefined || max <= 0 ? 0 : now / max;
+  return (
+    <div
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={max}
+      aria-valuenow={now}
+      aria-busy={now === undefined || undefined}
+      className={cx("space-y-1.5", className)}
+    >
+      <div className="flex items-baseline justify-between gap-3 text-[13px] text-fg-muted">
+        <span className="min-w-0 truncate">{label}</span>
+        {now === undefined ? null : <span className="shrink-0 tabular-nums">{percent(share, locale)}</span>}
+      </div>
+      <div className="h-1 overflow-hidden rounded-full bg-surface-3">
+        {now === undefined ? (
+          <div className="progress-indeterminate h-full w-1/3 rounded-full bg-info" />
+        ) : (
+          <div
+            className="h-full rounded-full bg-info transition-[width] duration-200"
+            style={{ width: `${share * 100}%` }}
+          />
+        )}
+      </div>
+    </div>
+  );
 }
 
 /**
