@@ -487,7 +487,7 @@ html.dark {
 /* A wide table scrolls with the block rather than pushing the whole column. */
 .md-body > table { display: block; overflow-x: auto; }
 
-/* Four token classes, all the small tokenizer of markdown/highlight.ts emits.
+/* Four token classes, all the small tokenizer of @quiz/docrender/highlight emits.
    Comment and string carry the reading; keyword and number are accents. */
 .md-body .tok-com { color: var(--fg-faint); font-style: italic; }
 .md-body .tok-str { color: var(--success); }

@@ -22,9 +22,8 @@ import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
+import { tokenize } from "@quiz/docrender/highlight";
 import { findClozeClosingBraces } from "@quiz/domain";
-
-import { tokenize } from "./highlight";
 
 /** The node this extension colours; the only one whose content is code. */
 const CODE_BLOCK = "codeBlock";
