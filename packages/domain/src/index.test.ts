@@ -40,6 +40,20 @@ describe("@quiz/domain public surface", () => {
       "shuffle",
       "splitTemplate",
       "streamSeed",
+      // Ported from heig-classroom (merge task M1-01).
+      "checkpointDueAt",
+      "extractScore",
+      "groupRepoName",
+      "parseStudentIgnore",
+      "pickStudentRepo",
+      "planCheckpointReviewDispatch",
+      "planFinalReviewDispatch",
+      "rateLimitReset",
+      "repoName",
+      "resolveFinalScore",
+      "runKind",
+      "slugify",
+      "zonedIso",
     ];
     for (const name of expected) expect(domain).toHaveProperty(name);
   });

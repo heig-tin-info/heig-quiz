@@ -7,6 +7,7 @@
 export * from "./activity.js";
 export * from "./batchable.js";
 export * from "./categorizeScore.js";
+export * from "./ciScore.js";
 export * from "./cloze.js";
 export * from "./compareOutput.js";
 export * from "./cooldown.js";
@@ -17,8 +18,11 @@ export * from "./drillProgress.js";
 export * from "./drillRating.js";
 export * from "./drillSession.js";
 export * from "./evaluationConfig.js";
+export * from "./finalScore.js";
 export * from "./format.js";
+export * from "./github.js";
 export * from "./grade.js";
+export * from "./groupRepo.js";
 export * from "./ipAllowlist.js";
 export * from "./itemList.js";
 export * from "./lockedTemplate.js";
@@ -29,12 +33,15 @@ export * from "./pollTally.js";
 export * from "./poolRole.js";
 export * from "./pseudonym.js";
 export * from "./questionProgress.js";
+export * from "./repoName.js";
 export * from "./retake.js";
+export * from "./reviewDispatch.js";
 export * from "./roster.js";
 export * from "./round.js";
 export * from "./short.js";
 export * from "./stats.js";
 export * from "./templatePull.js";
+export * from "./zone.js";
 // `./drillSchedule.js` is NOT re-exported: it pulls `ts-fsrs`, which the web
 // bundle would then carry. The server imports `@quiz/domain/drillSchedule`.
 

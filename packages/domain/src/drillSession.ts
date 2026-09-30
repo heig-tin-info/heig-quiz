@@ -4,6 +4,7 @@
  * day's cap, until the time budget is spent; courses and tags interleaved
  * rather than in blocks.
  */
+import { SCHOOL_TIME_ZONE, zoneOffset } from "./zone.js";
 
 /** The target length of a session, before a teacher or the admin sets another (F-ADMIN-03). */
 export const DRILL_SESSION_BUDGET_MS = 600_000;
@@ -12,7 +13,7 @@ export const DRILL_NEW_PER_DAY = 10;
 /** The time counted for a card with no reference time at all. */
 export const DRILL_UNKNOWN_REFERENCE_MS = 60_000;
 /** Where a drill "day" is counted: the school's clock, not the server's UTC. */
-export const DRILL_TIME_ZONE = "Europe/Zurich";
+export const DRILL_TIME_ZONE = SCHOOL_TIME_ZONE;
 
 /**
  * The share of cards the scheduler aims to have remembered when they come
@@ -20,26 +21,6 @@ export const DRILL_TIME_ZONE = "Europe/Zurich";
  * the web app draws it on the teacher's chart without pulling `ts-fsrs`.
  */
 export const DRILL_TARGET_RETENTION = 0.9;
-
-/** How far `timeZone`'s wall clock is ahead of UTC at `at`, in ms. */
-function zoneOffset(at: Date, timeZone: string): number {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      hourCycle: "h23",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    })
-      .formatToParts(at)
-      .map((p) => [p.type, p.value]),
-  );
-  const local = Date.UTC(+parts.year!, +parts.month! - 1, +parts.day!, +parts.hour!, +parts.minute!, +parts.second!);
-  return local - Math.floor(at.getTime() / 1000) * 1000;
-}
 
 /**
  * The calendar day of `now` in `timeZone`, as two instants: its first
