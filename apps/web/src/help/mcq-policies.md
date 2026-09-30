@@ -33,7 +33,7 @@ whatever policy the question names, one answer or several:
 
 - one correct answer among `n` choices: the right one earns 1, a wrong one costs `1/(n - 1)`;
 - several correct answers: `c/C - w/W`, the symmetric formula, not floored — it may reach -1;
-- no answer (nothing ticked, "I won't answer", cleared): 0.
+- no answer (nothing ticked, "Leave unanswered", cleared): 0.
 
 Guessing at random is worth 0 on average, so it no longer pays. The points
 of a question may be negative and are shown as such; the evaluation's total

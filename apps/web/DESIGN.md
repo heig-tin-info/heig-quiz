@@ -505,8 +505,11 @@ live in `ui/state.ts`, each written once.
   `tone="neutral"` is the same pill pressed as a solid `fg` fill with
   `surface` text (the progress strip's "done" segment): for a screen whose
   one accent is spoken for — the player's
-  question tools (Flag for review, I won't answer, Clear), which must read
-  as buttons and as on/off without ever out-shouting Next (issue #128).
+  answer tools (Leave unanswered, Clear), which must read as buttons and
+  as on/off without ever out-shouting Next (issue #128). The review flag is
+  not one of them: it belongs to the question, not to the answer, and is an
+  `IconButton` with `aria-pressed` floated in the card's top-right corner,
+  filled in `fg` when on (the favourite star's recipe).
 - Segmented: `surface-3` pill track, selected chip raised to `surface`.
   Segmented is ONE choice out of a set small enough to show whole — two or
   three normally, five at most and only with one-word labels (the pool
@@ -778,7 +781,7 @@ live in `ui/state.ts`, each written once.
   the student's question list (issues #89, #219). Each circle carries FOUR
   independent facts. Its mark is a SHAPE before it is a tint, so it reads in
   grey and to a colour-blind student: answered is a solid `fg` circle with a
-  check in `surface` ink; "won't answer" a dashed `fg-muted` circle on
+  check in `surface` ink; "left unanswered" a dashed `fg-muted` circle on
   `surface-3` with a dash; nothing yet a hollow `fg-faint` circle (not
   `line-strong`, which misses 3:1 against the canvas in dark mode). A
   flagged question carries a solid `Flag` in `warning` beside its number —
@@ -820,8 +823,8 @@ live in `ui/state.ts`, each written once.
   live in each circle's accessible name, which never thins out.
 - ProgressList: the same question list, standing — the zen player's side
   column from 1024 px of viewport up. A laptop has width to spare and height
-  to none, so the list, what the current question is worth and its review
-  flag move out of the bar and from over and under the question into a
+  to none, so the list and what the current question is worth move out of
+  the bar and from over the question into a
   12rem column left of it (sticky, bounded to the viewport); the question
   column keeps its 760 px and the bar widens to span both, so the title
   lines up with the list. Same circles, same four facts, same connector
@@ -830,10 +833,10 @@ live in `ui/state.ts`, each written once.
   long paper scrolls inside the list, which keeps the current row in view.
   Roving on ↑/↓ (the rows stand, and stop at the ends), ←/→ stepping with
   wrap as on the strip, Home and End. Under the list, a hairline,
-  then the current question's own block — "Question n · p points" heading
-  it, so the flag reads as this question's and not as one more row — and
-  the move keys (`Alt` + ←/→) in `Kbd`. "I won't answer" and "Clear" stay
-  under the question: they act on the answer. One question, or under
+  then the current question's own line — "Question n · p points" — and
+  the move keys (`Alt` + ←/→) in `Kbd`. The flag stays in the card's
+  corner, "Leave unanswered" and "Clear" under the question: they act on
+  the question and its answer, not on the list. One question, or under
   1024 px, the column is absent and the strip is back in the bar.
 - Pastille (`packages/qt-mcq/src/ui.tsx`): the letter of a choice IS its
   checkbox — a circle, 32 px in the teacher's editor, 40 px under a student's
@@ -854,7 +857,7 @@ live in `ui/state.ts`, each written once.
   empty box, a `line-strong` edge and no fill), `answered` (holds an answer:
   the box filled `info-mid`, no icon), `done` (validated in a locking
   navigation: the `info` fill AND a check, because two blues alone would be
-  colour alone), `skipped` ("I won't answer", issue #89: `surface-2` with a
+  colour alone), `skipped` ("Leave unanswered", issue #89: `surface-2` with a
   DASHED `fg-faint` edge and a dash — a decision to leave the question, not
   progress through it, so not blue) — and VERDICT, which the grid's
   "Results" switch puts in their place: `correct`, `partial`, `wrong`,

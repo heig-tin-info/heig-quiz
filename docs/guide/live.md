@@ -45,7 +45,7 @@ Each cell says where one student stands on one question. The legend under the gr
 | **Not started** (a faint small square) | The student has not opened this question |
 | **In progress** (an empty box) | The question is open, nothing is written yet |
 | **Answered** (a light blue box) | Something is written and saved |
-| **Won't answer** (a dash, dashed edge) | The student chose to leave the question |
+| **Left unanswered** (a dash, dashed edge) | The student chose to leave the question |
 | **Validated** (a dark blue box with a check) | The student validated the question (**Validate and continue**, a checkpoint) |
 | **Correct**, **Partly correct**, **Wrong** | The verdict, once the evaluation is closed and graded |
 

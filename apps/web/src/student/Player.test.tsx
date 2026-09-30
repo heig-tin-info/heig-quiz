@@ -147,7 +147,10 @@ const oneItemView = (): AttemptView => {
   return { ...view, items: [view.items[0]!] };
 };
 
-const withNavigation = (view: AttemptView, navigation: "free" | "forward_only"): AttemptView => ({
+const withNavigation = (
+  view: AttemptView,
+  navigation: "free" | "forward_only" | "milestones",
+): AttemptView => ({
   ...view,
   evaluation: {
     ...view.evaluation,
@@ -216,7 +219,7 @@ describe("the zen player on a wide screen", () => {
   const narrow = window.matchMedia;
   afterEach(() => vi.stubGlobal("matchMedia", narrow));
 
-  it("stands the list, the points and the flag beside the question, not over it", async () => {
+  it("stands the list and the points beside the question; the flag stays on its card", async () => {
     viewport(1280);
     const view = attemptView();
     const { calls } = stubs(view);
@@ -229,10 +232,11 @@ describe("the zen player on a wide screen", () => {
     // Question 2 is worth one point, said once, beside the list.
     expect(aside).toHaveTextContent("Question 2 · 1 point");
     expect(container.querySelector("main")).not.toHaveTextContent("1 point");
-    // The flag is the side column's, and there is only one.
+    // The flag is the question's, in the main column, and there is only one.
     const flags = screen.getAllByRole("button", { name: "Marquer à revoir" });
     expect(flags).toHaveLength(1);
-    expect(aside).toContainElement(flags[0]!);
+    expect(aside).not.toContainElement(flags[0]!);
+    expect(container.querySelector("main")).toContainElement(flags[0]!);
     await userEvent.click(flags[0]!);
     await waitFor(() =>
       expect(calls.some((c) => c.url.endsWith("/answers/i2/flag"))).toBe(true),
@@ -249,10 +253,9 @@ describe("the zen player on a wide screen", () => {
     const { container } = render(view);
     await screen.findByText("Question 1");
     expect(container.querySelector("aside")).toBeNull();
-    // The points and the flag stay where a narrow screen has them.
+    // The points stay where a narrow screen has them, and so does the flag.
     expect(screen.getByText("2 points")).toBeInTheDocument();
-    const tools = screen.getByRole("group", { name: "Cette question" });
-    expect(within(tools).getByRole("button", { name: "Marquer à revoir" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Marquer à revoir" })).toBeInTheDocument();
   });
 
   it("keeps the strip over the question under the breakpoint", async () => {
@@ -562,7 +565,7 @@ describe("the zen player", () => {
       expect(isPrimary(screen.getByRole("button", { name: "Suivant" }))).toBe(true);
       expect(screen.queryByRole("button", { name: "Marquer comme faite" })).toBeNull();
       // An answered question is not skippable: that would erase the answer.
-      expect(screen.queryByRole("button", { name: "Je ne répondrai pas à cette question" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Laisser sans réponse" })).toBeNull();
     });
 
     it("leaves the accent off an empty question in free mode: the field is the action", async () => {
@@ -573,14 +576,14 @@ describe("the zen player", () => {
       for (const button of screen.getAllByRole("button")) expect(isPrimary(button)).toBe(false);
     });
 
-    it("settles an empty question with 'I won't answer', and an answer takes it back", async () => {
+    it("settles an empty question with 'Leave unanswered', and an answer takes it back", async () => {
       const view = attemptView({ lastItemId: "i3" });
       const { calls } = stubs(view);
       render(view);
       await screen.findByText("Question 3");
 
       await userEvent.click(
-        screen.getByRole("button", { name: "Je ne répondrai pas à cette question" }),
+        screen.getByRole("button", { name: "Laisser sans réponse" }),
       );
       await waitFor(() =>
         expect(
@@ -590,39 +593,37 @@ describe("the zen player", () => {
           ),
         ).toBe(true),
       );
-      expect(await screen.findByText("Je n'y réponds pas")).toBeInTheDocument();
+      expect(await screen.findByText("Laissée sans réponse")).toBeInTheDocument();
       const strip = screen.getByRole("navigation", { name: "Progression : question 3 sur 3" });
       expect(
-        within(strip).getByRole("button", { name: "Question 3, vous n'y répondrez pas, en cours" }),
+        within(strip).getByRole("button", { name: "Question 3, laissée sans réponse, en cours" }),
       ).toBeInTheDocument();
       // Settled: the accent goes to the way out of the last question.
       expect(isPrimary(screen.getByRole("button", { name: "Rendre" }))).toBe(true);
       // And it can be taken back by hand — the chip is pressed (issue #128)…
-      const skip = screen.getByRole("button", { name: "Je ne répondrai pas à cette question" });
+      const skip = screen.getByRole("button", { name: "Laisser sans réponse" });
       expect(skip).toHaveAttribute("aria-pressed", "true");
 
       // …or by answering, which the list reads at once.
       await userEvent.type(await screen.findByLabelText("Votre réponse"), "1");
       expect(await screen.findByText("Répondue")).toBeInTheDocument();
-      expect(screen.queryByText("Je n'y réponds pas")).toBeNull();
+      expect(screen.queryByText("Laissée sans réponse")).toBeNull();
       expect(
-        screen.queryByRole("button", { name: "Je ne répondrai pas à cette question" }),
+        screen.queryByRole("button", { name: "Laisser sans réponse" }),
       ).toBeNull();
     });
 
-    // Issue #128: the question's two tools are one group of real toggles,
-    // under the card, and never the accent.
-    it("groups the flag and 'I won't answer' as pressed toggles under the question", async () => {
+    // Issue #128: the tools are real toggles, never the accent; the flag is
+    // an icon in the corner of the card, "Leave unanswered" a chip under it.
+    it("draws the flag in the card and 'Leave unanswered' under it, as neutral toggles", async () => {
       const view = attemptView({ lastItemId: "i3" });
       const { calls } = stubs(view);
       render(view);
       await screen.findByText("Question 3");
 
-      const tools = screen.getByRole("group", { name: "Cette question" });
-      const flag = within(tools).getByRole("button", { name: "Marquer à revoir" });
-      const skip = within(tools).getByRole("button", {
-        name: "Je ne répondrai pas à cette question",
-      });
+      const flag = screen.getByRole("button", { name: "Marquer à revoir" });
+      const skip = screen.getByRole("button", { name: "Laisser sans réponse" });
+      expect(flag.compareDocumentPosition(skip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       for (const chip of [flag, skip]) {
         expect(chip).toHaveAttribute("aria-pressed", "false");
         expect(isPrimary(chip)).toBe(false);
@@ -688,7 +689,7 @@ describe("the zen player", () => {
       expect(screen.getByRole("radio", { name: "*x" })).not.toBeChecked();
       expect(screen.queryByText("Répondue")).toBeNull();
       expect(
-        screen.getByRole("button", { name: "Je ne répondrai pas à cette question" }),
+        screen.getByRole("button", { name: "Laisser sans réponse" }),
       ).toBeInTheDocument();
 
       // A short answer holds a text the student empties by hand: no Clear.
@@ -703,15 +704,23 @@ describe("the zen player", () => {
       render(view);
       await screen.findByText("Question 3");
 
-      const validate = screen.getByRole("button", { name: "Valider et continuer" });
-      expect(isPrimary(validate)).toBe(true);
+      // Empty, the step is named for what it closes, and it is the only
+      // way to leave the question blank: no "Leave unanswered" beside it.
+      const blank = screen.getByRole("button", { name: "Laisser vide et continuer" });
+      expect(isPrimary(blank)).toBe(true);
+      expect(screen.queryByRole("button", { name: "Laisser sans réponse" })).toBeNull();
       // Cancelling the confirmation sends nothing.
-      await userEvent.click(validate);
+      await userEvent.click(blank);
       let dialog = await screen.findByRole("dialog");
       expect(within(dialog).getByText("Valider cette question ?")).toBeInTheDocument();
+      expect(within(dialog).getByText(/elle comptera comme non répondue/)).toBeInTheDocument();
       await userEvent.click(within(dialog).getByRole("button", { name: "Annuler" }));
       expect(calls.some((c) => c.url.endsWith("/done"))).toBe(false);
 
+      // Answered, it validates.
+      await userEvent.type(await screen.findByLabelText("Votre réponse"), "1");
+      const validate = await screen.findByRole("button", { name: "Valider et continuer" });
+      expect(isPrimary(validate)).toBe(true);
       await userEvent.click(screen.getByRole("button", { name: "Valider et continuer" }));
       dialog = await screen.findByRole("dialog");
       await userEvent.click(within(dialog).getByRole("button", { name: "Valider et continuer" }));
@@ -725,6 +734,29 @@ describe("the zen player", () => {
       await waitFor(() =>
         expect(isPrimary(screen.getByRole("button", { name: "Rendre" }))).toBe(true),
       );
+    });
+
+    it("milestones: an empty checkpoint reads 'Laisser vide et continuer'; elsewhere 'Laisser sans réponse' stays", async () => {
+      const checkpointAt = (id: string) => {
+        const view = withNavigation(attemptView({ lastItemId: "i3" }), "milestones");
+        return { ...view, items: view.items.map((i) => ({ ...i, milestone: i.id === id })) };
+      };
+      stubs(checkpointAt("i3"));
+      const { unmount } = render(checkpointAt("i3"));
+      await screen.findByText("Question 3");
+      expect(isPrimary(screen.getByRole("button", { name: "Laisser vide et continuer" }))).toBe(
+        true,
+      );
+      expect(screen.queryByRole("button", { name: "Laisser sans réponse" })).toBeNull();
+      unmount();
+
+      // The same empty question, not a checkpoint: nothing to validate, and
+      // it can be left unanswered by hand.
+      stubs(checkpointAt("i2"));
+      render(checkpointAt("i2"));
+      await screen.findByText("Question 3");
+      expect(screen.getByRole("button", { name: "Laisser sans réponse" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /et continuer$/ })).toBeNull();
     });
 
     it("keeps the question open when the latest answer failed to save (5xx, then validate)", async () => {

@@ -5,23 +5,25 @@
  * an empty one is (`isAnswered`) — with no click (issue #89, F-LIVE-08). What
  * the student can set by hand is what the answer alone cannot say:
  *
- *   - "I won't answer this question", on an EMPTY question: settled on
- *     purpose, left blank. A toggle: pressing it again — or writing an
- *     answer — takes it back;
+ *   - "Leave unanswered", on an EMPTY question: settled on purpose, left
+ *     blank. A toggle: pressing it again — or writing an answer — takes it
+ *     back;
  *   - the review FLAG, a toggle: a note to self, shown in the question list
  *     and on the teacher's grid, no effect on the grade;
  *   - "Clear", for MULTIPLE CHOICE only (the other types are emptied by
  *     hand): with negative points, withdrawing a selection must be possible.
  *
- * Those three are ONE toolbar of neutral chips under the question (issue
- * #128): outlined so they read as buttons, each with its icon, pressed in
- * `fg` rather than the accent — tools, not the page's action. They used to be
- * ghost buttons at two ends of the card, and students read them as text.
+ * The flag belongs to the question, so it is an icon in the corner of its
+ * card; the other two belong to the answer, and are one neutral chip under
+ * it (issue #128): outlined so it reads as a button, pressed in `fg` rather
+ * than the accent — a tool, not the page's action.
  * ONE primary action, and it moves with the question:
  *
  *   - where the navigation asks for it — every question in `forward_only`, a
  *     checkpoint in `milestones` — "Validate and continue", the one
- *     irreversible thing on the screen, behind a confirmation;
+ *     irreversible thing on the screen, behind a confirmation. On an empty
+ *     question it reads "Leave blank and continue": the same step, named
+ *     for what it closes;
  *   - otherwise, once the question is settled (answered or skipped), "Next",
  *     or "Hand in" on the last one — the button that is already in the bar,
  *     which lights up rather than being drawn twice;
@@ -64,7 +66,7 @@ import { PlayerQuestion, QuestionHeading } from "./PlayerQuestion";
 import { PlayerRail } from "./PlayerRail";
 import { PlayerShell } from "./PlayerShell";
 import { isAnswered } from "./QuestionHost";
-import { QuestionTools } from "./QuestionTools";
+import { FlagButton, QuestionTools } from "./QuestionTools";
 import { SubmitDialog } from "./SubmitDialog";
 import { usePlayerCommands } from "./usePlayerCommands";
 import { usePlayerControls } from "./usePlayerControls";
@@ -248,8 +250,8 @@ export function PlayerView({
   // is — a footer at the bottom of a 900 px window is a trip per question.
   // A hook, so it stays above the early return below.
   const desktop = useMinWidth(640);
-  // Wider still, the question list, the points and the flag stand in a
-  // column beside the question rather than over and under it.
+  // Wider still, the question list and the points stand in a column beside
+  // the question rather than over it.
   const wide = useMinWidth(1024);
   const segments = useMemo(() => segmentsOf(state, isAnswered), [state]);
   const unanswered = state.items.filter(
@@ -263,7 +265,7 @@ export function PlayerView({
   // and is offered while it can still be pressed.
   const canValidate =
     item !== undefined && !readOnly && !validated && mayValidate(state.navigation, item);
-  const controls = usePlayerControls({ session, item, readOnly, canValidate });
+  const controls = usePlayerControls({ session, item, readOnly, canValidate, blank: !answered });
   const move = useCallback((delta: 1 | -1) => dispatch({ type: "move", delta }), [dispatch]);
 
   const previous = neighbour(state, -1);
@@ -306,7 +308,7 @@ export function PlayerView({
   // one.
   const manyItems = total > 1;
   // One question has no list to stand beside it: the heading keeps the
-  // points and the tools keep the flag, as on a narrow screen.
+  // points, as on a narrow screen.
   const rail = wide && manyItems && item !== undefined;
   const selectSegment = (itemId: string) => dispatch({ type: "goto", itemId });
   const progressLabel = t("player.progress", { n: state.index + 1, total });
@@ -315,6 +317,7 @@ export function PlayerView({
       <PlayerActions
         manyItems={manyItems}
         canValidate={canValidate}
+        validateLabel={controls.validateLabel}
         hasPrevious={previous !== null}
         hasNext={next !== null}
         nextIsPrimary={!canValidate && settled && next !== null}
@@ -363,9 +366,7 @@ export function PlayerView({
                   segments={segments}
                   onSelect={selectSegment}
                   label={progressLabel}
-                  item={item}
-                  readOnly={readOnly}
-                  onFlag={() => void controls.toggleFlag()}
+                  points={item.points}
                 />
               ),
             }
@@ -379,7 +380,16 @@ export function PlayerView({
               validated={validated}
               mark={mark}
             />
-            <Card className="p-5 sm:p-6">
+            {/* `flow-root` holds the floated flag: the statement's first
+                lines wrap around it instead of running under it. */}
+            <Card className="flow-root p-5 sm:p-6">
+              <div className="float-right -mr-2 -mt-2 ml-2 sm:-mr-3 sm:-mt-3">
+                <FlagButton
+                  item={item}
+                  readOnly={readOnly}
+                  onFlag={() => void controls.toggleFlag()}
+                />
+              </div>
               <PlayerQuestion
                 key={`${item.id}:${item.generation ?? 0}`}
                 itemId={item.id}
@@ -397,15 +407,19 @@ export function PlayerView({
               item={item}
               answered={answered}
               readOnly={readOnly}
-              withFlag={!rail}
-              onFlag={() => void controls.toggleFlag()}
+              canValidate={canValidate}
               onClear={controls.clear}
               onSkip={() => void controls.toggleSkip()}
             />
             {desktop && actions ? (
               <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>
             ) : null}
-            <PlayerHint locked={locked} canValidate={canValidate} navigation={state.navigation} />
+            <PlayerHint
+              locked={locked}
+              canValidate={canValidate}
+              validateLabel={controls.validateLabel}
+              navigation={state.navigation}
+            />
           </>
         ) : null}
       </PlayerShell>
@@ -428,10 +442,12 @@ export function PlayerView({
 function PlayerHint({
   locked,
   canValidate,
+  validateLabel,
   navigation,
 }: {
   locked: boolean;
   canValidate: boolean;
+  validateLabel: string;
   navigation: PlayerSession["state"]["navigation"];
 }) {
   const t = useT();
@@ -441,6 +457,6 @@ function PlayerHint({
       ? null
       : navigation === "milestones"
         ? t("player.hint.milestone")
-        : t("player.hint.forward");
+        : t("player.hint.forward", { action: validateLabel });
   return hint ? <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">{hint}</p> : null;
 }

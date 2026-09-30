@@ -1422,7 +1422,7 @@ describe("ProgressList", () => {
     renderWithProviders(<ProgressList segments={segments} label="Progress" onSelect={() => {}} />);
     expect(screen.getByRole("navigation", { name: "Progress" })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Question 2, you won't answer it, flagged for review" }),
+      screen.getByRole("button", { name: "Question 2, left unanswered, flagged for review" }),
     ).toBeInTheDocument();
     const current = screen.getByRole("button", { name: "Question 3, not answered, current" });
     expect(current).toHaveAttribute("aria-current", "true");
@@ -1474,7 +1474,7 @@ describe("ProgressSegments", () => {
     expect(screen.getByRole("navigation", { name: "Progress" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Question 1, answered" })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Question 2, you won't answer it, flagged for review" }),
+      screen.getByRole("button", { name: "Question 2, left unanswered, flagged for review" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Question 4, not answered, closed" })).toBeInTheDocument();
   });
@@ -1495,7 +1495,7 @@ describe("ProgressSegments", () => {
     // Answered: solid, with a check inside.
     expect(bars[0]).toHaveClass("bg-fg");
     expect(bars[0]!.querySelector("svg")).not.toBeNull();
-    // Won't answer: a dashed outline on a recessed fill, with a dash inside.
+    // Left unanswered: a dashed outline on a recessed fill, with a dash inside.
     expect(bars[1]).toHaveClass("border-dashed", "bg-surface-3");
     expect(bars[1]!.querySelector("svg")).not.toBeNull();
     // Nothing yet: hollow, no symbol.
