@@ -9,7 +9,9 @@ with the renames of the merge: *assignment* ⇒ **project**
 (`assignments.work_mode` ⇒ `projects.work_mode`; the portal's own
 `/api/assignments/:id` route is the portal's business); *classroom*
 (org-bound, owned) ⇒ a Quiz **course** plus **classroom**, and "the owner
-of the class" ⇒ the course's staff (D04); a codespace *session* ⇒
+of the class" ⇒ the course's staff (D04), except for the quota below:
+whose `teacher_grants` quota an online project consumes once several
+staff share a course is for M6 to decide; a codespace *session* ⇒
 **workspace** in Quiz's vocabulary; `@hgc/codespace` ⇒ `@quiz/codespace`;
 `CLASSROOM_URL` ⇒ `PLATFORM_URL`; `apps/server` ⇒ `apps/api`;
 `classroom.chevallier.io` ⇒ Quiz. The portal (`apps/codespace`) and this

@@ -39,7 +39,7 @@ and the fold indexes, migration `0027_notification_folds`; Teams app 2.1.0);
 notification kinds of their own, sent through `notify` like every other
 kind (§1), rendered in the recipient's language (§2), with per-kind
 defaults (addendum 2026-09-28, b). Classroom's e-mails are not ported as
-e-mails: they become kinds. Settled with the merge: the `activity_*`
+e-mails: they become kinds. Settled with the merge (card M1-03): the `activity_*`
 payloads become kind-neutral (`{activityKind, activityId,
 activityTitle}`) before the project kinds are built (M1-03). Classroom's
 old unsubscribe links are planned to land on Quiz's notification settings
