@@ -35,7 +35,7 @@ import * as live from "../live/service.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import * as org from "../org/service.js";
 import * as poolService from "../pool/service.js";
-import { releaseResults, unreleaseResults } from "../results/service.js";
+import { publishCorrection, releaseResults, unreleaseResults } from "../results/service.js";
 import * as drill from "./service.js";
 
 let db: Db;
@@ -695,6 +695,67 @@ describe("the third round (ADR-041 §13)", () => {
       .set({ feedbackPolicy: { ...policy, when: "immediate", showKey: false } })
       .where(eq(evaluations.id, seed.evaluationId));
     expect((await drill.drillSession(db, userId, "fine", app.clock.now())).cards).toEqual([]);
+  });
+
+  it("serves an exercise's card once its correction is published (ADR-050 §6), never under `none`", async () => {
+    const app = await appAt();
+    /** A running exercise with retakes, one student, the key per `policy`. */
+    const published = async (policy: Record<string, unknown>) => {
+      const seed = await seedLive(db, {
+        mode: "exercise",
+        students: 1,
+        questions: 1,
+        durationS: null,
+        settings: {
+          timing: "manual",
+          lobby: "skip",
+          retakes: { enabled: true, keep: "best", maxAttempts: null },
+        },
+      });
+      await org.setClassroomDrill(db, seed.classroomId, true, app.clock.now());
+      const stored = (await reload(db, seed.evaluationId)).feedbackPolicy as Record<string, unknown>;
+      await db
+        .update(evaluations)
+        .set({ feedbackPolicy: { ...stored, ...policy } })
+        .where(eq(evaluations.id, seed.evaluationId));
+      await sit(app, seed, { answers: ["wrong"] });
+      const userId = seed.studentIds[0]!;
+      const [card] = await cardsOf({ userId });
+      // Retakes open, nothing published: the score only, and no card.
+      expect(await serves(app, userId, card!.id)).toBe(false);
+      await publishCorrection(db, await reload(db, seed.evaluationId), app.clock.now());
+      return { seed, userId, card: card! };
+    };
+
+    const shown = await published({ when: "on_release", showKey: true });
+    expect(await serves(app, shown.userId, shown.card.id)).toBe(true);
+    const review = await drill.answerCard(
+      db,
+      shown.userId,
+      shown.card.id,
+      { answer: "wrong", deviceClass: "fine" },
+      app.clock.now(),
+    );
+    expect(review.solution).toEqual({ answer: "answer-q0" });
+
+    // A retake in progress holds the key back again, until it is handed in.
+    app.clock.advance(30 * 86_400_000);
+    const evaluation = await reload(db, shown.seed.evaluationId);
+    const participant = (await live.participantOf(db, evaluation, shown.userId))!;
+    const retake = await live.retakeAttempt(db, { evaluation, participant, now: app.clock.now() });
+    expect(retake.state).toBe("in_progress");
+    expect(await serves(app, shown.userId, shown.card.id)).toBe(false);
+    expect((await drill.drillSession(db, shown.userId, "fine", app.clock.now())).cards).toEqual([]);
+    await live.submitAttempt(db, await reload(db, shown.seed.evaluationId), retake, app.clock.now());
+    expect(await serves(app, shown.userId, shown.card.id)).toBe(true);
+
+    // `none`: the publication shows nothing, and the drill follows.
+    const none = await published({ when: "none", showKey: true, showExplanation: true });
+    expect(await serves(app, none.userId, none.card.id)).toBe(false);
+    expect((await drill.drillSession(db, none.userId, "fine", app.clock.now())).cards).toEqual([]);
+    await expect(
+      drill.answerCard(db, none.userId, none.card.id, { answer: "x", deviceClass: "fine" }, app.clock.now()),
+    ).rejects.toBeInstanceOf(drill.DrillCardNotFound);
   });
 
   it("suspends an exam's cards while its release is withdrawn, and serves them again at the next", async () => {

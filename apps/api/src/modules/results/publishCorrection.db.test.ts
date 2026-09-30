@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { EvaluationMode, FeedbackPolicy, RetakeSettings } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
-import { attempts, auditLog, evaluations, gradings } from "../../db/schema.js";
+import { attempts, auditLog, evaluations, gradings, questionVersions } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
@@ -357,5 +357,35 @@ describe("a student's own correction once published (ADR-050)", () => {
     expect(body.items[0]).toMatchObject({ solution: null, answer: "nope" });
     // `showKey` off: the key is nowhere, not in the details either.
     expect(JSON.stringify(body)).not.toContain("answer-q0");
+  });
+
+  it("under `none`: no key and no explanation anywhere in the student's payload, retakes or not", async () => {
+    const policy = { when: "none", showKey: true, showExplanation: true } as const;
+    const secret = "why-this-is-the-key";
+    for (const retakes of [false, true]) {
+      const built = await running({ ...(retakes ? { retakes: {} } : {}), feedback: policy });
+      const [item] = await joinedItems(server.app.db, built.evaluation.id);
+      await server.app.db
+        .update(questionVersions)
+        .set({ explanation: secret })
+        .where(eq(questionVersions.id, item!.version.id));
+      const [first] = built.students;
+      const attempt = await sit(built, first.id, "nope");
+      await publish(built.evaluation.id);
+
+      const body = await feedbackOf(attempt.id, first);
+      expect(body).toMatchObject({ available: false });
+      expect(body.items).toBeUndefined();
+      expect(body).not.toHaveProperty("solution");
+      expect(body).not.toHaveProperty("explanation");
+      const serialized = JSON.stringify(body);
+      expect(serialized).not.toContain("answer-q0");
+      expect(serialized).not.toContain(secret);
+
+      // The fixture holds: the same paper under `on_release` shows both.
+      await setFeedback(built.evaluation.id, { ...policy, when: "on_release" });
+      const control = await feedbackOf(attempt.id, first);
+      expect(control.items[0]).toMatchObject({ solution: { answer: "answer-q0" }, explanation: secret });
+    }
   });
 });
