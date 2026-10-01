@@ -6,8 +6,9 @@
  *   taken is a 409 with a free name), use (any repository of the
  *   organization, its branch and root folder honoured, another's refused),
  *   remove (the repository kept; D28's disconnect unblocked), refresh, preview;
- * - save against `baseSha` (a stale one is a 409 and writes nothing), the
- *   `version` bump, the commit's author; add, delete, upload;
+ * - GitHub mode read-only (ADR-057): save, add, delete and upload refused
+ *   with 409 `read_only`, nothing committed nor copied; every staff page
+ *   carries its github.com edit link;
  * - the invitations (D27): `push` only, one audit entry each, a refusal never
  *   failing the creation;
  * - who may write: the staff; a student, a teacher off the staff get the 404
@@ -23,7 +24,6 @@ import {
   Journal,
   JOURNAL_ASSET_MAX_BYTES,
   JOURNAL_MARKDOWN_MAX,
-  JournalFileWritten,
   JournalNameTaken,
   JournalPreviewResult,
   JournalRefusal,
@@ -143,7 +143,9 @@ describe("create a journal (F-JRN-02)", () => {
     expect(res.statusCode, res.body).toBe(201);
     const journal = Journal.parse(res.json()) as JournalStaff;
     const fullName = `${room.login}/a-journal`;
-    expect(journal.repository).toMatchObject({ fullName, ref: "main", rootPath: "", syncStatus: "ok", editable: true });
+    // A created journal lives on GitHub, read-only in the platform (ADR-057).
+    expect(journal.mode).toBe("github");
+    expect(journal.repository).toMatchObject({ fullName, ref: "main", rootPath: "", syncStatus: "ok", editable: false });
     expect(journal.homePath).toBe("README.md");
     expect(gh.calls).toContain(`POST api.github.com/orgs/${room.login}/repos`);
     const created = gh.inits[gh.calls.lastIndexOf(`POST api.github.com/orgs/${room.login}/repos`)]!;
@@ -152,8 +154,10 @@ describe("create a journal (F-JRN-02)", () => {
     expect(readme).toMatchObject({ method: "PUT", path: "README.md", branch: "main", author: { name: "Test teacher", email: "501+prof@users.noreply.github.com" } });
     // The committer stays the App: GitHub signs the commit.
     expect(readme!.committer).toBeUndefined();
-    expect(await rowOf(room.id)).toMatchObject({ fullName, ref: "main", rootPath: "", createdBy: teacher.id });
-    expect(await auditOf(room.id, "journal.create")).toHaveLength(1);
+    expect(await rowOf(room.id)).toMatchObject({ mode: "github", fullName, ref: "main", rootPath: "", createdBy: teacher.id });
+    const audited = await auditOf(room.id, "journal.create");
+    expect(audited).toHaveLength(1);
+    expect(audited[0]!.payload).toMatchObject({ mode: "github", fullName });
   });
 
   it("takes the name the teacher chose", async () => {
@@ -356,142 +360,58 @@ describe("preview", () => {
   });
 });
 
-// ---------------------------------------------------------------- the browser's writes
+// ---------------------------------------------------------------- GitHub mode is read-only (ADR-057)
 
-describe("save a page (F-JRN-10)", () => {
-  it("commits against the blob opened, bumps the version, and returns the fresh page", async () => {
-    const { room, fullName } = await withJournal();
-    const opened = blobSha({ path: "README.md", content: "# Home\n" });
-    const before = (await rowOf(room.id))!.version;
-    const res = await call("PUT", `${base(room.id)}/pages/README.md`, teacher.headers, {
-      markdown: "# Home, edited\n",
-      baseSha: opened,
-      message: "Say more",
-    });
-    expect(res.statusCode, res.body).toBe(200);
-    const saved = JournalFileWritten.parse(res.json());
-    expect(saved.page).toMatchObject({ title: "Home, edited", blobSha: saved.blobSha, markdown: "# Home, edited\n" });
-    expect(commitsTo(fullName).at(-1)).toMatchObject({
-      method: "PUT",
-      path: "README.md",
-      message: "Say more",
-      author: { name: "Test teacher", email: "501+prof@users.noreply.github.com" },
-    });
-    // The write's bump, then the synchronisation's.
-    expect((await rowOf(room.id))!.version).toBe(before + 2);
-    expect((await auditOf(room.id, "journal.save"))[0]!.payload).toMatchObject({ path: "README.md", commitSha: saved.commitSha });
-  });
+describe("the content of a GitHub-mode journal is read-only (ADR-057)", () => {
+  const upload = (id: string, path: string, body: Buffer, type: string) =>
+    server.app.inject({ method: "POST", url: `${base(id)}/assets/${path}`, headers: { ...teacher.headers, "content-type": type }, payload: body });
 
-  it("refuses a stale baseSha with a 409, and writes nothing", async () => {
-    const { room, repo, fullName } = await withJournal();
-    const opened = blobSha({ path: "README.md", content: "# Home\n" });
-    // Somebody pushed from a clone since the editor opened the page.
-    pushTo(repo, [{ path: "README.md", content: "# Pushed\n" }]);
-    const commits = commitsTo(fullName).length;
-    const row = await rowOf(room.id);
-    const res = await call("PUT", `${base(room.id)}/pages/README.md`, teacher.headers, { markdown: "# Mine\n", baseSha: opened });
-    expect([res.statusCode, res.json().error]).toEqual([409, "conflict"]);
-    expect(commitsTo(fullName).length).toBe(commits);
-    expect(repo.branches.main!.files[0]!.content).toBe("# Pushed\n");
-    expect(await rowOf(room.id)).toEqual(row);
-    expect(await auditOf(room.id, "journal.save")).toEqual([]);
-  });
-
-  it("authors the commit with a noreply address of Quiz's when no GitHub account is linked, never the email", async () => {
-    const { room, fullName } = await withJournal();
-    const res = await call("PUT", `${base(room.id)}/pages/README.md`, colleague.headers, {
-      markdown: "# By a colleague\n",
-      baseSha: blobSha({ path: "README.md", content: "# Home\n" }),
-    });
-    expect(res.statusCode, res.body).toBe(200);
-    // `PUBLIC_URL` of the test configuration is http://localhost:3000.
-    expect(commitsTo(fullName).at(-1)).toMatchObject({
-      message: "Update README.md",
-      author: { name: "Test teacher", email: `quiz-${colleague.id}@users.noreply.localhost` },
-    });
-    expect(JSON.stringify(world.commits)).not.toContain("@heig.test");
-  });
-
-  it("answers 503 when GitHub fails, and writes nothing", async () => {
-    const { room, repo } = await withJournal();
-    repo.failWith = 502;
-    try {
-      const res = await call("PUT", `${base(room.id)}/pages/README.md`, teacher.headers, {
-        markdown: "# x\n",
-        baseSha: blobSha({ path: "README.md", content: "# Home\n" }),
-      });
-      expect([res.statusCode, res.json().error]).toEqual([503, "github_unavailable"]);
-    } finally {
-      delete repo.failWith;
-    }
-  });
-
-  it("refuses a body that is not a save", async () => {
-    const { room } = await withJournal();
-    // One case: the matrix is the contracts' (`journal.test.ts`).
-    expect((await call("PUT", `${base(room.id)}/pages/README.md`, teacher.headers, { markdown: "x", baseSha: "nope" })).statusCode).toBe(400);
-  });
-});
-
-describe("add and delete a page", () => {
-  it("adds a page under the root folder, once", async () => {
-    const room = await connectedClassroom();
-    const repo = repoOf(room.login, "rooted", [{ path: "notes/README.md", content: "# Notes\n" }]);
-    expect((await call("POST", `${base(room.id)}/use`, teacher.headers, { name: repo.name, rootPath: "notes" })).statusCode).toBe(201);
-    const res = await call("POST", `${base(room.id)}/pages`, teacher.headers, { path: "010-week/README.md", title: "Week 1" });
-    expect(res.statusCode, res.body).toBe(201);
-    const added = JournalFileWritten.parse(res.json());
-    expect(added.page).toMatchObject({ path: "010-week/README.md", title: "Week 1" });
-    expect(world.commits.at(-1)).toMatchObject({ path: "notes/010-week/README.md", message: "Add 010-week/README.md" });
-    expect(await auditOf(room.id, "journal.add")).toHaveLength(1);
-
-    const twice = await call("POST", `${base(room.id)}/pages`, teacher.headers, { path: "010-week/README.md" });
-    expect([twice.statusCode, twice.json().error]).toEqual([409, "page_exists"]);
-    expect((await call("POST", `${base(room.id)}/pages`, teacher.headers, { path: "../escape.md" })).statusCode).toBe(400);
-  });
-
-  it("deletes a page against the blob the copy holds", async () => {
-    const { room, repo } = await withJournal([
+  it("refuses a save, an add, a delete and an upload with 409 read_only, and writes nothing", async () => {
+    const { room, repo, fullName } = await withJournal([
       { path: "README.md", content: "# Home\n" },
       { path: "010-old.md", content: "# Old\n" },
     ]);
-    expect((await call("DELETE", `${base(room.id)}/pages/010-old.md`, teacher.headers)).statusCode).toBe(204);
-    expect(repo.branches.main!.files.map((f) => f.path)).toEqual(["README.md"]);
-    const pages = await server.app.db.select().from(journalPages).where(eq(journalPages.classroomId, room.id));
-    expect(pages.map((p) => p.path)).toEqual(["README.md"]);
-    expect(await auditOf(room.id, "journal.delete")).toHaveLength(1);
-    expect((await call("DELETE", `${base(room.id)}/pages/010-old.md`, teacher.headers)).statusCode).toBe(404);
-  });
-});
-
-describe("upload an asset (F-JRN-11)", () => {
-  const upload = (id: string, path: string, body: Buffer, type: string, headers = teacher.headers) =>
-    server.app.inject({ method: "POST", url: `${base(id)}/assets/${path}`, headers: { ...headers, "content-type": type }, payload: body });
-
-  it("commits the bytes into the repository", async () => {
-    const { room, repo } = await withJournal();
-    const res = await upload(room.id, "img/figure.png", Buffer.from("PNG-BYTES"), "image/png");
-    expect(res.statusCode, res.body).toBe(201);
-    const file = JournalFileWritten.parse(res.json());
-    expect(file).toMatchObject({ path: "img/figure.png", page: null });
-    const committed = repo.branches.main!.files.find((f) => f.path === "img/figure.png");
-    expect(Buffer.from(committed!.content).toString()).toBe("PNG-BYTES");
-    expect((await auditOf(room.id, "journal.upload"))[0]!.payload).toMatchObject({ path: "img/figure.png", bytes: 9 });
-  });
-
-  it("refuses a type that is not the extension's, an empty body, a file over 5 MB, a path outside", async () => {
-    const { room, fullName } = await withJournal();
     const commits = commitsTo(fullName).length;
+    const row = await rowOf(room.id);
+    const pages = await server.app.db.select().from(journalPages).where(eq(journalPages.classroomId, room.id));
+
+    const refused = [
+      await call("PUT", `${base(room.id)}/pages/README.md`, teacher.headers, {
+        markdown: "# Mine\n",
+        baseSha: blobSha({ path: "README.md", content: "# Home\n" }),
+      }),
+      await call("POST", `${base(room.id)}/pages`, teacher.headers, { path: "020-new.md", title: "New" }),
+      await call("DELETE", `${base(room.id)}/pages/010-old.md`, teacher.headers),
+      await call("DELETE", `${base(room.id)}/pages/030-missing.md`, teacher.headers),
+      await upload(room.id, "img/figure.png", Buffer.from("PNG-BYTES"), "image/png"),
+    ];
+    for (const res of refused) {
+      expect([res.statusCode, JournalRefusal.parse(res.json()).error], res.body).toEqual([409, "read_only"]);
+    }
+
+    expect(commitsTo(fullName).length).toBe(commits);
+    expect(repo.branches.main!.files.map((f) => f.path)).toEqual(["README.md", "010-old.md"]);
+    expect(await rowOf(room.id)).toEqual(row);
+    expect(await server.app.db.select().from(journalPages).where(eq(journalPages.classroomId, room.id))).toEqual(pages);
+    for (const action of ["journal.save", "journal.add", "journal.delete", "journal.upload"]) {
+      expect(await auditOf(room.id, action), action).toEqual([]);
+    }
+  });
+
+  it("is read-only in the staff payload, every page carrying its link to GitHub's editor", async () => {
+    const { room, fullName } = await withJournal();
+    const journal = Journal.parse((await call("GET", base(room.id), teacher.headers)).json()) as JournalStaff;
+    expect(journal).toMatchObject({ mode: "github", repository: { fullName, editable: false } });
+    const page = (await call("GET", `${base(room.id)}/pages/README.md`, teacher.headers)).json<{ editUrl: string }>();
+    expect(page.editUrl).toBe(`https://github.com/${fullName}/edit/main/README.md`);
+  });
+
+  it("still refuses an upload's own faults first", async () => {
+    const { room } = await withJournal();
     const mismatch = await upload(room.id, "a.png", Buffer.from("x"), "image/jpeg");
     expect([mismatch.statusCode, mismatch.json().error]).toEqual([415, "type_mismatch"]);
-    const empty = await upload(room.id, "a.png", Buffer.alloc(0), "image/png");
-    expect([empty.statusCode, empty.json().error]).toEqual([400, "empty_upload"]);
     const big = await upload(room.id, "a.png", Buffer.alloc(JOURNAL_ASSET_MAX_BYTES + 1), "image/png");
     expect(big.statusCode).toBe(413); // Fastify's own
-    for (const path of ["..%2Fx.png", "a/../../x.png", "page.md"]) {
-      expect((await upload(room.id, path, Buffer.from("x"), "image/png")).statusCode, path).toBe(404);
-    }
-    expect(commitsTo(fullName).length).toBe(commits);
   });
 });
 

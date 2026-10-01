@@ -3705,6 +3705,7 @@ export const fr: Record<keyof Dict, string> = {
   "journal.error.page_exists": "Une page existe déjà à cet emplacement.",
   "journal.error.type_mismatch": "Le type du fichier ne correspond pas à son extension.",
   "journal.error.empty_upload": "Le fichier est vide.",
+  "journal.error.read_only": "Ce journal vit dans un dépôt GitHub : modifiez-le sur GitHub.",
   "journalSettings.section": "Journal",
   "journalSettings.loadFailed": "Impossible de charger le journal",
   "journalSettings.none": "Pas de journal",

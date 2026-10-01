@@ -42,6 +42,7 @@ const staffPage: JournalPageStaff = {
   markdown: "# Pointers\n",
   blobSha: SHA,
   warnings: [{ code: "raw_html" }],
+  editUrl: "https://github.com/heig-prg/prg1-journal/edit/main/010-basics/020-pointers.md",
 };
 
 const studentPage: JournalPageStudent = {
@@ -114,6 +115,9 @@ describe("the student payloads (N-SEC-12)", () => {
     expectTypeOf<JournalStudent>().not.toHaveProperty("hiddenPaths");
     expectTypeOf<JournalStudent>().not.toHaveProperty("warningCount");
     expectTypeOf<JournalStudent>().not.toHaveProperty("repository");
+    // A student never learns where the journal lives (ADR-057).
+    expectTypeOf<JournalPageStudent>().not.toHaveProperty("editUrl");
+    expectTypeOf<JournalStudent>().not.toHaveProperty("mode");
   });
 
   it("accept the student fields", () => {
@@ -122,7 +126,7 @@ describe("the student payloads (N-SEC-12)", () => {
 
   it("refuse a staff page, and any staff field smuggled into a student one", () => {
     expect(JournalPageStudent.safeParse(staffPage).success).toBe(false);
-    for (const key of ["markdown", "blobSha", "warnings", "draft", "visibleFrom", "hidden"] as const) {
+    for (const key of ["markdown", "blobSha", "warnings", "draft", "visibleFrom", "hidden", "editUrl"] as const) {
       const smuggled = { ...studentPage, [key]: staffPage[key] };
       expect(JournalPageStudent.safeParse(smuggled).success, key).toBe(false);
     }
@@ -131,7 +135,7 @@ describe("the student payloads (N-SEC-12)", () => {
   it("refuse the hidden paths and counts in the navigation payload", () => {
     const student: JournalStudent = { view: "student", nav: [], homePath: null };
     expect(JournalStudent.parse(student)).toEqual(student);
-    for (const extra of [{ hiddenPaths: ["a.md"] }, { warningCount: 1 }, { repository: null }]) {
+    for (const extra of [{ hiddenPaths: ["a.md"] }, { warningCount: 1 }, { repository: null }, { mode: "github" }]) {
       expect(JournalStudent.safeParse({ ...student, ...extra }).success).toBe(false);
     }
   });
@@ -142,6 +146,7 @@ describe("the student payloads (N-SEC-12)", () => {
     expect(JournalPage.safeParse({ ...staffPage, view: "student" }).success).toBe(false);
     const staff: JournalStaff = {
       view: "staff",
+      mode: "quiz",
       repository: null,
       nav: [{ path: "010-a", title: "A", pagePath: null, children: [] }],
       homePath: null,

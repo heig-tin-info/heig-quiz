@@ -41,6 +41,7 @@ const nav = [
 
 const staffJournal = (over: Partial<JournalStaff> = {}): JournalStaff => ({
   view: "staff",
+  mode: "github",
   repository: {
     fullName: "heig-tin-info/prg1-journal",
     ref: "main",
@@ -90,6 +91,7 @@ const staffPage = (path: string, over: Partial<JournalPageStaff> = {}): JournalP
   markdown: "# Programmation 1",
   blobSha: "sha",
   warnings: [],
+  editUrl: null,
   ...over,
 });
 

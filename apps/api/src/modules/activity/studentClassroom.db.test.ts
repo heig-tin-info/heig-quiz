@@ -109,6 +109,7 @@ beforeAll(async () => {
   ]);
   await db.insert(classroomJournals).values({
     classroomId: mine.classroomId,
+    mode: "github",
     githubRepoId: 1,
     fullName: "heig/journal",
     ref: "main",

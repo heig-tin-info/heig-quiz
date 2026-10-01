@@ -1,9 +1,10 @@
 /**
  * The GitHub side of the journal (ported from heig-classroom's
  * `journal/repo.ts`, sync point `ab98cc0`): the reads of the ingestion
- * (M4-02), then the writes of the staff (M4-03) — create a repository, find
- * one by name, put and delete a file. Classroom's `commitMoves` (a reorder as
- * one commit) is not ported: nothing in Quiz reorders pages yet.
+ * (M4-02), then the writes (M4-03) — create a repository, find one by name,
+ * put a file. Since ADR-057 the platform never edits a GitHub-mode journal's
+ * pages: the put serves the creation's README and M4-11's Move to GitHub.
+ * Classroom's `commitMoves` (a reorder as one commit) is not ported.
  *
  * Everything goes through the REST API with the installation's client, and
  * NOTHING is cloned: a journal only ever needs one tree listing and the
@@ -312,7 +313,7 @@ export interface FileWrite {
 }
 
 /** The Contents API's route of a file: each segment encoded, the slashes kept. */
-const contentsRoute = (method: "PUT" | "DELETE", path: string) =>
+const contentsRoute = (method: "PUT", path: string) =>
   `${method} /repos/{owner}/{repo}/contents/${encodeJournalPath(path)}` as const;
 
 /**
@@ -355,21 +356,3 @@ export async function putFile(
   }
 }
 
-/** Removes one file, against the blob it was opened at (the lock of {@link putFile}). */
-export async function deleteFile(
-  octokit: Octokit,
-  repo: ResolvedRepo,
-  write: FileWrite & { baseSha: string },
-): Promise<{ commitSha: string }> {
-  try {
-    const { data } = await octokit.request(contentsRoute("DELETE", write.path), {
-      owner: repo.owner,
-      repo: repo.name,
-      ...commitFields(write),
-      sha: write.baseSha,
-    });
-    return { commitSha: (data as { commit: { sha?: string } }).commit.sha ?? "" };
-  } catch (err) {
-    throw conflictOf(err, write.path);
-  }
-}

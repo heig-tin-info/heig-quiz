@@ -74,6 +74,7 @@ async function world(files: FakeFile[], row: Partial<typeof classroomJournals.$i
   repos.push(repo);
   await db.insert(classroomJournals).values({
     classroomId,
+    mode: "github",
     githubRepoId: repo.id,
     fullName: `heig-prg/${repo.name}`,
     ref: "main",

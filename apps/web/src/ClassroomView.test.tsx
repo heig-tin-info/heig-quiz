@@ -362,6 +362,7 @@ describe("ClassroomView — the Journal tab", () => {
   const JOURNAL = `${ROOM}/journal`;
   const journal = (attached: boolean): JournalStaff => ({
     view: "staff",
+    mode: attached ? "github" : null,
     repository: attached
       ? {
           fullName: "heig-tin-info/prg1-journal",
