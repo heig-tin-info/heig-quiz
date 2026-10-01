@@ -2142,7 +2142,7 @@ export const fr: Record<keyof Dict, string> = {
   "param.remove": "Retirer {name}",
   "param.add": "Ajouter une variable",
   "param.condition": "Condition",
-  "param.condition.hint": "Facultative : tiré à nouveau tant qu'elle est fausse",
+  "param.condition.hint": "Facultative : nouveau tirage tant qu'elle est fausse",
   "param.format.auto": "Automatique",
   "param.format.int": "Entier",
   "param.format.decimal": "1 décimale",

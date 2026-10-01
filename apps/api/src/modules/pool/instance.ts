@@ -65,7 +65,6 @@ import {
   type StoredVersion,
 } from "./config.js";
 
-
 /** The columns of a question version an instance is made of. */
 export interface VersionContent extends StoredVersion {
   /** `question_versions.id`: which version stored values were drawn for. */

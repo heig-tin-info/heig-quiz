@@ -2143,7 +2143,7 @@ export const en = {
   "param.remove": "Remove {name}",
   "param.add": "Add a variable",
   "param.condition": "Condition",
-  "param.condition.hint": "Optional: drawn again while false",
+  "param.condition.hint": "Optional: redraw while false",
   "param.format.auto": "Automatic",
   "param.format.int": "Integer",
   "param.format.decimal": "1 decimal",

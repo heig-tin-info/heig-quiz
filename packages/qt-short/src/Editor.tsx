@@ -106,7 +106,6 @@ const rowCell = (index: number, className?: string) => ({
 const toPercent = (fraction: number) => Number((fraction * 100).toPrecision(12));
 const fromPercent = (percent: number) => Number((percent / 100).toPrecision(12));
 
-
 /**
  * A `number` matcher's value or tolerance: a number, or — in a
  * parameterized question — a `[[…]]` reference to a variable or an
