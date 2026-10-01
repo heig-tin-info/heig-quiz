@@ -111,6 +111,9 @@ Status values: `open`, `settled`, `superseded`.
   classroom, its journal when it has one, later its projects.
   **Activities** is the summary of the active activities across every
   classroom (today's home). `05-web.md` §5.2.
+  2026-10-01 (product owner): the student's desktop sidebar carries the
+  same entries as the bottom bar, Profile aside (`DESIGN.md`, "The
+  student's bottom bar").
 
 ### D09 — Online workspace in the merge's critical path?
 - **Question**: does production have assignments with `work_mode` ≠

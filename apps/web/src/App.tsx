@@ -260,9 +260,9 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
     ),
   // The pages of the classroom merge, placeholders until their screens ship
   // (`CLASSROOM_PAGES`, `router.ts`).
-  classroomGrades: (_, c) => <ComingSoon title="bnav.grades" navigate={c.navigate} />,
-  project: (_, c) => <ComingSoon title="soon.project" navigate={c.navigate} />,
-  projectGroups: (_, c) => <ComingSoon title="soon.projectGroups" navigate={c.navigate} />,
+  classroomGrades: (_, c) => <ComingSoon title="bnav.grades" navigate={c.navigate} teacherUi={c.teacherUi} />,
+  project: (_, c) => <ComingSoon title="soon.project" navigate={c.navigate} teacherUi={c.teacherUi} />,
+  projectGroups: (_, c) => <ComingSoon title="soon.projectGroups" navigate={c.navigate} teacherUi={c.teacherUi} />,
   activities: (_, c) => <ActivitiesPage navigate={c.navigate} />,
   polls: (_, c) => <PollLauncher navigate={c.navigate} />,
   // The projection is for a beamer: no sidebar, no chrome.

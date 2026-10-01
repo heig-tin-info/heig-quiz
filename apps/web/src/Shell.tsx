@@ -2,8 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   CalendarRange,
   ChevronDown,
-  ClipboardList,
-  Dumbbell,
   Eye,
   FolderTree,
   Library,
@@ -50,8 +48,8 @@ import {
   type IconType,
 } from "./ui";
 import { coursesKey, poolsKey } from "./queryKeys";
-import { BottomNav } from "./student/BottomNav";
-import { bottomNavShown } from "./student/bottomNavSlots";
+import { BottomNav, followSlot, SLOT_LOOK } from "./student/BottomNav";
+import { activeSlot, bottomNavShown, sidebarSlots } from "./student/bottomNavSlots";
 import { useDrillAvailability, type DrillAvailability } from "./drill/api";
 import { AvailableDot } from "./drill/AvailableDot";
 
@@ -206,8 +204,10 @@ function Nav({
     onNavigate?.();
   };
   const currentRoom = route.view === "classroom" ? route.id : null;
-  // The row lit for the page on screen, read from the route table.
+  // The row lit for the page on screen, read from the route table: a
+  // teacher's by section, a student's by the bottom bar's slot.
   const section = sectionOf(route);
+  const studentSlot = teacherUi ? null : activeSlot(route, window.location.hash);
   // Folded by default and not persisted: thirty classrooms turn the sidebar
   // into a scrolling wall, and the teacher who wants them all says so once.
   const [showAll, setShowAll] = useState(false);
@@ -239,31 +239,23 @@ function Nav({
         {/* Every activity across the classrooms (#190): a flat page, no tree.
             First, above the courses: it is where a teacher's day starts. */}
         {teacherUi ? (
-          <NavItem
-            icon={CalendarRange}
-            label={t("nav.activities")}
-            active={section === "activities"}
-            onClick={() => go({ view: "activities" })}
-          />
-        ) : null}
-        <NavItem
-          icon={teacherUi ? Library : ClipboardList}
-          // WP9: student player — the student home is their evaluations now,
-          // not the list of classrooms it used to be.
-          label={teacherUi ? t("nav.courses") : t("shome.title")}
-          active={section === "home"}
-          coach="nav.home"
-          expanded={teacherUi ? courseNav.state === "all" : undefined}
-          // The pools' rule (below): the click goes to the course list; on
-          // the list itself it toggles the active course / all courses.
-          onClick={() =>
-            teacherUi
-              ? courseNav.press(route.view === "home", () => go({ view: "home" }))
-              : go({ view: "home" })
-          }
-        />
-        {teacherUi ? (
           <>
+            <NavItem
+              icon={CalendarRange}
+              label={t("nav.activities")}
+              active={section === "activities"}
+              onClick={() => go({ view: "activities" })}
+            />
+            <NavItem
+              icon={Library}
+              label={t("nav.courses")}
+              active={section === "home"}
+              coach="nav.home"
+              expanded={courseNav.state === "all"}
+              // The pools' rule (below): the click goes to the course list; on
+              // the list itself it toggles the active course / all courses.
+              onClick={() => courseNav.press(route.view === "home", () => go({ view: "home" }))}
+            />
             <CourseNavTree state={courseNav.state} courses={courses} route={route} navigate={go} />
             <NavItem
               icon={FolderTree}
@@ -293,18 +285,28 @@ function Nav({
               onClick={() => go({ view: "polls" })}
             />
           </>
-        ) : null}
-        {/* ADR-041 (#317): the student's drill, once a classroom has it on.
-            The dot is "today's drill is available", never a count. */}
-        {!teacherUi && drill.shown ? (
-          <NavItem
-            icon={Dumbbell}
-            label={t("nav.drill")}
-            active={section === "drill"}
-            onClick={() => go({ view: "drill" })}
-            trailing={drill.available ? <AvailableDot /> : null}
-          />
-        ) : null}
+        ) : (
+          // The student's rows are the phone's bottom bar, minus Profile (the
+          // account menu below): one list, one lit row (`activeSlot`, which
+          // reads the home's `#past` as Grades). Drill only once a classroom
+          // has it on (ADR-041); its dot is "today's drill is available".
+          sidebarSlots(drill.shown).map((slot) => {
+            const look = SLOT_LOOK[slot.id];
+            return (
+              <NavItem
+                key={slot.id}
+                icon={look.icon}
+                label={t(look.sidebarLabel ?? look.label)}
+                active={slot.id === studentSlot}
+                onClick={() => {
+                  followSlot(slot, navigate);
+                  onNavigate?.();
+                }}
+                trailing={slot.id === "drill" && drill.available ? <AvailableDot /> : null}
+              />
+            );
+          })
+        )}
         {/* Settings is not a section of the product: it lives in the account
             menu at the bottom of this sidebar, and in the palette. */}
         {me.role === "admin" && teacherUi ? (

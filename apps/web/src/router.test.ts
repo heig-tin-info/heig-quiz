@@ -256,7 +256,6 @@ describe("ROUTES", () => {
       polls: "polls",
       poll: "polls",
       admin: "admin",
-      drill: "drill",
       project: "activities",
       projectGroups: "activities",
     });
@@ -270,6 +269,9 @@ describe("ROUTES", () => {
         "classroomSettings",
         "correction",
         "devUi",
+        // The student's pages: the student sidebar is lit by the bottom
+        // bar's slot (`activeSlot`), never by a section.
+        "drill",
         "evaluation",
         "evaluationPreview",
         "feedback",
@@ -282,8 +284,6 @@ describe("ROUTES", () => {
         "questionPreview",
         "results",
         "settings",
-        // The student sidebar has no Courses row: lighting Home there would
-        // name the wrong page (the bottom bar lights its Courses slot).
         "studentCourses",
         "teamsLink",
         "teamsTab",

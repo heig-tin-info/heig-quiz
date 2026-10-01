@@ -4,7 +4,6 @@ import {
   CalendarRange,
   ClipboardCheck,
   CircleHelp,
-  ClipboardList,
   Code2,
   FolderTree,
   GraduationCap,
@@ -116,9 +115,9 @@ export function buildCommands(ctx: CommandContext): Command[] {
       id: "nav:home",
       // Same label and icon as the sidebar row it duplicates: the palette must
       // name things the way the screen behind it does.
-      // WP9: student player — same label as the sidebar row it duplicates.
-      label: ctx.teacherUi ? t("nav.courses") : t("shome.title"),
-      icon: ctx.teacherUi ? Library : ClipboardList,
+      // A student's home is their Activities, the first row of their sidebar.
+      label: ctx.teacherUi ? t("nav.courses") : t("nav.activities"),
+      icon: ctx.teacherUi ? Library : CalendarRange,
       group: "navigate",
       run: () => navigate({ view: "home" }),
     },

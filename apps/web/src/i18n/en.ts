@@ -2147,7 +2147,6 @@ export const en = {
   "dev.ui.longForm": "Long-form reading (journal)",
 
   // WP9: student player
-  "shome.title": "Home",
   "shome.greeting": "Hello, {name}",
   "shome.subtitle": "Everything your classrooms have opened for you.",
   "shome.open": "Open now",

@@ -157,10 +157,16 @@ export type QuestionOrigin = Partial<Record<(typeof QUESTION_ORIGIN_PARAMS)[numb
 /** The one member of `Route` whose `view` is `V`. */
 export type RouteOf<V extends Route["view"]> = Extract<Route, { view: V }>;
 
-/** The sidebar sections (`Shell`'s `Nav`): the row that stays lit while a view is up. */
-export type NavSection = "home" | "activities" | "pools" | "polls" | "admin" | "drill";
+/**
+ * The teacher sidebar's sections (`Shell`'s `Nav`): the row that stays lit
+ * while a view is up. The student's sidebar is lit by `bottomSlot` instead.
+ */
+export type NavSection = "home" | "activities" | "pools" | "polls" | "admin";
 
-/** The slots of the student's bottom bar on a phone (`student/bottomNavSlots.ts`, #191). */
+/**
+ * The slots of the student's bottom bar on a phone (`student/bottomNavSlots.ts`,
+ * #191), which the student's desktop sidebar mirrors.
+ */
 export type BottomSlotId = "activities" | "courses" | "drill" | "grades" | "profile";
 
 /**
@@ -300,9 +306,8 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     section: "home",
   },
   // F-ORG-14 (D07): `/courses` alone, the student's classrooms. A teacher's
-  // Courses is the home; `/courses/:id` is one course (above). No sidebar
-  // row: the student's has no Courses entry, and lighting Home would name
-  // the wrong page.
+  // Courses is the home; `/courses/:id` is one course (above). A student's
+  // sidebar lights its Courses row through the slot.
   studentCourses: {
     path: () => "/courses",
     match: ([head, id]) => (head === "courses" && !id ? { view: "studentCourses" } : null),
@@ -463,7 +468,6 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   // ADR-041 (#317): the student's drill, the centre slot of the bottom bar.
   drill: {
     ...fixed("drill", { view: "drill" }, true),
-    section: "drill",
     bottomSlot: "drill",
   },
   // WP8 + WP10: ONE place decides what follows an evaluation id, so a new

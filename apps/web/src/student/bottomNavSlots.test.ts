@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parsePath, type Route } from "../router";
-import { activeSlot, bottomNavShown, visibleSlots } from "./bottomNavSlots";
+import { activeSlot, bottomNavShown, sidebarSlots, visibleSlots } from "./bottomNavSlots";
 
 describe("bottomNavShown (#191)", () => {
   it("draws the bar for the student on the pages its slots lead to", () => {
@@ -72,5 +72,27 @@ describe("visibleSlots (#317)", () => {
       "grades",
       "profile",
     ]);
+  });
+});
+
+describe("sidebarSlots (D07, 2026-10-01)", () => {
+  it("gives the student's sidebar the bar's slots in its order, minus Profile", () => {
+    expect(sidebarSlots(true).map((s) => s.id)).toEqual(["activities", "courses", "drill", "grades"]);
+    expect(sidebarSlots(false).map((s) => s.id)).toEqual(["activities", "courses", "grades"]);
+  });
+
+  it("leads Grades to the home's Grades section, as the bar does", () => {
+    const grades = sidebarSlots(false).find((s) => s.id === "grades");
+    expect(grades).toBe(visibleSlots(false).find((s) => s.id === "grades"));
+    expect(grades?.anchor).toBe("past");
+  });
+
+  it("lights Courses on every page of a classroom a student reads", () => {
+    const pages: Route[] = [
+      { view: "classroom", id: "c1" },
+      { view: "classroomJournal", id: "c1" },
+      { view: "classroomGrades", id: "c1" },
+    ];
+    for (const route of pages) expect(activeSlot(route, "")).toBe("courses");
   });
 });

@@ -169,6 +169,8 @@ projects is not pushed towards a journal).
 - Every string through `t()`, en and fr; one primary action per screen
   (`.claude/skills/quiz-ui/SKILL.md`, `apps/web/DESIGN.md`).
 - **Non-regression**: the default student persona's `student-home` scenes
-  stay identical (except the pressable card once D07 ships).
+  stay identical (except the pressable card once D07 ships, and, since
+  2026-10-01, the desktop scenes' sidebar, which mirrors the bottom bar:
+  Activities, Courses, Grades).
 - `pnpm build && pnpm typecheck`, then `pnpm --filter @quiz/web test` (per
   package: the full suite exhausts the RAM).

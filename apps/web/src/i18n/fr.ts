@@ -2147,7 +2147,6 @@ export const fr: Record<keyof Dict, string> = {
   "dev.ui.longForm": "Lecture longue (journal)",
 
   // WP9: student player
-  "shome.title": "Accueil",
   "shome.greeting": "Bonjour, {name}",
   "shome.subtitle": "Tout ce que vos classes ont ouvert pour vous.",
   "shome.open": "En cours",

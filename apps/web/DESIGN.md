@@ -1534,8 +1534,15 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
   least one classroom whose drill is on (`visibleSlots`); the four others
   share the width otherwise. Its label is `bnav.drill`, not the page title:
   "Entraînement" does not fit a fifth of a 390 px phone at 11 px, so the
-  French slot says "Révisions". The desktop sidebar has the same entry, a
-  "Drill" row under Home, under the same condition.
+  French slot says "Révisions"; the sidebar row, with room to spare, keeps
+  the page's title.
+- **The desktop sidebar mirrors the bar** (D07, the product owner's decision
+  of 2026-10-01). The student's sidebar rows are the bar's slots, in the
+  bar's order and under the same conditions, minus Profile, which is the
+  account menu's at the foot of the sidebar: Activities, Courses, Drill,
+  Grades (`sidebarSlots`). They take the slots' icons, lead where the slots
+  lead (Grades to `/#past`), and the lit row is the bar's (`activeSlot`), not
+  a sidebar section: those stay the teacher's.
 - **The badge is a dot, never a count.** "Today's drill is available"
   (ADR-041 §6) is an 8 px `accent` dot on the icon's top right, ringed in
   `canvas` so it reads on the lit pill too, with the words for a screen
