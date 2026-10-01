@@ -39,8 +39,14 @@ import { randomUUID } from "node:crypto";
 import { and, eq, gt, isNotNull, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
-import { isJournalPagePath, JOURNAL_ASSET_MAX_BYTES, safeJournalPath, type JournalSyncError } from "@quiz/contracts";
-import { assetContentType, cleanSource, placePage, prettifyName, renderPage } from "@quiz/docrender";
+import {
+  assetContentType,
+  isJournalPagePath,
+  JOURNAL_ASSET_MAX_BYTES,
+  safeJournalPath,
+  type JournalSyncError,
+} from "@quiz/contracts";
+import { cleanSource, placePage, prettifyName, renderPage } from "@quiz/docrender";
 
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
@@ -51,12 +57,11 @@ import {
   journalAssets,
   journalPages,
 } from "../../db/schema.js";
-import { installationClient } from "../../github/app.js";
 import { JOURNAL_INGEST_QUEUE } from "../../jobs.js";
 import { redactTokens } from "../../redact.js";
 import { journalChanged } from "./events.js";
 import {
-  bounded,
+  boundedClient,
   JournalRepoError,
   readBlob,
   readTree,
@@ -131,7 +136,7 @@ interface Copy {
 /**
  * The files under the journal's root that may be served as assets, by
  * journal-relative path, and the ones too large to (a reference to one says
- * so). Not a page, not repository furniture (a `.`-segment), and a path the
+ * so). Not a page, and a path the
  * routes would accept (`safeJournalPath`, N-SEC-15).
  */
 function classifyAssets(entries: readonly TreeEntry[], root: string) {
@@ -141,7 +146,8 @@ function classifyAssets(entries: readonly TreeEntry[], root: string) {
   for (const entry of entries) {
     if (isJournalPagePath(entry.path) || !entry.path.startsWith(prefix)) continue;
     const path = entry.path.slice(prefix.length);
-    if (safeJournalPath(path) === null || path.split("/").some((p) => p.startsWith("."))) continue;
+    // Repository furniture (a `.`-segment, `.github/`) fails it too.
+    if (safeJournalPath(path) === null) continue;
     if (entry.size > JOURNAL_ASSET_MAX_BYTES) oversized.add(path);
     else assets.set(path, entry);
   }
@@ -153,7 +159,7 @@ async function fetchCopy(config: AppConfig, snap: Snapshot): Promise<Copy> {
   if (snap.installationId === null) {
     throw new JournalRepoError("forbidden", "the classroom's organization has no installation");
   }
-  const { octokit } = await bounded(installationClient(config, snap.installationId));
+  const octokit = await boundedClient(config, snap.installationId);
   const repo = await resolveRepo(octokit, snap.row.githubRepoId);
   let tree: Awaited<ReturnType<typeof readTree>> | null;
   try {
@@ -246,6 +252,15 @@ async function lockedAt(tx: Tx, classroomId: string, expected: number): Promise<
 }
 
 const bumped = () => sql`${classroomJournals.version} + 1`;
+
+/**
+ * A write of the staff landed on GitHub (M4-03): the row's `version` moves,
+ * so an ingestion that read GitHub before it loses its compare-and-set and
+ * starts over from a fresh snapshot (J2).
+ */
+export async function bumpVersion(db: Db, classroomId: string): Promise<void> {
+  await db.update(classroomJournals).set({ version: bumped() }).where(eq(classroomJournals.classroomId, classroomId));
+}
 
 /** The copy written in one short transaction, or false when the row moved since the snapshot. */
 async function commitCopy(db: Db, snap: Snapshot, copy: Copy, now: Date): Promise<boolean> {

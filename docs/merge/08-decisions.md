@@ -145,7 +145,9 @@ Status values: `open`, `settled`, `superseded`.
 - **Suggested**: English — they are development artifacts read in a
   developer tool; UI strings stay translated.
 - Blocks: M3-07.
-- **Status**: open.
+- **Status**: open. M4-03 applied the suggestion provisionally: the
+  journal's seed README, repository description and default commit
+  messages are English (`modules/journal/writes.ts`).
 
 ### D13 — Accommodations on project deadlines
 - **Suggested**: the time bonus does not apply to projects; the per-repo

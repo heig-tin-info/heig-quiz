@@ -86,9 +86,14 @@ afterAll(async () => {
 
 it("walks the github module's and the journal's routes (the App is on)", () => {
   expect(githubRoutes().length).toBeGreaterThanOrEqual(6);
-  // Fastify's tree prints the journal's two wildcard routes (pages, assets)
-  // as one `journal*`: `journal.db.test.ts` walks those two by hand.
-  expect(githubRoutes().some(({ path }) => path.endsWith("/journal"))).toBe(true);
+  // Fastify's tree prints the journal's wildcard routes (pages, assets) as
+  // `pages*` and `journal*`, which these walks reach as no route at all:
+  // `journal.db.test.ts` walks the reads by hand, `writes.db.test.ts` the writes.
+  const walked = new Set(githubRoutes().map(({ method, path }) => `${method} ${path}`));
+  for (const write of ["POST", "DELETE", "POST /use", "POST /refresh", "POST /preview", "POST /pages"]) {
+    const [method, tail = ""] = write.split(" ");
+    expect(walked, write).toContain(`${method} /app/api/classrooms/:id/journal${tail}`);
+  }
 });
 
 describe("a seb session (ADR-027)", () => {

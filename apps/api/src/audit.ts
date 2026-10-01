@@ -100,6 +100,30 @@ export type AuditAction =
   /** That session ended: signed out, or expired (`payload.reason`). */
   | "impersonation.ended"
   /**
+   * The journal's staff writes (M4-03, 04-journal §4.1, D27): subject the
+   * classroom. `create` (a new repository) and `use` (one of the
+   * organization's): `payload.fullName`, `githubRepoId`, `ref`, `rootPath`;
+   * `remove`: the classroom's copy dropped, the repository kept; `refresh`;
+   * `save`, `add`, `delete`, `upload`: `payload.path` and `commitSha` (an
+   * upload, `bytes`). The synchronisations themselves audit nothing: their
+   * outcome is the journal's sync state.
+   */
+  | "journal.create"
+  | "journal.use"
+  | "journal.remove"
+  | "journal.refresh"
+  | "journal.save"
+  | "journal.add"
+  | "journal.delete"
+  | "journal.upload"
+  /**
+   * One staff member invited as a collaborator of the journal's repository
+   * (D27), `payload.permission` always `push`: `payload.userId`, `login`,
+   * `fullName`, `outcome` (`pending`, `accepted`, `stale` — the link points at
+   * no account —, `failed`).
+   */
+  | "journal.invite"
+  /**
    * ADR-051 §5, §8: a station's attestation accepted, or failed (`payload.reason`
    * `refused` | `unavailable`). The subject is the station's device id, or
    * `unknown` when no known station's cookie came with the failure — never the

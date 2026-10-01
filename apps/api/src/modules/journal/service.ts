@@ -143,10 +143,11 @@ export async function journalAsset(db: Db, classroomId: string, path: string, pa
 
 /**
  * Asks for a classroom's copy to be rebuilt: one `journal.ingest` job. The
- * webhook's push handler calls it, and M4-03's Refresh and saves will.
- * Without a queue (`JOBS_DISABLED=1`, a queue failed at boot) the ingestion
- * runs here, awaited, its failure recorded on the row by the ingestion
- * itself. J2 is the ingestion's compare-and-set, not the queue's.
+ * webhook's push handler calls it, and so do the Refresh and the choice of a
+ * repository (M4-03; a browser save rebuilds at once, `writes.ts`). Without a
+ * queue (`JOBS_DISABLED=1`, a queue failed at boot) the ingestion runs here,
+ * awaited, its failure recorded on the row by the ingestion itself. J2 is the
+ * ingestion's compare-and-set, not the queue's.
  */
 export async function requestIngest(app: FastifyInstance, config: AppConfig, classroomId: string): Promise<void> {
   if (app.boss) {

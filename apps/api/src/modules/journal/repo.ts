@@ -1,7 +1,9 @@
 /**
- * The GitHub side of the journal's READ half (ported from heig-classroom's
- * `journal/repo.ts`, sync point `ab98cc0`; the writes — create, put,
- * delete, moves — are merge task M4-03's).
+ * The GitHub side of the journal (ported from heig-classroom's
+ * `journal/repo.ts`, sync point `ab98cc0`): the reads of the ingestion
+ * (M4-02), then the writes of the staff (M4-03) — create a repository, find
+ * one by name, put and delete a file. Classroom's `commitMoves` (a reorder as
+ * one commit) is not ported: nothing in Quiz reorders pages yet.
  *
  * Everything goes through the REST API with the installation's client, and
  * NOTHING is cloned: a journal only ever needs one tree listing and the
@@ -10,9 +12,9 @@
  * file path of the journal ever goes into a URL here; the writes, which do
  * (the Contents API), build theirs with `encodeJournalPath`.
  *
- * Every call is BOUNDED ({@link bounded}, {@link once}): no retry of
- * Octokit's, no waiting out a rate limit, {@link GITHUB_TIMEOUT_MS} at
- * most. A rate limit or a timeout is `github_unavailable`, which the queue
+ * Every call is BOUNDED, through the one client {@link boundedClient}: no
+ * retry of Octokit's, no waiting out a rate limit, {@link GITHUB_TIMEOUT_MS}
+ * at most. A rate limit or a timeout is `github_unavailable`, which the queue
  * retries with backoff — never an ingestion blocked for an hour.
  *
  * Every failure is a {@link JournalRepoError} carrying a `JournalSyncError`
@@ -21,9 +23,10 @@
  */
 import type { Octokit } from "octokit";
 
-import type { JournalSyncError } from "@quiz/contracts";
+import { encodeJournalPath, JournalSyncError } from "@quiz/contracts";
 
-import { githubStatus } from "../../github/app.js";
+import type { AppConfig } from "../../config.js";
+import { githubStatus, installationClient } from "../../github/app.js";
 
 /** The longest the ingestion waits on one GitHub call, the token included. */
 export const GITHUB_TIMEOUT_MS = 30_000;
@@ -53,7 +56,12 @@ export interface ResolvedRepo {
 
 export class JournalRepoError extends Error {
   constructor(
-    readonly code: JournalSyncError | "empty",
+    /**
+     * A synchronisation's code; `empty`, a repository with no commit; for the
+     * writes, `conflict` (the file moved since it was opened) and
+     * `name_taken` (a creation on a name the organization already holds).
+     */
+    readonly code: JournalSyncError | "empty" | "conflict" | "name_taken",
     message: string,
   ) {
     super(message);
@@ -61,16 +69,8 @@ export class JournalRepoError extends Error {
   }
 }
 
-/** A request's options: no retry, no rate-limit wait, a deadline. */
-const once = () => ({
-  request: { retries: 0, noRateLimitWait: true, signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS) },
-});
-
-/**
- * `work`, or a timeout after {@link GITHUB_TIMEOUT_MS}: for the calls that
- * take no per-request option (the installation token's fetch).
- */
-export function bounded<T>(work: Promise<T>): Promise<T> {
+/** `work`, or a timeout after {@link GITHUB_TIMEOUT_MS}: the installation token's fetch takes no request option. */
+function bounded<T>(work: Promise<T>): Promise<T> {
   // After the timeout the token fetch keeps running in the background; its result is dropped.
   const signal = AbortSignal.timeout(GITHUB_TIMEOUT_MS);
   return Promise.race([
@@ -82,6 +82,29 @@ export function bounded<T>(work: Promise<T>): Promise<T> {
 }
 
 /**
+ * THE client of the journal's GitHub calls — the ingestion's and the
+ * writes', the shared adapters they call included (the invitations, a linked
+ * account's current login), which take no per-request option: the token
+ * fetched within {@link GITHUB_TIMEOUT_MS}, then a hook sets on EVERY request
+ * no retry, `noRateLimitWait` (what `HTTP_READ` of `github/app.ts` says for
+ * the reads serving an HTTP request: a rate limit is answered at once, never
+ * waited out for an hour) and a deadline. The client is a fresh one per call
+ * of `installationClient`, so no other caller is touched.
+ */
+export async function boundedClient(config: AppConfig, installationId: number): Promise<Octokit> {
+  const { octokit } = await bounded(installationClient(config, installationId));
+  octokit.hook.before("request", (options) => {
+    options.request = {
+      ...options.request,
+      retries: 0,
+      noRateLimitWait: true,
+      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+    } as typeof options.request;
+  });
+  return octokit;
+}
+
+/**
  * The code of a failure GitHub answered, or of no answer at all (a timeout,
  * the network). A 403 or a 429 that says the quota is spent is GitHub being
  * unavailable for now, not a refusal: the queue's retry, the next push or a
@@ -89,7 +112,10 @@ export function bounded<T>(work: Promise<T>): Promise<T> {
  * `repo_not_found` too: the App no longer reaches the repository.
  */
 export function syncErrorOf(err: unknown): JournalSyncError {
-  if (err instanceof JournalRepoError && err.code !== "empty") return err.code;
+  if (err instanceof JournalRepoError) {
+    const code = JournalSyncError.safeParse(err.code);
+    if (code.success) return code.data;
+  }
   const status = githubStatus(err);
   const headers = (err as { response?: { headers?: Record<string, string> } }).response?.headers;
   if (status === 429 || (status === 403 && headers?.["x-ratelimit-remaining"] === "0")) {
@@ -109,7 +135,6 @@ export async function resolveRepo(octokit: Octokit, githubRepoId: number): Promi
   try {
     const { data } = await octokit.request("GET /repositories/{repository_id}", {
       repository_id: githubRepoId,
-      ...once(),
     });
     const { full_name: fullName, name, owner } = data as {
       full_name: string;
@@ -137,7 +162,6 @@ export async function readTree(octokit: Octokit, repo: ResolvedRepo, ref: string
       owner: repo.owner,
       repo: repo.name,
       ref,
-      ...once(),
     });
     commitSha = data.sha;
   } catch (err) {
@@ -154,7 +178,6 @@ export async function readTree(octokit: Octokit, repo: ResolvedRepo, ref: string
     repo: repo.name,
     tree_sha: commitSha,
     recursive: "1",
-    ...once(),
   });
   if (tree.truncated) {
     throw new JournalRepoError("too_large", `the tree of ${repo.fullName} is too large to read at once`);
@@ -177,7 +200,176 @@ export async function readBlob(octokit: Octokit, repo: ResolvedRepo, sha: string
     owner: repo.owner,
     repo: repo.name,
     file_sha: sha,
-    ...once(),
   });
   return Buffer.from(data.content, data.encoding as BufferEncoding);
+}
+
+// ---------------------------------------------------------------- the writes (M4-03)
+
+
+/** Who a browser write is authored as (F-JRN-10): the teacher, never the App. */
+export interface CommitAuthor {
+  name: string;
+  email: string;
+}
+
+/** A repository of the organization, as a creation or a choice needs it. */
+export interface FoundRepo extends ResolvedRepo {
+  githubRepoId: number;
+  /** GitHub's immutable id of the owner: what tells the organization's own from another's. */
+  ownerId: number;
+  defaultBranch: string;
+}
+
+interface RawRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  default_branch?: string;
+  owner: { login: string; id: number };
+}
+
+const foundRepo = (data: RawRepo): FoundRepo => ({
+  githubRepoId: data.id,
+  owner: data.owner.login,
+  ownerId: data.owner.id,
+  name: data.name,
+  fullName: data.full_name,
+  defaultBranch: data.default_branch || "main",
+});
+
+/**
+ * `org/name` as GitHub resolves it today, or null when the installation
+ * reaches none. GitHub follows a renamed or transferred repository: the
+ * caller checks the owner it answers with.
+ */
+export async function findRepo(octokit: Octokit, org: string, name: string): Promise<FoundRepo | null> {
+  try {
+    const { data } = await octokit.request("GET /repos/{owner}/{repo}", { owner: org, repo: name });
+    return foundRepo(data as RawRepo);
+  } catch (err) {
+    if (githubStatus(err) === 404) return null;
+    throw err;
+  }
+}
+
+/**
+ * Creates a private repository in `org` and commits its first file, `seed`
+ * (the README), authored by `author`. A name already taken is `name_taken`,
+ * NEVER an adoption: handing a classroom whatever sits under that name would
+ * render another course to the wrong cohort (F-JRN-02); choosing an existing
+ * repository is its own, explicit action.
+ */
+export async function createRepo(
+  octokit: Octokit,
+  opts: {
+    org: string;
+    name: string;
+    description: string;
+    seed: { path: string; content: string };
+    author: CommitAuthor;
+  },
+): Promise<FoundRepo> {
+  let repo: FoundRepo;
+  try {
+    const { data } = await octokit.request("POST /orgs/{org}/repos", {
+      org: opts.org,
+      name: opts.name,
+      description: opts.description,
+      private: true,
+      has_wiki: false,
+      has_projects: false,
+      auto_init: false,
+    });
+    repo = foundRepo(data as RawRepo);
+  } catch (err) {
+    // GitHub's "name already exists on this account" (the name itself was validated before).
+    if (githubStatus(err) === 422) {
+      throw new JournalRepoError("name_taken", `${opts.org}/${opts.name} already exists`);
+    }
+    throw err;
+  }
+  // Empty until something is committed: this first write creates the default branch.
+  await putFile(octokit, repo, {
+    branch: repo.defaultBranch,
+    path: opts.seed.path,
+    content: Buffer.from(opts.seed.content, "utf8"),
+    message: "Start the journal",
+    author: opts.author,
+  });
+  return repo;
+}
+
+/** What a write of one file names: where, what, by whom, and against which blob. */
+export interface FileWrite {
+  branch: string;
+  /** Relative to the repository's root, already checked (`safeJournalPath`). */
+  path: string;
+  message: string;
+  author: CommitAuthor;
+  /** The blob the writer opened: the optimistic lock. Absent: the file must not exist yet. */
+  baseSha?: string | undefined;
+}
+
+/** The Contents API's route of a file: each segment encoded, the slashes kept. */
+const contentsRoute = (method: "PUT" | "DELETE", path: string) =>
+  `${method} /repos/{owner}/{repo}/contents/${encodeJournalPath(path)}` as const;
+
+/**
+ * Only the AUTHOR is the teacher: the committer stays the App, so GitHub
+ * signs the commit (Verified) and the history says it came through Quiz.
+ */
+const commitFields = (write: FileWrite) => ({ branch: write.branch, message: write.message, author: write.author });
+
+/** 409 (the blob moved) or 422 (a sha where there is none, none where there is one): the file changed. */
+function conflictOf(err: unknown, path: string): unknown {
+  const status = githubStatus(err);
+  return status === 409 || status === 422
+    ? new JournalRepoError("conflict", `${path} changed on GitHub since it was opened`)
+    : err;
+}
+
+/**
+ * Writes one file through the Contents API, against `baseSha`: GitHub
+ * refuses the write when the file moved since, and that is the whole
+ * conflict detection — nothing is compared, nothing merged, and a teacher who
+ * pushed from a clone is never overwritten by a tab left open.
+ */
+export async function putFile(
+  octokit: Octokit,
+  repo: ResolvedRepo,
+  write: FileWrite & { content: Buffer },
+): Promise<{ blobSha: string; commitSha: string }> {
+  try {
+    const { data } = await octokit.request(contentsRoute("PUT", write.path), {
+      owner: repo.owner,
+      repo: repo.name,
+      ...commitFields(write),
+      content: write.content.toString("base64"),
+      ...(write.baseSha ? { sha: write.baseSha } : {}),
+    });
+    const written = data as { content?: { sha?: string } | null; commit: { sha?: string } };
+    return { blobSha: written.content?.sha ?? "", commitSha: written.commit.sha ?? "" };
+  } catch (err) {
+    throw conflictOf(err, write.path);
+  }
+}
+
+/** Removes one file, against the blob it was opened at (the lock of {@link putFile}). */
+export async function deleteFile(
+  octokit: Octokit,
+  repo: ResolvedRepo,
+  write: FileWrite & { baseSha: string },
+): Promise<{ commitSha: string }> {
+  try {
+    const { data } = await octokit.request(contentsRoute("DELETE", write.path), {
+      owner: repo.owner,
+      repo: repo.name,
+      ...commitFields(write),
+      sha: write.baseSha,
+    });
+    return { commitSha: (data as { commit: { sha?: string } }).commit.sha ?? "" };
+  } catch (err) {
+    throw conflictOf(err, write.path);
+  }
 }
