@@ -16,8 +16,9 @@ Amended by [ADR-052](ADR-052-questions-bonus.md) (2026-09-30): the items
 scale is linear only (its rounding).
 
 Amended 2026-10-01 (templates first, decided with the product owner): the
-reading tool `list_templates` and the writing tools `create_template` and
-`instantiate_template` join the closed list of §C, and a new quiz is made
+reading tool `list_templates` and the writing tools `create_template`,
+`add_questions_to_template` and `instantiate_template` join the closed
+list of §C, and a new quiz is made
 as a template of the course by default — see the addendum at the end of §C.
 
 ## Context
@@ -97,7 +98,7 @@ Writing: `create_course`, `create_classroom`, `create_pool`,
 `link_pool_to_course`, `create_category`, `create_question`,
 `update_question`, `create_evaluation`, `add_questions_to_evaluation`,
 `update_evaluation`, `create_poll`, `create_template`,
-`instantiate_template`.
+`add_questions_to_template`, `instantiate_template`.
 
 - `describe_question_types` hands the model the JSON Schema of the type's
   `configSchema` — generated, so it cannot drift from the publication gate —
@@ -129,8 +130,8 @@ Writing: `create_course`, `create_classroom`, `create_pool`,
   a model choosing questions compares them.
 
 **Addendum of 2026-10-01 — templates first.** Reading gains
-`list_templates`; writing gains `create_template` and
-`instantiate_template`. Each is a thin client of the template routes of
+`list_templates`; writing gains `create_template`,
+`add_questions_to_template` and `instantiate_template`. Each is a thin client of the template routes of
 ADR-031, unchanged: `GET` and `POST /courses/:id/templates` (F-EVAL-24),
 `POST /templates/:id/items` (F-EVAL-25) and `POST /templates/:id/instances`.
 `create_template` takes the arguments of `create_evaluation` with a course
@@ -160,7 +161,10 @@ gets `422 template_pool_unlinked`.
   their arguments and their body (create with the mode's preset, add the
   items through the home's own item route, read the detail back). A refused
   item leaves the template created and empty, as it leaves the evaluation:
-  the model is told not to create it again.
+  the model is told not to create it again but to fix the cause and add the
+  questions with `add_questions_to_template`, the twin of
+  `add_questions_to_evaluation` over the same template item route (a new
+  revision, never a change to an instance: F-EVAL-25, F-EVAL-26).
 
 ## Consequences
 

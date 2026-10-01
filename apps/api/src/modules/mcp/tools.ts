@@ -139,7 +139,7 @@ async function createQuiz(
   api: Api,
   createPath: string,
   kind: "evaluations" | "templates",
-  a: { title: string; mode: "exam" | "exercise"; questionIds: string[] },
+  a: z.infer<z.ZodObject<typeof QuizFields>>,
 ) {
   const created = await api.post(createPath, { title: a.title, mode: a.mode, preset: a.mode });
   if (a.questionIds.length > 0) {
@@ -497,10 +497,25 @@ export const TOOLS: Tool[] = [
       "linked to the course (`link_pool_to_course`). Needs a seat on the course's staff: 404 otherwise, " +
       "like any course the teacher does not staff; do not retry elsewhere. If the questions are refused, " +
       "the template already exists, empty: do not create it again; fix the cause (publish, link the pool), " +
-      "then give the teacher its link from `list_templates` to add the questions there. Call `instantiate_template` when the teacher also wants it in a classroom.",
+      "then add them with `add_questions_to_template` (its id is in `list_templates`). " +
+      "Call `instantiate_template` when the teacher also wants it in a classroom.",
     input: z.object({ courseId: Id, ...QuizFields }),
     annotations: WRITE,
     run: (api, { courseId, ...a }) => createQuiz(api, `/courses/${courseId}/templates`, "templates", a),
+  }),
+
+  tool({
+    name: "add_questions_to_template",
+    title: "Add questions to a template",
+    description:
+      "Appends published questions to a template; each must come from a pool linked to the template's " +
+      "course. Its instances are not changed: they take the new revision only when the teacher pulls it.",
+    input: z.object({ templateId: Id, questionIds: z.array(Id).min(1).max(200) }),
+    annotations: WRITE,
+    run: async (api, a) => ({
+      ...(await api.post(`/templates/${a.templateId}/items`, { questionIds: a.questionIds })),
+      url: api.link(`/templates/${a.templateId}`),
+    }),
   }),
 
   tool({

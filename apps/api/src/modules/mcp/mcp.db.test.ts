@@ -140,6 +140,7 @@ describe("the transport", () => {
         "create_poll",
         "list_templates",
         "create_template",
+        "add_questions_to_template",
         "instantiate_template",
       ].sort(),
     );
@@ -387,8 +388,29 @@ describe("templates first (ADR-022, addendum of 2026-10-01)", () => {
       const q = await ok("create_question", { poolId: pool.id, type: "mcq", internalName: `${code}-${n}`, config: example });
       ids.push(q.questionId);
     }
-    return { course, room, ids };
+    return { course, room, pool, ids };
   }
+
+  it("adds questions to a template, and refuses an unpublished one", async () => {
+    const { course, pool, ids } = await courseWithQuestions("TPL-ADD");
+    const made = await ok("create_template", { courseId: course.id, title: "À compléter", questionIds: [ids[0]] });
+    const draft = await ok("create_question", {
+      poolId: pool.id,
+      type: "mcq",
+      internalName: "TPL-ADD-draft",
+      config: (describeQuestionType("mcq") as { example: unknown }).example,
+      publish: false,
+    });
+
+    const refused = await call("add_questions_to_template", { templateId: made.template.id, questionIds: [draft.questionId] });
+    expect(refused.isError).toBe(true);
+    expect(refused.data).toMatchObject({ status: 422, body: { error: "no_published_version" } });
+
+    const added = await ok("add_questions_to_template", { templateId: made.template.id, questionIds: [ids[1]] });
+    expect(added.template).toMatchObject({ id: made.template.id, itemCount: 2 });
+    expect(added.template.revision).toBeGreaterThan(made.template.revision);
+    expect(added.url).toContain(`/templates/${made.template.id}`);
+  });
 
   it("creates a template of the course, lists it and instantiates it into a classroom", async () => {
     const { course, room, ids } = await courseWithQuestions("TPL-MCP");
