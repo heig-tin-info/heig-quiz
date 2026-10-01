@@ -28,7 +28,6 @@ import { RegradeSheet } from "./RegradeSheet";
 import {
   ANY,
   byName,
-  byVerdict,
   canBatch,
   entryKey,
   EXPECTED,
@@ -111,10 +110,13 @@ export function GradingPanel({
     () => (item && shown ? gradingColumns(t, item.type, shown.student, shown.solution) : []),
     [t, item, shown],
   );
-  const base = useMemo(() => {
-    const ordered = anonymise ? shuffled(entries, seed) : byName(entries);
-    return parameters ? byVerdict(ordered) : ordered;
-  }, [entries, anonymise, seed, parameters]);
+  const base = useMemo(
+    () => (anonymise ? shuffled(entries, seed) : byName(entries)),
+    [entries, anonymise, seed],
+  );
+  // A parameterized question's answers each have their own key: its rows
+  // stand by verdict until the teacher sorts otherwise (ADR-056 §9).
+  const shownSort = sort ?? (parameters ? BY_VERDICT : null);
   const visible = useMemo(
     () =>
       filterRows(base, {
@@ -130,8 +132,8 @@ export function GradingPanel({
   );
   const rows = useMemo(() => {
     const byKey = new Map(sortable.map((c) => [c.key, c]));
-    return sortRows(visible, sort, (e, key) => byKey.get(key)?.sortValue(e) ?? "");
-  }, [visible, sort, sortable]);
+    return sortRows(visible, shownSort, (e, key) => byKey.get(key)?.sortValue(e) ?? "");
+  }, [visible, shownSort, sortable]);
 
   useEffect(() => {
     const at = rows.findIndex((e) => entryKey(e) === selected);
@@ -349,8 +351,8 @@ export function GradingPanel({
               maxPoints={item.points}
               parameters={parameters}
               named={!anonymise}
-              sort={sort}
-              onSort={(key) => setSort((s) => nextSort(s, key))}
+              sort={shownSort}
+              onSort={(key) => setSort(nextSort(shownSort, key))}
               selected={selected}
               onOpen={open}
               onValidate={validateOne}
@@ -380,6 +382,9 @@ export function GradingPanel({
     </Page>
   );
 }
+
+/** The base order of a parameterized question's rows (ADR-056 §9). */
+const BY_VERDICT: Sort = { key: "verdict", dir: 1 };
 
 /** The docked answer pane's width, which the page widens by (`pageBox`). */
 const ANSWER_PANE_WIDTH = "36rem";

@@ -1671,6 +1671,14 @@ function variablesIssues(variables: ParametersDraft | null): ZodIssueLite[] {
   ]);
 }
 
+/** Every `[[name]]` of a text replaced by its value; an unknown name stays as written. */
+export const fillText = (text: string, byName: Record<string, string>): string =>
+  text.replace(/\[\[\s*([A-Za-z_]\w*)\s*\]\]/g, (all, name: string) => byName[name] ?? all);
+
+/** {@link fillText} on every string of a JSON value: a template made an instance. */
+export const fillVariables = <T,>(json: T, byName: Record<string, string>): T =>
+  JSON.parse(JSON.stringify(json), (_k, v: unknown) => (typeof v === "string" ? fillText(v, byName) : v)) as T;
+
 /**
  * `POST /questions/:id/draft/instances` (ADR-056 §8), without mathjs: the
  * web bundle never carries the evaluator, and neither does its mock. Five
@@ -1689,10 +1697,7 @@ function mockDraws(q: MockQuestion): DraftInstances {
     const known: Record<string, string> = { h: String(h), g: g.toFixed(2), t: Math.sqrt((2 * h) / g).toFixed(2) };
     const values = variables.rows.map((row) => ({ name: row.name, value: known[row.name] ?? String(seed + 1) }));
     const byName = Object.fromEntries(values.map((v) => [v.name, v.value]));
-    const fill = (text: string) => text.replace(/\[\[\s*([A-Za-z_]\w*)\s*\]\]/g, (all, name: string) => byName[name] ?? all);
-    const config = JSON.parse(JSON.stringify(q.draft.config), (_k, v: unknown) =>
-      typeof v === "string" ? fill(v) : v,
-    ) as Record<string, unknown>;
+    const config = fillVariables(q.draft.config, byName);
     const parsed = q.type === "short" ? shortServer.configSchema.safeParse(config) : null;
     // The instance as a question of its own: the key hooks read its config, never the template's.
     const instance: MockQuestion = { ...q, versions: [], draft: { ...q.draft, config } };
@@ -1705,7 +1710,7 @@ function mockDraws(q: MockQuestion): DraftInstances {
       student: studentView(q, config),
       solution: studentSolutionOf(instance, solution),
       itemPoints: 1,
-      explanation: fill(q.draft.explanation),
+      explanation: fillText(q.draft.explanation, byName),
     };
   });
   return { instances, issues: [] };

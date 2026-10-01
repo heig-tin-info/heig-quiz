@@ -224,6 +224,10 @@ function AnswerRows({ q, revealed, density }: { q: ByQuestion; revealed: boolean
   const s = SCALE[density];
   const blank = q.outcomes.blank;
   const rows = q.distribution.slice(0, PROJECTION_ROW_CAP);
+  // A parameterized question groups nothing by what was written (ADR-056
+  // §9), and its verdicts — the blanks among them — are the head's bar: a
+  // list under it would say the same thing twice.
+  const listed = !q.parameterized && (rows.length > 0 || blank > 0);
   const overflow = q.distribution.length - rows.length;
   const top = Math.max(1, blank, ...rows.map((r) => r.count));
   const expected = (q.solution as Partial<ShortSolutionLike> | null)?.expected;
@@ -248,7 +252,7 @@ function AnswerRows({ q, revealed, density }: { q: ByQuestion; revealed: boolean
           <span className="font-mono font-semibold text-success">{expected.join(" · ")}</span>
         </p>
       ) : null}
-      {rows.length > 0 || blank > 0 ? (
+      {listed ? (
         <ul className="flex flex-col">
           {rows.map((entry) =>
             row(
@@ -286,22 +290,6 @@ function ClozeText({ q, revealed, density }: { q: ByQuestion; revealed: boolean;
   );
   const n = counted(q);
   const hole = (index: number) => {
-    // A parameterized cloze groups nothing by what was written (ADR-056
-    // §9): its blanks hold the example's key, and the head says how the
-    // class fared.
-    if (q.parameterized) {
-      return (
-        <span
-          className={cx(
-            "mx-1 inline-block min-w-[8ch] border-b-2 px-2.5 text-center align-middle font-mono font-semibold leading-tight",
-            revealed ? "border-success text-success" : "border-dashed border-line-strong text-transparent",
-          )}
-          aria-hidden={!revealed}
-        >
-          {keys.get(index) ?? "…"}
-        </span>
-      );
-    }
     const groups = q.distribution.filter((d) => d.part === index);
     const sum = (keep: (d: AnswerDistributionEntry) => boolean) =>
       groups.filter(keep).reduce((s, d) => s + d.count, 0);
@@ -328,7 +316,9 @@ function ClozeText({ q, revealed, density }: { q: ByQuestion; revealed: boolean;
         >
           {keys.get(index) ?? "…"}
         </span>
-        <SegmentedBar className="h-1.5" parts={parts} total={Math.max(1, n)} />
+        {/* A parameterized cloze groups nothing by what was written (ADR-056
+            §9): its blank holds the example's key, the head the verdicts. */}
+        {q.parameterized ? null : <SegmentedBar className="h-1.5" parts={parts} total={Math.max(1, n)} />}
       </span>
     );
   };

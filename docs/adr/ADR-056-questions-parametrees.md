@@ -277,17 +277,22 @@ right for Alice and wrong for Bob.
   Each entry carries its student's `values` (in the table's order, written
   with their formats) and its instantiated `explanation`; the side panel
   shows them under the type's `Review`, which already gets the entry's own
-  instance and key. The key's panel lists the variables and the condition.
-  Rows are grouped by verdict, and an answer column sorts only within a
-  verdict: two alike answers to their own keys are not answers to grade
-  alike. A per-row "expected" column can come later.
+  instance and key. The key's panel lists the variables, each format worded
+  as the editor words it, and the condition. The values are
+  `formattedValues` (`@quiz/domain/parameters`), the very list of the
+  editor's five draws (`NamedValues`).
+  Rows stand sorted by verdict until the teacher sorts otherwise, and an
+  answer column sorts only within a verdict: two alike answers to their own
+  keys are not answers to grade alike. A per-row "expected" column can come later.
 - **The debrief (ADR-033)** projects the instance of the EXAMPLE values
   (seed 0, the draw publication validated), named "Example values: each
   student had their own numbers" (`ByQuestion.parameterized`). Not the
   template: a formula on a wall is a worked solution, and a `cloze`
   template is no question the type can draw. Nothing is grouped by what was
-  written: `distribution` is empty, `outcomes` carry the verdicts, and a
-  `cloze` blank holds the example's key without a right / wrong bar. An
+  written: `distribution` is empty and `outcomes` carry the verdicts, which
+  the head's bar already draws — so a `short` lists no answer rows under its
+  expected answer (not even "no answer", which alone would read as broken),
+  and a `cloze` blank holds the example's key without a right / wrong bar. An
   `mcq` keeps its ticks per choice: choice B is the same formula, with the
   same verdict, on every paper.
 - **Distractor analysis (ADR-043)** groups `mcq` options by their template

@@ -130,16 +130,6 @@ export function byName(entries: readonly GradingEntry[]): GradingEntry[] {
   );
 }
 
-/**
- * A parameterized question's rows (ADR-056 §9), grouped by verdict — wrong,
- * partial, pending, correct — each group in the order it came in. Its
- * answers each have their own key, so two alike answers may well be one
- * right and one wrong: the verdict is the only grouping that holds.
- */
-export function byVerdict(entries: readonly GradingEntry[]): GradingEntry[] {
-  return sortRows(entries, { key: "verdict", dir: 1 }, verdictRank);
-}
-
 export function filterRows(entries: readonly GradingEntry[], f: RowFilters): GradingEntry[] {
   return entries.filter(
     (e) =>

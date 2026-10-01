@@ -9,6 +9,7 @@ import { formatPoints } from "@quiz/domain";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
+import { formatLabel } from "../question/VariablesSection";
 import { useToast } from "../notify";
 import { emptyAnswerOf, QuestionPlayerHost, QuestionReviewHost, typeLabel } from "../questionTypes";
 import {
@@ -141,10 +142,11 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 /**
  * A parameterized question's variables as the teacher wrote them (ADR-056
- * §9): one line per row, `name = expression`, in mono, with its format, and
+ * §9): one line per row, `name = expression`, in mono, with its format as
+ * the editor words it ("2 decimals"), and
  * the condition under them.
  */
-function VariablesSection({ parameters }: { parameters: GradingParameters }) {
+function VariablesList({ parameters }: { parameters: GradingParameters }) {
   const t = useT();
   const { rows, condition } = parameters.variables;
   return (
@@ -155,7 +157,9 @@ function VariablesSection({ parameters }: { parameters: GradingParameters }) {
             <dt className="shrink-0 font-semibold text-fg">{row.name}</dt>
             <dd className="min-w-0 break-words text-fg-muted">
               = {row.expr}
-              {row.format ? <span className="ml-2 text-xs text-fg-faint">{row.format}</span> : null}
+              {row.format ? (
+                <span className="ml-2 font-sans text-xs text-fg-faint">{formatLabel(t, row.format)}</span>
+              ) : null}
             </dd>
           </div>
         ))}
@@ -203,7 +207,7 @@ function ExpectedBody({ item, columns, student, parameters, explanation }: Panel
           expandable={false}
         />
       </Section>
-      {parameters ? <VariablesSection parameters={parameters} /> : null}
+      {parameters ? <VariablesList parameters={parameters} /> : null}
       <Section title={t("grading.expected")}>
         {parameters?.template.example ? (
           <p className="text-xs text-fg-muted">{t("grading.param.example")}</p>
@@ -224,7 +228,6 @@ function ExpectedBody({ item, columns, student, parameters, explanation }: Panel
           <MarkdownView size="sm" source={explanation} />
         </NotePanel>
       ) : null}
-      {parameters ? <p className="text-xs text-fg-muted">{t("grading.param.expectedHelp")}</p> : null}
       <p className="text-xs text-fg-muted">{t("grading.panel.expectedHelp")}</p>
     </div>
   );

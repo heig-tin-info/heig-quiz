@@ -58,7 +58,10 @@ import {
   RC_REFERENCE,
   RC_STUDENT,
   mockCircuitDetails,
+  fillText,
+  fillVariables,
   questions,
+  solutionOf,
   studentSolutionOf,
   studentView,
   tryAnswer,
@@ -149,32 +152,17 @@ const cellKey = (attemptId: string, itemId: string) => `${attemptId}:${itemId}`;
 
 // --- A parameterized question (ADR-056 §9) ---------------------------------
 //
-// One short answer whose numbers are drawn per attempt, appended to the
+// The pool's falling ball (`q-fall`, src/mock/pool.ts), appended to the
 // `closed` evaluation so the grading table, its panel and the class debrief
-// show what a parameterized question looks like there. The mock has no
-// evaluator (mathjs stays on the server): the instance of an attempt is
-// computed here by hand, from a hash of its id — never from `rand()`, so the
-// rest of the mock world draws exactly what it drew before.
+// show a parameterized question. The mock has no evaluator (mathjs stays on
+// the server): each attempt's `h` and `g` come from a hash of its id — never
+// from `rand()`, so the rest of the mock world draws exactly what it drew
+// before — `t` is computed from them, and the template is filled by the
+// pool's own `fillVariables`.
 
-const FALL_ID = "qqqqqqqq-0000-4000-8000-00000000fa11";
+const FALL: MockQuestion | undefined = questions.find((q) => q.id === "q-fall");
 
-const FALL_VARIABLES = {
-  rows: [
-    { name: "h", expr: "randint(10, 100)", format: "int" },
-    { name: "g", expr: "choice([3.71, 9.81, 24.79])", format: ".2" },
-    { name: "t", expr: "sqrt(2*h/g)", format: ".2" },
-  ],
-  condition: "t > 1.5",
-};
-
-const FALL_TEMPLATE: Record<string, unknown> = {
-  configVersion: 3,
-  prompt:
-    "Une bille est lâchée d'une hauteur de [[h]] m sur une planète où g = [[g]] m/s². " +
-    "Combien de secondes dure sa chute ?",
-  kind: "number",
-  matchers: [{ kind: "number", value: "[[t]]", tolerance: "[[t/100]]" }],
-};
+const isFall = (q: { id: string }) => q.id === "q-fall";
 
 interface FallValues {
   h: number;
@@ -191,9 +179,9 @@ function fallHash(text: string): number {
 
 const round2Fall = (x: number) => Math.round(x * 100) / 100;
 
-/** The values of an attempt (`null`: the example, seed 0), the condition held. */
+/** The values of an attempt (`null`: the example, seed 0), the condition `t > 1.5` held. */
 function fallValues(attemptId: string | null): FallValues {
-  if (attemptId === null) return { h: 45, g: 9.81, t: 3.03 };
+  if (attemptId === null) return { h: 42, g: 9.81, t: 2.93 };
   const n = fallHash(attemptId);
   const g = [3.71, 9.81, 24.79][n % 3]!;
   let h = 10 + ((n >>> 3) % 91);
@@ -201,74 +189,33 @@ function fallValues(attemptId: string | null): FallValues {
   return { h, g, t: round2Fall(Math.sqrt((2 * h) / g)) };
 }
 
-/** The instance an attempt read: the template with its values in place. */
-function fallInstance(v: FallValues): Record<string, unknown> {
-  return {
-    ...FALL_TEMPLATE,
-    prompt: String(FALL_TEMPLATE.prompt).replace("[[h]]", String(v.h)).replace("[[g]]", v.g.toFixed(2)),
-    matchers: [{ kind: "number", value: v.t, tolerance: round2Fall(v.t / 100) }],
-  };
-}
-
-const fallSolution = (v: FallValues) => ({ expected: [`${v.t} ± ${round2Fall(v.t / 100)}`] });
-
-/** What the grading queue sends of an attempt's values: formatted as the student read them. */
-const fallNamedValues = (v: FallValues) => [
+/** The values as the grading queue sends them: in the table's order, each with its format. */
+const fallNamed = (v: FallValues) => [
   { name: "h", value: String(v.h) },
   { name: "g", value: v.g.toFixed(2) },
   { name: "t", value: v.t.toFixed(2) },
 ];
 
-const FALL: MockQuestion = {
-  id: FALL_ID,
-  poolId: questions[0]?.poolId ?? "p1",
-  type: "short",
-  internalName: "chute-libre-parametree",
-  categoryId: null,
-  difficulty: 2,
-  shuffleable: false,
-  randomizable: true,
-  tags: ["mécanique"],
-  deletedAt: null,
-  updatedAt: iso(-30 * 24 * H),
-  draft: { config: FALL_TEMPLATE, explanation: "$t = \\sqrt{2h/g} = [[t]]$ s." },
-  versions: [
-    {
-      number: 1,
-      publishedAt: iso(-30 * 24 * H),
-      publishedBy: "u-me",
-      changeNote: null,
-      deprecatedAt: null,
-      deprecationNote: null,
-      config: FALL_TEMPLATE,
-      explanation: "$t = \\sqrt{2h/g} = [[t]]$ s.",
-      configVersion: 3,
-    },
-  ],
-};
-if (questions.length > 0) questions.push(FALL);
-
-const isFall = (q: { id: string }) => q.id === FALL_ID;
+const byNameOf = (v: FallValues) => Object.fromEntries(fallNamed(v).map((x) => [x.name, x.value]));
 
 /** The config one attempt read (`null`: the example's), an instance for the parameterized question. */
 function attemptConfig(q: MockQuestion, attemptId: string | null): Record<string, unknown> {
-  return isFall(q) ? fallInstance(fallValues(attemptId)) : publishedConfig(q);
-}
-
-/** The key one attempt is graded against: its own, for the parameterized question. */
-function attemptSolution(q: MockQuestion, attemptId: string | null, tried: unknown): unknown {
-  return isFall(q) ? fallSolution(fallValues(attemptId)) : tried;
+  return isFall(q) ? fillVariables(publishedConfig(q), byNameOf(fallValues(attemptId))) : publishedConfig(q);
 }
 
 /** The parameterized question's explanation, instantiated; null for any other. */
 function fallExplanation(q: MockQuestion, attemptId: string | null): string | null {
-  return isFall(q) ? String(FALL.versions[0]!.explanation).replace("[[t]]", fallValues(attemptId).t.toFixed(2)) : null;
+  const template = q.versions.at(-1)?.explanation ?? "";
+  return isFall(q) ? fillText(template, byNameOf(fallValues(attemptId))) : null;
 }
 
-/** One attempt's answer to the parameterized question: right, or a classic mistake. */
+/**
+ * One attempt's answer to the parameterized question, from ITS values: the
+ * right fall time, or a classic mistake (the factor 2 or the square root
+ * forgotten) — so alike numbers are right for one student, wrong for another.
+ */
 function fallAnswer(v: FallValues, ability: number, n: number): string {
   if ((n % 100) / 100 < ability) return v.t.toFixed(2);
-  // Forgot the factor 2, or the square root.
   return n % 2 === 0 ? round2Fall(Math.sqrt(v.h / v.g)).toFixed(2) : round2Fall((2 * v.h) / v.g).toFixed(2);
 }
 
@@ -588,15 +535,15 @@ function buildGradingWorld(
     });
   });
 
-  for (const item of items.filter((i) => i.questionId === FALL_ID)) {
+  for (const item of items.filter((i) => i.questionId === FALL?.id)) {
     for (const [attemptIndex, attempt] of attempts.entries()) {
       const key = cellKey(attempt.id, item.id);
       const n = fallHash(key);
-      const values = fallValues(attempt.id);
-      const answer = n % 17 === 0 ? null : { text: fallAnswer(values, attempt.ability, n) };
+      // One student left it blank; the others answered from their own values.
+      const answer = attemptIndex === 2 ? null : { text: fallAnswer(fallValues(attempt.id), attempt.ability, n) };
       if (answer) answers.set(key, answer);
       const graded = answer
-        ? (tryAnswer(FALL, fallInstance(values), answer) as { points: number; details: unknown })
+        ? (tryAnswer(FALL!, attemptConfig(FALL!, attempt.id), answer) as { points: number; details: unknown })
         : { points: 0, details: null };
       gradings.set(key, [
         {
@@ -634,7 +581,7 @@ const gradingWorlds: MockGradingWorld[] = [];
   const closed = evaluations.find((e) => e.state === "closed");
   const released = evaluations.find((e) => e.state === "released");
   // The parameterized question, the closed evaluation's last item (ADR-056 §9).
-  if (closed && closed.items.length > 0) {
+  if (closed && FALL && closed.items.length > 0) {
     closed.items.push({
       ...closed.items.at(-1)!,
       id: "iiiiiiii-0000-4000-8000-00000000fa11",
@@ -642,7 +589,7 @@ const gradingWorlds: MockGradingWorld[] = [];
       points: 2,
       milestone: false,
       bonus: false,
-      questionId: FALL_ID,
+      questionId: FALL.id,
       questionVersionId: "vvvvvvvv-0000-4000-8000-00000000fa11",
       type: "short",
       internalName: FALL.internalName,
@@ -707,14 +654,11 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
   const answer = e.answers.get(key) ?? null;
   const grading = standingGrading(e, attempt.id, item.id);
   const chain = e.gradings.get(key) ?? [];
-  const solution = attemptSolution(
-    q,
-    attempt.id,
+  const solution =
     q.type === "code"
       ? mockCodeDetails(config, 1).solution
       : (tryAnswer(q, config, answer, e.evaluation.mcqPolicy, negativeOf(e.evaluation)) as { solution?: unknown }).solution ??
-          null,
-  );
+        null;
   return {
     answerId: answer === null ? null : `${key}-ans`,
     attemptId: attempt.id,
@@ -728,7 +672,7 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
     kept: true,
     answer,
     ...(isFall(q)
-      ? { values: fallNamedValues(fallValues(attempt.id)), explanation: fallExplanation(q, attempt.id) }
+      ? { values: fallNamed(fallValues(attempt.id)), explanation: fallExplanation(q, attempt.id) }
       : {}),
     student: studentView(q, config),
     solution,
@@ -773,15 +717,12 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
       points: i.points,
       minPoints: scoresNegatively(i.type, negativeOf(e.evaluation), i.bonus) ? -i.points : 0,
       explanation: questions.find((q) => q.id === i.questionId)?.versions.at(-1)?.explanation || null,
-      ...(i.questionId === FALL_ID
+      ...(FALL && i.questionId === FALL.id
         ? {
             parameters: {
-              variables: FALL_VARIABLES,
-              template: {
-                student: studentView(FALL, FALL_TEMPLATE),
-                solution: { expected: ["[[t]] ± [[t/100]]"] },
-                example: false,
-              },
+              variables: FALL.versions.at(-1)!.variables!,
+              // The question as written: its `[[…]]` left as text.
+              template: { student: studentView(FALL, publishedConfig(FALL)), solution: solutionOf(FALL), example: false },
             },
           }
         : {}),
@@ -1097,13 +1038,10 @@ on("GET", "/app/api/evaluations/:id/results/by-question", (m) => {
       papers,
       ...(isFall(q) ? { parameterized: true } : {}),
       student: studentView(q, config),
-      solution: attemptSolution(
-        q,
-        null,
+      solution:
         q.type === "code"
           ? mockCodeDetails(config, 1).solution
           : (tryAnswer(q, config, null) as { solution?: unknown }).solution ?? null,
-      ),
       explanation: fallExplanation(q, null) ?? (q.versions.at(-1)?.explanation || null),
       outcomes,
       // Grouped by verdict only: no group by what was written holds.
@@ -1214,7 +1152,7 @@ on("GET", "/app/api/attempts/:id/feedback", (m) => {
         student: studentView(q, config),
         answer,
         // The student's key: an essay's rubric stays the teacher's (ADR-037).
-        solution: studentSolutionOf(q, attemptSolution(q, attempt.id, solution)),
+        solution: studentSolutionOf(q, solution),
         explanation: fallExplanation(q, attempt.id) ?? (q.versions.at(-1)?.explanation || null),
         details: grading?.details ?? null,
         comment: grading?.comment ?? null,

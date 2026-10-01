@@ -3066,8 +3066,6 @@ export const fr: Record<keyof Dict, string> = {
   "grading.param.condition": "Condition (les valeurs sont tirées à nouveau tant qu'elle est fausse) :",
   "grading.param.example": "Valeurs d'exemple : cette clé ne vaut que pour ces nombres.",
   "grading.param.values": "Valeurs de cet étudiant",
-  "grading.param.expectedHelp":
-    "Chaque réponse est corrigée selon sa propre clé, calculée à partir des valeurs tirées pour son étudiant. Deux réponses identiques ne sont pas forcément corrigées pareil : les lignes sont groupées par verdict.",
   "correction.param.example": "Valeurs d'exemple : chaque étudiant avait ses propres nombres.",
   "pool.stats.choicesDrawn": "Une valeur tirée pour chaque étudiant : cette part est celle de la position du choix, pas d'une erreur.",
   "grading.override.comment": "Commentaire",

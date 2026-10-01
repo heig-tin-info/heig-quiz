@@ -1470,9 +1470,12 @@ One question's answers as a table (`src/grading/`, origin
   or an italic `fg-muted` "per answer" in each cell when only an example
   could be drawn; a `zinc` badge with the dice icon, "Own key per answer",
   stands before the key's actions and explains itself in its tooltip. The
-  rows come grouped by verdict. The panel adds the student's values as
+  rows stand sorted by verdict (the Verdict header shows it). The panel adds the student's values as
   `surface-2` mono chips, `name = value`, under the review, and the key's
-  panel the variables, one mono line each.
+  panel the variables, one mono line each, the format worded in the text
+  face. On the correction projection, "Example values" sits above the
+  statement in the caption size with the dice icon, and a parameterized
+  short or cloze draws no answer groups: the head's bar holds the verdicts.
 - **The answer panel** is a `Sheet` with two optional slots added for it:
   `leading` (the verdict glyph before the title) and `actions` (↑ / ↓
   before the close button).

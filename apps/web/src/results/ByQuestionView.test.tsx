@@ -106,6 +106,20 @@ describe("ByQuestionView", () => {
     expect(within(hole.parentElement!).queryByRole("img")).toBeNull();
   });
 
+  it("lists no answer rows under a parameterized short answer: the head holds its verdicts", async () => {
+    const param = makeByQuestion({
+      item: byQuestionItem(2, "short"),
+      parameterized: true,
+      student: { prompt: "Dropped from 42 m: how long?" },
+      solution: { expected: ["2.93"] },
+      outcomes: { correct: 2, partial: 0, wrong: 1, blank: 1 },
+      distribution: [],
+    });
+    renderWithProviders(<ByQuestionView questions={[param]} />);
+    expect(await screen.findByText("2.93")).toBeVisible();
+    expect(screen.queryByRole("list")).toBeNull();
+  });
+
   it("leaves any other type's statement to its review, with the program below", async () => {
     renderWithProviders(<ByQuestionView questions={[CODE]} />);
     expect(await screen.findByText("Not answered.")).toBeVisible();

@@ -3067,8 +3067,6 @@ export const en = {
   "grading.param.condition": "Condition (the values are drawn again while it is false):",
   "grading.param.example": "Example values: this key holds for these numbers only.",
   "grading.param.values": "This student's values",
-  "grading.param.expectedHelp":
-    "Every answer is graded against its own key, computed from the values its student drew. Answers that look alike are not graded alike: the rows are grouped by verdict.",
   "correction.param.example": "Example values: each student had their own numbers.",
   "pool.stats.choicesDrawn": "A value drawn for each student: this share is that of the option's place, not of one mistake.",
   "grading.override.comment": "Comment",
