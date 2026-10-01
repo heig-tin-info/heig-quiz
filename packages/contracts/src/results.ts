@@ -298,14 +298,23 @@ export type StudentFeedback = z.infer<typeof StudentFeedback>;
 
 /**
  * Where a row of the student's Grades page stands (F-RES-04, F-ORG-14):
- * `released` — the results are released; `available` — not released, but
- * the feedback page already shows them (the immediate policy, a published
- * correction, ADR-050); `pending` — handed in, results to come; `submitted`
- * — handed in, and the feedback policy will never publish anything;
- * `missed` — nothing handed in. A `missed` row of a released evaluation
- * still carries its grade, the scale minimum (F-RES-02).
+ * `released` — the results are released; `withheld` — released, under the
+ * feedback policy `none`: the grade is not shared; `available` — not
+ * released, but the feedback page already shows them (the immediate policy,
+ * a published correction, ADR-050), so the row carries indicative points and
+ * no grade; `pending` — handed in, results to come; `submitted` — handed in,
+ * and the feedback policy will never publish anything; `missed` — nothing
+ * handed in. A `missed` row of a released evaluation still carries its
+ * grade, the scale minimum (F-RES-02).
  */
-export const GradeStatus = z.enum(["released", "available", "pending", "submitted", "missed"]);
+export const GradeStatus = z.enum([
+  "released",
+  "withheld",
+  "available",
+  "pending",
+  "submitted",
+  "missed",
+]);
 export type GradeStatus = z.infer<typeof GradeStatus>;
 
 /** One finished evaluation of the student's, on their Grades page. */
@@ -324,9 +333,13 @@ export const GradeRow = z.object({
   /**
    * The points and the Swiss grade, ONLY once the results are released and
    * the feedback policy lets the student read them — never under `none`
-   * (F-RES-04). Null everywhere else.
+   * (F-RES-04). On an `available` row, the points the feedback page shows
+   * for the attempt that counts, indicative, and `grade` null: no grade
+   * before the release. Null everywhere else.
    */
-  score: z.object({ points: z.number(), totalPoints: z.number(), grade: z.number() }).nullable(),
+  score: z
+    .object({ points: z.number(), totalPoints: z.number(), grade: z.number().nullable() })
+    .nullable(),
 });
 export type GradeRow = z.infer<typeof GradeRow>;
 

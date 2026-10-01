@@ -43,7 +43,16 @@ const groups: GradeGroup[] = [
         score: { points: 8.5, totalPoints: 12, grade: 4.5 },
       }),
       // Released under the policy `none`: the server sends no score.
-      row({ evaluationId: "e3", title: "Série 8", mode: "exercise" }),
+      row({ evaluationId: "e3", title: "Série 8", mode: "exercise", status: "withheld" }),
+      // Readable before the release: points, indicative, no grade.
+      row({
+        evaluationId: "e5",
+        title: "Série 2",
+        mode: "exercise",
+        status: "available",
+        feedbackAttemptId: "a5",
+        score: { points: 7, totalPoints: 10, grade: null },
+      }),
     ],
   },
   {
@@ -89,7 +98,18 @@ describe("the student's Grades", () => {
       expect((await tableRow(title)).getAllByText("—")).toHaveLength(2);
     }
     expect((await tableRow("Quiz 3bis")).getByText("results pending")).toBeInTheDocument();
+    expect((await tableRow("Série 8")).getByText("grade not shared")).toBeInTheDocument();
     expect((await tableRow("Examen final")).getByText("not taken")).toBeInTheDocument();
+  });
+
+  it("prints the points read before the release as indicative, and no grade", async () => {
+    mockFetch({ [URL]: ok(groups) });
+    render();
+    const early = await tableRow("Série 2");
+    expect(early.getByText("7 / 10")).toBeInTheDocument();
+    expect(early.getByText("indicative")).toBeInTheDocument();
+    expect(early.getByText("results available")).toBeInTheDocument();
+    expect(early.queryByText("—")).toBeNull();
   });
 
   it("opens the feedback of a row that names an attempt, and of no other", async () => {

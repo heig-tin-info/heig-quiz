@@ -81,12 +81,18 @@ about this course".
   archived ones included with an `archived` badge; header = classroom name,
   course code and name, period. Columns: Activity (bold), Kind, Date,
   Points x/y (right, tabular), Swiss grade, status badge (released /
-  results available / results pending / handed in / not taken); a row
-  opens the feedback page where the server names an attempt. On a phone
-  the rows collapse into small cards. No primary action. Data from
-  `GET /app/api/student/results` (`StudentGrades`, reshaped: the home's
-  Past rule, `studentGrades` in `live/grades.ts`; points and grade only
-  where F-RES-04 lets them through). The classroom page's Grades tab
+  grade not shared / results available / results pending / handed in /
+  not taken); a row opens the feedback page where the server names an
+  attempt. On a phone the rows collapse into small cards. No primary
+  action. Data from `GET /app/api/student/results` (`StudentGrades`,
+  reshaped: the home's Past rule, `studentGrades` in `live/grades.ts`;
+  points and grade only where F-RES-04 lets them through). The product
+  owner's decisions of 2026-10-01: a released row under the policy `none`
+  is `withheld` ("grade not shared"), no points, no grade; a row whose
+  results are readable before the release (`available`: the immediate
+  policy, a published correction) shows the points its feedback page shows
+  for the attempt that counts, with an `indicative` badge in the grade's
+  place, and no grade (`score.grade` null). The classroom page's Grades tab
   (M5-04) reuses its table, narrowed on the SERVER (`studentEvaluationRows`
   already takes a classroom id), never filtered in the browser, plus project
   grades (status `indicative`); the gradebook (M5-03) replaces the data

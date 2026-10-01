@@ -7,8 +7,11 @@ describe("gradeStatus (F-RES-04)", () => {
     [{ handedIn: false, released: true, results: "none" }, "missed"],
     [{ handedIn: false, released: false, results: "none" }, "missed"],
     [{ handedIn: true, released: true, results: "available" }, "released"],
-    // Released under the policy `none`: released all the same, without a grade.
-    [{ handedIn: true, released: true, results: "none" }, "released"],
+    // Released under the policy `none`: the grade is not shared.
+    [{ handedIn: true, released: true, results: "none" }, "withheld"],
+    // Released, the counted attempt's results still to come (an attempt
+    // reopened, retakes open): released, not withheld.
+    [{ handedIn: true, released: true, results: "pending" }, "released"],
     [{ handedIn: true, released: false, results: "available" }, "available"],
     [{ handedIn: true, released: false, results: "pending" }, "pending"],
     [{ handedIn: true, released: false, results: "none" }, "submitted"],

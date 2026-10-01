@@ -644,13 +644,15 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
       rows: [
         // Handed in, the quiz still running, `on_release` (issue #203).
         row({ evaluationId: STUDENT_EVAL_HANDED_IN, title: "Quiz 3bis — Allocation dynamique", status: "pending", date: iso(-35 * 60_000) }),
-        // An exercise under the immediate policy: readable, not released.
+        // An exercise under the immediate policy: readable, not released —
+        // its points, indicative, and no grade.
         row({
           title: "Série 2 — Tableaux",
           mode: "exercise",
           status: "available",
           date: iso(-3 * D),
           feedbackAttemptId: STUDENT_PAST_ATTEMPT,
+          score: { points: 7, totalPoints: 10, grade: null },
         }),
         row({
           evaluationId: STUDENT_EVAL_PAST,
@@ -669,8 +671,8 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
     {
       classroom: header({ id: "r6", name: "PRG1-2024", period: "2024-A", archived: true }),
       rows: [
-        // Under the policy `none`: released, and still no grade.
-        row({ title: "Série 8 — Fichiers", mode: "exercise", status: "released", date: iso(-320 * D) }),
+        // Under the policy `none`: released, and the grade not shared.
+        row({ title: "Série 8 — Fichiers", mode: "exercise", status: "withheld", date: iso(-320 * D) }),
         row({
           title: "Examen final — Programmation C",
           status: "released",

@@ -36,8 +36,9 @@ On a computer, the sidebar on the left takes you to **Activities** (this home), 
 
 **Grades** lists everything you finished, one table per classroom, the most recent first; the classrooms of past years are there too, marked **archived**. Each row gives the activity, whether it is a graded quiz or an exercise, its date, and a status:
 
-- **released**: your teacher published the results. The row shows your points and your grade, unless the evaluation shows no feedback at all.
-- **results available**: an exercise whose results you may already read, before any publication.
+- **released**: your teacher published the results. The row shows your points and your grade.
+- **grade not shared**: the results are published, but this evaluation shows no feedback at all: no points, no grade.
+- **results available**: an exercise whose results you may already read, before any publication. The row shows your points, marked **indicative**, and no grade: the grade comes with the publication.
 - **results pending**: you handed in; the results are not published yet.
 - **handed in**: you handed in, and this evaluation publishes nothing.
 - **not taken**: you did not take it. Once the results are published it carries the lowest grade, as on your teacher's list.

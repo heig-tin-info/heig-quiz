@@ -1285,13 +1285,16 @@ type StudentRow = Awaited<ReturnType<typeof studentEvaluationRows>>[number];
 
 /**
  * A card of the student's Past, beside the row it was drawn from, the
- * attempt that counts (`countedAttempt`) and the released grade.
+ * attempt that counts (`countedAttempt`), the released grade, and `early`:
+ * the points the feedback page shows for that attempt BEFORE the release
+ * (results `available`, not released), null everywhere else.
  */
 export interface PastEntry {
   row: StudentRow;
   card: EvaluationCard;
   counted: { id: string; state: string } | null;
   released: ReleasedGrade | undefined;
+  early: { points: number; totalPoints: number } | null;
 }
 
 /**
@@ -1337,16 +1340,26 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
   );
 
   // The grade of a released evaluation is the results page's (WP6), and the
-  // score of a kept attempt what its feedback page would show. A fixed
-  // number of queries for the whole page, not one per card.
+  // score of a kept attempt what its feedback page would show — so are the
+  // points of a row readable before its release (`early`). A fixed number of
+  // queries for the whole page, not one per card.
   const retakeIds = withRetakes.map((r) => r.evaluation.id);
+  const readableEarly = rows.filter((row) => {
+    const kept = countedAttempt(perEvaluation, row);
+    return (
+      kept !== null &&
+      row.evaluation.releasedAt === null &&
+      resultsState(row.evaluation, kept.state) === "available"
+    );
+  });
+  const scored = [...new Set([...withRetakes, ...readableEarly])];
   const [grades, totals, itemCounts, keptTallies] = await Promise.all([
     releasedGradesOf(db, userId, rows, perEvaluation),
-    totalPointsByEvaluation(db, retakeIds),
+    totalPointsByEvaluation(db, [...new Set(scored.map((r) => r.evaluation.id))]),
     itemCountsByEvaluation(db, retakeIds),
     tallyByAttempt(
       db,
-      withRetakes
+      scored
         .map((row) => countedAttemptId(perEvaluation, row))
         .filter((id): id is string => id !== null),
     ),
@@ -1428,7 +1441,14 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
     const kept = countedAttempt(perEvaluation, row);
     const counted = kept ? { id: kept.id, state: kept.state } : null;
     const c = card(row, counted?.state ?? null);
-    const ended = { row, card: c, counted, released: grades.get(row.evaluation.id) };
+    const early =
+      counted !== null && readableEarly.includes(row)
+        ? {
+            points: keptTallies.get(counted.id)?.points ?? 0,
+            totalPoints: totals.get(row.evaluation.id) ?? 0,
+          }
+        : null;
+    const ended = { row, card: c, counted, released: grades.get(row.evaluation.id), early };
     if (state === "scheduled") upcoming.push(c);
     else if (state !== "lobby" && state !== "running" && state !== "paused") past.push(ended);
     // Issue #203: "Open now" is what the student can still DO. A finished

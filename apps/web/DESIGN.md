@@ -1561,10 +1561,10 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
   to it.
 - **Drill is drawn only when it leads somewhere**: for a student with at
   least one classroom whose drill is on (`visibleSlots`); the four others
-  share the width otherwise. Its label is `bnav.drill`, not the page title:
-  "Entraînement" does not fit a fifth of a 390 px phone at 11 px, so the
-  French slot says "Révisions"; the sidebar row, with room to spare, keeps
-  the page's title.
+  share the width otherwise. Its label is the page's title, `nav.drill`, in
+  the bar and the sidebar alike: the feature is "Révisions" everywhere in
+  French (the product owner's decision of 2026-10-01), a word that fits a
+  fifth of a 390 px phone at 11 px, so no slot needs a second, shorter label.
 - **The desktop sidebar mirrors the bar** (D07, the product owner's decision
   of 2026-10-01). The student's sidebar rows are the bar's slots, in the
   bar's order and under the same conditions, minus Profile, which is the
