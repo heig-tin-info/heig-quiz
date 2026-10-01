@@ -65,7 +65,7 @@ changing what an existing student sees.
 | **M3 — Projects** | Project tables and lifecycle, acceptance and provisioning, ingestion and grading, deadline / freeze / dispatch, reconciliation, sync, teacher and student views, groups (M3-15/16) | no: projects open with the import (D26), at the cutover | A pilot on staging walks classroom's user stories; 100 repositories at a deadline applied in < 5 min; a student-view leak test on projects |
 | **M4 — Journal** | Pure renderer, journal module (read, then write), reader and teacher tab, WYSIWYG editor (D25) | yes: renders only where a teacher set a repository | A staging journal mirrors a repository; drafts and `visible_from` do not leak (pages nor assets); then live in production for the classrooms that opt in |
 | **M5 — Student classroom page and gradebook** | The student classroom page and the Courses route (M5-01/02, shipped with the journal), then the gradebook module and the teacher Grades tab | the student page is the first visible change for students (D07) | The gradebook equals per-evaluation results on the seeded world; staff seats never appear in it |
-| **M6 — Online workspace and SEB** | `packages/seb`, `apps/codespace` imported, its CI/CD, the Quiz `codespace` module, SEB for projects, engine VM capacity | yes, opt-in work mode | A supervised session opens from a Quiz project; proof B (real SEB) recorded. **Off the critical path if production has no online assignment (D09)** |
+| **M6 — Online workspace and SEB** | `packages/seb`, `apps/codespace` imported, its CI/CD, the Quiz `codespace` module, SEB for projects, engine VM capacity | yes, opt-in work mode | A supervised session opens from a Quiz project; proof B (real SEB) recorded. **Off the critical path (D09, settled 2026-10-01): after the cutover, tried in Quiz before any migration of the workspace** |
 | **M7 — Finishing** | Palette, help, tours, user guide pages and screenshots | yes | The guide documents projects, journal and GitHub setup |
 | **M8 — Migration and cutover** | Import script complete, legacy URL resolver, Caddy fragments, codespace identity remap, runbook, rehearsals, the cutover | **no — this is the switch** | A rehearsal on staging with a production dump passes its parity report; then the real cutover and a clean reconciliation |
 | **M9 — Decommission** | Point of no return, permanent redirects, classroom stack removed, repository archived, #143 closed | yes | Nothing of classroom runs |
@@ -106,7 +106,7 @@ M0-01 decisions ─┬─ M0-03 ADRs ── M1-02 adapters ── M2-01 github s
 M0-02 measures ──┘                                                                         │
             M1-01 domain ── M3-01 project schema ── M3-02 lifecycle ── M3-03 provisioning ──┴─ M3-04 ingestion
                                                                             ── M3-05 deadline ── M3-08 teacher views
-M3-* + M4-* + (M6-* if D09) ── M8-01 script complete ── M8-06 rehearsal ── M8-07 cutover ── M9-01
+M3-* + M4-* ── M8-01 script complete ── M8-06 rehearsal ── M8-07 cutover ── M9-01
 ```
 
 Everything web-side (M2-07, M3-10…13, M4-04…06, M5-02) runs in parallel

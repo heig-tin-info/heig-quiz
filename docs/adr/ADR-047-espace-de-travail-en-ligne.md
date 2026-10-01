@@ -15,10 +15,11 @@ staff share a course is for M6 to decide; a codespace *session* ⇒
 **workspace** in Quiz's vocabulary; `@hgc/codespace` ⇒ `@quiz/codespace`;
 `CLASSROOM_URL` ⇒ `PLATFORM_URL`; `apps/server` ⇒ `apps/api`;
 `classroom.chevallier.io` ⇒ Quiz. The portal (`apps/codespace`) and this
-mode come with phase M6, after the cutover unless D09 says otherwise
-(measured, awaiting confirmation). How SEB reaches a project — the
+mode come with phase M6, after the cutover (D09, settled 2026-10-01: the
+workspace is rebuilt and tried in Quiz before any migration of it). How SEB reaches a project — the
 platform building every `.seb`, Browser Exam Keys optional per activity —
-is D21, open: point 7 below holds until D21 is settled. Its two HS256
+is D21, settled 2026-10-01 on the suggestion, for M6; point 7 below holds
+until M6 implements it. Its two HS256
 messages are the cross-VM exception recorded in ADR-027's status.
 Classroom's requirement ids (GR-, GH-, NFR-, AU-) are those of
 heig-classroom's specification; `docs/spec/02-exigences-fonctionnelles.md`
