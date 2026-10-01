@@ -208,7 +208,7 @@ function Attached({ room, repository }: { room: ClassroomDetail; repository: Jou
         </Button>
       </SettingRow>
       <SettingRow title={t("journalSettings.remove")} desc={t("journalSettings.removeDesc")}>
-        <Button variant="secondary" loading={remove.isPending} onClick={() => void onRemove()}>
+        <Button variant="danger-quiet" loading={remove.isPending} onClick={() => void onRemove()}>
           <Trash2 /> {t("journalSettings.removeOpen")}
         </Button>
       </SettingRow>

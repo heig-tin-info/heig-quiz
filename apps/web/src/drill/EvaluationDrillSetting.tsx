@@ -105,7 +105,7 @@ export function EvaluationDrillSetting({ evaluation }: { evaluation: Evaluation 
           title={cards === 1 ? t("eval.drill.cards.one") : t("eval.drill.cards", { n: cards })}
           desc={t("eval.drill.cards.desc")}
         >
-          <Button variant="secondary" size="sm" loading={remove.isPending} onClick={() => void askRemove()}>
+          <Button variant="danger-quiet" size="sm" loading={remove.isPending} onClick={() => void askRemove()}>
             <Trash2 /> {t("eval.drill.remove")}
           </Button>
         </SettingRow>

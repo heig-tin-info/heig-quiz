@@ -97,6 +97,10 @@ const BUTTON_VARIANT = {
   subtle: "bg-surface-3 text-fg hover:bg-line-strong/70",
   ghost: "text-fg-muted hover:bg-surface-2 hover:text-fg",
   danger: "bg-danger text-on-fill hover:opacity-90",
+  // The trigger of a destructive action whose confirmation is the `danger`
+  // dialog, in a settings row: red ink without the fill, so the row says what
+  // the button does without competing with the screen's one accent.
+  "danger-quiet": "border border-danger/40 bg-surface text-danger hover:border-danger hover:bg-danger-soft",
 } as const;
 
 /** The button heights of DESIGN.md: 28, 34 and 40 px. */
@@ -110,7 +114,7 @@ export type ButtonVariant = keyof typeof BUTTON_VARIANT;
 export type ButtonSize = keyof typeof BUTTON_SIZE;
 
 /**
- * The class list of a button: a pill in one of five variants and three
+ * The class list of a button: a pill in one of six variants and three
  * sizes, pressed to 0.97. `apps/web`'s `Button` and `LinkButton` are this
  * list on a `<button>` and an `<a>`; a question type, which cannot import
  * them, writes it on its own `<button>`.
