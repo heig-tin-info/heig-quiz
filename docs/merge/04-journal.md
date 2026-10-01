@@ -111,7 +111,10 @@ sweep audit nothing, their outcome is the row's sync state).
   `/app/api/classrooms/:id/journal/assets/*`, behind the classroom's own
   access check. "Attach" becomes "choose a repository of the
   organization" (the classroom's Settings, D24); "Detach" removes the
-  classroom's row and its mirror, never the repository.
+  classroom's row and its mirror, never the repository. As ported (M4-03):
+  `POST base/use` replaces `POST base/attach`, `DELETE base` removes, and
+  the nine audit actions are `journal.create|use|remove|refresh|save|add|delete|upload|invite`
+  (the routes and their refusals: card M4-03, "As delivered").
 - **Module** `Q:modules/journal/` (routes, service, ingest, render wiring,
   repo, events, jobs), schema `Q:db/journal.ts`; tests ported as
   `*.db.test.ts` (ingest, journal) and unit (render, tree).
