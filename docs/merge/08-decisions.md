@@ -114,6 +114,14 @@ Status values: `open`, `settled`, `superseded`.
   2026-10-01 (product owner): the student's desktop sidebar carries the
   same entries as the bottom bar, Profile aside (`DESIGN.md`, "The
   student's bottom bar").
+  2026-10-01 (product owner), addendum: **no separate "Welcome" page**.
+  The logo leads to Activities, which answers "what do I do now". News,
+  if ever, would be a strip at the top of Activities built from existing
+  events (released grades, new journal pages), not a new page nor a new
+  content type. **A calendar or week view is deferred** until the
+  projects (M3) bring their deadlines; until then the agenda is the day
+  grouping of Coming up — Today, Tomorrow, This week, Later — on the home
+  and on the classroom page (F-ORG-14, F-ORG-15; `05-web.md` §5.2).
 
 ### D09 — Online workspace in the merge's critical path?
 - **Question**: does production have assignments with `work_mode` ≠

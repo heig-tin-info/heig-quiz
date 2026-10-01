@@ -1,6 +1,6 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EvaluationCard, StudentClassroomPage, StudentPollCard } from "@quiz/contracts";
 
@@ -172,6 +172,32 @@ describe("the student classroom page", () => {
     render();
     expect(await screen.findByRole("heading", { level: 1, name: "Could not load this classroom" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
+  });
+});
+
+// Product owner, 2026-10-01: the Coming up group by day, as on the home.
+describe("the classroom page's Coming up group, by day", () => {
+  // Sunday 4 October 2026, 20:00 local: tomorrow is next week's Monday.
+  const at = (day: number, hh: number) => new Date(2026, 9, day, hh, 0).toISOString();
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 4, 20, 0));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("files the cards under their day, and draws no empty one", async () => {
+    const upcoming = [
+      card({ id: "e-tue", title: "Série 5 — Tris", state: "scheduled", opensAt: at(6, 8) }),
+      card({ id: "e-mon", title: "Série 4 — Récursivité", state: "scheduled", opensAt: at(5, 8) }),
+    ];
+    mockFetch({ [URL_R1]: ok(classroomPage({ activities: { polls: [], open: [], upcoming, past: [] } })) });
+    render();
+    await screen.findByText("Série 4 — Récursivité");
+    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(["Tomorrow", "Later"]);
+    expect(within(screen.getByRole("list", { name: "Tomorrow" })).getByText("Série 4 — Récursivité")).toBeVisible();
+    expect(within(screen.getByRole("list", { name: "Later" })).getByText("Série 5 — Tris")).toBeVisible();
+    expect(screen.queryByText("Today")).toBeNull();
+    expect(screen.queryByText("This week")).toBeNull();
   });
 });
 

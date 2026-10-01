@@ -1602,6 +1602,21 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
 - A `<nav>` named "Main navigation", `aria-current="page"` on the lit slot,
   real links (a long press or a modified click opens the address).
 
+## The student's "Coming up", by day
+
+The home and a classroom's page group their Coming up section by the day
+each card opens (product owner, 2026-10-01; `UpcomingByDay` in
+`student/cards.tsx`, the rule `groupByDay` of `@quiz/domain`): Today,
+Tomorrow, This week, Later, an empty day not drawn. The day is a
+sub-heading INSIDE the section, never a second `SectionHeading`: an `h3` at
+14 px semibold, `fg` for Today and `fg-muted` for the others — the teacher
+schedule's week heading (`activities/views.tsx`), where this week is the
+one in `fg`. 8 px from the heading to its cards, 12 between the cards as
+everywhere on the page, 20 between two days, 32 between sections. The cards
+are unchanged and carry no button, so the accent rule of the page
+(`mostUrgent`, one red fill) is untouched. No calendar or week grid until
+the projects bring deadlines (D07).
+
 ## The participant's poll page (`/p/:CODE`)
 
 One question on a phone in a lecture hall, reached by a QR code and often by
