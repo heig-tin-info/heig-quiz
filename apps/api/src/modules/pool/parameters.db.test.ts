@@ -18,6 +18,8 @@ import { pools, questions, users } from "../../db/schema.js";
 import { testDb } from "../../test/db.js";
 import { EXPLANATION, PARAMETERIZED, VARIABLES } from "../../test/parameterized.js";
 import { checkConfig } from "../mcp/questionTypes.js";
+import { draw } from "@quiz/domain/parameters";
+
 import { exampleInstance, instanceOf, templateHash } from "./instance.js";
 import * as service from "./service.js";
 
@@ -202,8 +204,9 @@ describe("the instances (ADR-056 §4, §5)", () => {
     expect(() => instanceOf("short", renamed, { seed: 0, itemId: "x", stored: { versionId: row.id, values: drawn.values! } })).toThrow(
       service.InstanceMismatch,
     );
-    // The example instance is the seed-0 one, and the template's hash ignores every draw.
-    expect(exampleInstance("short", row)).toEqual(instanceOf("short", row, { seed: 0, itemId: "example" }));
+    // The example instance is `draw(params, 0)`, the draw publication gated;
+    // the template's hash ignores every draw.
+    expect(exampleInstance("short", row).values).toEqual(draw(service.parametersOf(row)!, 0).values);
     expect(templateHash("short", row)).toBe(templateHash("short", { ...row }));
     expect(templateHash("short", other)).not.toBe(templateHash("short", row));
 

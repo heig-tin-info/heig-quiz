@@ -53,7 +53,7 @@ describe("loading and saving a config (§1.6)", () => {
   });
 
   it("hands an invalid draft back at the CURRENT shape, migrated", () => {
-    const outcome = tryLoadConfig("mcq", { config: v1Mcq({ prompt: "" }), configVersion: 1 });
+    const outcome = tryLoadConfig("mcq", { config: v1Mcq({ prompt: "" }), configVersion: 1, variables: null });
     expect(outcome.ok).toBe(false);
     expect(outcome.config).toMatchObject({ configVersion: 2, policy: "symmetric" });
     expect(outcome.config).not.toHaveProperty("penalty");

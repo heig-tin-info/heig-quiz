@@ -26,18 +26,24 @@
  *     indexes (see `db/pool.ts`).
  */
 export type { PoolRow, QuestionRecord } from "./shared.js";
-export { loadConfig, typeOf } from "./config.js";
 export {
-  drawInstance,
+  asStatic,
+  isParameterized,
+  loadConfig,
+  typeOf,
+  type StaticVersion,
+  type StoredVersion,
+} from "./config.js";
+export {
+  configPerAttempt,
   exampleConfig,
   exampleInstance,
   instanceOf,
   InstanceMismatch,
-  configPerAttempt,
   itemInstance,
+  parameterIssues,
+  PARAMETERIZED_TYPES,
   parametersOf,
-  isParameterized,
-  sameVariables,
   templateHash,
   type Instance,
   type InstanceAttempt,

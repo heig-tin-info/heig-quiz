@@ -75,7 +75,7 @@ import {
   visibleRunRequest,
   visibleRunResult,
 } from "../live/visibleRun.js";
-import { hasKey, loadConfig, typeOf, type VersionRow } from "../pool/config.js";
+import { hasKey, loadConfig, typeOf, type StaticVersion } from "../pool/config.js";
 import { instanceOf } from "../pool/service.js";
 
 // --- Failures -------------------------------------------------------------
@@ -367,7 +367,7 @@ async function gradeItem(
   evaluation: EvaluationRecord,
   item: JoinedItem,
   seed: number,
-  version: VersionRow,
+  version: StaticVersion,
   payload: unknown,
   now: Date,
   log: (err: unknown, msg: string) => void,

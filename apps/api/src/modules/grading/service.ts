@@ -21,6 +21,7 @@ import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 
 import type {
   Grading,
+  ParametersDraft,
   GradingEntry,
   GradingHistoryEntry,
   GradingProgress,
@@ -43,7 +44,7 @@ import {
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attempts, evaluationItems, gradings, questionVersions, users } from "../../db/schema.js";
+import { answers, attempts, gradings, questionVersions, users } from "../../db/schema.js";
 import { DomainError } from "../http.js";
 import {
   flagReleasedEvaluationsOf,
@@ -57,7 +58,8 @@ import {
   type JoinedItem,
 } from "../evaluation/service.js";
 import { solutionViewOf, studentViewOf } from "../live/studentView.js";
-import { configPerAttempt, sameVariables } from "../pool/service.js";
+import { sameTable } from "@quiz/domain/parameters";
+import { configPerAttempt, parametersOf } from "../pool/service.js";
 import { watchReleasedGrades } from "../results/service.js";
 import { keptAttempts, tallyByAttempt } from "./kept.js";
 
@@ -824,7 +826,13 @@ export async function batchValidate(
  */
 export async function regradeItem(
   db: Db,
-  item: { evaluationId: string; itemId: string; questionId: string },
+  item: {
+    evaluationId: string;
+    itemId: string;
+    questionId: string;
+    /** The variables of the version the item holds now (ADR-056 §5). */
+    variables: ParametersDraft | null;
+  },
   input: { note: string; toVersionNumber?: number | undefined },
 ): Promise<string | null> {
   return db.transaction(async (tx) => {
@@ -843,13 +851,7 @@ export async function regradeItem(
       if (!version) return null;
       // The values the students had are kept, and the new version's derived
       // rows replayed from them (ADR-056 §5): only under the same names.
-      const [current] = await tx
-        .select({ variables: questionVersions.variables })
-        .from(evaluationItems)
-        .innerJoin(questionVersions, eq(questionVersions.id, evaluationItems.questionVersionId))
-        .where(eq(evaluationItems.id, item.itemId))
-        .limit(1);
-      if (current && !sameVariables(current, version)) throw new VariablesChanged();
+      if (!sameTable(parametersOf(item), parametersOf(version))) throw new VariablesChanged();
       await retargetItemVersion(tx, item.itemId, version.id);
       note = `${note} (re-graded with version ${input.toVersionNumber})`;
     }

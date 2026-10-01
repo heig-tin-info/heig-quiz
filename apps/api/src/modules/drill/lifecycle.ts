@@ -36,6 +36,7 @@ import {
 } from "../evaluation/service.js";
 import { solutionView, type EndedAttempt } from "../live/service.js";
 import {
+  asStatic,
   exampleConfig,
   isParameterized,
   loadConfig,
@@ -124,7 +125,7 @@ function canonical(value: unknown): string {
  */
 export function keyHashOf(type: string, version: VersionContent): string {
   if (isParameterized(version)) return templateHash(type, version);
-  const solution = solutionView({ type, version, seed: 0, itemId: KEY_VIEW_ITEM });
+  const solution = solutionView({ type, version: asStatic(type, version), seed: 0, itemId: KEY_VIEW_ITEM });
   return createHash("sha256").update(canonical(solution)).digest("hex");
 }
 

@@ -26,7 +26,7 @@ import {
   EvaluationCreate,
   EvaluationPatch,
   OAUTH_SCOPE,
-  Parameters,
+  ParametersDraft,
   PoolCreate,
   PollQuestionType,
   QuestionCreate,
@@ -101,9 +101,10 @@ const metaOf = (args: Record<string, unknown>) =>
 
 /**
  * The variables of a parameterized question (ADR-056), as a tool takes them:
- * the strict table, its names and formats checked before anything is sent.
+ * the table's shape; its rules — names, formats, expressions — are the
+ * domain's, which the pre-check (`checkConfig`) and the publication apply.
  */
-const Variables = Parameters.nullable()
+const Variables = ParametersDraft.nullable()
   .optional()
   .describe(
     "mcq, short (number key) and cloze only: an ordered table of variables `{ rows: [{ name, expr, format }], " +
@@ -114,7 +115,7 @@ const Variables = Parameters.nullable()
 async function saveAndPublish(
   api: Api,
   questionId: string,
-  draft: { config: unknown; explanation?: string | undefined; variables?: Parameters | null | undefined },
+  draft: { config: unknown; explanation?: string | undefined; variables?: ParametersDraft | null | undefined },
   publish: boolean,
 ) {
   const saved = await api.put(`/questions/${questionId}/draft`, {

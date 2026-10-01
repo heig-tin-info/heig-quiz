@@ -57,7 +57,7 @@ import {
   type JoinedItem,
 } from "../evaluation/service.js";
 import { hasKey, loadConfig, typeOf } from "../pool/config.js";
-import { exampleConfig, isParameterized, itemInstance } from "../pool/service.js";
+import { configPerAttempt, exampleConfig, isParameterized, itemInstance } from "../pool/service.js";
 import type { StoredInstance } from "../../db/columns.js";
 import * as events from "./events.js";
 import { announceGradingReady } from "./ready.js";
@@ -264,41 +264,45 @@ interface CellConfig {
  * a regrade retargeted). `null` when it cannot be read, and the cell
  * becomes a proposal.
  */
-function readConfig(app: FastifyInstance, item: JoinedItem): (attempt: AttemptRecord) => CellConfig | null {
+function readConfig(
+  app: FastifyInstance,
+  item: JoinedItem,
+): { configOf: (attempt: AttemptRecord) => CellConfig | null; keyed: boolean } {
+  const type = item.question.type;
   const unreadable = (err: unknown) => {
     app.log.error({ err, itemId: item.item.id }, "grading: unreadable question config");
     return null;
   };
-  if (!isParameterized(item.version)) {
-    let cell: CellConfig | null;
-    try {
-      cell = { config: loadConfig(item.question.type, item.version) };
-    } catch (err) {
-      cell = unreadable(err);
-    }
-    return () => cell;
+  let perAttempt: ReturnType<typeof configPerAttempt>;
+  let keyed: boolean;
+  try {
+    perAttempt = configPerAttempt(item);
+    // Whether it holds a key is a matter of structure: the config already
+    // parsed when static (it ignores the attempt), the example instance when
+    // parameterized.
+    keyed = hasKey(type, isParameterized(item.version) ? exampleConfig(type, item.version) : perAttempt(NO_ATTEMPT));
+  } catch (err) {
+    // Unreadable: every cell says so on its own (`config_unreadable`).
+    unreadable(err);
+    return { configOf: () => null, keyed: true };
   }
-  return (attempt) => {
-    try {
-      const instance = itemInstance(item, attempt);
-      const config = loadConfig(item.question.type, instance.version);
-      return instance.fallback ? { config, warning: instance.fallback } : { config };
-    } catch (err) {
-      return unreadable(err);
-    }
+  return {
+    keyed,
+    configOf: (attempt) => {
+      try {
+        const config = perAttempt(attempt);
+        // A draw served from a fallback (ADR-056 §7): the teacher is told.
+        const warning = attempt.instances[item.item.id]?.fallback;
+        return warning ? { config, warning } : { config };
+      } catch (err) {
+        return unreadable(err);
+      }
+    },
   };
 }
 
-/** Whether an item holds a key: on its example instance when parameterized (structure only). */
-function itemHasKey(item: JoinedItem): boolean {
-  const type = item.question.type;
-  try {
-    return hasKey(type, exampleConfig(type, item.version));
-  } catch {
-    // Unreadable: every cell says so on its own (`config_unreadable`).
-    return true;
-  }
-}
+/** No attempt at all: what a static item's config, which reads none, is asked with. */
+const NO_ATTEMPT = { seed: 0, instances: {} };
 
 /**
  * One cell that no teacher has settled yet: the grading to write, or the
@@ -412,11 +416,11 @@ export async function runEvaluationGrading(
   // dies half-way writes nothing and is simply run again (idempotency).
   const writes: WriteGradingInput[] = [];
   for (const item of pass.items) {
-    const configOf = readConfig(app, item);
+    const { configOf, keyed } = readConfig(app, item);
     // An opinion poll's question has no key (ADR-014, addendum 2026-09-23):
     // there is nothing to be right about, so nothing is written — not a
     // zero per answer, which would mark the whole room wrong.
-    if (!itemHasKey(item)) {
+    if (!keyed) {
       for (const _ of pass.attempts) progress.tick();
       continue;
     }

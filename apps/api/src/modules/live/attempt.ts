@@ -77,7 +77,7 @@ import {
 } from "../results/service.js";
 import { isShuffleable, studentView } from "./studentView.js";
 import type { StoredInstance } from "../../db/columns.js";
-import { drawInstance, instanceOf } from "../pool/service.js";
+import { instanceOf, itemInstance, type InstanceAttempt } from "../pool/service.js";
 
 export type AttemptRecord = typeof attempts.$inferSelect;
 
@@ -578,13 +578,15 @@ export function drawSeed(): number {
  */
 async function drawInstances(
   db: DbOrTx,
-  evaluationId: string,
+  evaluation: EvaluationRecord,
   seed: number,
 ): Promise<Record<string, StoredInstance>> {
-  const items = await parameterizedItems(db, evaluationId);
+  // A poll never holds a parameterized question (ADR-056 §10): nothing to read.
+  if (evaluation.mode === "poll") return {};
+  const items = await parameterizedItems(db, evaluation.id);
   const out: Record<string, StoredInstance> = {};
   for (const item of items) {
-    const stored = drawInstance(item.question.type, item.version, seed, item.item.id);
+    const { stored } = instanceOf(item.question.type, item.version, { seed, itemId: item.item.id });
     if (stored !== null) out[item.item.id] = stored;
   }
   return out;
@@ -615,7 +617,7 @@ export async function ensureAttempt(
       ...ownerOf(participant),
       state: "not_started",
       seed,
-      instances: await drawInstances(db, evaluation.id, seed),
+      instances: await drawInstances(db, evaluation, seed),
       presentAt: now,
       createdAt: now,
       updatedAt: now,
@@ -719,7 +721,7 @@ export async function retakeAttempt(
         attemptNumber: (latestAttempt(previous)?.attemptNumber ?? 0) + 1,
         state: "in_progress",
         seed,
-        instances: await drawInstances(tx, evaluation.id, seed),
+        instances: await drawInstances(tx, evaluation, seed),
         startedAt: now,
         deadlineAt,
         bonusS,
@@ -855,19 +857,15 @@ function attemptItems(
   answered: ReadonlyMap<string, AnswerRecord>,
   locked: ReadonlySet<string>,
   settings: EvaluationSettings,
-  seed: number,
-  instances: Readonly<Record<string, StoredInstance>>,
+  attempt: InstanceAttempt,
   defaults: Readonly<Record<string, unknown>>,
 ): AttemptItem[] {
+  const { seed } = attempt;
   return ordered.map((entry) => {
     const answer = answered.get(entry.item.id) ?? null;
     // The student's own numbers (ADR-056): stored at the attempt's creation,
     // drawn from the same seed for a preview that stores nothing.
-    const { version } = instanceOf(entry.question.type, entry.version, {
-      seed,
-      itemId: entry.item.id,
-      stored: instances[entry.item.id],
-    });
+    const { version } = itemInstance(entry, attempt);
     return {
       id: entry.item.id,
       position: entry.item.position,
@@ -1036,7 +1034,7 @@ async function viewOf(
       pausedAt: isoOrNull(evaluation.pausedAt),
       totalPoints: evaluationTotal(items.map((i) => i.item)),
     },
-    items: attemptItems(ordered, answered, locked, settings, seed, input.instances, gradeDefaults(evaluation)),
+    items: attemptItems(ordered, answered, locked, settings, { seed, instances: input.instances }, gradeDefaults(evaluation)),
   };
 }
 

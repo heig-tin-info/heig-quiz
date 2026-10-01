@@ -154,7 +154,7 @@ describe("grading_ready", () => {
     const item = items[0]!;
     await regradeItem(
       db,
-      { evaluationId: evaluation.id, itemId: item.item.id, questionId: item.question.id },
+      { evaluationId: evaluation.id, itemId: item.item.id, questionId: item.question.id, variables: null },
       { note: "typo" },
     );
     await runEvaluationGrading(app, {

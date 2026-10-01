@@ -22,8 +22,8 @@ import {
 
 import { questions } from "../../db/schema.js";
 import { studentSolutionViewOf, studentViewOf, teacherPreviewView } from "../live/studentView.js";
-import { loadConfig, tryLoadConfig, typeOf } from "./config.js";
-import { instanceOf, isParameterized, parameterIssues } from "./instance.js";
+import { isParameterized, loadConfig, tryLoadConfig, typeOf } from "./config.js";
+import { instanceOf, parameterIssues } from "./instance.js";
 import type { VersionRecord } from "./shared.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";

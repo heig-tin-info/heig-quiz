@@ -341,13 +341,16 @@ async function distractorsOf(
       questionId: questionVersions.questionId,
       config: questionVersions.config,
       configVersion: questionVersions.configVersion,
+      variables: questionVersions.variables,
     })
     .from(questionVersions)
     .where(and(inArray(questionVersions.questionId, [...countedOf.keys()]), isNotNull(questionVersions.number)))
     .orderBy(asc(questionVersions.number));
   for (const row of rows) {
-    // A version whose config cannot be read matches nothing.
-    const loaded = tryLoadConfig(DISTRACTOR_TYPE, row);
+    // A version whose config cannot be read matches nothing. A parameterized
+    // mcq is read as its TEMPLATE on purpose: its options are grouped by
+    // their template text (ADR-056 §9).
+    const loaded = tryLoadConfig(DISTRACTOR_TYPE, row, { template: true });
     push(versionsOf, row.questionId, { id: row.id, choices: loaded.ok ? (loaded.config as Choices) : null });
   }
 

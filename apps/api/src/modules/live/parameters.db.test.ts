@@ -68,6 +68,8 @@ async function answer(who: { headers: Record<string, string> }, attemptId: strin
     payload: { payload, revision: 1, clientTs: server.clock.now().toISOString() },
   });
   expect(res.statusCode).toBe(200);
+  // The autosave's answer is a student payload too.
+  expect(markersIn(res.body)).toEqual([]);
 }
 
 async function setPolicy(patch: Partial<FeedbackPolicy>): Promise<void> {

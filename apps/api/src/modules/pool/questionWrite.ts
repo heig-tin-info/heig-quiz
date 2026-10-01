@@ -21,6 +21,7 @@ import {
 import { userTopic } from "../realtime/bus.js";
 import { poolChanged, poolPeopleChanged } from "./events.js";
 import {
+  isParameterized,
   loadConfig,
   NotPublishable,
   publishConfig,
@@ -29,7 +30,7 @@ import {
   searchTextOf,
   typeOf,
 } from "./config.js";
-import { isParameterized, parameterIssues, parametersOf, storedTemplate } from "./instance.js";
+import { parameterIssues, parametersOf, storedTemplate } from "./instance.js";
 import {
   type QuestionRecord,
   poolOf,

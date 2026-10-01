@@ -58,16 +58,16 @@ import {
 import { gradeDefaults, type DbOrTx, type EvaluationRecord } from "../evaluation/service.js";
 import { DomainError } from "../http.js";
 import { drawSeed, isShuffleable, studentSolutionView, studentView } from "../live/service.js";
+import { ParameterError } from "@quiz/domain/parameters";
+
 import {
-  drawInstance,
   instanceOf,
   InstanceMismatch,
   loadConfig,
   typeOf,
-  type Instance,
+  type StaticVersion,
   type VersionContent,
 } from "../pool/service.js";
-import type { VersionRow } from "../pool/config.js";
 import type { StoredInstance } from "../../db/columns.js";
 import { keyShownTo } from "../results/service.js";
 import { currentVersions, drillGradeContext, keyHashOf } from "./lifecycle.js";
@@ -246,27 +246,23 @@ function questionOf(row: ActiveRow, context: Context) {
 /**
  * The instance one review shows (ADR-056 §5): the values stored when the card
  * was served, replayed when the question was republished since under the
- * same names, drawn again from the review's seed when the names changed —
- * the card is the item, so the stream is the card's. Static: the version.
+ * same names, drawn again from the review's seed when the names changed or
+ * the replay fails on the new version's rows (§7: never an error for the
+ * student) — the card is the item, so the stream is the card's. Static: the
+ * version.
  */
 function reviewInstance(row: ActiveRow, version: VersionContent, seed: number, stored: StoredInstance | null) {
   const at = { seed, itemId: row.card.id };
   try {
     return instanceOf(row.type, version, { ...at, stored });
   } catch (error) {
-    if (!(error instanceof InstanceMismatch)) throw error;
+    if (!(error instanceof InstanceMismatch) && !(error instanceof ParameterError)) throw error;
     return instanceOf(row.type, version, at);
   }
 }
 
-/** What a review stores of its instance: the values it was rendered with, under its version. */
-const storedOf = (version: VersionContent, instance: Instance): StoredInstance | null =>
-  instance.values === null
-    ? null
-    : { versionId: version.id, values: instance.values, ...(instance.fallback ? { fallback: instance.fallback } : {}) };
-
 /** The view of one review: the card is the item, so a new seed gives a new shuffle (06, question 28 (d)). */
-function viewOf(row: ActiveRow, version: VersionRow, seed: number) {
+function viewOf(row: ActiveRow, version: StaticVersion, seed: number) {
   return {
     type: row.type,
     version,
@@ -424,23 +420,24 @@ export async function serveCard(db: Db, userId: string, cardId: string, now: Dat
   const { row, question } = await servable(db, userId, cardId, now);
   const at = sql`${now.toISOString()}::timestamptz`;
   // One conditional statement each: two tabs serving at once share one seed
-  // — and the values drawn from it (ADR-056 §5), stored beside it.
+  // — and the values drawn from it (ADR-056 §5), stored beside it. A card
+  // already served (a reload) draws nothing.
   const seed = drawSeed();
-  await db
-    .update(drillCards)
-    .set({
-      serveSeed: seed,
-      serveValues: drawInstance(row.type, question.version, seed, row.card.id),
-      shownSince: now,
-      activeMs: 0,
-    })
-    .where(and(eq(drillCards.id, cardId), isNull(drillCards.serveSeed)));
+  const fresh = row.card.serveSeed === null ? instanceOf(row.type, question.version, { seed, itemId: row.card.id }) : null;
+  const claimed = fresh
+    ? await db
+        .update(drillCards)
+        .set({ serveSeed: seed, serveValues: fresh.stored, shownSince: now, activeMs: 0 })
+        .where(and(eq(drillCards.id, cardId), isNull(drillCards.serveSeed)))
+        .returning({ id: drillCards.id })
+    : [];
   const [served] = await db
     .update(drillCards)
     .set({ shownSince: sql`coalesce(${drillCards.shownSince}, ${at})` })
     .where(eq(drillCards.id, cardId))
     .returning({ seed: drillCards.serveSeed, values: drillCards.serveValues });
-  const instance = reviewInstance(row, question.version, served!.seed!, served!.values);
+  const instance =
+    fresh && claimed.length > 0 ? fresh : reviewInstance(row, question.version, served!.seed!, served!.values);
   const view = viewOf(row, instance.version, served!.seed!);
   return { cardId, type: row.type, student: studentView({ ...view, defaults: question.defaults }) };
 }
@@ -546,7 +543,7 @@ export async function answerCard(
       deviceClass: input.deviceClass,
       reviewedAt: now,
       answerPayload: answer,
-      values: storedOf(question.version, instance),
+      values: instance.stored,
     });
     await tx
       .update(drillCards)

@@ -13,7 +13,7 @@ import { z } from "zod";
 import type { ParametersDraft } from "@quiz/contracts";
 import { questionType, registeredServerIds } from "@quiz/registry/server";
 
-import { parameterIssues, PARAMETERIZED_TYPES } from "../pool/instance.js";
+import { isParameterized, parameterIssues, PARAMETERIZED_TYPES } from "../pool/service.js";
 
 /**
  * The rules of parameterized questions (ADR-056), told once and attached to
@@ -250,23 +250,12 @@ export function checkConfig(
   config: unknown,
   extra: { explanation?: string | undefined; variables?: ParametersDraft | null | undefined } = {},
 ) {
-  if (extra.variables && extra.variables.rows.length > 0) {
-    const t = questionType(type);
-    const issues = parameterIssues(type, {
-      config,
-      configVersion: declaredVersion(config) ?? t.configVersion,
-      explanation: extra.explanation ?? "",
-      variables: extra.variables,
-    });
+  const variables = extra.variables ?? null;
+  if (isParameterized({ variables })) {
+    const issues = parameterIssues(type, { config, explanation: extra.explanation ?? "", variables });
     return issues.length === 0 ? null : issues.map((i) => ({ path: i.path.join("."), message: i.message }));
   }
   const parsed = questionType(type).configSchema.safeParse(config);
   if (parsed.success) return null;
   return parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
-}
-
-/** The `configVersion` a config declares inside itself, when it does. */
-function declaredVersion(config: unknown): number | undefined {
-  const value = (config as { configVersion?: unknown } | null)?.configVersion;
-  return typeof value === "number" ? value : undefined;
 }

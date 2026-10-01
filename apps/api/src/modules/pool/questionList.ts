@@ -17,8 +17,8 @@ import {
   questionVersions,
   questions,
 } from "../../db/schema.js";
-import { hasKey, loadConfig, publicationIssuesOf, tryLoadConfig } from "./config.js";
-import { exampleConfig, isParameterized, parameterIssues, type VersionContent } from "./instance.js";
+import { hasKey, isParameterized, loadConfig, publicationIssuesOf, tryLoadConfig } from "./config.js";
+import { exampleConfig, parameterIssues, type VersionContent } from "./instance.js";
 import { type QuestionRecord, poolOf, type VersionRecord, qualified } from "./shared.js";
 import { starredBy } from "./stars.js";
 
@@ -565,7 +565,8 @@ export function versionJson(row: VersionRecord): VersionRow {
 }
 
 export function draftJson(type: string, row: VersionRecord): QuestionDraft {
-  const outcome = tryLoadConfig(type, row);
+  // A parameterized draft is handed back as its TEMPLATE, formulas and all (ADR-056).
+  const outcome = tryLoadConfig(type, row, { template: true });
   return {
     // MIGRATED either way (the editor always works at the current schema),
     // and never re-validated when it does not parse: the teacher must not

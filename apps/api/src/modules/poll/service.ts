@@ -74,7 +74,7 @@ import {
 } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import { studentSolutionView, studentViewOf } from "../live/studentView.js";
-import { hasKey, loadConfig, typeOf, type VersionRow } from "../pool/config.js";
+import { asStatic, hasKey, loadConfig, typeOf, type StoredVersion } from "../pool/config.js";
 import { createUnsavedQuestion, searchReachableQuestions } from "../pool/service.js";
 import * as events from "./events.js";
 
@@ -206,7 +206,7 @@ export function pollSettingsOf(scope: PollScope): PollSettings {
  * a parameterized version (`assertPollable`), so `loadConfig` reads it as it
  * is — and would throw on a template rather than show one.
  */
-function keyedOf(type: string, version: VersionRow): boolean {
+function keyedOf(type: string, version: StoredVersion): boolean {
   return hasKey(type, loadConfig(type, version));
 }
 
@@ -613,9 +613,14 @@ async function emitTally(
  * A poll never shuffles — everyone in the room reads the same screen as the
  * beamer, and the tally is labelled by canonical choice index — so the seed
  * is fixed and the shuffle is off.
+ *
+ * A poll's question is STATIC: `assertPollable` refuses a parameterized one
+ * and its pickers never offer one (ADR-056 §10). `asStatic` narrows the
+ * frozen version to what the student exits accept, and throws rather than
+ * show a template should that ever not hold.
  */
-function studentPayload(type: string, version: VersionRow, itemId: string): unknown {
-  return studentViewOf(type, loadConfig(type, version), { seed: 0, itemId, shuffle: false });
+function studentPayload(type: string, version: StoredVersion, itemId: string): unknown {
+  return studentViewOf(type, loadConfig(type, asStatic(type, version)), { seed: 0, itemId, shuffle: false });
 }
 
 function studentOf(item: JoinedItem): unknown {
@@ -630,7 +635,8 @@ function studentOf(item: JoinedItem): unknown {
 function solutionOf(item: JoinedItem): unknown {
   return studentSolutionView({
     type: item.question.type,
-    version: item.version,
+    // Static by construction, see `studentPayload`.
+    version: asStatic(item.question.type, item.version),
     seed: 0,
     itemId: item.item.id,
   });
