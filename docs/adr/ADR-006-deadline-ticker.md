@@ -18,7 +18,9 @@ written: in pg-boss 12 a `singletonKey` without `singletonSeconds`
 dedupes nothing on a `standard` queue (quiz #273), so the port chooses a
 queue policy when it creates the queue. The journal's `visible_from` hint
 (ADR-049, addendum, J4) is one more sweep of the same ticker. Accommodations
-on project deadlines are D13, open.
+on project deadlines are D13, settled 2026-10-01: the roster's time bonus
+does not apply to a project; a per-repository unlock covers the cases
+(F-PROJ-09).
 
 **Addendum (2026-09-30, D10, merge task M2-05):** the ticker now carries
 two kinds of periodic work. The clock-bound sweeps above stay `TickTask`s

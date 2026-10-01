@@ -5,21 +5,24 @@
 - A project by a HEIG-VD teacher for his own courses. Developed by the teacher, assisted by Claude.
 - Hosting: one Hetzner VM, Docker Compose deployment, a single node.
 - Users: HES-SO students and teachers authenticated by edu-ID, one admin.
-- Main use: in-class evaluations (20 to 30 students), exercises at home, live polls, individual practice.
-- Since the merge of heig-classroom (ADR-035, 2026-09-28; the working plan is [`docs/merge/`](../merge/README.md)): a classroom may also carry its **journal**, the course documentation kept in a GitHub repository and read in the app, and, later, its **projects**, graded work in student GitHub repositories. GitHub stays optional: a classroom without it is a plain Quiz classroom.
+- Main use: in-class evaluations (20 to 30 students), exercises at home, live polls, individual practice, and, since the merge, programming projects in GitHub repositories.
+- Since the merge of heig-classroom (ADR-035, 2026-09-28; the working plan is [`docs/merge/`](../merge/README.md)): a classroom may also carry its **journal**, the course documentation read in the app (kept in Quiz or in a GitHub repository, ADR-057), its **projects**, graded work in student GitHub repositories, and its **gradebook**. GitHub stays optional: a classroom without it is a plain Quiz classroom.
 
 ## 0.2 Why a home-grown system
 
-| Need | Moodle / CodeRunner | Wooclap, Kahoot, etc. | This project |
-|---|---|---|---|
-| edu-ID auth and automatic matching of students | Yes through Cyberlearn, but heavy | No | Yes, native |
-| Clean, modern interface, real time | No | Yes, but geared towards animation | Yes |
-| Code questions run in a sandbox | CodeRunner, dated UI | No | Yes, native |
-| LLM-assisted grading, framed and validated by the teacher | No | No | Yes, a differentiator |
-| Versioned question pool, shared, exportable as text | Partial | No | Yes |
-| Spaced practice on the questions of the course | No | No | Yes, phase 2 |
-| Free, no advertising, data on a server under our control | Yes | No | Yes |
-| Course notes written in markdown, versioned in git, read by the class in the same app | Pages, not versioned | No | Yes, the journal (ADR-035) |
+| Need | Moodle / CodeRunner | Wooclap, Kahoot, etc. | GitHub Classroom | This project |
+|---|---|---|---|---|
+| edu-ID auth and automatic matching of students | Yes through Cyberlearn, but heavy | No | No, GitHub accounts only | Yes, native |
+| Clean, modern interface, real time | No | Yes, but geared towards animation | Partial | Yes |
+| Code questions run in a sandbox | CodeRunner, dated UI | No | No | Yes, native |
+| LLM-assisted grading, framed and validated by the teacher | No | No | No | Yes, a differentiator |
+| Versioned question pool, shared, exportable as text | Partial | No | No | Yes |
+| Spaced practice on the questions of the course | No | No | No | Yes, phase 2 |
+| Free, no advertising, data on a server under our control | Yes | No | Free, data at GitHub | Yes |
+| Course notes written in markdown, versioned in git, read by the class in the same app | Pages, not versioned | No | No | Yes, the journal (ADR-035) |
+| A repository per student or group from a source repository | No | No | Yes | Yes, projects (F-PROJ) |
+| The deadline judged on the server's receipt of each push, the CI score captured, frozen and released into the grades | No | No | No | Yes, projects (F-PROJ) |
+| One gradebook for exams and projects | Yes | No | No | Yes (F-GBOOK) |
 
 ## 0.3 Objectives
 
@@ -34,7 +37,7 @@
 
 - Team: one person plus an AI assistant. The spec favours operational simplicity: one repository, one database, one VM.
 - Starting point: the `~/heig-classroom` repository by the same author, in production, provides the edu-ID auth, the design system, the deployment infrastructure and the container hardening. See [07-reutilisation-heig-classroom.md](07-reutilisation-heig-classroom.md).
-- Load: 20 to 30 students per quiz, 100 students simultaneously on the platform, code execution peaks of 30 runs in 10 seconds.
+- Load: 20 to 30 students per quiz, 100 students simultaneously on the platform, code execution peaks of 30 runs in 10 seconds; a project deadline applied to 100 repositories in under 5 minutes (N-PERF-07).
 - Languages: interface in French and in English. Question content in the teacher's language.
 - Auth: edu-ID only for named accounts. A session code allows anonymous participation in polls. Linking a GitHub account (F-GH-05) is never a way to sign in: it attaches a GitHub identity to an edu-ID account.
 - GitHub: the platform acts on GitHub through its own GitHub App (D23 of `docs/merge/08-decisions.md`), installed by a teacher on an organization; production and staging have separate Apps, and staging never holds the production one (N-SEC-18).
@@ -95,7 +98,9 @@ Carried by the task cards of [`docs/merge/09-tasks.md`](../merge/09-tasks.md), i
 | GitHub | Connect a classroom to an organization where Quiz's App is installed, with its checks; link one's GitHub account (F-GH) | M |
 | Journal | A classroom's course documentation in one GitHub repository, rendered on the server, read by the class, edited in the browser (F-JRN) | M |
 | Student | A **Courses** route and a classroom page: its activities, its journal, later its projects and grades (F-ORG-14, F-ORG-15) | M |
-| Projects, gradebook, online workspace, unified SEB | Specified with the rest of M0-04, not yet in this spec | M |
+| Projects | A repository per student or group from a source repository, protected files, the deadline on the server's receipt time, the CI score captured, frozen, reviewed and released, groups, sync of the source (F-PROJ). They open together with the import of heig-classroom's data, never before it (D26) | M |
+| Gradebook | The classroom's grades of its released exams and projects in one table, a weighted mean, a CSV (F-GBOOK) | M |
+| Online workspace, unified SEB | Phase M6, after the cutover (D09, D21; ADR-047) | S |
 
 ## 0.6 Out of scope
 
@@ -108,7 +113,8 @@ Carried by the task cards of [`docs/merge/09-tasks.md`](../merge/09-tasks.md), i
 - Management of study plans, credits, absences. The platform exports grades, it does not administer them.
 - Institutional multi-tenancy: a single admin, a single instance.
 - Code editor with a full language server. Monaco with highlighting and shortcuts is enough. (This is about the question editors; the online workspace of the merge, ADR-035, is specified with it.)
-- A general-purpose GitHub client: the platform touches GitHub only for what a feature needs (the journal now, projects later). It never deletes a repository when a journal is removed (F-JRN-04).
+- A general-purpose GitHub client: the platform touches GitHub only for what a feature needs (the journal, projects). It never deletes a repository: not when a journal is removed (F-JRN-04), not when a project or a classroom is deleted (F-PROJ-16).
+- Grading a project's repository in `apps/runner`, and a platform LLM review of projects: a project is graded by its own CI on the CI runners, and reviewed by the LLM there (D17); both may move into the platform later (phase L of the merge).
 - Hot installation of plugins from a remote repository.
 
 ## 0.7 Risks
@@ -122,6 +128,8 @@ Carried by the task cards of [`docs/merge/09-tasks.md`](../merge/09-tasks.md), i
 | Leak of the pool's questions | Medium | The pool is never served to students, only the questions of a running evaluation are, without the key |
 | Scope creep | High | Frozen phases, every new idea goes to phase 3 or out of scope |
 | GitHub unavailable, or its rate limit reached | Medium | The journal is a read model in Postgres: a page view never calls GitHub, an outage only delays the next synchronisation (N-RES-07) |
+| A forged CI score: the student's code runs in the run that reports it | Medium | A score is indicative until the teacher releases it; two `GRADE` annotations void a run; the teacher may override (N-SEC-21) |
+| A deadline applied late or twice on 100 repositories | High | The receipt time of every push written as the webhook arrives; the deadline claimed in the database, applied idempotently, with a time budget (N-PERF-07, N-RES-08) |
 | The platform acts on the wrong repositories (a staging copy of production driving real ones, a leaked App key) | High | Quiz's own Apps, one per environment; staging never holds the production App; the key and the webhook secret outside the repository and the database (N-SEC-16, N-SEC-18) |
 
 ## 0.8 Decision log
@@ -140,4 +148,5 @@ Carried by the task cards of [`docs/merge/09-tasks.md`](../merge/09-tasks.md), i
 | 2026-09-19 | Start from a pruned copy of heig-classroom: auth, visual identity, SSE, pg-boss, ticker, deployment, Podman hardening from the codespace |
 | 2026-09-28 | heig-classroom merges into Quiz: GitHub integration, projects and the journal come in scope (ADR-035, `docs/merge/`) |
 | 2026-09-30 | The journal first, live before the cutover, through Quiz's own GitHub App; one journal per classroom, a journal is a repository; a Settings tab on the classroom (D03, D07, D23–D25, D27) |
+| 2026-10-01 | Projects open with the import of heig-classroom's data, the cutover during the autumn semester; a project's score reaches the gradebook only after a release, on a per-project scale; the gradebook counts exams and projects; GitHub repositories are never deleted (D05, D06, D11–D13, D17–D20, D22, D26) |
 | 2026-10-01 | The journal in two modes: in Quiz (the default, no GitHub, the standard editor, revisions) or in a GitHub repository (read-only in the platform, Edit on GitHub); D25 superseded (ADR-057, D29) |
