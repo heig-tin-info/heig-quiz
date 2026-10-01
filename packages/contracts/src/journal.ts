@@ -13,11 +13,13 @@
  *
  * Warnings are CODES with parameters (fix J5), translated by the web app.
  *
- * Only the read half lives here (what M4-02 serves and M4-04 reads); the
- * bodies of the writes (create, use, save, add, preview, refresh) are
- * written by M4-03 with their handlers (`docs/merge/09-tasks.md`).
+ * The read half (what M4-02 serves and M4-04 reads) comes first; the write
+ * half (M4-03: create, use, refresh, preview, save, add, upload, and the
+ * refusals) closes the file.
  */
 import { z } from "zod";
+
+import { GITHUB_REPO_NAME_MAX } from "@quiz/domain";
 
 // ------------------------------------------------------------------ paths
 
@@ -276,3 +278,204 @@ export type JournalPageStaff = z.infer<typeof JournalPageStaff>;
 
 export const JournalPage = z.discriminatedUnion("view", [JournalPageStudent, JournalPageStaff]);
 export type JournalPage = z.infer<typeof JournalPage>;
+
+// ---------------------------------------------------------------- writing
+
+/** The longest page a save or a preview accepts, in characters (F-JRN-10). */
+export const JOURNAL_MARKDOWN_MAX = 500_000;
+
+/**
+ * A repository name as GitHub accepts it: letters, digits, `.`, `-`, `_`, at
+ * most 100 characters, and never `.` nor `..` (which name no repository, and
+ * would change the meaning of the URL they go into).
+ */
+export const GithubRepoName = z
+  .string()
+  .min(1)
+  .max(GITHUB_REPO_NAME_MAX)
+  .regex(/^[A-Za-z0-9._-]+$/, { message: "Letters, digits, '.', '-' and '_' only" })
+  .refine((n) => n !== "." && n !== "..", { message: "Not a repository name" });
+
+/**
+ * A branch name, checked as git's `check-ref-format` would and then some: no
+ * leading `-` (it would read as an option), no `..`, no empty segment (`//`,
+ * a leading or trailing `/`), no segment starting with `.` (so `.` and `/./`
+ * too), no `.lock` ending, no `@{`, no character git refuses (white space,
+ * `~`, `^`, `:`, `?`, `*`, `[`, `\`, a control character).
+ */
+export function isSafeGitRef(ref: string): boolean {
+  if (!ref || ref.length > 255 || ref.startsWith("-") || ref.endsWith(".lock")) return false;
+  if (ref.includes("..") || ref.includes("@{") || /[\s~^:?*[\\]/.test(ref) || hasControlChar(ref)) return false;
+  return ref.split("/").every((segment) => segment !== "" && !segment.startsWith("."));
+}
+
+export const GitRef = z.string().refine(isSafeGitRef, { message: "Not a branch name" });
+
+/**
+ * The folder of the repository holding the pages: trimmed of its surrounding
+ * slashes, "" for the repository's root, otherwise a path inside the
+ * repository ({@link safeJournalPath}), at most {@link JOURNAL_PATH_MAX}
+ * characters.
+ */
+export const JournalRootPath = z
+  .string()
+  .max(JOURNAL_PATH_MAX)
+  .transform((p) => p.replace(/^\/+|\/+$/g, ""))
+  .refine((p) => p === "" || safeJournalPath(p) !== null, { message: "Not a folder of the repository" });
+
+/**
+ * `POST /classrooms/:id/journal`: create a private repository in the
+ * classroom's organization (F-JRN-02); without a name, the staff payload's
+ * `proposedName`. Answers 201 with the staff `Journal`.
+ */
+export const JournalCreate = z.strictObject({ name: GithubRepoName.optional() });
+export type JournalCreate = z.infer<typeof JournalCreate>;
+
+/**
+ * `POST /classrooms/:id/journal/use`: a repository of the classroom's
+ * organization, by name (F-JRN-03, D27); the repository's default branch
+ * without a `ref`, its root without a `rootPath`. Answers 201 with the staff
+ * `Journal`.
+ */
+export const JournalUse = z.strictObject({
+  name: GithubRepoName,
+  ref: GitRef.optional(),
+  rootPath: JournalRootPath.optional(),
+});
+export type JournalUse = z.infer<typeof JournalUse>;
+
+/** A blob sha, as git writes it: the optimistic lock of a save. */
+export const BlobSha = z.string().regex(/^[0-9a-f]{40}$/, { message: "Not a blob sha" });
+
+/** A commit message the teacher may write; the platform words one otherwise. */
+const CommitMessage = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .refine((m) => !hasControlChar(m.replace(/\n/g, "")), { message: "No control character" });
+
+/**
+ * `PUT /classrooms/:id/journal/pages/*`: the page's new source, against the
+ * blob the editor opened (`JournalPageStaff.blobSha`). The file moved since
+ * ⇒ 409 `conflict`, nothing written and nothing merged (F-JRN-10). Answers
+ * {@link JournalFileWritten}.
+ */
+export const JournalPageSave = z.strictObject({
+  markdown: z.string().max(JOURNAL_MARKDOWN_MAX),
+  baseSha: BlobSha,
+  message: CommitMessage.optional(),
+});
+export type JournalPageSave = z.infer<typeof JournalPageSave>;
+
+/**
+ * `POST /classrooms/:id/journal/pages`: a new page, empty or with its first
+ * heading. Answers 201 with {@link JournalFileWritten}.
+ */
+export const JournalPageAdd = z.strictObject({
+  path: JournalPagePath,
+  title: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .refine((t) => !hasControlChar(t), { message: "No control character" })
+    .optional(),
+});
+export type JournalPageAdd = z.infer<typeof JournalPageAdd>;
+
+/**
+ * A file the platform committed (a saved or added page, an uploaded asset):
+ * its journal path, its blob sha — the next save's `baseSha` — and the
+ * commit. `page` is the page as the copy holds it once synchronised: null for
+ * an asset, or when the copy did not catch up (the synchronisation failed or
+ * lost a race to a push; the next one brings it).
+ */
+export const JournalFileWritten = z.strictObject({
+  path: z.string(),
+  blobSha: z.string(),
+  commitSha: z.string(),
+  page: JournalPageStaff.nullable(),
+});
+export type JournalFileWritten = z.infer<typeof JournalFileWritten>;
+
+/**
+ * `POST /classrooms/:id/journal/preview`: markdown not committed yet,
+ * rendered as the staff would read the page at `path`, against the copy's
+ * pages and assets. Nothing is stored.
+ */
+export const JournalPreview = z.strictObject({
+  path: JournalPagePath,
+  markdown: z.string().max(JOURNAL_MARKDOWN_MAX),
+});
+export type JournalPreview = z.infer<typeof JournalPreview>;
+
+export const JournalPreviewResult = z.strictObject({
+  title: z.string().nullable(),
+  html: z.string(),
+  toc: z.array(JournalTocEntry),
+  draft: z.boolean(),
+  visibleFrom: z.iso.datetime({ offset: true }).nullable(),
+  warnings: z.array(JournalWarning),
+});
+export type JournalPreviewResult = z.infer<typeof JournalPreviewResult>;
+
+/**
+ * `POST /classrooms/:id/journal/refresh`: the synchronisation was queued (the
+ * copy's `syncStatus` and the `journal` hint tell how it ends), or, with no
+ * queue, ran and ended so; `superseded`: other writes kept moving the copy,
+ * and a new synchronisation was queued.
+ */
+export const JournalRefreshResult = z.discriminatedUnion("status", [
+  z.strictObject({ status: z.literal("queued") }),
+  z.strictObject({
+    status: z.literal("ok"),
+    commitSha: z.string().nullable(),
+    pages: z.number().int().min(0),
+    assets: z.number().int().min(0),
+  }),
+  z.strictObject({ status: z.literal("error"), code: JournalSyncError }),
+  z.strictObject({ status: z.literal("superseded") }),
+]);
+export type JournalRefreshResult = z.infer<typeof JournalRefreshResult>;
+
+/**
+ * Why a write was refused, as a code the web app words (invariant 1): the
+ * synchronisation's codes when GitHub answered so, and
+ *
+ * - `not_connected` — the classroom is not connected to an organization where
+ *   Quiz's App is installed (F-JRN-02);
+ * - `journal_exists` — the classroom already has a journal (F-JRN-01);
+ * - `no_journal` — it has none to write to;
+ * - `name_taken` — the organization already has a repository by that name,
+ *   which is never adopted: {@link JournalNameTaken} proposes another;
+ * - `conflict` — the file moved on GitHub since it was opened;
+ * - `page_exists` — the copy already has a page at that path;
+ * - `type_mismatch` — an upload's content type is not its extension's;
+ * - `empty_upload` — an upload with no bytes;
+ * - `too_large` — an upload over {@link JOURNAL_ASSET_MAX_BYTES}.
+ */
+export const JournalErrorCode = z.enum([
+  ...JournalSyncError.options,
+  "not_connected",
+  "journal_exists",
+  "no_journal",
+  "name_taken",
+  "conflict",
+  "page_exists",
+  "type_mismatch",
+  "empty_upload",
+]);
+export type JournalErrorCode = z.infer<typeof JournalErrorCode>;
+
+/** The body of a refused write: `message` is the code again, the web app words it. */
+export const JournalRefusal = z.object({ error: JournalErrorCode, message: z.string() });
+export type JournalRefusal = z.infer<typeof JournalRefusal>;
+
+/** The 409 of a create on a name already taken, with a free name to propose instead (F-JRN-02). */
+export const JournalNameTaken = z.object({
+  error: z.literal("name_taken"),
+  message: z.string(),
+  suggestion: GithubRepoName,
+});
+export type JournalNameTaken = z.infer<typeof JournalNameTaken>;

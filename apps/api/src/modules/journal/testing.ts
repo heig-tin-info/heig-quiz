@@ -2,8 +2,9 @@
  * A journal repository on the fake GitHub of `github/testing.ts`, for the
  * journal's tests: the four REST routes the ingestion calls (the repository
  * by id, a branch's head, the tree, a blob), answered from a world the test
- * mutates, and the blob reads recorded. Test support only; nothing in the
- * application imports it.
+ * mutates, and the blob reads recorded; then the routes of the writes
+ * ({@link writeRoute}), which change that world as GitHub would. Test
+ * support only; nothing in the application imports it.
  */
 import { createHash } from "node:crypto";
 
@@ -22,6 +23,12 @@ export interface FakeRepo {
   id: number;
   owner: string;
   name: string;
+  /** GitHub's id of the owner (`GET /repos/{owner}/{repo}`); 0 by default. */
+  ownerId?: number;
+  /** `main` by default. */
+  defaultBranch?: string;
+  /** An `owner/name` it was transferred or renamed from, which GitHub still resolves to it. */
+  formerly?: string;
   /** Branch -> head and files; a repository without branches is empty (409). */
   branches: Record<string, { commit: string; files: FakeFile[] }>;
   /** Heads no branch points at any more, still readable by sha (see {@link pushTo}). */
@@ -102,6 +109,126 @@ export function repoRoute(repos: () => FakeRepo[], reads: string[] = []): Route 
       return json({ sha, encoding: "base64", content: Buffer.from(file.content).toString("base64") });
     }
     return undefined;
+  };
+}
+
+// ---------------------------------------------------------------- the writes (M4-03)
+
+/** One commit the platform made through the Contents API. */
+export interface FakeCommit {
+  repo: string;
+  method: "PUT" | "DELETE";
+  path: string;
+  branch: string;
+  message: string;
+  author: { name: string; email: string } | undefined;
+  committer: unknown;
+}
+
+/** The world of the writes: its repositories (shared with {@link repoRoute}), and what was done to them. */
+export interface FakeWorld {
+  repos: FakeRepo[];
+  /** GitHub's id of each organization by login, for the repositories created in it. */
+  orgIds: Record<string, number>;
+  /** GitHub accounts, id → login (`GET /user/{id}`); an id missing is a deleted account. */
+  accounts: Map<number, string>;
+  /** Logins GitHub refuses to invite (403). */
+  refused: Set<string>;
+  commits: FakeCommit[];
+  invitations: { repo: string; login: string; permission: unknown }[];
+  nextId: number;
+}
+
+export function fakeWorld(repos: FakeRepo[] = []): FakeWorld {
+  return { repos, orgIds: {}, accounts: new Map(), refused: new Set(), commits: [], invitations: [], nextId: 90_000 };
+}
+
+const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+const repoJson = (r: FakeRepo, status = 200) =>
+  json(
+    {
+      id: r.id,
+      name: r.name,
+      full_name: `${r.owner}/${r.name}`,
+      private: true,
+      default_branch: r.defaultBranch ?? "main",
+      owner: { login: r.owner, id: r.ownerId ?? 0 },
+    },
+    status,
+  );
+
+/**
+ * The routes the writes call, on `world`: a repository by name (following
+ * `formerly`), its creation (422 on a name taken), the Contents API's put and
+ * delete with GitHub's lock (409 on a stale sha, 422 on a sha missing or
+ * unexpected), a collaborator's invitation, an account by id.
+ */
+export function writeRoute(world: FakeWorld): Route {
+  const byName = (owner: string, name: string) =>
+    world.repos.find(
+      (r) =>
+        r.exists !== false &&
+        ((same(r.owner, owner) && same(r.name, name)) || (r.formerly !== undefined && same(r.formerly, `${owner}/${name}`))),
+    );
+  return (url, init) => {
+    if (url.host !== "api.github.com") return undefined;
+    const path = decodeURIComponent(url.pathname);
+    const body = typeof init.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : {};
+    let m: RegExpExecArray | null;
+    if (init.method === "GET" && (m = /^\/user\/(\d+)$/.exec(path))) {
+      const login = world.accounts.get(Number(m[1]));
+      return login ? json({ id: Number(m[1]), login }) : undefined;
+    }
+    if (init.method === "POST" && (m = /^\/orgs\/([^/]+)\/repos$/.exec(path))) {
+      const org = m[1]!;
+      const name = String(body.name);
+      if (byName(org, name)) return json({ message: "Repository creation failed.", errors: [{ message: "name already exists on this account" }] }, 422);
+      const repo: FakeRepo = { id: world.nextId++, owner: org, ownerId: world.orgIds[org] ?? 0, name, branches: {} };
+      world.repos.push(repo);
+      return repoJson(repo, 201);
+    }
+    if (init.method === "GET" && (m = /^\/repos\/([^/]+)\/([^/]+)$/.exec(path))) {
+      const repo = byName(m[1]!, m[2]!);
+      return repo ? repoJson(repo) : undefined;
+    }
+    if ((m = /^\/repos\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)$/.exec(path)) && init.method === "PUT") {
+      const repo = byName(m[1]!, m[2]!);
+      if (!repo) return undefined;
+      const login = m[3]!;
+      if (world.refused.has(login)) return json({ message: "Resource not accessible by integration" }, 403);
+      world.invitations.push({ repo: `${repo.owner}/${repo.name}`, login, permission: body.permission });
+      return json({ id: world.invitations.length }, 201);
+    }
+    if (!(m = /^\/repos\/([^/]+)\/([^/]+)\/contents\/(.+)$/.exec(path))) return undefined;
+    if (init.method !== "PUT" && init.method !== "DELETE") return undefined;
+    const repo = byName(m[1]!, m[2]!);
+    if (!repo) return undefined;
+    if (repo.failWith) return json({ message: "failure" }, repo.failWith);
+    const file = m[3]!;
+    const branch = String(body.branch ?? repo.defaultBranch ?? "main");
+    const empty = Object.keys(repo.branches).length === 0;
+    const head = repo.branches[branch];
+    if (!head && !(empty && init.method === "PUT")) return json({ message: `Branch ${branch} not found` }, 404);
+    const files = head?.files ?? [];
+    const existing = files.find((f) => f.path === file);
+    if (init.method === "DELETE" && !existing) return json({ message: "Not Found" }, 404);
+    if (existing && !body.sha) return json({ message: '"sha" wasn\'t supplied.' }, 422);
+    if (existing && body.sha !== blobSha(existing)) return json({ message: `${file} does not match ${String(body.sha)}` }, 409);
+    if (!existing && body.sha) return json({ message: "sha given for a file that does not exist" }, 422);
+    const rest = files.filter((f) => f.path !== file);
+    const put = init.method === "PUT" ? { path: file, content: Buffer.from(String(body.content), "base64") } : null;
+    const commit = pushTo(repo, put ? [...rest, put] : rest, branch);
+    world.commits.push({
+      repo: `${repo.owner}/${repo.name}`,
+      method: init.method,
+      path: file,
+      branch,
+      message: String(body.message),
+      author: body.author as FakeCommit["author"],
+      committer: body.committer,
+    });
+    return json({ content: put ? { path: file, sha: blobSha(put) } : null, commit: { sha: commit } }, put && !existing ? 201 : 200);
   };
 }
 

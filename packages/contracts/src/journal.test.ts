@@ -13,6 +13,15 @@ import {
   JournalWarning,
   encodeJournalPath,
   safeJournalPath,
+  GitRef,
+  GithubRepoName,
+  isSafeGitRef,
+  JOURNAL_MARKDOWN_MAX,
+  JOURNAL_PATH_MAX,
+  JournalErrorCode,
+  JournalPageSave,
+  JournalRefusal,
+  JournalRootPath,
 } from "./journal.js";
 
 const SHA = "a".repeat(40);
@@ -172,5 +181,43 @@ describe("the repository state (invariant 1)", () => {
   it("says why a synchronisation failed as a code, never a sentence", () => {
     expect(JournalRepository.parse(repo)).toEqual(repo);
     expect(JournalRepository.safeParse({ ...repo, syncError: "Branch main not found" }).success).toBe(false);
+  });
+});
+
+describe("the writes' inputs (M4-03)", () => {
+  it("a branch: what git accepts, and nothing that reads as an option or a path trick", () => {
+    for (const ok of ["main", "course/2026", "release-1.2", "feature_x"]) expect(isSafeGitRef(ok), ok).toBe(true);
+    for (const bad of ["", "-main", "a..b", "a//b", "/a", "a/", ".a", "a/.b", "a/./b", ".", "x.lock", "a b", "a~1", "a^", "a:b", "a?", "a*", "a[", "a\\b", "a@{1}", "a\u0001", "x".repeat(256)]) {
+      expect(isSafeGitRef(bad), JSON.stringify(bad)).toBe(false);
+    }
+    expect(GitRef.safeParse("-x").success).toBe(false);
+  });
+
+  it("a root folder: trimmed, inside the repository, capped", () => {
+    expect(JournalRootPath.parse("/docs/")).toBe("docs");
+    expect(JournalRootPath.parse("")).toBe("");
+    expect(JournalRootPath.parse("a/b")).toBe("a/b");
+    for (const bad of ["../x", "a/../b", "a\\b", "a//b", "x".repeat(JOURNAL_PATH_MAX + 1)]) {
+      expect(JournalRootPath.safeParse(bad).success, bad).toBe(false);
+    }
+  });
+
+  it("a repository name: GitHub's characters, never . nor ..", () => {
+    expect(GithubRepoName.safeParse("prg1-2026.journal_x").success).toBe(true);
+    for (const bad of ["", ".", "..", "a/b", "é", "x".repeat(101)]) expect(GithubRepoName.safeParse(bad).success, bad).toBe(false);
+  });
+
+  it("a save: a blob sha, a capped page, a message without control characters", () => {
+    expect(JournalPageSave.safeParse({ markdown: "# a", baseSha: SHA }).success).toBe(true);
+    expect(JournalPageSave.safeParse({ markdown: "# a", baseSha: "HEAD" }).success).toBe(false);
+    expect(JournalPageSave.safeParse({ markdown: "a".repeat(JOURNAL_MARKDOWN_MAX + 1), baseSha: SHA }).success).toBe(false);
+    expect(JournalPageSave.safeParse({ markdown: "", baseSha: SHA, message: "a\u0007" }).success).toBe(false);
+    expect(JournalPageSave.safeParse({ markdown: "", baseSha: SHA, extra: 1 }).success).toBe(false);
+  });
+
+  it("a refusal is a code of the closed list", () => {
+    expect(JournalRefusal.safeParse({ error: "conflict", message: "conflict" }).success).toBe(true);
+    expect(JournalRefusal.safeParse({ error: "The file moved", message: "" }).success).toBe(false);
+    expect(JournalErrorCode.options).toContain("github_unavailable");
   });
 });
