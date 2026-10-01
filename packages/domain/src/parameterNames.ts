@@ -79,6 +79,29 @@ export const PARAMETERIZED_TYPES: ReadonlySet<string> = new Set(["mcq", "short",
  */
 export const GROUPED_BY_CHOICE: ReadonlySet<string> = new Set(["mcq"]);
 
+/** What a format is, as an editor offers it: a kind, and for decimals and figures their count. */
+export type FormatKind = "auto" | "int" | "decimals" | "figures";
+
+/**
+ * A format read as its kind and count: `.2` is 2 decimals, `3s` 3
+ * significant figures, `""` automatic (`n` is 0 for the kinds without one).
+ * `null` for a string that is not one of {@link FORMATS}.
+ */
+export function parseFormat(format: string): { kind: FormatKind; n: number } | null {
+  if (!isFormat(format)) return null;
+  if (format === "") return { kind: "auto", n: 0 };
+  if (format === "int") return { kind: "int", n: 0 };
+  if (format.startsWith(".")) return { kind: "decimals", n: Number(format.slice(1)) };
+  return { kind: "figures", n: Number(format.slice(0, -1)) };
+}
+
+/** {@link parseFormat}'s inverse: the stored string of a kind and a count (1–6). */
+export function writeFormat(kind: FormatKind, n: number): string {
+  if (kind === "auto") return "";
+  if (kind === "int") return "int";
+  return kind === "decimals" ? `.${n}` : `${n}s`;
+}
+
 /**
  * The step of a format at `value`: the gap between two numbers the format
  * can write (ADR-056 §6). `int` steps by 1, `.n` by 10⁻ⁿ, and `ns` by an
@@ -87,11 +110,12 @@ export const GROUPED_BY_CHOICE: ReadonlySet<string> = new Set(["mcq"]);
  * or a non-finite value, which have no magnitude.
  */
 export function formatStep(format: string, value: number): number | null {
-  if (!isFormat(format) || format === "") return null;
-  if (format === "int") return 1;
-  if (format.startsWith(".")) return 10 ** -Number(format.slice(1));
+  const parsed = parseFormat(format);
+  if (parsed === null || parsed.kind === "auto") return null;
+  if (parsed.kind === "int") return 1;
+  if (parsed.kind === "decimals") return 10 ** -parsed.n;
   if (value === 0 || !Number.isFinite(value)) return null;
-  return 10 ** (Math.floor(Math.log10(Math.abs(value))) - Number(format.slice(0, -1)) + 1);
+  return 10 ** (Math.floor(Math.log10(Math.abs(value))) - parsed.n + 1);
 }
 
 /**

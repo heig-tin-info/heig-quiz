@@ -1,9 +1,17 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ChevronDown, ChevronUp, Dices, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { marked } from "marked";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import type { DraftInstance, DraftInstances, ParametersDraft, ZodIssueLite } from "@quiz/contracts";
-import { FORMATS, isFormat } from "@quiz/domain";
+import { MAX_VARIABLES, type DraftInstance, type DraftInstances, type ParametersDraft, type ZodIssueLite } from "@quiz/contracts";
+import {
+  identifiersIn,
+  namesMentioned,
+  parseFormat,
+  referencedNames,
+  writeFormat,
+  type FormatKind,
+} from "@quiz/domain";
 
 import { api, apiErrorMessage } from "../api";
 import { HelpIcon } from "../help";
@@ -16,16 +24,109 @@ import { PlayedQuestion } from "./PreviewedQuestion";
 
 type Row = ParametersDraft["rows"][number];
 
-/** A format as a teacher reads it: "2 decimals", "3 significant figures". */
+/** A format as a teacher reads it: "2 decimals", "3 significant figures"; an unknown one as written. */
 export function formatLabel(t: TFunction, format: string): string {
-  if (format === "") return t("param.format.auto");
-  if (format === "int") return t("param.format.int");
-  if (format.startsWith(".")) {
-    const n = Number(format.slice(1));
-    return n === 1 ? t("param.format.decimal") : t("param.format.decimals", { n });
-  }
-  const n = Number(format.slice(0, -1));
+  const parsed = parseFormat(format);
+  if (parsed === null) return format;
+  const { kind, n } = parsed;
+  if (kind === "auto") return t("param.format.auto");
+  if (kind === "int") return t("param.format.int");
+  if (kind === "decimals") return n === 1 ? t("param.format.decimal") : t("param.format.decimals", { n });
   return n === 1 ? t("param.format.figure") : t("param.format.figures", { n });
+}
+
+/** The count a kind starts with when it is picked: what a measure is most often written with. */
+const DEFAULT_COUNT: Record<"decimals" | "figures", number> = { decimals: 2, figures: 3 };
+const COUNTS = [1, 2, 3, 4, 5, 6] as const;
+
+/**
+ * The rows once the texts' `[[name]]` are reconciled with them (ADR-056,
+ * addendum of 2026-10-01): a name referenced and not declared gets a row,
+ * empty, and joins `auto`; a row of `auto` that is still empty and no longer
+ * referenced goes. A row with an expression stays, referenced or not — it
+ * gets the "not used" warning instead. The same `rows` when nothing changes.
+ */
+export function reconcileRows(
+  rows: readonly Row[],
+  referenced: readonly string[],
+  auto: ReadonlySet<string>,
+): { rows: readonly Row[]; auto: ReadonlySet<string> } {
+  const wanted = new Set(referenced);
+  const stale = (row: Row) => auto.has(row.name) && row.expr.trim() === "" && !wanted.has(row.name);
+  const kept = rows.filter((row) => !stale(row));
+  const declared = new Set(kept.map((row) => row.name));
+  const room = Math.max(0, MAX_VARIABLES - kept.length);
+  const added = referenced.filter((name) => !declared.has(name)).slice(0, room);
+  if (kept.length === rows.length && added.length === 0) return { rows, auto };
+  const removed = new Set(rows.filter(stale).map((row) => row.name));
+  return {
+    rows: [...kept, ...added.map((name) => ({ name, expr: "", format: "" }))],
+    auto: new Set([...[...auto].filter((name) => !removed.has(name)), ...added]),
+  };
+}
+
+/**
+ * A markdown text with its code — inline spans, fenced and indented blocks —
+ * blanked, read by marked's own lexer: a `[[…]]` in code declares no row.
+ */
+function outsideCode(text: string): string {
+  let out = "";
+  let cursor = 0;
+  marked.walkTokens(marked.lexer(text), (token) => {
+    if (token.type !== "code" && token.type !== "codespan") return;
+    const at = text.indexOf(token.raw, cursor);
+    if (at === -1) return;
+    out += `${text.slice(cursor, at)} `;
+    cursor = at + token.raw.length;
+  });
+  return out + text.slice(cursor);
+}
+
+/**
+ * How long the texts must rest before their references are reconciled: a
+ * `[[h]]` typed then grown to `[[height]]` (an editor that closes brackets
+ * by itself) never flashes a row `h` in and out.
+ */
+const RECONCILE_MS = 400;
+
+/**
+ * Keeps the rows in step with the texts' `[[name]]` ({@link reconcileRows}),
+ * once the texts rest. The texts as the editor opened them are not acted
+ * upon: opening a question never edits it, typing in it does. Which rows it
+ * created lives here, in memory: after a reload, every row is the teacher's.
+ */
+function useAutoRows({
+  content,
+  variables,
+  onChange,
+  disabled,
+}: {
+  content: unknown;
+  variables: ParametersDraft | null;
+  onChange: (next: ParametersDraft | null) => void;
+  disabled: boolean;
+}) {
+  const auto = useRef<ReadonlySet<string>>(new Set());
+  const seen = useRef(false);
+  const latest = useRef({ variables, onChange });
+  latest.current = { variables, onChange };
+  useEffect(() => {
+    if (!seen.current) {
+      seen.current = true;
+      return;
+    }
+    if (disabled) return;
+    const timer = setTimeout(() => {
+      const current = latest.current.variables;
+      const before = current?.rows ?? [];
+      const next = reconcileRows(before, referencedNames(content, outsideCode), auto.current);
+      auto.current = next.auto;
+      if (next.rows !== before) {
+        latest.current.onChange(next.rows.length === 0 ? null : { ...current, rows: [...next.rows] });
+      }
+    }, RECONCILE_MS);
+    return () => clearTimeout(timer);
+  }, [content, disabled]);
 }
 
 /**
@@ -71,6 +172,8 @@ export function isVariablesIssue(issue: ZodIssueLite): boolean {
 export function VariablesSection({
   questionId,
   type,
+  config,
+  explanation,
   variables,
   onChange,
   issues,
@@ -80,6 +183,9 @@ export function VariablesSection({
 }: {
   questionId: string;
   type: string;
+  /** The draft's configuration and explanation: their `[[name]]` declare rows. */
+  config: unknown;
+  explanation: string;
   variables: ParametersDraft | null;
   onChange: (next: ParametersDraft | null) => void;
   /** The draft's issues that {@link isVariablesIssue} keeps. */
@@ -94,6 +200,17 @@ export function VariablesSection({
   const rows = variables?.rows ?? [];
   const [opened, setOpened] = useState(false);
   const expanded = opened || rows.length > 0;
+
+  const content = useMemo(() => [config, explanation], [config, explanation]);
+  useAutoRows({ content, variables, onChange, disabled });
+
+  const mentioned = useMemo(() => {
+    const names = namesMentioned(content);
+    for (const name of identifiersIn(variables?.condition ?? "")) names.add(name);
+    return names;
+  }, [content, variables?.condition]);
+  const used = (row: Row) =>
+    mentioned.has(row.name) || rows.some((other) => other !== row && identifiersIn(other.expr).has(row.name));
 
   if (!expanded) {
     return (
@@ -135,7 +252,7 @@ export function VariablesSection({
 
       {rows.length > 0 ? (
         <div className="space-y-2">
-          <div className="hidden grid-cols-[7rem_minmax(0,1fr)_12rem_2rem] gap-2 text-xs font-medium text-fg-muted sm:grid">
+          <div className="hidden grid-cols-[7rem_minmax(0,1fr)_15rem_2rem] gap-2 text-xs font-medium text-fg-muted sm:grid">
             <span>{t("param.name")}</span>
             <span>{t("param.expr")}</span>
             <span>{t("param.format")}</span>
@@ -143,16 +260,16 @@ export function VariablesSection({
           <ol className="space-y-4 sm:space-y-2">
             {rows.map((row, index) => {
               const said = say(rowIssues(row.name));
+              const unused = row.name !== "" && !used(row);
               return (
                 <li key={index} className="space-y-1">
-                  <div className="grid grid-cols-[minmax(0,1fr)_2rem] gap-2 sm:grid-cols-[7rem_minmax(0,1fr)_12rem_2rem]">
+                  <div className="grid grid-cols-[minmax(0,1fr)_2rem] gap-2 sm:grid-cols-[7rem_minmax(0,1fr)_15rem_2rem]">
                     <input
                       type="text"
                       spellCheck={false}
                       autoComplete="off"
                       aria-label={t("param.nameOf", { n: index + 1 })}
                       aria-invalid={said.length > 0 || undefined}
-                      placeholder="h"
                       className={cx(inputClass, inputSize.md, "w-full font-mono text-[13px]")}
                       value={row.name}
                       disabled={disabled}
@@ -174,28 +291,27 @@ export function VariablesSection({
                       autoComplete="off"
                       aria-label={t("param.exprOf", { n: index + 1 })}
                       aria-invalid={said.length > 0 || undefined}
-                      placeholder="randint(10, 100)"
                       className={cx(inputClass, inputSize.md, "col-span-2 w-full font-mono text-[13px] sm:col-span-1")}
                       value={row.expr}
                       disabled={disabled}
                       onChange={(e) => patchRow(index, { expr: e.target.value })}
                     />
                     <span className="col-span-2 sm:col-span-1">
-                      <Select
-                        aria-label={t("param.formatOf", { n: index + 1 })}
-                        value={row.format}
+                      <FormatPicker
+                        index={index}
+                        format={row.format}
                         disabled={disabled}
-                        onChange={(e) => patchRow(index, { format: e.target.value })}
-                      >
-                        {(isFormat(row.format) ? FORMATS : [row.format, ...FORMATS]).map((format) => (
-                          <option key={format} value={format}>
-                            {isFormat(format) ? formatLabel(t, format) : format}
-                          </option>
-                        ))}
-                      </Select>
+                        onChange={(format) => patchRow(index, { format })}
+                      />
                     </span>
                   </div>
                   <Issues messages={said} />
+                  {unused ? (
+                    <p className="flex items-start gap-1.5 text-xs text-warning">
+                      <AlertTriangle className="mt-[0.2em] size-[1.1em] shrink-0" aria-hidden />
+                      <span className="min-w-0">{t("param.unused", { name: row.name })}</span>
+                    </p>
+                  ) : null}
                 </li>
               );
             })}
@@ -220,7 +336,6 @@ export function VariablesSection({
             fullWidth
             spellCheck={false}
             autoComplete="off"
-            placeholder="t > 1"
             className="font-mono text-[13px]"
             value={variables?.condition ?? ""}
             disabled={disabled}
@@ -236,6 +351,70 @@ export function VariablesSection({
         <Draws questionId={questionId} type={type} savedStamp={savedStamp} stale={dirty} />
       ) : null}
     </Card>
+  );
+}
+
+/**
+ * A format as a kind and, for decimals and significant figures, their count
+ * (1–6). The stored strings are those of `FORMATS`; one this editor does
+ * not write (an import's typo) stays shown, as itself, until it is changed.
+ */
+function FormatPicker({
+  index,
+  format,
+  disabled,
+  onChange,
+}: {
+  index: number;
+  format: string;
+  disabled: boolean;
+  onChange: (format: string) => void;
+}) {
+  const t = useT();
+  const parsed = parseFormat(format);
+  const counted = parsed?.kind === "decimals" || parsed?.kind === "figures" ? parsed : null;
+  const kinds: [FormatKind, string][] = [
+    ["auto", t("param.format.auto")],
+    ["int", t("param.format.int")],
+    ["decimals", t("param.format.kind.decimals")],
+    ["figures", t("param.format.kind.figures")],
+  ];
+  return (
+    <span className="flex gap-2">
+      <Select
+        aria-label={t("param.formatOf", { n: index + 1 })}
+        width="min-w-0 flex-1"
+        value={parsed?.kind ?? format}
+        disabled={disabled}
+        onChange={(e) => {
+          const kind = e.target.value as FormatKind;
+          const n = counted?.n ?? (kind === "decimals" || kind === "figures" ? DEFAULT_COUNT[kind] : 0);
+          onChange(writeFormat(kind, n));
+        }}
+      >
+        {parsed === null ? <option value={format}>{format}</option> : null}
+        {kinds.map(([kind, label]) => (
+          <option key={kind} value={kind}>
+            {label}
+          </option>
+        ))}
+      </Select>
+      {counted ? (
+        <Select
+          aria-label={t("param.format.countOf", { n: index + 1 })}
+          width="w-16 shrink-0"
+          value={String(counted.n)}
+          disabled={disabled}
+          onChange={(e) => onChange(writeFormat(counted.kind, Number(e.target.value)))}
+        >
+          {COUNTS.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </Select>
+      ) : null}
+    </span>
   );
 }
 

@@ -8,21 +8,21 @@ Multiple choice, short answer (with a number key) and fill in the blanks take va
 
 A ball is dropped from a height `h` on a planet of gravity `g`; how long does the fall last? From rest, `h = ½ g t²`, so `t = √(2h/g)`.
 
-In the editor, under the question's form, open **Random values** and add three variables:
-
-| Name | Expression | Format |
-| --- | --- | --- |
-| `h` | `randint(10, 100)` | Integer |
-| `g` | `choice([3.71, 9.81, 24.79])` | 2 decimals |
-| `t` | `sqrt(2*h/g)` | 2 decimals |
-
-with the condition `t > 1.5`, so that no fall is too short to be interesting.
-
-Then write the variables into the question between double brackets:
+Write the variables into the question between double brackets:
 
 - the statement: `A ball is dropped from [[h]] m on a planet where $g = [[g]]\,m/s^2$. How many seconds does the fall last?`
 - the key, a **Number** accepted answer: value `[[t]]`, tolerance `0.01`;
 - the explanation: `From rest, $h = \tfrac12 g t^2$, so $t = \sqrt{2h/g} = [[t]]$ s.`
+
+As you write them, **Random values** opens under the question's form with a row for each name, `h`, `g` and `t`, each waiting for its expression. Fill them in:
+
+| Name | Expression | Format |
+| --- | --- | --- |
+| `h` | `randint(10, 100)` | Integer |
+| `g` | `choice([3.71, 9.81, 24.79])` | Decimals, 2 |
+| `t` | `sqrt(2*h/g)` | Decimals, 2 |
+
+and add the condition `t > 1.5`, so that no fall is too short to be interesting.
 
 A student may read "dropped from 42 m where g = 9.81 m/s²" and be expected to answer 2.93; their neighbour reads 87 m and 3.71 m/s², and is expected to answer 6.85.
 
@@ -30,9 +30,11 @@ A student may read "dropped from 42 m where g = 9.81 m/s²" and be expected to a
 
 The table is read from top to bottom, and a row reads only the rows above it.
 
+A `[[name]]` written anywhere in the question adds its row, empty, even to a question that had no variables yet: the question becomes parameterized there, visibly. Only a bare name adds a row — `[[2*h]]` does not — and a `[[…]]` inside code (a `` `span` `` or a code block) adds none. A row added this way that is still empty goes away when its reference does; a row with an expression stays, and says it is **not used anywhere** until the question, another row or the condition reads it again. That is a warning, not an error: publication is not refused for it. **Add a variable** adds a row the text does not name, such as a value only a formula reads.
+
 - **Name**: a letter or `_`, then letters, digits or `_`. A name cannot be a function (`sqrt`) or a constant (`pi`).
-- **Expression**: a draw — `randint(a, b)` for an integer, both ends included, `uniform(a, b)` for a real number, `choice([…])` for one value of a list — or a formula of the rows above. The functions are the usual ones: `sqrt`, `abs`, `exp`, `log`, `round`, `floor`, `ceil`, `min`, `max`, `sin`, `cos`, `tan` and their kin, with the constants `pi` and `e`. The power is `^` (`h^2`), as on a calculator, and every product is written with `*`.
-- **Format**: Automatic (up to six significant figures), Integer, 1 to 6 decimals, or 1 to 6 significant figures. A variable **is** its formatted value: `g` at 2 decimals is 9.81, and every formula below it reads 9.81. Numbers are written with a dot in every language; a student may answer with a comma or a dot.
+- **Expression**: required — a row without one blocks publication. A draw — `randint(a, b)` for an integer, both ends included, `uniform(a, b)` for a real number, `choice([…])` for one value of a list — or a formula of the rows above. The functions are the usual ones: `sqrt`, `abs`, `exp`, `log`, `round`, `floor`, `ceil`, `min`, `max`, `sin`, `cos`, `tan` and their kin, with the constants `pi` and `e`. The power is `^` (`h^2`), as on a calculator, and every product is written with `*`.
+- **Format**: Automatic (up to six significant figures), Integer, Decimals or Significant figures, the last two with their number, 1 to 6. A variable **is** its formatted value: `g` at 2 decimals is 9.81, and every formula below it reads 9.81. Numbers are written with a dot in every language; a student may answer with a comma or a dot.
 - **Condition**, optional: a draw where it is false is drawn again, up to 100 times.
 
 ## Writing them into the question
@@ -57,7 +59,7 @@ Under the table, **Five draws** lists the values of five draws, computed by the 
 
 ## Publication and what students get
 
-Publication draws the variables 200 times and refuses the question when an expression fails, when a name is unknown, when a `[[` is not closed, when the condition is never met, or when a draw takes too long. Each issue is shown on its row, or on the text that holds the faulty `[[…]]`.
+Publication draws the variables 200 times and refuses the question when a row has no expression, when an expression fails, when a name is unknown, when a `[[` is not closed, when the condition is never met, or when a draw takes too long. Each issue is shown on its row, or on the text that holds the faulty `[[…]]`.
 
 The question list shows a **Parameterized** pill on such a question, and so does the editor's header once a version with variables is published.
 

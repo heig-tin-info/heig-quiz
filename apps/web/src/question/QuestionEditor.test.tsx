@@ -244,6 +244,20 @@ describe("QuestionEditor — mcq", () => {
     );
   }, 20_000);
 
+  it("never edits a question by opening it: an undeclared [[name]] waits for a keystroke (ADR-056, addendum of 2026-10-01)", async () => {
+    flowingClock();
+    const base = mcqDetail();
+    const detail = mcqDetail({
+      draft: { ...base.draft, config: { ...(base.draft.config as object), prompt: "From [[h]] m?" } },
+    });
+    const { calls } = mockFetch(routes(detail));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    expect(await screen.findByRole("button", { name: "Random values" })).toHaveAttribute("aria-expanded", "false");
+    await elapse(AUTOSAVE_DELAY_MS * 3);
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
+    expect(screen.queryByLabelText("Name 1")).toBeNull();
+  }, 20_000);
+
   /*
    * The autosave loop this screen used to live in: `PUT /draft` makes the API
    * emit a pool hint, `live.ts` invalidates EVERY query, the question query

@@ -778,7 +778,9 @@ const scenes = [
     } },
   { name: "editor-parameterized-issue", role: "teacher", path: "/questions/q-fall", settle: 3000, act: async (p) => {
       await p.getByRole("button", { name: /^(add a variable|ajouter une variable)$/i }).click();
-      await p.getByLabel(/^(name|nom) 4$/i).fill("2v");
+      // A valid name with no expression yet: its own issue, and the unused warning.
+      await p.getByLabel(/^(name|nom) 4$/i).fill("v0");
+      await p.getByLabel(/^format 4$/i).selectOption("figures");
       await p.waitForTimeout(2000);
     } },
   { name: "pool-parameterized", role: "teacher", path: "/pools/p2" },

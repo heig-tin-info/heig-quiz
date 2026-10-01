@@ -116,6 +116,7 @@ describe("publication of a parameterized question", () => {
     };
     const cases: [ParametersDraft, unknown, string][] = [
       [{ rows: [{ name: "h", expr: "2pi", format: "" }] }, onlyH, "parameters.forbidden_node"],
+      [{ rows: [{ name: "h", expr: "", format: "" }] }, onlyH, "parameters.empty_expression"],
       [{ rows: [{ name: "h", expr: "randint(1, 3)", format: "int" }], condition: "h > 5" }, onlyH, "parameters.condition_exhausted"],
       [VARIABLES, { ...(PARAMETERIZED.mcq as object), prompt: "From [[height]] m." }, "parameters.unknown_name"],
       [VARIABLES, { ...(PARAMETERIZED.mcq as object), prompt: "From [[h m." }, "parameters.unterminated"],

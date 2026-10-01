@@ -6,6 +6,13 @@ valeurs. Les questions à choix, à réponse courte et à trous les acceptent.
 
 ## Le tableau
 
+Écrivez `[[h]]` dans la question et une ligne `h` apparaît ici, en attente
+de son expression. Seul un nom seul ajoute une ligne (`[[2*h]]` non), et
+pas dans du code. Une ligne encore vide disparaît quand son `[[h]]`
+disparaît ; une ligne qui a une expression reste, marquée « utilisée nulle
+part ». **Ajouter une variable** ajoute une ligne que le texte ne nomme
+pas, comme une valeur que seule une formule lit.
+
 Une ligne par variable, lue de haut en bas : une ligne ne lit que celles
 qui sont au-dessus.
 
@@ -17,8 +24,8 @@ qui sont au-dessus.
   fonctions sont `sqrt`, `abs`, `exp`, `log`, `round`, `floor`, `ceil`,
   `min`, `max`, `sin`, `cos`, `tan` et leurs cousines ; `pi` et `e` ; `^`
   est la puissance.
-- **Format** : un entier, un nombre de décimales ou de chiffres
-  significatifs. Une variable EST sa valeur formatée : `g` à 2 décimales
+- **Format** : Automatique, Entier, ou un nombre (1 à 6) de décimales ou
+  de chiffres significatifs. Une variable EST sa valeur formatée : `g` à 2 décimales
   vaut 9.81, et chaque formule en dessous lit 9.81.
 - **Condition** (facultative) : `t > 1`. Un tirage où elle est fausse est
   tiré à nouveau.

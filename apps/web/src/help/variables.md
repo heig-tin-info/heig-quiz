@@ -6,6 +6,12 @@ answer and fill-in-the-blanks questions take them.
 
 ## The table
 
+Write `[[h]]` in the question and a row `h` appears here, waiting for its
+expression. Only a bare name adds a row (`[[2*h]]` does not), and not
+inside code. A row still empty goes away when its `[[h]]` does; a row with
+an expression stays, marked "not used". **Add a variable** adds a row the
+text does not name, such as a value only a formula reads.
+
 One row per variable, read from top to bottom: a row reads only the rows
 above it.
 
@@ -15,7 +21,8 @@ above it.
   list), or a formula of the rows above: `sqrt(2*h/g)`. The functions are
   `sqrt`, `abs`, `exp`, `log`, `round`, `floor`, `ceil`, `min`, `max`,
   `sin`, `cos`, `tan` and their kin; `pi` and `e`; `^` is the power.
-- **Format**: an integer, a number of decimals or of significant figures.
+- **Format**: Automatic, Integer, or a number (1 to 6) of decimals or of
+  significant figures.
   A variable IS its formatted value: `g` at 2 decimals is 9.81, and every
   formula below reads 9.81.
 - **Condition** (optional): `t > 1`. A draw where it is false is drawn

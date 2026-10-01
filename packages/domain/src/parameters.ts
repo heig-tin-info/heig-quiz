@@ -42,6 +42,7 @@ export { FORMAT_PATTERN, isVariableName, MAX_EXPRESSION_LENGTH } from "./paramet
 export { ParameterError, type Issue, type IssueCode } from "./parameters/evaluator.js";
 export { formatValue } from "./parameters/format.js";
 export type { Values } from "./parameters/text.js";
+export { identifiersIn, namesMentioned, referencedNames } from "./parameters/references.js";
 
 export interface VariableRow {
   name: string;
@@ -87,6 +88,8 @@ function checkTable(params: Parameters): { plan: Plan; issues: Issue[] } {
       issues.push({ code: "bad_format", message: `unknown format "${row.format}"`, row: row.name });
     }
     const compiled = collect(issues, { row: row.name }, () => {
+      // Its own code, not parse_error: the editor creates a row empty, and says what to write.
+      if (row.expr.trim() === "") fail("empty_expression", `${row.name} has no expression`);
       const c = compile(row.expr);
       checkNames(c, seen, true); // a row reads only the rows above it
       return c;

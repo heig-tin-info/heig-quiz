@@ -37,6 +37,7 @@ export {
   FORMAT_PATTERN,
   FORMATS,
   formatStep,
+  type FormatKind,
   GROUPED_BY_CHOICE,
   IDENTIFIER_SOURCE,
   isFormat,
@@ -45,8 +46,12 @@ export {
   referenceSpans,
   MAX_EXPRESSION_LENGTH,
   PARAMETERIZED_TYPES,
+  parseFormat,
+  writeFormat,
   type Format,
 } from "./parameterNames.js";
+// Which `[[name]]` a draft's texts hold, read without mathjs (ADR-056, addendum of 2026-10-01).
+export { identifiersIn, namesMentioned, referencedNames } from "./parameters/references.js";
 export * from "./period.js";
 export * from "./pollOutcome.js";
 export * from "./pollTally.js";

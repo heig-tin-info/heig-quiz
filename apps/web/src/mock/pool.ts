@@ -1666,7 +1666,7 @@ function variablesIssues(variables: ParametersDraft | null): ZodIssueLite[] {
       ? []
       : [{ path: ["variables", row.name], code: "custom" as const, message: "parameters.bad_name" }]),
     ...(row.expr.trim() === ""
-      ? [{ path: ["variables", row.name], code: "custom" as const, message: "parameters.parse_error" }]
+      ? [{ path: ["variables", row.name], code: "custom" as const, message: "parameters.empty_expression" }]
       : []),
   ]);
 }
