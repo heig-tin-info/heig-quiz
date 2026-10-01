@@ -768,6 +768,20 @@ const scenes = [
       await p.getByLabel(/^(tolerance|tolérance) \(minutes\) 3$/i).fill("10");
       await p.getByLabel(/^(matcher|critère) 1$/i).scrollIntoViewIfNeeded();
     } },
+  // ADR-056: a parameterized question opens on its variables and five draws;
+  // one draw played with its key; a row's issue; the pool's pill.
+  { name: "editor-parameterized", role: "teacher", path: "/questions/q-fall", settle: 3000 },
+  { name: "editor-parameterized-draw", role: "teacher", path: "/questions/q-fall", settle: 3000, act: async (p) => {
+      await p.getByRole("button", { name: /^(show draw|voir le tirage) 2$/i }).click();
+      await p.getByRole("button", { name: /^(show answers|montrer les réponses|afficher les réponses)$/i }).click();
+      await p.waitForTimeout(800);
+    } },
+  { name: "editor-parameterized-issue", role: "teacher", path: "/questions/q-fall", settle: 3000, act: async (p) => {
+      await p.getByRole("button", { name: /^(add a variable|ajouter une variable)$/i }).click();
+      await p.getByLabel(/^(name|nom) 4$/i).fill("2v");
+      await p.waitForTimeout(2000);
+    } },
+  { name: "pool-parameterized", role: "teacher", path: "/pools/p2" },
   { name: "editor-cloze", role: "teacher", path: "/questions/q4" },
   // `codeimage` (ADR-021): the last question of the mock pool. The try runs
   // through the mock's `POST /try`, whose details carry the reference image.

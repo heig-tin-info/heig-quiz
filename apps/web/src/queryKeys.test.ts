@@ -61,6 +61,11 @@ describe("queryKeys — each factory is the literal it replaced", () => {
       keys.questionPreviewKey("q1", 3),
       ["question", "q1", "preview", 3],
     ],
+    [
+      "questionInstancesKey",
+      keys.questionInstancesKey("q1", "2026-10-01T10:00:00.000Z"),
+      ["question", "q1", "instances", "2026-10-01T10:00:00.000Z"],
+    ],
     ["evaluationsKey", keys.evaluationsKey("r1"), ["evaluations", "r1"]],
     ["activitiesKey", keys.activitiesKey, ["activities"]],
     ["evaluationKey", keys.evaluationKey("e1"), ["evaluation", "e1"]],
@@ -184,6 +189,7 @@ describe("queryKeys — the prefixes invalidations rely on", () => {
       keys.questionKey("q1"),
       keys.questionPreviewKey("q1", "draft"),
     ],
+    ["questionKey ⊂ questionInstancesKey", keys.questionKey("q1"), keys.questionInstancesKey("q1", "s")],
     ["evaluationKey ⊂ templatePullKey", keys.evaluationKey("e1"), keys.templatePullKey("e1")],
     [
       "evaluationKey ⊂ itemPreviewKey",

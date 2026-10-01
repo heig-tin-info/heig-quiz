@@ -42,7 +42,6 @@ export {
   InstanceMismatch,
   itemInstance,
   parameterIssues,
-  PARAMETERIZED_TYPES,
   parametersOf,
   templateHash,
   type Instance,

@@ -31,6 +31,7 @@ const KNOWN: Record<string, keyof Dict> = {
   "short.llm_not_available": "issue.short.llm_not_available",
   "short.unresolved_reference": "issue.short.unresolved_reference",
   "short.computed_text_key": "issue.short.computed_text_key",
+  "short.tolerance_below_format": "issue.short.tolerance_below_format",
   "parameters.bad_name": "issue.parameters.bad_name",
   "parameters.duplicate_name": "issue.parameters.duplicate_name",
   "parameters.bad_format": "issue.parameters.bad_format",

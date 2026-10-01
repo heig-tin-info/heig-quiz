@@ -19,15 +19,20 @@
  * stores `"[[t]]"`, its instances the interpolated text (`"4.52"`), which
  * the schema reads as the number it spells. A v2 config IS a v3 config.
  */
+import { IDENTIFIER_SOURCE } from "@quiz/domain";
 import { ALLOWED_REGEX_FLAGS, isValidPattern, MAX_PATTERN_LENGTH } from "@quiz/domain/short";
 import { z } from "zod";
 
 export const SHORT_CONFIG_VERSION = 3;
 
 /** A plain decimal number as text: what an instance carries after `[[…]]` was replaced. */
-const NUMERIC_TEXT = /^\s*[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?\s*$/i;
+export const NUMERIC_TEXT = /^\s*[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?\s*$/i;
+/** A number as a teacher types it in the editor: a dot or a comma, an exponent. */
+export const TYPED_NUMBER = /^\s*[-+]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:e[-+]?\d+)?\s*$/i;
 /** One `[[…]]` reference, the whole field: the template of a parameterized question. */
 export const SHORT_REFERENCE = /^\s*\[\[[^\n]*\]\]\s*$/;
+/** A reference that names ONE variable, the whole field (`[[t]]`); the name is group 1. */
+export const SHORT_BARE_REFERENCE = new RegExp(`^\\s*\\[\\[\\s*(${IDENTIFIER_SOURCE})\\s*\\]\\]\\s*$`);
 
 /**
  * A number, the text of one (coerced), or a `[[…]]` reference — kept as

@@ -12,6 +12,7 @@ import { questionType } from "@quiz/registry/server";
 
 import { evaluations } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
+import { EXPLANATION, PARAMETERIZED, VARIABLES } from "../../test/parameterized.js";
 
 import { checkConfig, describeQuestionType } from "./questionTypes.js";
 import { TOOLS } from "./tools.js";
@@ -301,6 +302,38 @@ describe("an authoring session", () => {
     expect(isError).toBe(true);
     expect(data.details.length).toBeGreaterThan(0);
     expect((await ok("list_questions", { poolId: pool.id })).total).toBe(0);
+  });
+
+  it("writes a parameterized question end to end, and drops its variables on update (ADR-056)", async () => {
+    const pool = await ok("create_pool", { name: "Paramétrées" });
+    const q = await ok("create_question", {
+      poolId: pool.id,
+      type: "short",
+      internalName: "chute-libre",
+      config: PARAMETERIZED.short as Record<string, unknown>,
+      explanation: EXPLANATION,
+      variables: VARIABLES,
+    });
+    expect(q.publishedVersion).toBe(1);
+    const detail = await ok("get_question", { questionId: q.questionId });
+    expect(JSON.stringify(detail)).toContain("[[t]]");
+    const listed = await ok("list_questions", { poolId: pool.id });
+    expect(JSON.stringify(listed)).toContain('"randomizable":true');
+    // A tolerance below half the step of `t` (.2): refused before anything is published.
+    const tight = await call("update_question", {
+      questionId: q.questionId,
+      config: { ...(PARAMETERIZED.short as object), matchers: [{ kind: "number", value: "[[t]]", tolerance: 0.001 }] },
+    });
+    expect(tight.isError).toBe(true);
+    expect(JSON.stringify(tight.data)).toContain("short.tolerance_below_format");
+    // null makes it static again: a static key is a number.
+    const plain = await ok("update_question", {
+      questionId: q.questionId,
+      config: { configVersion: 3, prompt: "2 + 2 ?", kind: "number", matchers: [{ kind: "number", value: 4 }] },
+      variables: null,
+    });
+    expect(plain.publishedVersion).toBe(2);
+    expect(JSON.stringify(await ok("list_questions", { poolId: pool.id }))).toContain('"randomizable":false');
   });
 
   it("refuses a question from a pool the course does not use", async () => {

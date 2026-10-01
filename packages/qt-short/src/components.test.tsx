@@ -135,8 +135,8 @@ describe("ShortEditor", () => {
     for (const word of ["Matcher", "Value", "Tolerance", "Mode", "Unit", "Points"]) {
       expect(screen.getByText(word, { selector: "label" })).toBeVisible();
     }
-    expect(screen.getByLabelText("Value 1")).toHaveValue(9.81);
-    expect(screen.getByLabelText("Tolerance 1")).toHaveValue(0.05);
+    expect(screen.getByLabelText("Value 1")).toHaveValue("9.81");
+    expect(screen.getByLabelText("Tolerance 1")).toHaveValue("0.05");
     expect(screen.getByLabelText("Mode 1")).toHaveValue("abs");
     expect(screen.getByLabelText("Unit 1")).toHaveValue("m/s²");
     expect(screen.getByLabelText("Unit required 1")).toBeChecked();
@@ -160,10 +160,33 @@ describe("ShortEditor", () => {
       />,
     );
     const field = screen.getByLabelText("Tolerance (%) 1");
-    expect(field).toHaveValue(2);
+    expect(field).toHaveValue("2");
     expect(screen.getByText("Accepts 50 ± 2 %, from 49 to 51.")).toBeInTheDocument();
     await userEvent.type(field, "5");
     expect(onChange.mock.calls.at(-1)?.[0].matchers[0].tolerance).toBe(0.25);
+  });
+
+  it("shows a [[…]] reference as typed and stores it as text (ADR-056 §4)", async () => {
+    const onChange = vi.fn();
+    render(
+      <ShortEditor
+        config={config({
+          kind: "number",
+          matchers: [
+            { kind: "number", value: "[[t]]", tolerance: 0, toleranceMode: "abs", unitRequired: false, points: 1 },
+          ],
+        })}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.getByLabelText("Value 1")).toHaveValue("[[t]]");
+    const tolerance = screen.getByLabelText("Tolerance 1");
+    await userEvent.clear(tolerance);
+    await userEvent.type(tolerance, "[[[[d]]");
+    expect(onChange.mock.calls.at(-1)?.[0].matchers[0].tolerance).toBe("[[d]]");
+    await userEvent.clear(tolerance);
+    await userEvent.type(tolerance, "0,05");
+    expect(onChange.mock.calls.at(-1)?.[0].matchers[0].tolerance).toBe(0.05);
   });
 
   it("labels a date answer's tolerance in days and explains the window", () => {

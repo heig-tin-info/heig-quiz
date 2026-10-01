@@ -3,7 +3,8 @@
  *
  * No React in this import graph: the API and the grading worker load it.
  */
-import { ConfigMigrationError, tallyKeys, type QuestionTypeServer } from "@quiz/core/server";
+import { ConfigMigrationError, tallyKeys, type ParameterSample, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
+import { formatStep } from "@quiz/domain";
 import { describeMatcher } from "@quiz/domain/short";
 import { toCanonical } from "./canonical.js";
 import { gradeShort } from "./grade.js";
@@ -24,7 +25,54 @@ import {
   type ShortSolution,
   type ShortStudent,
 } from "./schema.js";
-import { isReference, isShortAnswered } from "./schema.js";
+import { isReference, isShortAnswered, NUMERIC_TEXT, SHORT_BARE_REFERENCE } from "./schema.js";
+
+/** A matcher field's number in one draw: a literal, or a variable it names; null otherwise. */
+function numberIn(field: unknown, values: Readonly<Record<string, number | string>>): number | null {
+  if (typeof field === "number") return field;
+  if (typeof field !== "string") return null;
+  if (NUMERIC_TEXT.test(field)) return Number(field);
+  const name = SHORT_BARE_REFERENCE.exec(field)?.[1];
+  const value = name === undefined ? undefined : values[name];
+  return typeof value === "number" ? value : null;
+}
+
+/**
+ * ADR-056 §6: a `number` matcher whose key names ONE variable (`[[t]]`) is
+ * refused when, in some gated draw, its tolerance is below half the step of
+ * that variable's format at the drawn value — the student who computes the
+ * exact answer would be marked wrong against the rounded key. An absolute
+ * tolerance is compared with half the step; a relative one is turned into
+ * the absolute margin it gives at the drawn key. A key that is an
+ * expression (`[[2*t]]`, written with up to six significant figures), a
+ * variable without a format, and a tolerance that is an expression are not
+ * checked.
+ */
+export function toleranceIssues(
+  template: unknown,
+  sample: ParameterSample,
+): PublicationIssue[] {
+  const matchers = (template as { matchers?: unknown } | null)?.matchers;
+  if (!Array.isArray(matchers)) return [];
+  return matchers.flatMap((matcher: unknown, index) => {
+    const m = matcher as { kind?: unknown; value?: unknown; tolerance?: unknown; toleranceMode?: unknown } | null;
+    if (m === null || typeof m !== "object" || m.kind !== "number" || typeof m.value !== "string") return [];
+    const name = SHORT_BARE_REFERENCE.exec(m.value)?.[1];
+    const format = name === undefined ? undefined : sample.formats[name];
+    if (name === undefined || format === undefined || format === "") return [];
+    const short = sample.values.some((values) => {
+      const key = values[name];
+      const tolerance = numberIn(m.tolerance ?? 0, values);
+      if (typeof key !== "number" || tolerance === null) return false;
+      const step = formatStep(format, key);
+      if (step === null) return false;
+      const margin = m.toleranceMode === "rel" ? Math.abs(key) * tolerance : tolerance;
+      // A hair of slack: 0.005 typed for `.2` is exactly half the step.
+      return margin < (step / 2) * (1 - 1e-9);
+    });
+    return short ? [{ path: ["matchers", index, "tolerance"], message: "short.tolerance_below_format" }] : [];
+  });
+}
 
 /** The key as a teacher reads it: one line per matcher, in evaluation order. */
 export function expectedAnswers(config: ShortConfig): string[] {
@@ -194,6 +242,8 @@ export const shortServer: QuestionTypeServer<
       return text.some((t) => t.includes("[[")) ? [{ path: ["matchers", index], message: "short.computed_text_key" }] : [];
     });
   },
+
+  sampleIssues: toleranceIssues,
 
   hasKey: (config) => config.matchers.length > 0,
 

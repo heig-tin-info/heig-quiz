@@ -21,6 +21,7 @@ nav = [
     { "Courses and classrooms" = "guide/classrooms.md" },
     { "Question pools" = "guide/pools.md" },
     { "Question types" = "guide/question-types.md" },
+    { "Parameterized questions" = "guide/parameterized-questions.md" },
     { "Evaluations" = "guide/evaluations.md" },
     { "Running an evaluation" = "guide/live.md" },
     { "Grading and results" = "guide/grading.md" },

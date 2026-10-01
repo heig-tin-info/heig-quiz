@@ -213,6 +213,20 @@ dot. Publication refuses a `number` matcher whose tolerance is below half
 the format step of its key, because the exact answer would then be marked
 wrong.
 
+The rule as implemented (`short.tolerance_below_format`, the type's
+`sampleIssues` hook, run by publication after the gated draws): it applies to
+a `number` matcher whose value is ONE variable (`[[t]]`) with a format. On
+each of the draws publication puts through the type's gate (seeds 0 to 4),
+the step of that format at the drawn key (`formatStep`: 1 for `int`, 10⁻ⁿ
+for `.n`, and for `ns` the step of n significant figures at that magnitude)
+is compared with the margin the tolerance gives there: the tolerance itself
+when absolute, `|key| × tolerance` when relative. A margin below half the
+step on any of those draws refuses the question. A tolerance that names one
+variable is read in each draw. Not checked: a key that is an expression
+(`[[2*t]]`, written with up to six significant figures, whose rounding is
+far below any sensible tolerance), a variable without a format, and a
+tolerance that is an expression.
+
 ### 7. The draw and its condition
 
 Variables are drawn in the order they are listed. A row reads only the rows

@@ -73,6 +73,7 @@ const row = (over: Partial<QuestionPage["items"][number]>): QuestionPage["items"
   hasDraftChanges: false,
   keyless: false,
   starred: false,
+  randomizable: false,
   updatedAt: "2026-09-18T08:00:00.000Z",
   deprecated: false,
   deletedAt: null,
