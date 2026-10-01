@@ -49,6 +49,8 @@ export * from "./templatePull.js";
 export * from "./zone.js";
 // `./drillSchedule.js` is NOT re-exported: it pulls `ts-fsrs`, which the web
 // bundle would then carry. The server imports `@quiz/domain/drillSchedule`.
+// `./parameters.js` is NOT re-exported either, for the same reason: it pulls
+// mathjs (ADR-056 §2). The server imports `@quiz/domain/parameters`.
 
 /**
  * The seeded shuffle lives in `@quiz/core/rng` (the question types need it

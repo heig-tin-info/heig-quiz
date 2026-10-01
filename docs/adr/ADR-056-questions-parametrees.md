@@ -88,7 +88,9 @@ Static limits, checked at write time:
 
 - the length of an expression;
 - the number of nodes of its syntax tree;
-- the size of a range: `1:1e9` exhausts memory.
+- no range at all: `1:1e9` would exhaust memory, and v1 refuses the
+  range syntax outright rather than cap its size (simpler, and nothing
+  needs it: `choice([...])` takes a literal list).
 
 The randomness is the platform's own. `randint(a, b)` (both ends included),
 `uniform(a, b)` and `choice([...])` are functions we add to the instance.

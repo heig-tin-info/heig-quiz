@@ -56,4 +56,10 @@ describe("@quiz/domain public surface", () => {
     ];
     for (const name of expected) expect(domain).toHaveProperty(name);
   });
+
+  it("keeps the rules that pull a heavy dependency out of the index (ts-fsrs, mathjs)", () => {
+    for (const name of ["reviewDrillCard", "draw", "validateParameters", "instantiate"]) {
+      expect(domain).not.toHaveProperty(name);
+    }
+  });
 });
