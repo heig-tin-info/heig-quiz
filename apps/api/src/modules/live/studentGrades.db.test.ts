@@ -155,7 +155,7 @@ describe("GET /app/api/student/results — what a row says (F-RES-04)", () => {
     const { body, groups } = await grades(student.headers);
     // Every row of it, wherever it sits in the payload, carries no score…
     const rows = groups.flatMap((g) => g.rows).filter((r) => r.evaluationId === id);
-    expect(rows).toEqual([expect.objectContaining({ status: "released", score: null, feedbackAttemptId: null })]);
+    expect(rows).toEqual([expect.objectContaining({ status: "withheld", score: null, feedbackAttemptId: null })]);
     // …and the serialized rows hold no grade nor points key at all.
     const raw = (JSON.parse(body) as { rows: Record<string, unknown>[] }[])
       .flatMap((g) => g.rows)
@@ -178,11 +178,19 @@ describe("GET /app/api/student/results — what a row says (F-RES-04)", () => {
     expect(await rowOf("pending")).toMatchObject({ status: "pending", score: null, feedbackAttemptId: null });
   });
 
-  it("opens the feedback of an immediate one before any release, still without a grade", async () => {
-    expect(await rowOf("immediate")).toMatchObject({
+  it("opens the feedback of an immediate one before any release, its points indicative, no grade", async () => {
+    const row = await rowOf("immediate");
+    expect(row).toMatchObject({
       status: "available",
-      score: null,
+      score: { points: 0, totalPoints: expect.any(Number), grade: null },
       feedbackAttemptId: expect.any(String),
+    });
+    // Exactly the points the feedback page shows for that attempt.
+    const feedback = await get(`/app/api/attempts/${row!.feedbackAttemptId}/feedback`, student.headers);
+    expect(feedback.json()).toMatchObject({
+      available: true,
+      points: row!.score!.points,
+      totalPoints: row!.score!.totalPoints,
     });
   });
 

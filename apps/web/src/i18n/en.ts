@@ -106,7 +106,6 @@ export const en = {
   "bnav.label": "Main navigation",
   "bnav.grades": "Grades",
   "bnav.profile": "Profile",
-  "bnav.drill": "Drill",
 
   "courses.title": "Courses",
   "courses.subtitle": "A course holds its staff, its classrooms and its question pool.",
@@ -2270,6 +2269,8 @@ export const en = {
   "sgrades.col.date": "Date",
   "sgrades.col.status": "Status",
   "sgrades.status.released": "released",
+  "sgrades.status.withheld": "grade not shared",
+  "sgrades.indicative": "indicative",
   "sgrades.status.available": "results available",
   "sgrades.status.pending": "results pending",
   "sgrades.status.submitted": "handed in",

@@ -296,7 +296,7 @@ function Nav({
               <NavItem
                 key={slot.id}
                 icon={look.icon}
-                label={t(look.sidebarLabel ?? look.label)}
+                label={t(look.label)}
                 active={slot.id === studentSlot}
                 onClick={() => go(slot.route)}
                 trailing={slot.id === "drill" && drill.available ? <AvailableDot /> : null}
