@@ -27,6 +27,7 @@ import {
   Button,
   cx,
   ErrorText,
+  GithubIcon,
   IconButton,
   inputClass,
   inputSize,
@@ -201,6 +202,16 @@ function Row({
           <a href={`mailto:${entry.email}`} className="hover:text-fg hover:underline">
             {entry.email}
           </a>
+          {/* The linked GitHub account, under the address rather than in an
+              eighth column: the API sends it only for a classroom connected
+              to GitHub (05-web §5.1). */}
+          {entry.githubLogin ? (
+            <span className="mt-0.5 flex items-center gap-1.5 text-xs">
+              <GithubIcon className="size-3.5" />
+              <span className="sr-only">{t("roster.githubAccount")}</span>
+              {entry.githubLogin}
+            </span>
+          ) : null}
         </td>
         <td className={T.td}>
           <span className="inline-flex items-center gap-1">

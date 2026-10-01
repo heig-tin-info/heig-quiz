@@ -46,7 +46,7 @@ import { audit } from "../audit.js";
 import { iso } from "../clock.js";
 import type { AppConfig } from "../config.js";
 import { isUniqueViolation, type Db } from "../db/client.js";
-import { classrooms, courseStaff, githubAccounts, githubClassroomLinks } from "../db/schema.js";
+import { classrooms, courseStaff, enrollments, githubAccounts, githubClassroomLinks } from "../db/schema.js";
 import { publish } from "../events.js";
 import { githubApp } from "../github/app.js";
 import { currentLogin } from "../github/collaborators.js";
@@ -170,16 +170,25 @@ async function saveAccount(
 
 /**
  * Whether the user Settings card shows (F-GH-05, 05-web §5.3): the user is
- * on the staff of a classroom connected to GitHub. "Has or had a project"
- * joins this test when projects exist (M3-01).
+ * on the staff of a classroom connected to GitHub, or holds a claimed seat
+ * in one. "Has or had a project" joins this test when projects exist
+ * (M3-01).
  */
 async function linkRelevant(db: Db, userId: string): Promise<boolean> {
+  const one = { one: sql<number>`1` };
   const [row] = await db
-    .select({ one: sql<number>`1` })
+    .select(one)
     .from(courseStaff)
     .innerJoin(classrooms, eq(classrooms.courseId, courseStaff.courseId))
     .innerJoin(githubClassroomLinks, eq(githubClassroomLinks.classroomId, classrooms.id))
     .where(eq(courseStaff.userId, userId))
+    .union(
+      db
+        .select(one)
+        .from(enrollments)
+        .innerJoin(githubClassroomLinks, eq(githubClassroomLinks.classroomId, enrollments.classroomId))
+        .where(eq(enrollments.userId, userId)),
+    )
     .limit(1);
   return row !== undefined;
 }

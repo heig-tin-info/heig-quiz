@@ -76,6 +76,9 @@ function makeStudents(n: number, claimedRatio: number, prefix: string): RosterEn
       lastLoginAt: claimed ? iso(-rand() * 20 * D) : null,
       avatarUrl: null,
       userId: claimed ? `${prefix}-u${i + 1}` : null,
+      // PRG1-2026 is the classroom connected to GitHub (`mock/github.ts`):
+      // three claimed students in four there have linked their account.
+      githubLogin: claimed && prefix === "r1" && i % 4 !== 3 ? `${slug(prenom)}-${slug(nom)}` : null,
     });
   }
   return out;
@@ -621,6 +624,7 @@ on("POST", "/app/api/classrooms/:id/self-enroll", (m) => {
       lastLoginAt: iso(0),
       avatarUrl: null,
       userId: me.id,
+      githubLogin: null,
     });
   }
   return undefined;
@@ -647,6 +651,7 @@ on("POST", "/app/api/classrooms/:id/roster", (m, body) => {
       lastLoginAt: null,
       avatarUrl: null,
       userId: null,
+      githubLogin: null,
     });
   }
   if (rowsIn.length === 0) {

@@ -107,3 +107,17 @@ describe("RosterTable impersonation link (ADR-034)", () => {
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
   });
 });
+
+describe("RosterTable GitHub login", () => {
+  it("shows a linked student's login under the address, and nothing for the others", () => {
+    renderWithProviders(
+      <RosterTable
+        classroomId="c1"
+        roster={[makeRosterEntry({ githubLogin: "lrochat" }), makeRosterEntry({ id: "e-2", nom: "Favre", githubLogin: null })]}
+      />,
+      { route: "/classrooms/c1?tab=students" },
+    );
+    expect(screen.getByText("lrochat")).toBeVisible();
+    expect(screen.getAllByText("GitHub account")).toHaveLength(1);
+  });
+});

@@ -127,8 +127,9 @@ let account: GithubAccountState["account"] = flags.unlinked
 
 on("GET", "/app/api/me/github", (): GithubAccountState => ({
   account,
-  // F-GH-05: staff of a connected classroom; a student before any project is not.
-  relevant: role !== "student",
+  // F-GH-05: staff of a connected classroom, or a seat in one; every mock
+  // persona is one or the other (the student sits in PRG1-2026).
+  relevant: true,
 }));
 
 on("DELETE", "/app/api/me/github", () => {

@@ -56,6 +56,7 @@ export function makeRosterEntry(overrides: Partial<RosterEntry> = {}): RosterEnt
     lastLoginAt: at(-DAY),
     avatarUrl: null,
     userId: "u-2",
+    githubLogin: null,
     ...overrides,
   };
 }

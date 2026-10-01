@@ -339,8 +339,9 @@ files it ports; writes en + fr for every string.
     login, or `GITHUB_ACCOUNT_STALE` (`@quiz/contracts`, `{error:
     "github_account_stale"}`, the 409 body) for a deleted account or no
     link; other failures throw. Nothing calls it yet (M3-03, M4-03).
-  - `relevant` is staff of a classroom linked to an organization only;
-    M3-01 adds "has or had a project" to `linkRelevant`.
+  - `relevant` is staff of a classroom linked to an organization only
+    (M2-08 adds a claimed seat in one); M3-01 adds "has or had a project"
+    to `linkRelevant`.
   - Not ported: classroom's `inviteOnGithubLink()` (group repositories
     created before the link), which belongs to M3-03.
   - `github_accounts` belongs to `auth` (orchestrator's decision): written
@@ -482,6 +483,23 @@ files it ports; writes en + fr for every string.
     `me`). Palette: `classroom-github-connect` through `useScreenCommands`.
   - Mock: PUT/DELETE of the link, `?ghwarn=1`, `?ghmissing=1`; a disconnect
     of PRG1-2026 under `?journal=1` answers `409 journal_attached`.
+
+### M2-08 — Student link from Settings, login on the roster
+- **Depends on**: M2-03, M2-07. Product owner, 2026-10-01: students may
+  link before any project, discreetly.
+- **Goal**: the user Settings card is also relevant to a student with a
+  claimed seat in a classroom connected to GitHub (F-GH-05); no banner,
+  no nudge, no line telling the student the staff see the login. The
+  teacher roster shows each linked student's login (GitHub icon + login)
+  when the classroom is connected (05-web §5.1).
+- **As delivered**: `linkRelevant` (`auth/githubLink.ts`) is staff of a
+  connected classroom UNION a claimed seat in one (M3-01 still adds "has or
+  had a project"); `RosterEntry.githubLogin` (`rosterView`, joined from
+  `github_accounts` only when `github_classroom_links` holds the
+  classroom: the stored login, followed on rename, never fetched per
+  read); the web shows it under the e-mail (the table stays at seven
+  columns). The classroom detail is a staff-only route, so no student
+  payload carries it.
 
 ## M3 — Projects
 

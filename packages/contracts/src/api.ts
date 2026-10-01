@@ -199,6 +199,8 @@ export interface RosterEntry {
   lastLoginAt: string | null;
   avatarUrl: string | null;
   userId: string | null;
+  /** The student's linked GitHub login (F-GH-05); null unless the classroom is connected to GitHub. */
+  githubLogin: string | null;
 }
 
 export interface ClassroomDetail {
