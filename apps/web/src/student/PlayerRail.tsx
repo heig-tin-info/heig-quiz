@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { useT } from "../i18n";
 import { ProgressList, type Segment } from "../ui";
 import { pointsLabel } from "./PlayerQuestion";
@@ -7,7 +9,9 @@ import { pointsLabel } from "./PlayerQuestion";
  * standing beside the question instead of a strip over it, then what belongs
  * to the question on screen but not to its answer — what it is worth. A
  * laptop has width to spare and height to none: every pixel the strip took
- * above the statement came out of the answer field.
+ * above the statement came out of the answer field. In the teacher's
+ * preview, the points line is followed by the preview's own tools for that
+ * question (`children`).
  *
  * The shell's `aside` makes it sticky and bounded to the viewport: a long
  * paper scrolls inside the list.
@@ -17,11 +21,13 @@ export function PlayerRail({
   onSelect,
   label,
   points,
+  children,
 }: {
   segments: Segment[];
   onSelect: (id: string) => void;
   label: string;
   points: number;
+  children?: ReactNode;
 }) {
   const t = useT();
   const index = segments.findIndex((s) => s.current === true);
@@ -40,6 +46,7 @@ export function PlayerRail({
           {" · "}
           {pointsLabel(t, points)}
         </p>
+        {children ? <div className="mt-3 flex flex-col items-start gap-1">{children}</div> : null}
       </div>
     </>
   );

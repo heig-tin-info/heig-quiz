@@ -15,6 +15,7 @@ import { makeEvaluationDetail } from "../test/grading-fixtures";
 
 import { elapse, flowingClock } from "../test/clock";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
+import { viewport } from "../test/viewport";
 import { EvaluationPreviewPage } from "./EvaluationPreviewPage";
 
 /*
@@ -178,9 +179,10 @@ describe("EvaluationPreviewPage", () => {
       </StrictMode>,
     );
 
-    // The banner, over the student's own player.
-    expect(await screen.findByText("Preview — nothing is saved")).toBeInTheDocument();
-    expect(screen.getByText("Quiz 3 — Pointeurs")).toBeInTheDocument();
+    // The student's own player, under the preview's strip: nothing laid over the question.
+    expect(await screen.findByText("Quiz 3 — Pointeurs")).toBeInTheDocument();
+    const strip = screen.getByRole("region", { name: "Preview — nothing is saved" });
+    expect(within(strip).getByRole("button", { name: "Restart" })).toBeInTheDocument();
     // One start, StrictMode or not: two would be two seeds for one click.
     expect(calls.filter((c) => c.url === URL)).toHaveLength(1);
     // The countdown of a 30-minute evaluation, counted from now.
@@ -229,6 +231,22 @@ describe("EvaluationPreviewPage", () => {
     expect(screen.queryByText("This question: 2 / 2 points")).toBeNull();
   });
 
+  it("stands the question's tools beside its points on a wide screen", async () => {
+    const narrow = window.matchMedia;
+    viewport(1280);
+    try {
+      mockFetch({ [`POST ${URL}`]: ok(preview(5)) });
+      const { container } = renderWithProviders(
+        <EvaluationPreviewPage id={EVAL} navigate={() => {}} />,
+      );
+      const show = await screen.findByRole("button", { name: "Show the points" });
+      expect(show.closest("aside")).not.toBeNull();
+      expect(container.querySelector("main")).not.toContainElement(show);
+    } finally {
+      vi.stubGlobal("matchMedia", narrow);
+    }
+  });
+
   it("restarts with a new seed from the correction", async () => {
     const user = userEvent.setup();
     let seeds = 0;
@@ -241,7 +259,8 @@ describe("EvaluationPreviewPage", () => {
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Hand in" }));
     await user.click(await screen.findByRole("button", { name: "Restart" }));
 
-    expect(await screen.findByText("Preview — nothing is saved")).toBeInTheDocument();
+    // The walk again: the correction has no Hand in.
+    expect(await screen.findByRole("button", { name: "Hand in" })).toBeInTheDocument();
     expect(calls.filter((c) => c.url === URL)).toHaveLength(2);
     // The second walk grades under the second seed.
     await user.click(screen.getByRole("button", { name: "Hand in" }));
@@ -279,6 +298,22 @@ describe("EvaluationPreviewPage", () => {
     expect(navigate).toHaveBeenCalledTimes(2);
   });
 
+  it("restarts from the strip, after asking once the paper has an answer", async () => {
+    const user = userEvent.setup();
+    let seeds = 0;
+    const { calls } = mockFetch({ [`POST ${URL}`]: () => ok(preview((seeds += 1))) });
+    renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
+    await user.click(await screen.findByRole("radio", { name: "&x" }));
+    const strip = screen.getByRole("region", { name: "Preview — nothing is saved" });
+    await user.click(within(strip).getByRole("button", { name: "Restart" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Restart the preview?" });
+    await user.click(within(dialog).getByRole("button", { name: "Restart" }));
+    // A new seed, an empty paper.
+    await waitFor(() => expect(calls.filter((c) => c.url === URL)).toHaveLength(2));
+    expect(await screen.findByRole("radio", { name: "&x" })).not.toBeChecked();
+  });
+
   it("hands the paper in by itself when the countdown reaches zero", async () => {
     // A one-second countdown, jumped on a flowing clock.
     flowingClock();
@@ -287,7 +322,7 @@ describe("EvaluationPreviewPage", () => {
       [`POST ${URL}/grade`]: ok(correction(7)),
     });
     renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
-    await screen.findByText("Preview — nothing is saved");
+    await screen.findByRole("button", { name: "Hand in" });
     await elapse(1_000);
     expect(await screen.findByRole("heading", { name: "Preview correction" })).toBeInTheDocument();
     expect(calls.filter((c) => c.url === `${URL}/grade`)).toHaveLength(1);
@@ -302,7 +337,7 @@ describe("EvaluationPreviewPage", () => {
         failing ? fail(503, { error: "runner_unavailable" }) : ok(correction(9)),
     });
     renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
-    await screen.findByText("Preview — nothing is saved");
+    await screen.findByRole("button", { name: "Hand in" });
     await elapse(1_000);
     expect(await screen.findByText("The grading failed")).toBeInTheDocument();
     // The clock keeps ticking past zero: no retry every second.

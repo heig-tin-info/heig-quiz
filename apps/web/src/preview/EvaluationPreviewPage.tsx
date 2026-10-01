@@ -11,21 +11,24 @@
  * order, new shuffles, an empty paper.
  *
  * The screen during the walk IS the student player (`PlayerView`), driven by
- * `usePreviewSession` instead of `useAttempt`, with two additions: the
- * preview banner above the question, and the bar's quiet Home, exam or not,
- * back to the evaluation (it asks first when answers would be thrown away).
- * The four decisions are therefore the player's; the banner is the calm
- * `neutral` alert, and its one action, Restart, is secondary — the accent
- * stays on "Hand in". Under it, "Show the points"
- * (`PreviewPoints`) grades the question on screen alone, secondary too.
+ * `usePreviewSession` instead of `useAttempt`, and nothing is laid over the
+ * question: what the teacher sees is the student's page. That it is a
+ * preview is a MODE, stated like the student view — the inverted strip above
+ * everything (`ModeBanner`), whose one pill is Restart. The bar's quiet Home,
+ * exam or not, leads back to the evaluation (it asks first when answers
+ * would be thrown away). The tools of the
+ * question on screen, "Show the points" (`PreviewPoints`, which grades it
+ * alone) and "Edit question", stand where the player says what a question
+ * is worth: beside the list on a wide screen, under the question otherwise.
+ * Both are ghost buttons — the accent stays on the player's own actions.
  *
  * The start is a MUTATION, not a query, on purpose: the app's refresh hints
  * invalidate every query, and a query here would draw a new seed — and throw
  * the teacher's answers away — whenever a colleague saved something.
  */
 import { useMutation } from "@tanstack/react-query";
-import { Eye, Loader2, RotateCcw, UserX } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Eye, Loader2, UserX } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
   PreviewGradeBody,
@@ -38,6 +41,7 @@ import { currentItem } from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import type { Route } from "../router";
+import { ModeBanner } from "../Shell";
 import { PlayerView } from "../student/Player";
 import { Alert, Button, Card, EmptyState, QueryError, Spinner } from "../ui";
 import { PreviewCorrectionView } from "./PreviewCorrection";
@@ -113,19 +117,7 @@ export function EvaluationPreviewPage({
     startPreview();
   };
 
-  if (correction && walk) {
-    return (
-      <PreviewCorrectionView
-        title={walk.preview.view.evaluation.title}
-        correction={correction}
-        restarting={restarting}
-        onRestart={restart}
-        onBack={back}
-      />
-    );
-  }
-
-  if (walk) {
+  if (walk && !correction) {
     return (
       <PreviewWalk
         // A new seed is a new paper: nothing of the previous walk survives.
@@ -142,9 +134,22 @@ export function EvaluationPreviewPage({
     );
   }
 
-  if (start.isError) {
+  // The walk's strip carries Restart; elsewhere it only says where we are
+  // (on the correction, Restart is the page's own primary button).
+  let content: ReactNode;
+  if (correction && walk) {
+    content = (
+      <PreviewCorrectionView
+        title={walk.preview.view.evaluation.title}
+        correction={correction}
+        restarting={restarting}
+        onRestart={restart}
+        onBack={back}
+      />
+    );
+  } else if (start.isError) {
     const missing = start.error instanceof ApiError && start.error.status === 404;
-    return (
+    content = (
       <main className="mx-auto w-full max-w-160 px-4 py-16">
         {missing ? (
           <Card className="px-6 py-4">
@@ -169,12 +174,44 @@ export function EvaluationPreviewPage({
         )}
       </main>
     );
+  } else {
+    content = <Spinner label={t("preview.starting")} className="py-24" />;
   }
-
-  return <Spinner label={t("preview.starting")} className="py-24" />;
+  return <PreviewMode>{content}</PreviewMode>;
 }
 
-/** The player, driven by the preview's own session, under the preview banner. */
+/**
+ * The preview is a mode of the tab, stated the way the student view states
+ * its own (DESIGN.md, "Mode banner"): the inverted strip above everything,
+ * sticky, with at most one pill.
+ */
+function PreviewMode({
+  onRestart,
+  restarting = false,
+  children,
+}: {
+  /** The pill, during the walk only. */
+  onRestart?: () => void;
+  restarting?: boolean;
+  children: ReactNode;
+}) {
+  const t = useT();
+  return (
+    <ModeBanner
+      icon={<Eye />}
+      message={t("preview.banner")}
+      action={
+        onRestart
+          ? { label: t("preview.restart"), onClick: onRestart, disabled: restarting }
+          : undefined
+      }
+    >
+      {children}
+    </ModeBanner>
+  );
+}
+
+/** The player, driven by the preview's own session, under the preview's strip. */
 function PreviewWalk({
   evaluationId,
   walk,
@@ -228,39 +265,17 @@ function PreviewWalk({
   const edit = usePreviewEdit({ evaluationId, preview: walk.preview, session, askRestart });
 
   return (
-    <>
+    // No Restart while the grading runs: it would land on the new walk.
+    <PreviewMode onRestart={() => void askRestart()} restarting={restarting || grading}>
       <PlayerView
         initial={walk.preview.view}
         session={session}
         onHome={() => void askLeave()}
         homeLabel={t("preview.backToEvaluation")}
         banner={
+          // Only what applies now: nothing stands over the question otherwise.
           <div className="space-y-3">
-            <Alert
-              icon={Eye}
-              title={t("preview.banner")}
-              action={
-                <div className="flex flex-wrap gap-2">
-                  {edit.editButton}
-                  <Button variant="secondary" size="sm" onClick={() => void askRestart()} disabled={restarting}>
-                    <RotateCcw /> {t("preview.restart")}
-                  </Button>
-                </div>
-              }
-            >
-              {t("preview.bannerBody")}
-            </Alert>
             {edit.notice}
-            {current ? (
-              <PreviewPoints
-                // A new question, a clean slate: no points of another one linger.
-                key={`${current.id}:${current.generation ?? 0}`}
-                evaluationId={evaluationId}
-                seed={walk.preview.seed}
-                itemId={current.id}
-                answer={session.state.answers[current.id]}
-              />
-            ) : null}
             {gradeFailed ? (
               <Alert tone="danger" title={t("preview.gradeFailed")}>
                 {t("preview.gradeFailedBody")}
@@ -275,16 +290,32 @@ function PreviewWalk({
             ) : null}
           </div>
         }
+        tools={
+          current ? (
+            <>
+              <PreviewPoints
+                // A new question, a clean slate: no points of another one linger.
+                key={`${current.id}:${current.generation ?? 0}`}
+                evaluationId={evaluationId}
+                seed={walk.preview.seed}
+                itemId={current.id}
+                answer={session.state.answers[current.id]}
+              />
+              {edit.editButton}
+            </>
+          ) : null
+        }
       />
       {grading ? <GradingOverlay /> : null}
-    </>
+    </PreviewMode>
   );
 }
 
 /**
  * While the grading runs — the runner may take seconds per code question —
  * the paper is covered, not unmounted: a grading that fails hands the
- * teacher back the answers they wrote.
+ * teacher back the answers they wrote. The strip above stays in sight, like
+ * over the paused attempt (DESIGN.md, "Mode banner").
  */
 function GradingOverlay() {
   const t = useT();
@@ -292,7 +323,7 @@ function GradingOverlay() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-0 z-40 flex items-center justify-center bg-canvas/85 px-4 backdrop-blur-[2px]"
+      className="fixed inset-x-0 top-(--banner-h) bottom-0 z-40 flex items-center justify-center bg-canvas/85 px-4 backdrop-blur-[2px]"
     >
       <div className="w-full max-w-115 rounded-card border border-line bg-surface px-6 py-8 text-center">
         <Loader2 className="mx-auto size-6 animate-spin text-fg-faint" aria-hidden />

@@ -3127,8 +3127,6 @@ export const en = {
   "preview.startFailed": "The preview could not be started.",
   "preview.notFound": "This evaluation is not available to you",
   "preview.banner": "Preview — nothing is saved",
-  "preview.bannerBody":
-    "You see exactly what a student gets, in a random order. Your answers stay in this tab; hand in to see the full correction.",
   "preview.restart": "Restart",
   "preview.answers.show": "Show answers",
   "preview.answers.hide": "Hide answers",
@@ -3162,8 +3160,7 @@ export const en = {
   "preview.grading.title": "Grading your answers…",
   "preview.grading.body": "Code questions run with all their test cases, which can take a few seconds.",
   "preview.correction.title": "Preview correction",
-  "preview.correction.banner":
-    "The full correction, whatever feedback the students will get. Nothing was saved.",
+  "preview.correction.banner": "The full correction, whatever feedback the students will get.",
   "preview.backToEvaluation": "Back to the evaluation",
   "preview.ungraded.title": "Some questions could not be graded",
   "preview.ungraded.bodyOne": "One question has no points here: the grade will move once it is graded.",

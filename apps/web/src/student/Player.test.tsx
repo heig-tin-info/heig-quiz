@@ -9,6 +9,7 @@ import type { AttemptOrLobby, AttemptView } from "@quiz/contracts";
 import { makeAttemptItem, makeAttemptView } from "../test/attempt-fixtures";
 import { elapse, flowingClock } from "../test/clock";
 import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
+import { viewport } from "../test/viewport";
 import { AttemptPage } from "./Attempt";
 
 /*
@@ -127,20 +128,6 @@ const render = (view = attemptView()) =>
     locale: "fr",
     route: `/take/${EVAL}`,
   });
-
-/** A viewport at least this wide: `useMinWidth` reads `matchMedia`. */
-function viewport(width: number) {
-  vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: Number(/min-width: (\d+)px/.exec(query)?.[1] ?? Infinity) <= width,
-    media: query,
-    onchange: null,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    addListener: () => {},
-    removeListener: () => {},
-    dispatchEvent: () => false,
-  }));
-}
 
 describe("the zen player on a wide screen", () => {
   // The setup's narrow stub, back for the tests after these.

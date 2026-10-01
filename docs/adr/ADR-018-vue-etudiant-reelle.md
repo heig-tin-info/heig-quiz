@@ -7,8 +7,9 @@ by the first two addenda at the end of this record: the first moves the
 switch into the application frame and makes it per WINDOW, the second removes
 the evaluation page's own button (and the read-only preview beside it) and
 makes the heading rename itself. Decisions 1 and 2 below are the ones they
-touch. Three later addenda follow (2026-09-24, 2026-09-25: the stateless
-preview of a whole evaluation, 2026-09-27). Decision 4 is amended by
+touch. Later addenda follow (2026-09-24, 2026-09-25: the stateless
+preview of a whole evaluation, 2026-09-27, 2026-09-29, 2026-10-01: the
+preview as a mode). Decision 4 is amended by
 ADR-020 (presence counts a body in the room). Wording aligned 2026-09-30
 (D16, `docs/merge/08-decisions.md`): the attempt's "journal" is now called
 the attempt log, "journal" meaning only a classroom's journal (ADR-049).
@@ -530,3 +531,28 @@ fix the question throws the walk away, and restarting draws another order.
    browser's storage is a separate change.
 3. **Showing the latest published version in the preview whatever the
    evaluation froze.** The preview would then show what no student gets.
+
+## Addendum (2026-10-01, seventh) — the preview is a mode, not a notice
+
+### Context
+
+The walk opened on an alert card over the question — a title, a sentence on
+what the preview is, Restart and "Edit question" — with "Show the points"
+under it. The product owner asked for the student's page as it is, and for
+the preview to be said the way the student view says itself.
+
+### Decision
+
+1. **A mode strip, like the student view.** The preview page is wrapped in
+   the frame's `ModeBanner`: "Preview — nothing is saved". During the walk
+   its one pill is Restart (asking first once the paper has an answer, and
+   disabled while a hand-in is graded); on the correction, Restart is the
+   page's primary button and the strip has no pill. The alert card and its
+   sentence are gone; the notices of the sixth addendum stay above the
+   question, only while they apply.
+2. **The question's tools stand where its points are.** "Show the points"
+   and "Edit question" (moved from the banner of the sixth addendum, decision
+   1) go where the player says what a question is worth: under the points
+   line of the side column on a wide screen, under the question past a
+   hairline otherwise (`PlayerView`'s `tools`). Both are ghost buttons: the
+   accent stays on the player's own actions.

@@ -3128,8 +3128,6 @@ export const fr: Record<keyof Dict, string> = {
   "preview.startFailed": "L'aperçu n'a pas pu être lancé.",
   "preview.notFound": "Cette évaluation ne vous est pas accessible",
   "preview.banner": "Aperçu — rien n'est enregistré",
-  "preview.bannerBody":
-    "Vous voyez exactement ce que reçoit un étudiant, dans un ordre tiré au hasard. Vos réponses restent dans cet onglet ; rendez la copie pour voir la correction complète.",
   "preview.restart": "Recommencer",
   "preview.answers.show": "Afficher les réponses",
   "preview.answers.hide": "Masquer les réponses",
@@ -3164,7 +3162,7 @@ export const fr: Record<keyof Dict, string> = {
   "preview.grading.body": "Les questions de code s'exécutent avec tous leurs tests, ce qui peut prendre quelques secondes.",
   "preview.correction.title": "Correction de l'aperçu",
   "preview.correction.banner":
-    "La correction complète, quel que soit le retour prévu pour les étudiants. Rien n'a été enregistré.",
+    "La correction complète, quel que soit le retour prévu pour les étudiants.",
   "preview.backToEvaluation": "Retour à l'évaluation",
   "preview.ungraded.title": "Certaines questions n'ont pas pu être corrigées",
   "preview.ungraded.bodyOne": "Une question n'a pas de points ici : la note changera une fois qu'elle sera corrigée.",
