@@ -70,7 +70,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M3-01 | `project` schema and contracts | review | M2-01, M1-01, D05 | `merge/M3-01-project-schema` | | Tables in `Q:db/project.ts` (migration `0054_project`), contracts in `packages/contracts/src/project.ts`, `GradeRow` and the activity unions widened, an empty `projectActivity` in `KINDS`, `projectGrade` in `@quiz/domain`; what M3-02…M3-13 inherit: card M3-01, "As delivered". Import steps moved to M8-01 |
+| M3-01 | `project` schema and contracts | review | M2-01, M1-01, D05 | `merge/M3-01-project-schema` | #468 | Tables in `Q:db/project.ts` (migration `0054_project`), contracts in `packages/contracts/src/project.ts`, `GradeRow` and the activity unions widened, an empty `projectActivity` in `KINDS`, `projectGrade` in `@quiz/domain`; what M3-02…M3-13 inherit: card M3-01, "As delivered". Import steps moved to M8-01 |
 | M3-02 | Project lifecycle | todo | M3-01, M2-02, D19 | | | |
 | M3-03 | Acceptance and provisioning | todo | M3-02, M2-03 | | | |
 | M3-04 | Ingestion and grading pipeline | todo | M2-04, M3-03 | | | |
