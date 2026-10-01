@@ -9,6 +9,11 @@ path, with one provider, a development stub. Amends docs/spec/04 §4.8
 `llm_calls` table), which a real provider will still owe. Leaves the LLM-reasoning
 part of question 27 (docs/spec/06) open.
 
+*Note (2026-10-01, ADR-058):* the real provider arrived as a separate
+gateway (`complete()`, an institutional key, `llm_calls`, a daily cap). It is
+not wired into the grading pass: `app.llm` stays chosen by `LLM_PROVIDER` as
+below, and the consequences listed here are still owed before it is.
+
 ## Context
 
 The **Validate N** button of the grading table (ADR-044 §4) validates the
