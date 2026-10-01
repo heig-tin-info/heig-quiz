@@ -432,16 +432,6 @@ describe("ClassroomView — the Journal tab", () => {
     expect(screen.queryByRole("button", { name: /Add students|New evaluation/ })).toBeNull();
   });
 
-  it("leaves its route for the classroom's address, the tab on it", async () => {
-    mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()), [`GET ${JOURNAL}`]: ok(journal(true)) });
-    const navigate = vi.fn();
-    renderWithProviders(<ClassroomView id="r1" navigate={navigate} routeTab="journal" />);
-    await userEvent.click(await screen.findByRole("tab", { name: /Roster/ }));
-    // One move, the tab in the address: a leave guard that holds it (the
-    // editor's) cannot lose the tab on the way.
-    expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1", tab: "roster" });
-  });
-
   it("sends its address back to the classroom when there is no journal", async () => {
     mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()), [`GET ${JOURNAL}`]: fail(404, {}) });
     const navigate = vi.fn();

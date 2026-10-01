@@ -620,10 +620,11 @@ export function useLeaveGuard(dirty: boolean, ask: LeaveGuard): void {
 
 /**
  * Fired by `useSearchParam` right after it rewrote the query string, and by
- * `navigate` once it moved. `history.replaceState` emits no `popstate`, so two hooks reading the same
- * parameter — the sidebar's category tree and the pool page it drives — each
- * kept their own copy and never saw the other's write. One event, dispatched
- * on `window`, is what makes the query string the single source of truth.
+ * `navigate` once it moved. `history.replaceState` and `pushState` emit no
+ * `popstate`, so two hooks reading the same parameter — the sidebar's
+ * category tree and the pool page it drives — each kept their own copy and
+ * never saw the other's write. One event, dispatched on `window`, is what
+ * makes the query string the single source of truth.
  */
 const SEARCH_PARAM_EVENT = "quiz:searchparam";
 

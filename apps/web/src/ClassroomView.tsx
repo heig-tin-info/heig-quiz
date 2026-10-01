@@ -78,6 +78,7 @@ const ROUTE_TABS: Record<RouteTab, (id: string) => Route> = {
   journal: (id) => ({ view: "classroomJournal", id }),
   settings: (id) => ({ view: "classroomSettings", id }),
 };
+const isRouteTab = (t: Tab): t is RouteTab => t in ROUTE_TABS;
 
 /**
  * The period: its dates and its label (F-ORG-03, #156), in a dialog.
@@ -213,7 +214,7 @@ export function ClassroomView({
 
   /** A tab: a route of its own (`ROUTE_TABS`), or a `?tab=` on the classroom's address. */
   const openTab = (next: Tab) => {
-    if (next === "journal" || next === "settings") navigate(ROUTE_TABS[next](id));
+    if (isRouteTab(next)) navigate(ROUTE_TABS[next](id));
     else if (routeTab) navigate({ view: "classroom", id, tab: next });
     else setTab(next);
   };
