@@ -67,7 +67,7 @@ condition: "t > 1"
 ```
 
 - `variables` is a header field of the version, beside `explanation`, not part of the type's configuration. A question with at least one variable is **parameterized**; `randomizable` is derived from it at publication.
-- Expressions are evaluated by a restricted mathjs instance (a whitelist of functions, no `import`, `parse` or `evaluate`, capped length, tree and ranges); `randint`, `uniform` and `choice` draw from `streamSeed(attempt.seed, item.id, "vars")`. A row reads the rows above it; the optional `condition` rejects a draw, retried at most 100 times.
+- Expressions are evaluated by a restricted mathjs instance (a whitelist of functions, no `import`, `parse` or `evaluate`, capped length and tree, no ranges); `randint`, `uniform` and `choice` draw from `streamSeed(attempt.seed, item.id, "vars")`. A row reads the rows above it; the optional `condition` rejects a draw, retried at most 100 times.
 - The statement, the choices, the keys, the blanks and the explanation use `[[h]]` or `[[sqrt(2*h/g)]]`, only in a parameterized question; `\[[` escapes. An unknown name is a publication error. A cloze blank reads `{{#[[t]]:1%}}`.
 - A variable is its formatted value (`int`, `.n` decimals, `ns` significant figures), rounded half away from zero; the dot is the decimal separator in every language.
 - The values are drawn the first time the item is served in an attempt and STORED with it; every later read (review, regrade, feedback) uses them. A retake has a new seed, so new values.

@@ -23,7 +23,7 @@ import { CommandPalette } from "./CommandPalette";
 import { Logo, UserMenu, useSignOut, ViewModeToggle } from "./Header";
 import { helpTopics, useHelp } from "./help";
 import { useI18n, useT } from "./i18n";
-import { sectionOf, type Route } from "./router";
+import { bottomSlotOf, sectionOf, type Route } from "./router";
 import {
   activeCourseOf,
   CourseNavTree,
@@ -48,8 +48,8 @@ import {
   type IconType,
 } from "./ui";
 import { coursesKey, poolsKey } from "./queryKeys";
-import { BottomNav, followSlot, SLOT_LOOK } from "./student/BottomNav";
-import { activeSlot, bottomNavShown, sidebarSlots } from "./student/bottomNavSlots";
+import { BottomNav, SLOT_LOOK } from "./student/BottomNav";
+import { bottomNavShown, sidebarSlots } from "./student/bottomNavSlots";
 import { useDrillAvailability, type DrillAvailability } from "./drill/api";
 import { AvailableDot } from "./drill/AvailableDot";
 
@@ -206,8 +206,8 @@ function Nav({
   const currentRoom = route.view === "classroom" ? route.id : null;
   // The row lit for the page on screen, read from the route table: a
   // teacher's by section, a student's by the bottom bar's slot.
-  const section = sectionOf(route);
-  const studentSlot = teacherUi ? null : activeSlot(route, window.location.hash);
+  const section = teacherUi ? sectionOf(route) : null;
+  const studentSlot = teacherUi ? null : bottomSlotOf(route);
   // Folded by default and not persisted: thirty classrooms turn the sidebar
   // into a scrolling wall, and the teacher who wants them all says so once.
   const [showAll, setShowAll] = useState(false);
@@ -287,9 +287,9 @@ function Nav({
           </>
         ) : (
           // The student's rows are the phone's bottom bar, minus Profile (the
-          // account menu below): one list, one lit row (`activeSlot`, which
-          // reads the home's `#past` as Grades). Drill only once a classroom
-          // has it on (ADR-041); its dot is "today's drill is available".
+          // account menu below): one list, one lit row (the route's
+          // `bottomSlot`). Drill only once a classroom has it on (ADR-041);
+          // its dot is "today's drill is available".
           sidebarSlots(drill.shown).map((slot) => {
             const look = SLOT_LOOK[slot.id];
             return (
@@ -298,10 +298,7 @@ function Nav({
                 icon={look.icon}
                 label={t(look.sidebarLabel ?? look.label)}
                 active={slot.id === studentSlot}
-                onClick={() => {
-                  followSlot(slot, navigate);
-                  onNavigate?.();
-                }}
+                onClick={() => go(slot.route)}
                 trailing={slot.id === "drill" && drill.available ? <AvailableDot /> : null}
               />
             );

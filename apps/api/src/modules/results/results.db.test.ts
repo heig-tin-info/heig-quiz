@@ -46,6 +46,11 @@ async function appFor() {
   return app;
 }
 
+/** The rows of the student's Grades page (`GET /student/results`), every classroom's. */
+async function gradeRows(studentId: string, now: Date) {
+  return (await live.studentGrades(db, studentId, now)).flatMap((group) => group.rows);
+}
+
 /**
  * A closed evaluation worth `total` points spread over one item, with two
  * students: the first has an attempt, the second never showed up.
@@ -333,11 +338,11 @@ describe("`released_grades` is the cache of the grade (docs/01 §5, audit D-06)"
     const attempt = (await live.attemptById(db, built.attempt.id))!;
     const feedback = await service.studentFeedback(db, evaluation, attempt, built.app.clock.now());
     if (!feedback.available) throw new Error("unreachable");
-    const [card] = await service.studentResultCards(db, studentId);
+    const [card] = await gradeRows(studentId, built.app.clock.now());
     const home = await live.studentHome(db, studentId, built.app.clock.now());
     return {
       feedback: feedback.grade,
-      card: card!.grade,
+      card: card!.score!.grade,
       home: home.past.find((c) => c.id === built.evaluation.id)!.grade,
     };
   }
@@ -399,8 +404,8 @@ describe("every validated write after the release raises the flag (D-06 review)"
       },
     ]);
     expect((await reload(db, built.evaluation.id)).modifiedAfterRelease).toBe(true);
-    const [card] = await service.studentResultCards(db, built.seed.studentIds[0]!);
-    expect({ points: card!.points, grade: card!.grade }).toEqual({ points: 20, grade: 6 });
+    const [card] = await gradeRows(built.seed.studentIds[0]!, built.app.clock.now());
+    expect(card!.score).toMatchObject({ points: 20, grade: 6 });
   });
 
   it("leaves an unreleased evaluation alone and ignores a proposal", async () => {
@@ -433,8 +438,8 @@ describe("every validated write after the release raises the flag (D-06 review)"
       // Under the stub the cell ends as a proposal worth zero (D14)…
       await runEvaluationGrading(app, { evaluationId: fixture.evaluationId });
       await service.releaseResults(db, await reload(db, fixture.evaluationId), app.clock.now());
-      const [frozen] = await service.studentResultCards(db, fixture.studentId);
-      expect(frozen!.grade).toBe(1);
+      const [frozen] = await gradeRows(fixture.studentId, app.clock.now());
+      expect(frozen!.score!.grade).toBe(1);
 
       // …then a real runner comes back and the job validates it.
       const outcome: RunnerOutcome = {
@@ -452,9 +457,9 @@ describe("every validated write after the release raises the flag (D-06 review)"
       await runEvaluationGrading(app, { evaluationId: fixture.evaluationId });
 
       expect((await reload(db, fixture.evaluationId)).modifiedAfterRelease).toBe(true);
-      const [card] = await service.studentResultCards(db, fixture.studentId);
-      expect(card!.points).toBeGreaterThan(0);
-      expect(card!.grade).toBeGreaterThan(1);
+      const [card] = await gradeRows(fixture.studentId, app.clock.now());
+      expect(card!.score!.points).toBeGreaterThan(0);
+      expect(card!.score!.grade).toBeGreaterThan(1);
     } finally {
       restore();
     }
@@ -462,7 +467,7 @@ describe("every validated write after the release raises the flag (D-06 review)"
 });
 
 describe("the student's pages read in a fixed number of statements (audit D-05)", () => {
-  it("draws the home and the result cards of three released evaluations in three statements each", async () => {
+  it("draws the home and the Grades page of three released evaluations in one statement each", async () => {
     const app = await appFor();
     let studentId: string | undefined;
     const expected = new Map<string, { points: number; totalPoints: number; grade: number }>();
@@ -504,20 +509,16 @@ describe("the student's pages read in a fixed number of statements (audit D-05)"
     // Every statement drizzle sends goes through the PGlite client's `query`.
     const statements = vi.spyOn(client, "query");
     try {
-      // One: every card is served from `released_grades` (D-06), so the two
+      // One: every row is served from `released_grades` (D-06), so the two
       // grouped queries of the live computation have nothing to read.
-      const cards = await service.studentResultCards(db, studentId!);
+      const rows = await gradeRows(studentId!, app.clock.now());
       expect(statements).toHaveBeenCalledTimes(1);
-      expect(cards).toHaveLength(3);
-      for (const card of cards) {
-        expect({ points: card.points, totalPoints: card.totalPoints, grade: card.grade }).toEqual(
-          expected.get(card.evaluationId),
-        );
-      }
+      expect(rows).toHaveLength(3);
+      for (const row of rows) expect(row.score).toEqual(expected.get(row.evaluationId));
 
       statements.mockClear();
       const home = await live.studentHome(db, studentId!, app.clock.now());
-      // The same `releasedGradesOf` as the cards: one statement too.
+      // The same `releasedGradesOf` as the Grades page: one statement too.
       expect(statements).toHaveBeenCalledTimes(1);
       expect(new Map(home.past.map((c) => [c.id, c.grade]))).toEqual(
         new Map([...expected].map(([id, e]) => [id, e.grade])),

@@ -31,6 +31,8 @@ export * from "./kioskAttestation.js";
 export * from "./kioskPairing.js";
 export * from "./lockedTemplate.js";
 export * from "./mcqScore.js";
+// The mathjs-free vocabulary of parameterized questions (ADR-056).
+export { FORMAT_PATTERN, isVariableName, MAX_EXPRESSION_LENGTH } from "./parameterNames.js";
 export * from "./period.js";
 export * from "./pollOutcome.js";
 export * from "./pollTally.js";
@@ -49,6 +51,9 @@ export * from "./templatePull.js";
 export * from "./zone.js";
 // `./drillSchedule.js` is NOT re-exported: it pulls `ts-fsrs`, which the web
 // bundle would then carry. The server imports `@quiz/domain/drillSchedule`.
+// `./parameters.js` is NOT re-exported either, for the same reason: it pulls
+// mathjs (ADR-056 §2). The server imports `@quiz/domain/parameters`; only its
+// mathjs-free vocabulary, `./parameterNames.js`, is above.
 
 /**
  * The seeded shuffle lives in `@quiz/core/rng` (the question types need it

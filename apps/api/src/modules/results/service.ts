@@ -28,7 +28,6 @@ import type {
   FeedbackPolicy,
   GradingScale,
   ReleasedGrades,
-  ResultCard,
   ResultRow,
   ResultsItem,
   ResultsView,
@@ -78,7 +77,6 @@ import {
   joinedItems,
   retakePolicyOf,
   retakesEnabled,
-  classroomIdOf,
   scaleOf,
   seatsOf,
   setCorrectionPublished,
@@ -643,6 +641,23 @@ export function resultsState(
 }
 
 /**
+ * Whether a student may read their GRADE of this evaluation (F-RES-04): once
+ * the results are released, and only where the feedback page would show it
+ * ({@link resultsState} `available`) — never under the policy `none`. A
+ * student who never began (no attempt, or one left in the lobby) reads the
+ * scale minimum (`gradeShown`) under the same policy as one whose attempt
+ * expired empty. The student home's card and the Grades page ask this
+ * before they carry a grade.
+ */
+export function gradeReadable(evaluation: EvaluationRecord, attemptState: string | null): boolean {
+  const began = attemptState !== null && attemptState !== "not_started";
+  return (
+    evaluation.releasedAt !== null &&
+    resultsState(evaluation, began ? attemptState : "expired") === "available"
+  );
+}
+
+/**
  * Whether the feedback policy shows THE KEY to a student whose attempt is in
  * `attemptState`, now: the rule {@link studentFeedback} applies, for the
  * drill, which never shows a key earlier than the exercise would (ADR-041
@@ -1027,32 +1042,4 @@ export async function shownGrades(
       },
     ]),
   );
-}
-
-/** `GET /student/results` — one card per released evaluation the student took. */
-export async function studentResultCards(db: Db, userId: string): Promise<ResultCard[]> {
-  const rows = (await studentEvaluationRows(db, userId)).filter(
-    (row) => row.evaluation.releasedAt !== null,
-  );
-  const retaking = await studentAttempts(
-    db,
-    userId,
-    rows.filter((row) => retakesEnabled(row.evaluation)).map((row) => row.evaluation),
-  );
-  const grades = await releasedGradesOf(db, userId, rows, retaking);
-  return rows.map((row) => {
-    const { attemptId, points, totalPoints, grade } = grades.get(row.evaluation.id)!;
-    return {
-      evaluationId: row.evaluation.id,
-      title: row.evaluation.title,
-      classroomId: classroomIdOf(row.evaluation),
-      classroomName: row.classroomName,
-      courseCode: row.courseCode,
-      attemptId,
-      releasedAt: isoOrNull(row.evaluation.releasedAt),
-      points,
-      totalPoints,
-      grade,
-    };
-  });
 }

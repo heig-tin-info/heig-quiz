@@ -1,10 +1,10 @@
 /**
  * The student's home.
  *
- * Three questions, in the order a student asks them: what can I do NOW, what
- * is coming, what did I already hand in. The classrooms come last, because
- * they are administration, not work. A classroom card
- * opens the classroom's page (D07).
+ * Two questions, in the order a student asks them: what can I do NOW, and
+ * what is coming. What they already handed in is the Grades page's
+ * (`/grades`, `StudentGrades`). The classrooms come last, because they are
+ * administration, not work. A classroom card opens the classroom's page (D07).
  *
  * The four decisions:
  *   - Type: the open evaluation's title is the one 17 px line on the page;
@@ -21,7 +21,6 @@
  * The cards are the ones every student page shares (`cards.tsx`).
  */
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
 import { CheckCircle2 } from "lucide-react";
 
 import type { DrillSession, Me, StudentHome as StudentHomeData } from "@quiz/contracts";
@@ -33,13 +32,11 @@ import { useT } from "../i18n";
 import type { Route } from "../router";
 import { Card, EmptyState, PageHeader, QueryError, SectionHeading, Skeleton, useNow } from "../ui";
 import { studentHomeKey } from "../queryKeys";
-import { HOME_SECTION } from "./bottomNavSlots";
 import {
   ActivityRow,
   ClassroomList,
   EvaluationRow,
   openLine,
-  pastLine,
   PollRow,
   upcomingLine,
   useCardActions,
@@ -71,20 +68,6 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
     queryFn: () => api("/app/api/student/home"),
   });
   const actions = useCardActions(navigate);
-  // The ONE scroll of the bottom bar's section slot (#191): to the section
-  // the address names once the lists are drawn, and back to the top when a
-  // slot cleared it. The classrooms come after the one anchored section
-  // (Past), so their loading moves nothing above it. Optional call:
-  // `scrollIntoView` does not exist under jsdom.
-  const drawn = !home.isLoading;
-  const hash = window.location.hash;
-  const lastHash = useRef(hash);
-  useEffect(() => {
-    if (!drawn) return;
-    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView?.({ block: "start" });
-    else if (lastHash.current) window.scrollTo({ top: 0 });
-    lastHash.current = hash;
-  }, [drawn, hash]);
 
   // ADR-041 §6 (#317): today's drill, while it holds something — the home's
   // "today's drill is available", beside what else is open now.
@@ -93,7 +76,6 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
   const polls = home.data?.polls ?? [];
   const open = home.data?.open ?? [];
   const upcoming = home.data?.upcoming ?? [];
-  const past = home.data?.past ?? [];
 
   return (
     <div className="space-y-8">
@@ -149,22 +131,6 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
             ) : (
               upcoming.map((card) => (
                 <EvaluationRow key={card.id} card={card} line={upcomingLine(card, now, t)} />
-              ))
-            )}
-          </section>
-
-          <section id={HOME_SECTION.grades} className="space-y-3">
-            <SectionHeading title={t("shome.past")} />
-            {past.length === 0 ? (
-              <Card className="px-5 py-4 text-sm text-fg-muted">{t("shome.past.empty")}</Card>
-            ) : (
-              past.map((card) => (
-                <EvaluationRow
-                  key={card.id}
-                  card={card}
-                  line={pastLine(card, t)}
-                  action={actions.review(card)}
-                />
               ))
             )}
           </section>

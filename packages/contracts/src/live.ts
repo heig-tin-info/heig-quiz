@@ -456,6 +456,11 @@ export const StudentHome = z.object({
   polls: z.array(StudentPollCard),
   open: z.array(EvaluationCard),
   upcoming: z.array(EvaluationCard),
+  /**
+   * Not drawn on the home any more (the Grades page has them, F-ORG-14), but
+   * kept: the classroom page's Past group is this list narrowed to the
+   * classroom (`activity/evaluation.ts`), one rule for both.
+   */
   past: z.array(EvaluationCard),
   serverNow: z.iso.datetime(),
 });

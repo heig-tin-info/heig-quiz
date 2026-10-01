@@ -3,7 +3,9 @@
  *
  * `Math.round` rounds half toward +Infinity, so `Math.round(-0.5)` is `-0`:
  * a penalised MCQ could lose a half point to the rounding direction. Every
- * rounding in the platform therefore goes through this module.
+ * rounding in the platform therefore goes through this module, with one
+ * exception: the format of a question's variable (ADR-056 §6) rounds the
+ * decimal representation, through mathjs, in `./parameters/format.ts`.
  */
 
 export type Rounding = "nearest" | "up" | "down";

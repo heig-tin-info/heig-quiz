@@ -37,8 +37,9 @@ about this course".
   bottom bar, today an anchor of the home) becomes a route listing the
   student's classrooms; a classroom card always opens the classroom page.
   **Activities** stays the summary of the active activities of every
-  classroom (today's home). Grades stays an anchor of the home until the
-  Grades tabs (M5-04).
+  classroom (today's home): Open now and Coming up. **Grades** is a route
+  too, `/grades` (2026-10-01): the student's finished work of every
+  classroom; the home lost its Past section to it.
 - **Route**: `/classrooms/:id` dispatches on the role — teachers get
   today's `ClassroomView`, students (and a teacher in student view,
   ADR-018) a new `StudentClassroom`. Tabs are routes, all `studentSafe`:
@@ -68,11 +69,22 @@ about this course".
   from `xl`, an "On this page" disclosure above the page below that. **No
   primary action for a student.** Staff: Edit (primary), Refresh
   (secondary), draft and visible-from badges, warnings.
-- **Grades**: a table — Activity (bold), Kind, Date, Points x/y (right,
-  tabular), Swiss grade, status badge (released / pending / indicative); a
-  row opens the feedback page or the project row. Data from
-  `GET /app/api/student/results` (exists, unused by the web app today),
-  filtered by classroom, plus project grades. No average until D06.
+- **Grades**: shipped first as the GLOBAL page `/grades`
+  (`student/StudentGrades.tsx`, product owner, 2026-10-01): one table per
+  classroom, grouped by classroom, the classroom of the newest row first,
+  archived ones included with an `archived` badge; header = classroom name,
+  course code and name, period. Columns: Activity (bold), Kind, Date,
+  Points x/y (right, tabular), Swiss grade, status badge (released /
+  results available / results pending / handed in / not taken); a row
+  opens the feedback page where the server names an attempt. On a phone
+  the rows collapse into small cards. No primary action. Data from
+  `GET /app/api/student/results` (`StudentGrades`, reshaped: the home's
+  Past rule, `studentGrades` in `live/grades.ts`; points and grade only
+  where F-RES-04 lets them through). The classroom page's Grades tab
+  (M5-04) reuses its table, narrowed on the SERVER (`studentEvaluationRows`
+  already takes a classroom id), never filtered in the browser, plus project
+  grades (status `indicative`); the gradebook (M5-03) replaces the data
+  source once D06 is settled. No average until D06.
 
 ## 5.3 GitHub onboarding
 
@@ -172,6 +184,8 @@ projects is not pushed towards a journal).
 - **Non-regression**: the default student persona's `student-home` scenes
   stay identical (except the pressable card once D07 ships, and, since
   2026-10-01, the desktop scenes' sidebar, which mirrors the bottom bar:
-  Activities, Courses, Grades).
+  Activities, Courses, Grades, and the Past section, which moved to the
+  `student-grades` scenes: nothing it offered — its rows, its states, its
+  "See my results" — is lost there).
 - `pnpm build && pnpm typecheck`, then `pnpm --filter @quiz/web test` (per
   package: the full suite exhausts the RAM).
