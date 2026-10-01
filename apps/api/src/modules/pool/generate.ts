@@ -11,6 +11,7 @@
 import { z } from "zod";
 
 import type { GenerateResult } from "@quiz/contracts";
+import { RunnerBusy, RunnerUnavailable, type RunnerService } from "@quiz/core/server";
 import { questionType } from "@quiz/registry/server";
 
 import type { LlmGateway } from "../llm/service.js";
@@ -23,8 +24,8 @@ export class GenerateRefusal extends Error {
   }
 }
 
-/** The output budgets: a whole proposal, and one element. */
-const MAX_TOKENS = { whole: 6_000, item: 1_500 } as const;
+/** The output budgets: a whole proposal (a program and its cases, at worst), and one element. */
+const MAX_TOKENS = { whole: 12_000, item: 1_500 } as const;
 
 const SYSTEM = [
   "You help a teacher of the HEIG-VD, a Swiss school of engineering, finish a quiz question they are writing.",
@@ -47,6 +48,7 @@ export function generatorTypes(types: readonly string[]): string[] {
 
 export async function generateAnswers(
   gateway: LlmGateway,
+  runner: RunnerService,
   input: { type: string; config: unknown; explanation: string; item?: number | undefined; userId: string },
 ): Promise<GenerateResult> {
   const generator = questionType(input.type).generator;
@@ -87,5 +89,24 @@ export async function generateAnswers(
     effort: "low",
   });
   const explanation = input.explanation.trim() === "" ? value.explanation.trim().slice(0, 20_000) : input.explanation;
-  return { config: generator.merge(config, value.proposal), explanation };
+  const merged = generator.merge(config, value.proposal);
+  if (!generator.settle) return { config: merged, explanation };
+  // What only running produces (expected outputs, a target), on the runner,
+  // and only from a config that validates — as Try runs only a valid one.
+  // Otherwise, or without a runner, the merge comes back as it is and the
+  // editor says what is left to do.
+  const valid = questionType(input.type).configSchema.safeParse(merged);
+  if (!valid.success) return { config: merged, explanation, incomplete: "draft_invalid" };
+  try {
+    const settled = await generator.settle(valid.data, runner);
+    // Nothing run or written: the draft as merged, not as the schema parsed
+    // it (no default filled in, no key dropped behind the teacher's back).
+    const out = settled.config === valid.data ? merged : settled.config;
+    return { config: out, explanation, ...(settled.incomplete ? { incomplete: settled.incomplete } : {}) };
+  } catch (error) {
+    if (error instanceof RunnerUnavailable || error instanceof RunnerBusy) {
+      return { config: merged, explanation, incomplete: "runner_unavailable" };
+    }
+    throw error;
+  }
 }

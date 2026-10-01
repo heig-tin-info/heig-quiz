@@ -754,6 +754,7 @@ const scenes = [
   { name: "editor-mcq-generated", role: "teacher", path: "/questions/q2", settle: 1500, act: async (p) => { await p.getByRole("textbox", { name: "Text of choice D" }).fill(""); await p.waitForTimeout(800); await p.getByRole("button", { name: "Generate answers" }).click(); await p.getByText("Answers suggested by the AI").waitFor(); } },
   { name: "editor-mcq-wand", role: "teacher", path: "/questions/q2", settle: 1500, act: async (p) => { await p.getByRole("textbox", { name: "Text of choice B" }).fill(""); await p.getByRole("button", { name: "Suggest this choice B" }).hover(); await p.waitForTimeout(400); } },
   { name: "editor-code", role: "teacher", path: "/questions/q1", settle: 5000 },
+  { name: "editor-code-generated", role: "teacher", path: "/questions/q1", settle: 5000, fold: true, act: async (p) => { await p.getByRole("button", { name: "Generate answers" }).click(); await p.getByText("Answers suggested by the AI").waitFor(); } },
   { name: "editor-short", role: "teacher", path: "/questions/q3" },
   // Issue #97: every field of an accepted answer labelled, and the sentence
   // saying what it accepts — a number with a tolerance, a date and a time.

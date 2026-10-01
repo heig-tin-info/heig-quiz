@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { GENERATE_INCOMPLETE } from "@quiz/core/generate";
 import { LLM_MODEL_IDS } from "@quiz/domain";
 
 /**
@@ -125,5 +126,10 @@ export type GenerateRequest = z.infer<typeof GenerateRequest>;
 export const GenerateResult = z.object({
   config: z.unknown(),
   explanation: z.string(),
+  /**
+   * What running could not settle (a code question's expected outputs, a
+   * picture's target): no runner here, or the reference did not compile.
+   */
+  incomplete: z.enum(GENERATE_INCOMPLETE).optional(),
 });
 export type GenerateResult = z.infer<typeof GenerateResult>;

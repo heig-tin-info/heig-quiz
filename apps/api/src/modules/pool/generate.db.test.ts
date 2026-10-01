@@ -71,7 +71,7 @@ describe("availability", () => {
   it("says the wand is off until a key is stored, and lists the types that have one", async () => {
     const before = LlmAvailability.parse((await call(owner, "GET", "/app/api/generate/availability")).json());
     expect(before.available).toBe(false);
-    expect(before.types.sort()).toEqual(["categorize", "mcq", "rich", "short"]);
+    expect(before.types.sort()).toEqual(["categorize", "code", "codeimage", "mcq", "rich", "short"]);
     expect((await generate({ config: mcq([{ text: "", correct: true }]), explanation: "" })).json()).toMatchObject({
       error: "llm_not_configured",
     });
@@ -151,5 +151,91 @@ describe("POST /questions/:id/generate", () => {
     const res = await generate({ config: mcq([{ text: "", correct: true }]), explanation: "" }, stranger);
     expect(res.statusCode).toBe(404);
     expect(seen).toHaveLength(0);
+  });
+});
+
+describe("a code question: the outputs come from running the reference (ADR-059 §7)", () => {
+  let codeId: string;
+  const codeDraft = {
+    configVersion: 1,
+    prompt: "Lisez deux entiers et affichez leur somme.",
+    language: "c",
+    runtime: "backend",
+    cooldown: "fixed",
+    template: "",
+    files: [],
+    action: "run",
+    compileArgs: "",
+    limits: { timeMs: 2000, memoryMb: 64, outputKb: 64 },
+    runsPerMinute: 10,
+    allOrNothing: false,
+    referenceSolution: "",
+    tests: {
+      mode: "io",
+      compare: { trimTrailing: true, ignoreCase: false, numeric: null },
+      cases: [{ name: "", args: [], stdin: "", expected: "", compareStdout: true, expectedExitCode: 0, visible: true, points: 1, timeMs: null }],
+    },
+  };
+
+  beforeAll(async () => {
+    const pool = (await call(owner, "POST", "/app/api/pools", { name: "Generate code" })).json<{ id: string }>().id;
+    const created = await call(owner, "POST", `/app/api/pools/${pool}/questions`, { type: "code", internalName: "sum" });
+    codeId = created.json<{ meta: { id: string } }>().meta.id;
+    next = () => ({
+      proposal: {
+        referenceSolution: "#include <stdio.h>\nint main(void){int a,b;scanf(\"%d %d\",&a,&b);printf(\"%d\\n\",a+b);}",
+        cases: [
+          { name: "petits", stdin: "1 2", args: [], visible: true },
+          { name: "négatifs", stdin: "-3 1", args: [], visible: false },
+        ],
+      },
+      explanation: "",
+    });
+  });
+
+  it("merges the reference and the inputs, and says the outputs wait for a runner", async () => {
+    const res = await call(owner, "POST", `/app/api/questions/${codeId}/generate`, { config: codeDraft, explanation: "" });
+    const result = GenerateResult.parse(res.json());
+    expect(result.incomplete).toBe("runner_unavailable");
+    expect(result.config).toMatchObject({
+      referenceSolution: expect.stringContaining("printf"),
+      tests: { cases: [{ name: "petits", stdin: "1 2", expected: "" }, { name: "négatifs", expected: "" }] },
+    });
+  });
+
+  it("writes the outputs the reference printed when there is a runner", async () => {
+    const real = server.app.runner;
+    server.app.runner = {
+      run: async (req) => ({
+        compile: { ok: true, stdout: "", stderr: "", ms: 1 },
+        cases: req.cases.map((c) => ({
+          exitCode: 0,
+          stdout: `${c.stdin.split(" ").map(Number).reduce((a, b) => a + b, 0)}\n`,
+          stderr: "",
+          ms: 1,
+          timedOut: false,
+          oom: false,
+          truncated: false,
+        })),
+      }),
+      health: real.health.bind(real),
+    };
+    try {
+      const res = await call(owner, "POST", `/app/api/questions/${codeId}/generate`, { config: codeDraft, explanation: "" });
+      const result = GenerateResult.parse(res.json());
+      expect(result.incomplete).toBeUndefined();
+      expect(result.config).toMatchObject({ tests: { cases: [{ expected: "3\n" }, { expected: "-2\n" }] } });
+    } finally {
+      server.app.runner = real;
+    }
+  });
+
+  it("runs nothing on a draft that does not validate, and says so instead of failing", async () => {
+    const { language: _language, ...partial } = codeDraft;
+    const res = await call(owner, "POST", `/app/api/questions/${codeId}/generate`, { config: partial, explanation: "" });
+    expect(res.statusCode).toBe(200);
+    const result = GenerateResult.parse(res.json());
+    expect(result.incomplete).toBe("draft_invalid");
+    expect(result.config).toMatchObject({ referenceSolution: expect.stringContaining("printf") });
   });
 });

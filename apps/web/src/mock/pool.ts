@@ -2597,7 +2597,7 @@ on("PUT", "/app/api/questions/:id/draft", (m, body) => {
 // so the screenshots show something; every type an empty explanation written.
 // `types` is a hand copy of the server's generator list: `contract.test`
 // checks its shape, not its content.
-on("GET", "/app/api/generate/availability", () => ({ available: true, types: ["mcq", "short", "rich", "categorize"] }));
+on("GET", "/app/api/generate/availability", () => ({ available: true, types: ["mcq", "short", "rich", "categorize", "code", "codeimage"] }));
 on("POST", "/app/api/questions/:id/generate", (m, body) => {
   questionOr404(m.groups!.id!);
   const config = { ...((body.config ?? {}) as Record<string, unknown>) };
@@ -2606,11 +2606,23 @@ on("POST", "/app/api/questions/:id/generate", (m, body) => {
       c.text.trim() === "" ? { text: "Une adresse au hasard, différente à chaque exécution", correct: false } : c,
     );
   }
+  // A code question: one more case, its output left to a runner the mock has not.
+  const tests = config.tests as { cases?: Record<string, unknown>[] } | undefined;
+  const program = Array.isArray(tests?.cases);
+  if (program) {
+    config.tests = {
+      ...tests,
+      cases: [
+        ...tests!.cases!,
+        { name: "valeurs négatives", args: [], stdin: "-3 1", expected: "", compareStdout: true, expectedExitCode: 0, visible: false, points: 1, timeMs: null },
+      ],
+    };
+  }
   const explanation =
     typeof body.explanation === "string" && body.explanation.trim() !== ""
       ? body.explanation
       : "Une variable locale non initialisée a une valeur indéterminée : la lire est un comportement indéfini.";
-  return { config, explanation };
+  return { config, explanation, ...(program ? { incomplete: "runner_unavailable" } : {}) };
 });
 on("POST", "/app/api/questions/:id/publish", (m, body) => {
   const q = questionOr404(m.groups!.id!);
