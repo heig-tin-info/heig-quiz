@@ -206,6 +206,19 @@ export function sameNames(params: Parameters, values: Values): boolean {
 }
 
 /**
+ * Whether two tables declare the same variable names, in any order — the
+ * condition under which values drawn under one are replayed under the other
+ * (a regrade with version N, ADR-056 §5). `null` is a static version: it
+ * matches only another static one.
+ */
+export function sameTable(a: Parameters | null, b: Parameters | null): boolean {
+  const names = (p: Parameters | null) => (p?.rows ?? []).map((r) => r.name).sort();
+  const x = names(a);
+  const y = names(b);
+  return x.length === y.length && x.every((name, i) => name === y[i]);
+}
+
+/**
  * The values of another version of a table, from values drawn under a former
  * one: a regrade with version N, a drill card whose question was republished
  * (ADR-056 §5). The caller has checked {@link sameNames}. A row that draws

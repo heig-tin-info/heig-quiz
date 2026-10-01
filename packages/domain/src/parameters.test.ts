@@ -10,6 +10,7 @@ import {
   ParameterError,
   replay,
   sameNames,
+  sameTable,
   validateParameters,
   type Parameters,
   type Values,
@@ -496,6 +497,15 @@ describe("sameNames / replay (ADR-056 §5)", () => {
     expect(sameNames(MRUA, { h: 1, g: 2 })).toBe(false);
     expect(sameNames(MRUA, { ...values, extra: 1 })).toBe(false);
     expect(sameNames({ rows: [] }, {})).toBe(true);
+  });
+
+  it("tells whether two tables declare the same names, in any order", () => {
+    const reordered: Parameters = { rows: [...MRUA.rows].reverse().map((r) => ({ ...r, expr: "1" })) };
+    expect(sameTable(MRUA, reordered)).toBe(true);
+    expect(sameTable(MRUA, { rows: MRUA.rows.slice(1) })).toBe(false);
+    expect(sameTable(MRUA, { rows: [...MRUA.rows.slice(1), { name: "k", expr: "1", format: "" }] })).toBe(false);
+    expect(sameTable(null, null)).toBe(true);
+    expect(sameTable(null, MRUA)).toBe(false);
   });
 
   it("keeps the drawn rows and evaluates the others again, in order and rounded", () => {
