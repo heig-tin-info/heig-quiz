@@ -3110,6 +3110,8 @@ export const en = {
   "preview.restart.title": "Restart the preview?",
   "preview.restart.message":
     "Your answers are thrown away and a new random order is drawn.",
+  "preview.leave.title": "Leave the preview?",
+  "preview.leave.message": "Your answers are thrown away: a preview saves nothing.",
   "preview.edit": "Edit question",
   "preview.edit.hint": "Opens the question's draft in a new tab. Publish it, then come back: this preview keeps your answers.",
   "preview.newVersion.title": "Version {n} of this question is published",

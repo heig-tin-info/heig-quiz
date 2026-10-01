@@ -28,10 +28,11 @@
  * during an exam.
  *
  * An EXERCISE is different (issue #125): it can be left at any time, every
- * answer is saved and the student home offers Continue. There, and only
- * there, the bar opens with a quiet Home button (`onHome`). An exam never
- * gets one: leaving does not stop its clock, and a way out would read as a
- * pause.
+ * answer is saved and the student home offers Continue. There the bar opens
+ * with a quiet Home button (`home`). An exam never gets one: leaving does
+ * not stop its clock, and a way out would read as a pause. The teacher's
+ * preview gets one whatever the mode: it has no clock to stop, and its Home
+ * leads back to the evaluation.
  */
 import { Home, Moon, Sun } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -70,8 +71,7 @@ export function PlayerShell({
   onSelectSegment,
   progressLabel,
   headerAction,
-  onHome,
-  homeBusy = false,
+  home,
   commands,
   banner,
   footer,
@@ -103,12 +103,12 @@ export function PlayerShell({
   /** "Hand in", the only action of the bar. */
   headerAction?: ReactNode;
   /**
-   * The way back to the student home, first in the bar. Given for an
-   * exercise only; absent in an exam and in the teacher's preview.
+   * The way back, first in the bar: to the student home, or from the
+   * teacher's preview to its evaluation. Given for an exercise and in the
+   * preview; absent in an exam. `busy`: leaving is under way, the button
+   * reads as disabled (the player ignores a second press).
    */
-  onHome?: () => void;
-  /** Leaving is under way: the button reads as disabled (the player ignores a second press). */
-  homeBusy?: boolean;
+  home?: { onClick: () => void; label: string; busy?: boolean };
   /** What `Ctrl+K` offers here. Empty means no palette at all. */
   commands?: Command[];
   /** The offline alert, in the flow under the bar. */
@@ -179,17 +179,17 @@ export function PlayerShell({
           )}
         >
           <div className="flex items-center gap-3">
-            {onHome ? (
+            {home ? (
               // `-ml-1.5`: the round button's own padding, so the house
               // lines up with the question column below it.
               <IconButton
-                label={t("player.command.home")}
-                onClick={onHome}
+                label={home.label}
+                onClick={home.onClick}
                 // `aria-disabled`, not `disabled`: the keyboard focus stays on
                 // Home while the answers are sent, and is still there after
                 // "Stay". The player's own guard ignores a second press.
-                aria-disabled={homeBusy || undefined}
-                aria-busy={homeBusy || undefined}
+                aria-disabled={home.busy || undefined}
+                aria-busy={home.busy || undefined}
                 className="-ml-1.5 -mr-1 aria-disabled:opacity-40"
               >
                 <Home />

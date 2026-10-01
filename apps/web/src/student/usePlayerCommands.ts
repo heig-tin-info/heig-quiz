@@ -21,6 +21,7 @@ export function usePlayerCommands({
   onMove,
   onSubmit,
   onHome,
+  homeLabel,
   onExitStudentView,
 }: {
   next: number | null;
@@ -28,6 +29,8 @@ export function usePlayerCommands({
   onMove: (delta: 1 | -1) => void;
   onSubmit: () => void;
   onHome: () => void;
+  /** What Home is called: the preview's leads back to its evaluation. */
+  homeLabel: string;
   /** Only for a teacher walking their own test attempt (ADR-018 addendum). */
   onExitStudentView?: (() => void) | undefined;
 }): Command[] {
@@ -64,7 +67,7 @@ export function usePlayerCommands({
       : []),
     {
       id: "player:home",
-      label: t("player.command.home"),
+      label: homeLabel,
       icon: Home,
       group: "navigate",
       run: onHome,
