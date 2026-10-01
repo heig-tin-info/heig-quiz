@@ -347,9 +347,6 @@ export function ClassroomView({
           onChange={openTab}
           label={t("classrooms.tabs")}
           items={[
-            // The whole roster, staff seats included: the number on a tab
-            // promises the number of rows behind it.
-            { value: "roster", label: t("roster.title"), count: data.roster.length, icon: Users },
             {
               value: "evaluations",
               label: t("eval.title"),
@@ -359,9 +356,13 @@ export function ClassroomView({
               icon: ClipboardList,
               coach: "classroom.tab.evaluations",
             },
-            // ADR-041 (#317): the students' drill, and its switch.
             ...(hasJournal ? [{ value: "journal" as const, label: t("journal.tab"), icon: BookOpen }] : []),
+            // ADR-041 (#317): the students' drill, and its switch.
             { value: "drill", label: t("nav.drill"), icon: Dumbbell },
+            // The whole roster, staff seats included: the number on a tab
+            // promises the number of rows behind it. Last before Settings:
+            // the content tabs come first, the people and the setup after.
+            { value: "roster", label: t("roster.title"), count: data.roster.length, icon: Users },
             { value: "settings", label: t("classroomSettings.tab"), icon: SettingsIcon },
           ]}
         />
