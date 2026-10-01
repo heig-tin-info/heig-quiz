@@ -34,8 +34,8 @@ describe("StudentPreviewPage", () => {
     const { calls } = mockFetch({ "POST /app/api/questions/q1/preview": ok(PREVIEW) });
     renderWithProviders(<StudentPreviewPage id="q1" />);
 
-    // The banner is the whole contract of the page.
-    expect(await screen.findByText("Preview — nothing is saved")).toBeInTheDocument();
+    // The subtitle is the whole contract of the page: nothing is kept.
+    expect(await screen.findByText("Answer freely: nothing is saved or graded")).toBeInTheDocument();
     // The statement went through `MarkdownView`, like the player's: a heading
     // is a heading and not the literal "# Les pointeurs".
     const heading = await screen.findByRole("heading", { name: "Les pointeurs" });
@@ -91,7 +91,7 @@ describe("StudentPreviewPage", () => {
       }),
     });
     renderWithProviders(<StudentPreviewPage id="q1" />);
-    expect(await screen.findByText("Preview — nothing is saved")).toBeInTheDocument();
+    expect(await screen.findByText("Answer freely: nothing is saved or graded")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Show answers" })).toBeNull();
   });
 

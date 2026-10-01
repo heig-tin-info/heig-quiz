@@ -1073,9 +1073,7 @@ export const en = {
   // The full-page student preview, opened in a tab of its own
   // (`/questions/:id/preview`).
   "question.preview.pageTitle": "Student preview",
-  "question.preview.pageSubtitle": "What a student sees for this question",
-  "question.preview.banner": "Preview — nothing is saved",
-  "question.preview.bannerBody": "Answer it if you like: no attempt is created, nothing is stored and nothing is graded. Close the tab when you are done.",
+  "question.preview.pageSubtitle": "Answer freely: nothing is saved or graded",
   "question.preview.incomplete": "Finish the question first: an unfinished draft has nothing to show a student.",
 
   // --- MCQ scoring policies (docs/04 §4.4) ---
