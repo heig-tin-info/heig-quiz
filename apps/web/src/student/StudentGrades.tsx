@@ -7,9 +7,6 @@
  * never before the release), and whether it opens a feedback page. This page
  * computes nothing; it draws.
  *
- * `classroomId` narrows it to one classroom: the classroom page's Grades tab
- * (M5-04) is this page, filtered, until the gradebook (D06) feeds it.
- *
  * The four decisions:
  *   - Type: the classroom's name is the 16 px title of its group; inside a
  *     row the activity is the bold 13 px identity, the grade the one number
@@ -50,7 +47,6 @@ import {
   SectionHeading,
   T,
   TableHead,
-  useSortableTable,
   type Column,
   type Tone,
 } from "../ui";
@@ -64,15 +60,8 @@ const STATUS: Record<GradeStatus, { label: keyof Dict; tone: Tone }> = {
   missed: { label: "sgrades.status.missed", tone: "zinc" },
 };
 
-type SortKey = "title" | "mode" | "date" | "points" | "grade" | "status";
 
-export function StudentGrades({
-  navigate,
-  classroomId,
-}: {
-  navigate: (r: Route) => void;
-  classroomId?: string;
-}) {
+export function StudentGrades({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
   const grades = useQuery<StudentGradesData>({
     queryKey: studentGradesKey,
@@ -80,7 +69,7 @@ export function StudentGrades({
   });
   if (grades.isLoading) return <PageSkeleton />;
 
-  const groups = (grades.data ?? []).filter((g) => classroomId === undefined || g.classroom.id === classroomId);
+  const groups = grades.data ?? [];
   return (
     <div className="space-y-6">
       <PageHeader title={t("bnav.grades")} description={t("sgrades.subtitle")} />
@@ -138,41 +127,22 @@ type Opener = (row: GradeRow) => (() => void) | null;
 
 function GradeTable({ rows, open }: { rows: GradeRow[]; open: Opener }) {
   const t = useT();
-  // The server's order (newest first) until the reader asks for another.
-  const { sorted, sort, toggle } = useSortableTable<GradeRow, SortKey>(
-    rows,
-    (row, key) => {
-      switch (key) {
-        case "mode":
-          return t(MODE_KEY[row.mode]);
-        case "date":
-          return row.date;
-        case "points":
-          return row.score?.points ?? -1;
-        case "grade":
-          return row.score?.grade ?? -1;
-        case "status":
-          return t(STATUS[row.status].label);
-        default:
-          return row.title;
-      }
-    },
-    null,
-  );
-  const columns: Column<SortKey>[] = [
-    { key: "title", label: t("sgrades.col.activity") },
-    { key: "mode", label: t("sgrades.col.kind"), className: cx(T.colMid, "w-32") },
-    { key: "date", label: t("sgrades.col.date"), className: cx(T.colHigh, "w-32") },
-    { key: "points", label: t("results.col.points"), right: true, className: "w-24" },
-    { key: "grade", label: t("results.col.grade"), right: true, className: "w-20" },
-    { key: "status", label: t("sgrades.col.status"), className: "w-44" },
+  // No sorting: the rows come newest first, the one order a student reads
+  // finished work in.
+  const columns: Column<string>[] = [
+    { key: "title", label: t("sgrades.col.activity"), sortable: false },
+    { key: "mode", label: t("sgrades.col.kind"), sortable: false, className: cx(T.colMid, "w-32") },
+    { key: "date", label: t("sgrades.col.date"), sortable: false, className: cx(T.colHigh, "w-32") },
+    { key: "points", label: t("results.col.points"), sortable: false, right: true, className: "w-24" },
+    { key: "grade", label: t("results.col.grade"), sortable: false, right: true, className: "w-20" },
+    { key: "status", label: t("sgrades.col.status"), sortable: false, className: "w-44" },
     { key: "open", label: t("shome.review"), sortable: false, srOnly: true, className: "w-10" },
   ];
   return (
     <table className={cx(T.table, "hidden table-fixed @lg:table")}>
-      <TableHead columns={columns} sort={sort} onToggle={toggle} />
+      <TableHead columns={columns} sort={null} onToggle={() => {}} />
       <tbody>
-        {sorted.map((row) => {
+        {rows.map((row) => {
           const go = open(row);
           return (
             <tr

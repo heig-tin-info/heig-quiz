@@ -59,9 +59,9 @@ const groups: GradeGroup[] = [
   },
 ];
 
-const render = (props: { classroomId?: string } = {}, navigate = vi.fn()) => ({
+const render = (navigate = vi.fn()) => ({
   navigate,
-  ...renderWithProviders(<StudentGrades navigate={navigate} {...props} />),
+  ...renderWithProviders(<StudentGrades navigate={navigate} />),
 });
 
 /** The table row of `title` (the desktop rendering; the phone list repeats it). */
@@ -100,13 +100,6 @@ describe("the student's Grades", () => {
     navigate.mockClear();
     await userEvent.click((await tableRow("Série 8")).getByText("Série 8"));
     expect(navigate).not.toHaveBeenCalled();
-  });
-
-  it("narrows to one classroom when the classroom's tab asks", async () => {
-    mockFetch({ [URL]: ok(groups) });
-    render({ classroomId: "r6" });
-    expect(await screen.findByRole("heading", { level: 2, name: /PRG1-2024/ })).toBeInTheDocument();
-    expect(screen.queryByText("PRG1-2026")).toBeNull();
   });
 
   it("says there is nothing yet", async () => {

@@ -5,7 +5,8 @@
  * must never carry — a grade under the policy `none`, a grade before the
  * release — and whom it lists: a staff seat only once it took an attempt
  * (ADR-018 §3), an archived classroom too. Who reads it: the student's
- * portal and an impersonation session (ADR-034), never a `seb` one (ADR-027).
+ * portal and an impersonation session (ADR-034), never a `seb` or `kiosk`
+ * one (ADR-027, ADR-051).
  */
 import { randomUUID } from "node:crypto";
 
@@ -18,6 +19,7 @@ import { registerForTests } from "@quiz/registry/server";
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { classrooms, enrollments, evaluations } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
+import { kioskStation } from "../../test/kiosk.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
 import { applyState } from "../evaluation/service.js";
@@ -82,11 +84,15 @@ async function closed(
 }
 
 /** A session of `kind` for `userId`, as the cookies a browser would send. */
-async function sessionOf(userId: string, auth: { kind: SessionKind; actorUserId?: string; evaluationId?: string }) {
+async function sessionOf(
+  userId: string,
+  auth: { kind: SessionKind; actorUserId?: string; evaluationId?: string; deviceId?: string },
+) {
   const session = await createSession(db(), userId, 8, {
     kind: auth.kind,
     actorUserId: auth.actorUserId ?? null,
     evaluationId: auth.evaluationId ?? null,
+    deviceId: auth.deviceId ?? null,
   });
   return {
     cookie: `${SESSION_COOKIE}=${session.token}; ${CSRF_COOKIE}=${session.csrf}`,
@@ -145,10 +151,19 @@ describe("GET /app/api/student/results — what a row says (F-RES-04)", () => {
   });
 
   it("shows NO grade of a released evaluation under the policy none, on the home neither", async () => {
-    const row = await rowOf("released none");
-    expect(row).toMatchObject({ status: "released", score: null, feedbackAttemptId: null });
+    const id = evaluationIds["released none"]!;
+    const { body, groups } = await grades(student.headers);
+    // Every row of it, wherever it sits in the payload, carries no score…
+    const rows = groups.flatMap((g) => g.rows).filter((r) => r.evaluationId === id);
+    expect(rows).toEqual([expect.objectContaining({ status: "released", score: null, feedbackAttemptId: null })]);
+    // …and the serialized rows hold no grade nor points key at all.
+    const raw = (JSON.parse(body) as { rows: Record<string, unknown>[] }[])
+      .flatMap((g) => g.rows)
+      .filter((r) => r["evaluationId"] === id);
+    expect(raw).toHaveLength(1);
+    expect(JSON.stringify(raw)).not.toMatch(/"(grade|points|totalPoints)"/);
     const home = await live.studentHome(db(), student.id, server.clock.now());
-    expect(home.past.find((c) => c.id === evaluationIds["released none"])!.grade).toBeNull();
+    expect(home.past.find((c) => c.id === id)!.grade).toBeNull();
   });
 
   it("keeps a released evaluation the student never took, with the scale minimum", async () => {
@@ -210,6 +225,17 @@ describe("GET /app/api/student/results — who reads it", () => {
   it("a seb session is nobody on this route (ADR-027)", async () => {
     const seb = await sessionOf(student.id, { kind: "seb", evaluationId: evaluationIds["pending"]! });
     expect((await get("/app/api/student/results", seb)).statusCode).toBe(401);
+  });
+
+  it("a kiosk session is nobody on this route, even from its own station (ADR-051)", async () => {
+    const station = await kioskStation(server.app);
+    const kiosk = await sessionOf(student.id, {
+      kind: "kiosk",
+      evaluationId: evaluationIds["pending"]!,
+      deviceId: station.deviceId,
+    });
+    const fromStation = { ...kiosk, cookie: `${kiosk.cookie}; ${station.cookie}` };
+    expect((await get("/app/api/student/results", fromStation)).statusCode).toBe(401);
   });
 
   it("an anonymous caller is asked to sign in", async () => {

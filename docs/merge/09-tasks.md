@@ -986,9 +986,11 @@ files it ports; writes en + fr for every string.
 - **Depends on**: M5-03.
 - **Goal**: teacher Grades tab (Export primary); the student Grades tab
   reads the gradebook when enabled.
-- **Note** (2026-10-01): the student tab is `StudentGrades` with its
-  `classroomId` prop (§5.2) — the global `/grades` page filtered to the
-  classroom — plus project grades; not a second component.
+- **Note** (2026-10-01): the student tab reuses the global `/grades`
+  page's table (`StudentGrades`, §5.2), its rows narrowed to the classroom
+  on the server (`studentEvaluationRows` takes a classroom id; a classroom
+  route loaded through `readableClassroom`), plus project grades; not a
+  second component, and no filtering in the browser.
 
 ## M6 — Online workspace and SEB (after the cutover if D09 says so)
 

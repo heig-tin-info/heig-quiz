@@ -79,9 +79,10 @@ about this course".
   opens the feedback page where the server names an attempt. On a phone
   the rows collapse into small cards. No primary action. Data from
   `GET /app/api/student/results` (`StudentGrades`, reshaped: the home's
-  Past rule, `studentGrades` in `live/attempt.ts`; points and grade only
+  Past rule, `studentGrades` in `live/grades.ts`; points and grade only
   where F-RES-04 lets them through). The classroom page's Grades tab
-  (M5-04) is the same component with its `classroomId` prop, plus project
+  (M5-04) reuses its table, narrowed on the SERVER (`studentEvaluationRows`
+  already takes a classroom id), never filtered in the browser, plus project
   grades (status `indicative`); the gradebook (M5-03) replaces the data
   source once D06 is settled. No average until D06.
 

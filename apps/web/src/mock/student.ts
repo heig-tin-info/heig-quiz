@@ -568,6 +568,7 @@ on("GET", "/app/api/student/home", studentHome);
 // is a whole term of weekly series; `?empty=1` nothing finished yet.
 on("GET", "/app/api/student/results", (): StudentGrades => {
   if (flags.empty) return [];
+  let seq = 0;
   const current = studentRooms()[0]!;
   const header = (over: Partial<GradeGroup["classroom"]>): GradeGroup["classroom"] => ({
     id: current.id,
@@ -579,7 +580,7 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
     ...over,
   });
   const row = (over: Partial<GradeRow> & Pick<GradeRow, "title" | "status">): GradeRow => ({
-    evaluationId: `00000000-0000-4000-8000-${String(++gradeRowSeq).padStart(12, "0")}`,
+    evaluationId: `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`,
     mode: "exam",
     date: iso(-D),
     feedbackAttemptId: null,
@@ -591,7 +592,6 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
     totalPoints,
     grade: Math.round((1 + (5 * points) / totalPoints) * 10) / 10,
   });
-  gradeRowSeq = 0;
   const series = flags.many
     ? Array.from({ length: 12 }, (_, i) =>
         row({
@@ -649,7 +649,6 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
     },
   ];
 });
-let gradeRowSeq = 0;
 
 // M5-01: the student's classroom page — the home narrowed to the classroom,
 // under the Courses card as its header. `?journal=1` gives PRG1-2026 (`r1`,
