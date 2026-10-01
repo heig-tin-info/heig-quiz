@@ -59,7 +59,8 @@ import { useGradingView } from "./view";
  * `ASIDE_MIN_WIDTH` that panel docks beside the table, which narrows and
  * stays readable, clickable and walkable (↑ / ↓, ← / →); the page widens by
  * the pane's width (`pageBox`), as the pool's does for its question. Under
- * it, the panel is a sheet over the table.
+ * it, the panel is a sheet over the table. A change of question leaves the
+ * pane open, on the new question's key.
  *
  * Anonymised by default at every visit, never remembered: the server sends
  * no name at all, and the rows stand in an order drawn once per visit, so
@@ -133,15 +134,19 @@ export function GradingPanel({
     else if (selected === EXPECTED || selected === null) lastIndex.current = -1;
   }, [rows, selected]);
 
+  // An open panel survives the change of question, on the new one's key:
+  // only its ✕ (or Escape) closes it. Never on the same student's next
+  // answer, which would grade a student rather than a question.
+  const panelOpen = panel !== null;
   const goTo = useCallback(
     (i: number) => {
       if (i < 0 || i >= items.length) return;
       setItemParam(items[i]!.id);
       setSort(null);
-      setSelected(null);
-      setPanel(null);
+      setSelected(panelOpen ? EXPECTED : null);
+      setPanel(panelOpen ? { key: EXPECTED, adjust: false } : null);
     },
-    [items, setItemParam],
+    [items, setItemParam, panelOpen],
   );
   // A placeholder to grade by hand (an essay) opens on the grading form:
   // reading it and giving it points is the only thing to do with it.
