@@ -327,6 +327,8 @@ describe("the panel queue (F-GRADE-03)", () => {
       expect(entry.kept).toBe(true);
       expect(entry.student).not.toBeNull();
       expect(entry.solution).not.toBeNull();
+      // A static question has no values (ADR-056 §9).
+      expect(entry).not.toHaveProperty("values");
       // Anonymous is the same entry without its label — no pseudonym either
       // (ADR-044).
       expect(anonymous[index]).toEqual({ ...entry, label: null });

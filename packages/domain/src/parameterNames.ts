@@ -73,6 +73,13 @@ export const MAX_EXPRESSION_LENGTH = 300;
 export const PARAMETERIZED_TYPES: ReadonlySet<string> = new Set(["mcq", "short", "cloze"]);
 
 /**
+ * The parameterized types whose class debrief still groups answers: by
+ * choice, never by what was written — choice B is the same formula, with the
+ * same verdict, on every paper (ADR-056 §9). The others group by verdict only.
+ */
+export const GROUPED_BY_CHOICE: ReadonlySet<string> = new Set(["mcq"]);
+
+/**
  * The step of a format at `value`: the gap between two numbers the format
  * can write (ADR-056 §6). `int` steps by 1, `.n` by 10⁻ⁿ, and `ns` by an
  * amount that follows the magnitude (9.81 at `3s` steps by 0.01, 981 by 1).

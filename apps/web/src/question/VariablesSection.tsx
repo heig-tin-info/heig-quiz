@@ -17,7 +17,7 @@ import { PlayedQuestion } from "./PreviewedQuestion";
 type Row = ParametersDraft["rows"][number];
 
 /** A format as a teacher reads it: "2 decimals", "3 significant figures". */
-function formatLabel(t: TFunction, format: string): string {
+export function formatLabel(t: TFunction, format: string): string {
   if (format === "") return t("param.format.auto");
   if (format === "int") return t("param.format.int");
   if (format.startsWith(".")) {

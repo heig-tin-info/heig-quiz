@@ -13,8 +13,11 @@ five in a second step), and the grading contracts
 (`packages/contracts/src/grading.ts`). The return from the question editor
 to the grading table came in a third step (addendum below). Amended
 2026-10-01 by ADR-056 §9: for a parameterized question the pinned row is the
-template (the formulas), each answer's own key is in the side panel, and
-rows group by verdict, not by answer text.
+question as written (the template, with its `[[…]]`, or the example
+instance when the type cannot draw the template, said "per answer"), marked
+"Own key per answer"; the side panel shows each answer's own key and its
+student's values, and the rows group by verdict, an answer column sorting
+only within a verdict.
 
 ## Context
 

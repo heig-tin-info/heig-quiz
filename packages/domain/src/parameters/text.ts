@@ -91,6 +91,20 @@ function mapStrings<T>(json: T, visit: (text: string, path: string) => string, p
   return json;
 }
 
+/**
+ * The variable names the `[[…]]` of one text read, directly. A reference
+ * that does not parse reads nothing here: publication refused it already.
+ */
+export function namesReadBy(text: string): Set<string> {
+  const names = new Set<string>();
+  for (const token of tokenize(text)) {
+    if (!("ref" in token) || !token.ref.closed) continue;
+    const compiled = collect([], {}, () => compile(token.ref.expr));
+    for (const name of compiled?.names ?? []) names.add(name);
+  }
+  return names;
+}
+
 /** A text piece: literal, or a checked expression and the format it is written with. */
 type Piece = string | { compiled: Compiled; format: string; offset: number };
 

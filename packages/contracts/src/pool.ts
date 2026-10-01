@@ -9,7 +9,7 @@
 import { z } from "zod";
 
 import { BoolFlag, IntList, StringList, ZodIssueLite, pageOf } from "./common.js";
-import { ParametersDraft } from "./parameters.js";
+import { NamedValues, ParametersDraft } from "./parameters.js";
 
 /**
  * The question types of the MVP. `QUESTION_TYPE_IDS` in `@quiz/core` is the
@@ -553,7 +553,7 @@ export type PreviewSolution = z.infer<typeof PreviewSolution>;
 export const DraftInstance = z.object({
   seed: z.number().int(),
   /** The variables in the table's order, each written with its format. */
-  values: z.array(z.object({ name: z.string(), value: z.string() })),
+  values: NamedValues,
   /** The instance as a student reads it (`studentView`, seed 0, no shuffle). */
   student: z.unknown(),
   /** Its key, as the preview's "Show answers" reads it. */

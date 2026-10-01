@@ -32,6 +32,9 @@ export interface GradingItem extends GradingQueueItem {
   stale: boolean;
 }
 
+/** A parameterized question's table and the question as written (ADR-056 §9). */
+export type GradingParameters = NonNullable<GradingQueueItem["parameters"]>;
+
 /** Where a question stands: its answers, and how many are validated. */
 export interface StepState {
   total: number;
@@ -118,6 +121,8 @@ export function useGradingData(evaluationId: string, itemId: string | null, name
     entries: queue.data?.entries ?? [],
     /** The question's explanation, an aid beside the answer (ADR-033). */
     explanation: queue.data?.items[0]?.explanation ?? null,
+    /** A parameterized question's table and the question as written (ADR-056 §9); null when static. */
+    parameters: queue.data?.items[0]?.parameters ?? null,
     progress: useGradingProgress(evaluationId),
   };
 }

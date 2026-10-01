@@ -21,6 +21,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { FeedbackPolicy } from "@quiz/contracts";
+import { formatValue } from "@quiz/domain/parameters";
 
 import { attempts, evaluations, gradings, questions } from "../../db/schema.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
@@ -207,6 +208,55 @@ describe("the feedback after the release (invariant 4)", () => {
       expect(item.explanation).toBe(EXPLANATION.replace("[[t]]", fallOf(values)));
       if (kind === "short") expect(showsKey(JSON.stringify(item.solution), values)).toBe(true);
     }
+  });
+});
+
+describe("the grading table and the debrief, the teacher's (ADR-056 §9)", () => {
+  type Queue = {
+    items: { parameters?: { variables: unknown; template: { student: unknown; solution: unknown; example: boolean } } }[];
+    entries: { attemptId: string; values?: { name: string; value: string }[]; explanation?: string | null; solution: unknown }[];
+  };
+  const queueOf = async (kind: Kind) => {
+    const res = await get(`/app/api/evaluations/${seed.evaluationId}/grading?itemId=${itemOf.get(kind)}`, teacher.headers);
+    expect(res.statusCode).toBe(200);
+    return res.json() as Queue;
+  };
+
+  it("pins the question as written, and lays each answer's own values and key beside it", async () => {
+    for (const kind of KINDS) {
+      const queue = await queueOf(kind);
+      const { parameters } = queue.items[0]!;
+      expect(parameters?.variables).toEqual(VARIABLES);
+      // A cloze's template is no question the type can draw: its example instance, said so.
+      expect(parameters?.template.example).toBe(kind === "cloze");
+      if (kind !== "cloze") expect(JSON.stringify(parameters?.template)).toContain("[[t");
+      for (const entry of queue.entries) {
+        const values = (await valuesOf(entry.attemptId, kind)).values;
+        expect(entry.values).toEqual([
+          { name: "h", value: String(values["h"]) },
+          { name: "g", value: formatValue(values["g"]!, ".2") },
+          { name: "t", value: fallOf(values) },
+        ]);
+        expect(entry.explanation).toBe(EXPLANATION.replace("[[t]]", fallOf(values)));
+        if (kind === "short") expect(showsKey(JSON.stringify(entry.solution), values)).toBe(true);
+      }
+    }
+  });
+
+  it("projects the example instance, named as such, and groups the answers by verdict only", async () => {
+    const res = await get(`/app/api/evaluations/${seed.evaluationId}/results/by-question`, teacher.headers);
+    expect(res.statusCode).toBe(200);
+    const debrief = res.json() as { item: { id: string }; parameterized?: boolean; distribution: unknown[]; outcomes: unknown }[];
+    for (const kind of KINDS) {
+      const item = debrief.find((d) => d.item.id === itemOf.get(kind))!;
+      expect(item.parameterized).toBe(true);
+      // An mcq's ticks stay, by choice; nothing else is grouped by what was written.
+      if (kind === "mcq") expect(item.distribution.map((d) => (d as { key: string }).key).sort()).toEqual(["0", "1"]);
+      else expect(item.distribution).toEqual([]);
+      expect(item.outcomes).toMatchObject({ correct: 1, wrong: 1 });
+    }
+    // The wall shows an instance, never the template.
+    expect(markersIn(res.body)).toEqual([]);
   });
 });
 

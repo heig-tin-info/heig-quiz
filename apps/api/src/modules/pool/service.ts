@@ -38,14 +38,18 @@ export {
   configPerAttempt,
   exampleConfig,
   exampleInstance,
+  explanationOrNull,
   instanceOf,
   InstanceMismatch,
   itemInstance,
   parameterIssues,
   parametersOf,
+  readingPerAttempt,
   templateHash,
+  writtenConfig,
   type Instance,
   type InstanceAttempt,
+  type Reading,
   type VersionContent,
 } from "./instance.js";
 export {

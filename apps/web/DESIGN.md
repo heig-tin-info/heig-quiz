@@ -1465,6 +1465,17 @@ One question's answers as a table (`src/grading/`, origin
   and "New version", no number — with "A newer version is published —
   re-grade" as its tooltip and name: a filled secondary, never the accent,
   which stays Validate N.
+- **A parameterized question** (ADR-056 §9): the key's row is the question
+  as written, its `[[…]]` left in the type's own key chips (mono, `info`),
+  or an italic `fg-muted` "per answer" in each cell when only an example
+  could be drawn; a `zinc` badge with the dice icon, "Own key per answer",
+  stands before the key's actions and explains itself in its tooltip. The
+  rows stand sorted by verdict (the Verdict header shows it). The panel adds the student's values as
+  `surface-2` mono chips, `name = value`, under the review, and the key's
+  panel the variables, one mono line each, the format worded in the text
+  face. On the correction projection, "Example values" sits above the
+  statement in the caption size with the dice icon, and a parameterized
+  short or cloze draws no answer groups: the head's bar holds the verdicts.
 - **The answer panel** is a `Sheet` with two optional slots added for it:
   `leading` (the verdict glyph before the title) and `actions` (↑ / ↓
   before the close button).

@@ -159,6 +159,17 @@ describe("QuestionStatsSheet", () => {
     expect(screen.queryByText(/add up to more than 100%/)).not.toBeInTheDocument();
   });
 
+  it("says of an option drawn for each student that its share is its place's (ADR-056 §9)", () => {
+    mockFetch({});
+    const drawn = { ...DISTRACTORS, options: DISTRACTORS.options.map((o, i) => (i === 2 ? { ...o, drawn: true } : o)) };
+    renderWithProviders(
+      <QuestionStatsSheet poolId="p1" row={ROW} stats={{ ...STATS, distractors: drawn }} canReset onClose={vi.fn()} />,
+    );
+    const rows = screen.getAllByRole("listitem");
+    expect(within(rows[2]!).getByText(/A value drawn for each student/)).toBeInTheDocument();
+    expect(screen.getAllByText(/A value drawn for each student/)).toHaveLength(1);
+  });
+
   it("says a multiple-choice question's shares add up past 100", () => {
     mockFetch({});
     renderWithProviders(
