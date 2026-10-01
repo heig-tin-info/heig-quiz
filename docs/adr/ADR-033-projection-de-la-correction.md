@@ -9,7 +9,9 @@ fields of `ByQuestion`, `TallyEntry` in `@quiz/core`, `debrief()` and
 ADR-050: §1's `not_over` is lifted, for an exercise, once its teacher
 publishes the correction. Amended 2026-10-01 by ADR-056 §9: the answers to a
 parameterized question each have their own key, so `debrief()` groups them
-by verdict only.
+by verdict only. Amended 2026-10-01 by its addendum below: the mcq review
+letters its choices as the wall does, in the teacher's order wherever the key
+is known.
 
 ## Context
 
@@ -88,3 +90,27 @@ group answers.
 3. **One aggregate call per item, each type judging every group**: every type
    would re-derive the attempt's outcome and ignore the teacher's override.
 4. **A separate `/correction` endpoint**: two readings of one view.
+
+## Addendum (2026-10-01): the student's review letters an mcq as the wall does
+
+A teacher reported that an mcq on the student's results page blurred the
+question and its choices: no letters, the statement in the size and weight of
+the choices. The review now letters its choices and colours the key's letter
+(DESIGN.md, `LetteredChoice`), which settled which letters.
+
+1. **The letter is the position** in the view the host hands the review, as
+   the player letters its rows; the host picks the order.
+2. **The teacher's order wherever the key is known**, so "B" is the wall's,
+   the grading table's (ADR-044) and the live grid cell's: the student's
+   results page when the policy publishes the key (settled with the product
+   owner), the grading panel, and the live inspection — which served the
+   student's shuffle until now, and whose letters would then have disagreed
+   with its own cell (settled in review). The ticks follow, an answer being
+   canonical (D3).
+3. **The attempt's own order while the key is hidden** (settled in review,
+   narrowing the product owner's "always the teacher's order"). The teacher's
+   order tends to be the key's — a categorize tray typed column by column,
+   the right choice written first — and the opaque card ids of ADR-036 would
+   be undone by it. Nothing is coloured without the key, so nothing is lost.
+4. **One statement token for every review** (`reviewPrompt`, `@quiz/ui`):
+   the results page stacks all the types, so the mcq's fix is theirs too.

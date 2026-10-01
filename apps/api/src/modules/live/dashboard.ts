@@ -23,7 +23,6 @@ import { answers, attemptEvents, attempts, enrollments, kioskDevices, sessions, 
 import {
   gradeDefaults,
   seatsOf,
-  settingsOf,
   staffRosterWithAttempt,
   type EvaluationRecord,
   type JoinedItem,
@@ -394,13 +393,15 @@ export async function attemptInspect(
           type: entry.question.type,
           internalName: entry.question.internalName,
         },
-        // The teacher sees exactly what the student saw, shuffle included.
+        // The teacher's order, as the grid cell and its tooltip letter the
+        // answer: "A" in the inspection is the "A" of the cell, whatever
+        // order this student was served (ADR-033, addendum 2026-10-01).
         studentConfig: studentView({
           type: entry.question.type,
           version,
           seed: attempt.seed,
           itemId: entry.item.id,
-          shuffle: settingsOf(evaluation).shuffleChoices && entry.question.shuffleable,
+          shuffle: false,
           defaults: gradeDefaults(evaluation),
         }),
         answer: answer?.payload ?? null,

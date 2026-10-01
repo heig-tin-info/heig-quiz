@@ -30,7 +30,8 @@ import { Check, X } from "lucide-react";
 
 import type { PollQuestionType, PollTally } from "@quiz/contracts";
 import { foldPollAnswer } from "@quiz/domain";
-import type { McqSolution, McqStudent } from "@quiz/qt-mcq/client";
+import { choiceLetter, LetteredChoice, type McqSolution, type McqStudent } from "@quiz/qt-mcq/client";
+import type { ChoiceMarkState } from "@quiz/ui";
 import type { ShortSolution, ShortStudent } from "@quiz/qt-short/client";
 
 import { useT } from "../i18n";
@@ -86,35 +87,17 @@ function McqReveal({
   const key = new Set(solution.correct);
   return (
     <ul className="flex flex-col gap-2">
-      {student.choices.map((choice) => {
-        const correct = key.has(choice.id);
-        const chosen = selected.has(choice.id);
-        const tag = correct
-          ? {
-              tone: "text-success",
-              icon: <Check aria-hidden />,
-              label: chosen ? t("join.reveal.yoursCorrect") : t("join.reveal.correct"),
-            }
-          : chosen
-            ? { tone: "text-danger", icon: <X aria-hidden />, label: t("join.reveal.yoursWrong") }
-            : null;
+      {student.choices.map((choice, index) => {
+        const look = ROW_LOOK[rowState(selected.has(choice.id), true, key.has(choice.id))];
         return (
-          <li
-            key={choice.id}
-            className={cx(
-              rowClass,
-              correct
-                ? "border-success/40 bg-success-soft"
-                : chosen
-                  ? "border-danger/40 bg-danger-soft"
-                  : "border-line bg-surface",
-            )}
-          >
-            <MarkdownView as="span" source={choice.text} inline className="min-w-0" />
-            {tag ? (
-              <span className={cx(tagClass, tag.tone)}>
-                {tag.icon}
-                {tag.label}
+          <li key={choice.id} className={cx(rowClass, look.row)}>
+            <LetteredChoice letter={choiceLetter(index)} mark={look.letter}>
+              <MarkdownView as="span" source={choice.text} inline />
+            </LetteredChoice>
+            {look.label ? (
+              <span className={cx(tagClass, look.tone)}>
+                {look.icon}
+                {t(look.label)}
               </span>
             ) : null}
           </li>
@@ -181,17 +164,17 @@ function ShortReveal({
 /** How one row of the distribution stands: the key's, this browser's, both, or neither. */
 type RowState = "yoursRight" | "right" | "wrong" | "yours" | "none";
 
-/** What each state wears: a tag (tone, icon, words) and the row's tint. */
+/** What each state wears: a tag (tone, icon, words), the row's tint, an mcq letter's state. */
 const ROW_LOOK: Record<
   RowState,
-  { tone: string; icon: ReactNode; label: "join.reveal.yoursCorrect" | "join.reveal.correct" | "join.reveal.yoursWrong" | "join.reveal.yours" | null; row: string }
+  { tone: string; icon: ReactNode; label: "join.reveal.yoursCorrect" | "join.reveal.correct" | "join.reveal.yoursWrong" | "join.reveal.yours" | null; row: string; letter: ChoiceMarkState }
 > = {
-  yoursRight: { tone: "text-success", icon: <Check aria-hidden />, label: "join.reveal.yoursCorrect", row: "border-success/40 bg-success-soft" },
-  right: { tone: "text-success", icon: <Check aria-hidden />, label: "join.reveal.correct", row: "border-success/40 bg-success-soft" },
-  wrong: { tone: "text-danger", icon: <X aria-hidden />, label: "join.reveal.yoursWrong", row: "border-danger/40 bg-danger-soft" },
+  yoursRight: { tone: "text-success", icon: <Check aria-hidden />, label: "join.reveal.yoursCorrect", row: "border-success/40 bg-success-soft", letter: "good" },
+  right: { tone: "text-success", icon: <Check aria-hidden />, label: "join.reveal.correct", row: "border-success/40 bg-success-soft", letter: "expected" },
+  wrong: { tone: "text-danger", icon: <X aria-hidden />, label: "join.reveal.yoursWrong", row: "border-danger/40 bg-danger-soft", letter: "bad" },
   // Neutral, never the accent: red already means "wrong".
-  yours: { tone: "font-semibold text-fg", icon: null, label: "join.reveal.yours", row: "border-line-strong bg-surface-2" },
-  none: { tone: "", icon: null, label: null, row: "border-line bg-surface" },
+  yours: { tone: "font-semibold text-fg", icon: null, label: "join.reveal.yours", row: "border-line-strong bg-surface-2", letter: "on" },
+  none: { tone: "", icon: null, label: null, row: "border-line bg-surface", letter: "off" },
 };
 
 function rowState(own: boolean, keyShown: boolean, correct: boolean): RowState {
@@ -236,16 +219,23 @@ function ResultsReveal({
     <ul className="flex flex-col gap-2">
       {rows.map((row) => {
         const look = ROW_LOOK[rowState(mine(row.key), keyShown, row.correct)];
+        const label = row.markdown ? (
+          <MarkdownView as="span" source={row.label} inline className="min-w-0" />
+        ) : (
+          <span className="min-w-0 break-words">{row.label}</span>
+        );
         return (
           <li
             key={row.key}
             className={cx("flex flex-col gap-2 rounded-card border px-3 py-2.5 text-sm", look.row)}
           >
             <div className="flex items-start justify-between gap-3">
-              {row.markdown ? (
-                <MarkdownView as="span" source={row.label} inline className="min-w-0" />
+              {row.letter === null ? (
+                label
               ) : (
-                <span className="min-w-0 break-words">{row.label}</span>
+                <LetteredChoice letter={row.letter} mark={look.letter}>
+                  {label}
+                </LetteredChoice>
               )}
               <span className="flex shrink-0 items-center gap-2">
                 {look.label ? (

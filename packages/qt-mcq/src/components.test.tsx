@@ -628,6 +628,13 @@ describe("McqPlayer — negative marking (ADR-026)", () => {
 });
 
 describe("McqReview", () => {
+  /** Each row's letter and the state its face shows: the grading table's (`choiceMark`). */
+  const marks = () =>
+    [...document.querySelectorAll("[data-mark]")].map((letter) => [
+      letter.textContent,
+      letter.getAttribute("data-mark"),
+    ]);
+
   it("prints a negative score as such, and says why", () => {
     render(
       <McqReview
@@ -695,6 +702,12 @@ describe("McqReview", () => {
     );
     expect(screen.queryByText("Correct")).not.toBeInTheDocument();
     expect(screen.getByText("Chosen")).toBeInTheDocument();
+    // No letter filled with a verdict: the tick is grey, the rest at rest.
+    expect(marks()).toEqual([
+      ["A", "on"],
+      ["B", "off"],
+      ["C", "off"],
+    ]);
   });
 
   /* #109: the grading page may put the question's own parts away; the
@@ -716,7 +729,29 @@ describe("McqReview", () => {
     expect(screen.queryByText(student.prompt)).toBeNull();
     expect(screen.queryByText("Missed")).toBeNull();
     expect(screen.getByText("Incorrect")).toBeInTheDocument();
+    // The missed key's letter stays at rest, without its word.
+    expect(marks().map(([, mark]) => mark)).toEqual(["bad", "off", "off"]);
     expect(screen.getAllByTestId("md")).toHaveLength(student.choices.length);
+  });
+
+  it("letters the choices by position, as the host hands them", () => {
+    render(
+      <McqReview
+        student={{ ...student, choices: [...student.choices].reverse() }}
+        answer={{ selected: [0] }}
+        solution={{ correct: [1] }}
+        details={null}
+        points={0}
+        maxPoints={2}
+        audience="student"
+      />,
+    );
+    // Canonical 2, 1, 0: the letter is the row, the state the choice's.
+    expect(marks()).toEqual([
+      ["A", "off"],
+      ["B", "missed"],
+      ["C", "bad"],
+    ]);
   });
 
   it("shows every part when no sections are given", () => {

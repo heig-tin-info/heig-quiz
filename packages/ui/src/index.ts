@@ -32,6 +32,7 @@ export {
   inputSize,
   label,
   lockedBlock,
+  reviewPrompt,
   sectionClass,
   sectionTitle,
   setting,

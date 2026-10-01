@@ -11,7 +11,7 @@ import { useMemo, useState } from "react";
 
 import { resolveStrings, showsSection } from "@quiz/core/client";
 import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
-import { breakdownOf, hint, markdown } from "@quiz/ui";
+import { breakdownOf, cx, hint, markdown, reviewPrompt } from "@quiz/ui";
 
 import { CompileFailure, ReferenceSolutionCard, ScoreLine } from "../ProgramReview.js";
 import { ImagePanel, type ImageLayout, type ImageView } from "./ImagePanel.js";
@@ -73,7 +73,7 @@ export function CodeImageReview({
   // The target picture stays with the answer whatever `sections` says: it is
   // what the output is judged against, not the teacher's solution (#109).
   const statement = showsSection(sections, "prompt") ? (
-    <div className="whitespace-pre-wrap text-sm text-fg">
+    <div className={cx("whitespace-pre-wrap", reviewPrompt)}>
       {markdown(renderMarkdown, student.prompt)}
     </div>
   ) : null;

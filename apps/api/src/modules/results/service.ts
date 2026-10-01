@@ -794,7 +794,13 @@ export async function studentFeedback(
       verdict: grading ? verdictOf(grading) : null,
       student: studentView({
         ...view,
-        shuffle: settings.shuffleChoices && item.question.shuffleable,
+        // With the key published, the teacher's order: the review letters
+        // its choices A, B, C… as the wall, the grading table and the live
+        // grid do, and the ticks follow, since an answer is canonical. With
+        // the key hidden, the attempt's own order: the teacher's tends to be
+        // the key's (a categorize tray typed column by column), and the
+        // review has nothing to colour anyway (ADR-033, addendum 2026-10-01).
+        shuffle: !policy.showKey && settings.shuffleChoices && item.question.shuffleable,
         defaults: gradeDefaults(evaluation),
       }),
       answer: policy.showAnswer ? (answer?.payload ?? null) : null,

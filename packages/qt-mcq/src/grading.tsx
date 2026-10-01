@@ -15,6 +15,7 @@ import { ChoiceMark, headerOf, type ChoiceMarkState } from "@quiz/ui";
 import type { McqAnswer, McqDetails, McqSolution, McqStudent } from "./schema.js";
 import { choiceLetter } from "./schema.js";
 import { mcqGradingStrings } from "./strings.js";
+import { choiceMark } from "./ui.js";
 
 /** A header is a column's name, not the choice: the whole text is its tooltip. */
 const HEADER_CHARS = 32;
@@ -35,11 +36,9 @@ export const mcqGrading: QuestionTypeGrading<McqStudent, McqAnswer, McqSolution,
     };
     return student.choices.map((choice): GradingColumn<McqAnswer, McqDetails> => {
       const isCorrect = correct?.has(choice.id) ?? null;
-      const markOf = (answer: McqAnswer | null): ChoiceMarkState => {
-        const ticked = answer?.selected.includes(choice.id) ?? false;
-        if (ticked) return isCorrect === null ? "on" : isCorrect ? "good" : "bad";
-        return isCorrect && answer !== null ? "missed" : "off";
-      };
+      // A blank row missed nothing it can be blamed for: no answer, no "missed".
+      const markOf = (answer: McqAnswer | null): ChoiceMarkState =>
+        choiceMark(answer?.selected.includes(choice.id) ?? false, isCorrect, answer !== null);
       return {
         key: `choice-${choice.id}`,
         ...headerOf(`${choiceLetter(choice.id)} · ${choice.text}`, HEADER_CHARS),

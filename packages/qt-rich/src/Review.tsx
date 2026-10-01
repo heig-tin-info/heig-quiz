@@ -12,7 +12,7 @@ import type { ReactNode } from "react";
 
 import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/client";
 import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
-import { caption, markdown, ScoreHeader } from "@quiz/ui";
+import { caption, markdown, reviewPrompt, ScoreHeader } from "@quiz/ui";
 
 import { countChars, type RichAnswer, type RichDetails, type RichSolution, type RichStudent } from "./schema.js";
 import { richReviewStrings, type RichReviewStringKey } from "./strings.js";
@@ -79,7 +79,7 @@ export function RichReview({
   return (
     <div className="flex flex-col gap-3">
       {showsSection(sections, "prompt") ? (
-        <div className="text-sm text-fg">{markdown(renderMarkdown, student.prompt)}</div>
+        <div className={reviewPrompt}>{markdown(renderMarkdown, student.prompt)}</div>
       ) : null}
 
       <div className="@container">

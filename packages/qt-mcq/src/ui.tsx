@@ -1,13 +1,14 @@
 /**
  * The components of this package that no other type has.
  *
- * What only the choice list of this type draws — the pastille, the tooltip of
- * its drag handle, two icons. The class lists and the primitives the five
- * types share live in `@quiz/ui`; this file uses the same design tokens of
- * `apps/web/DESIGN.md`: no raw colour, no `dark:` variant.
+ * What only the choice list of this type draws — the pastille, the lettered
+ * choice of a correction and the one rule of its state (`choiceMark`), the
+ * tooltip of its drag handle, two icons. The class lists and the primitives
+ * the five types share live in `@quiz/ui`; this file uses the same design
+ * tokens of `apps/web/DESIGN.md`: no raw colour, no `dark:` variant.
  */
 import type { ReactNode } from "react";
-import { cx } from "@quiz/ui";
+import { cx, type ChoiceMarkState } from "@quiz/ui";
 
 /**
  * Letter of a choice, as the editor and the review show it: A, B, C…
@@ -102,6 +103,66 @@ export function Pastille({
         {letter}
       </span>
     </>
+  );
+}
+
+/**
+ * The state of one choice in one answer, as the grading table's tick box and
+ * the review's letter both read it: ticked right or wrong, ticked with no key
+ * to judge it (`correct` null), a key left out — `missed`, only where the
+ * caller may say so — or nothing. Never `expected`: that is the key's own
+ * row, not an answer's.
+ */
+export function choiceMark(
+  ticked: boolean,
+  correct: boolean | null,
+  showMissed: boolean,
+): Exclude<ChoiceMarkState, "expected"> {
+  if (ticked) return correct === null ? "on" : correct ? "good" : "bad";
+  return correct === true && showMissed ? "missed" : "off";
+}
+
+/** A letter's face per state: filled once it has a verdict, at rest otherwise. */
+const LETTER: Record<ChoiceMarkState, string> = {
+  good: "bg-success text-on-fill",
+  missed: "bg-success text-on-fill",
+  expected: "bg-success text-on-fill",
+  bad: "bg-danger text-on-fill",
+  on: "bg-fg-muted text-on-fill",
+  off: "border-2 border-line-strong bg-surface text-fg-muted",
+};
+
+/**
+ * A choice in a CORRECTION — the review, the poll's reveal on a phone —
+ * behind its letter: the key's filled `success`, a wrong tick's `danger`, a
+ * tick with no key `fg-muted`, the rest the player's pastille at rest. A
+ * filled letter always has its verdict in words beside it, which the caller
+ * draws; the tone is never the only reading.
+ */
+export function LetteredChoice({
+  letter,
+  mark,
+  children,
+}: {
+  letter: string;
+  mark: ChoiceMarkState;
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <span className="flex min-w-0 flex-1 items-start gap-3">
+      <span
+        data-mark={mark}
+        className={cx(
+          "grid size-7 shrink-0 select-none place-items-center rounded-full text-xs font-bold leading-none",
+          LETTER[mark],
+        )}
+      >
+        {letter}
+      </span>
+      {/* The first line, not the block, lines up with the 28 px letter: half
+          of what it is taller than a line of text. */}
+      <span className="mt-1 min-w-0 flex-1">{children}</span>
+    </span>
   );
 }
 
