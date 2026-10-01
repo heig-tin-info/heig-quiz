@@ -1,11 +1,10 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Journal, JournalPage, JournalPageStaff, JournalStaff } from "@quiz/contracts";
 
-import { journalKey } from "../queryKeys";
 import type { Route } from "../router";
 import { fail, mockFetch, ok, renderWithProviders, type RouteHandler } from "../test/render";
 // The journal's route parses in every build since M4-05: no flag to stub.
@@ -332,50 +331,18 @@ describe("JournalReader — the staff", () => {
 });
 
 describe("JournalReader — Refresh (M4-05)", () => {
-  it("sits in the staff bar, secondary, and reads Refreshing… until the hint brings the moved row", async () => {
-    let synced = new Date(Date.now() - 3_600_000).toISOString();
+  it("sits in the staff bar, secondary, and reads Refreshing… once clicked", async () => {
     const { calls } = mockFetch({
-      [`GET ${BASE}`]: () => ok(staffJournal({ repository: { ...staffJournal().repository!, lastSyncedAt: synced } })),
+      [`GET ${BASE}`]: ok(staffJournal()),
       [`GET ${BASE}/pages/${HOME}`]: ok(staffPage(HOME)),
       [`POST ${BASE}/refresh`]: { status: 202 },
     });
-    const { queryClient } = renderWithProviders(<Reader path={HOME} />);
+    renderWithProviders(<Reader path={HOME} />);
     const refresh = await screen.findByRole("button", { name: /Refresh/ });
     expect(refresh.className).not.toMatch(/\bbg-accent\b/);
     await userEvent.click(refresh);
     expect(await screen.findByText("Refreshing…")).toBeInTheDocument();
     expect(calls.some((c) => c.method === "POST" && c.url === `${BASE}/refresh`)).toBe(true);
-
-    synced = new Date().toISOString();
-    await act(() => queryClient.invalidateQueries({ queryKey: journalKey("r1", "staff") }));
-    await waitFor(() => expect(screen.queryByText("Refreshing…")).toBeNull());
-    expect(screen.getByText(/Synced/)).toBeInTheDocument();
-  });
-
-  it("stops at a changed sync state too, a failure included", async () => {
-    let status: "ok" | "error" = "ok";
-    const base = staffJournal().repository!;
-    mockFetch({
-      [`GET ${BASE}`]: () =>
-        ok(
-          staffJournal({
-            repository: {
-              ...base,
-              syncStatus: status,
-              syncError: status === "error" ? "github_unavailable" : null,
-            },
-          }),
-        ),
-      [`GET ${BASE}/pages/${HOME}`]: ok(staffPage(HOME)),
-      [`POST ${BASE}/refresh`]: { status: 202 },
-    });
-    const { queryClient } = renderWithProviders(<Reader path={HOME} />);
-    await userEvent.click(await screen.findByRole("button", { name: /Refresh/ }));
-    expect(await screen.findByText("Refreshing…")).toBeInTheDocument();
-    status = "error";
-    await act(() => queryClient.invalidateQueries({ queryKey: journalKey("r1", "staff") }));
-    expect(await screen.findByText(/GitHub did not answer/)).toBeInTheDocument();
-    expect(screen.queryByText("Refreshing…")).toBeNull();
   });
 
   it("words a refused refresh, in French too", async () => {

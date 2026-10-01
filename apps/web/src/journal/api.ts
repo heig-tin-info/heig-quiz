@@ -18,7 +18,7 @@ import {
   type JournalStaff,
 } from "@quiz/contracts";
 
-import { api, ApiError, apiErrorMessage } from "../api";
+import { api, ApiError } from "../api";
 import type { TFunction } from "../i18n";
 import { journalKey } from "../queryKeys";
 import { JOURNAL_ERRORS } from "./words";
@@ -41,10 +41,10 @@ export function journalRefusal(error: unknown): JournalErrorCode | null {
   return parsed.success ? parsed.data.error : null;
 }
 
-/** A refused journal write in the interface language; anything else as `apiErrorMessage` says it. */
+/** A refused journal write in the interface language; anything else is the generic server error, never the server's text. */
 export function journalErrorText(error: unknown, t: TFunction): string {
   const code = journalRefusal(error);
-  return code ? t(JOURNAL_ERRORS[code]) : apiErrorMessage(error, t("error.server"));
+  return t(code ? JOURNAL_ERRORS[code] : "error.server");
 }
 
 /** The free name a create refused `name_taken` proposes instead (F-JRN-02), if that is the refusal. */
@@ -54,8 +54,7 @@ export function nameTakenSuggestion(error: unknown): string | null {
   return parsed.success ? parsed.data.suggestion : null;
 }
 
-/** How often the staff journal is read again while a Refresh is awaited, and for how long at most. */
-export const REFRESH_POLL_MS = 3_000;
+/** How long a Refresh is awaited at most, should its `journal` hint never come. */
 export const REFRESH_GIVE_UP_MS = 60_000;
 
 /** What a synchronisation changes on the row, whatever its outcome: its state and when it ended. */
@@ -68,9 +67,9 @@ const syncMark = (repository: JournalRepository | null) =>
  * `journal` hint brings back. The write's own `mutation` hint arrives first
  * and refetches a row the synchronisation has not touched yet, so "waiting"
  * is not "until the next fetch" but "until the row's state or its last
- * synchronisation time moves" — every ingestion, ok or failed, writes both.
- * While it waits, the payload is read again every few seconds, in case a
- * hint is lost, and the wait gives up after a minute.
+ * synchronisation time moves" — every ingestion, ok or failed, writes both
+ * and raises the hint (`journalChanged`); a reconnect refetches everything
+ * (ADR-005). The wait gives up after a minute all the same.
  */
 export function useJournalRefresh(
   classroomId: string,
@@ -98,16 +97,9 @@ export function useJournalRefresh(
       setWaitingOn(null);
       return;
     }
-    const poll = setInterval(
-      () => void qc.invalidateQueries({ queryKey: journalKey(classroomId, "staff"), exact: true }),
-      REFRESH_POLL_MS,
-    );
     const giveUp = setTimeout(() => setWaitingOn(null), Math.max(0, waitingOn.at + REFRESH_GIVE_UP_MS - Date.now()));
-    return () => {
-      clearInterval(poll);
-      clearTimeout(giveUp);
-    };
-  }, [waitingOn, mark, qc, classroomId]);
+    return () => clearTimeout(giveUp);
+  }, [waitingOn, mark]);
 
   return { refresh: () => refresh.mutate(), refreshing: refresh.isPending || waiting };
 }

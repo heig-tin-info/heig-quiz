@@ -396,7 +396,7 @@ describe("ClassroomView — the Journal tab", () => {
     expect(screen.queryByText(/Could not load the journal/)).toBeNull();
   });
 
-  it("mounts the reader on its route, with Refresh and no primary in the header", async () => {
+  it("mounts the reader on its route, with no primary in the header", async () => {
     mockFetch({
       [`GET ${ROOM}`]: ok(makeClassroomDetail()),
       [`GET ${JOURNAL}`]: ok(journal(true)),
@@ -418,7 +418,6 @@ describe("ClassroomView — the Journal tab", () => {
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} routeTab="journal" journalPath="README.md" />);
     expect(await screen.findByRole("tab", { name: /Journal/ })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByText("Bienvenue.")).toBeVisible();
-    expect(screen.getByRole("button", { name: /Refresh/ })).toBeVisible();
     expect(screen.queryByRole("button", { name: /Add students|New evaluation/ })).toBeNull();
   });
 

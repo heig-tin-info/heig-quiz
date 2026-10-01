@@ -34,12 +34,11 @@ import {
   Badge,
   Button,
   Card,
-  cx,
   EmptyState,
   FormError,
   GithubIcon,
   isoDateParts,
-  LEVEL_ICON,
+  LevelIcon,
   LinkButton,
   OrgAvatar,
   Progress,
@@ -162,12 +161,9 @@ function Connected({ room, github }: { room: ClassroomDetail; github: GithubClas
 
 function CheckRow({ line, installUrl }: { line: CheckLine; installUrl: string }) {
   const t = useT();
-  const { icon: Icon, className } = LEVEL_ICON[line.level];
   return (
     <li className="flex items-start gap-3 py-2 text-sm" data-level={line.level}>
-      <span role="img" aria-label={t(`github.level.${line.level}`)} className={cx("mt-0.5 shrink-0", className)}>
-        <Icon className="size-4" />
-      </span>
+      <LevelIcon level={line.level} label={t(`github.level.${line.level}`)} className="mt-0.5" />
       <span className="min-w-0 flex-1 text-fg">{t(line.text, line.vars)}</span>
       {line.fixOnGithub ? (
         <a
@@ -307,7 +303,7 @@ function ConnectSheet({
           <div aria-live="polite">
             {fresh ? (
               <p className="flex items-center gap-2 text-[13px] text-success">
-                <LEVEL_ICON.ok.icon className="size-4" /> {t("github.installedOn", { login: fresh.login })}
+                <LevelIcon level="ok" /> {t("github.installedOn", { login: fresh.login })}
               </p>
             ) : before && !refetched ? (
               <Progress label={t("github.waiting")} className="pt-1" />

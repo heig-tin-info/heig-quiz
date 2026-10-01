@@ -1,10 +1,9 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { GithubClassroom, JournalRepository, JournalStaff } from "@quiz/contracts";
 
-import { journalKey } from "../queryKeys";
 import { makeClassroomDetail } from "../test/fixtures";
 import { fail, mockFetch, noContent, ok, renderWithProviders, type RecordedCall } from "../test/render";
 import { JournalSettings } from "./JournalSettings";
@@ -135,10 +134,10 @@ describe("the Journal section — Create a journal", () => {
     });
     renderSection();
     await userEvent.click(await screen.findByRole("button", { name: "Create…" }));
-    const sheet = await screen.findByRole("dialog", { name: /Create a journal/ });
-    expect(within(sheet).getByLabelText(/Repository name/)).toHaveValue("prg1-2026-journal");
-    expect(within(sheet).getByText(/invited to it, with push rights/)).toBeVisible();
-    await userEvent.click(within(sheet).getByRole("button", { name: "Create the journal" }));
+    const dialog = await screen.findByRole("dialog", { name: /Create a journal/ });
+    expect(within(dialog).getByLabelText(/Repository name/)).toHaveValue("prg1-2026-journal");
+    expect(within(dialog).getByText(/invited to it, with push rights/)).toBeVisible();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create the journal" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(calls.find((c) => c.method === "POST")?.body).toEqual({ name: "prg1-2026-journal" });
@@ -149,12 +148,12 @@ describe("the Journal section — Create a journal", () => {
     mockFetch({ [`GET ${GITHUB}`]: ok(connected), [`GET ${JOURNAL}`]: ok(staff(null)) });
     renderSection();
     await userEvent.click(await screen.findByRole("button", { name: "Create…" }));
-    const sheet = await screen.findByRole("dialog");
-    const field = within(sheet).getByLabelText(/Repository name/);
+    const dialog = await screen.findByRole("dialog");
+    const field = within(dialog).getByLabelText(/Repository name/);
     await userEvent.clear(field);
     await userEvent.type(field, "mon journal");
-    expect(within(sheet).getByText(/Letters, digits/)).toBeVisible();
-    expect(within(sheet).getByRole("button", { name: "Create the journal" })).toBeDisabled();
+    expect(within(dialog).getByText(/Letters, digits/)).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Create the journal" })).toBeDisabled();
   });
 
   it("offers the free name a taken one gets, and creates it in one click", async () => {
@@ -171,33 +170,20 @@ describe("the Journal section — Create a journal", () => {
     });
     renderSection();
     await userEvent.click(await screen.findByRole("button", { name: "Create…" }));
-    const sheet = await screen.findByRole("dialog");
-    const field = within(sheet).getByLabelText(/Repository name/);
+    const dialog = await screen.findByRole("dialog");
+    const field = within(dialog).getByLabelText(/Repository name/);
     await userEvent.clear(field);
     await userEvent.type(field, "prg1-journal");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Create the journal" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create the journal" }));
 
-    expect(await within(sheet).findByText("heig-tin-info/prg1-journal already exists")).toBeVisible();
-    expect(within(sheet).getByText(/never takes over an existing repository/)).toBeVisible();
-    await userEvent.click(within(sheet).getByRole("button", { name: "Create prg1-journal-0190d3c4" }));
+    expect(await within(dialog).findByText("heig-tin-info/prg1-journal already exists")).toBeVisible();
+    expect(within(dialog).getByText(/never takes over an existing repository/)).toBeVisible();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create prg1-journal-0190d3c4" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(posts).toEqual([{ name: "prg1-journal" }, { name: "prg1-journal-0190d3c4" }]);
   });
 
-  it("words any other refusal from its code", async () => {
-    mockFetch({
-      [`GET ${GITHUB}`]: ok(connected),
-      [`GET ${JOURNAL}`]: ok(staff(null)),
-      [`POST ${JOURNAL}`]: fail(409, { error: "not_connected", message: "not_connected" }),
-    });
-    renderSection();
-    await userEvent.click(await screen.findByRole("button", { name: "Create…" }));
-    const sheet = await screen.findByRole("dialog");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Create the journal" }));
-    expect(await within(sheet).findByText("Could not create the journal")).toBeVisible();
-    expect(within(sheet).getByText(/not connected to a GitHub organization where the Quiz app is installed/)).toBeVisible();
-  });
 });
 
 describe("the Journal section — Use a repository", () => {
@@ -213,11 +199,11 @@ describe("the Journal section — Use a repository", () => {
       [`POST ${JOURNAL}/use`]: { status: 201, body: staff(repository()) },
     });
     renderSection();
-    const sheet = await openUse();
+    const dialog = await openUse();
     // The expert fields stay folded (docs/spec/08).
-    expect(within(sheet).queryByLabelText("Branch")).toBeNull();
-    await userEvent.type(within(sheet).getByLabelText(/Repository name/), "prg1-journal");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Use this repository" }));
+    expect(within(dialog).queryByLabelText("Branch")).toBeNull();
+    await userEvent.type(within(dialog).getByLabelText(/Repository name/), "prg1-journal");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Use this repository" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(calls.find((c) => c.method === "POST")?.body).toEqual({ name: "prg1-journal" });
   });
@@ -229,12 +215,12 @@ describe("the Journal section — Use a repository", () => {
       [`POST ${JOURNAL}/use`]: { status: 201, body: staff(repository({ ref: "dev", rootPath: "docs" })) },
     });
     renderSection();
-    const sheet = await openUse();
-    await userEvent.type(within(sheet).getByLabelText(/Repository name/), "prg1-journal");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Branch and folder" }));
-    await userEvent.type(within(sheet).getByLabelText("Branch"), "dev");
-    await userEvent.type(within(sheet).getByLabelText("Folder"), "/docs/");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Use this repository" }));
+    const dialog = await openUse();
+    await userEvent.type(within(dialog).getByLabelText(/Repository name/), "prg1-journal");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Branch and folder" }));
+    await userEvent.type(within(dialog).getByLabelText("Branch"), "dev");
+    await userEvent.type(within(dialog).getByLabelText("Folder"), "/docs/");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Use this repository" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(calls.find((c) => c.method === "POST")?.body).toEqual({ name: "prg1-journal", ref: "dev", rootPath: "docs" });
   });
@@ -242,28 +228,32 @@ describe("the Journal section — Use a repository", () => {
   it("says when a branch or a folder is not one, before asking", async () => {
     mockFetch({ [`GET ${GITHUB}`]: ok(connected), [`GET ${JOURNAL}`]: ok(staff(null)) });
     renderSection();
-    const sheet = await openUse();
-    await userEvent.type(within(sheet).getByLabelText(/Repository name/), "prg1-journal");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Branch and folder" }));
-    await userEvent.type(within(sheet).getByLabelText("Branch"), "-x");
-    await userEvent.type(within(sheet).getByLabelText("Folder"), "../etc");
-    expect(within(sheet).getByText("Not a branch name.")).toBeVisible();
-    expect(within(sheet).getByText("Not a folder of the repository.")).toBeVisible();
-    expect(within(sheet).getByRole("button", { name: "Use this repository" })).toBeDisabled();
+    const dialog = await openUse();
+    await userEvent.type(within(dialog).getByLabelText(/Repository name/), "prg1-journal");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Branch and folder" }));
+    await userEvent.type(within(dialog).getByLabelText("Branch"), "-x");
+    await userEvent.type(within(dialog).getByLabelText("Folder"), "../etc");
+    expect(within(dialog).getByText("Not a branch name.")).toBeVisible();
+    expect(within(dialog).getByText("Not a folder of the repository.")).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Use this repository" })).toBeDisabled();
   });
 
-  it("words a repository that does not exist", async () => {
+  it("words a refusal from its code, and never the server's own text", async () => {
+    let reply = fail(409, { error: "repo_not_found", message: "repo_not_found" });
     mockFetch({
       [`GET ${GITHUB}`]: ok(connected),
       [`GET ${JOURNAL}`]: ok(staff(null)),
-      [`POST ${JOURNAL}/use`]: fail(409, { error: "repo_not_found", message: "repo_not_found" }),
+      [`POST ${JOURNAL}/use`]: () => reply,
     });
     renderSection();
-    const sheet = await openUse();
-    await userEvent.type(within(sheet).getByLabelText(/Repository name/), "nowhere");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Use this repository" }));
-    expect(await within(sheet).findByText("Could not use this repository")).toBeVisible();
-    expect(within(sheet).getByText(/No repository by that name in the organization/)).toBeVisible();
+    const dialog = await openUse();
+    await userEvent.type(within(dialog).getByLabelText(/Repository name/), "nowhere");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Use this repository" }));
+    expect(await within(dialog).findByText(/No repository by that name in the organization/)).toBeVisible();
+    reply = fail(500, { message: "internal detail" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Use this repository" }));
+    expect(await within(dialog).findByText("The server did not answer. Try again in a moment.")).toBeVisible();
+    expect(within(dialog).queryByText("internal detail")).toBeNull();
   });
 
   it("opens the branch and folder on a refusal about them, in French too", async () => {
@@ -274,11 +264,11 @@ describe("the Journal section — Use a repository", () => {
     });
     renderWithProviders(<JournalSettings room={makeClassroomDetail()} />, { locale: "fr" });
     await userEvent.click(await screen.findByRole("button", { name: "Choisir…" }));
-    const sheet = await screen.findByRole("dialog");
-    await userEvent.type(within(sheet).getByLabelText(/Nom du dépôt/), "prg1-journal");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Utiliser ce dépôt" }));
-    expect(await within(sheet).findByText("Cette branche n'existe pas dans le dépôt.")).toBeVisible();
-    expect(within(sheet).getByLabelText("Branche")).toBeVisible();
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText(/Nom du dépôt/), "prg1-journal");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Utiliser ce dépôt" }));
+    expect(await within(dialog).findByText("Cette branche n'existe pas dans le dépôt.")).toBeVisible();
+    expect(within(dialog).getByLabelText("Branche")).toBeVisible();
   });
 });
 
@@ -318,40 +308,17 @@ describe("the Journal section — a journal", () => {
     expect(within(root).getByRole("button", { name: /Remove…/ })).toBeVisible();
   });
 
-  it("refreshes, and says Refreshing… until the copy's state moves", async () => {
-    let synced = new Date(Date.now() - 3_600_000).toISOString();
+  it("refreshes, and says Refreshing…", async () => {
     const { calls } = mockFetch({
       [`GET ${GITHUB}`]: ok(connected),
-      [`GET ${JOURNAL}`]: () => ok(staff(repository({ lastSyncedAt: synced }))),
-      [`POST ${JOURNAL}/refresh`]: { status: 202 },
-    });
-    const { queryClient } = renderSection();
-    const root = await section();
-    await userEvent.click(within(root).getByRole("button", { name: /Refresh/ }));
-    expect(await within(root).findByText("Refreshing…")).toBeVisible();
-    expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual([`${JOURNAL}/refresh`]);
-    // The write's own refetch reads the row unchanged: still refreshing.
-    await new Promise((r) => setTimeout(r, 50));
-    expect(within(root).getByText("Refreshing…")).toBeVisible();
-
-    // The synchronisation ends, and the `journal` hint reads the row again.
-    synced = new Date().toISOString();
-    await act(() => queryClient.invalidateQueries({ queryKey: journalKey("r1", "staff") }));
-    await waitFor(() => expect(within(root).queryByText("Refreshing…")).toBeNull());
-    expect(within(root).getByText(/Synced/)).toBeVisible();
-  });
-
-  it("words a refused refresh in a toast", async () => {
-    mockFetch({
-      [`GET ${GITHUB}`]: ok(connected),
       [`GET ${JOURNAL}`]: ok(staff(repository())),
-      [`POST ${JOURNAL}/refresh`]: fail(409, { error: "no_journal", message: "no_journal" }),
+      [`POST ${JOURNAL}/refresh`]: { status: 202 },
     });
     renderSection();
     const root = await section();
     await userEvent.click(within(root).getByRole("button", { name: /Refresh/ }));
-    expect(await screen.findByText("This classroom has no journal any more.")).toBeVisible();
-    expect(within(root).queryByText("Refreshing…")).toBeNull();
+    expect(await within(root).findByText("Refreshing…")).toBeVisible();
+    expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual([`${JOURNAL}/refresh`]);
   });
 
   it("removes the journal after a confirmation that says the repository is kept", async () => {

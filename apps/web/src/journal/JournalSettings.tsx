@@ -16,8 +16,9 @@
  *     is what lets the GitHub section disconnect the classroom (D28).
  *
  * Nothing here is accented (F-ORG-13): a classroom connected for its
- * projects is not pushed towards a journal. The sheets' own submit is the
- * primary of the sheet, not of the tab.
+ * projects is not pushed towards a journal. Create and Use are one-field
+ * forms (the expert fields folded), so dialogs; their submit is the primary
+ * of the dialog, not of the tab.
  *
  * Without Quiz's App on the platform the journal's routes are absent (404),
  * as the GitHub ones are: no section at all, as on a classroom never
@@ -26,7 +27,7 @@
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Trash2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 
 import {
   GithubRepoName,
@@ -42,20 +43,19 @@ import { useConfirm } from "../confirm";
 import { githubAbsent, useClassroomGithub } from "../github/api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { journalKey } from "../queryKeys";
 import {
   Alert,
   Button,
   Card,
-  cx,
   ErrorText,
   Field,
+  FormDialog,
+  FormError,
   GithubIcon,
-  LEVEL_ICON,
+  LevelIcon,
   QueryError,
   SectionHeading,
   SettingRow,
-  Sheet,
 } from "../ui";
 import {
   journalBase,
@@ -68,13 +68,13 @@ import {
 import { syncLevel, SyncText } from "./SyncState";
 import { SYNC_ERRORS } from "./words";
 
-type OpenSheet = "create" | "use" | null;
+type OpenDialog = "create" | "use" | null;
 
 export function JournalSettings({ room }: { room: ClassroomDetail }) {
   const t = useT();
   const github = useClassroomGithub(room.id);
   const journal = useStaffJournal(room.id);
-  const [sheet, setSheet] = useState<OpenSheet>(null);
+  const [dialog, setDialog] = useState<OpenDialog>(null);
 
   // No App on this platform, or still waiting: nothing, as the GitHub section.
   // A GitHub failure is said once, by the GitHub section above.
@@ -104,12 +104,12 @@ export function JournalSettings({ room }: { room: ClassroomDetail }) {
     body = (
       <Card className="divide-y divide-line px-5">
         <SettingRow title={t("journalSettings.create")} desc={t("journalSettings.createDesc", { org })}>
-          <Button variant="secondary" onClick={() => setSheet("create")}>
+          <Button variant="secondary" onClick={() => setDialog("create")}>
             {t("journalSettings.createOpen")}
           </Button>
         </SettingRow>
         <SettingRow title={t("journalSettings.use")} desc={t("journalSettings.useDesc", { org })}>
-          <Button variant="secondary" onClick={() => setSheet("use")}>
+          <Button variant="secondary" onClick={() => setDialog("use")}>
             {t("journalSettings.useOpen")}
           </Button>
         </SettingRow>
@@ -121,15 +121,15 @@ export function JournalSettings({ room }: { room: ClassroomDetail }) {
     <section className="space-y-3">
       <SectionHeading icon={BookOpen} title={t("journalSettings.section")} />
       {body}
-      {sheet === "create" && org !== null && journal.data ? (
-        <CreateSheet
+      {dialog === "create" && org !== null && journal.data ? (
+        <CreateDialog
           room={room}
           org={org}
           proposedName={journal.data.proposedName}
-          onClose={() => setSheet(null)}
+          onClose={() => setDialog(null)}
         />
       ) : null}
-      {sheet === "use" && org !== null ? <UseSheet room={room} org={org} onClose={() => setSheet(null)} /> : null}
+      {dialog === "use" && org !== null ? <UseDialog room={room} org={org} onClose={() => setDialog(null)} /> : null}
     </section>
   );
 }
@@ -166,7 +166,6 @@ function Attached({ room, repository }: { room: ClassroomDetail; repository: Jou
   };
 
   const level = syncLevel(repository, refreshing);
-  const { icon: LevelIcon, className: levelClass } = LEVEL_ICON[level];
   const reason =
     !refreshing && repository.syncStatus === "error"
       ? `${repository.syncError ? `${t(SYNC_ERRORS[repository.syncError])} ` : ""}${t("journal.sync.errorHint")}`
@@ -195,10 +194,8 @@ function Attached({ room, repository }: { room: ClassroomDetail; repository: Jou
       />
       <SettingRow
         title={
-          <span className="inline-flex items-center gap-2" data-level={level}>
-            <span role="img" aria-label={t(`github.level.${level}`)} className={cx("shrink-0", levelClass)}>
-              <LevelIcon className="size-4" />
-            </span>
+          <span className="inline-flex items-center gap-2">
+            <LevelIcon level={level} label={t(`github.level.${level}`)} />
             <span aria-live="polite">
               <SyncText repository={repository} refreshing={refreshing} />
             </span>
@@ -219,22 +216,21 @@ function Attached({ room, repository }: { room: ClassroomDetail; repository: Jou
   );
 }
 
-// ------------------------------------------------------------------ the sheets
+// ------------------------------------------------------------------ the dialogs
 
-/** A create or a use answered 201 with the staff journal: it becomes the cache's, and the pages are read again. */
+/** A create or a use answered 201: the journal and its pages are read again. */
 function useAttach(room: ClassroomDetail, onDone: () => void) {
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
   return async (next: JournalStaff) => {
-    qc.setQueryData(journalKey(room.id, "staff"), next);
     await qc.invalidateQueries({ queryKey: ["journal", room.id] });
     toast(t("journalSettings.attached", { name: next.repository?.fullName ?? "" }), "success");
     onDone();
   };
 }
 
-function CreateSheet({
+function CreateDialog({
   room,
   org,
   proposedName,
@@ -258,31 +254,17 @@ function CreateSheet({
     onSuccess: attach,
   });
   const suggestion = nameTakenSuggestion(create.error);
-  const submit = (e?: FormEvent) => {
-    e?.preventDefault();
-    if (body.success && body.data.name) create.mutate(body.data.name);
-  };
 
   return (
-    <Sheet
+    <FormDialog
       title={t("journalSettings.createTitle")}
-      subtitle={room.name}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button type="submit" form="journal-create" disabled={!body.success || !name.trim()} loading={create.isPending}>
-            {t("journalSettings.createSubmit")}
-          </Button>
-        </>
-      }
-    >
-      <form id="journal-create" className="space-y-5" onSubmit={submit}>
-        <p className="text-sm text-fg-muted">{t("journalSettings.createIntro", { org })}</p>
-        <RepoNameField value={name} onChange={setName} org={org} autoFocus />
-        {suggestion ? (
+      onSubmit={() => body.data?.name && create.mutate(body.data.name)}
+      submitLabel={t("journalSettings.createSubmit")}
+      submitting={create.isPending}
+      canSubmit={body.success && name.trim() !== ""}
+      error={
+        suggestion ? (
           <Alert
             tone="warning"
             title={t("journalSettings.nameTaken", { name: `${org}/${create.variables ?? name}` })}
@@ -301,20 +283,21 @@ function CreateSheet({
           >
             {t("journalSettings.nameTakenHint")}
           </Alert>
-        ) : create.error ? (
-          <Alert tone="danger" title={t("journalSettings.createFailed")}>
-            {journalErrorText(create.error, t)}
-          </Alert>
-        ) : null}
-      </form>
-    </Sheet>
+        ) : (
+          <FormError error={create.error} describe={(e) => journalErrorText(e, t)} />
+        )
+      }
+    >
+      <p className="text-sm text-fg-muted">{t("journalSettings.createIntro", { org })}</p>
+      <RepoNameField value={name} onChange={setName} org={org} autoFocus />
+    </FormDialog>
   );
 }
 
 /** The codes a use may meet whose fix is in the expert fields: the disclosure opens on them. */
-const EXPERT_REFUSALS = new Set(["ref_not_found", "root_not_found"]);
+const EXPERT_REFUSALS: ReadonlySet<string> = new Set(["ref_not_found", "root_not_found"]);
 
-function UseSheet({ room, org, onClose }: { room: ClassroomDetail; org: string; onClose: () => void }) {
+function UseDialog({ room, org, onClose }: { room: ClassroomDetail; org: string; onClose: () => void }) {
   const t = useT();
   const attach = useAttach(room, onClose);
   const [name, setName] = useState("");
@@ -330,80 +313,59 @@ function UseSheet({ room, org, onClose }: { room: ClassroomDetail; org: string; 
     mutationFn: (payload: JournalUse) =>
       api<JournalStaff>(`${journalBase(room.id)}/use`, { method: "POST", body: JSON.stringify(payload) }),
     onSuccess: attach,
+    onError: (error) => {
+      const code = journalRefusal(error);
+      if (code && EXPERT_REFUSALS.has(code)) setExpert(true);
+    },
   });
-  const refused = journalRefusal(use.error);
-  const open = expert || (refused !== null && EXPERT_REFUSALS.has(refused));
-  // Which field the API refused, when the schema already does: said under it.
+  // Which expert field the schema refuses: said under it, before asking.
   const issue = (field: "ref" | "rootPath") =>
     !body.success && body.error.issues.some((i) => i.path[0] === field);
-  const submit = (e?: FormEvent) => {
-    e?.preventDefault();
-    if (body.success) use.mutate(body.data);
-  };
 
   return (
-    <Sheet
+    <FormDialog
       title={t("journalSettings.useTitle")}
-      subtitle={room.name}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button type="submit" form="journal-use" disabled={!body.success} loading={use.isPending}>
-            {t("journalSettings.useSubmit")}
-          </Button>
-        </>
-      }
+      onSubmit={() => body.success && use.mutate(body.data)}
+      submitLabel={t("journalSettings.useSubmit")}
+      submitting={use.isPending}
+      canSubmit={body.success}
+      error={<FormError error={use.error} describe={(e) => journalErrorText(e, t)} />}
     >
-      <form id="journal-use" className="space-y-5" onSubmit={submit}>
-        <p className="text-sm text-fg-muted">{t("journalSettings.useIntro", { org })}</p>
-        <RepoNameField value={name} onChange={setName} org={org} autoFocus />
-
-        {open ? (
-          <div className="space-y-4">
-            <Button variant="ghost" size="sm" onClick={() => setExpert(false)} aria-expanded>
-              <ChevronUp /> {t("journalSettings.expert")}
-            </Button>
-            <div className="space-y-1.5">
-              <Field
-                label={t("journalSettings.ref")}
-                value={ref}
-                onChange={(e) => setRef(e.target.value)}
-                placeholder={t("journalSettings.refPlaceholder")}
-                spellCheck={false}
-                autoCapitalize="off"
-                fullWidth
-              />
-              {issue("ref") ? <ErrorText>{t("journalSettings.refInvalid")}</ErrorText> : null}
-            </div>
-            <div className="space-y-1.5">
-              <Field
-                label={t("journalSettings.root")}
-                value={rootPath}
-                onChange={(e) => setRootPath(e.target.value)}
-                placeholder={t("journalSettings.rootPlaceholder")}
-                spellCheck={false}
-                autoCapitalize="off"
-                fullWidth
-              />
-              {issue("rootPath") ? <ErrorText>{t("journalSettings.rootInvalid")}</ErrorText> : null}
-            </div>
+      <p className="text-sm text-fg-muted">{t("journalSettings.useIntro", { org })}</p>
+      <RepoNameField value={name} onChange={setName} org={org} autoFocus />
+      <Button variant="ghost" size="sm" aria-expanded={expert} onClick={() => setExpert((v) => !v)}>
+        {expert ? <ChevronUp /> : <ChevronDown />} {t("journalSettings.expert")}
+      </Button>
+      {expert ? (
+        <>
+          <div className="space-y-1.5">
+            <Field
+              label={t("journalSettings.ref")}
+              value={ref}
+              onChange={(e) => setRef(e.target.value)}
+              placeholder={t("journalSettings.refPlaceholder")}
+              spellCheck={false}
+              autoCapitalize="off"
+              fullWidth
+            />
+            {issue("ref") ? <ErrorText>{t("journalSettings.refInvalid")}</ErrorText> : null}
           </div>
-        ) : (
-          <Button variant="ghost" size="sm" onClick={() => setExpert(true)} aria-expanded={false}>
-            <ChevronDown /> {t("journalSettings.expert")}
-          </Button>
-        )}
-
-        {use.error ? (
-          <Alert tone="danger" title={t("journalSettings.useFailed")}>
-            {journalErrorText(use.error, t)}
-          </Alert>
-        ) : null}
-      </form>
-    </Sheet>
+          <div className="space-y-1.5">
+            <Field
+              label={t("journalSettings.root")}
+              value={rootPath}
+              onChange={(e) => setRootPath(e.target.value)}
+              placeholder={t("journalSettings.rootPlaceholder")}
+              spellCheck={false}
+              autoCapitalize="off"
+              fullWidth
+            />
+            {issue("rootPath") ? <ErrorText>{t("journalSettings.rootInvalid")}</ErrorText> : null}
+          </div>
+        </>
+      ) : null}
+    </FormDialog>
   );
 }
 

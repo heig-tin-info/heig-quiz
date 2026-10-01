@@ -24,6 +24,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ChevronRight, School } from "lucide-react";
+import { useEffect } from "react";
 
 import type { StudentActivities, StudentClassroomPage } from "@quiz/contracts";
 
@@ -104,6 +105,12 @@ export function StudentClassroom({
     queryFn: () => api(`/app/api/student/classrooms/${id}`),
   });
   const toCourses = () => navigate({ view: "studentCourses" });
+  // The Journal's address on a classroom that has none (removed meanwhile,
+  // or no App on the platform): the classroom's page, in place.
+  const noJournal = tab === "journal" && page.data !== undefined && !page.data.hasJournal;
+  useEffect(() => {
+    if (noJournal) navigate({ view: "classroom", id }, { replace: true });
+  }, [noJournal, navigate, id]);
 
   // A classroom the caller holds no seat in reads as one that does not exist.
   if (isNotFound(page.error)) {

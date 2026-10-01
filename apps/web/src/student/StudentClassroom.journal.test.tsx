@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -73,6 +73,16 @@ describe("the student classroom page's Journal tab", () => {
 
     await userEvent.click(screen.getByRole("tab", { name: "Activities" }));
     expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" });
+  });
+
+  it("sends the Journal's address back to the classroom when it has no journal", async () => {
+    mockFetch({
+      "GET /app/api/student/classrooms/r1": ok(page(false)),
+      "GET /app/api/classrooms/r1/journal?view=student": fail(404, {}),
+    });
+    const navigate = vi.fn();
+    renderWithProviders(<StudentClassroom id="r1" tab="journal" navigate={navigate} />);
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" }, { replace: true }));
   });
 
   it("keeps the breadcrumb and the tabs when the journal fails to load", async () => {

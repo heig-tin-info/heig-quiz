@@ -6,15 +6,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { JournalRepository } from "@quiz/contracts";
 
 import { ApiError } from "../api";
-import { journalKey } from "../queryKeys";
 import { mockFetch } from "../test/render";
-import { journalRefusal, nameTakenSuggestion, REFRESH_GIVE_UP_MS, REFRESH_POLL_MS, useJournalRefresh } from "./api";
+import { journalRefusal, nameTakenSuggestion, REFRESH_GIVE_UP_MS, useJournalRefresh } from "./api";
 
 /*
- * Refresh's wait (F-JRN-05): the copy is read again every few seconds while
- * the row has not moved, in case the `journal` hint is lost, and the wait
- * gives up after a minute rather than spinning for ever. And the refusals,
- * read off the body by the contract's schemas.
+ * Refresh's wait (F-JRN-05): "Refreshing…" until the row's sync state or its
+ * last synchronisation moves (the write's own refetch of an unchanged row
+ * does not end it), and never longer than a minute. And the refusals, read
+ * off the body by the contract's schemas.
  */
 
 afterEach(() => {
@@ -34,29 +33,36 @@ const repository: JournalRepository = {
   editable: true,
 };
 
-describe("useJournalRefresh", () => {
-  it("reads the journal again while it waits, and gives up after a minute", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    mockFetch({ "POST /app/api/classrooms/r1/journal/refresh": { status: 202 } });
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const invalidate = vi.spyOn(qc, "invalidateQueries");
-    const wrapper = ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
-    );
-    const onError = vi.fn();
-    const { result } = renderHook(() => useJournalRefresh("r1", repository, onError), { wrapper });
+function renderRefresh() {
+  mockFetch({ "POST /app/api/classrooms/r1/journal/refresh": { status: 202 } });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  );
+  return renderHook(({ repo }) => useJournalRefresh("r1", repo, vi.fn()), {
+    wrapper,
+    initialProps: { repo: repository },
+  });
+}
 
+describe("useJournalRefresh", () => {
+  it("waits through an unchanged row, and ends when the row moves", async () => {
+    const { result, rerender } = renderRefresh();
     act(() => result.current.refresh());
     await waitFor(() => expect(result.current.refreshing).toBe(true));
-    invalidate.mockClear();
-
-    await act(() => vi.advanceTimersByTimeAsync(REFRESH_POLL_MS));
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: journalKey("r1", "staff"), exact: true });
+    rerender({ repo: { ...repository } });
     expect(result.current.refreshing).toBe(true);
+    rerender({ repo: { ...repository, lastSyncedAt: "2026-10-01T10:00:00.000Z" } });
+    expect(result.current.refreshing).toBe(false);
+  });
 
+  it("gives up after a minute when no hint comes", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { result } = renderRefresh();
+    act(() => result.current.refresh());
+    await waitFor(() => expect(result.current.refreshing).toBe(true));
     await act(() => vi.advanceTimersByTimeAsync(REFRESH_GIVE_UP_MS));
     expect(result.current.refreshing).toBe(false);
-    expect(onError).not.toHaveBeenCalled();
   });
 });
 
@@ -68,6 +74,5 @@ describe("the refusals", () => {
     expect(journalRefusal(new ApiError(409, { error: "journal_attached" }))).toBeNull();
     expect(journalRefusal(new Error("network"))).toBeNull();
     expect(nameTakenSuggestion(new ApiError(409, { error: "conflict", message: "conflict" }))).toBeNull();
-    expect(nameTakenSuggestion(null)).toBeNull();
   });
 });

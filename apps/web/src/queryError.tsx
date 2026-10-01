@@ -97,15 +97,18 @@ export function FormError({
   error,
   fallback,
   title,
+  describe,
 }: {
   error: unknown;
   /** Defaults to the translated `error.server`, like `QueryError`'s. */
   fallback?: string;
   title?: string;
+  /** Words the error itself (a module's refusal codes), in place of `apiErrorMessage`. */
+  describe?: (error: unknown) => string;
 }) {
   const t = useT();
   if (error == null) return null;
-  const message = apiErrorMessage(error, fallback ?? t("error.server"));
+  const message = describe ? describe(error) : apiErrorMessage(error, fallback ?? t("error.server"));
   return title ? (
     <Alert tone="danger" title={title}>
       {message}

@@ -807,13 +807,13 @@ files it ports; writes en + fr for every string.
 - **As delivered** (#416): what M4-06 and the later tasks inherit:
   - `Q:apps/web/src/journal/JournalSettings.tsx`, in `ClassroomSettings`
     between GitHub and "Archive and delete": one line ("connect first")
-    until the classroom is connected; then "Create a journal" (sheet, the
+    until the classroom is connected; then "Create a journal" (`FormDialog`, the
     name prefilled with `proposedName`; a 409 `name_taken` offers
-    "Create <suggestion>" in one click) and "Use a repository" (sheet;
+    "Create <suggestion>" in one click) and "Use a repository" (`FormDialog`;
     branch and folder behind a "Branch and folder" disclosure that opens by
     itself on `ref_not_found`/`root_not_found`); once set, the repository
     (a link to GitHub), branch and folder, the sync state with its check
-    level (`LEVEL_ICON`: ok, unknown while pending or refreshing, blocker on
+    level (`LevelIcon` of `ui`: ok, unknown while pending or refreshing, blocker on
     error, with its reason), Refresh, "Remove the journal" (confirmed
     `danger`, says the repository is kept). Nothing accented. A 404 on the
     GitHub or the journal route draws nothing. A journal is still shown
@@ -824,19 +824,22 @@ files it ports; writes en + fr for every string.
     `useJournalRefresh` — "Refreshing…" from the click until the row's
     `syncStatus` or `lastSyncedAt` moves (the write's own `mutation` hint
     refetches an unchanged row first, so "until the next fetch" would stop
-    too early), polling every 3 s, giving up after 60 s.
-    `JOURNAL_ERRORS` (`words.ts`) words every `JournalErrorCode`.
+    too early; the `journal` hint follows every ingestion), giving up
+    after 60 s; no polling. `JOURNAL_ERRORS` (`words.ts`) words every
+    `JournalErrorCode`; anything else is `error.server`, never the
+    server's text (`FormError describe`).
   - The teacher's Journal tab is `ClassroomView routeTab="journal"`
     (`ROUTE_TABS.journal`), shown only while the staff payload has a
     repository; its address without a journal (or without an App) replaces
-    itself with the classroom's. The reader lost its breadcrumb (it is
+    itself with the classroom's, as the student page's does when
+    `hasJournal` is false. The reader lost its breadcrumb (it is
     always a tab now); its staff bar (`StaffBar`) holds the sync state and
     Refresh (`secondary`, `sm`). **Edit (M4-06) goes in that bar.**
   - `classroomJournal` is no longer `preview`; the student page's Journal
     tab shows on `hasJournal` alone. `CLASSROOM_PAGES` now gates only the
     Grades tab and the project pages.
-  - `api()` reads a success with an empty body (the 202 of Refresh) as
-    `undefined`, as it did a 204.
+  - `api()` reads no body from a 202 (Refresh) or a declared-empty
+    response, as from a 204; every other success is parsed.
   - Mock: create, use, remove and refresh change the journals for the
     page's life (`ORG_REPOS` are the taken names); `?journalerror=1`; the
     GitHub disconnect and the student page read `hasMockJournal`.
