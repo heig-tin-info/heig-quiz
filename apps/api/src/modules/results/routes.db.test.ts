@@ -9,6 +9,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { StudentGrades } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import { evaluations } from "../../db/schema.js";
@@ -40,6 +41,8 @@ afterAll(async () => {
 
 const get = (url: string, headers: Record<string, string>) =>
   server.app.inject({ method: "GET", url, headers });
+/** The rows of the student's Grades page, every classroom's, read through the contract. */
+const gradeRows = (body: unknown) => StudentGrades.parse(body).flatMap((group) => group.rows);
 const post = (url: string, headers: Record<string, string>, payload?: Payload) =>
   server.app.inject({
     method: "POST",
@@ -153,8 +156,11 @@ describe("results and the export (§4.6)", () => {
     expect(before.statusCode).toBe(200);
     expect(before.json()).toMatchObject({ available: false, reason: "results_pending" });
 
+    // The Grades page lists it already, pending, without a grade.
     const cards = await get("/app/api/student/results", student.headers);
-    expect(cards.json()).toHaveLength(0);
+    expect(gradeRows(cards.json())).toEqual([
+      expect.objectContaining({ status: "pending", score: null, feedbackAttemptId: null }),
+    ]);
 
     const released = await post(
       `/app/api/evaluations/${built.evaluationId}/release`,
@@ -167,8 +173,13 @@ describe("results and the export (§4.6)", () => {
     const after = await get(`/app/api/attempts/${built.attemptId}/feedback`, student.headers);
     expect(after.json()).toMatchObject({ available: true, points: 1, grade: 6 });
     const cardsAfter = await get("/app/api/student/results", student.headers);
-    expect(cardsAfter.json()).toHaveLength(1);
-    expect(cardsAfter.json()[0]).toMatchObject({ grade: 6, totalPoints: 1 });
+    expect(gradeRows(cardsAfter.json())).toEqual([
+      expect.objectContaining({
+        status: "released",
+        score: { points: 1, totalPoints: 1, grade: 6 },
+        feedbackAttemptId: built.attemptId,
+      }),
+    ]);
 
     // The student home carries the grade too (WP5 placeholder, filled here).
     const home = await get("/app/api/student/home", student.headers);

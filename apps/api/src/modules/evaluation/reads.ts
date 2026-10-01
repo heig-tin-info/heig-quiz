@@ -278,6 +278,8 @@ export async function joinedItem(
  *
  * `classroomId` narrows it to one of those classrooms (the student's
  * classroom page, M5-01): the same rows, never a second query shape.
+ * `staff`: the seat is a staff seat (ADR-018), which the Grades page lists
+ * only once it holds an attempt.
  */
 export function studentEvaluationRows(db: Db, userId: string, classroomId?: string) {
   return db
@@ -285,6 +287,11 @@ export function studentEvaluationRows(db: Db, userId: string, classroomId?: stri
       evaluation: evaluations,
       classroomName: classrooms.name,
       courseCode: courses.code,
+      // The Grades page's group header (F-ORG-14), archived classrooms included.
+      courseName: courses.name,
+      period: classrooms.period,
+      archivedAt: classrooms.archivedAt,
+      staff: enrollments.staff,
       attempt: attempts,
     })
     .from(enrollments)

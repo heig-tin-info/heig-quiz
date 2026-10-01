@@ -116,7 +116,10 @@ without a runner (so the code answers wait for it). Every scene showing
 The `student-home` scenes were retaken on 2026-09-30 once more, without the
 classroom code field (ADR-053). The `student-home`, `student-settings` and
 `feedback*` scenes were retaken on 2026-10-01, on a fresh seed, for the
-student sidebar that mirrors the bottom bar.
+student sidebar that mirrors the bottom bar. Later on 2026-10-01 the
+`student-home` scenes were retaken without the Past section, and the
+`student-grades` scenes (the `/grades` page) added, on a fresh seed with no
+runner.
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |
@@ -190,5 +193,7 @@ student sidebar that mirrors the bottom bar.
 | `results-released` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results` | released | Nothing: the page as it loads. | 1440×900, full page |
 | `feedback` | lea | `/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback` | released | Nothing: the page as it loads. | 1440×900, full page |
 | `feedback-phone` | lea | `/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback` | released | Nothing: the page as it loads. | 390×844, full page |
+| `student-grades` | lea | `/grades` | released | Nothing: the page as it loads. | 1440×900 |
+| `student-grades-phone` | lea | `/grades` | released | Nothing: the page as it loads. | 390×844 |
 | `student-settings` | lea | `/settings` | seeded | Nothing: the page as it loads. | 1440×900 |
 <!-- scenes:end -->

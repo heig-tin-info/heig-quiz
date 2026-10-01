@@ -2,9 +2,8 @@
  * HTTP surface of the `results` module (PLAN-MVP §4.6).
  *
  * The teacher half serves the grade table, the statistics, the per-question
- * view and the CSV; the student half serves exactly one thing — their own
- * attempt, through the feedback policy, and only once the results are
- * released.
+ * view and the CSV; the student half serves their own attempt, through the
+ * feedback policy, and the list of their finished work (the Grades page).
  *
  * The student route goes through `studentFeedback()` and nothing else: it is
  * the second half of the content gate of docs/05 §5.7, and the reason the
@@ -21,6 +20,7 @@ import { studentRoute, teacherRoute } from "../http.js";
 import { byId } from "../evaluation/service.js";
 import * as gradingEvents from "../grading/events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
+import { studentGrades } from "../live/service.js";
 import * as bus from "../realtime/bus.js";
 import { csvFilename, resultsCsv } from "./csv.js";
 import * as service from "./service.js";
@@ -146,9 +146,13 @@ export async function resultsPlugin(app: FastifyInstance) {
 
   // --- Student -----------------------------------------------------------
 
-  /** One card per released evaluation the student took (F-RES-04). */
+  /**
+   * The student's Grades page (F-RES-04, F-ORG-14): their finished work by
+   * classroom, the grade only where the feedback policy lets it through.
+   * The home's Past rule, so it lives beside the home (`live`).
+   */
   app.get("/app/api/student/results", { preHandler: requireSession }, async (req) =>
-    service.studentResultCards(app.db, req.user!.id),
+    studentGrades(app.db, req.user!.id, app.clock.now()),
   );
 
   /**

@@ -82,6 +82,7 @@ import {
   StudentClassroom,
   StudentClassroomPage,
   StudentHome,
+  GradeGroup,
   TemplateDetail,
   TemplatePullPreview,
 } from "@quiz/contracts";
@@ -377,6 +378,8 @@ const CHECKED: Case[] = [
     .map((p) => one("/app/api/p/:code", `/app/api/p/${p.code}`, PollPublicView)),
   one("/app/api/attempts/:id", `/app/api/attempts/${attemptId}`, AttemptOrLobby),
   one("/app/api/student/home", "/app/api/student/home", StudentHome),
+  // F-ORG-14, F-RES-04: the student's Grades, by classroom.
+  each("/app/api/student/results", "/app/api/student/results", GradeGroup),
   // M5-01: the Courses list, and the page of each classroom it lists.
   each("/app/api/student/classrooms", "/app/api/student/classrooms", StudentClassroom),
   ...["r1", "r2"].map((id) =>

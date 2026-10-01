@@ -4,7 +4,9 @@ The journal is a classroom's course documentation, written by the staff,
 read by the students. It is **not an activity**: no assessment, no
 tracking, no deadline. Classroom commit `ab98cc0` (52 files, +10 044 lines),
 classroom ADR-015 (imported as [ADR-049](../adr/ADR-049-journal-source-github.md),
-with an addendum on how the port differs).
+with an addendum on how the port differs). Since 2026-10-01 a journal has
+two modes ([ADR-057](../adr/ADR-057-journal-two-modes.md), D29, §4.5):
+§4.1 to §4.3 describe the GitHub mode, which the port shipped first.
 
 ## 4.1 How it works
 
@@ -186,8 +188,54 @@ queue too, so that development and production behave alike.
 - D15 — HTML policy: the journal escapes raw HTML; Quiz questions sanitise
   an allow-list (N-SEC-05); each surface keeps its rule (settled).
 - D25 — the editor is Quiz's WYSIWYG (Tiptap) from the start, with its
-  source mode. Its risks are why it was phase L: it writes `asset:` images
-  and normalises markdown (`_x_` ⇒ `*x*`), which means noisy git diffs and
-  images that do not render on GitHub. D25 lists the five conditions M4-06
-  proves by tests; the source editor ships first only if the round trip
-  fails on real journals.
+  source mode, under a byte-exact round trip (settled, met by M4-06;
+  **superseded by D29**).
+- D29 — the journal's two modes (settled 2026-10-01, ADR-057, §4.5).
+
+## 4.5 Two modes (ADR-057, D29)
+
+A journal's `mode` is chosen at its creation, in the Journal section of
+Settings ("In Quiz" / "In a GitHub repository"). Same tables, same
+`@quiz/docrender` pipeline, same student view in both.
+
+| | In Quiz (`quiz`, the default) | In a GitHub repository (`github`) |
+| --- | --- | --- |
+| Needs | nothing: no organisation, no App | a connected classroom, Quiz's App |
+| Content | `journal_pages.markdown`, `journal_assets.data` | the repository; the tables are a copy |
+| Editing | the platform's standard Tiptap editor (normalisation accepted), front matter as fields | the teacher's tools; the platform is read-only, each page links to "Edit on GitHub" (primary action of the staff bar; Refresh secondary) |
+| Update path | a save, in one transaction | push webhook, Refresh (§4.1) |
+| Order | stable path, explicit order among siblings, parent page | file names, numeric prefixes (§4.1) |
+| History | a revision per save (markdown + front matter, no limit) | the repository's |
+| Lock | page `version`, `409 conflict` keeps the draft | none: nothing is written |
+| Remove | deletes the only copy: typed confirmation with pages | drops the copy, keeps the repository |
+
+**Schema** (M4-07, one additive migration):
+
+- `classroom_journals.mode` (`quiz` | `github`); `github_repo_id`,
+  `full_name`, `ref` nullable under a CHECK (set in `github`, null in
+  `quiz`). Existing rows become `github`.
+- `journal_pages`: a `version` (the save's lock) and, for Quiz mode, an
+  explicit order among siblings and a parent page (the path is set at
+  creation and never changes). The exact columns are M4-07's choice.
+- `journal_page_revisions`: one row per Quiz-mode save (`classroom_id`,
+  `path`, `revision`, `markdown`, `created_by`, `created_at`). No student
+  route joins it; the student-exit tests search for a former revision's
+  content.
+- Assets in Quiz mode: a relative path beside the page (`images/…`),
+  `blob_sha` = sha256 of the bytes (the ETag of N-SEC-13); `asset_paths`
+  recomputed in the transaction of every save and delete (J1);
+  append-only, collected when no page references them.
+
+**What goes.** The browser's writes into a repository (M4-03's save, add,
+delete and upload refuse a GitHub-mode journal, M4-07), and the D25
+round-trip machinery of M4-06 — `apps/web/src/journal/editor/reconcile.ts`,
+`apps/web/src/markdown/journalSchema.ts`, the `journal: true` mode of
+`richTextExtensions` — deleted by M4-09. The relative-path image upload of
+`journal/editor/images.ts` stays.
+
+**Mode switch** (M4-11, M4-12): Move to GitHub, into a new or empty
+repository only, one initial commit with numeric prefixes from the order
+and the relative links rewritten; Bring back into Quiz, from the copy, the
+repository detached and never deleted, after showing what is left behind.
+Writes are frozen while either runs. Copying a journal from another
+classroom of the course comes later (M4-13).

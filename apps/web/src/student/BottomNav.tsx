@@ -1,13 +1,13 @@
-import { CalendarRange, Dumbbell, School, Trophy, UserRound } from "lucide-react";
+import { CalendarRange, Dumbbell, Library, School, Trophy, UserRound } from "lucide-react";
 import type { MouseEvent } from "react";
 
 import type { DrillAvailability } from "../drill/api";
 import { AvailableDot } from "../drill/AvailableDot";
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
-import { routeToPath, type Route } from "../router";
+import { bottomSlotOf, routeToPath, type Route } from "../router";
 import { cx, isPlainClick, type IconType } from "../ui";
-import { activeSlot, visibleSlots, type BottomSlot, type BottomSlotId } from "./bottomNavSlots";
+import { visibleSlots, type BottomSlot, type BottomSlotId } from "./bottomNavSlots";
 
 /**
  * Each slot's icon and label, for the bar and for the student's sidebar rows
@@ -26,6 +26,15 @@ export const SLOT_LOOK: Record<
 };
 
 /**
+ * The home's name and icon, as the first row of the sidebar shows them: a
+ * teacher's Courses, a student's Activities (their first slot). The palette
+ * and the placeholder pages name the home this way too.
+ */
+export function homeLook(teacherUi: boolean): { icon: IconType; label: keyof Dict } {
+  return teacherUi ? { icon: Library, label: "nav.courses" } : SLOT_LOOK.activities;
+}
+
+/**
  * The student's bottom bar on a phone: DESIGN.md, "The student's bottom bar" (#191).
  * `drill`: whether the Drill slot is drawn, and whether today's drill is
  * available (its badge, #317).
@@ -40,13 +49,13 @@ export function BottomNav({
   drill: DrillAvailability;
 }) {
   const t = useT();
-  const active = activeSlot(route, window.location.hash);
+  const active = bottomSlotOf(route);
 
   const go = (slot: BottomSlot) => (e: MouseEvent<HTMLAnchorElement>) => {
     // A modified click is the browser's: a new tab gets the real address.
     if (!isPlainClick(e)) return;
     e.preventDefault();
-    followSlot(slot, navigate);
+    navigate(slot.route);
   };
 
   return (
@@ -65,7 +74,7 @@ export function BottomNav({
             return (
               <li key={slot.id} className="min-w-0 flex-1">
                 <a
-                  href={slotHref(slot)}
+                  href={routeToPath(slot.route)}
                   onClick={go(slot)}
                   aria-current={current ? "page" : undefined}
                   className={cx(
@@ -95,18 +104,4 @@ export function BottomNav({
       </nav>
     </>
   );
-}
-
-/** A slot's address: its route's path, and the home section it scrolls to. */
-export function slotHref(slot: BottomSlot): string {
-  return routeToPath(slot.route) + (slot.anchor ? `#${slot.anchor}` : "");
-}
-
-/** Goes where a slot leads, from the bar or from the student's sidebar. */
-export function followSlot(slot: BottomSlot, navigate: (r: Route) => void): void {
-  // A fresh route: the same slot twice is a new state, so the bar re-reads the hash.
-  navigate({ ...slot.route });
-  // After the push, and replaced: the section is a place on the page, and
-  // Back leaves the page. The home scrolls to it (`StudentHome`).
-  window.history.replaceState(null, "", slotHref(slot));
 }

@@ -46,6 +46,11 @@ export type Route =
    * the classroom's page. `/courses` alone; `/courses/:id` is a teacher's course.
    */
   | { view: "studentCourses" }
+  /**
+   * The student's Grades (F-ORG-14, F-RES-04): their finished work, by
+   * classroom, `/grades`. The bottom bar's and the sidebar's Grades slot.
+   */
+  | { view: "studentGrades" }
   /** The teacher classroom's Settings tab (F-ORG-13, D24): GitHub, Journal, rename… */
   | { view: "classroomSettings"; id: string }
   /**
@@ -318,6 +323,9 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: true,
     bottomSlot: "courses",
   },
+  // F-ORG-14, F-RES-04: the student's finished work, every classroom's. A
+  // teacher's UI has no page of its own here; it gets the home.
+  studentGrades: { ...fixed("grades", { view: "studentGrades" }, true), bottomSlot: "grades" },
   // The classroom's tabs that are routes (§5.2). Before `classroom`, which
   // takes any tail after the id.
   classroomSettings: {

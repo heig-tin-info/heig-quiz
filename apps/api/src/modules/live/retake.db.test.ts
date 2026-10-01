@@ -472,10 +472,10 @@ describe("grading and results with several attempts", () => {
   it("serves the student's cards from the kept attempt", async () => {
     const { closed, student, first } = await twoAttempts("best");
     await results.releaseResults(db, closed, closed.closedAt!);
-    const cards = await results.studentResultCards(db, student);
-    const card = cards.find((c) => c.evaluationId === closed.id)!;
-    expect(card.attemptId).toBe(first.id);
-    expect(card.points).toBe(2);
+    const groups = await live.studentGrades(db, student, closed.closedAt!);
+    const card = groups.flatMap((g) => g.rows).find((c) => c.evaluationId === closed.id)!;
+    expect(card.feedbackAttemptId).toBe(first.id);
+    expect(card.score?.points).toBe(2);
   });
 });
 

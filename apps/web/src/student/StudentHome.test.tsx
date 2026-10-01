@@ -180,50 +180,18 @@ describe("the student home", () => {
     expect(screen.getAllByText(/Commencé le/)).toHaveLength(1);
   });
 
-  // WP10: the one student results page, `/attempts/:id/feedback`.
-  it("opens a past attempt's feedback", async () => {
+  // F-ORG-14 (2026-10-01): what was handed in is the Grades page's, `/grades`.
+  it("leaves finished work to the Grades page: no Past section", async () => {
     mockFetch({
-      "GET /app/api/student/home": ok(home),
-      "GET /app/api/student/classrooms": ok([]),
-    });
-    const { navigate } = render();
-    await userEvent.click(await screen.findByRole("button", { name: "Voir mes résultats" }));
-    expect(navigate).toHaveBeenCalledWith({ view: "feedback", attemptId: "a3" });
-  });
-
-  // Issue #203: no button that leads to "not published yet".
-  it("says the results are not out, with no button, when the server has none to show", async () => {
-    mockFetch({
-      "GET /app/api/student/home": ok({
-        ...home,
-        open: [],
-        past: [
-          // Handed in while the quiz still runs, `on_release`.
-          card({ id: "e5", title: "Quiz 4", attemptId: "a5", attemptState: "submitted", results: "pending" }),
-          // Its time ran out, and the teacher closed it without releasing.
-          card({
-            id: "e6",
-            title: "Quiz 5",
-            state: "closed",
-            attemptId: "a6",
-            attemptState: "expired",
-            results: "pending",
-          }),
-          // Closed under `none`: nothing will ever be published, so no "yet".
-          card({ id: "e7", title: "Quiz 6", state: "closed", attemptId: "a7", attemptState: "submitted", results: "none" }),
-        ],
-      }),
+      "GET /app/api/student/home": ok({ ...home, open: [] }),
       "GET /app/api/student/classrooms": ok([]),
     });
     render();
-    const row = async (title: string) =>
-      (await screen.findByText(title)).closest("div.rounded-card") as HTMLElement;
-    expect(within(await row("Quiz 4")).getByText("rendue · résultats pas encore publiés")).toBeInTheDocument();
-    expect(within(await row("Quiz 5")).getByText("temps écoulé · résultats pas encore publiés")).toBeInTheDocument();
-    expect(within(await row("Quiz 6")).getByText("rendue")).toBeInTheDocument();
+    expect(await screen.findByText("Série 4 — Récursivité")).toBeInTheDocument();
+    expect(screen.queryByText("Quiz 2 — Tableaux")).toBeNull();
+    expect(screen.queryByText("Évaluations passées")).toBeNull();
     expect(screen.queryByRole("button", { name: "Voir mes résultats" })).toBeNull();
-    // The open section is empty: nothing to do, no Start for a handed-in quiz.
-    expect(screen.queryByRole("button", { name: "Commencer" })).toBeNull();
+    // The open section is empty: nothing to do.
     expect(screen.getByText("Rien à faire pour l'instant")).toBeInTheDocument();
   });
 
@@ -339,38 +307,6 @@ describe("the student home", () => {
       );
     });
 
-    // Issue #203: with none left the server lists it under Past, and the
-    // button follows `results`.
-    it("shows the kept score under Past once no attempt is left, results only when available", async () => {
-      mockFetch({
-        "GET /app/api/student/home": ok({
-          ...home,
-          open: [],
-          past: [
-            retaking({ canRetake: false, attemptCount: 3, keep: "last" }),
-            {
-              ...retaking({ canRetake: false, attemptCount: 3 }),
-              id: "e10",
-              title: "Série 2 — Tableaux",
-              state: "closed",
-              results: "available",
-            },
-          ],
-        }),
-        "GET /app/api/student/classrooms": ok([]),
-      });
-      const { navigate } = render();
-      expect(
-        await screen.findByText("Dernier score 7.5 / 10 · tentatives : 3 sur 3"),
-      ).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "Recommencer" })).toBeNull();
-      const running = screen.getByText("Série 3 — Entraînement").closest("div.rounded-card")!;
-      expect(within(running as HTMLElement).queryByRole("button")).toBeNull();
-      const closed = screen.getByText("Série 2 — Tableaux").closest("div.rounded-card")!;
-      await userEvent.click(within(closed as HTMLElement).getByRole("button", { name: "Voir mes résultats" }));
-      expect(navigate).toHaveBeenCalledWith({ view: "feedback", attemptId: "a8" });
-    });
-
     it("asks first when the LAST attempt counts, and retakes only on confirm", async () => {
       const { calls } = mockFetch({
         "GET /app/api/student/home": ok({ ...home, open: [retaking({ keep: "last" })] }),
@@ -389,31 +325,6 @@ describe("the student home", () => {
       await vi.waitFor(() =>
         expect(navigate).toHaveBeenCalledWith({ view: "attempt", evaluationId: "e9" }),
       );
-    });
-
-    it("prints no score the feedback policy hides", async () => {
-      mockFetch({
-        "GET /app/api/student/home": ok({
-          ...home,
-          open: [],
-          past: [
-            {
-              ...retaking({
-                canRetake: false,
-                kept: { attemptId: "a8", attemptNumber: 1, score: null },
-              }),
-              state: "closed",
-              results: "pending",
-            },
-          ],
-        }),
-        "GET /app/api/student/classrooms": ok([]),
-      });
-      render();
-      expect(
-        await screen.findByText("tentatives : 2 sur 3 · résultats pas encore publiés"),
-      ).toBeInTheDocument();
-      expect(screen.queryByText(/score/)).toBeNull();
     });
 
     it("resumes an attempt in progress like any other", async () => {

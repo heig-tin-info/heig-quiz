@@ -140,3 +140,4 @@ Carried by the task cards of [`docs/merge/09-tasks.md`](../merge/09-tasks.md), i
 | 2026-09-19 | Start from a pruned copy of heig-classroom: auth, visual identity, SSE, pg-boss, ticker, deployment, Podman hardening from the codespace |
 | 2026-09-28 | heig-classroom merges into Quiz: GitHub integration, projects and the journal come in scope (ADR-035, `docs/merge/`) |
 | 2026-09-30 | The journal first, live before the cutover, through Quiz's own GitHub App; one journal per classroom, a journal is a repository; a Settings tab on the classroom (D03, D07, D23–D25, D27) |
+| 2026-10-01 | The journal in two modes: in Quiz (the default, no GitHub, the standard editor, revisions) or in a GitHub repository (read-only in the platform, Edit on GitHub); D25 superseded (ADR-057, D29) |
