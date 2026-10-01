@@ -15,6 +15,8 @@ import { Editor } from "@tiptap/core";
 import type { JSONContent } from "@tiptap/core";
 import { describe, expect, it } from "vitest";
 
+import { instantiate } from "@quiz/domain/parameters";
+
 import { protectHolePipes, restoreHolePipes } from "./clozeHole";
 import { INLINE_INPUT_RULES, richTextExtensions } from "./tiptap";
 
@@ -768,5 +770,159 @@ describe("protectHolePipes", () => {
   it("round-trips through the restore", () => {
     const source = "| a | {{x|y}} | `{{p|q}}` |";
     expect(restoreHolePipes(protectHolePipes(source))).toBe(source);
+  });
+});
+
+/*
+ * ---------------------------------------------------------------------------
+ * The `[[…]]` REFERENCES of a parameterized question (markdown/paramExpr.ts).
+ *
+ * The interpolation reads the stored markdown byte for byte, so a reference
+ * must come back exactly as typed: no `\[`, no `\*`, no `\_`, no entity. In
+ * every field, inline and block, parameterized or not.
+ * ---------------------------------------------------------------------------
+ */
+describe("round trip — parameter references", () => {
+  const sources = [
+    ["[[h]]"],
+    ["hauteur [[h]] et [[h*w]] et [[2*h/g]]"],
+    ["[[x_1]] et [[y_2]]"],
+    ["[[a*b]] et [[c*d]]"],
+    ["[[max([a, b])]] m"],
+    ["si [[a<b]] et [[a & b]]"],
+    // The ADR's escape: a literal `[[x]]`, kept as written.
+    ["\\[[x]] reste écrit"],
+    ["**[[h]] m** en gras"],
+    // Code is code: a reference there is text, and stays so.
+    ["`[[a]]` dans du code"],
+    ["```c\nint a = [[a]];\n```"],
+  ];
+
+  it.each(sources)("keeps %j in a block field", (source) => {
+    expect(roundTrip(source)).toBe(source);
+  });
+
+  it.each(sources)("keeps %j in an inline field", (source) => {
+    expect(roundTrip(source, true)).toBe(source);
+  });
+
+  it("marks each reference, and none inside code", () => {
+    const editor = editorFor("[[h]] `[[a]]` \\[[x]] [[y");
+    try {
+      expect(marked(editor)).toEqual(["[[h]]", "\\[[x]]"]);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("leaves an unclosed `[[` as text", () => {
+    expect(roundTrip("[[h et rien")).toBe("\\[\\[h et rien");
+  });
+
+  // What the editor stored before the node existed: read back as the
+  // reference, so the next save of the field repairs it.
+  it.each([
+    ["\\[\\[h\\]\\] m", "[[h]] m"],
+    ["\\[\\[h\\*w\\]\\] et \\[\\[2*h/g\\]\\]", "[[h*w]] et [[2*h/g]]"],
+    ["\\[\\[x\\_1\\]\\]", "[[x_1]]"],
+    ["\\[\\[a&lt;b\\]\\]", "[[a<b]]"],
+  ])("repairs the old escaped spelling %j", (stored, repaired) => {
+    expect(roundTrip(stored)).toBe(repaired);
+    expect(roundTrip(stored, true)).toBe(repaired);
+  });
+});
+
+/** The texts under the reference mark, one entry per marked range. */
+function marked(editor: Editor): string[] {
+  const out: string[] = [];
+  let last = -1;
+  editor.state.doc.descendants((node, pos) => {
+    if (!node.isText || !node.marks.some((m) => m.type.name === "paramExpr")) return;
+    if (pos === last) out[out.length - 1] = `${out.at(-1) ?? ""}${node.text ?? ""}`;
+    else out.push(node.text ?? "");
+    last = pos + node.nodeSize;
+  });
+  return out;
+}
+
+/*
+ * The repair, end to end: a draft the old editor stored escaped, opened and
+ * saved again, is a text the interpolation substitutes (ADR-056).
+ */
+describe("an old escaped draft, saved again", () => {
+  it.each([[false], [true]])("is interpolated (inline: %j)", (inline) => {
+    const stored = "hauteur \\[\\[h\\]\\] et \\[\\[h\\*w\\]\\] m";
+    const params = { rows: [{ name: "h", expr: "3", format: "" }, { name: "w", expr: "2", format: "" }] };
+    const before = instantiate({ prompt: stored }, params, { h: 3, w: 2 }).prompt;
+    expect(before).not.toContain("6");
+    const saved = roundTrip(stored, inline);
+    expect(instantiate({ prompt: saved }, params, { h: 3, w: 2 }).prompt).toBe("hauteur 3 et 6 m");
+  });
+});
+
+describe("a link whose text is in brackets", () => {
+  it.each([[false], [true]])("stays a link, never a reference (inline: %j)", (inline) => {
+    const editor = editorFor("voir [[1]](https://heig-vd.ch) et [[h]]", inline);
+    try {
+      const links: string[] = [];
+      editor.state.doc.descendants((node) => {
+        if (node.isText && node.marks.some((m) => m.type.name === "link")) links.push(node.text ?? "");
+      });
+      expect(links).toEqual(["[1]"]);
+      expect(marked(editor)).toEqual(["[[h]]"]);
+      expect(roundTrip(editor.getMarkdown().trim(), inline)).toBe(editor.getMarkdown().trim());
+    } finally {
+      editor.destroy();
+    }
+  });
+});
+
+describe("typing a parameter reference", () => {
+  it.each([[false], [true]])("stores what was typed, verbatim (inline: %j)", (inline) => {
+    const editor = editorFor("", inline);
+    try {
+      type(editor, "typed [[h]] and [[h*w]] and [[2*h/g]] and [[x_1]] end");
+      expect(editor.getMarkdown().trim()).toBe("typed [[h]] and [[h*w]] and [[2*h/g]] and [[x_1]] end");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("stores the ADR's escape as typed", () => {
+    const editor = editorFor();
+    try {
+      type(editor, "a \\[[x]] b");
+      expect(editor.getMarkdown().trim()).toBe("a \\[[x]] b");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("leaves a reference typed in inline code as code", () => {
+    const editor = editorFor();
+    try {
+      type(editor, "`[[a]]` b");
+      expect(editor.getMarkdown().trim()).toBe("`[[a]]` b");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("follows the text: a bracket deleted unmarks, typed back marks again", () => {
+    const editor = editorFor("v = [[h*w]] m");
+    try {
+      // After the last `]`: the paragraph opens at 1, "v = " is 4 characters.
+      const end = 1 + 4 + "[[h*w]]".length;
+      editor.view.dispatch(editor.state.tr.delete(end - 1, end));
+      expect(marked(editor)).toEqual([]);
+      expect(editor.getMarkdown().trim()).toBe("v = \\[\\[h\\*w\\] m");
+      editor.view.dispatch(editor.state.tr.insertText("]", end - 1));
+      expect(marked(editor)).toEqual(["[[h*w]]"]);
+      // Edited in place, inside the brackets.
+      editor.view.dispatch(editor.state.tr.insertText("*2", end - 2));
+      expect(editor.getMarkdown().trim()).toBe("v = [[h*w*2]] m");
+    } finally {
+      editor.destroy();
+    }
   });
 });

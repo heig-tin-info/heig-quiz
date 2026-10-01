@@ -2770,7 +2770,8 @@ on("POST", "/app/api/questions/:id/preview", (m, body) => {
   if (source === "draft" && issues.length > 0) {
     throw new MockValidation("This version cannot be rendered", issues);
   }
-  return { type: q.type, student: studentView(q, config), itemPoints: 1 };
+  const parameterized = (q.draft.variables?.rows.length ?? 0) > 0;
+  return { type: q.type, student: studentView(q, config), itemPoints: 1, parameterized };
 });
 on("POST", "/app/api/questions/:id/draft/instances", (m) => mockDraws(questionOr404(m.groups!.id!)));
 on("POST", "/app/api/questions/:id/preview/solution", (m) => {

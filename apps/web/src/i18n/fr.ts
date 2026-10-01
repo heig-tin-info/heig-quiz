@@ -1038,6 +1038,7 @@ export const fr: Record<keyof Dict, string> = {
   "question.versions.failed": "Cette version n'a pas pu être chargée.",
   "question.try.title": "Essayer la question",
   "question.try.hint": "Répondez comme un étudiant ; rien n'est enregistré.",
+  "question.try.hintFirstDraw": "Répondez comme un étudiant ; rien n'est enregistré. Valeurs aléatoires : vous répondez au tirage 1 des cinq.",
   "question.try.grade": "Corriger ma réponse",
   "question.try.runTests": "Lancer tous les tests",
   "question.try.runTestsHint": "Cas visibles et cachés, corrigés comme la réponse d'un étudiant : vous voyez la note.",

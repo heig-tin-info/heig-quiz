@@ -24,6 +24,8 @@ import { Extension, InputRule, mergeAttributes, Node } from "@tiptap/core";
 import type { MarkdownToken } from "@tiptap/core";
 import { matchClozeHole, parseBlankBody, type ClozeBlank } from "@quiz/domain";
 
+import { escapableStart } from "./delimiters";
+
 /** The token the tokenizer below emits; `body: null` is the escaped `\{{`. */
 type ClozeHoleToken = MarkdownToken & { raw?: string; body?: string | null };
 
@@ -257,11 +259,7 @@ const ClozeHole = Node.create({
     level: "inline" as const,
     // `\{{` is a hole token too (the literal one), so the scan starts at the
     // backslash when there is one right before the braces.
-    start: (src: string) => {
-      const at = src.indexOf("{{");
-      if (at === -1) return -1;
-      return at > 0 && src[at - 1] === "\\" ? at - 1 : at;
-    },
+    start: (src: string) => escapableStart(src, "{{"),
     tokenize: (src: string) => {
       const hole = matchClozeHole(src);
       if (hole === undefined) return undefined;

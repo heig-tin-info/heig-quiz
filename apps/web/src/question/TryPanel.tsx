@@ -90,7 +90,12 @@ export function TryPanel({
   return (
     <div className="space-y-5">
       <Card className="space-y-4 p-5">
-        <SectionHeading title={t("question.try.title")} description={t("question.try.hint")} />
+        <SectionHeading
+          title={t("question.try.title")}
+          // A parameterized question is tried on the first of its five draws
+          // (ADR-056 §8): the server says which, and the hint says so.
+          description={t(preview.data?.parameterized ? "question.try.hintFirstDraw" : "question.try.hint")}
+        />
         {/*
          * `circuit` gets no `onSimulate` here, and its player hides the
          * button accordingly. The API has no route that simulates a question

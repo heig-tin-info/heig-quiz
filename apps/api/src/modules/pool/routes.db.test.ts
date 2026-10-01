@@ -388,6 +388,7 @@ describe("POST /questions/:id/try (F-QST-09)", () => {
       payload: { source: "draft" },
     });
     expect(res.json().student).toEqual({ statement: "Visible" });
+    expect(res.json().parameterized).toBe(false);
     expect(JSON.stringify(res.json())).not.toContain("secret-key");
   });
 

@@ -530,6 +530,11 @@ export const PreviewResult = z.object({
   type: z.string(),
   student: z.unknown(),
   itemPoints: z.number(),
+  /**
+   * The version has variables (ADR-056): the view is the first of the five
+   * draws the editor lists, `draw(params, 0)`, and the Try tab says so.
+   */
+  parameterized: z.boolean(),
 });
 export type PreviewResult = z.infer<typeof PreviewResult>;
 

@@ -19,17 +19,9 @@
  */
 import { at, checkNames, checkValue, collect, compile, fail, run, type Compiled, type Issue } from "./evaluator.js";
 import { formatValue } from "./format.js";
+import { referenceSpans, type Reference } from "../parameterNames.js";
 
 export type Values = Record<string, number | string>;
-
-interface Reference {
-  /** Offset of the opening `[[`. */
-  offset: number;
-  /** Offset just past the closing `]]`, or the text's length when unclosed. */
-  end: number;
-  expr: string;
-  closed: boolean;
-}
 
 type Token = { text: string } | { ref: Reference };
 
@@ -37,41 +29,20 @@ function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
   let literal = "";
   let i = 0;
-  while (i < text.length) {
-    if (text.startsWith("\\[[", i)) {
-      literal += "[[";
-      i += 3;
-    } else if (text.startsWith("[[", i)) {
-      if (literal) tokens.push({ text: literal });
-      literal = "";
-      const ref = scanReference(text, i);
-      tokens.push({ ref });
-      i = ref.end;
-    } else {
-      literal += text[i];
-      i += 1;
+  for (const { from, to, escaped, closed } of referenceSpans(text)) {
+    literal += text.slice(i, from);
+    i = to;
+    if (escaped) {
+      literal += text.slice(from + 1, to);
+      continue;
     }
+    if (literal) tokens.push({ text: literal });
+    literal = "";
+    tokens.push({ ref: { offset: from, end: to, expr: text.slice(from + 2, closed ? to - 2 : to), closed } });
   }
+  literal += text.slice(i);
   if (literal) tokens.push({ text: literal });
   return tokens;
-}
-
-function scanReference(text: string, offset: number): Reference {
-  let depth = 0;
-  let quote = "";
-  for (let j = offset + 2; j < text.length; j++) {
-    const c = text[j]!;
-    if (quote) {
-      if (c === "\\") j += 1;
-      else if (c === quote) quote = "";
-    } else if (c === '"' || c === "'") quote = c;
-    else if (c === "[") depth += 1;
-    else if (c === "]" && depth > 0) depth -= 1;
-    else if (c === "]" && text[j + 1] === "]") {
-      return { offset, end: j + 2, expr: text.slice(offset + 2, j), closed: true };
-    }
-  }
-  return { offset, end: text.length, expr: text.slice(offset + 2), closed: false };
 }
 
 /**
