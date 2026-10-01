@@ -14,6 +14,11 @@ another classroom's journal, Quiz's own GitHub App, the WYSIWYG editor
 from the start, the defects J1–J7 fixed): where the body and the addendum
 disagree, the addendum is the decision for Quiz.
 
+**Amended by [ADR-057](ADR-057-journal-two-modes.md) (2026-10-01)**: a
+journal has a mode, In Quiz or In a GitHub repository. Point 2 of the body
+holds for the GitHub mode only; points 2 and 7 of the addendum are
+replaced (see [the second addendum](#addendum-2026-10-01-two-modes-adr-057)).
+
 Status in heig-classroom: Accepted (2026-09-27, issue #45). Reading, writing and ingestion implemented on the same day;
 the rich WYSIWYG editing surface is deferred, see "Consequences".
 
@@ -208,3 +213,21 @@ for Quiz.
       they do not collide with the question prose styles.
     - **J7** — development runs without webhooks nor pg-boss: Refresh is
       the development path, and the mock serves rendered HTML fixtures.
+
+## Addendum (2026-10-01): two modes (ADR-057)
+
+[ADR-057](ADR-057-journal-two-modes.md) gives a journal a mode, chosen at
+its creation. **In a GitHub repository** is this ADR and its first
+addendum, except that the platform no longer writes into the repository
+from the browser: no save, add, delete nor upload; each page links to
+"Edit on GitHub" instead. **In Quiz** needs no GitHub at all: the database
+is the content (point 2 does not hold there), edited with the platform's
+standard editor, with revisions. In consequence:
+
+- addendum point 2: the Journal section of Settings is available whether
+  the classroom is connected or not; only the GitHub mode needs a
+  connection;
+- addendum point 3 (D27): the App writes into a journal repository only to
+  seed a new one and for the initial commit of "Move to GitHub", into a
+  new or empty repository;
+- addendum point 7 (D25) is superseded: no WYSIWYG round trip over git.

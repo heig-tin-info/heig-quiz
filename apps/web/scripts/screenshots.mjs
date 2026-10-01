@@ -178,7 +178,7 @@ const scenes = [
     await p.waitForTimeout(250); // the slide
     } },
   { name: "classroom-roster", role: "teacher", path: "/classrooms/r1?tab=roster" },
-  { name: "classroom-empty", role: "teacher", path: "/classrooms/r1?empty=1", settle: 800 },
+  { name: "classroom-empty", role: "teacher", path: "/classrooms/r1?empty=1&tab=roster", settle: 800 },
   { name: "classroom-error", role: "teacher", path: "/classrooms/r1?fail=1", settle: 2500 },
   { name: "classroom-loading", role: "teacher", path: "/classrooms/r1?slow=1", settle: 300 },
   { name: "classroom-roster-many", role: "teacher", path: "/classrooms/r1?tab=roster&many=1" },

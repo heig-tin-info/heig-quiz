@@ -947,6 +947,111 @@ files it ports; writes en + fr for every string.
   - Scenes: `journal-edit`, `-source`, `-conflict`, `-frontmatter`,
     `-unsaved`.
 
+### M4-07 — API: journal modes, schema, GitHub mode read-only
+- **Depends on**: M4-03, D29 (ADR-057). First of the two-modes series
+  (`04-journal.md` §4.5).
+- **Goal**: `classroom_journals.mode`; the repository columns
+  (`github_repo_id`, `full_name`, `ref`) nullable under a CHECK (set in
+  `github`, null in `quiz`); existing rows migrate to `github`;
+  `journal_pages` gains a `version` and the Quiz-mode order and parent;
+  the `journal_page_revisions` table. A GitHub-mode journal becomes
+  read-only: M4-03's save, add, delete and upload refuse it (a coded
+  refusal, not a 404). The staff payload carries the mode and, in GitHub
+  mode, each page's Edit on GitHub URL (the file on the journal's branch,
+  under its root folder).
+- **Files**: `Q:db/journal.ts`, one migration, `packages/contracts/src/journal.ts`,
+  `Q:modules/journal/writes.ts`, `service.ts`, `studentView.ts` (unchanged
+  output: assert it).
+- **Tests**: the CHECK refuses a `quiz` row with a repository and a
+  `github` row without one; migrated rows are `github`; every M4-03 page
+  and asset write on a GitHub-mode journal is refused and writes nothing;
+  the Edit on GitHub URL (root folder, branch, a path with spaces); the
+  student payload carries neither the mode's URL nor anything new.
+
+### M4-08 — API: the Quiz-mode backend
+- **Depends on**: M4-07.
+- **Goal**: create a Quiz-mode journal without GitHub (no App, no
+  connection; the module's Quiz-mode routes register when the `GITHUB_*`
+  variables are absent), with an empty home page; save (page `version`
+  lock, `409 conflict`), add, delete, asset upload (relative path beside
+  the page, sha256 as `blob_sha`), each in one transaction that
+  re-renders, recomputes `asset_paths` and records a revision on save;
+  revisions list and restore; unreferenced assets collected; remove and
+  classroom deletion delete the only copy (the API requires the typed
+  classroom name when pages exist, F-JRN-04). Audit: `journal.create`
+  with the mode, the Quiz-mode page writes (the existing
+  `journal.save|add|delete|upload`, or `page_*` names: decide and record
+  it in the handoff), `journal.restore`. Writes frozen during a mode
+  switch (a flag the switch tasks set). Settle, and record in D29, what
+  deleting a page does to its revisions.
+- **Files**: `Q:modules/journal/` (a `quiz.ts` beside `writes.ts`),
+  `packages/contracts/src/journal.ts`, `apps/api/src/audit.ts`.
+- **Tests**: `*.db.test.ts` — create with no App configured; a stale
+  `version` is a 409 and writes nothing; a revision per save, restore is a
+  new save and audited; an asset referenced only by a draft is a 404 to a
+  student (J1), served once the page is published; the student exit
+  extended (05 §5.7): a former revision's content searched for in every
+  student response, for the three student callers; impersonation and
+  `seb`/`kiosk` sessions never write.
+
+### M4-09 — Web: mode choice, standard editor, GitHub mode read-only
+- **Depends on**: M4-08, M4-06.
+- **Goal**: the mode as a segmented control in the Journal section of
+  Settings ("In Quiz" / "In a GitHub repository", fr "Dans Quiz" / "Dans
+  un dépôt GitHub", a one-line explanation each; the GitHub option needs
+  a connected classroom). In Quiz mode: Edit opens the platform's
+  standard `RichText` (as question statements), the front matter as
+  fields, relative-path image upload, conflict kept as a draft, revisions
+  listed and restorable. In GitHub mode: Edit on GitHub is the primary
+  action of the `StaffBar`, Refresh secondary, no add, delete nor upload.
+  Remove: the confirmation of F-JRN-04 per mode. Delete
+  `journal/editor/reconcile.ts`, `markdown/journalSchema.ts`, the
+  `journal: true` mode of `richTextExtensions` and their tests. Whether
+  F-ORG-13's "Connect to GitHub" accent stays the Settings' one accent
+  when a Quiz-mode journal exists is a question for the product owner,
+  asked before the scenes are taken.
+- **Files**: `apps/web/src/journal/`, `apps/web/src/markdown/tiptap.ts`,
+  i18n en + fr, the mock.
+- **Scenes**: `journal-settings-mode`, `journal-edit` (standard editor),
+  `journal-github-readonly`, `journal-revisions`, `journal-remove-quiz`.
+
+### M4-10 — Rename, reorder, nest (Quiz mode)
+- **Depends on**: M4-09.
+- **Goal**: rename a page (its title), move it among its siblings and
+  under another parent; the path never changes (F-JRN-17). API and web.
+  Audit `journal.reorder`.
+- **Tests**: links and the navigation after a move; a move to a
+  descendant refused; the student navigation never names a hidden page.
+
+### M4-11 — Move to GitHub
+- **Depends on**: M4-10, M2-03.
+- **Goal**: a Quiz-mode journal moves into a NEW repository, or an EMPTY
+  one, of the classroom's organization (never one with content, ADR-049
+  point 6): one initial commit with every page and asset, numeric
+  prefixes from the order (steps of ten), relative links rewritten; the
+  row becomes `github`, read-only; the staff invited as for a creation.
+  Writes frozen while it runs. Audit `journal.export`.
+- **Tests**: a non-empty repository refused; the committed tree renders,
+  through ingestion, to the same student HTML as before the move; a save
+  during the move refused.
+
+### M4-12 — Bring back into Quiz
+- **Depends on**: M4-08.
+- **Goal**: a GitHub-mode journal becomes a Quiz-mode one from its copy;
+  the repository is detached, never deleted nor changed. The confirmation
+  lists what is left behind (files of the repository the copy does not
+  hold) and says that the first save normalises the markdown. The order
+  and parents come from the file names. Writes frozen while it runs.
+  Audit `journal.import`.
+- **Tests**: paths, order and assets preserved; no GitHub write; the
+  disconnect `409` (F-GH-04) no longer applies afterwards.
+
+### M4-13 — Copy a journal from another classroom (later)
+- **Depends on**: M4-08. Not in the first version (D29).
+- **Goal**: create a Quiz-mode journal as a copy of another classroom's
+  journal of the same course (the next semester), both under
+  `staffAccess`.
+
 ## M5 — Student classroom page and gradebook
 
 ### M5-01 — API: the student's classroom
