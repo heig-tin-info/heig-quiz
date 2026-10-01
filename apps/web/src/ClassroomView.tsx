@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  BookOpen,
   ClipboardList,
   Dumbbell,
   GraduationCap,
@@ -8,7 +9,7 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ClassroomPatch, type ClassroomDetail, type EvaluationSummary } from "@quiz/contracts";
 
@@ -16,8 +17,10 @@ import { api, useMe } from "./api";
 import { PeriodFields, periodBody, periodInvalid, type PeriodDraft } from "./ClassroomPeriod";
 import { ClassroomSettings } from "./ClassroomSettings";
 import { ClassroomDrill } from "./drill/ClassroomDrill";
-import { useClassroomGithub } from "./github/api";
+import { githubAbsent, useClassroomGithub } from "./github/api";
 import { useT } from "./i18n";
+import { useStaffJournal } from "./journal/api";
+import { JournalReader } from "./journal/JournalReader";
 // WP8: evaluation + dashboard
 import { EvaluationList, NewEvaluationModal } from "./evaluation/EvaluationList";
 import { useErrorToast, useToast } from "./notify";
@@ -57,17 +60,21 @@ import { invalidateHint } from "./realtime/hints";
  * own (`/classrooms/:id/settings`): rename, archive, delete and the drill
  * switch moved there from the header and the Drill tab, beside GitHub; its
  * one accent is its own ("Connect to GitHub"), so the header's slot stays
- * empty there too. The header keeps the name and the period.
+ * empty there too. The header keeps the name and the period. The Journal
+ * (F-JRN-07, M4-05) is a route too (`/classrooms/:id/journal/<path>`), and a
+ * tab only while the classroom has a journal (F-JRN-01): the reader, whose
+ * staff bar holds Refresh; Edit, its primary inside a page, is M4-06's.
  */
 
-export type ClassroomTab = "roster" | "evaluations" | "drill" | "settings";
+export type ClassroomTab = "roster" | "evaluations" | "journal" | "drill" | "settings";
 type Tab = ClassroomTab;
 
 /**
  * The tabs that are routes of their own (`/classrooms/:id/<tab>`), not a
- * `?tab=` on the classroom's address: Settings today, the Journal with M4-05.
+ * `?tab=` on the classroom's address: the Journal and the Settings.
  */
 const ROUTE_TABS: Partial<Record<Tab, (id: string) => Route>> = {
+  journal: (id) => ({ view: "classroomJournal", id }),
   settings: (id) => ({ view: "classroomSettings", id }),
 };
 
@@ -145,11 +152,14 @@ export function ClassroomView({
   id,
   navigate,
   routeTab,
+  journalPath,
 }: {
   id: string;
   navigate: Navigate;
   /** The tab the route names, for a tab that is a route (`ROUTE_TABS`). */
   routeTab?: Tab;
+  /** On the Journal tab, the page the address names (absent: the journal's home). */
+  journalPath?: string;
 }) {
   const t = useT();
   const qc = useQueryClient();
@@ -167,6 +177,11 @@ export function ClassroomView({
   // "Connect this classroom to GitHub" can open it from any tab.
   const [connectParam, setConnect] = useSearchParam("connect", "");
   const github = useClassroomGithub(id);
+  // F-JRN-01: the Journal tab exists exactly while the classroom has a
+  // journal. A 404 is a platform without Quiz's App: no journal, no tab.
+  const journal = useStaffJournal(id);
+  const hasJournal = journal.data?.repository != null;
+  const noJournal = journal.data?.repository === null || githubAbsent(journal.error);
 
   const room = useQuery<ClassroomDetail>({
     queryKey: classroomKey(id),
@@ -211,6 +226,11 @@ export function ClassroomView({
     setConnect("1");
   };
   const link = github.data?.link;
+  // The Journal's address on a classroom without one (removed meanwhile, or
+  // no App): the classroom's page, in place, rather than an error.
+  useEffect(() => {
+    if (routeTab === "journal" && noJournal) navigate({ view: "classroom", id }, { replace: true });
+  }, [routeTab, noJournal, navigate, id]);
   // F-GH-02: the palette's door to the connect sheet, on a classroom that
   // has none (and on a platform whose App exists: the route answered).
   useScreenCommands(
@@ -340,6 +360,7 @@ export function ClassroomView({
               coach: "classroom.tab.evaluations",
             },
             // ADR-041 (#317): the students' drill, and its switch.
+            ...(hasJournal ? [{ value: "journal" as const, label: t("journal.tab"), icon: BookOpen }] : []),
             { value: "drill", label: t("nav.drill"), icon: Dumbbell },
             { value: "settings", label: t("classroomSettings.tab"), icon: SettingsIcon },
           ]}
@@ -374,6 +395,8 @@ export function ClassroomView({
         ) : tab === "evaluations" ? (
           // WP8: evaluation + dashboard
           <EvaluationList classroomId={id} navigate={navigate} onNew={() => setCreating(true)} />
+        ) : tab === "journal" ? (
+          <JournalReader classroomId={id} path={journalPath} navigate={navigate} studentView={false} />
         ) : tab === "drill" ? (
           <ClassroomDrill room={data} onSettings={() => openTab("settings")} />
         ) : (

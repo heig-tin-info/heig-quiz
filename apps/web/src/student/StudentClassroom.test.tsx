@@ -9,9 +9,10 @@ import { mostUrgent, StudentClassroom } from "./StudentClassroom";
 
 /*
  * The student's page of one classroom (F-ORG-15, M5-02), in a production
- * build: `CLASSROOM_PAGES` is off here, so the Journal tab never shows —
- * its API (M4-02) does not exist yet. `StudentClassroom.journal.test.tsx`
- * covers the tab with the flag on.
+ * build: `CLASSROOM_PAGES` is off here. The Journal tab no longer waits for
+ * it (M4-05): it shows exactly when the classroom has a journal, which a
+ * platform without Quiz's App never reports. `StudentClassroom.journal.test.tsx`
+ * covers the tab itself.
  */
 
 const card = (over: Partial<EvaluationCard>): EvaluationCard & { kind: "evaluation" } => ({
@@ -139,12 +140,18 @@ describe("the student classroom page", () => {
     expect(document.querySelectorAll("button.bg-accent")).toHaveLength(0);
   });
 
-  it("shows no Journal tab while its API is not deployed, even for a classroom that has one", async () => {
+  it("shows the Journal tab in a production build, for a classroom that has one (M4-05)", async () => {
     mockFetch({ [URL_R1]: ok(classroomPage({ hasJournal: true })) });
+    render();
+    expect(await screen.findByRole("tab", { name: "Journal" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Activities" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("shows no tab at all where the classroom has no journal, as without Quiz's App", async () => {
+    mockFetch({ [URL_R1]: ok(classroomPage({ hasJournal: false })) });
     render();
     await screen.findByRole("heading", { level: 1, name: "PRG1-2026" });
     expect(screen.queryByRole("tablist")).toBeNull();
-    expect(screen.queryByRole("tab", { name: "Journal" })).toBeNull();
   });
 
   it("reads a 404 as a classroom that does not exist, with the way back to Courses", async () => {

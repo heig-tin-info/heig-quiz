@@ -8,21 +8,89 @@
  * Scene flag `?journal=1`: the classroom PRG1-2026 (`r1`) has a journal.
  * Without it no classroom has one: the staff read "no journal yet" (a
  * repository of `null`, the name "Create a journal" would propose), a student
- * a 404 — which is what every default scene sees, since no screen asks yet.
+ * a 404. `?journalerror=1`: that journal's last synchronisation failed (the
+ * repository is gone).
+ *
+ * The staff's writes (M4-03, for the Settings of M4-05) change the journals
+ * for the page's life, as the API would: create (a name among `ORG_REPOS` is
+ * refused `409 name_taken` with a suggestion), use (a repository outside
+ * `ORG_REPOS`, a branch other than `main` or `dev`, a folder other than
+ * `docs` or `journal` are refused with their codes), remove, and refresh,
+ * which answers at once and "synchronises" 2.5 s later — the reader and the
+ * Settings see it on their next read (the mock sends no hint).
  *
  * The pages are HTML fixtures shaped like `packages/docrender`'s output: an
  * `id` on every heading, relative links left as the renderer rewrites them.
  * One page lives in a folder whose name has a space and an accent, so the
  * route's encoded paths are exercised by the mock too.
  */
-import type { Journal, JournalNavNode, JournalPage, JournalTocEntry, JournalWarning } from "@quiz/contracts";
+import type {
+  Journal,
+  JournalCreate,
+  JournalNavNode,
+  JournalPage,
+  JournalRepository,
+  JournalStaff,
+  JournalTocEntry,
+  JournalUse,
+  JournalWarning,
+} from "@quiz/contracts";
 import { buildNav, homePage, placePage } from "@quiz/docrender/journalTree";
 
 import { rooms } from "./org";
-import { flags, iso, D, MockError, on, role } from "./runtime";
+import { flags, iso, D, MockError, MockPayload, on, role } from "./runtime";
 
 /** The classroom that has a journal under `?journal=1`. */
 const JOURNAL_ROOM = "r1";
+
+/** The organization the mock's journals live in (PRG1-2026's, `mock/github.ts`). */
+const ORG = "heig-tin-info";
+
+/** The repositories that already exist in it: "Use a repository" takes one, "Create" refuses their names. */
+const ORG_REPOS = ["prg1-journal", "prg1-2025-journal", "cours-prg1"];
+
+const repository = (name: string, ref = "main", rootPath = "", syncedAt = iso(0)): JournalRepository => ({
+  fullName: `${ORG}/${name}`,
+  ref,
+  rootPath,
+  htmlUrl: `https://github.com/${ORG}/${name}`,
+  syncStatus: "ok",
+  syncError: null,
+  lastSyncedAt: syncedAt,
+  lastCommitSha: "3f9c2a1d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a",
+  editable: true,
+});
+
+/** Each classroom's journal, by classroom id. */
+const journals = new Map<string, JournalRepository>();
+if (flags.journal) {
+  journals.set(
+    JOURNAL_ROOM,
+    flags.journalerror
+      ? { ...repository("prg1-2026-journal", "main", "", iso(-2 * D)), syncStatus: "error", syncError: "repo_not_found", editable: false }
+      : repository("prg1-2026-journal", "main", "", iso(-2 * D)),
+  );
+}
+
+/** When a refresh of a classroom "ends" (ms), until the next read applies it. */
+const refreshes = new Map<string, number>();
+
+/** Whether a classroom has a journal: the student classroom page and the GitHub disconnect read it. */
+export const hasMockJournal = (classroomId: string) => journals.has(classroomId);
+
+/** The repository as the API holds it now: a refresh that has ended moves its last synchronisation. */
+function currentRepository(classroomId: string): JournalRepository | null {
+  const repo = journals.get(classroomId);
+  if (!repo) return null;
+  const due = refreshes.get(classroomId);
+  if (due !== undefined && Date.now() >= due) {
+    refreshes.delete(classroomId);
+    const next = { ...repo, lastSyncedAt: new Date(due).toISOString() };
+    journals.set(classroomId, next);
+    return next;
+  }
+  return repo;
+}
 
 interface Fixture {
   path: string;
@@ -150,20 +218,16 @@ const studentPayload = (url: URL) => role === "student" || url.searchParams.get(
 function journalOr404(classroomId: string, url: URL): boolean {
   const room = rooms.find((r) => r.id === classroomId);
   if (!room) throw new MockError(404, "Not found");
-  const has = flags.journal && classroomId === JOURNAL_ROOM;
+  const has = journals.has(classroomId);
   if (!has && studentPayload(url)) throw new MockError(404, "Not found");
   return has;
 }
 
-on("GET", "/app/api/classrooms/:id/journal", (m, _body, url): Journal => {
-  const id = m.groups!.id!;
-  const has = journalOr404(id, url);
-  if (studentPayload(url)) {
-    const visible = PAGES.filter((p) => !hidden(p));
-    return { view: "student", nav: navOf(visible), homePath: homePage(visible)?.path ?? null };
-  }
-  if (!has) {
-    const room = rooms.find((r) => r.id === id)!;
+/** The staff payload of a classroom's journal. */
+function staffJournal(classroomId: string): JournalStaff {
+  const repo = currentRepository(classroomId);
+  if (!repo) {
+    const room = rooms.find((r) => r.id === classroomId)!;
     return {
       view: "staff",
       repository: null,
@@ -176,23 +240,72 @@ on("GET", "/app/api/classrooms/:id/journal", (m, _body, url): Journal => {
   }
   return {
     view: "staff",
-    repository: {
-      fullName: "heig-tin-info/prg1-2026-journal",
-      ref: "main",
-      rootPath: "",
-      htmlUrl: "https://github.com/heig-tin-info/prg1-2026-journal",
-      syncStatus: "ok",
-      syncError: null,
-      lastSyncedAt: iso(-2 * D),
-      lastCommitSha: "3f9c2a1d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a",
-      editable: true,
-    },
+    repository: repo,
     nav: navOf(PAGES),
     homePath: homePage(PAGES)?.path ?? null,
     hiddenPaths: PAGES.filter(hidden).map((p) => p.path),
     warningCount: PAGES.filter((p) => (p.warnings ?? []).length > 0).length,
     proposedName: null,
   };
+}
+
+/** A classroom of the staff persona, or the 404 the writes answer anyone else. */
+function staffRoom(id: string) {
+  if (role === "student" || !rooms.some((r) => r.id === id)) throw new MockError(404, "Not found");
+}
+
+/** A refused write, as `JournalRefusal` (`message` is the code again). */
+const refusal = (status: number, error: string, extra: Record<string, unknown> = {}) =>
+  new MockPayload(status, { error, message: error, ...extra });
+
+on("GET", "/app/api/classrooms/:id/journal", (m, _body, url): Journal => {
+  const id = m.groups!.id!;
+  journalOr404(id, url);
+  if (studentPayload(url)) {
+    const visible = PAGES.filter((p) => !hidden(p));
+    return { view: "student", nav: navOf(visible), homePath: homePage(visible)?.path ?? null };
+  }
+  return staffJournal(id);
+});
+
+on("POST", "/app/api/classrooms/:id/journal", (m, body): JournalStaff => {
+  const id = m.groups!.id!;
+  staffRoom(id);
+  if (journals.has(id)) throw refusal(409, "journal_exists");
+  const name = (body as JournalCreate).name ?? staffJournal(id).proposedName!;
+  // Never an adoption (F-JRN-02): a free name instead, as the API words it.
+  if (ORG_REPOS.includes(name)) throw refusal(409, "name_taken", { suggestion: `${name}-0190d3c4` });
+  ORG_REPOS.push(name);
+  journals.set(id, repository(name));
+  return staffJournal(id);
+});
+
+on("POST", "/app/api/classrooms/:id/journal/use", (m, body): JournalStaff => {
+  const id = m.groups!.id!;
+  staffRoom(id);
+  if (journals.has(id)) throw refusal(409, "journal_exists");
+  const { name, ref, rootPath } = body as JournalUse;
+  if (!ORG_REPOS.includes(name)) throw refusal(409, "repo_not_found");
+  if (ref !== undefined && ref !== "main" && ref !== "dev") throw refusal(409, "ref_not_found");
+  if (rootPath && rootPath !== "docs" && rootPath !== "journal") throw refusal(409, "root_not_found");
+  journals.set(id, repository(name, ref ?? "main", rootPath ?? ""));
+  return staffJournal(id);
+});
+
+on("DELETE", "/app/api/classrooms/:id/journal", (m) => {
+  const id = m.groups!.id!;
+  staffRoom(id);
+  journals.delete(id);
+  refreshes.delete(id);
+  return undefined;
+});
+
+on("POST", "/app/api/classrooms/:id/journal/refresh", (m) => {
+  const id = m.groups!.id!;
+  staffRoom(id);
+  if (!journals.has(id)) throw refusal(409, "no_journal");
+  refreshes.set(id, Date.now() + 2_500);
+  return undefined;
 });
 
 on("GET", "/app/api/classrooms/:id/journal/pages/(?<path>.+)", (m, _body, url): JournalPage => {

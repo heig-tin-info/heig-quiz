@@ -201,17 +201,16 @@ export interface RouteSpec<V extends Route["view"]> {
 
 /**
  * The gate of the classroom merge's routes (ADR-035, `docs/merge/05-web.md`
- * §5.1–§5.2) whose routes exist before their screens, or their API, do: the
- * classroom's Journal and Grades tabs, the project pages. Each renders a
- * placeholder (`ComingSoon`) until its task ships the real screen (M5-04,
- * M3-12); the Journal's reader exists (M4-04) and waits for its API (M4-02),
- * and so does the student classroom page's Journal tab.
+ * §5.1–§5.2) whose routes exist before their screens do: the classroom's
+ * Grades tab and the project pages. Each renders a placeholder
+ * (`ComingSoon`) until its task ships the real screen (M5-04, M3-12).
  *
- * Off in a production build: the `preview` routes do not parse, and the
- * student classroom page shows its Activities alone. On in the browser mock
- * (`VITE_MOCK=1`), and wherever `VITE_CLASSROOM_PAGES=1` is set at build time.
- * The student's Courses and classroom page left it with M5-02, the
- * classroom's Settings with M2-07.
+ * Off in a production build: the `preview` routes do not parse. On in the
+ * browser mock (`VITE_MOCK=1`), and wherever `VITE_CLASSROOM_PAGES=1` is set
+ * at build time. The student's Courses and classroom page left it with M5-02,
+ * the classroom's Settings with M2-07, the Journal (route and both tabs)
+ * with M4-05 — on a platform without Quiz's App its API answers 404 and no
+ * Journal tab is drawn.
  */
 export const CLASSROOM_PAGES =
   import.meta.env.VITE_MOCK === "1" || import.meta.env.VITE_CLASSROOM_PAGES === "1";
@@ -327,7 +326,6 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     },
     studentSafe: true,
     bottomSlot: "courses",
-    preview: true,
   },
   classroomGrades: {
     path: (r) => `/classrooms/${r.id}/grades`,

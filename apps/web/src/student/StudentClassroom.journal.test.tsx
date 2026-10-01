@@ -5,15 +5,12 @@ import { describe, expect, it, vi } from "vitest";
 import type { Journal, JournalPage, StudentClassroomPage } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
+import { StudentClassroom } from "./StudentClassroom";
 
 /*
- * The Journal tab of the student classroom page (F-ORG-15, F-JRN-07) with
- * `CLASSROOM_PAGES` on, as in the browser mock and once the journal's API
- * ships (M4-02). The router reads the flag once, when evaluated, so the
- * environment is stubbed before anything imports it.
+ * The Journal tab of the student classroom page (F-ORG-15, F-JRN-07), in
+ * every build since M4-05: no `CLASSROOM_PAGES` here.
  */
-vi.stubEnv("VITE_CLASSROOM_PAGES", "1");
-const { StudentClassroom } = await import("./StudentClassroom");
 
 const page = (hasJournal: boolean): StudentClassroomPage => ({
   classroom: {
@@ -42,7 +39,7 @@ const home: JournalPage = {
   updatedAt: new Date().toISOString(),
 };
 
-describe("the student classroom page's Journal tab, CLASSROOM_PAGES on", () => {
+describe("the student classroom page's Journal tab", () => {
   it("is there only when the classroom has a journal", async () => {
     mockFetch({ "GET /app/api/student/classrooms/r1": ok(page(false)) });
     renderWithProviders(<StudentClassroom id="r1" tab="activities" navigate={vi.fn()} />);

@@ -35,6 +35,7 @@ import type { CategorizeConfig } from "@quiz/qt-categorize/client";
 import { diagramServer } from "@quiz/qt-diagram/server";
 import type { DiagramConfig } from "@quiz/qt-diagram/client";
 import { pollOfTeacher, teacherPolls } from "./poll";
+import { hasMockJournal } from "./journal";
 import { studentRooms } from "./org";
 
 // --- 4. The student: home, lobby and player (WP9) --------------------------
@@ -577,7 +578,7 @@ on("GET", "/app/api/student/classrooms/:id", (m): StudentClassroomPage => {
       upcoming: tagged(home.upcoming),
       past: tagged(home.past),
     },
-    hasJournal: flags.journal && id === "r1",
+    hasJournal: hasMockJournal(id),
     hasProjects: false,
     serverNow: home.serverNow,
   };

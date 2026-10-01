@@ -53,9 +53,18 @@ describe("routeToPath / parsePath", () => {
     expect(parsePath("/classrooms/c-1/settings")).toEqual({ view: "classroomSettings", id: "c-1" });
   });
 
-  it("parses none of the classroom merge's routes while CLASSROOM_PAGES is off", () => {
+  it("parses the classroom's journal in every build, since M4-05 (F-JRN-07)", () => {
+    expect(ROUTES.classroomJournal.preview).toBeUndefined();
+    expect(parsePath("/classrooms/c-1/journal")).toEqual({ view: "classroomJournal", id: "c-1" });
+    expect(parsePath("/classrooms/c-1/journal/10-semaine-1/a.md")).toEqual({
+      view: "classroomJournal",
+      id: "c-1",
+      path: "10-semaine-1/a.md",
+    });
+  });
+
+  it("parses none of the classroom merge's other routes while CLASSROOM_PAGES is off", () => {
     // A production build: every such address reads as it did before them.
-    expect(parsePath("/classrooms/c-1/journal/a.md")).toEqual({ view: "classroom", id: "c-1" });
     expect(parsePath("/classrooms/c-1/grades")).toEqual({ view: "classroom", id: "c-1" });
     expect(parsePath("/projects/p-1")).toEqual({ view: "home" });
     expect(parsePath("/projects/p-1/groups")).toEqual({ view: "home" });
@@ -213,7 +222,8 @@ describe("ROUTES", () => {
       "attempt",
       // F-ORG-15: the student's page of the classroom (M5-02).
       "classroom",
-      // The merge's student tabs, reachable only under `CLASSROOM_PAGES`.
+      // The merge's student tabs: the Journal (M4-05); the Grades, only
+      // under `CLASSROOM_PAGES` until M5-04.
       "classroomGrades",
       "classroomJournal",
       "drill",

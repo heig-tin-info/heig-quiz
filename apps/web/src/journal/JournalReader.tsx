@@ -4,9 +4,9 @@ import {
   BookOpen,
   CalendarClock,
   ChevronDown,
-  ChevronRight,
   EyeOff,
   FileQuestion,
+  RefreshCw,
 } from "lucide-react";
 import { useEffect, useId, useState, type ReactNode } from "react";
 
@@ -20,6 +20,7 @@ import {
 
 import { api, ApiError } from "../api";
 import { useT } from "../i18n";
+import { useToast } from "../notify";
 import { journalKey, journalPageKey } from "../queryKeys";
 import { routeToPath, type Navigate } from "../router";
 import {
@@ -30,15 +31,15 @@ import {
   EmptyState,
   isoDateTime,
   PageError,
-  ParentLink,
   QueryError,
-  RelativeTime,
   Skeleton,
   useMinWidth,
 } from "../ui";
+import { journalErrorText, useJournalRefresh } from "./api";
 import { JournalArticle } from "./JournalArticle";
 import { JournalNav } from "./JournalNav";
 import { JournalToc } from "./JournalToc";
+import { SyncState } from "./SyncState";
 import { SYNC_ERRORS, warningText } from "./words";
 
 /*
@@ -52,8 +53,9 @@ import { SYNC_ERRORS, warningText } from "./words";
  *   `.md-doc`; the navigation is 13 px dense UI. No page title above it: two
  *   `h1`s on one screen and neither wins.
  * - Color: ONE accent, the page being read in the navigation (an
- *   `accent-soft` chip). A student has no primary action here. The staff's
- *   Edit (primary, inside a page) and Refresh arrive with M4-05 and M4-06.
+ *   `accent-soft` chip). A student has no primary action here. The staff
+ *   have Refresh (secondary, M4-05) in their bar above the page; Edit
+ *   (primary, inside a page) joins it with M4-06.
  * - Space: 2 between navigation rows, 32 between the columns, 24 under the
  *   header; the prose has its own rhythm (1.75 leading, 72 ch).
  * - Finish: the page is a sheet of paper (`surface`, hairline, card radius)
@@ -62,6 +64,10 @@ import { SYNC_ERRORS, warningText } from "./words";
  * Layout: from `lg` a 15 rem navigation column beside the article, the TOC
  * under the navigation, at the right from `xl`; on a phone the navigation
  * (and the TOC) fold into a disclosure above the page.
+ *
+ * The reader is always some page's tab: the teacher classroom page's Journal
+ * tab (`ClassroomView`, M4-05) or the student classroom page's (M5-02, whose
+ * compact header comes in as `header`). It draws no breadcrumb of its own.
  */
 
 type View = "staff" | "student";
@@ -111,13 +117,14 @@ export function JournalReader({
    */
   studentView: boolean;
   /**
-   * Drawn in place of the reader's own breadcrumb, in every state: the
-   * student classroom page's compact header and tabs (§5.2), under which the
-   * reader is that page's Journal tab.
+   * Drawn above the reader in every state: the student classroom page's
+   * compact header and tabs (§5.2), under which the reader is that page's
+   * Journal tab. The teacher's page draws its header itself, above.
    */
   header?: ReactNode;
 }) {
   const t = useT();
+  const toast = useToast();
   const view: View = studentView ? "student" : "staff";
   const base = `/app/api/classrooms/${classroomId}/journal`;
   const narrow = studentView ? "?view=student" : "";
@@ -154,17 +161,22 @@ export function JournalReader({
     if (hash) window.history.replaceState(null, "", `${window.location.pathname}${hash}`);
   };
 
+  const repository = staffJournal?.repository ?? null;
+  const { refresh, refreshing } = useJournalRefresh(classroomId, repository, (error) =>
+    toast(journalErrorText(error, t), "error"),
+  );
+
   const wide = useMinWidth(1024);
   const extraWide = useMinWidth(1280);
   const layout: Layout = extraWide ? "extraWide" : wide ? "wide" : "phone";
 
   if (journal.isPending) return <ReaderSkeleton layout={layout} header={outerHeader} />;
 
-  const header = outerHeader ?? (
-    <ReaderHeader
-      onClassroom={() => navigate({ view: "classroom", id: classroomId })}
-      aside={staffJournal?.repository ? <SyncState repository={staffJournal.repository} /> : null}
-    />
+  const header = (
+    <>
+      {outerHeader}
+      {repository ? <StaffBar repository={repository} refreshing={refreshing} onRefresh={refresh} /> : null}
+    </>
   );
 
   if (journal.isError) {
@@ -200,7 +212,6 @@ export function JournalReader({
   }
 
   const loaded = journal.data;
-  const repository = staffJournal?.repository ?? null;
   const syncAlert =
     repository?.syncStatus === "error" ? (
       <Alert tone="danger" icon={AlertTriangle} title={t("journal.sync.errorTitle")}>
@@ -327,41 +338,28 @@ function Frame({ header, children }: { header: ReactNode; children: ReactNode })
 }
 
 /**
- * The compact header: where the reader is (the classroom, then the journal)
- * and, for the staff, where the copy of the repository stands. No title: the
- * document owns it. The staff's actions (Edit, Refresh) join `aside` with
- * M4-05 and M4-06.
+ * The staff's bar above the page: where the copy of the repository stands,
+ * and Refresh (F-JRN-05, secondary). Edit (M4-06, the primary inside a page)
+ * joins it here. A student's payload has no repository, so no bar.
  */
-function ReaderHeader({ onClassroom, aside }: { onClassroom: () => void; aside: ReactNode }) {
+function StaffBar({
+  repository,
+  refreshing,
+  onRefresh,
+}: {
+  repository: JournalRepository;
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
   const t = useT();
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-      <nav aria-label={t("journal.breadcrumb")} className="flex items-center gap-1.5 text-[13px] text-fg-muted">
-        <ParentLink onClick={onClassroom}>{t("journal.classroom")}</ParentLink>
-        <ChevronRight className="size-3.5 text-fg-faint" aria-hidden />
-        <span className="text-fg">{t("journal.crumb")}</span>
-      </nav>
-      {aside}
+    <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+      <SyncState repository={repository} refreshing={refreshing} />
+      <Button variant="secondary" size="sm" loading={refreshing} onClick={onRefresh}>
+        {refreshing ? null : <RefreshCw />} {t("journal.refresh")}
+      </Button>
     </div>
   );
-}
-
-/** Where the copy of the repository stands: synced when, being read, or failed (the alert says why). */
-function SyncState({ repository }: { repository: JournalRepository }) {
-  const t = useT();
-  const text =
-    repository.syncStatus === "pending" ? (
-      t("journal.sync.pending")
-    ) : repository.syncStatus === "error" ? (
-      <span className="text-danger">{t("journal.sync.errorTitle")}</span>
-    ) : repository.lastSyncedAt ? (
-      <>
-        {t("journal.sync.ok")} <RelativeTime iso={repository.lastSyncedAt} />
-      </>
-    ) : (
-      t("journal.sync.never")
-    );
-  return <p className="text-xs text-fg-faint">{text}</p>;
 }
 
 /** The page: the staff's badges and warnings, then the document. */

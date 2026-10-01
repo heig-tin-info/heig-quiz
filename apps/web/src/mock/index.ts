@@ -29,6 +29,7 @@
  *    (section 7);
  *  - `unlinked` — the persona has no linked GitHub account (section 8);
  *  - `journal` — the classroom PRG1-2026 has a journal (section 9);
+ *    `journalerror` — and its last synchronisation failed;
  *  - `scene` — the student player's state, and only that one screen's:
  *    `?scene=lobby|running|paused|closed|extend|single|marks|forward|exercise` (`running` by default).
  *
@@ -53,7 +54,7 @@
  *   github.ts      8.  GitHub: the App's organizations and a classroom's link
  *                      (`?unlinked=1` declared for the account, M2-01);
  *   journal.ts     9.  a classroom's journal, its navigation and its rendered
- *                      pages (`?journal=1`);
+ *                      pages (`?journal=1`), and the staff's writes (M4-05);
  *   kiosk.ts       10. the kiosk stations: the admin's registry, and what a
  *                      station knows of itself (ADR-051).
  *
