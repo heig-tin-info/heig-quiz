@@ -67,9 +67,11 @@ import { presence } from "../realtime/presence.js";
 import {
   countedAttempt,
   countedAttemptId,
+  gradeReadable,
   releasedGradesOf,
   resultsState,
   scoreVisible,
+  type ReleasedGrade,
 } from "../results/service.js";
 import { isShuffleable, studentView } from "./studentView.js";
 
@@ -1275,6 +1277,29 @@ export async function studentHome(
   now: Date,
   classroomId?: string,
 ): Promise<StudentHome> {
+  const { polls, open, upcoming, past } = await studentBoard(db, userId, now, classroomId);
+  return { polls, open, upcoming, past: past.map((entry) => entry.card), serverNow: iso(now) };
+}
+
+type StudentRow = Awaited<ReturnType<typeof studentEvaluationRows>>[number];
+
+/**
+ * A card of the student's Past, beside the row it was drawn from, the
+ * attempt that counts (`countedAttempt`) and the released grade.
+ */
+export interface PastEntry {
+  row: StudentRow;
+  card: EvaluationCard;
+  counted: { id: string; state: string } | null;
+  released: ReleasedGrade | undefined;
+}
+
+/**
+ * The student's evaluations sorted into the home's lists (F-LIVE-01): ONE
+ * rule for what is open, coming and past, which the home and the Grades page
+ * (`grades.ts`) both read. Within the module only.
+ */
+export async function studentBoard(db: Db, userId: string, now: Date, classroomId?: string) {
   const all = await studentEvaluationRows(db, userId, classroomId).orderBy(
     desc(evaluations.createdAt),
   );
@@ -1364,45 +1389,55 @@ export async function studentHome(
     };
   };
 
-  const card = (row: (typeof rows)[number]): EvaluationCard => ({
-    id: row.evaluation.id,
-    title: row.evaluation.title,
-    mode: row.evaluation.mode,
-    state: row.evaluation.state,
-    classroomId: classroomIdOf(row.evaluation),
-    classroomName: row.classroomName,
-    courseCode: row.courseCode,
-    opensAt: isoOrNull(row.evaluation.opensAt),
-    closesAt: isoOrNull(row.evaluation.closesAt),
-    durationS: row.evaluation.durationS,
-    attemptId: row.attempt?.id ?? null,
-    attemptState: row.attempt?.state ?? null,
-    attemptStartedAt: isoOrNull(row.attempt?.startedAt ?? null),
-    deadlineAt: isoOrNull(row.attempt?.deadlineAt ?? null),
-    grade: grades.get(row.evaluation.id)?.grade ?? null,
-    retakes: retakesOf(row),
-    // Issue #203: what "See my results" would lead to, for the attempt
-    // that counts — the results service's own rule.
-    results: resultsState(row.evaluation, countedAttempt(perEvaluation, row)?.state ?? null),
-    trustedClients: trustedClients(row.evaluation),
-  });
+  const card = (row: (typeof rows)[number], counted: string | null): EvaluationCard => {
+    return {
+      id: row.evaluation.id,
+      title: row.evaluation.title,
+      mode: row.evaluation.mode,
+      state: row.evaluation.state,
+      classroomId: classroomIdOf(row.evaluation),
+      classroomName: row.classroomName,
+      courseCode: row.courseCode,
+      opensAt: isoOrNull(row.evaluation.opensAt),
+      closesAt: isoOrNull(row.evaluation.closesAt),
+      durationS: row.evaluation.durationS,
+      attemptId: row.attempt?.id ?? null,
+      attemptState: row.attempt?.state ?? null,
+      attemptStartedAt: isoOrNull(row.attempt?.startedAt ?? null),
+      deadlineAt: isoOrNull(row.attempt?.deadlineAt ?? null),
+      // Only a grade the student may read (F-RES-04): never under `none`.
+      grade: gradeReadable(row.evaluation, counted)
+        ? (grades.get(row.evaluation.id)?.grade ?? null)
+        : null,
+      retakes: retakesOf(row),
+      // Issue #203: what "See my results" would lead to, for the attempt
+      // that counts — the results service's own rule.
+      results: resultsState(row.evaluation, counted),
+      trustedClients: trustedClients(row.evaluation),
+    };
+  };
 
   const open: EvaluationCard[] = [];
   const upcoming: EvaluationCard[] = [];
-  const past: EvaluationCard[] = [];
+  const past: PastEntry[] = [];
   for (const row of rows) {
     const state = row.evaluation.state;
     if (state === "draft") continue;
-    const c = card(row);
+    // The attempt that COUNTS (F-EVAL-15): the server's own, for the card and
+    // for the Grades page alike.
+    const kept = countedAttempt(perEvaluation, row);
+    const counted = kept ? { id: kept.id, state: kept.state } : null;
+    const c = card(row, counted?.state ?? null);
+    const ended = { row, card: c, counted, released: grades.get(row.evaluation.id) };
     if (state === "scheduled") upcoming.push(c);
-    else if (state !== "lobby" && state !== "running" && state !== "paused") past.push(c);
+    else if (state !== "lobby" && state !== "running" && state !== "paused") past.push(ended);
     // Issue #203: "Open now" is what the student can still DO. A finished
     // attempt that cannot be retaken has nothing left to do, whatever the
     // evaluation's state: it is past. A reopened attempt is `in_progress`
     // again, and comes back here on its own.
     else if (c.attemptState !== null && isFinishedAttempt(c.attemptState) && !c.retakes?.canRetake) {
-      past.push(c);
+      past.push(ended);
     } else open.push(c);
   }
-  return { polls, open, upcoming, past, serverNow: iso(now) };
+  return { polls, open, upcoming, past };
 }

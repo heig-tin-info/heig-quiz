@@ -95,6 +95,41 @@ describe("useSearchParam", () => {
 });
 
 /*
+ * `navigate` lands on the route's whole address. A page that stays mounted
+ * from one classroom to the next must not keep the previous address's tab,
+ * and a click on the classroom on view leaves its tab too.
+ */
+describe("useRoute and the query string", () => {
+  const routeAndTab = () =>
+    renderHook(() => ({ route: useRoute(), tab: useSearchParam("tab", "evaluations") }));
+
+  it("hands the next page its own query, not the previous one's", () => {
+    goTo("/classrooms/c1?tab=roster");
+    const { result } = routeAndTab();
+    expect(result.current.tab[0]).toBe("roster");
+    act(() => result.current.route[1]({ view: "classroom", id: "c2" }));
+    expect(window.location.pathname + window.location.search).toBe("/classrooms/c2");
+    expect(result.current.tab[0]).toBe("evaluations");
+  });
+
+  it("drops the query of the page on view when it is navigated to again", () => {
+    goTo("/classrooms/c1?tab=roster");
+    const { result } = routeAndTab();
+    act(() => result.current.route[1]({ view: "classroom", id: "c1" }));
+    expect(window.location.pathname + window.location.search).toBe("/classrooms/c1");
+    expect(result.current.tab[0]).toBe("evaluations");
+  });
+
+  it("pushes nothing when the address is already the route's", () => {
+    goTo("/classrooms/c1");
+    const before = window.history.length;
+    const { result } = routeAndTab();
+    act(() => result.current.route[1]({ view: "classroom", id: "c1" }));
+    expect(window.history.length).toBe(before);
+  });
+});
+
+/*
  * The leave guard (M4-06): a screen holding unsaved work asks before the app
  * navigates away, by `navigate` or by Back, and the browser asks on a reload.
  */

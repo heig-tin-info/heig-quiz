@@ -1,6 +1,6 @@
 {
   "generatedBy": "apps/web/scripts/docs-screenshots.mjs",
-  "base": "http://localhost:3100",
+  "base": "http://localhost:3105",
   "viewports": {
     "desktop": {
       "width": 1440,
@@ -1289,7 +1289,7 @@
     },
     {
       "name": "student-home",
-      "caption": "The student's home: what is open, what is coming, what is past.",
+      "caption": "The student's home: what is open now and what is coming.",
       "persona": "lea",
       "path": "/",
       "width": 1440,
@@ -1300,19 +1300,19 @@
         "dark"
       ],
       "action": "Nothing: the page as it loads.",
-      "state": "As seeded: one exercise in its lobby, one scheduled test, one past test.",
+      "state": "As seeded: one exercise in its lobby, one scheduled test.",
       "phase": "seeded",
       "files": {
         "light": "student-home-light.png",
         "dark": "student-home-dark.png"
       },
-      "takenAt": "2026-10-01T06:44:50.987Z",
-      "commit": "ac2f6212",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-01T07:36:37.823Z",
+      "commit": "4c3e9f94",
+      "base": "http://localhost:3105"
     },
     {
       "name": "student-home-phone",
-      "caption": "The student's home: what is open, what is coming, what is past.",
+      "caption": "The student's home: what is open now and what is coming.",
       "persona": "lea",
       "path": "/",
       "width": 390,
@@ -1323,15 +1323,15 @@
         "dark"
       ],
       "action": "Nothing: the page as it loads.",
-      "state": "As seeded: one exercise in its lobby, one scheduled test, one past test.",
+      "state": "As seeded: one exercise in its lobby, one scheduled test.",
       "phase": "seeded",
       "files": {
         "light": "student-home-phone-light.png",
         "dark": "student-home-phone-dark.png"
       },
-      "takenAt": "2026-10-01T06:44:50.987Z",
-      "commit": "ac2f6212",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-01T07:36:37.823Z",
+      "commit": "4c3e9f94",
+      "base": "http://localhost:3105"
     },
     {
       "name": "student-lobby",
@@ -1631,6 +1631,52 @@
       "takenAt": "2026-10-01T06:44:50.987Z",
       "commit": "ac2f6212",
       "base": "http://localhost:3100"
+    },
+    {
+      "name": "student-grades",
+      "caption": "The student's Grades: finished work by classroom, the grade once released.",
+      "persona": "lea",
+      "path": "/grades",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Test 0” released by the teacher.",
+      "phase": "released",
+      "files": {
+        "light": "student-grades-light.png",
+        "dark": "student-grades-dark.png"
+      },
+      "takenAt": "2026-10-01T07:36:37.823Z",
+      "commit": "4c3e9f94",
+      "base": "http://localhost:3105"
+    },
+    {
+      "name": "student-grades-phone",
+      "caption": "The student's Grades: finished work by classroom, the grade once released.",
+      "persona": "lea",
+      "path": "/grades",
+      "width": 390,
+      "height": 844,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Test 0” released by the teacher.",
+      "phase": "released",
+      "files": {
+        "light": "student-grades-phone-light.png",
+        "dark": "student-grades-phone-dark.png"
+      },
+      "takenAt": "2026-10-01T07:36:37.823Z",
+      "commit": "4c3e9f94",
+      "base": "http://localhost:3105"
     },
     {
       "name": "student-settings",

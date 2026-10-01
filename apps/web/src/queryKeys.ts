@@ -223,6 +223,8 @@ export const resultsByQuestionKey = (evaluationId: string) =>
 
 export const studentHomeKey = ["student", "home"] as const;
 export const studentClassroomsKey = ["student", "classrooms"] as const;
+/** The student's Grades (`GET /student/results`), under the `student` root the `results` hint refreshes. */
+export const studentGradesKey = ["student", "grades"] as const;
 /** One classroom's student page (F-ORG-15), under the Courses list's key. */
 export const studentClassroomKey = (id: string) => [...studentClassroomsKey, id] as const;
 /** Every drill read of the student (ADR-041): what an opt-out or a finished session invalidates. */

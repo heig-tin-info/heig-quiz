@@ -102,6 +102,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["resultsByQuestionKey", keys.resultsByQuestionKey("e1"), ["results", "e1", "by-question"]],
     ["studentHomeKey", keys.studentHomeKey, ["student", "home"]],
     ["studentClassroomsKey", keys.studentClassroomsKey, ["student", "classrooms"]],
+    ["studentGradesKey", keys.studentGradesKey, ["student", "grades"]],
     ["studentClassroomKey", keys.studentClassroomKey("r1"), ["student", "classrooms", "r1"]],
     ["drillRootKey", keys.drillRootKey, ["student", "drill"]],
     ["drillClassroomsKey", keys.drillClassroomsKey, ["student", "drill", "classrooms"]],

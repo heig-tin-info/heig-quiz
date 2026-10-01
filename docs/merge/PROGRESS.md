@@ -94,15 +94,22 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M4-04 | Web: reader | done | M4-02, M1-04, M1-05 | `merge/M4-04-journal-reader` | #378 | `apps/web/src/journal/`: `JournalReader({classroomId, path?, navigate, studentView})` (the page; student UI ⇒ `?view=student`; keys `journalKey(id, view)` ⊃ `journalPageKey(id, view, path)`), `JournalNav`, `JournalToc`, `JournalArticle` (+ `journalLinkTarget`), `words.ts` (`warningText`, `SYNC_ERRORS`, keyed by the contract unions). No staff action yet (sync state only, in `ReaderHeader`'s `aside`): M4-05 adds Refresh there (invalidate `journalKey`), M4-06 adds Edit (primary) and the editor (both cards say so). `isPlainClick` lives in `./ui` (controls, beside `LinkButton`). Route still `preview: true` (no API until M4-02); M5-02 mounts the reader under the student classroom header. SSE `journal` hint ⇒ invalidate `["journal", id]` (M4-02) |
 | M4-05 | Web: Journal section of Settings, teacher tab | review | M4-03, M2-07, D24 | `merge/M4-05-journal-settings` | #416 | `journal/JournalSettings.tsx` (the section, in M2-07's slot), `journal/api.ts` (`useStaffJournal`, `useJournalRefresh`, the refusals worded through `JOURNAL_ERRORS`), teacher Journal tab = `ClassroomView routeTab="journal"` mounting `JournalReader`; the route and both tabs are out of `CLASSROOM_PAGES` (Grades and projects stay). **M4-06**: Edit goes in the reader's `StaffBar` (`JournalReader.tsx`), beside Refresh, as its primary; card M4-05, "As delivered" |
 | M4-06 | Web: WYSIWYG editor | review | M4-05, D25 | `merge/M4-06-journal-editor` | #417 | Edit (primary of `StaffBar`) swaps the page for `journal/editor/JournalEditor` on the same route; D25 holds WYSIWYG-first: `richTextExtensions({ journal: true })` keeps the author's spelling, `reconcile.ts` writes every unedited block as read, front matter split and rewritten line by line, pictures in `images/` beside the page by relative path, 409 keeps the draft, `useLeaveGuard` in `router.ts`; the real-corpus run needs `JOURNAL_CORPUS_DIR`; card M4-06, "As delivered" |
+| M4-07 | API: journal modes, schema, GitHub mode read-only | todo | M4-03, D29 | | | |
+| M4-08 | API: the Quiz-mode backend | todo | M4-07 | | | |
+| M4-09 | Web: mode choice, standard editor, GitHub mode read-only | todo | M4-08, M4-06 | | | |
+| M4-10 | Rename, reorder, nest (Quiz mode) | todo | M4-09 | | | |
+| M4-11 | Move to GitHub | todo | M4-10, M2-03 | | | |
+| M4-12 | Bring back into Quiz | todo | M4-08 | | | |
+| M4-13 | Copy a journal from another classroom (later) | todo | M4-08 | | | |
 
 ## M5 — Student classroom page and gradebook
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
 | M5-01 | API: the student's classroom | done | M1-03 | `merge/M5-01-student-classroom-api` | #377 | `GET /app/api/student/classrooms` (`StudentClassroom[]`, archived left out) and `GET /app/api/student/classrooms/:id` (`StudentClassroomPage`, always the student payload through the caller's own seat): shapes in `contracts/src/student.ts`. `readableClassroom(app, req, reply, params, { studentView })` in `guards.ts` (rule: `classroomPayload`) |
-| M5-02 | Web: student Courses route and classroom page | done | M5-01, D07 | `merge/M5-02-student-classroom-page` | #380 | `studentCourses` (`/courses`, no longer `preview`, no sidebar section) and `classroom` (`studentSafe` in every build) ship; `classroomJournal` stays `preview` until M4-02, and the classroom page's Journal tab shows only under `CLASSROOM_PAGES && hasJournal` (production: Activities alone). `student/StudentClassroom.tsx` (tab = `activities` / `journal`, the reader mounted with `JournalReader`'s new `header` prop), `student/StudentCourses.tsx`, `student/cards.tsx` (the rows, captions, `useCardActions`, `ClassroomList`, shared with the home; its join card was removed by ADR-053). The one accent: `mostUrgent`. Key `studentClassroomKey(id)` under `studentClassroomsKey`. M5-04: add the Grades tab to the same `Tabs`, move the bottom bar's Grades slot off the home anchor; M3-10: a `ProjectRow` in `Activities` and a rank in `mostUrgent`. **Open point settled 2026-10-01 by the product owner** (D07 addendum): the student's desktop sidebar mirrors the bottom bar — Activities, Courses, Drill (conditional), Grades (`/#past`), Profile left to the account menu (`sidebarSlots`, lit by `activeSlot`); branch `student-sidebar-nav`, the `student-home` desktop scenes change |
+| M5-02 | Web: student Courses route and classroom page | done | M5-01, D07 | `merge/M5-02-student-classroom-page` | #380 | `studentCourses` (`/courses`, no longer `preview`, no sidebar section) and `classroom` (`studentSafe` in every build) ship; `classroomJournal` stays `preview` until M4-02, and the classroom page's Journal tab shows only under `CLASSROOM_PAGES && hasJournal` (production: Activities alone). `student/StudentClassroom.tsx` (tab = `activities` / `journal`, the reader mounted with `JournalReader`'s new `header` prop), `student/StudentCourses.tsx`, `student/cards.tsx` (the rows, captions, `useCardActions`, `ClassroomList`, shared with the home; its join card was removed by ADR-053). The one accent: `mostUrgent`. Key `studentClassroomKey(id)` under `studentClassroomsKey`. M5-04: add the Grades tab to the same `Tabs`, move the bottom bar's Grades slot off the home anchor; M3-10: a `ProjectRow` in `Activities` and a rank in `mostUrgent`. **Open point settled 2026-10-01 by the product owner** (D07 addendum): the student's desktop sidebar mirrors the bottom bar — Activities, Courses, Drill (conditional), Grades (`/#past`), Profile left to the account menu (`sidebarSlots`, lit by `activeSlot`); branch `student-sidebar-nav`, the `student-home` desktop scenes change. Superseded the same day: Grades is the `/grades` route (row M5-04) |
 | M5-03 | Gradebook module | todo | M3-08, D06 | | | |
-| M5-04 | Web: Grades tabs | todo | M5-03 | | | |
+| M5-04 | Web: Grades tabs | todo | M5-03 | | | Ahead of it (product owner, 2026-10-01; branch `student-grades`): the student's global Grades page `/grades` (`student/StudentGrades.tsx`; this tab narrows on the server), fed by the reshaped `GET /app/api/student/results` (`StudentGrades`, `live/grades.ts`: the home's Past rule, grades only where F-RES-04 lets them through). The Grades slot (bar and sidebar) leads there; the home's Past section and its `#past` anchor are gone |
 
 ## M6 — Online workspace and SEB
 
@@ -152,6 +159,12 @@ In the critical path only if D09 finds online assignments in production.
 
 Newest first. One line per session that changed the state: date, who,
 what moved, what the next session must know.
+
+- 2026-10-01 — product owner, conversation: the journal in two modes
+  (D29, ADR-057), D25 superseded. In Quiz (default, no GitHub, standard
+  editor, revisions) or in a GitHub repository (read-only, Edit on
+  GitHub). Cards M4-07…M4-13 written; next: M4-07 (schema, GitHub mode
+  read-only).
 
 - 2026-10-01 — M4-06 (#417): the journal's editor in review, which closes the
   journal track. The D25 round trip is the identity on the synthetic journal

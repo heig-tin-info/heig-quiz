@@ -178,7 +178,7 @@ const scenes = [
     await p.waitForTimeout(250); // the slide
     } },
   { name: "classroom-roster", role: "teacher", path: "/classrooms/r1?tab=roster" },
-  { name: "classroom-empty", role: "teacher", path: "/classrooms/r1?empty=1", settle: 800 },
+  { name: "classroom-empty", role: "teacher", path: "/classrooms/r1?empty=1&tab=roster", settle: 800 },
   { name: "classroom-error", role: "teacher", path: "/classrooms/r1?fail=1", settle: 2500 },
   { name: "classroom-loading", role: "teacher", path: "/classrooms/r1?slow=1", settle: 300 },
   { name: "classroom-roster-many", role: "teacher", path: "/classrooms/r1?tab=roster&many=1" },
@@ -398,6 +398,13 @@ const scenes = [
   { name: "student-classroom-error", role: "student", path: "/classrooms/r1?fail=1", settle: 2500 },
   { name: "student-classroom-notfound", role: "student", path: "/classrooms/nope" },
   { name: "student-classroom-loading", role: "student", path: "/classrooms/r1?slow=1", settle: 300 },
+  // F-ORG-14, F-RES-04: the student's Grades, by classroom — every status
+  // once, PRG1-2024 archived; `?many=1` a term of weekly series.
+  { name: "student-grades", role: "student", path: "/grades" },
+  { name: "student-grades-empty", role: "student", path: "/grades?empty=1" },
+  { name: "student-grades-error", role: "student", path: "/grades?fail=1", settle: 2500 },
+  { name: "student-grades-many", role: "student", path: "/grades?many=1" },
+  { name: "student-grades-loading", role: "student", path: "/grades?slow=1", settle: 300 },
   // F-EVAL-15: the exercise card with its kept score and the Retake button,
   // and the score-only feedback between two attempts.
   { name: "student-home-retake", role: "student", path: "/" },

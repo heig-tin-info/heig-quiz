@@ -49,6 +49,11 @@ describe("routeToPath / parsePath", () => {
     expect(routeToPath({ view: "studentCourses" })).toBe("/courses");
   });
 
+  it("parses the student's Grades in every build (F-ORG-14, F-RES-04)", () => {
+    expect(parsePath("/grades")).toEqual({ view: "studentGrades" });
+    expect(routeToPath({ view: "studentGrades" })).toBe("/grades");
+  });
+
   it("parses the classroom's Settings in every build, since M2-07 (F-ORG-13)", () => {
     expect(parsePath("/classrooms/c-1/settings")).toEqual({ view: "classroomSettings", id: "c-1" });
   });
@@ -174,6 +179,7 @@ describe("ROUTES", () => {
     template: { view: "template", id: "t-1" },
     classroom: { view: "classroom", id: "c-1" },
     studentCourses: { view: "studentCourses" },
+    studentGrades: { view: "studentGrades" },
     classroomSettings: { view: "classroomSettings", id: "c-1" },
     classroomJournal: { view: "classroomJournal", id: "c-1", path: "10-semaine-1/10-pointeurs.md" },
     classroomGrades: { view: "classroomGrades", id: "c-1" },
@@ -234,8 +240,9 @@ describe("ROUTES", () => {
       "oauthConsent",
       "pair",
       "settings",
-      // F-ORG-14: the student's Courses (M5-02).
+      // F-ORG-14: the student's Courses (M5-02) and Grades.
       "studentCourses",
+      "studentGrades",
       "teamsLink",
       "teamsTab",
     ]);
@@ -270,7 +277,7 @@ describe("ROUTES", () => {
         "correction",
         "devUi",
         // The student's pages: the student sidebar is lit by the bottom
-        // bar's slot (`activeSlot`), never by a section.
+        // bar's slot (`bottomSlotOf`), never by a section.
         "drill",
         "evaluation",
         "evaluationPreview",
@@ -285,6 +292,7 @@ describe("ROUTES", () => {
         "results",
         "settings",
         "studentCourses",
+        "studentGrades",
         "teamsLink",
         "teamsTab",
       ].sort(),
