@@ -324,7 +324,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // The staging allowlist (ADR-028) is checked before any row is written:
     // a refused login leaves no user behind.
     if (!loginAdmits(config, claims)) {
-      req.log.warn({ sub: claims.sub }, "Login refused by LOGIN_ALLOWLIST");
+      req.log.warn({ sub: claims.sub }, "Login refused by LOGIN_ALLOWLIST or a placeholder subject");
       return reply
         .code(403)
         .send({ error: "login_not_allowed", message: "This environment is restricted" });

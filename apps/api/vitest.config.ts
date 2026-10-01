@@ -20,7 +20,7 @@ import { coverage, maxWorkers } from "../../vitest.shared.js";
  */
 export default defineConfig({
   test: {
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
     globalSetup: ["./src/test/template.ts"],
     testTimeout: 60_000,
     hookTimeout: 120_000,

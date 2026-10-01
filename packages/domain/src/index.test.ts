@@ -50,6 +50,8 @@ describe("@quiz/domain public surface", () => {
       "checkpointDueAt",
       "extractScore",
       "groupRepoName",
+      // The identity rule of the import and of login adoption (M1-06).
+      "decideMatch",
       "parseStudentIgnore",
       "pickStudentRepo",
       "planCheckpointReviewDispatch",

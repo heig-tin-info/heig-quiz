@@ -1,5 +1,8 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "noEmit": true, "types": ["node"] },
+  // `scripts/` (the heig-classroom import, run by tsx, never built) is
+  // typechecked with the tests; hence the wider root, harmless without emit.
+  "compilerOptions": { "noEmit": true, "types": ["node"], "rootDir": "${configDir}" },
+  "include": ["${configDir}/src", "${configDir}/scripts"],
   "exclude": []
 }

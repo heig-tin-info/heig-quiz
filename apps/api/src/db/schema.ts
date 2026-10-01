@@ -20,3 +20,4 @@ export * from "./github.js";
 export * from "./system.js";
 export * from "./kiosk.js";
 export * from "./llm.js";
+export * from "./importClassroom.js";

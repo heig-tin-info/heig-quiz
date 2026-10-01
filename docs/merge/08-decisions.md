@@ -51,6 +51,34 @@ Status values: `open`, `settled`, `superseded`.
   0 of 55 shared people have the same `sub` — edu-ID subjects are pairwise.
   Cascade `swiss_edu_id` → verified address → new user; **login adoption is
   required** (M1-06, with its ADR).
+- **Addendum** (2026-10-01, product owner, conversation; implemented by
+  M1-06 and [ADR-061](../adr/ADR-061-adoption-des-comptes-importes.md)):
+  - **Adoption by address**: when `swiss_edu_id` finds no imported
+    (`classroom:`) account, a login address from the institutional
+    affiliation is accepted; a private address only if unique on both sides
+    (exactly one imported account holds it and no other Quiz account does).
+    One hit adopts (a conditional UPDATE of `oidc_sub`, audited), none
+    inserts, several insert and audit the ambiguity. Adoption is permanent;
+    it never touches a non-`classroom:` row nor a `dev:` one.
+  - **Users of dropped classrooms**: not imported. The import brings the
+    people a mapped classroom reaches (roster, staff seats) and their
+    teachers (owners), nobody else.
+  - **The mapping key**: each heig-classroom classroom (by name or id) maps
+    to an EXISTING Quiz classroom designated by course code + classroom
+    name — resolved to ids in the dry-run report for the teachers to
+    check — or is dropped. The import creates no course, no classroom, no
+    organization nor classroom link; it refuses a mapped classroom not
+    connected to the organization its heig-classroom classroom used.
+  - **The cutover waits for M8-01**: M1-06's import (people, rosters, GitHub
+    account links) switches nothing; the switch is the complete import
+    (spec 06 no. 46), with projects, journals, webhooks and the legacy
+    audit.
+  - **Still open before the first `--apply`** (the script refuses until
+    each is given): (3) a student on the heig-classroom roster but missing
+    from the Quiz roster — suggested: add a claimed line and report it
+    (`--missing-students enroll|report`); (4) an assistant becoming staff
+    of the course widens their access to the whole course (D04 (a)) —
+    suggested: yes, listed in the dry run (`--assistants staff|skip`).
 
 ### D16 — Rename Quiz's "attempt journal"
 - **Suggested**: yes, "attempt log" in docs and comments (not in table

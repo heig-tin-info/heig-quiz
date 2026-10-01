@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
     "seed": "tsx --env-file-if-exists=../../.env src/seed.ts",
+    "import:classroom": "tsx --env-file-if-exists=../../.env scripts/import-classroom.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },

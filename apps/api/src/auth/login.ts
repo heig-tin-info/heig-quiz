@@ -7,34 +7,42 @@ import { randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
 
+import { audit } from "../audit.js";
 import { loginAllowed, type AppConfig } from "../config.js";
 import type { Db } from "../db/client.js";
 import { users } from "../db/schema.js";
 import { claimEnrollments } from "../modules/org/service.js";
 import { syncRoleOfUser } from "../roles.js";
+import { applyAdoption, findAdoption, isPlaceholderSub } from "./adoption.js";
 import { recordIdpClaims, syncUserEmails, verifiedAddressesOf } from "./claims.js";
 import type { OidcClaims } from "./oidc.js";
 import type { SessionUser } from "./plugin.js";
 
 /**
  * The staging allowlist (ADR-028), checked before any row is written, on
- * the verified addresses of the claims only.
+ * the verified addresses of the claims only. A subject shaped like an
+ * imported placeholder (`classroom:…`, ADR-061) is refused whatever the
+ * environment: it would land on that account through the upsert.
  */
 export function loginAdmits(
   config: AppConfig,
-  claims: Pick<OidcClaims, "raw" | "emailVerified">,
+  claims: Pick<OidcClaims, "sub" | "raw" | "emailVerified">,
 ): boolean {
+  if (isPlaceholderSub(claims.sub)) return false;
   return loginAllowed(config, verifiedAddressesOf(claims.raw, claims.emailVerified));
 }
 
 /**
- * User upsert (key: oidc_sub), then the address set and the affiliations,
+ * Login adoption of an imported heig-classroom account (ADR-061, `adoption.ts`),
+ * user upsert (key: oidc_sub), then the address set and the affiliations,
  * then the role through the single rule of roles.ts — the same path as any
  * later recompute, so it counts the course seats — but without the pool
  * succession, which stays tied to the admin and staff actions. A new account starts as a student; an existing one
  * keeps its role until the recompute.
  */
 export async function signIn(db: Db, config: AppConfig, claims: OidcClaims): Promise<SessionUser> {
+  // `loginAdmits` refused it already; never write under a placeholder subject.
+  if (isPlaceholderSub(claims.sub)) throw new Error("A placeholder subject cannot sign in");
   const profile = {
     email: claims.email,
     emailVerified: claims.emailVerified,
@@ -44,12 +52,29 @@ export async function signIn(db: Db, config: AppConfig, claims: OidcClaims): Pro
     pictureUrl: claims.picture,
     lastLoginAt: new Date(),
   };
-  const [row] = await db
-    .insert(users)
-    .values({ id: randomUUID(), oidcSub: claims.sub, ...profile })
-    .onConflictDoUpdate({ target: users.oidcSub, set: profile })
-    .returning({ id: users.id });
-  if (!row) throw new Error("User upsert returned no row");
+  // Adoption and upsert in one transaction (ADR-061): an account the
+  // heig-classroom import made for this person becomes theirs before the
+  // upsert, which then lands on it through `oidc_sub`.
+  const row = await db.transaction(async (tx) => {
+    const found = await findAdoption(tx, claims);
+    const adopted = found.kind === "candidate" && (await applyAdoption(tx, found.userId, claims.sub));
+    const [upserted] = await tx
+      .insert(users)
+      .values({ id: randomUUID(), oidcSub: claims.sub, ...profile })
+      .onConflictDoUpdate({ target: users.oidcSub, set: profile })
+      .returning({ id: users.id });
+    if (!upserted) throw new Error("User upsert returned no row");
+    const outcome =
+      found.kind === "ambiguous"
+        ? { action: "auth.adoption_ambiguous" as const, payload: { key: found.key, candidates: found.candidates } }
+        : adopted && found.kind === "candidate"
+          ? { action: "auth.account_adopted" as const, payload: { key: found.key, previousSub: found.previousSub } }
+          : null;
+    if (outcome) {
+      await audit(tx, { ...outcome, actorUserId: upserted.id, actorType: "system", subjectType: "user", subjectId: upserted.id });
+    }
+    return upserted;
+  });
   // Both are load-bearing: the role reads the affiliations and the verified
   // addresses, and the roster matching reads the addresses. A failed write
   // therefore fails the login — nothing is demoted on a partial picture.

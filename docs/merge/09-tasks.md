@@ -174,18 +174,59 @@ files it ports; writes en + fr for every string.
 
 ### M1-06 — Import script skeleton, identity matching, login adoption
 - **Depends on**: D08 (after M0-02), D04. ‖ M1-01…05.
-- **Goal**: `Q:apps/api/scripts/import-classroom.ts` per §2.5 — source
-  connection, mapping file schema (zod), dry-run/apply, `import_classroom`
-  schema (`id_map`, `runs`), report skeleton; steps implemented now: users
-  (the cascade of §2.4), addresses, claims, avatars, teacher grants,
-  courses, classrooms (without org link), course staff, enrollments, role
-  recompute. If D08 says so: login adoption in `Q:auth/login.ts` + its ADR.
+- **Goal** (narrowed by the product owner, 2026-10-01, D08 addendum):
+  `Q:apps/api/scripts/import-classroom.ts` per §2.5 — read-only source
+  connection, mapping file schema (zod), `--dry-run` (default) / `--apply`,
+  `import_classroom` schema (`id_map`, `runs`), a readable report; steps:
+  users (the cascade of §2.4), addresses, claims, avatars, teacher grants,
+  GitHub account links (spec 06 no. 45), course staff seats, enrollments
+  merged into the mapped rosters, role recompute; mapping validation with
+  the organization check. **No course and no classroom is created** (D22):
+  each source classroom maps to an EXISTING Quiz classroom (course code +
+  classroom name) or is dropped, and a mapped classroom must already be
+  connected to the organization its source classroom used. Login adoption
+  in `Q:auth/login.ts` + its ADR (D08: required).
 - **Fixture**: `apps/api/scripts/fixtures/classroom-seed.sql`, synthetic,
-  anonymised, built from classroom's own seed.
+  anonymised, on classroom's own schema (its migrations, concatenated).
 - **Tests** (`*.db.test.ts`): import into PGlite; second run writes
   nothing; merge into an existing classroom; a duplicate identity is
-  reported, not merged silently.
+  reported, not merged silently; an unconnected or wrong-org classroom
+  refused; a dropped classroom's users not imported; GitHub link cases;
+  login adoption (each key, ambiguity, concurrency, never a
+  non-`classroom:` row).
 - **Acceptance**: dry-run report readable; no write outside the target DB.
+- **Stays with M8-01**: projects, journals, webhooks, the legacy audit,
+  the parity report, the codespace, and the pre-flight checks on the
+  source's state (stopped, queues empty, deadlines). M1-06 alone switches
+  nothing (spec 06 no. 46: the complete import is the switch).
+- **As delivered** (branch `merge/M1-06-import-identity`): ADR-061 (login
+  adoption: `auth/adoption.ts`, audits `auth.account_adopted`,
+  `auth.adoption_ambiguous`); migration `0053_import_classroom` (the
+  schema; no index on `swiss_edu_id`, ADR-061 §7); `importAccountLink` in
+  `auth/githubLink.ts`; the script under `apps/api/scripts/` (run with
+  `pnpm --filter @quiz/api import:classroom`; `--actor <admin e-mail>`
+  names the account recorded on the run and on grants whose creator is not
+  imported). `--apply` refuses while the report holds a refusal (mapping
+  incomplete or unresolved, a classroom not connected or connected
+  elsewhere, an ambiguous identity, an inconsistent source) or while an
+  open decision is not given: `--assistants staff|skip` (open item 4) and
+  `--missing-students enroll|report` (open item 3). A matched account's
+  avatar is Quiz's (profile), its claims the newer snapshot.
+  - The identity rule is ONE pure function, `decideMatch` of `@quiz/domain`
+    (`identityMatch.ts`), used by the import and by the adoption; a
+    private address must have exactly one verified holder in the whole
+    database; a placeholder carrying a `swiss_edu_id` is adopted through
+    that key only; a login whose `sub` starts with `classroom:` is refused.
+  - Left out: heig-classroom's `dev:` accounts (their placeholder would be
+    adoptable by address); of an anonymized account, its addresses, claims
+    and avatar (classroom's anonymization never cleared them).
+  - Writes go through the owners' writers: `addAddresses` and
+    `recordIdpClaims` (`auth/claims.ts`), `importAccountLink`,
+    `createTeacherGrant` (`modules/admin/service.ts`), `addStaff`, and
+    `claimLines` (`modules/org`, the roster's own claim pass). The steps are
+    `scripts/import-classroom/steps.ts`.
+  - Decided at review (ADR-061 §8): `--actor` is required and an admin;
+    a grant is imported only on a verified address of an imported person.
 
 ## M2 — GitHub substrate
 
@@ -1204,7 +1245,9 @@ files it ports; writes en + fr for every string.
 - **Depends on**: every schema task (M2-01, M3-01, M4-01, M5-03, M6-06 if
   in scope), D11.
 - **Goal**: the whole order of §2.5, the verification report, the legacy
-  audit table, pre-flight checks.
+  audit table, pre-flight checks — extending M1-06's script, which already
+  imports the people, the rosters and the GitHub account links. The
+  cutover waits for this task (D08 addendum): M1-06 alone switches nothing.
 - **Acceptance**: dry-run on the synthetic fixture and on a staging copy of
   a production dump: parity report clean.
 - **From M2-02's review**: an organization imported twice (a null-id row
