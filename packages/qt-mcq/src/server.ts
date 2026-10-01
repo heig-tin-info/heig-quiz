@@ -11,6 +11,7 @@ import {
   type StudentView,
 } from "@quiz/core/server";
 import { shuffle, streamSeed } from "@quiz/core/rng";
+import { mcqGenerator } from "./generate.js";
 import { gradeMcq, negativeMarkingOf } from "./grade.js";
 import { toCanonical } from "./canonical.js";
 import {
@@ -217,4 +218,6 @@ export const mcqServer: QuestionTypeServer<
   searchText: (config) => [config.prompt, ...config.choices.map((c) => c.text)].join("\n"),
 
   toCanonical,
+
+  generator: mcqGenerator,
 };

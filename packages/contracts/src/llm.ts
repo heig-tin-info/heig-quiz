@@ -94,3 +94,36 @@ export const LlmUsage = z.object({
   total: UsageCounts,
 });
 export type LlmUsage = z.infer<typeof LlmUsage>;
+
+// --- "Generate answers" (ADR-059) -------------------------------------------
+
+/**
+ * `GET /app/api/generate/availability`, a teacher's: whether the wand can work
+ * now (a master key and a stored key), and the types that have one.
+ */
+export const LlmAvailability = z.object({
+  available: z.boolean(),
+  types: z.array(z.string()),
+});
+export type LlmAvailability = z.infer<typeof LlmAvailability>;
+
+/**
+ * `POST /app/api/questions/:id/generate`: the editor's draft as it stands,
+ * saved or not, and the element to fill when the wand is one element's (an
+ * MCQ choice). The question's type is the server's, never the client's.
+ */
+export const GenerateRequest = z
+  .object({
+    config: z.unknown(),
+    explanation: z.string().max(20_000),
+    item: z.number().int().min(0).max(100).optional(),
+  })
+  .strict();
+export type GenerateRequest = z.infer<typeof GenerateRequest>;
+
+/** The draft with the proposal merged in: what the editor sets, and what Undo reverts. */
+export const GenerateResult = z.object({
+  config: z.unknown(),
+  explanation: z.string(),
+});
+export type GenerateResult = z.infer<typeof GenerateResult>;

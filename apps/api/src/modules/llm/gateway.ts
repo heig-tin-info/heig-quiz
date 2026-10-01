@@ -52,6 +52,11 @@ export class LlmGateway {
     return this.deps.config.LLM_KEY_SECRET !== "";
   }
 
+  /** A call can be made now: a master key, and a key stored. Whether it decrypts is the call's to say. */
+  async ready(): Promise<boolean> {
+    return this.enabled && (await settingsRow(this.deps.db)).keyCiphertext !== null;
+  }
+
   async complete<T>(req: CompleteRequest<T>): Promise<Completion<T>> {
     if (!this.enabled) throw new LlmError("not_configured");
     const row = await settingsRow(this.deps.db);

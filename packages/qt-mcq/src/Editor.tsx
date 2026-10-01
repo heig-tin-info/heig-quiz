@@ -68,6 +68,7 @@ import {
   sectionClass,
   sectionTitle,
   Segmented,
+  WandIcon,
 } from "@quiz/ui";
 import {
   choiceLetter,
@@ -178,8 +179,19 @@ export function McqEditor({
   uploadAsset,
   aside,
   ungraded = false,
+  onGenerateItem,
 }: McqEditorProps) {
   const s = resolveStrings(mcqEditorStrings, strings);
+  /** The row whose wand is waiting for the model (ADR-059); one at a time. */
+  const [generating, setGenerating] = useState<number | null>(null);
+  const generate = (index: number) => {
+    if (!onGenerateItem || generating !== null) return;
+    setGenerating(index);
+    // The host words a failure; the row only stops waiting.
+    onGenerateItem(index)
+      .catch(() => undefined)
+      .finally(() => setGenerating(null));
+  };
   const multiple = config.mode === "multiple";
   const correctCount = config.choices.filter((c) => c.correct).length;
   /**
@@ -461,6 +473,13 @@ export function McqEditor({
                   disabled={disabled === true}
                   removable={config.choices.length > MCQ_MIN_CHOICES}
                   trailing={index === config.choices.length - 1 ? addButton : null}
+                  wand={
+                    onGenerateItem === undefined || disabled
+                      ? null
+                      : choice.text.trim() === ""
+                        ? { onGenerate: () => generate(index), generating: generating === index, waiting: generating !== null }
+                        : "slot"
+                  }
                   {...(RichText === undefined ? {} : { RichText })}
                   {...(uploadAsset === undefined ? {} : { uploadAsset })}
                   onText={(text) => setChoices(patchAt(config.choices, index, { text }))}
@@ -531,6 +550,7 @@ function ChoiceRow({
   onEnter,
   onTab,
   trailing,
+  wand,
 }: {
   index: number;
   /** The last save refused this choice (an empty text, in practice). */
@@ -552,6 +572,13 @@ function ChoiceRow({
    * the same width on every other one, so the fields keep one right edge.
    */
   trailing: ReactNode;
+  /**
+   * The wand of an empty row (ADR-059): `generating`, this row waits for the
+   * model; `waiting`, a row does, and no other wand may start. `"slot"`: the
+   * list offers wands and this row is written, so it keeps the wand's width
+   * and the fields one right edge. `null`: no wands at all.
+   */
+  wand: { onGenerate: () => void; generating: boolean; waiting: boolean } | "slot" | null;
 }) {
   const letter = choiceLetter(index);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -650,6 +677,23 @@ function ChoiceRow({
           }}
         />
       )}
+
+      {wand !== null && wand !== "slot" ? (
+        <Tip label={`${s.generateChoice} ${letter}`}>
+          <button
+            type="button"
+            className={cx(iconButtonClass, "mt-1.25 hover:text-accent", wand.generating && "animate-pulse text-accent")}
+            aria-label={`${s.generateChoice} ${letter}`}
+            aria-busy={wand.generating || undefined}
+            disabled={disabled || wand.waiting}
+            onClick={wand.onGenerate}
+          >
+            <WandIcon />
+          </button>
+        </Tip>
+      ) : wand === "slot" ? (
+        <span aria-hidden className="size-7 shrink-0" />
+      ) : null}
 
       <button
         type="button"

@@ -101,6 +101,13 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   // ADR-058: the AI settings without a master key, and a cap over its ceiling.
   llm_disabled: "error.llmDisabled",
   cap_too_high: "error.capTooHigh",
+  // ADR-059: the editor's wand.
+  llm_not_configured: "error.llmNotConfigured",
+  llm_budget_exhausted: "error.llmBudgetExhausted",
+  llm_failed: "error.llmFailed",
+  statement_empty: "error.statementEmpty",
+  item_not_empty: "error.itemNotEmpty",
+  generate_unsupported: "error.generateUnsupported",
 };
 
 /** Server-provided error message of a failed call (or its worded code), or the fallback. */

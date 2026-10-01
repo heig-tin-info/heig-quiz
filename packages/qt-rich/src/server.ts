@@ -12,6 +12,8 @@
  * to it instead (`pending: 'llm'`, docs/spec/04 §4.8, F-GRADE-02).
  */
 import { ConfigMigrationError, type QuestionTypeServer } from "@quiz/core/server";
+
+import { richGenerator } from "./generate.js";
 import {
   countChars,
   emptyRichDraft,
@@ -138,4 +140,6 @@ export const richServer: QuestionTypeServer<
 
   /** Teacher-facing (`question_versions.search`): the rubric and the model answer belong in it. */
   searchText: (config) => [config.prompt, config.rubric, config.reference ?? ""].join("\n"),
+
+  generator: richGenerator,
 };

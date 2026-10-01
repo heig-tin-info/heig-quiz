@@ -7,6 +7,7 @@
  */
 import { ConfigMigrationError, type QuestionTypeServer, type StudentView } from "@quiz/core/server";
 import { shuffle, streamSeed } from "@quiz/core/rng";
+import { categorizeGenerator } from "./generate.js";
 import { gradeCategorize, negativeMarkingFrom } from "./grade.js";
 import { placesOf } from "./placement.js";
 import {
@@ -159,4 +160,6 @@ export const categorizeServer: QuestionTypeServer<
 
   searchText: (config) =>
     [config.prompt, ...config.columns.map((c) => c.label), ...config.cards.map((c) => c.text)].join("\n"),
+
+  generator: categorizeGenerator,
 };

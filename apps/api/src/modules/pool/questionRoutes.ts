@@ -8,22 +8,40 @@ import {
   DeprecateBody,
   DraftPut,
   BoolFlag,
+  GenerateRequest,
   IdParam,
   PublishBody,
   QuestionCreate,
   QuestionPatch,
   QuestionSearch,
   VersionParam,
+  type LlmErrorCode,
   type StatsReset,
 } from "@quiz/contracts";
 
+import { registeredServerIds } from "@quiz/registry/server";
+
+import { Budget, BUDGET_RETRY_AFTER_S } from "../../budget.js";
 import { iso, isoOrNull } from "../../clock.js";
 import { questions } from "../../db/schema.js";
 import { callerOf, findAccessiblePool, requirePoolRole } from "../guards.js";
 import { invalid } from "../http.js";
+import { LlmError } from "../llm/service.js";
 import { poolChanged } from "./events.js";
+import { GenerateRefusal, generateAnswers, generatorTypes } from "./generate.js";
 import * as service from "./service.js";
 import { coreFailure, type PoolRouteContext } from "./routeContext.js";
+
+/** A held-down wand, not a quota (ADR-059): the gateway's daily cap is the ceiling. */
+const GENERATIONS_PER_MINUTE = 10;
+
+/** How a failed generation answers the editor: the gateway's code, worded by the client. */
+const LLM_FAILURES: Partial<Record<LlmErrorCode, [number, string]>> = {
+  not_configured: [409, "llm_not_configured"],
+  key_unreadable: [409, "llm_not_configured"],
+  budget_exhausted: [429, "llm_budget_exhausted"],
+  rate_limited: [429, "rate_limited"],
+};
 
 export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, trace, teacher, inPool, onQuestion } = ctx;
@@ -127,6 +145,53 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       },
     ),
   );
+
+  /**
+   * "Generate answers" (ADR-059): the editor's draft as it stands, completed
+   * by the model through the type's generator, sent back — never stored here.
+   * A contributor's, like the draft it completes. A few per minute per
+   * teacher: a guard against a held-down button, the gateway's cap does the
+   * rest.
+   */
+  const generations = new Budget();
+  app.post(
+    "/app/api/questions/:id/generate",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: GenerateRequest, load: onQuestion("contributor") },
+      async ({ req, reply, body, scope }) => {
+        if (!generations.spend(`generate:${req.user!.id}`, GENERATIONS_PER_MINUTE, app.clock.now())) {
+          return reply.code(429).header("retry-after", String(BUDGET_RETRY_AFTER_S)).send({ error: "rate_limited" });
+        }
+        try {
+          return await generateAnswers(app.llmGateway, {
+            type: scope.question.type,
+            config: body.config,
+            explanation: body.explanation,
+            item: body.item,
+            userId: req.user!.id,
+          });
+        } catch (error) {
+          if (error instanceof GenerateRefusal) return reply.code(400).send({ error: error.code });
+          if (error instanceof LlmError) {
+            const [status, code] = LLM_FAILURES[error.code] ?? [502, "llm_failed"];
+            return reply.code(status).send({ error: code, reason: error.code });
+          }
+          throw error;
+        }
+      },
+    ),
+  );
+
+  /**
+   * Whether the wand can work now, and the types that have one (ADR-059).
+   * Here and not in the llm module: the wand is the editor's, and which
+   * types have one is the registry's, which the llm module does not read.
+   */
+  app.get("/app/api/generate/availability", { preHandler: requireTeacher }, async () => ({
+    available: await app.llmGateway.ready(),
+    types: generatorTypes(registeredServerIds()),
+  }));
 
   app.post(
     "/app/api/questions/:id/publish",

@@ -29,6 +29,7 @@ import {
   AdminScheduledTask,
   AdminUser,
   SystemStatus,
+  LlmAvailability,
   LlmSettings,
   LlmUsage,
   AttemptInspect,
@@ -375,6 +376,7 @@ const CHECKED: Case[] = [
   one("/app/api/pair/:code", "/app/api/pair/BCDF-GHJK", PairPreview),
   one("/app/api/admin/system", "/app/api/admin/system", SystemStatus),
   one("/app/api/admin/llm", "/app/api/admin/llm", LlmSettings),
+  one("/app/api/generate/availability", "/app/api/generate/availability", LlmAvailability),
   one("/app/api/admin/llm/usage", "/app/api/admin/llm/usage", LlmUsage),
   each("/app/api/polls", "/app/api/polls", PollSummary),
   // The Activities section (#190).
