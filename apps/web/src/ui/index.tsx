@@ -4,7 +4,8 @@
 //   layers    the base: cx, Z, the layer stack (useLayer), Tip, IconButton,
 //             HelpIcon, Modal, Sheet, useNow. Imports no sibling.
 //   menu      the overflow menu (Menu) and the list and strip keyboard
-//             arithmetic (listboxIndex, rovingIndex), on layers.
+//             arithmetic (listboxIndex, rovingIndex), on layers (and
+//             isPlainClick from controls, for its link items).
 //   controls  buttons and form controls.
 //   table     sortable tables: useSortableTable, the styles `T`, TableHead.
 //   identity  a person or an organization as a picture or initials

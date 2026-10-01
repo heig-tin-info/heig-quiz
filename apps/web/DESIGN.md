@@ -206,28 +206,45 @@ question's prose never carries it, so the question scenes do not move.
   accent, `.tok-str` in success) is semantic and does not count as the
   screen's one accent use.
 
-- **The reader around it** (`src/journal/JournalReader.tsx`): from `lg` a
-  15 rem navigation column beside the page, and from `xl` a 13 rem table
-  of contents on the right (under the navigation before that); both
-  columns stick to the top of the window while the page scrolls. 15 rem
-  holds a week title of the navigation on one line, 13 rem an `h2`, and
-  what is left goes to the page, whose prose is capped at 72 ch anyway.
-  The page is a sheet (`surface`, hairline, card radius) on the canvas;
-  the columns beside it are bare. On a phone the navigation and the table
-  of contents fold into one disclosure above the page, named by the page
-  being read. The ONE accent of the reader is the page being read in the
-  navigation (`accent-soft` chip); a student has no primary action there.
-  The reader is a tab of the classroom page (both roles), under its
-  header and tabs, with no breadcrumb of its own; the staff get one bar
-  above the page, right-aligned: the sync state in 12 px `fg-faint` (red
+- **The reader around it** (`src/journal/JournalReader.tsx`): the
+  navigation is a **strip of pages** (`JournalStrip.tsx`), a row of its
+  own under the classroom's tabs and above the staff bar, at every width,
+  not sticky. It is a `<nav>` of real links with `aria-current="page"`,
+  not a tablist, so it does not reuse `Tabs` (buttons, roving tabindex):
+  a middle click opens a page in a tab, a plain click is routed in the app
+  through `navigate` (and so through the editor's leave guard). What it
+  shares with `Tabs` is `useScrollFade` and `revealInStrip`: a journal has
+  one folder per week (about 14 entries), so the strip scrolls sideways
+  under the 36 px fade and the current entry is scrolled into sight on
+  load and on navigation. It is visually subordinate to the classroom's
+  tabs and their 2 px ink underline: 13 px, 28 px tall entries, 4 px
+  apart, no underline; the entry being read — the page, or the top-level
+  folder that holds it — is an `accent-soft` chip, the ONE accent of the
+  reader (a student has no primary action there). A label is cut at
+  12 rem (full title in `title`). The home is the first entry, only when
+  the journal has one. A folder with a landing page is a split control:
+  its label links to the landing page, a chevron opens a `Menu` of its
+  pages (the landing page first, deeper levels indented 12 px a level, a
+  deeper folder without a landing page as a heading); a folder without
+  one is a single entry that opens the menu and never navigates
+  (F-JRN-06). A page hidden from students (staff payload only) carries an
+  eye on its own entry or menu item, never summed up on a folder's entry.
+  The page is a centred 48 rem column (the prose capped at 72 ch inside
+  it): no navigation column eats the width any more. From `xl` (1280) a
+  13 rem table of contents stands at its right, 32 px away, sticking to
+  the top of the window; below `xl`, phone included, it folds into a
+  small "On this page" disclosure above the page. The page is a sheet
+  (`surface`, hairline, card radius) on the canvas; the strip and the
+  table of contents are bare. The reader is a tab of the classroom page
+  (both roles), under its header and tabs, with no breadcrumb of its own;
+  the staff get one bar under the strip, right-aligned: the sync state in 12 px `fg-faint` (red
   on a failure) and Refresh, a `secondary` `sm` button reading
   "Refreshing…" until the copy's state moves, then add and delete a page
   (two icon buttons, `Actions`), then **Edit**, the bar's one `primary`.
 
 - **The editor** (`src/journal/editor/`, M4-06) takes the page's place on
-  the same route; the navigation stays, the table of contents goes (it
-  would go stale as the teacher types), and from `xl` the page takes the
-  TOC's column. The staff bar becomes the editor's: "Unsaved changes" or
+  the same route; the strip stays, the table of contents goes (it would
+  go stale as the teacher types). The staff bar becomes the editor's: "Unsaved changes" or
   "No changes" in 12 px `fg-faint` on the left, Cancel (`secondary`) and
   Save (`primary`, off while nothing differs) on the right. The page's
   sheet holds the front matter as one row of fields (title, date, visible

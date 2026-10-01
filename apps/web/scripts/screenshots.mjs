@@ -963,13 +963,18 @@ const scenes = [
   { name: "settings-admin", role: "admin", path: "/settings" },
   // F-JRN-07 (M4-04): the journal reader. `?journal=1` gives PRG1-2026 (r1)
   // its journal; without it a teacher is sent to the classroom (no Journal tab, M4-05). The student
-  // reads the home page and its TOC; on a phone the navigation is a
-  // disclosure (opened by the scene); the teacher reads a draft with its
+  // reads the home page and its TOC, under the strip of pages; below 1280 px
+  // the TOC is an "On this page" disclosure (opened by the phone scene); a
+  // folder's menu, opened from its chevron; the teacher reads a draft with its
   // badges and warnings; a page nobody has is the not-found page.
   { name: "journal-student", role: "student", path: "/classrooms/r1/journal?journal=1" },
-  { name: "journal-phone", role: "student", path: "/classrooms/r1/journal/10-semaine-1/10-pointeurs.md?journal=1", fold: true, act: async (p) => {
-      const toggle = p.getByRole("button", { name: /^(pages)/i });
+  { name: "journal-phone", role: "student", path: "/classrooms/r1/journal/README.md?journal=1", fold: true, act: async (p) => {
+      // From 1280 px the TOC is a column, not a disclosure: nothing to open.
+      const toggle = p.getByRole("button", { name: /^(on this page|sur cette page)$/i });
       if (await toggle.isVisible()) await toggle.click();
+    } },
+  { name: "journal-folder-menu", role: "teacher", path: "/classrooms/r1/journal/10-semaine-1/10-pointeurs.md?journal=1", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^(pages in|pages de) semaine 1 /i }).click();
     } },
   { name: "journal-teacher-hidden", role: "teacher", path: "/classrooms/r1/journal/20-semaine%202%20%C3%A9t%C3%A9/20-brouillon.md?journal=1" },
   { name: "journal-not-found", role: "student", path: "/classrooms/r1/journal/99-nulle-part.md?journal=1" },

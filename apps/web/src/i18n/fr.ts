@@ -3638,7 +3638,7 @@ export const fr: Record<keyof Dict, string> = {
   // error is a code of `@quiz/contracts`, worded here (fix J5).
   "journal.breadcrumb": "Où vous êtes",
   "journal.nav": "Pages du journal",
-  "journal.pages": "Pages",
+  "journal.folderPages": "Pages de {name}",
   "journal.home": "Accueil",
   "journal.untitled": "Sans titre",
   "journal.toc": "Sur cette page",

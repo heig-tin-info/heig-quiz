@@ -3643,7 +3643,7 @@ export const en = {
   // error is a code of `@quiz/contracts`, worded here (fix J5).
   "journal.breadcrumb": "Where you are",
   "journal.nav": "Pages of the journal",
-  "journal.pages": "Pages",
+  "journal.folderPages": "Pages in {name}",
   "journal.home": "Home",
   "journal.untitled": "Untitled",
   "journal.toc": "On this page",

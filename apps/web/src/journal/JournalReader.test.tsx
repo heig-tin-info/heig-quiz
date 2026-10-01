@@ -12,7 +12,7 @@ import { journalLinkTarget } from "./JournalArticle";
 import { JournalReader } from "./JournalReader";
 
 /*
- * The journal reader (F-JRN-07): the navigation and its current page, the
+ * The journal reader (F-JRN-07): the strip of pages and its current entry, the
  * article's internal links routed in the app, the staff's badges, warnings
  * and sync state worded from their codes, and a student view that shows none
  * of them — it is given the student payload, which has none of them.
@@ -141,8 +141,8 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
 });
 
-describe("JournalReader — navigation", () => {
-  it("lists the pages, marks the one being read, and opens another", async () => {
+describe("JournalReader — the strip of pages", () => {
+  it("draws the home, a page, and splits a folder with a landing page into its link and its menu", async () => {
     const { calls } = mockFetch({
       [`GET ${BASE}`]: ok(staffJournal()),
       [`GET ${BASE}/pages/${HOME}`]: ok(staffPage(HOME)),
@@ -151,28 +151,84 @@ describe("JournalReader — navigation", () => {
     renderWithProviders(<Reader path={HOME} />);
 
     const pages = await screen.findByRole("navigation", { name: "Pages of the journal" });
+    // Links, not tabs: the strip is no tablist.
+    expect(within(pages).queryByRole("tab")).toBeNull();
     const home = within(pages).getByRole("link", { name: "Home" });
     expect(home).toHaveAttribute("aria-current", "page");
-    // A folder with a landing page is a link; one without is a heading that folds.
-    expect(within(pages).getByRole("link", { name: "Semaine 1" })).not.toHaveAttribute("aria-current");
-    const folder = within(pages).getByRole("button", { name: "Semaine 2 été" });
-    expect(within(pages).queryByRole("link", { name: /Brouillon/ })).toBeNull();
-    await userEvent.click(folder);
-    // The staff see which pages the students do not.
-    expect(within(pages).getByRole("link", { name: /Brouillon/ })).toContainElement(
-      within(pages).getByRole("img", { name: "Hidden from students" }),
-    );
-
-    await userEvent.click(within(pages).getByRole("button", { name: "Semaine 1" }));
-    const pointers = within(pages).getByRole("link", { name: "Les pointeurs" });
+    // The folder's label opens its landing page; its chevron, its menu.
+    const landing = within(pages).getByRole("link", { name: "Semaine 1" });
+    expect(landing).toHaveAttribute("href", "/classrooms/r1/journal/10-semaine-1/README.md");
+    expect(landing).not.toHaveAttribute("aria-current");
+    const chevron = within(pages).getByRole("button", { name: "Pages in Semaine 1" });
+    await userEvent.click(chevron);
+    const menu = screen.getByRole("menu", { name: "Pages in Semaine 1" });
+    // The landing page first, then the pages under it.
+    expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Semaine 1", "Les pointeurs"]);
+    const pointers = within(menu).getByRole("menuitem", { name: "Les pointeurs" });
     expect(pointers).toHaveAttribute("href", "/classrooms/r1/journal/10-semaine-1/10-pointeurs.md");
     await userEvent.click(pointers);
 
     expect(navigateSpy).toHaveBeenLastCalledWith({ view: "classroomJournal", id: "r1", path: POINTERS }, undefined);
     expect(await screen.findByRole("heading", { level: 1, name: "Les pointeurs" })).toBeInTheDocument();
-    expect(within(pages).getByRole("link", { name: "Les pointeurs" })).toHaveAttribute("aria-current", "page");
-    expect(within(pages).getByRole("link", { name: "Home" })).not.toHaveAttribute("aria-current");
     expect(calls.map((c) => c.url)).toContain(`${BASE}/pages/${POINTERS}`);
+    // The folder holding the page is the current entry; the page, in its menu.
+    expect(within(pages).getByRole("link", { name: "Home" })).not.toHaveAttribute("aria-current");
+    expect(within(pages).getByRole("button", { name: "Pages in Semaine 1" })).toHaveAttribute("aria-current", "true");
+    await userEvent.click(within(pages).getByRole("button", { name: "Pages in Semaine 1" }));
+    expect(screen.getByRole("menuitem", { name: "Les pointeurs" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("menuitem", { name: "Semaine 1" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("routes a plain click on the landing link and leaves a modified one to the browser", async () => {
+    mockFetch({
+      [`GET ${BASE}`]: ok(staffJournal()),
+      [`GET ${BASE}/pages/${HOME}`]: ok(staffPage(HOME)),
+      [`GET ${BASE}/pages/10-semaine-1/README.md`]: ok(staffPage("10-semaine-1/README.md")),
+    });
+    renderWithProviders(<Reader path={HOME} />);
+    const landing = await screen.findByRole("link", { name: "Semaine 1" });
+    const taken: boolean[] = [];
+    const record = (e: Event) => {
+      taken.push(e.defaultPrevented);
+      e.preventDefault();
+    };
+    window.addEventListener("click", record);
+    fireEvent.click(landing, { ctrlKey: true });
+    fireEvent.click(landing);
+    window.removeEventListener("click", record);
+    expect(taken).toEqual([false, true]);
+    expect(navigateSpy).toHaveBeenLastCalledWith(
+      { view: "classroomJournal", id: "r1", path: "10-semaine-1/README.md" },
+      undefined,
+    );
+  });
+
+  it("opens the menu of a folder without a landing page, never a page, with the eye on its hidden page only", async () => {
+    mockFetch({
+      [`GET ${BASE}`]: ok(staffJournal()),
+      [`GET ${BASE}/pages/${HOME}`]: ok(staffPage(HOME)),
+    });
+    renderWithProviders(<Reader path={HOME} />);
+    const pages = await screen.findByRole("navigation", { name: "Pages of the journal" });
+    expect(within(pages).queryByRole("link", { name: /Semaine 2 été/ })).toBeNull();
+    // The eye is on the page, never summed up on its folder's entry.
+    expect(within(pages).queryByRole("img", { name: "Hidden from students" })).toBeNull();
+    navigateSpy.mockClear();
+    await userEvent.click(within(pages).getByRole("button", { name: "Semaine 2 été" }));
+    expect(navigateSpy).not.toHaveBeenCalled();
+    const draft = within(screen.getByRole("menu")).getByRole("menuitem", { name: /Brouillon/ });
+    expect(draft).toContainElement(within(draft).getByRole("img", { name: "Hidden from students" }));
+  });
+
+  it("has no home entry when the journal has no home page", async () => {
+    mockFetch({
+      [`GET ${BASE}`]: ok(staffJournal({ homePath: null })),
+      [`GET ${BASE}/pages/${POINTERS}`]: ok(staffPage(POINTERS)),
+    });
+    renderWithProviders(<Reader path={POINTERS} />);
+    const pages = await screen.findByRole("navigation", { name: "Pages of the journal" });
+    expect(within(pages).getByRole("link", { name: "Semaine 1" })).toBeInTheDocument();
+    expect(within(pages).queryByRole("link", { name: "Home" })).toBeNull();
   });
 
   it("opens the home page at its own address when none is named", async () => {
@@ -185,7 +241,7 @@ describe("JournalReader — navigation", () => {
     expect(navigateSpy).toHaveBeenCalledWith({ view: "classroomJournal", id: "r1", path: HOME }, { replace: true });
   });
 
-  it("shows the table of contents of the page, as text", async () => {
+  it("shows the table of contents of the page beside it, as text, from 1280 px", async () => {
     mockFetch({
       [`GET ${BASE}`]: ok(staffJournal()),
       [`GET ${BASE}/pages/${HOME}`]: ok(staffPage(HOME)),
@@ -196,22 +252,24 @@ describe("JournalReader — navigation", () => {
     expect(within(toc).getByRole("link", { name: "Évaluation" })).toHaveAttribute("href", "#evaluation");
     // The page's own title is not an entry of its table of contents.
     expect(within(toc).queryByText("Programmation 1")).toBeNull();
+    expect(screen.queryByRole("button", { name: "On this page" })).toBeNull();
   });
 
-  it("folds the navigation above the page on a phone", async () => {
+  it("folds the table of contents above the page below 1280 px, the strip still there", async () => {
     setWidth(390);
     mockFetch({
       [`GET ${BASE}`]: ok(staffJournal()),
       [`GET ${BASE}/pages/${HOME}`]: ok(staffPage(HOME)),
     });
     renderWithProviders(<Reader path={HOME} />);
-    const toggle = await screen.findByRole("button", { name: /Pages/ });
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("navigation", { name: "Pages of the journal" })).toBeNull();
-    await userEvent.click(toggle);
+    const toggle = await screen.findByRole("button", { name: "On this page" });
     expect(screen.getByRole("navigation", { name: "Pages of the journal" })).toBeInTheDocument();
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("navigation", { name: "On this page" })).toBeNull();
+    await userEvent.click(toggle);
+    const toc = screen.getByRole("navigation", { name: "On this page" });
     // Following a link from the panel folds it again.
-    await userEvent.click(screen.getByRole("link", { name: "Organisation" }));
+    await userEvent.click(within(toc).getByRole("link", { name: "Organisation" }));
     expect(toggle).toHaveAttribute("aria-expanded", "false");
   });
 });
@@ -393,6 +451,10 @@ describe("JournalReader — the student", () => {
     expect(screen.queryByRole("button", { name: /Refresh/ })).toBeNull();
     // The staff navigation's second section is not the student's.
     expect(screen.queryByText("Semaine 2 été")).toBeNull();
+    // Nor does a folder's menu carry a staff mark.
+    await userEvent.click(screen.getByRole("button", { name: "Pages in Semaine 1" }));
+    expect(within(screen.getByRole("menu")).getAllByRole("menuitem")).toHaveLength(2);
+    expect(screen.queryByRole("img", { name: "Hidden from students" })).toBeNull();
   });
 
   it("reads a 404 of the journal as not found", async () => {
