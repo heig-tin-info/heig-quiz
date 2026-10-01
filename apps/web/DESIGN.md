@@ -1010,6 +1010,15 @@ live in `ui/state.ts`, each written once.
   the text of the choice and not a letter. It replaced a letter plus a box
   labelled "Correct": two targets and a word that named nothing a teacher was
   looking for.
+- LetteredChoice (`packages/qt-mcq/src/ui.tsx`): a choice behind its letter
+  in a CORRECTION — the mcq review and the poll's reveal on a phone — where
+  nothing is clicked. A 28 px letter in the state of the grading table's tick
+  box (`ChoiceMarkState`, one rule, `choiceMark`): the key's filled
+  `success`, a wrong tick's filled `danger` on a `danger-soft` row, a tick
+  with no key filled `fg-muted`, the rest the pastille at rest. Like the
+  correction projection, the key's letter is green; unlike it, an untouched
+  distractor stays at rest — the review is one paper, not the room's. A
+  filled letter always has its verdict in words beside it.
 - VerdictCell: one cell of the live grid and of the grading list, nine
   states in two families. PROGRESS is drawn in SHAPES, not pictograms
   (#227) — `blank` (never opened: a faint 10 px hollow square glyph,
@@ -1180,6 +1189,7 @@ of the question surfaces, one token per role and never two dialects of it:
 | `label` | 13 px, 500, `fg`, a row | the label of a field, the caption of a group of fields (the app's `FieldLabel` row) |
 | `hint` | 13 px, `fg-muted` | the sentence that explains a control or a section of an editor (the app's `SettingRow` description) |
 | `caption` | 12 px, `fg-faint` | a quiet aside that only supports its surroundings: the instruction under a player's question, "no answer" in a review, the note beside a field in a dense row |
+| `reviewPrompt` | 14 px (13 px through the app's renderer), 500, `fg` | the statement at the head of every review, set apart from the answer under it by its weight; not a cloze's text, which IS its answer |
 | `sectionTitle` | 16 px, 700, tight | the title of a card or section (the app's `SectionHeading`) |
 | `sectionClass` | column, 8 px | a section of an editor laid out as a plain form |
 | `card` | `surface`, hairline, card radius | the cards of the code and circuit editors (`EditorSection`) |

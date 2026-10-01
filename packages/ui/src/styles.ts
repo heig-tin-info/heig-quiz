@@ -49,6 +49,15 @@ export const hint = "text-[13px] text-fg-muted";
  */
 export const caption = "text-xs text-fg-faint";
 
+/**
+ * The statement at the head of a review, set apart from the answer under it
+ * by its weight. `text-sm` is the plain-text size; a host's markdown renderer
+ * sets its own (13 px in the app), so 500 is the contrast every review can
+ * count on — the same in every type, since the student's results page stacks
+ * them all. Not a cloze's text: there the statement IS the answer.
+ */
+export const reviewPrompt = "text-sm font-medium text-fg";
+
 /** A checkbox in a column of settings (`CheckboxField.className`): no fixed height, the body ink. */
 export const setting = "flex items-center gap-2 text-[13px] text-fg";
 

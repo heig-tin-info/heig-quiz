@@ -30,6 +30,7 @@ import {
   lockedBlock,
   markdown,
   pointsOrDash,
+  reviewPrompt,
   sectionTitle,
   table,
   Verdict,
@@ -155,7 +156,7 @@ export function CircuitReview({
 
   /* The statement, so a verdict is never read without the question it judges. */
   const statement = showsSection(sections, "prompt") ? (
-    <div className="whitespace-pre-wrap text-sm text-fg">
+    <div className={cx("whitespace-pre-wrap", reviewPrompt)}>
       {markdown(renderMarkdown, student.prompt)}
     </div>
   ) : null;

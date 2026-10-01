@@ -6,7 +6,7 @@
  * `toStudent`: it is written by the grader FOR THE TEACHER and holds the
  * correct choices, the expected blanks, the matcher that fired and the hidden
  * cases' output. This file walks one evaluation with one question of each of
- * the four types through `GET /attempts/:id/feedback`, once with
+ * five types through `GET /attempts/:id/feedback`, once with
  * `showKey: false` and once with `showKey: true`, and asserts the key is
  * absent in the first and present in the second.
  *
@@ -45,9 +45,15 @@ const CONFIGS: Record<string, unknown> = {
   mcq: {
     configVersion: 2,
     prompt: "Which one is the capital of France?",
+    // Six, so the attempt's shuffle (on by default) almost never leaves them
+    // in order: once in 720 — see "the review's order" below.
     choices: [
       { text: "Paris", correct: true },
       { text: "Lyon", correct: false },
+      { text: "Marseille", correct: false },
+      { text: "Toulouse", correct: false },
+      { text: "Nice", correct: false },
+      { text: "Nantes", correct: false },
     ],
     mode: "single",
   },
@@ -77,6 +83,31 @@ const CONFIGS: Record<string, unknown> = {
       ],
     },
   },
+  // Typed column by column, as teachers do: the teacher's order of the
+  // cards IS the key's, which the attempt's shuffle hides (ADR-036).
+  categorize: {
+    configVersion: 1,
+    prompt: "Sort the C types.",
+    columns: [
+      { id: "colint", label: "Integer", cards: ["cdint", "cdsize", "cdlong"] },
+      { id: "colflt", label: "Floating point", cards: ["cddbl", "cdflt"] },
+      { id: "colptr", label: "Pointer", cards: ["cdchp", "cdvdp", "cdfnp"] },
+    ],
+    cards: [
+      { id: "cdint", text: "int" },
+      { id: "cdsize", text: "size_t" },
+      { id: "cdlong", text: "long" },
+      { id: "cddbl", text: "double" },
+      { id: "cdflt", text: "float" },
+      { id: "cdchp", text: "char *" },
+      { id: "cdvdp", text: "void *" },
+      { id: "cdfnp", text: "int (*)(void)" },
+    ],
+    ordered: false,
+    shuffleCards: true,
+    shuffleColumns: false,
+    policy: "inherit",
+  },
   rich: {
     configVersion: 1,
     prompt: "Why does a stack overflow crash a C program?",
@@ -90,6 +121,7 @@ const ANSWERS: Record<string, unknown> = {
   short: { text: "Paris" },
   cloze: { blanks: ["Paris"] },
   code: { regions: ["return 42;"] },
+  categorize: { columns: { colint: ["cdint"] } },
 };
 
 const get = (url: string, headers: Record<string, string>) =>
@@ -113,7 +145,7 @@ async function publish(poolId: string, type: string): Promise<string> {
 }
 
 /**
- * One evaluation with the four types, answered, closed (which grades it) and
+ * One evaluation with the five types, answered, closed (which grades it) and
  * released. The `code` cell is finalised by hand from a runner outcome: the
  * test runner is the unavailable stub (decision D14), and what is under test
  * is the redaction of a real `CodeDetails`, not the runner.
@@ -127,7 +159,7 @@ async function gradedEvaluation() {
   });
 
   const questionIds: string[] = [];
-  for (const type of ["mcq", "short", "cloze", "code"]) {
+  for (const type of ["mcq", "short", "cloze", "code", "categorize"]) {
     questionIds.push(await publish(seed.poolId, type));
   }
   await addItems(
@@ -145,9 +177,11 @@ async function gradedEvaluation() {
   const entered = await post(`/app/api/evaluations/${seed.evaluationId}/attempt`, student.headers, {});
   const view = entered.json().view as {
     attempt: { id: string };
-    items: { id: string; type: string }[];
+    items: { id: string; type: string; student: unknown }[];
   };
   const itemOf = (type: string) => view.items.find((i) => i.type === type)!.id;
+  /** The student view of `type` as this attempt was served it. */
+  const servedOf = (type: string) => view.items.find((i) => i.type === type)!.student;
 
   for (const item of view.items) {
     const saved = await server.app.inject({
@@ -181,7 +215,7 @@ async function gradedEvaluation() {
   });
 
   await post(`/app/api/evaluations/${seed.evaluationId}/release`, teacher.headers, { confirm: true });
-  return { seed, attemptId: view.attempt.id, itemOf };
+  return { seed, attemptId: view.attempt.id, itemOf, servedOf };
 }
 
 /** A real `CodeDetails`: the pure second half of the `code` grading. */
@@ -306,6 +340,26 @@ describe("`showKey: true` publishes the key the teacher chose to publish", () =>
 
     // …and the solutions travel with it.
     expect((await feedbackOf("mcq"))["solution"]).toEqual({ correct: [MCQ_CORRECT] });
+  });
+});
+
+describe("the review's order (ADR-033, addendum 2026-10-01)", () => {
+  /** The ids of an mcq's choices or a categorize question's cards, in order. */
+  const order = (student: unknown): unknown[] => {
+    const view = student as { choices?: { id: unknown }[]; cards?: { id: unknown }[] };
+    return (view.choices ?? view.cards ?? []).map((x) => x.id);
+  };
+
+  it("is the teacher's once the key is published: the letters are the wall's", async () => {
+    await setPolicy({ showKey: true });
+    expect(order((await feedbackOf("mcq"))["student"])).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it("is the attempt's while the key is hidden: the teacher's would tell it", async () => {
+    await setPolicy({ showKey: false });
+    for (const type of ["mcq", "categorize"]) {
+      expect(order((await feedbackOf(type))["student"]), type).toEqual(order(built.servedOf(type)));
+    }
   });
 });
 

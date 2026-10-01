@@ -18,7 +18,7 @@ import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/
 import { resolveStrings, showsSection } from "@quiz/core/client";
 import { DiagramView, type DiagramStrings } from "@quiz/diagram/client";
 import { isEmptyScene, toText } from "@quiz/diagram/server";
-import { caption, markdown, ScoreHeader, Segmented } from "@quiz/ui";
+import { caption, markdown, reviewPrompt, ScoreHeader, Segmented } from "@quiz/ui";
 
 import { countsOf } from "./grading.js";
 import type { DiagramAnswer, DiagramDetails, DiagramSolution, DiagramStudent } from "./schema.js";
@@ -72,7 +72,7 @@ export function DiagramReview({
 
   return (
     <div className="flex flex-col gap-3">
-      {showsSection(sections, "prompt") ? <div className="text-sm text-fg">{markdown(renderMarkdown, student.prompt)}</div> : null}
+      {showsSection(sections, "prompt") ? <div className={reviewPrompt}>{markdown(renderMarkdown, student.prompt)}</div> : null}
 
       {details?.reason === "kind_mismatch" ? <p className="text-[13px] text-warning">{s.kindMismatch}</p> : null}
 

@@ -13,7 +13,7 @@ import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
 import { CompileFailure, ReferenceSolutionCard, ScoreLine } from "./ProgramReview.js";
 import { REVIEW_STRINGS, type CodeReviewStrings } from "./strings.js";
-import { badge, breakdownOf, cx, hint, markdown, table, Verdict, verdictTone } from "@quiz/ui";
+import { badge, breakdownOf, cx, hint, markdown, reviewPrompt, table, Verdict, verdictTone } from "@quiz/ui";
 import { caseVerdict } from "./verdict.js";
 
 interface CodeReviewProps
@@ -95,7 +95,7 @@ export function CodeReview({
      way: its expected column is what the run was judged against, the
      verdict itself, not the solution. */
   const statement = showsSection(sections, "prompt") ? (
-    <div className="whitespace-pre-wrap text-sm text-fg">
+    <div className={cx("whitespace-pre-wrap", reviewPrompt)}>
       {markdown(renderMarkdown, student.prompt)}
     </div>
   ) : null;

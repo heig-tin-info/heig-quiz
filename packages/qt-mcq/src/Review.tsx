@@ -1,6 +1,15 @@
 /**
  * The `mcq` review: the verdict CHOICE BY CHOICE, never a bare score.
  *
+ * It reads like the correction projection: the statement first, set apart by
+ * its weight (`reviewPrompt`), then the choices, each behind its letter —
+ * A, B, C… in the order the host hands them, as the player letters its rows
+ * (`LetteredChoice`). The key's letter is filled `success`; a choice the
+ * student ticked wears a soft tint, `success` when it is right and `danger`
+ * when it is wrong. Every tinted row and every filled letter carries its
+ * verdict in words beside it. The state of a choice is the grading table's
+ * (`choiceMark`), so the two never read one answer differently.
+ *
  * What it may show is decided upstream: `solution` is `null` when the feedback
  * policy hides the key, and the component then shows what the student ticked
  * without ever guessing the rest.
@@ -13,11 +22,33 @@ import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/
 import { resolveStrings, showsSection } from "@quiz/core/client";
 import type { McqAnswer, McqDetails, McqSolution, McqStudent } from "./schema.js";
 import { mcqReviewStrings, type McqReviewStringKey } from "./strings.js";
-import { type BadgeTone, caption, cx, markdown, ScoreHeader, Verdict } from "@quiz/ui";
+import {
+  type BadgeTone,
+  caption,
+  type ChoiceMarkState,
+  cx,
+  markdown,
+  reviewPrompt,
+  ScoreHeader,
+  Verdict,
+} from "@quiz/ui";
+import { choiceLetter, choiceMark, LetteredChoice } from "./ui.js";
 
 type McqReviewProps = ReviewProps<McqStudent, McqAnswer, McqSolution, McqDetails> & {
   strings?: StringOverrides<McqReviewStringKey>;
   renderMarkdown?: MarkdownRenderer;
+};
+
+/** What each state wears: its row (only a tick is tinted) and its verdict in words. */
+const LOOK: Record<
+  Exclude<ChoiceMarkState, "expected">,
+  { row: string; verdict: { tone: BadgeTone; label: McqReviewStringKey } | null }
+> = {
+  good: { row: "bg-success-soft", verdict: { tone: "success", label: "correct" } },
+  bad: { row: "bg-danger-soft", verdict: { tone: "danger", label: "incorrect" } },
+  on: { row: "bg-surface-2", verdict: { tone: "neutral", label: "chosen" } },
+  missed: { row: "", verdict: { tone: "warning", label: "missed" } },
+  off: { row: "", verdict: null },
 };
 
 export function McqReview({
@@ -37,39 +68,28 @@ export function McqReview({
   const showKey = showsSection(sections, "solution");
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {showsSection(sections, "prompt") ? (
-        <p className="text-sm text-fg">{markdown(renderMarkdown, student.prompt)}</p>
+        <p className={reviewPrompt}>{markdown(renderMarkdown, student.prompt)}</p>
       ) : null}
 
-      <ul className="flex flex-col gap-1.5">
-        {student.choices.map((choice) => {
-          const chosen = selected.includes(choice.id);
-          const correct = key === null ? null : key.has(choice.id);
-          const verdict: { tone: BadgeTone; label: string } | null =
-            correct === null
-              ? chosen
-                ? { tone: "neutral", label: s.chosen }
-                : null
-              : chosen && correct
-                ? { tone: "success", label: s.correct }
-                : chosen && !correct
-                  ? { tone: "danger", label: s.incorrect }
-                  : !chosen && correct && showKey
-                    ? { tone: "warning", label: s.missed }
-                    : null;
+      <ul className="flex flex-col gap-1">
+        {student.choices.map((choice, index) => {
+          const mark = choiceMark(selected.includes(choice.id), key?.has(choice.id) ?? null, showKey);
+          const { row, verdict } = LOOK[mark];
           return (
             <li
               key={choice.id}
-              className={cx(
-                "flex items-start justify-between gap-3 rounded-xl px-3 py-2 text-sm",
-                chosen && "bg-surface-2",
-              )}
+              className={cx("flex items-start gap-3 rounded-xl px-2.5 py-1.5 text-sm", row)}
             >
-              <span className="min-w-0 flex-1">
+              <LetteredChoice letter={choiceLetter(index)} mark={mark}>
                 {markdown(renderMarkdown, choice.text)}
-              </span>
-              {verdict ? <Verdict tone={verdict.tone}>{verdict.label}</Verdict> : null}
+              </LetteredChoice>
+              {verdict ? (
+                <Verdict tone={verdict.tone} className="mt-0.75">
+                  {s[verdict.label]}
+                </Verdict>
+              ) : null}
             </li>
           );
         })}
