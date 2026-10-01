@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import type { ParametersDraft } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
@@ -17,7 +18,7 @@ import { fakeShort } from "../../test/fakeType.js";
 import { seedLive, type Seeded } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import { writeGrading } from "../grading/service.js";
-import { loadConfig, typeOf } from "../pool/config.js";
+import { typeOf } from "../pool/config.js";
 import * as poolService from "../pool/service.js";
 import { poolQuestionStats } from "./service.js";
 
@@ -52,22 +53,23 @@ function mcq(choices: Choice[], o: { mode?: "single" | "multiple"; prompt?: stri
   };
 }
 
-/** Publishes a new version of the question with this config. */
-async function publish(seed: Seeded, questionId: string, config: unknown) {
+/** Publishes a new version of the question with this config (and these variables). */
+async function publish(seed: Seeded, questionId: string, config: unknown, variables?: ParametersDraft) {
   const [question] = await db.select().from(questions).where(eq(questions.id, questionId));
-  await poolService.putDraft(db, question!, { config });
+  const saved = await poolService.putDraft(db, question!, { config, ...(variables ? { variables } : {}) });
+  expect(saved.issues).toEqual([]);
   await poolService.publishQuestion(db, question!, { userId: seed.teacherId });
 }
 
 /** An mcq question of the seed's pool, published with `config`. */
-async function mcqQuestion(seed: Seeded, config: unknown) {
+async function mcqQuestion(seed: Seeded, config: unknown, variables?: ParametersDraft) {
   const { id } = await poolService.createQuestion(db, {
     poolId: seed.poolId,
     type: "mcq",
     internalName: `mcq-${randomUUID().slice(0, 6)}`,
     createdBy: seed.teacherId,
   });
-  await publish(seed, id, config);
+  await publish(seed, id, config, variables);
   return id;
 }
 
@@ -85,8 +87,8 @@ async function evaluationOf(seed: Seeded, questionId: string, mode: "exam" | "ex
     db,
     evaluation,
     [questionId],
-    (type, version) =>
-      typeOf(type).defaultPoints(loadConfig(type, version)),
+    // The example instance's: a parameterized question's template is no config.
+    (type, version) => typeOf(type).defaultPoints(poolService.exampleConfig(type, version)),
     { attemptCount: 0 },
   );
   return { evaluationId: evaluation.id, itemId: item!.id };
@@ -304,5 +306,36 @@ describe("the distractor analysis (ADR-043)", () => {
     const later = new Date("2026-09-06T08:00:00.000Z");
     await sit(await evaluationOf(seed, q), students.slice(0, 10), Array.from({ length: 10 }, () => [1]), { startedAt: later });
     expect(await distractorsOf(seed, q)).toMatchObject({ n: 10, options: [{ share: 0 }, { share: 100 }, { share: 0 }] });
+  });
+  it("groups a parameterized mcq's options by their template, and says which show a value drawn for them alone", async () => {
+    const seed = await seedLive(db, { students: 10, questions: 0 });
+    const choices = [
+      { text: "[[t]] s", correct: true },
+      // A formula of the statement's values: one mistake for every student.
+      { text: "[[sqrt(h/g)]] s", correct: false },
+      // A number drawn for this option alone: noise, a different one each time.
+      { text: "[[d]] s", correct: false },
+    ];
+    const variables: ParametersDraft = {
+      rows: [
+        { name: "h", expr: "randint(10, 100)", format: "int" },
+        { name: "g", expr: "choice([3.71, 9.81, 24.79])", format: ".2" },
+        { name: "t", expr: "sqrt(2*h/g)", format: ".2" },
+        { name: "d", expr: "uniform(20, 30)", format: ".1" },
+      ],
+    };
+    const q = await mcqQuestion(seed, mcq(choices, { prompt: "Dropped from [[h]] m where g = [[g]]: how long?" }), variables);
+    await sit(await evaluationOf(seed, q), seed.studentIds, SEVEN_TWO_ONE);
+
+    expect(await distractorsOf(seed, q)).toEqual({
+      n: 10,
+      multiple: false,
+      options: [
+        { text: "[[t]] s", correct: true, share: 70 },
+        { text: "[[sqrt(h/g)]] s", correct: false, share: 20 },
+        { text: "[[d]] s", correct: false, share: 10, drawn: true },
+      ],
+      none: 0,
+    });
   });
 });

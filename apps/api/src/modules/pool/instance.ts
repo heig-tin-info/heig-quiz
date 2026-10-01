@@ -60,6 +60,7 @@ import {
   raise,
   saveConfig,
   templateOf,
+  tryLoadConfig,
   typeOf,
   type StaticVersion,
   type StoredVersion,
@@ -217,6 +218,19 @@ export function exampleConfig(type: string, version: VersionContent): unknown {
   return loadConfig(type, exampleInstance(type, version).version);
 }
 
+/**
+ * The question AS WRITTEN, for a teacher's eyes (the grading table's expected
+ * row, ADR-056 §9): the template itself when the type's schema takes it — an
+ * mcq's choices and a short's number matcher hold their `[[…]]` as text —
+ * else the {@link exampleInstance}, `example: true` (a cloze number blank
+ * `{{#[[t]]:1%}}` is no blank until it is instantiated). Never a student
+ * payload: no student route reads a template (invariant 4).
+ */
+export function writtenConfig(type: string, version: VersionContent): { config: unknown; example: boolean } {
+  const template = tryLoadConfig(type, version, { template: true });
+  return template.ok ? { config: template.config, example: false } : { config: exampleConfig(type, version), example: true };
+}
+
 /** What {@link itemInstance} reads of an evaluation item. */
 export interface InstanceItem {
   item: { id: string };
@@ -246,11 +260,48 @@ export function itemInstance(entry: InstanceItem, attempt: InstanceAttempt): Ins
  * whose every attempt has its own key. Throws like `loadConfig`.
  */
 export function configPerAttempt(entry: InstanceItem): (attempt: InstanceAttempt) => unknown {
+  const read = readingPerAttempt(entry);
+  return (attempt) => read(attempt).config;
+}
+
+/** What a reader of one attempt's item holds: its parsed config, and the values it was drawn with. */
+export interface Reading {
+  config: unknown;
+  /** Null for a static question. */
+  values: Values | null;
+  /** The explanation instantiated with `values`; the version's own for a static question. */
+  explanation: string;
+}
+
+/** {@link configPerAttempt}, with the values beside the config: the grading panel shows both. */
+export function readingPerAttempt(entry: InstanceItem): (attempt: InstanceAttempt) => Reading {
   if (!isParameterized(entry.version)) {
-    const config = loadConfig(entry.question.type, entry.version);
-    return () => config;
+    const reading = {
+      config: loadConfig(entry.question.type, entry.version),
+      values: null,
+      explanation: entry.version.explanation,
+    };
+    return () => reading;
   }
-  return (attempt) => loadConfig(entry.question.type, itemInstance(entry, attempt).version);
+  return (attempt) => {
+    const instance = itemInstance(entry, attempt);
+    return {
+      config: loadConfig(entry.question.type, instance.version),
+      values: instance.values,
+      explanation: instance.explanation,
+    };
+  };
+}
+
+/**
+ * The values of an instance as a student read them, in the table's order,
+ * each written with its row's format (ADR-056 §6): what the grading panel
+ * lays beside an answer so that the teacher can check it by hand.
+ */
+export function formattedValues(version: VersionContent, values: Values): { name: string; value: string }[] {
+  return (parametersOf(version)?.rows ?? []).flatMap(({ name, format }) =>
+    Object.hasOwn(values, name) ? [{ name, value: formatValue(values[name]!, format) }] : [],
+  );
 }
 
 /**

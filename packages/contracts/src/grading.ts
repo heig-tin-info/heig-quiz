@@ -12,6 +12,7 @@
  */
 import { z } from "zod";
 
+import { ParametersDraft } from "./parameters.js";
 import { VersionRow } from "./pool.js";
 
 /** Who produced a grading. `llm` is phase 2 and only ever `proposed` in MVP. */
@@ -105,6 +106,22 @@ export const GradingQueueItem = z.object({
    * server sends it (`null`: none; absent in older fixtures). Teacher-facing only.
    */
   explanation: z.string().nullable().optional(),
+  /**
+   * A parameterized question (ADR-056 §9): absent for a static one. Its
+   * answers each have their own key, so the expected row does not show one
+   * student's numbers: it shows `template`, the question as written, with
+   * its `[[…]]` (mcq, short), or — when the template alone is not a
+   * question the type can draw (a cloze `{{#[[t]]:1%}}`) — the instance of
+   * the example values, `example: true`, which the table then names as
+   * such. `variables` is the table the teacher wrote. Staff-only, like the
+   * whole queue.
+   */
+  parameters: z
+    .object({
+      variables: ParametersDraft,
+      template: z.object({ student: z.unknown(), solution: z.unknown(), example: z.boolean() }),
+    })
+    .optional(),
 });
 export type GradingQueueItem = z.infer<typeof GradingQueueItem>;
 
@@ -142,6 +159,18 @@ export const GradingEntry = z.object({
    */
   kept: z.boolean(),
   answer: z.unknown().nullable(),
+  /**
+   * A parameterized question's values for this attempt (ADR-056 §9), in the
+   * table's order, each written with its row's format — what the student
+   * read; `student` and `solution` are this instance's. Absent for a static
+   * question.
+   */
+  values: z.array(z.object({ name: z.string(), value: z.string() })).optional(),
+  /**
+   * Beside `values`: the explanation instantiated with them (`null`: none),
+   * where the item's is the template's. Absent for a static question.
+   */
+  explanation: z.string().nullable().optional(),
   /** The question as the student saw it, through `studentView()`. */
   student: z.unknown(),
   solution: z.unknown(),

@@ -36,7 +36,7 @@ import {
   type Issue,
 } from "./parameters/evaluator.js";
 import { roundToFormat } from "./parameters/format.js";
-import { compileTemplate, type Values } from "./parameters/text.js";
+import { compileTemplate, namesReadBy, type Values } from "./parameters/text.js";
 
 export { FORMAT_PATTERN, isVariableName, MAX_EXPRESSION_LENGTH } from "./parameterNames.js";
 export { ParameterError, type Issue, type IssueCode } from "./parameters/evaluator.js";
@@ -279,6 +279,30 @@ export function validateParameters(params: Parameters, content: unknown, opts: V
     }
   }
   return [];
+}
+
+/**
+ * Whether `text` shows a value drawn for it alone: one of its `[[…]]`
+ * depends — directly or through the rows it reads — on a row that calls
+ * `randint`, `uniform` or `choice` and on which none of the `shared` texts
+ * (an mcq's statement and its correct choices) depends. Such an option is
+ * noise, a different number for each student, where a formula of the
+ * statement's values (`[[sqrt(h/g)]]`, or `[[h]]` itself) is the same
+ * mistake for every student. The distractor analysis says so of the first
+ * kind (ADR-056 §9, ADR-043). A row or a reference that does not compile
+ * reads nothing.
+ */
+export function drawnApart(text: string, shared: readonly string[], params: Parameters): boolean {
+  const reach = new Map<string, Set<string>>();
+  for (const row of params.rows) {
+    const compiled = collect([], { row: row.name }, () => compile(row.expr));
+    const own = new Set<string>(compiled?.random ? [row.name] : []);
+    for (const name of compiled?.names ?? []) for (const drawn of reach.get(name) ?? []) own.add(drawn);
+    reach.set(row.name, own);
+  }
+  const drawnBy = (t: string) => [...namesReadBy(t)].flatMap((name) => [...(reach.get(name) ?? [])]);
+  const common = new Set(shared.flatMap(drawnBy));
+  return drawnBy(text).some((name) => !common.has(name));
 }
 
 /** A plain decimal number, matched in linear time (no nested quantifiers over digits). */

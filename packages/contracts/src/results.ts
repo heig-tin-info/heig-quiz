@@ -132,6 +132,16 @@ export const ByQuestion = z.object({
    * response is an array; the projection reads the first.
    */
   papers: z.number().int(),
+  /**
+   * A parameterized question (ADR-056 §9): every student had their own
+   * numbers, so `student`, `solution` and `explanation` are the instance of
+   * the EXAMPLE values (seed 0), which the debrief names as such. What was
+   * written is right for one student and wrong for another, so it is not
+   * grouped: `distribution` is empty, but for an mcq's ticks, grouped by
+   * choice (the same formula and verdict on every paper); `outcomes` holds
+   * the verdicts. Absent for a static question.
+   */
+  parameterized: z.boolean().optional(),
   /** The question as a student saw it (seed 0), never the raw config. */
   student: z.unknown(),
   solution: z.unknown(),

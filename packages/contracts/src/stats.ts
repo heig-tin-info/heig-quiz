@@ -65,6 +65,14 @@ export const DistractorStats = z.object({
       text: z.string(),
       correct: z.boolean(),
       share: z.number().int().min(0).max(100),
+      /**
+       * A parameterized mcq (ADR-056 §9): the option shows a value drawn for
+       * it alone (`uniform()`, `choice()`), a different number for each
+       * student. `text` is its template; its share is that of its position,
+       * not of a mistake. Absent otherwise — a formula of the statement's
+       * values is one mistake for every student and reads as any option.
+       */
+      drawn: z.boolean().optional(),
     }),
   ),
   none: z.number().int().min(0).max(100),
