@@ -46,10 +46,6 @@ describe("dayBucket", () => {
     expect(dayBucket(at, now, "Asia/Tokyo")).toBe("tomorrow");
   });
 
-  it("takes an instant in milliseconds as well as an ISO string", () => {
-    expect(dayBucket(ms("2026-10-02T09:00:00+02:00"), thursday, ZH)).toBe("tomorrow");
-  });
-
   it("files an undated or unreadable row under later", () => {
     expect(dayBucket(null, thursday, ZH)).toBe("later");
     expect(dayBucket("not a date", thursday, ZH)).toBe("later");

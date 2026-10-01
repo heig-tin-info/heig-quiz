@@ -13,38 +13,40 @@
  *
  * Pure: the instant and the time zone are the caller's.
  */
+import { zoneOffset } from "./zone.js";
 
 export type DayBucket = "today" | "tomorrow" | "week" | "later";
 
 /** The order the buckets are drawn in. */
-export const DAY_BUCKETS: readonly DayBucket[] = ["today", "tomorrow", "week", "later"];
+const DAY_BUCKETS: readonly DayBucket[] = ["today", "tomorrow", "week", "later"];
 
 const DAY = 86_400_000;
 
 /** The calendar day of `at` in `timeZone`, as a count of days since 1970-01-01. */
-export function civilDay(at: number, timeZone: string): number {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" })
-      .formatToParts(new Date(at))
-      .map((p) => [p.type, p.value]),
-  );
-  return Date.UTC(+parts.year!, +parts.month! - 1, +parts.day!) / DAY;
-}
+const civilDay = (at: number, timeZone: string): number =>
+  Math.floor((at + zoneOffset(new Date(at), timeZone)) / DAY);
 
 /** Days since the Monday of its week: 0 on a Monday, 6 on a Sunday (1970-01-01 was a Thursday). */
 const isoWeekday = (day: number): number => (((day + 3) % 7) + 7) % 7;
 
-/** The bucket of the instant `at` (ISO string or ms; null for undated) seen at `now` in `timeZone`. */
-export function dayBucket(at: string | number | null, now: number, timeZone: string): DayBucket {
-  if (at === null) return "later";
-  const ms = typeof at === "number" ? at : Date.parse(at);
-  if (Number.isNaN(ms)) return "later";
-  const today = civilDay(now, timeZone);
+const parse = (at: string | null): number => {
+  const ms = at === null ? NaN : Date.parse(at);
+  return Number.isNaN(ms) ? Infinity : ms;
+};
+
+/** The bucket of the instant `ms` (Infinity for undated) on the calendar day `today`. */
+function bucketOn(ms: number, today: number, timeZone: string): DayBucket {
+  if (ms === Infinity) return "later";
   const diff = civilDay(ms, timeZone) - today;
   if (diff <= 0) return "today";
   if (diff === 1) return "tomorrow";
   if (diff <= 6 - isoWeekday(today)) return "week";
   return "later";
+}
+
+/** The bucket of the instant `at` (ISO string; null for undated) seen at `now` in `timeZone`. */
+export function dayBucket(at: string | null, now: number, timeZone: string): DayBucket {
+  return bucketOn(parse(at), civilDay(now, timeZone), timeZone);
 }
 
 /**
@@ -58,18 +60,15 @@ export function groupByDay<T>(
   now: number,
   timeZone: string,
 ): { bucket: DayBucket; rows: T[] }[] {
-  const time = (row: T) => {
-    const iso = at(row);
-    const ms = iso === null ? NaN : Date.parse(iso);
-    return Number.isNaN(ms) ? Infinity : ms;
-  };
-  // `Array.prototype.sort` is stable.
-  const sorted = [...rows].sort((a, b) => {
-    const [ta, tb] = [time(a), time(b)];
-    return ta === tb ? 0 : ta < tb ? -1 : 1;
+  const today = civilDay(now, timeZone);
+  const placed = rows.map((row) => {
+    const ms = parse(at(row));
+    return { row, ms, bucket: bucketOn(ms, today, timeZone) };
   });
+  // `Array.prototype.sort` is stable.
+  placed.sort((a, b) => (a.ms === b.ms ? 0 : a.ms < b.ms ? -1 : 1));
   return DAY_BUCKETS.map((bucket) => ({
     bucket,
-    rows: sorted.filter((row) => dayBucket(at(row), now, timeZone) === bucket),
+    rows: placed.filter((p) => p.bucket === bucket).map((p) => p.row),
   })).filter((group) => group.rows.length > 0);
 }

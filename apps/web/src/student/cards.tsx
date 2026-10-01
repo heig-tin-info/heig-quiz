@@ -10,7 +10,7 @@
  * its most urgent one.
  */
 import { useQuery } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { CalendarClock, GraduationCap, School } from "lucide-react";
 
 import { formatPoints, groupByDay, type DayBucket } from "@quiz/domain";
@@ -181,23 +181,41 @@ export function UpcomingByDay({
   now: number;
   showWhere?: boolean;
 }) {
-  const t = useT();
   return (
     <div className="space-y-5">
       {groupByDay(cards, (card) => card.opensAt, now, localTimeZone()).map(({ bucket, rows }) => (
-        <div key={bucket} className="space-y-2">
-          <h3 className={cx("text-sm font-semibold", bucket === "today" ? "text-fg" : "text-fg-muted")}>
-            {t(DAY_KEY[bucket])}
-          </h3>
-          <ul className="space-y-3" aria-label={t(DAY_KEY[bucket])}>
-            {rows.map((card) => (
-              <li key={card.id}>
-                <EvaluationRow card={card} showWhere={showWhere} line={upcomingLine(card, now, t)} />
-              </li>
-            ))}
-          </ul>
-        </div>
+        <DayGroup key={bucket} bucket={bucket} cards={rows} now={now} showWhere={showWhere} />
       ))}
+    </div>
+  );
+}
+
+/** One day of {@link UpcomingByDay}: its sub-heading, which names the list, and its cards. */
+function DayGroup({
+  bucket,
+  cards,
+  now,
+  showWhere,
+}: {
+  bucket: DayBucket;
+  cards: readonly EvaluationCardData[];
+  now: number;
+  showWhere: boolean;
+}) {
+  const t = useT();
+  const id = useId();
+  return (
+    <div className="space-y-2">
+      <h3 id={id} className={cx("text-sm font-semibold", bucket === "today" ? "text-fg" : "text-fg-muted")}>
+        {t(DAY_KEY[bucket])}
+      </h3>
+      <ul className="space-y-3" aria-labelledby={id}>
+        {cards.map((card) => (
+          <li key={card.id}>
+            <EvaluationRow card={card} showWhere={showWhere} line={upcomingLine(card, now, t)} />
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

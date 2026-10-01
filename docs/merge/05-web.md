@@ -60,13 +60,10 @@ about this course".
   unfinished one without a deadline; then a retake); the others are
   secondary. Upcoming and Past are drawn only when they hold something.
   Upcoming is grouped by day, as on the home (product owner, 2026-10-01):
-  Today, Tomorrow, This week, Later, by the calendar day the card opens
-  (`opensAt`) in the browser's time zone; "This week" runs from the day
-  after tomorrow to Sunday (ISO weeks start on Monday); an opening already
-  passed is Today, an undated card Later; the soonest first inside a day,
-  an empty day not drawn. The rule is `groupByDay` of `@quiz/domain`
-  (`dayBucket.ts`), the view `UpcomingByDay` of `student/cards.tsx`. No
-  calendar view until the projects bring deadlines (D07). Empty state:
+  Today, Tomorrow, This week, Later — the rule is F-ORG-14's, written once
+  in `packages/domain/src/dayBucket.ts`, drawn by `UpcomingByDay` of
+  `student/cards.tsx`. No calendar view until the projects bring
+  deadlines (D07). Empty state:
   nothing to do in this classroom right now. `ProjectRow`: title, deadline
   countdown, group name, status badge (not started / repo ready /
   invitation pending / submitted / graded), CI score as plain tabular text

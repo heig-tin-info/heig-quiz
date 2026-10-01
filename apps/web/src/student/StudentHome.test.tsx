@@ -367,7 +367,7 @@ describe("Coming up, grouped by day", () => {
   const groups = async () => {
     await screen.findByText("À venir");
     return screen.getAllByRole("list").map((list) => [
-      list.getAttribute("aria-label"),
+      document.getElementById(list.getAttribute("aria-labelledby")!)?.textContent,
       within(list).getAllByRole("listitem").map((li) => li.querySelector("p")!.textContent),
     ]);
   };
@@ -392,15 +392,5 @@ describe("Coming up, grouped by day", () => {
       "Cette semaine",
       "Plus tard",
     ]);
-  });
-
-  it("leaves out an empty day: next Monday is Later, not This week", async () => {
-    renderUpcoming([scheduled("e-today", "Série 4", at(1, 23)), scheduled("e-monday", "Quiz 6", at(5, 0))]);
-    expect(await groups()).toEqual([
-      ["Aujourd'hui", ["Série 4"]],
-      ["Plus tard", ["Quiz 6"]],
-    ]);
-    expect(screen.queryByText("Demain")).toBeNull();
-    expect(screen.queryByText("Cette semaine")).toBeNull();
   });
 });

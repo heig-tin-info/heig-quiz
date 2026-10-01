@@ -1,6 +1,6 @@
 {
   "generatedBy": "apps/web/scripts/docs-screenshots.mjs",
-  "base": "http://localhost:3100",
+  "base": "http://localhost:3105",
   "viewports": {
     "desktop": {
       "width": 1440,
