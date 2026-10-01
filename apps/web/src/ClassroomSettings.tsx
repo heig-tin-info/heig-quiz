@@ -6,9 +6,10 @@
  *
  * Its one accent is "Connect to GitHub" while the classroom is not
  * connected; once it is, nothing here is accented (a classroom connected for
- * its projects is not pushed towards a journal). Delete is a `secondary`
- * button whose confirmation is the `danger` one: a red fill in the row would
- * compete with that one accent, which the squint test must find alone.
+ * its projects is not pushed towards a journal). Delete is a `danger-quiet`
+ * button whose confirmation is the `danger` one: red ink says it destroys,
+ * while a red fill in the row would compete with that one accent, which the
+ * squint test must find alone. Archive restores, so it stays `secondary`.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, School, Trash2 } from "lucide-react";
@@ -158,7 +159,7 @@ function LifecycleSection({ room, navigate }: { room: ClassroomDetail; navigate:
         </SettingRow>
         <SettingRow title={t("classroomSettings.delete")} desc={t("classroomSettings.deleteDesc")}>
           <Button
-            variant="secondary"
+            variant="danger-quiet"
             loading={remove.isPending}
             onClick={async () => {
               if (

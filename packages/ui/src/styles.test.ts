@@ -16,6 +16,13 @@ describe("buttonClass", () => {
     expect(classes).toContain("h-8.5");
   });
 
+  it("draws danger-quiet in red ink on the surface, never a red fill", () => {
+    const classes = buttonClass("danger-quiet").split(" ");
+    expect(classes).toContain("text-danger");
+    expect(classes).toContain("bg-surface");
+    expect(classes).not.toContain("bg-danger");
+  });
+
   it("appends the caller's extra classes last", () => {
     expect(buttonClass("ghost", "sm", "ml-auto").endsWith(" ml-auto")).toBe(true);
   });

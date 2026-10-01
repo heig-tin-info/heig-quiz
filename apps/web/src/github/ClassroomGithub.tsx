@@ -142,8 +142,8 @@ function Connected({ room, github }: { room: ClassroomDetail; github: GithubClas
               {t("github.connectedSince", { date: isoDateParts(link.linkedAt).date })}
             </p>
           </div>
-          {/* Secondary: once connected, nothing on the tab is accented (F-ORG-13). */}
-          <Button variant="secondary" loading={disconnect.isPending} onClick={() => void onDisconnect()}>
+          {/* Red ink, no fill: once connected, nothing on the tab is accented (F-ORG-13). */}
+          <Button variant="danger-quiet" loading={disconnect.isPending} onClick={() => void onDisconnect()}>
             {t("github.disconnect")}
           </Button>
         </div>

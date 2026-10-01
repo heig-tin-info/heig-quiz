@@ -53,7 +53,7 @@ export function GithubAccountCard() {
         >
           {account ? (
             <Button
-              variant="secondary"
+              variant="danger-quiet"
               loading={unlink.isPending}
               onClick={async () => {
                 if (

@@ -431,7 +431,12 @@ live in `ui/state.ts`, each written once.
 
 - Button: `primary` (accent fill, white text, one per screen), `secondary`
   (surface, hairline), `ghost` (no chrome), `danger` (danger fill, never
-  primary-styled elsewhere). Sizes `sm` 28 px, `md` 34 px, `lg` 40 px.
+  primary-styled elsewhere), `danger-quiet` (surface, red ink and hairline,
+  `danger-soft` on hover): the trigger in a settings row of an action whose
+  confirmation is the `danger` dialog — delete, remove, disconnect, unlink.
+  The row reads as destructive without a second red fill competing with the
+  screen's one accent; the fill belongs to the confirmation. A reversible
+  action (archive) stays `secondary`. Sizes `sm` 28 px, `md` 34 px, `lg` 40 px.
   Pressed to 0.97. The class list is `buttonClass` in `@quiz/ui`, which the
   app's `Button` and `LinkButton` and the question types all wear.
 - Icon button: round, ghost; `danger` turns red on hover only.
