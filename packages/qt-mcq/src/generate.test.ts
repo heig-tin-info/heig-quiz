@@ -86,3 +86,30 @@ describe("the wand of one choice", () => {
     ]);
   });
 });
+
+describe("the statement", () => {
+  it("is the prompt, empty when the draft has none", () => {
+    expect(mcqGenerator.statement(draft([]))).toBe("2 + 2 ?");
+    expect(mcqGenerator.statement({} as McqConfig)).toBe("");
+  });
+
+  it("merges into a draft whose choices are not a list (D16)", () => {
+    const broken = { ...draft([]), choices: "oops" } as unknown as McqConfig;
+    expect(mergeMcq(broken, { choices: [{ text: "4", correct: true }] }).choices).toEqual([{ text: "4", correct: true }]);
+    expect(mcqGenerator.item!.accepts(broken, 0)).toBe(false);
+  });
+
+  it("leaves an empty row the proposal cannot fill as it was", () => {
+    const merged = mergeMcq(
+      draft([
+        { text: "", correct: true },
+        { text: undefined as unknown as string, correct: false },
+      ]),
+      { choices: [{ text: "4", correct: true }] },
+    );
+    expect(merged.choices).toEqual([
+      { text: "4", correct: true },
+      { text: undefined, correct: false },
+    ]);
+  });
+});

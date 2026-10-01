@@ -184,11 +184,11 @@ export function McqEditor({
   const s = resolveStrings(mcqEditorStrings, strings);
   /** The row whose wand is waiting for the model (ADR-059); one at a time. */
   const [generating, setGenerating] = useState<number | null>(null);
-  const generate = (index: number) => {
-    if (!onGenerateItem || generating !== null) return;
+  const generate = (ask: (index: number) => Promise<void>, index: number) => {
     setGenerating(index);
-    // The host words a failure; the row only stops waiting.
-    onGenerateItem(index)
+    // The host words a failure; the row only stops waiting. A second wand
+    // cannot start meanwhile: every row's is disabled while one waits.
+    ask(index)
       .catch(() => undefined)
       .finally(() => setGenerating(null));
   };
@@ -477,7 +477,11 @@ export function McqEditor({
                     onGenerateItem === undefined || disabled
                       ? null
                       : choice.text.trim() === ""
-                        ? { onGenerate: () => generate(index), generating: generating === index, waiting: generating !== null }
+                        ? {
+                            onGenerate: () => generate(onGenerateItem, index),
+                            generating: generating === index,
+                            waiting: generating !== null,
+                          }
                         : "slot"
                   }
                   {...(RichText === undefined ? {} : { RichText })}

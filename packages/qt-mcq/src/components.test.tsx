@@ -37,6 +37,44 @@ describe("McqEditor", () => {
     expect(screen.getByLabelText("Statement")).toHaveValue("");
   });
 
+  it("draws the wand on an empty row only, and none without a host that offers it (ADR-059)", async () => {
+    const config = { ...SECRET_CONFIG, choices: [...SECRET_CONFIG.choices, { text: "", correct: false }] };
+    const { unmount } = render(<McqEditor config={config} onChange={() => {}} />);
+    expect(screen.queryByRole("button", { name: /^Suggest this choice/ })).toBeNull();
+    unmount();
+
+    let resolve!: () => void;
+    const onGenerateItem = vi.fn(() => new Promise<void>((r) => (resolve = r)));
+    render(<McqEditor config={config} onChange={() => {}} onGenerateItem={onGenerateItem} />);
+    const wands = screen.getAllByRole("button", { name: /^Suggest this choice/ });
+    expect(wands).toHaveLength(1);
+    const wand = screen.getByRole("button", { name: "Suggest this choice D" });
+    await userEvent.click(wand);
+    expect(onGenerateItem).toHaveBeenCalledWith(3);
+    expect(wand).toHaveAttribute("aria-busy", "true");
+    // One at a time: a second click while it waits asks nothing more.
+    await userEvent.click(wand);
+    expect(onGenerateItem).toHaveBeenCalledTimes(1);
+    resolve();
+    await waitFor(() => expect(wand).not.toHaveAttribute("aria-busy"));
+  });
+
+  it("draws no wand on a disabled editor", () => {
+    const config = { ...SECRET_CONFIG, choices: [...SECRET_CONFIG.choices, { text: "", correct: false }] };
+    render(<McqEditor config={config} onChange={() => {}} disabled onGenerateItem={() => Promise.resolve()} />);
+    expect(screen.queryByRole("button", { name: /^Suggest this choice/ })).toBeNull();
+  });
+
+  it("stops waiting when the host's wand fails", async () => {
+    const config = { ...SECRET_CONFIG, choices: [...SECRET_CONFIG.choices, { text: "", correct: false }] };
+    const onGenerateItem = vi.fn(() => Promise.reject(new Error("no model")));
+    render(<McqEditor config={config} onChange={() => {}} onGenerateItem={onGenerateItem} />);
+    const wand = screen.getByRole("button", { name: "Suggest this choice D" });
+    await userEvent.click(wand);
+    await waitFor(() => expect(wand).not.toHaveAttribute("aria-busy"));
+    expect(wand).toBeEnabled();
+  });
+
   it("adds a choice through onChange", async () => {
     const onChange = vi.fn();
     render(<McqEditor config={SECRET_CONFIG} onChange={onChange} />);
