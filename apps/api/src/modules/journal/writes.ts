@@ -102,7 +102,7 @@ export class JournalError extends DomainError {
 }
 
 /**
- * `work`, its GitHub failures as {@link JournalError}s: a conflict as such,
+ * `work`, its GitHub failures as {@link JournalError}s: a name taken as such,
  * anything GitHub answered (or its silence: a timeout, the network) as the
  * synchronisation's code for it. Anything else — a bug, the database — is
  * thrown as it is, a 500.
@@ -112,7 +112,7 @@ async function onGithub<T>(log: FastifyBaseLogger, work: () => Promise<T>): Prom
     return await work();
   } catch (err) {
     if (err instanceof DomainError) throw err;
-    if (err instanceof JournalRepoError && (err.code === "conflict" || err.code === "name_taken")) {
+    if (err instanceof JournalRepoError && err.code === "name_taken") {
       throw new JournalError(err.code);
     }
     const name = (err as Error | null)?.name;

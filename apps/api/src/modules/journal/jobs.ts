@@ -64,13 +64,8 @@ const push: WebhookHandler = async (app, config, delivery) => {
   const rows = await app.db
     .select({ classroomId: classroomJournals.classroomId, lastCommitSha: classroomJournals.lastCommitSha })
     .from(classroomJournals)
-    .where(
-      and(
-        eq(classroomJournals.mode, "github"),
-        eq(classroomJournals.githubRepoId, event.data.repository.id),
-        eq(classroomJournals.ref, branch),
-      ),
-    );
+    // A repository id matches GitHub-mode rows only (`classroom_journals_mode_ck`).
+    .where(and(eq(classroomJournals.githubRepoId, event.data.repository.id), eq(classroomJournals.ref, branch)));
   for (const row of rows) {
     if (row.lastCommitSha !== event.data.after) await requestIngest(app, config, row.classroomId);
   }

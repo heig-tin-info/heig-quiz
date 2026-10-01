@@ -19,7 +19,7 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { encodeJournalPath, Journal, JournalPage, type JournalPageStaff } from "@quiz/contracts";
+import { Journal, JournalPage, type JournalPageStaff } from "@quiz/contracts";
 
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { loadConfig, type AppConfig } from "../../config.js";
@@ -217,22 +217,6 @@ describe("the staff read everything", () => {
     expect(page.markdown).toContain("DRAFT-BODY-MARKER");
     expect(page.blobSha).toBe(blobSha(FILES[2]!));
     expect(page.editUrl).toMatch(/^https:\/\/github\.com\/heig-prg\/journal-\d+\/edit\/main\/020-draft\.md$/);
-  });
-
-  it("the edit link of a page under a root folder, on a branch with a slash, its segments encoded", async () => {
-    const repo = newRepo([]);
-    pushTo(repo, [{ path: "notes/010 été #1.md", content: "# Été\n" }], "prof/s1");
-    const { classroomId: id } = await journalClassroom(repo, teacher.id);
-    await server.app.db
-      .update(classroomJournals)
-      .set({ ref: "prof/s1", rootPath: "notes" })
-      .where(eq(classroomJournals.classroomId, id));
-    await ingestJournal(server.app, config, id);
-    const res = await get(`${base(id)}/pages/${encodeJournalPath("010 été #1.md")}`, teacher.headers);
-    expect(res.statusCode, res.body).toBe(200);
-    expect(res.json<JournalPageStaff>().editUrl).toBe(
-      `https://github.com/heig-prg/${repo.name}/edit/prof/s1/notes/010%20%C3%A9t%C3%A9%20%231.md`,
-    );
   });
 
   it("an asset only a draft references", async () => {

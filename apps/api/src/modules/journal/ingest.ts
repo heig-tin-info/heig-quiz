@@ -103,8 +103,9 @@ async function snapshot(db: Db, classroomId: string): Promise<Snapshot | null> {
     .leftJoin(githubClassroomLinks, eq(githubClassroomLinks.classroomId, classroomJournals.classroomId))
     .leftJoin(githubOrganizations, eq(githubOrganizations.id, githubClassroomLinks.orgId))
     .where(eq(classroomJournals.classroomId, classroomId));
-  const row = target ? githubJournal(target.row) : null;
-  if (!target || !row) return null;
+  if (!target) return null;
+  const row = githubJournal(target.row);
+  if (!row) return null;
   const [pages, assets] = await Promise.all([
     db
       .select({ id: journalPages.id, path: journalPages.path, blobSha: journalPages.blobSha, markdown: journalPages.markdown })
@@ -486,7 +487,8 @@ export async function repositoryChanged(
       updatedAt: now,
       version: bumped(),
     })
-    .where(and(eq(classroomJournals.mode, "github"), eq(classroomJournals.githubRepoId, githubRepoId)))
+    // A repository id matches GitHub-mode rows only (`classroom_journals_mode_ck`).
+    .where(eq(classroomJournals.githubRepoId, githubRepoId))
     .returning({ classroomId: classroomJournals.classroomId });
   const ids = touched.map((r) => r.classroomId);
   journalChanged(ids);

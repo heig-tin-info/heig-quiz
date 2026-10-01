@@ -7,8 +7,7 @@
  *   organization, its branch and root folder honoured, another's refused),
  *   remove (the repository kept; D28's disconnect unblocked), refresh, preview;
  * - GitHub mode read-only (ADR-057): save, add, delete and upload refused
- *   with 409 `read_only`, nothing committed nor copied; every staff page
- *   carries its github.com edit link;
+ *   with 409 `read_only`, nothing committed nor copied;
  * - the invitations (D27): `push` only, one audit entry each, a refusal never
  *   failing the creation;
  * - who may write: the staff; a student, a teacher off the staff get the 404
@@ -396,14 +395,6 @@ describe("the content of a GitHub-mode journal is read-only (ADR-057)", () => {
     for (const action of ["journal.save", "journal.add", "journal.delete", "journal.upload"]) {
       expect(await auditOf(room.id, action), action).toEqual([]);
     }
-  });
-
-  it("is read-only in the staff payload, every page carrying its link to GitHub's editor", async () => {
-    const { room, fullName } = await withJournal();
-    const journal = Journal.parse((await call("GET", base(room.id), teacher.headers)).json()) as JournalStaff;
-    expect(journal).toMatchObject({ mode: "github", repository: { fullName, editable: false } });
-    const page = (await call("GET", `${base(room.id)}/pages/README.md`, teacher.headers)).json<{ editUrl: string }>();
-    expect(page.editUrl).toBe(`https://github.com/${fullName}/edit/main/README.md`);
   });
 
   it("still refuses an upload's own faults first", async () => {

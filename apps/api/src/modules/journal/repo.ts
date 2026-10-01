@@ -58,11 +58,10 @@ export interface ResolvedRepo {
 export class JournalRepoError extends Error {
   constructor(
     /**
-     * A synchronisation's code; `empty`, a repository with no commit; for the
-     * writes, `conflict` (the file moved since it was opened) and
-     * `name_taken` (a creation on a name the organization already holds).
+     * A synchronisation's code; `empty`, a repository with no commit;
+     * `name_taken`, a creation on a name the organization already holds.
      */
-    readonly code: JournalSyncError | "empty" | "conflict" | "name_taken",
+    readonly code: JournalSyncError | "empty" | "name_taken",
     message: string,
   ) {
     super(message);
@@ -301,58 +300,36 @@ export async function createRepo(
   return repo;
 }
 
-/** What a write of one file names: where, what, by whom, and against which blob. */
+/** What a write of one new file names: where, what, by whom. */
 export interface FileWrite {
   branch: string;
   /** Relative to the repository's root, already checked (`safeJournalPath`). */
   path: string;
   message: string;
   author: CommitAuthor;
-  /** The blob the writer opened: the optimistic lock. Absent: the file must not exist yet. */
-  baseSha?: string | undefined;
-}
-
-/** The Contents API's route of a file: each segment encoded, the slashes kept. */
-const contentsRoute = (method: "PUT", path: string) =>
-  `${method} /repos/{owner}/{repo}/contents/${encodeJournalPath(path)}` as const;
-
-/**
- * Only the AUTHOR is the teacher: the committer stays the App, so GitHub
- * signs the commit (Verified) and the history says it came through Quiz.
- */
-const commitFields = (write: FileWrite) => ({ branch: write.branch, message: write.message, author: write.author });
-
-/** 409 (the blob moved) or 422 (a sha where there is none, none where there is one): the file changed. */
-function conflictOf(err: unknown, path: string): unknown {
-  const status = githubStatus(err);
-  return status === 409 || status === 422
-    ? new JournalRepoError("conflict", `${path} changed on GitHub since it was opened`)
-    : err;
 }
 
 /**
- * Writes one file through the Contents API, against `baseSha`: GitHub
- * refuses the write when the file moved since, and that is the whole
- * conflict detection — nothing is compared, nothing merged, and a teacher who
- * pushed from a clone is never overwritten by a tab left open.
+ * Creates one file through the Contents API (the README of a new
+ * repository; M4-11's export). Only the AUTHOR is the teacher: the
+ * committer stays the App, so GitHub signs the commit (Verified) and the
+ * history says it came through Quiz. The path's segments are encoded, the
+ * slashes kept.
  */
 export async function putFile(
   octokit: Octokit,
   repo: ResolvedRepo,
   write: FileWrite & { content: Buffer },
 ): Promise<{ blobSha: string; commitSha: string }> {
-  try {
-    const { data } = await octokit.request(contentsRoute("PUT", write.path), {
-      owner: repo.owner,
-      repo: repo.name,
-      ...commitFields(write),
-      content: write.content.toString("base64"),
-      ...(write.baseSha ? { sha: write.baseSha } : {}),
-    });
-    const written = data as { content?: { sha?: string } | null; commit: { sha?: string } };
-    return { blobSha: written.content?.sha ?? "", commitSha: written.commit.sha ?? "" };
-  } catch (err) {
-    throw conflictOf(err, write.path);
-  }
+  const { data } = await octokit.request(`PUT /repos/{owner}/{repo}/contents/${encodeJournalPath(write.path)}`, {
+    owner: repo.owner,
+    repo: repo.name,
+    branch: write.branch,
+    message: write.message,
+    author: write.author,
+    content: write.content.toString("base64"),
+  });
+  const written = data as { content?: { sha?: string } | null; commit: { sha?: string } };
+  return { blobSha: written.content?.sha ?? "", commitSha: written.commit.sha ?? "" };
 }
 
