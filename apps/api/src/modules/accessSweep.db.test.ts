@@ -135,7 +135,10 @@ afterAll(async () => {
 function sweptRoutes() {
   return routesOf(server.app.printRoutes({ commonPrefix: false })).flatMap(({ method, path }) => {
     const found = FAMILY.exec(path)?.[1] as Family | undefined;
-    if (!found) return [];
+    // A wildcard route (the journal's pages, assets, revisions) prints without
+    // the segment before its `*`, so no URL can be rebuilt from it: the
+    // journal's own tests sweep those (`writes.db.test.ts`, "who may write").
+    if (!found || path.includes("*")) return [];
     // A poll route on an exam is a 404 for its mode, whoever asks.
     const family = path.startsWith("/app/api/evaluations/:id/poll") ? "polls" : found;
     const url = (w: World, id: string) =>

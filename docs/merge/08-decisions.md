@@ -352,7 +352,12 @@ Status values: `open`, `settled`, `superseded`.
   3. **Revisions**: one per Quiz-mode save, markdown and front matter only,
      no limit; assets are not versioned (append-only, collected when no
      page references them). The staff restore a revision; restoring is
-     audited.
+     audited. **Deleting a page keeps its revisions** (settled with M4-08,
+     orchestrator): they live until the journal is removed, so a deleted
+     page can be restored later — restoring a revision of a deleted path
+     creates the page again. `author_id` keeps `no action` on user
+     deletion, as the repository's other authored history rows
+     (`questions.created_by`, `classroom_journals.created_by`).
   4. **Move to GitHub**: into a new repository or an empty one only, never
      one with content (ADR-049 point 6). "Bring back into Quiz" imports the
      copy and detaches the repository without deleting it, after showing

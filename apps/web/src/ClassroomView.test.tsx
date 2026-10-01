@@ -380,6 +380,7 @@ describe("ClassroomView — the Journal tab", () => {
     homePath: attached ? "README.md" : null,
     hiddenPaths: [],
     warningCount: 0,
+    pageCount: 0,
     proposedName: attached ? null : "prg1-2026-journal",
   });
 

@@ -301,6 +301,11 @@ export const JournalStaff = z.strictObject({
   hiddenPaths: z.array(z.string()),
   /** How many pages carry at least one warning. */
   warningCount: z.number().int().min(0),
+  /**
+   * How many pages the journal holds, hidden ones included: what removing a
+   * Quiz-mode journal destroys, said in its confirmation (F-JRN-04).
+   */
+  pageCount: z.number().int().min(0),
   /** What "Create a journal" proposes (F-JRN-02); null once there is one. */
   proposedName: z.string().nullable(),
 });
@@ -335,8 +340,8 @@ export const JournalPageStaff = z.strictObject({
   /** Not served to students right now: a draft, or `visibleFrom` in the future. */
   hidden: z.boolean(),
   markdown: z.string(),
-  /** The optimistic lock of a save (`baseSha`). */
-  blobSha: z.string(),
+  /** The optimistic lock of a Quiz-mode save: its `baseVersion` (ADR-057). */
+  version: z.number().int(),
   warnings: z.array(JournalWarning),
   /**
    * GitHub mode: github.com's editor of the page's file on the journal's
@@ -396,11 +401,16 @@ export const JournalRootPath = z
   .refine((p) => p === "" || safeJournalPath(p) !== null, { message: "Not a folder of the repository" });
 
 /**
- * `POST /classrooms/:id/journal`: create a private repository in the
- * classroom's organization (F-JRN-02); without a name, the staff payload's
+ * `POST /classrooms/:id/journal`, by its mode (ADR-057). `quiz`: a journal
+ * held in Quiz, needing no GitHub at all, seeded with its home page
+ * (`README.md`). `github`: a private repository created in the classroom's
+ * organization (F-JRN-02); without a name, the staff payload's
  * `proposedName`. Answers 201 with the staff `Journal`.
  */
-export const JournalCreate = z.strictObject({ name: GithubRepoName.optional() });
+export const JournalCreate = z.discriminatedUnion("mode", [
+  z.strictObject({ mode: z.literal("quiz") }),
+  z.strictObject({ mode: z.literal("github"), name: GithubRepoName.optional() }),
+]);
 export type JournalCreate = z.infer<typeof JournalCreate>;
 
 /**
@@ -416,27 +426,15 @@ export const JournalUse = z.strictObject({
 });
 export type JournalUse = z.infer<typeof JournalUse>;
 
-/** A blob sha, as git writes it: the optimistic lock of a save. */
-export const BlobSha = z.string().regex(/^[0-9a-f]{40}$/, { message: "Not a blob sha" });
-
-/** A commit message the teacher may write; the platform words one otherwise. */
-const CommitMessage = z
-  .string()
-  .trim()
-  .min(1)
-  .max(200)
-  .refine((m) => !hasControlChar(m.replace(/\n/g, "")), { message: "No control character" });
-
 /**
- * `PUT /classrooms/:id/journal/pages/*`: the page's new source, against the
- * blob the editor opened (`JournalPageStaff.blobSha`). The file moved since
- * ⇒ 409 `conflict`, nothing written and nothing merged (F-JRN-10). Answers
- * {@link JournalFileWritten}.
+ * `PUT /classrooms/:id/journal/pages/*` (Quiz mode): the page's new source,
+ * against the version the editor opened (`JournalPageStaff.version`). Saved
+ * since by someone else ⇒ 409 `conflict`, nothing written and nothing merged
+ * (F-JRN-10, ADR-057). Answers {@link JournalFileWritten}.
  */
 export const JournalPageSave = z.strictObject({
   markdown: z.string().max(JOURNAL_MARKDOWN_MAX),
-  baseSha: BlobSha,
-  message: CommitMessage.optional(),
+  baseVersion: z.number().int(),
 });
 export type JournalPageSave = z.infer<typeof JournalPageSave>;
 
@@ -457,16 +455,12 @@ export const JournalPageAdd = z.strictObject({
 export type JournalPageAdd = z.infer<typeof JournalPageAdd>;
 
 /**
- * A file the platform committed (a saved or added page, an uploaded asset):
- * its journal path, its blob sha — the next save's `baseSha` — and the
- * commit. `page` is the page as the copy holds it once synchronised: null for
- * an asset, or when the copy did not catch up (the synchronisation failed or
- * lost a race to a push; the next one brings it).
+ * A file a Quiz-mode write stored (a saved, added or restored page, an
+ * uploaded asset): its journal path, and the page as it now reads — its
+ * `version` the next save's `baseVersion`; null for an asset.
  */
 export const JournalFileWritten = z.strictObject({
   path: z.string(),
-  blobSha: z.string(),
-  commitSha: z.string(),
   page: JournalPageStaff.nullable(),
 });
 export type JournalFileWritten = z.infer<typeof JournalFileWritten>;
@@ -502,8 +496,12 @@ export type JournalPreviewResult = z.infer<typeof JournalPreviewResult>;
  * - `no_journal` — it has none to write to;
  * - `name_taken` — the organization already has a repository by that name,
  *   which is never adopted: {@link JournalNameTaken} proposes another;
- * - `conflict` — the file moved on GitHub since it was opened;
- * - `page_exists` — the copy already has a page at that path;
+ * - `conflict` — the page was saved by someone else since it was opened;
+ * - `page_exists` — the journal already has a page at that path;
+ * - `asset_exists` — it already has another file at that path (assets are
+ *   append-only: never overwritten);
+ * - `confirm_required` — removing a Quiz-mode journal that holds pages
+ *   destroys the only copy: the classroom's name must be typed (F-JRN-04);
  * - `type_mismatch` — an upload's content type is not its extension's;
  * - `empty_upload` — an upload with no bytes;
  * - `read_only` — the journal lives in a GitHub repository (ADR-057): its
@@ -519,6 +517,8 @@ export const JournalErrorCode = z.enum([
   "name_taken",
   "conflict",
   "page_exists",
+  "asset_exists",
+  "confirm_required",
   "type_mismatch",
   "empty_upload",
   "read_only",
@@ -536,3 +536,52 @@ export const JournalNameTaken = z.object({
   suggestion: GithubRepoName,
 });
 export type JournalNameTaken = z.infer<typeof JournalNameTaken>;
+
+/**
+ * `DELETE /classrooms/:id/journal?confirm=<the classroom's name>` (F-JRN-04):
+ * a Quiz-mode journal holding pages is the only copy of them, and goes only
+ * with the classroom's name typed (409 `confirm_required` otherwise). A
+ * GitHub-mode journal, or an empty one, needs nothing: the repository stays.
+ */
+export const JournalRemoveQuery = z.object({ confirm: z.string().max(200).optional() });
+export type JournalRemoveQuery = z.infer<typeof JournalRemoveQuery>;
+
+// ---------------------------------------------------------------- revisions (Quiz mode)
+
+/**
+ * One saved state of a Quiz-mode page (ADR-057), for the staff only: no
+ * student route ever reads a revision. `author` is the display name, null
+ * when it gives none (the web words it).
+ */
+export const JournalRevision = z.strictObject({
+  id: z.uuid(),
+  path: z.string(),
+  markdown: z.string(),
+  author: z.string().nullable(),
+  createdAt: z.iso.datetime({ offset: true }),
+});
+export type JournalRevision = z.infer<typeof JournalRevision>;
+
+/** `GET /classrooms/:id/journal/revisions/*`: a page's revisions, newest first, a deleted page's too. */
+export const JournalRevisionList = z.array(JournalRevision);
+export type JournalRevisionList = z.infer<typeof JournalRevisionList>;
+
+/**
+ * `GET /classrooms/:id/journal/deleted`: the paths that have revisions and no
+ * page any more, each restorable from its revisions; newest first. `title`
+ * is the latest revision's, null when nothing names it.
+ */
+export const JournalDeletedPage = z.strictObject({
+  path: z.string(),
+  title: z.string().nullable(),
+  savedAt: z.iso.datetime({ offset: true }),
+});
+export type JournalDeletedPage = z.infer<typeof JournalDeletedPage>;
+
+/**
+ * `POST /classrooms/:id/journal/restore`: a revision becomes the page's
+ * content again — a save like any other (a new revision, the version bumped,
+ * audited), and a deleted page is created again. Answers {@link JournalFileWritten}.
+ */
+export const JournalRestore = z.strictObject({ revisionId: z.uuid() });
+export type JournalRestore = z.infer<typeof JournalRestore>;

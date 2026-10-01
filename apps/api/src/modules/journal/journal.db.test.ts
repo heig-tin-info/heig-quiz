@@ -28,6 +28,7 @@ import {
   enrollments,
   githubClassroomLinks,
   githubOrganizations,
+  journalPageRevisions,
   journalPages,
   webhookDeliveries,
 } from "../../db/schema.js";
@@ -111,6 +112,10 @@ const SECRETS = [
   "github.com",
   "editUrl",
   "\"mode\"",
+  // Revisions (ADR-057): a draft's, a deleted page's; no student route reads them.
+  "REVISION-DRAFT-MARKER",
+  "REVISION-DELETED-MARKER",
+  "040-deleted",
   ...FILES.map(blobSha),
 ];
 
@@ -179,6 +184,13 @@ beforeAll(async () => {
     email: "unclaimed-journal@heig.test",
   });
   expect(await ingestJournal(server.app, config, classroomId)).toMatchObject({ status: "ok", pages: 4, assets: 4 });
+  // Revisions of a draft and of a page since deleted, searched for in every student response.
+  await server.app.db.insert(journalPageRevisions).values(
+    [
+      ["020-draft.md", "# REVISION-DRAFT-MARKER\n"],
+      ["040-deleted.md", "# REVISION-DELETED-MARKER\n"],
+    ].map(([path, markdown]) => ({ id: randomUUID(), classroomId, path: path!, markdown: markdown!, authorId: teacher.id })),
+  );
 
   impersonation = await sessionOf(student.id, { kind: "impersonation", actorUserId: admin.id, evaluationId: null });
   seb = await sessionOf(student.id, { kind: "seb", actorUserId: null, evaluationId });
@@ -215,7 +227,7 @@ describe("the staff read everything", () => {
     if (page.view !== "staff") throw new Error("expected the staff payload");
     expect(page).toMatchObject({ draft: true, hidden: true, title: "SECRET-DRAFT-TITLE", warnings: [{ code: "raw_html" }] });
     expect(page.markdown).toContain("DRAFT-BODY-MARKER");
-    expect(page.blobSha).toBe(blobSha(FILES[2]!));
+    expect(page.version).toBe(0);
     expect(page.editUrl).toMatch(/^https:\/\/github\.com\/heig-prg\/journal-\d+\/edit\/main\/020-draft\.md$/);
   });
 
@@ -235,6 +247,7 @@ describe("the staff read everything", () => {
       homePath: null,
       hiddenPaths: [],
       warningCount: 0,
+      pageCount: 0,
       proposedName: "a-journal",
     });
     // A student has no journal to read there: the 404 of a missing one.
@@ -278,6 +291,7 @@ describe("the student payload, the journal's one exit (invariant 4)", () => {
     for (const url of [
       `${base()}/pages/020-draft.md${query}`,
       `${base()}/pages/030-future.md${query}`,
+      `${base()}/pages/040-deleted.md${query}`,
       `${base()}/assets/img/draft-only.png${query}`,
       `${base()}/assets/img/future-only.png${query}`,
       `${base()}/assets/img/missing.png${query}`,

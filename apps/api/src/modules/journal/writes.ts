@@ -1,16 +1,17 @@
 /**
- * The journal's writes (merge task M4-03; spec F-JRN-02..05, F-JRN-10,
- * F-JRN-11; ported from heig-classroom's `modules/journal.ts`, sync point
- * `ab98cc0`, one journal per classroom since D03): create a repository, use
- * one of the organization's, remove the journal, refresh, preview, and the
- * writes of the content — save, add, delete a page, upload an asset.
+ * The journal's writes (merge task M4-03; spec F-JRN-02..05; ported from
+ * heig-classroom's `modules/journal.ts`, sync point `ab98cc0`, one journal
+ * per classroom since D03): create a repository, use one of the
+ * organization's, remove the journal, refresh, preview; the refusals and the
+ * context every write shares.
  *
  * **GitHub mode is read-only (ADR-057).** Its content is edited on GitHub
- * (`editUrl` of a page) and reaches the copy by a push or a Refresh; every
- * write of the content is refused with 409 `read_only`. Those routes are
- * Quiz mode's (merge task M4-08). Of M4-03's GitHub writes, what creates a
- * repository and commits a file (`createRepo`, `putFile`, `commitAuthor`)
- * stays, for the creation and for M4-11's Move to GitHub.
+ * (`editUrl` of a page) and reaches the copy by a push or a Refresh. The
+ * writes of the content — save, add, delete a page, upload an asset — are
+ * Quiz mode's (`quiz.ts`, M4-08), which refuses a GitHub-mode journal with
+ * 409 `read_only`. Of M4-03's GitHub writes, what creates a repository and
+ * commits a file (`createRepo`, `putFile`, `commitAuthor`) stays, for the
+ * creation and for M4-11's Move to GitHub.
  *
  * A new row starts at a random `version` (below), so an ingestion that read
  * GitHub for a removed row never writes its stale copy over a new one (J2,
@@ -25,18 +26,11 @@
  */
 import { randomInt } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import type { Octokit } from "octokit";
 
-import {
-  type JournalErrorCode,
-  type JournalFileWritten,
-  type JournalPageAdd,
-  type JournalPageSave,
-  type JournalPreviewResult,
-  type JournalStaff,
-} from "@quiz/contracts";
+import { type JournalErrorCode, type JournalPreviewResult, type JournalStaff } from "@quiz/contracts";
 import { journalRepoName, prettifyName, renderPage } from "@quiz/docrender";
 import { displayName, repoName } from "@quiz/domain";
 
@@ -55,7 +49,7 @@ import {
   journalPages,
   users,
 } from "../../db/schema.js";
-import { githubStatus } from "../../github/app.js";
+import { githubApp, githubStatus } from "../../github/app.js";
 import { inviteCollaborator } from "../../github/collaborators.js";
 import { DomainError } from "../http.js";
 import { journalChanged } from "./events.js";
@@ -88,6 +82,8 @@ const STATUS: Record<JournalErrorCode, number> = {
   name_taken: 409,
   conflict: 409,
   page_exists: 409,
+  asset_exists: 409,
+  confirm_required: 409,
   type_mismatch: 415,
   empty_upload: 400,
   read_only: 409,
@@ -273,7 +269,7 @@ committed here: a page cannot load one from another site.
  * it expects, and write the old repository's copy into it. Half the integer
  * range keeps room for the bumps.
  */
-const freshVersion = () => randomInt(1, 2 ** 30);
+export const freshVersion = () => randomInt(1, 2 ** 30);
 
 /**
  * The row of a classroom's new journal, then the staff invited and the copy
@@ -322,6 +318,8 @@ async function freeName(octokit: Octokit, org: string, name: string, room: Room)
 
 /** `POST /classrooms/:id/journal`: a new private repository with its README (F-JRN-02). */
 export async function createJournal(ctx: WriteContext, room: Room, name: string | undefined): Promise<JournalStaff> {
+  // Without Quiz's App there is no organization to create in (a Quiz-mode journal needs none).
+  if (!githubApp(ctx.config)) throw new JournalError("not_connected");
   const t = await targetOf(ctx.app.db, room.id);
   const org = connected(t);
   if (t.journal) throw new JournalError("journal_exists");
@@ -374,24 +372,37 @@ export async function useJournal(
 }
 
 /**
- * `DELETE /classrooms/:id/journal` (F-JRN-04): the row goes, and its pages
- * and assets with it by cascade; the repository is never touched. Needs no
- * GitHub, nor even an organization still installed — so a journal whose App
- * was uninstalled can still be removed, which in turn lets the classroom be
- * disconnected (D28). Idempotent.
+ * `DELETE /classrooms/:id/journal` (F-JRN-04): the row goes, and its pages,
+ * assets and revisions with it by cascade. In GitHub mode the repository is
+ * never touched; it needs no GitHub, nor even an organization still
+ * installed — so a journal whose App was uninstalled can still be removed,
+ * which in turn lets the classroom be disconnected (D28). In Quiz mode the
+ * pages are the only copy: with any, `confirm` must be the classroom's name
+ * (409 `confirm_required`, nothing removed). Idempotent.
  */
-export async function removeJournal(ctx: WriteContext, classroomId: string): Promise<void> {
-  const removed = await ctx.app.db
-    .delete(classroomJournals)
-    .where(eq(classroomJournals.classroomId, classroomId))
-    .returning({
-      mode: classroomJournals.mode,
-      fullName: classroomJournals.fullName,
-      githubRepoId: classroomJournals.githubRepoId,
-    });
-  if (removed.length === 0) return;
-  await ctx.note("journal.remove", removed[0]!);
-  journalChanged([classroomId]);
+export async function removeJournal(ctx: WriteContext, room: Room, confirm: string | undefined): Promise<void> {
+  const removed = await ctx.app.db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({
+        mode: classroomJournals.mode,
+        fullName: classroomJournals.fullName,
+        githubRepoId: classroomJournals.githubRepoId,
+      })
+      .from(classroomJournals)
+      .where(eq(classroomJournals.classroomId, room.id))
+      .for("update");
+    if (!row) return null;
+    const [counted] = await tx.select({ pages: count() }).from(journalPages).where(eq(journalPages.classroomId, room.id));
+    const pages = counted?.pages ?? 0;
+    if (row.mode === "quiz" && pages > 0 && confirm?.trim() !== room.name.trim()) {
+      throw new JournalError("confirm_required");
+    }
+    await tx.delete(classroomJournals).where(eq(classroomJournals.classroomId, room.id));
+    return { ...row, pages };
+  });
+  if (!removed) return;
+  await ctx.note("journal.remove", removed);
+  journalChanged([room.id]);
 }
 
 // ---------------------------------------------------------------- invitations (D27)
@@ -505,56 +516,3 @@ export async function previewPage(db: Db, classroomId: string, path: string, mar
     warnings: page.warnings,
   };
 }
-
-// ---------------------------------------------------------------- the content's writes
-
-/**
- * The journal a write of its content (a page, an asset) goes to: a
- * Quiz-mode one only. A GitHub-mode journal is read-only in the platform
- * (ADR-057): 409 `read_only`, its pages are edited on GitHub (`editUrl`).
- */
-async function quizJournal(db: Db, classroomId: string) {
-  const journal = attached(await targetOf(db, classroomId));
-  if (journal.mode !== "quiz") throw new JournalError("read_only");
-  return journal;
-}
-
-/** Quiz mode's writes land with merge task M4-08; until then no route creates a Quiz-mode journal. */
-function quizWritesPending(): never {
-  throw new DomainError("not_implemented", 501, "Quiz-mode journal writes are not implemented yet");
-}
-
-/** `PUT /classrooms/:id/journal/pages/*` (F-JRN-10): a Quiz-mode page saved. */
-export async function savePage(
-  ctx: WriteContext,
-  classroomId: string,
-  _path: string,
-  _body: JournalPageSave,
-): Promise<JournalFileWritten> {
-  await quizJournal(ctx.app.db, classroomId);
-  return quizWritesPending();
-}
-
-/** `POST /classrooms/:id/journal/pages` (F-JRN-10): a new Quiz-mode page. */
-export async function addPage(ctx: WriteContext, classroomId: string, _body: JournalPageAdd): Promise<JournalFileWritten> {
-  await quizJournal(ctx.app.db, classroomId);
-  return quizWritesPending();
-}
-
-/** `DELETE /classrooms/:id/journal/pages/*` (F-JRN-10): a Quiz-mode page deleted. */
-export async function deletePage(ctx: WriteContext, classroomId: string, _path: string): Promise<void> {
-  await quizJournal(ctx.app.db, classroomId);
-  quizWritesPending();
-}
-
-/** `POST /classrooms/:id/journal/assets/*` (F-JRN-11): an asset of a Quiz-mode journal. */
-export async function uploadAsset(
-  ctx: WriteContext,
-  classroomId: string,
-  _path: string,
-  _data: Buffer,
-): Promise<JournalFileWritten> {
-  await quizJournal(ctx.app.db, classroomId);
-  return quizWritesPending();
-}
-

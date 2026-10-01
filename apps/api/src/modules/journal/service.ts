@@ -75,6 +75,7 @@ export async function staffJournal(db: Db, room: { id: string; name: string }): 
       homePath: null,
       hiddenPaths: [],
       warningCount: 0,
+      pageCount: 0,
       proposedName: journalRepoName(room.name),
     };
   }
@@ -98,6 +99,7 @@ export async function staffJournal(db: Db, room: { id: string; name: string }): 
     homePath: homePage(pages)?.path ?? null,
     hiddenPaths: pages.filter((p) => p.hidden).map((p) => p.path).sort(),
     warningCount: pages.filter((p) => p.warned).length,
+    pageCount: pages.length,
     proposedName: null,
   };
 }
@@ -126,7 +128,7 @@ export async function staffPage(db: Db, classroomId: string, path: string): Prom
     visibleFrom: isoOrNull(p.visibleFrom),
     hidden: page.hidden,
     markdown: p.markdown,
-    blobSha: p.blobSha,
+    version: p.version,
     warnings: p.warnings,
     editUrl: github ? editUrl(github, p.path) : null,
   };
@@ -153,7 +155,7 @@ export async function journalAsset(db: Db, classroomId: string, path: string, pa
 /**
  * Asks for a classroom's copy to be rebuilt: one `journal.ingest` job. The
  * webhook's push handler calls it, and so do the Refresh and the choice of a
- * repository (M4-03; a browser save rebuilds at once, `writes.ts`). Without a
+ * repository (M4-03). Without a
  * queue (`JOBS_DISABLED=1`, a queue failed at boot) the ingestion runs here,
  * awaited, its failure recorded on the row by the ingestion itself. J2 is the
  * ingestion's compare-and-set, not the queue's.

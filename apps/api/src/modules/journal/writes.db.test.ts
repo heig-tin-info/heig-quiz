@@ -43,7 +43,7 @@ import { appKey, fakeGithub, orgsRoute } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { kioskStation } from "../../test/kiosk.js";
 import { seedLive } from "../../test/live.js";
-import { blobSha, fakeWorld, pushTo, repoRoute, writeRoute, type FakeFile, type FakeRepo } from "./testing.js";
+import { fakeWorld, pushTo, repoRoute, writeRoute, type FakeFile, type FakeRepo } from "./testing.js";
 
 const key = appKey();
 const gh = fakeGithub();
@@ -89,6 +89,7 @@ function repoOf(owner: string, name: string, files: FakeFile[], branch = "main")
 }
 
 const base = (id: string) => `/app/api/classrooms/${id}/journal`;
+const GITHUB = { mode: "github" };
 const call = (method: "GET" | "POST" | "PUT" | "DELETE", url: string, headers: Headers, payload?: unknown) =>
   server.app.inject({ method, url, headers, ...(payload === undefined ? {} : { payload: payload as object }) });
 
@@ -138,7 +139,7 @@ afterAll(async () => {
 describe("create a journal (F-JRN-02)", () => {
   it("creates a private repository with its README, invites, and reads it in", async () => {
     const room = await connectedClassroom();
-    const res = await call("POST", base(room.id), teacher.headers);
+    const res = await call("POST", base(room.id), teacher.headers, GITHUB);
     expect(res.statusCode, res.body).toBe(201);
     const journal = Journal.parse(res.json()) as JournalStaff;
     const fullName = `${room.login}/a-journal`;
@@ -161,7 +162,7 @@ describe("create a journal (F-JRN-02)", () => {
 
   it("takes the name the teacher chose", async () => {
     const room = await connectedClassroom();
-    const res = await call("POST", base(room.id), teacher.headers, { name: "prog-c-journal" });
+    const res = await call("POST", base(room.id), teacher.headers, { mode: "github", name: "prog-c-journal" });
     expect(res.statusCode, res.body).toBe(201);
     expect((await rowOf(room.id))!.fullName).toBe(`${room.login}/prog-c-journal`);
   });
@@ -170,7 +171,7 @@ describe("create a journal (F-JRN-02)", () => {
     const room = await connectedClassroom();
     const taken = repoOf(room.login, "a-journal", [{ path: "README.md", content: "# Someone else's course\n" }]);
     const before = world.commits.length;
-    const res = await call("POST", base(room.id), teacher.headers);
+    const res = await call("POST", base(room.id), teacher.headers, GITHUB);
     expect(res.statusCode).toBe(409);
     const refusal = JournalNameTaken.parse(res.json());
     const short = room.id.replace(/-/g, "").slice(0, 8);
@@ -181,23 +182,23 @@ describe("create a journal (F-JRN-02)", () => {
 
     // The suggestion taken too: the whole id, still deterministic.
     repoOf(room.login, `a-journal-${short}`, [{ path: "README.md", content: "x" }]);
-    const again = JournalNameTaken.parse((await call("POST", base(room.id), teacher.headers)).json());
+    const again = JournalNameTaken.parse((await call("POST", base(room.id), teacher.headers, GITHUB)).json());
     expect(again.suggestion).toBe(`a-journal-${room.id.replace(/-/g, "")}`);
   });
 
   it("refuses a classroom that already has a journal, or is not connected", async () => {
     const { room } = await withJournal();
-    const twice = await call("POST", base(room.id), teacher.headers);
+    const twice = await call("POST", base(room.id), teacher.headers, GITHUB);
     expect([twice.statusCode, JournalRefusal.parse(twice.json()).error]).toEqual([409, "journal_exists"]);
     const loose = await connectedClassroom({ connected: false });
-    const res = await call("POST", base(loose.id), teacher.headers);
+    const res = await call("POST", base(loose.id), teacher.headers, GITHUB);
     expect([res.statusCode, res.json().error]).toEqual([409, "not_connected"]);
   });
 
   it("refuses a name GitHub would not take", async () => {
     const room = await connectedClassroom();
     // One case: the matrix is the contracts' (`journal.test.ts`).
-    expect((await call("POST", base(room.id), teacher.headers, { name: ".." })).statusCode).toBe(400);
+    expect((await call("POST", base(room.id), teacher.headers, { mode: "github", name: ".." })).statusCode).toBe(400);
   });
 });
 
@@ -216,7 +217,7 @@ describe("the invitations (D27)", () => {
     world.accounts.set(502, "colleague");
     world.refused.add("colleague");
     try {
-      const res = await call("POST", base(room.id), teacher.headers, { name: "invited-journal" });
+      const res = await call("POST", base(room.id), teacher.headers, { mode: "github", name: "invited-journal" });
       expect(res.statusCode, res.body).toBe(201);
     } finally {
       await server.app.db.delete(githubAccounts).where(eq(githubAccounts.userId, colleague.id));
@@ -375,10 +376,7 @@ describe("the content of a GitHub-mode journal is read-only (ADR-057)", () => {
     const pages = await server.app.db.select().from(journalPages).where(eq(journalPages.classroomId, room.id));
 
     const refused = [
-      await call("PUT", `${base(room.id)}/pages/README.md`, teacher.headers, {
-        markdown: "# Mine\n",
-        baseSha: blobSha({ path: "README.md", content: "# Home\n" }),
-      }),
+      await call("PUT", `${base(room.id)}/pages/README.md`, teacher.headers, { markdown: "# Mine\n", baseVersion: 0 }),
       await call("POST", `${base(room.id)}/pages`, teacher.headers, { path: "020-new.md", title: "New" }),
       await call("DELETE", `${base(room.id)}/pages/010-old.md`, teacher.headers),
       await call("DELETE", `${base(room.id)}/pages/030-missing.md`, teacher.headers),
@@ -417,7 +415,7 @@ describe("repository furniture is never written (N-SEC-15)", () => {
       payload: Buffer.from("on: push"),
     });
     expect(workflow.statusCode).toBe(404);
-    const save = await call("PUT", `${base(room.id)}/pages/.github/x.md`, teacher.headers, { markdown: "x", baseSha: "a".repeat(40) });
+    const save = await call("PUT", `${base(room.id)}/pages/.github/x.md`, teacher.headers, { markdown: "x", baseVersion: 0 });
     expect(save.statusCode).toBe(404);
     // The path of an add is its body: refused by the body's schema.
     const add = await call("POST", `${base(room.id)}/pages`, teacher.headers, { path: ".github/x.md" });
@@ -437,14 +435,15 @@ describe("who may write", () => {
   /** Every write, with a body it would accept. */
   const writes = (id: string) =>
     [
-      ["POST", base(id), {}],
+      ["POST", base(id), GITHUB],
       ["POST", `${base(id)}/use`, { name: "x" }],
       ["DELETE", base(id), undefined],
       ["POST", `${base(id)}/refresh`, undefined],
       ["POST", `${base(id)}/preview`, { path: "a.md", markdown: "# a" }],
-      ["PUT", `${base(id)}/pages/README.md`, { markdown: "# a", baseSha: "a".repeat(40) }],
+      ["PUT", `${base(id)}/pages/README.md`, { markdown: "# a", baseVersion: 0 }],
       ["POST", `${base(id)}/pages`, { path: "b.md" }],
       ["DELETE", `${base(id)}/pages/README.md`, undefined],
+      ["POST", `${base(id)}/restore`, { revisionId: "018f0000-0000-7000-8000-000000000000" }],
       ["POST", `${base(id)}/assets/a.png`, { x: 1 }],
     ] as const;
 
