@@ -169,6 +169,7 @@ describe("MarkdownView — content", () => {
   /* A lone `$` in prose must not pair with one inside code, a URL or an image. */
   it("never lets a lone dollar swallow the code, link or image after it", () => {
     expect(view("costs $5 and `echo $HOME` now").querySelector("code")?.textContent).toBe("echo $HOME");
+    expect(view("price $$5 and `echo $$HOME` x").querySelector("code")?.textContent).toBe("echo $$HOME");
     expect(view("price $5, see [doc](https://x.ch/a$b) ok").querySelector("a")).toHaveAttribute("href", "https://x.ch/a$b");
     expect(view("price $5 ![pic](asset:abc) and $6").querySelector("img")).toHaveAttribute("src", "/app/api/assets/abc");
   });

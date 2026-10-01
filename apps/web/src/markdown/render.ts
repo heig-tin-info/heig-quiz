@@ -137,13 +137,13 @@ if (purify.isSupported) purify.addHook("uponSanitizeAttribute", (_node, data) =>
  * emphasis, so KaTeX would get a formula that is not the teacher's. Kept
  * whole here and rendered later (step 4).
  *
- * A single `$` is held to pandoc's rule — no space after the opening one, none
- * before the closing one, no digit after it — and never spans a code span or a
- * link: a lone `$` in prose ("costs $5") must not pair with one inside
- * `` `echo $HOME` `` or a URL and swallow them. What this refuses is left to
- * the text-node pass ({@link MATH}), exactly as before.
+ * Neither form spans a backtick or a link, and a single `$` is held to
+ * pandoc's rule: no space after the opening one, none before the closing one,
+ * no digit after it. A lone `$` in prose ("costs $5") must not pair with one
+ * inside `` `echo $HOME` `` or a URL and swallow them. What this refuses is
+ * left to the text-node pass ({@link MATH}), exactly as before.
  */
-const MATH_AT_START = /^(?:\$\$[\s\S]+?\$\$|\$(?![\s$])(?:[^$\\\n`]|\\.)*?(?<![\s\\])\$(?!\d))/;
+const MATH_AT_START = /^(?:\$\$[^`]+?\$\$|\$(?![\s$])(?:[^$\\\n`]|\\.)*?(?<![\s\\])\$(?!\d))/;
 
 /** A link or an image inside a candidate `$…$`: not a formula. */
 const LINK_INSIDE = /\]\(/;
