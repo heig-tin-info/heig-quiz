@@ -1,4 +1,4 @@
-import type { JournalSyncError, JournalWarning, JournalWarningCode } from "@quiz/contracts";
+import type { JournalErrorCode, JournalSyncError, JournalWarning, JournalWarningCode } from "@quiz/contracts";
 
 import type { Dict, TFunction } from "../i18n";
 
@@ -40,4 +40,27 @@ export const SYNC_ERRORS: Record<JournalSyncError, keyof Dict> = {
   github_unavailable: "journal.syncError.github_unavailable",
   too_large: "journal.syncError.too_large",
   forbidden: "journal.syncError.forbidden",
+};
+
+/**
+ * Why a write of the journal was refused (M4-03's `JournalErrorCode`): what
+ * GitHub answered, then the refusals of a write. A missing repository,
+ * branch or folder is worded for the one who just typed it ("Use a
+ * repository"), not as one that went missing since; the rest as above.
+ * Keyed by the contract's enum, so a new code is a compile error until it
+ * is worded.
+ */
+export const JOURNAL_ERRORS: Record<JournalErrorCode, keyof Dict> = {
+  ...SYNC_ERRORS,
+  repo_not_found: "journal.error.repo_not_found",
+  ref_not_found: "journal.error.ref_not_found",
+  root_not_found: "journal.error.root_not_found",
+  not_connected: "journal.error.not_connected",
+  journal_exists: "journal.error.journal_exists",
+  no_journal: "journal.error.no_journal",
+  name_taken: "journal.error.name_taken",
+  conflict: "journal.error.conflict",
+  page_exists: "journal.error.page_exists",
+  type_mismatch: "journal.error.type_mismatch",
+  empty_upload: "journal.error.empty_upload",
 };

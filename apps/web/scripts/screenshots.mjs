@@ -203,6 +203,20 @@ const scenes = [
   { name: "classroom-settings-github-checks-warn", role: "teacher", path: "/classrooms/r1/settings?ghwarn=1" },
   { name: "classroom-settings-github-org-missing", role: "teacher", path: "/classrooms/r1/settings?ghmissing=1" },
   { name: "classroom-settings-rename", role: "teacher", path: "/classrooms/r1/settings", fold: true, act: (p) => p.getByRole("button", { name: /^(rename|renommer)$/i }).first().click() },
+  // F-JRN-02 to F-JRN-05 (M4-05): the Journal section. PRG1-2026 (r1) is
+  // connected and has no journal by default; `?journal=1` gives it one,
+  // `?journalerror=1` makes its last synchronisation fail. `classroom-settings`
+  // (r2, not connected) shows the section's one "connect first" line.
+  { name: "classroom-settings-journal-none", role: "teacher", path: "/classrooms/r1/settings" },
+  { name: "classroom-settings-journal-create", role: "teacher", path: "/classrooms/r1/settings", fold: true, act: (p) => p.getByRole("button", { name: /^(create…|créer…)$/i }).click() },
+  { name: "classroom-settings-journal-name-taken", role: "teacher", path: "/classrooms/r1/settings", fold: true, act: journalNameTaken },
+  { name: "classroom-settings-journal-use", role: "teacher", path: "/classrooms/r1/settings", fold: true, act: journalUse },
+  { name: "classroom-settings-journal-set", role: "teacher", path: "/classrooms/r1/settings?journal=1" },
+  { name: "classroom-settings-journal-sync-error", role: "teacher", path: "/classrooms/r1/settings?journal=1&journalerror=1" },
+  { name: "classroom-settings-journal-remove", role: "teacher", path: "/classrooms/r1/settings?journal=1", fold: true, act: (p) => p.getByRole("button", { name: /^(remove…|retirer…)$/i }).click() },
+  // F-JRN-07 (M4-05): the teacher's Journal tab, its staff bar, Refresh just clicked.
+  { name: "classroom-journal-teacher", role: "teacher", path: "/classrooms/r1/journal?journal=1" },
+  { name: "classroom-journal-teacher-refreshing", role: "teacher", path: "/classrooms/r1/journal?journal=1", fold: true, act: (p) => p.getByRole("button", { name: /^(refresh|actualiser)$/i }).click() },
   { name: "classroom-row-menu", role: "teacher", path: "/classrooms/r1?tab=roster", fold: true, act: (p) => openRowMenu(p, /^Actions for /) },
   // ADR-034: an admin's row menu offers the impersonation link — with Super
   // Powers on (ADR-054); the private window it opens shows the student's
@@ -946,7 +960,7 @@ const scenes = [
   { name: "notifications-admin", role: "admin", path: "/", fold: true, act: async (p) => { await p.getByRole("button", { name: /^user menu/i }).first().click(); await p.getByRole("menuitem", { name: /^notifications/i }).click(); } },
   { name: "settings-admin", role: "admin", path: "/settings" },
   // F-JRN-07 (M4-04): the journal reader. `?journal=1` gives PRG1-2026 (r1)
-  // its journal; without it the staff read "no journal yet". The student
+  // its journal; without it a teacher is sent to the classroom (no Journal tab, M4-05). The student
   // reads the home page and its TOC; on a phone the navigation is a
   // disclosure (opened by the scene); the teacher reads a draft with its
   // badges and warnings; a page nobody has is the not-found page.
@@ -956,7 +970,6 @@ const scenes = [
       if (await toggle.isVisible()) await toggle.click();
     } },
   { name: "journal-teacher-hidden", role: "teacher", path: "/classrooms/r1/journal/20-semaine%202%20%C3%A9t%C3%A9/20-brouillon.md?journal=1" },
-  { name: "journal-empty", role: "teacher", path: "/classrooms/r1/journal?journal=0" },
   { name: "journal-not-found", role: "student", path: "/classrooms/r1/journal/99-nulle-part.md?journal=1" },
   { name: "journal-loading", role: "student", path: "/classrooms/r1/journal?journal=1&slow=1", settle: 300 },
   { name: "journal-error", role: "student", path: "/classrooms/r1/journal?journal=1&fail=1", settle: 2500 },
@@ -1060,6 +1073,22 @@ async function correctionPresent(page) {
   await page.getByRole("button", { name: /^actions$/i }).first().click();
   await page.getByRole("menuitem", { name: /(present the correction|projeter le corrigé)/i }).click();
   await page.waitForTimeout(1200);
+}
+
+/** "Create a journal" under a name the organization already has: the 409 and its suggestion. */
+async function journalNameTaken(page) {
+  await page.getByRole("button", { name: /^(create…|créer…)$/i }).click();
+  await page.getByLabel(/^(repository name|nom du dépôt)/i).fill("prg1-journal");
+  await page.getByRole("button", { name: /^(create the journal|créer le journal)$/i }).click();
+  await page.waitForTimeout(500);
+}
+
+/** "Use a repository", its branch and folder disclosed, filled. */
+async function journalUse(page) {
+  await page.getByRole("button", { name: /^(choose…|choisir…)$/i }).click();
+  await page.getByLabel(/^(repository name|nom du dépôt)/i).fill("prg1-2025-journal");
+  await page.getByRole("button", { name: /^(branch and folder|branche et dossier)$/i }).click();
+  await page.getByLabel(/^(folder|dossier)$/i).fill("docs");
 }
 
 /** The drill page's "Start": the first card of today's session on screen. */

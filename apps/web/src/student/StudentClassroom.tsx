@@ -6,9 +6,9 @@
  *
  * Its tabs are routes: Activities (`/classrooms/:id`) and, when the
  * classroom has one, Journal (`/classrooms/:id/journal/<path>`), which is the
- * M4-04 reader under this page's compact header. The Journal tab waits for
- * its API behind `CLASSROOM_PAGES` (M4-02); the grades stay an anchor of the
- * home until M5-04.
+ * M4-04 reader under this page's compact header (in every build since
+ * M4-05; `hasJournal` is false on a platform without Quiz's App, so no tab
+ * there); the grades stay an anchor of the home until M5-04.
  *
  * The four decisions:
  *   - Type: the classroom's name at the page-title step; the activity titles
@@ -24,6 +24,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ChevronRight, School } from "lucide-react";
+import { useEffect } from "react";
 
 import type { StudentActivities, StudentClassroomPage } from "@quiz/contracts";
 
@@ -31,7 +32,7 @@ import { api, ApiError } from "../api";
 import { useT } from "../i18n";
 import { JournalReader } from "../journal/JournalReader";
 import { studentClassroomKey } from "../queryKeys";
-import { CLASSROOM_PAGES, type Navigate } from "../router";
+import type { Navigate } from "../router";
 import {
   Badge,
   Button,
@@ -104,6 +105,12 @@ export function StudentClassroom({
     queryFn: () => api(`/app/api/student/classrooms/${id}`),
   });
   const toCourses = () => navigate({ view: "studentCourses" });
+  // The Journal's address on a classroom that has none (removed meanwhile,
+  // or no App on the platform): the classroom's page, in place.
+  const noJournal = tab === "journal" && page.data !== undefined && !page.data.hasJournal;
+  useEffect(() => {
+    if (noJournal) navigate({ view: "classroom", id }, { replace: true });
+  }, [noJournal, navigate, id]);
 
   // A classroom the caller holds no seat in reads as one that does not exist.
   if (isNotFound(page.error)) {
@@ -132,10 +139,10 @@ export function StudentClassroom({
   }
 
   const data = page.data;
-  // The Journal tab: only when the classroom has one, and only once its API
-  // exists (`CLASSROOM_PAGES`, M4-02). Kept while it is the tab being read.
+  // The Journal tab: only when the classroom has one (F-JRN-07). Kept while
+  // it is the tab being read.
   const tabs =
-    CLASSROOM_PAGES && (data?.hasJournal || tab === "journal") ? (
+    data?.hasJournal || tab === "journal" ? (
       <Tabs<ClassroomTab>
         label={t("sroom.tabs")}
         value={tab}

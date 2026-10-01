@@ -7,13 +7,9 @@ import type { Journal, JournalPage, JournalPageStaff, JournalStaff } from "@quiz
 
 import type { Route } from "../router";
 import { fail, mockFetch, ok, renderWithProviders, type RouteHandler } from "../test/render";
-
-// The journal's route is a `preview` one (`CLASSROOM_PAGES`), on in the mock
-// and off in a test build; the router reads the flag once, when evaluated, so
-// the environment is stubbed before anything imports it.
-vi.stubEnv("VITE_CLASSROOM_PAGES", "1");
-const { journalLinkTarget } = await import("./JournalArticle");
-const { JournalReader } = await import("./JournalReader");
+// The journal's route parses in every build since M4-05: no flag to stub.
+import { journalLinkTarget } from "./JournalArticle";
+import { JournalReader } from "./JournalReader";
 
 /*
  * The journal reader (F-JRN-07): the navigation and its current page, the
@@ -334,6 +330,41 @@ describe("JournalReader — the staff", () => {
   });
 });
 
+describe("JournalReader — Refresh (M4-05)", () => {
+  it("sits in the staff bar, secondary, and reads Refreshing… once clicked", async () => {
+    const { calls } = mockFetch({
+      [`GET ${BASE}`]: ok(staffJournal()),
+      [`GET ${BASE}/pages/${HOME}`]: ok(staffPage(HOME)),
+      [`POST ${BASE}/refresh`]: { status: 202 },
+    });
+    renderWithProviders(<Reader path={HOME} />);
+    const refresh = await screen.findByRole("button", { name: /Refresh/ });
+    expect(refresh.className).not.toMatch(/\bbg-accent\b/);
+    await userEvent.click(refresh);
+    expect(await screen.findByText("Refreshing…")).toBeInTheDocument();
+    expect(calls.some((c) => c.method === "POST" && c.url === `${BASE}/refresh`)).toBe(true);
+  });
+
+  it("words a refused refresh, in French too", async () => {
+    mockFetch({
+      [`GET ${BASE}`]: ok(staffJournal()),
+      [`GET ${BASE}/pages/${HOME}`]: ok(staffPage(HOME)),
+      [`POST ${BASE}/refresh`]: fail(503, { error: "github_unavailable", message: "github_unavailable" }),
+    });
+    renderWithProviders(<Reader path={HOME} />, { locale: "fr" });
+    await userEvent.click(await screen.findByRole("button", { name: /Actualiser/ }));
+    expect(await screen.findByText(/GitHub n'a pas répondu/)).toBeInTheDocument();
+    expect(screen.queryByText("Actualisation…")).toBeNull();
+  });
+
+  it("says to Refresh when the journal has no page yet", async () => {
+    mockFetch({ [`GET ${BASE}`]: ok(staffJournal({ nav: [], homePath: null, hiddenPaths: [] })) });
+    renderWithProviders(<Reader />);
+    expect(await screen.findByText("Add a markdown file to the journal's repository, then Refresh.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Refresh/ })).toBeInTheDocument();
+  });
+});
+
 describe("JournalReader — the student", () => {
   it("reads the student payload, never the staff one, and shows no staff field", async () => {
     // The staff routes answer with every staff field set: were the student
@@ -358,6 +389,8 @@ describe("JournalReader — the student", () => {
       expect(screen.queryByText(text)).toBeNull();
     }
     expect(screen.queryByRole("img", { name: "Hidden from students" })).toBeNull();
+    // No staff bar: a student has no action here (F-JRN-07).
+    expect(screen.queryByRole("button", { name: /Refresh/ })).toBeNull();
     // The staff navigation's second section is not the student's.
     expect(screen.queryByText("Semaine 2 été")).toBeNull();
   });

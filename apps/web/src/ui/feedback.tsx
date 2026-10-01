@@ -123,6 +123,25 @@ export const LEVEL_ICON: Record<CheckLevel, { icon: IconType; className: string 
   unknown: { icon: CircleHelp, className: "text-fg-faint" },
 };
 
+/**
+ * The icon of a level, in its colour. With a `label` it is an image named by
+ * it (a check line's state); without one it is decoration beside text that
+ * already says it.
+ */
+export function LevelIcon({ level, label, className }: { level: CheckLevel; label?: string; className?: string }) {
+  const { icon: Icon, className: tone } = LEVEL_ICON[level];
+  return (
+    <span
+      role={label ? "img" : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
+      className={cx("inline-flex shrink-0", tone, className)}
+    >
+      <Icon className="size-4" />
+    </span>
+  );
+}
+
 const TONES: Record<Tone, string> = {
   green: "bg-success-soft text-success",
   amber: "bg-warning-soft text-warning",

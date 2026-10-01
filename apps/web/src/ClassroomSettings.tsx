@@ -2,7 +2,7 @@
  * The teacher classroom's Settings tab (F-ORG-13, D24), in settings rows
  * (DESIGN.md, "Settings row"). It holds what the header held — rename,
  * archive, delete — and the drill switch the Drill tab held, plus the GitHub
- * section and, from M4-05, the Journal section.
+ * section and the Journal section (M4-05, `journal/JournalSettings.tsx`).
  *
  * Its one accent is "Connect to GitHub" while the classroom is not
  * connected; once it is, nothing here is accented (a classroom connected for
@@ -21,6 +21,7 @@ import { useConfirm } from "./confirm";
 import { ClassroomDrillSetting } from "./drill/ClassroomDrillSetting";
 import { ClassroomGithub } from "./github/ClassroomGithub";
 import { useT } from "./i18n";
+import { JournalSettings } from "./journal/JournalSettings";
 import { useErrorToast, useToast } from "./notify";
 import { invalidateHint } from "./realtime/hints";
 import type { Navigate } from "./router";
@@ -56,8 +57,8 @@ export function ClassroomSettings({
 
       <ClassroomGithub room={room} connecting={connecting} onConnecting={onConnecting} />
 
-      {/* The Journal section (M4-05, F-JRN-02 to F-JRN-05) goes here: enabled
-          once the classroom is connected, never accented. */}
+      {/* F-JRN-02 to F-JRN-05: enabled once the classroom is connected, never accented. */}
+      <JournalSettings room={room} />
 
       <LifecycleSection room={room} navigate={navigate} />
 

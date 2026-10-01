@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { EvaluationSummary } from "@quiz/contracts";
+import type { EvaluationSummary, JournalStaff } from "@quiz/contracts";
 
 import { ClassroomView } from "./ClassroomView";
 import { makeClassroomDetail, makeMe, makeRosterEntry } from "./test/fixtures";
@@ -339,5 +339,92 @@ describe("ClassroomView", () => {
     expect(
       await screen.findByText(/does not exist, or you do not have access/),
     ).toBeVisible();
+  });
+});
+
+/*
+ * The Journal tab (F-JRN-01, F-JRN-07, M4-05): a route of its own, drawn
+ * exactly while the classroom has a journal — never on a platform without
+ * Quiz's App, whose journal route answers 404.
+ */
+describe("ClassroomView — the Journal tab", () => {
+  const JOURNAL = `${ROOM}/journal`;
+  const journal = (attached: boolean): JournalStaff => ({
+    view: "staff",
+    repository: attached
+      ? {
+          fullName: "heig-tin-info/prg1-journal",
+          ref: "main",
+          rootPath: "",
+          htmlUrl: "https://github.com/heig-tin-info/prg1-journal",
+          syncStatus: "ok",
+          syncError: null,
+          lastSyncedAt: "2026-09-30T10:00:00.000Z",
+          lastCommitSha: null,
+          editable: true,
+        }
+      : null,
+    nav: [{ path: "README.md", title: "Accueil", pagePath: "README.md", children: [] }],
+    homePath: attached ? "README.md" : null,
+    hiddenPaths: [],
+    warningCount: 0,
+    proposedName: attached ? null : "prg1-2026-journal",
+  });
+
+  it("is a tab while the classroom has a journal, and a route the tab opens", async () => {
+    mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()), [`GET ${JOURNAL}`]: ok(journal(true)) });
+    const navigate = vi.fn();
+    renderWithProviders(<ClassroomView id="r1" navigate={navigate} />, { route: ROSTER_TAB });
+    await userEvent.click(await screen.findByRole("tab", { name: /Journal/ }));
+    expect(navigate).toHaveBeenCalledWith({ view: "classroomJournal", id: "r1" });
+  });
+
+  it("is no tab while the classroom has none", async () => {
+    const { calls } = mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()), [`GET ${JOURNAL}`]: ok(journal(false)) });
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
+    await screen.findByRole("tab", { name: /Roster/ });
+    await waitFor(() => expect(calls.some((c) => c.url === JOURNAL)).toBe(true));
+    expect(screen.queryByRole("tab", { name: /Journal/ })).toBeNull();
+  });
+
+  it("is no tab on a platform without Quiz's App (the route 404s), and no error either", async () => {
+    const { calls } = mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()), [`GET ${JOURNAL}`]: fail(404, {}) });
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
+    await screen.findByRole("tab", { name: /Roster/ });
+    await waitFor(() => expect(calls.some((c) => c.url === JOURNAL)).toBe(true));
+    expect(screen.queryByRole("tab", { name: /Journal/ })).toBeNull();
+    expect(screen.queryByText(/Could not load the journal/)).toBeNull();
+  });
+
+  it("mounts the reader on its route, with no primary in the header", async () => {
+    mockFetch({
+      [`GET ${ROOM}`]: ok(makeClassroomDetail()),
+      [`GET ${JOURNAL}`]: ok(journal(true)),
+      [`GET ${JOURNAL}/pages/README.md`]: ok({
+        view: "staff",
+        path: "README.md",
+        title: "Accueil",
+        html: "<h1>Accueil</h1><p>Bienvenue.</p>",
+        toc: [],
+        updatedAt: "2026-09-30T10:00:00.000Z",
+        draft: false,
+        visibleFrom: null,
+        hidden: false,
+        markdown: "# Accueil",
+        blobSha: "sha",
+        warnings: [],
+      }),
+    });
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} routeTab="journal" journalPath="README.md" />);
+    expect(await screen.findByRole("tab", { name: /Journal/ })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByText("Bienvenue.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Add students|New evaluation/ })).toBeNull();
+  });
+
+  it("sends its address back to the classroom when there is no journal", async () => {
+    mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()), [`GET ${JOURNAL}`]: fail(404, {}) });
+    const navigate = vi.fn();
+    renderWithProviders(<ClassroomView id="r1" navigate={navigate} routeTab="journal" />);
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" }, { replace: true }));
   });
 });

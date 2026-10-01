@@ -217,6 +217,12 @@ question's prose never carries it, so the question scenes do not move.
   of contents fold into one disclosure above the page, named by the page
   being read. The ONE accent of the reader is the page being read in the
   navigation (`accent-soft` chip); a student has no primary action there.
+  The reader is a tab of the classroom page (both roles), under its
+  header and tabs, with no breadcrumb of its own; the staff get one bar
+  above the page, right-aligned: the sync state in 12 px `fg-faint` (red
+  on a failure) and Refresh, a `secondary` `sm` button reading
+  "Refreshing…" until the copy's state moves. Edit, the primary inside a
+  page, joins that bar (M4-06).
 
 The rendered HTML comes from the server (`packages/docrender`, D15: the
 journal escapes raw HTML), so, like `.md-body` itself, these are tag

@@ -50,11 +50,6 @@ const CoursePage = lazy(() =>
 const TemplateEditor = lazy(() =>
   import("./evaluation/TemplateEditor").then((m) => ({ default: m.TemplateEditor })),
 );
-// F-JRN-07: the journal reader, its own chunk — no markdown library in it,
-// the pages arrive rendered.
-const JournalReader = lazy(() =>
-  import("./journal/JournalReader").then((m) => ({ default: m.JournalReader })),
-);
 const ClassroomView = lazy(() =>
   import("./ClassroomView").then((m) => ({ default: m.ClassroomView })),
 );
@@ -255,11 +250,11 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
     c.teacherUi ? <TeacherHome navigate={c.navigate} /> : <StudentCourses navigate={c.navigate} />,
   // F-ORG-13 (D24): the teacher classroom's Settings tab, a route of its own.
   classroomSettings: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} routeTab="settings" />,
-  // F-JRN-07: both roles. The student's is the Journal tab of their
-  // classroom page, which asks for the student payload.
+  // F-JRN-07: both roles, each the Journal tab of their classroom page. The
+  // student's asks for the student payload.
   classroomJournal: (r, c) =>
     c.teacherUi ? (
-      <JournalReader classroomId={r.id} path={r.path} navigate={c.navigate} studentView={false} />
+      <ClassroomView id={r.id} navigate={c.navigate} routeTab="journal" journalPath={r.path} />
     ) : (
       <StudentClassroom id={r.id} tab="journal" path={r.path} navigate={c.navigate} />
     ),

@@ -34,6 +34,7 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  *   LLM secret — the warning lines of the checks (`mock/github.ts`).
  * `ghmissing`: PRG1-2026's organization is gone from GitHub (`mock/github.ts`).
  * `journal`: the classroom PRG1-2026 has a journal (`mock/journal.ts`).
+ * `journalerror`: ...whose last synchronisation failed (`mock/journal.ts`).
  * `superpowers`: the admin persona's Super Powers are on, 54 minutes left (ADR-054).
  * `lastminutes`: ...with 4 min 30 s left instead, the banner's countdown.
  * `degraded`: the admin's system status has a dead clock, a stale backup and
@@ -54,6 +55,7 @@ export const FLAG_NAMES = [
   "ghwarn",
   "ghmissing",
   "journal",
+  "journalerror",
   "superpowers",
   "lastminutes",
   "degraded",

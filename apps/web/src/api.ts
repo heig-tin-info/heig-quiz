@@ -64,7 +64,11 @@ export async function api<T>(
     if (refusedWith(error, "kiosk_suspended")) window.dispatchEvent(new Event(KIOSK_SUSPENDED_EVENT));
     throw error;
   }
-  return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
+  // No body to parse: a 204, a 202 (the journal's Refresh), or one declared empty.
+  if (res.status === 202 || res.status === 204 || res.headers.get("content-length") === "0") {
+    return undefined as T;
+  }
+  return (await res.json()) as T;
 }
 
 /**
