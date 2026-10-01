@@ -20,7 +20,8 @@
  * and a `photo.JPG` of type `image/jpeg` goes in as `.jpg`.
  */
 import { JOURNAL_CONTENT_TYPES, safeJournalPath } from "@quiz/contracts";
-import { journalAssetUrl, parentOf, resolveRelative } from "@quiz/docrender";
+import { journalAssetUrl } from "@quiz/docrender/assets";
+import { parentOf, resolveRelative } from "@quiz/docrender/journalTree";
 
 import { REFUSED, type ImageUrl } from "../../markdown/imageUrl";
 

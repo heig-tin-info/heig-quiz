@@ -20,7 +20,7 @@
  * until the teacher changes it.
  */
 
-import { asBoolean, FRONT_MATTER, splitFrontMatter } from "@quiz/docrender";
+import { asBoolean, FRONT_MATTER, splitFrontMatter } from "@quiz/docrender/frontMatter";
 
 /** The fields beside the editor. Empty string (or false) means "not set". */
 export interface PageFields {

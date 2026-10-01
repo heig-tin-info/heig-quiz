@@ -20,7 +20,7 @@ import {
 import { useClozeHole, useHoleSelectionPreview } from "./useClozeHole";
 import { useFormulaTarget } from "./useFormulaTarget";
 import { useImageUpload } from "./useImageUpload";
-import type { ImageUrl } from "./tiptap";
+import type { ImageUrl } from "./imageUrl";
 import {
   focusFromChrome,
   useRichTextEditor,

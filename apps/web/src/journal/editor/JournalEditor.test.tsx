@@ -8,6 +8,8 @@ import type { JournalFileWritten, JournalPageStaff, JournalStaff } from "@quiz/c
 import type { Route } from "../../router";
 import { fail, mockFetch, noContent, ok, renderWithProviders, type RouteHandler } from "../../test/render";
 import { JournalReader } from "../JournalReader";
+// The reader loads the editor lazily; loaded here once, Edit finds it ready.
+import "./JournalEditor";
 
 /*
  * The journal's editor in the reader (F-JRN-10, F-JRN-11, D25): Edit in the

@@ -1,7 +1,8 @@
 import { JournalWarning } from "@quiz/contracts";
 import { describe, expect, it } from "vitest";
 
-import { renderPage, splitFrontMatter, type RenderContext } from "./render.js";
+import { splitFrontMatter } from "./frontMatter.js";
+import { renderPage, type RenderContext } from "./render.js";
 
 const CLASSROOM = "018f0000-0000-7000-8000-00000000c1a5";
 const ASSET_BASE = `/app/api/classrooms/${CLASSROOM}/journal/assets`;

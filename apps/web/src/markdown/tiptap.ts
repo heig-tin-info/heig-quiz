@@ -46,7 +46,6 @@ import { REFUSED, type ImageUrl } from "./imageUrl";
 import { JOURNAL_KIT_OVERRIDES, journalExtensions } from "./journalSchema";
 import { assetUrl, assetWidth } from "./render";
 
-export { REFUSED, type ImageUrl };
 
 /** KaTeX behaves here as in the student view: a broken formula shows, it never throws. */
 const KATEX_OPTIONS = { throwOnError: false } as const;

@@ -10,7 +10,8 @@ import { protectHolePipes, restoreHolePipes } from "./clozeHole";
 import { CodeBlockView } from "./CodeBlockView";
 import { ImageView } from "./ImageView";
 import { handleRichTextKeyDown, isMathNode, type RichTextKeyDeps } from "./richTextKeys";
-import { INLINE_INPUT_RULES, richTextExtensions, spellWith, type ImageUrl } from "./tiptap";
+import type { ImageUrl } from "./imageUrl";
+import { INLINE_INPUT_RULES, richTextExtensions, spellWith } from "./tiptap";
 import { emptyClozeHoles } from "./useClozeHole";
 import { emptyMath, type FormulaTarget } from "./useFormulaTarget";
 

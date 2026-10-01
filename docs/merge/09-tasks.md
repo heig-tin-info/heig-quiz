@@ -917,9 +917,14 @@ files it ports; writes en + fr for every string.
     `../` out of the tree): `ImageView` shows the alt text in a dashed
     frame and `renderHTML` writes no `src` (`data-asset` keeps the
     reference); the markdown is untouched.
-  - Front matter is read through `@quiz/docrender` (`FRONT_MATTER`, three
-    groups now, `splitFrontMatter`, `asBoolean`), so the fields show what
-    the renderer does (`draft: 1` is a draft; `...` closes nothing).
+  - Front matter is read through `@quiz/docrender/frontMatter` (its own
+    module now: `FRONT_MATTER`, three groups, `splitFrontMatter`,
+    `asBoolean`), so the fields show what the renderer does (`draft: 1` is
+    a draft; `...` closes nothing). Asset URLs come from
+    `@quiz/docrender/assets`. The web app never imports the package root.
+  - Bundle: `JournalEditor` is `lazy` in the reader, a chunk of its own
+    (Tiptap, marked, yaml); the reader's chunk, which students load, holds
+    neither yaml nor marked (checked on a production build).
   - An autolink stays `<href>` only while its text is its address (a
     plugin drops the flag once the text is edited).
   - Save sends `composePage(...)` with the opened `baseSha` and the

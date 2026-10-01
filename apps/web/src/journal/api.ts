@@ -24,7 +24,7 @@ import {
   type JournalRepository,
   type JournalStaff,
 } from "@quiz/contracts";
-import { journalAssetUrl } from "@quiz/docrender";
+import { journalAssetUrl } from "@quiz/docrender/assets";
 
 import { api, ApiError } from "../api";
 import type { TFunction } from "../i18n";

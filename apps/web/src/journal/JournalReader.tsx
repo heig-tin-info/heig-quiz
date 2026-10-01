@@ -11,7 +11,7 @@ import {
   RefreshCw,
   Trash2,
 } from "lucide-react";
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useId, useState, type ReactNode } from "react";
 
 import {
   encodeJournalPath,
@@ -44,7 +44,6 @@ import {
 import { journalErrorText, useJournalDeletePage, useJournalRefresh } from "./api";
 import { AddPageDialog } from "./editor/AddPageDialog";
 import { pageFolder } from "./editor/images";
-import { JournalEditor } from "./editor/JournalEditor";
 import { JournalArticle } from "./JournalArticle";
 import { JournalNav } from "./JournalNav";
 import { JournalToc } from "./JournalToc";
@@ -80,6 +79,9 @@ import { SYNC_ERRORS, warningText } from "./words";
  */
 
 type View = "staff" | "student";
+
+/** The editor (M4-06), a chunk of its own: the staff load it on Edit. */
+const JournalEditor = lazy(() => import("./editor/JournalEditor").then((m) => ({ default: m.JournalEditor })));
 
 /** The first node of the navigation, depth first, that `pred` accepts. */
 function findNode(nodes: JournalNavNode[], pred: (node: JournalNavNode) => boolean): JournalNavNode | null {
@@ -345,26 +347,28 @@ export function JournalReader({
 
   if (editingPage) {
     return (
-      <JournalEditor
-        key={`${editingPage.path}:${reloads}`}
-        classroomId={classroomId}
-        page={editingPage}
-        onClose={() => setEditing(null)}
-        onReload={() =>
-          void page.refetch().then(() => setReloads((n) => n + 1))
-        }
-      >
-        {(bar, body) =>
-          columns(
-            <>
-              {outerHeader}
-              {bar}
-            </>,
-            body,
-            false,
-          )
-        }
-      </JournalEditor>
+      // The editor is loaded on Edit, never with the reader: Tiptap, marked
+      // and yaml stay out of what a student downloads.
+      <Suspense fallback={columns(header, <ArticleSkeleton />, false)}>
+        <JournalEditor
+          key={`${editingPage.path}:${reloads}`}
+          classroomId={classroomId}
+          page={editingPage}
+          onClose={() => setEditing(null)}
+          onReload={() => void page.refetch().then(() => setReloads((n) => n + 1))}
+        >
+          {(bar, body) =>
+            columns(
+              <>
+                {outerHeader}
+                {bar}
+              </>,
+              body,
+              false,
+            )
+          }
+        </JournalEditor>
+      </Suspense>
     );
   }
 
