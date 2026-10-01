@@ -89,6 +89,8 @@ export type IssueCode =
   | "bad_format"
   | "too_long"
   | "too_complex"
+  /** A variable row with nothing written yet (an auto-created row starts so). */
+  | "empty_expression"
   | "parse_error"
   | "forbidden_node"
   | "unknown_function"

@@ -125,6 +125,8 @@ export function QuestionEditTab({
           <VariablesSection
             questionId={data.meta.id}
             type={data.meta.type}
+            config={draft.config}
+            explanation={draft.explanation}
             variables={draft.variables}
             onChange={(variables) => setDraft((current) => (current ? { ...current, variables } : current))}
             issues={variablesIssues}

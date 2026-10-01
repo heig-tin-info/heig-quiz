@@ -37,6 +37,7 @@ const KNOWN: Record<string, keyof Dict> = {
   "parameters.bad_format": "issue.parameters.bad_format",
   "parameters.too_long": "issue.parameters.too_long",
   "parameters.too_complex": "issue.parameters.too_complex",
+  "parameters.empty_expression": "issue.parameters.empty_expression",
   "parameters.parse_error": "issue.parameters.parse_error",
   "parameters.forbidden_node": "issue.parameters.forbidden_node",
   "parameters.unknown_function": "issue.parameters.unknown_function",

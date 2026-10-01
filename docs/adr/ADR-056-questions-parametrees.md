@@ -395,3 +395,48 @@ keeps a `[[…]]` left after interpolation literal, so no emphasis pairs
 across two of them; a link's `[[1]](…)` stays a link in both. The walk is
 one function, `referenceSpans`, shared by the interpolation and the editor;
 a closed `\[[…]]` is literal as a whole.
+
+## Addendum (2026-10-01): the text declares its variables
+
+Decided by the product owner after testing the editor. Declaring a variable
+in the table, then writing it in the text, asked for the same name twice;
+the editor now reads the text and builds the table's rows. This amends §3
+and §8.
+
+1. **A `[[name]]` adds its row, always.** When a closed `[[name]]` appears
+   in any string of the draft's configuration or in its explanation, and
+   `name` is a free identifier (`isVariableName`: no function, no constant,
+   no reserved word) that no row declares, the editor adds the row
+   `{ name, expr: "", format: "" }`. Only a bare name counts: `[[h*w]]`
+   declares nothing, an unclosed `[[hei` nothing either, and `\[[h]]` is
+   text. A `[[…]]` inside markdown code (an inline span, a fenced or an
+   indented block) declares nothing: code is where `[[` is most often
+   literal. The extraction is `referencedNames` (`@quiz/domain`, mathjs-free
+   so the browser runs it); the editor blanks the code first with the
+   markdown lexer it already renders with (marked), waits for the text to
+   rest before it acts, and does not act on the text as it opened it —
+   opening a question never edits it.
+2. **It holds on a static question too.** §3 still holds: interpolation is
+   active only when the question declares variables. The editor makes the
+   question parameterized by adding a row, visibly, in the "Random values"
+   section that opens on it; nothing is interpolated behind the teacher's
+   back.
+3. **A row starts with an empty expression, and that blocks publication.**
+   The issue has its own code, `empty_expression` ("No expression yet —
+   for example randint(1, 10).", under the row), instead of the generic
+   `parse_error`. A row added with "Add a variable" starts the same way.
+4. **Removal.** When its reference leaves the text, a row the editor
+   created and whose expression is still empty is removed. A row with an
+   expression is kept: deleting a formula is the teacher's act. The editor
+   remembers which rows it created for as long as it is open; after a
+   reload, every row is the teacher's. No stored field records it.
+5. **An unused row is a warning, not an issue.** A row that no `[[…]]` of
+   the texts, no other row and not the condition mentions says "h is not
+   used anywhere". It does not block publication. The editor reads the
+   mentions lexically (`namesMentioned`, `identifiersIn`), without mathjs:
+   a superset of what an expression reads, which can only silence the
+   warning, never raise a false one.
+6. **The format is a kind and a count**: Automatic, Integer, Decimals or
+   Significant figures, the last two with n from 1 to 6. The stored strings
+   of §6 do not change; `parseFormat` and `writeFormat`
+   (`@quiz/domain`) are the one reading of them.

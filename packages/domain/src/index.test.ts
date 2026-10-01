@@ -68,7 +68,7 @@ describe("@quiz/domain public surface", () => {
       expect(domain).not.toHaveProperty(name);
     }
     // The vocabulary of parameterized questions is reachable without mathjs.
-    for (const name of ["isVariableName", "FORMAT_PATTERN", "MAX_EXPRESSION_LENGTH"]) {
+    for (const name of ["isVariableName", "FORMAT_PATTERN", "MAX_EXPRESSION_LENGTH", "referencedNames", "namesMentioned"]) {
       expect(domain).toHaveProperty(name);
     }
   });

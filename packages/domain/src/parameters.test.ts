@@ -13,12 +13,16 @@ import {
   sameNames,
   sameTable,
   drawnApart,
+  identifiersIn,
+  namesMentioned,
+  referencedNames,
   validateParameters,
   type Parameters,
   type Values,
 } from "./parameters.js";
 import { at, collect, compile, type Issue } from "./parameters/evaluator.js";
 import { roundToFormat } from "./parameters/format.js";
+import { parseFormat, writeFormat } from "./parameterNames.js";
 
 /** The ADR's example: a ball dropped from h on a planet of gravity g. */
 const MRUA: Parameters = {
@@ -201,7 +205,6 @@ describe("the restricted evaluator refuses, statically", () => {
     ["true", "forbidden_node"],
     ["null", "forbidden_node"],
     ["1e400", "not_a_number"],
-    ["", "parse_error"],
     ["1 +", "parse_error"],
     ["1" + "+1".repeat(200), "too_long"],
     ["1" + "+1".repeat(60), "too_complex"],
@@ -586,5 +589,87 @@ describe("formattedValues", () => {
       { name: "t", value: "2.60" },
     ]);
     expect(formattedValues(MRUA, { h: 40 })).toEqual([{ name: "h", value: "40" }]);
+  });
+});
+
+describe("an empty expression (ADR-056, addendum of 2026-10-01)", () => {
+  it("is its own issue on a row, never a parse error", () => {
+    expect(validateParameters({ rows: [{ name: "h", expr: "  ", format: "" }] }, ["[[h]]"])).toEqual([
+      expect.objectContaining({ code: "empty_expression", row: "h" }),
+    ]);
+    expect(issueOf(() => draw({ rows: [{ name: "h", expr: "", format: "" }] }, 1)).code).toBe("empty_expression");
+  });
+
+  it("stays a parse error in a text's [[ ]] and in the compiler", () => {
+    expect(issueOf(() => compile("")).code).toBe("parse_error");
+    expect(validateParameters(one("1"), ["[[ ]]"])[0]?.code).toBe("parse_error");
+  });
+});
+
+describe("referencedNames", () => {
+  it("lists the bare names of closed [[…]] in every string, each once, in order", () => {
+    const config = {
+      prompt: "From [[h]] m, g = [[ g ]]: [[h]] again",
+      choices: [{ id: "a", text: "[[t]] s", correct: true }],
+      points: 2,
+      keys: [{ value: "[[t]]", tolerance: "[[tol]]" }],
+    };
+    expect(referencedNames([config, "So [[t]] = [[u]]"])).toEqual(["h", "g", "t", "tol", "u"]);
+  });
+
+  it("declares nothing for an expression, a constant, a function, a reserved word or a bad name", () => {
+    expect(referencedNames("[[h*w]] [[sqrt(x)]] [[pi]] [[e]] [[sqrt]] [[condition]] [[2x]] [[1,2],[3,4]] [[ -f x ]]")).toEqual([]);
+  });
+
+  it("ignores an unclosed reference: typing [[height]] never declares h, he, hei", () => {
+    const typed = "[[height]]";
+    for (let n = 3; n < typed.length - 1; n++) expect(referencedNames(typed.slice(0, n))).toEqual([]);
+    // `[[height]` is still open; only the second `]` closes it.
+    expect(referencedNames("[[height]")).toEqual([]);
+    expect(referencedNames(typed)).toEqual(["height"]);
+  });
+
+  it("ignores an escaped \\[[", () => {
+    expect(referencedNames("\\[[h]] and [[k]]")).toEqual(["k"]);
+  });
+
+  it("reads each text through `prepare`: the editor blanks markdown code with it", () => {
+    const blankTicks = (text: string) => text.replace(/`[^`]*`/g, (code) => " ".repeat(code.length));
+    expect(referencedNames(["`[[a]]` and [[b]]", "[[c]]"], blankTicks)).toEqual(["b", "c"]);
+  });
+});
+
+describe("parseFormat / writeFormat", () => {
+  it.each([
+    ["", "auto", 0],
+    ["int", "int", 0],
+    [".2", "decimals", 2],
+    ["3s", "figures", 3],
+  ] as const)("%s is %s %d, and back", (format, kind, n) => {
+    expect(parseFormat(format)).toEqual({ kind, n });
+    expect(writeFormat(kind, n)).toBe(format);
+  });
+
+  it("reads no unknown format", () => {
+    for (const format of ["%d", ".7", "0s", "s"]) expect(parseFormat(format)).toBeNull();
+  });
+});
+
+describe("namesMentioned / identifiersIn", () => {
+  it("mentions every identifier of a closed [[…]], code included", () => {
+    expect([...namesMentioned({ a: "`[[h*w]]` and [[sqrt(2*t)]] and [[open" })].sort()).toEqual([
+      "h",
+      "sqrt",
+      "t",
+      "w",
+    ]);
+  });
+
+  it("reads an expression lexically, without numbers' exponents nor quoted words", () => {
+    expect([...identifiersIn("randint(1, 1e5) + a_1 * choice(['x', \"y\"])")].sort()).toEqual([
+      "a_1",
+      "choice",
+      "randint",
+    ]);
   });
 });
