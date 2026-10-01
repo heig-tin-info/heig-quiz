@@ -27,7 +27,7 @@ import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { seedLive, type Seeded } from "../../test/live.js";
 import {
   EXPLANATION,
-  fallKey,
+  showsKey,
   fallOf,
   markersIn,
   PARAMETERIZED,
@@ -141,7 +141,7 @@ describe("the attempt (ADR-056 §5, invariant 4)", () => {
         expect(Object.keys(stored.values).sort()).toEqual(["g", "h", "t"]);
         // The key of a short answer or of a blank: never in the paper.
         const own = JSON.stringify(view.items.find((i) => i.id === itemOf.get(kind))!.student);
-        if (kind !== "mcq") expect(own).not.toContain(fallKey(stored.values));
+        if (kind !== "mcq") expect(showsKey(own, stored.values)).toBe(false);
         expect(own).toContain(`${stored.values["h"]} m`);
       }
     }
@@ -189,9 +189,11 @@ describe("the feedback after the release (invariant 4)", () => {
     const feedback = await feedbackOf(bob);
     expect(markersIn(JSON.stringify(feedback))).toEqual([]);
     for (const kind of ["short", "cloze"] as const) {
-      const key = fallKey((await valuesOf(attemptOf.get("bob")!, kind)).values);
+      const values = (await valuesOf(attemptOf.get("bob")!, kind)).values;
       const item = feedback.items.find((i) => i.itemId === itemOf.get(kind))!;
-      expect(JSON.stringify(item)).not.toContain(key);
+      // What the student reads, not the item's ids and counters ("position": 2 is no key).
+      const { student, answer: given, solution, explanation, details } = item as unknown as Record<string, unknown>;
+      expect(showsKey(JSON.stringify({ student, given, solution, explanation, details }), values)).toBe(false);
     }
   });
 
@@ -203,7 +205,7 @@ describe("the feedback after the release (invariant 4)", () => {
       const values = (await valuesOf(attemptOf.get("alice")!, kind)).values;
       const item = feedback.items.find((i) => i.itemId === itemOf.get(kind))!;
       expect(item.explanation).toBe(EXPLANATION.replace("[[t]]", fallOf(values)));
-      if (kind === "short") expect(JSON.stringify(item.solution)).toContain(fallKey(values));
+      if (kind === "short") expect(showsKey(JSON.stringify(item.solution), values)).toBe(true);
     }
   });
 });
