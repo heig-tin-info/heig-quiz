@@ -465,7 +465,7 @@ live in `ui/state.ts`, each written once.
   every dialog), 32 px high, 12 px medium text, a message (a short one under
   `sm`, so a phone still reads the word that names the mode; truncation is the
   fallback) and one compact 24 px outline pill for the way out — or, in the
-  preview, whose only way out is closing its tab, for Restart. A fixed
+  preview, whose way out is the player's own Home, for Restart. A fixed
   overlay of the page under it (the paused attempt, the preview's grading)
   starts at `--banner-h`, so the way out stays reachable. Solid **`fg` fill with
   `canvas` ink** (about 16:1 in both themes, since both tokens swap):
