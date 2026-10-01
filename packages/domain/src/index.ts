@@ -37,6 +37,7 @@ export {
   FORMAT_PATTERN,
   FORMATS,
   formatStep,
+  GROUPED_BY_CHOICE,
   IDENTIFIER_SOURCE,
   isFormat,
   isVariableName,

@@ -43,6 +43,7 @@ import {
   debrief,
   describe,
   feedbackGate,
+  GROUPED_BY_CHOICE,
   gradeFromPoints,
   histogram,
   isDebriefOpen,
@@ -108,7 +109,7 @@ import {
 import { answeredBy } from "../live/service.js";
 import { solutionView, stripKeys, studentSolutionView, studentView } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
-import { exampleInstance, isParameterized, itemInstance } from "../pool/service.js";
+import { exampleInstance, explanationOrNull, isParameterized, itemInstance } from "../pool/service.js";
 
 export { watchReleasedGrades, type GradeWatch } from "./updated.js";
 
@@ -509,9 +510,6 @@ export async function publishCorrection(
  * kept attempt falls back to one in progress when a student has none
  * finished (ADR-025 §3), and a paper still being written is nobody's result.
  */
-/** The types whose debrief groups answers by choice, not by what was written (ADR-056 §9). */
-const GROUPED_BY_CHOICE: ReadonlySet<string> = new Set(["mcq"]);
-
 export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<ByQuestion[]> {
   if (!isDebriefOpen({ state: evaluation.state, correctionPublished: correctionPublished(evaluation) })) {
     throw new NotOver("the debrief of a question waits for the close");
@@ -594,7 +592,7 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
         seed: 0,
         itemId: item.item.id,
       }),
-      explanation: example.explanation === "" ? null : example.explanation,
+      explanation: explanationOrNull(example.explanation),
       outcomes,
       distribution: byText ? [] : distribution,
       casePassRate,

@@ -238,7 +238,7 @@ describe("the grading table and the debrief, the teacher's (ADR-056 §9)", () =>
           { name: "t", value: fallOf(values) },
         ]);
         expect(entry.explanation).toBe(EXPLANATION.replace("[[t]]", fallOf(values)));
-        if (kind === "short") expect(JSON.stringify(entry.solution)).toContain(fallKey(values));
+        if (kind === "short") expect(showsKey(JSON.stringify(entry.solution), values)).toBe(true);
       }
     }
   });

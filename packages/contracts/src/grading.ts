@@ -12,7 +12,7 @@
  */
 import { z } from "zod";
 
-import { ParametersDraft } from "./parameters.js";
+import { NamedValues, ParametersDraft } from "./parameters.js";
 import { VersionRow } from "./pool.js";
 
 /** Who produced a grading. `llm` is phase 2 and only ever `proposed` in MVP. */
@@ -165,7 +165,7 @@ export const GradingEntry = z.object({
    * read; `student` and `solution` are this instance's. Absent for a static
    * question.
    */
-  values: z.array(z.object({ name: z.string(), value: z.string() })).optional(),
+  values: NamedValues.optional(),
   /**
    * Beside `values`: the explanation instantiated with them (`null`: none),
    * where the item's is the template's. Absent for a static question.

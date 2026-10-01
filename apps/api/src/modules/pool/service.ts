@@ -38,7 +38,7 @@ export {
   configPerAttempt,
   exampleConfig,
   exampleInstance,
-  formattedValues,
+  explanationOrNull,
   instanceOf,
   InstanceMismatch,
   itemInstance,

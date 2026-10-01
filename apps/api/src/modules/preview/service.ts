@@ -76,7 +76,7 @@ import {
   visibleRunResult,
 } from "../live/visibleRun.js";
 import { hasKey, loadConfig, typeOf, type StaticVersion } from "../pool/config.js";
-import { instanceOf } from "../pool/service.js";
+import { explanationOrNull, instanceOf } from "../pool/service.js";
 
 // --- Failures -------------------------------------------------------------
 
@@ -491,7 +491,7 @@ export async function gradePreview(
       solution: outcome.status === "no_key"
         ? null
         : studentSolutionView({ type: item.question.type, version, seed, itemId: shown.id }),
-      explanation: instance.explanation === "" ? null : instance.explanation,
+      explanation: explanationOrNull(instance.explanation),
       details: outcome.details ?? null,
       ...(outcome.comment === undefined ? {} : { comment: outcome.comment }),
     });

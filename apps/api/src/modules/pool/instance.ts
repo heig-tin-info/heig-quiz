@@ -39,7 +39,7 @@ import { PARAMETERIZED_TYPES } from "@quiz/domain";
 import {
   distinctRendered,
   draw,
-  formatValue,
+  formattedValues,
   instantiate,
   ParameterError,
   replay,
@@ -293,16 +293,8 @@ export function readingPerAttempt(entry: InstanceItem): (attempt: InstanceAttemp
   };
 }
 
-/**
- * The values of an instance as a student read them, in the table's order,
- * each written with its row's format (ADR-056 §6): what the grading panel
- * lays beside an answer so that the teacher can check it by hand.
- */
-export function formattedValues(version: VersionContent, values: Values): { name: string; value: string }[] {
-  return (parametersOf(version)?.rows ?? []).flatMap(({ name, format }) =>
-    Object.hasOwn(values, name) ? [{ name, value: formatValue(values[name]!, format) }] : [],
-  );
-}
+/** An explanation as the payloads carry it: `null` when there is none. */
+export const explanationOrNull = (explanation: string): string | null => (explanation === "" ? null : explanation);
 
 /**
  * The identity of a parameterized TEMPLATE, for a key that must not move
@@ -416,8 +408,7 @@ export function previewInstances(
   // The very draws publication gated, rendered: nothing is drawn twice.
   const instances = draws.map((drawn, i) => {
     const instance = render(type, version, params, { versionId: version.id, values: drawn }, drawn);
-    const values = params.rows.map((row) => ({ name: row.name, value: formatValue(drawn[row.name]!, row.format) }));
-    return { seed: GATE_SEEDS[i]!, values, instance };
+    return { seed: GATE_SEEDS[i]!, values: formattedValues(params, drawn), instance };
   });
   return { instances, issues: [] };
 }

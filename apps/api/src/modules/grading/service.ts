@@ -58,9 +58,9 @@ import {
   type JoinedItem,
 } from "../evaluation/service.js";
 import { solutionViewOf, studentViewOf } from "../live/studentView.js";
-import { sameTable } from "@quiz/domain/parameters";
+import { formattedValues, sameTable } from "@quiz/domain/parameters";
 import {
-  formattedValues,
+  explanationOrNull,
   isParameterized,
   parametersOf,
   readingPerAttempt,
@@ -584,8 +584,8 @@ function entryOf(
     answer: answer?.payload ?? null,
     ...(reading?.values
       ? {
-          values: formattedValues(item.version, reading.values),
-          explanation: reading.explanation === "" ? null : reading.explanation,
+          values: formattedValues(parametersOf(item.version)!, reading.values),
+          explanation: explanationOrNull(reading.explanation),
         }
       : {}),
     student: studentViewOf(item.question.type, config, view),
@@ -643,7 +643,7 @@ export async function gradingQueue(
       type: i.question.type,
       points: i.item.points,
       minPoints: pointsRangeOf(evaluation, i, i.item.points).min,
-      explanation: i.version.explanation === "" ? null : i.version.explanation,
+      explanation: explanationOrNull(i.version.explanation),
       ...(isParameterized(i.version) ? { parameters: writtenOf(i) } : {}),
     })),
     entries,
@@ -660,7 +660,7 @@ function writtenOf(item: JoinedItem): NonNullable<GradingQueue["items"][number][
   const { config, example } = writtenConfig(item.question.type, item.version);
   const view = { seed: 0, itemId: item.item.id, shuffle: false };
   return {
-    variables: item.version.variables!,
+    variables: parametersOf(item.version)!,
     template: {
       student: studentViewOf(item.question.type, config, view),
       solution: solutionViewOf(item.question.type, config, view),

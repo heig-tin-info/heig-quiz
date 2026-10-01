@@ -4,6 +4,7 @@ import {
   distinctRendered,
   draw,
   FORMAT_PATTERN,
+  formattedValues,
   formatValue,
   instantiate,
   isVariableName,
@@ -574,5 +575,16 @@ describe("drawnApart", () => {
   it("reads nothing from a reference or a row that does not parse", () => {
     expect(drawnApart("[[d +]] s", SHARED, NOISE)).toBe(false);
     expect(drawnApart("[[d]]", [], { rows: [{ name: "d", expr: "uniform(", format: "" }] })).toBe(false);
+  });
+});
+
+describe("formattedValues", () => {
+  it("writes each value with its row's format, in the table's order, leaving out a row without one", () => {
+    expect(formattedValues(MRUA, { t: 2.6, h: 40, g: 9.81 })).toEqual([
+      { name: "h", value: "40" },
+      { name: "g", value: "9.81" },
+      { name: "t", value: "2.60" },
+    ]);
+    expect(formattedValues(MRUA, { h: 40 })).toEqual([{ name: "h", value: "40" }]);
   });
 });
