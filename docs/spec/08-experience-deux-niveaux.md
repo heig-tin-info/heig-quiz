@@ -25,6 +25,7 @@ The platform serves two profiles of teachers with the same interface. The novice
 | Understand a setting | Every option has a help sentence under its label, not a tooltip. |
 | Grade effortlessly | Grading panel with the LLM proposals sorted by confidence. "Validate everything with high confidence" in one click, then review of the remaining cases. |
 | Reuse last year's evaluation | The course's own page (F-ORG-12), opened from its name, lists its evaluation templates; "Save as template" in an evaluation's menu puts one there, and "New template" on that page starts an empty one, edited in place with the evaluation editor's own controls minus everything of a run (F-EVAL-24, F-EVAL-25). The Courses home card lists none, so the home a novice starts from carries no empty "Templates" block for a feature they may never use. On the course page the section shows even when empty: a teacher who opened one course asked to see all of it, and the empty state is where they learn how a template is made (ADR-031, addendum of 2026-09-28). |
+| Hand out a GitHub lab without knowing GitHub Classroom | **New ▾ › Project** in the classroom asks for a name, a source repository picked from the organization, and a deadline; everything else has its default — one commit per branch, the repository locked at the deadline, the score read from `grading.yml` when the source has one, `criteria.yml`, `README.md` and `grading.yml` protected — under "Advanced options" (F-PROJ-01). Before that, the classroom's Settings walk the teacher through connecting the organization, with a check per thing that is missing (F-GH-02, F-GH-03). The project page then has one primary action at a time: Publish, Sync, Release (F-PROJ-13). |
 | See what the student sees | "Student preview" button wherever a question or an evaluation is displayed. For an evaluation it is a stateless walk in its own tab: a random seed, the student's player under a "Preview" banner, the countdown, and the full correction when it is handed in; nothing is stored (ADR-018, fourth addendum). |
 
 ## 8.3 Expert mode
@@ -40,6 +41,7 @@ The platform serves two profiles of teachers with the same interface. The novice
 | Process in bulk | Multiple selection in the pool: add a tag, move to a category, export, add to an evaluation. |
 | Inspect | Version history with diff, LLM call log, event log of an attempt, raw export of an evaluation as JSON. |
 | Plug in one's own LLM | Personal API key, model choice per purpose, prompt templates editable per teacher, phase 3. |
+| Run a project like a repository | The advanced options of a project: the source's whole history, a deadline commit instead of a lock, review checkpoints dated relative to the deadline (J−3), groups copied from another project; a sync of the source as a pull request into every repository; the runs of each repository, "grade now", a lock per repository (F-PROJ). |
 | Write from one's own tool | MCP server: create and read drafts from Claude Desktop or Claude Code. Planned for phase 3, shipped early with the personal API tokens (ADR-022, ADR-023). |
 
 ## 8.4 Command palette

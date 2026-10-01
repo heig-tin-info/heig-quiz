@@ -292,7 +292,7 @@ reused.
 - `project.create|update|delete|publish|auto_publish|archive|unarchive|deadline_applied|deadline_reopened|frozen|review_dispatched|milestone_dispatched|sync_requested|synced|release|accept|accept_failed`.
 - `project_repo.lock|unlock|grade_now|grade_override|deleted|deadline_archived|protected_files_reverted|revert_cap`.
 - `project_group.create|rename|delete|copy|split|singles|member_add|member_remove|repo_invite|repo_revoke`;
-  `project_milestone.create|delete`; `task.configure|run_now`.
+  `project_checkpoint.create|delete`; `task.configure|run_now`.
 
 ### Jobs and ticker
 
@@ -331,7 +331,7 @@ The first plan reused classroom's App at the cutover; D23 replaced it.
   re-approve.
 - **At the cutover** the organizations still used by classroom install
   Quiz's App ("All repositories"); the import resolves their installation
-  ids. Account links survive (`github_user_id` is the person's).
+  ids. Account links survive (`github_user_id` is the person's): the import carries them (spec 06 no. 45).
   Collaborator seats, rulesets (`hgc-protect`, `hgc-deadline-lock`) and
   the repositories stay where they are; Quiz's App, with Administration
   RW, manages them. Bot detection knows both bot logins (classroom's for

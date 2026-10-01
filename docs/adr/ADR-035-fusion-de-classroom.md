@@ -116,8 +116,8 @@ D21, open), runner (ADR-016), and later one `llm` module. Grades meet in a
 **gradebook** module that owns only its column table and reads the released
 results of each kind. A project score is frozen by the clock as ADR-012
 states (read literally for projects); when and on what scale it reaches the
-gradebook is D05 (the suggestion: after a teacher release), and the
-gradebook's rules are D06 — both open.
+gradebook is D05 (after a teacher release, on a per-project scale), and the
+gradebook's rules are D06 — both settled on 2026-10-01 (F-PROJ-14, F-GBOOK).
 
 ### 4. GitHub is optional
 
@@ -164,7 +164,7 @@ production dump before it runs once for real.
   **ADR-016** hosts the codespace beside the runner; **ADR-027** confines a
   `seb` session to an activity rather than an evaluation (the design is
   D21, open); **ADR-030** gains the project notification kinds (their list
-  is D18, open). Each of these records carries a status note saying so.
+  is D18, settled 2026-10-01). Each of these records carries a status note saying so.
 - **Classroom's own ADRs** are imported, bodies verbatim, with a status
   line naming the former number and the renames: its ADR-011
   (reconciliation handlers) into Quiz's free 011 slot,

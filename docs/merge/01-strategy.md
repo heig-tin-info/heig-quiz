@@ -62,7 +62,7 @@ changing what an existing student sees.
 | **M0 — Decisions and paper** | Blocking decisions settled, production measured, ADR-035 accepted, classroom ADRs imported, spec and `CLAUDE.md` amended | yes (docs) | The decisions marked *blocks M1* in `08-decisions.md` are settled; the spec-challenger has no open objection on ADR-035 |
 | **M1 — Foundations** | Pure domain ports, GitHub adapter layer, `ActivityKind` + `ActivitySummary` union, missing primitives and long-form styles, migration script skeleton with identity matching | yes, invisible | CI green; `/activities` unchanged; the import script dry-runs identity on a fixture |
 | **M2 — GitHub substrate** | `github` tables, installations and org link, account linking, webhook intake and delivery reconciliation, periodic tasks, Quiz's production and staging Apps (D23), the classroom's Settings tab | yes: nothing changes for a classroom whose teacher does not connect it | On staging with the staging App: installation resolved, webhooks received and deduplicated, a missed delivery replayed; then one classroom connected in production |
-| **M3 — Projects** | Project tables and lifecycle, acceptance and provisioning, ingestion and grading, deadline / freeze / dispatch, reconciliation, sync, teacher and student views, groups (M3-15/16) | yes: nothing appears until a teacher publishes a project | A pilot on staging walks classroom's user stories; 100 repositories at a deadline applied in < 5 min; a student-view leak test on projects |
+| **M3 — Projects** | Project tables and lifecycle, acceptance and provisioning, ingestion and grading, deadline / freeze / dispatch, reconciliation, sync, teacher and student views, groups (M3-15/16) | no: projects open with the import (D26), at the cutover | A pilot on staging walks classroom's user stories; 100 repositories at a deadline applied in < 5 min; a student-view leak test on projects |
 | **M4 — Journal** | Pure renderer, journal module (read, then write), reader and teacher tab, WYSIWYG editor (D25) | yes: renders only where a teacher set a repository | A staging journal mirrors a repository; drafts and `visible_from` do not leak (pages nor assets); then live in production for the classrooms that opt in |
 | **M5 — Student classroom page and gradebook** | The student classroom page and the Courses route (M5-01/02, shipped with the journal), then the gradebook module and the teacher Grades tab | the student page is the first visible change for students (D07) | The gradebook equals per-evaluation results on the seeded world; staff seats never appear in it |
 | **M6 — Online workspace and SEB** | `packages/seb`, `apps/codespace` imported, its CI/CD, the Quiz `codespace` module, SEB for projects, engine VM capacity | yes, opt-in work mode | A supervised session opens from a Quiz project; proof B (real SEB) recorded. **Off the critical path if production has no online assignment (D09)** |
@@ -95,8 +95,9 @@ student reader (M4-04) reaches students only through the student
 classroom page (M5-02): a classroom's journal is live for its students
 when both are merged.
 
-Projects (M3) follow on the same substrate; whether they too go live
-before the cutover is D26.
+Projects (M3) follow on the same substrate. They do not go live before
+the cutover: project creation opens in Quiz on the day classroom's data
+is imported, and from then on Quiz mirrors classroom (D26, 2026-10-01).
 
 ### Critical path
 
@@ -137,11 +138,17 @@ gain. Respect `AGENTS.md` §7: one full test suite at a time on the machine.
 (Details and rollback in [`06-codespace-seb-infra.md`](06-codespace-seb-infra.md).)
 The journal (and the GitHub substrate) is already live in Quiz with its own
 App (D23); what is still dark is what only migrated data can use. Before
-T0 the organizations still used by classroom install Quiz's App. At T0 —
-intersemester, no deadline, no live evaluation, no live workspace session —
+T0 the teachers create their classrooms in Quiz, install Quiz's App and
+connect them to their organization by hand (the import makes no
+organization link; spec 06 no. 47), and validate the correspondence
+table classroom → Quiz (D22). At T0 — during the autumn
+semester, as soon as M3 and M8-01 are ready (D20; no deadline, no live
+evaluation, no live workspace session in that hour) —
 a Caddy maintenance fragment freezes classroom (webhooks answer 503),
 classroom's database is dumped, the import script runs on Quiz's database,
-the reconciliation jobs (`reconcile.repos`, `reconcile.grades`) catch up
+the GitHub account links come over with the import (spec 06 no. 45),
+the
+reconciliation jobs (`reconcile.repos`, `reconcile.grades`) catch up
 from the repositories themselves, and `classroom.chevallier.io` becomes a
 redirect fragment
 (302 during observation, 301 after the point of no return). Target: under

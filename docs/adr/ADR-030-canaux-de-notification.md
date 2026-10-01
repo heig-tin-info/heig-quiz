@@ -51,7 +51,10 @@ suggestion being `project_published`, `project_deadline_reminder`,
 `project_repo_invited`, `project_grade_final` for students and
 `project_deadline_applied`, `project_provision_failed`, `github_org_lost`
 for the staff, e-mail on by default only for those that must not be
-missed — is D18, open; this record is amended again when it is settled.
+missed — is D18, settled 2026-10-01 on the suggestion: the kinds as
+listed, e-mail and Teams on by default for `project_deadline_reminder`,
+`project_repo_invited`, `project_grade_final`, `project_provision_failed`
+and `github_org_lost` (F-NOTIF-13).
 
 **Addendum (2026-09-30, ADR-055 §5): an admin kind, and a kind kept out of
 Teams.** `system_alert` tells the administrators that health checks of the

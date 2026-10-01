@@ -21,10 +21,11 @@ analogy only. With projects it has two readings:
   (`released_at`, `released_grades`), and a later change is visible as
   `modified_after_release`.
 
-How a frozen project score reaches students and the gradebook — after a
-teacher release, and on which scale (a per-project `grading_scale`) — is
-D05, open; the gradebook's rules are D06, open. Until they are settled,
-nothing here says that a frozen score is a released one.
+How a frozen project score reaches students and the gradebook was
+settled on 2026-10-01 (D05, D06): only through a teacher **release**,
+indicative before it, converted to a grade by a per-project
+`grading_scale` (F-PROJ-14, F-GBOOK). A frozen score is never a released
+one by itself.
 
 ## Context
 

@@ -87,14 +87,14 @@ Status values: `open`, `settled`, `superseded`.
   `grading_scale` (Quiz's `Scale`), with "max 6 ⇒ the score is the grade" as
   one preset.
 - Blocks: M3-01, M3-08.
-- **Status**: open.
+- **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion.
 
 ### D06 — Gradebook rules
 - **Suggested**: exams and projects count by default, exercises opt-in,
   polls never; weighted mean rounded to the tenth; students see the mean
   only if the teacher publishes it; no ranking.
 - Blocks: M5-03.
-- **Status**: open.
+- **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion.
 
 ### D07 — The student's door to the classroom page
 - **Options**: (a) the classroom cards of the home always open the
@@ -149,23 +149,21 @@ Status values: `open`, `settled`, `superseded`.
   table (actors remapped best-effort), so Quiz's union stays closed and
   clean.
 - Blocks: M8-01.
-- **Status**: open.
+- **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion.
 
 ### D12 — Language of text written into GitHub
 - (Seed READMEs, sync PR bodies, bot commit messages, revert commits.)
 - **Suggested**: English — they are development artifacts read in a
   developer tool; UI strings stay translated.
 - Blocks: M3-07.
-- **Status**: open. M4-03 applied the suggestion provisionally: the
-  journal's seed README, repository description and default commit
-  messages are English (`modules/journal/writes.ts`).
+- **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion: English. The journal's seed README, repository description and default commit messages already were (`modules/journal/writes.ts`).
 
 ### D13 — Accommodations on project deadlines
 - **Suggested**: the time bonus does not apply to projects; the per-repo
   manual unlock and a per-student deadline extension (later) cover the
   cases.
 - Blocks: M3-05.
-- **Status**: open.
+- **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion.
 
 ### D14 — Journal asset storage
 - **Suggested**: `bytea` as ported (a rebuildable read model, ≤ 5 MB per
@@ -186,7 +184,7 @@ Status values: `open`, `settled`, `superseded`.
 - **Suggested**: the merge ports classroom's CI-dispatched LLM review as
   is; a platform `llm` module is phase L.
 - Blocks: nothing on the critical path.
-- **Status**: open.
+- **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion, for now: classroom's CI-dispatched review is ported as is. Later, once the platform `llm` module is really in place (phase L), Quiz may run the review of a project itself instead of the student repository's CI.
 
 ### D18 — Notification kinds for projects
 - **Suggested**: student `project_published`, `project_deadline_reminder`,
@@ -195,19 +193,19 @@ Status values: `open`, `settled`, `superseded`.
   `github_org_lost`; e-mail on by default only for must-not-miss kinds
   (ADR-030 defaults); `activity_*` payloads kind-neutral.
 - Blocks: M3-09.
-- **Status**: open.
+- **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion.
 
 ### D19 — Deletion of a classroom or project
 - **Suggested**: deletes database rows only; GitHub repositories are never
   deleted (classroom H11), and the confirmation says so.
 - Blocks: M3-02.
-- **Status**: open.
+- **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion.
 
 ### D20 — The cutover window
 - **Suggested**: the intersemester (February 2027), a weekday morning with
   no deadline and no evaluation; announced a week and a day ahead.
 - Blocks: M8-07.
-- **Status**: open.
+- **Status**: settled 2026-10-01 (product owner, conversation): **during the semester, as soon as possible (target: the week of 2026-10-05)**, not at the intersemester — while classroom still holds little work. A student whose GitHub account is linked in heig-classroom has nothing to do: the import carries the link (spec 06 no. 45); the others link it in Quiz (F-GH-05); each teacher installs Quiz's App and connects their classrooms by hand from the classroom's Settings (F-GH-02), so the import creates no organization link. A deadline, a live evaluation or a live workspace session still excludes the hour of the switch.
 
 ### D21 — Unified SEB design
 - **Suggested**: `packages/seb`; the platform builds every `.seb`; a `seb`
@@ -227,7 +225,7 @@ Status values: `open`, `settled`, `superseded`.
 - **Suggested**: the product owner writes the mapping file from the list
   produced by M0-02.
 - Blocks: M8-06.
-- **Status**: open.
+- **Status**: settled 2026-10-01 (product owner, conversation): the teachers create their classrooms in Quiz themselves; the merge produces a correspondence table *classroom name in heig-classroom → classroom name in Quiz*, the product owner has the teachers validate it, confirms, and the import runs on it. A classroom-classroom maps to an existing Quiz classroom (merged into it), never to a new one created by the import.
 
 ## Taken with the journal-first reordering (2026-09-30)
 
@@ -297,7 +295,7 @@ Status values: `open`, `settled`, `superseded`.
 - **Suggested**: decide when M3 starts, from how the journal's go-live
   went.
 - Blocks: M3-14.
-- **Status**: open.
+- **Status**: settled 2026-10-01 (product owner, conversation): **projects open in Quiz together with the import, never before it.** The day project creation is released in a classroom is the day classroom's data (projects, deadlines, repositories, grades) is imported: Quiz then mirrors classroom, and the teachers change nothing in classroom between that import and the final migration. No project is created in Quiz before the import; M3-14's pilot runs on staging only.
 
 ### D27 — Which repositories a journal may use
 - **Answer**: any repository of the classroom's organization, as in
