@@ -25,9 +25,60 @@ import type { AnyQuestionTypeServer } from "@quiz/core/server";
 import { questionType } from "@quiz/registry/server";
 
 /** The two columns of `question_versions` that carry a configuration. */
-interface ConfigRow {
+export interface ConfigRow {
   config: unknown;
   configVersion: number;
+}
+
+/**
+ * A stored version as {@link loadConfig} reads it: the configuration AND the
+ * variables table, which every caller must hand over (ADR-056). A
+ * parameterized version is a TEMPLATE: no read here parses one — a reader
+ * gets one of its instances from `instance.ts`, whose `version` is a
+ * {@link StaticVersion}. Forgetting that is a throw, not a leak.
+ */
+export interface StoredVersion extends ConfigRow {
+  variables: { rows: readonly unknown[] } | null;
+}
+
+/**
+ * A version every reader may use as it is: static, or an instance. The
+ * student exits (`live/studentView.ts`) take only this, so handing them a
+ * template is a compile error (invariant 4).
+ */
+export interface StaticVersion extends ConfigRow {
+  variables: null;
+}
+
+/** Whether a version declares variables (ADR-056 §1): the ONE test of it. */
+export const isParameterized = (version: { variables: { rows: readonly unknown[] } | null }): boolean =>
+  version.variables !== null && version.variables.rows.length > 0;
+
+/** Thrown when a TEMPLATE is read as a configuration: a programming error, never a user's. */
+export class TemplateRead extends Error {
+  constructor(type: string) {
+    super(`a parameterized ${type} version was read without its instance (pool/instance.ts)`);
+    this.name = "TemplateRead";
+  }
+}
+
+/**
+ * A version known to be static, narrowed to {@link StaticVersion}; throws
+ * {@link TemplateRead} on a template. For a reader that never holds a
+ * parameterized version by construction (a poll, `assertPollable`).
+ */
+export function asStatic(type: string, version: StoredVersion): StaticVersion {
+  if (isParameterized(version)) throw new TemplateRead(type);
+  return { config: version.config, configVersion: version.configVersion, variables: null };
+}
+
+/**
+ * The raw TEMPLATE of a parameterized version, raised to the type's current
+ * shape and NOT parsed — for the deliberate template readers only:
+ * instantiation and the template's hash (`instance.ts`).
+ */
+export function templateOf(type: string, version: ConfigRow): unknown {
+  return migrated(typeOf(type), version);
 }
 
 type ConfigOutcome =
@@ -59,11 +110,13 @@ export function typeOf(type: string): AnyQuestionTypeServer {
  * like any other. The gates themselves — publication, the draft issues —
  * stay on `configSchema` and still demand a key.
  */
-export function loadConfig(type: string, row: ConfigRow): unknown {
+export function loadConfig(type: string, row: StoredVersion): unknown {
+  if (isParameterized(row)) throw new TemplateRead(type);
   const t = typeOf(type);
   return (t.keylessConfigSchema ?? t.configSchema).parse(migrated(t, row));
 }
 
+/** The stored config raised to the type's current shape, NOT parsed. */
 function migrated(t: AnyQuestionTypeServer, row: ConfigRow): unknown {
   return row.configVersion === t.configVersion ? row.config : t.migrate(row.config, row.configVersion);
 }
@@ -78,8 +131,15 @@ function migrated(t: AnyQuestionTypeServer, row: ConfigRow): unknown {
  * was therefore written back as an old shape stamped current — after which
  * nothing migrates it ever again and every parse dies on `configVersion`,
  * hiding every real issue the teacher needed to see.
+ *
+ * Like {@link loadConfig} it refuses a parameterized version, unless the
+ * caller opts in with `{ template: true }`: the few deliberate readers of a
+ * TEMPLATE (the draft handed to the editor, the distractor statistics,
+ * ADR-056 §9), which get its formulas — and an `ok: false` when the template
+ * alone does not satisfy the schema (a cloze `{{#[[t]]}}`).
  */
-export function tryLoadConfig(type: string, row: ConfigRow): ConfigOutcome {
+export function tryLoadConfig(type: string, row: StoredVersion, options: { template?: true } = {}): ConfigOutcome {
+  if (!options.template && isParameterized(row)) throw new TemplateRead(type);
   try {
     // The STRICT schema: a draft and the version a pool previews must hold a
     // key, and the editor is told when one does not.
@@ -96,7 +156,7 @@ export function tryLoadConfig(type: string, row: ConfigRow): ConfigOutcome {
  * `question_versions.config_version` column that says the same thing; a type
  * that does not is simply left alone here.
  */
-function declaredVersion(config: unknown): number | undefined {
+export function declaredVersion(config: unknown): number | undefined {
   if (config === null || typeof config !== "object" || Array.isArray(config)) return undefined;
   const value = (config as { configVersion?: unknown }).configVersion;
   return typeof value === "number" ? value : undefined;
@@ -108,7 +168,7 @@ function declaredVersion(config: unknown): number | undefined {
  * parse is about to report what is wrong with it anyway (D16), and a
  * migration failure there would replace the real issues with its own.
  */
-function raise(t: AnyQuestionTypeServer, config: unknown, fromVersion: number): unknown {
+export function raise(t: AnyQuestionTypeServer, config: unknown, fromVersion: number): unknown {
   if (fromVersion === t.configVersion) return config;
   try {
     return t.migrate(config, fromVersion);
@@ -132,7 +192,11 @@ export function saveConfig(
 ): ConfigRow {
   const t = typeOf(type);
   const schema = options.keyOptional ? (t.keylessConfigSchema ?? t.configSchema) : t.configSchema;
-  return { config: schema.parse(config), configVersion: t.configVersion };
+  // A config that declares an older shape (a caller that knows only `short`
+  // v2) is raised first, as the autosave does: a shape the current one
+  // holds must not be refused for its stamp alone.
+  const raised = raise(t, config, declaredVersion(config) ?? t.configVersion);
+  return { config: schema.parse(raised), configVersion: t.configVersion };
 }
 
 /**

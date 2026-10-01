@@ -76,6 +76,9 @@ import { studentRooms } from "./org";
 export const STUDENT_EVAL = "11111111-1111-4111-8111-111111111111";
 const STUDENT_EVAL_NEXT = "11111111-1111-4111-8111-111111111112";
 const STUDENT_EVAL_PAST = "11111111-1111-4111-8111-111111111113";
+const STUDENT_EVAL_NEXT_TODAY = "11111111-1111-4111-8111-111111111121";
+const STUDENT_EVAL_NEXT_TOMORROW = "11111111-1111-4111-8111-111111111122";
+const STUDENT_EVAL_NEXT_WEEK = "11111111-1111-4111-8111-111111111123";
 export const STUDENT_ATTEMPT = "22222222-2222-4222-8222-222222222222";
 export const STUDENT_PAST_ATTEMPT = "22222222-2222-4222-8222-222222222223";
 /** F-EVAL-15: an exercise the student already sat twice and may sit again. */
@@ -424,6 +427,47 @@ export const studentLobbyView = (): LobbyView => ({
   serverNow: new Date().toISOString(),
 });
 
+/** `days` from today, at hh:mm on the browser's clock. */
+const localAt = (days: number, hh: number, mm: number): string => {
+  const d = new Date(now);
+  d.setDate(d.getDate() + days);
+  d.setHours(hh, mm, 0, 0);
+  return d.toISOString();
+};
+
+/** Later today: 23:30, or ten minutes from now once that is less than half an hour away. */
+const todayLater = (): string => {
+  const late = localAt(0, 23, 30);
+  return Date.parse(late) - now > 30 * 60_000 ? late : iso(10 * 60_000);
+};
+
+/** A scheduled card of PRG1-2026, opening at `opensAt`. */
+const upcomingCard = (
+  id: string,
+  title: string,
+  mode: "exam" | "exercise",
+  opensAt: string,
+): EvaluationCard => ({
+  id,
+  title,
+  mode,
+  state: "scheduled",
+  classroomId: "r1",
+  classroomName: "PRG1-2026",
+  courseCode: "PRG1",
+  opensAt,
+  closesAt: new Date(Date.parse(opensAt) + (mode === "exam" ? 45 * 60_000 : 7 * D)).toISOString(),
+  durationS: mode === "exam" ? 30 * 60 : null,
+  attemptId: null,
+  attemptState: null,
+  attemptStartedAt: null,
+  grade: null,
+  deadlineAt: null,
+  retakes: null,
+  results: "none",
+  trustedClients: [],
+});
+
 const studentHome = (): StudentHomeData => {
   if (flags.empty) {
     return { polls: [], open: [], upcoming: [], past: [], serverNow: new Date().toISOString() };
@@ -495,25 +539,14 @@ const studentHome = (): StudentHomeData => {
         trustedClients: [],
       },
     ],
+    // Grouped by day on the page (Today, Tomorrow, This week, Later): one
+    // card per bucket, dated on the browser's clock so that every bucket is
+    // drawn whatever the day — but "This week", from Friday on, as in reality.
     upcoming: [
-      {
-        id: STUDENT_EVAL_NEXT,
-        title: "Série 4 — Récursivité",
-        mode: "exercise",
-        state: "scheduled",
-        ...room,
-        opensAt: iso(3 * D),
-        closesAt: iso(7 * D),
-        durationS: null,
-        attemptId: null,
-        attemptState: null,
-        attemptStartedAt: null,
-        grade: null,
-        deadlineAt: null,
-        retakes: null,
-        results: "none",
-        trustedClients: [],
-      },
+      upcomingCard(STUDENT_EVAL_NEXT, "Série 4 — Récursivité", "exercise", localAt(10, 10, 15)),
+      upcomingCard(STUDENT_EVAL_NEXT_TODAY, "Quiz 4 — Structures", "exam", todayLater()),
+      upcomingCard(STUDENT_EVAL_NEXT_TOMORROW, "Série 3bis — Chaînes", "exercise", localAt(1, 8, 30)),
+      upcomingCard(STUDENT_EVAL_NEXT_WEEK, "Quiz 5 — Fichiers", "exam", localAt(2, 14, 0)),
     ],
     past: [
       // Issue #203: handed in, the quiz still running, `on_release`. Past for
@@ -611,13 +644,15 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
       rows: [
         // Handed in, the quiz still running, `on_release` (issue #203).
         row({ evaluationId: STUDENT_EVAL_HANDED_IN, title: "Quiz 3bis — Allocation dynamique", status: "pending", date: iso(-35 * 60_000) }),
-        // An exercise under the immediate policy: readable, not released.
+        // An exercise under the immediate policy: readable, not released —
+        // its points, indicative, and no grade.
         row({
           title: "Série 2 — Tableaux",
           mode: "exercise",
           status: "available",
           date: iso(-3 * D),
           feedbackAttemptId: STUDENT_PAST_ATTEMPT,
+          score: { points: 7, totalPoints: 10, grade: null },
         }),
         row({
           evaluationId: STUDENT_EVAL_PAST,
@@ -636,8 +671,8 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
     {
       classroom: header({ id: "r6", name: "PRG1-2024", period: "2024-A", archived: true }),
       rows: [
-        // Under the policy `none`: released, and still no grade.
-        row({ title: "Série 8 — Fichiers", mode: "exercise", status: "released", date: iso(-320 * D) }),
+        // Under the policy `none`: released, and the grade not shared.
+        row({ title: "Série 8 — Fichiers", mode: "exercise", status: "withheld", date: iso(-320 * D) }),
         row({
           title: "Examen final — Programmation C",
           status: "released",

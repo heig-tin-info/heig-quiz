@@ -362,6 +362,7 @@ describe("ClassroomView — the Journal tab", () => {
   const JOURNAL = `${ROOM}/journal`;
   const journal = (attached: boolean): JournalStaff => ({
     view: "staff",
+    mode: attached ? "github" : null,
     repository: attached
       ? {
           fullName: "heig-tin-info/prg1-journal",
@@ -379,6 +380,7 @@ describe("ClassroomView — the Journal tab", () => {
     homePath: attached ? "README.md" : null,
     hiddenPaths: [],
     warningCount: 0,
+    pageCount: 0,
     proposedName: attached ? null : "prg1-2026-journal",
   });
 

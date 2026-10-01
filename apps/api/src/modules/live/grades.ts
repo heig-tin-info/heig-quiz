@@ -14,9 +14,10 @@ import { studentBoard, type PastEntry } from "./attempt.js";
 /**
  * The classroom of the newest row first, each newest first. A row says where
  * it stands; it carries points and a grade only where the student may read
- * them (`gradeReadable`), and opens the feedback page only where it has
- * something to show. A staff seat that took no attempt is not listed
- * (ADR-018 §3).
+ * them (`gradeReadable`), the indicative points alone where the feedback
+ * page already shows them before the release (`PastEntry.early`), and opens
+ * the feedback page only where it has something to show. A staff seat that
+ * took no attempt is not listed (ADR-018 §3).
  */
 export async function studentGrades(db: Db, userId: string, now: Date): Promise<StudentGrades> {
   const { past } = await studentBoard(db, userId, now);
@@ -44,20 +45,37 @@ export async function studentGrades(db: Db, userId: string, now: Date): Promise<
     .sort((a, b) => newest(b).localeCompare(newest(a)));
 }
 
-/** Where a finished evaluation stands for the student; see `GradeStatus`. */
+/**
+ * Where a finished evaluation stands for the student; see `GradeStatus`. A
+ * released evaluation whose feedback policy will never show anything
+ * (results `none`) is `withheld`: released, and its grade not shared.
+ */
 export function gradeStatus(fact: {
   handedIn: boolean;
   released: boolean;
   results: CardResults;
 }): GradeStatus {
   if (!fact.handedIn) return "missed";
-  if (fact.released) return "released";
+  if (fact.released) return fact.results === "none" ? "withheld" : "released";
   if (fact.results === "available") return "available";
   if (fact.results === "pending") return "pending";
   return "submitted";
 }
 
-function gradeRow({ row, card, counted, released }: PastEntry): GradeRow {
+/**
+ * The released points and grade where the student may read them; before the
+ * release, the feedback page's points, indicative, and no grade.
+ */
+function scoreOf({ row, counted, released, early }: PastEntry): GradeRow["score"] {
+  if (released && gradeReadable(row.evaluation, counted?.state ?? null)) {
+    return { points: released.points, totalPoints: released.totalPoints, grade: released.grade };
+  }
+  if (early) return { ...early, grade: null };
+  return null;
+}
+
+function gradeRow(entry: PastEntry): GradeRow {
+  const { row, card, counted } = entry;
   const { evaluation, attempt } = row;
   return {
     evaluationId: evaluation.id,
@@ -77,9 +95,6 @@ function gradeRow({ row, card, counted, released }: PastEntry): GradeRow {
     }),
     // `results` is the counted attempt's own (`resultsState`).
     feedbackAttemptId: card.results === "available" ? (counted?.id ?? null) : null,
-    score:
-      released && gradeReadable(evaluation, counted?.state ?? null)
-        ? { points: released.points, totalPoints: released.totalPoints, grade: released.grade }
-        : null,
+    score: scoreOf(entry),
   };
 }

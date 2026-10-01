@@ -19,14 +19,15 @@ import {
   JOURNAL_MARKDOWN_MAX,
   JOURNAL_PATH_MAX,
   JournalErrorCode,
+  JournalCreate,
   JournalPageSave,
   JournalRefusal,
+  JournalRemoveQuery,
   JournalRootPath,
   JournalUploadHeaders,
   assetContentType,
 } from "./journal.js";
 
-const SHA = "a".repeat(40);
 const ID = "018f0000-0000-7000-8000-000000000000";
 
 const staffPage: JournalPageStaff = {
@@ -40,8 +41,9 @@ const staffPage: JournalPageStaff = {
   visibleFrom: null,
   hidden: true,
   markdown: "# Pointers\n",
-  blobSha: SHA,
+  version: 3,
   warnings: [{ code: "raw_html" }],
+  editUrl: "https://github.com/heig-prg/prg1-journal/edit/main/010-basics/020-pointers.md",
 };
 
 const studentPage: JournalPageStudent = {
@@ -108,12 +110,16 @@ describe("the student payloads (N-SEC-12)", () => {
     expectTypeOf<JournalStaff>().not.toMatchTypeOf<JournalStudent>();
     expectTypeOf<JournalPageStudent>().not.toHaveProperty("markdown");
     expectTypeOf<JournalPageStudent>().not.toHaveProperty("blobSha");
+    expectTypeOf<JournalPageStudent>().not.toHaveProperty("version");
     expectTypeOf<JournalPageStudent>().not.toHaveProperty("warnings");
     expectTypeOf<JournalPageStudent>().not.toHaveProperty("draft");
     expectTypeOf<JournalPageStudent>().not.toHaveProperty("visibleFrom");
     expectTypeOf<JournalStudent>().not.toHaveProperty("hiddenPaths");
     expectTypeOf<JournalStudent>().not.toHaveProperty("warningCount");
     expectTypeOf<JournalStudent>().not.toHaveProperty("repository");
+    // A student never learns where the journal lives (ADR-057).
+    expectTypeOf<JournalPageStudent>().not.toHaveProperty("editUrl");
+    expectTypeOf<JournalStudent>().not.toHaveProperty("mode");
   });
 
   it("accept the student fields", () => {
@@ -122,7 +128,7 @@ describe("the student payloads (N-SEC-12)", () => {
 
   it("refuse a staff page, and any staff field smuggled into a student one", () => {
     expect(JournalPageStudent.safeParse(staffPage).success).toBe(false);
-    for (const key of ["markdown", "blobSha", "warnings", "draft", "visibleFrom", "hidden"] as const) {
+    for (const key of ["markdown", "version", "warnings", "draft", "visibleFrom", "hidden", "editUrl"] as const) {
       const smuggled = { ...studentPage, [key]: staffPage[key] };
       expect(JournalPageStudent.safeParse(smuggled).success, key).toBe(false);
     }
@@ -131,7 +137,7 @@ describe("the student payloads (N-SEC-12)", () => {
   it("refuse the hidden paths and counts in the navigation payload", () => {
     const student: JournalStudent = { view: "student", nav: [], homePath: null };
     expect(JournalStudent.parse(student)).toEqual(student);
-    for (const extra of [{ hiddenPaths: ["a.md"] }, { warningCount: 1 }, { repository: null }]) {
+    for (const extra of [{ hiddenPaths: ["a.md"] }, { warningCount: 1 }, { pageCount: 2 }, { repository: null }, { mode: "github" }]) {
       expect(JournalStudent.safeParse({ ...student, ...extra }).success).toBe(false);
     }
   });
@@ -142,11 +148,13 @@ describe("the student payloads (N-SEC-12)", () => {
     expect(JournalPage.safeParse({ ...staffPage, view: "student" }).success).toBe(false);
     const staff: JournalStaff = {
       view: "staff",
+      mode: "quiz",
       repository: null,
       nav: [{ path: "010-a", title: "A", pagePath: null, children: [] }],
       homePath: null,
       hiddenPaths: [],
       warningCount: 0,
+      pageCount: 0,
       proposedName: "prg1-2026-journal",
     };
     expect(Journal.parse(staff)).toEqual(staff);
@@ -211,12 +219,27 @@ describe("the writes' inputs (M4-03)", () => {
     for (const bad of ["", ".", "..", "a/b", "é", "x".repeat(101)]) expect(GithubRepoName.safeParse(bad).success, bad).toBe(false);
   });
 
-  it("a save: a blob sha, a capped page, a message without control characters", () => {
-    expect(JournalPageSave.safeParse({ markdown: "# a", baseSha: SHA }).success).toBe(true);
-    expect(JournalPageSave.safeParse({ markdown: "# a", baseSha: "HEAD" }).success).toBe(false);
-    expect(JournalPageSave.safeParse({ markdown: "a".repeat(JOURNAL_MARKDOWN_MAX + 1), baseSha: SHA }).success).toBe(false);
-    expect(JournalPageSave.safeParse({ markdown: "", baseSha: SHA, message: "a\u0007" }).success).toBe(false);
-    expect(JournalPageSave.safeParse({ markdown: "", baseSha: SHA, extra: 1 }).success).toBe(false);
+  it("a save: the version it was opened at, a capped page, nothing else", () => {
+    expect(JournalPageSave.safeParse({ markdown: "# a", baseVersion: 4 }).success).toBe(true);
+    expect(JournalPageSave.safeParse({ markdown: "# a", baseVersion: 1.5 }).success).toBe(false);
+    expect(JournalPageSave.safeParse({ markdown: "# a", baseSha: "a".repeat(40) }).success).toBe(false);
+    expect(JournalPageSave.safeParse({ markdown: "a".repeat(JOURNAL_MARKDOWN_MAX + 1), baseVersion: 0 }).success).toBe(false);
+    expect(JournalPageSave.safeParse({ markdown: "", baseVersion: 0, extra: 1 }).success).toBe(false);
+  });
+
+  it("a removal's confirmation is the one parameter it takes", () => {
+    expect(JournalRemoveQuery.parse({ confirm: "PRG1" })).toEqual({ confirm: "PRG1" });
+    expect(JournalRemoveQuery.parse({})).toEqual({});
+    expect(JournalRemoveQuery.safeParse({ force: "1" }).success).toBe(false);
+  });
+
+  it("a creation names its mode; only GitHub mode takes a name", () => {
+    expect(JournalCreate.parse({ mode: "quiz" })).toEqual({ mode: "quiz" });
+    expect(JournalCreate.parse({ mode: "github", name: "prg1" })).toEqual({ mode: "github", name: "prg1" });
+    expect(JournalCreate.parse({ mode: "github" })).toEqual({ mode: "github" });
+    for (const bad of [{}, { name: "prg1" }, { mode: "quiz", name: "prg1" }, { mode: "local" }]) {
+      expect(JournalCreate.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
   });
 
   it("an upload declares the type of its extension, parameters dropped", () => {

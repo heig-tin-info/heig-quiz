@@ -10,7 +10,22 @@
  */
 import { z } from "zod";
 
+import type { ParametersDraft } from "@quiz/contracts";
 import { questionType, registeredServerIds } from "@quiz/registry/server";
+
+import { isParameterized, parameterIssues, PARAMETERIZED_TYPES } from "../pool/service.js";
+
+/**
+ * The rules of parameterized questions (ADR-056), told once and attached to
+ * the three types that take variables.
+ */
+const VARIABLES_RULES = [
+  "Optional `variables` (a tool argument beside `config`, not inside it) make the question parameterized: every attempt draws its own values. `{ rows: [{ name, expr, format }], condition? }`.",
+  "A row's `expr` is a mathjs one-liner reading only the rows above it: `randint(1, 100)` (ends included), `uniform(0.5, 2)`, `choice([3.71, 9.81])`, arithmetic with `^` for powers, `sqrt`, `abs`, `exp`, `log`, trigonometry, `round`, `floor`, `ceil`, `min`, `max`, `pi`, `e`, `a ? b : c`. Write every `*` (no `2pi`).",
+  "`format`: `int`, `.1` to `.6` (decimals) or `1s` to `6s` (significant figures), or empty. A variable IS its rounded value: later rows read it rounded.",
+  "Write `[[h]]` or `[[sqrt(2*h/g)]]` in any text of the config and in the explanation; `\\[[` writes literal brackets. `condition` (e.g. `b^2 - 4*a*c > 0`) rejects a draw.",
+  "Publication draws 200 seeds and refuses an expression that fails, a condition never met, or (mcq) choices that render alike.",
+];
 
 interface TypeGuide {
   summary: string;
@@ -48,9 +63,10 @@ const GUIDES: Record<string, TypeGuide> = {
       "A `regex` matcher is for families of answers; a `number` matcher takes a `tolerance` (`toleranceMode` abs or rel).",
       "A matcher's `points` (0..1) gives partial credit for an almost-right answer.",
       "The `llm` matcher kind is refused at publication: never use it.",
+      "With `variables`, a `number` matcher's `value` and `tolerance` may be a `[[…]]` string (`\"[[t]]\"`); a computed text key (`[[…]]` in an `exact` value) is refused.",
     ],
     example: {
-      configVersion: 2,
+      configVersion: 3,
       prompt: "Quelle figure de style consiste à atténuer une idée pour en suggérer davantage ?",
       kind: "text",
       placeholder: "une figure de style",
@@ -210,7 +226,7 @@ export function describeQuestionType(type: string) {
   return {
     type,
     summary: guide?.summary ?? "",
-    rules: guide?.rules ?? [],
+    rules: [...(guide?.rules ?? []), ...(PARAMETERIZED_TYPES.has(type) ? VARIABLES_RULES : [])],
     configSchema: configJsonSchema(type),
     ...(guide?.example === undefined ? {} : { example: guide.example }),
   };
@@ -225,8 +241,20 @@ export function questionTypeSummaries() {
  * The gate a publication will apply, run BEFORE anything is created, so a
  * malformed config costs the model one round trip and leaves no half-written
  * question behind. The route's own publication still validates on its own.
+ *
+ * With variables (ADR-056) it is publication's own check, `parameterIssues`:
+ * a template need not satisfy the schema — its instances must.
  */
-export function checkConfig(type: string, config: unknown) {
+export function checkConfig(
+  type: string,
+  config: unknown,
+  extra: { explanation?: string | undefined; variables?: ParametersDraft | null | undefined } = {},
+) {
+  const variables = extra.variables ?? null;
+  if (isParameterized({ variables })) {
+    const issues = parameterIssues(type, { config, explanation: extra.explanation ?? "", variables });
+    return issues.length === 0 ? null : issues.map((i) => ({ path: i.path.join("."), message: i.message }));
+  }
   const parsed = questionType(type).configSchema.safeParse(config);
   if (parsed.success) return null;
   return parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message }));

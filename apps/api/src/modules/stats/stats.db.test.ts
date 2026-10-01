@@ -148,7 +148,7 @@ async function anotherEvaluation(seed: Seeded, questionIds = [seed.questionIds[0
     evaluation,
     questionIds,
     (type, version) =>
-      typeOf(type).defaultPoints(loadConfig(type, { config: version.config, configVersion: version.configVersion })),
+      typeOf(type).defaultPoints(loadConfig(type, version)),
     { attemptCount: 0 },
   );
   return { evaluationId: evaluation.id, itemId: items[0]!.id, itemIds: items.map((i) => i.id) };

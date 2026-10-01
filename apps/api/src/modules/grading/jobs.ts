@@ -37,7 +37,7 @@ import type {
   PendingLlmResult,
   RunnerRequest,
 } from "@quiz/core/server";
-import { JUSTIFICATION_KEY, type PassReason } from "@quiz/contracts";
+import { INSTANCE_WARNING_KEY, JUSTIFICATION_KEY, type PassReason } from "@quiz/contracts";
 import { RunnerBusy, RunnerUnavailable, isGraded, isPendingRunner } from "@quiz/core/server";
 import { isLiveState, itemPoints, round2 } from "@quiz/domain";
 
@@ -57,6 +57,8 @@ import {
   type JoinedItem,
 } from "../evaluation/service.js";
 import { hasKey, loadConfig, typeOf } from "../pool/config.js";
+import { configPerAttempt, exampleConfig, isParameterized, itemInstance } from "../pool/service.js";
+import type { StoredInstance } from "../../db/columns.js";
 import * as events from "./events.js";
 import { announceGradingReady } from "./ready.js";
 import {
@@ -248,22 +250,59 @@ function progressReporter(evaluation: EvaluationRecord, teacherIds: string[], to
   };
 }
 
+/** One item's config for one attempt, and the warning of its instance (ADR-056 §7). */
+interface CellConfig {
+  config: unknown;
+  warning?: StoredInstance["fallback"];
+}
+
 /**
  * The stored config of one item through `loadConfig`, the ONE read pipeline
- * (§1.6): migrated and parsed once per item, not once per attempt. `null`
- * when it cannot be read, and every cell of the item becomes a proposal.
+ * (§1.6): migrated and parsed once per item, not once per attempt — but for
+ * a parameterized question, whose every attempt has its own instance, read
+ * from the values the attempt stored (ADR-056 §5; replayed under a version
+ * a regrade retargeted). `null` when it cannot be read, and the cell
+ * becomes a proposal.
  */
-function readConfig(app: FastifyInstance, item: JoinedItem): unknown {
-  try {
-    return loadConfig(item.question.type, {
-      config: item.version.config,
-      configVersion: item.version.configVersion,
-    });
-  } catch (err) {
+function readConfig(
+  app: FastifyInstance,
+  item: JoinedItem,
+): { configOf: (attempt: AttemptRecord) => CellConfig | null; keyed: boolean } {
+  const type = item.question.type;
+  const unreadable = (err: unknown) => {
     app.log.error({ err, itemId: item.item.id }, "grading: unreadable question config");
     return null;
+  };
+  let perAttempt: ReturnType<typeof configPerAttempt>;
+  let keyed: boolean;
+  try {
+    perAttempt = configPerAttempt(item);
+    // Whether it holds a key is a matter of structure: the config already
+    // parsed when static (it ignores the attempt), the example instance when
+    // parameterized.
+    keyed = hasKey(type, isParameterized(item.version) ? exampleConfig(type, item.version) : perAttempt(NO_ATTEMPT));
+  } catch (err) {
+    // Unreadable: every cell says so on its own (`config_unreadable`).
+    unreadable(err);
+    return { configOf: () => null, keyed: true };
   }
+  return {
+    keyed,
+    configOf: (attempt) => {
+      try {
+        const config = perAttempt(attempt);
+        // A draw served from a fallback (ADR-056 §7): the teacher is told.
+        const warning = attempt.instances[item.item.id]?.fallback;
+        return warning ? { config, warning } : { config };
+      } catch (err) {
+        return unreadable(err);
+      }
+    },
+  };
 }
+
+/** No attempt at all: what a static item's config, which reads none, is asked with. */
+const NO_ATTEMPT = { seed: 0, instances: {} };
 
 /**
  * One cell that no teacher has settled yet: the grading to write, or the
@@ -276,12 +315,12 @@ async function gradeCell(
     evaluation: EvaluationRecord;
     job: EvaluationGradingJob;
     item: JoinedItem;
-    config: unknown;
+    config: CellConfig | null;
     attempt: AttemptRecord;
     answer: typeof answers.$inferSelect | null;
   },
 ): Promise<{ write: WriteGradingInput } | { runner: RunnerGradingJob }> {
-  const { evaluation, job, item, config, attempt, answer } = cell;
+  const { evaluation, job, item, attempt, answer } = cell;
   const base = {
     attemptId: attempt.id,
     itemId: item.item.id,
@@ -291,7 +330,8 @@ async function gradeCell(
     ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
   };
 
-  if (config === null) return { write: { ...base, ...failedProposal("config_unreadable") } };
+  if (cell.config === null) return { write: { ...base, ...failedProposal("config_unreadable") } };
+  const { config, warning } = cell.config;
   if (answer === null) {
     // F-GRADE-01: an absent answer is worth zero, and it is settled.
     //
@@ -326,7 +366,7 @@ async function gradeCell(
     // A bonus item never takes points away (ADR-052): floored at 0 here, the
     // one place an automatic grade becomes an item's points.
     const points = itemPoints(outcome.grading.points, item.item.bonus);
-    return { write: { ...base, ...outcome.grading, points } };
+    return { write: { ...base, ...outcome.grading, details: withWarning(outcome.grading.details, warning), points } };
   }
   return {
     runner: {
@@ -338,6 +378,17 @@ async function gradeCell(
       ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
     },
   };
+}
+
+/**
+ * The details of a grading, with the warning of an instance served from a
+ * fallback draw (ADR-056 §7) for the teacher; untouched otherwise. Never a
+ * student's: `filterDetails` strips the key under every policy.
+ */
+function withWarning(details: unknown, warning: CellConfig["warning"]): unknown {
+  if (warning === undefined) return details;
+  const own = details !== null && typeof details === "object" && !Array.isArray(details) ? details : {};
+  return { ...own, [INSTANCE_WARNING_KEY]: warning };
 }
 
 /**
@@ -365,11 +416,11 @@ export async function runEvaluationGrading(
   // dies half-way writes nothing and is simply run again (idempotency).
   const writes: WriteGradingInput[] = [];
   for (const item of pass.items) {
-    const config = readConfig(app, item);
+    const { configOf, keyed } = readConfig(app, item);
     // An opinion poll's question has no key (ADR-014, addendum 2026-09-23):
     // there is nothing to be right about, so nothing is written — not a
     // zero per answer, which would mark the whole room wrong.
-    if (config !== null && !hasKey(item.question.type, config)) {
+    if (!keyed) {
       for (const _ of pass.attempts) progress.tick();
       continue;
     }
@@ -379,6 +430,7 @@ export async function runEvaluationGrading(
       // touched again, so running the job twice changes nothing.
       if (pass.standing.get(key)?.state !== "validated") {
         const answer = pass.answers.get(key) ?? null;
+        const config = configOf(attempt);
         const graded = await gradeCell(app, { evaluation, job, item, config, attempt, answer });
         if ("write" in graded) writes.push(graded.write);
         else runnerJobs.push(graded.runner);
@@ -578,10 +630,7 @@ async function gradeWithRunner(
     return;
   }
 
-  const config = loadConfig(item.question.type, {
-    config: item.version.config,
-    configVersion: item.version.configVersion,
-  });
+  const config = loadConfig(item.question.type, itemInstance(item, attempt).version);
   const answerRow = job.answerId
     ? (await db.select().from(answers).where(eq(answers.id, job.answerId)).limit(1))[0]
     : undefined;

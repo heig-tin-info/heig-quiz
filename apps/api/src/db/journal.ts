@@ -5,14 +5,17 @@
  * task M4-02); every other module reads these tables by join and never writes
  * them.
  *
- * GitHub is the source of truth for the CONTENT; these tables are a read
- * model, rebuilt from a push, a Refresh or a browser save, never the thing a
- * teacher edits. Every page and asset carries the blob sha it was copied
- * from: a synchronisation re-renders a page only when its blob moved.
+ * Two modes (ADR-057, D29), the row's `mode`. In Quiz mode these tables ARE
+ * the journal: the teacher edits `journal_pages.markdown`, and each save
+ * keeps a `journal_page_revisions` row. In GitHub mode the repository is the
+ * source of truth for the CONTENT, and these tables are a read-only copy,
+ * rebuilt from a push or a Refresh, never written by a teacher in the
+ * platform. Every page and asset carries the blob sha it was copied from: a
+ * synchronisation re-renders a page only when its blob moved.
  *
- * One journal per classroom, and a journal is a repository (D03): the
- * classroom's row holds the repository, the branch and the root folder, and
- * the pages and assets hang off it by `classroom_id`. Two classrooms on the
+ * One journal per classroom (D03): the pages and assets hang off the
+ * classroom's row by `classroom_id`; in GitHub mode the row holds the
+ * repository, the branch and the root folder. Two classrooms on the
  * same repository each keep their own copy; a push fans out to every row
  * holding its `github_repo_id` (`classroom_journals_repo_idx`). Removing the
  * journal deletes the row, and the copy goes with it by cascade — never the
@@ -35,6 +38,7 @@ import {
 
 import {
   JOURNAL_ASSET_MAX_BYTES,
+  JOURNAL_MODES,
   JOURNAL_SYNC_STATUSES,
   type JournalSyncError,
   type JournalTocEntry,
@@ -51,12 +55,22 @@ export const classroomJournals = pgTable(
     classroomId: uuid("classroom_id")
       .primaryKey()
       .references(() => classrooms.id, { onDelete: "cascade" }),
-    /** GitHub's immutable id of the repository: what a push and a rename carry. */
-    githubRepoId: bigint("github_repo_id", { mode: "number" }).notNull(),
+    /**
+     * Where the content lives (ADR-057): `quiz`, these tables ARE the
+     * journal; `github`, they are a read-only copy of the repository below.
+     * No default: every insertion names its mode.
+     */
+    mode: text("mode", { enum: JOURNAL_MODES }).notNull(),
+    /**
+     * GitHub's immutable id of the repository: what a push and a rename
+     * carry. The three repository columns are set in GitHub mode and null in
+     * Quiz mode (`classroom_journals_mode_ck`).
+     */
+    githubRepoId: bigint("github_repo_id", { mode: "number" }),
     /** `org/name`, followed on a rename. */
-    fullName: text("full_name").notNull(),
+    fullName: text("full_name"),
     /** The branch the copy follows. */
-    ref: text("ref").notNull(),
+    ref: text("ref"),
     /** The folder of the repository holding the pages, "" for its root. */
     rootPath: text("root_path").notNull().default(""),
     /** Head commit the copy was built from; null before the first synchronisation. */
@@ -84,7 +98,14 @@ export const classroomJournals = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("classroom_journals_repo_idx").on(t.githubRepoId)],
+  (t) => [
+    index("classroom_journals_repo_idx").on(t.githubRepoId),
+    check(
+      "classroom_journals_mode_ck",
+      sql`(${t.mode} = 'github' AND ${t.githubRepoId} IS NOT NULL AND ${t.fullName} IS NOT NULL AND ${t.ref} IS NOT NULL)
+        OR (${t.mode} = 'quiz' AND ${t.githubRepoId} IS NULL AND ${t.fullName} IS NULL AND ${t.ref} IS NULL)`,
+    ),
+  ],
 );
 
 /**
@@ -136,6 +157,12 @@ export const journalPages = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
+    /**
+     * Quiz mode's optimistic lock (ADR-057): bumped by every save, a save
+     * against another version is a 409 `conflict` (M4-08). GitHub mode
+     * locks on `blob_sha` and never reads it.
+     */
+    version: integer("version").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -178,4 +205,30 @@ export const journalAssets = pgTable(
       sql`${t.size} BETWEEN 0 AND ${sql.raw(String(JOURNAL_ASSET_MAX_BYTES))}`,
     ),
   ],
+);
+
+/**
+ * A saved state of a Quiz-mode page (ADR-057): one row per save, the source
+ * only (markdown and front matter; assets are not versioned), no limit. Keyed
+ * by the page's path, which a move never changes, so a page deleted and
+ * re-added keeps its history. Staff only: no student route ever reads this
+ * table (invariant 4). Gone with the journal, by cascade.
+ */
+export const journalPageRevisions = pgTable(
+  "journal_page_revisions",
+  {
+    id: uuid("id").primaryKey(),
+    classroomId: uuid("classroom_id")
+      .notNull()
+      .references(() => classroomJournals.classroomId, { onDelete: "cascade" }),
+    path: text("path").notNull(),
+    markdown: text("markdown").notNull(),
+    frontMatter: jsonb("front_matter").$type<Record<string, unknown>>().notNull().default({}),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // A page's history, newest first.
+  (t) => [index("journal_page_revisions_page_idx").on(t.classroomId, t.path, t.createdAt)],
 );

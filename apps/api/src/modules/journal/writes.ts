@@ -1,18 +1,21 @@
 /**
- * The journal's writes (merge task M4-03; spec F-JRN-02..05, F-JRN-10,
- * F-JRN-11; ported from heig-classroom's `modules/journal.ts`, sync point
- * `ab98cc0`, one journal per classroom since D03): create a repository, use
- * one of the organization's, remove the journal, refresh, preview, and the
- * browser's writes — save, add, delete a page, upload an asset.
+ * The journal's writes (merge task M4-03; spec F-JRN-02..05; ported from
+ * heig-classroom's `modules/journal.ts`, sync point `ab98cc0`, one journal
+ * per classroom since D03): create a repository, use one of the
+ * organization's, remove the journal, refresh, preview; the refusals and the
+ * context every write shares.
  *
- * **GitHub first.** A write goes to the repository through the Contents API,
- * against the blob the editor opened (the optimistic lock); only then is the
- * copy rebuilt. A concurrent change is a 409 `conflict`, never a merge.
+ * **GitHub mode is read-only (ADR-057).** Its content is edited on GitHub
+ * (`editUrl` of a page) and reaches the copy by a push or a Refresh. The
+ * writes of the content — save, add, delete a page, upload an asset — are
+ * Quiz mode's (`quiz.ts`, M4-08), which refuses a GitHub-mode journal with
+ * 409 `read_only`. Of M4-03's GitHub writes, what creates a repository and
+ * commits a file (`createRepo`, `putFile`, `commitAuthor`) stays, for the
+ * creation and for M4-11's Move to GitHub.
  *
- * **Every write bumps `classroom_journals.version`** before the copy is
- * rebuilt, so an ingestion that read GitHub before the commit never writes
- * its stale copy over it (J2, `ingest.ts`); a new row starts at a random
- * version for the same reason (below).
+ * A new row starts at a random `version` (below), so an ingestion that read
+ * GitHub for a removed row never writes its stale copy over a new one (J2,
+ * `ingest.ts`).
  *
  * **Every write is audited** (`journal.*`, invariant 9) through the `note` of
  * the route, which knows the actor; an invitation is one entry each (D27).
@@ -23,19 +26,12 @@
  */
 import { randomInt } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import type { Octokit } from "octokit";
 
-import {
-  type JournalErrorCode,
-  type JournalFileWritten,
-  type JournalPageAdd,
-  type JournalPageSave,
-  type JournalPreviewResult,
-  type JournalStaff,
-} from "@quiz/contracts";
-import { journalRepoName, prettifyName, renderPage } from "@quiz/docrender";
+import { type JournalPreviewResult, type JournalStaff } from "@quiz/contracts";
+import { journalRepoName } from "@quiz/docrender";
 import { displayName, repoName } from "@quiz/domain";
 
 import type { AuditAction } from "../../audit.js";
@@ -53,56 +49,29 @@ import {
   journalPages,
   users,
 } from "../../db/schema.js";
-import { githubStatus } from "../../github/app.js";
+import { githubApp, githubStatus } from "../../github/app.js";
 import { inviteCollaborator } from "../../github/collaborators.js";
 import { DomainError } from "../http.js";
+import { JournalError } from "./errors.js";
 import { journalChanged } from "./events.js";
-import { bumpVersion, ingestJournal } from "./ingest.js";
+import { githubJournal } from "./mode.js";
 import {
   boundedClient,
   createRepo,
-  deleteFile,
   findRepo,
   JournalRepoError,
-  putFile,
-  resolveRepo,
   syncErrorOf,
   type CommitAuthor,
   type FoundRepo,
   type ResolvedRepo,
 } from "./repo.js";
-import { requestIngest, staffJournal, staffPage } from "./service.js";
+import { renderAt } from "./rendering.js";
+import { journalRemovalRefused, requestIngest, staffJournal } from "./service.js";
 
 // ---------------------------------------------------------------- refusals
 
-/** The status of each refusal: the state of things (409) but for the upload's own faults and GitHub's silence. An upload over the cap is Fastify's own 413. */
-const STATUS: Record<JournalErrorCode, number> = {
-  repo_not_found: 409,
-  ref_not_found: 409,
-  root_not_found: 409,
-  forbidden: 409,
-  too_large: 409,
-  github_unavailable: 503,
-  not_connected: 409,
-  journal_exists: 409,
-  no_journal: 409,
-  name_taken: 409,
-  conflict: 409,
-  page_exists: 409,
-  type_mismatch: 415,
-  empty_upload: 400,
-};
-
-/** A write refused: `{ error: code, message: code, ...details }`, worded by the web app. */
-export class JournalError extends DomainError {
-  constructor(code: JournalErrorCode, details?: Readonly<Record<string, unknown>>) {
-    super(code, STATUS[code], code, details);
-    this.name = "JournalError";
-  }
-}
-
 /**
- * `work`, its GitHub failures as {@link JournalError}s: a conflict as such,
+ * `work`, its GitHub failures as {@link JournalError}s: a name taken as such,
  * anything GitHub answered (or its silence: a timeout, the network) as the
  * synchronisation's code for it. Anything else — a bug, the database — is
  * thrown as it is, a 500.
@@ -112,7 +81,7 @@ async function onGithub<T>(log: FastifyBaseLogger, work: () => Promise<T>): Prom
     return await work();
   } catch (err) {
     if (err instanceof DomainError) throw err;
-    if (err instanceof JournalRepoError && (err.code === "conflict" || err.code === "name_taken")) {
+    if (err instanceof JournalRepoError && err.code === "name_taken") {
       throw new JournalError(err.code);
     }
     const name = (err as Error | null)?.name;
@@ -166,15 +135,6 @@ function attached(t: Target): NonNullable<Target["journal"]> {
   return t.journal;
 }
 
-/** A journal written to: the row, and a client on its organization's installation. */
-async function writable(ctx: WriteContext, classroomId: string) {
-  const t = await targetOf(ctx.app.db, classroomId);
-  const journal = attached(t);
-  const org = connected(t);
-  const octokit = await onGithub(ctx.app.log, () => boundedClient(ctx.config, org.installationId));
-  return { journal, octokit };
-}
-
 // ---------------------------------------------------------------- context
 
 /** The audit actions of the journal, all of them staff writes (04-journal §4.1). */
@@ -224,28 +184,6 @@ export async function commitAuthor(db: Db, config: AppConfig, userId: string): P
   const email = linked ? `${u.githubUserId}+${u.login}@users.noreply.github.com` : `quiz-${userId}@users.noreply.${host}`;
   const name = displayName({ givenName: u.givenName, familyName: u.familyName, email: null });
   return { name: name || (linked ? u.login! : `quiz-${userId}`), email };
-}
-
-/** A journal path as a path of the repository: under the row's root folder. */
-const repoPath = (journal: { rootPath: string }, path: string) =>
-  journal.rootPath ? `${journal.rootPath}/${path}` : path;
-
-/**
- * After a commit: the row's `version` bumped (an ingestion that read GitHub
- * before the commit loses its compare-and-set), then the copy rebuilt AT
- * ONCE, awaited, so the response carries the page as it now is and the
- * push's webhook finds the copy already at its head (F-JRN-05). Not through
- * the queue: the caller waits for this result, and J2's guarantee is the
- * ingestion's compare-and-set, not the queue. The commit stands whatever
- * happens here: a failure is the copy's sync state, logged, not the write's.
- */
-async function afterCommit(ctx: WriteContext, classroomId: string): Promise<void> {
-  await bumpVersion(ctx.app.db, classroomId);
-  try {
-    await ingestJournal(ctx.app, ctx.config, classroomId);
-  } catch (err) {
-    ctx.app.log.error({ err, classroomId }, "the journal's synchronisation after a write failed");
-  }
 }
 
 // ---------------------------------------------------------------- choosing a repository
@@ -304,7 +242,7 @@ committed here: a page cannot load one from another site.
  * it expects, and write the old repository's copy into it. Half the integer
  * range keeps room for the bumps.
  */
-const freshVersion = () => randomInt(1, 2 ** 30);
+export const freshVersion = () => randomInt(1, 2 ** 30);
 
 /**
  * The row of a classroom's new journal, then the staff invited and the copy
@@ -322,6 +260,7 @@ async function attach(
     .insert(classroomJournals)
     .values({
       classroomId: room.id,
+      mode: "github",
       githubRepoId: repo.githubRepoId,
       fullName: repo.fullName,
       ref: where.ref,
@@ -332,7 +271,7 @@ async function attach(
     .onConflictDoNothing()
     .returning({ classroomId: classroomJournals.classroomId });
   if (inserted.length === 0) throw new JournalError("journal_exists");
-  await ctx.note(action, { fullName: repo.fullName, githubRepoId: repo.githubRepoId, ...where });
+  await ctx.note(action, { mode: "github", fullName: repo.fullName, githubRepoId: repo.githubRepoId, ...where });
   await inviteStaff(ctx, octokit, repo, room);
   await requestIngest(ctx.app, ctx.config, room.id);
   return staffJournal(ctx.app.db, room);
@@ -352,6 +291,8 @@ async function freeName(octokit: Octokit, org: string, name: string, room: Room)
 
 /** `POST /classrooms/:id/journal`: a new private repository with its README (F-JRN-02). */
 export async function createJournal(ctx: WriteContext, room: Room, name: string | undefined): Promise<JournalStaff> {
+  // Without Quiz's App there is no organization to create in (a Quiz-mode journal needs none).
+  if (!githubApp(ctx.config)) throw new JournalError("not_connected");
   const t = await targetOf(ctx.app.db, room.id);
   const org = connected(t);
   if (t.journal) throw new JournalError("journal_exists");
@@ -404,20 +345,33 @@ export async function useJournal(
 }
 
 /**
- * `DELETE /classrooms/:id/journal` (F-JRN-04): the row goes, and its pages
- * and assets with it by cascade; the repository is never touched. Needs no
- * GitHub, nor even an organization still installed — so a journal whose App
- * was uninstalled can still be removed, which in turn lets the classroom be
- * disconnected (D28). Idempotent.
+ * `DELETE /classrooms/:id/journal` (F-JRN-04): the row goes, and its pages,
+ * assets and revisions with it by cascade. In GitHub mode the repository is
+ * never touched; it needs no GitHub, nor even an organization still
+ * installed — so a journal whose App was uninstalled can still be removed,
+ * which in turn lets the classroom be disconnected (D28). In Quiz mode the
+ * pages are the only copy: with any, `confirm` must be the classroom's name
+ * (409 `confirm_required`, nothing removed). Idempotent.
  */
-export async function removeJournal(ctx: WriteContext, classroomId: string): Promise<void> {
-  const removed = await ctx.app.db
-    .delete(classroomJournals)
-    .where(eq(classroomJournals.classroomId, classroomId))
-    .returning({ fullName: classroomJournals.fullName, githubRepoId: classroomJournals.githubRepoId });
-  if (removed.length === 0) return;
-  await ctx.note("journal.remove", removed[0]!);
-  journalChanged([classroomId]);
+export async function removeJournal(ctx: WriteContext, room: Room, confirm: string | undefined): Promise<void> {
+  const removed = await ctx.app.db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({
+        mode: classroomJournals.mode,
+        fullName: classroomJournals.fullName,
+        githubRepoId: classroomJournals.githubRepoId,
+      })
+      .from(classroomJournals)
+      .where(eq(classroomJournals.classroomId, room.id))
+      .for("update");
+    if (!row) return null;
+    const pages = await journalRemovalRefused(tx, room, confirm);
+    await tx.delete(classroomJournals).where(eq(classroomJournals.classroomId, room.id));
+    return { ...row, pages };
+  });
+  if (!removed) return;
+  await ctx.note("journal.remove", removed);
+  journalChanged([room.id]);
 }
 
 // ---------------------------------------------------------------- invitations (D27)
@@ -493,10 +447,12 @@ async function inviteStaff(ctx: WriteContext, octokit: Octokit, repo: ResolvedRe
  * requested — queued, or run without a queue. Its outcome is the row's
  * `syncStatus`, which the `journal` hint makes the client read again. Needs
  * no connection check: the ingestion records an organization no longer
- * installed as `forbidden`.
+ * installed as `forbidden`. A Quiz-mode journal is its own source, always
+ * up to date: nothing to do, nothing audited.
  */
 export async function refreshJournal(ctx: WriteContext, classroomId: string): Promise<void> {
-  const journal = attached(await targetOf(ctx.app.db, classroomId));
+  const journal = githubJournal(attached(await targetOf(ctx.app.db, classroomId)));
+  if (!journal) return;
   await ctx.note("journal.refresh", { fullName: journal.fullName });
   await requestIngest(ctx.app, ctx.config, classroomId);
 }
@@ -513,13 +469,13 @@ export async function previewPage(db: Db, classroomId: string, path: string, mar
     db.select({ path: journalPages.path }).from(journalPages).where(eq(journalPages.classroomId, classroomId)),
     db.select({ path: journalAssets.path }).from(journalAssets).where(eq(journalAssets.classroomId, classroomId)),
   ]);
-  const page = renderPage(markdown, {
+  const page = renderAt(
     classroomId,
-    pagePath: path,
-    fallbackTitle: prettifyName(path),
-    pages: new Set([...pages.map((p) => p.path), path]),
-    assets: new Set(assets.map((a) => a.path)),
-  });
+    path,
+    markdown,
+    new Set([...pages.map((p) => p.path), path]),
+    new Set(assets.map((a) => a.path)),
+  );
   return {
     title: page.title,
     html: page.html,
@@ -528,115 +484,4 @@ export async function previewPage(db: Db, classroomId: string, path: string, mar
     visibleFrom: page.visibleFrom?.toISOString() ?? null,
     warnings: page.warnings,
   };
-}
-
-// ---------------------------------------------------------------- the browser's writes
-
-/** The committed file, and the page as the copy now holds it — if the copy caught up to this very blob. */
-async function written(
-  db: Db,
-  classroomId: string,
-  path: string,
-  commit: { blobSha: string; commitSha: string },
-  isPage: boolean,
-): Promise<JournalFileWritten> {
-  const page = isPage ? await staffPage(db, classroomId, path) : null;
-  return { path, ...commit, page: page?.blobSha === commit.blobSha ? page : null };
-}
-
-/** `PUT /classrooms/:id/journal/pages/*` (F-JRN-10): the page, against the blob the editor opened. */
-export async function savePage(
-  ctx: WriteContext,
-  classroomId: string,
-  path: string,
-  body: JournalPageSave,
-): Promise<JournalFileWritten> {
-  const { journal, octokit } = await writable(ctx, classroomId);
-  const author = await commitAuthor(ctx.app.db, ctx.config, ctx.userId);
-  const commit = await onGithub(ctx.app.log, async () =>
-    putFile(octokit, await resolveRepo(octokit, journal.githubRepoId), {
-      branch: journal.ref,
-      path: repoPath(journal, path),
-      content: Buffer.from(body.markdown, "utf8"),
-      message: body.message ?? `Update ${path}`,
-      author,
-      baseSha: body.baseSha,
-    }),
-  );
-  await ctx.note("journal.save", { path, commitSha: commit.commitSha });
-  await afterCommit(ctx, classroomId);
-  return written(ctx.app.db, classroomId, path, commit, true);
-}
-
-/** `POST /classrooms/:id/journal/pages` (F-JRN-10): a new page, its title as its first heading. */
-export async function addPage(ctx: WriteContext, classroomId: string, body: JournalPageAdd): Promise<JournalFileWritten> {
-  const { journal, octokit } = await writable(ctx, classroomId);
-  if (await staffPage(ctx.app.db, classroomId, body.path)) throw new JournalError("page_exists");
-  const author = await commitAuthor(ctx.app.db, ctx.config, ctx.userId);
-  // No `baseSha`: a file GitHub has and the copy does not yet is a conflict, never overwritten.
-  const commit = await onGithub(ctx.app.log, async () =>
-    putFile(octokit, await resolveRepo(octokit, journal.githubRepoId), {
-      branch: journal.ref,
-      path: repoPath(journal, body.path),
-      content: Buffer.from(body.title ? `# ${body.title}\n` : "", "utf8"),
-      message: `Add ${body.path}`,
-      author,
-    }),
-  );
-  await ctx.note("journal.add", { path: body.path, commitSha: commit.commitSha });
-  await afterCommit(ctx, classroomId);
-  return written(ctx.app.db, classroomId, body.path, commit, true);
-}
-
-/** `DELETE /classrooms/:id/journal/pages/*` (F-JRN-10): against the blob the copy holds. */
-export async function deletePage(ctx: WriteContext, classroomId: string, path: string): Promise<void> {
-  const { journal, octokit } = await writable(ctx, classroomId);
-  const page = await staffPage(ctx.app.db, classroomId, path);
-  if (!page) throw new DomainError("not_found", 404, "not_found");
-  const author = await commitAuthor(ctx.app.db, ctx.config, ctx.userId);
-  const commit = await onGithub(ctx.app.log, async () =>
-    deleteFile(octokit, await resolveRepo(octokit, journal.githubRepoId), {
-      branch: journal.ref,
-      path: repoPath(journal, path),
-      message: `Delete ${path}`,
-      author,
-      baseSha: page.blobSha,
-    }),
-  );
-  await ctx.note("journal.delete", { path, commitSha: commit.commitSha });
-  await afterCommit(ctx, classroomId);
-}
-
-/**
- * `POST /classrooms/:id/journal/assets/*` (F-JRN-11): a file committed into
- * the repository at `path` — the editor puts it beside the page and inserts
- * it with a relative link, never as a platform asset. Replacing a file the
- * copy holds goes against its blob; one GitHub has and the copy does not
- * (not referenced yet) is a conflict, never overwritten.
- */
-export async function uploadAsset(
-  ctx: WriteContext,
-  classroomId: string,
-  path: string,
-  data: Buffer,
-): Promise<JournalFileWritten> {
-  const { journal, octokit } = await writable(ctx, classroomId);
-  const [cached] = await ctx.app.db
-    .select({ blobSha: journalAssets.blobSha })
-    .from(journalAssets)
-    .where(and(eq(journalAssets.classroomId, classroomId), eq(journalAssets.path, path)));
-  const author = await commitAuthor(ctx.app.db, ctx.config, ctx.userId);
-  const commit = await onGithub(ctx.app.log, async () =>
-    putFile(octokit, await resolveRepo(octokit, journal.githubRepoId), {
-      branch: journal.ref,
-      path: repoPath(journal, path),
-      content: data,
-      message: `Upload ${path}`,
-      author,
-      baseSha: cached?.blobSha,
-    }),
-  );
-  await ctx.note("journal.upload", { path, bytes: data.length, commitSha: commit.commitSha });
-  await afterCommit(ctx, classroomId);
-  return written(ctx.app.db, classroomId, path, commit, false);
 }

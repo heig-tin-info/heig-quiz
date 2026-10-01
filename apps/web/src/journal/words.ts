@@ -61,6 +61,9 @@ export const JOURNAL_ERRORS: Record<JournalErrorCode, keyof Dict> = {
   name_taken: "journal.error.name_taken",
   conflict: "journal.error.conflict",
   page_exists: "journal.error.page_exists",
+  asset_exists: "journal.error.asset_exists",
+  confirm_required: "journal.error.confirm_required",
   type_mismatch: "journal.error.type_mismatch",
   empty_upload: "journal.error.empty_upload",
+  read_only: "journal.error.read_only",
 };

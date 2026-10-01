@@ -8,6 +8,9 @@ import {
   instantiate,
   isVariableName,
   ParameterError,
+  replay,
+  sameNames,
+  sameTable,
   validateParameters,
   type Parameters,
   type Values,
@@ -484,6 +487,49 @@ describe("distinctRendered", () => {
     expect(distinctRendered([`${run}x`, `${run}y`, `1${run}`, `${run}.5`])).toBe(true);
     expect(distinctRendered([`${"9".repeat(39)}x`, "9".repeat(39)])).toBe(true);
     expect(distinctRendered([`1${"0".repeat(30)}`, `1${"0".repeat(29)}1`])).toBe(false);
+  });
+});
+
+describe("sameNames / replay (ADR-056 §5)", () => {
+  it("tells whether stored values hold exactly a table's names", () => {
+    const { values } = draw(MRUA, 3);
+    expect(sameNames(MRUA, values)).toBe(true);
+    expect(sameNames(MRUA, { h: 1, g: 2 })).toBe(false);
+    expect(sameNames(MRUA, { ...values, extra: 1 })).toBe(false);
+    expect(sameNames({ rows: [] }, {})).toBe(true);
+  });
+
+  it("tells whether two tables declare the same names, in any order", () => {
+    const reordered: Parameters = { rows: [...MRUA.rows].reverse().map((r) => ({ ...r, expr: "1" })) };
+    expect(sameTable(MRUA, reordered)).toBe(true);
+    expect(sameTable(MRUA, { rows: MRUA.rows.slice(1) })).toBe(false);
+    expect(sameTable(MRUA, { rows: [...MRUA.rows.slice(1), { name: "k", expr: "1", format: "" }] })).toBe(false);
+    expect(sameTable(null, null)).toBe(true);
+    expect(sameTable(null, MRUA)).toBe(false);
+  });
+
+  it("keeps the drawn rows and evaluates the others again, in order and rounded", () => {
+    const { values } = draw(MRUA, 7);
+    // Version N: the same names, a corrected formula for t, a new rounding.
+    const next: Parameters = {
+      rows: [
+        { name: "h", expr: "randint(1, 1000)", format: "int" },
+        { name: "g", expr: "choice([1, 2])", format: ".2" },
+        { name: "t", expr: "sqrt(h/g)", format: ".1" },
+      ],
+    };
+    const replayed = replay(next, values);
+    expect(replayed.h).toBe(values.h);
+    expect(replayed.g).toBe(values.g);
+    expect(replayed.t).toBe(roundToFormat(Math.sqrt((values.h as number) / (values.g as number)), ".1"));
+    // The same table replays to the very same values.
+    expect(replay(MRUA, values)).toEqual(values);
+  });
+
+  it("refuses a drawn row without a stored value, a static issue and a failed evaluation", () => {
+    expect(issueOf(() => replay(MRUA, { g: 9.81, t: 1 }))).toMatchObject({ code: "unknown_name", row: "h" });
+    expect(issueOf(() => replay(one("2pi"), { x: 1 })).code).toBe("forbidden_node");
+    expect(issueOf(() => replay(one("sqrt(-1)"), { x: 1 }))).toMatchObject({ row: "x" });
   });
 });
 

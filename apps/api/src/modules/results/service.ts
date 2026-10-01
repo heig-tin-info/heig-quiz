@@ -35,7 +35,7 @@ import type {
   StudentFeedback,
   StudentResultItem,
 } from "@quiz/contracts";
-import { JUSTIFICATION_KEY } from "@quiz/contracts";
+import { INSTANCE_WARNING_KEY, JUSTIFICATION_KEY } from "@quiz/contracts";
 import {
   evaluationTotal,
   attemptTotal,
@@ -108,6 +108,7 @@ import {
 import { answeredBy } from "../live/service.js";
 import { solutionView, stripKeys, studentSolutionView, studentView } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
+import { exampleInstance, itemInstance } from "../pool/service.js";
 
 export { watchReleasedGrades, type GradeWatch } from "./updated.js";
 
@@ -534,7 +535,11 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
   const { showHiddenCaseNames } = feedbackOf(evaluation);
 
   return items.map((item, index) => {
-    const version = { config: item.version.config, configVersion: item.version.configVersion };
+    // The question as the room reads it: of a parameterized one, the example
+    // instance (seed 0) — every student had their own numbers, and the
+    // debrief groups their answers by verdict (ADR-056 §9).
+    const example = exampleInstance(item.question.type, item.version);
+    const { version } = example;
     const holdsAnswer = answeredBy(item);
     const type = typeOf(item.question.type);
     // Per attempt, so that what it wrote can take the verdict of its grading;
@@ -577,7 +582,7 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
         seed: 0,
         itemId: item.item.id,
       }),
-      explanation: item.version.explanation === "" ? null : item.version.explanation,
+      explanation: example.explanation === "" ? null : example.explanation,
       outcomes,
       distribution,
       casePassRate,
@@ -769,7 +774,10 @@ export async function studentFeedback(
   const result: StudentResultItem[] = items.map((item) => {
     const grading = gradingByItem.get(item.item.id) ?? null;
     const answer = byItem.get(item.item.id) ?? null;
-    const version = { config: item.version.config, configVersion: item.version.configVersion };
+    // The student's OWN instance (ADR-056 §9): the values stored with the
+    // attempt, in the statement, the key and the explanation alike.
+    const instance = itemInstance(item, attempt);
+    const { version } = instance;
     const view = {
       type: item.question.type,
       version,
@@ -793,8 +801,8 @@ export async function studentFeedback(
       // The student's key: the grading criteria stay the teacher's (ADR-037).
       solution: policy.showKey ? studentSolutionView(view) : null,
       explanation:
-        policy.showExplanation && item.version.explanation !== ""
-          ? item.version.explanation
+        policy.showExplanation && instance.explanation !== ""
+          ? instance.explanation
           : null,
       details: grading ? filterDetails(item.question.type, grading.details, policy) : null,
       comment: policy.showTeacherComment ? (grading?.comment ?? null) : null,
@@ -842,7 +850,9 @@ export async function studentFeedback(
  * `showKey` means the teacher chose to publish the key: the details travel
  * whole, both layers off — but for an LLM's justification
  * (`JUSTIFICATION_KEY`), which is the teacher's under every policy
- * (ADR-045, open question 27) and is stripped first.
+ * (ADR-045, open question 27) and is stripped first, as is the warning of
+ * a parameterized question served from a fallback draw
+ * (`INSTANCE_WARNING_KEY`, ADR-056 §7).
  *
  * The list is its OWN, not `FORBIDDEN_STUDENT_KEYS` (`live/studentView.ts`):
  * what carries a key in a grading breakdown is these five fields, and
@@ -860,8 +870,8 @@ export const FORBIDDEN_DETAIL_KEYS: readonly string[] = [
   "referenceSolution",
 ];
 
-const forbiddenDetailKeys = new Set([...FORBIDDEN_DETAIL_KEYS, JUSTIFICATION_KEY]);
-const teacherOnlyDetailKeys = new Set([JUSTIFICATION_KEY]);
+const forbiddenDetailKeys = new Set([...FORBIDDEN_DETAIL_KEYS, JUSTIFICATION_KEY, INSTANCE_WARNING_KEY]);
+const teacherOnlyDetailKeys = new Set([JUSTIFICATION_KEY, INSTANCE_WARNING_KEY]);
 
 /**
  * The one exception of layer 2, and it is the published half of a `code`

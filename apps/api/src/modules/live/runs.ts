@@ -20,6 +20,7 @@ import { compilesPerMinute } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { loadConfig, typeOf } from "../pool/config.js";
+import { itemInstance } from "../pool/service.js";
 import type { EvaluationRecord } from "../evaluation/service.js";
 import { gradeDefaults, joinedItem } from "../evaluation/service.js";
 import * as events from "./events.js";
@@ -84,7 +85,7 @@ async function attemptRunContext<T>(
   if (!joined) throw new LiveError("not_found", 404);
 
   const type = typeOf(joined.question.type);
-  const version = { config: joined.version.config, configVersion: joined.version.configVersion };
+  const { version } = itemInstance(joined, attempt);
   const student = runnableView(
     studentView({ type: joined.question.type, version, seed: attempt.seed, itemId, shuffle: false }),
   );

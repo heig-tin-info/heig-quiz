@@ -1,9 +1,11 @@
 /**
  * The journal's routes (spec 05 §5.11), base `/app/api/classrooms/:id/journal`:
  * the reads (F-JRN-07, F-JRN-12) — the navigation, a page, an asset — and
- * the staff's writes ({@link registerWrites}, M4-03). Registered only when
- * Quiz's App is configured (`app.ts`), like the rest of the GitHub work:
- * without it none exists.
+ * the staff's writes ({@link registerWrites}, M4-03, M4-08). Registered on
+ * every platform: a Quiz-mode journal needs no GitHub (ADR-057). What only a
+ * GitHub-mode journal does — use a repository, Refresh, the webhooks — is
+ * registered only with Quiz's App configured, like the rest of the GitHub
+ * work; without it, creating a GitHub-mode journal is 409 `not_connected`.
  *
  * Every read loads the classroom through `readableClassroom` (invariant 6):
  * the course's staff get the staff payload unless `?view=student` narrows it
@@ -26,6 +28,9 @@ import {
   JournalPageParams,
   JournalPageSave,
   JournalPreview,
+  JournalRemoveQuery,
+  JournalRestore,
+  JournalRevisionParams,
   JournalUploadHeaders,
   JournalUse,
   JournalViewQuery,
@@ -33,10 +38,13 @@ import {
 
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
+import { githubApp } from "../../github/app.js";
 import { accessibleClassroom, readableClassroom } from "../guards.js";
 import { notFound, studentRoute, teacherRoute } from "../http.js";
 import { INERT_IMAGE_HEADERS } from "../pool/assets.js";
+import { JournalError } from "./errors.js";
 import { registerJournalHandlers } from "./jobs.js";
+import * as quiz from "./quiz.js";
 import * as service from "./service.js";
 import * as studentView from "./studentView.js";
 import * as writes from "./writes.js";
@@ -65,7 +73,7 @@ const SVG_HEADERS = {
 } as const;
 
 export async function journalPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
-  registerJournalHandlers();
+  if (githubApp(opts.config)) registerJournalHandlers();
   const read = studentRoute(app);
   const session = { preHandler: (req: FastifyRequest, reply: FastifyReply) => app.requireSession(req, reply) };
   const base = "/app/api/classrooms/:id/journal";
@@ -119,7 +127,8 @@ export async function journalPlugin(app: FastifyInstance, opts: { config: AppCon
 }
 
 /**
- * The writes (M4-03, `writes.ts`): the course's STAFF only, loaded through
+ * The writes (M4-03, `writes.ts`; the content's, Quiz mode only, M4-08,
+ * `quiz.ts`) and the revisions' reads: the course's STAFF only, loaded through
  * `accessibleClassroom` (invariant 6): a student, a teacher off the staff and
  * a missing classroom get the same 404, and a staff member reading in the
  * student view is still staff here (a write is never a student's). Portal
@@ -142,43 +151,57 @@ async function registerWrites(app: FastifyInstance, config: AppConfig, base: str
     note: (action, payload) => trace(req, action, "classroom", room.id, payload),
   });
 
-  /** Create a repository (F-JRN-02); 409 `name_taken` with a `suggestion`, never an adoption. */
+  /**
+   * Create a journal, by its mode (ADR-057): held in Quiz, or a new
+   * repository (F-JRN-02; 409 `name_taken` with a `suggestion`, never an
+   * adoption).
+   */
   app.post(
     base,
     session,
-    teacher({ ...onClassroom, body: JournalCreate, optionalBody: true }, async ({ req, reply, body, scope }) =>
-      reply.code(201).send(await writes.createJournal(as(req, scope.room), scope.room, body.name)),
-    ),
+    teacher({ ...onClassroom, body: JournalCreate }, async ({ req, reply, body, scope }) => {
+      const ctx = as(req, scope.room);
+      const created =
+        body.mode === "quiz"
+          ? await quiz.createQuizJournal(ctx, scope.room)
+          : await writes.createJournal(ctx, scope.room, body.name);
+      return reply.code(201).send(created);
+    }),
   );
 
-  /** Use a repository of the organization (F-JRN-03, D27). */
-  app.post(
-    `${base}/use`,
-    session,
-    teacher({ ...onClassroom, body: JournalUse }, async ({ req, reply, body, scope }) =>
-      reply.code(201).send(await writes.useJournal(as(req, scope.room), scope.room, body)),
-    ),
-  );
-
-  /** Remove the journal (F-JRN-04): the copy goes, the repository stays. */
+  /**
+   * Remove the journal (F-JRN-04): the copy goes, the repository stays; a
+   * Quiz-mode journal's pages, the only copy, with the classroom's name typed.
+   */
   app.delete(
     base,
     session,
-    teacher(onClassroom, async ({ req, reply, scope }) => {
-      await writes.removeJournal(as(req, scope.room), scope.room.id);
+    teacher({ ...onClassroom, query: JournalRemoveQuery }, async ({ req, reply, query, scope }) => {
+      await writes.removeJournal(as(req, scope.room), scope.room, query.confirm);
       return reply.code(204).send();
     }),
   );
 
-  app.post(
-    `${base}/refresh`,
-    session,
-    teacher(onClassroom, async ({ req, reply, scope }) => {
-      await writes.refreshJournal(as(req, scope.room), scope.room.id);
-      // The outcome is the row's `syncStatus`, read again on the `journal` hint.
-      return reply.code(202).send();
-    }),
-  );
+  if (githubApp(config)) {
+    /** Use a repository of the organization (F-JRN-03, D27). */
+    app.post(
+      `${base}/use`,
+      session,
+      teacher({ ...onClassroom, body: JournalUse }, async ({ req, reply, body, scope }) =>
+        reply.code(201).send(await writes.useJournal(as(req, scope.room), scope.room, body)),
+      ),
+    );
+
+    app.post(
+      `${base}/refresh`,
+      session,
+      teacher(onClassroom, async ({ req, reply, scope }) => {
+        await writes.refreshJournal(as(req, scope.room), scope.room.id);
+        // The outcome is the row's `syncStatus`, read again on the `journal` hint.
+        return reply.code(202).send();
+      }),
+    );
+  }
 
   /** A read behind a POST (the body is the markdown): no mutation hint. */
   app.post(
@@ -193,7 +216,7 @@ async function registerWrites(app: FastifyInstance, config: AppConfig, base: str
     `${base}/pages/*`,
     session,
     teacher({ ...onPage, body: JournalPageSave }, async ({ req, params, body, scope }) =>
-      writes.savePage(as(req, scope.room), scope.room.id, params["*"], body),
+      quiz.savePage(as(req, scope.room), scope.room.id, params["*"], body),
     ),
   );
 
@@ -201,16 +224,48 @@ async function registerWrites(app: FastifyInstance, config: AppConfig, base: str
     `${base}/pages`,
     session,
     teacher({ ...onClassroom, body: JournalPageAdd }, async ({ req, reply, body, scope }) =>
-      reply.code(201).send(await writes.addPage(as(req, scope.room), scope.room.id, body)),
+      reply.code(201).send(await quiz.addPage(as(req, scope.room), scope.room.id, body)),
     ),
   );
 
   app.delete(
     `${base}/pages/*`,
     session,
-    teacher(onPage, async ({ req, reply, params, scope }) => {
-      await writes.deletePage(as(req, scope.room), scope.room.id, params["*"]);
-      return reply.code(204).send();
+    teacher(onPage, async ({ req, reply, params, scope }) =>
+      (await quiz.deletePage(as(req, scope.room), scope.room.id, params["*"])) ? reply.code(204).send() : notFound(reply),
+    ),
+  );
+
+  /** A page's revisions, newest first (ADR-057), a deleted page's too. */
+  app.get(
+    `${base}/revisions/*`,
+    session,
+    teacher(onPage, async ({ params, scope }) => quiz.revisions(app.db, scope.room.id, params["*"])),
+  );
+
+  /** One revision with its markdown. */
+  app.get(
+    `${base}/revision/:revisionId`,
+    session,
+    teacher({ params: JournalRevisionParams, load }, async ({ reply, params, scope }) =>
+      (await quiz.revision(app.db, scope.room.id, params.revisionId)) ?? notFound(reply),
+    ),
+  );
+
+  /** The deleted pages a revision can bring back. */
+  app.get(
+    `${base}/deleted`,
+    session,
+    teacher(onClassroom, async ({ scope }) => quiz.deletedPages(app.db, scope.room.id)),
+  );
+
+  /** A revision restored: a save, or the deleted page created again. */
+  app.post(
+    `${base}/restore`,
+    session,
+    teacher({ ...onClassroom, body: JournalRestore }, async ({ req, reply, body, scope }) => {
+      const restored = await quiz.restoreRevision(as(req, scope.room), scope.room.id, body.revisionId);
+      return restored ?? notFound(reply);
     }),
   );
 
@@ -230,10 +285,10 @@ async function registerWrites(app: FastifyInstance, config: AppConfig, base: str
       teacher({ params: JournalAssetParams, load }, async ({ req, reply, params, scope }) => {
         const path = params["*"];
         const declared = JournalUploadHeaders.parse(req.headers)["content-type"];
-        if (declared !== assetContentType(path)) throw new writes.JournalError("type_mismatch");
+        if (declared !== assetContentType(path)) throw new JournalError("type_mismatch");
         const data = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-        if (data.length === 0) throw new writes.JournalError("empty_upload");
-        return reply.code(201).send(await writes.uploadAsset(as(req, scope.room), scope.room.id, path, data));
+        if (data.length === 0) throw new JournalError("empty_upload");
+        return reply.code(201).send(await quiz.uploadAsset(as(req, scope.room), scope.room.id, path, data));
       }),
     );
   });

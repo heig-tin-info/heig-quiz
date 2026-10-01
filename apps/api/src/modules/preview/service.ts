@@ -75,7 +75,8 @@ import {
   visibleRunRequest,
   visibleRunResult,
 } from "../live/visibleRun.js";
-import { hasKey, loadConfig, typeOf } from "../pool/config.js";
+import { hasKey, loadConfig, typeOf, type StaticVersion } from "../pool/config.js";
+import { instanceOf } from "../pool/service.js";
 
 // --- Failures -------------------------------------------------------------
 
@@ -209,10 +210,12 @@ export async function itemSolution(
 async function previewedItem(db: Db, evaluation: EvaluationRecord, itemId: string) {
   const joined = await joinedItem(db, evaluation.id, itemId);
   if (!joined) throw notFound();
-  const version = { config: joined.version.config, configVersion: joined.version.configVersion };
+  const view = teacherPreviewView(joined.item.id);
+  // A parameterized question shows the instance of the view's seed (ADR-056).
+  const { version } = instanceOf(joined.question.type, joined.version, view);
   return {
     joined,
-    input: { type: joined.question.type, version, ...teacherPreviewView(joined.item.id) },
+    input: { type: joined.question.type, version, ...view },
   };
 }
 
@@ -223,7 +226,8 @@ async function previewItem(db: Db, evaluation: EvaluationRecord, itemId: string,
   const joined = await joinedItem(db, evaluation.id, itemId);
   // An item of another evaluation is indistinguishable from none (invariant 6).
   if (!joined) throw notFound();
-  const version = { config: joined.version.config, configVersion: joined.version.configVersion };
+  // The preview stores nothing: the instance of its seed, drawn again (ADR-056 §5).
+  const { version } = instanceOf(joined.question.type, joined.version, { seed, itemId });
   return {
     joined,
     type: typeOf(joined.question.type),
@@ -363,6 +367,7 @@ async function gradeItem(
   evaluation: EvaluationRecord,
   item: JoinedItem,
   seed: number,
+  version: StaticVersion,
   payload: unknown,
   now: Date,
   log: (err: unknown, msg: string) => void,
@@ -370,10 +375,7 @@ async function gradeItem(
   const type = typeOf(item.question.type);
   let config: unknown;
   try {
-    config = loadConfig(item.question.type, {
-      config: item.version.config,
-      configVersion: item.version.configVersion,
-    });
+    config = loadConfig(item.question.type, version);
   } catch (err) {
     log(err, "preview: unreadable question config");
     return ungraded("grader_error");
@@ -463,11 +465,13 @@ export async function gradePreview(
     // preview): there is nothing left to grade, and no reason to fail.
     if (!item) continue;
     const payload = answers.has(shown.id) ? answers.get(shown.id) : undefined;
-    const outcome = await gradeItem(input.runner, evaluation, item, seed, payload, now, input.log);
+    // The instance the player showed: the same seed draws the same values (ADR-056 §5).
+    const instance = instanceOf(item.question.type, item.version, { seed, itemId: shown.id });
+    const { version } = instance;
+    const outcome = await gradeItem(input.runner, evaluation, item, seed, version, payload, now, input.log);
     if (outcome.points !== null) scored.push(outcome.points);
     // An answer to grade by hand is expected, not a failure: not counted here.
     if (!["graded", "no_key", "manual"].includes(outcome.status)) pending += 1;
-    const version = { config: item.version.config, configVersion: item.version.configVersion };
     items.push({
       itemId: shown.id,
       position: rank,
@@ -487,7 +491,7 @@ export async function gradePreview(
       solution: outcome.status === "no_key"
         ? null
         : studentSolutionView({ type: item.question.type, version, seed, itemId: shown.id }),
-      explanation: item.version.explanation === "" ? null : item.version.explanation,
+      explanation: instance.explanation === "" ? null : instance.explanation,
       details: outcome.details ?? null,
       ...(outcome.comment === undefined ? {} : { comment: outcome.comment }),
     });

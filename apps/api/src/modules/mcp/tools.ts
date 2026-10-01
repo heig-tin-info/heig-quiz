@@ -26,6 +26,7 @@ import {
   EvaluationCreate,
   EvaluationPatch,
   OAUTH_SCOPE,
+  ParametersDraft,
   PoolCreate,
   PollQuestionType,
   QuestionCreate,
@@ -98,16 +99,29 @@ const metaOf = (args: Record<string, unknown>) =>
       .map((key) => [key, args[key]]),
   );
 
+/**
+ * The variables of a parameterized question (ADR-056), as a tool takes them:
+ * the table's shape; its rules — names, formats, expressions — are the
+ * domain's, which the pre-check (`checkConfig`) and the publication apply.
+ */
+const Variables = ParametersDraft.nullable()
+  .optional()
+  .describe(
+    "mcq, short (number key) and cloze only: an ordered table of variables `{ rows: [{ name, expr, format }], " +
+      "condition? }`, drawn per attempt; null makes the question static. See `describe_question_types`.",
+  );
+
 /** Saves the draft, then publishes it unless asked not to; the shared tail of both question writers. */
 async function saveAndPublish(
   api: Api,
   questionId: string,
-  draft: { config: unknown; explanation?: string | undefined },
+  draft: { config: unknown; explanation?: string | undefined; variables?: ParametersDraft | null | undefined },
   publish: boolean,
 ) {
   const saved = await api.put(`/questions/${questionId}/draft`, {
     config: draft.config,
     ...(draft.explanation === undefined ? {} : { explanation: draft.explanation }),
+    ...(draft.variables === undefined ? {} : { variables: draft.variables }),
   });
   let version: number | null = null;
   if (publish && saved.valid) {
@@ -398,6 +412,7 @@ export const TOOLS: Tool[] = [
       internalName: QuestionCreate.shape.internalName,
       config: z.record(z.string(), z.unknown()),
       explanation: z.string().max(20_000).optional(),
+      variables: Variables,
       categoryId: Id.nullable().optional(),
       difficulty: Difficulty.optional().describe("1 (easy) to 5 (hard); 3 by default"),
       tags: Tags.optional(),
@@ -406,7 +421,7 @@ export const TOOLS: Tool[] = [
     annotations: WRITE,
     run: async (api, a) => {
       if (a.publish) {
-        const issues = checkConfig(a.type, a.config);
+        const issues = checkConfig(a.type, a.config, { explanation: a.explanation, variables: a.variables });
         if (issues) throw new ToolRefusal("The config does not satisfy the type's schema; nothing was created.", issues);
       }
       const created = await api.post(`/pools/${a.poolId}/questions`, {
@@ -417,7 +432,12 @@ export const TOOLS: Tool[] = [
       const id: string = created.meta.id;
       const meta = metaOf({ difficulty: a.difficulty, tags: a.tags });
       if (Object.keys(meta).length > 0) await api.patch(`/questions/${id}`, meta);
-      return saveAndPublish(api, id, { config: a.config, explanation: a.explanation }, a.publish);
+      return saveAndPublish(
+        api,
+        id,
+        { config: a.config, explanation: a.explanation, variables: a.variables },
+        a.publish,
+      );
     },
   }),
 
@@ -431,6 +451,7 @@ export const TOOLS: Tool[] = [
       questionId: Id,
       config: z.record(z.string(), z.unknown()).optional(),
       explanation: z.string().max(20_000).optional(),
+      variables: Variables,
       ...QuestionPatch.shape,
       publish: z.boolean().default(true),
     }),
@@ -439,15 +460,24 @@ export const TOOLS: Tool[] = [
       const current = await api.get(`/questions/${a.questionId}`);
       const meta = metaOf(a);
       if (Object.keys(meta).length > 0) await api.patch(`/questions/${a.questionId}`, meta);
-      if (a.config === undefined && a.explanation === undefined && !a.publish) {
+      if (a.config === undefined && a.explanation === undefined && a.variables === undefined && !a.publish) {
         return { questionId: a.questionId, url: api.link(`/questions/${a.questionId}`) };
       }
       const config = a.config ?? current.draft?.config;
       if (a.publish) {
-        const issues = checkConfig(current.meta.type, config);
+        const issues = checkConfig(current.meta.type, config, {
+          explanation: a.explanation ?? current.draft?.explanation,
+          // Absent: the draft's own table, which the publication will read.
+          variables: a.variables === undefined ? current.draft?.variables : a.variables,
+        });
         if (issues) throw new ToolRefusal("The config does not satisfy the type's schema; nothing was published.", issues);
       }
-      return saveAndPublish(api, a.questionId, { config, explanation: a.explanation }, a.publish);
+      return saveAndPublish(
+        api,
+        a.questionId,
+        { config, explanation: a.explanation, variables: a.variables },
+        a.publish,
+      );
     },
   }),
 

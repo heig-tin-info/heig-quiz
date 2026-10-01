@@ -93,6 +93,9 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   super_powers_required: "error.superPowersRequired",
   // ADR-055 §6: the test e-mail of an admin account without an address.
   no_email: "error.noEmail",
+  // ADR-056 §5 and §10: a regrade across other variables, a poll on a parameterized question.
+  variables_changed: "error.variablesChanged",
+  poll_parameterized: "error.pollParameterized",
 };
 
 /** Server-provided error message of a failed call (or its worded code), or the fallback. */

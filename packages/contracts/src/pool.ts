@@ -9,6 +9,7 @@
 import { z } from "zod";
 
 import { BoolFlag, IntList, StringList, ZodIssueLite, pageOf } from "./common.js";
+import { ParametersDraft } from "./parameters.js";
 
 /**
  * The question types of the MVP. `QUESTION_TYPE_IDS` in `@quiz/core` is the
@@ -337,7 +338,6 @@ export const QuestionPatch = z
     categoryId: z.uuid().nullable().optional(),
     difficulty: z.number().int().min(1).max(5).optional(),
     shuffleable: z.boolean().optional(),
-    randomizable: z.boolean().optional(),
     tags: z.array(z.string().trim().min(1).max(64)).max(32).optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: "Nothing to update" });
@@ -348,6 +348,8 @@ export type QuestionPatch = z.infer<typeof QuestionPatch>;
 export const QuestionDraft = z.object({
   config: z.unknown(),
   explanation: z.string(),
+  /** The variables table (ADR-056); null for a static question. Never in a student schema. */
+  variables: ParametersDraft.nullable(),
   configVersion: z.number().int(),
   updatedAt: z.string(),
   /** False when the stored config does not satisfy the type's schema (D16). */
@@ -359,6 +361,11 @@ export type QuestionDraft = z.infer<typeof QuestionDraft>;
 export const DraftPut = z.object({
   config: z.unknown(),
   explanation: z.string().max(20_000).optional(),
+  /**
+   * The variables table (ADR-056), stored as sent like the config (D16):
+   * absent keeps the draft's, null makes the question static again.
+   */
+  variables: ParametersDraft.nullable().optional(),
 });
 export type DraftPut = z.infer<typeof DraftPut>;
 
@@ -382,6 +389,7 @@ export type VersionRow = z.infer<typeof VersionRow>;
 export const VersionDetail = VersionRow.extend({
   config: z.unknown(),
   explanation: z.string(),
+  variables: ParametersDraft.nullable(),
   configVersion: z.number().int(),
 });
 export type VersionDetail = z.infer<typeof VersionDetail>;

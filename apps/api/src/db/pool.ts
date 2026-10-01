@@ -28,6 +28,8 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import type { ParametersDraft } from "@quiz/contracts";
+
 import { POOL_COLORS } from "@quiz/contracts";
 
 import { users } from "./auth.js";
@@ -168,6 +170,11 @@ export const questions = pgTable(
     internalName: text("internal_name").notNull(),
     difficulty: smallint("difficulty").notNull().default(2),
     shuffleable: boolean("shuffleable").notNull().default(true),
+    /**
+     * Derived, never patched (ADR-056 §1): whether the LATEST published
+     * version declares variables. Written by every version write that
+     * publishes (`publishQuestion`); the list's Parameterized pill reads it.
+     */
     randomizable: boolean("randomizable").notNull().default(false),
     createdBy: uuid("created_by").references(() => users.id),
     /** Set when the question was copied from another one (`POST /copy`). */
@@ -252,6 +259,14 @@ export const questionVersions = pgTable(
     config: jsonb("config").notNull(),
     configVersion: integer("config_version").notNull().default(1),
     explanation: text("explanation").notNull().default(""),
+    /**
+     * The variables table of a parameterized question (ADR-056 §1), null for
+     * a static one. A header field: it belongs to no question type. A draft
+     * stores it as sent, like `config` (D16); a published version holds a
+     * table publication validated. Never sent toward a student: a reader
+     * gets an instance (`pool/instance.ts`).
+     */
+    variables: jsonb("variables").$type<ParametersDraft | null>(),
     searchText: text("search_text").notNull().default(""),
     search: tsvector("search").generatedAlwaysAs(
       sql`to_tsvector('simple', search_text)`,

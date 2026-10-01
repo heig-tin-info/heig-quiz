@@ -240,6 +240,7 @@ describe("results_updated across a regrade (F-GRADE-06)", () => {
         evaluationId: built.evaluationId,
         itemId: built.itemIds[item]!,
         questionId: built.questionIds[item]!,
+        variables: null,
       },
       { note: "key fixed" },
     );
@@ -282,6 +283,7 @@ describe("results_updated across a regrade (F-GRADE-06)", () => {
         evaluationId: built.evaluationId,
         itemId: built.itemIds[0]!,
         questionId: built.questionIds[0]!,
+        variables: null,
       },
       { note: "key fixed" },
     );

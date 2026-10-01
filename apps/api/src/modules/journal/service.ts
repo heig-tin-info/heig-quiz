@@ -1,8 +1,9 @@
 /**
  * The `journal` module (ADR-049 and its addendum, spec 05 §5.11,
- * docs/merge/04-journal.md): a classroom's course documentation, held in a
- * GitHub repository and copied into `classroom_journals`, `journal_pages`
- * and `journal_assets`, which this module alone writes.
+ * docs/merge/04-journal.md, ADR-057): a classroom's course documentation,
+ * held in Quiz itself or in a GitHub repository copied in, in
+ * `classroom_journals`, `journal_pages`, `journal_assets` and
+ * `journal_page_revisions`, which this module alone writes.
  *
  * This entry is what the routes and the other modules call: whether a
  * classroom has a journal (the student's classroom page), the STAFF
@@ -11,7 +12,7 @@
  * (invariant 4). Reads never touch GitHub: a page view is a SELECT, and a
  * GitHub outage leaves the journal readable (N-RES-07).
  */
-import { and, eq, sql } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import type { JournalPageStaff, JournalRepository, JournalStaff } from "@quiz/contracts";
@@ -19,14 +20,14 @@ import { buildNav, homePage, journalRepoName } from "@quiz/docrender";
 
 import { isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import { classroomJournals, journalAssets, journalPages } from "../../db/schema.js";
 import { JOURNAL_INGEST_QUEUE } from "../../jobs.js";
 import type { ClassroomPayload } from "../guards.js";
+import { JournalError } from "./errors.js";
 import { ingestJournal } from "./ingest.js";
+import { editUrl, githubJournal, type GithubJournal, type JournalRow } from "./mode.js";
 import { studentMayFetch, visibleToStudents } from "./studentView.js";
-
-type JournalRow = typeof classroomJournals.$inferSelect;
 
 /** Whether the classroom has a journal (F-JRN-01): its Journal tab exists exactly then. */
 export async function hasJournal(db: Db, classroomId: string): Promise<boolean> {
@@ -48,7 +49,7 @@ async function journalRow(db: Db, classroomId: string): Promise<JournalRow | nul
 /** Not served to students right now: the negation of THE predicate. */
 const hiddenFromStudents = () => sql<boolean>`NOT (${visibleToStudents()})`;
 
-function repositoryView(row: JournalRow): JournalRepository {
+function repositoryView(row: GithubJournal): JournalRepository {
   return {
     fullName: row.fullName,
     ref: row.ref,
@@ -58,8 +59,8 @@ function repositoryView(row: JournalRow): JournalRepository {
     syncError: row.syncError,
     lastSyncedAt: isoOrNull(row.lastSyncedAt),
     lastCommitSha: row.lastCommitSha,
-    // Nothing can be written before the copy knows the head it writes over.
-    editable: row.syncStatus === "ok" && row.lastCommitSha !== null,
+    // Read-only in the platform (ADR-057): edited on GitHub, `editUrl` of a page.
+    editable: false,
   };
 }
 
@@ -69,11 +70,13 @@ export async function staffJournal(db: Db, room: { id: string; name: string }): 
   if (!row) {
     return {
       view: "staff",
+      mode: null,
       repository: null,
       nav: [],
       homePath: null,
       hiddenPaths: [],
       warningCount: 0,
+      pageCount: 0,
       proposedName: journalRepoName(room.name),
     };
   }
@@ -88,25 +91,33 @@ export async function staffJournal(db: Db, room: { id: string; name: string }): 
     })
     .from(journalPages)
     .where(eq(journalPages.classroomId, room.id));
+  const github = githubJournal(row);
   return {
     view: "staff",
-    repository: repositoryView(row),
+    mode: row.mode,
+    repository: github ? repositoryView(github) : null,
     nav: buildNav(pages),
     homePath: homePage(pages)?.path ?? null,
     hiddenPaths: pages.filter((p) => p.hidden).map((p) => p.path).sort(),
     warningCount: pages.filter((p) => p.warned).length,
+    pageCount: pages.length,
     proposedName: null,
   };
 }
 
-/** `GET /classrooms/:id/journal/pages/*` for the staff: the page, its source and its lock. */
-export async function staffPage(db: Db, classroomId: string, path: string): Promise<JournalPageStaff | null> {
+/**
+ * `GET /classrooms/:id/journal/pages/*` for the staff: the page, its source,
+ * its lock, and in GitHub mode where to edit it.
+ */
+export async function staffPage(db: Db | Tx, classroomId: string, path: string): Promise<JournalPageStaff | null> {
   const [page] = await db
-    .select({ page: journalPages, hidden: hiddenFromStudents() })
+    .select({ page: journalPages, journal: classroomJournals, hidden: hiddenFromStudents() })
     .from(journalPages)
+    .innerJoin(classroomJournals, eq(classroomJournals.classroomId, journalPages.classroomId))
     .where(and(eq(journalPages.classroomId, classroomId), eq(journalPages.path, path)));
   if (!page) return null;
   const p = page.page;
+  const github = githubJournal(page.journal);
   return {
     view: "staff",
     path: p.path,
@@ -118,9 +129,36 @@ export async function staffPage(db: Db, classroomId: string, path: string): Prom
     visibleFrom: isoOrNull(p.visibleFrom),
     hidden: page.hidden,
     markdown: p.markdown,
-    blobSha: p.blobSha,
+    version: p.version,
     warnings: p.warnings,
+    editUrl: github ? editUrl(github, p.path) : null,
   };
+}
+
+/**
+ * The one guard of F-JRN-04 (ADR-057): a Quiz-mode journal holding pages is
+ * the only copy of them, and goes — by its removal, or by its classroom's
+ * deletion (F-ORG-09, `org`'s route) — only with the classroom's name typed
+ * as `confirm`: 409 `confirm_required` otherwise. A GitHub-mode journal (the
+ * repository stays) or an empty one needs nothing. Returns the journal's
+ * page count (0 with no journal), what the removal audits.
+ */
+export async function journalRemovalRefused(
+  db: Db | Tx,
+  room: { id: string; name: string },
+  confirm: string | undefined,
+): Promise<number> {
+  const [row] = await db
+    .select({ mode: classroomJournals.mode, pages: count(journalPages.id) })
+    .from(classroomJournals)
+    .leftJoin(journalPages, eq(journalPages.classroomId, classroomJournals.classroomId))
+    .where(eq(classroomJournals.classroomId, room.id))
+    .groupBy(classroomJournals.mode);
+  const pages = row?.pages ?? 0;
+  if (row?.mode === "quiz" && pages > 0 && confirm?.trim() !== room.name.trim()) {
+    throw new JournalError("confirm_required");
+  }
+  return pages;
 }
 
 /**
@@ -144,7 +182,7 @@ export async function journalAsset(db: Db, classroomId: string, path: string, pa
 /**
  * Asks for a classroom's copy to be rebuilt: one `journal.ingest` job. The
  * webhook's push handler calls it, and so do the Refresh and the choice of a
- * repository (M4-03; a browser save rebuilds at once, `writes.ts`). Without a
+ * repository (M4-03). Without a
  * queue (`JOBS_DISABLED=1`, a queue failed at boot) the ingestion runs here,
  * awaited, its failure recorded on the row by the ingestion itself. J2 is the
  * ingestion's compare-and-set, not the queue's.

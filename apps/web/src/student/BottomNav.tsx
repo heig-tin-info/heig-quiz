@@ -11,16 +11,12 @@ import { visibleSlots, type BottomSlot, type BottomSlotId } from "./bottomNavSlo
 
 /**
  * Each slot's icon and label, for the bar and for the student's sidebar rows
- * that mirror it (`sidebarSlots`). `sidebarLabel`: the sidebar has room for
- * the page's own title where the bar needs a shorter word.
+ * that mirror it (`sidebarSlots`): one label, the page's own name.
  */
-export const SLOT_LOOK: Record<
-  BottomSlotId,
-  { icon: IconType; label: keyof Dict; sidebarLabel?: keyof Dict }
-> = {
+export const SLOT_LOOK: Record<BottomSlotId, { icon: IconType; label: keyof Dict }> = {
   activities: { icon: CalendarRange, label: "nav.activities" },
   courses: { icon: School, label: "nav.courses" },
-  drill: { icon: Dumbbell, label: "bnav.drill", sidebarLabel: "nav.drill" },
+  drill: { icon: Dumbbell, label: "nav.drill" },
   grades: { icon: Trophy, label: "bnav.grades" },
   profile: { icon: UserRound, label: "bnav.profile" },
 };

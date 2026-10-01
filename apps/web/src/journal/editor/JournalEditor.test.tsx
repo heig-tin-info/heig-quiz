@@ -27,7 +27,6 @@ document.elementFromPoint ??= () => null;
 
 const BASE = "/app/api/classrooms/r1/journal";
 const PATH = "semaine-01/index.md";
-const SHA = "a".repeat(40);
 const MARKDOWN = [
   "---",
   "title: Semaine 1",
@@ -44,6 +43,7 @@ const MARKDOWN = [
 
 const journal = (editable = true): JournalStaff => ({
   view: "staff",
+  mode: "github",
   repository: {
     fullName: "heig-tin-info/prg1-journal",
     ref: "main",
@@ -66,6 +66,7 @@ const journal = (editable = true): JournalStaff => ({
   homePath: PATH,
   hiddenPaths: [],
   warningCount: 0,
+  pageCount: 0,
   proposedName: null,
 });
 
@@ -80,16 +81,15 @@ const page = (over: Partial<JournalPageStaff> = {}): JournalPageStaff => ({
   visibleFrom: null,
   hidden: false,
   markdown: MARKDOWN,
-  blobSha: SHA,
+  version: 4,
   warnings: [],
+  editUrl: null,
   ...over,
 });
 
 const written = (markdown: string): JournalFileWritten => ({
   path: PATH,
-  blobSha: "b".repeat(40),
-  commitSha: "d".repeat(40),
-  page: page({ markdown, blobSha: "b".repeat(40), html: "<p>Saved.</p>" }),
+  page: page({ markdown, version: 5, html: "<p>Saved.</p>" }),
 });
 
 const navigateSpy = vi.fn();
@@ -206,8 +206,7 @@ describe("D25 (2): the front matter as fields", () => {
         "author: Yves\n",
         "author: Yves\ndraft: true\n",
       ),
-      baseSha: SHA,
-      message: "Rename week 1",
+      baseVersion: 4,
     });
     // Saved: back to reading.
     expect(await screen.findByText("Page saved.")).toBeInTheDocument();
@@ -371,7 +370,7 @@ describe("D25 (3): a picture goes into the repository, with a relative path", ()
     });
     const UPLOAD = `${BASE}/assets/semaine-01/images/capture-ecran-abcdef.png`;
     const { calls, fetchMock } = setup({
-      [`POST ${UPLOAD}`]: ok({ path: "semaine-01/images/capture-ecran-abcdef.png", blobSha: SHA, commitSha: SHA, page: null }),
+      [`POST ${UPLOAD}`]: ok({ path: "semaine-01/images/capture-ecran-abcdef.png", page: null }),
       [`PUT ${BASE}/pages/${PATH}`]: (call) => ok(written((call.body as { markdown: string }).markdown)),
     });
     const surface = await openEditor();
@@ -426,7 +425,7 @@ describe("add and delete a page", () => {
   it("adds a page at a .md path, in the folder being read, and opens it in the editor", async () => {
     const added = page({ path: "semaine-01/exercices.md", markdown: "# Exercices\n", title: "Exercices" });
     const { calls } = setup({
-      [`POST ${BASE}/pages`]: ok({ path: added.path, blobSha: "e".repeat(40), commitSha: "f".repeat(40), page: added }),
+      [`POST ${BASE}/pages`]: ok({ path: added.path, page: added }),
       [`GET ${BASE}/pages/semaine-01/exercices.md`]: ok(added),
     });
     await userEvent.click(await screen.findByRole("button", { name: "Add a page" }));

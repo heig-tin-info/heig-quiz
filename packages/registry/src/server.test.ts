@@ -27,7 +27,7 @@ type RegisteredId = (typeof REGISTERED)[number];
  */
 const CONFIG_VERSIONS: Record<RegisteredId, number> = {
   mcq: 2,
-  short: 2,
+  short: 3,
   cloze: 2,
   code: 1,
   circuit: 1,

@@ -59,11 +59,13 @@ const repository = (over: Partial<JournalRepository> = {}): JournalRepository =>
 
 const staff = (repo: JournalRepository | null): JournalStaff => ({
   view: "staff",
+  mode: repo ? "github" : null,
   repository: repo,
   nav: [],
   homePath: null,
   hiddenPaths: [],
   warningCount: 0,
+  pageCount: 0,
   proposedName: repo ? null : "prg1-2026-journal",
 });
 
@@ -140,7 +142,7 @@ describe("the Journal section — Create a journal", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Create the journal" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(calls.find((c) => c.method === "POST")?.body).toEqual({ name: "prg1-2026-journal" });
+    expect(calls.find((c) => c.method === "POST")?.body).toEqual({ mode: "github", name: "prg1-2026-journal" });
     expect(await screen.findByText(/Journal set: heig-tin-info\/prg1-2026-journal/)).toBeVisible();
   });
 
@@ -181,7 +183,7 @@ describe("the Journal section — Create a journal", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Create prg1-journal-0190d3c4" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(posts).toEqual([{ name: "prg1-journal" }, { name: "prg1-journal-0190d3c4" }]);
+    expect(posts).toEqual([{ mode: "github", name: "prg1-journal" }, { mode: "github", name: "prg1-journal-0190d3c4" }]);
   });
 
 });

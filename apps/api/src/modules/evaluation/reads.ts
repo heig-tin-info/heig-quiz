@@ -254,6 +254,16 @@ export async function joinedItems(db: DbOrTx, evaluationId: string): Promise<Joi
     .orderBy(asc(evaluationItems.position));
 }
 
+/**
+ * The items whose frozen version declares variables (ADR-056): what a new
+ * attempt draws values for. Usually none, and then nothing else is read.
+ */
+export async function parameterizedItems(db: DbOrTx, evaluationId: string): Promise<JoinedItem[]> {
+  return selectJoinedItems(db).where(
+    and(eq(evaluationItems.evaluationId, evaluationId), isNotNull(questionVersions.variables)),
+  );
+}
+
 /** One item of one evaluation, by primary key — not the whole list filtered. */
 export async function joinedItem(
   db: Db,

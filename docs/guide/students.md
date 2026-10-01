@@ -13,14 +13,14 @@ Your teacher adds your school e-mail address to the class list. The seat is atta
 Your home shows what your classrooms have opened for you, in two sections, and your classrooms under them. What you already handed in is on the **Grades** page (below).
 
 <figure markdown="span">
-  ![The student home: an exercise open now with Enter the waiting room, a graded quiz coming up in two days, and the classroom card with extra time](../assets/screenshots/student-home-light.png#only-light)
-  ![The student home: an exercise open now with Enter the waiting room, a graded quiz coming up in two days, and the classroom card with extra time](../assets/screenshots/student-home-dark.png#only-dark)
+  ![The student home: an exercise open now with Enter the waiting room, a graded quiz coming up this week, and the classroom card with extra time](../assets/screenshots/student-home-light.png#only-light)
+  ![The student home: an exercise open now with Enter the waiting room, a graded quiz coming up this week, and the classroom card with extra time](../assets/screenshots/student-home-dark.png#only-dark)
   <figcaption>The home: what is open now, what is coming up, and your classrooms.</figcaption>
 </figure>
 
 **Open now** lists what you can still do, each with one button: **Start**, **Resume** if you already began, or **Enter the waiting room** when the teacher has opened one. The badge says whether it is a **Graded quiz** or an **Exercise**, and the card shows how long you have or when it is due.
 
-**Coming up** shows what is scheduled and when it starts. A quiz you handed in leaves the home at once, even while the others are still writing, for the **Grades** page.
+**Coming up** shows what is scheduled and when it starts, grouped by the day it opens: **Today**, **Tomorrow**, **This week** (until Sunday) and **Later**. A day with nothing in it is left out; your classroom's page groups its own the same way. A quiz you handed in leaves the home at once, even while the others are still writing, for the **Grades** page.
 
 **My classrooms** lists your classrooms with their teachers. If you were granted extra time, the card shows it, for instance **Extra time: +25%**. It applies automatically to every timed evaluation of that classroom; there is nothing to ask for at the start.
 
@@ -36,8 +36,9 @@ On a computer, the sidebar on the left takes you to **Activities** (this home), 
 
 **Grades** lists everything you finished, one table per classroom, the most recent first; the classrooms of past years are there too, marked **archived**. Each row gives the activity, whether it is a graded quiz or an exercise, its date, and a status:
 
-- **released**: your teacher published the results. The row shows your points and your grade, unless the evaluation shows no feedback at all.
-- **results available**: an exercise whose results you may already read, before any publication.
+- **released**: your teacher published the results. The row shows your points and your grade.
+- **grade not shared**: the results are published, but this evaluation shows no feedback at all: no points, no grade.
+- **results available**: an exercise whose results you may already read, before any publication. The row shows your points, marked **indicative**, and no grade: the grade comes with the publication.
 - **results pending**: you handed in; the results are not published yet.
 - **handed in**: you handed in, and this evaluation publishes nothing.
 - **not taken**: you did not take it. Once the results are published it carries the lowest grade, as on your teacher's list.

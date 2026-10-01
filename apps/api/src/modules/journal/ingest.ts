@@ -46,7 +46,7 @@ import {
   safeJournalPath,
   type JournalSyncError,
 } from "@quiz/contracts";
-import { cleanSource, placePage, prettifyName, renderPage } from "@quiz/docrender";
+import { cleanSource, placePage } from "@quiz/docrender";
 
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
@@ -69,7 +69,8 @@ import {
   syncErrorOf,
   type TreeEntry,
 } from "./repo.js";
-import { visibleToStudents } from "./studentView.js";
+import { githubJournal, type GithubJournal } from "./mode.js";
+import { renderSources, renderStudentPages, storePages, type PageSource, type RenderedRow } from "./rendering.js";
 
 export type IngestOutcome =
   | { status: "ok"; commitSha: string | null; pages: number; assets: number }
@@ -83,13 +84,14 @@ const ATTEMPTS = 2;
 // ---------------------------------------------------------------- 1. the snapshot
 
 interface Snapshot {
-  row: typeof classroomJournals.$inferSelect;
+  row: GithubJournal;
   /** Null: the organization is not installed, or not active. */
   installationId: number | null;
   pages: Map<string, { id: string; blobSha: string; markdown: string }>;
   assets: Map<string, string>;
 }
 
+/** Null when the classroom has no journal, or a Quiz-mode one: there is no repository to copy (ADR-057). */
 async function snapshot(db: Db, classroomId: string): Promise<Snapshot | null> {
   const [target] = await db
     .select({
@@ -102,6 +104,8 @@ async function snapshot(db: Db, classroomId: string): Promise<Snapshot | null> {
     .leftJoin(githubOrganizations, eq(githubOrganizations.id, githubClassroomLinks.orgId))
     .where(eq(classroomJournals.classroomId, classroomId));
   if (!target) return null;
+  const row = githubJournal(target.row);
+  if (!row) return null;
   const [pages, assets] = await Promise.all([
     db
       .select({ id: journalPages.id, path: journalPages.path, blobSha: journalPages.blobSha, markdown: journalPages.markdown })
@@ -113,7 +117,7 @@ async function snapshot(db: Db, classroomId: string): Promise<Snapshot | null> {
       .where(eq(journalAssets.classroomId, classroomId)),
   ]);
   return {
-    row: target.row,
+    row,
     installationId: target.orgStatus === "active" ? target.installationId : null,
     pages: new Map(pages.map((p) => [p.path, p])),
     assets: new Map(assets.map((a) => [a.path, a.blobSha])),
@@ -126,7 +130,7 @@ async function snapshot(db: Db, classroomId: string): Promise<Snapshot | null> {
 interface Copy {
   fullName: string;
   commitSha: string | null;
-  pages: (typeof journalPages.$inferInsert & { moved: boolean })[];
+  pages: RenderedRow[];
   /** The assets whose blob moved, downloaded. */
   downloads: { path: string; blobSha: string; data: Buffer }[];
   /** Every asset a page references: the ones kept. */
@@ -180,45 +184,16 @@ async function fetchCopy(config: AppConfig, snap: Snapshot): Promise<Copy> {
     const place = entry.size > JOURNAL_ASSET_MAX_BYTES ? null : placePage(entry.path, root);
     return place ? [{ entry, place }] : [];
   });
-  const pagePaths = new Set(placed.map((p) => p.place.path));
-  const assetPaths = new Set(assets.keys());
   const blob = (sha: string) => readBlob(octokit, repo, sha);
 
-  const pages: Copy["pages"] = [];
-  const referenced = new Set<string>();
+  const sources: PageSource[] = [];
   for (const { entry, place } of placed) {
     const before = snap.pages.get(place.path);
     const moved = before?.blobSha !== entry.sha;
     const markdown = moved ? cleanSource((await blob(entry.sha)).toString("utf8")) : before!.markdown;
-    const page = renderPage(markdown, {
-      classroomId: snap.row.classroomId,
-      pagePath: place.path,
-      fallbackTitle: place.fallbackTitle,
-      pages: pagePaths,
-      assets: assetPaths,
-      oversized,
-    });
-    for (const path of page.assets) referenced.add(path);
-    pages.push({
-      id: before?.id ?? randomUUID(),
-      classroomId: snap.row.classroomId,
-      path: place.path,
-      parentPath: place.parentPath,
-      sortKey: place.sortKey,
-      title: page.title,
-      frontMatter: page.frontMatter,
-      blobSha: entry.sha,
-      markdown,
-      htmlStaff: page.html,
-      htmlStudent: "",
-      toc: page.toc,
-      draft: page.draft,
-      visibleFrom: page.visibleFrom,
-      warnings: page.warnings,
-      assetPaths: page.assets,
-      moved,
-    });
+    sources.push({ id: before?.id ?? randomUUID(), path: place.path, markdown, blobSha: entry.sha, moved });
   }
+  const { pages, referenced } = renderSources(snap.row.classroomId, sources, new Set(assets.keys()), oversized);
 
   const downloads: Copy["downloads"] = [];
   for (const path of referenced) {
@@ -254,9 +229,10 @@ async function lockedAt(tx: Tx, classroomId: string, expected: number): Promise<
 const bumped = () => sql`${classroomJournals.version} + 1`;
 
 /**
- * A write of the staff landed on GitHub (M4-03): the row's `version` moves,
- * so an ingestion that read GitHub before it loses its compare-and-set and
- * starts over from a fresh snapshot (J2).
+ * The platform wrote to the repository or changed the row outside an
+ * ingestion (M4-11's Move to GitHub, a mode switch): the row's `version`
+ * moves, so an ingestion that read GitHub before it loses its
+ * compare-and-set and starts over from a fresh snapshot (J2).
  */
 export async function bumpVersion(db: Db, classroomId: string): Promise<void> {
   await db.update(classroomJournals).set({ version: bumped() }).where(eq(classroomJournals.classroomId, classroomId));
@@ -267,23 +243,7 @@ async function commitCopy(db: Db, snap: Snapshot, copy: Copy, now: Date): Promis
   const classroomId = snap.row.classroomId;
   return db.transaction(async (tx) => {
     if (!(await lockedAt(tx, classroomId, snap.row.version))) return false;
-    for (const { moved, ...page } of copy.pages) {
-      // `updated_at` only when the blob moved: a neighbour's change is no change of this page.
-      const { id: _id, classroomId: _c, path: _p, htmlStudent: _h, ...values } = page;
-      const set = moved ? { ...values, updatedAt: now } : values;
-      await tx
-        .insert(journalPages)
-        .values({ ...page, updatedAt: now })
-        .onConflictDoUpdate({ target: [journalPages.classroomId, journalPages.path], set });
-    }
-    const kept = copy.pages.map((p) => p.path);
-    await tx
-      .delete(journalPages)
-      .where(
-        kept.length
-          ? and(eq(journalPages.classroomId, classroomId), notInArray(journalPages.path, kept))
-          : eq(journalPages.classroomId, classroomId),
-      );
+    await storePages(tx, classroomId, copy.pages, now);
     for (const { path, blobSha, data } of copy.downloads) {
       const values = { blobSha, contentType: assetContentType(path), size: data.length, data, updatedAt: now };
       await tx
@@ -334,7 +294,8 @@ async function commitFailure(db: Db, snap: Snapshot, code: JournalSyncError, now
 
 /**
  * Rebuilds one classroom's copy. Returns null when the classroom has no
- * journal (removed since the job was sent). A failure GitHub answered, or
+ * journal (removed since the job was sent) or a Quiz-mode one, which has no
+ * repository and is never ingested (ADR-057). A failure GitHub answered, or
  * GitHub not answering in time, is recorded on the row (`sync_status =
  * error`, the code) and RETURNED, the pages kept; the queue's worker decides
  * what is worth a retry. A database failure is thrown.
@@ -372,44 +333,6 @@ export async function ingestJournal(
 }
 
 // ---------------------------------------------------------------- the student rendering
-
-/**
- * Renders again the `html_student` of every page of a classroom's journal,
- * from the stored markdown — no GitHub call — with only the pages
- * {@link visibleToStudents} holds for linkable NOW (the database's clock),
- * and stamps the row with that `now()`. The assets are the ones the pages
- * reference (their `asset_paths`, which the staff rendering resolved
- * against the repository): the same links as at ingestion. Called with the
- * row locked.
- */
-async function renderStudentPages(tx: Tx, classroomId: string): Promise<void> {
-  const pages = await tx
-    .select({
-      id: journalPages.id,
-      path: journalPages.path,
-      markdown: journalPages.markdown,
-      assetPaths: journalPages.assetPaths,
-      visible: sql<boolean>`${visibleToStudents()}`,
-    })
-    .from(journalPages)
-    .where(eq(journalPages.classroomId, classroomId));
-  const visible = new Set(pages.filter((p) => p.visible).map((p) => p.path));
-  const assets = new Set(pages.flatMap((p) => p.assetPaths));
-  for (const page of pages) {
-    const { html } = renderPage(page.markdown, {
-      classroomId,
-      pagePath: page.path,
-      fallbackTitle: prettifyName(page.path),
-      pages: visible,
-      assets,
-    });
-    await tx.update(journalPages).set({ htmlStudent: html }).where(eq(journalPages.id, page.id));
-  }
-  await tx
-    .update(classroomJournals)
-    .set({ studentRenderedAt: sql`now()` })
-    .where(eq(classroomJournals.classroomId, classroomId));
-}
 
 /**
  * Fix J4: the journals holding a page whose `visible_from` passed since
@@ -481,6 +404,7 @@ export async function repositoryChanged(
       updatedAt: now,
       version: bumped(),
     })
+    // A repository id matches GitHub-mode rows only (`classroom_journals_mode_ck`).
     .where(eq(classroomJournals.githubRepoId, githubRepoId))
     .returning({ classroomId: classroomJournals.classroomId });
   const ids = touched.map((r) => r.classroomId);

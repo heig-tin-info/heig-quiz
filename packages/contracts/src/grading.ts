@@ -38,6 +38,7 @@ export type GradingConfidence = z.infer<typeof GradingConfidence>;
 export {
   isMachineReason,
   isRetryableReason,
+  INSTANCE_WARNING_KEY,
   JUSTIFICATION_KEY,
   justificationOf,
   MACHINE_REASONS,

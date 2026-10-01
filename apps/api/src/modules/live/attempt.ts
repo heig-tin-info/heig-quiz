@@ -46,6 +46,7 @@ import {
   seatsOf,
   trustedClients,
   settingsOf,
+  type DbOrTx,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
@@ -53,6 +54,7 @@ import {
   isLatestAttempt,
   itemCountsByEvaluation,
   joinedItems,
+  parameterizedItems,
   retakePolicyOf,
   retakesEnabled,
   studentEvaluationRows,
@@ -74,6 +76,8 @@ import {
   type ReleasedGrade,
 } from "../results/service.js";
 import { isShuffleable, studentView } from "./studentView.js";
+import type { StoredInstance } from "../../db/columns.js";
+import { instanceOf, itemInstance, type InstanceAttempt } from "../pool/service.js";
 
 export type AttemptRecord = typeof attempts.$inferSelect;
 
@@ -566,6 +570,29 @@ export function drawSeed(): number {
 }
 
 /**
+ * The values of every parameterized item of a new attempt (ADR-056 §5),
+ * drawn ONCE, here, from the attempt's seed and stored with it: the paper is
+ * rendered from the seed alone before any answer exists, so the values
+ * cannot wait for one. `{}` when no item declares variables — the common
+ * case, which costs one indexed read.
+ */
+async function drawInstances(
+  db: DbOrTx,
+  evaluation: EvaluationRecord,
+  seed: number,
+): Promise<Record<string, StoredInstance>> {
+  // A poll never holds a parameterized question (ADR-056 §10): nothing to read.
+  if (evaluation.mode === "poll") return {};
+  const items = await parameterizedItems(db, evaluation.id);
+  const out: Record<string, StoredInstance> = {};
+  for (const item of items) {
+    const { stored } = instanceOf(item.question.type, item.version, { seed, itemId: item.item.id });
+    if (stored !== null) out[item.item.id] = stored;
+  }
+  return out;
+}
+
+/**
  * Idempotent creation of the FIRST attempt. The unique index
  * `(evaluation_id, user_id, attempt_number)` is the mechanism: a second call
  * inserts number 1 again, is refused, and reads the row that is already
@@ -581,6 +608,7 @@ export async function ensureAttempt(
   // `returning()` is what tells the two apart: an empty array means the
   // unique index refused the insert, so this call created nothing and must
   // not announce a new row to the dashboard.
+  const seed = drawSeed();
   const created = await db
     .insert(attempts)
     .values({
@@ -588,7 +616,8 @@ export async function ensureAttempt(
       evaluationId: evaluation.id,
       ...ownerOf(participant),
       state: "not_started",
-      seed: drawSeed(),
+      seed,
+      instances: await drawInstances(db, evaluation, seed),
       presentAt: now,
       createdAt: now,
       updatedAt: now,
@@ -682,6 +711,7 @@ export async function retakeAttempt(
       timeBonusPercent: participant.timeBonusPercent,
       extraS: 0,
     });
+    const seed = drawSeed();
     const created = await tx
       .insert(attempts)
       .values({
@@ -690,7 +720,8 @@ export async function retakeAttempt(
         ...ownerOf(participant),
         attemptNumber: (latestAttempt(previous)?.attemptNumber ?? 0) + 1,
         state: "in_progress",
-        seed: drawSeed(),
+        seed,
+        instances: await drawInstances(tx, evaluation, seed),
         startedAt: now,
         deadlineAt,
         bonusS,
@@ -826,12 +857,15 @@ function attemptItems(
   answered: ReadonlyMap<string, AnswerRecord>,
   locked: ReadonlySet<string>,
   settings: EvaluationSettings,
-  seed: number,
+  attempt: InstanceAttempt,
   defaults: Readonly<Record<string, unknown>>,
 ): AttemptItem[] {
+  const { seed } = attempt;
   return ordered.map((entry) => {
     const answer = answered.get(entry.item.id) ?? null;
-    const version = { config: entry.version.config, configVersion: entry.version.configVersion };
+    // The student's own numbers (ADR-056): stored at the attempt's creation,
+    // drawn from the same seed for a preview that stores nothing.
+    const { version } = itemInstance(entry, attempt);
     return {
       id: entry.item.id,
       position: entry.item.position,
@@ -918,6 +952,7 @@ export async function attemptView(
 ): Promise<AttemptView> {
   return viewOf(db, evaluation, {
     seed: attempt.seed,
+    instances: attempt.instances,
     answered: await answersOf(db, attempt.id),
     header: {
       id: attempt.id,
@@ -948,6 +983,7 @@ export async function previewView(
 ): Promise<AttemptView> {
   return viewOf(db, evaluation, {
     seed,
+    instances: {},
     items,
     answered: new Map(),
     header: {
@@ -974,6 +1010,8 @@ async function viewOf(
   evaluation: EvaluationRecord,
   input: {
     seed: number;
+    /** The attempt's stored values (ADR-056); `{}` for a preview, which draws them from `seed`. */
+    instances: Readonly<Record<string, StoredInstance>>;
     items?: readonly JoinedItem[] | undefined;
     answered: ReadonlyMap<string, AnswerRecord>;
     header: AttemptView["attempt"];
@@ -996,7 +1034,7 @@ async function viewOf(
       pausedAt: isoOrNull(evaluation.pausedAt),
       totalPoints: evaluationTotal(items.map((i) => i.item)),
     },
-    items: attemptItems(ordered, answered, locked, settings, seed, gradeDefaults(evaluation)),
+    items: attemptItems(ordered, answered, locked, settings, { seed, instances: input.instances }, gradeDefaults(evaluation)),
   };
 }
 
@@ -1285,13 +1323,16 @@ type StudentRow = Awaited<ReturnType<typeof studentEvaluationRows>>[number];
 
 /**
  * A card of the student's Past, beside the row it was drawn from, the
- * attempt that counts (`countedAttempt`) and the released grade.
+ * attempt that counts (`countedAttempt`), the released grade, and `early`:
+ * the points the feedback page shows for that attempt BEFORE the release
+ * (results `available`, not released), null everywhere else.
  */
 export interface PastEntry {
   row: StudentRow;
   card: EvaluationCard;
   counted: { id: string; state: string } | null;
   released: ReleasedGrade | undefined;
+  early: { points: number; totalPoints: number } | null;
 }
 
 /**
@@ -1337,16 +1378,26 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
   );
 
   // The grade of a released evaluation is the results page's (WP6), and the
-  // score of a kept attempt what its feedback page would show. A fixed
-  // number of queries for the whole page, not one per card.
+  // score of a kept attempt what its feedback page would show — so are the
+  // points of a row readable before its release (`early`). A fixed number of
+  // queries for the whole page, not one per card.
   const retakeIds = withRetakes.map((r) => r.evaluation.id);
+  const readableEarly = rows.filter((row) => {
+    const kept = countedAttempt(perEvaluation, row);
+    return (
+      kept !== null &&
+      row.evaluation.releasedAt === null &&
+      resultsState(row.evaluation, kept.state) === "available"
+    );
+  });
+  const scored = [...new Set([...withRetakes, ...readableEarly])];
   const [grades, totals, itemCounts, keptTallies] = await Promise.all([
     releasedGradesOf(db, userId, rows, perEvaluation),
-    totalPointsByEvaluation(db, retakeIds),
+    totalPointsByEvaluation(db, [...new Set(scored.map((r) => r.evaluation.id))]),
     itemCountsByEvaluation(db, retakeIds),
     tallyByAttempt(
       db,
-      withRetakes
+      scored
         .map((row) => countedAttemptId(perEvaluation, row))
         .filter((id): id is string => id !== null),
     ),
@@ -1428,7 +1479,14 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
     const kept = countedAttempt(perEvaluation, row);
     const counted = kept ? { id: kept.id, state: kept.state } : null;
     const c = card(row, counted?.state ?? null);
-    const ended = { row, card: c, counted, released: grades.get(row.evaluation.id) };
+    const early =
+      counted !== null && readableEarly.includes(row)
+        ? {
+            points: keptTallies.get(counted.id)?.points ?? 0,
+            totalPoints: totals.get(row.evaluation.id) ?? 0,
+          }
+        : null;
+    const ended = { row, card: c, counted, released: grades.get(row.evaluation.id), early };
     if (state === "scheduled") upcoming.push(c);
     else if (state !== "lobby" && state !== "running" && state !== "paused") past.push(ended);
     // Issue #203: "Open now" is what the student can still DO. A finished

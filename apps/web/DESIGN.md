@@ -1563,10 +1563,10 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
   to it.
 - **Drill is drawn only when it leads somewhere**: for a student with at
   least one classroom whose drill is on (`visibleSlots`); the four others
-  share the width otherwise. Its label is `bnav.drill`, not the page title:
-  "Entraînement" does not fit a fifth of a 390 px phone at 11 px, so the
-  French slot says "Révisions"; the sidebar row, with room to spare, keeps
-  the page's title.
+  share the width otherwise. Its label is the page's title, `nav.drill`, in
+  the bar and the sidebar alike: the feature is "Révisions" everywhere in
+  French (the product owner's decision of 2026-10-01), a word that fits a
+  fifth of a 390 px phone at 11 px, so no slot needs a second, shorter label.
 - **The desktop sidebar mirrors the bar** (D07, the product owner's decision
   of 2026-10-01). The student's sidebar rows are the bar's slots, in the
   bar's order and under the same conditions, minus Profile, which is the
@@ -1603,6 +1603,21 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
   what is about the person: the inbox, the theme, signing out.
 - A `<nav>` named "Main navigation", `aria-current="page"` on the lit slot,
   real links (a long press or a modified click opens the address).
+
+## The student's "Coming up", by day
+
+The home and a classroom's page group their Coming up section by the day
+each card opens (product owner, 2026-10-01; `UpcomingByDay` in
+`student/cards.tsx`, the rule `groupByDay` of `@quiz/domain`): Today,
+Tomorrow, This week, Later, an empty day not drawn. The day is a
+sub-heading INSIDE the section, never a second `SectionHeading`: an `h3` at
+14 px semibold, `fg` for Today and `fg-muted` for the others — the teacher
+schedule's week heading (`activities/views.tsx`), where this week is the
+one in `fg`. 8 px from the heading to its cards, 12 between the cards as
+everywhere on the page, 20 between two days, 32 between sections. The cards
+are unchanged and carry no button, so the accent rule of the page
+(`mostUrgent`, one red fill) is untouched. No calendar or week grid until
+the projects bring deadlines (D07).
 
 ## The participant's poll page (`/p/:CODE`)
 

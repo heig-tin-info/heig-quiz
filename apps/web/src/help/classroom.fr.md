@@ -35,7 +35,7 @@ ouvert, en crée une.
 
 Un clic sur la période (ou sur **Définir la période** quand il n'y en a pas)
 ouvre ses dates et son libellé. L'onglet **Réglages** porte le reste :
-**Renommer**, l'interrupteur de l'**Entraînement**, la connexion **GitHub**
+**Renommer**, l'interrupteur des **Révisions**, la connexion **GitHub**
 quand la plateforme en a une, et la fin de la classe.
 
 **Connecter à GitHub** choisit une organisation où l'app de Quiz est

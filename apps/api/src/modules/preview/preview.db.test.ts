@@ -161,7 +161,7 @@ async function world() {
     [mcq, code],
     (type, version) =>
       typeOf(type).defaultPoints(
-        loadConfig(type, { config: version.config, configVersion: version.configVersion }),
+        loadConfig(type, version),
       ),
     { attemptCount: 0 },
   );
@@ -422,7 +422,7 @@ describe("the Run button of a preview", () => {
       [second],
       (type, version) =>
         typeOf(type).defaultPoints(
-          loadConfig(type, { config: version.config, configVersion: version.configVersion }),
+          loadConfig(type, version),
         ),
       { attemptCount: 0 },
     );

@@ -477,6 +477,26 @@ describe("grading and results with several attempts", () => {
     expect(card.feedbackAttemptId).toBe(first.id);
     expect(card.score?.points).toBe(2);
   });
+
+  it("shows the counted attempt's points, indicative and without a grade, before the release", async () => {
+    const { closed, student, first } = await twoAttempts("best");
+    await db
+      .update(evaluations)
+      .set({ feedbackPolicy: { ...(closed.feedbackPolicy as object), when: "immediate" } })
+      .where(eq(evaluations.id, closed.id));
+    const immediate = await reload(db, closed.id);
+    const groups = await live.studentGrades(db, student, closed.closedAt!);
+    const card = groups.flatMap((g) => g.rows).find((c) => c.evaluationId === closed.id)!;
+    // The best attempt (the first, both right), not the latest (both wrong).
+    expect(card).toMatchObject({
+      status: "available",
+      feedbackAttemptId: first.id,
+      score: { points: 2, totalPoints: 2, grade: null },
+    });
+    // The very points its feedback page shows.
+    const feedback = await results.studentFeedback(db, immediate, first, closed.closedAt!);
+    expect(feedback).toMatchObject({ available: true, points: 2, totalPoints: 2 });
+  });
 });
 
 describe("the screens with several attempts", () => {

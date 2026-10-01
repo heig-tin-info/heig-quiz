@@ -32,8 +32,13 @@ export type ShortMatcher =
   | { kind: "regex"; pattern: string; flags?: string | undefined; points?: number | undefined }
   | {
       kind: "number";
-      value: number;
-      tolerance?: number | undefined;
+      /**
+       * A string is a `[[…]]` reference of a parameterized TEMPLATE (ADR-056
+       * §4): it is described as written and never matches. An instance holds
+       * numbers.
+       */
+      value: number | string;
+      tolerance?: number | string | undefined;
       toleranceMode?: ToleranceMode | undefined;
       unit?: string | undefined;
       unitRequired?: boolean | undefined;
@@ -268,8 +273,12 @@ export function matchShort(input: string, matcher: ShortMatcher): boolean {
       return matchExact(input, matcher.value, matcher);
     case "regex":
       return matchRegex(input, matcher.pattern, matcher.flags ?? "i");
-    case "number":
-      return matchNumber(input, matcher);
+    case "number": {
+      const { value, tolerance = 0 } = matcher;
+      return typeof value === "number" && typeof tolerance === "number"
+        ? matchNumber(input, { ...matcher, value, tolerance })
+        : false;
+    }
     case "date":
       return matchDate(input, matcher.value, matcher.toleranceDays ?? 0);
     case "time":
@@ -317,7 +326,8 @@ export function describeMatcher(matcher: ShortMatcher): string {
       const tolerance = matcher.tolerance ?? 0;
       const unit = matcher.unit === undefined ? "" : ` ${matcher.unit}`;
       if (tolerance === 0) return `${matcher.value}${unit}`;
-      const suffix = (matcher.toleranceMode ?? "abs") === "rel" ? `${tolerance * 100} %` : String(tolerance);
+      const rel = (matcher.toleranceMode ?? "abs") === "rel";
+      const suffix = !rel ? String(tolerance) : typeof tolerance === "number" ? `${tolerance * 100} %` : `100 × ${tolerance} %`;
       return `${matcher.value} ± ${suffix}${unit}`;
     }
     case "date":

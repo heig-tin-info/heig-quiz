@@ -114,6 +114,14 @@ Status values: `open`, `settled`, `superseded`.
   2026-10-01 (product owner): the student's desktop sidebar carries the
   same entries as the bottom bar, Profile aside (`DESIGN.md`, "The
   student's bottom bar").
+  2026-10-01 (product owner), addendum: **no separate "Welcome" page**.
+  The logo leads to Activities, which answers "what do I do now". News,
+  if ever, would be a strip at the top of Activities built from existing
+  events (released grades, new journal pages), not a new page nor a new
+  content type. **A calendar or week view is deferred** until the
+  projects (M3) bring their deadlines; until then the agenda is the day
+  grouping of Coming up — Today, Tomorrow, This week, Later — on the home
+  and on the classroom page (F-ORG-14, F-ORG-15; `05-web.md` §5.2).
 
 ### D09 — Online workspace in the merge's critical path?
 - **Question**: does production have assignments with `work_mode` ≠
@@ -342,9 +350,15 @@ Status values: `open`, `settled`, `superseded`.
   2. **Copy a journal from another classroom** of the course: later
      (M4-13), not in the first version.
   3. **Revisions**: one per Quiz-mode save, markdown and front matter only,
-     no limit; assets are not versioned (append-only, collected when no
-     page references them). The staff restore a revision; restoring is
-     audited.
+     no limit; assets are not versioned: append-only, and kept until the
+     journal is removed (amended with M4-08: collecting the assets no page
+     references would break a revision restored later). The staff restore a revision; restoring is
+     audited. **Deleting a page keeps its revisions** (settled with M4-08,
+     orchestrator): they live until the journal is removed, so a deleted
+     page can be restored later — restoring a revision of a deleted path
+     creates the page again. `author_id` keeps `no action` on user
+     deletion, as the repository's other authored history rows
+     (`questions.created_by`, `classroom_journals.created_by`).
   4. **Move to GitHub**: into a new repository or an empty one only, never
      one with content (ADR-049 point 6). "Bring back into Quiz" imports the
      copy and detaches the repository without deleting it, after showing

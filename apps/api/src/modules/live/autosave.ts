@@ -16,7 +16,8 @@ import { itemPoints, mayValidate, progressStatus } from "@quiz/domain";
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { answers, attemptEvents, attempts, evaluations } from "../../db/schema.js";
-import { loadConfig, typeOf } from "../pool/config.js";
+import { typeOf } from "../pool/config.js";
+import { configPerAttempt, itemInstance, loadConfig, type InstanceAttempt } from "../pool/service.js";
 import { settingsOf, type EvaluationRecord, type JoinedItem } from "../evaluation/service.js";
 import { gradeDefaults, joinedItem, joinedItems } from "../evaluation/service.js";
 import { closeShown } from "./dwell.js";
@@ -88,31 +89,31 @@ function genericSummary(payload: unknown): string {
  * It is a CLOSURE over one item because the dashboard summarises a whole
  * grid: the type and its configuration are resolved once per question and
  * reused down the column, instead of once per cell — twenty-four students
- * times ten questions is 240 config parses of ten distinct configs.
+ * times ten questions is 240 config parses of ten distinct configs. A
+ * parameterized question is the exception (ADR-056): each attempt has its
+ * own instance — a cloze option may be a drawn number — so its config is
+ * resolved per attempt, from the values the attempt stored.
  */
-export function answerSummarizer(item: JoinedItem): (payload: unknown) => string {
-  let hook: ((payload: unknown) => string) | null = null;
+export function answerSummarizer(item: JoinedItem): (payload: unknown, attempt: InstanceAttempt) => string {
+  let hook: ((payload: unknown, attempt: InstanceAttempt) => string) | null = null;
   try {
     const type = typeOf(item.question.type);
     const write = type.summarizeAnswer?.bind(type);
     if (write) {
-      const config = loadConfig(item.question.type, {
-        config: item.version.config,
-        configVersion: item.version.configVersion,
-      });
-      hook = (payload) => {
+      const configOf = configPerAttempt(item);
+      hook = (payload, attempt) => {
         const answer = type.answerSchema.safeParse(payload);
-        return answer.success ? truncate(write(config, answer.data)) : genericSummary(payload);
+        return answer.success ? truncate(write(configOf(attempt), answer.data)) : genericSummary(payload);
       };
     }
   } catch {
     /* an unknown type or an unreadable config: the generic form still says something */
   }
   const write = hook;
-  return (payload) => {
+  return (payload, attempt) => {
     if (payload === null || payload === undefined) return "";
     try {
-      return write ? write(payload) : genericSummary(payload);
+      return write ? write(payload, attempt) : genericSummary(payload);
     } catch {
       return genericSummary(payload);
     }
@@ -120,8 +121,8 @@ export function answerSummarizer(item: JoinedItem): (payload: unknown) => string
 }
 
 /** {@link answerSummarizer} for one cell. */
-export function summarizeAnswer(item: JoinedItem, payload: unknown): string {
-  return answerSummarizer(item)(payload);
+export function summarizeAnswer(item: JoinedItem, payload: unknown, attempt: InstanceAttempt): string {
+  return answerSummarizer(item)(payload, attempt);
 }
 
 /**
@@ -160,14 +161,12 @@ export function liveGrader(
   now: Date,
 ): ((attempt: AttemptRecord, payload: unknown) => Promise<GradedCell | null>) | null {
   let type: AnyQuestionTypeServer;
-  let config: unknown;
+  let configOf: (attempt: InstanceAttempt) => unknown;
   try {
     type = typeOf(item.question.type);
     if (type.finalizeRunner) return null;
-    config = loadConfig(item.question.type, {
-      config: item.version.config,
-      configVersion: item.version.configVersion,
-    });
+    // Once per column; per attempt for a parameterized question (ADR-056).
+    configOf = configPerAttempt(item);
   } catch {
     // An unknown type or a config this build cannot read: no preview, and
     // certainly not a 500 on the teacher's dashboard.
@@ -179,7 +178,7 @@ export function liveGrader(
     try {
       const parsed = type.answerSchema.safeParse(payload);
       if (!parsed.success) return null;
-      const result = await type.grade(config, parsed.data, {
+      const result = await type.grade(configOf(attempt), parsed.data, {
         seed: attempt.seed,
         itemId: item.item.id,
         attemptId: attempt.id,
@@ -284,7 +283,7 @@ async function publishCell(
     status: cellStatus(row, answered),
     revision: row.revision,
     flagged: row.flagged,
-    summary: item && row.payload !== null ? summarizeAnswer(item, row.payload) : null,
+    summary: item && row.payload !== null ? summarizeAnswer(item, row.payload, attempt) : null,
     verdict: item ? await previewVerdict(evaluation, item, attempt, row.payload, now) : null,
   });
 }
@@ -315,11 +314,9 @@ export async function saveAnswer(
   const payload = parsed.data;
   // The rules that need the config (an mcq in `single` mode takes one
   // choice, ADR-026): the same 422 as a malformed payload.
+  // This attempt's own instance of a parameterized question (ADR-056).
   const misfit = type.answerMisfit?.(
-    loadConfig(joined.question.type, {
-      config: joined.version.config,
-      configVersion: joined.version.configVersion,
-    }),
+    loadConfig(joined.question.type, itemInstance(joined, attempt).version),
     payload,
   );
   if (misfit) throw new AnswerInvalid([{ message: misfit }]);

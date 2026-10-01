@@ -3,9 +3,8 @@
  * classroom page, its Settings and the reader share (one cache entry,
  * `journalKey(id, "staff")`), the refusals worded, and Refresh.
  *
- * The routes exist only on a platform with Quiz's GitHub App: without one,
- * every one of them answers 404 (`githubAbsent`), and the screens then draw
- * no journal at all, as for a classroom that never had one.
+ * The routes exist on every platform (a Quiz-mode journal needs no GitHub,
+ * ADR-057); `use` and `refresh` only with Quiz's GitHub App.
  */
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";

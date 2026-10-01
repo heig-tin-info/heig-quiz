@@ -157,7 +157,7 @@ export async function seedLive(db: Db, options: SeedOptions = {}): Promise<Seede
           questionIds,
           (type, version) =>
             typeOf(type).defaultPoints(
-              loadConfig(type, { config: version.config, configVersion: version.configVersion }),
+              loadConfig(type, version),
             ),
           { attemptCount: 0 },
         );

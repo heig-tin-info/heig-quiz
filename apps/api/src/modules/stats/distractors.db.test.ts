@@ -86,7 +86,7 @@ async function evaluationOf(seed: Seeded, questionId: string, mode: "exam" | "ex
     evaluation,
     [questionId],
     (type, version) =>
-      typeOf(type).defaultPoints(loadConfig(type, { config: version.config, configVersion: version.configVersion })),
+      typeOf(type).defaultPoints(loadConfig(type, version)),
     { attemptCount: 0 },
   );
   return { evaluationId: evaluation.id, itemId: item!.id };

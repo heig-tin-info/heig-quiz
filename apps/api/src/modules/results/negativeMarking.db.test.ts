@@ -133,7 +133,7 @@ async function build(options: {
     [single, multiple],
     (type, version) =>
       typeOf(type).defaultPoints(
-        loadConfig(type, { config: version.config, configVersion: version.configVersion }),
+        loadConfig(type, version),
       ),
     { attemptCount: 0 },
   );

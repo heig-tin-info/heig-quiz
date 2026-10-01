@@ -109,6 +109,8 @@ interface Fixture {
   visibleInDays: number | null;
   markdown: string;
   warnings?: JournalWarning[];
+  /** The save's lock (`baseVersion`); 0 until a save. */
+  version?: number;
 }
 
 const heading = (depth: number, id: string, text: string) => `<h${depth} id="${id}">${text}</h${depth}>`;
@@ -313,21 +315,25 @@ function staffJournal(classroomId: string): JournalStaff {
     const room = rooms.find((r) => r.id === classroomId)!;
     return {
       view: "staff",
+      mode: null,
       repository: null,
       nav: [],
       homePath: null,
       hiddenPaths: [],
       warningCount: 0,
+      pageCount: 0,
       proposedName: `${room.name.toLowerCase()}-journal`,
     };
   }
   return {
     view: "staff",
+    mode: "github",
     repository: repo,
     nav: navOf(PAGES),
     homePath: homePage(PAGES)?.path ?? null,
     hiddenPaths: PAGES.filter(hidden).map((p) => p.path),
     warningCount: PAGES.filter((p) => (p.warnings ?? []).length > 0).length,
+    pageCount: PAGES.length,
     proposedName: null,
   };
 }
@@ -355,7 +361,8 @@ on("POST", "/app/api/classrooms/:id/journal", (m, body): JournalStaff => {
   const id = m.groups!.id!;
   staffRoom(id);
   if (journals.has(id)) throw refusal(409, "journal_exists");
-  const name = (body as JournalCreate).name ?? staffJournal(id).proposedName!;
+  const create = body as JournalCreate;
+  const name = (create.mode === "github" ? create.name : undefined) ?? staffJournal(id).proposedName!;
   // Never an adoption (F-JRN-02): a free name instead, as the API words it.
   if (ORG_REPOS.includes(name)) throw refusal(409, "name_taken", { suggestion: `${name}-0190d3c4` });
   ORG_REPOS.push(name);
@@ -416,27 +423,18 @@ const staffPageOf = (page: Fixture): JournalPageStaff => ({
   visibleFrom: page.visibleInDays === null ? null : iso(page.visibleInDays * D),
   hidden: hidden(page),
   markdown: page.markdown,
-  blobSha: blobOf(page.markdown),
+  version: page.version ?? 0,
   warnings: page.warnings ?? [],
+  // The mock still edits in the platform; its GitHub-mode reading is M4-09's.
+  editUrl: null,
 });
 
 // --------------------------------------------------------------- writes
-// The editor's routes (M4-06): save against the blob (`?journalconflict=1`:
-// every save meets a moved file), add, delete, upload, preview. A written
+// The editor's routes (M4-06): save against the version (`?journalconflict=1`:
+// every save meets a page saved meanwhile), add, delete, upload, preview. A written
 // page is rendered by the journal's own renderer (`@quiz/docrender`), as
 // the API's ingestion would; an upload is accepted and not kept (the
 // editor draws a picture it uploaded from the browser's copy).
-
-/** A 40-hex "blob sha" of a text, stable for the same text (FNV-1a, five times salted). */
-function blobOf(text: string): string {
-  let out = "";
-  for (let salt = 0; salt < 5; salt += 1) {
-    let h = 0x811c9dc5 ^ salt;
-    for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
-    out += (h >>> 0).toString(16).padStart(8, "0");
-  }
-  return out;
-}
 
 /** The page rendered again from its markdown, as an ingestion would. */
 function rerender(page: Fixture): void {
@@ -455,11 +453,9 @@ function rerender(page: Fixture): void {
   page.warnings = rendered.warnings;
 }
 
-/** A write's answer: the file, its new blob, a commit, and the page as the copy now holds it. */
+/** A write's answer: the file, and the page as it now reads. */
 const written = (path: string, page: Fixture | null): JournalFileWritten => ({
   path,
-  blobSha: blobOf(page?.markdown ?? path),
-  commitSha: blobOf(`commit ${path} ${Date.now()}`),
   page: page ? staffPageOf(page) : null,
 });
 
@@ -475,9 +471,10 @@ function writablePage(m: RegExpMatchArray): Fixture {
 
 on("PUT", "/app/api/classrooms/:id/journal/pages/(?<path>.+)", (m, body): JournalFileWritten => {
   const page = writablePage(m);
-  const { markdown, baseSha } = body as JournalPageSave;
-  if (flags.journalconflict || baseSha !== blobOf(page.markdown)) throw refusal(409, "conflict");
+  const { markdown, baseVersion } = body as JournalPageSave;
+  if (flags.journalconflict || baseVersion !== (page.version ?? 0)) throw refusal(409, "conflict");
   page.markdown = markdown;
+  page.version = (page.version ?? 0) + 1;
   rerender(page);
   return written(page.path, page);
 });

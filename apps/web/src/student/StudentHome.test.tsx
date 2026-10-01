@@ -1,6 +1,6 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EvaluationCard, Me, StudentHome as StudentHomeData } from "@quiz/contracts";
 
@@ -338,5 +338,59 @@ describe("the student home", () => {
       render();
       expect(await screen.findByRole("button", { name: "Continuer" })).toBeInTheDocument();
     });
+  });
+});
+
+// Product owner, 2026-10-01: "Coming up" grouped by the day each card opens,
+// in the browser's time zone. Dates are built on the local clock, so the
+// test holds in any TZ; only `Date` is faked, the timers stay real.
+describe("Coming up, grouped by day", () => {
+  // Thursday 1 October 2026, 10:00 local.
+  const at = (day: number, hh: number) => new Date(2026, 9, day, hh, 0).toISOString();
+  const scheduled = (id: string, title: string, opensAt: string) =>
+    card({ id, title, mode: "exercise", state: "scheduled", opensAt });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 1, 10, 0));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const renderUpcoming = (upcoming: EvaluationCard[]) => {
+    mockFetch({
+      "GET /app/api/student/home": ok({ ...home, open: [], upcoming }),
+      "GET /app/api/student/classrooms": ok([]),
+    });
+    render();
+  };
+
+  const groups = async () => {
+    await screen.findByText("À venir");
+    return screen.getAllByRole("list").map((list) => [
+      document.getElementById(list.getAttribute("aria-labelledby")!)?.textContent,
+      within(list).getAllByRole("listitem").map((li) => li.querySelector("p")!.textContent),
+    ]);
+  };
+
+  it("draws Today, Tomorrow, This week and Later, the soonest first in each", async () => {
+    renderUpcoming([
+      scheduled("e-later", "Série 9", at(20, 9)),
+      scheduled("e-today-late", "Quiz 4", at(1, 16)),
+      scheduled("e-week", "Série 5", at(3, 9)),
+      scheduled("e-today", "Série 4", at(1, 13)),
+      scheduled("e-tomorrow", "Quiz 5", at(2, 0)),
+    ]);
+    expect(await groups()).toEqual([
+      ["Aujourd'hui", ["Série 4", "Quiz 4"]],
+      ["Demain", ["Quiz 5"]],
+      ["Cette semaine", ["Série 5"]],
+      ["Plus tard", ["Série 9"]],
+    ]);
+    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual([
+      "Aujourd'hui",
+      "Demain",
+      "Cette semaine",
+      "Plus tard",
+    ]);
   });
 });

@@ -66,6 +66,7 @@ export {
   attemptCount,
   joinedItems,
   joinedItem,
+  parameterizedItems,
   studentEvaluationRows,
   totalPointsByEvaluation,
   itemCountsByEvaluation,

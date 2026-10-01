@@ -4,7 +4,8 @@
  * row first, archived classrooms included and marked. The server decides
  * everything a row says (`GET /app/api/student/results`): its status, whether
  * it carries points and a grade (never under the feedback policy `none`,
- * never before the release), and whether it opens a feedback page. This page
+ * never a grade before the release: an `available` row carries its points
+ * alone, marked indicative), and whether it opens a feedback page. This page
  * computes nothing; it draws.
  *
  * The four decisions:
@@ -54,6 +55,7 @@ import { MODE_KEY } from "./cards";
 
 const STATUS: Record<GradeStatus, { label: keyof Dict; tone: Tone }> = {
   released: { label: "sgrades.status.released", tone: "green" },
+  withheld: { label: "sgrades.status.withheld", tone: "zinc" },
   available: { label: "sgrades.status.available", tone: "green" },
   pending: { label: "sgrades.status.pending", tone: "amber" },
   submitted: { label: "sgrades.status.submitted", tone: "zinc" },
@@ -162,7 +164,7 @@ function GradeTable({ rows, open }: { rows: GradeRow[]; open: Opener }) {
                 <Points row={row} />
               </td>
               <td className={cx(T.td, "text-right font-semibold tabular-nums")}>
-                {row.score ? <Grade value={row.score.grade} /> : <Dash />}
+                <GradeCell row={row} />
               </td>
               <td className={T.td}>
                 <StatusBadge status={row.status} />
@@ -202,9 +204,14 @@ function GradeList({ rows, open }: { rows: GradeRow[]; open: Opener }) {
               </div>
             </div>
             <div className="shrink-0 text-right">
-              <p className="text-[17px] font-semibold leading-snug tabular-nums">
-                {row.score ? <Grade value={row.score.grade} /> : <Dash />}
-              </p>
+              {/* The indicative badge keeps its own size, outside the grade's 17 px line. */}
+              {row.score?.grade === null ? (
+                <GradeCell row={row} />
+              ) : (
+                <p className="text-[17px] font-semibold leading-snug tabular-nums">
+                  <GradeCell row={row} />
+                </p>
+              )}
               {/* One dash says "no grade"; a second under it would say nothing more. */}
               {row.score ? (
                 <p className="mt-0.5 text-[13px] tabular-nums text-fg-muted">
@@ -233,6 +240,17 @@ function Points({ row }: { row: GradeRow }) {
   ) : (
     <Dash />
   );
+}
+
+/**
+ * The grade, or where there is none: "indicative" beside points read before
+ * the release (F-RES-04), a dash otherwise.
+ */
+function GradeCell({ row }: { row: GradeRow }) {
+  const t = useT();
+  if (!row.score) return <Dash />;
+  if (row.score.grade === null) return <Badge tone="zinc">{t("sgrades.indicative")}</Badge>;
+  return <Grade value={row.score.grade} />;
 }
 
 function StatusBadge({ status }: { status: GradeStatus }) {

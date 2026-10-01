@@ -410,6 +410,7 @@ describe("EvaluationConfig", () => {
    * where "Open the waiting room" failed with the server's English message.
    */
   describe("an incomplete timing (#76)", () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
     const takeHome = () =>
       makeEvaluationDetail({
         evaluation: {
@@ -418,7 +419,8 @@ describe("EvaluationConfig", () => {
           settings: { ...makeEvaluationDetail().evaluation.settings, timing: "deadline", lobby: "skip" },
           durationS: null,
           opensAt: null,
-          closesAt: "2026-10-01T10:00:00.000Z",
+          // Relative to the clock: a fixed date turns this test red the day it passes.
+          closesAt: new Date(Date.now() + 7 * DAY_MS).toISOString(),
         },
       });
 
@@ -444,7 +446,7 @@ describe("EvaluationConfig", () => {
     it("goes to the launch step once the timing is complete", async () => {
       const user = userEvent.setup();
       const complete = takeHome();
-      complete.evaluation.opensAt = "2026-09-24T08:00:00.000Z";
+      complete.evaluation.opensAt = new Date(Date.now() - DAY_MS).toISOString();
       mockFetch(routes(complete));
       renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
         route: "/evaluations/x?step=timing",

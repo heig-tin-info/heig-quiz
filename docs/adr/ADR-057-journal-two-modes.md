@@ -71,7 +71,9 @@ dépôt GitHub"); never "local".
   still the ETag of N-SEC-13. The set of assets a page references
   (`asset_paths`) is recomputed in the transaction of every save and every
   delete, so an asset of a draft never reaches a student (J1, N-SEC-13).
-  Assets are append-only and collected when no page references them.
+  Assets are append-only and kept until the journal is removed, like the
+  revisions, so a restored revision finds its images again (amended with
+  M4-08: no collection).
 - **Revisions**: one per save, the markdown with its front matter, no
   limit; assets are not versioned. The staff list a page's revisions and
   restore one; a restore is a save, audited. No student route ever reads
@@ -119,9 +121,12 @@ dépôt GitHub"); never "local".
   (`github_repo_id`, `full_name`, `ref`) become nullable under a CHECK:
   set in GitHub mode, null in Quiz mode. Existing rows migrate to
   `github`.
-- `journal_pages` gains a `version` (the lock) and, for Quiz mode, an
-  explicit order among siblings and a parent.
-- A revisions table, one row per Quiz-mode save.
+- `journal_pages` gains a `version` (the lock, M4-07). The Quiz-mode
+  explicit order among siblings and parent page are columns of their own,
+  added by M4-10 (rename, reorder, nest); `parent_path` keeps its meaning,
+  the directory of the file.
+- A revisions table, one row per Quiz-mode save, ordered by its
+  `created_at` (no revision number).
 
 ### 5. Access and audit
 

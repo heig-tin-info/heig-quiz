@@ -21,6 +21,7 @@ import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 
 import type {
   Grading,
+  ParametersDraft,
   GradingEntry,
   GradingHistoryEntry,
   GradingProgress,
@@ -57,7 +58,8 @@ import {
   type JoinedItem,
 } from "../evaluation/service.js";
 import { solutionViewOf, studentViewOf } from "../live/studentView.js";
-import { loadConfig } from "../pool/config.js";
+import { sameTable } from "@quiz/domain/parameters";
+import { configPerAttempt, parametersOf } from "../pool/service.js";
 import { watchReleasedGrades } from "../results/service.js";
 import { keptAttempts, tallyByAttempt } from "./kept.js";
 
@@ -480,8 +482,12 @@ interface QueueContext {
   staffAttempts: ReadonlySet<string>;
   /** The attempt that counts for each student who retook (ADR-025). */
   kept: ReadonlySet<string>;
-  /** Each item's config, parsed once for every attempt that shows it. */
-  configs: Map<string, unknown>;
+  /**
+   * Each item's config, parsed once for every attempt that shows it — per
+   * attempt for a parameterized question, whose every attempt has its own
+   * key (ADR-056, `configPerAttempt`).
+   */
+  configs: Map<string, (attempt: AttemptRecord) => unknown>;
 }
 
 /**
@@ -534,10 +540,7 @@ async function loadQueueContext(
     configs: new Map(
       (attemptRows.length === 0 ? [] : selection.items).map((i) => [
         i.item.id,
-        loadConfig(i.question.type, {
-          config: i.version.config,
-          configVersion: i.version.configVersion,
-        }),
+        configPerAttempt(i),
       ]),
     ),
   };
@@ -559,7 +562,7 @@ function entryOf(
   const key = pairKey(attempt.id, item.item.id);
   const answer = context.answers.get(key) ?? null;
   const who = context.roster.get(attempt.id);
-  const config = context.configs.get(item.item.id);
+  const config = context.configs.get(item.item.id)?.(attempt);
   const view = { seed: attempt.seed, itemId: item.item.id, shuffle: false };
   return {
     answerId: answer?.id ?? null,
@@ -823,14 +826,20 @@ export async function batchValidate(
  */
 export async function regradeItem(
   db: Db,
-  item: { evaluationId: string; itemId: string; questionId: string },
+  item: {
+    evaluationId: string;
+    itemId: string;
+    questionId: string;
+    /** The variables of the version the item holds now (ADR-056 §5). */
+    variables: ParametersDraft | null;
+  },
   input: { note: string; toVersionNumber?: number | undefined },
 ): Promise<string | null> {
   return db.transaction(async (tx) => {
     let note = input.note.trim();
     if (input.toVersionNumber !== undefined) {
       const [version] = await tx
-        .select({ id: questionVersions.id })
+        .select({ id: questionVersions.id, variables: questionVersions.variables })
         .from(questionVersions)
         .where(
           and(
@@ -840,6 +849,9 @@ export async function regradeItem(
         )
         .limit(1);
       if (!version) return null;
+      // The values the students had are kept, and the new version's derived
+      // rows replayed from them (ADR-056 §5): only under the same names.
+      if (!sameTable(parametersOf(item), parametersOf(version))) throw new VariablesChanged();
       await retargetItemVersion(tx, item.itemId, version.id);
       note = `${note} (re-graded with version ${input.toVersionNumber})`;
     }
@@ -852,6 +864,17 @@ export async function regradeItem(
     await clearGradingReady(tx, item.evaluationId);
     return note;
   });
+}
+
+/**
+ * A regrade with a version whose variables are not the item's (ADR-056 §5):
+ * the values the students were served could not be read under it, so the
+ * item keeps its version and nothing is regraded.
+ */
+export class VariablesChanged extends GradingError {
+  constructor() {
+    super("variables_changed", 409, "the version declares other variables than the item's");
+  }
 }
 
 /** The full history of one cell, newest first (F-GRADE-05, F-GRADE-06). */

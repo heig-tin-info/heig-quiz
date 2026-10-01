@@ -19,7 +19,7 @@
  */
 import { COMMON_FORBIDDEN_STUDENT_KEYS, type StudentView } from "@quiz/core/server";
 
-import { loadConfig, typeOf } from "../pool/config.js";
+import { loadConfig, TemplateRead, typeOf, type StaticVersion } from "../pool/config.js";
 
 /**
  * Keys a student payload may never carry, whatever produced it.
@@ -88,8 +88,14 @@ export function stripMetadata(value: unknown): unknown {
 interface StudentViewInput {
   /** Registered question-type id, from `questions.type`. */
   type: string;
-  /** The two columns of `question_versions` — never a hand-built object. */
-  version: { config: unknown; configVersion: number };
+  /**
+   * A STATIC version: the `version` of an instance (`pool/instance.ts`,
+   * ADR-056), which is the stored row itself for a static question. A
+   * stored row is not a `StaticVersion`, so handing a template here does not
+   * compile; `loadConfig` refuses one at run time as well. A formula or a
+   * variable name cannot reach this exit.
+   */
+  version: StaticVersion;
   /** `attempts.seed`; 0 for the teacher preview, which is therefore stable. */
   seed: number;
   /** `evaluation_items.id`: the shuffle stream is per item, not per question. */
@@ -184,11 +190,13 @@ export function studentSolutionViewOf(type: string, config: unknown, view: Stude
 }
 
 /** `type.shuffleable(config)`: whether shuffling means anything for this one. */
-export function isShuffleable(type: string, version: { config: unknown; configVersion: number }): boolean {
+export function isShuffleable(type: string, version: StaticVersion): boolean {
   const t = typeOf(type);
   try {
     return t.shuffleable(loadConfig(type, version));
-  } catch {
+  } catch (error) {
+    // A template is a programming error, not an unshuffleable question.
+    if (error instanceof TemplateRead) throw error;
     return false;
   }
 }
