@@ -703,7 +703,7 @@ describe("the grading pass applies the hierarchy", () => {
       [inheriting, overriding],
       (type, version) =>
         typeOf(type).defaultPoints(
-          loadConfig(type, { config: version.config, configVersion: version.configVersion }),
+          loadConfig(type, version),
         ),
       { attemptCount: 0 },
     );
@@ -806,7 +806,7 @@ describe("the grading pass hands categorize the evaluation's policy (ADR-036)", 
       [inheriting, overriding],
       (type, version) =>
         typeOf(type).defaultPoints(
-          loadConfig(type, { config: version.config, configVersion: version.configVersion }),
+          loadConfig(type, version),
         ),
       { attemptCount: 0 },
     );

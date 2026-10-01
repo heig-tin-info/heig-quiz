@@ -41,6 +41,7 @@ import { presence } from "../realtime/presence.js";
 import { solutionView, studentView } from "./studentView.js";
 import { type AttemptRecord, type AnswerRecord, answersOf, reopenRefusal } from "./attempt.js";
 import { answerSummarizer, answeredBy, liveGrader, cellStatus } from "./autosave.js";
+import { itemInstance } from "../pool/service.js";
 
 // --- Dashboard read model (F-DASH-01..04) ---------------------------------
 
@@ -123,7 +124,7 @@ export async function dashboardView(
 
   // One summarizer per QUESTION (see `answerSummarizer`), built only when the
   // teacher actually asked for the answers.
-  const summarize = new Map<string, (payload: unknown) => string>(
+  const summarize = new Map<string, ReturnType<typeof answerSummarizer>>(
     input.includeAnswers ? items.map((item) => [item.item.id, answerSummarizer(item)]) : [],
   );
   // "Does it hold an answer?", once per QUESTION too (issue #89).
@@ -209,7 +210,7 @@ export async function dashboardView(
               points: grading && grading.state === "validated" ? grading.points : null,
               revision: answer?.revision ?? 0,
               summary:
-                answer ? (summarize.get(item.item.id)?.(answer.payload) ?? null) : null,
+                answer && attempt ? (summarize.get(item.item.id)?.(answer.payload, attempt) ?? null) : null,
               flagged: answer?.flagged ?? false,
             };
           }),
@@ -382,10 +383,8 @@ export async function attemptInspect(
       submittedAt: isoOrNull(attempt.submittedAt),
     },
     items: items.map((entry) => {
-      const version = {
-        config: entry.version.config,
-        configVersion: entry.version.configVersion,
-      };
+      // The student's own instance of a parameterized question (ADR-056).
+      const { version } = itemInstance(entry, attempt);
       const answer = answered.get(entry.item.id) ?? null;
       return {
         item: {

@@ -18,7 +18,7 @@ afterAll(() => restore());
 
 describe("loading and saving a config (§1.6)", () => {
   it("loadConfig throws on a config no migration can save, tryLoadConfig does not", () => {
-    const row = { config: { statement: 7 }, configVersion: 2 };
+    const row = { config: { statement: 7 }, configVersion: 2, variables: null };
     expect(() => loadConfig("short", row)).toThrow();
     const outcome = tryLoadConfig("short", row);
     expect(outcome.ok).toBe(false);

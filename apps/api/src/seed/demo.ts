@@ -27,7 +27,8 @@ import {
 import * as evaluationService from "../modules/evaluation/service.js";
 import { runEvaluationGrading } from "../modules/grading/jobs.js";
 import * as live from "../modules/live/service.js";
-import { loadConfig, typeOf } from "../modules/pool/config.js";
+import { typeOf } from "../modules/pool/config.js";
+import { exampleConfig } from "../modules/pool/instance.js";
 import * as poolService from "../modules/pool/service.js";
 import {
   CLOSED_TITLE,
@@ -54,10 +55,7 @@ const MINUTE = 60_000;
 const defaultPoints = (
   type: string,
   version: typeof questionVersions.$inferSelect,
-): number =>
-  typeOf(type).defaultPoints(
-    loadConfig(type, { config: version.config, configVersion: version.configVersion }),
-  );
+): number => typeOf(type).defaultPoints(exampleConfig(type, version));
 
 // ---------------------------------------------------------------------------
 // Pools, categories, questions

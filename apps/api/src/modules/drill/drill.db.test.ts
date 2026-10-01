@@ -28,15 +28,17 @@ import {
 } from "../../db/schema.js";
 import { testApp, testDb } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
+import { markersIn, publishParameterized } from "../../test/parameterized.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import * as live from "../live/service.js";
 
-import { loadConfig, typeOf } from "../pool/config.js";
+import { loadConfig, typeOf, type VersionRow } from "../pool/config.js";
 import * as org from "../org/service.js";
 import * as poolService from "../pool/service.js";
 import { publishCorrection, releaseResults, unreleaseResults } from "../results/service.js";
 import * as drill from "./service.js";
+import { currentVersions } from "./lifecycle.js";
 
 let db: Db;
 let restore: () => void;
@@ -56,7 +58,7 @@ async function appAt(at = T0) {
 }
 type App = Awaited<ReturnType<typeof appAt>>;
 
-const points = (type: string, version: { config: unknown; configVersion: number }) =>
+const points = (type: string, version: VersionRow) =>
   typeOf(type).defaultPoints(loadConfig(type, version));
 
 /**
@@ -353,6 +355,41 @@ describe("today's session (F-DRILL-03)", () => {
     app.clock.advance(86_400_000);
     const tomorrow = await drill.drillSession(db, userId, "fine", app.clock.now());
     expect(tomorrow.cards.filter((c) => c.isNew)).toHaveLength(3);
+  });
+});
+
+describe("a review of a parameterized question (ADR-056 §5)", () => {
+  it("serves the values it stores beside the seed, grades on them, keeps them with the review, and keys the card on the template", async () => {
+    const app = await appAt();
+    const seed = await seedLive(db, { mode: "exercise", students: 1, questions: 0 });
+    await org.setClassroomDrill(db, seed.classroomId, true, app.clock.now());
+    const questionId = await publishParameterized(db, { poolId: seed.poolId, teacherId: seed.teacherId, type: "mcq" });
+    const [item] = await evaluationService.addItems(db, await reload(db, seed.evaluationId), [questionId], (type, version) =>
+      typeOf(type).defaultPoints(poolService.exampleConfig(type, version)), { attemptCount: 0 });
+    await sit(app, { ...seed, questionIds: [questionId], itemIds: [item!.id] }, { answers: [{ selected: [0] }] });
+    const userId = seed.studentIds[0]!;
+    const [card] = await cardsOf({ userId });
+    const version = (await currentVersions(db, [questionId])).get(questionId)!;
+    expect(card!.keyHash).toBe(poolService.templateHash("mcq", version));
+
+    const served = await drill.serveCard(db, userId, card!.id, app.clock.now());
+    expect(markersIn(JSON.stringify(served))).toEqual([]);
+    const [open] = await db.select().from(drillCards).where(eq(drillCards.id, card!.id));
+    expect(open!.serveValues).toMatchObject({ versionId: version.id });
+    expect(Object.keys(open!.serveValues!.values).sort()).toEqual(["g", "h", "t"]);
+    // A reload serves the same instance.
+    expect(await drill.serveCard(db, userId, card!.id, app.clock.now())).toEqual(served);
+
+    const result = await drill.answerCard(db, userId, card!.id, { answer: { selected: [0] }, deviceClass: "fine" }, app.clock.now());
+    expect(result.correctness).toBe("right");
+    expect(markersIn(JSON.stringify(result))).toEqual([]);
+    const [review] = await db.select().from(drillReviews).where(eq(drillReviews.cardId, card!.id));
+    expect(review!.values).toEqual(open!.serveValues);
+    const [closed] = await db.select().from(drillCards).where(eq(drillCards.id, card!.id));
+    expect(closed!.serveSeed).toBeNull();
+    expect(closed!.serveValues).toBeNull();
+    // A new draw is no new key: the card keeps its schedule.
+    expect(closed!.keyHash).toBe(card!.keyHash);
   });
 });
 

@@ -25,9 +25,28 @@ import type { AnyQuestionTypeServer } from "@quiz/core/server";
 import { questionType } from "@quiz/registry/server";
 
 /** The two columns of `question_versions` that carry a configuration. */
-interface ConfigRow {
+export interface ConfigRow {
   config: unknown;
   configVersion: number;
+}
+
+/**
+ * A version as {@link loadConfig} reads it: the configuration AND the
+ * variables table, which every caller must hand over (ADR-056). A
+ * parameterized version is never read here: it is a template, and a reader
+ * gets one of its instances from `instance.ts` — whose `version` is a row of
+ * this shape with `variables: null`. Forgetting that is a throw, not a leak.
+ */
+export interface VersionRow extends ConfigRow {
+  variables: { rows: readonly unknown[] } | null;
+}
+
+/** Thrown by {@link loadConfig} when handed a TEMPLATE: a programming error, never a user's. */
+export class TemplateRead extends Error {
+  constructor(type: string) {
+    super(`a parameterized ${type} version was read without its instance (pool/instance.ts)`);
+    this.name = "TemplateRead";
+  }
 }
 
 type ConfigOutcome =
@@ -59,12 +78,14 @@ export function typeOf(type: string): AnyQuestionTypeServer {
  * like any other. The gates themselves — publication, the draft issues —
  * stay on `configSchema` and still demand a key.
  */
-export function loadConfig(type: string, row: ConfigRow): unknown {
+export function loadConfig(type: string, row: VersionRow): unknown {
+  if (row.variables !== null && row.variables.rows.length > 0) throw new TemplateRead(type);
   const t = typeOf(type);
   return (t.keylessConfigSchema ?? t.configSchema).parse(migrated(t, row));
 }
 
-function migrated(t: AnyQuestionTypeServer, row: ConfigRow): unknown {
+/** The stored config raised to the type's current shape, NOT parsed. */
+export function migrated(t: AnyQuestionTypeServer, row: ConfigRow): unknown {
   return row.configVersion === t.configVersion ? row.config : t.migrate(row.config, row.configVersion);
 }
 
@@ -108,7 +129,7 @@ function declaredVersion(config: unknown): number | undefined {
  * parse is about to report what is wrong with it anyway (D16), and a
  * migration failure there would replace the real issues with its own.
  */
-function raise(t: AnyQuestionTypeServer, config: unknown, fromVersion: number): unknown {
+export function raise(t: AnyQuestionTypeServer, config: unknown, fromVersion: number): unknown {
   if (fromVersion === t.configVersion) return config;
   try {
     return t.migrate(config, fromVersion);
@@ -132,7 +153,11 @@ export function saveConfig(
 ): ConfigRow {
   const t = typeOf(type);
   const schema = options.keyOptional ? (t.keylessConfigSchema ?? t.configSchema) : t.configSchema;
-  return { config: schema.parse(config), configVersion: t.configVersion };
+  // A config that declares an older shape (a caller that knows only `short`
+  // v2) is raised first, as the autosave does: a shape the current one
+  // holds must not be refused for its stamp alone.
+  const raised = raise(t, config, declaredVersion(config) ?? t.configVersion);
+  return { config: schema.parse(raised), configVersion: t.configVersion };
 }
 
 /**

@@ -119,7 +119,8 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
       async ({ body, scope }) => {
         const saved = await service.putDraft(app.db, scope.question, {
           config: body.config,
-          ...(body.explanation !== undefined ? { explanation: body.explanation } : {}),
+          explanation: body.explanation,
+          variables: body.variables,
         });
         poolChanged(scope.pool.id);
         return saved;

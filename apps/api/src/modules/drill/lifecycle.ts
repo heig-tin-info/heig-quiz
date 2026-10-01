@@ -35,7 +35,14 @@ import {
   type EvaluationRecord,
 } from "../evaluation/service.js";
 import { solutionView, type EndedAttempt } from "../live/service.js";
-import { loadConfig, typeOf } from "../pool/service.js";
+import {
+  exampleConfig,
+  isParameterized,
+  loadConfig,
+  templateHash,
+  typeOf,
+  type VersionContent,
+} from "../pool/service.js";
 import { UnavailableRunner } from "../runner/index.js";
 
 /** A student's drill data is kept five years (N-DATA-03, ADR-041 §8). */
@@ -110,8 +117,13 @@ function canonical(value: unknown): string {
  * `toSolution` under a fixed view. A card whose stored hash differs is
  * reset at its next review (§7); a rewording that leaves the key alone keeps
  * the card's FSRS state.
+ *
+ * A parameterized question's key is its TEMPLATE (ADR-056 §5), never one
+ * instance: each review draws new values, and a new draw must not reset the
+ * card. An edit of a formula does.
  */
-export function keyHashOf(type: string, version: { config: unknown; configVersion: number }): string {
+export function keyHashOf(type: string, version: VersionContent): string {
+  if (isParameterized(version)) return templateHash(type, version);
   const solution = solutionView({ type, version, seed: 0, itemId: KEY_VIEW_ITEM });
   return createHash("sha256").update(canonical(solution)).digest("hex");
 }
@@ -180,7 +192,9 @@ async function createCards(
   for (const j of items) {
     // The card serves the question as it stands now (ADR-041 §7).
     const version = current.get(j.question.id) ?? j.version;
-    if (!(await isDrillableQuestion(j.question.type, loadConfig(j.question.type, version), defaults, now))) continue;
+    // Whether it can be drilled is a matter of structure: a parameterized
+    // question answers it on its example instance (ADR-056).
+    if (!(await isDrillableQuestion(j.question.type, exampleConfig(j.question.type, version), defaults, now))) continue;
     const keyHash = keyHashOf(j.question.type, version);
     for (const userId of takers) {
       rows.push({

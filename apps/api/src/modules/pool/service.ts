@@ -14,7 +14,9 @@
  *   - `categories.ts`: the category tree;
  *   - `questionList.ts`: listing and searching questions, their JSON views;
  *   - `questionWrite.ts`: the write path of a question and its versions;
- *   - `move.ts`: moving questions between pools (ADR-017).
+ *   - `move.ts`: moving questions between pools (ADR-017);
+ *   - `instance.ts`: the instances of a parameterized question (ADR-056),
+ *     which every reader of a version for an attempt goes through.
  *
  * Two rules shape everything here:
  *   - a stored config is only ever read and written through `./config.ts`
@@ -25,6 +27,22 @@
  */
 export type { PoolRow, QuestionRecord } from "./shared.js";
 export { loadConfig, typeOf } from "./config.js";
+export {
+  drawInstance,
+  exampleConfig,
+  exampleInstance,
+  instanceOf,
+  InstanceMismatch,
+  configPerAttempt,
+  itemInstance,
+  parametersOf,
+  isParameterized,
+  sameVariables,
+  templateHash,
+  type Instance,
+  type InstanceAttempt,
+  type VersionContent,
+} from "./instance.js";
 export {
   DraftInvalid,
   MissingDraft,

@@ -18,6 +18,7 @@ import {
   questions,
 } from "../../db/schema.js";
 import { hasKey, loadConfig, publicationIssuesOf, tryLoadConfig } from "./config.js";
+import { exampleConfig, isParameterized, parameterIssues, type VersionContent } from "./instance.js";
 import { type QuestionRecord, poolOf, type VersionRecord, qualified } from "./shared.js";
 import { starredBy } from "./stars.js";
 
@@ -174,7 +175,7 @@ interface VersionFacts {
   deprecated: boolean;
   draftUpdatedAt: Date | null;
   /** The latest published config, for `keyless`. */
-  latest: { config: unknown; configVersion: number } | null;
+  latest: VersionContent | null;
 }
 
 /** Latest published number, its deprecation, and the draft's mtime, per question. */
@@ -191,8 +192,11 @@ async function versionFactsOf(
       publishedAt: questionVersions.publishedAt,
       deprecatedAt: questionVersions.deprecatedAt,
       updatedAt: questionVersions.updatedAt,
+      id: questionVersions.id,
       config: questionVersions.config,
       configVersion: questionVersions.configVersion,
+      explanation: questionVersions.explanation,
+      variables: questionVersions.variables,
     })
     .from(questionVersions)
     .where(inArray(questionVersions.questionId, ids));
@@ -210,7 +214,13 @@ async function versionFactsOf(
       facts.latestNumber = row.number;
       facts.publishedAt = row.publishedAt;
       facts.deprecated = row.deprecatedAt !== null;
-      facts.latest = { config: row.config, configVersion: row.configVersion };
+      facts.latest = {
+        id: row.id,
+        config: row.config,
+        configVersion: row.configVersion,
+        explanation: row.explanation,
+        variables: row.variables,
+      };
     }
     out.set(row.questionId, facts);
   }
@@ -227,10 +237,11 @@ async function versionFactsOf(
  * longer parses is not called keyless — that is a different problem, and
  * the gates that care report it themselves.
  */
-export function isKeyless(type: string, version: { config: unknown; configVersion: number } | null): boolean {
+export function isKeyless(type: string, version: VersionContent | null): boolean {
   if (version === null) return false;
   try {
-    return !hasKey(type, loadConfig(type, version));
+    // A parameterized question's key is its structure: the example instance says it.
+    return !hasKey(type, exampleConfig(type, version));
   } catch {
     return false;
   }
@@ -354,7 +365,7 @@ interface ReachableQuestion {
   tags: string[];
   latestNumber: number;
   /** The latest published version, for what the caller shows of it. */
-  latest: { config: unknown; configVersion: number };
+  latest: VersionContent;
 }
 
 /** The pool of a question is linked to `courseId`, on a query with `questions` in scope. */
@@ -431,6 +442,8 @@ export async function searchReachableQuestions(
     courseId: string | null;
     types: readonly string[];
     search: QuestionSearch;
+    /** Leave out the parameterized questions (ADR-056 §10): a poll's picker. */
+    staticOnly?: boolean;
   },
 ): Promise<{ items: ReachableQuestion[]; nextCursor: string | null; total: number; tags: string[] }> {
   const { search } = input;
@@ -439,6 +452,7 @@ export async function searchReachableQuestions(
     : [...input.types];
   const scope = reachableScope(input.poolWhere, types);
   if (input.courseId !== null) scope.push(linkedTo(input.courseId));
+  if (input.staticOnly) scope.push(eq(questions.randomizable, false));
   const filters = filterWhere({ ...search, type: undefined, categoryId: undefined, includeDeleted: false });
   const [{ page, tags, facts, nextCursor, total }, scopeTags] = await Promise.all([
     pageWhere(db, [...scope, ...filters], search),
@@ -560,9 +574,14 @@ export function draftJson(type: string, row: VersionRecord): QuestionDraft {
     // back under the current version number — see `tryLoadConfig`.
     config: outcome.config,
     explanation: row.explanation,
+    variables: row.variables,
     configVersion: row.configVersion,
     updatedAt: row.updatedAt.toISOString(),
     // "Valid" means publishable, the flag the editor's Publish button reads.
-    valid: outcome.ok && publicationIssuesOf(type, outcome.config).length === 0,
+    // A parameterized draft is publishable when its INSTANCES are (ADR-056):
+    // its template need not satisfy the schema at all.
+    valid: isParameterized(row)
+      ? parameterIssues(type, row).length === 0
+      : outcome.ok && publicationIssuesOf(type, outcome.config).length === 0,
   };
 }

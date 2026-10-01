@@ -22,7 +22,9 @@ import {
 
 import { questions } from "../../db/schema.js";
 import { studentSolutionViewOf, studentViewOf, teacherPreviewView } from "../live/studentView.js";
-import { tryLoadConfig, typeOf } from "./config.js";
+import { loadConfig, tryLoadConfig, typeOf } from "./config.js";
+import { instanceOf, isParameterized, parameterIssues } from "./instance.js";
+import type { VersionRecord } from "./shared.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
 
@@ -43,7 +45,7 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
       await reply.code(404).send({ error: "not_found" });
       return null;
     }
-    const outcome = tryLoadConfig(question.type, row);
+    const outcome = isParameterized(row) ? tryInstance(question, row) : tryLoadConfig(question.type, row);
     if (!outcome.ok) {
       await reply
         .code(422)
@@ -51,6 +53,22 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
       return null;
     }
     return { config: outcome.config };
+  }
+
+  /**
+   * A parameterized draft or version is previewed and tried as the instance
+   * of the preview's seed (0) and stream (the question's id), drawn on the
+   * spot: the same numbers on every open (ADR-056 §8 shows five, PR 3). A
+   * table that cannot draw is the draft's issues, not a 500.
+   */
+  function tryInstance(question: typeof questions.$inferSelect, row: VersionRecord) {
+    try {
+      const { version } = instanceOf(question.type, row, { seed: 0, itemId: question.id });
+      return { ok: true as const, config: loadConfig(question.type, version) };
+    } catch (error) {
+      const issues = parameterIssues(question.type, row);
+      return { ok: false as const, issues: issues.length > 0 ? issues : issuesOf(error) };
+    }
   }
 
   app.post(

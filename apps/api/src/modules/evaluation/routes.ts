@@ -36,7 +36,8 @@ import {
 
 import type { AppConfig } from "../../config.js";
 import { tracer, type AuditAction } from "../../audit.js";
-import { hasKey, loadConfig, typeOf } from "../pool/config.js";
+import { hasKey, typeOf } from "../pool/config.js";
+import { exampleConfig } from "../pool/service.js";
 import {
   accessibleCourse,
   callerOf,
@@ -79,8 +80,9 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
   // F-EVAL-02: the type decides an item's default weight, from the config it
   // owns — this module never looks inside a config. And a question kept after
   // an opinion poll has no key: polls only. Shared by evaluations and templates.
+  // A parameterized question's structure is its example instance's (ADR-056).
   const versionConfig = (type: string, version: service.JoinedItem["version"]) =>
-    loadConfig(type, { config: version.config, configVersion: version.configVersion });
+    exampleConfig(type, version);
   const defaultPoints = (type: string, version: service.JoinedItem["version"]) =>
     typeOf(type).defaultPoints(versionConfig(type, version));
   const keyed = (type: string, version: service.JoinedItem["version"]) =>

@@ -4,7 +4,7 @@ import { isDeepStrictEqual } from "node:util";
 
 import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
-import type { QuestionDetail, VersionDetail, VersionRow, ZodIssueLite } from "@quiz/contracts";
+import type { ParametersDraft, QuestionDetail, VersionDetail, VersionRow, ZodIssueLite } from "@quiz/contracts";
 import { issuesOf } from "@quiz/contracts";
 
 import { isUniqueViolation, type Db } from "../../db/client.js";
@@ -29,6 +29,7 @@ import {
   searchTextOf,
   typeOf,
 } from "./config.js";
+import { isParameterized, parameterIssues, parametersOf, storedTemplate } from "./instance.js";
 import {
   type QuestionRecord,
   poolOf,
@@ -230,6 +231,7 @@ export async function keepUnsavedQuestion(
           config: published.config,
           configVersion: published.configVersion,
           explanation: published.explanation,
+          variables: published.variables,
           searchText: searchTextOf(question.type, name, published.config),
           // Equal to the publication: `hasDraftChanges` is strict, so the
           // pool list shows the question as published and unchanged.
@@ -329,7 +331,6 @@ export async function patchQuestion(
     categoryId?: string | null | undefined;
     difficulty?: number | undefined;
     shuffleable?: boolean | undefined;
-    randomizable?: boolean | undefined;
     tags?: readonly string[] | undefined;
   },
 ): Promise<void> {
@@ -343,7 +344,6 @@ export async function patchQuestion(
         ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId } : {}),
         ...(patch.difficulty !== undefined ? { difficulty: patch.difficulty } : {}),
         ...(patch.shuffleable !== undefined ? { shuffleable: patch.shuffleable } : {}),
-        ...(patch.randomizable !== undefined ? { randomizable: patch.randomizable } : {}),
         updatedAt: now,
       })
       .where(eq(questions.id, question.id));
@@ -383,15 +383,25 @@ export async function patchQuestion(
  * Autosave (F-QST-02, decision D16): the config is STORED even when it does
  * not parse, and the issues travel back so the editor can underline them.
  * Nothing here can fail on content.
+ *
+ * The variables table (ADR-056) is stored as sent, like the config. A
+ * parameterized draft's issues are those of publication
+ * (`parameterIssues`): the table, every `[[…]]`, and the instances through
+ * the type's gate — its template alone need not satisfy the schema.
  */
 export async function putDraft(
   db: Db,
   question: QuestionRecord,
-  body: { config: unknown; explanation?: string },
+  body: { config: unknown; explanation?: string | undefined; variables?: ParametersDraft | null | undefined },
 ): Promise<{ updatedAt: string; valid: boolean; issues: ZodIssueLite[] }> {
   const draft = await draftOf(db, question.id);
-  const { row, issues } = saveDraftConfig(question.type, body.config);
+  const saved = saveDraftConfig(question.type, body.config);
+  const { row } = saved;
   const explanation = body.explanation ?? draft.explanation;
+  const variables = body.variables === undefined ? draft.variables : body.variables;
+  const issues = isParameterized({ variables })
+    ? parameterIssues(question.type, { ...row, explanation, variables })
+    : saved.issues;
   // Writing back what is already stored is not a change (F-QST-03: "the
   // draft stays equal to the published version until the next change"). The
   // stamp stays where it was, or a no-op save right after a publication
@@ -400,6 +410,7 @@ export async function putDraft(
   if (
     draft.configVersion === row.configVersion &&
     draft.explanation === explanation &&
+    isDeepStrictEqual(draft.variables, variables) &&
     // Through JSON, as jsonb stores it: an `undefined` key is no difference.
     isDeepStrictEqual(draft.config, JSON.parse(JSON.stringify(row.config ?? null)))
   ) {
@@ -413,6 +424,7 @@ export async function putDraft(
         config: row.config,
         configVersion: row.configVersion,
         explanation,
+        variables,
         searchText: searchTextOf(question.type, question.internalName, row.config),
         updatedAt: now,
       })
@@ -462,12 +474,21 @@ export async function publishQuestion(
     if (!draft) throw new MissingDraft();
 
     // Full parse here, and only here: this is the gate D16 moves the
-    // validation to.
+    // validation to. A parameterized draft (ADR-056) passes when its table
+    // draws and every instance passes the type's gate; its TEMPLATE is
+    // stored, and `questions.randomizable` follows it (§1).
+    const variables = parametersOf(draft);
     let config: unknown;
-    try {
-      config = publishConfig(question.type, loadConfig(question.type, draft)).config;
-    } catch (error) {
-      throw new DraftInvalid(error instanceof NotPublishable ? error.issues : issuesOf(error));
+    if (variables !== null) {
+      const issues = parameterIssues(question.type, draft);
+      if (issues.length > 0) throw new DraftInvalid(issues);
+      config = storedTemplate(question.type, draft).config;
+    } else {
+      try {
+        config = publishConfig(question.type, loadConfig(question.type, { ...draft, variables: null })).config;
+      } catch (error) {
+        throw new DraftInvalid(error instanceof NotPublishable ? error.issues : issuesOf(error));
+      }
     }
     const configVersion = typeOf(question.type).configVersion;
     const searchText = searchTextOf(question.type, question.internalName, config);
@@ -485,6 +506,7 @@ export async function publishQuestion(
         number,
         config,
         configVersion,
+        variables,
         searchText,
         publishedAt: now,
         publishedBy: input.userId,
@@ -501,11 +523,15 @@ export async function publishQuestion(
       config,
       configVersion,
       explanation: draft.explanation,
+      variables,
       searchText,
       updatedAt: now,
       createdAt: now,
     });
-    await tx.update(questions).set({ updatedAt: now }).where(eq(questions.id, question.id));
+    await tx
+      .update(questions)
+      .set({ updatedAt: now, randomizable: variables !== null })
+      .where(eq(questions.id, question.id));
 
     // The link table of `db/pool.ts`: which assets this version shows. It is
     // the garbage-collection root, and it is what lets a STUDENT taking the
@@ -582,8 +608,11 @@ export async function versionDetail(
   if (!row) return null;
   return {
     ...versionJson(row),
-    config: loadConfig(question.type, row),
+    // The TEMPLATE of a parameterized version, as stored (ADR-056): the
+    // teacher reads the formulas, never one instance.
+    config: isParameterized(row) ? row.config : loadConfig(question.type, row),
     explanation: row.explanation,
+    variables: row.variables,
     configVersion: row.configVersion,
   };
 }
@@ -627,6 +656,7 @@ export async function restoreVersion(
         config: source.config,
         configVersion: source.configVersion,
         explanation: source.explanation,
+        variables: source.variables,
         searchText: source.searchText,
         updatedAt: now,
       })
@@ -724,7 +754,8 @@ export async function copyQuestion(
       categoryId: input.categoryId ?? null,
       difficulty: question.difficulty,
       shuffleable: question.shuffleable,
-      randomizable: question.randomizable,
+      // Derived from the published version (ADR-056 §1): a copy has none yet.
+      randomizable: false,
       createdBy: input.userId,
       originQuestionId: question.id,
       createdAt: now,
@@ -737,6 +768,7 @@ export async function copyQuestion(
       config: draft.config,
       configVersion: draft.configVersion,
       explanation: draft.explanation,
+      variables: draft.variables,
       searchText: searchTextOf(question.type, name, draft.config),
       updatedAt: now,
       createdAt: now,

@@ -31,7 +31,7 @@ import {
 import { type Payload, type TestServer, testServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
-import { loadConfig, typeOf } from "../pool/config.js";
+import { loadConfig, typeOf, type VersionRow } from "../pool/config.js";
 import * as pollService from "../poll/service.js";
 import * as poolService from "../pool/service.js";
 import * as service from "./service.js";
@@ -40,7 +40,7 @@ let server: TestServer;
 let db: Db;
 let restore: () => void;
 
-const points = (type: string, version: { config: unknown; configVersion: number }) =>
+const points = (type: string, version: VersionRow) =>
   typeOf(type).defaultPoints(loadConfig(type, version));
 
 beforeAll(async () => {

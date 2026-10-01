@@ -58,7 +58,17 @@ import {
 import { gradeDefaults, type DbOrTx, type EvaluationRecord } from "../evaluation/service.js";
 import { DomainError } from "../http.js";
 import { drawSeed, isShuffleable, studentSolutionView, studentView } from "../live/service.js";
-import { loadConfig, typeOf } from "../pool/service.js";
+import {
+  drawInstance,
+  instanceOf,
+  InstanceMismatch,
+  loadConfig,
+  typeOf,
+  type Instance,
+  type VersionContent,
+} from "../pool/service.js";
+import type { VersionRow } from "../pool/config.js";
+import type { StoredInstance } from "../../db/columns.js";
 import { keyShownTo } from "../results/service.js";
 import { currentVersions, drillGradeContext, keyHashOf } from "./lifecycle.js";
 
@@ -227,14 +237,36 @@ function questionOf(row: ActiveRow, context: Context) {
   const evaluation = context.evaluations.get(row.card.evaluationId);
   if (!version || !evaluation) return null;
   return {
-    version: { config: version.config, configVersion: version.configVersion },
+    version,
     defaults: gradeDefaults(evaluation),
     open: keyReleased(evaluation, context.latest.get(evaluation.id)),
   };
 }
 
+/**
+ * The instance one review shows (ADR-056 §5): the values stored when the card
+ * was served, replayed when the question was republished since under the
+ * same names, drawn again from the review's seed when the names changed —
+ * the card is the item, so the stream is the card's. Static: the version.
+ */
+function reviewInstance(row: ActiveRow, version: VersionContent, seed: number, stored: StoredInstance | null) {
+  const at = { seed, itemId: row.card.id };
+  try {
+    return instanceOf(row.type, version, { ...at, stored });
+  } catch (error) {
+    if (!(error instanceof InstanceMismatch)) throw error;
+    return instanceOf(row.type, version, at);
+  }
+}
+
+/** What a review stores of its instance: the values it was rendered with, under its version. */
+const storedOf = (version: VersionContent, instance: Instance): StoredInstance | null =>
+  instance.values === null
+    ? null
+    : { versionId: version.id, values: instance.values, ...(instance.fallback ? { fallback: instance.fallback } : {}) };
+
 /** The view of one review: the card is the item, so a new seed gives a new shuffle (06, question 28 (d)). */
-function viewOf(row: ActiveRow, version: { config: unknown; configVersion: number }, seed: number) {
+function viewOf(row: ActiveRow, version: VersionRow, seed: number) {
   return {
     type: row.type,
     version,
@@ -391,17 +423,25 @@ export async function drillSession(
 export async function serveCard(db: Db, userId: string, cardId: string, now: Date): Promise<DrillServed> {
   const { row, question } = await servable(db, userId, cardId, now);
   const at = sql`${now.toISOString()}::timestamptz`;
-  // One conditional statement each: two tabs serving at once share one seed.
+  // One conditional statement each: two tabs serving at once share one seed
+  // — and the values drawn from it (ADR-056 §5), stored beside it.
+  const seed = drawSeed();
   await db
     .update(drillCards)
-    .set({ serveSeed: drawSeed(), shownSince: now, activeMs: 0 })
+    .set({
+      serveSeed: seed,
+      serveValues: drawInstance(row.type, question.version, seed, row.card.id),
+      shownSince: now,
+      activeMs: 0,
+    })
     .where(and(eq(drillCards.id, cardId), isNull(drillCards.serveSeed)));
   const [served] = await db
     .update(drillCards)
     .set({ shownSince: sql`coalesce(${drillCards.shownSince}, ${at})` })
     .where(eq(drillCards.id, cardId))
-    .returning({ seed: drillCards.serveSeed });
-  const view = viewOf(row, question.version, served!.seed!);
+    .returning({ seed: drillCards.serveSeed, values: drillCards.serveValues });
+  const instance = reviewInstance(row, question.version, served!.seed!, served!.values);
+  const view = viewOf(row, instance.version, served!.seed!);
   return { cardId, type: row.type, student: studentView({ ...view, defaults: question.defaults }) };
 }
 
@@ -454,7 +494,7 @@ export async function answerCard(
   return db.transaction(async (tx) => {
     // The card row is the lock: two answers at once rate the card once.
     const [locked] = await tx
-      .select({ serveSeed: drillCards.serveSeed, credit: openCredit(now) })
+      .select({ serveSeed: drillCards.serveSeed, serveValues: drillCards.serveValues, credit: openCredit(now) })
       .from(drillCards)
       .where(and(eq(drillCards.id, cardId), eq(drillCards.userId, userId)))
       .for("update");
@@ -473,7 +513,9 @@ export async function answerCard(
     const seed = locked.serveSeed;
     const references = await referenceTimes(tx, [card.questionId], input.deviceClass, userId);
     const referenceMs = references.get(card.questionId) ?? null;
-    const config = loadConfig(row.type, question.version);
+    // Graded on the values the student was served (ADR-056 §5).
+    const instance = reviewInstance(row, question.version, seed, locked.serveValues);
+    const config = loadConfig(row.type, instance.version);
     const result = await type.grade(
       config,
       answer,
@@ -504,10 +546,11 @@ export async function answerCard(
       deviceClass: input.deviceClass,
       reviewedAt: now,
       answerPayload: answer,
+      values: storedOf(question.version, instance),
     });
     await tx
       .update(drillCards)
-      .set({ ...next, keyHash, serveSeed: null, shownSince: null, activeMs: 0 })
+      .set({ ...next, keyHash, serveSeed: null, serveValues: null, shownSince: null, activeMs: 0 })
       .where(eq(drillCards.id, cardId));
     return {
       correctness,
@@ -517,7 +560,7 @@ export async function answerCard(
       activeMs,
       referenceMs: referenceMs === null ? null : Math.round(referenceMs),
       dueAt: iso(next.dueAt),
-      solution: studentSolutionView(viewOf(row, question.version, seed)),
+      solution: studentSolutionView(viewOf(row, instance.version, seed)),
     };
   });
 }

@@ -602,7 +602,11 @@ describe("the per-question debrief (F-RES-03, ADR-033)", () => {
     expect(q!.outcomes).toEqual({ correct: 2, partial: 1, wrong: 2, blank: 2 });
     // Over the same seven attempts: (1 + 0 + 1 + 0 + 0.5 + 0 + 0) / 7.
     expect(q!.successRate).toBe(0.36);
-    expect(q!.distribution.map((d) => [d.label, d.count, d.correct, d.part])).toEqual([
+    // By count; groups of one tie, in the order the attempts are read, which
+    // no query fixes (they share a timestamp): compared by label.
+    const groups = q!.distribution.map((d) => [d.label, d.count, d.correct, d.part] as const);
+    expect(groups[0]).toEqual(["nope", 2, null, null]);
+    expect([...groups].sort((a, b) => (b[1] - a[1]) || String(a[0]).localeCompare(String(b[0])))).toEqual([
       ["nope", 2, null, null],
       ["answer-q0", 1, true, null],
       ["four", 1, false, null],
