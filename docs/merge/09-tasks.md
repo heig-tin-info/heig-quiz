@@ -1328,9 +1328,9 @@ files it ports; writes en + fr for every string.
   `github_classroom_links.org_id`; `squashed_*` → `distribution_*`;
   `llm_dispatched_at` → `review_dispatched_at`; `grades_validated_at/by` →
   `released_at/by`; `created_by` = the remapped classroom owner;
-  `grading_scale` to be decided by the product owner (suggested:
-  `{kind: "score_is_grade"}`, heig-classroom's own reading — a score out of
-  6 is the grade, any other maximum linear); the
+  `grading_scale` = `{kind: "score_is_grade"}`, heig-classroom's own
+  reading — a score out of 6 is the grade, any other maximum linear
+  (product owner, 2026-10-02: released grades do not move at the import); the
   codespace columns and `work_mode` dropped, a non-`free` row refused);
   `assignment_milestones` → `project_checkpoints`; groups and members
   (`enrollment_id` remapped); `student_repos` → `project_repos` (`user_id`,

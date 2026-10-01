@@ -126,7 +126,10 @@ Status values: `open`, `settled`, `superseded`.
   shows a project row only after the release**, with the final score and
   its grade, never the score's source, the teacher's comment nor the
   repository. No score without a repository in M3: the score of a student
-  who never accepted, and the absence mark, are M5-03's.
+  who never accepted, and the absence mark, are M5-03's. Projects imported
+  from heig-classroom get `score_is_grade` (product owner, 2026-10-02), its
+  own reading of a score out of 6, so that no released grade moves at the
+  import (M8-01).
 
 ### D06 — Gradebook rules
 - **Suggested**: exams and projects count by default, exercises opt-in,
