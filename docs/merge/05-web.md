@@ -13,7 +13,7 @@ feedback, `/p/:code`, settings. **There is no student classroom page.**
 | `Timeline` | merge | `activities/Timeline.tsx` (already a port of it); projects become rows |
 | Assignments tab (`AssignmentsCard`) | merge + new | the classroom's **Activities** tab (today "Evaluations", `EvaluationList`) over the `ActivitySummary` union |
 | Journal tab, `JournalPage`/`Nav`/`Body`/`Editor` | new | `/classrooms/:id/journal/*`, both roles |
-| Students tab (`RosterTable`, `RosterImport`) | merge | Roster tab (Quiz's files descend from these); a GitHub login column only when the classroom is connected |
+| Students tab (`RosterTable`, `RosterImport`) | merge | Roster tab (Quiz's files descend from these); the GitHub login (icon + login, under the e-mail rather than in an eighth column) only when the classroom is connected |
 | Staff tab | merge | course staff (`PeopleStack`) |
 | Settings tab (rename, archive, delete) | merge | the teacher classroom's **Settings** tab (D24), with the GitHub and Journal sections |
 | `InstallWizard`, org badge | new | the GitHub section of the classroom's Settings (the "Connect to GitHub" sheet), header badge |
@@ -112,7 +112,9 @@ button walks four states:
 4. ready ⇒ "Open repository".
 
 The Settings GitHub card appears only once the user has, or has had, a
-project, or is staff of a classroom connected to GitHub.
+project, is staff of a classroom connected to GitHub, or holds a claimed
+seat in one (product owner, 2026-10-01: a student may link before any
+project, discreetly — no banner, no nudge).
 
 **Teacher — per classroom, from Settings** (D24). GitHub is optional: a
 classroom without it is a plain Quiz classroom. The Settings tab's

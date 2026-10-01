@@ -948,6 +948,7 @@ const scenes = [
   // F-GH-05 (M2-07): the GitHub card, linked and not.
   { name: "settings-github-linked", role: "teacher", path: "/settings", fold: true, act: (p) => p.getByRole("heading", { name: "GitHub" }).scrollIntoViewIfNeeded() },
   { name: "settings-github-unlinked", role: "teacher", path: "/settings?unlinked=1", fold: true, act: (p) => p.getByRole("heading", { name: "GitHub" }).scrollIntoViewIfNeeded() },
+  { name: "settings-github-student", role: "student", path: "/settings?unlinked=1", fold: true, act: (p) => p.getByRole("heading", { name: "GitHub" }).scrollIntoViewIfNeeded() },
   // ADR-054: an admin's Super Powers, off and on, and the red banner above
   // everything — its minutes, its last-five-minutes countdown, and stacked
   // over the student view's banner.

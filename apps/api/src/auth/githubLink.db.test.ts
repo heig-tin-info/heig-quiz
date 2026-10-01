@@ -416,6 +416,19 @@ describe("/app/api/me/github", () => {
     expect(linked.account.login).toBe(github.user.login);
     expect(Number.isNaN(Date.parse(linked.account.linkedAt))).toBe(false);
   });
+  it("says whether the card is relevant: a claimed seat in a classroom connected to GitHub", async () => {
+    const teacher = await server.signIn("teacher");
+    const student = await server.signIn("student");
+    const state = async () =>
+      (await server.app.inject({ method: "GET", url: "/app/api/me/github", headers: student.headers })).json();
+
+    const { classroomId } = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
+    expect(await state()).toEqual({ account: null, relevant: false });
+    const orgId = randomUUID();
+    await server.app.db.insert(githubOrganizations).values({ id: orgId, login: `org-${orgId.slice(0, 8)}` });
+    await server.app.db.insert(githubClassroomLinks).values({ classroomId, orgId, linkedBy: teacher.id });
+    expect((await state()).relevant).toBe(true);
+  });
 });
 
 describe("the user token (invariant 15, N-SEC-16)", () => {

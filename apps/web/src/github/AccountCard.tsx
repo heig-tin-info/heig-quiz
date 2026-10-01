@@ -4,10 +4,11 @@
  * login and unlink it.
  *
  * Shown only when it is relevant (`GithubAccountState.relevant`: staff of a
- * connected classroom, or a user who has or had a project), and always while
- * an account is linked, so it can be unlinked. Absent on a platform without
- * Quiz's App (the route answers 404), and while it loads: a card that
- * appears late is better than one that appears and vanishes.
+ * connected classroom, a student seated in one, or a user who has or had a
+ * project), and always while an account is linked, so it can be unlinked.
+ * Absent on a platform without Quiz's App (the route answers 404), and
+ * while it loads: a card that appears late is better than one that appears
+ * and vanishes.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 

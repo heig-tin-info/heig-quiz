@@ -11,6 +11,9 @@ import {
   courseStaff,
   courses,
   enrollments,
+  githubAccounts,
+  githubClassroomLinks,
+  githubOrganizations,
   notifications,
   userEmails,
 } from "../../db/schema.js";
@@ -501,6 +504,42 @@ describe("roster accommodations (F-ORG-07)", () => {
     expect(refused.statusCode).toBe(400);
   });
 
+});
+
+describe("roster GitHub login (F-GH-05, 05-web §5.1)", () => {
+  it("carries a student's linked login only once the classroom is connected", async () => {
+    // A course of its own: the other blocks count the classrooms of `courseId`.
+    const ownCourse = randomUUID();
+    const roomId = randomUUID();
+    await server.app.db.insert(courses).values({ id: ownCourse, name: "GitHub", code: "GH1" });
+    await server.app.db.insert(courseStaff).values({ courseId: ownCourse, userId: teacher.id });
+    await server.app.db.insert(classrooms).values({ id: roomId, courseId: ownCourse, name: "PRG1-GH" });
+    const student = await server.signIn("student");
+    await server.app.db.insert(enrollments).values([
+      {
+        id: randomUUID(),
+        classroomId: roomId,
+        nom: "Lovelace",
+        prenom: "Ada",
+        email: `ada-${roomId.slice(0, 8)}@heig.test`,
+        userId: student.id,
+      },
+      { id: randomUUID(), classroomId: roomId, nom: "Hopper", prenom: "Grace", email: `grace-${roomId.slice(0, 8)}@heig.test` },
+    ]);
+    await server.app.db
+      .insert(githubAccounts)
+      .values({ userId: student.id, githubUserId: 7_000_000 + Math.floor(Math.random() * 1e6), login: "ada-l" });
+    const logins = async () => {
+      const res = await server.app.inject({ method: "GET", url: `/app/api/classrooms/${roomId}`, headers: teacher.headers });
+      return (res.json() as { roster: { nom: string; githubLogin: string | null }[] }).roster.map((r) => [r.nom, r.githubLogin]);
+    };
+
+    expect(await logins()).toEqual([["Hopper", null], ["Lovelace", null]]);
+    const orgId = randomUUID();
+    await server.app.db.insert(githubOrganizations).values({ id: orgId, login: `org-${orgId.slice(0, 8)}` });
+    await server.app.db.insert(githubClassroomLinks).values({ classroomId: roomId, orgId, linkedBy: teacher.id });
+    expect(await logins()).toEqual([["Hopper", null], ["Lovelace", "ada-l"]]);
+  });
 });
 
 describe("dated period (F-ORG-03, #156)", () => {

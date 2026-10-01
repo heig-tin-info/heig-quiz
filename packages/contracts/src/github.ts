@@ -153,8 +153,9 @@ export type GithubAccount = z.infer<typeof GithubAccount>;
 /**
  * `GET /app/api/me/github`: the caller's account link, for the user Settings
  * card. `relevant` says whether the card shows (F-GH-05: staff of a
- * connected classroom, or a user who has or had a project); a linked
- * account is shown whatever it says, so it can be unlinked.
+ * connected classroom, a claimed seat in one, or a user who has or had a
+ * project); a linked account is shown whatever it says, so it can be
+ * unlinked.
  */
 export const GithubAccountState = z.object({
   account: GithubAccount.nullable(),

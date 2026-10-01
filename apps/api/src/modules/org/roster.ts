@@ -1,12 +1,21 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, exists, isNull, ne, sql } from "drizzle-orm";
 import { parseRosterCsv, rosterFromRows, type Cell, type RosterParse } from "@quiz/domain";
 
 import { audit } from "../../audit.js";
 import { publish } from "../../events.js";
 import type { Db } from "../../db/client.js";
-import { avatars, classrooms, courseStaff, enrollments, userEmails, users } from "../../db/schema.js";
+import {
+  avatars,
+  classrooms,
+  courseStaff,
+  enrollments,
+  githubAccounts,
+  githubClassroomLinks,
+  userEmails,
+  users,
+} from "../../db/schema.js";
 import { emailIn, knownEmails, normalizeEmail, sharedWithOthers } from "../../identity.js";
 import { shownAvatar } from "../avatar.js";
 import { notifyMany } from "../notifications/service.js";
@@ -308,7 +317,11 @@ export async function claimForExistingUsers(db: Db, classroomId: string, actorId
   );
 }
 
-/** Teacher's roster table: identity, claim status, accommodation. */
+/**
+ * Teacher's roster table: identity, claim status, accommodation, and the
+ * student's linked GitHub login when the classroom is connected to GitHub
+ * (05-web §5.1) — the stored login, followed on rename, never fetched here.
+ */
 export async function rosterView(db: Db, classroomId: string) {
   const rows = await db
     .select({
@@ -327,10 +340,23 @@ export async function rosterView(db: Db, classroomId: string) {
       userId: users.id,
       pictureUrl: users.pictureUrl,
       avatarAt: avatars.updatedAt,
+      githubLogin: githubAccounts.login,
     })
     .from(enrollments)
     .leftJoin(users, eq(enrollments.userId, users.id))
     .leftJoin(avatars, eq(avatars.userId, users.id))
+    .leftJoin(
+      githubAccounts,
+      and(
+        eq(githubAccounts.userId, users.id),
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(githubClassroomLinks)
+            .where(eq(githubClassroomLinks.classroomId, classroomId)),
+        ),
+      ),
+    )
     .where(eq(enrollments.classroomId, classroomId))
     .orderBy(enrollments.nom, enrollments.prenom);
   return rows.map(({ avatarAt, pictureUrl, claimedAt, ...r }) => ({

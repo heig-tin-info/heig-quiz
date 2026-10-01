@@ -189,6 +189,7 @@ export const en = {
   "roster.col.status": "Status",
   "roster.col.bonus": "Extra time",
   "roster.col.lastSignIn": "Last sign-in",
+  "roster.githubAccount": "GitHub account",
   "roster.rowActions": "Actions for {name}",
   "roster.status.claimed": "claimed",
   "roster.status.pending": "pending",

@@ -185,6 +185,7 @@ export const fr: Record<keyof Dict, string> = {
   "roster.col.status": "État",
   "roster.col.bonus": "Temps suppl.",
   "roster.col.lastSignIn": "Dernière connexion",
+  "roster.githubAccount": "Compte GitHub",
   "roster.rowActions": "Actions pour {name}",
   "roster.status.claimed": "rattaché",
   "roster.status.pending": "en attente",

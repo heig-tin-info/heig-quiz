@@ -753,6 +753,7 @@ function seedStaffTest() {
       lastLoginAt: iso(-H),
       avatarUrl: null,
       userId: ME_TEACHER.userId,
+      githubLogin: null,
     });
   }
   for (const e of evaluations) {

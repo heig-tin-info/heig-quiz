@@ -62,6 +62,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M2-05 | Periodic tasks | done | D10 | `merge/M2-05-scheduled-tasks` | #392 | Landed before M1-02 (core only). `scheduled_tasks` (module `system`, migration `0042_scheduled_tasks`); `ScheduledTask {key, defaultIntervalMinutes, run → summary}` in `ticker.ts`, catalog `SCHEDULED_TASKS` in `modules/system/catalog.ts` (keys: the closed `SCHEDULED_TASK_KEYS` of `@quiz/contracts`; a new task adds its key there and its `admin.task.<key>` names en/fr); rows seeded once at boot, the ticker claims every 15 s, the `system.task` queue runs (a finished run publishes `admin`); the ticker starts even if a job registration fails; `live.*` stay `TickTask`s. Admin: `GET/PATCH /app/api/admin/tasks[/:key]`, `POST …/:key/run` (200 inline, 202 queued, 409 `task_running`), audit `task.configure`/`task.run_now`; web: Admin › Scheduled tasks tab. M3-06/M2-04: add `reconcile.*` to the catalog, never a GitHub call in the tick |
 | M2-06 | Quiz's Apps (production, staging), staging safety | todo | M2-01, D23 | | | |
 | M2-07 | Web: classroom Settings tab, GitHub section, link card | review | M2-02, M2-03, M1-04, M1-05, D24 | `merge/M2-07-classroom-settings` | #408 | `classroomSettings` parses in every build (`ClassroomView routeTab`, `ROUTE_TABS`); rename/archive/delete/drill switch live in `ClassroomSettings.tsx`, the Journal slot (M4-05) is the comment between GitHub and "Archive and delete"; `apps/web/src/github/` (hooks, checks, sheet opened by `?connect=1`, account card, `useGithubLinkReturn`); card M2-07, "As delivered" |
+| M2-08 | Student link from Settings, login on the roster | review | M2-03, M2-07 | `student-github-link` | #452 | `linkRelevant` also counts a claimed seat in a connected classroom; `RosterEntry.githubLogin` (connected classrooms only), shown under the e-mail; F-GH-05, N-DATA-02, 05-web amended; card M2-08, "As delivered" |
 
 ## M3 — Projects
 
@@ -159,6 +160,11 @@ In the critical path only if D09 finds online assignments in production.
 
 Newest first. One line per session that changed the state: date, who,
 what moved, what the next session must know.
+
+- 2026-10-01 — M2-08: product owner, conversation: a student of a
+  connected classroom may link GitHub from Settings now (no nudge, no
+  privacy line), and the roster of a connected classroom shows the login.
+  F-GH-05 and N-DATA-02 amended.
 
 - 2026-10-01 — M4-08 (#438): the Quiz-mode backend in review — a journal with
   no GitHub, page writes under a version lock, revisions and restore, assets
