@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatStep } from "./parameterNames.js";
+import { FORMAT_PATTERN, FORMATS, formatStep, isVariableName } from "./parameterNames.js";
 
 describe("formatStep", () => {
   it("is 1 for int and 10^-n for .n, whatever the value", () => {
@@ -20,5 +20,20 @@ describe("formatStep", () => {
     expect(formatStep("", 9.81)).toBeNull();
     expect(formatStep("3s", 0)).toBeNull();
     expect(formatStep("3s", Number.NaN)).toBeNull();
+  });
+});
+
+describe("FORMATS and FORMAT_PATTERN", () => {
+  it("is one list: the pattern takes every format and nothing else", () => {
+    for (const format of FORMATS) expect(FORMAT_PATTERN.test(format)).toBe(true);
+    for (const other of [".7", "7s", "1.2", "x", "int ", "0s", "a1"]) expect(FORMAT_PATTERN.test(other)).toBe(false);
+    expect(formatStep("x", 1)).toBeNull();
+  });
+});
+
+describe("isVariableName", () => {
+  it("refuses the table's own word, under which the condition's issues are filed", () => {
+    expect(isVariableName("condition")).toBe(false);
+    expect(isVariableName("cond")).toBe(true);
   });
 });

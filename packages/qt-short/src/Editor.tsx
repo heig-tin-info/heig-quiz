@@ -20,6 +20,7 @@ import {
   type ShortConstraints,
   type ShortKind,
   type ShortMatcher,
+  TYPED_NUMBER,
 } from "./schema.js";
 import { explainMatcher } from "./explain.js";
 import { shortEditorStrings, type ShortEditorStringKey } from "./strings.js";
@@ -105,8 +106,6 @@ const rowCell = (index: number, className?: string) => ({
 const toPercent = (fraction: number) => Number((fraction * 100).toPrecision(12));
 const fromPercent = (percent: number) => Number((percent / 100).toPrecision(12));
 
-/** A number as typed: a dot or a comma, an exponent. */
-const TYPED_NUMBER = /^\s*[-+]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:e[-+]?\d+)?\s*$/i;
 
 /**
  * A `number` matcher's value or tolerance: a number, or — in a

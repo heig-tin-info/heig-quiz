@@ -354,6 +354,11 @@ export interface QuestionTypeServer<
    * Called at publication, once the table draws and every gated instance
    * passes, on the raw template with the formats and the gated draws'
    * values. Omitting it means "nothing more".
+   *
+   * Separate from `parameterIssues` because it runs at another stage of the
+   * gate: `parameterIssues` runs FIRST, on the template alone, before the
+   * table is even known to draw; this one needs values that exist only once
+   * the table has drawn and its instances have passed.
    */
   sampleIssues?(template: unknown, sample: ParameterSample): PublicationIssue[];
 

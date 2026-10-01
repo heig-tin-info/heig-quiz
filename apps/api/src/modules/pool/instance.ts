@@ -65,7 +65,6 @@ import {
   type StoredVersion,
 } from "./config.js";
 
-export { PARAMETERIZED_TYPES };
 
 /** The columns of a question version an instance is made of. */
 export interface VersionContent extends StoredVersion {
@@ -282,52 +281,63 @@ function issueOf(issue: Issue): ZodIssueLite {
 
 const parameterIssue = (path: string[], message: string): ZodIssueLite => ({ path, code: "custom", message });
 
+/** What {@link parameterIssues} reads of a draft. */
+interface DraftContent {
+  config: unknown;
+  /** The stored row's; a caller holding a bare config (MCP) leaves it out: the config's own is read. */
+  configVersion?: number;
+  explanation: string;
+  variables: ParametersDraft | null;
+}
+
 /**
- * Everything publication requires of a parameterized draft (ADR-056 §3, §7,
- * §10), as the editor's issues; empty for a static one (its config goes
- * through `publishConfig` as before). In order, stopping at the first
- * family that fails: a type that takes variables; the type's own rule on
- * the template (`parameterIssues`); the table and every `[[…]]` of the
- * config and the explanation, over 200 draws (`validateParameters`); then
- * the instances of a few seeds through the type's publication gate.
+ * Publication's check of a parameterized draft, and the values of the
+ * draws it gated (one per seed of `GATE_SEEDS`, in order) when it passes.
+ * See {@link parameterIssues}.
  */
-export function parameterIssues(
-  type: string,
-  draft: {
-    config: unknown;
-    /** The stored row's; a caller holding a bare config (MCP) leaves it out: the config's own is read. */
-    configVersion?: number;
-    explanation: string;
-    variables: ParametersDraft | null;
-  },
-): ZodIssueLite[] {
-  const params = parametersOf(draft);
-  if (params === null) return [];
-  if (!PARAMETERIZED_TYPES.has(type)) return [parameterIssue(["variables"], "parameters.unsupported_type")];
+function gate(type: string, draft: DraftContent, params: Parameters): { issues: ZodIssueLite[]; draws: Values[] } {
+  const refused = (issues: ZodIssueLite[]) => ({ issues, draws: [] });
+  if (!PARAMETERIZED_TYPES.has(type)) return refused([parameterIssue(["variables"], "parameters.unsupported_type")]);
   const t = typeOf(type);
   const template = raise(t, draft.config, draft.configVersion ?? declaredVersion(draft.config) ?? t.configVersion);
   const own = (t.parameterIssues?.(template) ?? []).map((i) => parameterIssue(i.path.map(String), i.message));
-  if (own.length > 0) return own;
+  if (own.length > 0) return refused(own);
   const options = acceptOf(t, template, params);
   const issues = validateParameters(params, { config: template, explanation: draft.explanation }, options);
-  if (issues.length > 0) return issues.map(issueOf);
-  const drawn: Values[] = [];
+  if (issues.length > 0) return refused(issues.map(issueOf));
+  const draws: Values[] = [];
   for (const seed of GATE_SEEDS) {
     try {
       const { values } = draw(params, seed, options);
       publishConfig(type, instantiate(template, params, values));
-      drawn.push(values);
+      draws.push(values);
     } catch (error) {
-      if (error instanceof NotPublishable) return error.issues;
-      if (error instanceof ParameterError) return [issueOf(error.issue)];
-      return issuesOf(error);
+      if (error instanceof NotPublishable) return refused(error.issues);
+      if (error instanceof ParameterError) return refused([issueOf(error.issue)]);
+      return refused(issuesOf(error));
     }
   }
   // The rules that read the drawn values (§6: a tolerance against the key's format).
   const formats = Object.fromEntries(params.rows.map((row) => [row.name, row.format]));
-  return (t.sampleIssues?.(template, { formats, values: drawn }) ?? []).map((i) =>
+  const sampled = (t.sampleIssues?.(template, { formats, values: draws }) ?? []).map((i) =>
     parameterIssue(i.path.map(String), i.message),
   );
+  return sampled.length > 0 ? refused(sampled) : { issues: [], draws };
+}
+
+/**
+ * Everything publication requires of a parameterized draft (ADR-056 §3, §6,
+ * §7, §10), as the editor's issues; empty for a static one (its config goes
+ * through `publishConfig` as before). In order, stopping at the first
+ * family that fails: a type that takes variables; the type's own rule on
+ * the template (`parameterIssues`); the table and every `[[…]]` of the
+ * config and the explanation, over 200 draws (`validateParameters`); the
+ * instances of a few seeds through the type's publication gate; then the
+ * type's rules on those draws' values (`sampleIssues`).
+ */
+export function parameterIssues(type: string, draft: DraftContent): ZodIssueLite[] {
+  const params = parametersOf(draft);
+  return params === null ? [] : gate(type, draft, params).issues;
 }
 
 /** One instance of the editor's preview (ADR-056 §8): its seed, its values as shown, the instance. */
@@ -351,12 +361,13 @@ export function previewInstances(
 ): { instances: PreviewInstance[]; issues: ZodIssueLite[] } {
   const params = parametersOf(version);
   if (params === null) return { instances: [], issues: [] };
-  const issues = parameterIssues(type, version);
+  const { issues, draws } = gate(type, version, params);
   if (issues.length > 0) return { instances: [], issues };
-  const instances = GATE_SEEDS.map((seed) => {
-    const instance = gatedInstance(type, version, params, seed);
-    const values = params.rows.map((row) => ({ name: row.name, value: formatValue(instance.values![row.name]!, row.format) }));
-    return { seed, values, instance };
+  // The very draws publication gated, rendered: nothing is drawn twice.
+  const instances = draws.map((drawn, i) => {
+    const instance = render(type, version, params, { versionId: version.id, values: drawn }, drawn);
+    const values = params.rows.map((row) => ({ name: row.name, value: formatValue(drawn[row.name]!, row.format) }));
+    return { seed: GATE_SEEDS[i]!, values, instance };
   });
   return { instances, issues: [] };
 }

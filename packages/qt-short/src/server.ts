@@ -25,19 +25,14 @@ import {
   type ShortSolution,
   type ShortStudent,
 } from "./schema.js";
-import { isReference, isShortAnswered } from "./schema.js";
-
-/** A whole field that names one variable: `[[t]]`. */
-const BARE_REFERENCE = /^\s*\[\[\s*([A-Za-z_][A-Za-z0-9_]*)\s*\]\]\s*$/;
-/** A tolerance typed as a number, or as its text. */
-const NUMERIC_TEXT = /^\s*[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?\s*$/i;
+import { isReference, isShortAnswered, NUMERIC_TEXT, SHORT_BARE_REFERENCE } from "./schema.js";
 
 /** A matcher field's number in one draw: a literal, or a variable it names; null otherwise. */
 function numberIn(field: unknown, values: Readonly<Record<string, number | string>>): number | null {
   if (typeof field === "number") return field;
   if (typeof field !== "string") return null;
   if (NUMERIC_TEXT.test(field)) return Number(field);
-  const name = BARE_REFERENCE.exec(field)?.[1];
+  const name = SHORT_BARE_REFERENCE.exec(field)?.[1];
   const value = name === undefined ? undefined : values[name];
   return typeof value === "number" ? value : null;
 }
@@ -62,7 +57,7 @@ export function toleranceIssues(
   return matchers.flatMap((matcher: unknown, index) => {
     const m = matcher as { kind?: unknown; value?: unknown; tolerance?: unknown; toleranceMode?: unknown } | null;
     if (m === null || typeof m !== "object" || m.kind !== "number" || typeof m.value !== "string") return [];
-    const name = BARE_REFERENCE.exec(m.value)?.[1];
+    const name = SHORT_BARE_REFERENCE.exec(m.value)?.[1];
     const format = name === undefined ? undefined : sample.formats[name];
     if (name === undefined || format === undefined || format === "") return [];
     const short = sample.values.some((values) => {

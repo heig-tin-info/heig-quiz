@@ -35,10 +35,14 @@ export * from "./mcqScore.js";
 // The mathjs-free vocabulary of parameterized questions (ADR-056).
 export {
   FORMAT_PATTERN,
+  FORMATS,
   formatStep,
+  IDENTIFIER_SOURCE,
+  isFormat,
   isVariableName,
   MAX_EXPRESSION_LENGTH,
   PARAMETERIZED_TYPES,
+  type Format,
 } from "./parameterNames.js";
 export * from "./period.js";
 export * from "./pollOutcome.js";
