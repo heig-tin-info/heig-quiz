@@ -2,7 +2,8 @@
  * The student's home.
  *
  * Two questions, in the order a student asks them: what can I do NOW, and
- * what is coming. What they already handed in is the Grades page's
+ * what is coming — the latter grouped by day, Today to Later (`UpcomingByDay`,
+ * product owner 2026-10-01). What they already handed in is the Grades page's
  * (`/grades`, `StudentGrades`). The classrooms come last, because they are
  * administration, not work. A classroom card opens the classroom's page (D07).
  *
@@ -38,7 +39,7 @@ import {
   EvaluationRow,
   openLine,
   PollRow,
-  upcomingLine,
+  UpcomingByDay,
   useCardActions,
 } from "./cards";
 
@@ -129,9 +130,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
             {upcoming.length === 0 ? (
               <Card className="px-5 py-4 text-sm text-fg-muted">{t("shome.upcoming.empty")}</Card>
             ) : (
-              upcoming.map((card) => (
-                <EvaluationRow key={card.id} card={card} line={upcomingLine(card, now, t)} />
-              ))
+              <UpcomingByDay cards={upcoming} now={now} />
             )}
           </section>
         </>

@@ -1,6 +1,6 @@
 {
   "generatedBy": "apps/web/scripts/docs-screenshots.mjs",
-  "base": "http://localhost:3105",
+  "base": "http://localhost:3100",
   "viewports": {
     "desktop": {
       "width": 1440,
@@ -1306,9 +1306,9 @@
         "light": "student-home-light.png",
         "dark": "student-home-dark.png"
       },
-      "takenAt": "2026-10-01T07:36:37.823Z",
-      "commit": "4c3e9f94",
-      "base": "http://localhost:3105"
+      "takenAt": "2026-10-01T09:20:54.630Z",
+      "commit": "8859454d",
+      "base": "http://localhost:3100"
     },
     {
       "name": "student-home-phone",
@@ -1329,9 +1329,9 @@
         "light": "student-home-phone-light.png",
         "dark": "student-home-phone-dark.png"
       },
-      "takenAt": "2026-10-01T07:36:37.823Z",
-      "commit": "4c3e9f94",
-      "base": "http://localhost:3105"
+      "takenAt": "2026-10-01T09:20:54.630Z",
+      "commit": "8859454d",
+      "base": "http://localhost:3100"
     },
     {
       "name": "student-lobby",

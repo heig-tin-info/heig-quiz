@@ -12,6 +12,7 @@ export * from "./cloze.js";
 export * from "./compareOutput.js";
 export * from "./cooldown.js";
 export * from "./correction.js";
+export * from "./dayBucket.js";
 export * from "./debrief.js";
 export * from "./deadline.js";
 export * from "./drillEligibility.js";

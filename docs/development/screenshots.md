@@ -119,7 +119,8 @@ classroom code field (ADR-053). The `student-home`, `student-settings` and
 student sidebar that mirrors the bottom bar. Later on 2026-10-01 the
 `student-home` scenes were retaken without the Past section, and the
 `student-grades` scenes (the `/grades` page) added, on a fresh seed with no
-runner.
+runner. The `student-home` scenes were retaken once more that day, on a
+fresh seed with no runner, for Coming up grouped by day.
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |

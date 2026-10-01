@@ -13,7 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { CalendarClock, GraduationCap, School } from "lucide-react";
 
-import { formatPoints } from "@quiz/domain";
+import { formatPoints, groupByDay, type DayBucket } from "@quiz/domain";
 import type {
   EvaluationCard as EvaluationCardData,
   StudentClassroom,
@@ -29,6 +29,7 @@ import {
   Badge,
   Button,
   Card,
+  cx,
   EmptyState,
   isoDateParts,
   isoDateTime,
@@ -150,6 +151,55 @@ export function upcomingLine(card: EvaluationCardData, now: number, t: TFunction
   return wait > 0
     ? t("shome.opensIn", { time: formatDuration(wait, t) })
     : t("shome.opensAt", { when: isoDateTime(card.opensAt) });
+}
+
+const DAY_KEY = {
+  today: "shome.day.today",
+  tomorrow: "shome.day.tomorrow",
+  week: "shome.day.week",
+  later: "shome.day.later",
+} as const satisfies Record<DayBucket, string>;
+
+/** The browser's time zone: where the student's day begins and ends. */
+const localTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/**
+ * "Coming up" as an agenda (product owner, 2026-10-01): the cards under
+ * Today, Tomorrow, This week and Later, by the day they OPEN (`opensAt`, the
+ * instant their line counts down to; every card of the list is a scheduled
+ * evaluation), in the browser's time zone (`groupByDay` of `@quiz/domain`).
+ * The soonest first inside a day; an empty day is not drawn. `now` is the
+ * page's `useNow`, so the cards move from Tomorrow to Today at midnight.
+ * The sub-heading is the teacher's schedule's week heading, one step down.
+ */
+export function UpcomingByDay({
+  cards,
+  now,
+  showWhere = true,
+}: {
+  cards: readonly EvaluationCardData[];
+  now: number;
+  showWhere?: boolean;
+}) {
+  const t = useT();
+  return (
+    <div className="space-y-5">
+      {groupByDay(cards, (card) => card.opensAt, now, localTimeZone()).map(({ bucket, rows }) => (
+        <div key={bucket} className="space-y-2">
+          <h3 className={cx("text-sm font-semibold", bucket === "today" ? "text-fg" : "text-fg-muted")}>
+            {t(DAY_KEY[bucket])}
+          </h3>
+          <ul className="space-y-3" aria-label={t(DAY_KEY[bucket])}>
+            {rows.map((card) => (
+              <li key={card.id}>
+                <EvaluationRow card={card} showWhere={showWhere} line={upcomingLine(card, now, t)} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export type RowAction = {

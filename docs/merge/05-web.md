@@ -37,7 +37,8 @@ about this course".
   bottom bar, today an anchor of the home) becomes a route listing the
   student's classrooms; a classroom card always opens the classroom page.
   **Activities** stays the summary of the active activities of every
-  classroom (today's home): Open now and Coming up. **Grades** is a route
+  classroom (today's home): Open now and Coming up, the latter grouped by
+  day (below, Activities). **Grades** is a route
   too, `/grades` (2026-10-01): the student's finished work of every
   classroom; the home lost its Past section to it.
 - **Route**: `/classrooms/:id` dispatches on the role — teachers get
@@ -57,7 +58,15 @@ about this course".
   single most urgent open activity (M5-02, `mostUrgent`: an unfinished
   activity with a deadline, soonest first; then a running poll; then an
   unfinished one without a deadline; then a retake); the others are
-  secondary. Upcoming and Past are drawn only when they hold something. Empty state:
+  secondary. Upcoming and Past are drawn only when they hold something.
+  Upcoming is grouped by day, as on the home (product owner, 2026-10-01):
+  Today, Tomorrow, This week, Later, by the calendar day the card opens
+  (`opensAt`) in the browser's time zone; "This week" runs from the day
+  after tomorrow to Sunday (ISO weeks start on Monday); an opening already
+  passed is Today, an undated card Later; the soonest first inside a day,
+  an empty day not drawn. The rule is `groupByDay` of `@quiz/domain`
+  (`dayBucket.ts`), the view `UpcomingByDay` of `student/cards.tsx`. No
+  calendar view until the projects bring deadlines (D07). Empty state:
   nothing to do in this classroom right now. `ProjectRow`: title, deadline
   countdown, group name, status badge (not started / repo ready /
   invitation pending / submitted / graded), CI score as plain tabular text

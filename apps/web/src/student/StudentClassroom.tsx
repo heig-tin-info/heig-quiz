@@ -53,7 +53,7 @@ import {
   openLine,
   pastLine,
   PollRow,
-  upcomingLine,
+  UpcomingByDay,
   useCardActions,
 } from "./cards";
 
@@ -239,7 +239,10 @@ function Breadcrumb({ room, onCourses }: { room: Header; onCourses: () => void }
   );
 }
 
-/** Open now, Upcoming, Past: the home's cards for this classroom, one accent among them. */
+/**
+ * Open now, Upcoming (by day, as on the home), Past: the home's cards for
+ * this classroom, one accent among them.
+ */
 function Activities({ activities, navigate }: { activities: StudentActivities; navigate: Navigate }) {
   const t = useT();
   const now = useNow(30_000);
@@ -275,9 +278,7 @@ function Activities({ activities, navigate }: { activities: StudentActivities; n
       {upcoming.length > 0 ? (
         <section className="space-y-3">
           <SectionHeading title={t("shome.upcoming")} />
-          {upcoming.map((card) => (
-            <EvaluationRow key={card.id} card={card} showWhere={false} line={upcomingLine(card, now, t)} />
-          ))}
+          <UpcomingByDay cards={upcoming} now={now} showWhere={false} />
         </section>
       ) : null}
 
