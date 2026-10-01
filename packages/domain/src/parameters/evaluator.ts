@@ -150,7 +150,7 @@ export function fail(code: IssueCode, message: string, extra: Omit<Issue, "code"
 }
 
 /** Largest syntax tree accepted, in nodes. */
-export const MAX_EXPRESSION_NODES = 100;
+const MAX_EXPRESSION_NODES = 100;
 
 /** Operators by their mathjs function name: arithmetic, comparison, logic. */
 const OPERATORS = new Set([
