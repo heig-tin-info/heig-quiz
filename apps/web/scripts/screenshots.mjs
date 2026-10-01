@@ -205,20 +205,39 @@ const scenes = [
   { name: "classroom-settings-github-checks-warn", role: "teacher", path: "/classrooms/r1/settings?ghwarn=1" },
   { name: "classroom-settings-github-org-missing", role: "teacher", path: "/classrooms/r1/settings?ghmissing=1" },
   { name: "classroom-settings-rename", role: "teacher", path: "/classrooms/r1/settings", fold: true, act: (p) => p.getByRole("button", { name: /^(rename|renommer)$/i }).first().click() },
-  // F-JRN-02 to F-JRN-05 (M4-05): the Journal section. PRG1-2026 (r1) is
-  // connected and has no journal by default; `?journal=1` gives it one,
-  // `?journalerror=1` makes its last synchronisation fail. `classroom-settings`
-  // (r2, not connected) shows the section's one "connect first" line.
-  { name: "classroom-settings-journal-none", role: "teacher", path: "/classrooms/r1/settings" },
-  { name: "classroom-settings-journal-create", role: "teacher", path: "/classrooms/r1/settings", fold: true, act: (p) => p.getByRole("button", { name: /^(create…|créer…)$/i }).click() },
+  // F-JRN-01 to F-JRN-05 (M4-05, M4-09): the Journal section. PRG1-2026
+  // (r1) is connected and has no journal by default: the mode's segmented
+  // control, In Quiz chosen (`journal-settings-mode`), In a GitHub
+  // repository chosen, and chosen on r2, not connected (the "needs the
+  // GitHub connection" line). `?journal=1` gives r1 a Quiz-mode journal,
+  // `?journalgithub=1` a GitHub-mode one, `?journalerror=1` a GitHub-mode
+  // one whose last synchronisation failed. Removing a Quiz-mode journal
+  // with pages asks for the classroom's name (`journal-remove-quiz`).
+  { name: "journal-settings-mode", role: "teacher", path: "/classrooms/r1/settings" },
+  { name: "classroom-settings-journal-none", role: "teacher", path: "/classrooms/r1/settings", act: chooseGithubMode },
+  { name: "journal-settings-mode-not-connected", role: "teacher", path: "/classrooms/r2/settings", act: chooseGithubMode },
+  { name: "classroom-settings-journal-create", role: "teacher", path: "/classrooms/r1/settings", fold: true, act: async (p) => { await chooseGithubMode(p); await p.getByRole("button", { name: /^(create…|créer…)$/i }).click(); } },
   { name: "classroom-settings-journal-name-taken", role: "teacher", path: "/classrooms/r1/settings", fold: true, act: journalNameTaken },
   { name: "classroom-settings-journal-use", role: "teacher", path: "/classrooms/r1/settings", fold: true, act: journalUse },
   { name: "classroom-settings-journal-set", role: "teacher", path: "/classrooms/r1/settings?journal=1" },
+  { name: "classroom-settings-journal-set-github", role: "teacher", path: "/classrooms/r1/settings?journal=1&journalgithub=1" },
   { name: "classroom-settings-journal-sync-error", role: "teacher", path: "/classrooms/r1/settings?journal=1&journalerror=1" },
-  { name: "classroom-settings-journal-remove", role: "teacher", path: "/classrooms/r1/settings?journal=1", fold: true, act: (p) => p.getByRole("button", { name: /^(remove…|retirer…)$/i }).click() },
-  // F-JRN-07 (M4-05): the teacher's Journal tab, its staff bar, Refresh just clicked.
+  { name: "journal-remove-quiz", role: "teacher", path: "/classrooms/r1/settings?journal=1", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^(remove…|retirer…)$/i }).click();
+      await p.getByLabel(/^(type|tapez) PRG1-2026/i).fill("PRG1-20");
+    } },
+  { name: "classroom-settings-journal-remove", role: "teacher", path: "/classrooms/r1/settings?journal=1&journalgithub=1", fold: true, act: (p) => p.getByRole("button", { name: /^(remove…|retirer…)$/i }).click() },
+  { name: "classroom-settings-delete-journal", role: "teacher", path: "/classrooms/r1/settings?journal=1", fold: true, act: async (p) => {
+      await p.getByText(/pages, written and kept in Quiz|pages, écrites et conservées dans Quiz/).waitFor();
+      await p.getByRole("button", { name: /^(delete classroom|supprimer la classe)/i }).click();
+    } },
+  // F-JRN-07 (M4-05, M4-09): the teacher's Journal tab, its staff bar: Quiz
+  // mode (Edit, the Pages menu opened), GitHub mode (Edit on GitHub, Refresh
+  // just clicked).
   { name: "classroom-journal-teacher", role: "teacher", path: "/classrooms/r1/journal?journal=1" },
-  { name: "classroom-journal-teacher-refreshing", role: "teacher", path: "/classrooms/r1/journal?journal=1", fold: true, act: (p) => p.getByRole("button", { name: /^(refresh|actualiser)$/i }).click() },
+  { name: "journal-quiz-pages-menu", role: "teacher", path: `${JOURNAL_EDIT}?journal=1`, fold: true, act: (p) => p.getByRole("button", { name: /^(pages)$/i }).click() },
+  { name: "journal-github-readonly", role: "teacher", path: `${JOURNAL_EDIT}?journal=1&journalgithub=1` },
+  { name: "classroom-journal-teacher-refreshing", role: "teacher", path: "/classrooms/r1/journal?journal=1&journalgithub=1", fold: true, act: (p) => p.getByRole("button", { name: /^(refresh|actualiser)$/i }).click() },
   { name: "classroom-row-menu", role: "teacher", path: "/classrooms/r1?tab=roster", fold: true, act: (p) => openRowMenu(p, /^Actions for /) },
   // ADR-034: an admin's row menu offers the impersonation link — with Super
   // Powers on (ADR-054); the private window it opens shows the student's
@@ -1003,7 +1022,7 @@ const scenes = [
       await openEditor(p);
       await typeInEditor(p);
       await p.getByRole("button", { name: /^(save|enregistrer)$/i }).click();
-      await p.getByText(/^(this page changed on github|cette page a changé sur github)/i).waitFor();
+      await p.getByText(/^(someone saved this page|quelqu'un a enregistré cette page)/i).waitFor();
     } },
   { name: "journal-edit-frontmatter", role: "teacher", path: `${JOURNAL_EDIT}?journal=1&journalconflict=0`, act: async (p) => {
       await openEditor(p);
@@ -1015,6 +1034,19 @@ const scenes = [
       await typeInEditor(p);
       await p.getByRole("button", { name: /^(cancel|annuler)$/i }).click();
     } },
+  // ADR-057 (M4-09): a Quiz-mode page's history, an older version on view,
+  // and the deleted pages.
+  { name: "journal-revisions", role: "teacher", path: `${JOURNAL_EDIT}?journal=1`, fold: true, act: async (p) => {
+      await journalPagesMenu(p, /^(history|historique)$/i);
+      await p.getByRole("dialog").getByRole("button", { name: /Anne Dupuis/ }).click();
+      await p.waitForTimeout(600);
+    } },
+  { name: "journal-revisions-source", role: "teacher", path: `${JOURNAL_EDIT}?journal=1`, fold: true, act: async (p) => {
+      await journalPagesMenu(p, /^(history|historique)$/i);
+      await p.getByRole("radio", { name: /^markdown$/i }).check({ force: true });
+      await p.waitForTimeout(400);
+    } },
+  { name: "journal-deleted", role: "teacher", path: `${JOURNAL_EDIT}?journal=1`, fold: true, act: (p) => journalPagesMenu(p, /^(deleted pages|pages supprimées)$/i) },
 ];
 
 /**
@@ -1130,8 +1162,21 @@ async function typeInEditor(page) {
   await page.keyboard.type(" Un ajout.");
 }
 
+/** The Journal section's mode: In a GitHub repository. */
+async function chooseGithubMode(page) {
+  await page.getByRole("radio", { name: /^(in a github repository|dans un dépôt github)$/i }).check({ force: true });
+}
+
+/** An item of the journal's Pages menu (Quiz mode). */
+async function journalPagesMenu(page, item) {
+  await page.getByRole("button", { name: /^pages$/i }).click();
+  await page.getByRole("menuitem", { name: item }).click();
+  await page.waitForTimeout(500);
+}
+
 /** "Create a journal" under a name the organization already has: the 409 and its suggestion. */
 async function journalNameTaken(page) {
+  await chooseGithubMode(page);
   await page.getByRole("button", { name: /^(create…|créer…)$/i }).click();
   await page.getByLabel(/^(repository name|nom du dépôt)/i).fill("prg1-journal");
   await page.getByRole("button", { name: /^(create the journal|créer le journal)$/i }).click();
@@ -1140,6 +1185,7 @@ async function journalNameTaken(page) {
 
 /** "Use a repository", its branch and folder disclosed, filled. */
 async function journalUse(page) {
+  await chooseGithubMode(page);
   await page.getByRole("button", { name: /^(choose…|choisir…)$/i }).click();
   await page.getByLabel(/^(repository name|nom du dépôt)/i).fill("prg1-2025-journal");
   await page.getByRole("button", { name: /^(branch and folder|branche et dossier)$/i }).click();

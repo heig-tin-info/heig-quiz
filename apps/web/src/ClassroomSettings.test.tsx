@@ -121,6 +121,36 @@ describe("the classroom's Settings tab", () => {
     expect(calls.some((c) => c.method === "DELETE" && c.url === ROOM)).toBe(true);
   });
 
+  it("asks for the classroom's name when a Quiz-mode journal with pages goes with it, and sends it", async () => {
+    const { calls } = mockFetch({
+      [`GET ${ROOM}`]: ok(makeClassroomDetail()),
+      [`GET ${ROOM}/journal`]: ok({
+        view: "staff",
+        mode: "quiz",
+        repository: null,
+        nav: [],
+        homePath: null,
+        hiddenPaths: [],
+        warningCount: 0,
+        pageCount: 3,
+        proposedName: null,
+      }),
+      [`DELETE ${ROOM}?confirm=PRG1-2026`]: noContent(),
+    });
+    const navigate = renderSettings();
+    // The journal is read before the classroom is deleted.
+    await screen.findByText(/3 pages, written and kept in Quiz/);
+    await userEvent.click(screen.getByRole("button", { name: /Delete classroom/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Its journal and its 3 pages are deleted with it");
+    const confirm = within(dialog).getByRole("button", { name: "Delete" });
+    expect(confirm).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("Type PRG1-2026 to confirm"), "PRG1-2026");
+    await userEvent.click(confirm);
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "home" }));
+    expect(calls.some((c) => c.method === "DELETE" && c.url === `${ROOM}?confirm=PRG1-2026`)).toBe(true);
+  });
+
   it("points the Drill tab's empty state at the switch, now in Settings", async () => {
     mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()), [`GET ${ROOM}/drill/activity`]: ok([]) });
     const navigate = vi.fn();

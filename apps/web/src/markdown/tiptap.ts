@@ -28,7 +28,7 @@
  * dropped, in either mode.
  */
 import { Extension, InputRule, flattenExtensions } from "@tiptap/core";
-import type { AnyExtension, Editor, JSONContent, Node as TiptapNode, NodeViewRenderer } from "@tiptap/core";
+import type { AnyExtension, Node as TiptapNode, NodeViewRenderer } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import type { EditorState, Transaction } from "@tiptap/pm/state";
 import { TextSelection } from "@tiptap/pm/state";
@@ -43,7 +43,6 @@ import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table
 import { clozeHoleExtensions } from "./clozeHole";
 import { CodeHighlight } from "./codeHighlight";
 import { REFUSED, type ImageUrl } from "./imageUrl";
-import { JOURNAL_KIT_OVERRIDES, journalExtensions } from "./journalSchema";
 import { assetUrl, assetWidth } from "./render";
 
 
@@ -85,7 +84,7 @@ export const INLINE_INPUT_RULES = [
  * and only the rendered `src` is resolved to the same-origin endpoint. A URL
  * that is not an asset is left alone and simply does not load, which is what
  * the student view does with it too (`render.ts`) — unless the host resolves
- * it: the journal's images are RELATIVE paths in the repository (D25), which
+ * it: the journal's images are RELATIVE paths beside the page (F-JRN-11), which
  * `imageUrl` turns into the journal's asset route.
  */
 const assetImage = (imageUrl?: ImageUrl) => Image.extend({
@@ -527,12 +526,6 @@ export interface RichTextSchemaOptions {
    * prompt, and an input rule that swallowed them there would be a trap.
    */
   cloze?: boolean;
-  /**
-   * The journal's spelling (journalSchema.ts): delimiters and markers kept as
-   * written, raw HTML as literal nodes. Never with `cloze`: a journal page
-   * has no holes.
-   */
-  journal?: boolean;
   /** Resolves an image's `src` for display (the journal's relative paths). */
   imageUrl?: ImageUrl;
 }
@@ -550,10 +543,9 @@ export function richTextExtensions({
   codeBlockNodeView,
   inline = false,
   cloze = false,
-  journal = false,
   imageUrl,
 }: RichTextSchemaOptions = {}): AnyExtension[] {
-  const holes = cloze && !journal;
+  const holes = cloze;
   const base = assetImage(imageUrl);
   const image = imageNodeView ? base.extend({ addNodeView: imageNodeView }) : base;
   const code = codeBlockNodeView
@@ -565,9 +557,7 @@ export function richTextExtensions({
       link: { openOnClick: false },
       // Taken out of the kit and put back below, extended (see `CodeFence`).
       codeBlock: false,
-      ...(journal ? JOURNAL_KIT_OVERRIDES : {}),
     }),
-    ...(journal ? journalExtensions() : []),
     // Two spaces and not four: a snippet in a question is read in a narrow
     // column, and C in this school is written with two.
     code.configure({ enableTabIndentation: true, tabSize: 2 }),
@@ -601,25 +591,4 @@ export function richTextExtensions({
     ...clozeHoleExtensions(holes),
     Markdown,
   ];
-}
-
-/**
- * How `editor` writes `markdown` when nothing is edited: parsed, built
- * through the schema as `setContent` builds it, serialized again, trimmed as
- * the field trims what it emits. What the journal's reconciliation matches
- * an edited page against (journal/editor/reconcile.ts).
- */
-export function spellWith(editor: Editor): (markdown: string) => string {
-  return (markdown) => {
-    const manager = editor.markdown;
-    if (!manager) return markdown;
-    const parsed = manager.parse(markdown);
-    let json: JSONContent = parsed;
-    try {
-      json = editor.schema.nodeFromJSON(parsed).toJSON() as JSONContent;
-    } catch {
-      // What the schema refuses, the serializer still reads as parsed.
-    }
-    return manager.serialize(json).trim();
-  };
 }

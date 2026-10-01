@@ -272,11 +272,6 @@ export const JournalRepository = z.strictObject({
   syncError: JournalSyncError.nullable(),
   lastSyncedAt: z.iso.datetime({ offset: true }).nullable(),
   lastCommitSha: z.string().nullable(),
-  /**
-   * Whether the platform writes this journal's pages: always false since
-   * ADR-057, a GitHub-mode journal is edited on GitHub (`editUrl` of a page).
-   */
-  editable: z.boolean(),
 });
 export type JournalRepository = z.infer<typeof JournalRepository>;
 

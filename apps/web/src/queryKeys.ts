@@ -100,6 +100,9 @@ export const meGithubKey = ["me", "github"] as const;
 export const journalKey = (id: string, view: "staff" | "student") => ["journal", id, view] as const;
 export const journalPageKey = (id: string, view: "staff" | "student", path: string) =>
   [...journalKey(id, view), "page", path] as const;
+/** A Quiz-mode page's revisions, and the deleted pages (ADR-057): staff only, under the staff journal. */
+export const journalRevisionsKey = (id: string, path: string) => [...journalKey(id, "staff"), "revisions", path] as const;
+export const journalDeletedKey = (id: string) => [...journalKey(id, "staff"), "deleted"] as const;
 
 // --- Pools and questions -----------------------------------------------------
 

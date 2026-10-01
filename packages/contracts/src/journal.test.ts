@@ -187,7 +187,6 @@ describe("the repository state (invariant 1)", () => {
     syncError: "ref_not_found",
     lastSyncedAt: null,
     lastCommitSha: null,
-    editable: false,
   };
 
   it("says why a synchronisation failed as a code, never a sentence", () => {

@@ -30,6 +30,7 @@ import {
   pick,
   rand,
 } from "./runtime";
+import { journalRemovalRefusal } from "./journal";
 import {
   me,
 } from "./session";
@@ -588,7 +589,10 @@ on("PATCH", "/app/api/classrooms/:id", (m, body) => {
   if (body.periodEnd !== undefined) r.periodEnd = (body.periodEnd as string | null) ?? null;
   return classroomDetail(r);
 });
-on("DELETE", "/app/api/classrooms/:id", (m) => {
+on("DELETE", "/app/api/classrooms/:id", (m, _body, url) => {
+  // A Quiz-mode journal with pages goes with its classroom only by name (F-ORG-09).
+  const refused = journalRemovalRefusal(m.groups!.id!, url);
+  if (refused) throw refused;
   const i = rooms.findIndex((r) => r.id === m.groups!.id);
   if (i >= 0) rooms.splice(i, 1);
   return undefined;

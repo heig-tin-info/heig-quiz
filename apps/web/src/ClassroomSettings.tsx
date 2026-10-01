@@ -22,6 +22,7 @@ import { useConfirm } from "./confirm";
 import { ClassroomDrillSetting } from "./drill/ClassroomDrillSetting";
 import { ClassroomGithub } from "./github/ClassroomGithub";
 import { useT } from "./i18n";
+import { removalNeedsName, useStaffJournal } from "./journal/api";
 import { JournalSettings } from "./journal/JournalSettings";
 import { useErrorToast, useToast } from "./notify";
 import { invalidateHint } from "./realtime/hints";
@@ -117,6 +118,10 @@ function LifecycleSection({ room, navigate }: { room: ClassroomDetail; navigate:
   const toast = useToast();
   const toastError = useErrorToast();
   const archived = room.archivedAt !== null;
+  // A Quiz-mode journal holding pages goes with the classroom, and it is the
+  // only copy of them: the name is typed, and sent (F-ORG-09, F-JRN-04).
+  const journal = useStaffJournal(room.id);
+  const typed = removalNeedsName(journal.data);
   const archive = useMutation({
     mutationFn: (to: "archive" | "unarchive") => api(`/app/api/classrooms/${room.id}/${to}`, { method: "POST" }),
     onSuccess: async (_, to) => {
@@ -126,7 +131,10 @@ function LifecycleSection({ room, navigate }: { room: ClassroomDetail; navigate:
     onError: toastError("classroomSettings.archiveFailed"),
   });
   const remove = useMutation({
-    mutationFn: () => api(`/app/api/classrooms/${room.id}`, { method: "DELETE" }),
+    mutationFn: (confirm?: string) =>
+      api(`/app/api/classrooms/${room.id}${confirm === undefined ? "" : `?confirm=${encodeURIComponent(confirm)}`}`, {
+        method: "DELETE",
+      }),
     onSuccess: async () => {
       await invalidateHint(qc, ["classrooms"]);
       navigate({ view: "home" });
@@ -165,12 +173,23 @@ function LifecycleSection({ room, navigate }: { room: ClassroomDetail; navigate:
               if (
                 await confirm({
                   title: t("classrooms.deleteConfirm", { name: room.name }),
+                  ...(typed
+                    ? {
+                        message: t(
+                          journal.data!.pageCount === 1
+                            ? "classroomSettings.deleteJournal.one"
+                            : "classroomSettings.deleteJournal",
+                          { count: journal.data!.pageCount },
+                        ),
+                        typeToConfirm: room.name,
+                      }
+                    : {}),
                   confirmLabel: t("common.delete"),
                   cancelLabel: t("common.cancel"),
                   danger: true,
                 })
               ) {
-                remove.mutate();
+                remove.mutate(typed ? room.name : undefined);
               }
             }}
           >

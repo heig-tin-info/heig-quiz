@@ -218,7 +218,7 @@ describe("the staff read everything", () => {
     expect(journal.proposedName).toBeNull();
     // GitHub mode is read-only in the platform (ADR-057).
     expect(journal.mode).toBe("github");
-    expect(journal.repository).toMatchObject({ syncStatus: "ok", syncError: null, ref: "main", rootPath: "", editable: false });
+    expect(journal.repository).toMatchObject({ syncStatus: "ok", syncError: null, ref: "main", rootPath: "" });
   });
 
   it("a draft page with its source, its lock, its warnings and where to edit it", async () => {

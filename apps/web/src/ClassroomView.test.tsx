@@ -373,7 +373,6 @@ describe("ClassroomView — the Journal tab", () => {
           syncError: null,
           lastSyncedAt: "2026-09-30T10:00:00.000Z",
           lastCommitSha: null,
-          editable: true,
         }
       : null,
     nav: [{ path: "README.md", title: "Accueil", pagePath: "README.md", children: [] }],

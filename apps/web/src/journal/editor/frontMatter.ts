@@ -1,11 +1,11 @@
 /*
- * The front matter of a journal page as four fields (F-JRN-08, D25 condition
- * 2): `title`, `date`, `draft`, `visible_from`. The editor never sees the
- * `---` block; the page is split before it opens and joined again on save.
+ * The front matter of a journal page as four fields (F-JRN-08): `title`,
+ * `date`, `draft`, `visible_from`. The editor never sees the `---` block;
+ * the page is split before it opens and joined again on save.
  *
  * The block is edited LINE BY LINE, never parsed and re-dumped: a YAML dump
  * would reorder keys, requote values and drop comments, and every one of
- * those is a line of noise in the teacher's commit. So:
+ * those would change a key the teacher never touched. So:
  *
  *  - a field that was not changed leaves its line exactly as it was;
  *  - a changed field rewrites its own line only (`key: value`), in place;

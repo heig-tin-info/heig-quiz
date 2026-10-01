@@ -4,9 +4,12 @@ import {
   BookOpen,
   CalendarClock,
   ChevronDown,
+  ExternalLink,
   EyeOff,
+  FileClock,
   FilePlus,
   FileQuestion,
+  History,
   Pencil,
   RefreshCw,
   Trash2,
@@ -19,7 +22,7 @@ import {
   type JournalNavNode,
   type JournalPage,
   type JournalPageStaff,
-  type JournalRepository,
+  type JournalStaff,
 } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
@@ -36,6 +39,7 @@ import {
   cx,
   EmptyState,
   isoDateTime,
+  LinkButton,
   PageError,
   QueryError,
   Skeleton,
@@ -45,6 +49,7 @@ import { journalErrorText, useJournalDeletePage, useJournalRefresh } from "./api
 import { AddPageDialog } from "./editor/AddPageDialog";
 import { pageFolder } from "./editor/images";
 import { JournalArticle } from "./JournalArticle";
+import { DeletedSheet, HistorySheet } from "./JournalHistory";
 import { JournalStrip } from "./JournalStrip";
 import { JournalToc, tocEntries } from "./JournalToc";
 import { SyncState } from "./SyncState";
@@ -135,7 +140,8 @@ export function JournalReader({
   });
   const data: Journal | undefined = journal.data;
   const staffJournal = data && data.view === "staff" ? data : null;
-  const hasJournal = data !== undefined && (staffJournal === null || staffJournal.repository !== null);
+  // The staff payload says "no journal" by its mode (ADR-057); a student without one gets a 404.
+  const hasJournal = data !== undefined && (staffJournal === null || staffJournal.mode !== null);
   const target =
     path ?? (data ? (data.homePath ?? findNode(data.nav, (n) => n.pagePath !== null)?.pagePath ?? null) : null);
 
@@ -166,11 +172,13 @@ export function JournalReader({
     toast(journalErrorText(error, t), "error"),
   );
 
-  // The staff's writes (M4-06): the editor swaps the page on this very route,
-  // by local state, and is left as soon as another page is on view.
+  // The staff's writes, Quiz mode only (ADR-057): the editor swaps the page
+  // on this very route, by local state, and is left as soon as another page
+  // is on view. The history and the deleted pages are sheets over the page.
   const confirm = useConfirm();
   const [editing, setEditing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [sheet, setSheet] = useState<"history" | "deleted" | null>(null);
   /** Bumped by the conflict's reload: the editor reopens on the page as read again. */
   const [reloads, setReloads] = useState(0);
   const remove = useJournalDeletePage(classroomId);
@@ -205,9 +213,9 @@ export function JournalReader({
 
   const staffBar = (
     <>
-      {repository ? (
+      {staffJournal?.mode ? (
         <StaffBar
-          repository={repository}
+          journal={staffJournal}
           refreshing={refreshing}
           onRefresh={refresh}
           page={staffPage}
@@ -215,6 +223,26 @@ export function JournalReader({
           onEdit={() => setEditing(staffPage?.path ?? null)}
           onAdd={() => setAdding(true)}
           onDelete={(doomed) => void deletePage(doomed)}
+          onHistory={() => setSheet("history")}
+          onDeleted={() => setSheet("deleted")}
+        />
+      ) : null}
+      {sheet === "history" && staffPage ? (
+        <HistorySheet
+          classroomId={classroomId}
+          path={staffPage.path}
+          title={staffPage.title}
+          onClose={() => setSheet(null)}
+        />
+      ) : null}
+      {sheet === "deleted" ? (
+        <DeletedSheet
+          classroomId={classroomId}
+          onClose={() => setSheet(null)}
+          onRestored={(restored) => {
+            setSheet(null);
+            navigate({ view: "classroomJournal", id: classroomId, path: restored });
+          }}
         />
       ) : null}
       {adding ? (
@@ -284,8 +312,23 @@ export function JournalReader({
     return (
       <Frame header={header}>
         {syncAlert}
-        <EmptyState icon={BookOpen} titleAs="h1" title={t("journal.empty")}>
-          {staffJournal ? t("journal.emptyHint.staff") : t("journal.emptyHint")}
+        <EmptyState
+          icon={BookOpen}
+          titleAs="h1"
+          title={t("journal.empty")}
+          action={
+            staffJournal?.mode === "quiz" ? (
+              <Button variant="secondary" onClick={() => setAdding(true)}>
+                <FilePlus /> {t("journalPage.add")}
+              </Button>
+            ) : undefined
+          }
+        >
+          {staffJournal?.mode === "quiz"
+            ? t("journal.emptyHint.quiz")
+            : staffJournal
+              ? t("journal.emptyHint.staff")
+              : t("journal.emptyHint")}
         </EmptyState>
       </Frame>
     );
@@ -427,14 +470,19 @@ function Frame({ header, children }: { header: ReactNode; children: ReactNode })
 }
 
 /**
- * The staff's bar above the page: where the copy of the repository stands,
- * Refresh (F-JRN-05, secondary), add and delete a page (two icon buttons),
- * and Edit, the primary inside a page (M4-06). The writes wait for a copy
- * that knows the head it writes over (`editable`); a student's payload has
- * no repository, so no bar.
+ * The staff's bar above the page, by the journal's mode (ADR-057). A
+ * student's payload has no mode, so no bar.
+ *
+ * - GitHub mode, read-only in the platform: where the copy of the
+ *   repository stands, Refresh (F-JRN-05, secondary), and **Edit on
+ *   GitHub**, the bar's one primary: github.com's editor of the page's
+ *   file, in a new tab (the page's `editUrl`).
+ * - Quiz mode: the Pages menu (add a page, this page's history, the deleted
+ *   pages, delete this page) and **Edit**, the bar's one primary, which
+ *   opens the editor on this route.
  */
 function StaffBar({
-  repository,
+  journal,
   refreshing,
   onRefresh,
   page,
@@ -442,8 +490,10 @@ function StaffBar({
   onEdit,
   onAdd,
   onDelete,
+  onHistory,
+  onDeleted,
 }: {
-  repository: JournalRepository;
+  journal: JournalStaff;
   refreshing: boolean;
   onRefresh: () => void;
   /** The page on view, when one is. */
@@ -452,31 +502,55 @@ function StaffBar({
   onEdit: () => void;
   onAdd: () => void;
   onDelete: (page: JournalPageStaff) => void;
+  onHistory: () => void;
+  onDeleted: () => void;
 }) {
   const t = useT();
-  const writable = repository.editable;
+  if (journal.repository) {
+    const editUrl = page?.editUrl ?? null;
+    return (
+      <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+        <SyncState repository={journal.repository} refreshing={refreshing} />
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" loading={refreshing} onClick={onRefresh}>
+            {refreshing ? null : <RefreshCw />} {t("journal.refresh")}
+          </Button>
+          {editUrl ? (
+            <LinkButton variant="primary" size="sm" href={editUrl} target="_blank" rel="noopener noreferrer">
+              <ExternalLink /> {t("journalEditor.editOnGithub")}
+              <span className="sr-only"> {t("common.newTab")}</span>
+            </LinkButton>
+          ) : (
+            <Button size="sm" disabled>
+              <ExternalLink /> {t("journalEditor.editOnGithub")}
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
-      <SyncState repository={repository} refreshing={refreshing} />
       <div className="flex items-center gap-2">
-        <Button variant="secondary" size="sm" loading={refreshing} onClick={onRefresh}>
-          {refreshing ? null : <RefreshCw />} {t("journal.refresh")}
-        </Button>
         <Actions
           size="sm"
+          menu
           label={t("journalPage.actions")}
           items={[
-            { label: t("journalPage.add"), icon: FilePlus, disabled: !writable, onSelect: onAdd },
+            { label: t("journalPage.add"), icon: FilePlus, onSelect: onAdd },
+            { label: t("journalHistory.open"), icon: History, disabled: page === null, onSelect: onHistory },
+            { label: t("journalDeleted.open"), icon: FileClock, onSelect: onDeleted },
             {
               label: t("journalPage.delete"),
               icon: Trash2,
               danger: true,
-              disabled: !writable || page === null || deleting,
+              separator: true,
+              disabled: page === null || deleting,
               onSelect: () => (page ? onDelete(page) : undefined),
             },
           ]}
         />
-        <Button size="sm" disabled={!writable || page === null} onClick={onEdit}>
+        <Button size="sm" disabled={page === null} onClick={onEdit}>
           <Pencil /> {t("journalEditor.edit")}
         </Button>
       </div>

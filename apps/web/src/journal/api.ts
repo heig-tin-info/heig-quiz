@@ -15,19 +15,23 @@ import {
   JournalNameTaken,
   JournalRefusal,
   type JournalErrorCode,
+  type JournalDeletedPage,
   type JournalFileWritten,
   type JournalPageAdd,
   type JournalPageSave,
   type JournalPreview,
   type JournalPreviewResult,
   type JournalRepository,
+  type JournalRestore,
+  type JournalRevisionContent,
+  type JournalRevisionList,
   type JournalStaff,
 } from "@quiz/contracts";
 import { journalAssetUrl } from "@quiz/docrender/assets";
 
 import { api, ApiError } from "../api";
 import type { TFunction } from "../i18n";
-import { journalKey, journalPageKey } from "../queryKeys";
+import { journalDeletedKey, journalKey, journalPageKey, journalRevisionsKey } from "../queryKeys";
 import { JOURNAL_ERRORS } from "./words";
 
 /** `/app/api/classrooms/:id/journal`, the base of every journal route. */
@@ -112,18 +116,19 @@ export function useJournalRefresh(
 }
 
 // ------------------------------------------------------------------ writes
-// The editor's routes (M4-06, F-JRN-10, F-JRN-11). Every write ends with the
-// journal's cache entry invalidated, pages included: the navigation, the
-// hidden pages and the copy's head all move with a commit.
+// The editor's routes (F-JRN-10, F-JRN-11), Quiz mode only (ADR-057: a
+// GitHub-mode journal is edited on GitHub). Every write ends with the
+// journal's cache entry invalidated, pages and revisions included: the
+// navigation, the hidden pages and the history all move with a save.
 
 /** `…/journal/pages/<path>`, the path encoded segment by segment. */
 export const journalPageUrl = (classroomId: string, path: string) =>
   `${journalBase(classroomId)}/pages/${encodeJournalPath(path)}`;
 
 /**
- * Save (`PUT …/pages/*`): the page against the blob the editor opened. A
- * 409 `conflict` leaves everything as it was, and the caller keeps the
- * draft.
+ * Save (`PUT …/pages/*`): the page against the version the editor opened
+ * (`baseVersion`). A 409 `conflict` leaves everything as it was, and the
+ * caller keeps the draft.
  */
 export function useJournalSave(classroomId: string, path: string) {
   const qc = useQueryClient();
@@ -145,16 +150,16 @@ export function useJournalAddPage(classroomId: string) {
 }
 
 /**
- * After a page was written: the page the response carries (when the copy
- * caught up with the commit) goes into the cache at once, so the reader
- * shows it without waiting; then the journal is read again.
+ * After a page was written: the page the response carries goes into the
+ * cache at once, so the reader shows it without waiting; then the journal is
+ * read again.
  */
 async function afterWrite(qc: QueryClient, classroomId: string, written: JournalFileWritten): Promise<void> {
   if (written.page) qc.setQueryData(journalPageKey(classroomId, "staff", written.path), written.page);
   await qc.invalidateQueries({ queryKey: journalKey(classroomId, "staff") });
 }
 
-/** Delete a page (`DELETE …/pages/*`), against the blob the copy holds. */
+/** Delete a page (`DELETE …/pages/*`); its revisions stay, so it can come back (`deleted`). */
 export function useJournalDeletePage(classroomId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -167,7 +172,7 @@ export function useJournalDeletePage(classroomId: string) {
 }
 
 /**
- * A file written into the repository at `path` (`POST …/assets/*`): the raw
+ * A file stored in the journal at `path` (`POST …/assets/*`): the raw
  * bytes, declared with exactly the content type of the path's extension,
  * which is what the route checks (`JournalUploadHeaders`).
  */
@@ -178,7 +183,61 @@ export function uploadJournalAsset(classroomId: string, path: string, file: Blob
   });
 }
 
-/** Markdown not saved yet, rendered as the page at `path` would read (`POST …/preview`). */
+// ------------------------------------------------------------------ revisions (Quiz mode)
+// ADR-057: one revision per save, listed and restored by the staff.
+
+/** `GET …/revisions/*`: a page's revisions, newest first, metadata only. */
+export function useJournalRevisions(classroomId: string, path: string) {
+  return useQuery<JournalRevisionList>({
+    queryKey: journalRevisionsKey(classroomId, path),
+    queryFn: () => api(`${journalBase(classroomId)}/revisions/${encodeJournalPath(path)}`),
+  });
+}
+
+/** `GET …/revision/:id`: one revision with its markdown. */
+export function useJournalRevision(classroomId: string, revisionId: string | null) {
+  return useQuery<JournalRevisionContent>({
+    queryKey: [...journalKey(classroomId, "staff"), "revision", revisionId ?? ""],
+    queryFn: () => api(`${journalBase(classroomId)}/revision/${revisionId!}`),
+    enabled: revisionId !== null,
+    // A revision never changes.
+    staleTime: Infinity,
+  });
+}
+
+/** `GET …/deleted`: the pages a revision can bring back. */
+export function useJournalDeleted(classroomId: string) {
+  return useQuery<JournalDeletedPage[]>({
+    queryKey: journalDeletedKey(classroomId),
+    queryFn: () => api(`${journalBase(classroomId)}/deleted`),
+  });
+}
+
+/** `POST …/restore`: a revision becomes the page again (a save; a deleted page comes back). */
+export function useJournalRestore(classroomId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (revisionId: string) =>
+      api<JournalFileWritten>(`${journalBase(classroomId)}/restore`, {
+        method: "POST",
+        body: JSON.stringify({ revisionId } satisfies JournalRestore),
+      }),
+    onSuccess: (written) => afterWrite(qc, classroomId, written),
+  });
+}
+
+/**
+ * Remove the journal (F-JRN-04): `confirm` is the classroom's name, typed,
+ * which a Quiz-mode journal holding pages requires (409 `confirm_required`).
+ */
+export const journalRemoveUrl = (classroomId: string, confirm?: string) =>
+  `${journalBase(classroomId)}${confirm === undefined ? "" : `?confirm=${encodeURIComponent(confirm)}`}`;
+
+/** Whether removing this journal destroys the only copy of pages: the classroom's name must be typed. */
+export const removalNeedsName = (journal: JournalStaff | undefined): boolean =>
+  journal?.mode === "quiz" && journal.pageCount > 0;
+
+/** Markdown not saved yet (or a revision), rendered as the page at `path` would read (`POST …/preview`). */
 export function previewJournalPage(classroomId: string, path: string, markdown: string): Promise<JournalPreviewResult> {
   const body: JournalPreview = { path, markdown };
   return api<JournalPreviewResult>(`${journalBase(classroomId)}/preview`, {

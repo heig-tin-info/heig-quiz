@@ -51,7 +51,6 @@ const staffJournal = (over: Partial<JournalStaff> = {}): JournalStaff => ({
     syncError: null,
     lastSyncedAt: new Date(Date.now() - 3_600_000).toISOString(),
     lastCommitSha: "abc",
-    editable: true,
   },
   nav,
   homePath: HOME,
@@ -385,7 +384,9 @@ describe("JournalReader — the staff", () => {
   });
 
   it("says so when the classroom has no journal", async () => {
-    mockFetch({ [`GET ${BASE}`]: ok(staffJournal({ repository: null, nav: [], homePath: null, hiddenPaths: [] })) });
+    mockFetch({
+      [`GET ${BASE}`]: ok(staffJournal({ mode: null, repository: null, nav: [], homePath: null, hiddenPaths: [] })),
+    });
     renderWithProviders(<Reader />);
     expect(await screen.findByRole("heading", { level: 1, name: "No journal yet" })).toBeInTheDocument();
   });
@@ -423,6 +424,56 @@ describe("JournalReader — Refresh (M4-05)", () => {
     renderWithProviders(<Reader />);
     expect(await screen.findByText("Add a markdown file to the journal's repository, then Refresh.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Refresh/ })).toBeInTheDocument();
+  });
+});
+
+describe("JournalReader — GitHub mode is read-only (ADR-057)", () => {
+  const EDIT = "https://github.com/heig-tin-info/prg1-journal/edit/main/README.md";
+
+  it("makes Edit on GitHub the bar's primary: the page's editUrl, in a new tab", async () => {
+    mockFetch({
+      [`GET ${BASE}`]: ok(staffJournal()),
+      [`GET ${BASE}/pages/${HOME}`]: ok(staffPage(HOME, { editUrl: EDIT })),
+    });
+    renderWithProviders(<Reader path={HOME} />);
+    const link = await screen.findByRole("link", { name: /Edit on GitHub/ });
+    expect(link).toHaveAttribute("href", EDIT);
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+    expect(link.className).toMatch(/\bbg-accent\b/);
+    // Refresh stays secondary; nothing writes in the platform.
+    expect(screen.getByRole("button", { name: /Refresh/ }).className).not.toMatch(/\bbg-accent\b/);
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Pages" })).toBeNull();
+  });
+});
+
+describe("JournalReader — Quiz mode (ADR-057)", () => {
+  it("has Edit as the primary and the page actions in a menu, no Refresh, no sync state", async () => {
+    mockFetch({
+      [`GET ${BASE}`]: ok(staffJournal({ mode: "quiz", repository: null })),
+      [`GET ${BASE}/pages/${HOME}`]: ok(staffPage(HOME)),
+    });
+    renderWithProviders(<Reader path={HOME} />);
+    const edit = await screen.findByRole("button", { name: "Edit" });
+    await waitFor(() => expect(edit).toBeEnabled());
+    expect(edit.className).toMatch(/\bbg-accent\b/);
+    expect(screen.queryByRole("button", { name: /Refresh/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Edit on GitHub/ })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Pages" }));
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "Add a page",
+      "History",
+      "Deleted pages",
+      "Delete this page",
+    ]);
+  });
+
+  it("offers to add the first page when the journal has none", async () => {
+    mockFetch({ [`GET ${BASE}`]: ok(staffJournal({ mode: "quiz", repository: null, nav: [], homePath: null, hiddenPaths: [] })) });
+    renderWithProviders(<Reader />);
+    expect(await screen.findByText("Add its first page.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Add a page" }).length).toBeGreaterThan(0);
   });
 });
 
