@@ -1,4 +1,4 @@
-import { BarChart3, Copy, Pencil, Trash2 } from "lucide-react";
+import { BarChart3, Copy, Dices, Pencil, Trash2 } from "lucide-react";
 import type { DragEvent } from "react";
 
 import type { QuestionRow } from "@quiz/contracts";
@@ -289,6 +289,11 @@ export function QuestionTable({
                       {row.internalName}
                     </span>
                     {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
+                    {row.randomizable ? (
+                      <Badge tone="zinc" icon={Dices}>
+                        {t("pool.parameterized")}
+                      </Badge>
+                    ) : null}
                     <RowStatsButton row={row} statsFor={statsFor} />
                   </span>
                 </td>

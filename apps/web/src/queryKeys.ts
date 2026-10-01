@@ -158,6 +158,12 @@ export const questionKey = (id: string) => ["question", id] as const;
 /** `POST /questions/:id/preview` of the draft or of one published version. */
 export const questionPreviewKey = (id: string, source: "draft" | number | undefined) =>
   ["question", id, "preview", source] as const;
+/**
+ * `POST /questions/:id/draft/instances` (ADR-056 §8), per stored draft: the
+ * stamp of the draft it was drawn from, so every save draws again.
+ */
+export const questionInstancesKey = (id: string, stamp: string) =>
+  ["question", id, "instances", stamp] as const;
 
 // --- Evaluations ---------------------------------------------------------------
 

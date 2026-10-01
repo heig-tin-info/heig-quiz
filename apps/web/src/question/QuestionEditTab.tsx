@@ -2,6 +2,7 @@ import { AlertTriangle, MessageCircleQuestion } from "lucide-react";
 import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 
 import type { Asset, PoolDetail, QuestionDetail, ZodIssueLite } from "@quiz/contracts";
+import { PARAMETERIZED_TYPES } from "@quiz/domain";
 
 import { api } from "../api";
 import { HelpIcon } from "../help";
@@ -12,11 +13,13 @@ import { Alert, Card, Spinner } from "../ui";
 import { toConfigIssues } from "./issues";
 import { MetaPanel } from "./MetaPanel";
 import type { Draft } from "./useQuestionDraft";
+import { isVariablesIssue, VariablesSection } from "./VariablesSection";
 
 /**
- * The Edit tab: the type's own form and the explanation on the left, the
- * question's properties on the right — with, under them, the slot a type may
- * portal its own settings into.
+ * The Edit tab: the type's own form, the variables of a type that takes
+ * them (ADR-056) and the explanation on the left, the question's properties
+ * on the right — with, under them, the slot a type may portal its own
+ * settings into.
  */
 export function QuestionEditTab({
   data,
@@ -27,6 +30,8 @@ export function QuestionEditTab({
   edited,
   readOnly,
   onTry,
+  savedStamp,
+  dirty,
 }: {
   data: QuestionDetail;
   /** `undefined` while the pool is loading. */
@@ -37,6 +42,10 @@ export function QuestionEditTab({
   edited: boolean;
   readOnly: boolean;
   onTry: ((config: unknown) => Promise<TryOutcome>) | undefined;
+  /** The stored draft's stamp, which the Variables section's draws are keyed on. */
+  savedStamp: string | null;
+  /** Something is typed and not yet stored. */
+  dirty: boolean;
 }) {
   const t = useT();
   const poolId = data.meta.poolId;
@@ -61,7 +70,13 @@ export function QuestionEditTab({
     [poolId],
   );
 
-  const configIssues = useMemo(() => toConfigIssues(t, issues), [t, issues]);
+  // The table's issues go to the Variables section, the rest to the type's form.
+  const variablesIssues = useMemo(() => issues.filter(isVariablesIssue), [issues]);
+  const configIssues = useMemo(
+    () => toConfigIssues(t, issues.filter((issue) => !isVariablesIssue(issue))),
+    [t, issues],
+  );
+  const parameterized = PARAMETERIZED_TYPES.has(data.meta.type);
   // Reported, not predicted: the alert appears once a save came back with
   // issues, or once the teacher has touched a draft the server already holds
   // as invalid. The Publish dialog reports the issues unconditionally — that
@@ -105,6 +120,19 @@ export function QuestionEditTab({
             <Spinner />
           )}
         </Card>
+
+        {parameterized && draft ? (
+          <VariablesSection
+            questionId={data.meta.id}
+            type={data.meta.type}
+            variables={draft.variables}
+            onChange={(variables) => setDraft((current) => (current ? { ...current, variables } : current))}
+            issues={variablesIssues}
+            disabled={readOnly}
+            savedStamp={savedStamp}
+            dirty={dirty}
+          />
+        ) : null}
 
         <Card className="space-y-3 p-5">
           {/*

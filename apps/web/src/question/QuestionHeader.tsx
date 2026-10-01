@@ -1,4 +1,4 @@
-import { ArrowLeft, Copy, Eye, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Dices, Eye, Save, Trash2 } from "lucide-react";
 
 import type { QuestionDetail } from "@quiz/contracts";
 
@@ -78,6 +78,12 @@ export function QuestionHeader({
           ) : (
             <Badge tone="amber">{t("question.draft")}</Badge>
           )}
+          {/* ADR-056 §8: its published version draws values per attempt. */}
+          {data.meta.randomizable ? (
+            <Badge tone="zinc" icon={Dices}>
+              {t("pool.parameterized")}
+            </Badge>
+          ) : null}
           {draftAhead ? (
             <Badge tone="amber">{t("question.unpublished")}</Badge>
           ) : null}

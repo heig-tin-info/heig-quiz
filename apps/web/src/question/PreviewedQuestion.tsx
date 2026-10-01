@@ -89,12 +89,20 @@ export function PlayedQuestion({
   view,
   solution,
   label,
+  showsAnswers = SHOWS_ANSWERS.has(view.type),
 }: {
   view: StudentQuestion;
   /** Where the key comes from; without one, no "Show answers". */
   solution?: SolutionSource;
   /** The player's own line above the question, where the surface wants it. */
   label?: string;
+  /**
+   * Whether "Show answers" is offered; by default for the types whose
+   * review reads plainly from the key alone. The draws of a parameterized
+   * draft offer it for `short` too: its computed key is what the teacher
+   * checks there (ADR-056 §8).
+   */
+  showsAnswers?: boolean;
 }) {
   const t = useT();
   const [answer, setAnswer] = useState<unknown>(() => emptyAnswerOf(view.type, view.student));
@@ -118,7 +126,7 @@ export function PlayedQuestion({
         <p className="text-[13px] text-fg-muted">
           {view.points === 1 ? t("player.point") : t("player.points", { n: view.points })}
         </p>
-        {solution && SHOWS_ANSWERS.has(view.type) ? (
+        {solution && showsAnswers ? (
           <Button variant="secondary" size="sm" aria-pressed={shown} onClick={() => setShown(!shown)}>
             {shown ? <EyeOff /> : <KeyRound />}
             {shown ? t("preview.answers.hide") : t("preview.answers.show")}
