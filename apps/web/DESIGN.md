@@ -1587,11 +1587,13 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
   at exactly what a student gets. The teacher UI is desktop first and keeps its
   top bar and drawer on a phone.
 - **Navigation, never an action.** No slot wears the accent fill; the current
-  one is the sidebar's selection (`accent` label in semibold, an `accent-soft`
-  pill behind its icon), so the screen's one primary button is still the one
+  one is the sidebar's selection (an `accent` icon on an `accent-soft`
+  pill), so the screen's one primary button is still the one
   red FILL on it (invariant 2).
-- **Slots**, each an icon over a visible 11 px label, sharing the width
-  equally: Activities (the home, "Open now"), Courses (the student's
+- **Slots**, each an icon alone (24 px; the label is for a screen reader,
+  `sr-only`, the product owner's decision of 2026-10-01: four or five icons
+  a student meets every day need no caption, and the captions made the bar
+  heavy), sharing the width equally: Activities (the home, "Open now"), Courses (the student's
   classrooms, `/courses`, and lit on a classroom's pages — F-ORG-14, D07),
   Grades (the student's finished work, `/grades`, and lit on a feedback
   page), Profile (the settings), and Drill (#317, `/drill`) in the MIDDLE.
@@ -1602,8 +1604,8 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
   least one classroom whose drill is on (`visibleSlots`); the four others
   share the width otherwise. Its label is the page's title, `nav.drill`, in
   the bar and the sidebar alike: the feature is "Révisions" everywhere in
-  French (the product owner's decision of 2026-10-01), a word that fits a
-  fifth of a 390 px phone at 11 px, so no slot needs a second, shorter label.
+  French (the product owner's decision of 2026-10-01); in the bar it is
+  what a screen reader announces.
 - **The desktop sidebar mirrors the bar** (D07, the product owner's decision
   of 2026-10-01). The student's sidebar rows are the bar's slots, in the
   bar's order and under the same conditions, minus Profile, which is the
@@ -1618,11 +1620,17 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
   number of cards left would be a streak by another name, which the product
   owner ruled out; the accent is right because the dot points at the one
   thing to do there, like the primary it leads to.
-- **Shape.** Fixed to the bottom, 56 px plus the iOS home-indicator inset
-  (`env(safe-area-inset-bottom)`), `canvas` at 90 % with a blur and a
-  hairline over it — the phone top bar, mirrored. `--bottom-nav-h` is its
-  whole height while it is in the page (pure CSS, `:root:has(nav[data-bottom-dock])`
-  under `lg`; zero otherwise): a spacer under the page and the toast stack
+- **Shape.** It floats, the way a phone's own apps draw it now (2026-10-01):
+  a 56 px `rounded-full` pill, 16 px in from the sides (at most `max-w-sm`),
+  lifted off the bottom edge by `--bottom-nav-gap` — 12 px, or the iOS
+  home-indicator inset less 8 px when that is larger, so the pill tucks into
+  the inset rather than stacking on it. `surface` at 85 % with a blur, a
+  hairline all round and the popover shadow: it is a floating layer, not page
+  flow. The lit slot is a 44 px `accent-soft` pill under an `accent` icon
+  drawn a little heavier. `--bottom-nav-h` is the whole band it covers
+  (pill, gap and 8 px of air) while it is in the page (pure CSS,
+  `:root:has(nav[data-bottom-dock])` under `lg`; zero otherwise): a spacer
+  under the page and the toast stack
   read it, so neither the end of a page nor a toast is ever behind the bar.
   An anchor (a journal heading) lands under the sticky top bar through one
   `scroll-padding-top` on the root, from `--topbar-h`.
