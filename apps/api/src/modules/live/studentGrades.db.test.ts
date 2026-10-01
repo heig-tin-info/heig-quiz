@@ -106,9 +106,12 @@ async function grades(headers: Record<string, string>) {
   return { body: res.body, groups: StudentGrades.parse(res.json()) };
 }
 
+/** The evaluations' rows: the projects' have their own (M3-08). */
+const evaluationRows = (groups: StudentGrades) => groups.flatMap((g) => g.rows).filter((r) => r.kind === "evaluation");
+
 async function rowOf(title: string, headers = student.headers) {
   const { groups } = await grades(headers);
-  return groups.flatMap((g) => g.rows).find((r) => r.evaluationId === evaluationIds[title]);
+  return evaluationRows(groups).find((r) => r.evaluationId === evaluationIds[title]);
 }
 
 beforeAll(async () => {
@@ -154,7 +157,7 @@ describe("GET /app/api/student/results — what a row says (F-RES-04)", () => {
     const id = evaluationIds["released none"]!;
     const { body, groups } = await grades(student.headers);
     // Every row of it, wherever it sits in the payload, carries no score…
-    const rows = groups.flatMap((g) => g.rows).filter((r) => r.evaluationId === id);
+    const rows = evaluationRows(groups).filter((r) => r.evaluationId === id);
     expect(rows).toEqual([expect.objectContaining({ status: "withheld", score: null, feedbackAttemptId: null })]);
     // …and the serialized rows hold no grade nor points key at all.
     const raw = (JSON.parse(body) as { rows: Record<string, unknown>[] }[])
@@ -202,7 +205,7 @@ describe("GET /app/api/student/results — what a row says (F-RES-04)", () => {
 describe("GET /app/api/student/results — the groups", () => {
   it("groups by classroom, newest first, an archived classroom included and marked", async () => {
     const { groups } = await grades(student.headers);
-    expect(groups.map((g) => g.rows.map((r) => r.evaluationId))).toEqual(
+    expect(groups.map((g) => evaluationRows([g]).map((r) => r.evaluationId))).toEqual(
       ["archived", "closed none", "immediate", "pending", "released missed", "released none", "released on_release"]
         .map((title) => [evaluationIds[title]]),
     );
@@ -218,7 +221,7 @@ describe("GET /app/api/student/results — the groups", () => {
 
   it("lists a staff seat's evaluations only where it took an attempt (ADR-018 §3)", async () => {
     const { groups } = await grades(seated.headers);
-    expect(groups.flatMap((g) => g.rows).map((r) => r.evaluationId)).toEqual([
+    expect(evaluationRows(groups).map((r) => r.evaluationId)).toEqual([
       evaluationIds["released on_release"],
     ]);
   });

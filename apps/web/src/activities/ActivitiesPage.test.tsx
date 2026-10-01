@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ActivitySummary } from "@quiz/contracts";
+import type { EvaluationActivitySummary } from "@quiz/contracts";
 
 import { id, liveAt } from "../test/live-fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
@@ -16,7 +16,7 @@ import { ActivitiesPage } from "./ActivitiesPage";
 const MIN = 60_000;
 const ROOM = { id: id("classroom", 1), name: "PRG1-2026", courseCode: "PRG1" };
 
-function activity(n: number, over: Partial<ActivitySummary> = {}): ActivitySummary {
+function activity(n: number, over: Partial<EvaluationActivitySummary> = {}): EvaluationActivitySummary {
   return {
     kind: "evaluation",
     id: id("activity", n),
@@ -57,7 +57,7 @@ beforeEach(() => {
   localStorage.removeItem("quiz-activities-view");
 });
 
-const render = (rows: ActivitySummary[] = ALL, navigate = vi.fn()) => {
+const render = (rows: EvaluationActivitySummary[] = ALL, navigate = vi.fn()) => {
   const stub = mockFetch({ "GET /app/api/activities": ok(rows) });
   renderWithProviders(<ActivitiesPage navigate={navigate} />);
   return { navigate, ...stub };

@@ -8,7 +8,7 @@ import {
   Square,
 } from "lucide-react";
 
-import type { ActivitySummary, PollTeacherView } from "@quiz/contracts";
+import type { EvaluationActivitySummary, PollTeacherView } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -26,7 +26,7 @@ import { Menu, type MenuItem } from "../ui";
  * list: closing an exam expires every attempt and starts the grading, and
  * that stays on its dashboard, behind its own confirmation.
  */
-export function useEndPoll(): { end: (row: ActivitySummary) => void; pending: string | null } {
+export function useEndPoll(): { end: (row: EvaluationActivitySummary) => void; pending: string | null } {
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
@@ -56,7 +56,7 @@ export function useEndPoll(): { end: (row: ActivitySummary) => void; pending: st
 }
 
 /** A running poll: the one activity a list may end. */
-export const endable = (row: ActivitySummary) => row.mode === "poll" && row.state === "running";
+export const endable = (row: EvaluationActivitySummary) => row.mode === "poll" && row.state === "running";
 
 /**
  * The overflow menu of one row, on every view: where else the activity
@@ -70,9 +70,9 @@ export function ActivityMenu({
   navigate,
   onEnd,
 }: {
-  row: ActivitySummary;
+  row: EvaluationActivitySummary;
   navigate: (r: Route) => void;
-  onEnd: (row: ActivitySummary) => void;
+  onEnd: (row: EvaluationActivitySummary) => void;
 }) {
   const t = useT();
   const items: MenuItem[] =

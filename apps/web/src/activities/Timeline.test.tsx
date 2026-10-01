@@ -2,7 +2,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ActivitySummary } from "@quiz/contracts";
+import type { EvaluationActivitySummary } from "@quiz/contracts";
 
 import { id, liveAt } from "../test/live-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
@@ -19,7 +19,7 @@ const MIN = 60_000;
 const DAYS = 24 * 60 * MIN;
 const ROOM = { id: id("classroom", 1), name: "EMB-2026", courseCode: "EMB" };
 
-function activity(n: number, over: Partial<ActivitySummary> = {}): ActivitySummary {
+function activity(n: number, over: Partial<EvaluationActivitySummary> = {}): EvaluationActivitySummary {
   return {
     kind: "evaluation",
     id: id("activity", n),

@@ -88,11 +88,11 @@ module); DROP.
 
 | Classroom | → Quiz (module `project` unless said) |
 | --- | --- |
-| `assignments` | `projects` (+ `classroom_id`, `grading_scale`; codespace columns only if M6) |
-| `assignment_milestones` | `project_milestones` |
+| `assignments` | `projects` (+ `classroom_id`, `org_id`, `grading_scale`; the codespace columns and `work_mode` dropped, D09) |
+| `assignment_milestones` | `project_checkpoints` |
 | `assignment_groups`, `assignment_group_members` | `project_groups`, `project_group_members` (`enrollment_id` through the enrollment remap) |
 | `student_repos` | `project_repos` (`user_id`, `teacher_graded_by` remapped; the two partial uniques kept) |
-| `grade_runs` | `project_grade_runs` (doubles kept, `kind` ci/llm, `after_deadline`) |
+| `grade_runs` | `project_grade_runs` (doubles kept as `points` / `max`, `kind` `llm` → `review`, `after_deadline`) |
 | `push_receipts` | `push_receipts` (module `github`; `received_at` is the legal freeze reference) |
 | `bot_commits`, `grade_dispatches`, `reverts` | same names, module `project` |
 | `webhook_deliveries` | `webhook_deliveries` (module `github`), last 30 days only, none unprocessed at T0 |
@@ -201,7 +201,7 @@ environment's `DATABASE_URL`.
   enrollments (merged into the mapped rosters, remap recorded; missing
   lines per item 3) → role recompute → one `migration.classroom_import`
   audit row. M8-01 adds, before the role recompute: notification
-  preferences, (codespace grants), projects, milestones, groups → group
+  preferences, (codespace grants), projects, checkpoints, groups → group
   members → project repos → grade runs, push receipts, bot commits,
   dispatches, reverts → classroom journal rows (re-ingested after) →
   webhook deliveries (30 days) → legacy audit. No GitHub organization, no

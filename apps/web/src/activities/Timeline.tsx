@@ -1,7 +1,7 @@
 import { CalendarRange, ChevronDown, ChevronRight, Crosshair, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import type { ActivitySummary } from "@quiz/contracts";
+import type { EvaluationActivitySummary } from "@quiz/contracts";
 
 import { evaluationHome, evaluationStateLabel } from "../evaluation/common";
 import { useI18n, useT } from "../i18n";
@@ -59,7 +59,7 @@ const startOfDay = (t: number) => {
  * on the axis around the "now" line. An ended one without a closing stops at
  * its last change. A draft nobody dated has no place: null.
  */
-export function spanOf(a: ActivitySummary, now: number): Span | null {
+export function spanOf(a: EvaluationActivitySummary, now: number): Span | null {
   const open = bucketOf(a.state) === "open";
   const start = a.opensAt ?? a.startedAt;
   if (start === null && !open) return null;
@@ -147,7 +147,7 @@ function buildTicks(from: number, to: number, locale: string): Tick[] {
  * the room, amber waiting or paused, a calm blue for what is planned, a
  * dashed outline for a draft, the recessed surface for what is over.
  */
-function barClass(a: ActivitySummary): string {
+function barClass(a: EvaluationActivitySummary): string {
   if (a.state === "draft") return "border border-dashed border-fg-faint bg-surface text-fg-muted";
   if (a.state === "running") return "bg-success text-on-fill";
   if (bucketOf(a.state) === "open") return "bg-warning text-on-fill";
@@ -156,7 +156,7 @@ function barClass(a: ActivitySummary): string {
 }
 
 /** The dot beside a lane's name: the bar's colour, at full strength for the pale ones. */
-function dotClass(a: ActivitySummary): string {
+function dotClass(a: EvaluationActivitySummary): string {
   if (a.state === "draft") return "border border-dashed border-fg-faint";
   if (a.state === "scheduled") return "bg-info";
   if (bucketOf(a.state) === "ended") return "bg-line-strong";
@@ -166,7 +166,7 @@ function dotClass(a: ActivitySummary): string {
 interface Room {
   key: string;
   label: string;
-  lanes: { row: ActivitySummary; span: Span }[];
+  lanes: { row: EvaluationActivitySummary; span: Span }[];
 }
 
 export function ActivityTimeline({
@@ -174,7 +174,7 @@ export function ActivityTimeline({
   navigate,
   now,
 }: {
-  rows: ActivitySummary[];
+  rows: EvaluationActivitySummary[];
   navigate: (r: Route) => void;
   now: number;
 }) {
@@ -287,7 +287,7 @@ export function ActivityTimeline({
     });
 
   /** What a bar says to a screen reader and on hover: the title, the state, the span. */
-  const barName = (row: ActivitySummary, s: Span) =>
+  const barName = (row: EvaluationActivitySummary, s: Span) =>
     t("activities.timeline.bar", {
       title: row.title,
       state: evaluationStateLabel(row.state, t),
@@ -295,7 +295,7 @@ export function ActivityTimeline({
       to: isoDateTime(new Date(s.d).toISOString()),
     });
 
-  const bar = (row: ActivitySummary, s: Span, compact: boolean) => {
+  const bar = (row: EvaluationActivitySummary, s: Span, compact: boolean) => {
     const l = pct(s.s);
     const r = pct(s.d);
     if (r <= 0 || l >= 100) return null; // fully outside the window

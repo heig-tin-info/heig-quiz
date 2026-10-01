@@ -4,7 +4,7 @@
  * and groups the rows itself (`activities/model.ts`).
  *
  * `KINDS` is a plain list, not a registry: a kind is added here by hand, in
- * the same pull request as its module (the projects, M3-02).
+ * the same pull request as its kind (the projects: M3-01, filled by M3-02).
  */
 import type { ActivitySummary, StudentActivities, StudentClassroomPage } from "@quiz/contracts";
 
@@ -13,8 +13,9 @@ import type { Caller, ReadableClassroom } from "../guards.js";
 import { hasJournal } from "../journal/service.js";
 import { studentClassroomHeader } from "../org/service.js";
 import { evaluationActivity } from "./evaluation.js";
+import { projectActivity } from "./project.js";
 
-const KINDS = [evaluationActivity] as const;
+const KINDS = [evaluationActivity, projectActivity] as const;
 
 /** `GET /activities`: what the caller manages in their own name, every kind. */
 export async function listForTeacher(db: Db, caller: Caller, now: Date): Promise<ActivitySummary[]> {
@@ -28,7 +29,9 @@ async function studentCards(
   classroomId: string,
   now: Date,
 ): Promise<StudentActivities> {
-  const kinds = await Promise.all(KINDS.map((k) => k.studentCards(db, caller, classroomId, now)));
+  const kinds: StudentActivities[] = await Promise.all(
+    KINDS.map((k) => k.studentCards(db, caller, classroomId, now)),
+  );
   return {
     polls: kinds.flatMap((k) => k.polls),
     open: kinds.flatMap((k) => k.open),

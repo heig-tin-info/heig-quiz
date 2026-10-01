@@ -473,7 +473,7 @@ describe("grading and results with several attempts", () => {
     const { closed, student, first } = await twoAttempts("best");
     await results.releaseResults(db, closed, closed.closedAt!);
     const groups = await live.studentGrades(db, student, closed.closedAt!);
-    const card = groups.flatMap((g) => g.rows).find((c) => c.evaluationId === closed.id)!;
+    const card = groups.flatMap((g) => g.rows).filter((r) => r.kind === "evaluation").find((c) => c.evaluationId === closed.id)!;
     expect(card.feedbackAttemptId).toBe(first.id);
     expect(card.score?.points).toBe(2);
   });
@@ -486,7 +486,7 @@ describe("grading and results with several attempts", () => {
       .where(eq(evaluations.id, closed.id));
     const immediate = await reload(db, closed.id);
     const groups = await live.studentGrades(db, student, closed.closedAt!);
-    const card = groups.flatMap((g) => g.rows).find((c) => c.evaluationId === closed.id)!;
+    const card = groups.flatMap((g) => g.rows).filter((r) => r.kind === "evaluation").find((c) => c.evaluationId === closed.id)!;
     // The best attempt (the first, both right), not the latest (both wrong).
     expect(card).toMatchObject({
       status: "available",

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarRange, LayoutGrid, List, Radio, SearchX, Square } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
-import type { ActivitySummary, EvaluationMode } from "@quiz/contracts";
+import type { ActivitySummary, EvaluationActivitySummary, EvaluationMode } from "@quiz/contracts";
 import { isLiveNow } from "@quiz/domain";
 
 import { api } from "../api";
@@ -67,9 +67,11 @@ const VIEWS: readonly View[] = ["cards", "list", "schedule"];
 
 export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
-  const list = useQuery<ActivitySummary[]>({
+  const list = useQuery<ActivitySummary[], Error, EvaluationActivitySummary[]>({
     queryKey: activitiesKey,
     queryFn: () => api("/app/api/activities"),
+    // The projects are drawn by M3-10; until then the section lists the evaluations.
+    select: (rows) => rows.filter((row) => row.kind === "evaluation"),
   });
   // "Live" moves with the clock too (a scheduled exam 15 minutes out), not
   // only with the hints: re-evaluated every half minute.
@@ -231,9 +233,9 @@ function LiveNow({
   onEnd,
   pending,
 }: {
-  rows: ActivitySummary[];
+  rows: EvaluationActivitySummary[];
   navigate: (r: Route) => void;
-  onEnd: (row: ActivitySummary) => void;
+  onEnd: (row: EvaluationActivitySummary) => void;
   pending: string | null;
 }) {
   const t = useT();
@@ -291,7 +293,7 @@ function LiveNow({
 }
 
 /** "Started 25 minutes ago", or "Opens in 10 minutes" for one about to. */
-function Since({ row }: { row: ActivitySummary }) {
+function Since({ row }: { row: EvaluationActivitySummary }) {
   const t = useT();
   if (row.state === "scheduled" && row.opensAt) {
     return (

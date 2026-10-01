@@ -9,6 +9,7 @@
 import { z } from "zod";
 
 import { EvaluationCard, StudentPollCard } from "./live.js";
+import { StudentProjectCard } from "./project.js";
 
 /** One card of the Courses list: a classroom where the caller holds a claimed seat. */
 export const StudentClassroom = z.object({
@@ -31,6 +32,7 @@ export type StudentClassroom = z.infer<typeof StudentClassroom>;
  */
 export const StudentActivityCard = z.discriminatedUnion("kind", [
   EvaluationCard.extend({ kind: z.literal("evaluation") }),
+  StudentProjectCard,
 ]);
 export type StudentActivityCard = z.infer<typeof StudentActivityCard>;
 

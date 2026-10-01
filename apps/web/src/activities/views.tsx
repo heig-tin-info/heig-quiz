@@ -1,7 +1,7 @@
 import { ClipboardCheck, NotebookPen, Vote } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import type { ActivitySummary, EvaluationMode } from "@quiz/contracts";
+import type { EvaluationActivitySummary, EvaluationMode } from "@quiz/contracts";
 
 import { evaluationHome, evaluationStateLabel, stateTone } from "../evaluation/common";
 import { useI18n, useT, type TFunction } from "../i18n";
@@ -38,25 +38,25 @@ export const MODE_ICON: Record<EvaluationMode, IconType> = {
 };
 
 export interface ViewProps {
-  rows: ActivitySummary[];
+  rows: EvaluationActivitySummary[];
   navigate: (r: Route) => void;
-  onEnd: (row: ActivitySummary) => void;
+  onEnd: (row: EvaluationActivitySummary) => void;
 }
 
 /** "Exercise", or "Exercise · take-home" for a series done over days. */
-export function modeLabel(row: ActivitySummary, t: TFunction): string {
+export function modeLabel(row: EvaluationActivitySummary, t: TFunction): string {
   const mode = t(`eval.mode.${row.mode}`);
   return row.takeHome ? `${mode} · ${t("activities.takeHome")}` : mode;
 }
 
 /** "PRG1 · PRG1-2026", or the word for an anonymous poll's lack of one. */
-export function classroomLabel(row: ActivitySummary, t: TFunction): string {
+export function classroomLabel(row: EvaluationActivitySummary, t: TFunction): string {
   return row.classroom
     ? `${row.classroom.courseCode} · ${row.classroom.name}`
     : t("activities.noClassroom");
 }
 
-function StateBadge({ row }: { row: ActivitySummary }) {
+function StateBadge({ row }: { row: EvaluationActivitySummary }) {
   const t = useT();
   return <Badge tone={stateTone(row.state)}>{evaluationStateLabel(row.state, t)}</Badge>;
 }
@@ -71,7 +71,7 @@ export function ActivityTable({ rows, navigate, onEnd }: ViewProps) {
   const t = useT();
   // No initial sort: the rows arrive in `activityOrder`, which is the answer
   // to "what needs me" nobody clicked for. A click on a label replaces it.
-  const { sorted, sort, toggle } = useSortableTable<ActivitySummary, SortKey>(
+  const { sorted, sort, toggle } = useSortableTable<EvaluationActivitySummary, SortKey>(
     rows,
     (row, key) => {
       switch (key) {

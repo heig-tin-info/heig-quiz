@@ -225,12 +225,12 @@ describe("GET /app/api/student/classrooms/:id", () => {
     ]) {
       expect(body, secret).not.toContain(secret);
     }
-    expect(p.activities.open[0]!.attemptId).toBeNull();
+    expect(p.activities.open[0]).toMatchObject({ kind: "evaluation", attemptId: null });
   });
 
   it("gives the classmate their own attempt, and never the student's bonus", async () => {
     const { page: p } = await page(classmate.headers);
-    expect(p.activities.open[0]!.attemptId).toBe(classmateAttempt);
+    expect(p.activities.open[0]).toMatchObject({ kind: "evaluation", attemptId: classmateAttempt });
     expect(p.classroom.timeBonusPercent).toBe(0);
   });
 

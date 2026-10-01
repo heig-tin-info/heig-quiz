@@ -48,7 +48,7 @@ async function appFor() {
 
 /** The rows of the student's Grades page (`GET /student/results`), every classroom's. */
 async function gradeRows(studentId: string, now: Date) {
-  return (await live.studentGrades(db, studentId, now)).flatMap((group) => group.rows);
+  return (await live.studentGrades(db, studentId, now)).flatMap((group) => group.rows).filter((r) => r.kind === "evaluation");
 }
 
 /**

@@ -7,8 +7,8 @@ import type {
   AttemptView,
   AutosaveResponse,
   EvaluationCard,
+  EvaluationGradeRow,
   GradeGroup,
-  GradeRow,
   LobbyView,
   StudentClassroomPage,
   StudentGrades,
@@ -612,7 +612,8 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
     archived: false,
     ...over,
   });
-  const row = (over: Partial<GradeRow> & Pick<GradeRow, "title" | "status">): GradeRow => ({
+  const row = (over: Partial<EvaluationGradeRow> & Pick<EvaluationGradeRow, "title" | "status">): EvaluationGradeRow => ({
+    kind: "evaluation",
     evaluationId: `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`,
     mode: "exam",
     date: iso(-D),

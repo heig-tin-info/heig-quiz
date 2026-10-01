@@ -23,7 +23,7 @@ describe("ActivitySummary (ADR-035 §2)", () => {
   it("reads an evaluation row, its mode kept", () => {
     const row = ActivitySummary.parse(evaluation);
     expect(row.kind).toBe("evaluation");
-    expect(row.mode).toBe("exam");
+    expect(row).toMatchObject({ mode: "exam" });
   });
 
   it("keeps an anonymous poll as an evaluation, with no classroom", () => {
@@ -33,7 +33,22 @@ describe("ActivitySummary (ADR-035 §2)", () => {
   it("refuses a row without its kind, or of a kind it does not know", () => {
     const { kind: _kind, ...bare } = evaluation;
     expect(ActivitySummary.safeParse(bare).success).toBe(false);
+    expect(ActivitySummary.safeParse({ ...evaluation, kind: "journal" }).success).toBe(false);
+    // A project's kind with an evaluation's fields is not a project.
     expect(ActivitySummary.safeParse({ ...evaluation, kind: "project" }).success).toBe(false);
+  });
+
+  it("reads a project row (M3-01)", () => {
+    const project = {
+      kind: "project",
+      id: ID,
+      title: "Lab 2",
+      state: "published",
+      classroom: { id: ID, name: "PRG1-2026", courseCode: "PRG1" },
+      startAt: "2026-10-01T08:00:00.000Z",
+      deadlineAt: "2026-10-15T22:00:00.000Z",
+    } as const;
+    expect(ActivitySummary.parse(project)).toEqual(project);
   });
 });
 

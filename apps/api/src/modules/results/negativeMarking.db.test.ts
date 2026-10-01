@@ -54,7 +54,8 @@ afterAll(async () => {
 
 const db = () => server.app.db;
 /** The rows of the student's Grades page, every classroom's, read through the contract. */
-const gradeRows = (body: unknown) => StudentGrades.parse(body).flatMap((group) => group.rows);
+const gradeRows = (body: unknown) =>
+  StudentGrades.parse(body).flatMap((group) => group.rows).filter((r) => r.kind === "evaluation");
 const get = (url: string, headers: Record<string, string>) =>
   server.app.inject({ method: "GET", url, headers });
 const send = (

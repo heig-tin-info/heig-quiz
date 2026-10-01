@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { GradeGroup, GradeRow } from "@quiz/contracts";
+import type { EvaluationGradeRow, GradeGroup } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { StudentGrades } from "./StudentGrades";
@@ -15,7 +15,8 @@ import { StudentGrades } from "./StudentGrades";
 
 const URL = "GET /app/api/student/results";
 
-const row = (over: Partial<GradeRow> & Pick<GradeRow, "evaluationId" | "title">): GradeRow => ({
+const row = (over: Partial<EvaluationGradeRow> & Pick<EvaluationGradeRow, "evaluationId" | "title">): EvaluationGradeRow => ({
+  kind: "evaluation",
   mode: "exam",
   date: "2026-09-20T10:00:00.000Z",
   status: "released",
@@ -119,6 +120,31 @@ describe("the student's Grades", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "feedback", attemptId: "a2" });
     navigate.mockClear();
     await userEvent.click((await tableRow("Série 8")).getByText("Série 8"));
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("prints a released project's score out of its maximum, its grade, and opens nothing", async () => {
+    const project: GradeGroup = {
+      ...groups[0]!,
+      rows: [
+        {
+          kind: "project",
+          projectId: "p1",
+          title: "Lab 2",
+          date: "2026-09-25T10:00:00.000Z",
+          status: "released",
+          score: { points: 15, max: 20, grade: 4.8 },
+        },
+      ],
+    };
+    mockFetch({ [URL]: ok([project]) });
+    const { navigate } = render();
+    const lab = await tableRow("Lab 2");
+    expect(lab.getAllByText("Project").length).toBeGreaterThan(0);
+    expect(lab.getByText("15 / 20")).toBeInTheDocument();
+    expect(lab.getByText("4.8")).toBeInTheDocument();
+    expect(lab.getByText("released")).toBeInTheDocument();
+    await userEvent.click(lab.getByText("Lab 2"));
     expect(navigate).not.toHaveBeenCalled();
   });
 

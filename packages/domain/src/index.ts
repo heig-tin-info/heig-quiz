@@ -58,6 +58,7 @@ export * from "./period.js";
 export * from "./pollOutcome.js";
 export * from "./pollTally.js";
 export * from "./poolRole.js";
+export * from "./projectGrade.js";
 export * from "./pseudonym.js";
 export * from "./questionProgress.js";
 export * from "./repoName.js";
