@@ -2393,6 +2393,7 @@ export const fr: Record<keyof Dict, string> = {
   "sgrades.subtitle": "Vos quiz et exercices terminés, classe par classe. Ouvrez-en un pour voir vos résultats.",
   "sgrades.col.activity": "Activité",
   "sgrades.col.kind": "Type",
+  "sgrades.kind.project": "Projet",
   "sgrades.col.date": "Date",
   "sgrades.col.status": "Statut",
   "sgrades.status.released": "publié",

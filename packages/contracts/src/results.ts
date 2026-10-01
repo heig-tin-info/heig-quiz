@@ -328,7 +328,8 @@ export const GradeStatus = z.enum([
 export type GradeStatus = z.infer<typeof GradeStatus>;
 
 /** One finished evaluation of the student's, on their Grades page. */
-export const GradeRow = z.object({
+export const EvaluationGradeRow = z.object({
+  kind: z.literal("evaluation"),
   evaluationId: z.uuid(),
   title: z.string(),
   mode: EvaluationMode,
@@ -351,6 +352,29 @@ export const GradeRow = z.object({
     .object({ points: z.number(), totalPoints: z.number(), grade: z.number().nullable() })
     .nullable(),
 });
+export type EvaluationGradeRow = z.infer<typeof EvaluationGradeRow>;
+
+/**
+ * One RELEASED project of the student's (F-PROJ-14, F-ORG-14; product owner,
+ * 2026-10-01): no row before the release — a project's score is indicative
+ * until then and lives on the project's own page (F-PROJ-15). `date` is the
+ * release; `score` the final score (`totalPoints` its maximum) and its grade
+ * by the project's scale.
+ * Never the score's source (teacher, review, frozen), the teacher's comment
+ * nor the repository (N-SEC-20): those belong to the project's student view.
+ */
+export const ProjectGradeRow = z.object({
+  kind: z.literal("project"),
+  projectId: z.uuid(),
+  title: z.string(),
+  date: z.iso.datetime(),
+  status: z.literal("released"),
+  score: z.object({ points: z.number(), totalPoints: z.number(), grade: z.number() }),
+});
+export type ProjectGradeRow = z.infer<typeof ProjectGradeRow>;
+
+/** One row of the student's Grades page, whatever its kind. */
+export const GradeRow = z.discriminatedUnion("kind", [EvaluationGradeRow, ProjectGradeRow]);
 export type GradeRow = z.infer<typeof GradeRow>;
 
 /** One classroom of the student's Grades page, archived ones included. */

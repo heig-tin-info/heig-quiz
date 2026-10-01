@@ -9,7 +9,7 @@
  */
 import { z } from "zod";
 
-import { TRUSTED_CLIENTS } from "@quiz/domain";
+import { ROUNDINGS, TRUSTED_CLIENTS } from "@quiz/domain";
 
 /** F-EVAL-01. `poll` is accepted by the column and refused by every route (decision D7). */
 export const EvaluationMode = z.enum(["exam", "exercise", "poll"]);
@@ -220,6 +220,10 @@ export type EvaluationSettings = z.infer<typeof EvaluationSettings>;
 /** The settings of a freshly created evaluation, all defaults applied. */
 export const defaultSettings = (): EvaluationSettings => EvaluationSettings.parse({});
 
+/** How a grade is rounded to the tenth (`roundToTenth` of `@quiz/domain`), every scale alike. */
+export const Rounding = z.enum(ROUNDINGS);
+export type Rounding = z.infer<typeof Rounding>;
+
 /**
  * F-EVAL-10: grade = 1 + 5 × points / total, capped at 6, rounded to the
  * tenth. Linear only: the `threshold` kind is gone (ADR-052), and the bonus
@@ -228,7 +232,7 @@ export const defaultSettings = (): EvaluationSettings => EvaluationSettings.pars
  */
 export const GradingScale = z.object({
   kind: z.literal("linear"),
-  rounding: z.enum(["nearest", "up", "down"]).default("nearest"),
+  rounding: Rounding.default("nearest"),
 });
 export type GradingScale = z.infer<typeof GradingScale>;
 

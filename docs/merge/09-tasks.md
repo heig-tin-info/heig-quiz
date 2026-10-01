@@ -548,9 +548,45 @@ files it ports; writes en + fr for every string.
 - **Depends on**: M2-01, M1-01, D05.
 - **Create**: `Q:db/project.ts` (§3.3 tables), one additive migration;
   `packages/contracts/src/project.ts`; `ActivitySummary` and `GradeRow` (ex-`ResultCard`)
-  project variants; import-script steps for projects, milestones, repos,
-  runs, bot commits, dispatches, reverts.
+  project variants. The import-script steps for these tables moved to
+  M8-01 (product owner and orchestrator, 2026-10-01): this task is schema
+  and contracts only, and the schema accepts imported rows as they are.
 - **Acceptance**: migration on a dump copy; the partial uniques tested.
+- **As delivered** (branch `merge/M3-01-project-schema`): migration
+  `0054_project` (nine `CREATE TABLE`). What M3-02…M3-16 inherit:
+  - **Tables** (`Q:db/project.ts`): `projects`, `project_checkpoints`,
+    `project_groups`, `project_group_members`, `project_repos`,
+    `project_grade_runs`, `bot_commits`, `grade_dispatches`, `reverts`;
+    classroom's columns under §7.4's words (`distribution_*`,
+    `review_dispatched_at`, `released_at/by`, `review_grade_run_id`,
+    `project_grade_runs.points/max/kind` `ci`|`review`,
+    `grade_dispatches.trigger` `deadline`|`checkpoint` + `checkpoint_id`,
+    children's FK `repo_id`; shas `text`). New: `projects.org_id` (copied
+    from the classroom's link), `grading_scale` (no default),
+    `created_by`; `project_repos.released_points/max` (the release's
+    snapshot), `protection_suspended_at`. Codespace columns and
+    `work_mode` dropped (D09). No default on `accepted_at`,
+    `completed_at`, `reverts.created_at` (services write
+    `app.clock.now()`); ids `randomUUID()` (Quiz has no UUID v7 helper).
+    Cascades per D19; nothing in `github` is reached by a deletion.
+  - **Contracts** (`packages/contracts/src/project.ts`): the closed `as
+    const` lists the schema uses, `ProjectGradingScale` (`linear` |
+    `score_is_grade`, the shared `Rounding`), `ProjectActivitySummary`,
+    `StudentProjectCard`. `ActivityKindName`, `ActivitySummary`,
+    `StudentActivityCard` carry the project member; `GradeRow` is a union
+    of `EvaluationGradeRow` and `ProjectGradeRow` (`{kind, projectId,
+    title, date = released_at, status: "released", score: {points,
+    totalPoints, grade}}`, only after the release, never the source,
+    comment or repository, N-SEC-20). Each route's bodies come with its
+    task (cards M3-02, M3-03, M3-05, M3-08).
+  - **`projectActivity`** (`Q:modules/activity/project.ts`) is in `KINDS`
+    and lists nothing (M3-02 fills it). The web draws no project in the
+    Activities section nor on the student's classroom page (M3-10,
+    M3-13); the student's Grades draws a released project row.
+  - **`projectGrade`** (`@quiz/domain`): score → grade by the project's
+    scale, `fellBack` when `score_is_grade` meets a maximum other than 6.
+  - `linkRelevant` (`auth/githubLink.ts`) counts a project repository of
+    one's own or of one's group.
 
 ### M3-02 — Project lifecycle
 - **Depends on**: M3-01, M2-02, D19.
@@ -562,11 +598,29 @@ files it ports; writes en + fr for every string.
 - **Tests**: source missing, slug and squashed suffixes and cleanup, patch
   rules, publish, reopen, archive, 404 for non-staff; deletion leaves
   repositories.
+- **From M3-01**: deleting a project (or its classroom) cascades every
+  `project` row but never reaches `push_receipts`, which is `github`'s and
+  keyed on GitHub's repository id: the deletion purges the receipts of its
+  repositories through a `github` service function (N-DATA-03). Fill
+  `projectActivity` (`Q:modules/activity/project.ts`) and write
+  `grading_scale` (`defaultProjectGradingScale()` unless the body sets one).
+  Write `ProjectCreate` and `ProjectPatch` (heig-classroom's zod rules, a
+  strict body, no work mode) and the lifecycle's error codes
+  (`unassigned_students`, `strategy_frozen`, `publish_mode_frozen`,
+  `source_not_found`, `distribution_failed`, `duplicate_slug`) in
+  `contracts/src/project.ts`. Define the column defaults (`grace_minutes`
+  30, `squash`, `lock`, `auto`, `manual`) once, as named constants used by
+  both the schema's `.default()` and the zod `.default()`.
 
 ### M3-03 — Acceptance and provisioning
 - **Depends on**: M3-02, M2-03.
 - **Port from**: `C:modules/student.ts` (accept), `github/provision.ts`,
   `github/collaborators.ts`, `C:repos.ts`.
+- **Contracts**: Accept's error codes (`github_not_linked`,
+  `github_account_stale`, `app_not_installed`, `provision_in_progress`,
+  `no_group`, `has_repo`, `revoke_failed`), and the zod enums of
+  `PROVISION_STATUSES` / `INVITATION_STATUSES` with the first payload that
+  carries them.
 - **Tests** (fake octokit): idempotent accept, `provision_in_progress`, an
   `ok` row survives a failure, teacher notified once, stale account ⇒ 409,
   renamed login followed, refused under impersonation.
@@ -583,6 +637,10 @@ files it ports; writes en + fr for every string.
 - **Port from**: `C:deadline.ts`, `C:dispatch.ts`, `github/lock.ts`,
   `github/commit.ts`, the ticker duties.
 - **Create**: `PROJECT_TASKS` on `Q:ticker.ts` (claim + enqueue only).
+- **Contracts**: `ReviewCheckpoint` `{id, name, dueAt, offsetDays,
+  dispatchedAt}` and `ReviewCheckpointCreate` (a `criteria.yml`-friendly
+  name `^[a-z0-9][a-z0-9_-]{0,49}$`; a date or an offset of −365…−1 days,
+  exactly one; heig-classroom's `milestones.ts`).
 - **Tests**: port `deadline.test`, `dispatch.test`, `dispatch.db.test`;
   TestClock: single claim, rescheduling between sweep and run, 404
   terminal, archive fallback, idempotent commit strategy, freeze at
@@ -601,6 +659,12 @@ files it ports; writes en + fr for every string.
 - **Depends on**: M3-04, M3-05.
 - **Port from**: `C:modules/assignments/detail.ts`, grade history,
   override, validate ⇒ release; the live-state cache (#37/#40).
+- **Contracts**: the grade runs' views (`GradeRunView`, `GradeRunList`
+  with the current, frozen and review run ids; zod enums of
+  `GRADE_RUN_KINDS`, `GRADE_RUN_PARSE_STATUSES`, `CI_STATUSES`),
+  `ScoreOverride` (`PATCH …/repos/:rid/score`, points 0…1000 or null, a
+  comment ≤ 2000), `not_frozen`, `ProjectDetail`. The release calls
+  `projectGrade` and writes `released_points/max`.
 - **Tests**: port `grades.db.test`; a deleted repo never calls GitHub; a
   rate-limited detail returns stored state at once.
 
@@ -1166,6 +1230,11 @@ files it ports; writes en + fr for every string.
   `GET /app/api/student/results` → `StudentGrades`) exists before this
   task; once D06 is settled the gradebook becomes its data source, under
   the same feedback-policy filter (F-RES-04).
+- **Note** (product owner, 2026-10-01, from M3-01): the M3 tasks give no
+  score to a student without a repository. The score a teacher sets for a
+  student who never accepted a project (F-GBOOK-01, 06 no. 48) and the
+  absence mark are this task's: where that score is stored is decided
+  here (M3-01's `project_repos` has no row to hold it).
 
 ### M5-04 — Web: Grades tabs
 - **Depends on**: M5-03.
@@ -1253,6 +1322,26 @@ files it ports; writes en + fr for every string.
 - **From M2-02's review**: an organization imported twice (a null-id row
   and an id row with the same login) must be merged by the import, not left
   to `retireLoginHolders`.
+- **From M3-01** (the project steps moved here, 2026-10-01): ids kept,
+  `ON CONFLICT DO NOTHING`, in FK order. `assignments` → `projects`
+  (`classroom_id` mapped; `org_id` = the mapped classroom's
+  `github_classroom_links.org_id`; `squashed_*` → `distribution_*`;
+  `llm_dispatched_at` → `review_dispatched_at`; `grades_validated_at/by` →
+  `released_at/by`; `created_by` = the remapped classroom owner;
+  `grading_scale` = `{kind: "score_is_grade"}`, heig-classroom's own
+  reading — a score out of 6 is the grade, any other maximum linear
+  (product owner, 2026-10-02: released grades do not move at the import); the
+  codespace columns and `work_mode` dropped, a non-`free` row refused);
+  `assignment_milestones` → `project_checkpoints`; groups and members
+  (`enrollment_id` remapped); `student_repos` → `project_repos` (`user_id`,
+  `teacher_graded_by` remapped, `llm_grade_run_id` →
+  `review_grade_run_id`, `accepted_at` copied — no default; for a
+  released project, `released_points` / `released_max` = the final score
+  at the import, so nothing reads "changed after release");
+  `grade_runs` → `project_grade_runs` (`grade_points/max` → `points/max`,
+  `kind` `llm` → `review`); `bot_commits`, `grade_dispatches` (`trigger`
+  `milestone` → `checkpoint`, `milestone_id` → `checkpoint_id`),
+  `reverts` (`student_repo_id` → `repo_id`).
 
 ### M8-02 — Legacy URL resolver
 - **Depends on**: M8-01 (id map), M3-12, M4-04.

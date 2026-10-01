@@ -2394,6 +2394,7 @@ export const en = {
   "sgrades.subtitle": "Your finished quizzes and exercises, classroom by classroom. Open one to see your results.",
   "sgrades.col.activity": "Activity",
   "sgrades.col.kind": "Kind",
+  "sgrades.kind.project": "Project",
   "sgrades.col.date": "Date",
   "sgrades.col.status": "Status",
   "sgrades.status.released": "released",

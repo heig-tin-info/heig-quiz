@@ -27,6 +27,7 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { answers, attempts, evaluations, gradings, questions } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
+import { evaluationRows } from "../../test/grades.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
@@ -54,7 +55,7 @@ afterAll(async () => {
 
 const db = () => server.app.db;
 /** The rows of the student's Grades page, every classroom's, read through the contract. */
-const gradeRows = (body: unknown) => StudentGrades.parse(body).flatMap((group) => group.rows);
+const gradeRows = (body: unknown) => evaluationRows(StudentGrades.parse(body));
 const get = (url: string, headers: Record<string, string>) =>
   server.app.inject({ method: "GET", url, headers });
 const send = (

@@ -6,15 +6,17 @@
  * {@link ActivityKindName} and one to {@link ActivitySummary}, and every
  * `switch` over them that forgets it stops compiling.
  *
- * Today one kind, `evaluation` (exam, exercise, and poll as its `mode`,
- * ADR-014). A poll is a mode of it, never a kind of its own.
+ * Two kinds: `evaluation` (exam, exercise, and poll as its `mode`,
+ * ADR-014; a poll is a mode of it, never a kind of its own) and `project`
+ * (F-PROJ; listed by the `project` module from M3-02 on).
  */
 import { z } from "zod";
 
 import { EvaluationMode, EvaluationState } from "./evaluation.js";
+import { ProjectActivitySummary } from "./project.js";
 
-/** The kinds of activity. `project` joins with the projects (M3-02). */
-export const ActivityKindName = z.enum(["evaluation"]);
+/** The kinds of activity. */
+export const ActivityKindName = z.enum(["evaluation", "project"]);
 export type ActivityKindName = z.infer<typeof ActivityKindName>;
 
 /**
@@ -46,7 +48,10 @@ export const EvaluationActivitySummary = z.object({
 export type EvaluationActivitySummary = z.infer<typeof EvaluationActivitySummary>;
 
 /** One row of `GET /activities`, whatever its kind. */
-export const ActivitySummary = z.discriminatedUnion("kind", [EvaluationActivitySummary]);
+export const ActivitySummary = z.discriminatedUnion("kind", [
+  EvaluationActivitySummary,
+  ProjectActivitySummary,
+]);
 export type ActivitySummary = z.infer<typeof ActivitySummary>;
 
 /** The kinds and the union's members are one list: `true` or a compile error. */

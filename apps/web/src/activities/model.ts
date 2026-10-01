@@ -6,7 +6,7 @@
  * "Live" is not decided here: it is `isLiveNow` of `@quiz/domain`, the deploy
  * guard's definition, so the section and the guard can never disagree.
  */
-import type { ActivitySummary, EvaluationMode, EvaluationState } from "@quiz/contracts";
+import type { EvaluationActivitySummary, EvaluationMode, EvaluationState } from "@quiz/contracts";
 
 /** The three ages of an activity, as the state filter offers them. */
 export type Bucket = "upcoming" | "open" | "ended";
@@ -33,7 +33,7 @@ export function bucketOf(state: EvaluationState): Bucket {
  * started, or when it closes. Null for a draft nobody dated yet — the
  * schedule files it under "Not scheduled".
  */
-export function anchorOf(a: ActivitySummary): string | null {
+export function anchorOf(a: EvaluationActivitySummary): string | null {
   return a.opensAt ?? a.startedAt ?? a.closesAt;
 }
 
@@ -44,7 +44,7 @@ const time = (iso: string | null) => (iso === null ? null : new Date(iso).getTim
  * (the soonest first, the undated drafts last), then what is over (the most
  * recent first). It answers "what needs me" before "what happened".
  */
-export function activityOrder(rows: readonly ActivitySummary[]): ActivitySummary[] {
+export function activityOrder(rows: readonly EvaluationActivitySummary[]): EvaluationActivitySummary[] {
   const rank: Record<Bucket, number> = { open: 0, upcoming: 1, ended: 2 };
   return [...rows].sort((a, b) => {
     const byBucket = rank[bucketOf(a.state)] - rank[bucketOf(b.state)];
@@ -63,7 +63,7 @@ export interface Filters {
 }
 
 /** An empty set filters nothing: no chip pressed is "everything". */
-export function matches(a: ActivitySummary, f: Filters): boolean {
+export function matches(a: EvaluationActivitySummary, f: Filters): boolean {
   return (
     (f.modes.size === 0 || f.modes.has(a.mode)) &&
     (f.buckets.size === 0 || f.buckets.has(bucketOf(a.state)))
@@ -95,7 +95,7 @@ export function isoWeek(t: number): number {
 export interface Week {
   /** Local midnight of its Monday; null for the undated rows. */
   start: number | null;
-  rows: ActivitySummary[];
+  rows: EvaluationActivitySummary[];
 }
 
 /**
@@ -104,20 +104,20 @@ export interface Week {
  * Monday, an exam in its lobby with no date at all) — anything else under
  * {@link anchorOf}.
  */
-export function scheduleAnchorOf(a: ActivitySummary, now: number): number | null {
+export function scheduleAnchorOf(a: EvaluationActivitySummary, now: number): number | null {
   return bucketOf(a.state) === "open" ? now : time(anchorOf(a));
 }
 
-const shownTime = (a: ActivitySummary, now: number): number =>
+const shownTime = (a: EvaluationActivitySummary, now: number): number =>
   time(anchorOf(a)) ?? scheduleAnchorOf(a, now)!;
 
 /**
  * The rows by the week of their schedule anchor, oldest week first, each
  * week in time order; the undated drafts last, in a week of their own.
  */
-export function weeksOf(rows: readonly ActivitySummary[], now: number): Week[] {
-  const byWeek = new Map<number, ActivitySummary[]>();
-  const undated: ActivitySummary[] = [];
+export function weeksOf(rows: readonly EvaluationActivitySummary[], now: number): Week[] {
+  const byWeek = new Map<number, EvaluationActivitySummary[]>();
+  const undated: EvaluationActivitySummary[] = [];
   for (const row of rows) {
     const anchor = scheduleAnchorOf(row, now);
     if (anchor === null) {

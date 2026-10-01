@@ -54,6 +54,8 @@ describe("@quiz/domain public surface", () => {
       "decideMatch",
       "parseStudentIgnore",
       "pickStudentRepo",
+      // A project's score as a grade (M3-01, D05).
+      "projectGrade",
       "planCheckpointReviewDispatch",
       "planFinalReviewDispatch",
       "repoName",

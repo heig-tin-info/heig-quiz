@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ActivitySummary } from "@quiz/contracts";
+import type { EvaluationActivitySummary } from "@quiz/contracts";
 
 import {
   activityOrder,
@@ -14,7 +14,7 @@ import {
 } from "./model";
 
 let n = 0;
-function row(over: Partial<ActivitySummary> = {}): ActivitySummary {
+function row(over: Partial<EvaluationActivitySummary> = {}): EvaluationActivitySummary {
   n += 1;
   return {
     kind: "evaluation",

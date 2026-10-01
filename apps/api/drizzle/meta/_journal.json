@@ -379,6 +379,13 @@
       "when": 1790885949590,
       "tag": "0053_import_classroom",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790891923814,
+      "tag": "0054_project",
+      "breakpoints": true
     }
   ]
 }

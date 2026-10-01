@@ -153,6 +153,9 @@ function notificationRoute(payload: NotificationPayload): Route {
       switch (payload.activityKind) {
         case "evaluation":
           return { view: "attempt", evaluationId: payload.activityId };
+        // Never sent for a project, which has kinds of its own (F-NOTIF-13).
+        case "project":
+          return { view: "home" };
       }
   }
 }

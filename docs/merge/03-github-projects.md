@@ -182,7 +182,7 @@ layers:
 
 | Classroom | Quiz |
 | --- | --- |
-| `organizations`, `classrooms.org_id NOT NULL` | `github_organizations` + `github_classroom_links` (optional link, made lazily); `projects.github_org_id` denormalised |
+| `organizations`, `classrooms.org_id NOT NULL` | `github_organizations` + `github_classroom_links` (optional link, made lazily); `projects.org_id` (→ `github_organizations.id`) copied at creation |
 | `classrooms.teacher_id` owner, `classroom_staff`, `isOwner` | `course_staff`, no owner; "the teacher" = the course staff (`staffOfCourse`); `teacher:` audiences → `course:<id>` |
 | `teacherGuard`, `accessibleAssignment/StudentRepo` | `Q:modules/guards.ts`: `staffAccess(me, classrooms.course_id)` + new `findAccessibleProject`, `accessibleProjectRepo`, student loaders by own enrollment/group (404 otherwise) |
 | `enrollments.status='claimed'` | `user_id IS NOT NULL` |
@@ -228,9 +228,10 @@ layers:
   linked_by, linked_at)`, `webhook_deliveries`,
   `push_receipts`; in `Q:db/github.ts` too, but `auth`'s: `github_accounts`
   (M2-03).
-- `project`: `projects` (← assignments; + `classroom_id`, `github_org_id`,
-  `created_by`, `grading_scale`; the four partial indexes kept),
-  `project_milestones`, `project_groups`, `project_group_members` (FK to
+- `project` (M3-01, `Q:db/project.ts`): `projects` (← assignments; +
+  `classroom_id`, `org_id`, `created_by`, `grading_scale`; the four partial
+  indexes kept), `project_checkpoints` (← milestones), `project_groups`,
+  `project_group_members` (FK to
   `enrollments`), `project_repos` (← student_repos, partial uniques kept),
   `project_grade_runs`, `bot_commits`, `grade_dispatches`, `reverts`.
 - `system` (D10, M2-05, already there): `scheduled_tasks`; the admin
@@ -245,13 +246,13 @@ layers:
   `suggestedOrgId`, `installUrl`), `GithubAccountState` (M2-01);
   `GithubConnectBody` (M2-02), `GithubLinkOutcome` (M2-03).
 - `project.ts`: `ProjectCreate/Patch` (classroom's zod rules),
-  `ProjectSummary`, `ProjectDetail` (`liveStale`), `GradeView`,
-  `GradeRunList`, `GroupsPayload`, `Milestone`, `GradeOverride`,
+  `ProjectSummary`, `ProjectDetail` (`liveStale`), `GradeRunView`,
+  `GradeRunList`, `GroupsPayload`, `ReviewCheckpoint`, `ScoreOverride`,
   `StudentProjectCard`; error codes `github_not_linked`,
   `github_account_stale`, `provision_in_progress`, `no_group`,
   `unassigned_students`, `has_repo`, `revoke_failed`, `app_not_installed`,
   `not_frozen`, `strategy_frozen`, `publish_mode_frozen`,
-  `source_not_found`, `squashed_failed`, `duplicate_slug`.
+  `source_not_found`, `distribution_failed`, `duplicate_slug`.
 - `ActivitySummary` and `GradeRow` (the student's Grades, ex-`ResultCard`) become discriminated unions.
 - `AppNotice` variants: `project_commit_pushed`, `protected_reverted`,
   `sync_done`, `grade_captured`, `accepted`, `deadline_applied`,
@@ -271,25 +272,27 @@ layers:
   /app/api/projects/:pid/{publish,archive,unarchive,sync,release}`,
   `GET /app/api/projects/:pid` (detail),
   `GET …/repos/:rid/{grade-runs,activity}`,
-  `POST …/repos/:rid/{lock,unlock,grade-now}`, `PATCH …/repos/:rid/grade`,
-  milestones, groups, org repository browser.
+  `POST …/repos/:rid/{lock,unlock,grade-now}`, `PATCH …/repos/:rid/score`,
+  checkpoints, groups, org repository browser.
 - project (student): `POST /app/api/student/projects/:pid/accept`, cards in
   the student home and classroom payloads.
 
 ### Grades
 
-Keep the four slots per repo (current CI, frozen CI, LLM, teacher) and
-`resolveFinalGrade`. Classroom's `validate-grades` becomes Quiz's
-**release** (`project.release`, kind `project_grade_final`). The Swiss
-grade comes from `gradeFromPoints` with the project's `grading_scale` (D05
-settles the "max 6 = a mark" convention). Quiz's `gradings` table is not
-reused.
+Keep the four slots per repo (current CI, frozen CI, review — classroom's
+LLM —, teacher) and `resolveFinalScore` (`@quiz/domain`). Classroom's
+`validate-grades` becomes Quiz's **release** (`project.release`, kind
+`project_grade_final`), which snapshots each repository's final score
+(`project_repos.released_points`, `released_max`). The Swiss grade comes
+from `projectGrade` (`@quiz/domain`) with the project's `grading_scale`, a
+project-only type: `linear` or `score_is_grade` (D05 and its addendum).
+Quiz's `gradings` table is not reused.
 
 ### Audit actions
 
 - `github.link|unlink|renamed`;
   `github_org.link|unlink|installation_resolved|installation_deleted|renamed|deleted`.
-- `project.create|update|delete|publish|auto_publish|archive|unarchive|deadline_applied|deadline_reopened|frozen|review_dispatched|milestone_dispatched|sync_requested|synced|release|accept|accept_failed`.
+- `project.create|update|delete|publish|auto_publish|archive|unarchive|deadline_applied|deadline_reopened|frozen|review_dispatched|checkpoint_dispatched|sync_requested|synced|release|accept|accept_failed`.
 - `project_repo.lock|unlock|grade_now|grade_override|deleted|deadline_archived|protected_files_reverted|revert_cap`.
 - `project_group.create|rename|delete|copy|split|singles|member_add|member_remove|repo_invite|repo_revoke`;
   `project_checkpoint.create|delete`; `task.configure|run_now`.
@@ -300,7 +303,7 @@ reused.
   `project.dispatch`, `task.run`.
 - `PROJECT_TASKS` (`everyMs` 20 s, claim + enqueue only): scheduled publish
   with the group guard, due deadlines, J-1 reminder, freeze, review
-  dispatch, milestones, scheduled-tasks claim.
+  dispatch, checkpoints, scheduled-tasks claim.
 - `grace_minutes` stays (CI completion); Quiz's 3-s exam grace does not
   apply to projects.
 - No App configured ⇒ tasks skip, no retry loop, no `markRepoDeleted` from

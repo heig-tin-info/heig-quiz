@@ -116,6 +116,20 @@ Status values: `open`, `settled`, `superseded`.
   one preset.
 - Blocks: M3-01, M3-08.
 - **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion.
+  Addendum 2026-10-01 (product owner, with M3-01): the scale is a
+  **project-only type**, `ProjectGradingScale` = `linear` |
+  `score_is_grade` with the evaluation scale's rounding, stored in
+  `projects.grading_scale`; the evaluations' `GradingScale` stays linear
+  only (ADR-052 untouched). The release writes a **per-repository
+  snapshot** (`project_repos.released_points`, `released_max`): any later
+  difference is "changed after release". The student's **Grades page
+  shows a project row only after the release**, with the final score and
+  its grade, never the score's source, the teacher's comment nor the
+  repository. No score without a repository in M3: the score of a student
+  who never accepted, and the absence mark, are M5-03's. Projects imported
+  from heig-classroom get `score_is_grade` (product owner, 2026-10-02), its
+  own reading of a score out of 6, so that no released grade moves at the
+  import (M8-01).
 
 ### D06 — Gradebook rules
 - **Suggested**: exams and projects count by default, exercises opt-in,

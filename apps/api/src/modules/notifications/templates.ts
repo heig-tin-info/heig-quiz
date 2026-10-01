@@ -369,6 +369,10 @@ export function notificationPath(payload: NotificationPayload): string {
       switch (payload.activityKind) {
         case "evaluation":
           return `/take/${payload.activityId}`;
+        // Never sent for a project, which has kinds of its own (F-NOTIF-13):
+        // the student's Activities, which list it.
+        case "project":
+          return "/";
       }
   }
 }

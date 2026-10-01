@@ -104,8 +104,11 @@ export function StudentGrades({ navigate }: { navigate: (r: Route) => void }) {
 function ClassroomGrades({ group, navigate }: { group: GradeGroup; navigate: (r: Route) => void }) {
   const t = useT();
   const room = group.classroom;
+  // A project's row opens nothing: its score lives on the project's page (F-PROJ-15).
   const open = (row: GradeRow) =>
-    row.feedbackAttemptId === null ? null : () => navigate(feedbackLink(row.feedbackAttemptId!).route);
+    row.kind === "evaluation" && row.feedbackAttemptId !== null
+      ? () => navigate(feedbackLink(row.feedbackAttemptId!).route)
+      : null;
   return (
     <section className="space-y-3">
       <SectionHeading
@@ -148,7 +151,7 @@ function GradeTable({ rows, open }: { rows: GradeRow[]; open: Opener }) {
           const go = open(row);
           return (
             <tr
-              key={row.evaluationId}
+              key={keyOf(row)}
               className={cx(T.row, go && cx(T.rowHover, "cursor-pointer"))}
               {...(go ? { onClick: go, ...pressable(go, "row") } : {})}
             >
@@ -158,7 +161,7 @@ function GradeTable({ rows, open }: { rows: GradeRow[]; open: Opener }) {
                     under the title. */}
                 <span className="mt-0.5 block text-fg-muted @2xl:hidden">{caption(row, t)}</span>
               </td>
-              <td className={cx(T.td, T.colMid, "text-fg-muted")}>{t(MODE_KEY[row.mode])}</td>
+              <td className={cx(T.td, T.colMid, "text-fg-muted")}>{kindOf(row, t)}</td>
               <td className={cx(T.td, T.colHigh, "tabular-nums text-fg-muted")}>{dateOf(row)}</td>
               <td className={cx(T.td, "text-right tabular-nums")}>
                 <Points row={row} />
@@ -189,7 +192,7 @@ function GradeList({ rows, open }: { rows: GradeRow[]; open: Opener }) {
         const go = open(row);
         return (
           <li
-            key={row.evaluationId}
+            key={keyOf(row)}
             className={cx(
               "flex items-start gap-3 px-4 py-3.5",
               go && "cursor-pointer transition-colors hover:bg-surface-2/70",
@@ -229,8 +232,14 @@ function GradeList({ rows, open }: { rows: GradeRow[]; open: Opener }) {
 
 const dateOf = (row: GradeRow) => isoDateParts(row.date).date;
 
+const keyOf = (row: GradeRow) => (row.kind === "evaluation" ? row.evaluationId : row.projectId);
+
+/** An evaluation's mode, or "Project". */
+const kindOf = (row: GradeRow, t: TFunction) =>
+  t(row.kind === "evaluation" ? MODE_KEY[row.mode] : "sgrades.kind.project");
+
 /** Kind and date, the line under the title where their columns are gone. */
-const caption = (row: GradeRow, t: TFunction) => `${t(MODE_KEY[row.mode])} · ${dateOf(row)}`;
+const caption = (row: GradeRow, t: TFunction) => `${kindOf(row, t)} · ${dateOf(row)}`;
 
 function Points({ row }: { row: GradeRow }) {
   return row.score ? (

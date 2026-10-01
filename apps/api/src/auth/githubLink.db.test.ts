@@ -9,15 +9,25 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ThrottledOctokit } from "../github/app.js";
-import { auditLog, githubAccounts, githubClassroomLinks, githubOrganizations } from "../db/schema.js";
+import {
+  auditLog,
+  enrollments,
+  githubAccounts,
+  githubClassroomLinks,
+  githubOrganizations,
+  projectGroupMembers,
+  projectGroups,
+  projectRepos,
+  projects,
+} from "../db/schema.js";
 import { testServer, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
-import { GITHUB_ACCOUNT_STALE } from "@quiz/contracts";
+import { GITHUB_ACCOUNT_STALE, defaultProjectGradingScale } from "@quiz/contracts";
 
 import { createApiToken } from "./tokens.js";
 import { linkReturn, linkedLogin } from "./githubLink.js";
@@ -428,6 +438,56 @@ describe("/app/api/me/github", () => {
     await server.app.db.insert(githubOrganizations).values({ id: orgId, login: `org-${orgId.slice(0, 8)}` });
     await server.app.db.insert(githubClassroomLinks).values({ classroomId, orgId, linkedBy: teacher.id });
     expect((await state()).relevant).toBe(true);
+  });
+
+  it("says whether the card is relevant: a project repository of one's own or of one's group, connected or not", async () => {
+    const teacher = await server.signIn("teacher");
+    const [owner, member, loner] = [await server.signIn("student"), await server.signIn("student"), await server.signIn("student")];
+    const relevant = async (who: Who) =>
+      (await server.app.inject({ method: "GET", url: "/app/api/me/github", headers: who.headers })).json().relevant;
+    const db = server.app.db;
+
+    // A classroom no longer connected: its projects' repositories remain.
+    const { classroomId } = await seedLive(db, {
+      teacherId: teacher.id,
+      studentIds: [owner.id, member.id, loner.id],
+      questions: 0,
+    });
+    const orgId = randomUUID();
+    await db.insert(githubOrganizations).values({ id: orgId, login: `org-${orgId.slice(0, 8)}` });
+    const projectId = randomUUID();
+    await db.insert(projects).values({
+      id: projectId,
+      classroomId,
+      orgId,
+      name: "Lab",
+      slug: "lab",
+      startAt: new Date(),
+      deadlineAt: new Date(),
+      sourceRepoId: 1,
+      sourceFullName: "org/lab-source",
+      branches: ["main"],
+      protectedFiles: [],
+      gradingScale: defaultProjectGradingScale(),
+      createdBy: teacher.id,
+    });
+    const seat = async (userId: string) =>
+      (await db.select({ id: enrollments.id }).from(enrollments).where(and(eq(enrollments.classroomId, classroomId), eq(enrollments.userId, userId))))[0]!.id;
+    const [withRepo, without] = [randomUUID(), randomUUID()];
+    await db.insert(projectGroups).values([
+      { id: withRepo, projectId, name: "A", slug: "a", position: 0 },
+      { id: without, projectId, name: "B", slug: "b", position: 1 },
+    ]);
+    await db.insert(projectGroupMembers).values([
+      { id: randomUUID(), projectId, groupId: withRepo, enrollmentId: await seat(owner.id) },
+      { id: randomUUID(), projectId, groupId: withRepo, enrollmentId: await seat(member.id) },
+      { id: randomUUID(), projectId, groupId: without, enrollmentId: await seat(loner.id) },
+    ]);
+    expect([await relevant(owner), await relevant(member), await relevant(loner)]).toEqual([false, false, false]);
+
+    // The owner accepts for the group: the group's repository is everyone's in it.
+    await db.insert(projectRepos).values({ id: randomUUID(), projectId, userId: owner.id, groupId: withRepo, acceptedAt: new Date() });
+    expect([await relevant(owner), await relevant(member), await relevant(loner)]).toEqual([true, true, false]);
   });
 });
 

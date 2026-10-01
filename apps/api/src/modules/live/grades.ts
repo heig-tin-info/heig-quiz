@@ -4,7 +4,7 @@
  * included, by classroom. Depends on `attempt.ts` only.
  */
 import { isFinishedAttempt } from "@quiz/domain";
-import type { CardResults, GradeGroup, GradeRow, GradeStatus, StudentGrades } from "@quiz/contracts";
+import type { CardResults, EvaluationGradeRow, GradeGroup, GradeStatus, StudentGrades } from "@quiz/contracts";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -66,7 +66,7 @@ export function gradeStatus(fact: {
  * The released points and grade where the student may read them; before the
  * release, the feedback page's points, indicative, and no grade.
  */
-function scoreOf({ row, counted, released, early }: PastEntry): GradeRow["score"] {
+function scoreOf({ row, counted, released, early }: PastEntry): EvaluationGradeRow["score"] {
   if (released && gradeReadable(row.evaluation, counted?.state ?? null)) {
     return { points: released.points, totalPoints: released.totalPoints, grade: released.grade };
   }
@@ -74,10 +74,11 @@ function scoreOf({ row, counted, released, early }: PastEntry): GradeRow["score"
   return null;
 }
 
-function gradeRow(entry: PastEntry): GradeRow {
+function gradeRow(entry: PastEntry): EvaluationGradeRow {
   const { row, card, counted } = entry;
   const { evaluation, attempt } = row;
   return {
+    kind: "evaluation",
     evaluationId: evaluation.id,
     title: evaluation.title,
     mode: evaluation.mode,

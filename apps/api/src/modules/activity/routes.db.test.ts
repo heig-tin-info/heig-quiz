@@ -165,7 +165,7 @@ describe("GET /app/api/activities", () => {
 
   it("names the classroom, or none for an anonymous poll, and flags a take-home series", async () => {
     const list = await activitiesOf(alice);
-    const byTitle = new Map(list.map((a) => [a.title, a]));
+    const byTitle = new Map(list.filter((a) => a.kind === "evaluation").map((a) => [a.title, a]));
     expect(byTitle.get("alice exam")!.classroom).toMatchObject({
       name: "PRG1-2026",
       courseCode: "PRG1",

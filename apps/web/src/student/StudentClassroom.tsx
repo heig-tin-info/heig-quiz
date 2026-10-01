@@ -26,7 +26,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ChevronRight, School } from "lucide-react";
 import { useEffect } from "react";
 
-import type { StudentActivities, StudentClassroomPage } from "@quiz/contracts";
+import type { StudentActivities, StudentActivityCard, StudentClassroomPage } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
 import { useT } from "../i18n";
@@ -61,6 +61,20 @@ export type ClassroomTab = "activities" | "journal";
 
 type Header = StudentClassroomPage["classroom"];
 
+type EvaluationCard = Extract<StudentActivityCard, { kind: "evaluation" }>;
+
+/** The groups of the Activities tab, holding the evaluations' cards. M3-13 removes it. */
+type EvaluationActivities = Pick<StudentActivities, "polls"> & Record<"open" | "upcoming" | "past", EvaluationCard[]>;
+
+/**
+ * The evaluations' cards: the projects' are drawn by M3-13 (none is served
+ * before), which removes this narrowing and `EvaluationActivities`.
+ */
+function evaluationsOf({ polls, open, upcoming, past }: StudentActivities): EvaluationActivities {
+  const only = (cards: StudentActivityCard[]) => cards.filter((card) => card.kind === "evaluation");
+  return { polls, open: only(open), upcoming: only(upcoming), past: only(past) };
+}
+
 /**
  * The single most urgent open activity, the one whose button is the page's
  * primary (F-ORG-15), by rank then by due time:
@@ -71,7 +85,7 @@ type Header = StudentClassroomPage["classroom"];
  *   3. a card already done and open to a retake.
  * Ties keep the server's order. `null` when nothing is open.
  */
-export function mostUrgent({ polls, open }: Pick<StudentActivities, "polls" | "open">): string | null {
+export function mostUrgent({ polls, open }: Pick<EvaluationActivities, "polls" | "open">): string | null {
   const ranked = [
     ...open.map((card) => {
       const due = card.deadlineAt ?? card.closesAt;
@@ -192,7 +206,7 @@ export function StudentClassroom({
     <div className="space-y-6">
       <ClassroomHeader room={data.classroom} onCourses={toCourses} />
       {tabs}
-      <Activities activities={data.activities} navigate={navigate} />
+      <Activities activities={evaluationsOf(data.activities)} navigate={navigate} />
     </div>
   );
 }
@@ -243,7 +257,7 @@ function Breadcrumb({ room, onCourses }: { room: Header; onCourses: () => void }
  * Open now, Upcoming (by day, as on the home), Past: the home's cards for
  * this classroom, one accent among them.
  */
-function Activities({ activities, navigate }: { activities: StudentActivities; navigate: Navigate }) {
+function Activities({ activities, navigate }: { activities: EvaluationActivities; navigate: Navigate }) {
   const t = useT();
   const now = useNow(30_000);
   const actions = useCardActions(navigate);
