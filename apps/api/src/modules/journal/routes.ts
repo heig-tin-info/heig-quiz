@@ -13,10 +13,11 @@
  * kind, so a `seb` or `kiosk` session is nobody. The student payloads come
  * from `studentView.ts` alone (invariant 4).
  */
-import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
   IdParam,
+  assetContentType,
   JOURNAL_ASSET_MAX_BYTES,
   JOURNAL_ASSETS_PATH,
   JournalAssetParams,
@@ -25,10 +26,10 @@ import {
   JournalPageParams,
   JournalPageSave,
   JournalPreview,
+  JournalUploadHeaders,
   JournalUse,
   JournalViewQuery,
 } from "@quiz/contracts";
-import { assetContentType } from "@quiz/docrender";
 
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
@@ -172,7 +173,11 @@ async function registerWrites(app: FastifyInstance, config: AppConfig, base: str
   app.post(
     `${base}/refresh`,
     session,
-    teacher(onClassroom, async ({ req, scope }) => writes.refreshJournal(as(req, scope.room), scope.room.id)),
+    teacher(onClassroom, async ({ req, reply, scope }) => {
+      await writes.refreshJournal(as(req, scope.room), scope.room.id);
+      // The outcome is the row's `syncStatus`, read again on the `journal` hint.
+      return reply.code(202).send();
+    }),
   );
 
   /** A read behind a POST (the body is the markdown): no mutation hint. */
@@ -211,23 +216,20 @@ async function registerWrites(app: FastifyInstance, config: AppConfig, base: str
 
   /**
    * An upload (F-JRN-11): the raw bytes, at most {@link JOURNAL_ASSET_MAX_BYTES},
-   * declared with the content type of the path's extension. In a child
+   * declared with the content type of the path's extension
+   * (`JournalUploadHeaders`); over the cap, Fastify's own 413. In a child
    * context of its own: its catch-all byte parser and its body limit reach
    * no other route.
    */
   await app.register(async (uploads) => {
     uploads.removeAllContentTypeParsers();
     uploads.addContentTypeParser("*", { parseAs: "buffer" }, (_req, body, done) => done(null, body));
-    uploads.setErrorHandler((err: FastifyError, _req, reply) => {
-      if (err.code !== "FST_ERR_CTP_BODY_TOO_LARGE") throw err; // the application's handler
-      return reply.code(413).send({ error: "too_large", message: "too_large" });
-    });
     uploads.post(
       `${JOURNAL_ASSETS_PATH(":id")}/*`,
       { ...session, bodyLimit: JOURNAL_ASSET_MAX_BYTES },
       teacher({ params: JournalAssetParams, load }, async ({ req, reply, params, scope }) => {
         const path = params["*"];
-        const declared = (req.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
+        const declared = JournalUploadHeaders.parse(req.headers)["content-type"];
         if (declared !== assetContentType(path)) throw new writes.JournalError("type_mismatch");
         const data = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
         if (data.length === 0) throw new writes.JournalError("empty_upload");

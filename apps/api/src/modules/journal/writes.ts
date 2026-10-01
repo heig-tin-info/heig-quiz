@@ -23,8 +23,9 @@
  */
 import { randomInt } from "node:crypto";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
+import type { Octokit } from "octokit";
 
 import {
   type JournalErrorCode,
@@ -32,11 +33,10 @@ import {
   type JournalPageAdd,
   type JournalPageSave,
   type JournalPreviewResult,
-  type JournalRefreshResult,
   type JournalStaff,
 } from "@quiz/contracts";
 import { journalRepoName, prettifyName, renderPage } from "@quiz/docrender";
-import { repoName } from "@quiz/domain";
+import { displayName, repoName } from "@quiz/domain";
 
 import type { AuditAction } from "../../audit.js";
 import { linkedLogin } from "../../auth/githubLink.js";
@@ -57,7 +57,7 @@ import { githubStatus } from "../../github/app.js";
 import { inviteCollaborator } from "../../github/collaborators.js";
 import { DomainError } from "../http.js";
 import { journalChanged } from "./events.js";
-import { ingestJournal } from "./ingest.js";
+import { bumpVersion, ingestJournal } from "./ingest.js";
 import {
   boundedClient,
   createRepo,
@@ -75,13 +75,13 @@ import { requestIngest, staffJournal, staffPage } from "./service.js";
 
 // ---------------------------------------------------------------- refusals
 
-/** The status of each refusal: the state of things (409) but for the upload's own faults and GitHub's silence. */
+/** The status of each refusal: the state of things (409) but for the upload's own faults and GitHub's silence. An upload over the cap is Fastify's own 413. */
 const STATUS: Record<JournalErrorCode, number> = {
   repo_not_found: 409,
   ref_not_found: 409,
   root_not_found: 409,
   forbidden: 409,
-  too_large: 413,
+  too_large: 409,
   github_unavailable: 503,
   not_connected: 409,
   journal_exists: 409,
@@ -198,21 +198,20 @@ export interface Room {
 
 /**
  * Who a browser commit is authored as (F-JRN-10, D27: "the commits are
- * authored as the teacher"). With a linked GitHub account, their name and
- * GitHub's noreply address for that account, `<id>+<login>@users.noreply.github.com`:
- * GitHub attributes the commit to the account by its immutable id — a later
- * rename changes nothing — and no address of theirs is written into a
- * history every member of the organization reads. Without one, their name
- * and the address Quiz knows them by, the edu-ID one the audit log names:
- * there is no GitHub account to point at, and the commit must still say who
- * made it. The COMMITTER stays the App (`repo.ts`), so GitHub signs it.
+ * authored as the teacher"): their name (`displayName`, never an address in
+ * its place) and a NOREPLY address, never their email (N-DATA-02): every
+ * member of the organization reads the history, and it outlives the
+ * classroom. Linked to GitHub, `<id>+<login>@users.noreply.github.com`, which
+ * GitHub attributes to the account by its immutable id (a later rename
+ * changes nothing); otherwise `quiz-<user id>@users.noreply.<the platform's
+ * host>`, which names the Quiz account and reaches nobody. The COMMITTER
+ * stays the App (`repo.ts`), so GitHub signs the commit.
  */
-export async function commitAuthor(db: Db, userId: string): Promise<CommitAuthor> {
+export async function commitAuthor(db: Db, config: AppConfig, userId: string): Promise<CommitAuthor> {
   const [u] = await db
     .select({
-      given: users.givenName,
-      family: users.familyName,
-      email: users.email,
+      givenName: users.givenName,
+      familyName: users.familyName,
       githubUserId: githubAccounts.githubUserId,
       login: githubAccounts.login,
     })
@@ -220,12 +219,11 @@ export async function commitAuthor(db: Db, userId: string): Promise<CommitAuthor
     .leftJoin(githubAccounts, eq(githubAccounts.userId, users.id))
     .where(eq(users.id, userId));
   if (!u) throw new Error(`commit author ${userId} is not a user`);
+  const host = new URL(config.PUBLIC_URL).hostname;
   const linked = u.githubUserId !== null && u.login !== null;
-  const name = `${u.given} ${u.family}`.trim() || (linked ? u.login! : u.email);
-  return {
-    name,
-    email: linked ? `${u.githubUserId}+${u.login}@users.noreply.github.com` : u.email,
-  };
+  const email = linked ? `${u.githubUserId}+${u.login}@users.noreply.github.com` : `quiz-${userId}@users.noreply.${host}`;
+  const name = displayName({ givenName: u.givenName, familyName: u.familyName, email: null });
+  return { name: name || (linked ? u.login! : `quiz-${userId}`), email };
 }
 
 /** A journal path as a path of the repository: under the row's root folder. */
@@ -248,13 +246,6 @@ async function afterCommit(ctx: WriteContext, classroomId: string): Promise<void
   } catch (err) {
     ctx.app.log.error({ err, classroomId }, "the journal's synchronisation after a write failed");
   }
-}
-
-async function bumpVersion(db: Db, classroomId: string): Promise<void> {
-  await db
-    .update(classroomJournals)
-    .set({ version: sql`${classroomJournals.version} + 1` })
-    .where(eq(classroomJournals.classroomId, classroomId));
 }
 
 // ---------------------------------------------------------------- choosing a repository
@@ -322,7 +313,7 @@ const freshVersion = () => randomInt(1, 2 ** 30);
 async function attach(
   ctx: WriteContext,
   room: Room,
-  octokit: Awaited<ReturnType<typeof boundedClient>>,
+  octokit: Octokit,
   repo: FoundRepo,
   where: { ref: string; rootPath: string },
   action: "journal.create" | "journal.use",
@@ -353,7 +344,7 @@ async function attach(
  * deterministic, so a retried creation proposes the same name instead of
  * scattering repositories over the organization.
  */
-async function freeName(octokit: Awaited<ReturnType<typeof boundedClient>>, org: string, name: string, room: Room) {
+async function freeName(octokit: Octokit, org: string, name: string, room: Room) {
   const id = room.id.replace(/-/g, "");
   const short = repoName(name, id.slice(0, 8));
   return (await findRepo(octokit, org, short)) ? repoName(name, id) : short;
@@ -365,7 +356,7 @@ export async function createJournal(ctx: WriteContext, room: Room, name: string 
   const org = connected(t);
   if (t.journal) throw new JournalError("journal_exists");
   const wanted = name ?? journalRepoName(room.name);
-  const author = await commitAuthor(ctx.app.db, ctx.userId);
+  const author = await commitAuthor(ctx.app.db, ctx.config, ctx.userId);
   return onGithub(ctx.app.log, async () => {
     const octokit = await boundedClient(ctx.config, org.installationId);
     let repo: FoundRepo;
@@ -431,21 +422,40 @@ export async function removeJournal(ctx: WriteContext, classroomId: string): Pro
 
 // ---------------------------------------------------------------- invitations (D27)
 
+/** GitHub's permissions of a collaborator, from the least to the most. */
+const PERMISSION_RANK: Record<string, number> = { none: 0, read: 1, triage: 2, write: 3, maintain: 4, admin: 5 };
+
+/**
+ * `login`'s permission on the repository now, or null when they hold none
+ * (GitHub answers 404 for a user who is not a collaborator).
+ */
+async function permissionOf(octokit: Octokit, repo: ResolvedRepo, login: string): Promise<string | null> {
+  try {
+    const { data } = await octokit.request("GET /repos/{owner}/{repo}/collaborators/{username}/permission", {
+      owner: repo.owner,
+      repo: repo.name,
+      username: login,
+    });
+    return (data as { permission?: string }).permission ?? null;
+  } catch (err) {
+    if (githubStatus(err) === 404) return null;
+    throw err;
+  }
+}
+
 /**
  * Invites the course's staff who linked a GitHub account as collaborators
  * of the repository, `push` only — never `admin` nor `maintain` — so the
  * clone-and-push path works without anyone touching GitHub's settings
  * (F-JRN-02, F-JRN-03). Their CURRENT login, read by their account's
  * immutable id (`linkedLogin`): an invitation to a renamed login would reach
- * nobody. One audit entry per member, whatever came of it; a failure is
- * logged and audited, and never fails the creation or the choice.
+ * nobody. A member who already holds `push` or more on a repository chosen
+ * with "use" is left as they are (`accepted`): GitHub's invitation SETS the
+ * permission, and would lower an admin to `push`. One audit entry per member,
+ * whatever came of it; a failure is logged and audited, and never fails the
+ * creation or the choice.
  */
-async function inviteStaff(
-  ctx: WriteContext,
-  octokit: Awaited<ReturnType<typeof boundedClient>>,
-  repo: ResolvedRepo,
-  room: Room,
-): Promise<void> {
+async function inviteStaff(ctx: WriteContext, octokit: Octokit, repo: ResolvedRepo, room: Room): Promise<void> {
   const staff = await ctx.app.db
     .select({ userId: githubAccounts.userId })
     .from(courseStaff)
@@ -459,7 +469,11 @@ async function inviteStaff(
       if (typeof current !== "string") outcome = "stale"; // GITHUB_ACCOUNT_STALE
       else {
         login = current;
-        outcome = await inviteCollaborator(octokit, repo.owner, repo.name, current, "push");
+        const held = await permissionOf(octokit, repo, current);
+        outcome =
+          (PERMISSION_RANK[held ?? "none"] ?? 0) >= PERMISSION_RANK.write!
+            ? "accepted"
+            : await inviteCollaborator(octokit, repo.owner, repo.name, current, "push");
       }
     } catch (err) {
       outcome = "failed";
@@ -476,15 +490,15 @@ async function inviteStaff(
 
 /**
  * `POST /classrooms/:id/journal/refresh` (F-JRN-05): one synchronisation
- * requested, queued or — with no queue — run. Needs no connection check: the
- * ingestion records an organization no longer installed as `forbidden`.
+ * requested — queued, or run without a queue. Its outcome is the row's
+ * `syncStatus`, which the `journal` hint makes the client read again. Needs
+ * no connection check: the ingestion records an organization no longer
+ * installed as `forbidden`.
  */
-export async function refreshJournal(ctx: WriteContext, classroomId: string): Promise<JournalRefreshResult> {
+export async function refreshJournal(ctx: WriteContext, classroomId: string): Promise<void> {
   const journal = attached(await targetOf(ctx.app.db, classroomId));
   await ctx.note("journal.refresh", { fullName: journal.fullName });
-  const outcome = await requestIngest(ctx.app, ctx.config, classroomId);
-  if (!outcome) throw new JournalError("no_journal"); // removed meanwhile
-  return outcome;
+  await requestIngest(ctx.app, ctx.config, classroomId);
 }
 
 /**
@@ -538,7 +552,7 @@ export async function savePage(
   body: JournalPageSave,
 ): Promise<JournalFileWritten> {
   const { journal, octokit } = await writable(ctx, classroomId);
-  const author = await commitAuthor(ctx.app.db, ctx.userId);
+  const author = await commitAuthor(ctx.app.db, ctx.config, ctx.userId);
   const commit = await onGithub(ctx.app.log, async () =>
     putFile(octokit, await resolveRepo(octokit, journal.githubRepoId), {
       branch: journal.ref,
@@ -558,7 +572,7 @@ export async function savePage(
 export async function addPage(ctx: WriteContext, classroomId: string, body: JournalPageAdd): Promise<JournalFileWritten> {
   const { journal, octokit } = await writable(ctx, classroomId);
   if (await staffPage(ctx.app.db, classroomId, body.path)) throw new JournalError("page_exists");
-  const author = await commitAuthor(ctx.app.db, ctx.userId);
+  const author = await commitAuthor(ctx.app.db, ctx.config, ctx.userId);
   // No `baseSha`: a file GitHub has and the copy does not yet is a conflict, never overwritten.
   const commit = await onGithub(ctx.app.log, async () =>
     putFile(octokit, await resolveRepo(octokit, journal.githubRepoId), {
@@ -579,7 +593,7 @@ export async function deletePage(ctx: WriteContext, classroomId: string, path: s
   const { journal, octokit } = await writable(ctx, classroomId);
   const page = await staffPage(ctx.app.db, classroomId, path);
   if (!page) throw new DomainError("not_found", 404, "not_found");
-  const author = await commitAuthor(ctx.app.db, ctx.userId);
+  const author = await commitAuthor(ctx.app.db, ctx.config, ctx.userId);
   const commit = await onGithub(ctx.app.log, async () =>
     deleteFile(octokit, await resolveRepo(octokit, journal.githubRepoId), {
       branch: journal.ref,
@@ -611,7 +625,7 @@ export async function uploadAsset(
     .select({ blobSha: journalAssets.blobSha })
     .from(journalAssets)
     .where(and(eq(journalAssets.classroomId, classroomId), eq(journalAssets.path, path)));
-  const author = await commitAuthor(ctx.app.db, ctx.userId);
+  const author = await commitAuthor(ctx.app.db, ctx.config, ctx.userId);
   const commit = await onGithub(ctx.app.log, async () =>
     putFile(octokit, await resolveRepo(octokit, journal.githubRepoId), {
       branch: journal.ref,

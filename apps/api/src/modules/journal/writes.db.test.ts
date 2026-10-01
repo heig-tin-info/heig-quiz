@@ -26,7 +26,6 @@ import {
   JournalFileWritten,
   JournalNameTaken,
   JournalPreviewResult,
-  JournalRefreshResult,
   JournalRefusal,
   type JournalStaff,
 } from "@quiz/contracts";
@@ -40,7 +39,6 @@ import {
   githubClassroomLinks,
   githubOrganizations,
   journalPages,
-  users,
 } from "../../db/schema.js";
 import { appKey, fakeGithub, orgsRoute } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
@@ -195,9 +193,8 @@ describe("create a journal (F-JRN-02)", () => {
 
   it("refuses a name GitHub would not take", async () => {
     const room = await connectedClassroom();
-    for (const name of ["..", ".", "a/b", "é", "x".repeat(101)]) {
-      expect((await call("POST", base(room.id), teacher.headers, { name })).statusCode, name).toBe(400);
-    }
+    // One case: the matrix is the contracts' (`journal.test.ts`).
+    expect((await call("POST", base(room.id), teacher.headers, { name: ".." })).statusCode).toBe(400);
   });
 });
 
@@ -238,6 +235,19 @@ describe("the invitations (D27)", () => {
     const invite = gh.inits[gh.calls.lastIndexOf(`PUT api.github.com/repos/${fullName}/collaborators/prof`)]!;
     expect(invite.signal).toBeInstanceOf(AbortSignal);
   });
+
+  it("leaves a collaborator who already holds more than push as they are", async () => {
+    const room = await connectedClassroom();
+    const repo = repoOf(room.login, `admin-held-${nextId++}`, [{ path: "README.md", content: "# Home\n" }]);
+    const fullName = `${repo.owner}/${repo.name}`;
+    world.collaborators.set(fullName, new Map([["prof", "admin"]]));
+    const res = await call("POST", `${base(room.id)}/use`, teacher.headers, { name: repo.name });
+    expect(res.statusCode, res.body).toBe(201);
+    expect(world.invitations.filter((i) => i.repo === fullName)).toEqual([]);
+    expect(gh.calls).not.toContain(`PUT api.github.com/repos/${fullName}/collaborators/prof`);
+    const [entry] = await auditOf(room.id, "journal.invite");
+    expect(entry!.payload).toMatchObject({ userId: teacher.id, login: "prof", permission: "push", outcome: "accepted" });
+  });
 });
 
 // ---------------------------------------------------------------- use
@@ -274,12 +284,9 @@ describe("use a repository of the organization (F-JRN-03)", () => {
 
   it("refuses a branch or a folder that is not one", async () => {
     const room = await connectedClassroom();
-    for (const ref of ["-x", "a..b", "a//b", "/a", "a/", ".hidden", "a/.b", "x.lock", "a b", "a~1", "a@{1}"]) {
-      expect((await call("POST", `${base(room.id)}/use`, teacher.headers, { name: "n", ref })).statusCode, ref).toBe(400);
-    }
-    for (const rootPath of ["../x", "a/../b", "a\\b", "x".repeat(401)]) {
-      expect((await call("POST", `${base(room.id)}/use`, teacher.headers, { name: "n", rootPath })).statusCode, rootPath).toBe(400);
-    }
+    // One case each: the matrices are the contracts' (`journal.test.ts`).
+    expect((await call("POST", `${base(room.id)}/use`, teacher.headers, { name: "n", ref: "-x" })).statusCode).toBe(400);
+    expect((await call("POST", `${base(room.id)}/use`, teacher.headers, { name: "n", rootPath: ".github" })).statusCode).toBe(400);
   });
 });
 
@@ -308,12 +315,11 @@ describe("remove the journal (F-JRN-04)", () => {
 });
 
 describe("refresh (F-JRN-05)", () => {
-  it("synchronises the copy at once without a queue, and audits it", async () => {
+  it("answers 202 and no body, synchronises the copy (here without a queue), and audits it", async () => {
     const { room, repo } = await withJournal();
     const head = pushTo(repo, [{ path: "README.md", content: "# Moved\n" }]);
     const res = await call("POST", `${base(room.id)}/refresh`, teacher.headers);
-    expect(res.statusCode, res.body).toBe(200);
-    expect(JournalRefreshResult.parse(res.json())).toEqual({ status: "ok", commitSha: head, pages: 1, assets: 0 });
+    expect([res.statusCode, res.body]).toEqual([202, ""]);
     expect((await rowOf(room.id))!.lastCommitSha).toBe(head);
     expect(await auditOf(room.id, "journal.refresh")).toHaveLength(1);
   });
@@ -391,15 +397,19 @@ describe("save a page (F-JRN-10)", () => {
     expect(await auditOf(room.id, "journal.save")).toEqual([]);
   });
 
-  it("authors the commit as the Quiz user when no GitHub account is linked", async () => {
+  it("authors the commit with a noreply address of Quiz's when no GitHub account is linked, never the email", async () => {
     const { room, fullName } = await withJournal();
     const res = await call("PUT", `${base(room.id)}/pages/README.md`, colleague.headers, {
       markdown: "# By a colleague\n",
       baseSha: blobSha({ path: "README.md", content: "# Home\n" }),
     });
     expect(res.statusCode, res.body).toBe(200);
-    const [me] = await server.app.db.select({ email: users.email }).from(users).where(eq(users.id, colleague.id));
-    expect(commitsTo(fullName).at(-1)).toMatchObject({ message: "Update README.md", author: { name: "Test teacher", email: me!.email } });
+    // `PUBLIC_URL` of the test configuration is http://localhost:3000.
+    expect(commitsTo(fullName).at(-1)).toMatchObject({
+      message: "Update README.md",
+      author: { name: "Test teacher", email: `quiz-${colleague.id}@users.noreply.localhost` },
+    });
+    expect(JSON.stringify(world.commits)).not.toContain("@heig.test");
   });
 
   it("answers 503 when GitHub fails, and writes nothing", async () => {
@@ -418,9 +428,8 @@ describe("save a page (F-JRN-10)", () => {
 
   it("refuses a body that is not a save", async () => {
     const { room } = await withJournal();
-    for (const body of [{ markdown: "x" }, { markdown: "x", baseSha: "nope" }, { markdown: "a".repeat(JOURNAL_MARKDOWN_MAX + 1), baseSha: "a".repeat(40) }]) {
-      expect((await call("PUT", `${base(room.id)}/pages/README.md`, teacher.headers, body)).statusCode).toBe(400);
-    }
+    // One case: the matrix is the contracts' (`journal.test.ts`).
+    expect((await call("PUT", `${base(room.id)}/pages/README.md`, teacher.headers, { markdown: "x", baseSha: "nope" })).statusCode).toBe(400);
   });
 });
 
@@ -438,9 +447,7 @@ describe("add and delete a page", () => {
 
     const twice = await call("POST", `${base(room.id)}/pages`, teacher.headers, { path: "010-week/README.md" });
     expect([twice.statusCode, twice.json().error]).toEqual([409, "page_exists"]);
-    for (const path of ["../escape.md", "/abs.md", "a/./b.md", "not-a-page.txt"]) {
-      expect((await call("POST", `${base(room.id)}/pages`, teacher.headers, { path })).statusCode, path).toBe(400);
-    }
+    expect((await call("POST", `${base(room.id)}/pages`, teacher.headers, { path: "../escape.md" })).statusCode).toBe(400);
   });
 
   it("deletes a page against the blob the copy holds", async () => {
@@ -480,10 +487,30 @@ describe("upload an asset (F-JRN-11)", () => {
     const empty = await upload(room.id, "a.png", Buffer.alloc(0), "image/png");
     expect([empty.statusCode, empty.json().error]).toEqual([400, "empty_upload"]);
     const big = await upload(room.id, "a.png", Buffer.alloc(JOURNAL_ASSET_MAX_BYTES + 1), "image/png");
-    expect([big.statusCode, big.json().error]).toEqual([413, "too_large"]);
+    expect(big.statusCode).toBe(413); // Fastify's own
     for (const path of ["..%2Fx.png", "a/../../x.png", "page.md"]) {
       expect((await upload(room.id, path, Buffer.from("x"), "image/png")).statusCode, path).toBe(404);
     }
+    expect(commitsTo(fullName).length).toBe(commits);
+  });
+});
+
+describe("repository furniture is never written (N-SEC-15)", () => {
+  it("refuses a workflow upload, a save and an add under .github, with no commit", async () => {
+    const { room, fullName } = await withJournal();
+    const commits = commitsTo(fullName).length;
+    const workflow = await server.app.inject({
+      method: "POST",
+      url: `${base(room.id)}/assets/.github/workflows/x.yml`,
+      headers: { ...teacher.headers, "content-type": "application/octet-stream" },
+      payload: Buffer.from("on: push"),
+    });
+    expect(workflow.statusCode).toBe(404);
+    const save = await call("PUT", `${base(room.id)}/pages/.github/x.md`, teacher.headers, { markdown: "x", baseSha: "a".repeat(40) });
+    expect(save.statusCode).toBe(404);
+    // The path of an add is its body: refused by the body's schema.
+    const add = await call("POST", `${base(room.id)}/pages`, teacher.headers, { path: ".github/x.md" });
+    expect(add.statusCode).toBe(400);
     expect(commitsTo(fullName).length).toBe(commits);
   });
 });

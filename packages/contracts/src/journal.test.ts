@@ -22,6 +22,8 @@ import {
   JournalPageSave,
   JournalRefusal,
   JournalRootPath,
+  JournalUploadHeaders,
+  assetContentType,
 } from "./journal.js";
 
 const SHA = "a".repeat(40);
@@ -71,6 +73,8 @@ describe("safeJournalPath (N-SEC-15)", () => {
     ["a/%2E%2e/b.md", "an escaped climb, any case"],
     ["a%2fb.md", "an escaped slash"],
     ["a%5Cb.md", "an escaped backslash"],
+    [".github/workflows/x.yml", "repository furniture"],
+    ["docs/.gitignore", "a dot file"],
   ])("refuses %j (%s)", (raw) => {
     expect(safeJournalPath(raw)).toBeNull();
   });
@@ -197,7 +201,7 @@ describe("the writes' inputs (M4-03)", () => {
     expect(JournalRootPath.parse("/docs/")).toBe("docs");
     expect(JournalRootPath.parse("")).toBe("");
     expect(JournalRootPath.parse("a/b")).toBe("a/b");
-    for (const bad of ["../x", "a/../b", "a\\b", "a//b", "x".repeat(JOURNAL_PATH_MAX + 1)]) {
+    for (const bad of ["../x", "a/../b", "a\\b", "a//b", ".github", "x".repeat(JOURNAL_PATH_MAX + 1)]) {
       expect(JournalRootPath.safeParse(bad).success, bad).toBe(false);
     }
   });
@@ -213,6 +217,15 @@ describe("the writes' inputs (M4-03)", () => {
     expect(JournalPageSave.safeParse({ markdown: "a".repeat(JOURNAL_MARKDOWN_MAX + 1), baseSha: SHA }).success).toBe(false);
     expect(JournalPageSave.safeParse({ markdown: "", baseSha: SHA, message: "a\u0007" }).success).toBe(false);
     expect(JournalPageSave.safeParse({ markdown: "", baseSha: SHA, extra: 1 }).success).toBe(false);
+  });
+
+  it("an upload declares the type of its extension, parameters dropped", () => {
+    expect(assetContentType("images/P.SVG")).toBe("image/svg+xml");
+    expect(assetContentType("handout.pdf")).toBe("application/pdf");
+    expect(assetContentType("archive.tar.xz")).toBe("application/octet-stream");
+    expect(assetContentType("Makefile")).toBe("application/octet-stream");
+    expect(JournalUploadHeaders.parse({ "content-type": "Image/PNG; charset=binary" })["content-type"]).toBe("image/png");
+    expect(JournalUploadHeaders.parse({})["content-type"]).toBe("");
   });
 
   it("a refusal is a code of the closed list", () => {

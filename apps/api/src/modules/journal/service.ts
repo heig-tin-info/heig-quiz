@@ -23,7 +23,7 @@ import type { Db } from "../../db/client.js";
 import { classroomJournals, journalAssets, journalPages } from "../../db/schema.js";
 import { JOURNAL_INGEST_QUEUE } from "../../jobs.js";
 import type { ClassroomPayload } from "../guards.js";
-import { ingestJournal, type IngestOutcome } from "./ingest.js";
+import { ingestJournal } from "./ingest.js";
 import { studentMayFetch, visibleToStudents } from "./studentView.js";
 
 type JournalRow = typeof classroomJournals.$inferSelect;
@@ -146,18 +146,13 @@ export async function journalAsset(db: Db, classroomId: string, path: string, pa
  * webhook's push handler calls it, and so do the Refresh and the choice of a
  * repository (M4-03; a browser save rebuilds at once, `writes.ts`). Without a
  * queue (`JOBS_DISABLED=1`, a queue failed at boot) the ingestion runs here,
- * awaited, its failure recorded on the row by the ingestion itself, and its
- * outcome returned (null: the classroom has no journal). J2 is the
+ * awaited, its failure recorded on the row by the ingestion itself. J2 is the
  * ingestion's compare-and-set, not the queue's.
  */
-export async function requestIngest(
-  app: FastifyInstance,
-  config: AppConfig,
-  classroomId: string,
-): Promise<IngestOutcome | { status: "queued" } | null> {
+export async function requestIngest(app: FastifyInstance, config: AppConfig, classroomId: string): Promise<void> {
   if (app.boss) {
     await app.boss.send(JOURNAL_INGEST_QUEUE, { classroomId });
-    return { status: "queued" };
+    return;
   }
-  return ingestJournal(app, config, classroomId);
+  await ingestJournal(app, config, classroomId);
 }

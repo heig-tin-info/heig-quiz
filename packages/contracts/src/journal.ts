@@ -14,8 +14,9 @@
  * Warnings are CODES with parameters (fix J5), translated by the web app.
  *
  * The read half (what M4-02 serves and M4-04 reads) comes first; the write
- * half (M4-03: create, use, refresh, preview, save, add, upload, and the
- * refusals) closes the file.
+ * half (M4-03: create, use, preview, save, add, upload, and the refusals)
+ * closes the file. Refresh has no body either way: 202, the outcome is the
+ * row's `syncStatus` after the `journal` hint.
  */
 import { z } from "zod";
 
@@ -45,8 +46,10 @@ export function hasControlChar(text: string): boolean {
 }
 
 /**
- * A path inside the journal's root (N-SEC-15), or null: no `..` nor `.`
- * segment, no empty segment, no leading `/`, no backslash, no control
+ * A path inside the journal's root (N-SEC-15), or null: no segment starting
+ * with `.` (so no `..`, no `.`, and no repository furniture — `.github/`
+ * workflows, `.gitignore` — which the copy never holds and a write must
+ * never touch), no empty segment, no leading `/`, no backslash, no control
  * character, at most {@link JOURNAL_PATH_MAX} characters. The route
  * parameters are already URL-decoded by the router, so nothing is decoded
  * here; a percent-escape that would decode to `.`, `/` or a backslash
@@ -58,7 +61,7 @@ export function safeJournalPath(raw: string): string | null {
   if (raw.startsWith("/") || raw.includes("\\")) return null;
   if (hasControlChar(raw) || /%(2e|2f|5c)/i.test(raw)) return null;
   const parts = raw.split("/");
-  if (parts.some((p) => p === "" || p === "." || p === "..")) return null;
+  if (parts.some((p) => p === "" || p.startsWith("."))) return null;
   return raw;
 }
 
@@ -101,6 +104,50 @@ export type JournalPageParams = z.infer<typeof JournalPageParams>;
  */
 export const JOURNAL_ASSETS_PATH = (classroomId: string) =>
   `/app/api/classrooms/${classroomId}/journal/assets`;
+
+/** Content types served for the extensions a journal may carry. */
+export const JOURNAL_CONTENT_TYPES: Readonly<Record<string, string>> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  avif: "image/avif",
+  pdf: "application/pdf",
+  zip: "application/zip",
+  csv: "text/csv",
+  txt: "text/plain",
+  json: "application/json",
+  c: "text/plain",
+  h: "text/plain",
+  cpp: "text/plain",
+  py: "text/plain",
+};
+
+/**
+ * The content type an asset is served with, from its extension; anything
+ * unknown is `application/octet-stream` (downloaded, never rendered). An
+ * upload must declare exactly this type (F-JRN-11, {@link JournalUploadHeaders}).
+ */
+export function assetContentType(path: string): string {
+  const ext = (path.split(".").pop() ?? "").toLowerCase();
+  return JOURNAL_CONTENT_TYPES[ext] ?? "application/octet-stream";
+}
+
+/**
+ * The headers of `POST /classrooms/:id/journal/assets/*`: the media type the
+ * client declares, parameters dropped and lowercased. The route refuses one
+ * that is not `assetContentType(path)` (415 `type_mismatch`); the editor
+ * (M4-06) sends exactly that.
+ */
+export const JournalUploadHeaders = z.object({
+  "content-type": z
+    .string()
+    .default("")
+    .transform((t) => t.split(";")[0]!.trim().toLowerCase()),
+});
+export type JournalUploadHeaders = z.infer<typeof JournalUploadHeaders>;
 
 /** `/classrooms/:id/journal/assets/*`. */
 export const JournalAssetParams = z.object({ id: z.uuid(), "*": JournalAssetPath });
@@ -421,25 +468,6 @@ export const JournalPreviewResult = z.strictObject({
 export type JournalPreviewResult = z.infer<typeof JournalPreviewResult>;
 
 /**
- * `POST /classrooms/:id/journal/refresh`: the synchronisation was queued (the
- * copy's `syncStatus` and the `journal` hint tell how it ends), or, with no
- * queue, ran and ended so; `superseded`: other writes kept moving the copy,
- * and a new synchronisation was queued.
- */
-export const JournalRefreshResult = z.discriminatedUnion("status", [
-  z.strictObject({ status: z.literal("queued") }),
-  z.strictObject({
-    status: z.literal("ok"),
-    commitSha: z.string().nullable(),
-    pages: z.number().int().min(0),
-    assets: z.number().int().min(0),
-  }),
-  z.strictObject({ status: z.literal("error"), code: JournalSyncError }),
-  z.strictObject({ status: z.literal("superseded") }),
-]);
-export type JournalRefreshResult = z.infer<typeof JournalRefreshResult>;
-
-/**
  * Why a write was refused, as a code the web app words (invariant 1): the
  * synchronisation's codes when GitHub answered so, and
  *
@@ -452,8 +480,9 @@ export type JournalRefreshResult = z.infer<typeof JournalRefreshResult>;
  * - `conflict` — the file moved on GitHub since it was opened;
  * - `page_exists` — the copy already has a page at that path;
  * - `type_mismatch` — an upload's content type is not its extension's;
- * - `empty_upload` — an upload with no bytes;
- * - `too_large` — an upload over {@link JOURNAL_ASSET_MAX_BYTES}.
+ * - `empty_upload` — an upload with no bytes.
+ *
+ * An upload over {@link JOURNAL_ASSET_MAX_BYTES} is Fastify's own 413.
  */
 export const JournalErrorCode = z.enum([
   ...JournalSyncError.options,

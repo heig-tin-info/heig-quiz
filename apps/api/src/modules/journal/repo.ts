@@ -12,9 +12,9 @@
  * file path of the journal ever goes into a URL here; the writes, which do
  * (the Contents API), build theirs with `encodeJournalPath`.
  *
- * Every call is BOUNDED ({@link bounded}, {@link once}): no retry of
- * Octokit's, no waiting out a rate limit, {@link GITHUB_TIMEOUT_MS} at
- * most. A rate limit or a timeout is `github_unavailable`, which the queue
+ * Every call is BOUNDED, through the one client {@link boundedClient}: no
+ * retry of Octokit's, no waiting out a rate limit, {@link GITHUB_TIMEOUT_MS}
+ * at most. A rate limit or a timeout is `github_unavailable`, which the queue
  * retries with backoff — never an ingestion blocked for an hour.
  *
  * Every failure is a {@link JournalRepoError} carrying a `JournalSyncError`
@@ -69,16 +69,8 @@ export class JournalRepoError extends Error {
   }
 }
 
-/** A request's options: no retry, no rate-limit wait, a deadline. */
-const once = () => ({
-  request: { retries: 0, noRateLimitWait: true, signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS) },
-});
-
-/**
- * `work`, or a timeout after {@link GITHUB_TIMEOUT_MS}: for the calls that
- * take no per-request option (the installation token's fetch).
- */
-export function bounded<T>(work: Promise<T>): Promise<T> {
+/** `work`, or a timeout after {@link GITHUB_TIMEOUT_MS}: the installation token's fetch takes no request option. */
+function bounded<T>(work: Promise<T>): Promise<T> {
   // After the timeout the token fetch keeps running in the background; its result is dropped.
   const signal = AbortSignal.timeout(GITHUB_TIMEOUT_MS);
   return Promise.race([
@@ -87,6 +79,29 @@ export function bounded<T>(work: Promise<T>): Promise<T> {
       signal.addEventListener("abort", () => reject(signal.reason as Error), { once: true });
     }),
   ]);
+}
+
+/**
+ * THE client of the journal's GitHub calls — the ingestion's and the
+ * writes', the shared adapters they call included (the invitations, a linked
+ * account's current login), which take no per-request option: the token
+ * fetched within {@link GITHUB_TIMEOUT_MS}, then a hook sets on EVERY request
+ * no retry, `noRateLimitWait` (what `HTTP_READ` of `github/app.ts` says for
+ * the reads serving an HTTP request: a rate limit is answered at once, never
+ * waited out for an hour) and a deadline. The client is a fresh one per call
+ * of `installationClient`, so no other caller is touched.
+ */
+export async function boundedClient(config: AppConfig, installationId: number): Promise<Octokit> {
+  const { octokit } = await bounded(installationClient(config, installationId));
+  octokit.hook.before("request", (options) => {
+    options.request = {
+      ...options.request,
+      retries: 0,
+      noRateLimitWait: true,
+      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+    } as typeof options.request;
+  });
+  return octokit;
 }
 
 /**
@@ -120,7 +135,6 @@ export async function resolveRepo(octokit: Octokit, githubRepoId: number): Promi
   try {
     const { data } = await octokit.request("GET /repositories/{repository_id}", {
       repository_id: githubRepoId,
-      ...once(),
     });
     const { full_name: fullName, name, owner } = data as {
       full_name: string;
@@ -148,7 +162,6 @@ export async function readTree(octokit: Octokit, repo: ResolvedRepo, ref: string
       owner: repo.owner,
       repo: repo.name,
       ref,
-      ...once(),
     });
     commitSha = data.sha;
   } catch (err) {
@@ -165,7 +178,6 @@ export async function readTree(octokit: Octokit, repo: ResolvedRepo, ref: string
     repo: repo.name,
     tree_sha: commitSha,
     recursive: "1",
-    ...once(),
   });
   if (tree.truncated) {
     throw new JournalRepoError("too_large", `the tree of ${repo.fullName} is too large to read at once`);
@@ -188,28 +200,12 @@ export async function readBlob(octokit: Octokit, repo: ResolvedRepo, sha: string
     owner: repo.owner,
     repo: repo.name,
     file_sha: sha,
-    ...once(),
   });
   return Buffer.from(data.content, data.encoding as BufferEncoding);
 }
 
 // ---------------------------------------------------------------- the writes (M4-03)
 
-/**
- * An installation client whose EVERY request is bounded like {@link once}:
- * the writes serve an HTTP request, and so do the calls they make through
- * the shared adapters (the invitations, a linked account's current login),
- * which take no per-request option. The hook sets the options on each
- * request before Octokit's retry and throttling read them; the client is a
- * fresh one per call of `installationClient`, so no other caller is touched.
- */
-export async function boundedClient(config: AppConfig, installationId: number): Promise<Octokit> {
-  const { octokit } = await bounded(installationClient(config, installationId));
-  octokit.hook.before("request", (options) => {
-    options.request = { ...options.request, ...once().request };
-  });
-  return octokit;
-}
 
 /** Who a browser write is authored as (F-JRN-10): the teacher, never the App. */
 export interface CommitAuthor {

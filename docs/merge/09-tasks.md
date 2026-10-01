@@ -735,18 +735,24 @@ files it ports; writes en + fr for every string.
     `accessibleClassroom` (404 otherwise; impersonation 403, `seb`/`kiosk`
     nobody): `POST base` (`JournalCreate`, 201 staff `Journal`), `POST
     base/use` (`JournalUse`, 201), `DELETE base` (204, idempotent), `POST
-    base/refresh` (`JournalRefreshResult`), `POST base/preview`
+    base/refresh` (202, no body: the outcome is the row's `syncStatus`
+    after the `journal` hint), `POST base/preview`
     (`JournalPreview` → `JournalPreviewResult`, `readOnly`), `PUT
     base/pages/*` (`JournalPageSave` → `JournalFileWritten`), `POST
     base/pages` (`JournalPageAdd`, 201 `JournalFileWritten`), `DELETE
     base/pages/*` (204), `POST base/assets/*` (raw body ≤ 5 MB in a child
-    context of its own, 201 `JournalFileWritten` with `page: null`).
+    context of its own, Fastify's 413 over it; `JournalUploadHeaders` and
+    `assetContentType`, now in `@quiz/contracts`; 201 `JournalFileWritten`
+    with `page: null`).
+  - Paths: `safeJournalPath` refuses every segment starting with `.` (so
+    `.github/workflows`, `.gitignore`): no write touches repository
+    furniture, and the ingestion copies none of it (pages included).
   - Refusals: `JournalErrorCode` (the sync codes plus `not_connected`,
     `journal_exists`, `no_journal`, `name_taken`, `conflict`,
     `page_exists`, `type_mismatch`, `empty_upload`), body
     `{error, message}` with `message` the code; 409 for the state of
-    things, 413 `too_large`, 415 `type_mismatch`, 400 `empty_upload`,
-    503 `github_unavailable`. `name_taken` carries `suggestion`
+    things, 415 `type_mismatch`, 400 `empty_upload`, 503
+    `github_unavailable`. `name_taken` carries `suggestion`
     (`JournalNameTaken`): the name with the classroom id's first 8 hex
     characters, all 32 if that is taken too (checked once).
   - Which route needs what: create and use an organization with Quiz's App
@@ -760,19 +766,22 @@ files it ports; writes en + fr for every string.
     when the copy did not reach the committed blob. Create and use go
     through `requestIngest` (queued in production); a new row starts at a
     random `version`, so an ingestion that snapshotted a removed row never
-    matches a fresh one. `requestIngest` now returns the outcome, or
-    `{status: "queued"}`.
-  - Author: linked ⇒ name + `<id>+<login>@users.noreply.github.com`
-    (attributed by the immutable id, no address disclosed); not linked ⇒
-    name + the Quiz user's email. The committer stays the App (GitHub signs
+    matches a fresh one. Every write calls `bumpVersion` (`ingest.ts`).
+  - Author: `displayName` and a noreply address, never the user's email
+    (N-DATA-02): linked ⇒ `<id>+<login>@users.noreply.github.com`
+    (attributed by the immutable id); not linked ⇒
+    `quiz-<user id>@users.noreply.<host of PUBLIC_URL>`. The committer stays the App (GitHub signs
     the commit). Text written into GitHub (seed README, description,
     default commit messages) is English, D12's suggestion; D12 stays open.
   - Invitations (D27): every course staff member with a `github_accounts`
     row, current login through `linkedLogin`, `permission: "push"`; one
+    already at push or above (`GET …/collaborators/{u}/permission`) is
+    left as is, `accepted` (an invitation would lower an admin); one
     `journal.invite` each (`outcome` `pending`, `accepted`, `stale`,
     `failed`); a failure is logged and never fails the step.
-  - Every GitHub call of a write goes through `boundedClient` (a request
-    hook: no retry, `noRateLimitWait`, 30 s), the shared adapters included.
+  - Every journal GitHub call, the ingestion's and the writes', goes
+    through `boundedClient` (a request hook: no retry, `noRateLimitWait`,
+    30 s), the shared adapters included; `once()` is gone.
   - Audit: `journal.create|use|remove|refresh|save|add|delete|upload|invite`,
     subject the classroom.
 

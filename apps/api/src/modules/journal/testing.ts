@@ -134,13 +134,24 @@ export interface FakeWorld {
   accounts: Map<number, string>;
   /** Logins GitHub refuses to invite (403). */
   refused: Set<string>;
+  /** Collaborators already on a repository, by `owner/name`, login → permission (`admin`, `write`, …). */
+  collaborators: Map<string, Map<string, string>>;
   commits: FakeCommit[];
   invitations: { repo: string; login: string; permission: unknown }[];
   nextId: number;
 }
 
 export function fakeWorld(repos: FakeRepo[] = []): FakeWorld {
-  return { repos, orgIds: {}, accounts: new Map(), refused: new Set(), commits: [], invitations: [], nextId: 90_000 };
+  return {
+    repos,
+    orgIds: {},
+    accounts: new Map(),
+    refused: new Set(),
+    collaborators: new Map(),
+    commits: [],
+    invitations: [],
+    nextId: 90_000,
+  };
 }
 
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
@@ -162,7 +173,7 @@ const repoJson = (r: FakeRepo, status = 200) =>
  * The routes the writes call, on `world`: a repository by name (following
  * `formerly`), its creation (422 on a name taken), the Contents API's put and
  * delete with GitHub's lock (409 on a stale sha, 422 on a sha missing or
- * unexpected), a collaborator's invitation, an account by id.
+ * unexpected), a collaborator's permission and invitation, an account by id.
  */
 export function writeRoute(world: FakeWorld): Route {
   const byName = (owner: string, name: string) =>
@@ -192,11 +203,18 @@ export function writeRoute(world: FakeWorld): Route {
       const repo = byName(m[1]!, m[2]!);
       return repo ? repoJson(repo) : undefined;
     }
+    if ((m = /^\/repos\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)\/permission$/.exec(path)) && init.method === "GET") {
+      const repo = byName(m[1]!, m[2]!);
+      if (!repo) return undefined;
+      const held = world.collaborators.get(`${repo.owner}/${repo.name}`)?.get(m[3]!);
+      return held ? json({ permission: held, user: { login: m[3]! } }) : undefined;
+    }
     if ((m = /^\/repos\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)$/.exec(path)) && init.method === "PUT") {
       const repo = byName(m[1]!, m[2]!);
       if (!repo) return undefined;
       const login = m[3]!;
       if (world.refused.has(login)) return json({ message: "Resource not accessible by integration" }, 403);
+      // GitHub SETS the permission: an existing admin invited with `push` would be lowered.
       world.invitations.push({ repo: `${repo.owner}/${repo.name}`, login, permission: body.permission });
       return json({ id: world.invitations.length }, 201);
     }
