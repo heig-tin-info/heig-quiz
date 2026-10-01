@@ -16,7 +16,7 @@ with its two sanctioned divergences from invariants 11–12 (a persistent
 work volume, a git channel on an internal bridge); invariants 10–14
 remain those of `apps/runner`. The plan is
 `docs/merge/06-codespace-seb-infra.md` §6.2; it ships with phase M6,
-after the cutover unless D09 says otherwise (awaiting confirmation).
+after the cutover (D09, settled 2026-10-01).
 
 ## Context
 

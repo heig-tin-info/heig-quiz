@@ -100,7 +100,7 @@ Carried by the task cards of [`docs/merge/09-tasks.md`](../merge/09-tasks.md), i
 | Student | A **Courses** route and a classroom page: its activities, its journal, later its projects and grades (F-ORG-14, F-ORG-15) | M |
 | Projects | A repository per student or group from a source repository, protected files, the deadline on the server's receipt time, the CI score captured, frozen, reviewed and released, groups, sync of the source (F-PROJ). They open together with the import of heig-classroom's data, never before it (D26) | M |
 | Gradebook | The classroom's grades of its released exams and projects in one table, a weighted mean, a CSV (F-GBOOK) | M |
-| Online workspace, unified SEB | Phase M6, after the cutover (D09, D21; ADR-047) | S |
+| Online workspace, unified SEB | Phase M6, after the cutover: rebuilt in Quiz, tried by users, then its migration considered (D09); a `seb` session confined to an activity, `packages/seb` (D21; ADR-047) | S |
 
 ## 0.6 Out of scope
 

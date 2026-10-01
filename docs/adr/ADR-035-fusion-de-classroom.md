@@ -112,7 +112,7 @@ its own tables and state machine (a table belongs to one module).
 Each activity kind calls the same services: roster and staff (`org`),
 deadlines (the single ticker, ADR-006), notifications (ADR-030), audit (one
 closed union), SEB (ADR-027 launch tickets; how they reach a project is
-D21, open), runner (ADR-016), and later one `llm` module. Grades meet in a
+D21, settled 2026-10-01), runner (ADR-016), and later one `llm` module. Grades meet in a
 **gradebook** module that owns only its column table and reads the released
 results of each kind. A project score is frozen by the clock as ADR-012
 states (read literally for projects); when and on what scale it reaches the
@@ -163,7 +163,7 @@ production dump before it runs once for real.
   its literal (projects) and analogical (evaluations) readings;
   **ADR-016** hosts the codespace beside the runner; **ADR-027** confines a
   `seb` session to an activity rather than an evaluation (the design is
-  D21, open); **ADR-030** gains the project notification kinds (their list
+  D21, settled 2026-10-01); **ADR-030** gains the project notification kinds (their list
   is D18, settled 2026-10-01). Each of these records carries a status note saying so.
 - **Classroom's own ADRs** are imported, bodies verbatim, with a status
   line naming the former number and the renames: its ADR-011

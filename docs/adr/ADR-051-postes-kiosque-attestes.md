@@ -389,8 +389,8 @@ code, their switches):
   suspends a station (§6).
 - A SEB session caught by the per-request check needs proof B first. Until
   then, the check only writes to the audit.
-- D21 keeps its open part, a session confined to an activity (a project)
-  and `packages/seb`. When it is settled, `trustRefusal` is where the
+- D21's other part, a session confined to an activity (a project) and
+  `packages/seb`, was settled on 2026-10-01 for M6. When M6 implements it, `trustRefusal` is where the
   project's SEB check goes.
 
 ## Alternatives considered

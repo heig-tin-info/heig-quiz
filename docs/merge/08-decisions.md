@@ -159,8 +159,12 @@ Status values: `open`, `settled`, `superseded`.
   meanwhile.
 - Blocks: M6, M8-04.
 - **Status**: measured 2026-09-28: 3 online assignments, all in test
-  classrooms with a roster of 1. The suggestion applies (M6 after the
-  cutover); awaiting the product owner's confirmation.
+  classrooms with a roster of 1. **Settled 2026-10-01** (product owner,
+  conversation): off the critical path. The test classrooms are not
+  imported (they are `drop` in the mapping), so no online assignment comes
+  over and nothing of the codespace is imported. The online workspace is
+  rebuilt in Quiz (M6) after the cutover, tested locally, tried by users,
+  and only once it is confirmed to work is any migration of it looked at.
 
 ### D10 — Periodic tasks
 - **Suggested**: port `scheduled_tasks` (restart-safe, admin-visible
@@ -240,11 +244,14 @@ Status values: `open`, `settled`, `superseded`.
   session confined to an activity; BEKs optional per activity (Config Key
   only by default); proof B before the first SEB project (§6.3).
 - Blocks: M6-02, M6-07.
-- **Status**: open. Partly settled for evaluations by ADR-051 (2026-09-30):
-  the Config Key is checked on every request of a `seb` session (audit-only
-  until proof B), and a new confined session supersedes the previous one of
-  the same student and exam. Still open: the session confined to an
-  activity, `packages/seb`, the BEKs per activity.
+- **Status**: settled 2026-10-01 on the suggestion (product owner,
+  conversation), for M6: `packages/seb`; the platform builds every `.seb`;
+  a `seb` session confined to one **activity** (an evaluation or a
+  project); the Config Key alone by default, Browser Exam Keys optional per
+  activity; proof B before the first SEB project. The evaluations' part was
+  settled by ADR-051 (2026-09-30): the Config Key checked on every request
+  of a `seb` session (audit-only until proof B), a new confined session
+  superseding the previous one of the same student and exam.
 
 ### D22 — The classroom-to-course mapping
 - **Question**: for each classroom-classroom in production, which Quiz
