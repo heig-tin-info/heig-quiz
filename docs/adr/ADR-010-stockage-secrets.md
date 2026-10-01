@@ -36,6 +36,15 @@ logged (N-SEC-19). Staging may hold its own service account's key, never
 production's. It goes into the vault of point 2 like the others; rotation is
 Google's two-key procedure (create a new key, deploy, delete the old one).
 
+**Amended again (2026-10-01, ADR-058, the LLM gateway):** one secret lives in
+the database, the LLM provider's API key, entered by an administrator from
+the console, and only ENCRYPTED (AES-256-GCM) under a master key,
+`LLM_KEY_SECRET`, which is a secret of this ADR: environment file, age
+vault, never the repository nor the database. Rejected alternative 3 still
+holds for every other secret. Losing the master key loses only the provider
+key, which an administrator enters again. The key is never returned by the
+API and the log redaction knows `sk-ant-` and `x-api-key`.
+
 ## Context
 
 Server secrets: the PEM private key of the GitHub App, the OIDC and GitHub OAuth client
@@ -74,4 +83,5 @@ reinject them reproducibly.
 2. **A dedicated Vault (HashiCorp or equivalent)**: one more stateful service to operate and
    back up, out of proportion for about a dozen secrets.
 3. **Secrets in the database**: forbidden by AU-43 and pointless — the database is backed up
-   off site, which would widen the exposure surface.
+   off site, which would widen the exposure surface. *Except the LLM provider key, encrypted
+   under a master key kept out of the database (ADR-058).*

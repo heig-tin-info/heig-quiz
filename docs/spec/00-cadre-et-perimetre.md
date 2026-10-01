@@ -118,7 +118,7 @@ Carried by the task cards of [`docs/merge/09-tasks.md`](../merge/09-tasks.md), i
 | VM outage during an exam | High | Server-side autosave on every keystroke, transparent resume, backups, documented failover procedure, paper fallback mode |
 | Escape from the code sandbox | High | Containers without network, gVisor, CPU / memory / pids / time limits, read-only image, no reachable secrets |
 | Wrong LLM grading on an official grade | Medium | Always validated by the teacher, justification per criterion, confidence score, traced re-grading |
-| Cost or unavailability of the LLM provider | Medium | Deferred grading, never in the critical path of the quiz, key per teacher |
+| Cost or unavailability of the LLM provider | Medium | Deferred grading, never in the critical path of the quiz, a daily spending cap on the institutional key (ADR-058, which replaced the key per teacher) |
 | Leak of the pool's questions | Medium | The pool is never served to students, only the questions of a running evaluation are, without the key |
 | Scope creep | High | Frozen phases, every new idea goes to phase 3 or out of scope |
 | GitHub unavailable, or its rate limit reached | Medium | The journal is a read model in Postgres: a page view never calls GitHub, an outage only delays the next synchronisation (N-RES-07) |

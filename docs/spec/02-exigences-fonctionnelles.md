@@ -186,7 +186,7 @@ What a user is told, and where (ADR-030 and its addendum of #198). A notificatio
 
 | Id | Requirement | Phase | Prio |
 |---|---|---|---|
-| F-LLM-01 | The admin configures providers: Anthropic, OpenAI, or OpenAI-compatible, with a model and an optional institutional key. Every teacher may enter their own key, encrypted at rest. | P2 | M |
+| F-LLM-01 | The admin configures providers: Anthropic, OpenAI, or OpenAI-compatible, with a model and an optional institutional key. Every teacher may enter their own key, encrypted at rest. *Amended (ADR-058, 2026-10-01): one provider (Anthropic) and one institutional key for now, entered by an administrator, with a model per purpose (one chosen in the screen) and a daily spending cap; no per-teacher key.* | P2 | M |
 | F-LLM-02 | In the editor: generate a variant of the question, propose the answer key, write the explanation, propose distractors. The result lands in the draft, never published automatically. | P2 | M |
 | F-LLM-03 | LLM grading is described in F-GRADE-02. No LLM call is made while an evaluation is running. | P2 | M |
 | F-LLM-04 | Every piece of data sent is anonymised: no name, email nor student identifier. The calls are logged with the model, the number of tokens and the estimated cost, per teacher. | P2 | M |
