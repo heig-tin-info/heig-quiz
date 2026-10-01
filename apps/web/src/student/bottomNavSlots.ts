@@ -36,6 +36,16 @@ export function visibleSlots(drill: boolean): readonly BottomSlot[] {
   return drill ? BOTTOM_SLOTS : BOTTOM_SLOTS.filter((s) => s.id !== "drill");
 }
 
+/**
+ * The rows of the student's desktop sidebar (`Shell`'s `Nav`): the bar's
+ * slots in the bar's order, minus Profile, which is the account menu's at the
+ * foot of the sidebar (D07, 2026-10-01). The lit row is `activeSlot`'s, as on
+ * the bar.
+ */
+export function sidebarSlots(drill: boolean): readonly BottomSlot[] {
+  return visibleSlots(drill).filter((s) => s.id !== "profile");
+}
+
 /** The bar is the student UI's, on the views the route table gives a slot. */
 export function bottomNavShown(route: Route, teacherUi: boolean): boolean {
   return !teacherUi && bottomSlotOf(route) !== null;

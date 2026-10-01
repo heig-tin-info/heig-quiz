@@ -14,16 +14,20 @@ import { Card, EmptyState, PageHeader, ParentLink } from "./ui";
 export function ComingSoon({
   title,
   navigate,
+  teacherUi,
 }: {
   /** The page's name, a key of the dictionary. */
   title: keyof Dict;
   navigate: Navigate;
+  /** The home is named as the sidebar names it: Courses, or a student's Activities. */
+  teacherUi: boolean;
 }) {
   const t = useT();
+  const home = teacherUi ? t("nav.courses") : t("nav.activities");
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={<ParentLink onClick={() => navigate({ view: "home" })}>{t("shome.title")}</ParentLink>}
+        eyebrow={<ParentLink onClick={() => navigate({ view: "home" })}>{home}</ParentLink>}
         title={t(title)}
       />
       <Card className="px-6 py-4">

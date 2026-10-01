@@ -1306,8 +1306,8 @@
         "light": "student-home-light.png",
         "dark": "student-home-dark.png"
       },
-      "takenAt": "2026-09-30T17:09:10.905Z",
-      "commit": "c84da7cd",
+      "takenAt": "2026-10-01T06:44:50.987Z",
+      "commit": "ac2f6212",
       "base": "http://localhost:3100"
     },
     {
@@ -1329,8 +1329,8 @@
         "light": "student-home-phone-light.png",
         "dark": "student-home-phone-dark.png"
       },
-      "takenAt": "2026-09-30T17:09:10.905Z",
-      "commit": "c84da7cd",
+      "takenAt": "2026-10-01T06:44:50.987Z",
+      "commit": "ac2f6212",
       "base": "http://localhost:3100"
     },
     {
@@ -1544,7 +1544,7 @@
       "name": "feedback-pending",
       "caption": "The student's results page while the teacher has not published yet.",
       "persona": "lea",
-      "path": "/attempts/a7085a9f-8dd7-45ad-9dff-75fd4753b558/feedback",
+      "path": "/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1559,8 +1559,8 @@
         "light": "feedback-pending-light.png",
         "dark": "feedback-pending-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-01T06:44:50.987Z",
+      "commit": "ac2f6212",
       "base": "http://localhost:3100"
     },
     {
@@ -1590,7 +1590,7 @@
       "name": "feedback",
       "caption": "The student's feedback: points, verdicts, explanations and the teacher's comments.",
       "persona": "lea",
-      "path": "/attempts/a7085a9f-8dd7-45ad-9dff-75fd4753b558/feedback",
+      "path": "/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -1605,15 +1605,15 @@
         "light": "feedback-light.png",
         "dark": "feedback-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-01T06:44:50.987Z",
+      "commit": "ac2f6212",
       "base": "http://localhost:3100"
     },
     {
       "name": "feedback-phone",
       "caption": "The student's feedback: points, verdicts, explanations and the teacher's comments.",
       "persona": "lea",
-      "path": "/attempts/a7085a9f-8dd7-45ad-9dff-75fd4753b558/feedback",
+      "path": "/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback",
       "width": 390,
       "height": 844,
       "fullPage": true,
@@ -1628,8 +1628,8 @@
         "light": "feedback-phone-light.png",
         "dark": "feedback-phone-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-01T06:44:50.987Z",
+      "commit": "ac2f6212",
       "base": "http://localhost:3100"
     },
     {
@@ -1651,8 +1651,8 @@
         "light": "student-settings-light.png",
         "dark": "student-settings-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-01T06:44:50.987Z",
+      "commit": "ac2f6212",
       "base": "http://localhost:3100"
     }
   ]

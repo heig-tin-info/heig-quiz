@@ -30,6 +30,8 @@ Your home shows what your classrooms have opened for you, in three sections.
   <figcaption>The home on a phone.</figcaption>
 </figure>
 
+On a computer, the sidebar on the left takes you to **Activities** (this home), **Courses** (your classrooms, each with a page of its own), **Drill** once a teacher of yours has turned it on, and **Grades** (the past evaluations of this home). On a phone, the same entries sit in the bar at the bottom of the screen, with **Profile** beside them; on a computer your profile is in the menu under your name.
+
 ## The waiting room
 
 An in-class evaluation usually opens on a waiting room. You enter it from your home and wait; your teacher starts the evaluation for everybody at once, and your screen switches to the first question by itself.

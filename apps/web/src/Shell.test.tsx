@@ -304,9 +304,84 @@ describe("Shell sidebar", () => {
   it("shows the student navigation, with no classroom list, outside the teacher UI", () => {
     renderShell({ teacherUi: false, me: makeMe({ role: "student" }) });
     const nav = within(sidebar());
-    // WP9: "Home" is the student heading; the teacher sections are gone.
-    expect(nav.getByRole("button", { name: "Home" })).toBeInTheDocument();
+    // The bottom bar's slots minus Profile (the account menu's); the teacher
+    // sections are gone.
+    expect(nav.getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Activities",
+      "Courses",
+      "Grades",
+    ]);
     expect(nav.queryByRole("button", { name: /^Classroom 1(?!\d)/ })).toBeNull();
+  });
+
+  it("puts the student's Drill row between Courses and Grades, as on the bar (#317)", () => {
+    renderShell({ teacherUi: false, me: makeMe({ role: "student" }), drill: { rooms: 1, cards: 0 } });
+    expect(within(sidebar()).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Activities",
+      "Courses",
+      "Drill",
+      "Grades",
+    ]);
+  });
+
+  // D07 (2026-10-01): the student sidebar lights what the bottom bar lights.
+  it.each<[string, Route, string, string | null]>([
+    ["the home", { view: "home" }, "/", "Activities"],
+    ["the home's Grades section", { view: "home" }, "/#past", "Grades"],
+    ["the course list", { view: "studentCourses" }, "/courses", "Courses"],
+    ["a classroom", { view: "classroom", id: "c1" }, "/classrooms/c1", "Courses"],
+    ["a classroom's journal", { view: "classroomJournal", id: "c1" }, "/classrooms/c1/journal", "Courses"],
+    ["a classroom's grades", { view: "classroomGrades", id: "c1" }, "/classrooms/c1/grades", "Courses"],
+    ["a feedback page", { view: "feedback", attemptId: "a1" }, "/attempts/a1/feedback", "Grades"],
+    ["the drill", { view: "drill" }, "/drill", "Drill"],
+    ["an attempt", { view: "attempt", evaluationId: "e1" }, "/take/e1", null],
+  ])("lights the student's row of %s", (_, route, path, lit) => {
+    renderShell({
+      route,
+      path,
+      teacherUi: false,
+      me: makeMe({ role: "student" }),
+      drill: { rooms: 1, cards: 0 },
+    });
+    const current = within(sidebar())
+      .getAllByRole("button")
+      .filter((b) => b.getAttribute("aria-current") === "page")
+      .map((b) => b.textContent);
+    expect(current).toEqual(lit ? [lit] : []);
+  });
+
+  it("leads the student's Grades row to the home's Grades section, like the bar", async () => {
+    const navigate = vi.fn();
+    renderShell({ teacherUi: false, me: makeMe({ role: "student" }), navigate });
+    await userEvent.click(within(sidebar()).getByRole("button", { name: "Grades" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "home" });
+    expect(window.location.hash).toBe("#past");
+    await userEvent.click(within(sidebar()).getByRole("button", { name: "Courses" }));
+    expect(navigate).toHaveBeenLastCalledWith({ view: "studentCourses" });
+    expect(window.location.hash).toBe("");
+  });
+
+  // The student rows are lit by the bar's slot; a teacher's stay lit by section.
+  it.each<[string, Route, string | null]>([
+    ["the home", { view: "home" }, "Courses"],
+    ["the activities", { view: "activities" }, "Activities"],
+    ["a pool", { view: "pool", id: "p1" }, "Question pools"],
+    ["the polls", { view: "polls" }, "Poll"],
+    ["a classroom", { view: "classroom", id: "c1" }, null],
+    ["a classroom's journal", { view: "classroomJournal", id: "c1" }, null],
+    ["the student course list", { view: "studentCourses" }, null],
+    ["the drill", { view: "drill" }, null],
+    ["a feedback page", { view: "feedback", attemptId: "a1" }, null],
+  ])("keeps the teacher's top rows as they were on %s", (_, route, lit) => {
+    renderShell({ route });
+    const top = within(sidebar())
+      .getAllByRole("button")
+      .filter((b) => ["Activities", "Courses", "Question pools", "Poll"].includes(b.textContent ?? ""));
+    expect(top.map((b) => b.textContent)).toEqual(["Activities", "Courses", "Question pools", "Poll"]);
+    expect(top.filter((b) => b.getAttribute("aria-current") === "page").map((b) => b.textContent)).toEqual(
+      lit ? [lit] : [],
+    );
+    expect(within(sidebar()).queryByRole("button", { name: "Grades" })).toBeNull();
   });
 
   // ADR-041 (#317): the student's Drill row, once a classroom has the drill on.
@@ -996,7 +1071,7 @@ describe("Shell course tree", () => {
   it("is teacher UI only", () => {
     localStorage.setItem(KEY, "all");
     renderShell({ courses: COURSES, teacherUi: false, me: makeMe({ role: "student" }) });
-    expect(within(sidebar()).getByRole("button", { name: "Home" })).not.toHaveAttribute(
+    expect(within(sidebar()).getByRole("button", { name: "Courses" })).not.toHaveAttribute(
       "aria-expanded",
     );
     expect(within(sidebar()).queryByRole("button", { name: "PRG1" })).toBeNull();

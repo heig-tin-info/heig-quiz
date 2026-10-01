@@ -114,7 +114,9 @@ describe the grading table (ADR-044); their images were retaken again on
 without a runner (so the code answers wait for it). Every scene showing
 "Test 0", and `teacher-home`, was retaken on 2026-09-30 (nine questions, `LLM_PROVIDER=stub`).
 The `student-home` scenes were retaken on 2026-09-30 once more, without the
-classroom code field (ADR-053).
+classroom code field (ADR-053). The `student-home`, `student-settings` and
+`feedback*` scenes were retaken on 2026-10-01, on a fresh seed, for the
+student sidebar that mirrors the bottom bar.
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |
@@ -184,9 +186,9 @@ classroom code field (ADR-053).
 | `player-run` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | running | Moved to question 5, clicked “Run”, waited for “Compiled”. | 1440×900, full page |
 | `player-submit` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | running | Clicked “Hand in”. | 1440×900 |
 | `player-done` | lea | `/take/39e9fb59-2ddb-43a1-ad68-e2eea5efc518` | graded | Nothing: the page as it loads. | 1440×900 |
-| `feedback-pending` | lea | `/attempts/a7085a9f-8dd7-45ad-9dff-75fd4753b558/feedback` | graded | Nothing: the page as it loads. | 1440×900 |
+| `feedback-pending` | lea | `/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback` | graded | Nothing: the page as it loads. | 1440×900 |
 | `results-released` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results` | released | Nothing: the page as it loads. | 1440×900, full page |
-| `feedback` | lea | `/attempts/a7085a9f-8dd7-45ad-9dff-75fd4753b558/feedback` | released | Nothing: the page as it loads. | 1440×900, full page |
-| `feedback-phone` | lea | `/attempts/a7085a9f-8dd7-45ad-9dff-75fd4753b558/feedback` | released | Nothing: the page as it loads. | 390×844, full page |
+| `feedback` | lea | `/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback` | released | Nothing: the page as it loads. | 1440×900, full page |
+| `feedback-phone` | lea | `/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback` | released | Nothing: the page as it loads. | 390×844, full page |
 | `student-settings` | lea | `/settings` | seeded | Nothing: the page as it loads. | 1440×900 |
 <!-- scenes:end -->

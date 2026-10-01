@@ -9,10 +9,18 @@ import { routeToPath, type Route } from "../router";
 import { cx, isPlainClick, type IconType } from "../ui";
 import { activeSlot, visibleSlots, type BottomSlot, type BottomSlotId } from "./bottomNavSlots";
 
-const SLOT_LOOK: Record<BottomSlotId, { icon: IconType; label: keyof Dict }> = {
+/**
+ * Each slot's icon and label, for the bar and for the student's sidebar rows
+ * that mirror it (`sidebarSlots`). `sidebarLabel`: the sidebar has room for
+ * the page's own title where the bar needs a shorter word.
+ */
+export const SLOT_LOOK: Record<
+  BottomSlotId,
+  { icon: IconType; label: keyof Dict; sidebarLabel?: keyof Dict }
+> = {
   activities: { icon: CalendarRange, label: "nav.activities" },
   courses: { icon: School, label: "nav.courses" },
-  drill: { icon: Dumbbell, label: "bnav.drill" },
+  drill: { icon: Dumbbell, label: "bnav.drill", sidebarLabel: "nav.drill" },
   grades: { icon: Trophy, label: "bnav.grades" },
   profile: { icon: UserRound, label: "bnav.profile" },
 };
@@ -38,11 +46,7 @@ export function BottomNav({
     // A modified click is the browser's: a new tab gets the real address.
     if (!isPlainClick(e)) return;
     e.preventDefault();
-    // A fresh route: the same slot twice is a new state, so the bar re-reads the hash.
-    navigate({ ...slot.route });
-    // After the push, and replaced: the section is a place on the page, and
-    // Back leaves the page. The home scrolls to it (`StudentHome`).
-    window.history.replaceState(null, "", hrefOf(slot));
+    followSlot(slot, navigate);
   };
 
   return (
@@ -61,7 +65,7 @@ export function BottomNav({
             return (
               <li key={slot.id} className="min-w-0 flex-1">
                 <a
-                  href={hrefOf(slot)}
+                  href={slotHref(slot)}
                   onClick={go(slot)}
                   aria-current={current ? "page" : undefined}
                   className={cx(
@@ -93,6 +97,16 @@ export function BottomNav({
   );
 }
 
-function hrefOf(slot: BottomSlot): string {
+/** A slot's address: its route's path, and the home section it scrolls to. */
+export function slotHref(slot: BottomSlot): string {
   return routeToPath(slot.route) + (slot.anchor ? `#${slot.anchor}` : "");
+}
+
+/** Goes where a slot leads, from the bar or from the student's sidebar. */
+export function followSlot(slot: BottomSlot, navigate: (r: Route) => void): void {
+  // A fresh route: the same slot twice is a new state, so the bar re-reads the hash.
+  navigate({ ...slot.route });
+  // After the push, and replaced: the section is a place on the page, and
+  // Back leaves the page. The home scrolls to it (`StudentHome`).
+  window.history.replaceState(null, "", slotHref(slot));
 }

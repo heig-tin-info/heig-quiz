@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ClipboardList, Library } from "lucide-react";
+import { CalendarRange, Library } from "lucide-react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -83,8 +83,8 @@ describe("buildCommands: who sees what", () => {
       buildCommands(makeContext({ me: makeMe({ role: "student" }), teacherUi: false })),
       "nav:home",
     );
-    expect(student.label).toBe("Home");
-    expect(student.icon).toBe(ClipboardList);
+    expect(student.label).toBe("Activities");
+    expect(student.icon).toBe(CalendarRange);
   });
 
   it("offers Administration to an admin in the teacher UI, and to nobody else", () => {
