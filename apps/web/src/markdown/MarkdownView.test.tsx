@@ -153,6 +153,8 @@ describe("MarkdownView — content", () => {
     expect(tex("$a_1 + b_1$ et $\\{x\\}\\;\\!y$")).toEqual(["a_1 + b_1", "\\{x\\}\\;\\!y"]);
     expect(tex("$$\\sum_{i} x_i \\, dx$$")).toEqual(["\\sum_{i} x_i \\, dx"]);
     expect(view("$a_1 + b_1$").querySelector("em")).toBeNull();
+    // Entities are the characters they spell, as marked decodes them anywhere.
+    expect(tex("$a &lt; b$")).toEqual(["a < b"]);
     // An escaped dollar is still a dollar, never the start of a formula.
     expect(view("costs 5\\$ only").textContent?.trim()).toBe("costs 5$ only");
   });
@@ -162,6 +164,13 @@ describe("MarkdownView — content", () => {
     expect(body.querySelector("code")?.textContent).toContain("$HOME");
     expect(body.querySelector(".katex")).toBeNull();
     expect(view("Run `echo $a_1$` here").querySelector(".katex")).toBeNull();
+  });
+
+  /* A lone `$` in prose must not pair with one inside code, a URL or an image. */
+  it("never lets a lone dollar swallow the code, link or image after it", () => {
+    expect(view("costs $5 and `echo $HOME` now").querySelector("code")?.textContent).toBe("echo $HOME");
+    expect(view("price $5, see [doc](https://x.ch/a$b) ok").querySelector("a")).toHaveAttribute("href", "https://x.ch/a$b");
+    expect(view("price $5 ![pic](asset:abc) and $6").querySelector("img")).toHaveAttribute("src", "/app/api/assets/abc");
   });
 
   it("gives a fenced block its language class and token spans", () => {
