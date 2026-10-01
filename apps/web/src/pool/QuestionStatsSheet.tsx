@@ -276,6 +276,10 @@ function DistractorRows({ distractors }: { distractors: DistractorStats }) {
               </span>
             </div>
             <SegmentedBar parts={[{ tone: row.letter === null ? "muted" : "info", value: row.share }]} total={100} />
+            {/* A value drawn for each student: its share is its place's (ADR-056 §9). */}
+            {"drawn" in row && row.drawn ? (
+              <p className="text-xs text-fg-muted">{t("pool.stats.choicesDrawn")}</p>
+            ) : null}
           </li>
         ))}
       </ul>

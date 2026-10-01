@@ -59,8 +59,6 @@ function repositoryView(row: GithubJournal): JournalRepository {
     syncError: row.syncError,
     lastSyncedAt: isoOrNull(row.lastSyncedAt),
     lastCommitSha: row.lastCommitSha,
-    // Read-only in the platform (ADR-057): edited on GitHub, `editUrl` of a page.
-    editable: false,
   };
 }
 

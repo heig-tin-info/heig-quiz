@@ -11,7 +11,10 @@ multiple-choice reading were delegated). With `sameAsLatest` and
 `@quiz/domain/stats`, `distractorsOf` in the `stats` module and
 `DistractorStats` in `@quiz/contracts/stats`. No migration, no change to the
 `QuestionType` contract. Revises F-STAT-02 (docs/spec/02). Extends ADR-038
-(what is counted), with the not-reached rule of ADR-039.
+(what is counted), with the not-reached rule of ADR-039. Amended 2026-10-01
+by ADR-056 §9: a parameterized mcq's options are its template's texts, and
+an option whose value is drawn for it alone (`drawn`) says its share is its
+place's.
 Amended 2026-09-30 with ADR-038 §2: exams only, never an exercise (§1).
 
 ## Context

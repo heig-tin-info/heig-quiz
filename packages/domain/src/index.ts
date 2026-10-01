@@ -33,7 +33,18 @@ export * from "./kioskPairing.js";
 export * from "./lockedTemplate.js";
 export * from "./mcqScore.js";
 // The mathjs-free vocabulary of parameterized questions (ADR-056).
-export { FORMAT_PATTERN, isVariableName, MAX_EXPRESSION_LENGTH } from "./parameterNames.js";
+export {
+  FORMAT_PATTERN,
+  FORMATS,
+  formatStep,
+  GROUPED_BY_CHOICE,
+  IDENTIFIER_SOURCE,
+  isFormat,
+  isVariableName,
+  MAX_EXPRESSION_LENGTH,
+  PARAMETERIZED_TYPES,
+  type Format,
+} from "./parameterNames.js";
 export * from "./period.js";
 export * from "./pollOutcome.js";
 export * from "./pollTally.js";

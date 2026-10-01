@@ -8,10 +8,11 @@ fields of `ByQuestion`, `TallyEntry` in `@quiz/core`, `debrief()` and
 `outcomeOf()` in `@quiz/domain`, and F-RES-03). Amended 2026-09-30 by
 ADR-050: §1's `not_over` is lifted, for an exercise, once its teacher
 publishes the correction. Amended 2026-10-01 by ADR-056 §9: the answers to a
-parameterized question each have their own key, so `debrief()` groups them
-by verdict only. Amended 2026-10-01 by its addendum below: the mcq review
-letters its choices as the wall does, in the teacher's order wherever the key
-is known.
+parameterized question each have their own key, so they are grouped by
+verdict only (an mcq keeps its ticks per choice), and the projected question
+is the instance of the example values, named as such. Amended 2026-10-01 by
+its addendum below: the mcq review letters its choices as the wall does, in
+the teacher's order wherever the key is known.
 
 ## Context
 

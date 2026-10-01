@@ -1,32 +1,38 @@
 /**
  * The Journal section of a classroom's Settings (F-JRN-01 to F-JRN-05,
- * `docs/merge/05-web.md` §5.3, D24, D27, D28).
+ * `docs/merge/05-web.md` §5.3, D24, D27, D28, ADR-057).
  *
- * A journal is one repository of the classroom's organization, so the
- * section is enabled once the classroom is connected to GitHub; before that
- * it is one line that says so. Then:
- *   - no journal: "Create a journal" (a new private repository, under the
- *     name the API proposes; a name already taken is never adopted, and the
- *     free one it suggests is one click away) and "Use a repository" (any
- *     repository of the organization; its branch and folder behind a
- *     disclosure, docs/spec/08);
- *   - a journal: the repository (a link to GitHub), its branch and folder,
- *     where its copy stands with a check level, Refresh, and "Remove the
- *     journal", confirmed, which keeps the repository on GitHub. Removing it
- *     is what lets the GitHub section disconnect the classroom (D28).
+ * A journal has a mode, chosen when it is created (ADR-057):
+ *   - no journal: a segmented control "In Quiz" (the default) / "In a GitHub
+ *     repository", the current choice explained in one line under the
+ *     title (DESIGN.md, Settings row). In Quiz needs nothing else: one
+ *     Create. In a GitHub repository keeps "Create a journal" (a new
+ *     private repository, under the name the API proposes; a name already
+ *     taken is never adopted, and the free one it suggests is one click
+ *     away) and "Use a repository" (its branch and folder behind a
+ *     disclosure, docs/spec/08) once the classroom is connected; before
+ *     that, one line pointing at the GitHub section above. On a platform
+ *     without Quiz's App there is no choice to make: In Quiz only.
+ *   - a Quiz-mode journal: its mode and how many pages it holds, and
+ *     "Remove the journal", which deletes them (the only copy), so with
+ *     pages the classroom's name is typed (F-JRN-04, `?confirm=`).
+ *   - a GitHub-mode journal: the repository (a link to GitHub), its branch
+ *     and folder, where its copy stands with a check level, Refresh, and
+ *     "Remove the journal", confirmed, which keeps the repository on
+ *     GitHub. Removing it is what lets the GitHub section disconnect the
+ *     classroom (D28).
  *
- * Nothing here is accented (F-ORG-13): a classroom connected for its
- * projects is not pushed towards a journal. Create and Use are one-field
- * forms (the expert fields folded), so dialogs; their submit is the primary
- * of the dialog, not of the tab.
+ * Nothing here is accented (F-ORG-13): the Settings' one accent stays
+ * "Connect to GitHub" while the classroom is not connected, whatever the
+ * journal (the product owner, M4-09: projects need it too). Create and Use
+ * are one-field forms (the expert fields folded), so dialogs; their submit
+ * is the primary of the dialog, not of the tab.
  *
- * Without Quiz's App on the platform the journal's routes are absent (404),
- * as the GitHub ones are: no section at all, as on a classroom never
- * connected. Nor while the first answers are awaited (the GitHub section
- * draws nothing then either).
+ * Without the journal's routes (404) there is no section; nor while the
+ * first answers are awaited.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Trash2 } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -34,6 +40,7 @@ import {
   JournalCreate,
   JournalUse,
   type ClassroomDetail,
+  type JournalMode,
   type JournalRepository,
   type JournalStaff,
 } from "@quiz/contracts";
@@ -43,6 +50,7 @@ import { useConfirm } from "../confirm";
 import { githubAbsent, useClassroomGithub } from "../github/api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
+import { journalRootKey } from "../queryKeys";
 import {
   Alert,
   Button,
@@ -55,13 +63,17 @@ import {
   LevelIcon,
   QueryError,
   SectionHeading,
+  Segmented,
   SettingRow,
 } from "../ui";
 import {
   journalBase,
   journalErrorText,
   journalRefusal,
+  journalRemoveUrl,
   nameTakenSuggestion,
+  pagesText,
+  removalNeedsName,
   useJournalRefresh,
   useStaffJournal,
 } from "./api";
@@ -76,12 +88,14 @@ export function JournalSettings({ room }: { room: ClassroomDetail }) {
   const journal = useStaffJournal(room.id);
   const [dialog, setDialog] = useState<OpenDialog>(null);
 
-  // No App on this platform, or still waiting: nothing, as the GitHub section.
-  // A GitHub failure is said once, by the GitHub section above.
-  if (githubAbsent(github.error) || githubAbsent(journal.error)) return null;
-  if (github.isPending || journal.isPending || github.isError) return null;
+  // No journal routes, or still waiting: nothing. A GitHub failure is said
+  // once, by the GitHub section above; here it only hides the GitHub mode's
+  // actions (no organization known).
+  if (githubAbsent(journal.error)) return null;
+  if (github.isPending || journal.isPending) return null;
 
-  const org = github.data.link?.org.login ?? null;
+  const withGithub = !githubAbsent(github.error);
+  const org = github.data?.link?.org.login ?? null;
   let body;
   if (journal.isError) {
     body = (
@@ -92,29 +106,12 @@ export function JournalSettings({ room }: { room: ClassroomDetail }) {
         retrying={journal.isFetching}
       />
     );
-  } else if (journal.data.repository) {
-    body = <Attached room={room} repository={journal.data.repository} />;
-  } else if (org === null) {
-    body = (
-      <Card className="px-5">
-        <SettingRow title={t("journalSettings.none")} desc={t("journalSettings.connectFirst")} />
-      </Card>
-    );
+  } else if (journal.data.mode === "quiz") {
+    body = <QuizAttached room={room} journal={journal.data} />;
+  } else if (journal.data.mode === "github" && journal.data.repository) {
+    body = <Attached room={room} journal={journal.data} repository={journal.data.repository} />;
   } else {
-    body = (
-      <Card className="divide-y divide-line px-5">
-        <SettingRow title={t("journalSettings.create")} desc={t("journalSettings.createDesc", { org })}>
-          <Button variant="secondary" onClick={() => setDialog("create")}>
-            {t("journalSettings.createOpen")}
-          </Button>
-        </SettingRow>
-        <SettingRow title={t("journalSettings.use")} desc={t("journalSettings.useDesc", { org })}>
-          <Button variant="secondary" onClick={() => setDialog("use")}>
-            {t("journalSettings.useOpen")}
-          </Button>
-        </SettingRow>
-      </Card>
-    );
+    body = <NewJournal room={room} org={org} withGithub={withGithub} onOpen={setDialog} />;
   }
 
   return (
@@ -134,28 +131,127 @@ export function JournalSettings({ room }: { room: ClassroomDetail }) {
   );
 }
 
+// ------------------------------------------------------------------ no journal yet
+
+/**
+ * The mode, then what creating a journal of that mode takes. The choice is
+ * this card's state only: nothing is written until Create.
+ */
+function NewJournal({
+  room,
+  org,
+  withGithub,
+  onOpen,
+}: {
+  room: ClassroomDetail;
+  /** The connected organization, null while the classroom is not connected. */
+  org: string | null;
+  /** The platform has Quiz's App: the GitHub mode exists. */
+  withGithub: boolean;
+  onOpen: (dialog: OpenDialog) => void;
+}) {
+  const t = useT();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [mode, setMode] = useState<JournalMode>("quiz");
+  const create = useMutation({
+    mutationFn: () =>
+      api<JournalStaff>(journalBase(room.id), {
+        method: "POST",
+        body: JSON.stringify({ mode: "quiz" } satisfies JournalCreate),
+      }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: journalRootKey(room.id) });
+      toast(t("journalSettings.createdQuiz"), "success");
+    },
+    onError: (error) => toast(journalErrorText(error, t), "error"),
+  });
+
+  let actions;
+  if (mode === "quiz") {
+    actions = (
+      <SettingRow title={t("journalSettings.create")} desc={t("journalSettings.createQuizDesc")}>
+        <Button variant="secondary" loading={create.isPending} onClick={() => create.mutate()}>
+          {create.isPending ? null : <Plus />} {t("journalSettings.createQuiz")}
+        </Button>
+      </SettingRow>
+    );
+  } else if (org === null) {
+    actions = <SettingRow title={t("journalSettings.notConnected")} desc={t("journalSettings.connectFirst")} />;
+  } else {
+    actions = (
+      <>
+        <SettingRow title={t("journalSettings.create")} desc={t("journalSettings.createDesc", { org })}>
+          <Button variant="secondary" onClick={() => onOpen("create")}>
+            {t("journalSettings.createOpen")}
+          </Button>
+        </SettingRow>
+        <SettingRow title={t("journalSettings.use")} desc={t("journalSettings.useDesc", { org })}>
+          <Button variant="secondary" onClick={() => onOpen("use")}>
+            {t("journalSettings.useOpen")}
+          </Button>
+        </SettingRow>
+      </>
+    );
+  }
+
+  return (
+    <Card className="divide-y divide-line px-5">
+      {withGithub ? (
+        <SettingRow
+          title={t("journalSettings.mode")}
+          desc={mode === "quiz" ? t("journalSettings.mode.quiz.desc") : t("journalSettings.mode.github.desc")}
+        >
+          <Segmented
+            name="journal-mode"
+            label={t("journalSettings.mode")}
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: "quiz", label: t("journalSettings.mode.quiz") },
+              { value: "github", label: t("journalSettings.mode.github") },
+            ]}
+          />
+        </SettingRow>
+      ) : null}
+      {actions}
+    </Card>
+  );
+}
+
 // ------------------------------------------------------------------ a journal
 
-function Attached({ room, repository }: { room: ClassroomDetail; repository: JournalRepository }) {
+/**
+ * Remove the journal (F-JRN-04), confirmed: a GitHub-mode one leaves its
+ * repository on GitHub; a Quiz-mode one holding pages destroys the only
+ * copy of them, so the classroom's name is typed and sent as `?confirm=`.
+ */
+function RemoveRow({ room, journal }: { room: ClassroomDetail; journal: JournalStaff }) {
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
   const toast = useToast();
-  const onError = (error: unknown) => toast(journalErrorText(error, t), "error");
-  const { refresh, refreshing } = useJournalRefresh(room.id, repository, onError);
+  const typed = removalNeedsName(journal);
+  const onGithub = journal.mode === "github";
+  const name = journal.repository?.fullName ?? "";
   const remove = useMutation({
-    mutationFn: () => api(journalBase(room.id), { method: "DELETE" }),
+    mutationFn: () => api(journalRemoveUrl(room.id, typed ? room.name : undefined), { method: "DELETE" }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["journal", room.id] });
-      toast(t("journalSettings.removed", { name: repository.fullName }), "success");
+      await qc.invalidateQueries({ queryKey: journalRootKey(room.id) });
+      toast(onGithub ? t("journalSettings.removed", { name }) : t("journalSettings.removedQuiz"), "success");
     },
-    onError,
+    onError: (error) => toast(journalErrorText(error, t), "error"),
   });
   const onRemove = async () => {
+    let message: string;
+    if (onGithub) message = t("journalSettings.removeBody", { name });
+    else if (typed) message = t("journalSettings.removeBodyQuiz", { pages: pagesText(t, journal.pageCount) });
+    else message = t("journalSettings.removeBodyQuizEmpty");
     if (
       await confirm({
         title: t("journalSettings.removeConfirm", { name: room.name }),
-        message: t("journalSettings.removeBody", { name: repository.fullName }),
+        message,
+        ...(typed ? { typeToConfirm: room.name } : {}),
         confirmLabel: t("journalSettings.remove"),
         cancelLabel: t("common.cancel"),
         danger: true,
@@ -164,12 +260,55 @@ function Attached({ room, repository }: { room: ClassroomDetail; repository: Jou
       remove.mutate();
     }
   };
+  return (
+    <SettingRow
+      title={t("journalSettings.remove")}
+      desc={onGithub ? t("journalSettings.removeDesc") : t("journalSettings.removeDescQuiz")}
+    >
+      <Button variant="danger-quiet" loading={remove.isPending} onClick={() => void onRemove()}>
+        <Trash2 /> {t("journalSettings.removeOpen")}
+      </Button>
+    </SettingRow>
+  );
+}
+
+/** A Quiz-mode journal: its mode, its pages, and Remove. The pages are edited from the Journal tab. */
+function QuizAttached({ room, journal }: { room: ClassroomDetail; journal: JournalStaff }) {
+  const t = useT();
+  return (
+    <Card className="divide-y divide-line px-5">
+      <SettingRow
+        title={t("journalSettings.mode.quiz")}
+        desc={t("journalSettings.quizSet", { pages: pagesText(t, journal.pageCount) })}
+      />
+      <RemoveRow room={room} journal={journal} />
+    </Card>
+  );
+}
+
+/** A GitHub-mode journal: the repository, the copy's state with Refresh, and Remove. */
+function Attached({
+  room,
+  journal,
+  repository,
+}: {
+  room: ClassroomDetail;
+  journal: JournalStaff;
+  repository: JournalRepository;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const onError = (error: unknown) => toast(journalErrorText(error, t), "error");
+  const { refresh, refreshing } = useJournalRefresh(room.id, repository, onError);
 
   const level = syncLevel(repository, refreshing);
   const reason =
     !refreshing && repository.syncStatus === "error"
       ? `${repository.syncError ? `${t(SYNC_ERRORS[repository.syncError])} ` : ""}${t("journal.sync.errorHint")}`
       : null;
+  const where = repository.rootPath
+    ? t("journalSettings.where.folder", { ref: repository.ref, folder: repository.rootPath })
+    : t("journalSettings.where.root", { ref: repository.ref });
 
   return (
     <Card className="divide-y divide-line px-5">
@@ -186,11 +325,7 @@ function Attached({ room, repository }: { room: ClassroomDetail; repository: Jou
             <ExternalLink className="size-3.5 shrink-0 text-fg-faint" />
           </a>
         }
-        desc={
-          repository.rootPath
-            ? t("journalSettings.where.folder", { ref: repository.ref, folder: repository.rootPath })
-            : t("journalSettings.where.root", { ref: repository.ref })
-        }
+        desc={`${t("journalSettings.mode.github")} · ${where}`}
       />
       <SettingRow
         title={
@@ -207,11 +342,7 @@ function Attached({ room, repository }: { room: ClassroomDetail; repository: Jou
           {refreshing ? null : <RefreshCw />} {t("journal.refresh")}
         </Button>
       </SettingRow>
-      <SettingRow title={t("journalSettings.remove")} desc={t("journalSettings.removeDesc")}>
-        <Button variant="danger-quiet" loading={remove.isPending} onClick={() => void onRemove()}>
-          <Trash2 /> {t("journalSettings.removeOpen")}
-        </Button>
-      </SettingRow>
+      <RemoveRow room={room} journal={journal} />
     </Card>
   );
 }
@@ -224,7 +355,7 @@ function useAttach(room: ClassroomDetail, onDone: () => void) {
   const qc = useQueryClient();
   const toast = useToast();
   return async (next: JournalStaff) => {
-    await qc.invalidateQueries({ queryKey: ["journal", room.id] });
+    await qc.invalidateQueries({ queryKey: journalRootKey(room.id) });
     toast(t("journalSettings.attached", { name: next.repository?.fullName ?? "" }), "success");
     onDone();
   };

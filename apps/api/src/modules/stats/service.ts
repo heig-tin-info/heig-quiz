@@ -55,6 +55,7 @@ import {
   type ScoredAnswer,
   type Spread,
 } from "@quiz/domain";
+import { drawnApart, type Parameters } from "@quiz/domain/parameters";
 
 import { isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -71,6 +72,7 @@ import { isStaffAttempt } from "../evaluation/service.js";
 import { pairKey, type PairKey } from "../grading/service.js";
 import { answeredBy } from "../live/service.js";
 import { tryLoadConfig, typeOf } from "../pool/config.js";
+import { parametersOf } from "../pool/service.js";
 
 /**
  * What makes an attempt count, whatever the series: a finished attempt of an
@@ -307,6 +309,7 @@ interface CountedAnswer {
 
 /** What an mcq config holds that this analysis reads. */
 interface Choices {
+  prompt: string;
   mode: "single" | "multiple";
   choices: { text: string; correct: boolean }[];
 }
@@ -334,7 +337,7 @@ async function distractorsOf(
   for (const answer of counted) push(countedOf, answer.questionId, answer);
   if (countedOf.size === 0) return result;
 
-  const versionsOf = new Map<string, { id: string; choices: Choices | null }[]>();
+  const versionsOf = new Map<string, { id: string; choices: Choices | null; params: Parameters | null }[]>();
   const rows = await db
     .select({
       id: questionVersions.id,
@@ -351,7 +354,11 @@ async function distractorsOf(
     // mcq is read as its TEMPLATE on purpose: its options are grouped by
     // their template text (ADR-056 §9).
     const loaded = tryLoadConfig(DISTRACTOR_TYPE, row, { template: true });
-    push(versionsOf, row.questionId, { id: row.id, choices: loaded.ok ? (loaded.config as Choices) : null });
+    push(versionsOf, row.questionId, {
+      id: row.id,
+      choices: loaded.ok ? (loaded.config as Choices) : null,
+      params: parametersOf(row),
+    });
   }
 
   const type = typeOf(DISTRACTOR_TYPE);
@@ -359,6 +366,7 @@ async function distractorsOf(
   for (const [questionId, given] of countedOf) {
     const same = sameAsLatest(versionsOf.get(questionId) ?? [], (v) => v.choices && keyOf(v.choices));
     const latest = same.at(-1)?.choices;
+    const drawn = drawnOptions(latest, same.at(-1)?.params ?? null);
     const ids = new Set(same.map((v) => v.id));
     // A skipped question is no answer, whatever it stored: the class debrief's rule.
     const payloads = given
@@ -376,13 +384,31 @@ async function distractorsOf(
             n: payloads.length,
             // Any matching version that let several choices be ticked lets the shares pass 100.
             multiple: same.some((v) => v.choices!.mode === "multiple"),
-            options: latest.choices.map(({ text, correct }, i) => ({ text, correct, share: shares.options[i]! })),
+            options: latest.choices.map(({ text, correct }, i) => ({
+              text,
+              correct,
+              share: shares.options[i]!,
+              ...(drawn[i] ? { drawn: true } : {}),
+            })),
             none: shares.none,
           }
         : null,
     );
   }
   return result;
+}
+
+/**
+ * Which options of a parameterized mcq show a value drawn for them alone
+ * (ADR-056 §9): a `uniform()` or `choice()` distractor, a different number
+ * for each student, against the statement and the correct choices. A
+ * formula distractor (`[[sqrt(h/g)]]`) is not one. All false for a static
+ * question.
+ */
+function drawnOptions(choices: Choices | null | undefined, params: Parameters | null): boolean[] {
+  if (!choices || params === null) return [];
+  const shared = [choices.prompt, ...choices.choices.filter((c) => c.correct).map((c) => c.text)];
+  return choices.choices.map((c) => !c.correct && drawnApart(c.text, shared, params));
 }
 
 /** Two versions have the same options when their texts and their key are the same, in order. */

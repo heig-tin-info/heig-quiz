@@ -91,15 +91,25 @@ export const classroomGithubKey = (id: string) => ["classroom", id, "github"] as
 export const githubOrgsKey = ["github", "orgs"] as const;
 /** The caller's GitHub account link (F-GH-05): under `meKey`, refreshed with the session. */
 export const meGithubKey = ["me", "github"] as const;
+/** Both payloads of a classroom's journal: what a create, a use or a removal invalidates. */
+export const journalRootKey = (id: string) => ["journal", id] as const;
 /**
  * A classroom's journal (F-JRN-07), in the payload `view` asks for: the staff
  * one or the student one (a teacher in the student view reads the latter).
  * Its pages hang under it, so one invalidation of the journal (a refresh, the
  * SSE hint of an ingestion) refreshes the navigation and every page read.
  */
-export const journalKey = (id: string, view: "staff" | "student") => ["journal", id, view] as const;
+export const journalKey = (id: string, view: "staff" | "student") => [...journalRootKey(id), view] as const;
 export const journalPageKey = (id: string, view: "staff" | "student", path: string) =>
   [...journalKey(id, view), "page", path] as const;
+/** A Quiz-mode page's revisions, and the deleted pages (ADR-057): staff only, under the staff journal. */
+export const journalRevisionsKey = (id: string, path: string) => [...journalKey(id, "staff"), "revisions", path] as const;
+export const journalDeletedKey = (id: string) => [...journalKey(id, "staff"), "deleted"] as const;
+/** One revision with its markdown (it never changes), and that markdown rendered as its page would read. */
+export const journalRevisionKey = (id: string, revisionId: string) =>
+  [...journalKey(id, "staff"), "revision", revisionId] as const;
+export const journalRevisionRenderedKey = (id: string, revisionId: string) =>
+  [...journalRevisionKey(id, revisionId), "rendered"] as const;
 
 // --- Pools and questions -----------------------------------------------------
 
@@ -158,6 +168,12 @@ export const questionKey = (id: string) => ["question", id] as const;
 /** `POST /questions/:id/preview` of the draft or of one published version. */
 export const questionPreviewKey = (id: string, source: "draft" | number | undefined) =>
   ["question", id, "preview", source] as const;
+/**
+ * `POST /questions/:id/draft/instances` (ADR-056 §8), per stored draft: the
+ * stamp of the draft it was drawn from, so every save draws again.
+ */
+export const questionInstancesKey = (id: string, stamp: string) =>
+  ["question", id, "instances", stamp] as const;
 
 // --- Evaluations ---------------------------------------------------------------
 

@@ -8,7 +8,7 @@
  * The order of the matchers is the grading order — the first match wins — so
  * the list is reorderable and numbered.
  */
-import { useId } from "react";
+import { useId, useState } from "react";
 import type { ConfigIssue, EditorProps, MarkdownRenderer, StringOverrides } from "@quiz/core/client";
 import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import {
@@ -20,6 +20,7 @@ import {
   type ShortConstraints,
   type ShortKind,
   type ShortMatcher,
+  TYPED_NUMBER,
 } from "./schema.js";
 import { explainMatcher } from "./explain.js";
 import { shortEditorStrings, type ShortEditorStringKey } from "./strings.js";
@@ -103,12 +104,77 @@ const rowCell = (index: number, className?: string) => ({
  * shows `tolerance × 100` and stores what it reads divided by 100.
  */
 const toPercent = (fraction: number) => Number((fraction * 100).toPrecision(12));
-/**
- * A `[[…]]` reference of a parameterized template (ADR-056 §4) is not a
- * number this field can show: it reads empty, and typing replaces it.
- */
-const numeric = (value: number | string): number | null => (typeof value === "number" ? value : null);
 const fromPercent = (percent: number) => Number((percent / 100).toPrecision(12));
+
+/**
+ * A `number` matcher's value or tolerance: a number, or — in a
+ * parameterized question — a `[[…]]` reference to a variable or an
+ * expression (ADR-056 §4), kept as the text the teacher typed. What reads
+ * as a number is stored as one (a relative tolerance is typed in percent
+ * and stored as a fraction); an empty field stores 0; anything
+ * else is stored as text, which the schema accepts only as a whole
+ * `[[…]]` and otherwise reports on the field (D16). A reference is stored
+ * as written: in a relative tolerance its value is the fraction (0.01 is
+ * 1 %).
+ *
+ * The field keeps its own text, so that "4." or "[[t" survive the round
+ * trip through the config; it takes the config's value again only when that
+ * value changed to something the text does not read as.
+ */
+function NumberOrReferenceField({
+  id,
+  label,
+  value,
+  onChange,
+  percent = false,
+  disabled,
+  index,
+}: {
+  id: string;
+  label: string;
+  value: number | string;
+  onChange: (value: number | string) => void;
+  /** Typed in percent, stored as a fraction. */
+  percent?: boolean;
+  disabled: boolean | undefined;
+  /** The matcher's row, for the label a screen reader hears. */
+  index: number;
+}) {
+  const shown = (v: number | string) => (typeof v === "number" ? String(percent ? toPercent(v) : v) : v);
+  const read = (typed: string): number | string => {
+    if (typed.trim() === "") return 0;
+    if (!TYPED_NUMBER.test(typed)) return typed.trim();
+    const n = Number(typed.trim().replace(",", "."));
+    return percent ? fromPercent(n) : n;
+  };
+  const [text, setText] = useState(() => shown(value));
+  // A new value from the config that is not what the text reads (a restored
+  // version, a draft from another tab) replaces the text; the echo of what
+  // was just typed does not.
+  const [seen, setSeen] = useState(value);
+  if (value !== seen) {
+    setSeen(value);
+    if (value !== read(text)) setText(shown(value));
+  }
+  return (
+    <FieldCell label={label} htmlFor={id} {...rowCell(index)}>
+      <input
+        id={id}
+        type="text"
+        inputMode="decimal"
+        spellCheck={false}
+        autoComplete="off"
+        className={cx(inputClass, inputSize.md, "w-full text-right tabular-nums sm:w-28")}
+        value={text}
+        disabled={disabled}
+        onChange={(e) => {
+          setText(e.target.value);
+          onChange(read(e.target.value));
+        }}
+      />
+    </FieldCell>
+  );
+}
 
 /**
  * The fields of one accepted answer, as the cells of the row's labelled
@@ -180,34 +246,24 @@ function MatcherFields({
       const relative = matcher.toleranceMode === "rel";
       return (
         <>
-          <NumberField
+          <NumberOrReferenceField
             id={id("value")}
             label={s.value}
-            {...rowCell(index)}
-            {...narrow}
-            step="any"
-            value={numeric(matcher.value)}
+            index={index}
+            value={matcher.value}
             disabled={disabled}
             onChange={(value) => onPatch({ ...matcher, value })}
           />
-          <NumberField
+          {/* Mounted again with the mode: the same fraction reads x100 in percent. */}
+          <NumberOrReferenceField
+            key={matcher.toleranceMode}
             id={id("tolerance")}
             label={relative ? s.tolerancePercent : s.tolerance}
-            {...rowCell(index)}
-            {...narrow}
-            min={0}
-            step="any"
-            value={
-              typeof matcher.tolerance !== "number"
-                ? null
-                : relative
-                  ? toPercent(matcher.tolerance)
-                  : matcher.tolerance
-            }
+            index={index}
+            percent={relative}
+            value={matcher.tolerance}
             disabled={disabled}
-            onChange={(typed) =>
-              onPatch({ ...matcher, tolerance: relative ? fromPercent(typed) : typed })
-            }
+            onChange={(tolerance) => onPatch({ ...matcher, tolerance })}
           />
           <FieldCell label={s.toleranceMode} htmlFor={id("mode")} {...rowCell(index)}>
             <select

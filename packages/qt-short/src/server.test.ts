@@ -84,6 +84,44 @@ describe("the contract", () => {
     expect(shortServer.parameterIssues!(null)).toEqual([]);
   });
 
+  describe("a tolerance below half the step of the key's format (ADR-056 §6)", () => {
+    const number = (tolerance: unknown, toleranceMode = "abs", value = "[[t]]") => ({
+      matchers: [{ kind: "number", value, tolerance, toleranceMode }],
+    });
+    const sample = (format: string, ...t: number[]) => ({
+      formats: { t: format, d: "" },
+      values: t.map((v) => ({ t: v, d: 0.001 })),
+    });
+    const refused = [{ path: ["matchers", 0, "tolerance"], message: "short.tolerance_below_format" }];
+
+    it("compares an absolute tolerance with half the step", () => {
+      expect(shortServer.sampleIssues!(number(0), sample(".2", 4.52))).toEqual(refused);
+      expect(shortServer.sampleIssues!(number(0.004), sample(".2", 4.52))).toEqual(refused);
+      expect(shortServer.sampleIssues!(number(0.005), sample(".2", 4.52))).toEqual([]);
+      expect(shortServer.sampleIssues!(number("0.5"), sample("int", 12))).toEqual([]);
+      expect(shortServer.sampleIssues!(number(undefined), sample("int", 12))).toEqual(refused);
+    });
+
+    it("turns a relative tolerance into its margin at the smallest drawn key", () => {
+      // 1 % of 0.62 is 0.0062 ≥ 0.005, but 1 % of 0.31 is not.
+      expect(shortServer.sampleIssues!(number(0.01, "rel"), sample(".2", 0.62, 4.52))).toEqual([]);
+      expect(shortServer.sampleIssues!(number(0.01, "rel"), sample(".2", 4.52, 0.31))).toEqual(refused);
+      // 3 significant figures of 981 step by 1: 0.1 % (0.981) covers it.
+      expect(shortServer.sampleIssues!(number(0.001, "rel"), sample("3s", 981, 9.81))).toEqual([]);
+    });
+
+    it("reads a tolerance that names a variable in each draw", () => {
+      expect(shortServer.sampleIssues!(number("[[d]]"), sample(".2", 4.52))).toEqual(refused);
+    });
+
+    it("leaves alone a key without a format, an expression key and a computed tolerance", () => {
+      expect(shortServer.sampleIssues!(number(0), sample("", 4.52))).toEqual([]);
+      expect(shortServer.sampleIssues!(number(0, "abs", "[[2*t]]"), sample(".2", 4.52))).toEqual([]);
+      expect(shortServer.sampleIssues!(number("[[d/10]]"), sample(".2", 4.52))).toEqual([]);
+      expect(shortServer.sampleIssues!(null, sample(".2", 4.52))).toEqual([]);
+    });
+  });
+
   it("raises a v2 config unchanged, but for its stamp", () => {
     const v2 = { ...config(), configVersion: 2 };
     expect(shortServer.migrate(v2, 2)).toEqual(config());

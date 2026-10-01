@@ -35,9 +35,11 @@ import { createHash } from "node:crypto";
 import { issuesOf, type ParametersDraft, type ZodIssueLite } from "@quiz/contracts";
 import type { AnyQuestionTypeServer } from "@quiz/core/server";
 import { streamSeed } from "@quiz/core/rng";
+import { PARAMETERIZED_TYPES } from "@quiz/domain";
 import {
   distinctRendered,
   draw,
+  formattedValues,
   instantiate,
   ParameterError,
   replay,
@@ -58,13 +60,11 @@ import {
   raise,
   saveConfig,
   templateOf,
+  tryLoadConfig,
   typeOf,
   type StaticVersion,
   type StoredVersion,
 } from "./config.js";
-
-/** The types whose texts may interpolate variables in v1 (ADR-056 §10). */
-export const PARAMETERIZED_TYPES: ReadonlySet<string> = new Set(["mcq", "short", "cloze"]);
 
 /** The columns of a question version an instance is made of. */
 export interface VersionContent extends StoredVersion {
@@ -204,13 +204,31 @@ export function instanceOf(
 export function exampleInstance(type: string, version: VersionContent): Instance {
   const params = parametersOf(version);
   if (params === null) return instanceOf(type, version, { seed: 0, itemId: "" });
-  const { values } = draw(params, 0, acceptOf(typeOf(type), templateOf(type, version), params));
+  return gatedInstance(type, version, params, 0);
+}
+
+/** The instance of `draw(params, seed)`: what publication gates for `seed`. */
+function gatedInstance(type: string, version: VersionContent, params: Parameters, seed: number): Instance {
+  const { values } = draw(params, seed, acceptOf(typeOf(type), templateOf(type, version), params));
   return render(type, version, params, { versionId: version.id, values }, values);
 }
 
 /** The parsed config a reader of a question's STRUCTURE uses: its {@link exampleInstance}'s. */
 export function exampleConfig(type: string, version: VersionContent): unknown {
   return loadConfig(type, exampleInstance(type, version).version);
+}
+
+/**
+ * The question AS WRITTEN, for a teacher's eyes (the grading table's expected
+ * row, ADR-056 §9): the template itself when the type's schema takes it — an
+ * mcq's choices and a short's number matcher hold their `[[…]]` as text —
+ * else the {@link exampleInstance}, `example: true` (a cloze number blank
+ * `{{#[[t]]:1%}}` is no blank until it is instantiated). Never a student
+ * payload: no student route reads a template (invariant 4).
+ */
+export function writtenConfig(type: string, version: VersionContent): { config: unknown; example: boolean } {
+  const template = tryLoadConfig(type, version, { template: true });
+  return template.ok ? { config: template.config, example: false } : { config: exampleConfig(type, version), example: true };
 }
 
 /** What {@link itemInstance} reads of an evaluation item. */
@@ -242,12 +260,41 @@ export function itemInstance(entry: InstanceItem, attempt: InstanceAttempt): Ins
  * whose every attempt has its own key. Throws like `loadConfig`.
  */
 export function configPerAttempt(entry: InstanceItem): (attempt: InstanceAttempt) => unknown {
-  if (!isParameterized(entry.version)) {
-    const config = loadConfig(entry.question.type, entry.version);
-    return () => config;
-  }
-  return (attempt) => loadConfig(entry.question.type, itemInstance(entry, attempt).version);
+  const read = readingPerAttempt(entry);
+  return (attempt) => read(attempt).config;
 }
+
+/** What a reader of one attempt's item holds: its parsed config, and the values it was drawn with. */
+export interface Reading {
+  config: unknown;
+  /** Null for a static question. */
+  values: Values | null;
+  /** The explanation instantiated with `values`; the version's own for a static question. */
+  explanation: string;
+}
+
+/** {@link configPerAttempt}, with the values beside the config: the grading panel shows both. */
+export function readingPerAttempt(entry: InstanceItem): (attempt: InstanceAttempt) => Reading {
+  if (!isParameterized(entry.version)) {
+    const reading = {
+      config: loadConfig(entry.question.type, entry.version),
+      values: null,
+      explanation: entry.version.explanation,
+    };
+    return () => reading;
+  }
+  return (attempt) => {
+    const instance = itemInstance(entry, attempt);
+    return {
+      config: loadConfig(entry.question.type, instance.version),
+      values: instance.values,
+      explanation: instance.explanation,
+    };
+  };
+}
+
+/** An explanation as the payloads carry it: `null` when there is none. */
+export const explanationOrNull = (explanation: string): string | null => (explanation === "" ? null : explanation);
 
 /**
  * The identity of a parameterized TEMPLATE, for a key that must not move
@@ -276,45 +323,94 @@ function issueOf(issue: Issue): ZodIssueLite {
 
 const parameterIssue = (path: string[], message: string): ZodIssueLite => ({ path, code: "custom", message });
 
+/** What {@link parameterIssues} reads of a draft. */
+interface DraftContent {
+  config: unknown;
+  /** The stored row's; a caller holding a bare config (MCP) leaves it out: the config's own is read. */
+  configVersion?: number;
+  explanation: string;
+  variables: ParametersDraft | null;
+}
+
 /**
- * Everything publication requires of a parameterized draft (ADR-056 §3, §7,
- * §10), as the editor's issues; empty for a static one (its config goes
- * through `publishConfig` as before). In order, stopping at the first
- * family that fails: a type that takes variables; the type's own rule on
- * the template (`parameterIssues`); the table and every `[[…]]` of the
- * config and the explanation, over 200 draws (`validateParameters`); then
- * the instances of a few seeds through the type's publication gate.
+ * Publication's check of a parameterized draft, and the values of the
+ * draws it gated (one per seed of `GATE_SEEDS`, in order) when it passes.
+ * See {@link parameterIssues}.
  */
-export function parameterIssues(
-  type: string,
-  draft: {
-    config: unknown;
-    /** The stored row's; a caller holding a bare config (MCP) leaves it out: the config's own is read. */
-    configVersion?: number;
-    explanation: string;
-    variables: ParametersDraft | null;
-  },
-): ZodIssueLite[] {
-  const params = parametersOf(draft);
-  if (params === null) return [];
-  if (!PARAMETERIZED_TYPES.has(type)) return [parameterIssue(["variables"], "parameters.unsupported_type")];
+function gate(type: string, draft: DraftContent, params: Parameters): { issues: ZodIssueLite[]; draws: Values[] } {
+  const refused = (issues: ZodIssueLite[]) => ({ issues, draws: [] });
+  if (!PARAMETERIZED_TYPES.has(type)) return refused([parameterIssue(["variables"], "parameters.unsupported_type")]);
   const t = typeOf(type);
   const template = raise(t, draft.config, draft.configVersion ?? declaredVersion(draft.config) ?? t.configVersion);
   const own = (t.parameterIssues?.(template) ?? []).map((i) => parameterIssue(i.path.map(String), i.message));
-  if (own.length > 0) return own;
+  if (own.length > 0) return refused(own);
   const options = acceptOf(t, template, params);
   const issues = validateParameters(params, { config: template, explanation: draft.explanation }, options);
-  if (issues.length > 0) return issues.map(issueOf);
+  if (issues.length > 0) return refused(issues.map(issueOf));
+  const draws: Values[] = [];
   for (const seed of GATE_SEEDS) {
     try {
-      publishConfig(type, instantiate(template, params, draw(params, seed, options).values));
+      const { values } = draw(params, seed, options);
+      publishConfig(type, instantiate(template, params, values));
+      draws.push(values);
     } catch (error) {
-      if (error instanceof NotPublishable) return error.issues;
-      if (error instanceof ParameterError) return [issueOf(error.issue)];
-      return issuesOf(error);
+      if (error instanceof NotPublishable) return refused(error.issues);
+      if (error instanceof ParameterError) return refused([issueOf(error.issue)]);
+      return refused(issuesOf(error));
     }
   }
-  return [];
+  // The rules that read the drawn values (§6: a tolerance against the key's format).
+  const formats = Object.fromEntries(params.rows.map((row) => [row.name, row.format]));
+  const sampled = (t.sampleIssues?.(template, { formats, values: draws }) ?? []).map((i) =>
+    parameterIssue(i.path.map(String), i.message),
+  );
+  return sampled.length > 0 ? refused(sampled) : { issues: [], draws };
+}
+
+/**
+ * Everything publication requires of a parameterized draft (ADR-056 §3, §6,
+ * §7, §10), as the editor's issues; empty for a static one (its config goes
+ * through `publishConfig` as before). In order, stopping at the first
+ * family that fails: a type that takes variables; the type's own rule on
+ * the template (`parameterIssues`); the table and every `[[…]]` of the
+ * config and the explanation, over 200 draws (`validateParameters`); the
+ * instances of a few seeds through the type's publication gate; then the
+ * type's rules on those draws' values (`sampleIssues`).
+ */
+export function parameterIssues(type: string, draft: DraftContent): ZodIssueLite[] {
+  const params = parametersOf(draft);
+  return params === null ? [] : gate(type, draft, params).issues;
+}
+
+/** One instance of the editor's preview (ADR-056 §8): its seed, its values as shown, the instance. */
+export interface PreviewInstance {
+  seed: number;
+  /** In the table's order, each written with its row's format. */
+  values: { name: string; value: string }[];
+  instance: Instance;
+}
+
+/**
+ * The editor's preview of a parameterized draft (ADR-056 §8): the instances
+ * of the seeds publication gates, drawn exactly as it draws them, so what
+ * the teacher reads is what publication checked. Issues instead when the
+ * draft would not publish — the instances of a draft that does not draw
+ * cannot be shown. Empty for a static draft.
+ */
+export function previewInstances(
+  type: string,
+  version: VersionContent,
+): { instances: PreviewInstance[]; issues: ZodIssueLite[] } {
+  const params = parametersOf(version);
+  if (params === null) return { instances: [], issues: [] };
+  const { issues, draws } = gate(type, version, params);
+  if (issues.length > 0) return { instances: [], issues };
+  // The very draws publication gated, rendered: nothing is drawn twice.
+  const instances = draws.map((drawn, i) => {
+    const instance = render(type, version, params, { versionId: version.id, values: drawn }, drawn);
+    return { seed: GATE_SEEDS[i]!, values: formattedValues(params, drawn), instance };
+  });
+  return { instances, issues: [] };
 }
 
 /**

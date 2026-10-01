@@ -20,6 +20,7 @@ const row = (over: Partial<QuestionRow> & { id: string }): QuestionRow => ({
   hasDraftChanges: false,
   keyless: false,
   starred: false,
+  randomizable: false,
   updatedAt: "2026-09-18T08:00:00.000Z",
   deprecated: false,
   deletedAt: null,

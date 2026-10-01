@@ -237,26 +237,37 @@ question's prose never carries it, so the question scenes do not move.
   (`surface`, hairline, card radius) on the canvas; the strip and the
   table of contents are bare. The reader is a tab of the classroom page
   (both roles), under its header and tabs, with no breadcrumb of its own;
-  the staff get one bar under the strip, right-aligned: the sync state in 12 px `fg-faint` (red
-  on a failure) and Refresh, a `secondary` `sm` button reading
-  "Refreshing…" until the copy's state moves, then add and delete a page
-  (two icon buttons, `Actions`), then **Edit**, the bar's one `primary`.
+  the staff get one bar under the strip, right-aligned, drawn by the
+  journal's mode (ADR-057). In Quiz mode: the Pages menu (`Actions`
+  forced to a menu: add a page, History, Deleted pages, then delete this
+  page, `danger`, under a hairline), then **Edit**, the bar's one
+  `primary`. In GitHub mode, read-only: the sync state in 12 px
+  `fg-faint` (red on a failure), Refresh, a `secondary` `sm` button
+  reading "Refreshing…" until the copy's state moves, then **Edit on
+  GitHub**, the bar's one `primary`: a link to github.com's editor of the
+  page's file, in a new tab, with the `ExternalLink` icon.
+  History and Deleted pages are sheets: the history lists the page's
+  saves (date at 13 px tabular, author 12 px muted, the newest badged
+  "Current"; the one on view an `accent-soft` row), the revision on view
+  under them on `surface-2`, rendered by the server's renderer or as its
+  markdown (a `sm` segmented), and "Restore this version" is the sheet's
+  one `primary`, confirmed.
 
-- **The editor** (`src/journal/editor/`, M4-06) takes the page's place on
-  the same route; the strip stays, the table of contents goes (it would
-  go stale as the teacher types). The staff bar becomes the editor's: "Unsaved changes" or
-  "No changes" in 12 px `fg-faint` on the left, Cancel (`secondary`) and
-  Save (`primary`, off while nothing differs) on the right. The page's
-  sheet holds the front matter as one row of fields (title, date, visible
-  from, draft; stacked on a phone), a hairline, then the rich field, whose
-  surface wears `.md-doc` too: the teacher writes in the type students
-  read. Raw HTML shows in the field as what it is, text: mono, `fg-muted`,
-  a block of it on `surface-2` (`.rt-raw-html`). Under the sheet, the
-  optional description of the change. A save refused because the file
-  moved is the one red block, above the sheet: the draft stays, "Copy my
-  text" (`secondary`) and "Reload the page…" (`danger`, confirmed). The
-  source view adds the server's preview under the textarea, on demand
-  (`secondary`), on `surface-2`.
+- **The editor** (`src/journal/editor/`, Quiz mode only) takes the
+  page's place on the same route; the strip stays, the table of contents
+  goes (it would go stale as the teacher types). The staff bar becomes the
+  editor's: "Unsaved changes" or "No changes" in 12 px `fg-faint` on the
+  left, Cancel (`secondary`) and Save (`primary`, off while nothing
+  differs) on the right. The page's sheet holds the front matter as one
+  row of fields (title, date, visible from, draft; stacked on a phone), a
+  hairline, then the platform's standard rich field (the one question
+  statements use, its source view included), whose surface wears
+  `.md-doc` too (`longForm`): the teacher writes in the type students
+  read. A save refused because someone saved meanwhile is the one red
+  block, above the sheet: the draft stays, "Copy my text" (`secondary`)
+  and "Reload the page…" (`danger`, confirmed). The source view adds the
+  server's preview under the textarea, on demand (`secondary`), on
+  `surface-2`.
 
 The rendered HTML comes from the server (`packages/docrender`, D15: the
 journal escapes raw HTML), so, like `.md-body` itself, these are tag
@@ -453,7 +464,12 @@ live in `ui/state.ts`, each written once.
   confirmation is the `danger` dialog — delete, remove, disconnect, unlink.
   The row reads as destructive without a second red fill competing with the
   screen's one accent; the fill belongs to the confirmation. A reversible
-  action (archive) stays `secondary`. Sizes `sm` 28 px, `md` 34 px, `lg` 40 px.
+  action (archive) stays `secondary`. A deletion that destroys the only
+  copy of something (a classroom whose Quiz-mode journal holds pages, that
+  journal itself: F-ORG-09, F-JRN-04) asks for the classroom's name in the
+  same dialog (`useConfirm({ typeToConfirm })`): one field under the
+  message, the `danger` button off until the name matches.
+  Sizes `sm` 28 px, `md` 34 px, `lg` 40 px.
   Pressed to 0.97. The class list is `buttonClass` in `@quiz/ui`, which the
   app's `Button` and `LinkButton` and the question types all wear.
 - Icon button: round, ghost; `danger` turns red on hover only.
@@ -1459,6 +1475,17 @@ One question's answers as a table (`src/grading/`, origin
   and "New version", no number — with "A newer version is published —
   re-grade" as its tooltip and name: a filled secondary, never the accent,
   which stays Validate N.
+- **A parameterized question** (ADR-056 §9): the key's row is the question
+  as written, its `[[…]]` left in the type's own key chips (mono, `info`),
+  or an italic `fg-muted` "per answer" in each cell when only an example
+  could be drawn; a `zinc` badge with the dice icon, "Own key per answer",
+  stands before the key's actions and explains itself in its tooltip. The
+  rows stand sorted by verdict (the Verdict header shows it). The panel adds the student's values as
+  `surface-2` mono chips, `name = value`, under the review, and the key's
+  panel the variables, one mono line each, the format worded in the text
+  face. On the correction projection, "Example values" sits above the
+  statement in the caption size with the dice icon, and a parameterized
+  short or cloze draws no answer groups: the head's bar holds the verdicts.
 - **The answer panel** is a `Sheet` with two optional slots added for it:
   `leading` (the verdict glyph before the title) and `actions` (↑ / ↓
   before the close button).

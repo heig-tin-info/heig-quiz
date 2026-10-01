@@ -58,8 +58,15 @@ import {
   type JoinedItem,
 } from "../evaluation/service.js";
 import { solutionViewOf, studentViewOf } from "../live/studentView.js";
-import { sameTable } from "@quiz/domain/parameters";
-import { configPerAttempt, parametersOf } from "../pool/service.js";
+import { formattedValues, sameTable } from "@quiz/domain/parameters";
+import {
+  explanationOrNull,
+  isParameterized,
+  parametersOf,
+  readingPerAttempt,
+  writtenConfig,
+  type Reading,
+} from "../pool/service.js";
 import { watchReleasedGrades } from "../results/service.js";
 import { keptAttempts, tallyByAttempt } from "./kept.js";
 
@@ -485,9 +492,9 @@ interface QueueContext {
   /**
    * Each item's config, parsed once for every attempt that shows it — per
    * attempt for a parameterized question, whose every attempt has its own
-   * key (ADR-056, `configPerAttempt`).
+   * key and its own values (ADR-056, `readingPerAttempt`).
    */
-  configs: Map<string, (attempt: AttemptRecord) => unknown>;
+  readings: Map<string, (attempt: AttemptRecord) => Reading>;
 }
 
 /**
@@ -537,10 +544,10 @@ async function loadQueueContext(
     ),
     // Only when some cell will show them: an empty panel never parsed a
     // config, and must not start failing on one that no longer loads.
-    configs: new Map(
+    readings: new Map(
       (attemptRows.length === 0 ? [] : selection.items).map((i) => [
         i.item.id,
-        configPerAttempt(i),
+        readingPerAttempt(i),
       ]),
     ),
   };
@@ -562,7 +569,8 @@ function entryOf(
   const key = pairKey(attempt.id, item.item.id);
   const answer = context.answers.get(key) ?? null;
   const who = context.roster.get(attempt.id);
-  const config = context.configs.get(item.item.id)?.(attempt);
+  const reading = context.readings.get(item.item.id)?.(attempt);
+  const config = reading?.config;
   const view = { seed: attempt.seed, itemId: item.item.id, shuffle: false };
   return {
     answerId: answer?.id ?? null,
@@ -574,6 +582,12 @@ function entryOf(
     attemptNumber: who?.attemptNumber ?? null,
     kept: context.kept.has(attempt.id),
     answer: answer?.payload ?? null,
+    ...(reading?.values
+      ? {
+          values: formattedValues(parametersOf(item.version)!, reading.values),
+          explanation: explanationOrNull(reading.explanation),
+        }
+      : {}),
     student: studentViewOf(item.question.type, config, view),
     solution: solutionViewOf(item.question.type, config, view),
     grading: grading ? toGrading(grading) : null,
@@ -629,10 +643,29 @@ export async function gradingQueue(
       type: i.question.type,
       points: i.item.points,
       minPoints: pointsRangeOf(evaluation, i, i.item.points).min,
-      explanation: i.version.explanation === "" ? null : i.version.explanation,
+      explanation: explanationOrNull(i.version.explanation),
+      ...(isParameterized(i.version) ? { parameters: writtenOf(i) } : {}),
     })),
     entries,
     counts: { total, validated, proposed, missing: total - validated - proposed },
+  };
+}
+
+/**
+ * A parameterized item's expected row (ADR-056 §9): its variables, and the
+ * question as written — through the type's own views, seed 0 and no
+ * shuffle, like every view of the panel. Staff-only, like the queue.
+ */
+function writtenOf(item: JoinedItem): NonNullable<GradingQueue["items"][number]["parameters"]> {
+  const { config, example } = writtenConfig(item.question.type, item.version);
+  const view = { seed: 0, itemId: item.item.id, shuffle: false };
+  return {
+    variables: parametersOf(item.version)!,
+    template: {
+      student: studentViewOf(item.question.type, config, view),
+      solution: solutionViewOf(item.question.type, config, view),
+      example,
+    },
   };
 }
 

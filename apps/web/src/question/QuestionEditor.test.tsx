@@ -227,6 +227,23 @@ describe("QuestionEditor — mcq", () => {
     expect(await screen.findAllByText("Saved")).not.toHaveLength(0);
   }, 20_000);
 
+  it("keeps the variables behind 'Random values', and saves the table with the draft (ADR-056)", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch(
+      routes(mcqDetail(), { "POST /app/api/questions/q1/draft/instances": ok({ instances: [], issues: [] }) }),
+    );
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    await user.click(await screen.findByRole("button", { name: "Random values" }));
+    await user.click(screen.getByRole("button", { name: "Add a variable" }));
+    await user.type(screen.getByLabelText("Name 1"), "h");
+    await user.type(screen.getByLabelText("Expression 1"), "randint(1, 9)");
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === "PUT").at(-1)?.body).toMatchObject({
+        variables: { rows: [{ name: "h", expr: "randint(1, 9)", format: "" }] },
+      }),
+    );
+  }, 20_000);
+
   /*
    * The autosave loop this screen used to live in: `PUT /draft` makes the API
    * emit a pool hint, `live.ts` invalidates EVERY query, the question query

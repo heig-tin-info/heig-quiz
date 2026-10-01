@@ -1,9 +1,10 @@
 /** Section 2 of the mock — see `index.ts` for the layout. */
-import { PoolColor, type QuestionStats, type ZodIssueLite } from "@quiz/contracts";
+import { PoolColor, type DraftInstances, type ParametersDraft, type QuestionStats, type ZodIssueLite } from "@quiz/contracts";
 import {
   clozeStudentTemplate,
   describeBlank,
   displayName,
+  isVariableName,
   matchBlank,
   mcqFraction,
   parseCloze,
@@ -106,6 +107,8 @@ interface MockVersion {
   config: Record<string, unknown>;
   explanation: string;
   configVersion: number;
+  /** The variables table it was published with (ADR-056); null when static. */
+  variables: ParametersDraft | null;
 }
 
 export interface MockQuestion {
@@ -120,7 +123,7 @@ export interface MockQuestion {
   tags: string[];
   deletedAt: string | null;
   updatedAt: string;
-  draft: { config: Record<string, unknown>; explanation: string };
+  draft: { config: Record<string, unknown>; explanation: string; variables: ParametersDraft | null };
   versions: MockVersion[];
 }
 
@@ -692,12 +695,19 @@ export function makeQuestion(
   init: Omit<MockQuestion, "id" | "versions" | "draft" | "deletedAt" | "updatedAt"> & {
     config: Record<string, unknown>;
     explanation?: string;
+    variables?: ParametersDraft | null;
     published?: { number: number; changeNote: string; daysAgo: number }[];
     draftChanges?: boolean;
+    /**
+     * A fixed id, outside the sequence: a question added after the others
+     * were numbered, so that every `qN` the screenshots and the tests name
+     * keeps pointing at the same question.
+     */
+    id?: string;
   },
 ): MockQuestion {
-  const { config, explanation = "", published = [], draftChanges = false, ...rest } = init;
-  questionSeq += 1;
+  const { config, explanation = "", variables = null, published = [], draftChanges = false, id, ...rest } = init;
+  if (id === undefined) questionSeq += 1;
   const versions: MockVersion[] = published.map((v) => ({
     number: v.number,
     publishedAt: iso(-v.daysAgo * D),
@@ -708,13 +718,14 @@ export function makeQuestion(
     config,
     explanation,
     configVersion: 1,
+    variables,
   }));
   return {
     ...rest,
-    id: `q${questionSeq}`,
+    id: id ?? `q${questionSeq}`,
     deletedAt: null,
     updatedAt: iso(-(draftChanges ? 1 : (published.at(-1)?.daysAgo ?? 30)) * D),
-    draft: { config, explanation },
+    draft: { config, explanation, variables },
     versions,
   };
 }
@@ -987,6 +998,43 @@ export const questions: MockQuestion[] = [
       [{ name: "troncature", stdin: "", expected: "bonjour", visible: true }],
     ),
     explanation: "`strncpy` ne termine pas toujours la chaîne : il faut écrire le `\\0` soi-même.",
+  }),
+  // A parameterized question (ADR-056): the falling ball of the ADR, its
+  // values drawn per attempt; the editor's Variables section and its five
+  // draws (`mockDraws`), and the list's "Parameterized" pill.
+  makeQuestion({
+    id: "q-fall",
+    poolId: "p2",
+    type: "short",
+    internalName: "chute-libre-planete",
+    categoryId: "k6",
+    difficulty: 2,
+    shuffleable: false,
+    randomizable: true,
+    tags: ["accelerometre", "mrua"],
+    config: {
+      configVersion: 3,
+      prompt:
+        "L'accéléromètre d'une sonde mesure la chute libre d'une bille lâchée de [[h]] m, " +
+        "sur une planète où $g = [[g]]\\,\\mathrm{m/s^2}$. Combien de temps dure la chute ? Répondez en secondes.",
+      kind: "number",
+      constraints: { min: 0, integer: false },
+      prefilters: { trim: true, lowercase: true },
+      placeholder: "s",
+      matchers: [
+        { kind: "number", value: "[[t]]", tolerance: 0.01, toleranceMode: "abs", unit: "s", unitRequired: false, points: 1 },
+      ],
+    },
+    variables: {
+      rows: [
+        { name: "h", expr: "randint(10, 100)", format: "int" },
+        { name: "g", expr: "choice([3.71, 9.81, 24.79])", format: ".2" },
+        { name: "t", expr: "sqrt(2*h/g)", format: ".2" },
+      ],
+      condition: "t > 1.5",
+    },
+    explanation: "Un MRUA depuis le repos : $h = \\tfrac{1}{2} g t^2$, d'où $t = \\sqrt{2h/g} = [[t]]$ s.",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 3 }],
   }),
   makeQuestion({
     poolId: "p2",
@@ -1476,6 +1524,7 @@ const questionRow = (q: MockQuestion) => ({
   deletedAt: q.deletedAt,
   keyless: isKeyless(q),
   starred: stars.has(q.id) && q.deletedAt === null,
+  randomizable: q.randomizable,
 });
 
 /**
@@ -1524,8 +1573,7 @@ export const questionDetail = (q: MockQuestion) => ({
   draft: {
     config: q.draft.config,
     explanation: q.draft.explanation,
-    // No mock question is parameterized (ADR-056): the editor's table is PR 3.
-    variables: null,
+    variables: q.draft.variables,
     configVersion: 1,
     updatedAt: q.updatedAt,
     valid: draftIssues(q).length === 0,
@@ -1604,6 +1652,68 @@ export function draftIssues(
     }
   }
   return out;
+}
+
+/**
+ * The table's own mistakes the mock can see without an evaluator: a name
+ * the domain refuses (`isVariableName`, mathjs-free), an empty expression.
+ * The API says much more (`validateParameters`); this is enough to put an
+ * issue on a row.
+ */
+function variablesIssues(variables: ParametersDraft | null): ZodIssueLite[] {
+  return (variables?.rows ?? []).flatMap((row) => [
+    ...(isVariableName(row.name)
+      ? []
+      : [{ path: ["variables", row.name], code: "custom" as const, message: "parameters.bad_name" }]),
+    ...(row.expr.trim() === ""
+      ? [{ path: ["variables", row.name], code: "custom" as const, message: "parameters.parse_error" }]
+      : []),
+  ]);
+}
+
+/** Every `[[name]]` of a text replaced by its value; an unknown name stays as written. */
+export const fillText = (text: string, byName: Record<string, string>): string =>
+  text.replace(/\[\[\s*([A-Za-z_]\w*)\s*\]\]/g, (all, name: string) => byName[name] ?? all);
+
+/** {@link fillText} on every string of a JSON value: a template made an instance. */
+export const fillVariables = <T,>(json: T, byName: Record<string, string>): T =>
+  JSON.parse(JSON.stringify(json), (_k, v: unknown) => (typeof v === "string" ? fillText(v, byName) : v)) as T;
+
+/**
+ * `POST /questions/:id/draft/instances` (ADR-056 §8), without mathjs: the
+ * web bundle never carries the evaluator, and neither does its mock. Five
+ * canned draws of the falling ball (`h`, `g`, and `t` computed from them);
+ * any other variable reads its draw's number. Each `[[name]]` of the draft
+ * is replaced, then the instance goes through the same stand-ins as the
+ * preview.
+ */
+function mockDraws(q: MockQuestion): DraftInstances {
+  const variables = q.draft.variables;
+  if (variables === null || variables.rows.length === 0) return { instances: [], issues: [] };
+  const issues = variablesIssues(variables);
+  if (issues.length > 0) return { instances: [], issues };
+  const FALLS: [number, number][] = [[42, 9.81], [87, 3.71], [40, 24.79], [63, 9.81], [30, 3.71]];
+  const instances = FALLS.map(([h, g], seed) => {
+    const known: Record<string, string> = { h: String(h), g: g.toFixed(2), t: Math.sqrt((2 * h) / g).toFixed(2) };
+    const values = variables.rows.map((row) => ({ name: row.name, value: known[row.name] ?? String(seed + 1) }));
+    const byName = Object.fromEntries(values.map((v) => [v.name, v.value]));
+    const config = fillVariables(q.draft.config, byName);
+    const parsed = q.type === "short" ? shortServer.configSchema.safeParse(config) : null;
+    // The instance as a question of its own: the key hooks read its config, never the template's.
+    const instance: MockQuestion = { ...q, versions: [], draft: { ...q.draft, config } };
+    const solution = parsed?.success
+      ? shortServer.toSolution(parsed.data, { seed: 0, itemId: q.id, shuffle: false })
+      : solutionOf(instance);
+    return {
+      seed,
+      values,
+      student: studentView(q, config),
+      solution: studentSolutionOf(instance, solution),
+      itemPoints: 1,
+      explanation: fillText(q.draft.explanation, byName),
+    };
+  });
+  return { instances, issues: [] };
 }
 
 /** `toStudent`, as the server's registry would do it (seed 0, no shuffle). */
@@ -2475,9 +2585,11 @@ on("PUT", "/app/api/questions/:id/draft", (m, body) => {
   q.draft = {
     config: (body.config ?? {}) as Record<string, unknown>,
     explanation: typeof body.explanation === "string" ? body.explanation : q.draft.explanation,
+    // ADR-056: absent keeps the table, null makes the question static again.
+    variables: body.variables === undefined ? q.draft.variables : (body.variables as ParametersDraft | null),
   };
   q.updatedAt = iso(0);
-  const issues = draftIssues(q);
+  const issues = [...draftIssues(q), ...variablesIssues(q.draft.variables)];
   return { updatedAt: q.updatedAt, valid: issues.length === 0, issues };
 });
 on("POST", "/app/api/questions/:id/publish", (m, body) => {
@@ -2496,15 +2608,18 @@ on("POST", "/app/api/questions/:id/publish", (m, body) => {
     config: q.draft.config,
     explanation: q.draft.explanation,
     configVersion: 1,
+    variables: q.draft.variables,
   };
   q.versions.push(version);
+  // ADR-056 §1: derived at publication, never patched.
+  q.randomizable = (q.draft.variables?.rows.length ?? 0) > 0;
   return versionRow(version);
 });
 on("POST", "/app/api/questions/:id/versions/:number/restore", (m) => {
   const q = questionOr404(m.groups!.id!);
   const version = q.versions.find((v) => v.number === Number(m.groups!.number));
   if (!version) throw new MockError(404, "Version not found");
-  q.draft = { config: version.config, explanation: version.explanation };
+  q.draft = { config: version.config, explanation: version.explanation, variables: version.variables };
   q.updatedAt = iso(0);
   return questionDetail(q);
 });
@@ -2657,6 +2772,7 @@ on("POST", "/app/api/questions/:id/preview", (m, body) => {
   }
   return { type: q.type, student: studentView(q, config), itemPoints: 1 };
 });
+on("POST", "/app/api/questions/:id/draft/instances", (m) => mockDraws(questionOr404(m.groups!.id!)));
 on("POST", "/app/api/questions/:id/preview/solution", (m) => {
   const q = questionOr404(m.groups!.id!);
   return { solution: studentSolutionOf(q, solutionOf(q)) };

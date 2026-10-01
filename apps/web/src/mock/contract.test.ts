@@ -54,7 +54,10 @@ import {
   ItemVersions,
   encodeJournalPath,
   Journal,
+  JournalDeletedPage,
   JournalPage,
+  JournalRevision,
+  JournalRevisionContent,
   KioskDevice,
   KioskStation,
   PairPreview,
@@ -200,6 +203,10 @@ const journalPages = [...new Set([...(journal.homePath ? [journal.homePath] : []
   path,
   student: !journal.hiddenPaths.includes(path),
 }));
+/** A page of the Quiz-mode journal, and one of its revisions (ADR-057). */
+const revisedPage = journal.homePath ?? journalPages[0]!.path;
+const revisionsUrl = `/app/api/classrooms/${classroomId}/journal/revisions/${encodeJournalPath(revisedPage)}`;
+const revisionId = ((await get(revisionsUrl)) as { id: string }[])[0]!.id;
 
 // --- Route -> schema -------------------------------------------------------
 
@@ -404,6 +411,15 @@ const CHECKED: Case[] = [
       ),
     ),
   ),
+  // The Quiz-mode journal's history (ADR-057): a page's revisions, one
+  // revision with its markdown, the deleted pages.
+  each("/app/api/classrooms/:id/journal/revisions/(?<path>.+)", revisionsUrl, JournalRevision),
+  one(
+    "/app/api/classrooms/:id/journal/revision/:rev",
+    `/app/api/classrooms/${classroomId}/journal/revision/${revisionId}`,
+    JournalRevisionContent,
+  ),
+  each("/app/api/classrooms/:id/journal/deleted", `/app/api/classrooms/${classroomId}/journal/deleted`, JournalDeletedPage),
   // GitHub (F-GH-01 to F-GH-05): the organizations, every classroom's link
   // (connected or not), and the persona's account.
   each("/app/api/github/orgs", "/app/api/github/orgs", GithubOrg),

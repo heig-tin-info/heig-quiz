@@ -5,19 +5,23 @@
  * read, a staff payload with everything (the drafts, the source, the
  * warnings).
  *
- * Scene flag `?journal=1`: the classroom PRG1-2026 (`r1`) has a journal.
- * Without it no classroom has one: the staff read "no journal yet" (a
- * repository of `null`, the name "Create a journal" would propose), a student
- * a 404. `?journalerror=1`: that journal's last synchronisation failed (the
- * repository is gone).
+ * Scene flag `?journal=1`: the classroom PRG1-2026 (`r1`) has a journal, in
+ * Quiz mode (ADR-057): editable, with revisions and a deleted page.
+ * `?journalgithub=1` makes it a GitHub-mode one instead (read-only, Edit on
+ * GitHub), and `?journalerror=1` a GitHub-mode one whose last
+ * synchronisation failed (the repository is gone). Without `?journal=1` no
+ * classroom has one: the staff read "no journal yet" (a mode of `null`, the
+ * name "Create a journal" would propose), a student a 404.
  *
- * The staff's writes (M4-03, for the Settings of M4-05) change the journals
- * for the page's life, as the API would: create (a name among `ORG_REPOS` is
- * refused `409 name_taken` with a suggestion), use (a repository outside
+ * The staff's writes change the journals for the page's life, as the API
+ * would: create in Quiz mode, or in GitHub mode (a name among `ORG_REPOS`
+ * is refused `409 name_taken` with a suggestion), use (a repository outside
  * `ORG_REPOS`, a branch other than `main` or `dev`, a folder other than
- * `docs` or `journal` are refused with their codes), remove, and refresh,
- * which answers at once and "synchronises" 2.5 s later — the reader and the
- * Settings see it on their next read (the mock sends no hint).
+ * `docs` or `journal` are refused with their codes), remove (a Quiz-mode
+ * journal holding pages only with the classroom's name, `?confirm=`), and
+ * refresh, which answers at once and "synchronises" 2.5 s later — the
+ * reader and the Settings see it on their next read (the mock sends no
+ * hint).
  *
  * The pages are HTML fixtures shaped like `packages/docrender`'s output: an
  * `id` on every heading, relative links left as the renderer rewrites them.
@@ -27,7 +31,9 @@
 import type {
   Journal,
   JournalCreate,
+  JournalDeletedPage,
   JournalFileWritten,
+  JournalMode,
   JournalNavNode,
   JournalPage,
   JournalPageAdd,
@@ -36,6 +42,9 @@ import type {
   JournalPreview,
   JournalPreviewResult,
   JournalRepository,
+  JournalRestore,
+  JournalRevision,
+  JournalRevisionContent,
   JournalStaff,
   JournalTocEntry,
   JournalUse,
@@ -65,35 +74,57 @@ const repository = (name: string, ref = "main", rootPath = "", syncedAt = iso(0)
   syncError: null,
   lastSyncedAt: syncedAt,
   lastCommitSha: "3f9c2a1d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a",
-  editable: true,
 });
 
+/** A classroom's journal: its mode, and its repository in GitHub mode. */
+interface MockJournal {
+  mode: JournalMode;
+  repo: JournalRepository | null;
+}
+
 /** Each classroom's journal, by classroom id. */
-const journals = new Map<string, JournalRepository>();
+const journals = new Map<string, MockJournal>();
 if (flags.journal) {
+  const repo = repository("prg1-2026-journal", "main", "", iso(-2 * D));
   journals.set(
     JOURNAL_ROOM,
     flags.journalerror
-      ? { ...repository("prg1-2026-journal", "main", "", iso(-2 * D)), syncStatus: "error", syncError: "repo_not_found", editable: false }
-      : repository("prg1-2026-journal", "main", "", iso(-2 * D)),
+      ? { mode: "github", repo: { ...repo, syncStatus: "error", syncError: "repo_not_found" } }
+      : flags.journalgithub
+        ? { mode: "github", repo }
+        : { mode: "quiz", repo: null },
   );
 }
 
 /** When a refresh of a classroom "ends" (ms), until the next read applies it. */
 const refreshes = new Map<string, number>();
 
-/** Whether a classroom has a journal: the student classroom page and the GitHub disconnect read it. */
+/** Whether a classroom has a journal: the student classroom page reads it. */
 export const hasMockJournal = (classroomId: string) => journals.has(classroomId);
+
+/** Whether its journal lives in a repository: what keeps the GitHub section from disconnecting it (D28). */
+export const hasMockGithubJournal = (classroomId: string) => journals.get(classroomId)?.mode === "github";
+
+/**
+ * F-JRN-04, F-ORG-09: a Quiz-mode journal holding pages goes only with the
+ * classroom's name typed (`?confirm=`); the refusal the API answers, or null.
+ */
+export function journalRemovalRefusal(classroomId: string, url: URL): MockPayload | null {
+  const room = rooms.find((r) => r.id === classroomId);
+  if (journals.get(classroomId)?.mode !== "quiz" || PAGES.length === 0 || !room) return null;
+  return url.searchParams.get("confirm")?.trim() === room.name.trim() ? null : refusal(409, "confirm_required");
+}
 
 /** The repository as the API holds it now: a refresh that has ended moves its last synchronisation. */
 function currentRepository(classroomId: string): JournalRepository | null {
-  const repo = journals.get(classroomId);
-  if (!repo) return null;
+  const journal = journals.get(classroomId);
+  const repo = journal?.repo ?? null;
+  if (!journal || !repo) return null;
   const due = refreshes.get(classroomId);
   if (due !== undefined && Date.now() >= due) {
     refreshes.delete(classroomId);
     const next = { ...repo, lastSyncedAt: new Date(due).toISOString() };
-    journals.set(classroomId, next);
+    journals.set(classroomId, { ...journal, repo: next });
     return next;
   }
   return repo;
@@ -310,8 +341,8 @@ function journalOr404(classroomId: string, url: URL): boolean {
 
 /** The staff payload of a classroom's journal. */
 function staffJournal(classroomId: string): JournalStaff {
-  const repo = currentRepository(classroomId);
-  if (!repo) {
+  const journal = journals.get(classroomId);
+  if (!journal) {
     const room = rooms.find((r) => r.id === classroomId)!;
     return {
       view: "staff",
@@ -327,8 +358,8 @@ function staffJournal(classroomId: string): JournalStaff {
   }
   return {
     view: "staff",
-    mode: "github",
-    repository: repo,
+    mode: journal.mode,
+    repository: currentRepository(classroomId),
     nav: navOf(PAGES),
     homePath: homePage(PAGES)?.path ?? null,
     hiddenPaths: PAGES.filter(hidden).map((p) => p.path),
@@ -362,11 +393,15 @@ on("POST", "/app/api/classrooms/:id/journal", (m, body): JournalStaff => {
   staffRoom(id);
   if (journals.has(id)) throw refusal(409, "journal_exists");
   const create = body as JournalCreate;
-  const name = (create.mode === "github" ? create.name : undefined) ?? staffJournal(id).proposedName!;
+  if (create.mode === "quiz") {
+    journals.set(id, { mode: "quiz", repo: null });
+    return staffJournal(id);
+  }
+  const name = create.name ?? staffJournal(id).proposedName!;
   // Never an adoption (F-JRN-02): a free name instead, as the API words it.
   if (ORG_REPOS.includes(name)) throw refusal(409, "name_taken", { suggestion: `${name}-0190d3c4` });
   ORG_REPOS.push(name);
-  journals.set(id, repository(name));
+  journals.set(id, { mode: "github", repo: repository(name) });
   return staffJournal(id);
 });
 
@@ -378,13 +413,15 @@ on("POST", "/app/api/classrooms/:id/journal/use", (m, body): JournalStaff => {
   if (!ORG_REPOS.includes(name)) throw refusal(409, "repo_not_found");
   if (ref !== undefined && ref !== "main" && ref !== "dev") throw refusal(409, "ref_not_found");
   if (rootPath && rootPath !== "docs" && rootPath !== "journal") throw refusal(409, "root_not_found");
-  journals.set(id, repository(name, ref ?? "main", rootPath ?? ""));
+  journals.set(id, { mode: "github", repo: repository(name, ref ?? "main", rootPath ?? "") });
   return staffJournal(id);
 });
 
-on("DELETE", "/app/api/classrooms/:id/journal", (m) => {
+on("DELETE", "/app/api/classrooms/:id/journal", (m, _body, url) => {
   const id = m.groups!.id!;
   staffRoom(id);
+  const refused = journalRemovalRefusal(id, url);
+  if (refused) throw refused;
   journals.delete(id);
   refreshes.delete(id);
   return undefined;
@@ -393,7 +430,7 @@ on("DELETE", "/app/api/classrooms/:id/journal", (m) => {
 on("POST", "/app/api/classrooms/:id/journal/refresh", (m) => {
   const id = m.groups!.id!;
   staffRoom(id);
-  if (!journals.has(id)) throw refusal(409, "no_journal");
+  if (!journals.get(id)?.repo) throw refusal(409, "no_journal");
   refreshes.set(id, Date.now() + 2_500);
   return undefined;
 });
@@ -405,7 +442,7 @@ on("GET", "/app/api/classrooms/:id/journal/pages/(?<path>.+)", (m, _body, url): 
   // A page a student may not read is a page that does not exist (F-JRN-07).
   if (!page || (studentPayload(url) && hidden(page))) throw new MockError(404, "Not found");
   if (studentPayload(url)) return { view: "student", ...commonOf(page) };
-  return staffPageOf(page);
+  return staffPageOf(page, journals.get(m.groups!.id!)?.repo ?? null);
 });
 
 const commonOf = (page: Fixture) => ({
@@ -416,7 +453,16 @@ const commonOf = (page: Fixture) => ({
   updatedAt: iso(-3 * D),
 });
 
-const staffPageOf = (page: Fixture): JournalPageStaff => ({
+/** github.com's editor of a page's file, as the API builds it (GitHub mode only). */
+const editUrlOf = (repo: JournalRepository, path: string) =>
+  `https://github.com/${repo.fullName}/edit/${repo.ref}/${[repo.rootPath, path]
+    .filter(Boolean)
+    .join("/")
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/")}`;
+
+const staffPageOf = (page: Fixture, repo: JournalRepository | null = null): JournalPageStaff => ({
   view: "staff",
   ...commonOf(page),
   draft: page.draft,
@@ -425,16 +471,70 @@ const staffPageOf = (page: Fixture): JournalPageStaff => ({
   markdown: page.markdown,
   version: page.version ?? 0,
   warnings: page.warnings ?? [],
-  // The mock still edits in the platform; its GitHub-mode reading is M4-09's.
-  editUrl: null,
+  editUrl: repo ? editUrlOf(repo, page.path) : null,
 });
 
 // --------------------------------------------------------------- writes
-// The editor's routes (M4-06): save against the version (`?journalconflict=1`:
-// every save meets a page saved meanwhile), add, delete, upload, preview. A written
-// page is rendered by the journal's own renderer (`@quiz/docrender`), as
-// the API's ingestion would; an upload is accepted and not kept (the
-// editor draws a picture it uploaded from the browser's copy).
+// The editor's routes, Quiz mode only (ADR-057; a GitHub-mode journal is
+// `409 read_only`): save against the version (`?journalconflict=1`: every
+// save meets a page saved meanwhile), add, delete, upload, preview, and the
+// revisions (list, read, deleted pages, restore). A written page is rendered
+// by the journal's own renderer (`@quiz/docrender`), as the API would; an
+// upload is accepted and not kept (the editor draws a picture it uploaded
+// from the browser's copy).
+
+/** One saved state of a page: every save, add and restore writes one. */
+type Revision = JournalRevisionContent;
+const revisions: Revision[] = [];
+let revisionSeq = 0;
+/** A revision of `path`, `hoursAgo` hours old. */
+function addRevision(path: string, markdown: string, author: string | null, hoursAgo = 0): Revision {
+  revisionSeq += 1;
+  const revision: Revision = {
+    id: `0190d3c4-0000-7000-8000-${String(revisionSeq).padStart(12, "0")}`,
+    path,
+    author,
+    createdAt: new Date(Date.now() - hoursAgo * 3_600_000).toISOString(),
+    markdown,
+  };
+  revisions.push(revision);
+  return revision;
+}
+/** A page's revisions, newest first, metadata only. */
+const revisionsOf = (path: string): JournalRevision[] =>
+  revisions
+    .filter((r) => r.path === path)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map(({ markdown: _markdown, ...meta }) => meta);
+
+// The history the scenes show: the page the editor opens has three saves,
+// every other page the one that created it, and one page was deleted.
+for (const page of PAGES) addRevision(page.path, page.markdown, "Yves Chevallier", 24 * 9);
+{
+  const pointers = PAGES.find((p) => p.path === "10-semaine-1/10-pointeurs.md")!;
+  const first = pointers.markdown.replace(/\n\| Type[\s\S]*?\n\n/, "\n");
+  revisions.find((r) => r.path === pointers.path)!.markdown = first.replace("_adresse_", "adresse");
+  addRevision(pointers.path, first, "Anne Dupuis", 24 * 4);
+  addRevision(pointers.path, pointers.markdown, "Yves Chevallier", 3);
+  addRevision(
+    "20-semaine 2 été/30-ancien-td.md",
+    "# Ancien TD — chaînes\n\nLa série de l'an passé, remplacée par les exercices de la semaine.\n",
+    "Anne Dupuis",
+    24 * 2,
+  );
+}
+
+/** The title a revision's markdown gives the page: its front matter's, else its first heading. */
+const titleOf = (markdown: string): string | null =>
+  /^title:\s*(.+)$/m.exec(markdown)?.[1]?.trim() ?? /^#\s+(.+)$/m.exec(markdown)?.[1]?.trim() ?? null;
+
+/** A Quiz-mode journal to write to: no journal, or a GitHub-mode one, is refused as the API does. */
+function writableJournal(id: string): void {
+  staffRoom(id);
+  const journal = journals.get(id);
+  if (!journal) throw refusal(409, "no_journal");
+  if (journal.mode === "github") throw refusal(409, "read_only");
+}
 
 /** The page rendered again from its markdown, as an ingestion would. */
 function rerender(page: Fixture): void {
@@ -462,8 +562,7 @@ const written = (path: string, page: Fixture | null): JournalFileWritten => ({
 /** The page of a write, or the 404 a missing one is. */
 function writablePage(m: RegExpMatchArray): Fixture {
   const id = m.groups!.id!;
-  staffRoom(id);
-  if (!journals.has(id)) throw refusal(409, "no_journal");
+  writableJournal(id);
   const page = PAGES.find((p) => p.path === decodeURIComponent(m.groups!.path!));
   if (!page) throw new MockError(404, "Not found");
   return page;
@@ -476,18 +575,19 @@ on("PUT", "/app/api/classrooms/:id/journal/pages/(?<path>.+)", (m, body): Journa
   page.markdown = markdown;
   page.version = (page.version ?? 0) + 1;
   rerender(page);
+  addRevision(page.path, markdown, "Yves Chevallier");
   return written(page.path, page);
 });
 
 on("POST", "/app/api/classrooms/:id/journal/pages", (m, body): JournalFileWritten => {
   const id = m.groups!.id!;
-  staffRoom(id);
-  if (!journals.has(id)) throw refusal(409, "no_journal");
+  writableJournal(id);
   const { path, title } = body as JournalPageAdd;
   if (PAGES.some((p) => p.path === path)) throw refusal(409, "page_exists");
   const page: Fixture = { path, title: title ?? path, html: "", toc: [], draft: false, visibleInDays: null, markdown: title ? `# ${title}\n` : "" };
   PAGES.push(page);
   rerender(page);
+  addRevision(path, page.markdown, "Yves Chevallier");
   return written(path, page);
 });
 
@@ -498,9 +598,7 @@ on("DELETE", "/app/api/classrooms/:id/journal/pages/(?<path>.+)", (m) => {
 });
 
 on("POST", "/app/api/classrooms/:id/journal/assets/(?<path>.+)", (m): JournalFileWritten => {
-  const id = m.groups!.id!;
-  staffRoom(id);
-  if (!journals.has(id)) throw refusal(409, "no_journal");
+  writableJournal(m.groups!.id!);
   return written(decodeURIComponent(m.groups!.path!), null);
 });
 
@@ -522,4 +620,43 @@ on("POST", "/app/api/classrooms/:id/journal/preview", (m, body): JournalPreviewR
     visibleFrom: rendered.visibleFrom?.toISOString() ?? null,
     warnings: rendered.warnings,
   };
+});
+
+on("GET", "/app/api/classrooms/:id/journal/revisions/(?<path>.+)", (m): JournalRevision[] => {
+  staffRoom(m.groups!.id!);
+  return revisionsOf(decodeURIComponent(m.groups!.path!));
+});
+
+on("GET", "/app/api/classrooms/:id/journal/revision/:rev", (m): JournalRevisionContent => {
+  staffRoom(m.groups!.id!);
+  const revision = revisions.find((r) => r.id === m.groups!.rev);
+  if (!revision) throw new MockError(404, "Not found");
+  return revision;
+});
+
+on("GET", "/app/api/classrooms/:id/journal/deleted", (m): JournalDeletedPage[] => {
+  staffRoom(m.groups!.id!);
+  const gone = [...new Set(revisions.map((r) => r.path))].filter((path) => !PAGES.some((p) => p.path === path));
+  return gone
+    .map((path) => {
+      const latest = revisions.filter((r) => r.path === path).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]!;
+      return { path, title: titleOf(latest.markdown), revisionId: latest.id, savedAt: latest.createdAt };
+    })
+    .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+});
+
+on("POST", "/app/api/classrooms/:id/journal/restore", (m, body): JournalFileWritten => {
+  writableJournal(m.groups!.id!);
+  const revision = revisions.find((r) => r.id === (body as JournalRestore).revisionId);
+  if (!revision) throw new MockError(404, "Not found");
+  let page = PAGES.find((p) => p.path === revision.path);
+  if (!page) {
+    page = { path: revision.path, title: revision.path, html: "", toc: [], draft: false, visibleInDays: null, markdown: "" };
+    PAGES.push(page);
+  }
+  page.markdown = revision.markdown;
+  page.version = (page.version ?? 0) + 1;
+  rerender(page);
+  addRevision(page.path, page.markdown, "Yves Chevallier");
+  return written(page.path, page);
 });

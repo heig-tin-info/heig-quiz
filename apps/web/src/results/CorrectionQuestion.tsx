@@ -1,3 +1,4 @@
+import { Dices } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { AnswerDistributionEntry, ByQuestion } from "@quiz/contracts";
@@ -223,6 +224,10 @@ function AnswerRows({ q, revealed, density }: { q: ByQuestion; revealed: boolean
   const s = SCALE[density];
   const blank = q.outcomes.blank;
   const rows = q.distribution.slice(0, PROJECTION_ROW_CAP);
+  // A parameterized question groups nothing by what was written (ADR-056
+  // §9), and its verdicts — the blanks among them — are the head's bar: a
+  // list under it would say the same thing twice.
+  const listed = !q.parameterized && (rows.length > 0 || blank > 0);
   const overflow = q.distribution.length - rows.length;
   const top = Math.max(1, blank, ...rows.map((r) => r.count));
   const expected = (q.solution as Partial<ShortSolutionLike> | null)?.expected;
@@ -247,7 +252,7 @@ function AnswerRows({ q, revealed, density }: { q: ByQuestion; revealed: boolean
           <span className="font-mono font-semibold text-success">{expected.join(" · ")}</span>
         </p>
       ) : null}
-      {rows.length > 0 || blank > 0 ? (
+      {listed ? (
         <ul className="flex flex-col">
           {rows.map((entry) =>
             row(
@@ -311,7 +316,9 @@ function ClozeText({ q, revealed, density }: { q: ByQuestion; revealed: boolean;
         >
           {keys.get(index) ?? "…"}
         </span>
-        <SegmentedBar className="h-1.5" parts={parts} total={Math.max(1, n)} />
+        {/* A parameterized cloze groups nothing by what was written (ADR-056
+            §9): its blank holds the example's key, the head the verdicts. */}
+        {q.parameterized ? null : <SegmentedBar className="h-1.5" parts={parts} total={Math.max(1, n)} />}
       </span>
     );
   };
@@ -400,7 +407,11 @@ export function CorrectionProgram({
  */
 export const drawsKey = (type: string): boolean => type === "mcq" || type === "cloze" || type === "short";
 
-/** The statement: the prompt, or a cloze's text with its blanks in place. */
+/**
+ * The statement: the prompt, or a cloze's text with its blanks in place. A
+ * parameterized question's is the instance of its example values, and says
+ * so above it: no student read these very numbers (ADR-056 §9).
+ */
 export function CorrectionStatement({
   q,
   revealed,
@@ -410,12 +421,24 @@ export function CorrectionStatement({
   revealed: boolean;
   density?: Density;
 }) {
+  const t = useT();
   const prompt = promptOf(q);
-  if (q.item.type === "cloze") return <ClozeText q={q} revealed={revealed} density={density} />;
-  if (!prompt) return null;
+  const statement =
+    q.item.type === "cloze" ? (
+      <ClozeText q={q} revealed={revealed} density={density} />
+    ) : prompt ? (
+      <div className={SCALE[density].prompt}>
+        <MarkdownView source={prompt} inline />
+      </div>
+    ) : null;
+  if (!q.parameterized || statement === null) return statement;
   return (
-    <div className={SCALE[density].prompt}>
-      <MarkdownView source={prompt} inline />
+    <div className="flex flex-col gap-2">
+      <p className={cx("flex items-center gap-1.5 font-medium text-fg-muted", SCALE[density].caption)}>
+        <Dices className="size-[1.1em] shrink-0" aria-hidden />
+        {t("correction.param.example")}
+      </p>
+      {statement}
     </div>
   );
 }

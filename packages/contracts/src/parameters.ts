@@ -30,3 +30,11 @@ export const ParametersDraft = z.object({
   condition: z.string().max(DRAFT_TEXT).optional(),
 });
 export type ParametersDraft = z.infer<typeof ParametersDraft>;
+
+/**
+ * The values of one instance, in the table's order, each written with its
+ * row's format (ADR-056 §6): the editor's five draws and the grading panel.
+ * Teacher-facing only, like the table.
+ */
+export const NamedValues = z.array(z.object({ name: z.string(), value: z.string() }));
+export type NamedValues = z.infer<typeof NamedValues>;

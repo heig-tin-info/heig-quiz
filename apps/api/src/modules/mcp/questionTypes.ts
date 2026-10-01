@@ -11,9 +11,10 @@
 import { z } from "zod";
 
 import type { ParametersDraft } from "@quiz/contracts";
+import { PARAMETERIZED_TYPES } from "@quiz/domain";
 import { questionType, registeredServerIds } from "@quiz/registry/server";
 
-import { isParameterized, parameterIssues, PARAMETERIZED_TYPES } from "../pool/service.js";
+import { isParameterized, parameterIssues } from "../pool/service.js";
 
 /**
  * The rules of parameterized questions (ADR-056), told once and attached to

@@ -4,6 +4,7 @@ import {
   distinctRendered,
   draw,
   FORMAT_PATTERN,
+  formattedValues,
   formatValue,
   instantiate,
   isVariableName,
@@ -11,6 +12,7 @@ import {
   replay,
   sameNames,
   sameTable,
+  drawnApart,
   validateParameters,
   type Parameters,
   type Values,
@@ -544,5 +546,45 @@ describe("at / collect", () => {
     const issues: Issue[] = [];
     expect(collect(issues, { row: "x" }, () => compile("2pi"))).toBeUndefined();
     expect(issues).toEqual([expect.objectContaining({ code: "forbidden_node", row: "x" })]);
+  });
+});
+
+describe("drawnApart", () => {
+  const NOISE: Parameters = {
+    rows: [...MRUA.rows, { name: "d", expr: "uniform(1, 5)", format: ".1" }, { name: "k", expr: "2*d", format: "" }],
+  };
+  const SHARED = ["Dropped from [[h]] m, g = [[g]].", "[[t]] s"];
+
+  it("is true when an option depends on a draw nothing shared depends on", () => {
+    expect(drawnApart("[[d]] s", SHARED, NOISE)).toBe(true);
+    expect(drawnApart("about [[t + d]] s", SHARED, NOISE)).toBe(true);
+    // Through a derived row.
+    expect(drawnApart("[[k]] s", SHARED, NOISE)).toBe(true);
+  });
+
+  it("is false for a formula of the shared values, a literal and a static table", () => {
+    expect(drawnApart("[[sqrt(h/g)]] s", SHARED, NOISE)).toBe(false);
+    expect(drawnApart("[[h]] s", SHARED, NOISE)).toBe(false);
+    expect(drawnApart("none of these", SHARED, NOISE)).toBe(false);
+    expect(drawnApart("\\[[d]] escaped", SHARED, NOISE)).toBe(false);
+    expect(drawnApart("[[x]]", [], { rows: [{ name: "x", expr: "2 + 3", format: "" }] })).toBe(false);
+    // Shared through the statement, the draw is the question's own.
+    expect(drawnApart("[[d]] s", [...SHARED, "with [[d]]"], NOISE)).toBe(false);
+  });
+
+  it("reads nothing from a reference or a row that does not parse", () => {
+    expect(drawnApart("[[d +]] s", SHARED, NOISE)).toBe(false);
+    expect(drawnApart("[[d]]", [], { rows: [{ name: "d", expr: "uniform(", format: "" }] })).toBe(false);
+  });
+});
+
+describe("formattedValues", () => {
+  it("writes each value with its row's format, in the table's order, leaving out a row without one", () => {
+    expect(formattedValues(MRUA, { t: 2.6, h: 40, g: 9.81 })).toEqual([
+      { name: "h", value: "40" },
+      { name: "g", value: "9.81" },
+      { name: "t", value: "2.60" },
+    ]);
+    expect(formattedValues(MRUA, { h: 40 })).toEqual([{ name: "h", value: "40" }]);
   });
 });

@@ -138,6 +138,25 @@ describe("useConfirm", () => {
     await waitFor(() => expect(screen.getByTestId("answer-Second").textContent).toBe("true"));
   });
 
+  it("starts a question that replaces another with nothing typed", async () => {
+    const name = { title: "Delete?", confirmLabel: "Delete", typeToConfirm: "PRG1" };
+    renderWithProviders(
+      <>
+        <ConfirmHarness options={name} label="First" />
+        <ConfirmHarness options={{ ...name, title: "Delete again?" }} label="Second" />
+      </>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "First" }));
+    await userEvent.type(within(screen.getByRole("dialog")).getByLabelText("Type PRG1 to confirm"), "PRG1");
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" })).toBeEnabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Second" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAccessibleName("Delete again?");
+    expect(within(dialog).getByLabelText("Type PRG1 to confirm")).toHaveValue("");
+    expect(within(dialog).getByRole("button", { name: "Delete" })).toBeDisabled();
+  });
+
   it("names its two buttons in the reader's language when the caller does not", async () => {
     renderWithProviders(<ConfirmHarness options={{ title: "Archiver ?" }} label="Ask" />, {
       locale: "fr",

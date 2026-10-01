@@ -11,7 +11,7 @@
  * initials (`OrgAvatar`, M1-04) until the API serves a same-origin one.
  * A connect (PUT) and a disconnect (DELETE) change the link for the page's
  * life, as the API would; a disconnect of a classroom (or a connect elsewhere)
- * while it has a journal (`?journal=1`, or one set from its Settings) is
+ * while it has a GitHub-mode journal (`?journalgithub=1`, or one set from its Settings) is
  * refused `409 journal_attached` (D28).
  *
  * Scene flags: `?unlinked=1` (`flags.unlinked`), the persona has no linked
@@ -27,7 +27,7 @@ import type {
   GithubOrg,
 } from "@quiz/contracts";
 
-import { hasMockJournal } from "./journal";
+import { hasMockGithubJournal } from "./journal";
 import { rooms } from "./org";
 import { D, flags, iso, MockError, MockPayload, on, role } from "./runtime";
 
@@ -102,7 +102,7 @@ on("PUT", "/app/api/classrooms/:id/github", (m, body) => {
   if (!org?.installed || org.status !== "active") {
     throw new MockPayload(409, { error: "app_not_installed" });
   }
-  if (hasMockJournal(id) && LINKS[id]?.org.id !== org.id) {
+  if (hasMockGithubJournal(id) && LINKS[id]?.org.id !== org.id) {
     throw new MockPayload(409, { error: "journal_attached" });
   }
   LINKS[id] = {
@@ -116,7 +116,7 @@ on("PUT", "/app/api/classrooms/:id/github", (m, body) => {
 on("DELETE", "/app/api/classrooms/:id/github", (m) => {
   const id = m.groups!.id!;
   staffRoom(id);
-  if (hasMockJournal(id)) throw new MockPayload(409, { error: "journal_attached" });
+  if (hasMockGithubJournal(id)) throw new MockPayload(409, { error: "journal_attached" });
   delete LINKS[id];
   return undefined;
 });

@@ -915,12 +915,26 @@ describe("the zen player's clock", () => {
 
   /*
    * Only the clock is faked — the interval every countdown shares, and the
-   * time itself — so a tick happens exactly when the test says, however
-   * loaded the machine. The fetches, the queries and Testing Library's
-   * waits keep their real timers.
+   * time itself — so once the countdown has joined the tick (`firstSecond`),
+   * a tick happens exactly when the test says, however loaded the machine.
+   * The fetches, the queries and Testing Library's waits keep their real
+   * timers.
    */
   const fakeClock = (now: number) =>
     vi.useFakeTimers({ now, toFake: ["setInterval", "clearInterval", "Date"] });
+
+  /*
+   * The countdown joins the tick in an effect, which React may run a
+   * macrotask after the digits are drawn: on a loaded runner, after the
+   * test's first jump, and that tick is lost. So the first second is awaited
+   * until the digits move — by the tick, or by the late subscription reading
+   * the clock — and the countdown is ticking from then on.
+   */
+  const firstSecond = async () => {
+    const shown = timer().textContent;
+    act(() => void vi.advanceTimersByTime(1_000));
+    await waitFor(() => expect(timer().textContent).not.toBe(shown));
+  };
 
   it("counts down to the server's deadline and stops at zero without closing anything", async () => {
     // The browser is an hour off: only the server's time may count.
@@ -931,7 +945,7 @@ describe("the zen player's clock", () => {
     await screen.findByText("Question 2");
     expect(timer()).toHaveTextContent("0:03");
 
-    act(() => void vi.advanceTimersByTime(1_000));
+    await firstSecond();
     expect(timer()).toHaveTextContent("0:02");
 
     act(() => void vi.advanceTimersByTime(5_000));
@@ -954,6 +968,7 @@ describe("the zen player's clock", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
+    await firstSecond();
     const before = hostRenders.count;
     const shown = timer().textContent;
 

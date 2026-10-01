@@ -26,7 +26,6 @@ import {
   useRichTextEditor,
   useRichTextSync,
   type ImageUploader,
-  type Reconcile,
 } from "./useRichTextEditor";
 
 /*
@@ -62,12 +61,10 @@ export type { RichTextProps };
  * question type is lent (`RichTextProps`): the journal's editor (M4-06).
  */
 export interface RichTextHostProps extends RichTextProps {
-  /** The journal's spelling of markdown (markdown/journalSchema.ts). */
-  journal?: boolean;
+  /** The surface wears the long-form type of a document (`.md-doc`): the journal's page. */
+  longForm?: boolean;
   /** Resolves an image's `src` for display: the journal's relative paths. */
   imageUrl?: ImageUrl;
-  /** Rewrites what the rich surface emits; the source pane's text is emitted as typed. */
-  reconcile?: Reconcile;
   /** The source pane was opened (true) or closed. */
   onSourceChange?: (source: boolean) => void;
 }
@@ -90,9 +87,8 @@ export function RichText({
   shortcuts = [],
   holes = false,
   rows,
-  journal = false,
+  longForm = false,
   imageUrl,
-  reconcile,
   onSourceChange,
 }: RichTextHostProps) {
   const t = useT();
@@ -133,9 +129,8 @@ export function RichText({
     openHole,
     openFormula,
     openCreatedHole,
-    journal,
+    longForm,
     imageUrl,
-    reconcile,
   });
   const marks = useRichTextMarks(editor);
   const selectionPreview = useHoleSelectionPreview(editor, holes);

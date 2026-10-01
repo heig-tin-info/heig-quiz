@@ -43,6 +43,7 @@ import {
   debrief,
   describe,
   feedbackGate,
+  GROUPED_BY_CHOICE,
   gradeFromPoints,
   histogram,
   isDebriefOpen,
@@ -108,7 +109,7 @@ import {
 import { answeredBy } from "../live/service.js";
 import { solutionView, stripKeys, studentSolutionView, studentView } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
-import { exampleInstance, itemInstance } from "../pool/service.js";
+import { exampleInstance, explanationOrNull, isParameterized, itemInstance } from "../pool/service.js";
 
 export { watchReleasedGrades, type GradeWatch } from "./updated.js";
 
@@ -536,8 +537,16 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
 
   return items.map((item, index) => {
     // The question as the room reads it: of a parameterized one, the example
-    // instance (seed 0) — every student had their own numbers, and the
-    // debrief groups their answers by verdict (ADR-056 §9).
+    // instance (seed 0), which the debrief names as such — every student had
+    // their own numbers. Not the template: a formula on a wall is a worked
+    // solution, a cloze's template is no question the type can draw, and
+    // the example is the very draw publication validated. Its answers are
+    // grouped by verdict only (ADR-056 §9): "2.6" is right for one student
+    // and wrong for the next, so no group by what was written holds — only
+    // an mcq's ticks stay, grouped by choice: choice B is the same formula,
+    // with the same verdict, on every paper.
+    const parameterized = isParameterized(item.version);
+    const byText = parameterized && !GROUPED_BY_CHOICE.has(item.question.type);
     const example = exampleInstance(item.question.type, item.version);
     const { version } = example;
     const holdsAnswer = answeredBy(item);
@@ -569,6 +578,7 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
     return {
       item: views[index]!,
       papers: counted.size,
+      ...(parameterized ? { parameterized } : {}),
       student: studentView({
         type: item.question.type,
         version,
@@ -582,9 +592,9 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
         seed: 0,
         itemId: item.item.id,
       }),
-      explanation: example.explanation === "" ? null : example.explanation,
+      explanation: explanationOrNull(example.explanation),
       outcomes,
-      distribution,
+      distribution: byText ? [] : distribution,
       casePassRate,
       successRate,
       avgMs: null,

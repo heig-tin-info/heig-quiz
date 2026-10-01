@@ -9,17 +9,16 @@ import { useT } from "../../i18n";
 import { RichText } from "../../markdown/RichText";
 import { useToast } from "../../notify";
 import { useLeaveGuard } from "../../router";
-import { Alert, Button, Field } from "../../ui";
+import { Alert, Button } from "../../ui";
 import { journalErrorText, journalRefusal, previewJournalPage, uploadJournalAsset, useJournalSave } from "../api";
 import { JournalArticle } from "../JournalArticle";
 import { composePage, readFields, splitPage, type PageFields } from "./frontMatter";
 import { imagePlacement, journalImageUrl, randomSuffix } from "./images";
 import { PageFieldsForm } from "./PageFieldsForm";
-import { reconciler } from "./reconcile";
 
 /*
- * The journal's editor (F-JRN-10, D25), in place of the page it edits, on the
- * reader's own route.
+ * The journal's editor (F-JRN-10, ADR-057), Quiz mode only, in place of the
+ * page it edits, on the reader's own route.
  *
  * The four decisions:
  * - Type: the text is edited in the page's own long-form type (`.md-doc`,
@@ -28,16 +27,18 @@ import { reconciler } from "./reconcile";
  * - Color: ONE accent, Save, in the bar. Cancel is secondary; the conflict
  *   is the one red block, and its reload is `danger`, behind a confirmation.
  * - Space: the bar 24 above the sheet; inside the sheet the fields, a
- *   hairline, then the text, 16 apart; the change description under it.
+ *   hairline, then the text, 16 apart.
  * - Finish: the same sheet as the page being read (surface, hairline, card
  *   radius), so opening the editor swaps the contents, not the frame.
  *
  * Markdown is the one truth: the page is split into its front matter (the
- * fields) and its body (the editor), and every keystroke composes them back
- * into the markdown that would be saved. What the rich surface emits is
- * reconciled with the body it opened on (reconcile.ts), so a block the
- * teacher did not edit is written as it was read. Save is enabled only when
- * that markdown differs from the page's, byte for byte (D25 condition 5).
+ * fields) and its body, edited in the platform's standard rich text field
+ * (the one question statements use, with its source view), and every
+ * keystroke composes them back into the markdown that would be saved. The
+ * field's normalisation of markdown is accepted (ADR-057: nobody diffs a
+ * Quiz-mode page). Save is enabled only when that markdown differs from the
+ * page's, and sends it against the version the editor opened
+ * (`baseVersion`); a save refused `409 conflict` keeps the draft.
  */
 
 export interface JournalEditorProps {
@@ -58,15 +59,15 @@ export function JournalEditor({ classroomId, page: current, onClose, onReload, c
 
   // The version the editor OPENED, for its whole life: a refetch of the page
   // underneath (a hint, a reconnect) changes neither the text being edited
-  // nor the blob a save is checked against. A reload remounts the editor.
+  // nor the version a save is checked against. A reload remounts the editor;
+  // after a save the reader holds the page the save answered, whose
+  // `version` the next Edit opens on.
   const [page] = useState(current);
   const [opened] = useState(() => splitPage(page.markdown));
   const [fields, setFields] = useState<PageFields>(() => readFields(opened.yaml));
   const [body, setBody] = useState(opened.body);
-  const [message, setMessage] = useState("");
   const [source, setSource] = useState(false);
   const [conflict, setConflict] = useState(false);
-  const [reconcile] = useState(() => reconciler(opened.body));
 
   /** The markdown a save would send; a byte of difference is an edit. */
   const markdown = composePage(opened, fields, body);
@@ -133,8 +134,8 @@ export function JournalEditor({ classroomId, page: current, onClose, onReload, c
     save.mutate(
       { markdown, baseVersion: page.version },
       {
-        onSuccess: (written) => {
-          toast(written.page ? t("journalEditor.saved") : t("journalEditor.savedPending"), "success");
+        onSuccess: () => {
+          toast(t("journalEditor.saved"), "success");
           onClose();
         },
         onError: (error) => {
@@ -208,15 +209,13 @@ export function JournalEditor({ classroomId, page: current, onClose, onReload, c
           aria-label={t("journalEditor.body")}
           placeholder={t("journalEditor.bodyPlaceholder")}
           rows={16}
-          journal
+          longForm
           imageUrl={imageUrl}
-          reconcile={reconcile}
           uploadImage={uploadImage}
           onSourceChange={(on) => {
             setSource(on);
             preview.reset();
           }}
-          className="journal-editor"
         />
         {source ? (
           <SourcePreview
@@ -229,16 +228,6 @@ export function JournalEditor({ classroomId, page: current, onClose, onReload, c
           />
         ) : null}
       </div>
-
-      <Field
-        fullWidth
-        label={t("journalEditor.message")}
-        hint={t("journalEditor.messageHint")}
-        value={message}
-        maxLength={200}
-        placeholder={t("journalEditor.messagePlaceholder", { path: page.path })}
-        onChange={(e) => setMessage(e.target.value)}
-      />
     </div>
   );
 

@@ -9,6 +9,7 @@ import { formatPoints } from "@quiz/domain";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
+import { formatLabel } from "../question/VariablesSection";
 import { useToast } from "../notify";
 import { emptyAnswerOf, QuestionPlayerHost, QuestionReviewHost, typeLabel } from "../questionTypes";
 import {
@@ -27,7 +28,7 @@ import { GradingHistory } from "./GradingHistory";
 import { gradingStateLabel, machineReason, sourceLabel, whoOf } from "./labels";
 import { isMissing, rowAction, type PanelTarget } from "./rows";
 import { useGradingInvalidate } from "./useGradingInvalidate";
-import type { GradingItem } from "./useGradingData";
+import type { GradingItem, GradingParameters } from "./useGradingData";
 import { ExpectedGlyph, VerdictGlyph } from "./VerdictGlyph";
 
 interface PanelProps {
@@ -40,8 +41,13 @@ interface PanelProps {
   /** The width of the pane it docks as beside the table; null, a sheet over it. */
   pane: string | null;
   columns: GradingColumn[];
-  /** The question as its students saw it: the expected panel's statement. */
+  /**
+   * The question as its students saw it: the expected panel's statement —
+   * of a parameterized question, the question as written (ADR-056 §9).
+   */
   student: unknown;
+  /** A parameterized question's table and template; null when static. */
+  parameters?: GradingParameters | null;
   explanation: string | null;
   onClose: () => void;
   /** One row up or down the table, the expected row included (↑ / ↓). */
@@ -134,7 +140,59 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function ExpectedBody({ item, columns, student, explanation }: PanelProps) {
+/**
+ * A parameterized question's variables as the teacher wrote them (ADR-056
+ * §9): one line per row, `name = expression`, in mono, with its format as
+ * the editor words it ("2 decimals"), and
+ * the condition under them.
+ */
+function VariablesList({ parameters }: { parameters: GradingParameters }) {
+  const t = useT();
+  const { rows, condition } = parameters.variables;
+  return (
+    <Section title={t("grading.param.variables")}>
+      <dl className="space-y-1 font-mono text-[13px]">
+        {rows.map((row) => (
+          <div key={row.name} className="flex items-baseline gap-2">
+            <dt className="shrink-0 font-semibold text-fg">{row.name}</dt>
+            <dd className="min-w-0 break-words text-fg-muted">
+              = {row.expr}
+              {row.format ? (
+                <span className="ml-2 font-sans text-xs text-fg-faint">{formatLabel(t, row.format)}</span>
+              ) : null}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {condition?.trim() ? (
+        <p className="text-xs text-fg-muted">
+          {t("grading.param.condition")}{" "}
+          <code className="font-mono text-fg">{condition}</code>
+        </p>
+      ) : null}
+    </Section>
+  );
+}
+
+/** One answer's values, `name = value`, as its student read them (ADR-056 §9). */
+function ValuesSection({ values }: { values: NonNullable<GradingEntry["values"]> }) {
+  const t = useT();
+  return (
+    <Section title={t("grading.param.values")}>
+      <ul className="flex flex-wrap gap-1.5 font-mono text-[13px]">
+        {values.map((v) => (
+          <li key={v.name} className="rounded-field bg-surface-2 px-2 py-0.5 tabular-nums">
+            <span className="font-semibold">{v.name}</span>
+            <span className="text-fg-muted"> = </span>
+            {v.value}
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+function ExpectedBody({ item, columns, student, parameters, explanation }: PanelProps) {
   const t = useT();
   return (
     <div className="space-y-6">
@@ -149,7 +207,11 @@ function ExpectedBody({ item, columns, student, explanation }: PanelProps) {
           expandable={false}
         />
       </Section>
+      {parameters ? <VariablesList parameters={parameters} /> : null}
       <Section title={t("grading.expected")}>
+        {parameters?.template.example ? (
+          <p className="text-xs text-fg-muted">{t("grading.param.example")}</p>
+        ) : null}
         <dl className="space-y-1.5 text-[13px]">
           {columns.map((c) => (
             <div key={c.key} className="flex items-baseline gap-3">
@@ -191,6 +253,8 @@ function EntryPanel({
   const { entry, adjust } = target;
   const grading = entry.grading;
   const justification = justificationOf(grading?.details ?? null);
+  // A parameterized answer's own, with its values; else the item's.
+  const ownExplanation = entry.explanation === undefined ? explanation : entry.explanation;
 
   // Two addresses for one correction (deviation W6-3): a graded cell by its
   // grading, an ungraded one by its answer. A cell with neither — an absent
@@ -273,6 +337,7 @@ function EntryPanel({
           maxPoints={grading?.maxPoints ?? item.points}
           audience="teacher"
         />
+        {entry.values ? <ValuesSection values={entry.values} /> : null}
         {/* A comment is the teacher's only when the grading is: an automatic
             pass puts its own note here ("runner unavailable"), and labelling
             that "visible to the student" would be a promise nobody made. */}
@@ -293,9 +358,9 @@ function EntryPanel({
             <p className="text-[13px] text-fg">{justification}</p>
           </NotePanel>
         ) : null}
-        {explanation ? (
+        {ownExplanation ? (
           <NotePanel eyebrow={t("grading.explanation")}>
-            <MarkdownView size="sm" source={explanation} />
+            <MarkdownView size="sm" source={ownExplanation} />
           </NotePanel>
         ) : null}
         {adjust && path !== null ? (

@@ -85,7 +85,7 @@ The actions are provided by the mounted screens, through a command registry in `
 - **Projection view** without names: presence ring in the waiting room, live distribution for a poll, completion rate during a quiz.
 - **Image difference** for `codeimage`: the target, the student's image and a green / red difference, one grid or two side by side, with the share of correct pixels.
 - **Attempt history** for support: reconstruction of the sequence of revisions of an answer with server timestamps.
-- **Preview of five instantiations** for a question with random values, with a "freeze" button.
+- **Preview of five instantiations** for a question with random values, computed by the API (ADR-056 §8); a "freeze" button, turning one instance into a static question, comes later.
 - **Statistics in the pool**: on a question's row or card, success rate and time spent per question, to pick the right question at a glance (ADR-038, ADR-039); the filter sheet bounds both, to find the questions that are too easy, too hard or too long (F-STAT-03).
 - **Paste from Moodle**: a GIFT file dropped on the pool is imported, the non-convertible questions are listed.
 - **Batch grading**: filter by confidence, by question, by gap between the LLM proposal and the average score.

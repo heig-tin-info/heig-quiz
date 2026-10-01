@@ -9,7 +9,7 @@
 import { z } from "zod";
 
 import { BoolFlag, IntList, StringList, ZodIssueLite, pageOf } from "./common.js";
-import { ParametersDraft } from "./parameters.js";
+import { NamedValues, ParametersDraft } from "./parameters.js";
 
 /**
  * The question types of the MVP. `QUESTION_TYPE_IDS` in `@quiz/core` is the
@@ -284,6 +284,12 @@ export const QuestionRow = z.object({
    * for everyone else and always false on a soft-deleted question.
    */
   starred: z.boolean(),
+  /**
+   * Its latest published version declares variables (ADR-056 §1, §8): the
+   * list's "Parameterized" pill. `questions.randomizable`, derived at
+   * publication.
+   */
+  randomizable: z.boolean(),
 });
 export type QuestionRow = z.infer<typeof QuestionRow>;
 
@@ -535,6 +541,34 @@ export type PreviewResult = z.infer<typeof PreviewResult>;
  */
 export const PreviewSolution = z.object({ solution: z.unknown() });
 export type PreviewSolution = z.infer<typeof PreviewSolution>;
+
+/**
+ * `POST /questions/:id/draft/instances` (ADR-056 §8): the five instances of
+ * a parameterized DRAFT, drawn on the server exactly as publication draws
+ * the ones it checks (seeds 0 to 4), so the browser evaluates nothing.
+ * Teacher-facing: the values and the key of each instance are there.
+ * `issues` instead of instances when the draft would not publish; both
+ * empty for a static draft.
+ */
+export const DraftInstance = z.object({
+  seed: z.number().int(),
+  /** The variables in the table's order, each written with its format. */
+  values: NamedValues,
+  /** The instance as a student reads it (`studentView`, seed 0, no shuffle). */
+  student: z.unknown(),
+  /** Its key, as the preview's "Show answers" reads it. */
+  solution: z.unknown(),
+  itemPoints: z.number(),
+  /** The explanation, instantiated. */
+  explanation: z.string(),
+});
+export type DraftInstance = z.infer<typeof DraftInstance>;
+
+export const DraftInstances = z.object({
+  instances: z.array(DraftInstance),
+  issues: z.array(ZodIssueLite),
+});
+export type DraftInstances = z.infer<typeof DraftInstances>;
 
 /** Teacher rehearsal (F-QST-09): graded in process, never persisted. */
 export const TryBody = z.object({

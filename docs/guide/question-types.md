@@ -327,4 +327,4 @@ The specification announces more types for later phases. None is available today
 - **Essay graded by an assistant**: a proposal of points per rubric criterion, which you validate.
 - **Diagram graded with help**: a proposal computed per kind (the equivalence of two automata, the vertices and weights of a graph, the classes and links matched by name), which you validate.
 
-Random values in a statement, announced for phase 2, are not available either.
+Random values in a statement are available on multiple choice, short answer and fill in the blanks: see [Parameterized questions](parameterized-questions.md).

@@ -43,7 +43,14 @@ export function sortColumns(
   columns: readonly GradingColumn[],
   named: boolean,
   whoOf: (entry: GradingEntry) => string,
+  /**
+   * A parameterized question (ADR-056 §9): an answer column sorts WITHIN
+   * each verdict, never across, since alike answers to their own keys are
+   * not answers a teacher may grade alike.
+   */
+  parameterized = false,
 ): SortColumn[] {
+  const answerKey = (c: GradingColumn, e: GradingEntry) => (isMissing(e) ? "" : c.sortKey(e.answer));
   return [
     { key: "verdict", label: t("grading.col.verdict"), answer: false, sortValue: verdictRank },
     ...(named
@@ -55,7 +62,8 @@ export function sortColumns(
       title: c.title,
       align: c.align,
       answer: true,
-      sortValue: (e: GradingEntry) => (isMissing(e) ? "" : c.sortKey(e.answer)),
+      sortValue: (e: GradingEntry) =>
+        parameterized ? `${verdictRank(e)}:${answerKey(c, e)}` : answerKey(c, e),
     })),
     {
       key: "points",

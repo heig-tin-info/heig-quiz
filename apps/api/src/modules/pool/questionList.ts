@@ -272,6 +272,7 @@ function rowJson(
     deletedAt: question.deletedAt?.toISOString() ?? null,
     keyless: isKeyless(question.type, facts?.latest ?? null),
     starred: question.starred,
+    randomizable: question.randomizable,
   };
 }
 

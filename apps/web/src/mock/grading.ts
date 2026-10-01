@@ -58,7 +58,10 @@ import {
   RC_REFERENCE,
   RC_STUDENT,
   mockCircuitDetails,
+  fillText,
+  fillVariables,
   questions,
+  solutionOf,
   studentSolutionOf,
   studentView,
   tryAnswer,
@@ -146,6 +149,75 @@ interface MockGradingWorld {
 }
 
 const cellKey = (attemptId: string, itemId: string) => `${attemptId}:${itemId}`;
+
+// --- A parameterized question (ADR-056 §9) ---------------------------------
+//
+// The pool's falling ball (`q-fall`, src/mock/pool.ts), appended to the
+// `closed` evaluation so the grading table, its panel and the class debrief
+// show a parameterized question. The mock has no evaluator (mathjs stays on
+// the server): each attempt's `h` and `g` come from a hash of its id — never
+// from `rand()`, so the rest of the mock world draws exactly what it drew
+// before — `t` is computed from them, and the template is filled by the
+// pool's own `fillVariables`.
+
+const FALL: MockQuestion | undefined = questions.find((q) => q.id === "q-fall");
+
+const isFall = (q: { id: string }) => q.id === "q-fall";
+
+interface FallValues {
+  h: number;
+  g: number;
+  t: number;
+}
+
+/** FNV-1a, for a stable draw per attempt that consumes nothing of `rand()`. */
+function fallHash(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return h >>> 0;
+}
+
+const round2Fall = (x: number) => Math.round(x * 100) / 100;
+
+/** The values of an attempt (`null`: the example, seed 0), the condition `t > 1.5` held. */
+function fallValues(attemptId: string | null): FallValues {
+  if (attemptId === null) return { h: 42, g: 9.81, t: 2.93 };
+  const n = fallHash(attemptId);
+  const g = [3.71, 9.81, 24.79][n % 3]!;
+  let h = 10 + ((n >>> 3) % 91);
+  while (Math.sqrt((2 * h) / g) <= 1.5) h += 10;
+  return { h, g, t: round2Fall(Math.sqrt((2 * h) / g)) };
+}
+
+/** The values as the grading queue sends them: in the table's order, each with its format. */
+const fallNamed = (v: FallValues) => [
+  { name: "h", value: String(v.h) },
+  { name: "g", value: v.g.toFixed(2) },
+  { name: "t", value: v.t.toFixed(2) },
+];
+
+const byNameOf = (v: FallValues) => Object.fromEntries(fallNamed(v).map((x) => [x.name, x.value]));
+
+/** The config one attempt read (`null`: the example's), an instance for the parameterized question. */
+function attemptConfig(q: MockQuestion, attemptId: string | null): Record<string, unknown> {
+  return isFall(q) ? fillVariables(publishedConfig(q), byNameOf(fallValues(attemptId))) : publishedConfig(q);
+}
+
+/** The parameterized question's explanation, instantiated; null for any other. */
+function fallExplanation(q: MockQuestion, attemptId: string | null): string | null {
+  const template = q.versions.at(-1)?.explanation ?? "";
+  return isFall(q) ? fillText(template, byNameOf(fallValues(attemptId))) : null;
+}
+
+/**
+ * One attempt's answer to the parameterized question, from ITS values: the
+ * right fall time, or a classic mistake (the factor 2 or the square root
+ * forgotten) — so alike numbers are right for one student, wrong for another.
+ */
+function fallAnswer(v: FallValues, ability: number, n: number): string {
+  if ((n % 100) / 100 < ability) return v.t.toFixed(2);
+  return n % 2 === 0 ? round2Fall(Math.sqrt(v.h / v.g)).toFixed(2) : round2Fall((2 * v.h) / v.g).toFixed(2);
+}
 
 /** The published configuration of a mock question (its latest version). */
 function publishedConfig(q: MockQuestion): Record<string, unknown> {
@@ -334,6 +406,8 @@ function buildGradingWorld(
   attempts.forEach((attempt, attemptIndex) => {
     items.forEach((item, itemIndex) => {
       const q = questions.find((x) => x.id === item.questionId)!;
+      // Its own pass below: nothing of `rand()` is spent on it.
+      if (isFall(q)) return;
       const config = publishedConfig(q);
       const key = cellKey(attempt.id, item.id);
       // Two students in thirty left this question untouched.
@@ -461,6 +535,39 @@ function buildGradingWorld(
     });
   });
 
+  for (const item of items.filter((i) => i.questionId === FALL?.id)) {
+    for (const [attemptIndex, attempt] of attempts.entries()) {
+      const key = cellKey(attempt.id, item.id);
+      const n = fallHash(key);
+      // One student left it blank; the others answered from their own values.
+      const answer = attemptIndex === 2 ? null : { text: fallAnswer(fallValues(attempt.id), attempt.ability, n) };
+      if (answer) answers.set(key, answer);
+      const graded = answer
+        ? (tryAnswer(FALL!, attemptConfig(FALL!, attempt.id), answer) as { points: number; details: unknown })
+        : { points: 0, details: null };
+      gradings.set(key, [
+        {
+          id: `g${(gradingSeq += 1)}`,
+          answerId: answer ? `${key}-ans` : null,
+          attemptId: attempt.id,
+          itemId: item.id,
+          points: graded.points * item.points,
+          maxPoints: item.points,
+          source: "auto",
+          // A few left to validate while the evaluation is being graded.
+          state: !options.allValidated && n % 5 === 0 && graded.points > 0 ? "proposed" : "validated",
+          details: graded.details,
+          confidence: !options.allValidated && n % 5 === 0 && graded.points > 0 ? "high" : null,
+          comment: null,
+          gradedBy: null,
+          gradedAt: iso(-2 * H + attemptIndex * 1000),
+          supersedesId: null,
+          regradeNote: null,
+        },
+      ]);
+    }
+  }
+
   return { evaluation, items, attempts, answers, gradings };
 }
 
@@ -473,6 +580,24 @@ const gradingWorlds: MockGradingWorld[] = [];
 {
   const closed = evaluations.find((e) => e.state === "closed");
   const released = evaluations.find((e) => e.state === "released");
+  // The parameterized question, the closed evaluation's last item (ADR-056 §9).
+  if (closed && FALL && closed.items.length > 0) {
+    closed.items.push({
+      ...closed.items.at(-1)!,
+      id: "iiiiiiii-0000-4000-8000-00000000fa11",
+      position: closed.items.length,
+      points: 2,
+      milestone: false,
+      bonus: false,
+      questionId: FALL.id,
+      questionVersionId: "vvvvvvvv-0000-4000-8000-00000000fa11",
+      type: "short",
+      internalName: FALL.internalName,
+      versionNumber: 1,
+      latestVersionNumber: 1,
+      deprecated: false,
+    });
+  }
   if (closed)
     gradingWorlds.push(
       buildGradingWorld(closed, { allValidated: false, pinnedAttemptId: STUDENT_ATTEMPT }),
@@ -524,7 +649,7 @@ function negativeOf(evaluation: MockEvaluation): boolean {
 
 function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalItem, anonymous: boolean) {
   const q = questions.find((x) => x.id === item.questionId)!;
-  const config = publishedConfig(q);
+  const config = attemptConfig(q, attempt.id);
   const key = cellKey(attempt.id, item.id);
   const answer = e.answers.get(key) ?? null;
   const grading = standingGrading(e, attempt.id, item.id);
@@ -546,6 +671,9 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
     attemptNumber: null,
     kept: true,
     answer,
+    ...(isFall(q)
+      ? { values: fallNamed(fallValues(attempt.id)), explanation: fallExplanation(q, attempt.id) }
+      : {}),
     student: studentView(q, config),
     solution,
     grading,
@@ -589,6 +717,15 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
       points: i.points,
       minPoints: scoresNegatively(i.type, negativeOf(e.evaluation), i.bonus) ? -i.points : 0,
       explanation: questions.find((q) => q.id === i.questionId)?.versions.at(-1)?.explanation || null,
+      ...(FALL && i.questionId === FALL.id
+        ? {
+            parameters: {
+              variables: FALL.versions.at(-1)!.variables!,
+              // The question as written: its `[[…]]` left as text.
+              template: { student: studentView(FALL, publishedConfig(FALL)), solution: solutionOf(FALL), example: false },
+            },
+          }
+        : {}),
     })),
     entries,
     counts: {
@@ -878,7 +1015,8 @@ on("GET", "/app/api/evaluations/:id/results/by-question", (m) => {
   const papers = e.attempts.filter((a) => !a.staff).length;
   return e.items.map((item, index) => {
     const q = questions.find((x) => x.id === item.questionId)!;
-    const config = publishedConfig(q);
+    // A parameterized question projects its example instance (ADR-056 §9).
+    const config = attemptConfig(q, null);
     const server = DEBRIEF_TYPES[q.type];
     // As `byQuestion` does it: one tally per attempt of the class, a blank
     // for no answer (or one that holds nothing), nothing at all for an
@@ -898,14 +1036,16 @@ on("GET", "/app/api/evaluations/:id/results/by-question", (m) => {
     return {
       item: view.items[index]!,
       papers,
+      ...(isFall(q) ? { parameterized: true } : {}),
       student: studentView(q, config),
       solution:
         q.type === "code"
           ? mockCodeDetails(config, 1).solution
           : (tryAnswer(q, config, null) as { solution?: unknown }).solution ?? null,
-      explanation: q.versions.at(-1)?.explanation || null,
+      explanation: fallExplanation(q, null) ?? (q.versions.at(-1)?.explanation || null),
       outcomes,
-      distribution,
+      // Grouped by verdict only: no group by what was written holds.
+      distribution: isFall(q) ? [] : distribution,
       casePassRate,
       successRate,
       avgMs: null,
@@ -987,7 +1127,7 @@ on("GET", "/app/api/attempts/:id/feedback", (m) => {
     grade: gradeOf(points, total),
     items: e.items.map((item) => {
       const q = questions.find((x) => x.id === item.questionId)!;
-      const config = publishedConfig(q);
+      const config = attemptConfig(q, attempt.id);
       const key = cellKey(attempt.id, item.id);
       const answer = e.answers.get(key) ?? null;
       const grading = standingGrading(e, attempt.id, item.id);
@@ -1013,7 +1153,7 @@ on("GET", "/app/api/attempts/:id/feedback", (m) => {
         answer,
         // The student's key: an essay's rubric stays the teacher's (ADR-037).
         solution: studentSolutionOf(q, solution),
-        explanation: q.versions.at(-1)?.explanation || null,
+        explanation: fallExplanation(q, attempt.id) ?? (q.versions.at(-1)?.explanation || null),
         details: grading?.details ?? null,
         comment: grading?.comment ?? null,
       };

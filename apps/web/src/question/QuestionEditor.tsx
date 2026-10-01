@@ -156,7 +156,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   const toast = useToast();
   const [rawTab, setTab] = useSearchParam("tab", "edit");
   const tab: Tab = rawTab === "try" || rawTab === "versions" ? rawTab : "edit";
-  const { detail, pool, poolId, readOnly, draft, setDraft, autosave, issues, edited } =
+  const { detail, pool, poolId, readOnly, draft, setDraft, autosave, issues, edited, savedStamp } =
     useQuestionDraft(id);
   const [publishing, setPublishing] = useState(false);
   const origin = useOrigin();
@@ -275,6 +275,8 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
             edited={edited}
             readOnly={readOnly}
             onTry={onTry}
+            savedStamp={savedStamp}
+            dirty={autosave.dirty}
           />
         </EditorExpandChrome.Provider>
       ) : tab === "try" ? (

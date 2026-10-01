@@ -9,6 +9,7 @@ import {
   PreviewBody,
   TryBody,
   issuesOf,
+  type DraftInstances,
   type PreviewSolution,
   type TryResult,
 } from "@quiz/contracts";
@@ -23,7 +24,7 @@ import {
 import { questions } from "../../db/schema.js";
 import { studentSolutionViewOf, studentViewOf, teacherPreviewView } from "../live/studentView.js";
 import { isParameterized, loadConfig, tryLoadConfig, typeOf } from "./config.js";
-import { instanceOf, parameterIssues } from "./instance.js";
+import { instanceOf, parameterIssues, previewInstances } from "./instance.js";
 import type { VersionRecord } from "./shared.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
@@ -114,6 +115,40 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
         } satisfies PreviewSolution;
       },
     ),
+  );
+
+  /**
+   * The five instances of a parameterized DRAFT (ADR-056 §8), for the
+   * editor's Variables section: the seeds publication gates, drawn on the
+   * server, so the browser evaluates nothing and the teacher reads what
+   * publication checks. Nothing comes from the client but the question id:
+   * the stored draft is read. Each instance goes through the ONE student
+   * exit like the preview above, and its key through the preview's "Show
+   * answers" path. A draft that would not publish answers with its issues.
+   */
+  app.post(
+    "/app/api/questions/:id/draft/instances",
+    { preHandler: requireTeacher, config: { readOnly: true } },
+    teacher({ params: IdParam, load: onQuestion() }, async ({ scope }) => {
+      const { type, id } = scope.question;
+      const row = await service.draftOf(app.db, id);
+      const { instances, issues } = previewInstances(type, row);
+      const view = teacherPreviewView(id);
+      return {
+        issues,
+        instances: instances.map(({ seed, values, instance }) => {
+          const config = loadConfig(type, instance.version);
+          return {
+            seed,
+            values,
+            student: studentViewOf(type, config, view),
+            solution: studentSolutionViewOf(type, config, view),
+            itemPoints: typeOf(type).defaultPoints(config),
+            explanation: instance.explanation,
+          };
+        }),
+      } satisfies DraftInstances;
+    }),
   );
 
   /**

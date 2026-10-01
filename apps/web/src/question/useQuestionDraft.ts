@@ -1,16 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 
-import type { DraftSaved, PoolDetail, QuestionDetail, ZodIssueLite } from "@quiz/contracts";
+import type { DraftSaved, ParametersDraft, PoolDetail, QuestionDetail, ZodIssueLite } from "@quiz/contracts";
 
 import { api } from "../api";
 import { poolKey, questionKey } from "../queryKeys";
 import { useAutosave } from "./autosave";
 
-/** The working copy of a question: what the type's editor and the explanation edit. */
+/** The working copy of a question: what the type's editor, the explanation and the Variables section edit. */
 export interface Draft {
   config: unknown;
   explanation: string;
+  /** The variables table (ADR-056); null for a static question. */
+  variables: ParametersDraft | null;
 }
 
 /**
@@ -58,14 +60,19 @@ export function useQuestionDraft(id: string) {
   // tells our own draft apart from a foreign one when the question query
   // comes back (see the effect below).
   const ownStamp = useRef<string | null>(null);
+  // The `updatedAt` of the draft the server holds as far as this editor
+  // knows: its own last save, or the one it loaded. What the server computes
+  // from the STORED draft (the five instances, ADR-056 §8) is keyed on it.
+  const [savedStamp, setSavedStamp] = useState<string | null>(null);
 
   const save = useCallback(
     async (value: Draft) => {
       const saved = await api<DraftSaved>(`/app/api/questions/${id}/draft`, {
         method: "PUT",
-        body: JSON.stringify({ config: value.config, explanation: value.explanation }),
+        body: JSON.stringify({ config: value.config, explanation: value.explanation, variables: value.variables }),
       });
       ownStamp.current = saved.updatedAt;
+      setSavedStamp(saved.updatedAt);
       setIssues(saved.issues);
       return saved;
     },
@@ -75,7 +82,7 @@ export function useQuestionDraft(id: string) {
   // `enabled: false` for a reader: not one `PUT /draft` leaves the browser,
   // whatever a control that slipped through would do to the local draft.
   const autosave = useAutosave<Draft>({
-    value: draft ?? { config: null, explanation: "" },
+    value: draft ?? { config: null, explanation: "", variables: null },
     save,
     enabled: draft !== null && !readOnly,
   });
@@ -101,12 +108,13 @@ export function useQuestionDraft(id: string) {
     if (!serverDraft || !serverStamp) return;
     if (dirty) return;
     if (ownStamp.current !== null && new Date(serverStamp) <= new Date(ownStamp.current)) return;
-    const next = { config: serverDraft.config, explanation: serverDraft.explanation };
+    const next = { config: serverDraft.config, explanation: serverDraft.explanation, variables: serverDraft.variables ?? null };
     // Shown, never saved back: it is already what the server holds. Saving
     // it would stamp the draft AFTER the publication that just produced it,
     // and the question would read "unpublished changes" forever (#72, #74).
     adopt(next);
     setLocalDraft(next);
+    setSavedStamp(serverStamp);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the stamp is the identity of a draft
   }, [serverStamp]);
 
@@ -115,5 +123,5 @@ export function useQuestionDraft(id: string) {
     setLocalDraft(next);
   }, []);
 
-  return { detail, pool, poolId, readOnly, draft, setDraft, autosave, issues, edited };
+  return { detail, pool, poolId, readOnly, draft, setDraft, autosave, issues, edited, savedStamp };
 }

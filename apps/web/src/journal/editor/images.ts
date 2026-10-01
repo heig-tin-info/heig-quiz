@@ -1,8 +1,9 @@
 /*
- * The journal's pictures (F-JRN-11, D25 condition 3): a picture dropped,
- * pasted or picked into a page is written into the REPOSITORY, beside the
- * page, and inserted with a RELATIVE path — never as a platform asset
- * (`asset:<id>`) — so that the page renders the same on GitHub.
+ * The journal's pictures (F-JRN-11, ADR-057): a picture dropped, pasted or
+ * picked into a page is stored in the journal's assets, beside the page,
+ * and inserted with a RELATIVE path — never as a platform asset
+ * (`asset:<id>`) — so that the page keeps its pictures when it moves to a
+ * repository (Move to GitHub, M4-11).
  *
  * Where: an `images/` folder next to the page (`semaine-01/index.md` puts
  * its pictures in `semaine-01/images/`). One folder per page's folder, not
@@ -11,9 +12,9 @@
  *
  * Its name: the file's own, reduced to `[a-z0-9-]`, with six random hex
  * characters before the extension. The suffix is what lets two teachers
- * drop two `capture.png` without one overwriting the other: the write route
- * refuses a path GitHub has and the copy does not (a conflict, never an
- * overwrite), and a name nobody chose twice never meets that refusal.
+ * drop two `capture.png` without one overwriting the other: assets are
+ * append-only, the route refuses other bytes at a taken path
+ * (`asset_exists`), and a name nobody chose twice never meets that refusal.
  *
  * Its extension comes from the file's TYPE, not its name: the route checks
  * that the declared content type is the extension's (`assetContentType`),
