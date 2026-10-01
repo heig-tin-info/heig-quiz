@@ -1,5 +1,6 @@
 /**
  * The restricted expression evaluator of parameterized questions (ADR-056 §2).
+ * Internal: `../parameters.ts` is the entry point; nothing else imports this.
  *
  * An expression is written by a teacher and evaluated on the server, so it is
  * untrusted input. Two layers stand between it and mathjs:
@@ -13,7 +14,7 @@
  *     a typo as easily as a product), `true`/`null` and every function that is
  *     not named below. This walk is the guarantee.
  *  2. The instance: built with `create()` from the factories of the allowed
- *     functions only, not from `all`. `import` and `parse` remain on it (every
+ *     functions only (plus `format`, which `./format.ts` uses), not from `all`. `import` and `parse` remain on it (every
  *     instance has them), but no node that survives the walk can reach them:
  *     a call's callee must be a plain name on the allowlist, and a bare name
  *     must be a constant or a variable in scope. The smaller instance is
@@ -46,6 +47,7 @@ import {
   expDependencies,
   fixDependencies,
   floorDependencies,
+  formatDependencies,
   hypotDependencies,
   largerDependencies,
   largerEqDependencies,
@@ -76,8 +78,9 @@ import {
   unequalDependencies,
   xorDependencies,
   type FactoryFunctionMap,
-  type MathNode,
 } from "mathjs";
+
+import { CONSTANTS, FUNCTIONS, MAX_EXPRESSION_LENGTH, RANDOM_FUNCTIONS } from "../parameterNames.js";
 
 /** The stable codes of a parameter issue. A UI translates them; never the message. */
 export type IssueCode =
@@ -95,6 +98,7 @@ export type IssueCode =
   | "not_a_boolean"
   | "eval_error"
   | "condition_exhausted"
+  | "choices_not_distinct"
   | "too_slow";
 
 export interface Issue {
@@ -116,48 +120,45 @@ export class ParameterError extends Error {
   }
 }
 
+/**
+ * Runs `f`; a `ParameterError` it throws is rethrown with `extra` laid over
+ * its issue (the row, the path, the offset of the `[[`). Anything else is a
+ * bug and goes up unchanged.
+ */
+export function at<T>(extra: Omit<Issue, "code" | "message">, f: () => T): T {
+  try {
+    return f();
+  } catch (e) {
+    if (e instanceof ParameterError) throw new ParameterError({ ...e.issue, ...extra });
+    throw e;
+  }
+}
+
+/** Like `at`, but records the issue in `issues` and returns undefined. */
+export function collect<T>(issues: Issue[], extra: Omit<Issue, "code" | "message">, f: () => T): T | undefined {
+  try {
+    return at(extra, f);
+  } catch (e) {
+    if (!(e instanceof ParameterError)) throw e;
+    issues.push(e.issue);
+    return undefined;
+  }
+}
+
 export function fail(code: IssueCode, message: string, extra: Omit<Issue, "code" | "message"> = {}): never {
   throw new ParameterError({ code, message, ...extra });
 }
 
-/** Longest expression accepted, in characters. */
-export const MAX_EXPRESSION_LENGTH = 300;
 /** Largest syntax tree accepted, in nodes. */
 export const MAX_EXPRESSION_NODES = 100;
 
-/** The mathjs functions an expression may call. */
-const FUNCTIONS = new Set([
-  "sqrt", "cbrt", "abs", "exp", "log", "log10", "log2",
-  "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "sinh", "cosh", "tanh",
-  "round", "floor", "ceil", "fix", "sign", "min", "max", "hypot", "mod",
-]);
-/** Ours, drawn from the platform's generator; allowed only in a variable row. */
-export const RANDOM_FUNCTIONS = new Set(["randint", "uniform", "choice"]);
-const CONSTANTS = new Set(["pi", "e"]);
 /** Operators by their mathjs function name: arithmetic, comparison, logic. */
 const OPERATORS = new Set([
   "add", "subtract", "multiply", "divide", "pow", "mod", "unaryMinus", "unaryPlus",
   "equal", "unequal", "smaller", "larger", "smallerEq", "largerEq",
   "and", "or", "not", "xor",
 ]);
-/** Words of the mathjs grammar, or its values, that a variable may not be named. */
-const RESERVED = new Set([
-  "and", "or", "not", "xor", "mod", "to", "in", "end",
-  "true", "false", "null", "undefined", "NaN", "Infinity",
-]);
-
-/** A name a variable row may take: an identifier that shadows nothing. */
-export function isVariableName(name: string): boolean {
-  return (
-    /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) &&
-    !FUNCTIONS.has(name) &&
-    !RANDOM_FUNCTIONS.has(name) &&
-    !CONSTANTS.has(name) &&
-    !RESERVED.has(name)
-  );
-}
-
-const math = create(
+export const math = create(
   {
     parseDependencies,
     addDependencies, subtractDependencies, multiplyDependencies, divideDependencies,
@@ -173,6 +174,7 @@ const math = create(
     roundDependencies, floorDependencies, ceilDependencies, fixDependencies,
     signDependencies, minDependencies, maxDependencies, hypotDependencies,
     piDependencies, eDependencies,
+    formatDependencies,
     // mathjs types each `*Dependencies` as possibly undefined; they are not.
   } as FactoryFunctionMap,
   // `predictable`: sqrt(-1) is NaN (refused), never a Complex. `Array`: a
@@ -204,47 +206,29 @@ export interface Compiled {
   evaluate(scope: Map<string, unknown>): unknown;
 }
 
-const CACHE_SIZE = 500;
-const cache = new Map<string, Compiled | Issue>();
-
 /**
  * Parses and validates an expression, without looking at the names in scope
- * (`checkNames` does). Cached by its text, bounded: the oldest entry goes.
- * Throws a `ParameterError` when the expression is refused.
+ * (`checkNames` does). Throws a `ParameterError` when the expression is
+ * refused; whatever else mathjs might throw becomes a `parse_error`.
  */
 export function compile(expr: string): Compiled {
-  let entry = cache.get(expr);
-  if (entry === undefined) {
-    try {
-      entry = compileUncached(expr);
-    } catch (e) {
-      entry = (e as ParameterError).issue;
-    }
-    if (cache.size >= CACHE_SIZE) cache.delete(cache.keys().next().value!);
-    cache.set(expr, entry);
-  }
-  if ("code" in entry) throw new ParameterError(entry);
-  return entry;
-}
-
-function compileUncached(expr: string): Compiled {
   if (expr.length > MAX_EXPRESSION_LENGTH) {
     fail("too_long", `expression longer than ${MAX_EXPRESSION_LENGTH} characters`);
   }
   if (expr.trim() === "") fail("parse_error", "empty expression");
-  let root: MathNode;
   try {
-    root = math.parse(expr);
+    const root = math.parse(expr);
+    const names = new Set<string>();
+    const state = { nodes: 0, random: false };
+    walk(root as unknown as Node, names, state);
+    const code = root.compile();
+    return { names, random: state.random, evaluate: (scope) => code.evaluate(scope) as unknown };
   } catch (e) {
+    if (e instanceof ParameterError) throw e;
     // mathjs's SyntaxError carries `char`, 1-based.
     const char = (e as { char?: number }).char ?? 1;
-    fail("parse_error", (e as Error).message, { offset: char - 1 });
+    return fail("parse_error", (e as Error).message, { offset: char - 1 });
   }
-  const names = new Set<string>();
-  const state = { nodes: 0, random: false };
-  walk(root as unknown as Node, names, state);
-  const code = root.compile();
-  return { names, random: state.random, evaluate: (scope) => code.evaluate(scope) as unknown };
 }
 
 function walk(node: Node, names: Set<string>, state: { nodes: number; random: boolean }): void {

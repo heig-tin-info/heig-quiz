@@ -3,19 +3,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   distinctRendered,
   draw,
-  formatsOf,
+  FORMAT_PATTERN,
   formatValue,
   instantiate,
-  interpolate,
-  isFormat,
   isVariableName,
   ParameterError,
-  references,
-  roundToFormat,
   validateParameters,
   type Parameters,
+  type Values,
 } from "./parameters.js";
-import { compile } from "./parameters/evaluator.js";
+import { at, collect, compile, type Issue } from "./parameters/evaluator.js";
+import { roundToFormat } from "./parameters/format.js";
 
 /** The ADR's example: a ball dropped from h on a planet of gravity g. */
 const MRUA: Parameters = {
@@ -27,6 +25,10 @@ const MRUA: Parameters = {
 };
 
 const one = (expr: string, format = ""): Parameters => ({ rows: [{ name: "x", expr, format }] });
+
+/** One text through `instantiate`, with a table declaring `values`' names and the given formats. */
+const interpolate = (text: string, values: Values, formats: Record<string, string> = {}) =>
+  instantiate(text, { rows: Object.keys(values).map((name) => ({ name, expr: "0", format: formats[name] ?? "" })) }, values);
 
 /** The issue a call throws, or a failure. */
 function issueOf(fn: () => unknown) {
@@ -93,14 +95,13 @@ describe("draw", () => {
     const d = draw(params, 3);
     expect(d).toMatchObject({ runs: 100, exhausted: true });
     expect(d.values.n).toBeLessThanOrEqual(10);
-    expect(draw(params, 3, { maxRuns: 0 })).toMatchObject({ runs: 1, exhausted: true });
   });
 
   it("applies `accept` like the condition", () => {
     const params: Parameters = { rows: [{ name: "n", expr: "randint(1, 3)", format: "int" }] };
     const d = draw(params, 5, { accept: (v) => v.n === 2 });
     expect(d.values.n).toBe(2);
-    expect(draw(params, 5, { accept: () => false, maxRuns: 4 })).toMatchObject({ runs: 4, exhausted: true });
+    expect(draw(params, 5, { accept: () => false })).toMatchObject({ runs: 100, exhausted: true });
   });
 
   it("ignores a blank condition", () => {
@@ -206,18 +207,6 @@ describe("the restricted evaluator refuses, statically", () => {
     expect(validateParameters(one(expr), [])[0]?.code).toBe(code);
   });
 
-  it("caches a refusal as well as a success", () => {
-    expect(issueOf(() => compile("2pi")).code).toBe("forbidden_node");
-    expect(issueOf(() => compile("2pi")).code).toBe("forbidden_node");
-    expect(compile("1 + 2")).toBe(compile("1 + 2"));
-  });
-
-  it("stays bounded: the oldest expression leaves the cache", () => {
-    const first = compile("0 + 0");
-    for (let i = 1; i <= 500; i++) compile(`${i} + 0`);
-    expect(compile("0 + 0")).not.toBe(first);
-  });
-
   it("accepts the whole allowlist", () => {
     const expr =
       "sqrt(4) + cbrt(8) + abs(-1) + exp(0) + log(e) + log10(10) + log2(2) + sin(0) + cos(0) + tan(0)" +
@@ -234,18 +223,20 @@ describe("the restricted evaluator refuses, statically", () => {
 describe("variable names and formats", () => {
   it("accepts identifiers that shadow nothing", () => {
     for (const ok of ["h", "v_0", "_x", "R2"]) expect(isVariableName(ok), ok).toBe(true);
-    for (const bad of ["2a", "a-b", "", "pi", "e", "sqrt", "randint", "and", "mod", "Infinity", "a.b"]) {
+    for (const bad of ["2a", "a-b", "", "pi", "e", "sqrt", "randint", "and", "mod", "Infinity", "a.b", "__proto__"]) {
       expect(isVariableName(bad), bad).toBe(false);
     }
   });
 
   it("knows the formats", () => {
-    for (const ok of ["", "int", ".1", ".6", "1s", "6s"]) expect(isFormat(ok), ok).toBe(true);
-    for (const bad of [".0", ".7", "7s", "0s", "INT", "%.2f"]) expect(isFormat(bad), bad).toBe(false);
+    for (const ok of ["", "int", ".1", ".6", "1s", "6s"]) expect(FORMAT_PATTERN.test(ok), ok).toBe(true);
+    for (const bad of [".0", ".7", "7s", "0s", "INT", "%.2f"]) expect(FORMAT_PATTERN.test(bad), bad).toBe(false);
   });
 
-  it("maps formats by name", () => {
-    expect(formatsOf(MRUA)).toEqual({ h: "int", g: ".2", t: ".2" });
+  it("refuses __proto__ as a name, so no value can vanish into a prototype", () => {
+    expect(validateParameters({ rows: [{ name: "__proto__", expr: "1", format: "" }] }, [])[0]?.code).toBe("bad_name");
+    const d = draw({ rows: [{ name: "constructor", expr: "2", format: "" }] }, 1);
+    expect(Object.getOwnPropertyDescriptor(d.values, "constructor")?.value).toBe(2);
   });
 });
 
@@ -307,6 +298,7 @@ describe("interpolate", () => {
       "h = 12 m, g = 9.80, 2t = 3.12, h/7 = 1.71429",
     );
     expect(interpolate("[[g]]", values)).toBe("9.8");
+    expect(interpolate("[[g + 0]]", values, formats)).toBe("9.8");
   });
 
   it("works inside LaTeX, a cloze blank and C code", () => {
@@ -336,13 +328,6 @@ describe("interpolate", () => {
     expect(issueOf(() => interpolate("[[ -f x ]]", values)).offset).toBe(0);
   });
 
-  it("lists the references with their positions", () => {
-    expect(references("a [[h]] \\[[no]] [[g*2")).toEqual([
-      { offset: 2, end: 7, expr: "h", closed: true },
-      { offset: 16, end: 21, expr: "g*2", closed: false },
-    ]);
-    expect(references("plain")).toEqual([]);
-  });
 });
 
 describe("instantiate", () => {
@@ -356,7 +341,13 @@ describe("instantiate", () => {
       matcher: { kind: "number", value: "[[t]]", tolerance: 0.01 },
     };
     const frozen = structuredClone(config);
-    const out = instantiate(config, { h: 10, t: 1.43 }, { t: ".2" });
+    const params: Parameters = {
+      rows: [
+        { name: "h", expr: "10", format: "int" },
+        { name: "t", expr: "1.43", format: ".2" },
+      ],
+    };
+    const out = instantiate(config, params, { h: 10, t: 1.43 });
     expect(out).toEqual({
       prompt: "Drop from 10 m",
       choices: [
@@ -367,18 +358,18 @@ describe("instantiate", () => {
     });
     expect(config).toEqual(frozen);
     expect(out).not.toBe(config);
-    expect(instantiate(7, {})).toBe(7);
+    expect(instantiate(7, params, {})).toBe(7);
   });
 
   it("keeps a __proto__ key a key", () => {
-    const json = JSON.parse('{"__proto__": "[[h]]"}') as Record<string, unknown>;
-    const out = instantiate(json, { h: 1 });
+    const json = JSON.parse('{"__proto__": "[[x]]"}') as Record<string, unknown>;
+    const out = instantiate(json, one("1"), { x: 1 });
     expect(Object.getOwnPropertyDescriptor(out, "__proto__")?.value).toBe("1");
     expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
   });
 
   it("says where a failure lies", () => {
-    expect(issueOf(() => instantiate({ a: ["ok", "x [[y]]"] }, {}))).toMatchObject({
+    expect(issueOf(() => instantiate({ a: ["ok", "x [[y]]"] }, one("1"), { x: 1 }))).toMatchObject({
       code: "unknown_name",
       path: "/a/1",
       offset: 2,
@@ -442,18 +433,33 @@ describe("validateParameters", () => {
     expect(issues).toEqual([expect.objectContaining({ code: "not_a_number", path: "/a" })]);
   });
 
-  it("honours `accept`, the sample count and the budget", () => {
-    expect(validateParameters(one("randint(1, 2)", "int"), [], { accept: () => false, maxRuns: 3 })[0]?.code).toBe(
-      "condition_exhausted",
-    );
-    let now = 0;
-    const clock = () => (now += 10);
-    expect(validateParameters(MRUA, texts, { clock, budgetMs: 35 })).toEqual([
-      expect.objectContaining({ code: "too_slow" }),
+  it("names an exhaustion caused by `accept` apart from the condition's", () => {
+    expect(validateParameters(one("randint(1, 2)", "int"), [], { accept: () => false })).toEqual([
+      expect.objectContaining({ code: "choices_not_distinct" }),
     ]);
+    const never: Parameters = { ...one("randint(1, 2)", "int"), condition: "x > 2" };
+    expect(validateParameters(never, [], { accept: () => false })[0]?.code).toBe("condition_exhausted");
+  });
+
+  it("draws 200 seeds, within a 2 s budget", () => {
     const spy = vi.fn(() => true);
-    expect(validateParameters(MRUA, [], { samples: 7, accept: spy })).toEqual([]);
-    expect(spy).toHaveBeenCalledTimes(7);
+    expect(validateParameters(MRUA, [], { accept: spy })).toEqual([]);
+    expect(spy).toHaveBeenCalledTimes(200);
+    let now = 0;
+    const clock = () => (now += 100);
+    expect(validateParameters(MRUA, texts, { clock })).toEqual([
+      expect.objectContaining({ code: "too_slow", message: "21 draws took more than 2000 ms" }),
+    ]);
+  });
+
+  it("lets a bug that is not a ParameterError go up", () => {
+    expect(() =>
+      validateParameters(MRUA, [], {
+        accept: () => {
+          throw new TypeError("bug");
+        },
+      }),
+    ).toThrow(TypeError);
   });
 
   it("draws nothing for a table without rows, and finds no reference in a static text", () => {
@@ -467,10 +473,32 @@ describe("distinctRendered", () => {
     expect(distinctRendered(["a", " a "])).toBe(false);
     expect(distinctRendered(["100", "100.5"])).toBe(false);
     expect(distinctRendered(["100", "102"])).toBe(true);
-    expect(distinctRendered(["100", "102"], 0.05)).toBe(false);
     expect(distinctRendered(["0", "-0"])).toBe(false);
     expect(distinctRendered(["1e3", "1000"])).toBe(false);
     expect(distinctRendered(["1 m", "1.001 m"])).toBe(true);
     expect(distinctRendered([])).toBe(true);
+  });
+
+  it("stays linear on long digit runs", () => {
+    const run = "9".repeat(120_000);
+    const start = performance.now();
+    expect(distinctRendered([`${run}x`, `${run}y`, `1${run}`, `${run}.5`])).toBe(true);
+    expect(distinctRendered([`${"9".repeat(39)}x`, "9".repeat(39)])).toBe(true);
+    expect(distinctRendered([`1${"0".repeat(30)}`, `1${"0".repeat(29)}1`])).toBe(false);
+    expect(performance.now() - start).toBeLessThan(200);
+  });
+});
+
+describe("at / collect", () => {
+  it("enrich a ParameterError and let anything else go up unchanged", () => {
+    const bug = new TypeError("bug");
+    const boom = () => {
+      throw bug;
+    };
+    expect(() => at({ row: "x" }, boom)).toThrow(bug);
+    expect(() => collect([], { row: "x" }, boom)).toThrow(bug);
+    const issues: Issue[] = [];
+    expect(collect(issues, { row: "x" }, () => compile("2pi"))).toBeUndefined();
+    expect(issues).toEqual([expect.objectContaining({ code: "forbidden_node", row: "x" })]);
   });
 });

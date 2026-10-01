@@ -1,31 +1,33 @@
 /**
  * `[[expr]]` in the texts of a parameterized question (ADR-056 §3, §4).
+ * Internal: `../parameters.ts` is the entry point.
  *
  * Every text field of the configuration and the explanation may hold
  * `[[h]]` or `[[sqrt(2*h/g)]]`; one pass replaces each by its value. `\[[`
  * writes a literal `[[` (the backslash goes). Inside the brackets, `[`/`]`
- * nest and quoted strings are skipped, so `[[choice([1, 2])]]`-like text and
- * `[[max([a, b])]]` close where a reader expects. The caller scans only a
- * parameterized question: a static one keeps its `[[1,2],[3,4]]` as text.
+ * nest and quoted strings are skipped, so `[[max([a, b])]]` closes where a
+ * reader expects. The caller scans only a parameterized question: a static
+ * one keeps its `[[1,2],[3,4]]` as text.
  *
  * Inline expressions read the drawn values, never draw: the random functions
  * are refused there. A bare variable (`[[g]]`) is written with its row's
- * format when the caller passes the formats, any other expression with the
- * empty format (up to 6 significant figures).
+ * format, any other expression with the empty format.
+ *
+ * A JSON value is compiled once into a `Template` (every `[[…]]` parsed and
+ * checked against the names in scope), then rendered with each set of values:
+ * validation renders the same template 200 times.
  */
-import { checkNames, checkValue, compile, ParameterError, run } from "./evaluator.js";
+import { at, checkNames, checkValue, collect, compile, fail, run, type Compiled, type Issue } from "./evaluator.js";
 import { formatValue } from "./format.js";
 
 export type Values = Record<string, number | string>;
 
-export interface Reference {
+interface Reference {
   /** Offset of the opening `[[`. */
   offset: number;
   /** Offset just past the closing `]]`, or the text's length when unclosed. */
   end: number;
-  /** What lies between the brackets. */
   expr: string;
-  /** False when no `]]` closes it. */
   closed: boolean;
 }
 
@@ -72,60 +74,12 @@ function scanReference(text: string, offset: number): Reference {
   return { offset, end: text.length, expr: text.slice(offset + 2), closed: false };
 }
 
-/** Each `[[…]]` of a text, in order, with its position (for validation and the editor). */
-export function references(text: string): Reference[] {
-  return tokenize(text).flatMap((t) => ("ref" in t ? [t.ref] : []));
-}
-
-/**
- * Checks one reference against the names in scope, statically, and returns
- * its compiled form. Throws a `ParameterError` positioned at the `[[`.
- */
-export function checkReference(ref: Reference, known: ReadonlySet<string>) {
-  try {
-    if (!ref.closed) throw new ParameterError({ code: "unterminated", message: "[[ without its ]]" });
-    const compiled = compile(ref.expr);
-    checkNames(compiled, known, false);
-    return compiled;
-  } catch (e) {
-    const issue = (e as ParameterError).issue;
-    throw new ParameterError({ ...issue, offset: ref.offset });
-  }
-}
-
-/**
- * Replaces every `[[expr]]` of `text` with its formatted value. Throws a
- * `ParameterError` (code and offset) on an unclosed, invalid or failing
- * reference.
- */
-export function interpolate(text: string, values: Values, formats: Record<string, string> = {}): string {
-  const scope = new Map<string, unknown>(Object.entries(values));
-  const known = new Set(scope.keys());
-  let out = "";
-  for (const token of tokenize(text)) {
-    if ("text" in token) {
-      out += token.text;
-      continue;
-    }
-    const compiled = checkReference(token.ref, known);
-    let value: number | string;
-    try {
-      value = checkValue(run(compiled, scope));
-    } catch (e) {
-      throw new ParameterError({ ...(e as ParameterError).issue, offset: token.ref.offset });
-    }
-    const name = token.ref.expr.trim();
-    out += formatValue(value, Object.hasOwn(formats, name) ? formats[name]! : "");
-  }
-  return out;
-}
-
 /**
  * Calls `visit` on every string of a JSON value with its JSON-pointer path,
  * and returns a copy where each string is replaced by what `visit` returns.
  * Numbers, booleans and null are kept; the input is never mutated.
  */
-export function mapStrings<T>(json: T, visit: (text: string, path: string) => string, path = ""): T {
+function mapStrings<T>(json: T, visit: (text: string, path: string) => string, path = ""): T {
   if (typeof json === "string") return visit(json, path) as T;
   if (Array.isArray(json)) return json.map((item, i) => mapStrings(item, visit, `${path}/${i}`)) as T;
   if (json !== null && typeof json === "object") {
@@ -137,13 +91,51 @@ export function mapStrings<T>(json: T, visit: (text: string, path: string) => st
   return json;
 }
 
-/** `interpolate` on every string of a JSON value (ADR-056 §4); a new value, the input untouched. */
-export function instantiate<T>(json: T, values: Values, formats: Record<string, string> = {}): T {
-  return mapStrings(json, (text, path) => {
-    try {
-      return interpolate(text, values, formats);
-    } catch (e) {
-      throw new ParameterError({ ...(e as ParameterError).issue, path });
-    }
+/** A text piece: literal, or a checked expression and the format it is written with. */
+type Piece = string | { compiled: Compiled; format: string; offset: number };
+
+export interface Template<T> {
+  /** Every unclosed, invalid or out-of-scope `[[…]]`, with its path and offset. */
+  issues: Issue[];
+  /** The JSON with every `[[…]]` replaced; throws a positioned `ParameterError`. */
+  render(values: Values): T;
+}
+
+/** Compiles every `[[…]]` of a JSON value against the variables' formats (by name). */
+export function compileTemplate<T>(json: T, formats: Record<string, string>): Template<T> {
+  const known = new Set(Object.keys(formats));
+  const issues: Issue[] = [];
+  const texts = new Map<string, Piece[]>();
+  mapStrings(json, (text, path) => {
+    const pieces: Piece[] = tokenize(text).map((token) => {
+      if ("text" in token) return token.text;
+      const { ref } = token;
+      const compiled = collect(issues, { path, offset: ref.offset }, () => {
+        if (!ref.closed) fail("unterminated", "[[ without its ]]");
+        const c = compile(ref.expr);
+        checkNames(c, known, false);
+        return c;
+      });
+      const name = ref.expr.trim();
+      return compiled ? { compiled, format: Object.hasOwn(formats, name) ? formats[name]! : "", offset: ref.offset } : "";
+    });
+    texts.set(path, pieces);
+    return text;
   });
+  return {
+    issues,
+    render(values) {
+      const scope = new Map<string, unknown>(Object.entries(values));
+      return mapStrings(json, (_, path) =>
+        texts
+          .get(path)!
+          .map((piece) =>
+            typeof piece === "string"
+              ? piece
+              : at({ path, offset: piece.offset }, () => formatValue(checkValue(run(piece.compiled, scope)), piece.format)),
+          )
+          .join(""),
+      );
+    },
+  };
 }
