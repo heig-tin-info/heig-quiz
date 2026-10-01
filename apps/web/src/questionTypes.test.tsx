@@ -290,7 +290,6 @@ describe("question type strings", () => {
     expect(plural(e, "lockedRegions", 3)).toBe("3 locked regions");
     expect(fmt(e.tryResult, { passed: 2, total: 3 })).toBe("2 of 3 cases pass.");
     expect(fmt(e.removeCase, { name: "stdin" })).toBe("Remove the case stdin");
-    expect(fmt(p.limits, { timeMs: 2000, memoryMb: 128 })).toBe("2000 ms · 128 MB");
     expect(plural(p, "hiddenCases", 1, { count: 1, points: 2 })).toBe("1 hidden case, worth 2 points.");
   });
 

@@ -248,7 +248,7 @@ The grade is always the server's. At grading, the file is rebuilt from your temp
   <figcaption>A code question in the player: the locked part greyed out, the editable region in the code editor.</figcaption>
 </figure>
 
-The statement, the language and the limits (`2000 ms · 128 MB`), the locked part of the template greyed out, and a code editor for each editable region. Under it, **Visible cases** with a **Run** button, and **Try it yourself** for a run on the student's own **Arguments** and **stdin**, which nobody grades.
+The statement (the language and the limits are not shown to the student), the locked part of the template greyed out, and a code editor for each editable region. Under it, **Visible cases** with a **Run** button, and **Try it yourself** for a run on the student's own **Arguments** and **stdin**, which nobody grades.
 
 <figure markdown="span">
   ![The visible cases after a run](../assets/screenshots/player-run-light.png#only-light)

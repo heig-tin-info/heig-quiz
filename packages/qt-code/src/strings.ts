@@ -219,7 +219,6 @@ export interface CodePlayerStrings {
   compileFailed: string;
   compileOk: string;
   allOrNothing: string;
-  limits: string;
   manual: string;
   manualArgs: string;
   argument: string;
@@ -272,7 +271,6 @@ export const PLAYER_STRINGS: CodePlayerStrings = {
   compileFailed: "Compilation failed",
   compileOk: "Compiled",
   allOrNothing: "All cases must pass to score.",
-  limits: "{timeMs} ms · {memoryMb} MB",
   manual: "Try it yourself",
   manualArgs: "Arguments",
   argument: "Argument {n}",

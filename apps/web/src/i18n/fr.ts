@@ -1484,7 +1484,6 @@ export const fr: Record<keyof Dict, string> = {
   "qt.code.p.compileFailed": "Compilation échouée",
   "qt.code.p.compileOk": "Compilé",
   "qt.code.p.allOrNothing": "Tous les cas doivent passer pour marquer.",
-  "qt.code.p.limits": "{timeMs} ms · {memoryMb} Mo",
   "qt.code.p.loadingRuntime":
     "Chargement de l'environnement d'exécution… cela n'arrive qu'une fois.",
   "qt.code.p.noStdin": "Aucune entrée",
@@ -3111,6 +3110,8 @@ export const fr: Record<keyof Dict, string> = {
   "preview.restart.title": "Recommencer l'aperçu ?",
   "preview.restart.message":
     "Vos réponses sont effacées et un nouvel ordre est tiré au hasard.",
+  "preview.leave.title": "Quitter l'aperçu ?",
+  "preview.leave.message": "Vos réponses sont effacées : un aperçu n'enregistre rien.",
   "preview.edit": "Modifier la question",
   "preview.edit.hint": "Ouvre le brouillon de la question dans un nouvel onglet. Publiez-la, puis revenez : cet aperçu garde vos réponses.",
   "preview.newVersion.title": "La version {n} de cette question est publiée",

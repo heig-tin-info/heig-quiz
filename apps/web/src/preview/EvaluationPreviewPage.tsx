@@ -14,7 +14,9 @@
  * `usePreviewSession` instead of `useAttempt`, and nothing is laid over the
  * question: what the teacher sees is the student's page. That it is a
  * preview is a MODE, stated like the student view — the inverted strip above
- * everything (`ModeBanner`), whose one pill is Restart. The tools of the
+ * everything (`ModeBanner`), whose one pill is Restart. The bar's quiet Home,
+ * exam or not, leads back to the evaluation (it asks first when answers
+ * would be thrown away). The tools of the
  * question on screen, "Show the points" (`PreviewPoints`, which grades it
  * alone) and "Edit question", stand where the player says what a question
  * is worth: beside the list on a wide screen, under the question otherwise.
@@ -240,20 +242,25 @@ function PreviewWalk({
   const touched = Object.keys(session.state.answers).length > 0;
   const current = currentItem(session.state);
 
+  // Restarting and leaving both throw the paper away. Only a paper with
+  // something on it has something to lose.
+  const mayDiscard = async (title: string, message: string, confirmLabel: string) =>
+    !touched || (await confirm({ title, message, confirmLabel, cancelLabel: t("common.cancel") }));
   const askRestart = async () => {
-    // Only a paper with something on it has something to lose.
-    if (
-      touched &&
-      !(await confirm({
-        title: t("preview.restart.title"),
-        message: t("preview.restart.message"),
-        confirmLabel: t("preview.restart"),
-        cancelLabel: t("common.cancel"),
-      }))
-    ) {
-      return;
-    }
-    onRestart();
+    const ok = await mayDiscard(
+      t("preview.restart.title"),
+      t("preview.restart.message"),
+      t("preview.restart"),
+    );
+    if (ok) onRestart();
+  };
+  const askLeave = async () => {
+    const ok = await mayDiscard(
+      t("preview.leave.title"),
+      t("preview.leave.message"),
+      t("preview.backToEvaluation"),
+    );
+    if (ok) onBack();
   };
   const edit = usePreviewEdit({ evaluationId, preview: walk.preview, session, askRestart });
 
@@ -263,7 +270,8 @@ function PreviewWalk({
       <PlayerView
         initial={walk.preview.view}
         session={session}
-        onHome={onBack}
+        onHome={() => void askLeave()}
+        homeLabel={t("preview.backToEvaluation")}
         banner={
           // Only what applies now: nothing stands over the question otherwise.
           <div className="space-y-3">

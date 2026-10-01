@@ -272,6 +272,32 @@ describe("EvaluationPreviewPage", () => {
     ]);
   });
 
+  it("leaves for the evaluation from the bar, asking first once something is answered", async () => {
+    const user = userEvent.setup();
+    mockFetch({ [`POST ${URL}`]: ok(preview(4)) });
+    const navigate = vi.fn();
+    renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={navigate} />);
+    // An exam, yet the bar has a way out: the preview has no clock to stop.
+    const home = await screen.findByRole("button", { name: "Back to the evaluation" });
+
+    // A blank paper has nothing to lose.
+    await user.click(home);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(navigate).toHaveBeenLastCalledWith({ view: "evaluation", id: EVAL });
+
+    await user.click(screen.getByRole("radio", { name: "&x" }));
+    await user.click(home);
+    const dialog = await screen.findByRole("dialog", { name: "Leave the preview?" });
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("radio", { name: "&x" })).toBeChecked();
+
+    await user.click(home);
+    const again = await screen.findByRole("dialog");
+    await user.click(within(again).getByRole("button", { name: "Back to the evaluation" }));
+    expect(navigate).toHaveBeenCalledTimes(2);
+  });
+
   it("restarts from the strip, after asking once the paper has an answer", async () => {
     const user = userEvent.setup();
     let seeds = 0;

@@ -243,6 +243,7 @@ export function PlayerView({
   onResults,
   onExitStudentView,
   banner,
+  homeLabel,
   tools,
   homeBusy = false,
   station = false,
@@ -250,6 +251,8 @@ export function PlayerView({
   initial: AttemptView;
   session: PlayerSession;
   onHome: () => void;
+  /** Where Home leads, named; the student home by default. */
+  homeLabel?: string;
   /** Leaving is under way (the answers are being sent): Home is disabled. */
   homeBusy?: boolean;
   /** Absent where there is no feedback page to open (the preview). */
@@ -311,12 +314,14 @@ export function PlayerView({
     () => ({ deadlineAt: session.deadlineAt, clock: session.clock, paused, sync }),
     [session.deadlineAt, session.clock, paused, sync],
   );
+  const home = { onClick: onHome, label: homeLabel ?? t("player.command.home"), busy: homeBusy };
   const commands = usePlayerCommands({
     next,
     previous,
     onMove: move,
     onSubmit: controls.openSubmit,
     onHome,
+    homeLabel: home.label,
     onExitStudentView,
   });
 
@@ -378,9 +383,10 @@ export function PlayerView({
         progressLabel={progressLabel}
         commands={commands}
         // Issue #125: an exercise may be left and continued later; an exam
-        // may not look like it can. The preview is a tab of its own.
-        {...(initial.evaluation.mode === "exercise" && !initial.attempt.preview
-          ? { onHome, homeBusy }
+        // may not look like it can. The teacher's preview, exam or not, has
+        // no clock to stop: its way out is the same quiet button.
+        {...(initial.evaluation.mode === "exercise" || initial.attempt.preview
+          ? { home }
           : {})}
         headerAction={
           <Button

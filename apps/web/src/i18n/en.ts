@@ -1493,7 +1493,6 @@ export const en = {
   "qt.code.p.compileFailed": "Compilation failed",
   "qt.code.p.compileOk": "Compiled",
   "qt.code.p.allOrNothing": "All cases must pass to score.",
-  "qt.code.p.limits": "{timeMs} ms · {memoryMb} MB",
   "qt.code.p.loadingRuntime": "Loading the language runtime… this happens once.",
   "qt.code.p.noStdin": "No input",
   "qt.code.p.command": "$ program {args}",
@@ -3109,6 +3108,8 @@ export const en = {
   "preview.restart.title": "Restart the preview?",
   "preview.restart.message":
     "Your answers are thrown away and a new random order is drawn.",
+  "preview.leave.title": "Leave the preview?",
+  "preview.leave.message": "Your answers are thrown away: a preview saves nothing.",
   "preview.edit": "Edit question",
   "preview.edit.hint": "Opens the question's draft in a new tab. Publish it, then come back: this preview keeps your answers.",
   "preview.newVersion.title": "Version {n} of this question is published",

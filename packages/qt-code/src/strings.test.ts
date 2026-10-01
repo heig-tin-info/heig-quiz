@@ -43,7 +43,6 @@ const ROWS: Row[] = [
   ],
   [P, "command", ["args"], (args: string) => `$ program ${args}`, [["-v 3"], [""]]],
   [P, "exitMismatch", ["got", "want"], (got: string, want: number) => `exit ${got} ≠ ${want}`, [["1", 0], ["139", 2]]],
-  [P, "limits", ["timeMs", "memoryMb"], (timeMs: number, memoryMb: number) => `${timeMs} ms · ${memoryMb} MB`, [[2000, 128], [500, 64]]],
   [P, "exitCode", ["code"], (code: string) => `exit ${code}`, [["0"], ["1"]]],
   [R, "score", ["points", "max"], (points: number, max: number) => `${points} / ${max} points`, [[2, 3], [0, 1.5]]],
   [R, "exitMismatch", ["got", "want"], (got: string, want: number) => `exit ${got} ≠ ${want}`, [["1", 0], ["139", 2]]],
