@@ -204,9 +204,14 @@ function GradeList({ rows, open }: { rows: GradeRow[]; open: Opener }) {
               </div>
             </div>
             <div className="shrink-0 text-right">
-              <p className="text-[17px] font-semibold leading-snug tabular-nums">
+              {/* The indicative badge keeps its own size, outside the grade's 17 px line. */}
+              {row.score?.grade === null ? (
                 <GradeCell row={row} />
-              </p>
+              ) : (
+                <p className="text-[17px] font-semibold leading-snug tabular-nums">
+                  <GradeCell row={row} />
+                </p>
+              )}
               {/* One dash says "no grade"; a second under it would say nothing more. */}
               {row.score ? (
                 <p className="mt-0.5 text-[13px] tabular-nums text-fg-muted">

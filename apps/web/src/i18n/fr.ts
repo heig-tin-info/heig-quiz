@@ -3625,7 +3625,7 @@ export const fr: Record<keyof Dict, string> = {
   "drill.student.optedOut": "S'est retiré des révisions le {date}. Rien après cette date n'est affiché ; ce qui précède reste visible.",
   "drill.stat.questions": "Questions vues",
   "drill.stat.sessions": "Séances",
-  "drill.stat.reviews": "Révisions",
+  "drill.stat.reviews": "Révisions faites",
   "drill.stat.recall": "Taux de rappel",
   "drill.stat.recallAll": "Taux de rappel, depuis le début",
   "drill.stat.recall.hint": "sur {n} révisions répétées",
