@@ -243,6 +243,7 @@ export function PlayerView({
   onResults,
   onExitStudentView,
   banner,
+  tools,
   homeBusy = false,
   station = false,
 }: {
@@ -254,8 +255,14 @@ export function PlayerView({
   /** Absent where there is no feedback page to open (the preview). */
   onResults?: OnResults;
   onExitStudentView?: () => void;
-  /** Above the question, before the offline alert: the preview's own banner. */
+  /** Above the question, before the offline alert: the preview's own notices. */
   banner?: ReactNode;
+  /**
+   * The preview's tools for the question on screen (its points, its editor):
+   * where the player says what a question is worth — the side column beside
+   * the list, under the question otherwise.
+   */
+  tools?: ReactNode;
   /** Sat on a kiosk station: see {@link PlayerEnd}. */
   station?: boolean;
 }) {
@@ -399,7 +406,9 @@ export function PlayerView({
                   onSelect={selectSegment}
                   label={progressLabel}
                   points={item.points}
-                />
+                >
+                  {tools}
+                </PlayerRail>
               ),
             }
           : {})}
@@ -453,6 +462,12 @@ export function PlayerView({
               validateLabel={controls.validateLabel}
               navigation={state.navigation}
             />
+            {tools && !rail ? (
+              // A hairline: under it is the teacher's, not the student's page.
+              <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+                {tools}
+              </div>
+            ) : null}
           </>
         ) : null}
       </PlayerShell>

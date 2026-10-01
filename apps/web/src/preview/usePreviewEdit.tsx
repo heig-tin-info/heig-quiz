@@ -59,7 +59,7 @@ export function usePreviewEdit({
   evaluationId: string;
   preview: EvaluationPreview;
   session: PlayerSession;
-  /** The banner's Restart, confirmation included: answers are never dropped silently. */
+  /** The strip's Restart, confirmation included: answers are never dropped silently. */
   askRestart: () => Promise<void>;
 }): { editButton: ReactNode; notice: ReactNode } {
   const t = useT();
@@ -115,7 +115,7 @@ export function usePreviewEdit({
   if (!data || !row) return { editButton: null, notice: null };
 
   const editButton = data.editableQuestionIds.includes(row.questionId) ? (
-    <Button variant="secondary" size="sm" onClick={openEditor} title={t("preview.edit.hint")}>
+    <Button variant="ghost" size="sm" onClick={openEditor} title={t("preview.edit.hint")}>
       <Pencil /> {t("preview.edit")}
     </Button>
   ) : null;

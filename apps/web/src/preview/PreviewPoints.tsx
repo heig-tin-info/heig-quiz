@@ -58,9 +58,9 @@ export function PreviewPoints({
       : undefined;
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <Button
-        variant="secondary"
+        variant="ghost"
         size="sm"
         onClick={() => grade.mutate({ itemId, answer })}
         loading={grade.isPending}
@@ -69,7 +69,7 @@ export function PreviewPoints({
       </Button>
       {fresh ? (
         fresh.status === "graded" && fresh.points !== null ? (
-          <span className="text-[15px] font-semibold tabular-nums">
+          <span className="text-[13px] font-semibold tabular-nums">
             {t("preview.points.value", { points: formatPoints(fresh.points), max: fresh.maxPoints })}
           </span>
         ) : (
