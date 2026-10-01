@@ -54,8 +54,8 @@ import {
   PROVISION_STATUSES,
   PUBLISH_MODES,
   REVIEW_DISPATCH_TRIGGERS,
-  SCORE_PARSE_STATUSES,
-  SCORE_RUN_KINDS,
+  GRADE_RUN_PARSE_STATUSES,
+  GRADE_RUN_KINDS,
   SOURCE_STRATEGIES,
   SYNC_PR_STATES,
   type ProjectGradingScale,
@@ -334,9 +334,9 @@ export const projectGradeRuns = pgTable(
     /** The TESTS annotation's counters, when the run printed one. */
     testsPassed: integer("tests_passed"),
     testsTotal: integer("tests_total"),
-    parseStatus: text("parse_status", { enum: SCORE_PARSE_STATUSES }).notNull(),
+    parseStatus: text("parse_status", { enum: GRADE_RUN_PARSE_STATUSES }).notNull(),
     /** `ci` — a push; `review` — the final review (heig-classroom's `llm`). */
-    kind: text("kind", { enum: SCORE_RUN_KINDS }).notNull().default("ci"),
+    kind: text("kind", { enum: GRADE_RUN_KINDS }).notNull().default("ci"),
     /** Its commit was received after the deadline (ADR-012): never changes the frozen score. */
     afterDeadline: boolean("after_deadline").notNull().default(false),
     /** GitHub's completion time of the run: no default. */

@@ -8,7 +8,9 @@
  * decimal representation, through mathjs, in `./parameters/format.ts`.
  */
 
-export type Rounding = "nearest" | "up" | "down";
+/** The three ways a grade is rounded to the tenth; `nearest` is half away from zero. */
+export const ROUNDINGS = ["nearest", "up", "down"] as const;
+export type Rounding = (typeof ROUNDINGS)[number];
 
 /** The epsilon absorbs binary representation error (0.1 * 3 is 0.30000000000000004). */
 const EPSILON = 1e-9;

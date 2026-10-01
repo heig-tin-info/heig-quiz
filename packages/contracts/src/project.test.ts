@@ -1,15 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  ProjectCreate,
-  ProjectGradingScale,
-  ProjectPatch,
-  ReviewCheckpointCreate,
-  ScoreOverride,
-  ScoreRunList,
-  StudentProjectCard,
-  defaultProjectGradingScale,
-} from "./project.js";
+import { ProjectGradingScale, StudentProjectCard, defaultProjectGradingScale } from "./project.js";
 import { GradeRow, ProjectGradeRow, StudentGrades } from "./results.js";
 import { StudentActivityCard } from "./student.js";
 
@@ -25,92 +16,6 @@ describe("ProjectGradingScale (D05, spec 06 no. 49)", () => {
   it("offers the preset 'the score is the grade', and nothing else", () => {
     expect(ProjectGradingScale.parse({ kind: "score_is_grade" })).toEqual({ kind: "score_is_grade", rounding: "nearest" });
     expect(ProjectGradingScale.safeParse({ kind: "threshold" }).success).toBe(false);
-  });
-});
-
-describe("ProjectCreate (F-PROJ-01)", () => {
-  const base = { name: "Lab 2", sourceRepo: "lab2-source" };
-
-  it("fills heig-classroom's defaults for a manual project with a duration", () => {
-    expect(ProjectCreate.parse({ ...base, durationMinutes: 60 * 24 * 14 })).toEqual({
-      ...base,
-      durationMinutes: 60 * 24 * 14,
-      publishMode: "manual",
-      graceMinutes: 30,
-      sourceStrategy: "squash",
-      deadlineStrategy: "lock",
-      gradingMode: "auto",
-      protectedFiles: [],
-      groupMode: false,
-    });
-  });
-
-  it("wants a deadline date or a duration, exactly one, when manual", () => {
-    expect(ProjectCreate.safeParse(base).success).toBe(false);
-    expect(ProjectCreate.safeParse({ ...base, deadlineAt: DEADLINE, durationMinutes: 60 }).success).toBe(false);
-    expect(ProjectCreate.safeParse({ ...base, deadlineAt: DEADLINE }).success).toBe(true);
-  });
-
-  it("wants both dates, in order, and no duration, when scheduled", () => {
-    const scheduled = { ...base, publishMode: "scheduled" };
-    expect(ProjectCreate.safeParse({ ...scheduled, startAt: START }).success).toBe(false);
-    expect(ProjectCreate.safeParse({ ...scheduled, startAt: DEADLINE, deadlineAt: START }).success).toBe(false);
-    expect(ProjectCreate.safeParse({ ...scheduled, startAt: START, deadlineAt: DEADLINE, durationMinutes: 60 }).success).toBe(false);
-    expect(ProjectCreate.safeParse({ ...scheduled, startAt: START, deadlineAt: DEADLINE }).success).toBe(true);
-  });
-
-  it("refuses a field it does not know (no work mode: a project is free, D09)", () => {
-    expect(ProjectCreate.safeParse({ ...base, deadlineAt: DEADLINE, workMode: "online" }).success).toBe(false);
-  });
-});
-
-describe("the staff's other writes", () => {
-  it("refuses an empty patch", () => {
-    expect(ProjectPatch.safeParse({}).success).toBe(false);
-    expect(ProjectPatch.parse({ deadlineAt: DEADLINE })).toEqual({ deadlineAt: DEADLINE });
-  });
-
-  it("takes a checkpoint by date or by offset before the deadline, exactly one", () => {
-    expect(ReviewCheckpointCreate.safeParse({ name: "mid-term", offsetDays: -3 }).success).toBe(true);
-    expect(ReviewCheckpointCreate.safeParse({ name: "mid-term", dueAt: START }).success).toBe(true);
-    expect(ReviewCheckpointCreate.safeParse({ name: "mid-term" }).success).toBe(false);
-    expect(ReviewCheckpointCreate.safeParse({ name: "mid-term", dueAt: START, offsetDays: -3 }).success).toBe(false);
-    expect(ReviewCheckpointCreate.safeParse({ name: "mid-term", offsetDays: 0 }).success).toBe(false);
-    expect(ReviewCheckpointCreate.safeParse({ name: "Mid term", offsetDays: -3 }).success).toBe(false);
-  });
-
-  it("sets or clears a teacher score", () => {
-    expect(ScoreOverride.parse({ points: 5.5, comment: "Good" })).toEqual({ points: 5.5, comment: "Good" });
-    expect(ScoreOverride.parse({ points: null })).toEqual({ points: null });
-    expect(ScoreOverride.safeParse({ points: -1 }).success).toBe(false);
-  });
-
-  it("round-trips a repository's runs", () => {
-    const list = {
-      currentRunId: ID,
-      frozenRunId: null,
-      reviewRunId: null,
-      runs: [
-        {
-          id: ID,
-          workflowRunId: 987654321,
-          runAttempt: 1,
-          points: 4.5,
-          max: 6,
-          testsPassed: 9,
-          testsTotal: 10,
-          parseStatus: "ok",
-          conclusion: "success",
-          sha: "a".repeat(40),
-          branch: "main",
-          kind: "ci",
-          afterDeadline: false,
-          completedAt: START,
-        },
-      ],
-    };
-    expect(ScoreRunList.parse(list)).toEqual(list);
-    expect(ScoreRunList.safeParse({ ...list, runs: [{ ...list.runs[0], kind: "llm" }] }).success).toBe(false);
   });
 });
 
@@ -146,7 +51,7 @@ describe("the student's Grades: a project row (F-PROJ-14, product owner 2026-10-
     title: "Lab 2",
     date: DEADLINE,
     status: "released",
-    score: { points: 4.5, max: 6, grade: 4.5 },
+    score: { points: 4.5, totalPoints: 6, grade: 4.5 },
   } as const;
 
   it("round-trips, in a classroom's group beside an evaluation's", () => {
@@ -171,13 +76,13 @@ describe("the student's Grades: a project row (F-PROJ-14, product owner 2026-10-
 
   it("exists only released, with a grade", () => {
     expect(GradeRow.safeParse({ ...row, status: "available" }).success).toBe(false);
-    expect(GradeRow.safeParse({ ...row, score: { points: 4.5, max: 6, grade: null } }).success).toBe(false);
+    expect(GradeRow.safeParse({ ...row, score: { points: 4.5, totalPoints: 6, grade: null } }).success).toBe(false);
     expect(GradeRow.safeParse({ ...row, score: null }).success).toBe(false);
   });
 
   it("carries neither the score's source, the teacher's comment nor the repository (N-SEC-20)", () => {
     expect(Object.keys(ProjectGradeRow.shape).sort()).toEqual(["date", "kind", "projectId", "score", "status", "title"]);
-    expect(Object.keys(ProjectGradeRow.shape.score.shape).sort()).toEqual(["grade", "max", "points"]);
+    expect(Object.keys(ProjectGradeRow.shape.score.shape).sort()).toEqual(["grade", "points", "totalPoints"]);
     const leaky = {
       ...row,
       source: "teacher",

@@ -238,16 +238,13 @@ const keyOf = (row: GradeRow) => (row.kind === "evaluation" ? row.evaluationId :
 const kindOf = (row: GradeRow, t: TFunction) =>
   t(row.kind === "evaluation" ? MODE_KEY[row.mode] : "sgrades.kind.project");
 
-/** What the points are out of: an evaluation's total, a project's score maximum. */
-const outOf = (score: NonNullable<GradeRow["score"]>) => ("totalPoints" in score ? score.totalPoints : score.max);
-
 /** Kind and date, the line under the title where their columns are gone. */
 const caption = (row: GradeRow, t: TFunction) => `${kindOf(row, t)} · ${dateOf(row)}`;
 
 function Points({ row }: { row: GradeRow }) {
   return row.score ? (
     <>
-      {formatPoints(row.score.points)} / {formatPoints(outOf(row.score))}
+      {formatPoints(row.score.points)} / {formatPoints(row.score.totalPoints)}
     </>
   ) : (
     <Dash />

@@ -63,10 +63,13 @@ type Header = StudentClassroomPage["classroom"];
 
 type EvaluationCard = Extract<StudentActivityCard, { kind: "evaluation" }>;
 
-/** The groups of the Activities tab, holding the evaluations' cards. */
+/** The groups of the Activities tab, holding the evaluations' cards. M3-13 removes it. */
 type EvaluationActivities = Pick<StudentActivities, "polls"> & Record<"open" | "upcoming" | "past", EvaluationCard[]>;
 
-/** The evaluations' cards: the projects' are drawn by M3-13 (none is served before). */
+/**
+ * The evaluations' cards: the projects' are drawn by M3-13 (none is served
+ * before), which removes this narrowing and `EvaluationActivities`.
+ */
 function evaluationsOf({ polls, open, upcoming, past }: StudentActivities): EvaluationActivities {
   const only = (cards: StudentActivityCard[]) => cards.filter((card) => card.kind === "evaluation");
   return { polls, open: only(open), upcoming: only(upcoming), past: only(past) };

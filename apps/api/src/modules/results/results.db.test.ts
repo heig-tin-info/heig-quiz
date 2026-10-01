@@ -21,6 +21,7 @@ import { evaluationItems, evaluations, gradings, notifications } from "../../db/
 import { testApp, testDatabase } from "../../test/db.js";
 import { seedCodeEvaluation } from "../../test/codeFixture.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
+import { evaluationRows } from "../../test/grades.js";
 import { reload, seedLive } from "../../test/live.js";
 import { applyState, isLegalTransition, joinedItems } from "../evaluation/service.js";
 import { runEvaluationGrading } from "../grading/jobs.js";
@@ -48,7 +49,7 @@ async function appFor() {
 
 /** The rows of the student's Grades page (`GET /student/results`), every classroom's. */
 async function gradeRows(studentId: string, now: Date) {
-  return (await live.studentGrades(db, studentId, now)).flatMap((group) => group.rows).filter((r) => r.kind === "evaluation");
+  return evaluationRows(await live.studentGrades(db, studentId, now));
 }
 
 /**

@@ -19,6 +19,7 @@ import { registerForTests } from "@quiz/registry/server";
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { classrooms, enrollments, evaluations } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
+import { evaluationRows } from "../../test/grades.js";
 import { kioskStation } from "../../test/kiosk.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
@@ -105,9 +106,6 @@ async function grades(headers: Record<string, string>) {
   expect(res.statusCode, res.body).toBe(200);
   return { body: res.body, groups: StudentGrades.parse(res.json()) };
 }
-
-/** The evaluations' rows: the projects' have their own (M3-08). */
-const evaluationRows = (groups: StudentGrades) => groups.flatMap((g) => g.rows).filter((r) => r.kind === "evaluation");
 
 async function rowOf(title: string, headers = student.headers) {
   const { groups } = await grades(headers);

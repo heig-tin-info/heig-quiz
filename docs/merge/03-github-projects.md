@@ -246,8 +246,8 @@ layers:
   `suggestedOrgId`, `installUrl`), `GithubAccountState` (M2-01);
   `GithubConnectBody` (M2-02), `GithubLinkOutcome` (M2-03).
 - `project.ts`: `ProjectCreate/Patch` (classroom's zod rules),
-  `ProjectSummary`, `ProjectDetail` (`liveStale`), `ScoreView`,
-  `ScoreRunList`, `GroupsPayload`, `ReviewCheckpoint`, `ScoreOverride`,
+  `ProjectSummary`, `ProjectDetail` (`liveStale`), `GradeRunView`,
+  `GradeRunList`, `GroupsPayload`, `ReviewCheckpoint`, `ScoreOverride`,
   `StudentProjectCard`; error codes `github_not_linked`,
   `github_account_stale`, `provision_in_progress`, `no_group`,
   `unassigned_students`, `has_repo`, `revoke_failed`, `app_not_installed`,

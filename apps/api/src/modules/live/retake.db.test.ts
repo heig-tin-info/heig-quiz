@@ -18,6 +18,7 @@ import { attempts, evaluations, gradings } from "../../db/schema.js";
 import { testApp } from "../../test/db.js";
 import { type Payload, type TestServer, testServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
+import { evaluationRows } from "../../test/grades.js";
 import { reload, seedLive } from "../../test/live.js";
 import {
   applyState,
@@ -473,7 +474,7 @@ describe("grading and results with several attempts", () => {
     const { closed, student, first } = await twoAttempts("best");
     await results.releaseResults(db, closed, closed.closedAt!);
     const groups = await live.studentGrades(db, student, closed.closedAt!);
-    const card = groups.flatMap((g) => g.rows).filter((r) => r.kind === "evaluation").find((c) => c.evaluationId === closed.id)!;
+    const card = evaluationRows(groups).find((c) => c.evaluationId === closed.id)!;
     expect(card.feedbackAttemptId).toBe(first.id);
     expect(card.score?.points).toBe(2);
   });
@@ -486,7 +487,7 @@ describe("grading and results with several attempts", () => {
       .where(eq(evaluations.id, closed.id));
     const immediate = await reload(db, closed.id);
     const groups = await live.studentGrades(db, student, closed.closedAt!);
-    const card = groups.flatMap((g) => g.rows).filter((r) => r.kind === "evaluation").find((c) => c.evaluationId === closed.id)!;
+    const card = evaluationRows(groups).find((c) => c.evaluationId === closed.id)!;
     // The best attempt (the first, both right), not the latest (both wrong).
     expect(card).toMatchObject({
       status: "available",

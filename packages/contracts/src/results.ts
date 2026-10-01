@@ -358,7 +358,8 @@ export type EvaluationGradeRow = z.infer<typeof EvaluationGradeRow>;
  * One RELEASED project of the student's (F-PROJ-14, F-ORG-14; product owner,
  * 2026-10-01): no row before the release — a project's score is indicative
  * until then and lives on the project's own page (F-PROJ-15). `date` is the
- * release; `score` the final score and its grade by the project's scale.
+ * release; `score` the final score (`totalPoints` its maximum) and its grade
+ * by the project's scale.
  * Never the score's source (teacher, review, frozen), the teacher's comment
  * nor the repository (N-SEC-20): those belong to the project's student view.
  */
@@ -368,7 +369,7 @@ export const ProjectGradeRow = z.object({
   title: z.string(),
   date: z.iso.datetime(),
   status: z.literal("released"),
-  score: z.object({ points: z.number(), max: z.number(), grade: z.number() }),
+  score: z.object({ points: z.number(), totalPoints: z.number(), grade: z.number() }),
 });
 export type ProjectGradeRow = z.infer<typeof ProjectGradeRow>;
 

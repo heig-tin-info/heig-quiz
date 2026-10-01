@@ -133,7 +133,7 @@ describe("the student's Grades", () => {
           title: "Lab 2",
           date: "2026-09-25T10:00:00.000Z",
           status: "released",
-          score: { points: 15, max: 20, grade: 4.8 },
+          score: { points: 15, totalPoints: 20, grade: 4.8 },
         },
       ],
     };
