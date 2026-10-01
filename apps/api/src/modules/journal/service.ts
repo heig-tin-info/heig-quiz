@@ -1,8 +1,9 @@
 /**
  * The `journal` module (ADR-049 and its addendum, spec 05 §5.11,
- * docs/merge/04-journal.md): a classroom's course documentation, held in a
- * GitHub repository and copied into `classroom_journals`, `journal_pages`
- * and `journal_assets`, which this module alone writes.
+ * docs/merge/04-journal.md, ADR-057): a classroom's course documentation,
+ * held in Quiz itself or in a GitHub repository copied in, in
+ * `classroom_journals`, `journal_pages`, `journal_assets` and
+ * `journal_page_revisions`, which this module alone writes.
  *
  * This entry is what the routes and the other modules call: whether a
  * classroom has a journal (the student's classroom page), the STAFF
@@ -24,9 +25,8 @@ import { classroomJournals, journalAssets, journalPages } from "../../db/schema.
 import { JOURNAL_INGEST_QUEUE } from "../../jobs.js";
 import type { ClassroomPayload } from "../guards.js";
 import { ingestJournal } from "./ingest.js";
+import { editUrl, githubJournal, type GithubJournal, type JournalRow } from "./mode.js";
 import { studentMayFetch, visibleToStudents } from "./studentView.js";
-
-type JournalRow = typeof classroomJournals.$inferSelect;
 
 /** Whether the classroom has a journal (F-JRN-01): its Journal tab exists exactly then. */
 export async function hasJournal(db: Db, classroomId: string): Promise<boolean> {
@@ -48,7 +48,7 @@ async function journalRow(db: Db, classroomId: string): Promise<JournalRow | nul
 /** Not served to students right now: the negation of THE predicate. */
 const hiddenFromStudents = () => sql<boolean>`NOT (${visibleToStudents()})`;
 
-function repositoryView(row: JournalRow): JournalRepository {
+function repositoryView(row: GithubJournal): JournalRepository {
   return {
     fullName: row.fullName,
     ref: row.ref,
@@ -58,8 +58,8 @@ function repositoryView(row: JournalRow): JournalRepository {
     syncError: row.syncError,
     lastSyncedAt: isoOrNull(row.lastSyncedAt),
     lastCommitSha: row.lastCommitSha,
-    // Nothing can be written before the copy knows the head it writes over.
-    editable: row.syncStatus === "ok" && row.lastCommitSha !== null,
+    // Read-only in the platform (ADR-057): edited on GitHub, `editUrl` of a page.
+    editable: false,
   };
 }
 
@@ -69,6 +69,7 @@ export async function staffJournal(db: Db, room: { id: string; name: string }): 
   if (!row) {
     return {
       view: "staff",
+      mode: null,
       repository: null,
       nav: [],
       homePath: null,
@@ -88,9 +89,11 @@ export async function staffJournal(db: Db, room: { id: string; name: string }): 
     })
     .from(journalPages)
     .where(eq(journalPages.classroomId, room.id));
+  const github = githubJournal(row);
   return {
     view: "staff",
-    repository: repositoryView(row),
+    mode: row.mode,
+    repository: github ? repositoryView(github) : null,
     nav: buildNav(pages),
     homePath: homePage(pages)?.path ?? null,
     hiddenPaths: pages.filter((p) => p.hidden).map((p) => p.path).sort(),
@@ -99,14 +102,19 @@ export async function staffJournal(db: Db, room: { id: string; name: string }): 
   };
 }
 
-/** `GET /classrooms/:id/journal/pages/*` for the staff: the page, its source and its lock. */
+/**
+ * `GET /classrooms/:id/journal/pages/*` for the staff: the page, its source,
+ * its lock, and in GitHub mode where to edit it.
+ */
 export async function staffPage(db: Db, classroomId: string, path: string): Promise<JournalPageStaff | null> {
   const [page] = await db
-    .select({ page: journalPages, hidden: hiddenFromStudents() })
+    .select({ page: journalPages, journal: classroomJournals, hidden: hiddenFromStudents() })
     .from(journalPages)
+    .innerJoin(classroomJournals, eq(classroomJournals.classroomId, journalPages.classroomId))
     .where(and(eq(journalPages.classroomId, classroomId), eq(journalPages.path, path)));
   if (!page) return null;
   const p = page.page;
+  const github = githubJournal(page.journal);
   return {
     view: "staff",
     path: p.path,
@@ -120,6 +128,7 @@ export async function staffPage(db: Db, classroomId: string, path: string): Prom
     markdown: p.markdown,
     blobSha: p.blobSha,
     warnings: p.warnings,
+    editUrl: github ? editUrl(github, p.path) : null,
   };
 }
 

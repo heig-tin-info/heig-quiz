@@ -313,6 +313,7 @@ function staffJournal(classroomId: string): JournalStaff {
     const room = rooms.find((r) => r.id === classroomId)!;
     return {
       view: "staff",
+      mode: null,
       repository: null,
       nav: [],
       homePath: null,
@@ -323,6 +324,7 @@ function staffJournal(classroomId: string): JournalStaff {
   }
   return {
     view: "staff",
+    mode: "github",
     repository: repo,
     nav: navOf(PAGES),
     homePath: homePage(PAGES)?.path ?? null,
@@ -418,6 +420,8 @@ const staffPageOf = (page: Fixture): JournalPageStaff => ({
   markdown: page.markdown,
   blobSha: blobOf(page.markdown),
   warnings: page.warnings ?? [],
+  // The mock still edits in the platform; its GitHub-mode reading is M4-09's.
+  editUrl: null,
 });
 
 // --------------------------------------------------------------- writes

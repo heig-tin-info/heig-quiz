@@ -19,7 +19,7 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { Journal, JournalPage } from "@quiz/contracts";
+import { Journal, JournalPage, type JournalPageStaff } from "@quiz/contracts";
 
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { loadConfig, type AppConfig } from "../../config.js";
@@ -106,6 +106,11 @@ const SECRETS = [
   "blobSha",
   "warnings",
   "hidden",
+  // The repository (ADR-057): its organization, the edit links, the mode.
+  "heig-prg",
+  "github.com",
+  "editUrl",
+  "\"mode\"",
   ...FILES.map(blobSha),
 ];
 
@@ -121,6 +126,7 @@ async function journalClassroom(repo: FakeRepo, teacherId: string, studentIds: s
   await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId, linkedBy: teacherId, linkedAt: new Date() });
   await db.insert(classroomJournals).values({
     classroomId: seeded.classroomId,
+    mode: "github",
     githubRepoId: repo.id,
     fullName: `${repo.owner}/${repo.name}`,
     ref: "main",
@@ -198,16 +204,19 @@ describe("the staff read everything", () => {
     expect(journal.hiddenPaths).toEqual(["020-draft.md", "030-future.md"]);
     expect(journal.warningCount).toBe(1);
     expect(journal.proposedName).toBeNull();
-    expect(journal.repository).toMatchObject({ syncStatus: "ok", syncError: null, ref: "main", rootPath: "", editable: true });
+    // GitHub mode is read-only in the platform (ADR-057).
+    expect(journal.mode).toBe("github");
+    expect(journal.repository).toMatchObject({ syncStatus: "ok", syncError: null, ref: "main", rootPath: "", editable: false });
   });
 
-  it("a draft page with its source, its lock and its warnings", async () => {
+  it("a draft page with its source, its lock, its warnings and where to edit it", async () => {
     const res = await get(`${base()}/pages/020-draft.md`, teacher.headers);
     const page = JournalPage.parse(res.json());
     if (page.view !== "staff") throw new Error("expected the staff payload");
     expect(page).toMatchObject({ draft: true, hidden: true, title: "SECRET-DRAFT-TITLE", warnings: [{ code: "raw_html" }] });
     expect(page.markdown).toContain("DRAFT-BODY-MARKER");
     expect(page.blobSha).toBe(blobSha(FILES[2]!));
+    expect(page.editUrl).toMatch(/^https:\/\/github\.com\/heig-prg\/journal-\d+\/edit\/main\/020-draft\.md$/);
   });
 
   it("an asset only a draft references", async () => {
@@ -220,6 +229,7 @@ describe("the staff read everything", () => {
     const other = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
     expect((await get(base(other.classroomId), teacher.headers)).json()).toEqual({
       view: "staff",
+      mode: null,
       repository: null,
       nav: [],
       homePath: null,
@@ -432,6 +442,39 @@ describe("the webhooks", () => {
     const res = await get(`${base(first)}/pages/README.md`, teacher.headers);
     expect(res.statusCode).toBe(200);
     expect(res.json().title).toBe("Two");
+  });
+});
+
+// ---------------------------------------------------------------- Quiz mode (ADR-057)
+
+describe("a Quiz-mode journal", () => {
+  it("is read by the staff with no repository, and never ingested nor refreshed from GitHub", async () => {
+    const { classroomId: id } = await seedLive(server.app.db, { teacherId: teacher.id, questions: 0 });
+    await server.app.db.insert(classroomJournals).values({ classroomId: id, mode: "quiz", createdBy: teacher.id, version: 7 });
+    await server.app.db.insert(journalPages).values({
+      id: randomUUID(),
+      classroomId: id,
+      path: "README.md",
+      parentPath: "",
+      sortKey: "README.md",
+      title: "Home",
+      blobSha: "a".repeat(40),
+      markdown: "# Home\n",
+      htmlStaff: "<h1>Home</h1>",
+      htmlStudent: "<h1>Home</h1>",
+    });
+    const calls = gh.calls.length;
+
+    expect(await ingestJournal(server.app, config, id)).toBeNull();
+    const refreshed = await server.app.inject({ method: "POST", url: `${base(id)}/refresh`, headers: teacher.headers });
+    expect(refreshed.statusCode).toBe(202);
+    expect(gh.calls.length).toBe(calls);
+    expect(await rowOf(id)).toMatchObject({ version: 7, syncStatus: "pending", lastSyncedAt: null });
+
+    const journal = Journal.parse((await get(base(id), teacher.headers)).json());
+    expect(journal).toMatchObject({ view: "staff", mode: "quiz", repository: null, homePath: "README.md" });
+    const page = (await get(`${base(id)}/pages/README.md`, teacher.headers)).json<JournalPageStaff>();
+    expect(page).toMatchObject({ title: "Home", editUrl: null });
   });
 });
 

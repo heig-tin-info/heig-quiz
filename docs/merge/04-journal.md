@@ -214,13 +214,16 @@ Settings ("In Quiz" / "In a GitHub repository"). Same tables, same
 - `classroom_journals.mode` (`quiz` | `github`); `github_repo_id`,
   `full_name`, `ref` nullable under a CHECK (set in `github`, null in
   `quiz`). Existing rows become `github`.
-- `journal_pages`: a `version` (the save's lock) and, for Quiz mode, an
-  explicit order among siblings and a parent page (the path is set at
-  creation and never changes). The exact columns are M4-07's choice.
-- `journal_page_revisions`: one row per Quiz-mode save (`classroom_id`,
-  `path`, `revision`, `markdown`, `created_by`, `created_at`). No student
-  route joins it; the student-exit tests search for a former revision's
-  content.
+- `journal_pages`: a `version` (the save's lock, M4-07). For Quiz mode,
+  an explicit order among siblings and a parent page (the path is set at
+  creation and never changes) are columns of their own, added by M4-10;
+  `parent_path` keeps its meaning, the directory of the file.
+- `journal_page_revisions` (M4-07, written from M4-08): one row per
+  Quiz-mode save (`id`, `classroom_id`, `path`, `markdown`,
+  `front_matter`, `author_id`, `created_at`), cascading with the journal.
+  No revision number: a page's revisions are ordered by `created_at`. No
+  student route joins it; the student-exit tests search for a former
+  revision's content.
 - Assets in Quiz mode: a relative path beside the page (`images/…`),
   `blob_sha` = sha256 of the bytes (the ETag of N-SEC-13); `asset_paths`
   recomputed in the transaction of every save and delete (J1);

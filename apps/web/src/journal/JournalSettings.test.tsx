@@ -59,6 +59,7 @@ const repository = (over: Partial<JournalRepository> = {}): JournalRepository =>
 
 const staff = (repo: JournalRepository | null): JournalStaff => ({
   view: "staff",
+  mode: repo ? "github" : null,
   repository: repo,
   nav: [],
   homePath: null,

@@ -44,6 +44,7 @@ const MARKDOWN = [
 
 const journal = (editable = true): JournalStaff => ({
   view: "staff",
+  mode: "github",
   repository: {
     fullName: "heig-tin-info/prg1-journal",
     ref: "main",
@@ -82,6 +83,7 @@ const page = (over: Partial<JournalPageStaff> = {}): JournalPageStaff => ({
   markdown: MARKDOWN,
   blobSha: SHA,
   warnings: [],
+  editUrl: null,
   ...over,
 });
 

@@ -94,7 +94,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M4-04 | Web: reader | done | M4-02, M1-04, M1-05 | `merge/M4-04-journal-reader` | #378 | `apps/web/src/journal/`: `JournalReader({classroomId, path?, navigate, studentView})` (the page; student UI ⇒ `?view=student`; keys `journalKey(id, view)` ⊃ `journalPageKey(id, view, path)`), `JournalNav`, `JournalToc`, `JournalArticle` (+ `journalLinkTarget`), `words.ts` (`warningText`, `SYNC_ERRORS`, keyed by the contract unions). No staff action yet (sync state only, in `ReaderHeader`'s `aside`): M4-05 adds Refresh there (invalidate `journalKey`), M4-06 adds Edit (primary) and the editor (both cards say so). `isPlainClick` lives in `./ui` (controls, beside `LinkButton`). Route still `preview: true` (no API until M4-02); M5-02 mounts the reader under the student classroom header. SSE `journal` hint ⇒ invalidate `["journal", id]` (M4-02) |
 | M4-05 | Web: Journal section of Settings, teacher tab | review | M4-03, M2-07, D24 | `merge/M4-05-journal-settings` | #416 | `journal/JournalSettings.tsx` (the section, in M2-07's slot), `journal/api.ts` (`useStaffJournal`, `useJournalRefresh`, the refusals worded through `JOURNAL_ERRORS`), teacher Journal tab = `ClassroomView routeTab="journal"` mounting `JournalReader`; the route and both tabs are out of `CLASSROOM_PAGES` (Grades and projects stay). **M4-06**: Edit goes in the reader's `StaffBar` (`JournalReader.tsx`), beside Refresh, as its primary; card M4-05, "As delivered" |
 | M4-06 | Web: WYSIWYG editor | review | M4-05, D25 | `merge/M4-06-journal-editor` | #417 | Edit (primary of `StaffBar`) swaps the page for `journal/editor/JournalEditor` on the same route; D25 holds WYSIWYG-first: `richTextExtensions({ journal: true })` keeps the author's spelling, `reconcile.ts` writes every unedited block as read, front matter split and rewritten line by line, pictures in `images/` beside the page by relative path, 409 keeps the draft, `useLeaveGuard` in `router.ts`; the real-corpus run needs `JOURNAL_CORPUS_DIR`; card M4-06, "As delivered" |
-| M4-07 | API: journal modes, schema, GitHub mode read-only | todo | M4-03, D29 | | | |
+| M4-07 | API: journal modes, schema, GitHub mode read-only | review | M4-03, D29 | `journal-mode-schema` | #433 | Migration `0050_journal_modes`: `classroom_journals.mode` (no default; existing rows → `github`), repository columns nullable under `classroom_journals_mode_ck`, `journal_pages.version`, `journal_page_revisions` (author_id, front_matter, no revision number: ordered by `created_at`). GitHub mode refuses save/add/delete/upload with 409 `read_only`; staff payload `mode`, staff page `editUrl` (`modules/journal/mode.ts`). **Handoff**: the 501 stubs (`quizWritesPending`, `writes.ts`) must not survive M4-08; `JournalRepository.editable` is now always false and redundant with `mode` — delete it in M4-09 once the web stops reading it; `bumpVersion` kept on purpose for M4-11/M4-12 (a mode switch must call it); `journal_page_revisions.author_id` delete behaviour (now `no action`) to settle in M4-08; Quiz-mode explicit order and parent columns deferred to M4-10 (`parent_path` keeps its meaning, the file's directory) |
 | M4-08 | API: the Quiz-mode backend | todo | M4-07 | | | |
 | M4-09 | Web: mode choice, standard editor, GitHub mode read-only | todo | M4-08, M4-06 | | | |
 | M4-10 | Rename, reorder, nest (Quiz mode) | todo | M4-09 | | | |
@@ -159,6 +159,11 @@ In the critical path only if D09 finds online assignments in production.
 
 Newest first. One line per session that changed the state: date, who,
 what moved, what the next session must know.
+
+- 2026-10-01 — M4-07 (#433): journal modes in review — schema and
+  migration, GitHub mode read-only (409 `read_only`), `mode` and `editUrl`
+  in the staff payloads. Next: M4-08 (the Quiz-mode backend); see the
+  row's handoff.
 
 - 2026-10-01 — product owner, conversation: the journal in two modes
   (D29, ADR-057), D25 superseded. In Quiz (default, no GitHub, standard

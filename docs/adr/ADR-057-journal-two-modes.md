@@ -119,9 +119,12 @@ dépôt GitHub"); never "local".
   (`github_repo_id`, `full_name`, `ref`) become nullable under a CHECK:
   set in GitHub mode, null in Quiz mode. Existing rows migrate to
   `github`.
-- `journal_pages` gains a `version` (the lock) and, for Quiz mode, an
-  explicit order among siblings and a parent.
-- A revisions table, one row per Quiz-mode save.
+- `journal_pages` gains a `version` (the lock, M4-07). The Quiz-mode
+  explicit order among siblings and parent page are columns of their own,
+  added by M4-10 (rename, reorder, nest); `parent_path` keeps its meaning,
+  the directory of the file.
+- A revisions table, one row per Quiz-mode save, ordered by its
+  `created_at` (no revision number).
 
 ### 5. Access and audit
 

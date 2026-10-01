@@ -3717,6 +3717,7 @@ export const en = {
   "journal.error.page_exists": "A page already exists at that path.",
   "journal.error.type_mismatch": "The file's type does not match its extension.",
   "journal.error.empty_upload": "The file is empty.",
+  "journal.error.read_only": "This journal lives in a GitHub repository: edit it on GitHub.",
   "journalSettings.section": "Journal",
   "journalSettings.loadFailed": "Could not load the journal",
   "journalSettings.none": "No journal",

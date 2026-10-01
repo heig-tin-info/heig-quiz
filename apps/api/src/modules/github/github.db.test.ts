@@ -326,6 +326,7 @@ describe("a classroom's link", () => {
   it("is held by a journal: no other organization, no disconnect (D28)", async () => {
     await server.app.db.insert(classroomJournals).values({
       classroomId: room,
+      mode: "github",
       githubRepoId: 4242,
       fullName: "heig-link/journal",
       ref: "main",
@@ -338,8 +339,13 @@ describe("a classroom's link", () => {
     expect(dropped.statusCode).toBe(409);
     expect(dropped.json()).toMatchObject({ error: "journal_attached" });
 
-    await server.app.db.delete(classroomJournals).where(eq(classroomJournals.classroomId, room));
+    // A Quiz-mode journal needs no GitHub, and holds nothing (ADR-057, F-GH-04).
+    await server.app.db
+      .update(classroomJournals)
+      .set({ mode: "quiz", githubRepoId: null, fullName: null, ref: null })
+      .where(eq(classroomJournals.classroomId, room));
     expect((await call("DELETE", `/app/api/classrooms/${room}/github`, teacher)).statusCode).toBe(204);
+    await server.app.db.delete(classroomJournals).where(eq(classroomJournals.classroomId, room));
     expect(await audits("github_org.unlink", room)).toHaveLength(1);
     const res = await call("GET", `/app/api/classrooms/${room}/github`, teacher);
     expect(res.json<GithubClassroom>().link).toBeNull();

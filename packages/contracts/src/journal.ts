@@ -245,7 +245,20 @@ export const JournalSyncError = z.enum([
 ]);
 export type JournalSyncError = z.infer<typeof JournalSyncError>;
 
-/** The repository a classroom's journal mirrors, for the staff. */
+/**
+ * Where a journal's content lives, chosen when it is created (ADR-057, D29):
+ *
+ * - `quiz` — in Quiz itself: the database is the source of truth, edited in
+ *   the platform; no GitHub needed;
+ * - `github` — in a repository, edited there (VS Code, git, github.com): the
+ *   platform holds a read-only copy and refuses every write of the content
+ *   (`read_only`).
+ */
+export const JOURNAL_MODES = ["quiz", "github"] as const;
+export const JournalMode = z.enum(JOURNAL_MODES);
+export type JournalMode = z.infer<typeof JournalMode>;
+
+/** The repository a classroom's journal mirrors, for the staff (GitHub mode only). */
 export const JournalRepository = z.strictObject({
   /** `org/name`. */
   fullName: z.string(),
@@ -259,7 +272,10 @@ export const JournalRepository = z.strictObject({
   syncError: JournalSyncError.nullable(),
   lastSyncedAt: z.iso.datetime({ offset: true }).nullable(),
   lastCommitSha: z.string().nullable(),
-  /** Writes need a copy that knows the head it writes over. */
+  /**
+   * Whether the platform writes this journal's pages: always false since
+   * ADR-057, a GitHub-mode journal is edited on GitHub (`editUrl` of a page).
+   */
   editable: z.boolean(),
 });
 export type JournalRepository = z.infer<typeof JournalRepository>;
@@ -275,7 +291,9 @@ export type JournalStudent = z.infer<typeof JournalStudent>;
 /** `GET /classrooms/:id/journal` for the staff. */
 export const JournalStaff = z.strictObject({
   view: z.literal("staff"),
-  /** Null while the classroom has no journal. */
+  /** Where the content lives; null while the classroom has no journal. */
+  mode: JournalMode.nullable(),
+  /** The repository of a GitHub-mode journal; null otherwise. */
   repository: JournalRepository.nullable(),
   nav: z.array(JournalNavNode),
   homePath: z.string().nullable(),
@@ -320,6 +338,13 @@ export const JournalPageStaff = z.strictObject({
   /** The optimistic lock of a save (`baseSha`). */
   blobSha: z.string(),
   warnings: z.array(JournalWarning),
+  /**
+   * GitHub mode: github.com's editor of the page's file on the journal's
+   * branch (`https://github.com/<org/name>/edit/<ref>/<root>/<path>`), the
+   * one way to change it. Null in Quiz mode. Staff only: a student never
+   * learns the repository.
+   */
+  editUrl: z.string().nullable(),
 });
 export type JournalPageStaff = z.infer<typeof JournalPageStaff>;
 
@@ -480,7 +505,9 @@ export type JournalPreviewResult = z.infer<typeof JournalPreviewResult>;
  * - `conflict` — the file moved on GitHub since it was opened;
  * - `page_exists` — the copy already has a page at that path;
  * - `type_mismatch` — an upload's content type is not its extension's;
- * - `empty_upload` — an upload with no bytes.
+ * - `empty_upload` — an upload with no bytes;
+ * - `read_only` — the journal lives in a GitHub repository (ADR-057): its
+ *   pages and assets are edited there, never written by the platform.
  *
  * An upload over {@link JOURNAL_ASSET_MAX_BYTES} is Fastify's own 413.
  */
@@ -494,6 +521,7 @@ export const JournalErrorCode = z.enum([
   "page_exists",
   "type_mismatch",
   "empty_upload",
+  "read_only",
 ]);
 export type JournalErrorCode = z.infer<typeof JournalErrorCode>;
 

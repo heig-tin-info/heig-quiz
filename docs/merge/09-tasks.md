@@ -953,8 +953,8 @@ files it ports; writes en + fr for every string.
 - **Goal**: `classroom_journals.mode`; the repository columns
   (`github_repo_id`, `full_name`, `ref`) nullable under a CHECK (set in
   `github`, null in `quiz`); existing rows migrate to `github`;
-  `journal_pages` gains a `version` and the Quiz-mode order and parent;
-  the `journal_page_revisions` table. A GitHub-mode journal becomes
+  `journal_pages` gains a `version` (the Quiz-mode order and parent are
+  M4-10's); the `journal_page_revisions` table. A GitHub-mode journal becomes
   read-only: M4-03's save, add, delete and upload refuse it (a coded
   refusal, not a 404). The staff payload carries the mode and, in GitHub
   mode, each page's Edit on GitHub URL (the file on the journal's branch,
@@ -1019,7 +1019,9 @@ files it ports; writes en + fr for every string.
 - **Depends on**: M4-09.
 - **Goal**: rename a page (its title), move it among its siblings and
   under another parent; the path never changes (F-JRN-17). API and web.
-  Audit `journal.reorder`.
+  Audit `journal.reorder`. Adds the Quiz-mode explicit order and parent
+  columns on `journal_pages` (deferred from M4-07); `parent_path` keeps
+  its meaning, the directory of the file.
 - **Tests**: links and the navigation after a move; a move to a
   descendant refused; the student navigation never names a hidden page.
 

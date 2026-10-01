@@ -548,14 +548,15 @@ function refusal(code: (typeof GITHUB_CONNECT_REFUSALS)[number], message: string
 }
 
 /**
- * D28: while the classroom has a journal, its organization does not change.
+ * D28: while the classroom has a GitHub-mode journal, its organization does
+ * not change; a Quiz-mode one needs no GitHub at all (ADR-057, F-GH-04).
  * Read in the connect's transaction; `github` never imports `journal`.
  */
 async function refuseWithJournal(tx: Tx, classroomId: string): Promise<void> {
   const [journal] = await tx
     .select({ id: classroomJournals.classroomId })
     .from(classroomJournals)
-    .where(eq(classroomJournals.classroomId, classroomId))
+    .where(and(eq(classroomJournals.classroomId, classroomId), eq(classroomJournals.mode, "github")))
     .limit(1);
   if (journal) throw refusal("journal_attached", "Remove the classroom's journal first");
 }

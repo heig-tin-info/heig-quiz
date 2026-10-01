@@ -69,6 +69,7 @@ import {
   syncErrorOf,
   type TreeEntry,
 } from "./repo.js";
+import { githubJournal, type GithubJournal } from "./mode.js";
 import { visibleToStudents } from "./studentView.js";
 
 export type IngestOutcome =
@@ -83,13 +84,14 @@ const ATTEMPTS = 2;
 // ---------------------------------------------------------------- 1. the snapshot
 
 interface Snapshot {
-  row: typeof classroomJournals.$inferSelect;
+  row: GithubJournal;
   /** Null: the organization is not installed, or not active. */
   installationId: number | null;
   pages: Map<string, { id: string; blobSha: string; markdown: string }>;
   assets: Map<string, string>;
 }
 
+/** Null when the classroom has no journal, or a Quiz-mode one: there is no repository to copy (ADR-057). */
 async function snapshot(db: Db, classroomId: string): Promise<Snapshot | null> {
   const [target] = await db
     .select({
@@ -102,6 +104,8 @@ async function snapshot(db: Db, classroomId: string): Promise<Snapshot | null> {
     .leftJoin(githubOrganizations, eq(githubOrganizations.id, githubClassroomLinks.orgId))
     .where(eq(classroomJournals.classroomId, classroomId));
   if (!target) return null;
+  const row = githubJournal(target.row);
+  if (!row) return null;
   const [pages, assets] = await Promise.all([
     db
       .select({ id: journalPages.id, path: journalPages.path, blobSha: journalPages.blobSha, markdown: journalPages.markdown })
@@ -113,7 +117,7 @@ async function snapshot(db: Db, classroomId: string): Promise<Snapshot | null> {
       .where(eq(journalAssets.classroomId, classroomId)),
   ]);
   return {
-    row: target.row,
+    row,
     installationId: target.orgStatus === "active" ? target.installationId : null,
     pages: new Map(pages.map((p) => [p.path, p])),
     assets: new Map(assets.map((a) => [a.path, a.blobSha])),
@@ -254,9 +258,10 @@ async function lockedAt(tx: Tx, classroomId: string, expected: number): Promise<
 const bumped = () => sql`${classroomJournals.version} + 1`;
 
 /**
- * A write of the staff landed on GitHub (M4-03): the row's `version` moves,
- * so an ingestion that read GitHub before it loses its compare-and-set and
- * starts over from a fresh snapshot (J2).
+ * The platform wrote to the repository or changed the row outside an
+ * ingestion (M4-11's Move to GitHub, a mode switch): the row's `version`
+ * moves, so an ingestion that read GitHub before it loses its
+ * compare-and-set and starts over from a fresh snapshot (J2).
  */
 export async function bumpVersion(db: Db, classroomId: string): Promise<void> {
   await db.update(classroomJournals).set({ version: bumped() }).where(eq(classroomJournals.classroomId, classroomId));
@@ -334,7 +339,8 @@ async function commitFailure(db: Db, snap: Snapshot, code: JournalSyncError, now
 
 /**
  * Rebuilds one classroom's copy. Returns null when the classroom has no
- * journal (removed since the job was sent). A failure GitHub answered, or
+ * journal (removed since the job was sent) or a Quiz-mode one, which has no
+ * repository and is never ingested (ADR-057). A failure GitHub answered, or
  * GitHub not answering in time, is recorded on the row (`sync_status =
  * error`, the code) and RETURNED, the pages kept; the queue's worker decides
  * what is worth a retry. A database failure is thrown.
@@ -481,6 +487,7 @@ export async function repositoryChanged(
       updatedAt: now,
       version: bumped(),
     })
+    // A repository id matches GitHub-mode rows only (`classroom_journals_mode_ck`).
     .where(eq(classroomJournals.githubRepoId, githubRepoId))
     .returning({ classroomId: classroomJournals.classroomId });
   const ids = touched.map((r) => r.classroomId);
