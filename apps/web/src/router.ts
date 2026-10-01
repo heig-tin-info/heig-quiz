@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { encodeJournalPath, safeJournalPath } from "@quiz/contracts";
 
+/** The classroom's sections that live in `?tab=`; the others are routes of their own. */
+export type ClassroomQueryTab = "roster" | "evaluations" | "drill";
+
 /**
  * Minimal history-backed router: every in-app navigation pushes a real URL,
  * so the browser (and mouse) back/forward buttons work, and deep links
@@ -30,9 +33,10 @@ export type Route =
   /**
    * `tab`: the section to open on (the launch checklist's "Roster" link,
    * #152), carried in `?tab=` like the page's own tabs; `parsePath` never
-   * sees it, the page reads it off the query string.
+   * sees it, the page reads it off the query string. Without one, the
+   * classroom opens on its evaluations.
    */
-  | { view: "classroom"; id: string; tab?: "roster" }
+  | { view: "classroom"; id: string; tab?: ClassroomQueryTab }
   /*
    * The pages of the classroom merge (ADR-035, `docs/merge/05-web.md` §5.2),
    * each behind `CLASSROOM_PAGES` (below) until its screen ships.
@@ -614,6 +618,15 @@ export function useLeaveGuard(dirty: boolean, ask: LeaveGuard): void {
   }, [dirty]);
 }
 
+/**
+ * Fired by `useSearchParam` right after it rewrote the query string, and by
+ * `navigate` once it moved. `history.replaceState` emits no `popstate`, so two hooks reading the same
+ * parameter — the sidebar's category tree and the pool page it drives — each
+ * kept their own copy and never saw the other's write. One event, dispatched
+ * on `window`, is what makes the query string the single source of truth.
+ */
+const SEARCH_PARAM_EVENT = "quiz:searchparam";
+
 /** The address on view, query included, as the router last showed it. */
 const here = () => window.location.pathname + window.location.search;
 
@@ -642,9 +655,14 @@ export function useRoute(): [Route, Navigate] {
   const navigate = useCallback<Navigate>((r, options) => {
     const path = routeToPath(r);
     const go = () => {
-      if (path !== window.location.pathname) {
+      // The whole address, query included: a click on the page on view
+      // drops its `?tab=` too, and lands where the route says.
+      if (path !== here()) {
         if (options?.replace) window.history.replaceState(null, "", path);
         else window.history.pushState(null, "", path);
+        // No `popstate` either: without this, a page that stays mounted (one
+        // classroom to the next) kept the old address's `?tab=`.
+        window.dispatchEvent(new Event(SEARCH_PARAM_EVENT));
       }
       shown.current = here();
       setRoute(r);
@@ -662,15 +680,6 @@ export function useRoute(): [Route, Navigate] {
   }, []);
   return [route, navigate];
 }
-
-/**
- * Fired by `useSearchParam` right after it rewrote the query string.
- * `history.replaceState` emits no `popstate`, so two hooks reading the same
- * parameter — the sidebar's category tree and the pool page it drives — each
- * kept their own copy and never saw the other's write. One event, dispatched
- * on `window`, is what makes the query string the single source of truth.
- */
-const SEARCH_PARAM_EVENT = "quiz:searchparam";
 
 /**
  * One query-string parameter as state (tabs inside a page, the selected

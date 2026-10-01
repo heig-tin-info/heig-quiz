@@ -14,8 +14,8 @@ import { fail, mockFetch, ok, renderWithProviders } from "./test/render";
  * the roster, which is what unblocks everything, and "New evaluation" on
  * the evaluations (#295).
  *
- * The page opens on the tab that holds the work: the evaluations once there
- * are students, the roster while it is empty.
+ * The page opens on the evaluations, whatever the roster holds: the sidebar
+ * and the course page land there, the roster is one click away.
  *
  * The header keeps the name and the period; renaming, archiving and
  * deleting moved to the Settings tab (D24, `ClassroomSettings.test.tsx`).
@@ -70,11 +70,22 @@ describe("ClassroomView", () => {
 
   it("offers Add students from the empty roster", async () => {
     mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail({ roster: [] })) });
-    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
-    // No tab in the URL and no student: the roster is what blocks everything,
-    // so that is the tab the page opens on.
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
     expect(await screen.findByText("Empty roster")).toBeVisible();
     expect(screen.getAllByRole("button", { name: /Add students/ })).toHaveLength(2);
+  });
+
+  it("opens on the evaluations while the roster is still empty", async () => {
+    mockFetch({
+      [`GET ${ROOM}`]: ok(makeClassroomDetail({ roster: [] })),
+      [`GET ${EVALUATIONS}`]: ok([]),
+    });
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />);
+    expect(await screen.findByRole("tab", { name: /Evaluations/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.queryByText("Empty roster")).toBeNull();
   });
 
   it("opens on the evaluations once the classroom has students", async () => {
@@ -419,6 +430,16 @@ describe("ClassroomView — the Journal tab", () => {
     expect(await screen.findByRole("tab", { name: /Journal/ })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByText("Bienvenue.")).toBeVisible();
     expect(screen.queryByRole("button", { name: /Add students|New evaluation/ })).toBeNull();
+  });
+
+  it("leaves its route for the classroom's address, the tab on it", async () => {
+    mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()), [`GET ${JOURNAL}`]: ok(journal(true)) });
+    const navigate = vi.fn();
+    renderWithProviders(<ClassroomView id="r1" navigate={navigate} routeTab="journal" />);
+    await userEvent.click(await screen.findByRole("tab", { name: /Roster/ }));
+    // One move, the tab in the address: a leave guard that holds it (the
+    // editor's) cannot lose the tab on the way.
+    expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1", tab: "roster" });
   });
 
   it("sends its address back to the classroom when there is no journal", async () => {

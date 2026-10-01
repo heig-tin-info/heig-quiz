@@ -26,7 +26,7 @@ import { EvaluationList, NewEvaluationModal } from "./evaluation/EvaluationList"
 import { useErrorToast, useToast } from "./notify";
 import { RosterImport } from "./RosterImport";
 import { RosterTable } from "./RosterTable";
-import { useSearchParam, type Navigate, type Route } from "./router";
+import { useSearchParam, type ClassroomQueryTab, type Navigate, type Route } from "./router";
 import { useScreenCommands } from "./screenCommands";
 import {
   Badge,
@@ -66,14 +66,15 @@ import { invalidateHint } from "./realtime/hints";
  * staff bar holds Refresh; Edit, its primary inside a page, is M4-06's.
  */
 
-export type ClassroomTab = "roster" | "evaluations" | "journal" | "drill" | "settings";
+type RouteTab = "journal" | "settings";
+export type ClassroomTab = ClassroomQueryTab | RouteTab;
 type Tab = ClassroomTab;
 
 /**
  * The tabs that are routes of their own (`/classrooms/:id/<tab>`), not a
  * `?tab=` on the classroom's address: the Journal and the Settings.
  */
-const ROUTE_TABS: Partial<Record<Tab, (id: string) => Route>> = {
+const ROUTE_TABS: Record<RouteTab, (id: string) => Route> = {
   journal: (id) => ({ view: "classroomJournal", id }),
   settings: (id) => ({ view: "classroomSettings", id }),
 };
@@ -169,10 +170,9 @@ export function ClassroomView({
   const [importing, setImporting] = useState(false);
   const [editingPeriod, setEditingPeriod] = useState(false);
   const [creating, setCreating] = useState(false);
-  // "" and not a tab name: which tab opens depends on the roster, which is
-  // not loaded yet when this runs. The empty value means "whatever the page
-  // decides"; a click always writes a real one.
-  const [tabParam, setTab] = useSearchParam("tab", "");
+  // The evaluations are where the page opens, whatever the roster holds: the
+  // sidebar and the course page land there, the Roster is one click away.
+  const [tabParam, setTab] = useSearchParam("tab", "evaluations");
   // The Settings' GitHub connect sheet, in the address so the palette's
   // "Connect this classroom to GitHub" can open it from any tab.
   const [connectParam, setConnect] = useSearchParam("connect", "");
@@ -213,13 +213,9 @@ export function ClassroomView({
 
   /** A tab: a route of its own (`ROUTE_TABS`), or a `?tab=` on the classroom's address. */
   const openTab = (next: Tab) => {
-    const route = ROUTE_TABS[next];
-    if (route) {
-      navigate(route(id));
-      return;
-    }
-    if (routeTab) navigate({ view: "classroom", id });
-    setTab(next);
+    if (next === "journal" || next === "settings") navigate(ROUTE_TABS[next](id));
+    else if (routeTab) navigate({ view: "classroom", id, tab: next });
+    else setTab(next);
   };
   const openConnect = () => {
     if (routeTab !== "settings") openTab("settings");
@@ -268,18 +264,8 @@ export function ClassroomView({
   }
 
   const data = room.data;
-  const students = data.roster.filter((r) => !r.staff);
-  // An empty roster is what blocks everything, so it is what the page opens
-  // on; once there are students, the work is in the evaluations. The teacher's
-  // own seat does not count: a classroom holding nothing else is still one to
-  // fill.
-  const tab: Tab = routeTab
-    ? routeTab
-    : tabParam === "roster" || tabParam === "evaluations" || tabParam === "drill"
-      ? tabParam
-      : students.length > 0
-        ? "evaluations"
-        : "roster";
+  const tab: Tab =
+    routeTab ?? (tabParam === "roster" || tabParam === "drill" ? tabParam : "evaluations");
   const mine = me.data;
   const seat = mine
     ? data.roster.find(
