@@ -53,8 +53,9 @@ describe("the classroom's Settings tab", () => {
     mockFetch({ [`GET ${ROOM}`]: ok(makeClassroomDetail()) });
     const navigate = renderSettings();
     await userEvent.click(await screen.findByRole("tab", { name: /Roster/ }));
-    expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" });
-    expect(new URLSearchParams(window.location.search).get("tab")).toBe("roster");
+    // One move, the tab in the address: a leave guard that holds it (the
+    // journal editor's) cannot lose the tab on the way.
+    expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1", tab: "roster" });
   });
 
   it("renames the classroom in a dialog", async () => {
