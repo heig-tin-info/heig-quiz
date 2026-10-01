@@ -26,12 +26,12 @@
  */
 import { randomInt } from "node:crypto";
 
-import { count, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import type { Octokit } from "octokit";
 
-import { type JournalErrorCode, type JournalPreviewResult, type JournalStaff } from "@quiz/contracts";
-import { journalRepoName, prettifyName, renderPage } from "@quiz/docrender";
+import { type JournalPreviewResult, type JournalStaff } from "@quiz/contracts";
+import { journalRepoName } from "@quiz/docrender";
 import { displayName, repoName } from "@quiz/domain";
 
 import type { AuditAction } from "../../audit.js";
@@ -52,6 +52,7 @@ import {
 import { githubApp, githubStatus } from "../../github/app.js";
 import { inviteCollaborator } from "../../github/collaborators.js";
 import { DomainError } from "../http.js";
+import { JournalError } from "./errors.js";
 import { journalChanged } from "./events.js";
 import { githubJournal } from "./mode.js";
 import {
@@ -64,38 +65,10 @@ import {
   type FoundRepo,
   type ResolvedRepo,
 } from "./repo.js";
-import { requestIngest, staffJournal } from "./service.js";
+import { renderAt } from "./rendering.js";
+import { journalRemovalRefused, requestIngest, staffJournal } from "./service.js";
 
 // ---------------------------------------------------------------- refusals
-
-/** The status of each refusal: the state of things (409) but for the upload's own faults and GitHub's silence. An upload over the cap is Fastify's own 413. */
-const STATUS: Record<JournalErrorCode, number> = {
-  repo_not_found: 409,
-  ref_not_found: 409,
-  root_not_found: 409,
-  forbidden: 409,
-  too_large: 409,
-  github_unavailable: 503,
-  not_connected: 409,
-  journal_exists: 409,
-  no_journal: 409,
-  name_taken: 409,
-  conflict: 409,
-  page_exists: 409,
-  asset_exists: 409,
-  confirm_required: 409,
-  type_mismatch: 415,
-  empty_upload: 400,
-  read_only: 409,
-};
-
-/** A write refused: `{ error: code, message: code, ...details }`, worded by the web app. */
-export class JournalError extends DomainError {
-  constructor(code: JournalErrorCode, details?: Readonly<Record<string, unknown>>) {
-    super(code, STATUS[code], code, details);
-    this.name = "JournalError";
-  }
-}
 
 /**
  * `work`, its GitHub failures as {@link JournalError}s: a name taken as such,
@@ -392,11 +365,7 @@ export async function removeJournal(ctx: WriteContext, room: Room, confirm: stri
       .where(eq(classroomJournals.classroomId, room.id))
       .for("update");
     if (!row) return null;
-    const [counted] = await tx.select({ pages: count() }).from(journalPages).where(eq(journalPages.classroomId, room.id));
-    const pages = counted?.pages ?? 0;
-    if (row.mode === "quiz" && pages > 0 && confirm?.trim() !== room.name.trim()) {
-      throw new JournalError("confirm_required");
-    }
+    const pages = await journalRemovalRefused(tx, room, confirm);
     await tx.delete(classroomJournals).where(eq(classroomJournals.classroomId, room.id));
     return { ...row, pages };
   });
@@ -500,13 +469,13 @@ export async function previewPage(db: Db, classroomId: string, path: string, mar
     db.select({ path: journalPages.path }).from(journalPages).where(eq(journalPages.classroomId, classroomId)),
     db.select({ path: journalAssets.path }).from(journalAssets).where(eq(journalAssets.classroomId, classroomId)),
   ]);
-  const page = renderPage(markdown, {
+  const page = renderAt(
     classroomId,
-    pagePath: path,
-    fallbackTitle: prettifyName(path),
-    pages: new Set([...pages.map((p) => p.path), path]),
-    assets: new Set(assets.map((a) => a.path)),
-  });
+    path,
+    markdown,
+    new Set([...pages.map((p) => p.path), path]),
+    new Set(assets.map((a) => a.path)),
+  );
   return {
     title: page.title,
     html: page.html,

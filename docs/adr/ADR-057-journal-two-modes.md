@@ -71,7 +71,9 @@ dépôt GitHub"); never "local".
   still the ETag of N-SEC-13. The set of assets a page references
   (`asset_paths`) is recomputed in the transaction of every save and every
   delete, so an asset of a draft never reaches a student (J1, N-SEC-13).
-  Assets are append-only and collected when no page references them.
+  Assets are append-only and kept until the journal is removed, like the
+  revisions, so a restored revision finds its images again (amended with
+  M4-08: no collection).
 - **Revisions**: one per save, the markdown with its front matter, no
   limit; assets are not versioned. The staff list a page's revisions and
   restore one; a restore is a save, audited. No student route ever reads

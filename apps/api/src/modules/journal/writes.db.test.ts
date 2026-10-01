@@ -447,6 +447,14 @@ describe("who may write", () => {
       ["POST", `${base(id)}/assets/a.png`, { x: 1 }],
     ] as const;
 
+  /** The staff's reads of the revisions: never a student's, nor a confined session's. */
+  const staffReads = (id: string) =>
+    [
+      ["GET", `${base(id)}/revisions/README.md`, undefined],
+      ["GET", `${base(id)}/revision/018f0000-0000-7000-8000-000000000000`, undefined],
+      ["GET", `${base(id)}/deleted`, undefined],
+    ] as const;
+
   const sessionOf = async (userId: string, auth: Parameters<typeof createSession>[3]): Promise<Headers> => {
     const s = await createSession(server.app.db, userId, 8, auth);
     return { cookie: `${SESSION_COOKIE}=${s.token}; ${CSRF_COOKIE}=${s.csrf}`, "x-csrf-token": s.csrf };
@@ -472,7 +480,7 @@ describe("who may write", () => {
     ["a student of the classroom", () => student.headers],
     ["a teacher off the course's staff", () => outsider.headers],
   ])("%s gets the 404 of a missing classroom, and writes nothing", async (_who, headers) => {
-    for (const [method, url, body] of writes(room)) {
+    for (const [method, url, body] of [...writes(room), ...staffReads(room)]) {
       const [real, missing] = await Promise.all([
         call(method, url, headers(), body),
         call(method, url.replace(room, randomUUID()), headers(), body),
@@ -495,7 +503,7 @@ describe("who may write", () => {
     ["seb", () => seb],
     ["kiosk", () => kiosk],
   ])("a %s session is nobody (ADR-027)", async (_kind, headers) => {
-    for (const [method, url, body] of writes(room)) {
+    for (const [method, url, body] of [...writes(room), ...staffReads(room)]) {
       const [confined, anonymous] = await Promise.all([call(method, url, headers(), body), call(method, url, {}, body)]);
       expect(confined.statusCode, `${method} ${url}`).toBe(401);
       expect(confined.body).toBe(anonymous.body);

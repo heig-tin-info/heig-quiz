@@ -538,13 +538,18 @@ export const JournalNameTaken = z.object({
 export type JournalNameTaken = z.infer<typeof JournalNameTaken>;
 
 /**
- * `DELETE /classrooms/:id/journal?confirm=<the classroom's name>` (F-JRN-04):
- * a Quiz-mode journal holding pages is the only copy of them, and goes only
- * with the classroom's name typed (409 `confirm_required` otherwise). A
- * GitHub-mode journal, or an empty one, needs nothing: the repository stays.
+ * `DELETE /classrooms/:id/journal?confirm=<the classroom's name>` (F-JRN-04),
+ * and `DELETE /classrooms/:id` the same way (F-ORG-09): a Quiz-mode journal
+ * holding pages is the only copy of them, and goes only with the
+ * classroom's name typed (409 `confirm_required` otherwise). A GitHub-mode
+ * journal, or an empty one, needs nothing: the repository stays.
  */
-export const JournalRemoveQuery = z.object({ confirm: z.string().max(200).optional() });
+export const JournalRemoveQuery = z.strictObject({ confirm: z.string().max(200).optional() });
 export type JournalRemoveQuery = z.infer<typeof JournalRemoveQuery>;
+
+/** `DELETE /classrooms/:id`: the classroom's journal goes with it, under the same confirmation. */
+export const ClassroomDeleteQuery = JournalRemoveQuery;
+export type ClassroomDeleteQuery = JournalRemoveQuery;
 
 // ---------------------------------------------------------------- revisions (Quiz mode)
 
@@ -556,15 +561,22 @@ export type JournalRemoveQuery = z.infer<typeof JournalRemoveQuery>;
 export const JournalRevision = z.strictObject({
   id: z.uuid(),
   path: z.string(),
-  markdown: z.string(),
   author: z.string().nullable(),
   createdAt: z.iso.datetime({ offset: true }),
 });
 export type JournalRevision = z.infer<typeof JournalRevision>;
 
-/** `GET /classrooms/:id/journal/revisions/*`: a page's revisions, newest first, a deleted page's too. */
+/** `GET /classrooms/:id/journal/revisions/*`: a page's revisions, newest first, a deleted page's too; no content. */
 export const JournalRevisionList = z.array(JournalRevision);
 export type JournalRevisionList = z.infer<typeof JournalRevisionList>;
+
+/** `GET /classrooms/:id/journal/revision/:revisionId`: one revision with its markdown. */
+export const JournalRevisionContent = JournalRevision.extend({ markdown: z.string() });
+export type JournalRevisionContent = z.infer<typeof JournalRevisionContent>;
+
+/** `/classrooms/:id/journal/revision/:revisionId`. */
+export const JournalRevisionParams = z.object({ id: z.uuid(), revisionId: z.uuid() });
+export type JournalRevisionParams = z.infer<typeof JournalRevisionParams>;
 
 /**
  * `GET /classrooms/:id/journal/deleted`: the paths that have revisions and no

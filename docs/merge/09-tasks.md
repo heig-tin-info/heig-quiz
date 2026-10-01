@@ -976,7 +976,8 @@ files it ports; writes en + fr for every string.
   lock, `409 conflict`), add, delete, asset upload (relative path beside
   the page, sha256 as `blob_sha`), each in one transaction that
   re-renders, recomputes `asset_paths` and records a revision on save;
-  revisions list and restore; unreferenced assets collected; remove and
+  revisions list and restore; assets kept until the journal goes (no
+  collection: a restored revision needs its images, D29); remove and
   classroom deletion delete the only copy (the API requires the typed
   classroom name when pages exist, F-JRN-04). Audit: `journal.create`
   with the mode, the Quiz-mode page writes (the existing

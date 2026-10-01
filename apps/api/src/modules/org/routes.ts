@@ -15,6 +15,7 @@ import { z } from "zod";
 
 import {
   ClassroomCreate,
+  ClassroomDeleteQuery,
   ClassroomPatch,
   CoursePatch,
   CourseCreate,
@@ -46,6 +47,7 @@ import {
   teacherGuard,
 } from "../guards.js";
 import { invalid, notFound, teacherRoute } from "../http.js";
+import { journalRemovalRefused } from "../journal/service.js";
 import { poolsOfCourse, setCoursePools } from "../pool/service.js";
 import { claimForExistingUsers, importRoster, rosterView } from "./roster.js";
 import * as service from "./service.js";
@@ -334,10 +336,16 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     );
   }
 
+  /**
+   * The classroom goes, and its journal with it by cascade (F-ORG-09): a
+   * Quiz-mode journal holding pages is the only copy, so the journal's own
+   * guard asks for the classroom's name typed (`?confirm=`, F-JRN-04).
+   */
   app.delete(
     "/app/api/classrooms/:id",
     { preHandler: requireTeacher },
-    teacher(onClassroom, async ({ req, reply, scope }) => {
+    teacher({ ...onClassroom, query: ClassroomDeleteQuery }, async ({ req, reply, query, scope }) => {
+      await journalRemovalRefused(app.db, scope.room, query.confirm);
       await service.deleteClassroom(app.db, scope.room.id);
       await trace(req, "classroom.delete", "classroom", scope.room.id, { name: scope.room.name });
       return reply.code(204).send();

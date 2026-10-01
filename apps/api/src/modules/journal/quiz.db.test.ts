@@ -26,6 +26,7 @@ import {
   JournalDeletedPage,
   JournalFileWritten,
   JournalRefusal,
+  JournalRevisionContent,
   JournalRevisionList,
   type JournalPageStaff,
   type JournalStaff,
@@ -252,19 +253,29 @@ describe("the assets", () => {
     expect((await call("GET", url, student.headers)).body).toBe("SECRET-BYTES");
   });
 
-  it("are collected once no page references them and their grace passed", async () => {
+  it("are kept until the journal goes: a restored revision finds its image again", async () => {
     const { id } = await quizJournal();
-    for (const path of ["old.png", "fresh.png", "kept.png"]) {
-      expect((await upload(id, path, Buffer.from(path))).statusCode).toBe(201);
-    }
-    await save(id, "README.md", "# A\n\n![k](kept.png)\n");
-    await server.app.db
-      .update(journalAssets)
-      .set({ createdAt: sql`now() - interval '2 days'` })
-      .where(and(eq(journalAssets.classroomId, id), sql`${journalAssets.path} <> 'fresh.png'`));
-    await add(id, "other.md");
-    const left = await server.app.db.select({ path: journalAssets.path }).from(journalAssets).where(eq(journalAssets.classroomId, id));
-    expect(left.map((a) => a.path).sort()).toEqual(["fresh.png", "kept.png"]);
+    await add(id, "fig.md");
+    await save(id, "fig.md", "# Fig\n\n![f](images/fig.png)\n");
+    expect((await upload(id, "images/fig.png", Buffer.from("FIG-BYTES"))).statusCode).toBe(201);
+    const [withImage] = JournalRevisionList.parse((await call("GET", `${base(id)}/revisions/fig.md`, teacher.headers)).json());
+    expect((await call("DELETE", `${base(id)}/pages/fig.md`, teacher.headers)).statusCode).toBe(204);
+    await save(id, "README.md", "# Something else\n");
+
+    const restored = await call("POST", `${base(id)}/restore`, teacher.headers, { revisionId: withImage!.id });
+    expect(restored.statusCode, restored.body).toBe(200);
+    expect((await pageRow(id, "fig.md"))!.assetPaths).toEqual(["images/fig.png"]);
+    expect((await call("GET", `${base(id)}/assets/images/fig.png`, teacher.headers)).body).toBe("FIG-BYTES");
+  });
+
+  it("an identical upload again renders nothing and bumps nothing", async () => {
+    const { id } = await quizJournal();
+    expect((await upload(id, "a.png", Buffer.from("A"))).statusCode).toBe(201);
+    const [before] = await server.app.db.select().from(classroomJournals).where(eq(classroomJournals.classroomId, id));
+    expect((await upload(id, "a.png", Buffer.from("A"))).statusCode).toBe(201);
+    const [after] = await server.app.db.select().from(classroomJournals).where(eq(classroomJournals.classroomId, id));
+    expect(after!.version).toBe(before!.version);
+    expect(await auditOf(id, "journal.upload")).toHaveLength(1);
   });
 });
 
@@ -275,15 +286,18 @@ describe("the revisions", () => {
     await save(id, "README.md", "# Third\n");
     const res = await call("GET", `${base(id)}/revisions/README.md`, teacher.headers);
     const list = JournalRevisionList.parse(res.json());
-    expect(list.map((r) => r.markdown)).toEqual(["# Third\n", "# Second\n", "# A\n"]);
-    expect(list[0]).toMatchObject({ path: "README.md", author: "Test teacher" });
+    const markdownOf = async (rid: string) =>
+      JournalRevisionContent.parse((await call("GET", `${base(id)}/revision/${rid}`, teacher.headers)).json()).markdown;
+    expect(await Promise.all(list.map((r) => markdownOf(r.id)))).toEqual(["# Third\n", "# Second\n", "# A\n"]);
+    expect(list[0]).toEqual({ id: list[0]!.id, path: "README.md", author: "Test teacher", createdAt: list[0]!.createdAt });
+    expect((await call("GET", `${base(id)}/revision/${randomUUID()}`, teacher.headers)).statusCode).toBe(404);
 
     const before = await staffPage(id, "README.md");
     const restored = await call("POST", `${base(id)}/restore`, teacher.headers, { revisionId: list[2]!.id });
     expect(restored.statusCode, restored.body).toBe(200);
     expect(JournalFileWritten.parse(restored.json()).page).toMatchObject({ markdown: "# A\n", title: "A", version: before.version + 1 });
     const after = JournalRevisionList.parse((await call("GET", `${base(id)}/revisions/README.md`, teacher.headers)).json());
-    expect(after.map((r) => r.markdown)).toEqual(["# A\n", "# Third\n", "# Second\n", "# A\n"]);
+    expect(await Promise.all(after.map((r) => markdownOf(r.id)))).toEqual(["# A\n", "# Third\n", "# Second\n", "# A\n"]);
     expect((await auditOf(id, "journal.restore"))[0]!.payload).toEqual({ mode: "quiz", path: "README.md", revisionId: list[2]!.id });
 
     const unknown = await call("POST", `${base(id)}/restore`, teacher.headers, { revisionId: randomUUID() });
@@ -309,7 +323,8 @@ describe("the revisions", () => {
   it("are the staff's alone", async () => {
     const { id } = await quizJournal();
     const outsider = await server.signIn("teacher");
-    for (const url of [`${base(id)}/revisions/README.md`, `${base(id)}/deleted`]) {
+    const [rev] = await revisionsOf(id, "README.md");
+    for (const url of [`${base(id)}/revisions/README.md`, `${base(id)}/revision/${rev!.id}`, `${base(id)}/deleted`]) {
       for (const headers of [student.headers, impersonation, outsider.headers]) {
         const [real, missing] = await Promise.all([call("GET", url, headers), call("GET", url.replace(id, randomUUID()), headers)]);
         expect([real.statusCode, real.body], url).toEqual([404, missing.body]);
@@ -348,6 +363,53 @@ describe("remove (F-JRN-04): the only copy", () => {
       expect(await server.app.db.select().from(table).where(eq(table.classroomId, id))).toEqual([]);
     }
     expect((await auditOf(id, "journal.remove"))[0]!.payload).toMatchObject({ mode: "quiz", pages: 1 });
+  });
+});
+
+describe("deleting the classroom (F-ORG-09) takes the same confirmation", () => {
+  const remove = (id: string, query = "") => call("DELETE", `/app/api/classrooms/${id}${query}`, teacher.headers);
+
+  it("refuses without the name when a Quiz journal has pages, and deletes with it", async () => {
+    const { id } = await quizJournal();
+    for (const query of ["", "?confirm=B"]) {
+      const res = await remove(id, query);
+      expect([res.statusCode, JournalRefusal.parse(res.json()).error], query).toEqual([409, "confirm_required"]);
+    }
+    expect(await pageRow(id, "README.md")).toBeDefined();
+    expect((await remove(id, "?confirm=A")).statusCode).toBe(204);
+    expect(await server.app.db.select().from(journalPageRevisions).where(eq(journalPageRevisions.classroomId, id))).toEqual([]);
+  });
+
+  it("needs nothing for an empty Quiz journal, a GitHub-mode one, or none", async () => {
+    const empty = await quizJournal();
+    expect((await call("DELETE", `${base(empty.id)}/pages/README.md`, teacher.headers)).statusCode).toBe(204);
+    expect((await remove(empty.id)).statusCode).toBe(204);
+
+    const { classroomId: github } = await seedLive(server.app.db, { teacherId: teacher.id, questions: 0 });
+    await server.app.db
+      .insert(classroomJournals)
+      .values({ classroomId: github, mode: "github", githubRepoId: 2, fullName: "o/r2", ref: "main", createdBy: teacher.id });
+    await server.app.db.insert(journalPages).values({
+      id: randomUUID(),
+      classroomId: github,
+      path: "README.md",
+      parentPath: "",
+      sortKey: "0:readme.md",
+      blobSha: "a".repeat(40),
+      markdown: "# R\n",
+      htmlStaff: "",
+      htmlStudent: "",
+    });
+    expect((await remove(github)).statusCode).toBe(204);
+
+    const { classroomId: bare } = await seedLive(server.app.db, { teacherId: teacher.id, questions: 0 });
+    expect((await remove(bare)).statusCode).toBe(204);
+    expect((await remove(bare)).statusCode).toBe(404);
+  });
+
+  it("refuses an unknown query parameter", async () => {
+    const { id } = await quizJournal();
+    expect((await remove(id, "?force=1")).statusCode).toBe(400);
   });
 });
 

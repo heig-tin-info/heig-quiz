@@ -22,6 +22,7 @@ import {
   JournalCreate,
   JournalPageSave,
   JournalRefusal,
+  JournalRemoveQuery,
   JournalRootPath,
   JournalUploadHeaders,
   assetContentType,
@@ -224,6 +225,12 @@ describe("the writes' inputs (M4-03)", () => {
     expect(JournalPageSave.safeParse({ markdown: "# a", baseSha: "a".repeat(40) }).success).toBe(false);
     expect(JournalPageSave.safeParse({ markdown: "a".repeat(JOURNAL_MARKDOWN_MAX + 1), baseVersion: 0 }).success).toBe(false);
     expect(JournalPageSave.safeParse({ markdown: "", baseVersion: 0, extra: 1 }).success).toBe(false);
+  });
+
+  it("a removal's confirmation is the one parameter it takes", () => {
+    expect(JournalRemoveQuery.parse({ confirm: "PRG1" })).toEqual({ confirm: "PRG1" });
+    expect(JournalRemoveQuery.parse({})).toEqual({});
+    expect(JournalRemoveQuery.safeParse({ force: "1" }).success).toBe(false);
   });
 
   it("a creation names its mode; only GitHub mode takes a name", () => {

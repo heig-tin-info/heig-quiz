@@ -28,7 +28,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
-import { attempts, courseStaff, enrollments, evaluations, poolMembers, poolTags } from "../db/schema.js";
+import { attempts, courseStaff, enrollments, evaluations, journalPageRevisions, poolMembers, poolTags } from "../db/schema.js";
 import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
@@ -39,6 +39,9 @@ type Who = Awaited<ReturnType<TestServer["signIn"]>>;
 const STUDENT_ROUTES = new Set([
   "POST /app/api/evaluations/:id/attempt",
   "POST /app/api/evaluations/:id/retake",
+  // The journal's reads: a student of the classroom reads its journal (F-JRN-12).
+  "GET /app/api/classrooms/:id/journal",
+  "GET /app/api/classrooms/:id/journal/pages*",
 ]);
 
 /**
@@ -93,6 +96,18 @@ async function world(): Promise<World> {
   // as `evaluation.db.test.ts` makes one: a poll is refused items).
   const poll = await seedLive(db, { teacherId: owner.id, studentIds: [enrolled.id], questions: 1 });
   await db.update(evaluations).set({ mode: "poll" }).where(eq(evaluations.id, poll.evaluationId));
+  // A Quiz-mode journal (ADR-057), through its route: its home page and that page's revision.
+  const journal = await server.app.inject({
+    method: "POST",
+    url: `/app/api/classrooms/${seed.classroomId}/journal`,
+    headers: owner.headers,
+    payload: { mode: "quiz" },
+  });
+  expect(journal.statusCode, journal.body).toBe(201);
+  const [revision] = await db
+    .select({ id: journalPageRevisions.id })
+    .from(journalPageRevisions)
+    .where(eq(journalPageRevisions.classroomId, seed.classroomId));
   const attemptId = randomUUID();
   await db.insert(attempts).values({ id: attemptId, evaluationId: seed.evaluationId, userId: enrolled.id, seed: 1 });
   return {
@@ -112,6 +127,7 @@ async function world(): Promise<World> {
       attemptId,
       tag: "malloc",
       number: "1",
+      revisionId: revision!.id,
     },
   };
 }
@@ -135,10 +151,11 @@ afterAll(async () => {
 function sweptRoutes() {
   return routesOf(server.app.printRoutes({ commonPrefix: false })).flatMap(({ method, path }) => {
     const found = FAMILY.exec(path)?.[1] as Family | undefined;
-    // A wildcard route (the journal's pages, assets, revisions) prints without
-    // the segment before its `*`, so no URL can be rebuilt from it: the
-    // journal's own tests sweep those (`writes.db.test.ts`, "who may write").
-    if (!found || path.includes("*")) return [];
+    // Two wildcard routes under one node (the journal's `assets/*` and
+    // `revisions/*`) print as `/journal*`, their segments lost: no URL can be
+    // rebuilt from it, and the journal's own tests sweep both
+    // (`writes.db.test.ts`, "who may write"; `journal.db.test.ts`).
+    if (!found || path.endsWith("/journal*")) return [];
     // A poll route on an exam is a 404 for its mode, whoever asks.
     const family = path.startsWith("/app/api/evaluations/:id/poll") ? "polls" : found;
     const url = (w: World, id: string) =>
@@ -148,7 +165,9 @@ function sweptRoutes() {
         // A new inner parameter needs a real value in `world()`.
         if (value === undefined) throw new Error(`${method} ${path}: no value for :${name}`);
         return value;
-      });
+      })
+        // The one wildcard swept, `pages*`: a page every world's journal has.
+        .replace(/\*$/, "/README.md");
     return [
       {
         method,

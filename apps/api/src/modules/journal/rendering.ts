@@ -12,11 +12,34 @@
  */
 import { and, eq, notInArray, sql } from "drizzle-orm";
 
-import { navSortKey, parentOf, prettifyName, renderPage } from "@quiz/docrender";
+import { navSortKey, parentOf, prettifyName, renderPage, type RenderedPage } from "@quiz/docrender";
 
 import type { Tx } from "../../db/client.js";
 import { classroomJournals, journalPages } from "../../db/schema.js";
 import { visibleToStudents } from "./studentView.js";
+
+/**
+ * One page of a classroom's journal rendered at `path`, its file name the
+ * title of last resort, with `pages` linkable and `assets` served: every
+ * rendering of the module goes through here.
+ */
+export function renderAt(
+  classroomId: string,
+  path: string,
+  markdown: string,
+  pages: ReadonlySet<string>,
+  assets: ReadonlySet<string>,
+  oversized?: ReadonlySet<string>,
+): RenderedPage {
+  return renderPage(markdown, {
+    classroomId,
+    pagePath: path,
+    fallbackTitle: prettifyName(path),
+    pages,
+    assets,
+    ...(oversized ? { oversized } : {}),
+  });
+}
 
 /** A page's source, as stored or as fetched. */
 export interface PageSource {
@@ -46,14 +69,7 @@ export function renderSources(
   const pagePaths = new Set(sources.map((s) => s.path));
   const referenced = new Set<string>();
   const pages = sources.map(({ id, path, markdown, blobSha, moved }): RenderedRow => {
-    const page = renderPage(markdown, {
-      classroomId,
-      pagePath: path,
-      fallbackTitle: prettifyName(path),
-      pages: pagePaths,
-      assets,
-      ...(oversized ? { oversized } : {}),
-    });
+    const page = renderAt(classroomId, path, markdown, pagePaths, assets, oversized);
     for (const asset of page.assets) referenced.add(asset);
     return {
       id,
@@ -125,13 +141,7 @@ export async function renderStudentPages(tx: Tx, classroomId: string): Promise<v
   const visible = new Set(pages.filter((p) => p.visible).map((p) => p.path));
   const assets = new Set(pages.flatMap((p) => p.assetPaths));
   for (const page of pages) {
-    const { html } = renderPage(page.markdown, {
-      classroomId,
-      pagePath: page.path,
-      fallbackTitle: prettifyName(page.path),
-      pages: visible,
-      assets,
-    });
+    const { html } = renderAt(classroomId, page.path, page.markdown, visible, assets);
     await tx.update(journalPages).set({ htmlStudent: html }).where(eq(journalPages.id, page.id));
   }
   await tx

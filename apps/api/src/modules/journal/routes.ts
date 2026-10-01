@@ -30,6 +30,7 @@ import {
   JournalPreview,
   JournalRemoveQuery,
   JournalRestore,
+  JournalRevisionParams,
   JournalUploadHeaders,
   JournalUse,
   JournalViewQuery,
@@ -41,6 +42,7 @@ import { githubApp } from "../../github/app.js";
 import { accessibleClassroom, readableClassroom } from "../guards.js";
 import { notFound, studentRoute, teacherRoute } from "../http.js";
 import { INERT_IMAGE_HEADERS } from "../pool/assets.js";
+import { JournalError } from "./errors.js";
 import { registerJournalHandlers } from "./jobs.js";
 import * as quiz from "./quiz.js";
 import * as service from "./service.js";
@@ -241,6 +243,15 @@ async function registerWrites(app: FastifyInstance, config: AppConfig, base: str
     teacher(onPage, async ({ params, scope }) => quiz.revisions(app.db, scope.room.id, params["*"])),
   );
 
+  /** One revision with its markdown. */
+  app.get(
+    `${base}/revision/:revisionId`,
+    session,
+    teacher({ params: JournalRevisionParams, load }, async ({ reply, params, scope }) =>
+      (await quiz.revision(app.db, scope.room.id, params.revisionId)) ?? notFound(reply),
+    ),
+  );
+
   /** The deleted pages a revision can bring back. */
   app.get(
     `${base}/deleted`,
@@ -274,9 +285,9 @@ async function registerWrites(app: FastifyInstance, config: AppConfig, base: str
       teacher({ params: JournalAssetParams, load }, async ({ req, reply, params, scope }) => {
         const path = params["*"];
         const declared = JournalUploadHeaders.parse(req.headers)["content-type"];
-        if (declared !== assetContentType(path)) throw new writes.JournalError("type_mismatch");
+        if (declared !== assetContentType(path)) throw new JournalError("type_mismatch");
         const data = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-        if (data.length === 0) throw new writes.JournalError("empty_upload");
+        if (data.length === 0) throw new JournalError("empty_upload");
         return reply.code(201).send(await quiz.uploadAsset(as(req, scope.room), scope.room.id, path, data));
       }),
     );
