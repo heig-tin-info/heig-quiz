@@ -278,7 +278,9 @@ Status values: `open`, `settled`, `superseded`.
 - **Consequences**: removes "the WYSIWYG journal editor" from phase L and
   from "what stays out" (`01-strategy.md` §1.4).
 - Blocks: M4-06.
-- **Status**: settled 2026-09-30 (product owner, conversation).
+- **Status**: settled 2026-09-30 (product owner, conversation);
+  **superseded by D29** on 2026-10-01. M4-06 met it in full; D29 removes
+  the need, since the platform no longer writes markdown into a repository.
 
 ### D26 — Projects before the cutover?
 - **Question**: with Quiz's own App (D23), projects too could go live in
@@ -314,3 +316,49 @@ Status values: `open`, `settled`, `superseded`.
   Projects will raise the same question for their repositories.
 - Blocks: M2-02 (disconnect route), M4-03.
 - **Status**: settled 2026-09-30 (product owner, conversation): (a).
+
+## Taken with the journal's two modes (2026-10-01)
+
+### D29 — The journal's two modes
+- **Question**: D25's byte-exact round trip holds (M4-06), but it costs a
+  reconciler and a second editor schema that every new markdown construct
+  can break, and a novice still needs a GitHub organisation, the App and a
+  connected classroom before writing a page. Must every journal be a
+  repository?
+- **Answer**: a journal has a **mode**, chosen at its creation in the
+  Journal section of Settings ("In Quiz" / "In a GitHub repository"; fr
+  "Dans Quiz" / "Dans un dépôt GitHub"; never "local").
+  **In Quiz** (default): no GitHub needed; the database is the content;
+  edited with the platform's standard Tiptap editor, normalisation
+  accepted; revisions. **In a GitHub repository**: the repository is the
+  content, edited in the teacher's own tools; the platform is read-only
+  for it (push webhook, Refresh) and each page links to "Edit on GitHub",
+  the primary action of the staff bar there. Changing mode is an action,
+  never a toggle. Four points settled in the same conversation:
+  1. **Paths and order (Quiz mode)**: a page's path is stable (it never
+     changes when the page moves), the order among siblings is an explicit
+     field, nesting a parent page. "Move to GitHub" writes numeric prefixes
+     into the file names it commits and rewrites the relative links.
+  2. **Copy a journal from another classroom** of the course: later
+     (M4-13), not in the first version.
+  3. **Revisions**: one per Quiz-mode save, markdown and front matter only,
+     no limit; assets are not versioned (append-only, collected when no
+     page references them). The staff restore a revision; restoring is
+     audited.
+  4. **Move to GitHub**: into a new repository or an empty one only, never
+     one with content (ADR-049 point 6). "Bring back into Quiz" imports the
+     copy and detaches the repository without deleting it, after showing
+     what is left behind and that the first save normalises the markdown.
+- **Consequences**: [ADR-057](../adr/ADR-057-journal-two-modes.md);
+  supersedes D25; amends ADR-049 (body point 2 for Quiz mode, addendum
+  points 2 and 7), D24 (the Journal section no longer waits for a
+  connection), D27 (the App writes into a journal repository only to seed
+  it and for Move to GitHub) and D28 (the `409` applies to a GitHub-mode
+  journal only). Existing journals migrate to GitHub mode, read-only;
+  Bring back into Quiz is their way back. Removing a Quiz-mode journal or
+  deleting its classroom destroys the only copy: the confirmation names
+  the number of pages and, when there are pages, the teacher types the
+  classroom's name. `reconcile.ts`, `journalSchema.ts` and the
+  `journal: true` mode of `richTextExtensions` are deleted by M4-09.
+- Blocks: M4-07 to M4-13.
+- **Status**: settled 2026-10-01 (product owner, conversation).
