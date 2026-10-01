@@ -35,11 +35,9 @@ export function fromLocalInput(local: string): string {
 export function PageFieldsForm({
   fields,
   onChange,
-  disabled,
 }: {
   fields: PageFields;
   onChange: (next: PageFields) => void;
-  disabled?: boolean;
 }) {
   const t = useT();
   const set = <K extends keyof PageFields>(key: K, value: PageFields[K]) => onChange({ ...fields, [key]: value });
@@ -47,7 +45,6 @@ export function PageFieldsForm({
   return (
     <fieldset
       aria-label={t("journalEditor.fields")}
-      disabled={disabled}
       className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto]"
     >
       <Field
@@ -80,7 +77,6 @@ export function PageFieldsForm({
             checked={fields.draft}
             onChange={(v) => set("draft", v)}
             label={t("journalEditor.draft")}
-            disabled={disabled}
           />
           <span aria-hidden className="text-xs text-fg-faint">
             {fields.draft ? t("journalEditor.draftOn") : t("journalEditor.draftOff")}

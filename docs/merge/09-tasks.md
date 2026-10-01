@@ -838,8 +838,8 @@ files it ports; writes en + fr for every string.
   - `classroomJournal` is no longer `preview`; the student page's Journal
     tab shows on `hasJournal` alone. `CLASSROOM_PAGES` now gates only the
     Grades tab and the project pages.
-  - `api()` reads no body from a 202 (Refresh) or a declared-empty
-    response, as from a 204; every other success is parsed.
+  - `api()` reads no body from a 202 (Refresh), as from a 204; every
+    other success is parsed (M4-06 dropped the "declared empty" case).
   - Mock: create, use, remove and refresh change the journals for the
     page's life (`ORG_REPOS` are the taken names); `?journalerror=1`; the
     GitHub disconnect and the student page read `hasMockJournal`.
@@ -863,6 +863,67 @@ files it ports; writes en + fr for every string.
   absent), front matter, images, relative links and KaTeX, no write of
   an unedited page.
 - **Scenes**: `journal-edit`, `-source`, `-conflict`.
+- **As delivered** (#417): D25 holds in full, WYSIWYG from the start (no
+  fallback to the source editor). What later tasks inherit:
+  - Edit is the `primary` of the reader's `StaffBar`, beside Refresh and
+    two icon buttons (add, delete a page, `Actions`); all three writes are
+    off while `repository.editable` is false. The editor replaces the page
+    on the same route by local state (`editing` in `JournalReader`), is
+    left when another page is on view, and snapshots the page it opened
+    (text and `blobSha`) for its life; the conflict's reload remounts it.
+  - `src/journal/editor/`: `JournalEditor` (bar + body, laid out by the
+    reader through a render prop), `PageFieldsForm`, `AddPageDialog`;
+    `frontMatter.ts` splits the `---` block off before the editor sees the
+    body and writes the four fields (`title`, `date`, `draft`,
+    `visible_from`) LINE BY LINE: an unchanged field keeps its line, a
+    changed one rewrites its own, emptied ⇒ removed, new ⇒ appended,
+    every other line verbatim, an empty block drops its fences.
+  - The journal's schema: `richTextExtensions({ journal: true, imageUrl })`
+    (`markdown/journalSchema.ts`): `_`/`*` and `__`/`**` kept, bullet
+    markers (`-`, `*`, `+`), thematic breaks, backslash hard breaks and
+    `<autolinks>` kept, raw HTML (block and inline) as literal atoms shown
+    as text and written back verbatim; no cloze. `RichText` takes the
+    web-only `RichTextHostProps` (`journal`, `imageUrl`, `reconcile`,
+    `onSourceChange`); the source pane's text is emitted as typed.
+  - `reconcile.ts`: the editor's output is cut into blocks (marked's
+    lexer) and matched (LCS) against each source block as the editor
+    would spell it unedited (`spellWith`, with the page's link
+    definitions): matched ⇒ written as READ, blank lines between former
+    neighbours kept, lead and trail kept; unmatched ⇒ the editor's
+    spelling; a link definition is kept after the block it followed.
+  - Accepted normalisations, in an EDITED block only (every other block is
+    byte for byte, `roundtrip.test.ts` asserts the list): a table is
+    re-padded to its columns (its alignment row too); setext ⇒ ATX
+    heading; `~~~` and indented code ⇒ backtick fence; `1)` ⇒ `1.`; an
+    ordered list is renumbered; `$$x$$` on one line ⇒ three lines; a bare
+    URL ⇒ `[url](url)`; a literal `*`/`_`/`` ` ``/`[`/`]`/`~`/`\` is
+    escaped; a bare `&` or `<` in text ⇒ an entity; a reference link ⇒
+    inline (its definition stays). The file's final newline is kept.
+  - Pictures (`images.ts`): uploaded to `<page folder>/images/<slug>-<6
+    hex>.<ext from the type>` through `uploadJournalAsset` (content type =
+    `assetContentType(path)`), inserted as `images/<…>` relative to the
+    page, never `asset:`; drawn from the browser's copy (object URL) until
+    a saved page references it, any other relative image from
+    `JOURNAL_ASSETS_PATH`. Over 5 MB or an unserved type ⇒ a toast, nothing
+    sent. The size and rotate tools of the image stay `asset:`-only.
+  - Save sends `composePage(...)` with the opened `baseSha` and the
+    optional description; Save is off while that markdown equals the
+    page's byte for byte (D25 condition 5). 409 `conflict` ⇒ the red
+    block above the sheet, draft kept, Save off, "Copy my text"
+    (clipboard), "Reload the page…" (confirmed). Source view ⇒ "Preview"
+    on demand through `POST …/preview`.
+  - Leaving: `useLeaveGuard(dirty, ask)` in `router.ts` holds `navigate`,
+    undoes Back/Forward until the answer, and sets `beforeunload`; Cancel
+    asks the same question when dirty.
+  - The D25 test: `journal/editor/roundtrip.test.ts` over
+    `synthetic-journal/` (four pages, every construct the card names) and
+    over `JOURNAL_CORPUS_DIR` when set (skipped with its reason in the
+    title otherwise). Not run on classroom's production journals yet: the
+    corpus is fetched outside this repository.
+  - Mock: save, add, delete, upload and preview, rendered with
+    `@quiz/docrender`; `?journalconflict=1` makes every save a 409.
+  - Scenes: `journal-edit`, `-source`, `-conflict`, `-frontmatter`,
+    `-unsaved`.
 
 ## M5 — Student classroom page and gradebook
 

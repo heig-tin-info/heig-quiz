@@ -214,6 +214,59 @@ describe("D25 (2): the front matter as fields", () => {
   });
 });
 
+describe("the date fields", () => {
+  it("writes a date and a visibility moment, each in its own line", async () => {
+    const { calls } = setup({
+      [`PUT ${BASE}/pages/${PATH}`]: (call) => ok(written((call.body as { markdown: string }).markdown)),
+    });
+    await openEditor();
+    fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-10-02" } });
+    fireEvent.change(screen.getByLabelText("Visible to students from"), { target: { value: "2026-10-05T08:00" } });
+    await userEvent.click(saveButton());
+    await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+    const yaml = (calls.find((c) => c.method === "PUT")!.body as { markdown: string }).markdown.split("---")[1]!;
+    expect(yaml).toMatch(/\ndate: 2026-10-02\nvisible_from: 2026-10-05T08:00:00[+-]\d{2}:\d{2}\n$/);
+    expect(yaml).toContain("title: Semaine 1\nauthor: Yves\n");
+  });
+
+  it("shows a value that is not a date as text, untouched until edited", async () => {
+    setup({
+      [`GET ${BASE}/pages/${PATH}`]: ok(page({ markdown: "---\ndate: semaine 3\nvisible_from: next week\n---\n# A\n" })),
+    });
+    await openEditor();
+    expect(screen.getByLabelText("Date")).toHaveAttribute("type", "text");
+    expect(screen.getByLabelText("Date")).toHaveValue("semaine 3");
+    expect(screen.getByLabelText("Visible to students from")).toHaveValue("next week");
+    await userEvent.type(screen.getByLabelText("Visible to students from"), "!");
+    expect(saveButton()).toBeEnabled();
+  });
+});
+
+describe("the source view", () => {
+  it("previews the markdown through the students' renderer, on demand", async () => {
+    const { calls } = setup({
+      [`POST ${BASE}/preview`]: ok({
+        title: "Introduction",
+        html: "<h1 id=\"introduction\">Introduction</h1><p>Rendu par le serveur.</p>",
+        toc: [],
+        draft: false,
+        visibleFrom: null,
+        warnings: [],
+      }),
+    });
+    await openEditor();
+    await userEvent.click(screen.getByRole("button", { name: "Markdown source" }));
+    const source = screen.getByRole("textbox", { name: "Page text" });
+    expect(source).toHaveValue(splitPageBody(MARKDOWN));
+    await userEvent.click(screen.getByRole("button", { name: "Preview" }));
+    expect(await screen.findByText("Rendu par le serveur.")).toBeInTheDocument();
+    expect(calls.find((c) => c.url === `${BASE}/preview`)!.body).toEqual({ path: PATH, markdown: MARKDOWN });
+  });
+});
+
+/** The body the editor opens on: the page without its front matter. */
+const splitPageBody = (md: string) => md.replace(/^---\n[\s\S]*?\n---\n/, "");
+
 describe("the save flow", () => {
   it("sends the body as typed, with front matter and every untouched block as read", async () => {
     const { calls } = setup({
@@ -274,8 +327,8 @@ describe("D25 (3): a picture goes into the repository, with a relative path", ()
   it("uploads beside the page and inserts images/<name>, never asset:", async () => {
     URL.createObjectURL = () => "blob:local-copy";
     // The six random characters of the name, fixed.
-    vi.spyOn(crypto, "getRandomValues").mockImplementation(<T extends ArrayBufferView | null>(array: T) => {
-      (array as unknown as Uint8Array).set([0xab, 0xcd, 0xef]);
+    vi.spyOn(crypto, "getRandomValues").mockImplementation((array) => {
+      (array as Uint8Array).set([0xab, 0xcd, 0xef]);
       return array;
     });
     const UPLOAD = `${BASE}/assets/semaine-01/images/capture-ecran-abcdef.png`;

@@ -1,6 +1,24 @@
 import { describe, expect, it } from "vitest";
 
 import { composePage, joinPage, readFields, splitPage, writeFields, yamlScalar } from "./frontMatter";
+import { fromLocalInput, toLocalInput } from "./PageFieldsForm";
+
+describe("visible_from in a datetime-local input", () => {
+  it("shows the moment in the reader's zone, and writes it back with its offset", () => {
+    const iso = "2026-09-16T08:00:00+02:00";
+    const local = toLocalInput(iso)!;
+    expect(local).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    const written = fromLocalInput(local);
+    expect(written).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00[+-]\d{2}:\d{2}$/);
+    expect(new Date(written).getTime()).toBe(new Date(iso).getTime());
+  });
+
+  it("says when a value is not a date, and empties to nothing", () => {
+    expect(toLocalInput("next week")).toBeNull();
+    expect(toLocalInput("")).toBe("");
+    expect(fromLocalInput("")).toBe("");
+  });
+});
 
 /*
  * D25 condition 2: the front matter is kept out of the editor and edited as
