@@ -43,6 +43,7 @@ import {
   diskStatus,
   HEALTH_THRESHOLDS,
   jobsStatus,
+  llmBudgetStatus,
   overdueStatus,
   serverErrorsStatus,
   SERVICE_NAMES,
@@ -64,6 +65,7 @@ import { MIGRATIONS_DIR } from "../../paths.js";
 import { InProcessQueue } from "../../jobs.js";
 import { lastTickOf } from "../../ticker.js";
 import { overdueAttempts, overdueEvaluations } from "../live/service.js";
+import { todayBudget } from "../llm/service.js";
 import { openStreamCount } from "../realtime/bus.js";
 import { runnerCheck } from "../runner/index.js";
 import { listScheduledTasks } from "./service.js";
@@ -380,7 +382,11 @@ const SERVICE_OFF: Record<ServiceName, (config: AppConfig) => CheckCause | null>
   mail: (config) => (mailEnabled(config) ? null : "mail.dry_run"),
   signin: () => null,
   teams: (config) => (teamsEnabled(config) ? null : "service.not_configured"),
-  llm: (config) => (config.LLM_PROVIDER === "none" ? "service.not_configured" : null),
+  // The grading stub (ADR-045) or the gateway (ADR-058). A master key with no
+  // key stored yet reads as `unused`: this verdict is synchronous, from the
+  // configuration alone, and the settings screen says the key is missing.
+  llm: (config) =>
+    config.LLM_PROVIDER === "none" && config.LLM_KEY_SECRET === "" ? "service.not_configured" : null,
   github: (config) => (githubApp(config) === null ? "service.not_configured" : null),
 };
 
@@ -422,6 +428,21 @@ function serviceCheck(name: ServiceName): HealthCheck["run"] {
   };
 }
 
+/**
+ * The LLM gateway's spend today against its cap (ADR-058 §7): read from the
+ * call log, never by calling the provider. Names no one.
+ */
+async function llmBudgetCheck({ app, now }: CheckContext): Promise<CheckResult> {
+  if (!app.llmGateway.enabled) return { status: "unknown", cause: "service.not_configured" };
+  const { spentUsd, capUsd, refused } = await todayBudget(app.db, now);
+  const status = llmBudgetStatus(spentUsd, capUsd, refused);
+  return {
+    status,
+    value: { kind: "share", part: Math.round(spentUsd * 100) / 100, total: capUsd, bytes: false },
+    cause: status === "ok" ? null : "llm.budget",
+  };
+}
+
 // --- The registry ---------------------------------------------------------
 
 /** Every check, in the order the screen lists them. */
@@ -445,6 +466,7 @@ export const HEALTH_CHECKS: readonly HealthCheck[] = [
     section: "services",
     run: serviceCheck(name),
   })),
+  { key: "llm.budget", section: "services", run: llmBudgetCheck },
 ];
 
 /**

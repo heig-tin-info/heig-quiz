@@ -30,6 +30,7 @@ export * from "./ipAllowlist.js";
 export * from "./itemList.js";
 export * from "./kioskAttestation.js";
 export * from "./kioskPairing.js";
+export * from "./llm.js";
 export * from "./lockedTemplate.js";
 export * from "./mcqScore.js";
 // The mathjs-free vocabulary of parameterized questions (ADR-056).

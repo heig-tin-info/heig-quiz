@@ -80,6 +80,8 @@ export const SYSTEM_CHECK_KEYS = [
   "backup",
   // Third-party services, judged from the process's own traffic (ADR-055 §6).
   ...SERVICE_CHECK_KEYS,
+  // The LLM gateway's spend today against its daily cap (ADR-058 §7).
+  "llm.budget",
 ] as const;
 export type SystemCheckKey = (typeof SYSTEM_CHECK_KEYS)[number];
 
@@ -118,6 +120,7 @@ export const CHECK_CAUSES = [
   "service.unused",
   "service.failed_recently",
   "service.failing",
+  "llm.budget",
   "mail.dry_run",
   "check.failed",
 ] as const;

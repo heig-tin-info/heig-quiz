@@ -96,6 +96,11 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   // ADR-056 §5 and §10: a regrade across other variables, a poll on a parameterized question.
   variables_changed: "error.variablesChanged",
   poll_parameterized: "error.pollParameterized",
+  // A per-minute guard (`budget.ts`): the test e-mail, the AI connection test.
+  rate_limited: "error.rateLimited",
+  // ADR-058: the AI settings without a master key, and a cap over its ceiling.
+  llm_disabled: "error.llmDisabled",
+  cap_too_high: "error.capTooHigh",
 };
 
 /** Server-provided error message of a failed call (or its worded code), or the fallback. */

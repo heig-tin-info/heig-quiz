@@ -165,6 +165,13 @@ export type AuditAction =
    */
   | "kiosk.suspended"
   | "kiosk.resumed"
+  /**
+   * An admin saved the LLM gateway's settings (ADR-058): `payload` the model
+   * and the cap when they changed, and `key: "set" | "removed"` — NEVER the key.
+   */
+  | "llm.settings"
+  /** An admin ran the connection test (ADR-058 §6): `payload.ok`, and the error code. */
+  | "llm.test"
   | "oauth.grant"
   | "oauth.refresh_replay"
   | "oauth.revoke"

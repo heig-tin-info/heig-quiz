@@ -2,7 +2,7 @@
  * Section 1b — courses, classrooms, roster and administration: the world a
  * teacher organises before there is a single question in it.
  */
-import { ScheduledTaskPatch } from "@quiz/contracts";
+import { LlmSettingsPatch, ScheduledTaskPatch } from "@quiz/contracts";
 import type {
   AdminScheduledTask,
   AdminTeacher,
@@ -14,6 +14,9 @@ import type {
   StudentClassroom,
   CheckDetail,
   CheckValue,
+  LlmSettings,
+  LlmTestResult,
+  LlmUsage,
   SystemCheck,
   SystemStatus,
   TestMailResult,
@@ -938,3 +941,67 @@ function systemStatus(): SystemStatus {
 on("GET", "/app/api/admin/system", () => systemStatus());
 // The mock has no mailer: a dry run, as in development.
 on("POST", "/app/api/admin/system/test-mail", (): TestMailResult => ({ outcome: "dry_run" }));
+
+// The LLM gateway (ADR-058): a key saved, Sonnet, a month of authoring.
+// `?empty=1`: no key yet and no call; the test answers like a real provider.
+const llm: LlmSettings = {
+  enabled: true,
+  provider: "anthropic",
+  keyLast4: flags.empty ? null : "Q7fA",
+  keyReadable: true,
+  model: "claude-sonnet-5-5",
+  dailyCapUsd: 20,
+  dailyCapMaxUsd: 100,
+  spentTodayUsd: flags.empty ? 0 : 0.84,
+  updatedAt: iso(-6 * D),
+};
+on("GET", "/app/api/admin/llm", () => llm);
+on("PATCH", "/app/api/admin/llm", (_m, body) => {
+  const patch = LlmSettingsPatch.safeParse(body);
+  if (!patch.success) throw new MockError(400, "validation");
+  const { apiKey, model, dailyCapUsd } = patch.data;
+  if (dailyCapUsd !== undefined && dailyCapUsd > llm.dailyCapMaxUsd) {
+    throw new MockError(400, `The daily cap cannot exceed ${llm.dailyCapMaxUsd} USD`);
+  }
+  Object.assign(llm, {
+    ...(apiKey !== undefined ? { keyLast4: apiKey === null ? null : apiKey.slice(-4) } : {}),
+    ...(model ? { model } : {}),
+    ...(dailyCapUsd !== undefined ? { dailyCapUsd } : {}),
+    updatedAt: iso(0),
+  });
+  return llm;
+});
+on("POST", "/app/api/admin/llm/test", (): LlmTestResult =>
+  llm.keyLast4 ? { ok: true, model: llm.model, latencyMs: 1240 } : { ok: false, model: null, error: "not_configured" },
+);
+const usageRow = (given: string, family: string, calls: number, input: number, output: number) => ({
+  userId: `u-${slug(family)}`,
+  givenName: given,
+  familyName: family,
+  email: `${slug(given)}.${slug(family)}@heig-vd.ch`,
+  calls,
+  errors: calls > 40 ? 1 : 0,
+  inputTokens: input,
+  outputTokens: output,
+  costUsd: (input * 2 + output * 10) / 1_000_000,
+});
+on("GET", "/app/api/admin/llm/usage", (): LlmUsage => {
+  const rows = flags.empty
+    ? []
+    : [
+        usageRow("Sophie", "Rochat", 64, 412_000, 96_000),
+        usageRow("Marc", "Favre", 23, 151_000, 38_500),
+        { ...usageRow("", "", 3, 240, 30), userId: null, givenName: null, familyName: null, email: null },
+      ];
+  const total = rows.reduce(
+    (t, r) => ({
+      calls: t.calls + r.calls,
+      errors: t.errors + r.errors,
+      inputTokens: t.inputTokens + r.inputTokens,
+      outputTokens: t.outputTokens + r.outputTokens,
+      costUsd: t.costUsd + r.costUsd,
+    }),
+    { calls: 0, errors: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+  );
+  return { since: new Date(new Date(iso(0)).setDate(1)).toISOString(), rows, total };
+});

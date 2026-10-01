@@ -1004,6 +1004,9 @@ const scenes = [
   { name: "admin-tasks", role: "admin", path: "/admin?tab=tasks" },
   { name: "admin-tasks-error", role: "admin", path: "/admin?tab=tasks&fail=1", settle: 2500 },
   // N-OPS-03 (ADR-055): the system status, healthy, degraded, and its states.
+  { name: "admin-llm", role: "admin", path: "/admin?tab=llm&empty=0" },
+  { name: "admin-llm-empty", role: "admin", path: "/admin?tab=llm&empty=1" },
+  { name: "admin-llm-error", role: "admin", path: "/admin?tab=llm&fail=1", settle: 2500 },
   { name: "admin-system", role: "admin", path: "/admin?tab=system&degraded=0" },
   { name: "admin-system-degraded", role: "admin", path: "/admin?tab=system&degraded=1" },
   { name: "admin-system-error", role: "admin", path: "/admin?tab=system&fail=1", settle: 2500 },

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, CalendarClock, Library, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
+import { Activity, CalendarClock, Library, ShieldCheck, Sparkles, Trash2, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
 import type { AdminTeacher, TeacherGrantCreate } from "@quiz/contracts";
@@ -31,6 +31,7 @@ import {
 } from "./ui";
 import { SystemSection } from "./AdminSystem";
 import { TasksSection } from "./AdminTasks";
+import { LlmSection } from "./AdminLlm";
 import { KioskSection } from "./AdminKiosk";
 import { UsersSection } from "./AdminUsers";
 import { adminTeachersKey } from "./queryKeys";
@@ -46,7 +47,7 @@ const nameOf = (r: AdminTeacher): [string, string] => [r.givenName ?? "", r.fami
  * (the teacher grants, the kiosk stations where the platform has them —
  * `KioskSection`, ADR-051 — then every account), the system status
  * (F-ADMIN-07, next to the tasks it points to) and the scheduled tasks
- * (F-ADMIN-06). The people stay first and the default: the page's one
+ * (F-ADMIN-06), and the LLM gateway (ADR-058). The people stay first and the default: the page's one
  * primary action, "Grant", is there. A tab is one entry of `ADMIN_TABS`
  * (`router.ts`) and one panel below.
  */
@@ -65,6 +66,7 @@ export function AdminPage() {
           { value: "people", label: t("admin.tab.people"), icon: Users },
           { value: "system", label: t("admin.tab.system"), icon: Activity },
           { value: "tasks", label: t("admin.tab.tasks"), icon: CalendarClock },
+          { value: "llm", label: t("admin.tab.llm"), icon: Sparkles },
         ]}
       />
       <TabPanel idPrefix="admin" value={tab} className="space-y-6">
@@ -76,8 +78,10 @@ export function AdminPage() {
           </>
         ) : tab === "system" ? (
           <SystemSection onOpenTasks={() => setTab("tasks")} />
-        ) : (
+        ) : tab === "tasks" ? (
           <TasksSection />
+        ) : (
+          <LlmSection />
         )}
       </TabPanel>
     </div>
