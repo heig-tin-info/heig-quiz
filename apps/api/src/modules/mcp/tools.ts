@@ -30,6 +30,7 @@ import {
   PollQuestionType,
   QuestionCreate,
   QuestionPatch,
+  TemplateInstantiate,
 } from "@quiz/contracts";
 
 import { checkConfig, describeQuestionType, questionTypeSummaries } from "./questionTypes.js";
@@ -405,10 +406,13 @@ export const TOOLS: Tool[] = [
     name: "create_evaluation",
     title: "Create an evaluation",
     description:
-      "Creates an evaluation in DRAFT in a classroom — `exercise` (practice, feedback allowed) or `exam` — " +
-      "and adds the given questions. Every question must be PUBLISHED and come from a pool linked to the " +
-      "classroom's course (`link_pool_to_course`). Nothing is opened to students: the teacher schedules or " +
-      "starts it from the web app.",
+      "Creates an evaluation in DRAFT directly in a classroom — `exercise` (practice, feedback allowed) or " +
+      "`exam` — and adds the given questions. Call it ONLY when the teacher explicitly asks for an " +
+      "evaluation in a classroom; to make a new quiz, use `create_template` instead (and `instantiate_template` " +
+      "when they also want it in a class), so the quiz is kept in the course for next year. Also the fallback " +
+      "when `create_template` is refused because the teacher holds no seat on the course's staff. Every " +
+      "question must be PUBLISHED and come from a pool linked to the classroom's course " +
+      "(`link_pool_to_course`). Nothing is opened to students: the teacher schedules or starts it from the web app.",
     input: z.object({
       classroomId: Id,
       title: EvaluationCreate.shape.title,
@@ -453,6 +457,72 @@ export const TOOLS: Tool[] = [
     input: z.object({ evaluationId: Id, ...EvaluationPatch.shape }),
     annotations: { ...WRITE, idempotentHint: true },
     run: (api, { evaluationId, ...body }) => api.patch(`/evaluations/${evaluationId}`, body),
+  }),
+
+  // --- Templates (ADR-031; ADR-022, addendum of 2026-10-01) ------------------
+
+  tool({
+    name: "list_templates",
+    title: "List the templates of a course",
+    description:
+      "The evaluation templates of a course (ADR-031): reusable exams and exercises kept in the course, " +
+      "from which each year's classroom gets its own copy. Check it before `create_template`, so nothing is " +
+      "created twice.",
+    input: z.object({ courseId: Id }),
+    annotations: READ,
+    run: async (api, a) =>
+      (await api.get(`/courses/${a.courseId}/templates`)).map((t: { id: string }) => ({
+        ...t,
+        url: api.link(`/templates/${t.id}`),
+      })),
+  }),
+
+  tool({
+    name: "create_template",
+    title: "Create a template",
+    description:
+      "THE default way to make a new quiz, exam or exercise: a template of the COURSE, not an evaluation of " +
+      "a classroom, because a quiz is reused year to year and the template keeps it. Creates it with the " +
+      "mode's preset and adds the given questions. Every question must be PUBLISHED and come from a pool " +
+      "linked to the course (`link_pool_to_course`). Needs a seat on the course's staff (404 otherwise: " +
+      "then fall back to `create_evaluation`). Call `instantiate_template` when the teacher also wants it " +
+      "in a classroom.",
+    input: z.object({
+      courseId: Id,
+      title: EvaluationCreate.shape.title,
+      mode: z.enum(["exam", "exercise"]).default("exercise"),
+      questionIds: z.array(Id).max(200).default([]),
+    }),
+    annotations: WRITE,
+    run: async (api, a) => {
+      const created = await api.post(`/courses/${a.courseId}/templates`, {
+        title: a.title,
+        mode: a.mode,
+        preset: a.mode,
+      });
+      const detail =
+        a.questionIds.length > 0
+          ? await api.post(`/templates/${created.id}/items`, { questionIds: a.questionIds })
+          : await api.get(`/templates/${created.id}`);
+      return { ...detail, url: api.link(`/templates/${created.id}`) };
+    },
+  }),
+
+  tool({
+    name: "instantiate_template",
+    title: "Instantiate a template in a classroom",
+    description:
+      "Copies a template into a classroom of the SAME course as a new DRAFT evaluation (the title is the " +
+      "template's unless given). A classroom of another course is a 404. A question whose pool the course " +
+      "no longer links is refused with 422 `template_pool_unlinked` (relink it with `link_pool_to_course`); " +
+      "`deprecatedItems` lists the questions frozen on a deprecated version, a warning only. Nothing is " +
+      "opened to students.",
+    input: z.object({ templateId: Id, ...TemplateInstantiate.shape }),
+    annotations: WRITE,
+    run: async (api, { templateId, ...body }) => {
+      const made = await api.post(`/templates/${templateId}/instances`, body);
+      return { ...made, url: api.link(`/evaluations/${made.evaluation.id}`) };
+    },
   }),
 
   tool({
