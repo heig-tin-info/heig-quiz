@@ -3101,6 +3101,8 @@ export const fr: Record<keyof Dict, string> = {
   "preview.restart.title": "Recommencer l'aperçu ?",
   "preview.restart.message":
     "Vos réponses sont effacées et un nouvel ordre est tiré au hasard.",
+  "preview.leave.title": "Quitter l'aperçu ?",
+  "preview.leave.message": "Vos réponses sont effacées : un aperçu n'enregistre rien.",
   "preview.edit": "Modifier la question",
   "preview.edit.hint": "Ouvre le brouillon de la question dans un nouvel onglet. Publiez-la, puis revenez : cet aperçu garde vos réponses.",
   "preview.newVersion.title": "La version {n} de cette question est publiée",

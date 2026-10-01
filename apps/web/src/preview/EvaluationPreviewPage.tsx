@@ -11,10 +11,12 @@
  * order, new shuffles, an empty paper.
  *
  * The screen during the walk IS the student player (`PlayerView`), driven by
- * `usePreviewSession` instead of `useAttempt`, with one addition: the preview
- * banner above the question. The four decisions are therefore the player's;
- * the banner is the calm `neutral` alert, and its one action, Restart, is
- * secondary — the accent stays on "Hand in". Under it, "Show the points"
+ * `usePreviewSession` instead of `useAttempt`, with two additions: the
+ * preview banner above the question, and the bar's quiet Home, exam or not,
+ * back to the evaluation (it asks first when answers would be thrown away).
+ * The four decisions are therefore the player's; the banner is the calm
+ * `neutral` alert, and its one action, Restart, is secondary — the accent
+ * stays on "Hand in". Under it, "Show the points"
  * (`PreviewPoints`) grades the question on screen alone, secondary too.
  *
  * The start is a MUTATION, not a query, on purpose: the app's refresh hints
@@ -203,20 +205,25 @@ function PreviewWalk({
   const touched = Object.keys(session.state.answers).length > 0;
   const current = currentItem(session.state);
 
+  // Restarting and leaving both throw the paper away. Only a paper with
+  // something on it has something to lose.
+  const mayDiscard = async (title: string, message: string, confirmLabel: string) =>
+    !touched || (await confirm({ title, message, confirmLabel, cancelLabel: t("common.cancel") }));
   const askRestart = async () => {
-    // Only a paper with something on it has something to lose.
-    if (
-      touched &&
-      !(await confirm({
-        title: t("preview.restart.title"),
-        message: t("preview.restart.message"),
-        confirmLabel: t("preview.restart"),
-        cancelLabel: t("common.cancel"),
-      }))
-    ) {
-      return;
-    }
-    onRestart();
+    const ok = await mayDiscard(
+      t("preview.restart.title"),
+      t("preview.restart.message"),
+      t("preview.restart"),
+    );
+    if (ok) onRestart();
+  };
+  const askLeave = async () => {
+    const ok = await mayDiscard(
+      t("preview.leave.title"),
+      t("preview.leave.message"),
+      t("preview.backToEvaluation"),
+    );
+    if (ok) onBack();
   };
   const edit = usePreviewEdit({ evaluationId, preview: walk.preview, session, askRestart });
 
@@ -225,7 +232,8 @@ function PreviewWalk({
       <PlayerView
         initial={walk.preview.view}
         session={session}
-        onHome={onBack}
+        onHome={() => void askLeave()}
+        homeLabel={t("preview.backToEvaluation")}
         banner={
           <div className="space-y-3">
             <Alert
