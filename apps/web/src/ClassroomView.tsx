@@ -179,10 +179,10 @@ export function ClassroomView({
   const [connectParam, setConnect] = useSearchParam("connect", "");
   const github = useClassroomGithub(id);
   // F-JRN-01: the Journal tab exists exactly while the classroom has a
-  // journal. A 404 is a platform without Quiz's App: no journal, no tab.
+  // journal, in either mode (ADR-057). A 404 is no journal routes: no tab.
   const journal = useStaffJournal(id);
-  const hasJournal = journal.data?.repository != null;
-  const noJournal = journal.data?.repository === null || githubAbsent(journal.error);
+  const hasJournal = journal.data?.mode != null;
+  const noJournal = journal.data?.mode === null || githubAbsent(journal.error);
 
   const room = useQuery<ClassroomDetail>({
     queryKey: classroomKey(id),

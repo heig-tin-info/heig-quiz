@@ -10,12 +10,15 @@ import { JournalSettings } from "./JournalSettings";
 
 /*
  * The Journal section of a classroom's Settings (F-JRN-02 to F-JRN-05,
- * M4-05): one line until the classroom is connected; then "Create a
- * journal" (the proposed name, the 409 `name_taken` and its suggestion in
- * one click) and "Use a repository" (branch and folder behind a
- * disclosure, the refusals worded); once set, the repository, its sync
- * state, Refresh and "Remove the journal", confirmed. Nothing accented; and
- * nothing at all on a platform without Quiz's App (404).
+ * M4-05, ADR-057): the mode first, In Quiz by default (one Create, no
+ * GitHub needed) or In a GitHub repository (one line until the classroom
+ * is connected; then "Create a journal" with the proposed name, the 409
+ * `name_taken` and its suggestion in one click, and "Use a repository",
+ * branch and folder behind a disclosure, the refusals worded); once set,
+ * a Quiz-mode journal's pages and its removal by the classroom's typed
+ * name, or the repository, its sync state, Refresh and "Remove the
+ * journal", confirmed. Nothing accented; In Quiz only on a platform
+ * without Quiz's App; nothing at all without the journal's routes (404).
  */
 
 afterEach(() => {
@@ -53,11 +56,10 @@ const repository = (over: Partial<JournalRepository> = {}): JournalRepository =>
   syncError: null,
   lastSyncedAt: new Date(Date.now() - 3_600_000).toISOString(),
   lastCommitSha: "abc",
-  editable: true,
   ...over,
 });
 
-const staff = (repo: JournalRepository | null): JournalStaff => ({
+const staff = (repo: JournalRepository | null, over: Partial<JournalStaff> = {}): JournalStaff => ({
   view: "staff",
   mode: repo ? "github" : null,
   repository: repo,
@@ -67,7 +69,16 @@ const staff = (repo: JournalRepository | null): JournalStaff => ({
   warningCount: 0,
   pageCount: 0,
   proposedName: repo ? null : "prg1-2026-journal",
+  ...over,
 });
+
+/** A Quiz-mode journal holding `pageCount` pages. */
+const quizJournal = (pageCount: number) => staff(null, { mode: "quiz", pageCount, proposedName: null });
+
+/** Picks "In a GitHub repository" in the mode's segmented control. */
+async function chooseGithub(name = "In a GitHub repository") {
+  await userEvent.click(await screen.findByRole("radio", { name }));
+}
 
 function renderSection() {
   return renderWithProviders(<JournalSettings room={makeClassroomDetail()} />);
@@ -100,13 +111,40 @@ describe("the Journal section — before a journal", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("is one line, with no action, until the classroom is connected", async () => {
+  it("starts on In Quiz, which needs no GitHub: one Create, posting the mode", async () => {
+    const { calls } = mockFetch({
+      [`GET ${GITHUB}`]: ok(plain),
+      [`GET ${JOURNAL}`]: ok(staff(null)),
+      [`POST ${JOURNAL}`]: { status: 201, body: quizJournal(1) },
+    });
+    renderSection();
+    const root = await section();
+    expect(within(root).getByRole("radio", { name: "In Quiz" })).toBeChecked();
+    expect(within(root).getByText(/Written here, in Quiz's editor/)).toBeVisible();
+    expectNoAccent(root);
+    await userEvent.click(within(root).getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    expect(calls.find((c) => c.method === "POST")?.body).toEqual({ mode: "quiz" });
+    expect(await screen.findByText("Journal created.")).toBeVisible();
+  });
+
+  it("says the GitHub mode needs the connection, with no action, until the classroom is connected", async () => {
     mockFetch({ [`GET ${GITHUB}`]: ok(plain), [`GET ${JOURNAL}`]: ok(staff(null)) });
     renderSection();
     const root = await section();
-    expect(within(root).getByText("No journal")).toBeVisible();
-    expect(within(root).getByText(/Connect the classroom to GitHub first/)).toBeVisible();
-    expect(within(root).queryByRole("button")).toBeNull();
+    await chooseGithub();
+    expect(within(root).getByText(/Written in a repository of the classroom's organization/)).toBeVisible();
+    expect(within(root).getByText("Needs the GitHub connection")).toBeVisible();
+    expect(within(root).getByText(/in the GitHub section above/)).toBeVisible();
+    expect(within(root).queryByRole("button", { name: /Create|Choose/ })).toBeNull();
+  });
+
+  it("offers In Quiz only on a platform without Quiz's App", async () => {
+    mockFetch({ [`GET ${GITHUB}`]: fail(404, {}), [`GET ${JOURNAL}`]: ok(staff(null)) });
+    renderSection();
+    const root = await section();
+    expect(within(root).queryByRole("radiogroup")).toBeNull();
+    expect(within(root).getByRole("button", { name: "Create" })).toBeVisible();
   });
 
   it("says when the journal could not be read, with a retry", async () => {
@@ -120,6 +158,7 @@ describe("the Journal section — before a journal", () => {
     mockFetch({ [`GET ${GITHUB}`]: ok(connected), [`GET ${JOURNAL}`]: ok(staff(null)) });
     renderSection();
     const root = await section();
+    await chooseGithub();
     expect(within(root).getByText("Create a journal")).toBeVisible();
     expect(within(root).getByText("Use a repository")).toBeVisible();
     expect(within(root).getByText(/A new private repository in heig-tin-info/)).toBeVisible();
@@ -135,6 +174,7 @@ describe("the Journal section — Create a journal", () => {
       [`POST ${JOURNAL}`]: { status: 201, body: staff(repository({ fullName: "heig-tin-info/prg1-2026-journal" })) },
     });
     renderSection();
+    await chooseGithub();
     await userEvent.click(await screen.findByRole("button", { name: "Create…" }));
     const dialog = await screen.findByRole("dialog", { name: /Create a journal/ });
     expect(within(dialog).getByLabelText(/Repository name/)).toHaveValue("prg1-2026-journal");
@@ -149,6 +189,7 @@ describe("the Journal section — Create a journal", () => {
   it("refuses a name GitHub would not take, before asking", async () => {
     mockFetch({ [`GET ${GITHUB}`]: ok(connected), [`GET ${JOURNAL}`]: ok(staff(null)) });
     renderSection();
+    await chooseGithub();
     await userEvent.click(await screen.findByRole("button", { name: "Create…" }));
     const dialog = await screen.findByRole("dialog");
     const field = within(dialog).getByLabelText(/Repository name/);
@@ -171,6 +212,7 @@ describe("the Journal section — Create a journal", () => {
       },
     });
     renderSection();
+    await chooseGithub();
     await userEvent.click(await screen.findByRole("button", { name: "Create…" }));
     const dialog = await screen.findByRole("dialog");
     const field = within(dialog).getByLabelText(/Repository name/);
@@ -190,6 +232,7 @@ describe("the Journal section — Create a journal", () => {
 
 describe("the Journal section — Use a repository", () => {
   async function openUse() {
+    await chooseGithub();
     await userEvent.click(await screen.findByRole("button", { name: "Choose…" }));
     return screen.findByRole("dialog", { name: /Use a repository/ });
   }
@@ -265,6 +308,7 @@ describe("the Journal section — Use a repository", () => {
       [`POST ${JOURNAL}/use`]: fail(409, { error: "ref_not_found", message: "ref_not_found" }),
     });
     renderWithProviders(<JournalSettings room={makeClassroomDetail()} />, { locale: "fr" });
+    await chooseGithub("Dans un dépôt GitHub");
     await userEvent.click(await screen.findByRole("button", { name: "Choisir…" }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.type(within(dialog).getByLabelText(/Nom du dépôt/), "prg1-journal");
@@ -285,7 +329,7 @@ describe("the Journal section — a journal", () => {
     const link = within(root).getByRole("link", { name: /heig-tin-info\/prg1-journal/ });
     expect(link).toHaveAttribute("href", "https://github.com/heig-tin-info/prg1-journal");
     expect(link).toHaveAttribute("target", "_blank");
-    expect(within(root).getByText("Branch dev, folder docs")).toBeVisible();
+    expect(within(root).getByText(/In a GitHub repository · Branch dev, folder docs/)).toBeVisible();
     expect(within(root).getByText(/Synced/)).toBeVisible();
     expect(within(root).getByRole("img", { name: "OK" })).toBeVisible();
     expectNoAccent(root);
@@ -356,5 +400,57 @@ describe("the Journal section — a journal", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+  });
+});
+
+describe("the Journal section — a Quiz-mode journal (ADR-057)", () => {
+  it("shows its mode and its pages, nothing accented, no Refresh", async () => {
+    mockFetch({ [`GET ${GITHUB}`]: ok(connected), [`GET ${JOURNAL}`]: ok(quizJournal(12)) });
+    renderSection();
+    const root = await section();
+    expect(within(root).getByText("In Quiz")).toBeVisible();
+    expect(within(root).getByText(/12 pages, written and kept in Quiz/)).toBeVisible();
+    expect(within(root).queryByRole("button", { name: /Refresh/ })).toBeNull();
+    expectNoAccent(root);
+  });
+
+  it("removes a journal holding pages only once the classroom's name is typed, and sends it", async () => {
+    const { calls } = mockFetch({
+      [`GET ${GITHUB}`]: ok(connected),
+      [`GET ${JOURNAL}`]: ok(quizJournal(12)),
+      [`DELETE ${JOURNAL}?confirm=PRG1-2026`]: noContent(),
+    });
+    renderSection();
+    const root = await section();
+    await userEvent.click(within(root).getByRole("button", { name: /Remove…/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Remove the journal of PRG1-2026?" });
+    expect(within(dialog).getByText(/Its 12 pages and their history are deleted/)).toBeVisible();
+    const confirm = within(dialog).getByRole("button", { name: "Remove the journal" });
+    expect(confirm).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("Type PRG1-2026 to confirm"), "PRG1-202");
+    expect(confirm).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText("Type PRG1-2026 to confirm"), "6");
+    expect(confirm).toBeEnabled();
+    await userEvent.click(confirm);
+    await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
+    expect(calls.find((c) => c.method === "DELETE")!.url).toBe(`${JOURNAL}?confirm=PRG1-2026`);
+    expect(await screen.findByText("Journal deleted.")).toBeVisible();
+  });
+
+  it("asks for no name when the journal holds no page", async () => {
+    const { calls } = mockFetch({
+      [`GET ${GITHUB}`]: ok(connected),
+      [`GET ${JOURNAL}`]: ok(quizJournal(0)),
+      [`DELETE ${JOURNAL}`]: noContent(),
+    });
+    renderSection();
+    const root = await section();
+    await userEvent.click(within(root).getByRole("button", { name: /Remove…/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/The journal has no page/)).toBeVisible();
+    expect(within(dialog).queryByRole("textbox")).toBeNull();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove the journal" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
+    expect(calls.find((c) => c.method === "DELETE")!.url).toBe(JOURNAL);
   });
 });

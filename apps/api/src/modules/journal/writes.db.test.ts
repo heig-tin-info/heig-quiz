@@ -145,7 +145,7 @@ describe("create a journal (F-JRN-02)", () => {
     const fullName = `${room.login}/a-journal`;
     // A created journal lives on GitHub, read-only in the platform (ADR-057).
     expect(journal.mode).toBe("github");
-    expect(journal.repository).toMatchObject({ fullName, ref: "main", rootPath: "", syncStatus: "ok", editable: false });
+    expect(journal.repository).toMatchObject({ fullName, ref: "main", rootPath: "", syncStatus: "ok" });
     expect(journal.homePath).toBe("README.md");
     expect(gh.calls).toContain(`POST api.github.com/orgs/${room.login}/repos`);
     const created = gh.inits[gh.calls.lastIndexOf(`POST api.github.com/orgs/${room.login}/repos`)]!;

@@ -1015,6 +1015,24 @@ files it ports; writes en + fr for every string.
   i18n en + fr, the mock.
 - **Scenes**: `journal-settings-mode`, `journal-edit` (standard editor),
   `journal-github-readonly`, `journal-revisions`, `journal-remove-quiz`.
+- **As delivered**: the product owner kept "Connect to GitHub" as the
+  Settings' one accent, whatever the journal (projects need it). The mode
+  is a `Segmented` in a settings row, its description the chosen mode's
+  line; on a platform without Quiz's App, In Quiz only (no control). The
+  staff bar is drawn by `mode`, never by "has a repository": Quiz mode =
+  the Pages menu (`Actions menu`: add, History, Deleted pages, delete) +
+  Edit; GitHub mode = sync state, Refresh, Edit on GitHub (`LinkButton`
+  to the page's `editUrl`, new tab). History and Deleted pages are sheets
+  (`journal/JournalHistory.tsx`), a revision rendered through `POST
+  …/preview` or shown as markdown. One typed-name confirmation:
+  `useConfirm({ typeToConfirm })` (`confirm.tsx`), used by Remove the
+  journal and by the classroom's deletion (`?confirm=`, both decided by
+  `removalNeedsName`). The editor is the standard `RichText` with
+  `longForm` (the `.md-doc` type only, no schema change); `reconcile.ts`,
+  `journalSchema.ts`, `spellWith`, the round-trip test, the synthetic
+  journal and `.rt-raw-html` are gone; `JournalRepository.editable` too
+  (contracts and API). Mock: `?journal=1` is Quiz mode,
+  `?journalgithub=1` GitHub mode, with revisions and a deleted page.
 
 ### M4-10 — Rename, reorder, nest (Quiz mode)
 - **Depends on**: M4-09.

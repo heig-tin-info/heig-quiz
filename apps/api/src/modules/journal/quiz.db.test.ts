@@ -310,10 +310,10 @@ describe("the revisions", () => {
     await save(id, "gone.md", "# Gone for good\n");
     await call("DELETE", `${base(id)}/pages/gone.md`, teacher.headers);
     const deleted = (await call("GET", `${base(id)}/deleted`, teacher.headers)).json<unknown[]>().map((d) => JournalDeletedPage.parse(d));
-    expect(deleted).toMatchObject([{ path: "gone.md", title: "Gone for good" }]);
-
     const [latest] = JournalRevisionList.parse((await call("GET", `${base(id)}/revisions/gone.md`, teacher.headers)).json());
-    const res = await call("POST", `${base(id)}/restore`, teacher.headers, { revisionId: latest!.id });
+    expect(deleted).toMatchObject([{ path: "gone.md", title: "Gone for good", revisionId: latest!.id }]);
+
+    const res = await call("POST", `${base(id)}/restore`, teacher.headers, { revisionId: deleted[0]!.revisionId });
     expect(res.statusCode, res.body).toBe(200);
     expect((await pageRow(id, "gone.md"))!.markdown).toBe("# Gone for good\n");
     expect((await call("GET", `${base(id)}/deleted`, teacher.headers)).json()).toEqual([]);

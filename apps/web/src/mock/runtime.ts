@@ -33,10 +33,11 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  * `ghwarn`: PRG1-2026's organization is on GitHub's free plan, without the
  *   LLM secret — the warning lines of the checks (`mock/github.ts`).
  * `ghmissing`: PRG1-2026's organization is gone from GitHub (`mock/github.ts`).
- * `journal`: the classroom PRG1-2026 has a journal (`mock/journal.ts`).
- * `journalerror`: ...whose last synchronisation failed (`mock/journal.ts`).
- * `journalconflict`: ...and every save of a page meets a file that moved
- *   on GitHub, `409 conflict` (`mock/journal.ts`, M4-06).
+ * `journal`: the classroom PRG1-2026 has a journal, in Quiz mode (`mock/journal.ts`).
+ * `journalgithub`: ...in a GitHub repository instead, read-only (ADR-057).
+ * `journalerror`: ...in a GitHub repository whose last synchronisation failed.
+ * `journalconflict`: ...and every save of a page meets a page saved
+ *   meanwhile, `409 conflict` (`mock/journal.ts`).
  * `superpowers`: the admin persona's Super Powers are on, 54 minutes left (ADR-054).
  * `lastminutes`: ...with 4 min 30 s left instead, the banner's countdown.
  * `degraded`: the admin's system status has a dead clock, a stale backup and
@@ -57,6 +58,7 @@ export const FLAG_NAMES = [
   "ghwarn",
   "ghmissing",
   "journal",
+  "journalgithub",
   "journalerror",
   "journalconflict",
   "superpowers",
