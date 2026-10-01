@@ -23,6 +23,8 @@ export const mcqEditorStrings = {
   correctChoice: "Choice {letter} is correct",
   addChoice: "Add a choice",
   removeChoice: "Remove choice",
+  /** The wand of an empty choice (ADR-059): the model proposes this one. */
+  generateChoice: "Suggest this choice",
   /** Accessible name of the drag handle; the keyboard reorders through it too. */
   reorderChoice: "Reorder choice",
   /** Enter walks to the next choice; shown in the app's shortcut strip. */

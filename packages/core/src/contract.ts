@@ -7,6 +7,7 @@
  * (decision D1).
  */
 import type { z } from "zod";
+import type { AnswerGenerator } from "./generate.js";
 import type { LlmGradeRequest, LlmService } from "./llm.js";
 import type { RunnerOutcome, RunnerRequest, RunnerService } from "./runner.js";
 
@@ -527,4 +528,7 @@ export interface QuestionTypeServer<
   toCanonical?(config: TConfig): unknown;
   /** Back from the canonical mapping; `configSchema.parse` when omitted (`fromCanonicalOf`). */
   fromCanonical?(raw: unknown): TConfig;
+
+  /** "Generate answers" (ADR-059): what the model may propose, and how it merges. Absent: no wand. */
+  readonly generator?: AnswerGenerator<TConfig>;
 }

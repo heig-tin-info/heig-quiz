@@ -2592,6 +2592,26 @@ on("PUT", "/app/api/questions/:id/draft", (m, body) => {
   const issues = [...draftIssues(q), ...variablesIssues(q.draft.variables)];
   return { updatedAt: q.updatedAt, valid: issues.length === 0, issues };
 });
+// "Generate answers" (ADR-059): no model, and no merge either — that is the
+// types' own, tested in `qt-*`. An MCQ's empty rows get a canned distractor
+// so the screenshots show something; every type an empty explanation written.
+// `types` is a hand copy of the server's generator list: `contract.test`
+// checks its shape, not its content.
+on("GET", "/app/api/generate/availability", () => ({ available: true, types: ["mcq", "short", "rich", "categorize"] }));
+on("POST", "/app/api/questions/:id/generate", (m, body) => {
+  questionOr404(m.groups!.id!);
+  const config = { ...((body.config ?? {}) as Record<string, unknown>) };
+  if (Array.isArray(config.choices)) {
+    config.choices = (config.choices as { text: string; correct: boolean }[]).map((c) =>
+      c.text.trim() === "" ? { text: "Une adresse au hasard, différente à chaque exécution", correct: false } : c,
+    );
+  }
+  const explanation =
+    typeof body.explanation === "string" && body.explanation.trim() !== ""
+      ? body.explanation
+      : "Une variable locale non initialisée a une valeur indéterminée : la lire est un comportement indéfini.";
+  return { config, explanation };
+});
 on("POST", "/app/api/questions/:id/publish", (m, body) => {
   const q = questionOr404(m.groups!.id!);
   const issues = draftIssues(q);

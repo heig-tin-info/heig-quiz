@@ -54,6 +54,8 @@ export const pairPreviewKey = (code: string) => ["pair-preview", code] as const;
  * refetch it; it polls on its own clock instead.
  */
 export const adminSystemKey = ["admin-system"] as const;
+/** Whether the editor's "Generate answers" wand works now, and for which types (ADR-059). */
+export const generateAvailabilityKey = ["generate-availability"] as const;
 /** The caller's personal API tokens (settings). */
 export const apiTokensKey = ["api-tokens"] as const;
 /** The assistants connected through OAuth (settings, ADR-023). */

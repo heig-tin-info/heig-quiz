@@ -37,7 +37,7 @@ Amends:
   phase (§8).
 
 Defers N-DATA-05's "no-retention mode" and the data-protection review of
-what is sent to the provider to a new open question (docs/spec/06, row 35).
+what is sent to the provider to a new open question (docs/spec/06, row 43).
 
 ## Context
 

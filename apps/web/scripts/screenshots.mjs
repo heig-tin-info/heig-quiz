@@ -749,6 +749,10 @@ const scenes = [
   { name: "editor-mcq", role: "teacher", path: "/questions/q2" },
   // A choice emptied: the autosave's issue, on the field and named under the list.
   { name: "editor-mcq-issues", role: "teacher", path: "/questions/q2", settle: 3000, act: async (p) => { await p.getByRole("textbox", { name: "Text of choice B" }).fill(""); await p.waitForTimeout(2500); } },
+  // "Generate answers" (ADR-059): the proposal merged, with its Undo; and the
+  // wand of an empty choice.
+  { name: "editor-mcq-generated", role: "teacher", path: "/questions/q2", settle: 1500, act: async (p) => { await p.getByRole("textbox", { name: "Text of choice D" }).fill(""); await p.waitForTimeout(800); await p.getByRole("button", { name: "Generate answers" }).click(); await p.getByText("Answers suggested by the AI").waitFor(); } },
+  { name: "editor-mcq-wand", role: "teacher", path: "/questions/q2", settle: 1500, act: async (p) => { await p.getByRole("textbox", { name: "Text of choice B" }).fill(""); await p.getByRole("button", { name: "Suggest this choice B" }).hover(); await p.waitForTimeout(400); } },
   { name: "editor-code", role: "teacher", path: "/questions/q1", settle: 5000 },
   { name: "editor-short", role: "teacher", path: "/questions/q3" },
   // Issue #97: every field of an accepted answer labelled, and the sentence

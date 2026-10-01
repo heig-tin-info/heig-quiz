@@ -7,6 +7,7 @@ import { ConfigMigrationError, tallyKeys, type ParameterSample, type Publication
 import { formatStep } from "@quiz/domain";
 import { describeMatcher } from "@quiz/domain/short";
 import { toCanonical } from "./canonical.js";
+import { shortGenerator } from "./generate.js";
 import { gradeShort } from "./grade.js";
 import {
   defaultShortConstraints,
@@ -294,4 +295,6 @@ export const shortServer: QuestionTypeServer<
   searchText: (config) => [config.prompt, ...expectedAnswers(config)].join("\n"),
 
   toCanonical,
+
+  generator: shortGenerator,
 };

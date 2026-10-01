@@ -578,6 +578,7 @@ interface EditorHostProps {
   onTryInBrowser?: (config: CodeConfig) => Promise<RunnerOutcome | "unavailable">;
   /** `diagram` and `circuit`: the layer a canvas expands into (`EditorProps.Expand`). */
   Expand?: ComponentType<ExpandProps>;
+  onGenerateItem?: (index: number) => Promise<void>;
 }
 
 /**
@@ -611,6 +612,7 @@ export function QuestionEditorHost({
   ungraded,
   published,
   onTry,
+  onGenerateItem,
 }: {
   t: TFunction;
   type: string;
@@ -641,6 +643,8 @@ export function QuestionEditorHost({
    * always the server's, since only it may assemble a netlist (invariant 14).
    */
   onTry?: (config: unknown) => Promise<TryOutcome>;
+  /** The wand of one element of the type's list (`EditorProps.onGenerateItem`, ADR-059). */
+  onGenerateItem?: (index: number) => Promise<void>;
 }) {
   const client = questionType(type);
   if (!client) return <Unknown>{t("qt.unknown")}</Unknown>;
@@ -664,6 +668,7 @@ export function QuestionEditorHost({
         {...(ungraded === undefined ? {} : { ungraded })}
         {...(published === undefined ? {} : { published })}
         {...(onTry === undefined ? {} : { onTry })}
+        {...(onGenerateItem === undefined ? {} : { onGenerateItem })}
         {...(onTry !== undefined && client.id === "code"
           ? { onTryInBrowser: tryReferenceInBrowser }
           : {})}

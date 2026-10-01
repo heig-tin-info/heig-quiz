@@ -81,6 +81,14 @@ export interface EditorProps<TConfig> {
    * type ignores it.
    */
   Expand?: ComponentType<ExpandProps>;
+  /**
+   * The wand of ONE element of the type's list ("Generate answers",
+   * ADR-059): the host asks the model for the element at `index`, which must
+   * be empty, and hands the result back through `onChange`. It resolves once
+   * applied, or rejects (the host has already said why). Absent — no model,
+   * or a type the host does not offer it for — the editor shows no wand.
+   */
+  onGenerateItem?: (index: number) => Promise<void>;
 }
 
 /**

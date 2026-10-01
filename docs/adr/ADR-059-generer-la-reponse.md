@@ -2,12 +2,23 @@
 
 ## Status
 
-Proposed (2026-10-01, sketch agreed with the product owner; to be completed
-before it is implemented). Second phase of LLM assistance, on the gateway of
+Accepted (2026-10-01, decisions of the product owner; proposed the same day
+as a sketch). Second phase of LLM assistance, on the gateway of
 [ADR-058](ADR-058-passerelle-llm.md). Delivers the "Generate the answer"
-button of docs/spec/08 and part of F-LLM-02. Writing whole questions from an
-LLM stays the job of the MCP server (F-LLM-06, ADR-022): this ADR is about
-completing the question a teacher is writing.
+button of docs/spec/08 and, of F-LLM-02, "propose the answer key, write the
+explanation, propose distractors" (the per-choice wand); "generate a
+variant" stays out. Writing whole questions from an LLM stays the job of the
+MCP server (F-LLM-06, ADR-022): this ADR is about completing the question a
+teacher is writing.
+
+Delivered with `AnswerGenerator` (`@quiz/core/server`, `generate.ts`), the
+generators of `qt-mcq`, `qt-short`, `qt-rich` and `qt-categorize`
+(`src/generate.ts` each), `apps/api/src/modules/pool/generate.ts`, the routes
+`POST /app/api/questions/:id/generate` and `GET /app/api/generate/availability`
+(`GenerateRequest`, `GenerateResult`, `LlmAvailability` of `@quiz/contracts`),
+`EditorProps.onGenerateItem`, and `apps/web/src/question/generate.tsx`.
+Amends docs/spec/08 §8.2 ("the proposals appear highlighted, with accept or
+reject"): see §3.
 
 ## Context
 
@@ -17,57 +28,125 @@ its rubric, the reference solution and the test cases, the explanation.
 That is the "thankless work" of docs/spec/08 §principle 3, which an LLM can
 propose and the teacher decides.
 
-## Decision (sketch)
+## Decision
 
-1. **A wand, two scopes.** The editor's "Generate answers" button (the
-   magic-wand icon) proposes everything the type needs beyond the statement.
-   A field-level wand proposes ONE element: one more choice of an MCQ when
-   the teacher added an empty one, one more test case, one more blank of a
-   cloze. It appears on hover and focus, so that the screen keeps one
-   primary action (invariant 2).
-2. **A proposal, in the form, never saved by itself.** The API returns a
-   proposed config (or one element of it); the client merges it into the
-   editor's form, where the teacher reads, edits or undoes it, and saves it
-   like any edit into the draft. Nothing is published by the model
-   (docs/spec/08 §principle 3). What the teacher already wrote is never
-   overwritten silently: the merge fills empty fields, and a replacement
-   shows what it replaces with an Undo.
-3. **One mechanism for every type.** The prompt is built from what the type
-   already declares: its config schema (zod, in `qt-*/server`) and the
-   authoring rules the MCP server gives an LLM client
-   (`describe_question_types`). The reply is validated by the type's own
-   config schema; a type may add a `generate` hook to its server half when
-   it needs more (a `circuit` checked by simulation). A target path
-   (`choices[5]`) selects the field-level scope.
-4. **Types in waves.** First `mcq`, `short`, `cloze`, `rich` (model answer
-   and rubric) and `categorize`. Then `code`: the model writes the reference
-   solution and the test INPUTS, and the expected outputs are COMPUTED by
-   running the reference solution on the runner (docs/spec/00 phase 2),
-   never taken from the model. `circuit`, `codeimage` and `diagram` last, or
-   never, if the proposals are not reliable.
-5. **Parameterized questions (ADR-056).** The `[[…]]` expressions of the
-   statement are given to the model as written, and the reply must keep
-   them; the validation of ADR-056 rejects a reply that drops one.
-6. **Language.** The model writes in the language of the statement. A pool
-   setting for the default language (when the statement is empty) is not
-   built; French is the fallback.
-7. **Cost and abuse.** Purpose `generate`, attributed to the teacher, logged
-   and capped by ADR-058. A per-minute `Budget` per teacher stops a held-down
-   button; no quota.
-8. **No key.** Without a configured gateway the wand is hidden; F-LLM-05's
-   "Copy the prompt" may come later on the same prompt builder.
+### 1. The type owns what may be proposed, and the merge
 
-## To settle before implementing
+A question type may declare a `generator` beside its schemas
+(`QuestionTypeServer.generator`, an `AnswerGenerator`):
 
-- The exact merge rule per type (which fields count as "empty").
-- Whether the explanation is generated with the answer or by its own wand.
-- The staging runner is stubbed: the `code` wave cannot be tested end to end
-  there until it has a runner.
+- `statement(config)`: the wand is refused while it is empty
+  (`statement_empty`) — the model completes a question, it never invents one;
+- `instructions`: what to propose, in English, for the system prompt;
+- `proposalSchema`: a NARROW zod schema of the proposal — the choices, the
+  accepted values, the model answer and rubric, the columns and cards —
+  never the whole config. The model never writes the statement, the
+  settings (`mode`, `policy`, `kind`, shuffles, limits) nor ids;
+- `merge(config, proposal)`: pure, tested without a model;
+- `item` (optional): ONE element of the type's list at an index that must be
+  empty (`item_not_empty` otherwise): the wand of one MCQ choice.
+
+A draft may be invalid (D16): generators read it defensively. The API builds
+the prompt (the draft's config and explanation as JSON, the type's
+instructions, the rules common to all) and calls `LlmGateway.complete` with
+purpose `generate`, the teacher as user, `effort: low`.
+
+### 2. The merge fills the empty and completes the lists
+
+Decided by the product owner: nothing the teacher wrote is changed.
+
+- **mcq**: the teacher's choices stay, text and tick; the proposal fills the
+  empty rows in place, then is appended (12 at most); a choice already
+  written is never repeated; in `single` mode the teacher's tick wins and a
+  proposed second key becomes a distractor.
+- **short**: the teacher's matchers stay; the empty placeholder of a fresh
+  draft goes; each proposed value becomes a matcher of the question's
+  `kind`, which the model does not choose; a value that does not read as
+  that kind (a date that is not `YYYY-MM-DD`) is dropped.
+- **rich**: `reference` (model answer) and `rubric` are written only where
+  empty. Both are the grader's; `toStudent` never sends them (invariant 4).
+- **categorize**: a proposed column joins the teacher's column of the same
+  label, else takes an unlabelled one, else is added (6 at most); a card the
+  draft holds is never added again nor moved; distractors belong to no
+  column; ids are the merge's.
+- **The explanation** is written in the same call, only when empty.
+
+A teacher who wants a field regenerated empties it first.
+
+### 3. A proposal is an edit, with one Undo
+
+The merged draft comes back to the editor and is set like a teacher's edit:
+the autosave stores it (D16). One Undo restores the draft as it was before
+the call, offered until the teacher's next edit. A reply that arrives after
+the teacher changed the draft is dropped, with a message. Nothing is ever
+published by the model (docs/spec/08 principle 3). This replaces the
+"highlighted, accept or reject" of docs/spec/08 §8.2, which would have
+needed a preview mode in every type's editor.
+
+### 4. Language and content
+
+The model writes in the language of the statement, French when unclear. The
+`[[…]]` expressions of a parameterized question (ADR-056) and the `asset:`
+links are kept as written; the images themselves are not sent, so a
+statement built around a figure gets a proposal made blind. Only the
+draft's config and explanation are sent — no name, no student, no answer
+(open question 43).
+
+### 5. Routes and access
+
+`POST /app/api/questions/:id/generate` takes the editor's draft as it stands
+(`GenerateRequest`: `config`, `explanation`, optional `item`) and answers the
+merged draft (`GenerateResult`); nothing is stored by the route. Access is
+`onQuestion("contributor")`, the draft's own: a teacher outside the pool
+gets the 404 of a missing question (invariant 6). The type is the
+question's, never the client's. Ten per minute per teacher (`Budget`)
+against a held-down button; the gateway's daily cap is the ceiling. The
+gateway's failures answer by code: `409 llm_not_configured`,
+`429 llm_budget_exhausted`, `429 rate_limited`, `502 llm_failed`.
+`GET /app/api/generate/availability` tells the editor whether to show the
+wand: a stored key, and the types that have a generator.
+
+### 6. The screen
+
+"Generate answers" (the magic wand) is a secondary button above the type's
+form: Publish stays the one primary action (invariant 2). The per-choice
+wand appears on an EMPTY choice row of an MCQ only.
+
+### 7. The types, in waves
+
+Wave 1, delivered: `mcq`, `short`, `rich`, `categorize`. Then:
+
+- `cloze`: its key is inline in the text (`{{…}}`), which is the statement.
+  A wand there could only propose alternatives and distractors inside the
+  blanks the teacher placed; to be designed.
+- `code`: the model would write the reference solution and the test INPUTS;
+  the expected outputs are COMPUTED by running the reference on the runner,
+  never taken from the model. It needs first a "Compute the expected
+  outputs" action (no LLM), and a rule for a reference against a locked
+  template. Not testable end to end on staging until it has a runner.
+- `circuit`, `codeimage`, `diagram`: last, or never, if the proposals are
+  not reliable.
+
+## Consequences
+
+- A teacher writes a statement, presses the wand, reads and corrects what
+  came, and publishes. A wrong key that is not read is a wrong key in the
+  draft; the Try tab and the review before Publish are the guard.
+- A new type gets a wand by declaring a generator; the route, the screen and
+  the gateway do not change.
+- Every call is logged and capped by ADR-058, attributed to the teacher.
 
 ## Alternatives considered
 
 - **Through the MCP server.** The MCP server serves an LLM client that drives
   the platform; here the platform calls the model itself, from the editor,
   and the MCP path would need the teacher's client in the loop.
-- **A prompt per type, hand-written.** Nine prompts to keep in step with nine
-  schemas; the schema and the MCP rules already say what a valid config is.
+- **The model writes the whole config.** It would rewrite the statement and
+  the settings, and its ids would have to satisfy schemas it cannot see the
+  refinements of; a narrow proposal merged by code keeps what the teacher
+  wrote by construction.
+- **The MCP guides as the prompt.** They are written for a tool caller
+  ("call `get_question`", "a tool argument beside `config`"); each type's
+  generator states what the wand needs, beside the merge it describes.
+- **Accept/reject highlighted proposals.** Safer to read, but a preview mode
+  in every type's editor; the draft is not published, and Undo restores it.

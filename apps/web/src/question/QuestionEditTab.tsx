@@ -10,6 +10,7 @@ import { useT } from "../i18n";
 import { MarkdownField } from "../markdown/MarkdownField";
 import { QuestionEditorHost, type TryOutcome } from "../questionTypes";
 import { Alert, Card, Spinner } from "../ui";
+import { GenerateBar, useGenerate } from "./generate";
 import { toConfigIssues } from "./issues";
 import { MetaPanel } from "./MetaPanel";
 import type { Draft } from "./useQuestionDraft";
@@ -82,6 +83,7 @@ export function QuestionEditTab({
   // as invalid. The Publish dialog reports the issues unconditionally — that
   // is the moment the draft has to be complete.
   const invalid = issues.length > 0 || (edited && data.draft.valid === false);
+  const wand = useGenerate({ questionId: data.meta.id, type: data.meta.type, draft, setDraft, readOnly });
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
@@ -102,6 +104,8 @@ export function QuestionEditTab({
           </p>
         ) : null}
 
+        <GenerateBar wand={wand} />
+
         <Card className="p-5">
           {draft ? (
             <QuestionEditorHost
@@ -115,6 +119,7 @@ export function QuestionEditTab({
               aside={scoringSlot}
               published={data.latestPublished !== null}
               {...(onTry === undefined ? {} : { onTry })}
+              {...(wand.item === undefined ? {} : { onGenerateItem: wand.item })}
             />
           ) : (
             <Spinner />

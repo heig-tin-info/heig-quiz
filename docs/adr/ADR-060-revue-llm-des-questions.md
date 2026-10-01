@@ -57,7 +57,7 @@ read every question once, quietly, and point at what looks wrong.
 - The share of the leftover budget the night may spend.
 - Whether a teacher can ask for a review now, on one question, or only wait
   for the night.
-- Open question 35 (docs/spec/06): every question of the platform is sent to
+- Open question 43 (docs/spec/06): every question of the platform is sent to
   the provider; settle it, or accept it explicitly, before turning the
   review on for every pool.
 
