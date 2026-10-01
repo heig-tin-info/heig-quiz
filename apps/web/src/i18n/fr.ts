@@ -1068,9 +1068,7 @@ export const fr: Record<keyof Dict, string> = {
   "question.preview.close": "Fermer l'aperçu",
   "question.preview.shortcut": "Aperçu de la question",
   "question.preview.pageTitle": "Aperçu étudiant",
-  "question.preview.pageSubtitle": "Ce qu'un étudiant voit de cette question",
-  "question.preview.banner": "Aperçu — rien n'est enregistré",
-  "question.preview.bannerBody": "Répondez si vous le souhaitez : aucune tentative n'est créée, rien n'est stocké et rien n'est corrigé. Fermez l'onglet quand vous avez terminé.",
+  "question.preview.pageSubtitle": "Répondez librement : rien n'est enregistré ni corrigé",
   "question.preview.incomplete": "Terminez d'abord la question : un brouillon inachevé n'a rien à montrer à un étudiant.",
 
   // --- Politiques de notation des QCM (docs/04 §4.4) ---

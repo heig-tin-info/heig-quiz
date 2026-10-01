@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Eye } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 import type { PreviewResult } from "@quiz/contracts";
 
@@ -31,8 +31,10 @@ import { questionPreviewQuery, questionSolutionQuery } from "./previewQuery";
  * The four decisions, and they are the player's, on purpose: the point of the
  * screen is that it looks like the exam.
  *   - Type: the statement at reading size, the chrome at 13 px.
- *   - Color: no accent at all. The banner is the calm `neutral` alert, and
- *     "Show answers" is secondary: it changes nothing but this tab.
+ *   - Color: no accent at all, and no banner either: the header's subtitle
+ *     says that nothing is kept, so the question is the first thing under
+ *     the bar, as in the exam. "Show answers" is secondary: it changes
+ *     nothing but this tab.
  *   - Space: the player's 760 px column, the player's spacing.
  *   - Finish: the player's hairline bar over the warm canvas, no shadow.
  *
@@ -54,11 +56,6 @@ export function StudentPreviewPage({ id }: { id: string }) {
       title={t("question.preview.pageTitle")}
       subtitle={t("question.preview.pageSubtitle")}
       deadlineAt={null}
-      banner={
-        <Alert icon={Eye} title={t("question.preview.banner")}>
-          {t("question.preview.bannerBody")}
-        </Alert>
-      }
       headerAction={
         // The one thing this page does besides being read. It is secondary:
         // a preview has no primary action (DESIGN.md, one primary action).
