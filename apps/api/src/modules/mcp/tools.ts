@@ -30,6 +30,7 @@ import {
   PollQuestionType,
   QuestionCreate,
   QuestionPatch,
+  SimilarQuestionSearch,
   TemplateInstantiate,
 } from "@quiz/contracts";
 
@@ -243,6 +244,27 @@ export const TOOLS: Tool[] = [
   }),
 
   tool({
+    name: "find_similar_questions",
+    title: "Find questions close to one about to be written",
+    description:
+      "Call it BEFORE create_question with the statement you are about to write, and reuse a close hit " +
+      "rather than writing a near-duplicate: reuse makes its exam statistics grow, a copy starts with none. " +
+      "Hits come from the course's pools first, then from every pool the teacher reaches (public pools " +
+      "included, so other teachers' questions may appear), ranked by shared words with no threshold: judge " +
+      "each `excerpt`. `linked`: usable as is in the course's evaluations. `canLink`: call " +
+      "link_pool_to_course first (it makes the course staff contributors of that whole pool). `stats` " +
+      "`{ n, p, r }` reads as in get_pool_question_stats (`r`: discrimination); null below ten exam answers.",
+    input: z.object({
+      courseId: Id,
+      text: SimilarQuestionSearch.shape.text.describe("The statement to compare, or its gist"),
+      type: SimilarQuestionSearch.shape.type,
+      limit: SimilarQuestionSearch.shape.limit,
+    }),
+    annotations: READ,
+    run: (api, { courseId, ...query }) => api.get(`/courses/${courseId}/similar-questions`, query),
+  }),
+
+  tool({
     name: "get_question",
     title: "Get a question",
     description: "One question: its metadata, its current draft (config and explanation) and its published versions.",
@@ -365,7 +387,8 @@ export const TOOLS: Tool[] = [
     title: "Create a question",
     description:
       "Creates a question in a pool, saves its config and explanation, and publishes it (unless " +
-      "`publish` is false). Call `describe_question_types` for the type first. An invalid config is " +
+      "`publish` is false). Call `find_similar_questions` first and reuse a close hit rather than " +
+      "writing a duplicate. Call `describe_question_types` for the type first. An invalid config is " +
       "refused with the list of issues and nothing is created. `internalName` is a unique slug inside " +
       "the pool, never shown to students (e.g. `fr-vocab-prolixe`). `explanation` is Markdown shown " +
       "after grading when the evaluation allows it.",

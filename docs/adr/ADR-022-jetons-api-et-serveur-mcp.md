@@ -19,7 +19,10 @@ Amended 2026-10-01 (templates first, decided with the product owner): the
 reading tool `list_templates` and the writing tools `create_template`,
 `add_questions_to_template` and `instantiate_template` join the closed
 list of §C, and a new quiz is made
-as a template of the course by default — see the addendum at the end of §C.
+as a template of the course by default; and the reading tool
+`find_similar_questions` joins it too, so that an assistant looks for an
+existing question before writing a new one — see the two addenda at the
+end of §C.
 
 ## Context
 
@@ -90,9 +93,9 @@ converted with `z.toJSONSchema`.
 ### C. What the tools are, and what they are not
 
 Reading: `list_courses`, `get_course`, `list_pools`, `get_pool`,
-`get_pool_question_stats`, `list_questions`, `get_question`,
-`list_evaluations`, `get_evaluation`, `describe_question_types`,
-`list_templates`.
+`get_pool_question_stats`, `find_similar_questions`, `list_questions`,
+`get_question`, `list_evaluations`, `get_evaluation`,
+`describe_question_types`, `list_templates`.
 
 Writing: `create_course`, `create_classroom`, `create_pool`,
 `link_pool_to_course`, `create_category`, `create_question`,
@@ -165,6 +168,41 @@ gets `422 template_pool_unlinked`.
   questions with `add_questions_to_template`, the twin of
   `add_questions_to_evaluation` over the same template item route (a new
   revision, never a change to an instance: F-EVAL-25, F-EVAL-26).
+
+**Addendum of 2026-10-01 — look before writing a question.** An assistant
+asked for ten questions writes ten new ones, even when the course's pools —
+or a colleague's public pool — already hold the same question with years of
+exam statistics behind it. The copy starts from zero answers (ADR-038), and
+the pools fill with near-duplicates.
+
+- **A read tool over a route.** `find_similar_questions({ courseId, text,
+  type? })` is one call to `GET /app/api/courses/:id/similar-questions`
+  (pool module), which the web app may call too (docs/08 §8.1, principle 4).
+  The course is loaded through the staff predicate, the questions through
+  the caller's `poolAccess`, published and live only. A hit says whether
+  its pool is linked to the course and whether the caller may link it
+  (ADR-013), and carries the pool screen's own statistics, so the
+  ten-answer threshold and the exams-only rule hold unchanged.
+- **Linked pools first, then every reachable pool** (decided with the
+  owner): reuse inside the course costs nothing, a link widens the staff's
+  write access, a copy loses the statistics.
+- **The ranking.** The index is a `simple` tsvector, without stemming or
+  stop words. The statement is cut into words of three characters or more,
+  outside a short French and English stop list (`similarityTerms`,
+  `@quiz/domain`), matched as an OR against the LATEST published version and
+  ordered by `ts_rank(search, query, 1)`: it grows with each distinct word
+  shared, and the normalisation divides by `1 + log(length)` so that a long
+  code template does not win by bulk. `ts_rank_cd` was not taken: on an OR
+  query each occurrence is its own cover, so it counts repetitions rather
+  than shared words. Top `limit` (10 by default), no threshold: the model
+  judges the excerpts.
+- **No refusal in `create_question`** (decided with the owner). It does not
+  demand that a search ran (no `reviewedSimilar` flag). A model prepares and
+  a teacher decides (§C): whether a close question is "the same" is a
+  judgement this server cannot make, and a gate a model satisfies by passing
+  `true` protects nothing. The steering is the tool's description,
+  `create_question`'s and the handshake instructions; `modules/mcp` still
+  touches no database.
 
 ## Consequences
 

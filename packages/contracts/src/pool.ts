@@ -642,3 +642,46 @@ export const TagParam = z.object({
   tag: z.string().trim().min(1).max(64),
 });
 export type TagParam = z.infer<typeof TagParam>;
+
+// --- Similar questions ---------------------------------------------------
+
+/**
+ * `GET /courses/:id/similar-questions`: the questions close to a statement
+ * about to be written (ADR-022, addendum of 2026-10-01), over every pool the
+ * caller reaches, the course's own first — its text, optionally one type,
+ * and how many hits (ranked, no threshold).
+ */
+export const SimilarQuestionSearch = z.object({
+  text: z.string().trim().min(1).max(4000),
+  type: QuestionTypeId.optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+export type SimilarQuestionSearch = z.infer<typeof SimilarQuestionSearch>;
+
+/**
+ * One hit: a PUBLISHED, live question of a pool the caller reaches.
+ * `linked`: its pool is linked to the course, so an evaluation of the course
+ * may use it as it is. `canLink`: linking its pool would succeed (the caller
+ * is at least `contributor` on it, ADR-013). `stats` is the pool screen's
+ * figure (ADR-038, exams only): null below ten counted answers — withheld,
+ * not zero; `r` is the discrimination index (ADR-042), null when no exam
+ * qualifies.
+ */
+export const SimilarQuestion = z.object({
+  questionId: z.uuid(),
+  pool: z.object({ id: z.uuid(), name: z.string() }),
+  type: QuestionTypeId,
+  internalName: z.string(),
+  /** The start of the latest published statement, whitespace folded. */
+  excerpt: z.string(),
+  latestNumber: z.number().int().min(1),
+  linked: z.boolean(),
+  canLink: z.boolean(),
+  stats: z
+    .object({ n: z.number().int().nonnegative(), p: z.number(), r: z.number().nullable() })
+    .nullable(),
+});
+export type SimilarQuestion = z.infer<typeof SimilarQuestion>;
+
+export const SimilarQuestions = z.object({ items: z.array(SimilarQuestion) });
+export type SimilarQuestions = z.infer<typeof SimilarQuestions>;

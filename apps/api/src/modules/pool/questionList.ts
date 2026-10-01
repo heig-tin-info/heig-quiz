@@ -347,7 +347,7 @@ async function pageWhere(
   };
 }
 
-/** One row of {@link searchReachableQuestions}: a published question and its pool. */
+/** One row of a search across pools: a published question and its pool. */
 interface ReachableQuestion {
   question: QuestionRecord;
   pool: { id: string; name: string };
@@ -355,6 +355,62 @@ interface ReachableQuestion {
   latestNumber: number;
   /** The latest published version, for what the caller shows of it. */
   latest: { config: unknown; configVersion: number };
+}
+
+/** The pool of a question is linked to `courseId`, on a query with `questions` in scope. */
+const linkedTo = (courseId: string) =>
+  sql`EXISTS (SELECT 1 FROM ${coursePools} WHERE ${qualified(coursePools.poolId)} = ${qualified(questions.poolId)} AND ${qualified(coursePools.courseId)} = ${courseId})`;
+
+/**
+ * The scope of a search across pools: the PUBLISHED, live questions of every
+ * pool the caller reaches (`poolWhere`, `undefined` for an admin with Super
+ * Powers), of `types` when given.
+ */
+function reachableScope(poolWhere: SQL | undefined, types?: readonly string[]): SQL[] {
+  const reachable =
+    poolWhere === undefined
+      ? isNotNull(questions.poolId)
+      : sql`EXISTS (SELECT 1 FROM ${pools} WHERE ${qualified(pools.id)} = ${qualified(questions.poolId)} AND ${poolWhere})`;
+  const scope: SQL[] = [reachable, isNull(questions.deletedAt), sql`${latestNumber} IS NOT NULL`];
+  if (types) scope.push(types.length === 0 ? sql`false` : inArray(questions.type, types));
+  return scope;
+}
+
+/**
+ * The rows of a search across pools, with their tags, their pool's name and
+ * their latest version, by id; a row whose latest version is gone is left out.
+ */
+async function hydrateReachable(
+  db: Db,
+  page: readonly QuestionRecord[],
+  tags: Map<string, string[]>,
+  facts: Map<string, VersionFacts>,
+): Promise<Map<string, ReachableQuestion>> {
+  const poolIds = [...new Set(page.map((q) => q.poolId).filter((id): id is string => id !== null))];
+  const names =
+    poolIds.length === 0
+      ? new Map<string, string>()
+      : new Map(
+          (
+            await db
+              .select({ id: pools.id, name: pools.name })
+              .from(pools)
+              .where(inArray(pools.id, poolIds))
+          ).map((p) => [p.id, p.name] as const),
+        );
+  const out = new Map<string, ReachableQuestion>();
+  for (const question of page) {
+    const fact = facts.get(question.id);
+    if (!fact?.latest || fact.latestNumber === null || question.poolId === null) continue;
+    out.set(question.id, {
+      question,
+      pool: { id: question.poolId, name: names.get(question.poolId) ?? "" },
+      tags: tags.get(question.id) ?? [],
+      latestNumber: fact.latestNumber,
+      latest: fact.latest,
+    });
+  }
+  return out;
 }
 
 /**
@@ -381,21 +437,8 @@ export async function searchReachableQuestions(
   const types = search.type?.length
     ? input.types.filter((t) => search.type!.includes(t))
     : [...input.types];
-  const reachable =
-    input.poolWhere === undefined
-      ? isNotNull(questions.poolId)
-      : sql`EXISTS (SELECT 1 FROM ${pools} WHERE ${qualified(pools.id)} = ${qualified(questions.poolId)} AND ${input.poolWhere})`;
-  const scope: SQL[] = [
-    reachable,
-    isNull(questions.deletedAt),
-    sql`${latestNumber} IS NOT NULL`,
-    types.length === 0 ? sql`false` : inArray(questions.type, types),
-  ];
-  if (input.courseId !== null) {
-    scope.push(
-      sql`EXISTS (SELECT 1 FROM ${coursePools} WHERE ${qualified(coursePools.poolId)} = ${qualified(questions.poolId)} AND ${qualified(coursePools.courseId)} = ${input.courseId})`,
-    );
-  }
+  const scope = reachableScope(input.poolWhere, types);
+  if (input.courseId !== null) scope.push(linkedTo(input.courseId));
   const filters = filterWhere({ ...search, type: undefined, categoryId: undefined, includeDeleted: false });
   const [{ page, tags, facts, nextCursor, total }, scopeTags] = await Promise.all([
     pageWhere(db, [...scope, ...filters], search),
@@ -406,31 +449,76 @@ export async function searchReachableQuestions(
       .where(and(...scope))
       .orderBy(asc(questionTags.tag)),
   ]);
-  const poolIds = [...new Set(page.map((q) => q.poolId).filter((id): id is string => id !== null))];
-  const names =
-    poolIds.length === 0
-      ? new Map<string, string>()
-      : new Map(
-          (
-            await db
-              .select({ id: pools.id, name: pools.name })
-              .from(pools)
-              .where(inArray(pools.id, poolIds))
-          ).map((p) => [p.id, p.name] as const),
-        );
-  const items: ReachableQuestion[] = [];
-  for (const question of page) {
-    const fact = facts.get(question.id);
-    if (!fact?.latest || fact.latestNumber === null || question.poolId === null) continue;
-    items.push({
-      question,
-      pool: { id: question.poolId, name: names.get(question.poolId) ?? "" },
-      tags: tags.get(question.id) ?? [],
-      latestNumber: fact.latestNumber,
-      latest: fact.latest,
-    });
-  }
-  return { items, nextCursor, total, tags: scopeTags.map((r) => r.tag) };
+  const rows = await hydrateReachable(db, page, tags, facts);
+  return {
+    items: page.flatMap((q) => rows.get(q.id) ?? []),
+    nextCursor,
+    total,
+    tags: scopeTags.map((r) => r.tag),
+  };
+}
+
+/** One hit of {@link rankReachableQuestions}. */
+export interface RankedQuestion extends ReachableQuestion {
+  /** Its pool is linked to the course searched for. */
+  linked: boolean;
+  /** The latest published version's indexed text (`search_text`). */
+  searchText: string;
+}
+
+/**
+ * The questions of the same scope closest to a statement (ADR-022, addendum
+ * of 2026-10-01): those whose LATEST published version shares at least one
+ * of `terms` (an OR of them, from `similarityTerms`), the ones of the pools
+ * linked to `courseId` first, then best rank first; the top `limit`, no
+ * threshold. No term, no hit.
+ *
+ * The rank is `ts_rank(search, query, 1)`: on an OR query it grows with each
+ * DISTINCT term matched (a repeated word adds less and less), and the
+ * normalisation `1` divides it by `1 + log(length)` so that a long code
+ * template does not outrank a short statement by sheer bulk. `ts_rank_cd`
+ * was not taken: with an OR query every occurrence is its own cover, so it
+ * counts occurrences rather than shared words. The index is a `simple`
+ * tsvector (no stemming, no stop words), which is why the terms come
+ * stripped of short and common words.
+ */
+export async function rankReachableQuestions(
+  db: Db,
+  input: {
+    poolWhere: SQL | undefined;
+    courseId: string;
+    terms: readonly string[];
+    limit: number;
+    type?: string | undefined;
+  },
+): Promise<RankedQuestion[]> {
+  if (input.terms.length === 0) return [];
+  // Letters and digits only (`similarityTerms`), so the join needs no escaping.
+  const query = sql`to_tsquery('simple', ${input.terms.join(" | ")})`;
+  const search = qualified(questionVersions.search);
+  const linked = linkedTo(input.courseId);
+  const rows = await db
+    .select({
+      question: questions,
+      linked: sql<boolean>`${linked}`.mapWith(Boolean),
+      searchText: questionVersions.searchText,
+    })
+    .from(questions)
+    .innerJoin(
+      questionVersions,
+      and(eq(questionVersions.questionId, questions.id), sql`${qualified(questionVersions.number)} = ${latestNumber}`),
+    )
+    .where(and(...reachableScope(input.poolWhere, input.type ? [input.type] : undefined), sql`${search} @@ ${query}`))
+    .orderBy(sql`${linked} DESC`, sql`ts_rank(${search}, ${query}, 1) DESC`, asc(questions.id))
+    .limit(input.limit);
+  const page = rows.map((r) => r.question);
+  const ids = page.map((q) => q.id);
+  const [tags, facts] = await Promise.all([tagsOf(db, ids), versionFactsOf(db, ids)]);
+  const hydrated = await hydrateReachable(db, page, tags, facts);
+  return rows.flatMap((r) => {
+    const row = hydrated.get(r.question.id);
+    return row ? [{ ...row, linked: r.linked, searchText: r.searchText }] : [];
+  });
 }
 
 export function metaJson(question: QuestionRecord, tags: string[]): QuestionMeta {

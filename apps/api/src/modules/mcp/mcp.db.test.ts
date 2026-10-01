@@ -122,6 +122,7 @@ describe("the transport", () => {
         "list_pools",
         "get_pool",
         "get_pool_question_stats",
+        "find_similar_questions",
         "list_questions",
         "get_question",
         "describe_question_types",
@@ -153,6 +154,7 @@ describe("the transport", () => {
         "list_pools",
         "get_pool",
         "get_pool_question_stats",
+        "find_similar_questions",
         "list_questions",
         "get_question",
         "list_evaluations",
@@ -343,6 +345,44 @@ describe("an authoring session", () => {
     const { isError, data } = await call("get_pool_question_stats", { poolId: pool.id }, await tokenFor(other.headers));
     expect(isError).toBe(true);
     expect(data.status).toBe(404);
+  });
+
+  it("finds an existing question before one is written, through the course's route", async () => {
+    const course = await ok("create_course", { name: "Réemploi", code: "REUSE-MCP" });
+    const pool = await ok("create_pool", { name: "Réemploi" });
+    await ok("link_pool_to_course", { courseId: course.id, poolId: pool.id });
+    const example = (describeQuestionType("mcq") as unknown as { example: { prompt: string } }).example;
+    const q = await ok("create_question", { poolId: pool.id, type: "mcq", internalName: "reuse-mcq", config: example });
+
+    const found = await ok("find_similar_questions", { courseId: course.id, text: example.prompt });
+    expect(found.items[0]).toMatchObject({
+      questionId: q.questionId,
+      pool: { id: pool.id },
+      linked: true,
+      canLink: true,
+      // Never answered in an exam: withheld, not zero.
+      stats: null,
+    });
+    expect(await ok("find_similar_questions", { courseId: course.id, text: example.prompt, type: "code" })).toEqual({
+      items: [],
+    });
+
+    // Another teacher: the course is out of reach, the 404 of a missing one.
+    const other = await server.signIn("teacher");
+    const { isError, data } = await call(
+      "find_similar_questions",
+      { courseId: course.id, text: example.prompt },
+      await tokenFor(other.headers),
+    );
+    expect(isError).toBe(true);
+    expect(data.status).toBe(404);
+  });
+
+  it("tells the model to look before writing a question", async () => {
+    const { result } = await rpc("initialize", { protocolVersion: "2025-06-18" });
+    expect(result.instructions).toContain("find_similar_questions");
+    const create = TOOLS.find((t) => t.name === "create_question")!;
+    expect(create.description).toContain("find_similar_questions");
   });
 
   it("launches an inline opinion poll and returns its join code", async () => {
