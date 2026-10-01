@@ -264,6 +264,16 @@ export interface PublicationIssue {
   message: string;
 }
 
+/**
+ * What {@link QuestionTypeServer.sampleIssues} reads of a parameterized
+ * question (ADR-056 §6): each variable's format, and the values of the draws
+ * publication puts through the type's gate.
+ */
+export interface ParameterSample {
+  formats: Readonly<Record<string, string>>;
+  values: readonly Readonly<Record<string, number | string>>[];
+}
+
 // ---------------------------------------------------------------------------
 // QuestionTypeServer
 // ---------------------------------------------------------------------------
@@ -336,6 +346,16 @@ export interface QuestionTypeServer<
    * "nothing more".
    */
   parameterIssues?(template: unknown): PublicationIssue[];
+
+  /**
+   * Parameterized questions (ADR-056 §6): what a TEMPLATE may not do given
+   * the values it is drawn with — a `short` whose tolerance is below half the
+   * step of its key's format, so that the exact answer would be marked wrong.
+   * Called at publication, once the table draws and every gated instance
+   * passes, on the raw template with the formats and the gated draws'
+   * values. Omitting it means "nothing more".
+   */
+  sampleIssues?(template: unknown, sample: ParameterSample): PublicationIssue[];
 
   /**
    * The texts that must stay distinct in every instance of a parameterized
