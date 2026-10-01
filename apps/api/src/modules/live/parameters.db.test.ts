@@ -192,7 +192,7 @@ describe("the feedback after the release (invariant 4)", () => {
       const values = (await valuesOf(attemptOf.get("bob")!, kind)).values;
       const item = feedback.items.find((i) => i.itemId === itemOf.get(kind))!;
       // What the student reads, not the item's ids and counters ("position": 2 is no key).
-      const { student, answer: given, solution, explanation, details } = item;
+      const { student, answer: given, solution, explanation, details } = item as unknown as Record<string, unknown>;
       expect(showsKey(JSON.stringify({ student, given, solution, explanation, details }), values)).toBe(false);
     }
   });
