@@ -53,6 +53,43 @@ describe("the contract", () => {
     expect(issues).toEqual([{ path: ["matchers", 5], message: "short.llm_not_available" }]);
   });
 
+  it("refuses a [[…]] reference left in a number key, where nothing will replace it (ADR-056 §4)", () => {
+    const template = ShortConfigSchema.parse(
+      config({
+        kind: "number",
+        matchers: [{ kind: "number", value: "[[t]]", tolerance: "[[d]]", toleranceMode: "abs", unitRequired: false, points: 1 }],
+      }),
+    );
+    expect(shortServer.publicationIssues!(template)).toEqual([
+      { path: ["matchers", 0, "value"], message: "short.unresolved_reference" },
+      { path: ["matchers", 0, "tolerance"], message: "short.unresolved_reference" },
+    ]);
+    expect(expectedAnswers(template)).toEqual(["[[t]] ± [[d]]"]);
+  });
+
+  it("refuses a computed text key in a parameterized template (ADR-056 §10)", () => {
+    const issues = shortServer.parameterIssues!({
+      matchers: [
+        { kind: "number", value: "[[t]]" },
+        { kind: "exact", value: "[[t]] m" },
+        { kind: "regex", pattern: "[[a]]+" },
+        { kind: "exact", value: "plain" },
+        null,
+      ],
+    });
+    expect(issues).toEqual([
+      { path: ["matchers", 1], message: "short.computed_text_key" },
+      { path: ["matchers", 2], message: "short.computed_text_key" },
+    ]);
+    expect(shortServer.parameterIssues!(null)).toEqual([]);
+  });
+
+  it("raises a v2 config unchanged, but for its stamp", () => {
+    const v2 = { ...config(), configVersion: 2 };
+    expect(shortServer.migrate(v2, 2)).toEqual(config());
+    expect(shortServer.migrate("junk", 2)).toBe("junk");
+  });
+
   it("indexes the prompt and the expected answers for the teacher's search", () => {
     const text = shortServer.searchText(SECRET_CONFIG);
     expect(text).toContain("32-bit");
@@ -77,7 +114,7 @@ describe("migrate v1 -> v2", () => {
     const out = migrateShortV1(
       v1([{ kind: "exact", value: "Newton", caseSensitive: true, trim: false, collapseSpaces: true }]),
     );
-    expect(out.configVersion).toBe(2);
+    expect(out.configVersion).toBe(3);
     expect(out.prefilters).toEqual({ trim: false, lowercase: false });
     expect(out.matchers).toEqual([{ kind: "exact", value: "Newton" }]);
     expect(ShortConfigSchema.safeParse(out).success).toBe(true);
@@ -122,7 +159,7 @@ describe("migrate v1 -> v2", () => {
 
   it("migrates an invalid v1 draft without throwing (D16)", () => {
     const out = migrateShortV1({ configVersion: 1, prompt: "", matchers: [] });
-    expect(out.configVersion).toBe(2);
+    expect(out.configVersion).toBe(3);
     expect(ShortConfigSchema.safeParse(out).success).toBe(false);
   });
 });
@@ -143,7 +180,7 @@ describe("the canonical mapping", () => {
 
   it("omits the defaults", () => {
     expect(toCanonical(emptyShortDraft())).toEqual({
-      configVersion: 2,
+      configVersion: 3,
       prompt: "",
       matchers: [{ kind: "exact", value: "" }],
     });

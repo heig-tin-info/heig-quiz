@@ -24,7 +24,7 @@ import {
   type ShortSolution,
   type ShortStudent,
 } from "./schema.js";
-import { isShortAnswered } from "./schema.js";
+import { isReference, isShortAnswered } from "./schema.js";
 
 /** The key as a teacher reads it: one line per matcher, in evaluation order. */
 export function expectedAnswers(config: ShortConfig): string[] {
@@ -83,6 +83,12 @@ export function migrateShortV1(raw: unknown): ShortConfig {
   return next as unknown as ShortConfig;
 }
 
+/** A config of an earlier shape that the current one holds unchanged, stamped current. */
+function stamped(config: unknown): ShortConfig {
+  if (config === null || typeof config !== "object" || Array.isArray(config)) return config as ShortConfig;
+  return { ...(config as object), configVersion: SHORT_CONFIG_VERSION } as ShortConfig;
+}
+
 export const shortServer: QuestionTypeServer<
   ShortConfig,
   ShortAnswer,
@@ -103,10 +109,15 @@ export const shortServer: QuestionTypeServer<
 
   emptyDraft: emptyShortDraft,
 
-  /** Same version: identity, even for an invalid draft (D16). v1: see above. */
+  /**
+   * Same version: identity, even for an invalid draft (D16). v1: see above.
+   * v2 -> v3 changes nothing but the stamp: v3 only widens what a `number`
+   * matcher accepts (ADR-056 §4).
+   */
   migrate(config: unknown, fromVersion: number): ShortConfig {
     if (fromVersion === SHORT_CONFIG_VERSION) return config as ShortConfig;
     if (fromVersion === 1) return migrateShortV1(config);
+    if (fromVersion === 2) return stamped(config);
     throw new ConfigMigrationError(
       "short",
       fromVersion,
@@ -156,9 +167,33 @@ export const shortServer: QuestionTypeServer<
    * per matcher so the editor points at it (`matchShort` never matches it).
    */
   publicationIssues: (config) =>
-    config.matchers.flatMap((matcher, index) =>
-      matcher.kind === "llm" ? [{ path: ["matchers", index], message: "short.llm_not_available" }] : [],
-    ),
+    config.matchers.flatMap((matcher, index) => {
+      if (matcher.kind === "llm") return [{ path: ["matchers", index], message: "short.llm_not_available" }];
+      if (matcher.kind !== "number") return [];
+      // A `[[…]]` left in a key: only a question without variables gets here
+      // with one (a parameterized one is checked on its instances), and
+      // there nothing will ever replace it (ADR-056 §4).
+      return (["value", "tolerance"] as const).flatMap((field) =>
+        isReference(matcher[field]) ? [{ path: ["matchers", index, field], message: "short.unresolved_reference" }] : [],
+      );
+    }),
+
+  /**
+   * ADR-056 §10: a parameterized question's key is a NUMBER. A computed
+   * text key (`[[…]]` in an `exact`, `regex`, `date` or `time` value) is
+   * refused: string equality cannot hold for a number computed, then
+   * formatted.
+   */
+  parameterIssues(template) {
+    const matchers = (template as { matchers?: unknown } | null)?.matchers;
+    if (!Array.isArray(matchers)) return [];
+    return matchers.flatMap((matcher: unknown, index) => {
+      const m = matcher as { kind?: unknown; value?: unknown; pattern?: unknown } | null;
+      if (m === null || typeof m !== "object" || m.kind === "number") return [];
+      const text = [m.value, m.pattern].filter((t): t is string => typeof t === "string");
+      return text.some((t) => t.includes("[[")) ? [{ path: ["matchers", index], message: "short.computed_text_key" }] : [];
+    });
+  },
 
   hasKey: (config) => config.matchers.length > 0,
 

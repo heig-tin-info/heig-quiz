@@ -148,6 +148,18 @@ export const mcqServer: QuestionTypeServer<
   hasKey: (config) => config.choices.some((choice) => choice.correct),
 
   /**
+   * ADR-056 §7: in a parameterized question, two choices that render alike
+   * (or within 1 % as numbers) make a draw fail. The instance comes as raw
+   * json, so anything that is not a choice's text is skipped.
+   */
+  distinctTexts: (config: unknown) => {
+    const choices = (config as { choices?: unknown } | null)?.choices;
+    return Array.isArray(choices)
+      ? choices.flatMap((c) => (typeof (c as { text?: unknown })?.text === "string" ? [(c as { text: string }).text] : []))
+      : [];
+  },
+
+  /**
    * `details.correct` is the answer key, and the breakdown is served to the
    * student by the feedback policy: it goes when the key is not published.
    * `c`/`C` and `w`/`W` stay — they are the student's own score, which is

@@ -326,6 +326,25 @@ export interface QuestionTypeServer<
    */
   publicationIssues?(config: TConfig): PublicationIssue[];
 
+  /**
+   * Parameterized questions (ADR-056): what a TEMPLATE may not do even
+   * though each of its instances is publishable — a `short` whose text key
+   * is computed (`[[…]]` in an `exact` value), which string equality could
+   * never match once formatted (§10). Called at publication on the
+   * template of a question that declares variables, as RAW json (a template
+   * need not satisfy the schema: its instances do). Omitting it means
+   * "nothing more".
+   */
+  parameterIssues?(template: unknown): PublicationIssue[];
+
+  /**
+   * The texts that must stay distinct in every instance of a parameterized
+   * question (ADR-056 §7): `mcq`'s choices. A draw whose texts render equal,
+   * or numerically within 1 %, is drawn again. `config` is an instance, as
+   * raw json at the type's current shape. Omitting it means no such rule.
+   */
+  distinctTexts?(config: unknown): string[];
+
   /** Raise an old stored config to `configVersion`. Pure, total, never throws on a config it emitted before. */
   migrate(config: unknown, fromVersion: number): TConfig;
 
@@ -440,9 +459,6 @@ export interface QuestionTypeServer<
     /** The evaluation's feedback policy on hidden case names; absent, closed. */
     showHiddenCaseNames?: boolean;
   }): ItemAggregate;
-
-  /** Phase 2 random values; absent in MVP packages. */
-  randomize?(config: TConfig, seed: number): TConfig;
 
   /** `answer === null` means "not answered": graders must return 0 points (F-GRADE-01). */
   grade(

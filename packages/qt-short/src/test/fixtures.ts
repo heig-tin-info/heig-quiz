@@ -24,7 +24,7 @@ export function gradeContext(itemPoints: number): GradeContext {
 
 export function config(over: Partial<ShortConfig> = {}): ShortConfig {
   return ShortConfigSchema.parse({
-    configVersion: 2,
+    configVersion: 3,
     prompt: "Which directive includes the standard I/O header?",
     matchers: [{ kind: "exact", value: "#include <stdio.h>" }],
     ...over,

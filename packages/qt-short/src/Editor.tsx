@@ -103,6 +103,11 @@ const rowCell = (index: number, className?: string) => ({
  * shows `tolerance × 100` and stores what it reads divided by 100.
  */
 const toPercent = (fraction: number) => Number((fraction * 100).toPrecision(12));
+/**
+ * A `[[…]]` reference of a parameterized template (ADR-056 §4) is not a
+ * number this field can show: it reads empty, and typing replaces it.
+ */
+const numeric = (value: number | string): number | null => (typeof value === "number" ? value : null);
 const fromPercent = (percent: number) => Number((percent / 100).toPrecision(12));
 
 /**
@@ -181,7 +186,7 @@ function MatcherFields({
             {...rowCell(index)}
             {...narrow}
             step="any"
-            value={matcher.value}
+            value={numeric(matcher.value)}
             disabled={disabled}
             onChange={(value) => onPatch({ ...matcher, value })}
           />
@@ -192,7 +197,13 @@ function MatcherFields({
             {...narrow}
             min={0}
             step="any"
-            value={relative ? toPercent(matcher.tolerance) : matcher.tolerance}
+            value={
+              typeof matcher.tolerance !== "number"
+                ? null
+                : relative
+                  ? toPercent(matcher.tolerance)
+                  : matcher.tolerance
+            }
             disabled={disabled}
             onChange={(typed) =>
               onPatch({ ...matcher, tolerance: relative ? fromPercent(typed) : typed })

@@ -75,6 +75,15 @@ export function reasonOf(details: unknown): string | null {
  */
 export const JUSTIFICATION_KEY = "justification";
 
+/**
+ * Where a grading's `details` say that the instance of a parameterized
+ * question was served from a fallback draw (ADR-056 §7): `"exhausted"` when
+ * the condition never held in 100 runs, `"failed"` when the drawn values did
+ * not render. The teacher's, like {@link JUSTIFICATION_KEY}: stripped from
+ * every student payload whatever the policy — the student never sees an error.
+ */
+export const INSTANCE_WARNING_KEY = "instanceWarning";
+
 /** `details.justification`, when an LLM wrote one. */
 export function justificationOf(details: unknown): string | null {
   if (details && typeof details === "object" && JUSTIFICATION_KEY in details) {

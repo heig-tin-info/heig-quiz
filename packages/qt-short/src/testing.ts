@@ -8,7 +8,7 @@ import { ShortConfigSchema, type ShortConfig } from "./schema.js";
 
 /** One matcher of every kind, every secret a `short` config can hold. */
 export const SECRET_CONFIG: ShortConfig = ShortConfigSchema.parse({
-  configVersion: 2,
+  configVersion: 3,
   prompt: "How many bytes does an `int` take on a 32-bit target?",
   kind: "number",
   placeholder: "bytes",
