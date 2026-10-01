@@ -9,6 +9,7 @@ import { reparseMigrate, type RunnerOutcome } from "@quiz/core/server";
 import { splitTemplate } from "@quiz/domain/lockedTemplate";
 
 import { fromCanonical, toCanonical } from "./canonical.js";
+import { codeGenerator } from "./generate.js";
 import {
   buildInteractiveRequest,
   finalizeRunnerCode,
@@ -175,6 +176,8 @@ export const codeServer: QuestionTypeServer<
 
   toCanonical,
   fromCanonical,
+
+  generator: codeGenerator,
 };
 
 /*

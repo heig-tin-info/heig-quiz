@@ -12,6 +12,7 @@ import { reparseMigrate, tallyKeys, type RunnerOutcome } from "@quiz/core/server
 import { splitTemplate } from "@quiz/domain/lockedTemplate";
 
 import { fromCanonicalImage, toCanonicalImage } from "./canonical.js";
+import { codeimageGenerator } from "./generate.js";
 import { finalizeRunnerCodeImage, gradeCodeImage, interactiveImageRequest } from "./grade.js";
 import {
   CODEIMAGE_CONFIG_VERSION,
@@ -163,4 +164,6 @@ export const codeimageServer: QuestionTypeServer<
 
   toCanonical: toCanonicalImage,
   fromCanonical: fromCanonicalImage,
+
+  generator: codeimageGenerator,
 };

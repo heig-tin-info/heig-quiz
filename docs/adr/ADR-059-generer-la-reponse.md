@@ -12,8 +12,8 @@ MCP server (F-LLM-06, ADR-022): this ADR is about completing the question a
 teacher is writing.
 
 Delivered with `AnswerGenerator` (`@quiz/core/server`, `generate.ts`), the
-generators of `qt-mcq`, `qt-short`, `qt-rich` and `qt-categorize`
-(`src/generate.ts` each), `apps/api/src/modules/pool/generate.ts`, the routes
+generators of `qt-mcq`, `qt-short`, `qt-rich`, `qt-categorize` and
+`qt-code` (`src/generate.ts` each, `src/image/generate.ts` for `codeimage`), `apps/api/src/modules/pool/generate.ts`, the routes
 `POST /app/api/questions/:id/generate` and `GET /app/api/generate/availability`
 (`GenerateRequest`, `GenerateResult`, `LlmAvailability` of `@quiz/contracts`),
 `EditorProps.onGenerateItem`, and `apps/web/src/question/generate.tsx`.
@@ -44,7 +44,19 @@ A question type may declare a `generator` beside its schemas
   settings (`mode`, `policy`, `kind`, shuffles, limits) nor ids;
 - `merge(config, proposal)`: pure, tested without a model;
 - `item` (optional): ONE element of the type's list at an index that must be
-  empty (`item_not_empty` otherwise): the wand of one MCQ choice.
+  empty (`item_not_empty` otherwise): the wand of one MCQ choice;
+- `settle` (optional): what only RUNNING produces, after the merge — a code
+  question's expected outputs, a picture's target — computed from the
+  reference on the runner (`app.runner`), never taken from the model.
+  It runs only a merged draft that validates with the type's `configSchema`,
+  as Try runs only a valid one. Otherwise — an invalid draft, no runner
+  (`RunnerUnavailable`, `RunnerBusy`), a reference that does not compile, a
+  case that timed out or a picture with a missing pixel — the merged draft
+  comes back all the same with `incomplete` (`draft_invalid`,
+  `runner_unavailable`, `compile_failed`, `partial`), and the editor says
+  what is left to do. No type with a `settle` takes variables (ADR-056:
+  only `mcq`, `short` and `cloze` do); one that would must settle on a drawn
+  instance, as Try does.
 
 A draft may be invalid (D16): generators read it defensively. The API builds
 the prompt (the draft's config and explanation as JSON, the type's
@@ -69,6 +81,16 @@ Decided by the product owner: nothing the teacher wrote is changed.
   label, else takes an unlabelled one, else is added (6 at most); a card the
   draft holds is never added again nor moved; distractors belong to no
   column; ids are the merge's.
+- **code**: the reference is written only when empty, and only when it fits
+  the template's editable regions (`referenceRegions`, the `@@next` cut);
+  the empty placeholder case goes; proposed cases (name, stdin, args,
+  visible) are appended, none repeating a name; `settle` runs the reference
+  on every case whose expected output is empty and writes what it printed,
+  and its exit code when not 0. A case that timed out or was cut keeps its
+  empty output.
+- **codeimage**: the reference is written as for `code`; `settle` runs it
+  and makes the picture it draws the target, when the draft has none and the
+  picture has no invalid or missing pixel.
 - **The explanation** is written in the same call, only when empty.
 
 A teacher who wants a field regenerated empties it first.
@@ -114,18 +136,16 @@ wand appears on an EMPTY choice row of an MCQ only.
 
 ### 7. The types, in waves
 
-Wave 1, delivered: `mcq`, `short`, `rich`, `categorize`. Then:
+Wave 1, delivered: `mcq`, `short`, `rich`, `categorize`. Wave 2, delivered
+the same day: `code` and `codeimage` (§2), the outputs and the target
+computed by `settle` — on staging, which has no runner, they come back empty
+with the notice. A standalone "Compute the expected outputs" action, without
+the model, is deferred; it would call the same `settle`. Then:
 
 - `cloze`: its key is inline in the text (`{{…}}`), which is the statement.
   A wand there could only propose alternatives and distractors inside the
   blanks the teacher placed; to be designed.
-- `code`: the model would write the reference solution and the test INPUTS;
-  the expected outputs are COMPUTED by running the reference on the runner,
-  never taken from the model. It needs first a "Compute the expected
-  outputs" action (no LLM), and a rule for a reference against a locked
-  template. Not testable end to end on staging until it has a runner.
-- `circuit`, `codeimage`, `diagram`: last, or never, if the proposals are
-  not reliable.
+- `circuit`, `diagram`: last, or never, if the proposals are not reliable.
 
 ## Consequences
 

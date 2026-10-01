@@ -16,6 +16,18 @@
  */
 import type { z } from "zod";
 
+import type { RunnerService } from "./runner.js";
+
+/**
+ * What running could not settle after a merge: the platform has no runner
+ * (or it is busy), the merged draft is not valid enough to run, the
+ * reference did not compile, or some of what it should produce did not come
+ * (a case that timed out, a picture with a missing pixel). The draft comes
+ * back merged all the same; the editor says what is left to do.
+ */
+export const GENERATE_INCOMPLETE = ["runner_unavailable", "draft_invalid", "compile_failed", "partial"] as const;
+export type GenerateIncomplete = (typeof GENERATE_INCOMPLETE)[number];
+
 export interface AnswerGenerator<TConfig, TProposal = unknown, TItem = unknown> {
   /** The draft's statement: the wand is refused while it is empty. */
   statement(config: TConfig): string;
@@ -25,6 +37,15 @@ export interface AnswerGenerator<TConfig, TProposal = unknown, TItem = unknown> 
   proposalSchema: z.ZodType<TProposal>;
   /** The draft with the proposal merged in: the empty filled, the rest kept. */
   merge(config: TConfig, proposal: TProposal): TConfig;
+  /**
+   * What only RUNNING can produce, after the merge — the expected outputs of
+   * a code question, the target of a picture — computed from the reference
+   * on the runner, never taken from the model (ADR-059 §7). Unlike the other
+   * hooks it receives a config the caller has VALIDATED with `configSchema`.
+   * It throws the runner's own `RunnerUnavailable` / `RunnerBusy`; the
+   * caller reports them.
+   */
+  settle?(config: TConfig, runner: RunnerService): Promise<{ config: TConfig; incomplete?: GenerateIncomplete }>;
   /**
    * One element of the type's list, at `index` (the wand of one MCQ choice):
    * the element must be empty there. Absent: no per-element wand.

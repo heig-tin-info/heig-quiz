@@ -46,7 +46,9 @@ export function useGenerate({
   useEffect(() => {
     latest.current = draft;
   }, [draft]);
-  const [undo, setUndo] = useState<{ before: Draft; config: unknown } | null>(null);
+  const [undo, setUndo] = useState<{ before: Draft; config: unknown; incomplete?: GenerateResult["incomplete"] } | null>(
+    null,
+  );
 
   const ask = (body: GenerateRequest) =>
     api<GenerateResult>(`/app/api/questions/${questionId}/generate`, { method: "POST", body: JSON.stringify(body) });
@@ -62,7 +64,7 @@ export function useGenerate({
       return;
     }
     setDraft({ ...before, config: result.config, explanation: result.explanation });
-    setUndo({ before, config: result.config });
+    setUndo({ before, config: result.config, ...(result.incomplete ? { incomplete: result.incomplete } : {}) });
   };
 
   const whole = useMutation({
@@ -82,20 +84,24 @@ export function useGenerate({
     }
   };
 
+  // The last proposal, while the draft is still what it made.
+  const current = undo && draft?.config === undo.config ? undo : null;
+
   return {
     enabled,
     pending: whole.isPending,
     run: () => (draft ? whole.mutate(draft) : undefined),
     /** The wand of one element, for the type's editor; undefined when the wand is off. */
     item: enabled ? item : undefined,
+    /** What running could not settle (a code question's outputs, a picture's target), while Undo stands. */
+    incomplete: current?.incomplete,
     /** Undo is offered until the teacher's next edit of the config. */
-    undo:
-      undo && draft?.config === undo.config
-        ? () => {
-            setDraft(undo.before);
-            setUndo(null);
-          }
-        : null,
+    undo: current
+      ? () => {
+          setDraft(current.before);
+          setUndo(null);
+        }
+      : null,
   };
 }
 
@@ -121,6 +127,7 @@ export function GenerateBar({ wand }: { wand: ReturnType<typeof useGenerate> }) 
           }
         >
           {t("question.generate.done.body")}
+          {wand.incomplete ? <span className="mt-1 block">{t(`question.generate.incomplete.${wand.incomplete}`)}</span> : null}
         </Alert>
       ) : null}
     </div>

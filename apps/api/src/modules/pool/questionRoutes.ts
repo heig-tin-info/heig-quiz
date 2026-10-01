@@ -164,7 +164,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
           return reply.code(429).header("retry-after", String(BUDGET_RETRY_AFTER_S)).send({ error: "rate_limited" });
         }
         try {
-          return await generateAnswers(app.llmGateway, {
+          return await generateAnswers(app.llmGateway, app.runner, {
             type: scope.question.type,
             config: body.config,
             explanation: body.explanation,
