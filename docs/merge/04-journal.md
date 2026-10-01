@@ -227,7 +227,8 @@ Settings ("In Quiz" / "In a GitHub repository"). Same tables, same
 - Assets in Quiz mode: a relative path beside the page (`images/…`),
   `blob_sha` = sha256 of the bytes (the ETag of N-SEC-13); `asset_paths`
   recomputed in the transaction of every save and delete (J1);
-  append-only, collected when no page references them.
+  append-only, kept until the journal is removed (a restored revision
+  finds its images; M4-08).
 
 **What goes.** The browser's writes into a repository (M4-03's save, add,
 delete and upload refuse a GitHub-mode journal, M4-07), and the D25

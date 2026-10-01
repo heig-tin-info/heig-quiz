@@ -1,16 +1,17 @@
 /**
- * The journal's writes (merge task M4-03; spec F-JRN-02..05, F-JRN-10,
- * F-JRN-11; ported from heig-classroom's `modules/journal.ts`, sync point
- * `ab98cc0`, one journal per classroom since D03): create a repository, use
- * one of the organization's, remove the journal, refresh, preview, and the
- * writes of the content — save, add, delete a page, upload an asset.
+ * The journal's writes (merge task M4-03; spec F-JRN-02..05; ported from
+ * heig-classroom's `modules/journal.ts`, sync point `ab98cc0`, one journal
+ * per classroom since D03): create a repository, use one of the
+ * organization's, remove the journal, refresh, preview; the refusals and the
+ * context every write shares.
  *
  * **GitHub mode is read-only (ADR-057).** Its content is edited on GitHub
- * (`editUrl` of a page) and reaches the copy by a push or a Refresh; every
- * write of the content is refused with 409 `read_only`. Those routes are
- * Quiz mode's (merge task M4-08). Of M4-03's GitHub writes, what creates a
- * repository and commits a file (`createRepo`, `putFile`, `commitAuthor`)
- * stays, for the creation and for M4-11's Move to GitHub.
+ * (`editUrl` of a page) and reaches the copy by a push or a Refresh. The
+ * writes of the content — save, add, delete a page, upload an asset — are
+ * Quiz mode's (`quiz.ts`, M4-08), which refuses a GitHub-mode journal with
+ * 409 `read_only`. Of M4-03's GitHub writes, what creates a repository and
+ * commits a file (`createRepo`, `putFile`, `commitAuthor`) stays, for the
+ * creation and for M4-11's Move to GitHub.
  *
  * A new row starts at a random `version` (below), so an ingestion that read
  * GitHub for a removed row never writes its stale copy over a new one (J2,
@@ -29,15 +30,8 @@ import { eq } from "drizzle-orm";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import type { Octokit } from "octokit";
 
-import {
-  type JournalErrorCode,
-  type JournalFileWritten,
-  type JournalPageAdd,
-  type JournalPageSave,
-  type JournalPreviewResult,
-  type JournalStaff,
-} from "@quiz/contracts";
-import { journalRepoName, prettifyName, renderPage } from "@quiz/docrender";
+import { type JournalPreviewResult, type JournalStaff } from "@quiz/contracts";
+import { journalRepoName } from "@quiz/docrender";
 import { displayName, repoName } from "@quiz/domain";
 
 import type { AuditAction } from "../../audit.js";
@@ -55,9 +49,10 @@ import {
   journalPages,
   users,
 } from "../../db/schema.js";
-import { githubStatus } from "../../github/app.js";
+import { githubApp, githubStatus } from "../../github/app.js";
 import { inviteCollaborator } from "../../github/collaborators.js";
 import { DomainError } from "../http.js";
+import { JournalError } from "./errors.js";
 import { journalChanged } from "./events.js";
 import { githubJournal } from "./mode.js";
 import {
@@ -70,36 +65,10 @@ import {
   type FoundRepo,
   type ResolvedRepo,
 } from "./repo.js";
-import { requestIngest, staffJournal } from "./service.js";
+import { renderAt } from "./rendering.js";
+import { journalRemovalRefused, requestIngest, staffJournal } from "./service.js";
 
 // ---------------------------------------------------------------- refusals
-
-/** The status of each refusal: the state of things (409) but for the upload's own faults and GitHub's silence. An upload over the cap is Fastify's own 413. */
-const STATUS: Record<JournalErrorCode, number> = {
-  repo_not_found: 409,
-  ref_not_found: 409,
-  root_not_found: 409,
-  forbidden: 409,
-  too_large: 409,
-  github_unavailable: 503,
-  not_connected: 409,
-  journal_exists: 409,
-  no_journal: 409,
-  name_taken: 409,
-  conflict: 409,
-  page_exists: 409,
-  type_mismatch: 415,
-  empty_upload: 400,
-  read_only: 409,
-};
-
-/** A write refused: `{ error: code, message: code, ...details }`, worded by the web app. */
-export class JournalError extends DomainError {
-  constructor(code: JournalErrorCode, details?: Readonly<Record<string, unknown>>) {
-    super(code, STATUS[code], code, details);
-    this.name = "JournalError";
-  }
-}
 
 /**
  * `work`, its GitHub failures as {@link JournalError}s: a name taken as such,
@@ -273,7 +242,7 @@ committed here: a page cannot load one from another site.
  * it expects, and write the old repository's copy into it. Half the integer
  * range keeps room for the bumps.
  */
-const freshVersion = () => randomInt(1, 2 ** 30);
+export const freshVersion = () => randomInt(1, 2 ** 30);
 
 /**
  * The row of a classroom's new journal, then the staff invited and the copy
@@ -322,6 +291,8 @@ async function freeName(octokit: Octokit, org: string, name: string, room: Room)
 
 /** `POST /classrooms/:id/journal`: a new private repository with its README (F-JRN-02). */
 export async function createJournal(ctx: WriteContext, room: Room, name: string | undefined): Promise<JournalStaff> {
+  // Without Quiz's App there is no organization to create in (a Quiz-mode journal needs none).
+  if (!githubApp(ctx.config)) throw new JournalError("not_connected");
   const t = await targetOf(ctx.app.db, room.id);
   const org = connected(t);
   if (t.journal) throw new JournalError("journal_exists");
@@ -374,24 +345,33 @@ export async function useJournal(
 }
 
 /**
- * `DELETE /classrooms/:id/journal` (F-JRN-04): the row goes, and its pages
- * and assets with it by cascade; the repository is never touched. Needs no
- * GitHub, nor even an organization still installed — so a journal whose App
- * was uninstalled can still be removed, which in turn lets the classroom be
- * disconnected (D28). Idempotent.
+ * `DELETE /classrooms/:id/journal` (F-JRN-04): the row goes, and its pages,
+ * assets and revisions with it by cascade. In GitHub mode the repository is
+ * never touched; it needs no GitHub, nor even an organization still
+ * installed — so a journal whose App was uninstalled can still be removed,
+ * which in turn lets the classroom be disconnected (D28). In Quiz mode the
+ * pages are the only copy: with any, `confirm` must be the classroom's name
+ * (409 `confirm_required`, nothing removed). Idempotent.
  */
-export async function removeJournal(ctx: WriteContext, classroomId: string): Promise<void> {
-  const removed = await ctx.app.db
-    .delete(classroomJournals)
-    .where(eq(classroomJournals.classroomId, classroomId))
-    .returning({
-      mode: classroomJournals.mode,
-      fullName: classroomJournals.fullName,
-      githubRepoId: classroomJournals.githubRepoId,
-    });
-  if (removed.length === 0) return;
-  await ctx.note("journal.remove", removed[0]!);
-  journalChanged([classroomId]);
+export async function removeJournal(ctx: WriteContext, room: Room, confirm: string | undefined): Promise<void> {
+  const removed = await ctx.app.db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({
+        mode: classroomJournals.mode,
+        fullName: classroomJournals.fullName,
+        githubRepoId: classroomJournals.githubRepoId,
+      })
+      .from(classroomJournals)
+      .where(eq(classroomJournals.classroomId, room.id))
+      .for("update");
+    if (!row) return null;
+    const pages = await journalRemovalRefused(tx, room, confirm);
+    await tx.delete(classroomJournals).where(eq(classroomJournals.classroomId, room.id));
+    return { ...row, pages };
+  });
+  if (!removed) return;
+  await ctx.note("journal.remove", removed);
+  journalChanged([room.id]);
 }
 
 // ---------------------------------------------------------------- invitations (D27)
@@ -489,13 +469,13 @@ export async function previewPage(db: Db, classroomId: string, path: string, mar
     db.select({ path: journalPages.path }).from(journalPages).where(eq(journalPages.classroomId, classroomId)),
     db.select({ path: journalAssets.path }).from(journalAssets).where(eq(journalAssets.classroomId, classroomId)),
   ]);
-  const page = renderPage(markdown, {
+  const page = renderAt(
     classroomId,
-    pagePath: path,
-    fallbackTitle: prettifyName(path),
-    pages: new Set([...pages.map((p) => p.path), path]),
-    assets: new Set(assets.map((a) => a.path)),
-  });
+    path,
+    markdown,
+    new Set([...pages.map((p) => p.path), path]),
+    new Set(assets.map((a) => a.path)),
+  );
   return {
     title: page.title,
     html: page.html,
@@ -505,56 +485,3 @@ export async function previewPage(db: Db, classroomId: string, path: string, mar
     warnings: page.warnings,
   };
 }
-
-// ---------------------------------------------------------------- the content's writes
-
-/**
- * The journal a write of its content (a page, an asset) goes to: a
- * Quiz-mode one only. A GitHub-mode journal is read-only in the platform
- * (ADR-057): 409 `read_only`, its pages are edited on GitHub (`editUrl`).
- */
-async function quizJournal(db: Db, classroomId: string) {
-  const journal = attached(await targetOf(db, classroomId));
-  if (journal.mode !== "quiz") throw new JournalError("read_only");
-  return journal;
-}
-
-/** Quiz mode's writes land with merge task M4-08; until then no route creates a Quiz-mode journal. */
-function quizWritesPending(): never {
-  throw new DomainError("not_implemented", 501, "Quiz-mode journal writes are not implemented yet");
-}
-
-/** `PUT /classrooms/:id/journal/pages/*` (F-JRN-10): a Quiz-mode page saved. */
-export async function savePage(
-  ctx: WriteContext,
-  classroomId: string,
-  _path: string,
-  _body: JournalPageSave,
-): Promise<JournalFileWritten> {
-  await quizJournal(ctx.app.db, classroomId);
-  return quizWritesPending();
-}
-
-/** `POST /classrooms/:id/journal/pages` (F-JRN-10): a new Quiz-mode page. */
-export async function addPage(ctx: WriteContext, classroomId: string, _body: JournalPageAdd): Promise<JournalFileWritten> {
-  await quizJournal(ctx.app.db, classroomId);
-  return quizWritesPending();
-}
-
-/** `DELETE /classrooms/:id/journal/pages/*` (F-JRN-10): a Quiz-mode page deleted. */
-export async function deletePage(ctx: WriteContext, classroomId: string, _path: string): Promise<void> {
-  await quizJournal(ctx.app.db, classroomId);
-  quizWritesPending();
-}
-
-/** `POST /classrooms/:id/journal/assets/*` (F-JRN-11): an asset of a Quiz-mode journal. */
-export async function uploadAsset(
-  ctx: WriteContext,
-  classroomId: string,
-  _path: string,
-  _data: Buffer,
-): Promise<JournalFileWritten> {
-  await quizJournal(ctx.app.db, classroomId);
-  return quizWritesPending();
-}
-

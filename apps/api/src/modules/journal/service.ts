@@ -12,7 +12,7 @@
  * (invariant 4). Reads never touch GitHub: a page view is a SELECT, and a
  * GitHub outage leaves the journal readable (N-RES-07).
  */
-import { and, eq, sql } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import type { JournalPageStaff, JournalRepository, JournalStaff } from "@quiz/contracts";
@@ -20,10 +20,11 @@ import { buildNav, homePage, journalRepoName } from "@quiz/docrender";
 
 import { isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import { classroomJournals, journalAssets, journalPages } from "../../db/schema.js";
 import { JOURNAL_INGEST_QUEUE } from "../../jobs.js";
 import type { ClassroomPayload } from "../guards.js";
+import { JournalError } from "./errors.js";
 import { ingestJournal } from "./ingest.js";
 import { editUrl, githubJournal, type GithubJournal, type JournalRow } from "./mode.js";
 import { studentMayFetch, visibleToStudents } from "./studentView.js";
@@ -75,6 +76,7 @@ export async function staffJournal(db: Db, room: { id: string; name: string }): 
       homePath: null,
       hiddenPaths: [],
       warningCount: 0,
+      pageCount: 0,
       proposedName: journalRepoName(room.name),
     };
   }
@@ -98,6 +100,7 @@ export async function staffJournal(db: Db, room: { id: string; name: string }): 
     homePath: homePage(pages)?.path ?? null,
     hiddenPaths: pages.filter((p) => p.hidden).map((p) => p.path).sort(),
     warningCount: pages.filter((p) => p.warned).length,
+    pageCount: pages.length,
     proposedName: null,
   };
 }
@@ -106,7 +109,7 @@ export async function staffJournal(db: Db, room: { id: string; name: string }): 
  * `GET /classrooms/:id/journal/pages/*` for the staff: the page, its source,
  * its lock, and in GitHub mode where to edit it.
  */
-export async function staffPage(db: Db, classroomId: string, path: string): Promise<JournalPageStaff | null> {
+export async function staffPage(db: Db | Tx, classroomId: string, path: string): Promise<JournalPageStaff | null> {
   const [page] = await db
     .select({ page: journalPages, journal: classroomJournals, hidden: hiddenFromStudents() })
     .from(journalPages)
@@ -126,10 +129,36 @@ export async function staffPage(db: Db, classroomId: string, path: string): Prom
     visibleFrom: isoOrNull(p.visibleFrom),
     hidden: page.hidden,
     markdown: p.markdown,
-    blobSha: p.blobSha,
+    version: p.version,
     warnings: p.warnings,
     editUrl: github ? editUrl(github, p.path) : null,
   };
+}
+
+/**
+ * The one guard of F-JRN-04 (ADR-057): a Quiz-mode journal holding pages is
+ * the only copy of them, and goes — by its removal, or by its classroom's
+ * deletion (F-ORG-09, `org`'s route) — only with the classroom's name typed
+ * as `confirm`: 409 `confirm_required` otherwise. A GitHub-mode journal (the
+ * repository stays) or an empty one needs nothing. Returns the journal's
+ * page count (0 with no journal), what the removal audits.
+ */
+export async function journalRemovalRefused(
+  db: Db | Tx,
+  room: { id: string; name: string },
+  confirm: string | undefined,
+): Promise<number> {
+  const [row] = await db
+    .select({ mode: classroomJournals.mode, pages: count(journalPages.id) })
+    .from(classroomJournals)
+    .leftJoin(journalPages, eq(journalPages.classroomId, classroomJournals.classroomId))
+    .where(eq(classroomJournals.classroomId, room.id))
+    .groupBy(classroomJournals.mode);
+  const pages = row?.pages ?? 0;
+  if (row?.mode === "quiz" && pages > 0 && confirm?.trim() !== room.name.trim()) {
+    throw new JournalError("confirm_required");
+  }
+  return pages;
 }
 
 /**
@@ -153,7 +182,7 @@ export async function journalAsset(db: Db, classroomId: string, path: string, pa
 /**
  * Asks for a classroom's copy to be rebuilt: one `journal.ingest` job. The
  * webhook's push handler calls it, and so do the Refresh and the choice of a
- * repository (M4-03; a browser save rebuilds at once, `writes.ts`). Without a
+ * repository (M4-03). Without a
  * queue (`JOBS_DISABLED=1`, a queue failed at boot) the ingestion runs here,
  * awaited, its failure recorded on the row by the ingestion itself. J2 is the
  * ingestion's compare-and-set, not the queue's.

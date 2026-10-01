@@ -57,6 +57,7 @@ const staffJournal = (over: Partial<JournalStaff> = {}): JournalStaff => ({
   homePath: HOME,
   hiddenPaths: [DRAFT],
   warningCount: 1,
+  pageCount: 3,
   proposedName: null,
   ...over,
 });
@@ -89,7 +90,7 @@ const staffPage = (path: string, over: Partial<JournalPageStaff> = {}): JournalP
   visibleFrom: null,
   hidden: false,
   markdown: "# Programmation 1",
-  blobSha: "sha",
+  version: 1,
   warnings: [],
   editUrl: null,
   ...over,

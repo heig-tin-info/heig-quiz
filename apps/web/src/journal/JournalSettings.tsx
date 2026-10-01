@@ -244,12 +244,12 @@ function CreateDialog({
   const t = useT();
   const attach = useAttach(room, onClose);
   const [name, setName] = useState(proposedName ?? "");
-  const body = JournalCreate.safeParse({ name: name.trim() });
+  const body = JournalCreate.safeParse({ mode: "github", name: name.trim() });
   const create = useMutation({
     mutationFn: (wanted: string) =>
       api<JournalStaff>(journalBase(room.id), {
         method: "POST",
-        body: JSON.stringify({ name: wanted } satisfies JournalCreate),
+        body: JSON.stringify({ mode: "github", name: wanted } satisfies JournalCreate),
       }),
     onSuccess: attach,
   });
@@ -259,7 +259,7 @@ function CreateDialog({
     <FormDialog
       title={t("journalSettings.createTitle")}
       onClose={onClose}
-      onSubmit={() => body.data?.name && create.mutate(body.data.name)}
+      onSubmit={() => body.data?.mode === "github" && body.data.name && create.mutate(body.data.name)}
       submitLabel={t("journalSettings.createSubmit")}
       submitting={create.isPending}
       canSubmit={body.success && name.trim() !== ""}

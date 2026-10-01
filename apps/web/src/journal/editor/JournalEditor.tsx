@@ -130,9 +130,8 @@ export function JournalEditor({ classroomId, page: current, onClose, onReload, c
   // ----------------------------------------------------------------- save
   const submit = () => {
     if (!dirty || conflict) return;
-    const description = message.trim();
     save.mutate(
-      { markdown, baseSha: page.blobSha, ...(description ? { message: description } : {}) },
+      { markdown, baseVersion: page.version },
       {
         onSuccess: (written) => {
           toast(written.page ? t("journalEditor.saved") : t("journalEditor.savedPending"), "success");

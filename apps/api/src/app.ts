@@ -198,8 +198,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   if (app.kioskAttestor) await app.register(kioskPlugin, { config });
   await app.register(evaluationPlugin, { config });
   await app.register(activityPlugin);
-  // The journal (M4-02) is copied from GitHub: no App, no journal route.
-  if (githubApp(config)) await app.register(journalPlugin, { config });
+  // The journal: a Quiz-mode one needs no App (ADR-057); its GitHub routes do.
+  await app.register(journalPlugin, { config });
   await app.register(livePlugin);
   await app.register(previewPlugin);
   await app.register(gradingPlugin);

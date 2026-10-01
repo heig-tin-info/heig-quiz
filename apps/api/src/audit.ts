@@ -100,13 +100,16 @@ export type AuditAction =
   /** That session ended: signed out, or expired (`payload.reason`). */
   | "impersonation.ended"
   /**
-   * The journal's staff writes (M4-03, 04-journal §4.1, D27): subject the
-   * classroom. `create` (a new repository) and `use` (one of the
+   * The journal's staff writes (M4-03, M4-08, 04-journal §4.1, D27, ADR-057):
+   * subject the classroom, `payload.mode` on every write of a mode. `create`
+   * — a Quiz-mode journal, or a new repository — and `use` (one of the
    * organization's): `payload.fullName`, `githubRepoId`, `ref`, `rootPath`;
-   * `remove`: the classroom's copy dropped, the repository kept; `refresh`;
-   * `save`, `add`, `delete`, `upload`: `payload.path` and `commitSha` (an
-   * upload, `bytes`). The synchronisations themselves audit nothing: their
-   * outcome is the journal's sync state.
+   * `remove`: the row and its copy dropped (`payload.pages`), a repository
+   * kept; `refresh`; Quiz mode's page writes `save`, `add`, `delete`,
+   * `upload`: `payload.path` (a save, the new `version`; an upload, `bytes`
+   * and `blobSha`); `restore`: a revision made the page's content again,
+   * `payload.path`, `revisionId`. The synchronisations themselves audit
+   * nothing: their outcome is the journal's sync state.
    */
   | "journal.create"
   | "journal.use"
@@ -116,6 +119,7 @@ export type AuditAction =
   | "journal.add"
   | "journal.delete"
   | "journal.upload"
+  | "journal.restore"
   /**
    * One staff member invited as a collaborator of the journal's repository
    * (D27), `payload.permission` always `push`: `payload.userId`, `login`,
