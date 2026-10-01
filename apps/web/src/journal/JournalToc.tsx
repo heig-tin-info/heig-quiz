@@ -4,22 +4,27 @@ import { useT } from "../i18n";
 import { cx } from "../ui";
 
 /**
- * The table of contents of a page: its `h2` and `h3`, as in-page anchors.
- * The `h1` is the page's own title, already the first thing on it, and
- * deeper levels turn a table of contents into a second copy of the page.
- * The text is PLAIN TEXT from the contract, rendered as React text.
- * Nothing when the page has fewer than two such headings: one entry is not
- * a table of anything.
+ * The entries of a page's table of contents: its `h2` and `h3`. The `h1` is
+ * the page's own title, already the first thing on it, and deeper levels
+ * turn a table of contents into a second copy of the page. None when the
+ * page has fewer than two: one entry is not a table of anything.
  */
-export function JournalToc({ toc }: { toc: JournalTocEntry[] }) {
-  const t = useT();
+export function tocEntries(toc: JournalTocEntry[]): JournalTocEntry[] {
   const entries = toc.filter((e) => e.depth === 2 || e.depth === 3);
-  if (entries.length < 2) return null;
+  return entries.length < 2 ? [] : entries;
+}
+
+/**
+ * The table of contents of a page (`tocEntries`), as in-page anchors. The
+ * text is PLAIN TEXT from the contract, rendered as React text.
+ */
+export function JournalToc({ entries, titled = true }: { entries: JournalTocEntry[]; titled?: boolean }) {
+  const t = useT();
   return (
     <nav aria-label={t("journal.toc")}>
-      <p className="mb-2 px-2.5 text-xs font-semibold uppercase tracking-wide text-fg-faint">
-        {t("journal.toc")}
-      </p>
+      {titled ? (
+        <p className="mb-2 px-2.5 text-xs font-semibold uppercase tracking-wide text-fg-faint">{t("journal.toc")}</p>
+      ) : null}
       <ul className="space-y-0.5">
         {entries.map((entry) => (
           <li key={entry.id}>

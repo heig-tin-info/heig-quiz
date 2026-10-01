@@ -61,10 +61,11 @@ about this course".
   countdown, group name, status badge (not started / repo ready /
   invitation pending / submitted / graded), CI score as plain tabular text
   marked "indicative" until released.
-- **Journal**: the ported reader under a compact header; at `lg`+ a 15-rem
-  navigation column (current page = the accent, an `accent-soft` chip)
-  beside the article (`.md-doc`); TOC under the navigation, or at the right
-  from `xl`; on a phone the navigation is a disclosure above the page. **No
+- **Journal**: the ported reader under a compact header; a strip of page
+  links under the classroom's tabs (current entry = the accent, an
+  `accent-soft` chip; a folder opens a menu of its pages; it scrolls
+  sideways), then the article (`.md-doc`) centred; the TOC at the right
+  from `xl`, an "On this page" disclosure above the page below that. **No
   primary action for a student.** Staff: Edit (primary), Refresh
   (secondary), draft and visible-from badges, warnings.
 - **Grades**: a table — Activity (bold), Kind, Date, Points x/y (right,

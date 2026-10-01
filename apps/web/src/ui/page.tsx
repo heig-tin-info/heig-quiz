@@ -445,6 +445,20 @@ export function useScrollFade(
 }
 
 /**
+ * Scrolls a horizontal strip (never the page, so no `scrollIntoView`) just
+ * enough to bring `item` into sight, clear of the fade on the edge it comes
+ * from: a strip wider than a phone opens on its selected entry rather than
+ * on its first (Tabs, the journal's strip).
+ */
+export function revealInStrip(box: HTMLElement, item: HTMLElement): void {
+  const outer = box.getBoundingClientRect();
+  const inner = item.getBoundingClientRect();
+  const fade = Number.parseInt(TAB_FADE, 10);
+  if (inner.left < outer.left + fade) box.scrollLeft -= outer.left + fade - inner.left;
+  else if (inner.right > outer.right - fade) box.scrollLeft += inner.right - outer.right + fade;
+}
+
+/**
  * Text tabs with an ink underline; counts sit in `fg-faint`.
  * Roving tabindex: only the selected tab is in the Tab order, ArrowLeft and
  * ArrowRight move and select with wrap, Home and End jump to the ends.
@@ -496,13 +510,8 @@ export function Tabs<V extends string>({
   // The strip scrolls, never the page, so no `scrollIntoView`.
   const selectedValue = items[selected]?.value;
   useEffect(() => {
-    const box = strip.current;
     const tab = selectedValue === undefined ? null : refs.current[selectedValue];
-    if (!box || !tab) return;
-    const outer = box.getBoundingClientRect();
-    const inner = tab.getBoundingClientRect();
-    if (inner.left < outer.left) box.scrollLeft -= outer.left - inner.left;
-    else if (inner.right > outer.right) box.scrollLeft += inner.right - outer.right;
+    if (strip.current && tab) revealInStrip(strip.current, tab);
   }, [selectedValue]);
   const onKeyDown = (e: React.KeyboardEvent) => {
     const next = rovingIndex(e.key, roving, items.length);

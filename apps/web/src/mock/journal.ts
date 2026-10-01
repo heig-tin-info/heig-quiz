@@ -232,6 +232,53 @@ const PAGES: Fixture[] = [
   },
 ];
 
+/** A short page: a title and one paragraph, in the renderer's shape. */
+const plainPage = (path: string, title: string, text: string, visibleInDays: number | null = null): Fixture => {
+  const id = path.replace(/\W+/g, "-");
+  return {
+    path,
+    title,
+    html: [heading(1, id, title), `<p>${text}</p>`].join("\n"),
+    toc: [{ id, depth: 1, text: title }],
+    draft: false,
+    visibleInDays,
+    markdown: `# ${title}\n\n${text}\n`,
+  };
+};
+
+// A semester's worth of weeks, so the reader's strip of pages has to scroll
+// (one folder per week, as the course's real journals have): week 1 also
+// holds a folder of exercises one level deeper, and the annexes are a folder
+// without a landing page (a menu that never navigates, F-JRN-06).
+const WEEKS = [
+  "Fonctions",
+  "Tableaux à deux dimensions et matrices",
+  "Structures",
+  "Fichiers",
+  "Allocation dynamique",
+  "Listes chaînées",
+  "Récursivité",
+  "Tri et recherche",
+  "Préprocesseur",
+  "Compilation séparée",
+  "Révisions",
+];
+/** Weeks 3 to 6 are out; the later ones open to the students a week apart. */
+const future = (i: number) => (i < 4 ? null : (i - 3) * 7);
+PAGES.push(
+  plainPage("10-semaine-1/90-exercices/10-serie-1.md", "Série 1", "Exercices sur les pointeurs."),
+  plainPage("10-semaine-1/90-exercices/20-serie-2.md", "Série 2", "Exercices sur l'arithmétique des pointeurs."),
+  ...WEEKS.flatMap((title, i) => {
+    const folder = `${21 + i}-semaine-${i + 3}`;
+    return [
+      plainPage(`${folder}/README.md`, `Semaine ${i + 3} — ${title}`, "Ce qui sera vu cette semaine.", future(i)),
+      plainPage(`${folder}/10-exercices.md`, "Exercices", "La série de la semaine.", future(i)),
+    ];
+  }),
+  plainPage("90-annexes/10-outils.md", "Outils", "Le compilateur, l'éditeur, le débogueur."),
+  plainPage("90-annexes/20-style.md", "Conventions de style", "Nommer, indenter, commenter."),
+);
+
 const hidden = (p: Fixture) => p.draft || (p.visibleInDays !== null && p.visibleInDays > 0);
 
 /**

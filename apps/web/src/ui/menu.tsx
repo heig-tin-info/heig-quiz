@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { useT } from "../i18n";
+import { isPlainClick } from "./controls";
 import { cx, IconButton, useLayer, Z, type IconType } from "./layers";
 
 /*
@@ -29,7 +30,11 @@ export interface MenuItem {
   description?: string;
   icon?: IconType;
   onSelect?: () => void;
-  /** Plain link item (external URLs, downloads). */
+  /**
+   * Link item (external URLs, downloads, a page of the app). With `onSelect`
+   * too, a plain click calls it instead of following the link (the app
+   * routes it) and a middle click still opens a tab.
+   */
   href?: string;
   /** Tooltip on hover: what the label abbreviates. */
   title?: string;
@@ -43,7 +48,29 @@ export interface MenuItem {
   disabled?: boolean;
   /** Draws a hairline above this item. */
   separator?: boolean;
+  /** Indentation level, for the deeper levels of a tree (the journal's pages). */
+  depth?: number;
+  /** The item is the page on view: `aria-current="page"` and the `accent-soft` chip. */
+  current?: boolean;
+  /** A faint icon after the label, with its accessible name (a page hidden from students). */
+  mark?: { icon: IconType; label: string };
+  /** Not an item: the label of the items under it (a folder that does not navigate). */
+  heading?: boolean;
 }
+
+/** A `MenuItem`'s mark: a 14 px icon that a screen reader reads by its label. */
+export function ItemMark({ mark, className = "" }: { mark: MenuItem["mark"]; className?: string }) {
+  if (!mark) return null;
+  const Icon = mark.icon;
+  return (
+    <span role="img" aria-label={mark.label} className={cx("inline-flex shrink-0", className)}>
+      <Icon className="size-3.5" />
+    </span>
+  );
+}
+
+/** The left padding of an item at `depth`: the item's own 10 px, then 12 px a level. */
+const indent = (depth = 0) => (depth > 0 ? { paddingLeft: `calc(0.625rem + ${depth * 0.75}rem)` } : undefined);
 
 /** Height assumed for the panel when deciding to flip it upward. */
 const MENU_FLIP_MARGIN = 280;
@@ -182,7 +209,7 @@ export function Menu({
 
   /** Indexes of the items the keyboard may land on (disabled ones are skipped). */
   const reachable = useMemo(
-    () => items.map((it, i) => (it.disabled ? -1 : i)).filter((i) => i >= 0),
+    () => items.map((it, i) => (it.disabled || it.heading ? -1 : i)).filter((i) => i >= 0),
     [items],
   );
 
@@ -370,7 +397,9 @@ export function Menu({
                     ? "pointer-events-none opacity-40"
                     : it.danger
                       ? "text-danger hover:bg-danger-soft"
-                      : "text-fg hover:bg-surface-2",
+                      : it.current
+                        ? "bg-accent-soft font-medium text-accent"
+                        : "text-fg hover:bg-surface-2",
                 );
                 const body = (
                   <>
@@ -393,12 +422,17 @@ export function Menu({
                         </span>
                       ) : null}
                     </span>
+                    <ItemMark mark={it.mark} className="ml-auto text-fg-faint" />
                   </>
                 );
                 return (
                   <div key={i} role="none">
                     {it.separator ? <div className="my-1 border-t border-line" role="none" /> : null}
-                    {it.href ? (
+                    {it.heading ? (
+                      <div aria-hidden className="px-2.5 pb-0.5 pt-1.5 text-xs font-medium text-fg-faint" style={indent(it.depth)}>
+                        {it.label}
+                      </div>
+                    ) : it.href ? (
                       <a
                         ref={(el) => {
                           itemRefs.current[i] = el;
@@ -409,8 +443,15 @@ export function Menu({
                         target={it.href.startsWith("http") ? "_blank" : undefined}
                         rel="noreferrer"
                         title={it.title}
+                        aria-current={it.current ? "page" : undefined}
                         className={cls}
-                        onClick={() => close(true)}
+                        style={indent(it.depth)}
+                        onClick={(e) => {
+                          close(true);
+                          if (!it.onSelect || !isPlainClick(e)) return;
+                          e.preventDefault();
+                          it.onSelect();
+                        }}
                       >
                         {body}
                       </a>
@@ -424,6 +465,7 @@ export function Menu({
                         tabIndex={-1}
                         title={it.title}
                         className={cls}
+                        style={indent(it.depth)}
                         disabled={it.disabled}
                         aria-disabled={it.disabled}
                         onClick={() => {

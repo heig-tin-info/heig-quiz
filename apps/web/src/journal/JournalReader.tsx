@@ -45,8 +45,8 @@ import { journalErrorText, useJournalDeletePage, useJournalRefresh } from "./api
 import { AddPageDialog } from "./editor/AddPageDialog";
 import { pageFolder } from "./editor/images";
 import { JournalArticle } from "./JournalArticle";
-import { JournalNav } from "./JournalNav";
-import { JournalToc } from "./JournalToc";
+import { JournalStrip } from "./JournalStrip";
+import { JournalToc, tocEntries } from "./JournalToc";
 import { SyncState } from "./SyncState";
 import { SYNC_ERRORS, warningText } from "./words";
 
@@ -58,20 +58,24 @@ import { SYNC_ERRORS, warningText } from "./words";
  *
  * The four decisions:
  * - Type: the document owns the title, its `h1` at the 28 px step inside
- *   `.md-doc`; the navigation is 13 px dense UI. No page title above it: two
- *   `h1`s on one screen and neither wins.
- * - Color: ONE accent, the page being read in the navigation (an
- *   `accent-soft` chip). A student has no primary action here. The staff
- *   have Refresh (secondary, M4-05) in their bar above the page; Edit
- *   (primary, inside a page) joins it with M4-06.
- * - Space: 2 between navigation rows, 32 between the columns, 24 under the
- *   header; the prose has its own rhythm (1.75 leading, 72 ch).
+ *   `.md-doc`; the strip of pages is 13 px dense UI, a step under the
+ *   classroom's 14 px tabs. No page title above it: two `h1`s on one screen
+ *   and neither wins.
+ * - Color: ONE accent, the entry being read in the strip (an `accent-soft`
+ *   chip, no underline: the ink underline is the classroom tabs'). A
+ *   student has no primary action here. The staff have Refresh (secondary)
+ *   and Edit (primary, inside a page) in their bar above the page.
+ * - Space: 4 between the strip's entries, 24 between the rows (strip, staff
+ *   bar, page), 32 between the page and the TOC; the prose has its own
+ *   rhythm (1.75 leading, 72 ch).
  * - Finish: the page is a sheet of paper (`surface`, hairline, card radius)
- *   on the canvas; the navigation and the TOC are bare columns. No shadow.
+ *   on the canvas; the strip and the TOC are bare. No shadow.
  *
- * Layout: from `lg` a 15 rem navigation column beside the article, the TOC
- * under the navigation, at the right from `xl`; on a phone the navigation
- * (and the TOC) fold into a disclosure above the page.
+ * Layout: the strip of pages (`JournalStrip`) is a row of its own under the
+ * classroom's tabs, above the staff bar, at every width; it scrolls sideways
+ * when the entries outgrow it. The page is a centred column (48 rem, the
+ * prose capped at 72 ch inside it); from `xl` the TOC is a 13 rem column at
+ * its right, below `xl` a small "On this page" disclosure above it.
  *
  * The reader is always some page's tab: the teacher classroom page's Journal
  * tab (`ClassroomView`, M4-05) or the student classroom page's (M5-02, whose
@@ -92,21 +96,6 @@ function findNode(nodes: JournalNavNode[], pred: (node: JournalNavNode) => boole
   }
   return null;
 }
-
-/**
- * The columns, decided once in JS (`useMinWidth`) rather than again in CSS:
- * the navigation (and the TOC) beside the article from 1024 px, the TOC in
- * a column of its own from 1280 px, one column below 1024 px.
- */
-const GRID = {
-  phone: "grid gap-6",
-  wide: "grid grid-cols-[15rem_minmax(0,1fr)] gap-8",
-  extraWide: "grid grid-cols-[15rem_minmax(0,1fr)_13rem] gap-8",
-} as const;
-type Layout = keyof typeof GRID;
-
-/** A column beside the article: it stays in view while the page scrolls. */
-const SIDE_COLUMN = "sticky top-8 max-h-[calc(100dvh-4rem)] self-start overflow-y-auto";
 
 const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404;
 
@@ -209,15 +198,13 @@ export function JournalReader({
     });
   };
 
-  const wide = useMinWidth(1024);
-  const extraWide = useMinWidth(1280);
-  const layout: Layout = extraWide ? "extraWide" : wide ? "wide" : "phone";
+  /** The table of contents has a column of its own from 1280 px; above the page below that. */
+  const tocBeside = useMinWidth(1280);
 
-  if (journal.isPending) return <ReaderSkeleton layout={layout} header={outerHeader} />;
+  if (journal.isPending) return <ReaderSkeleton header={outerHeader} />;
 
-  const header = (
+  const staffBar = (
     <>
-      {outerHeader}
       {repository ? (
         <StaffBar
           repository={repository}
@@ -243,6 +230,12 @@ export function JournalReader({
           }}
         />
       ) : null}
+    </>
+  );
+  const header = (
+    <>
+      {outerHeader}
+      {staffBar}
     </>
   );
 
@@ -298,48 +291,50 @@ export function JournalReader({
     );
   }
 
-  const hiddenPaths = new Set(staffJournal?.hiddenPaths ?? []);
-  const nav = (
-    <nav aria-label={t("journal.nav")}>
-      <JournalNav
-        nodes={loaded.nav}
-        homePath={loaded.homePath}
-        current={target}
-        hiddenPaths={hiddenPaths}
-        hrefOf={hrefOf}
-        onOpen={(p) => open(p)}
-      />
-    </nav>
+  const strip = (
+    <JournalStrip
+      nodes={loaded.nav}
+      homePath={loaded.homePath}
+      current={target}
+      hiddenPaths={new Set(staffJournal?.hiddenPaths ?? [])}
+      hrefOf={hrefOf}
+      onOpen={(p) => open(p)}
+    />
   );
-  const toc = page.data ? <JournalToc toc={page.data.toc} /> : null;
-  const currentTitle =
-    target === loaded.homePath
-      ? t("journal.home")
-      : (findNode(loaded.nav, (n) => n.pagePath === target)?.title ?? page.data?.title ?? t("journal.untitled"));
 
-  /** The columns around `main`; the editor has no table of contents (it would go stale as it types). */
-  const columns = (frameHeader: ReactNode, main: ReactNode, withToc: boolean) => {
-    const grid: Layout = !withToc && layout === "extraWide" ? "wide" : layout;
-    const sideToc = withToc ? toc : null;
+  /**
+   * The rows above the page (the caller's header, the strip, `bar`), then the
+   * page centred, its table of contents beside it or above it. The editor has
+   * none: it would go stale as the teacher types.
+   */
+  const columns = (bar: ReactNode, main: ReactNode, withToc: boolean) => {
+    const toc = withToc && page.data ? tocEntries(page.data.toc) : [];
     return (
-      <Frame header={frameHeader}>
+      <Frame
+        header={
+          <>
+            {outerHeader}
+            {strip}
+            {bar}
+          </>
+        }
+      >
         {syncAlert}
-        <div className={GRID[grid]}>
-          {grid === "phone" ? (
-            <PhoneDisclosure title={currentTitle}>
-              {nav}
-              {sideToc}
-            </PhoneDisclosure>
-          ) : (
-            <aside className={cx("space-y-8", SIDE_COLUMN)}>
-              {nav}
-              {grid === "wide" ? sideToc : null}
+        {/* From 1280 px the TOC's column is kept even empty: the page stays in place from one page to the next. */}
+        <div className={cx("mx-auto", tocBeside ? "grid max-w-[63rem] grid-cols-[minmax(0,1fr)_13rem] gap-8" : "max-w-3xl")}>
+          <div className="min-w-0 space-y-4">
+            {toc.length > 0 && !tocBeside ? (
+              <TocDisclosure>
+                <JournalToc entries={toc} titled={false} />
+              </TocDisclosure>
+            ) : null}
+            {main}
+          </div>
+          {toc.length > 0 && tocBeside ? (
+            <aside className="sticky top-8 max-h-[calc(100dvh-4rem)] self-start overflow-y-auto">
+              <JournalToc entries={toc} />
             </aside>
-          )}
-
-          <div className="min-w-0 space-y-4">{main}</div>
-
-          {grid === "extraWide" && sideToc ? <aside className={SIDE_COLUMN}>{sideToc}</aside> : null}
+          ) : null}
         </div>
       </Frame>
     );
@@ -349,7 +344,7 @@ export function JournalReader({
     return (
       // The editor is loaded on Edit, never with the reader: Tiptap, marked
       // and yaml stay out of what a student downloads.
-      <Suspense fallback={columns(header, <ArticleSkeleton />, false)}>
+      <Suspense fallback={columns(staffBar, <ArticleSkeleton />, false)}>
         <JournalEditor
           key={`${editingPage.path}:${reloads}`}
           classroomId={classroomId}
@@ -357,23 +352,14 @@ export function JournalReader({
           onClose={() => setEditing(null)}
           onReload={() => void page.refetch().then(() => setReloads((n) => n + 1))}
         >
-          {(bar, body) =>
-            columns(
-              <>
-                {outerHeader}
-                {bar}
-              </>,
-              body,
-              false,
-            )
-          }
+          {(bar, body) => columns(bar, body, false)}
         </JournalEditor>
       </Suspense>
     );
   }
 
   return columns(
-    header,
+    staffBar,
     <PageSlot
       page={page}
       classroomId={classroomId}
@@ -560,8 +546,8 @@ function PageBody({
   );
 }
 
-/** On a phone, the navigation folds above the page, named by the page being read. */
-function PhoneDisclosure({ title, children }: { title: string; children: ReactNode }) {
+/** Below `xl`, the table of contents folds above the page; a link followed from it folds it again. */
+function TocDisclosure({ children }: { children: ReactNode }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const panel = useId();
@@ -572,19 +558,15 @@ function PhoneDisclosure({ title, children }: { title: string; children: ReactNo
         aria-expanded={open}
         aria-controls={panel}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left"
+        className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[13px] font-medium text-fg-muted"
       >
-        <span className="min-w-0 flex-1">
-          <span className="block text-xs text-fg-faint">{t("journal.pages")}</span>
-          <span className="block truncate text-sm font-medium">{title}</span>
-        </span>
+        <span className="min-w-0 flex-1">{t("journal.toc")}</span>
         <ChevronDown className={cx("size-4 shrink-0 text-fg-faint transition-transform", open && "rotate-180")} />
       </button>
       {open ? (
-        // Any link followed from the panel (a page, a heading) folds it again.
         <div
           id={panel}
-          className="space-y-6 border-t border-line px-2 py-3"
+          className="border-t border-line px-2 py-3"
           onClick={(e) => {
             if ((e.target as Element).closest("a")) setOpen(false);
           }}
@@ -612,22 +594,20 @@ function ArticleSkeleton() {
  * `header` is live content (a breadcrumb, tabs), and a status region is
  * announced as a whole and holds no controls.
  */
-function ReaderSkeleton({ layout, header }: { layout: Layout; header: ReactNode }) {
+function ReaderSkeleton({ header }: { header: ReactNode }) {
   const t = useT();
   return (
     <div className="space-y-6">
       {header ?? <Skeleton className="h-4 w-40" />}
-      <div className={GRID[layout]} role="status" aria-label={t("common.loading")}>
-        {layout === "phone" ? (
-          <Skeleton className="h-14 w-full" />
-        ) : (
-          <div className="space-y-2">
-            <Skeleton className="h-6 w-40" />
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-6 w-36" />
-          </div>
-        )}
-        <ArticleSkeleton />
+      <div className="space-y-6" role="status" aria-label={t("common.loading")}>
+        <div className="flex gap-2">
+          <Skeleton className="h-7 w-20" />
+          <Skeleton className="h-7 w-28" />
+          <Skeleton className="h-7 w-24" />
+        </div>
+        <div className="mx-auto max-w-3xl">
+          <ArticleSkeleton />
+        </div>
       </div>
     </div>
   );
