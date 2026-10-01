@@ -15,6 +15,7 @@ ALTER TABLE "classroom_journals" ALTER COLUMN "ref" DROP NOT NULL;--> statement-
 ALTER TABLE "classroom_journals" ADD COLUMN "mode" text DEFAULT 'github' NOT NULL;--> statement-breakpoint
 -- No default afterwards: every insertion names its mode.
 ALTER TABLE "classroom_journals" ALTER COLUMN "mode" DROP DEFAULT;--> statement-breakpoint
+ALTER TABLE "journal_pages" ADD COLUMN "version" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "journal_page_revisions" ADD CONSTRAINT "journal_page_revisions_classroom_id_classroom_journals_classroom_id_fk" FOREIGN KEY ("classroom_id") REFERENCES "public"."classroom_journals"("classroom_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "journal_page_revisions" ADD CONSTRAINT "journal_page_revisions_author_id_users_id_fk" FOREIGN KEY ("author_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "journal_page_revisions_page_idx" ON "journal_page_revisions" USING btree ("classroom_id","path","created_at");--> statement-breakpoint

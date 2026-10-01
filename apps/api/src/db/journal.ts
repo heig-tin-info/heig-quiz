@@ -157,6 +157,12 @@ export const journalPages = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
+    /**
+     * Quiz mode's optimistic lock (ADR-057): bumped by every save, a save
+     * against another version is a 409 `conflict` (M4-08). GitHub mode
+     * locks on `blob_sha` and never reads it.
+     */
+    version: integer("version").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
