@@ -37,10 +37,11 @@ function setup(overrides: Partial<React.ComponentProps<typeof CodePlayer>> = {})
 }
 
 describe("CodePlayer", () => {
-  it("shows the prompt, the limits and the hidden-case count", () => {
+  it("shows the prompt and the hidden-case count, not the language nor the limits", () => {
     setup();
     expect(screen.getByText("Sum the integers read on stdin.")).toBeInTheDocument();
-    expect(screen.getByText("2000 ms · 128 MB")).toBeInTheDocument();
+    expect(screen.queryByText("2000 ms · 128 MB")).not.toBeInTheDocument();
+    expect(screen.queryByText("c")).not.toBeInTheDocument();
     expect(screen.getByText("1 hidden case, worth 2 point(s).")).toBeInTheDocument();
   });
 
