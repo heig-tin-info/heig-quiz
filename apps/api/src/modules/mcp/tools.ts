@@ -122,6 +122,32 @@ async function saveAndPublish(
   };
 }
 
+/** The arguments `create_evaluation` and `create_template` share: what the quiz is. */
+const QuizFields = {
+  title: EvaluationCreate.shape.title,
+  mode: z.enum(["exam", "exercise"]).default("exercise"),
+  questionIds: z.array(Id).max(200).default([]),
+};
+
+/**
+ * The shared body of both quiz writers: creates the evaluation or template
+ * at `createPath` with the mode's preset, adds the questions through its own
+ * item route, and answers its detail with the web app's link. `kind` is both
+ * the API's and the web app's path segment.
+ */
+async function createQuiz(
+  api: Api,
+  createPath: string,
+  kind: "evaluations" | "templates",
+  a: { title: string; mode: "exam" | "exercise"; questionIds: string[] },
+) {
+  const created = await api.post(createPath, { title: a.title, mode: a.mode, preset: a.mode });
+  if (a.questionIds.length > 0) {
+    await api.post(`/${kind}/${created.id}/items`, { questionIds: a.questionIds });
+  }
+  return { ...(await api.get(`/${kind}/${created.id}`)), url: api.link(`/${kind}/${created.id}`) };
+}
+
 export const TOOLS: Tool[] = [
   // --- Reading -------------------------------------------------------------
 
@@ -409,28 +435,12 @@ export const TOOLS: Tool[] = [
       "Creates an evaluation in DRAFT directly in a classroom — `exercise` (practice, feedback allowed) or " +
       "`exam` — and adds the given questions. Call it ONLY when the teacher explicitly asks for an " +
       "evaluation in a classroom; to make a new quiz, use `create_template` instead (and `instantiate_template` " +
-      "when they also want it in a class), so the quiz is kept in the course for next year. Also the fallback " +
-      "when `create_template` is refused because the teacher holds no seat on the course's staff. Every " +
+      "when they also want it in a class), so the quiz is kept in the course for next year. Every " +
       "question must be PUBLISHED and come from a pool linked to the classroom's course " +
       "(`link_pool_to_course`). Nothing is opened to students: the teacher schedules or starts it from the web app.",
-    input: z.object({
-      classroomId: Id,
-      title: EvaluationCreate.shape.title,
-      mode: z.enum(["exam", "exercise"]).default("exercise"),
-      questionIds: z.array(Id).max(200).default([]),
-    }),
+    input: z.object({ classroomId: Id, ...QuizFields }),
     annotations: WRITE,
-    run: async (api, a) => {
-      const created = await api.post(`/classrooms/${a.classroomId}/evaluations`, {
-        title: a.title,
-        mode: a.mode,
-        preset: a.mode,
-      });
-      if (a.questionIds.length > 0) {
-        await api.post(`/evaluations/${created.id}/items`, { questionIds: a.questionIds });
-      }
-      return { ...(await api.get(`/evaluations/${created.id}`)), url: api.link(`/evaluations/${created.id}`) };
-    },
+    run: (api, { classroomId, ...a }) => createQuiz(api, `/classrooms/${classroomId}/evaluations`, "evaluations", a),
   }),
 
   tool({
@@ -484,28 +494,13 @@ export const TOOLS: Tool[] = [
       "THE default way to make a new quiz, exam or exercise: a template of the COURSE, not an evaluation of " +
       "a classroom, because a quiz is reused year to year and the template keeps it. Creates it with the " +
       "mode's preset and adds the given questions. Every question must be PUBLISHED and come from a pool " +
-      "linked to the course (`link_pool_to_course`). Needs a seat on the course's staff (404 otherwise: " +
-      "then fall back to `create_evaluation`). Call `instantiate_template` when the teacher also wants it " +
-      "in a classroom.",
-    input: z.object({
-      courseId: Id,
-      title: EvaluationCreate.shape.title,
-      mode: z.enum(["exam", "exercise"]).default("exercise"),
-      questionIds: z.array(Id).max(200).default([]),
-    }),
+      "linked to the course (`link_pool_to_course`). Needs a seat on the course's staff: 404 otherwise, " +
+      "like any course the teacher does not staff; do not retry elsewhere. If the questions are refused, " +
+      "the template already exists, empty: do not create it again; fix the cause (publish, link the pool), " +
+      "then give the teacher its link from `list_templates` to add the questions there. Call `instantiate_template` when the teacher also wants it in a classroom.",
+    input: z.object({ courseId: Id, ...QuizFields }),
     annotations: WRITE,
-    run: async (api, a) => {
-      const created = await api.post(`/courses/${a.courseId}/templates`, {
-        title: a.title,
-        mode: a.mode,
-        preset: a.mode,
-      });
-      const detail =
-        a.questionIds.length > 0
-          ? await api.post(`/templates/${created.id}/items`, { questionIds: a.questionIds })
-          : await api.get(`/templates/${created.id}`);
-      return { ...detail, url: api.link(`/templates/${created.id}`) };
-    },
+    run: (api, { courseId, ...a }) => createQuiz(api, `/courses/${courseId}/templates`, "templates", a),
   }),
 
   tool({

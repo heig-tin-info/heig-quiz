@@ -150,10 +150,17 @@ gets `422 template_pool_unlinked`.
   template, and instantiates it into a classroom when the teacher wants it
   there.
 - **Steered, not gated.** `create_evaluation` stays, for the teacher who
-  explicitly asks for an evaluation in a classroom, and as the fallback of
-  a teacher with no seat on the course's staff. The steering is the tool
+  explicitly asks for an evaluation in a classroom. The steering is the tool
   descriptions and the server's `instructions` only; no tool refuses the
-  other path.
+  other path. There is no fallback between the two: a classroom is reached
+  through its course's staff (`staffAccess`, invariant 6), so a teacher
+  refused a template of a course is refused an evaluation in its classrooms
+  with the same `404`.
+- **One writer, two homes.** `create_template` and `create_evaluation` share
+  their arguments and their body (create with the mode's preset, add the
+  items through the home's own item route, read the detail back). A refused
+  item leaves the template created and empty, as it leaves the evaluation:
+  the model is told not to create it again.
 
 ## Consequences
 

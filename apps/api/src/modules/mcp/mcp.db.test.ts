@@ -430,6 +430,12 @@ describe("templates first (ADR-022, addendum of 2026-10-01)", () => {
     expect(refused.isError).toBe(true);
     expect(refused.data).toMatchObject({ status: 422, body: { error: "template_pool_unlinked" } });
 
+    // A classroom of another course, even the teacher's own, is the 404 of one the template does not reach.
+    const elsewhere = await courseWithQuestions("TPL-ELSEWHERE");
+    const foreign = await call("instantiate_template", { templateId: made.template.id, classroomId: elsewhere.room.id });
+    expect(foreign.isError).toBe(true);
+    expect(foreign.data.status).toBe(404);
+
     // No seat on the course's staff: the course is the 404 of a missing one.
     const other = await server.signIn("teacher");
     const stranger = await call("create_template", { courseId: course.id, title: "Intrus" }, await tokenFor(other.headers));
