@@ -16,7 +16,7 @@ const STOP_WORDS = new Set([
   // French
   "les", "des", "une", "est", "sont", "que", "qui", "quoi", "quel", "quelle", "quels", "quelles",
   "lequel", "laquelle", "lesquels", "lesquelles", "dans", "pour", "par", "sur", "sous", "avec",
-  "sans", "pas", "plus", "moins", "son", "sa", "ses", "aux", "ces", "cet", "cette", "leur", "leurs",
+  "sans", "pas", "plus", "moins", "son", "ses", "aux", "ces", "cet", "cette", "leur", "leurs",
   "elle", "elles", "ils", "nous", "vous", "mais", "ont", "été", "être", "avoir", "fait", "comme",
   "tout", "tous", "toute", "toutes", "entre", "comment", "combien", "pourquoi", "suivant",
   "suivante", "suivants", "suivantes", "parmi", "donc", "car", "alors", "votre", "vos", "notre",

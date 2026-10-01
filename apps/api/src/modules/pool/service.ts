@@ -57,7 +57,7 @@ export {
   vacateSeats,
 } from "./members.js";
 export { poolTagNames, poolTags, describeTag } from "./tags.js";
-export { poolsOfCourse, PoolLinkForbidden, setCoursePools } from "./coursePools.js";
+export { mayLinkPool, poolsOfCourse, PoolLinkForbidden, setCoursePools } from "./coursePools.js";
 export {
   categoryTree,
   categoriesWithCounts,
@@ -68,7 +68,12 @@ export {
   reorderCategories,
   deleteCategory,
 } from "./categories.js";
-export { InvalidCursor, listQuestions, searchReachableQuestions } from "./questionList.js";
+export {
+  InvalidCursor,
+  listQuestions,
+  rankReachableQuestions,
+  searchReachableQuestions,
+} from "./questionList.js";
 export { clearPoolStars, starQuestions, unstarQuestions } from "./stars.js";
 export {
   createQuestion,

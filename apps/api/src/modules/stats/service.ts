@@ -100,8 +100,18 @@ function countedAttempt(): SQL {
  * process; should a pool's history grow too large for that, the same
  * filters pre-aggregate in SQL (`count`, `avg(points / max_points)` by
  * question).
+ *
+ * `questionIds` narrows to those questions of the pool (the similar
+ * questions of ADR-022's addendum of 2026-10-01): each keeps exactly the
+ * figures the whole pool would give it, its discrimination included — the
+ * rest of an exam is read by attempt, not by pool.
  */
-export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQuestionStats> {
+export async function poolQuestionStats(
+  db: Db,
+  poolId: string,
+  questionIds?: readonly string[],
+): Promise<PoolQuestionStats> {
+  const ofPool = questionsOf(poolId, questionIds);
   const rows = await db
     .select({
       questionId: questions.id,
@@ -133,7 +143,7 @@ export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQue
     )
     .where(
       and(
-        eq(questions.poolId, poolId),
+        ofPool,
         countedAttempt(),
         // Not reached (ADR-039): a question never on screen says nothing of
         // its difficulty. Only a tracked attempt can tell.
@@ -148,7 +158,7 @@ export async function poolQuestionStats(db: Db, poolId: string): Promise<PoolQue
     sinceOf.set(row.questionId, row.since);
   }
 
-  const dwells = await dwellsOf(db, poolId);
+  const dwells = await dwellsOf(db, ofPool);
   const discriminations = await discriminationsOf(db, rows);
   const distractors = await distractorsOf(db, rows.filter((row) => row.type === DISTRACTOR_TYPE));
   const items: PoolQuestionStats["items"] = [];
@@ -175,8 +185,14 @@ function inSeconds(ms: Spread): TimeStats {
   return { n: ms.n, meanS: s(ms.mean), medianS: s(ms.median), p25S: s(ms.p25), p75S: s(ms.p75) };
 }
 
-/** The timed exam answers of every question of the pool (ADR-039), by question. */
-async function dwellsOf(db: Db, poolId: string): Promise<Map<string, number[]>> {
+/** The questions of the pool, or those of `ids` in it. */
+function questionsOf(poolId: string, ids?: readonly string[]): SQL {
+  const inPool = eq(questions.poolId, poolId);
+  return ids ? and(inPool, inArray(questions.id, [...ids]))! : inPool;
+}
+
+/** The timed exam answers of the questions `ofPool` selects (ADR-039), by question. */
+async function dwellsOf(db: Db, ofPool: SQL): Promise<Map<string, number[]>> {
   const rows = await db
     .select({ questionId: questions.id, dwellMs: answers.dwellMs })
     .from(questions)
@@ -187,7 +203,7 @@ async function dwellsOf(db: Db, poolId: string): Promise<Map<string, number[]>> 
     .innerJoin(attempts, eq(attempts.id, answers.attemptId))
     .where(
       and(
-        eq(questions.poolId, poolId),
+        ofPool,
         countedAttempt(),
         eq(attempts.displayTracked, true),
         // A positive dwell: the question was on screen (the series' one filter).

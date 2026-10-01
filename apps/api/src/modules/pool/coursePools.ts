@@ -1,6 +1,7 @@
 /** `course_pools`: written here, called by the `org` module. */
 import { and, asc, eq, inArray, type SQL } from "drizzle-orm";
 
+import type { PoolRole } from "@quiz/contracts";
 import { poolRoleAllows } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
@@ -37,6 +38,12 @@ export class PoolLinkForbidden extends DomainError {
     );
   }
 }
+
+/**
+ * The caller may newly link a pool where they hold `role`: linking makes the
+ * whole course staff contributors of it, so it takes at least that (ADR-013).
+ */
+export const mayLinkPool = (role: PoolRole) => poolRoleAllows(role, "contributor");
 
 /**
  * Replaces the whole set of pools a course draws from. Only pools the caller
@@ -78,7 +85,7 @@ export async function setCoursePools(
   if (added.length === 0 && !unlinked) return poolsOfCourse(db, courseId);
   if (added.length) {
     const refused = (await listPools(db, inArray(pools.id, added), viewer)).filter(
-      (p) => !poolRoleAllows(p.role, "contributor"),
+      (p) => !mayLinkPool(p.role),
     );
     if (refused.length) throw new PoolLinkForbidden(refused.map(({ id, name }) => ({ id, name })));
   }

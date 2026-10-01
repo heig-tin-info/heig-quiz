@@ -8,12 +8,13 @@
  * Access is loaded twice, never checked afterwards (invariant 6): the course
  * through the staff predicate (a 404 otherwise), the questions through the
  * caller's `poolAccess` — a pool they cannot see never contributes a hit,
- * and a draft never does either (`searchReachableQuestions` keeps the
+ * and a draft never does either (`rankReachableQuestions` keeps the
  * published, live questions only).
  *
  * The statistics are the pool screen's own (`poolQuestionStats`, ADR-038),
- * read once per distinct pool of the hits, so the ten-answer threshold and
- * the exams-only rule hold here exactly as there.
+ * narrowed to the hits, so the ten-answer threshold and the exams-only rule
+ * hold here exactly as there. Composed here rather than in the pool service:
+ * the stats module already imports the pool module.
  */
 import { inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -22,10 +23,8 @@ import {
   IdParam,
   SimilarQuestionSearch,
   type QuestionTypeId,
-  type SimilarQuestion,
   type SimilarQuestions,
 } from "@quiz/contracts";
-import { poolRoleAllows } from "@quiz/domain";
 import { similarityTerms } from "@quiz/domain/similarityTerms";
 
 import { pools } from "../../db/schema.js";
@@ -37,14 +36,9 @@ import * as service from "./service.js";
 /** How much of a statement a hit shows: enough to recognise it. */
 const EXCERPT_CHARS = 240;
 
-/** The start of a version's statement, as the type indexes it; empty when it no longer parses. */
-function excerptOf(type: string, version: { config: unknown; configVersion: number }): string {
-  let text = "";
-  try {
-    text = service.typeOf(type).searchText(service.loadConfig(type, version) as never);
-  } catch {
-    return "";
-  }
+/** The indexed text of a version without the internal name it starts with, folded and cut. */
+function excerptOf(searchText: string, internalName: string): string {
+  const text = searchText.startsWith(internalName) ? searchText.slice(internalName.length) : searchText;
   const folded = text.replace(/\s+/g, " ").trim();
   return folded.length > EXCERPT_CHARS ? `${folded.slice(0, EXCERPT_CHARS - 1)}…` : folded;
 }
@@ -62,27 +56,24 @@ export function similarRoutes(app: FastifyInstance, ctx: PoolRouteContext): void
         load: (req, reply, params) => accessibleCourse(app, req, reply, params),
       },
       async ({ req, query, scope: course }): Promise<SimilarQuestions> => {
-        const found = await service.searchReachableQuestions(app.db, {
+        const hits = await service.rankReachableQuestions(app.db, {
           poolWhere: mine(req),
-          course: { id: course.id, only: query.scope === "linked" },
-          types: query.type ? [query.type] : null,
-          order: {
-            kind: "rank",
-            terms: similarityTerms(query.text),
-            limit: query.limit,
-            linkedFirst: query.scope === undefined,
-          },
+          courseId: course.id,
+          terms: similarityTerms(query.text),
+          limit: query.limit,
+          type: query.type,
         });
-        const poolIds = [...new Set(found.items.map((hit) => hit.pool.id))];
-        if (poolIds.length === 0) return { items: [] };
+        const byPool = new Map<string, string[]>();
+        for (const hit of hits) byPool.set(hit.pool.id, [...(byPool.get(hit.pool.id) ?? []), hit.question.id]);
+        if (byPool.size === 0) return { items: [] };
         const [roles, stats] = await Promise.all([
-          service.listPools(app.db, inArray(pools.id, poolIds), callerOf(req)),
-          Promise.all(poolIds.map((id) => poolQuestionStats(app.db, id))),
+          service.listPools(app.db, inArray(pools.id, [...byPool.keys()]), callerOf(req)),
+          Promise.all([...byPool].map(([poolId, ids]) => poolQuestionStats(app.db, poolId, ids))),
         ]);
         const roleOf = new Map(roles.map((p) => [p.id, p.role] as const));
         const statsOf = new Map(stats.flatMap((s) => s.items).map((s) => [s.questionId, s] as const));
         return {
-          items: found.items.map(({ question, pool, latestNumber, latest, linked }): SimilarQuestion => {
+          items: hits.map(({ question, pool, latestNumber, linked, searchText }) => {
             const figures = statsOf.get(question.id);
             const role = roleOf.get(pool.id);
             return {
@@ -90,13 +81,11 @@ export function similarRoutes(app: FastifyInstance, ctx: PoolRouteContext): void
               pool,
               type: question.type as QuestionTypeId,
               internalName: question.internalName,
-              excerpt: excerptOf(question.type, latest),
+              excerpt: excerptOf(searchText, question.internalName),
               latestNumber,
               linked,
-              canLink: linked || (role !== undefined && poolRoleAllows(role, "contributor")),
-              stats: figures
-                ? { n: figures.n, p: figures.p, r: figures.discrimination?.r ?? null }
-                : null,
+              canLink: linked || (role !== undefined && service.mayLinkPool(role)),
+              stats: figures ? { n: figures.n, p: figures.p, r: figures.discrimination?.r ?? null } : null,
             };
           }),
         };

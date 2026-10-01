@@ -30,8 +30,8 @@ import {
   PollQuestionType,
   QuestionCreate,
   QuestionPatch,
-  TemplateInstantiate,
   SimilarQuestionSearch,
+  TemplateInstantiate,
 } from "@quiz/contracts";
 
 import { checkConfig, describeQuestionType, questionTypeSummaries } from "./questionTypes.js";
@@ -247,23 +247,18 @@ export const TOOLS: Tool[] = [
     name: "find_similar_questions",
     title: "Find questions close to one about to be written",
     description:
-      "Call it BEFORE create_question, with the statement (or its gist) you are about to write: it returns the " +
-      "published questions closest to it, best first, from the course's pools first, then from every pool the " +
-      "teacher reaches (`scope`: `linked` for the course's pools only, `reachable` to rank every pool by " +
-      "similarity alone). Prefer reusing a hit over writing a near-duplicate: reuse makes its statistics grow, " +
-      "a copy starts with none. `linked`: usable as is in the course's evaluations. `canLink`: call " +
-      "link_pool_to_course first — note that linking makes the whole course staff contributors of that pool. " +
-      "Neither: the teacher only reads that pool; a copy would start with empty statistics. `stats` is " +
-      "`{ n, p, r }` over EXAMS only (never exercises): `n` answers, `p` mean share of the points, `r` " +
-      "discrimination (null when no exam qualifies); `stats` is null below ten answers — withheld, not zero. " +
-      "Public pools are searched too, so other teachers' published questions may appear. Ranked by shared " +
-      "words, no threshold: judge each hit's `excerpt` yourself.",
+      "Call it BEFORE create_question with the statement you are about to write, and reuse a close hit " +
+      "rather than writing a near-duplicate: reuse makes its exam statistics grow, a copy starts with none. " +
+      "Hits come from the course's pools first, then from every pool the teacher reaches (public pools " +
+      "included, so other teachers' questions may appear), ranked by shared words with no threshold: judge " +
+      "each `excerpt`. `linked`: usable as is in the course's evaluations. `canLink`: call " +
+      "link_pool_to_course first (it makes the course staff contributors of that whole pool). `stats` " +
+      "`{ n, p, r }` reads as in get_pool_question_stats (`r`: discrimination); null below ten exam answers.",
     input: z.object({
       courseId: Id,
       text: SimilarQuestionSearch.shape.text.describe("The statement to compare, or its gist"),
       type: SimilarQuestionSearch.shape.type,
-      scope: SimilarQuestionSearch.shape.scope,
-      limit: z.number().int().min(1).max(50).default(10),
+      limit: SimilarQuestionSearch.shape.limit,
     }),
     annotations: READ,
     run: (api, { courseId, ...query }) => api.get(`/courses/${courseId}/similar-questions`, query),

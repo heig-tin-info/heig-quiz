@@ -22,6 +22,7 @@ import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { publishQuestion, seedLive, type Seeded } from "../../test/live.js";
 import { writeGrading } from "../grading/service.js";
+import { poolQuestionStats } from "../stats/service.js";
 import * as poolService from "./service.js";
 
 let server: TestServer;
@@ -145,23 +146,14 @@ afterAll(async () => {
 });
 
 describe("GET /courses/:id/similar-questions", () => {
-  it("ranks every reachable pool by shared words with scope=reachable", async () => {
-    const items = await hits({ text: TEXT, scope: "reachable" });
-    expect(items.map((h) => h.questionId)).toEqual([ids.linkedStrong, ids.public, ids.own, ids.linkedWeak]);
-  });
-
-  it("puts the course's pools first by default", async () => {
+  it("puts the course's pools first, then every reachable pool, each by shared words", async () => {
+    // Four words shared, then one, in the course's pools; three, then two, elsewhere.
     const items = await hits({ text: TEXT });
     expect(items.map((h) => h.questionId)).toEqual([ids.linkedStrong, ids.linkedWeak, ids.public, ids.own]);
   });
 
-  it("searches the course's pools only with scope=linked", async () => {
-    const items = await hits({ text: TEXT, scope: "linked" });
-    expect(items.map((h) => h.questionId)).toEqual([ids.linkedStrong, ids.linkedWeak]);
-  });
-
   it("never returns a pool the caller cannot reach, nor a draft", async () => {
-    const found = (await hits({ text: TEXT, scope: "reachable", limit: "50" })).map((h) => h.questionId);
+    const found = (await hits({ text: TEXT, limit: "50" })).map((h) => h.questionId);
     expect(found).not.toContain(ids.private);
     expect(found).not.toContain(ids.draft);
   });
@@ -187,6 +179,10 @@ describe("GET /courses/:id/similar-questions", () => {
     expect(byId.get(ids.linkedStrong)!.stats).toEqual({ n: 10, p: 1, r: null });
     expect(byId.get(ids.linkedWeak)!.stats).toBeNull();
     expect(byId.get(ids.own)!.stats).toBeNull();
+    // Narrowed to the hits, the pool screen's figures are the same.
+    const whole = await poolQuestionStats(db, seed.poolId);
+    const narrowed = await poolQuestionStats(db, seed.poolId, [ids.linkedStrong]);
+    expect(narrowed.items).toEqual(whole.items.filter((i) => i.questionId === ids.linkedStrong));
   });
 
   it("filters by type, cuts at limit, and finds nothing in stop words", async () => {

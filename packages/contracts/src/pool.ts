@@ -646,22 +646,14 @@ export type TagParam = z.infer<typeof TagParam>;
 // --- Similar questions ---------------------------------------------------
 
 /**
- * Where `GET /courses/:id/similar-questions` looks: `linked`, the pools of
- * the course only; `reachable`, every pool the caller reaches, ranked by
- * similarity alone. Omitted: every reachable pool, the course's own first.
- */
-export const SimilarQuestionScope = z.enum(["linked", "reachable"]);
-export type SimilarQuestionScope = z.infer<typeof SimilarQuestionScope>;
-
-/**
- * The search for questions close to a statement about to be written
- * (ADR-022, addendum of 2026-10-01): its text, optionally one type, the
- * scope, and how many hits (ranked, no threshold).
+ * `GET /courses/:id/similar-questions`: the questions close to a statement
+ * about to be written (ADR-022, addendum of 2026-10-01), over every pool the
+ * caller reaches, the course's own first — its text, optionally one type,
+ * and how many hits (ranked, no threshold).
  */
 export const SimilarQuestionSearch = z.object({
   text: z.string().trim().min(1).max(4000),
   type: QuestionTypeId.optional(),
-  scope: SimilarQuestionScope.optional(),
   limit: z.coerce.number().int().min(1).max(50).default(10),
 });
 export type SimilarQuestionSearch = z.infer<typeof SimilarQuestionSearch>;
