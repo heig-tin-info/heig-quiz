@@ -316,7 +316,7 @@ describe("GradingPanel — the answer panel", () => {
       await waitFor(() => expect(rowOf("a1")).toHaveFocus());
     });
 
-    it("lets ← / → change the question with the pane open, closing it", async () => {
+    it("keeps the pane open across a change of question, on the new question's key", async () => {
       mockFetch(routes([proposal("a1", 2)]));
       renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
       await table();
@@ -327,6 +327,20 @@ describe("GradingPanel — the answer panel", () => {
       expect(
         await screen.findByRole("table", { name: "Answers to question 2" }),
       ).toBeInTheDocument();
+      expect(
+        await screen.findByRole("complementary", { name: "Question 2" }),
+      ).toBeInTheDocument();
+      expect(document.querySelector('[data-row="expected"]')).toHaveAttribute("aria-current", "true");
+
+      // The question bar's arrows too; only the ✕ closes it.
+      await userEvent.click(screen.getByRole("button", { name: "Previous question" }));
+      const pane = await screen.findByRole("complementary", { name: "Question 1" });
+      await userEvent.click(within(pane).getByRole("button", { name: "Close" }));
+      expect(screen.queryByRole("complementary")).toBeNull();
+
+      // Closed, it stays closed on the next question.
+      await userEvent.keyboard("{ArrowRight}");
+      await screen.findByRole("table", { name: "Answers to question 2" });
       expect(screen.queryByRole("complementary")).toBeNull();
     });
   });
