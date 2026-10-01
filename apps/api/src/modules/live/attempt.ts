@@ -46,6 +46,7 @@ import {
   seatsOf,
   trustedClients,
   settingsOf,
+  type DbOrTx,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
@@ -53,6 +54,7 @@ import {
   isLatestAttempt,
   itemCountsByEvaluation,
   joinedItems,
+  parameterizedItems,
   retakePolicyOf,
   retakesEnabled,
   studentEvaluationRows,
@@ -74,6 +76,8 @@ import {
   type ReleasedGrade,
 } from "../results/service.js";
 import { isShuffleable, studentView } from "./studentView.js";
+import type { StoredInstance } from "../../db/columns.js";
+import { instanceOf, itemInstance, type InstanceAttempt } from "../pool/service.js";
 
 export type AttemptRecord = typeof attempts.$inferSelect;
 
@@ -566,6 +570,29 @@ export function drawSeed(): number {
 }
 
 /**
+ * The values of every parameterized item of a new attempt (ADR-056 §5),
+ * drawn ONCE, here, from the attempt's seed and stored with it: the paper is
+ * rendered from the seed alone before any answer exists, so the values
+ * cannot wait for one. `{}` when no item declares variables — the common
+ * case, which costs one indexed read.
+ */
+async function drawInstances(
+  db: DbOrTx,
+  evaluation: EvaluationRecord,
+  seed: number,
+): Promise<Record<string, StoredInstance>> {
+  // A poll never holds a parameterized question (ADR-056 §10): nothing to read.
+  if (evaluation.mode === "poll") return {};
+  const items = await parameterizedItems(db, evaluation.id);
+  const out: Record<string, StoredInstance> = {};
+  for (const item of items) {
+    const { stored } = instanceOf(item.question.type, item.version, { seed, itemId: item.item.id });
+    if (stored !== null) out[item.item.id] = stored;
+  }
+  return out;
+}
+
+/**
  * Idempotent creation of the FIRST attempt. The unique index
  * `(evaluation_id, user_id, attempt_number)` is the mechanism: a second call
  * inserts number 1 again, is refused, and reads the row that is already
@@ -581,6 +608,7 @@ export async function ensureAttempt(
   // `returning()` is what tells the two apart: an empty array means the
   // unique index refused the insert, so this call created nothing and must
   // not announce a new row to the dashboard.
+  const seed = drawSeed();
   const created = await db
     .insert(attempts)
     .values({
@@ -588,7 +616,8 @@ export async function ensureAttempt(
       evaluationId: evaluation.id,
       ...ownerOf(participant),
       state: "not_started",
-      seed: drawSeed(),
+      seed,
+      instances: await drawInstances(db, evaluation, seed),
       presentAt: now,
       createdAt: now,
       updatedAt: now,
@@ -682,6 +711,7 @@ export async function retakeAttempt(
       timeBonusPercent: participant.timeBonusPercent,
       extraS: 0,
     });
+    const seed = drawSeed();
     const created = await tx
       .insert(attempts)
       .values({
@@ -690,7 +720,8 @@ export async function retakeAttempt(
         ...ownerOf(participant),
         attemptNumber: (latestAttempt(previous)?.attemptNumber ?? 0) + 1,
         state: "in_progress",
-        seed: drawSeed(),
+        seed,
+        instances: await drawInstances(tx, evaluation, seed),
         startedAt: now,
         deadlineAt,
         bonusS,
@@ -826,12 +857,15 @@ function attemptItems(
   answered: ReadonlyMap<string, AnswerRecord>,
   locked: ReadonlySet<string>,
   settings: EvaluationSettings,
-  seed: number,
+  attempt: InstanceAttempt,
   defaults: Readonly<Record<string, unknown>>,
 ): AttemptItem[] {
+  const { seed } = attempt;
   return ordered.map((entry) => {
     const answer = answered.get(entry.item.id) ?? null;
-    const version = { config: entry.version.config, configVersion: entry.version.configVersion };
+    // The student's own numbers (ADR-056): stored at the attempt's creation,
+    // drawn from the same seed for a preview that stores nothing.
+    const { version } = itemInstance(entry, attempt);
     return {
       id: entry.item.id,
       position: entry.item.position,
@@ -918,6 +952,7 @@ export async function attemptView(
 ): Promise<AttemptView> {
   return viewOf(db, evaluation, {
     seed: attempt.seed,
+    instances: attempt.instances,
     answered: await answersOf(db, attempt.id),
     header: {
       id: attempt.id,
@@ -948,6 +983,7 @@ export async function previewView(
 ): Promise<AttemptView> {
   return viewOf(db, evaluation, {
     seed,
+    instances: {},
     items,
     answered: new Map(),
     header: {
@@ -974,6 +1010,8 @@ async function viewOf(
   evaluation: EvaluationRecord,
   input: {
     seed: number;
+    /** The attempt's stored values (ADR-056); `{}` for a preview, which draws them from `seed`. */
+    instances: Readonly<Record<string, StoredInstance>>;
     items?: readonly JoinedItem[] | undefined;
     answered: ReadonlyMap<string, AnswerRecord>;
     header: AttemptView["attempt"];
@@ -996,7 +1034,7 @@ async function viewOf(
       pausedAt: isoOrNull(evaluation.pausedAt),
       totalPoints: evaluationTotal(items.map((i) => i.item)),
     },
-    items: attemptItems(ordered, answered, locked, settings, seed, gradeDefaults(evaluation)),
+    items: attemptItems(ordered, answered, locked, settings, { seed, instances: input.instances }, gradeDefaults(evaluation)),
   };
 }
 

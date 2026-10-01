@@ -18,7 +18,7 @@ afterAll(() => restore());
 
 describe("loading and saving a config (§1.6)", () => {
   it("loadConfig throws on a config no migration can save, tryLoadConfig does not", () => {
-    const row = { config: { statement: 7 }, configVersion: 2 };
+    const row = { config: { statement: 7 }, configVersion: 2, variables: null };
     expect(() => loadConfig("short", row)).toThrow();
     const outcome = tryLoadConfig("short", row);
     expect(outcome.ok).toBe(false);
@@ -53,7 +53,7 @@ describe("loading and saving a config (§1.6)", () => {
   });
 
   it("hands an invalid draft back at the CURRENT shape, migrated", () => {
-    const outcome = tryLoadConfig("mcq", { config: v1Mcq({ prompt: "" }), configVersion: 1 });
+    const outcome = tryLoadConfig("mcq", { config: v1Mcq({ prompt: "" }), configVersion: 1, variables: null });
     expect(outcome.ok).toBe(false);
     expect(outcome.config).toMatchObject({ configVersion: 2, policy: "symmetric" });
     expect(outcome.config).not.toHaveProperty("penalty");

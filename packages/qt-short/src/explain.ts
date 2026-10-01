@@ -48,7 +48,9 @@ function formatMinutes(total: number): string {
 export function explainMatcher(matcher: ShortMatcher, s: Strings): string | null {
   switch (matcher.kind) {
     case "number": {
-      if (!Number.isFinite(matcher.value)) return null;
+      // A `[[…]]` reference (ADR-056 §4) is not a value yet: nothing to explain.
+      if (typeof matcher.value !== "number" || !Number.isFinite(matcher.value)) return null;
+      if (typeof matcher.tolerance !== "number") return null;
       const tolerance = Number.isFinite(matcher.tolerance) ? Math.max(0, matcher.tolerance) : 0;
       const unitText = matcher.unit?.trim() ?? "";
       const unit = unitText === "" ? "" : ` ${unitText}`;

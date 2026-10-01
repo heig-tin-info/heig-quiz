@@ -1524,6 +1524,8 @@ export const questionDetail = (q: MockQuestion) => ({
   draft: {
     config: q.draft.config,
     explanation: q.draft.explanation,
+    // No mock question is parameterized (ADR-056): the editor's table is PR 3.
+    variables: null,
     configVersion: 1,
     updatedAt: q.updatedAt,
     valid: draftIssues(q).length === 0,

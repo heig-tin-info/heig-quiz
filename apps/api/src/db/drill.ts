@@ -35,6 +35,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { users } from "./auth.js";
+import type { StoredInstance } from "./columns.js";
 import { evaluations } from "./evaluation.js";
 import { classrooms } from "./org.js";
 import { questions } from "./pool.js";
@@ -74,6 +75,11 @@ export const drillCards = pgTable(
      * time already credited. Cleared by the answer.
      */
     serveSeed: integer("serve_seed"),
+    /**
+     * The values a parameterized question was served with (ADR-056 §5),
+     * beside `serve_seed` and cleared with it; null for a static question.
+     */
+    serveValues: jsonb("serve_values").$type<StoredInstance>(),
     shownSince: timestamp("shown_since", { withTimezone: true }),
     activeMs: integer("active_ms").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
@@ -88,6 +94,7 @@ export const drillCards = pgTable(
       "drill_cards_serve_ck",
       sql`${t.serveSeed} is not null or (${t.shownSince} is null and ${t.activeMs} = 0)`,
     ),
+    check("drill_cards_serve_values_ck", sql`${t.serveSeed} is not null or ${t.serveValues} is null`),
   ],
 );
 
@@ -112,6 +119,8 @@ export const drillReviews = pgTable(
     deviceClass: text("device_class", { enum: ["coarse", "fine"] }).notNull(),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull(),
     answerPayload: jsonb("answer_payload"),
+    /** The values of a parameterized question the answer was given to (ADR-056 §5); null when static. */
+    values: jsonb("values").$type<StoredInstance>(),
   },
   (t) => [
     index("drill_reviews_card_idx").on(t.cardId, t.reviewedAt),

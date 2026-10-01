@@ -74,7 +74,7 @@ import {
 } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import { studentSolutionView, studentViewOf } from "../live/studentView.js";
-import { hasKey, loadConfig, typeOf } from "../pool/config.js";
+import { asStatic, hasKey, loadConfig, typeOf, type StoredVersion } from "../pool/config.js";
 import { createUnsavedQuestion, searchReachableQuestions } from "../pool/service.js";
 import * as events from "./events.js";
 
@@ -88,6 +88,16 @@ export class PollError extends DomainError {
 export class PollTypeRefused extends PollError {
   constructor(type: string) {
     super("poll_type", 422, `a poll cannot run a "${type}" question`);
+  }
+}
+
+/**
+ * ADR-056 §10: a projector and thirty phones must show the same thing, and
+ * every attempt of a parameterized question draws its own numbers.
+ */
+export class PollParameterizedRefused extends PollError {
+  constructor() {
+    super("poll_parameterized", 422, "a poll cannot run a parameterized question");
   }
 }
 
@@ -191,17 +201,18 @@ export function pollSettingsOf(scope: PollScope): PollSettings {
   };
 }
 
-/** Whether a frozen question version names a right answer. */
-function keyedOf(type: string, version: { config: unknown; configVersion: number }): boolean {
+/**
+ * Whether a frozen question version names a right answer. A poll never holds
+ * a parameterized version (`assertPollable`), so `loadConfig` reads it as it
+ * is — and would throw on a template rather than show one.
+ */
+function keyedOf(type: string, version: StoredVersion): boolean {
   return hasKey(type, loadConfig(type, version));
 }
 
 /** Whether the poll's frozen question names a right answer. */
 function isKeyed(item: JoinedItem): boolean {
-  return keyedOf(item.question.type, {
-    config: item.version.config,
-    configVersion: item.version.configVersion,
-  });
+  return keyedOf(item.question.type, item.version);
 }
 
 /** The classroom a poll is for, or null for anyone with the code. */
@@ -251,6 +262,8 @@ async function assertPollable(db: Db, questionId: string): Promise<void> {
   if (question.type !== "mcq" && question.type !== "short") {
     throw new PollTypeRefused(question.type);
   }
+  // Derived from the latest published version, the one the poll freezes.
+  if (question.randomizable) throw new PollParameterizedRefused();
   const [version] = await db
     .select({ id: questionVersions.id })
     .from(questionVersions)
@@ -300,10 +313,7 @@ export async function createPoll(
         createdBy: input.createdBy,
         questionId: input.questionId,
         accessCode: code,
-        defaultPoints: (type, version) =>
-          typeOf(type).defaultPoints(
-            loadConfig(type, { config: version.config, configVersion: version.configVersion }),
-          ),
+        defaultPoints: (type, version) => typeOf(type).defaultPoints(loadConfig(type, version)),
         now: input.now,
       });
     } catch (err) {
@@ -573,10 +583,7 @@ export async function tallyOf(db: Db, evaluation: EvaluationRecord): Promise<Pol
   const type = scope.item.question.type as PollType;
   let choiceCount = 0;
   if (type === "mcq") {
-    const config = loadConfig(type, {
-      config: scope.item.version.config,
-      configVersion: scope.item.version.configVersion,
-    }) as { choices?: unknown[] };
+    const config = loadConfig(type, scope.item.version) as { choices?: unknown[] };
     choiceCount = Array.isArray(config.choices) ? config.choices.length : 0;
   }
   return pollTally({
@@ -606,21 +613,18 @@ async function emitTally(
  * A poll never shuffles — everyone in the room reads the same screen as the
  * beamer, and the tally is labelled by canonical choice index — so the seed
  * is fixed and the shuffle is off.
+ *
+ * A poll's question is STATIC: `assertPollable` refuses a parameterized one
+ * and its pickers never offer one (ADR-056 §10). `asStatic` narrows the
+ * frozen version to what the student exits accept, and throws rather than
+ * show a template should that ever not hold.
  */
-function studentPayload(
-  type: string,
-  version: { config: unknown; configVersion: number },
-  itemId: string,
-): unknown {
-  return studentViewOf(type, loadConfig(type, version), { seed: 0, itemId, shuffle: false });
+function studentPayload(type: string, version: StoredVersion, itemId: string): unknown {
+  return studentViewOf(type, loadConfig(type, asStatic(type, version)), { seed: 0, itemId, shuffle: false });
 }
 
 function studentOf(item: JoinedItem): unknown {
-  return studentPayload(
-    item.question.type,
-    { config: item.version.config, configVersion: item.version.configVersion },
-    item.item.id,
-  );
+  return studentPayload(item.question.type, item.version, item.item.id);
 }
 
 /**
@@ -631,7 +635,8 @@ function studentOf(item: JoinedItem): unknown {
 function solutionOf(item: JoinedItem): unknown {
   return studentSolutionView({
     type: item.question.type,
-    version: { config: item.version.config, configVersion: item.version.configVersion },
+    // Static by construction, see `studentPayload`.
+    version: asStatic(item.question.type, item.version),
     seed: 0,
     itemId: item.item.id,
   });
@@ -789,6 +794,7 @@ export async function questionPicks(
       questionId: questionVersions.questionId,
       config: questionVersions.config,
       configVersion: questionVersions.configVersion,
+      variables: questionVersions.variables,
     })
     .from(evaluations)
     .innerJoin(evaluationItems, eq(evaluationItems.evaluationId, evaluations.id))
@@ -813,6 +819,8 @@ export async function questionPicks(
       and(
         inArray(questions.id, candidates),
         inArray(questions.type, ["mcq", "short"]),
+        // ADR-056 §10: a parameterized question is never offered.
+        eq(questions.randomizable, false),
         isNull(questions.deletedAt),
         input.poolWhere === undefined ? undefined : or(isNull(questions.poolId), input.poolWhere),
       ),
@@ -888,7 +896,7 @@ export async function questionPicks(
     entry.useCount += 1;
     if (run.evaluation.state === "running") continue;
     const type = typeById.get(run.questionId)!;
-    const keyed = keyedOf(type, { config: run.config, configVersion: run.configVersion });
+    const keyed = keyedOf(type, run);
     const answered = answeredOf.get(run.evaluation.id) ?? 0;
     const graded = gradedOf.get(run.evaluation.id);
     entry.counts.push({
@@ -910,11 +918,7 @@ export async function questionPicks(
     const version = latest.get(question.id);
     if (!version) continue; // a draft-only question is not runnable (F-EVAL-03)
     const stats = usage.get(question.id);
-    const student = studentPayload(
-      question.type,
-      { config: version.config, configVersion: version.configVersion },
-      question.id,
-    ) as { prompt?: unknown };
+    const student = studentPayload(question.type, version, question.id) as { prompt?: unknown };
     picks.push({
       id: question.id,
       type: question.type as PollType,
@@ -960,6 +964,7 @@ export async function poolQuestionPage(
     courseId: input.courseId,
     types: POLLABLE_TYPES,
     search: input.search,
+    staticOnly: true,
   });
   return {
     items: found.items.map(({ question, pool, tags, latestNumber, latest }) => {

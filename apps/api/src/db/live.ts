@@ -37,6 +37,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { users } from "./auth.js";
+import type { StoredInstance } from "./columns.js";
 import { evaluationItems, evaluations } from "./evaluation.js";
 
 /**
@@ -92,6 +93,13 @@ export const attempts = pgTable(
     attemptNumber: integer("attempt_number").notNull().default(1),
     /** Drawn once; every permutation is derived from it and never stored (D19). */
     seed: integer("seed").notNull(),
+    /**
+     * The values of every parameterized item, drawn once when the attempt is
+     * created (ADR-056 §5), by item id. Unlike a permutation they are
+     * STORED: a mathjs upgrade or an edit must never change the numbers a
+     * student had. `{}` for an evaluation of static questions.
+     */
+    instances: jsonb("instances").$type<Record<string, StoredInstance>>().notNull().default({}),
     startedAt: timestamp("started_at", { withTimezone: true }),
     /** Null in `manual` timing: only the teacher closes (F-EVAL-04). */
     deadlineAt: timestamp("deadline_at", { withTimezone: true }),

@@ -24,6 +24,12 @@ describe("the contract", () => {
     expect(mcqServer.shuffleable(multipleConfig({ shuffleChoices: false }))).toBe(false);
   });
 
+  it("names its choices' texts as the ones an instance keeps distinct (ADR-056 §7)", () => {
+    expect(mcqServer.distinctTexts!(SECRET_CONFIG)).toEqual(SECRET_CONFIG.choices.map((c) => c.text));
+    expect(mcqServer.distinctTexts!({ choices: [{ text: "a" }, { correct: true }, null] })).toEqual(["a"]);
+    expect(mcqServer.distinctTexts!(null)).toEqual([]);
+  });
+
   it("feeds the search index with the prompt and every choice", () => {
     const text = mcqServer.searchText(SECRET_CONFIG);
     expect(text).toContain("p + 1");

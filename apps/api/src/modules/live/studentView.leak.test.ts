@@ -244,7 +244,7 @@ const KEYLESS_SECRETS = new Set(["circuit"]);
 
 function checkType(id: string, type: AnyQuestionTypeServer): void {
   const { config, markers } = sowSecrets(type);
-  const version = { config, configVersion: type.configVersion };
+  const version = { config, configVersion: type.configVersion, variables: null };
   const itemId = "33333333-3333-4333-8333-333333333333";
 
   // Two seeds, one with shuffling on: a permutation must not reorder a key
@@ -395,7 +395,7 @@ describe("studentView never leaks the key (invariant 4)", () => {
     const type = questionType("categorize");
     const payload = studentView({
       type: "categorize",
-      version: { config: filledDraft(type), configVersion: type.configVersion },
+      version: { config: filledDraft(type), configVersion: type.configVersion, variables: null },
       seed: 0,
       itemId: "55555555-5555-4555-8555-555555555555",
       shuffle: false,
@@ -427,7 +427,7 @@ describe("studentView never leaks the key (invariant 4)", () => {
     });
     const payload = studentView({
       type: "diagram",
-      version: { config, configVersion: type.configVersion },
+      version: { config, configVersion: type.configVersion, variables: null },
       seed: 0,
       itemId: "77777777-7777-4777-8777-777777777777",
       shuffle: false,
@@ -467,7 +467,7 @@ describe("studentView never leaks the key (invariant 4)", () => {
       });
       const payload = studentView({
         type: "code",
-        version: { config, configVersion: type.configVersion },
+        version: { config, configVersion: type.configVersion, variables: null },
         seed: 7,
         itemId: "44444444-4444-4444-8444-444444444444",
         shuffle: true,
@@ -494,7 +494,7 @@ describe("studentSolutionView keeps the teacher's material home (ADR-037)", () =
   const studentKeyOf = (id: string, config: unknown) =>
     studentSolutionView({
       type: id,
-      version: { config, configVersion: questionType(id).configVersion },
+      version: { config, configVersion: questionType(id).configVersion, variables: null },
       seed: 0,
       itemId,
     });
@@ -539,7 +539,7 @@ describe("stripMetadata is the last line of defence", () => {
     try {
       const payload = studentView({
         type: "short",
-        version: { config: { statement: "s", answer: "a" }, configVersion: rogue.configVersion },
+        version: { config: { statement: "s", answer: "a" }, configVersion: rogue.configVersion, variables: null },
         seed: 1,
         itemId: "55555555-5555-4555-8555-555555555555",
         shuffle: false,

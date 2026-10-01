@@ -28,15 +28,17 @@ import {
 } from "../../db/schema.js";
 import { testApp, testDb } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
+import { fallKey, fallOf, markersIn, PARAMETERIZED, publishParameterized } from "../../test/parameterized.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import * as live from "../live/service.js";
 
-import { loadConfig, typeOf } from "../pool/config.js";
+import { loadConfig, typeOf, type StoredVersion } from "../pool/config.js";
 import * as org from "../org/service.js";
 import * as poolService from "../pool/service.js";
 import { publishCorrection, releaseResults, unreleaseResults } from "../results/service.js";
 import * as drill from "./service.js";
+import { currentVersions } from "./lifecycle.js";
 
 let db: Db;
 let restore: () => void;
@@ -56,7 +58,7 @@ async function appAt(at = T0) {
 }
 type App = Awaited<ReturnType<typeof appAt>>;
 
-const points = (type: string, version: { config: unknown; configVersion: number }) =>
+const points = (type: string, version: StoredVersion) =>
   typeOf(type).defaultPoints(loadConfig(type, version));
 
 /**
@@ -353,6 +355,94 @@ describe("today's session (F-DRILL-03)", () => {
     app.clock.advance(86_400_000);
     const tomorrow = await drill.drillSession(db, userId, "fine", app.clock.now());
     expect(tomorrow.cards.filter((c) => c.isNew)).toHaveLength(3);
+  });
+});
+
+describe("a review of a parameterized question (ADR-056 §5)", () => {
+  // The REAL `short` here, not this file's fake: its v3 number key is the point.
+  beforeAll(() => restore());
+  afterAll(() => {
+    restore = registerForTests(fakeShort);
+  });
+  /** A drill world whose one question is a parameterized `type`, sat and handed in: one card. */
+  async function parameterizedCard(app: App, type: "mcq" | "short" | "cloze") {
+    const seed = await seedLive(db, { mode: "exercise", students: 1, questions: 0 });
+    await org.setClassroomDrill(db, seed.classroomId, true, app.clock.now());
+    const questionId = await publishParameterized(db, { poolId: seed.poolId, teacherId: seed.teacherId, type });
+    const [item] = await evaluationService.addItems(db, await reload(db, seed.evaluationId), [questionId], (t, version) =>
+      typeOf(t).defaultPoints(poolService.exampleConfig(t, version)), { attemptCount: 0 });
+    await sit(app, { ...seed, questionIds: [questionId], itemIds: [item!.id] }, { answers: [WRONG[type]] });
+    const userId = seed.studentIds[0]!;
+    const [card] = await cardsOf({ userId });
+    return { seed, questionId, userId, card: card! };
+  }
+
+  const WRONG = { mcq: { selected: [1] }, short: { text: "0" }, cloze: { blanks: ["0"] } } as const;
+  const rightAnswer = (type: "mcq" | "short" | "cloze", t: string) =>
+    type === "mcq" ? { selected: [0] } : type === "short" ? { text: t } : { blanks: [t] };
+
+  for (const type of ["mcq", "short", "cloze"] as const) {
+    it(`${type}: serves the values it stores beside the seed, grades on them, keeps them with the review, keys the card on the template`, async () => {
+      const app = await appAt();
+      const { questionId, userId, card } = await parameterizedCard(app, type);
+      const version = (await currentVersions(db, [questionId])).get(questionId)!;
+      expect(card.keyHash).toBe(poolService.templateHash(type, version));
+
+      const served = await drill.serveCard(db, userId, card.id, app.clock.now());
+      const [open] = await db.select().from(drillCards).where(eq(drillCards.id, card.id));
+      expect(open!.serveValues).toMatchObject({ versionId: version.id });
+      expect(Object.keys(open!.serveValues!.values).sort()).toEqual(["g", "h", "t"]);
+      const t = fallOf(open!.serveValues!.values);
+      expect(markersIn(JSON.stringify(served))).toEqual([]);
+      // The key of a short answer or of a blank is never in the question served.
+      const key = fallKey(open!.serveValues!.values);
+      if (type !== "mcq") expect(JSON.stringify(served)).not.toContain(key);
+      // A reload serves the same instance.
+      expect(await drill.serveCard(db, userId, card.id, app.clock.now())).toEqual(served);
+
+      const result = await drill.answerCard(db, userId, card.id, { answer: rightAnswer(type, t), deviceClass: "fine" }, app.clock.now());
+      expect(result.correctness).toBe("right");
+      expect(markersIn(JSON.stringify(result))).toEqual([]);
+      // The key shown after the answer is the instance's.
+      if (type !== "mcq") expect(JSON.stringify(result.solution)).toContain(key);
+      const [review] = await db.select().from(drillReviews).where(eq(drillReviews.cardId, card.id));
+      expect(review!.values).toEqual(open!.serveValues);
+      const [closed] = await db.select().from(drillCards).where(eq(drillCards.id, card.id));
+      expect(closed!.serveSeed).toBeNull();
+      expect(closed!.serveValues).toBeNull();
+      // A new draw is no new key: the card keeps its schedule.
+      expect(closed!.keyHash).toBe(card.keyHash);
+    });
+  }
+
+  it("draws again, never fails, when the question was republished with rows the served values cannot replay (§7)", async () => {
+    const app = await appAt();
+    const { questionId, userId, card, seed } = await parameterizedCard(app, "short");
+    await drill.serveCard(db, userId, card.id, app.clock.now());
+    // Version 2: the same names, but `t` is now undefined for any served h ≥ 10.
+    const [question] = await db.select().from(questions).where(eq(questions.id, questionId));
+    const saved = await poolService.putDraft(db, question!, {
+      config: PARAMETERIZED.short,
+      variables: {
+        rows: [
+          { name: "h", expr: "randint(1, 5)", format: "int" },
+          { name: "g", expr: "choice([3.71, 9.81])", format: ".2" },
+          { name: "t", expr: "sqrt(5 - h) + 1", format: ".2" },
+        ],
+      },
+    });
+    expect(saved.issues).toEqual([]);
+    await poolService.publishQuestion(db, question!, { userId: seed.teacherId });
+    const v2 = (await currentVersions(db, [questionId])).get(questionId)!;
+
+    const served = await drill.serveCard(db, userId, card.id, app.clock.now());
+    expect(markersIn(JSON.stringify(served))).toEqual([]);
+    const result = await drill.answerCard(db, userId, card.id, { answer: { text: "0" }, deviceClass: "fine" }, app.clock.now());
+    expect(result.correctness).toBe("wrong");
+    const [review] = await db.select().from(drillReviews).where(eq(drillReviews.cardId, card.id));
+    // Drawn again under version 2, from the review's own seed.
+    expect(review!.values).toMatchObject({ versionId: v2.id });
+    expect(review!.values!.values["h"]).toBeLessThanOrEqual(5);
   });
 });
 

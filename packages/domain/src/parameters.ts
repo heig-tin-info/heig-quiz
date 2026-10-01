@@ -112,20 +112,25 @@ function checkedPlan(params: Parameters): Plan {
   return plan;
 }
 
+/** One row's value, from the rows above it in `scope`. */
+function evaluateRow(row: VariableRow, compiled: Compiled, scope: Map<string, unknown>): number | string {
+  return at({ row: row.name }, () => {
+    const v = checkValue(run(compiled, scope));
+    if (typeof v === "string" && row.format !== "") fail("bad_format", "a text value takes no format");
+    // A variable IS its formatted value (ADR-056 §6): later rows read it rounded.
+    return typeof v === "number" ? roundToFormat(v, row.format) : v;
+  });
+}
+
+/** The table's values, by name. `fromEntries`, not assignment: no name can be lost to a prototype setter. */
+const valuesOf = (plan: Plan, scope: Map<string, unknown>): Values =>
+  Object.fromEntries(plan.rows.map(({ row }) => [row.name, scope.get(row.name) as number | string]));
+
 /** One run: the values, and whether the condition holds on them. */
 function evaluateOnce(plan: Plan, next: () => number): { values: Values; holds: boolean } {
   const scope = new Map<string, unknown>(randomScope(next));
-  for (const { row, compiled } of plan.rows) {
-    const value = at({ row: row.name }, () => {
-      const v = checkValue(run(compiled, scope));
-      if (typeof v === "string" && row.format !== "") fail("bad_format", "a text value takes no format");
-      // A variable IS its formatted value (ADR-056 §6): later rows read it rounded.
-      return typeof v === "number" ? roundToFormat(v, row.format) : v;
-    });
-    scope.set(row.name, value);
-  }
-  // `fromEntries`, not assignment: no name can be lost to a prototype setter.
-  const values: Values = Object.fromEntries(plan.rows.map(({ row }) => [row.name, scope.get(row.name) as number | string]));
+  for (const { row, compiled } of plan.rows) scope.set(row.name, evaluateRow(row, compiled, scope));
+  const values = valuesOf(plan, scope);
   if (plan.condition === null) return { values, holds: true };
   const holds = at({ row: "condition" }, () => run(plan.condition!, scope));
   if (typeof holds !== "boolean") {
@@ -192,6 +197,46 @@ export function instantiate<T>(json: T, params: Parameters, values: Values): T {
   const template = compileTemplate(json, formatsOf(params));
   if (template.issues.length > 0) throw new ParameterError(template.issues[0]!);
   return template.render(values);
+}
+
+/** Whether stored `values` hold exactly the variables `params` declares (ADR-056 §5). */
+export function sameNames(params: Parameters, values: Values): boolean {
+  const keys = Object.keys(values);
+  return keys.length === params.rows.length && params.rows.every((row) => Object.hasOwn(values, row.name));
+}
+
+/**
+ * Whether two tables declare the same variable names, in any order — the
+ * condition under which values drawn under one are replayed under the other
+ * (a regrade with version N, ADR-056 §5). `null` is a static version: it
+ * matches only another static one.
+ */
+export function sameTable(a: Parameters | null, b: Parameters | null): boolean {
+  const names = (p: Parameters | null) => (p?.rows ?? []).map((r) => r.name).sort();
+  const x = names(a);
+  const y = names(b);
+  return x.length === y.length && x.every((name, i) => name === y[i]);
+}
+
+/**
+ * The values of another version of a table, from values drawn under a former
+ * one: a regrade with version N, a drill card whose question was republished
+ * (ADR-056 §5). The caller has checked {@link sameNames}. A row that draws
+ * (`randint`, `uniform`, `choice`) keeps its stored value; every other row is
+ * evaluated again, in order, from the rows above it, and rounded by its
+ * format. The condition is not checked: the student already had these
+ * numbers. Throws a `ParameterError` on a static issue, a missing value or an
+ * evaluation failure.
+ */
+export function replay(params: Parameters, stored: Values): Values {
+  const plan = checkedPlan(params);
+  const scope = new Map<string, unknown>();
+  for (const { row, compiled } of plan.rows) {
+    if (!compiled.random) scope.set(row.name, evaluateRow(row, compiled, scope));
+    else if (Object.hasOwn(stored, row.name)) scope.set(row.name, stored[row.name]);
+    else fail("unknown_name", `no stored value for ${row.name}`, { row: row.name });
+  }
+  return valuesOf(plan, scope);
 }
 
 export interface ValidateOptions extends DrawOptions {

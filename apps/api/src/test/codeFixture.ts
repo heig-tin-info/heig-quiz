@@ -64,7 +64,7 @@ export async function seedCodeEvaluation(
     [questionId],
     (type, version) =>
       typeOf(type).defaultPoints(
-        loadConfig(type, { config: version.config, configVersion: version.configVersion }),
+        loadConfig(type, version),
       ),
     { attemptCount: 0 },
   );

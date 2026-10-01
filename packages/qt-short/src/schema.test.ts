@@ -10,7 +10,7 @@ import { shortServer } from "./server.js";
 
 function base(): Record<string, unknown> {
   return {
-    configVersion: 2,
+    configVersion: 3,
     prompt: "Give the directive.",
     matchers: [{ kind: "exact", value: "#include <stdio.h>" }],
   };
@@ -53,7 +53,7 @@ describe("ShortConfigSchema", () => {
     ["matcher points above 1", { ...base(), matchers: [{ kind: "exact", value: "x", points: 2 }] }],
     ["a negative tolerance", { ...base(), matchers: [{ kind: "number", value: 1, tolerance: -1 }] }],
     ["an unknown answer kind", { ...base(), kind: "colour" }],
-    ["a future configVersion", { ...base(), configVersion: 3 }],
+    ["a future configVersion", { ...base(), configVersion: 4 }],
     ["a v1 config, which must go through migrate() first", { ...base(), configVersion: 1 }],
     ["a max length above the hard cap", { ...base(), constraints: { maxLength: 501 } }],
     ["a min length above the max length", { ...base(), constraints: { minLength: 10, maxLength: 5 } }],
@@ -94,6 +94,25 @@ describe("ShortConfigSchema", () => {
     });
     expect(result.error?.issues[0]?.path).toEqual(["matchers", 0, "value"]);
     expect(result.error?.issues[0]?.message).toBe("short.integer_expected");
+  });
+
+  it("v3: reads a number matcher's numeric text as a number and keeps a [[…]] reference (ADR-056 §4)", () => {
+    const number = (value: unknown, tolerance?: unknown) =>
+      ShortConfigSchema.safeParse({
+        ...base(),
+        kind: "number",
+        constraints: { integer: true },
+        matchers: [{ kind: "number", value, ...(tolerance === undefined ? {} : { tolerance }) }],
+      });
+    const coerced = number(" 4 ", "0.5");
+    expect(coerced.success && coerced.data.matchers[0]).toMatchObject({ value: 4, tolerance: 0.5 });
+    const reference = number("[[h]]", "[[ d / 2 ]]");
+    expect(reference.success && reference.data.matchers[0]).toMatchObject({ value: "[[h]]", tolerance: "[[ d / 2 ]]" });
+    // The integer rule reads the number; a reference waits for its instance.
+    expect(number("4.5").success).toBe(false);
+    expect(number("abc").success).toBe(false);
+    expect(number("4", "-1").success).toBe(false);
+    expect(number("[[h]] + 1").success).toBe(false);
   });
 
   it("drops the v1 text options an old payload still carries", () => {

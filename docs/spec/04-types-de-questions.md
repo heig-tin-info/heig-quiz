@@ -12,7 +12,8 @@ A type is a TypeScript package that exports a `QuestionType` object:
 | `defaultPoints(config)` | Default points when the question is added to an evaluation. |
 | `toStudent(config, seed)` | Returns the configuration visible to the student: no key, no explanation, no hidden tests, choices shuffled according to the seed. Pure function, tested. |
 | `grade(config, answer, ctx)` | Returns `{ points, maxPoints, details }` or `{ pending: 'runner' | 'llm' }`. `ctx` provides the seed, the item's points, and the runner and LLM services. |
-| `randomize(config, seed)` | Optional. Instantiates the random variables. Returns a concrete configuration. |
+| `distinctTexts(config)` | Optional (`mcq`). The texts an instance of a parameterized question keeps distinct (ADR-056 §7). Variables themselves are a header field of the version, instantiated by the API before any hook is called, never by the type. |
+| `parameterIssues(template)` | Optional (`short`). What a parameterized template may not do although its instances could (a computed text key, ADR-056 §10). |
 | `Editor` | React component for editing the draft. |
 | `Player` | React component for answering. Receives the student configuration, the current answer, an `onChange` callback. |
 | `Review` | React component for review: answer, key, grading, for the teacher and for the student feedback. |

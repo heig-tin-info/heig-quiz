@@ -230,4 +230,13 @@ describe("matcher dispatch and rendering", () => {
       "explain",
     ]);
   });
+
+  it("never matches a template's [[…]] reference, and writes it as it stands (ADR-056 §4)", () => {
+    const value: ShortMatcher = { kind: "number", value: "[[t]]", tolerance: 0.1 };
+    const tolerance: ShortMatcher = { kind: "number", value: 4, tolerance: "[[d]]", toleranceMode: "rel" };
+    expect(matchShort("4", value)).toBe(false);
+    expect(matchShort("4", tolerance)).toBe(false);
+    expect(describeMatcher(value)).toBe("[[t]] ± 0.1");
+    expect(describeMatcher(tolerance)).toBe("4 ± 100 × [[d]] %");
+  });
 });

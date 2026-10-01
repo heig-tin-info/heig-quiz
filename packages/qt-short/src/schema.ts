@@ -13,11 +13,36 @@
  * answer field cannot be case-sensitive for one accepted answer and not for
  * the next, and a teacher who read "Case sensitive" three times on three rows
  * was reading the same decision three times.
+ *
+ * Version 3 (ADR-056 §4) lets a `number` matcher's `value` and `tolerance`
+ * hold a `[[…]]` reference, for a parameterized question: the template
+ * stores `"[[t]]"`, its instances the interpolated text (`"4.52"`), which
+ * the schema reads as the number it spells. A v2 config IS a v3 config.
  */
 import { ALLOWED_REGEX_FLAGS, isValidPattern, MAX_PATTERN_LENGTH } from "@quiz/domain/short";
 import { z } from "zod";
 
-export const SHORT_CONFIG_VERSION = 2;
+export const SHORT_CONFIG_VERSION = 3;
+
+/** A plain decimal number as text: what an instance carries after `[[…]]` was replaced. */
+const NUMERIC_TEXT = /^\s*[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?\s*$/i;
+/** One `[[…]]` reference, the whole field: the template of a parameterized question. */
+export const SHORT_REFERENCE = /^\s*\[\[[^\n]*\]\]\s*$/;
+
+/**
+ * A number, the text of one (coerced), or a `[[…]]` reference — kept as
+ * text, which no grade ever matches and publication refuses on a question
+ * without variables (`short.unresolved_reference`).
+ */
+const numberOrReference = (number: z.ZodNumber) =>
+  z.union([
+    number,
+    z.string().regex(NUMERIC_TEXT).transform(Number).pipe(number),
+    z.string().max(300).regex(SHORT_REFERENCE),
+  ]);
+
+/** Whether a matcher field still holds a `[[…]]` reference rather than a number. */
+export const isReference = (value: unknown): value is string => typeof value === "string";
 
 export const SHORT_MAX_MATCHERS = 20;
 /** Decision D10: the answer a student may type, and therefore what a regex sees. */
@@ -48,8 +73,8 @@ export const ShortMatcherSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("number"),
-    value: z.number(),
-    tolerance: z.number().min(0).default(0),
+    value: numberOrReference(z.number()),
+    tolerance: numberOrReference(z.number().min(0)).default(0),
     toleranceMode: z.enum(["abs", "rel"]).default("abs"),
     unit: z.string().max(16).optional(),
     unitRequired: z.boolean().default(false),
@@ -150,7 +175,12 @@ function refineShortConfig(
       });
     }
     // A field that only takes whole numbers cannot expect 3.5.
-    if (config.constraints.integer && matcher.kind === "number" && !Number.isInteger(matcher.value)) {
+    if (
+      config.constraints.integer &&
+      matcher.kind === "number" &&
+      typeof matcher.value === "number" &&
+      !Number.isInteger(matcher.value)
+    ) {
       ctx.addIssue({
         code: "custom",
         path: ["matchers", index, "value"],
