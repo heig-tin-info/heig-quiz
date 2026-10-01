@@ -61,8 +61,11 @@ an ordered list of rows `{ name, expr, format }` plus an optional
 `condition`. It belongs to no question type, so the three types do not each
 need a migration for it. A question is **parameterized** exactly when its
 published version has at least one variable. The `questions.randomizable`
-flag is derived from that at publication, the way `shuffleable` is, and is
-never patched by hand.
+flag is derived from that by every version write that publishes
+(`publishQuestion` today), and is never patched by hand: it left
+`QuestionPatch`. (`shuffleable` is NOT derived the same way: it is set at
+the question's creation and patched by the teacher.) A copy has no
+published version yet, so it starts at `false`.
 
 Variables belong to one question. Two questions about the same cliff do not
 share `h`. A problem in several parts is a `cloze`, or a multi-part question
@@ -165,20 +168,32 @@ mathjs, a reordered variable or a different retry cap would change every
 past instance. The review, the results and a regrade would then show numbers
 the student never saw.
 
-- **When.** The first time an item of a parameterized question is served in
-  an attempt, its values are drawn with the attempt's seed and written to
-  the `(attempt, item)` row, as `{ name: value }`. Every later read uses the
-  stored values. Values are recomputed only when none are stored, for
-  example in the student preview of ADR-018, which stores nothing.
+- **When.** The paper is rendered from the attempt's seed before any answer
+  row exists, so the values cannot wait for one: they are drawn for every
+  parameterized item **when the attempt is created** (the first attempt and
+  each retake), from `streamSeed(attempt.seed, item.id, "vars")`, and stored
+  in `attempts.instances` as `{ [itemId]: { versionId, values } }`. The
+  items of an evaluation are frozen once an attempt exists. Every later read
+  uses the stored values. Values are recomputed from the same seed only
+  when none are stored, for example in the student preview of ADR-018,
+  which stores nothing.
 - **Seed.** The seed stays per attempt, not per student and evaluation. A
   retake (n + 1) gets a new seed, so new values: that is the point of
   retaking an exercise.
 - **Version.** A regrade with version N (F-GRADE-06) keeps the stored values
   when N declares the same variable names, and recomputes only N's derived
-  expressions from them. When the names differ, the item's regrade is
-  refused with a reason.
-- **Drill.** A review in progress keeps its values beside `serve_seed`.
-  `drill_reviews` stores them with the answer. ADR-041 (i) is unchanged:
+  expressions from them: a row that calls `randint`, `uniform` or `choice`
+  keeps its stored value, every other row is evaluated again in order and
+  rounded by its format (`replay`), the condition is not checked. The
+  stored values are never rewritten: `versionId` says which version they
+  were drawn for, and a read under another one replays them. When the names
+  differ, the item's regrade is refused (`409 variables_changed`) and the
+  item keeps its version.
+- **Drill.** A review in progress keeps its values beside `serve_seed`
+  (`drill_cards.serve_values`, cleared with it). The question is the latest
+  published version, which may change between the serve and the answer:
+  the values are replayed under the same names and drawn again otherwise.
+  `drill_reviews.values` stores them with the answer. ADR-041 (i) is unchanged:
   each review is a new seed, so new values. A card's key identity
   (`keyHashOf`) is computed on the TEMPLATE, never on an instance, so a new
   instance does not reset the card.
@@ -216,7 +231,8 @@ to a shared pool (ADR-013). The validation draws 200 seeds. The question is
 refused if an evaluation fails, if a draw exhausts its 100 tries, or if a
 draw is slow. If the cap is still reached when a student is served, the last
 draw is kept, a warning is written to the grading details, and the student
-never sees an error.
+never sees an error. A draw that throws is served from seed 0's values,
+which publication validated, and flagged the same way.
 
 ### 8. Editor, preview and list
 
