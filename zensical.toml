@@ -92,6 +92,7 @@ nav = [
       { "ADR-050 Publishing an exercise's correction" = "adr/ADR-050-publier-la-correction-d-un-exercice.md" },
       { "ADR-051 Attested kiosk stations" = "adr/ADR-051-postes-kiosque-attestes.md" },
       { "ADR-054 Super Powers of an admin" = "adr/ADR-054-super-powers-admin.md" },
+      { "ADR-056 Parameterized questions" = "adr/ADR-056-questions-parametrees.md" },
     ] },
     { "Classroom merge" = [
       { "Overview" = "merge/README.md" },
