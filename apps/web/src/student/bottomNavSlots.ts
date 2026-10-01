@@ -8,22 +8,18 @@ import { bottomSlotOf, type BottomSlotId, type Route } from "../router";
 
 export type { BottomSlotId };
 
+/** A slot leads to a page: every one of them is a route (Grades too, since `/grades`). */
 export interface BottomSlot {
   id: BottomSlotId;
   route: Route;
-  /** The `id` of the section of the student home the slot scrolls to. */
-  anchor?: string;
 }
-
-/** The anchor of the student home's Grades section (until M5-04), written once for both sides. */
-export const HOME_SECTION = { grades: "past" } as const;
 
 /** In the order they are drawn; Drill (#317) in the middle. */
 export const BOTTOM_SLOTS: readonly BottomSlot[] = [
   { id: "activities", route: { view: "home" } },
   { id: "courses", route: { view: "studentCourses" } },
   { id: "drill", route: { view: "drill" } },
-  { id: "grades", route: { view: "home" }, anchor: HOME_SECTION.grades },
+  { id: "grades", route: { view: "studentGrades" } },
   { id: "profile", route: { view: "settings" } },
 ];
 
@@ -39,8 +35,8 @@ export function visibleSlots(drill: boolean): readonly BottomSlot[] {
 /**
  * The rows of the student's desktop sidebar (`Shell`'s `Nav`): the bar's
  * slots in the bar's order, minus Profile, which is the account menu's at the
- * foot of the sidebar (D07, 2026-10-01). The lit row is `activeSlot`'s, as on
- * the bar.
+ * foot of the sidebar (D07, 2026-10-01). The lit row is the bar's: the route
+ * table's `bottomSlot` (`bottomSlotOf`).
  */
 export function sidebarSlots(drill: boolean): readonly BottomSlot[] {
   return visibleSlots(drill).filter((s) => s.id !== "profile");
@@ -49,16 +45,4 @@ export function sidebarSlots(drill: boolean): readonly BottomSlot[] {
 /** The bar is the student UI's, on the views the route table gives a slot. */
 export function bottomNavShown(route: Route, teacherUi: boolean): boolean {
   return !teacherUi && bottomSlotOf(route) !== null;
-}
-
-/**
- * The slot lit for `route`: the route table's, except on the home, where the
- * address's `hash` (`#past`, …) names the section a slot scrolled to.
- */
-export function activeSlot(route: Route, hash: string): BottomSlotId | null {
-  if (route.view === "home") {
-    const section = BOTTOM_SLOTS.find((s) => s.anchor !== undefined && `#${s.anchor}` === hash);
-    if (section) return section.id;
-  }
-  return bottomSlotOf(route);
 }

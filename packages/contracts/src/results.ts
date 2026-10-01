@@ -11,7 +11,7 @@
  */
 import { z } from "zod";
 
-import { GradingScale, RetakeKeep } from "./evaluation.js";
+import { EvaluationMode, GradingScale, RetakeKeep } from "./evaluation.js";
 import { AttemptScore, AttemptState, RetakeRefusalReason } from "./live.js";
 import { Verdict } from "./grading.js";
 
@@ -296,17 +296,58 @@ export const StudentFeedback = z.discriminatedUnion("available", [
 ]);
 export type StudentFeedback = z.infer<typeof StudentFeedback>;
 
-/** `GET /student/results` — one card per released evaluation (F-RES-04). */
-export const ResultCard = z.object({
+/**
+ * Where a row of the student's Grades page stands (F-RES-04, F-ORG-14):
+ * `released` — the results are released; `available` — not released, but
+ * the feedback page already shows them (the immediate policy, a published
+ * correction, ADR-050); `pending` — handed in, results to come; `submitted`
+ * — handed in, and the feedback policy will never publish anything;
+ * `missed` — nothing handed in. A `missed` row of a released evaluation
+ * still carries its grade, the scale minimum (F-RES-02).
+ */
+export const GradeStatus = z.enum(["released", "available", "pending", "submitted", "missed"]);
+export type GradeStatus = z.infer<typeof GradeStatus>;
+
+/** One finished evaluation of the student's, on their Grades page. */
+export const GradeRow = z.object({
   evaluationId: z.uuid(),
   title: z.string(),
-  classroomId: z.uuid(),
-  classroomName: z.string(),
-  courseCode: z.string(),
-  attemptId: z.uuid().nullable(),
-  releasedAt: z.iso.datetime().nullable(),
-  points: z.number(),
-  totalPoints: z.number(),
-  grade: z.number(),
+  mode: EvaluationMode,
+  /** When it ended for the student: the hand-in, the close, or the evaluation's. */
+  date: z.iso.datetime(),
+  status: GradeStatus,
+  /**
+   * The attempt whose feedback page the row opens (the one that counts,
+   * F-EVAL-15), only when that page has something to show; null otherwise.
+   */
+  feedbackAttemptId: z.uuid().nullable(),
+  /**
+   * The points and the Swiss grade, ONLY once the results are released and
+   * the feedback policy lets the student read them — never under `none`
+   * (F-RES-04). Null everywhere else.
+   */
+  score: z.object({ points: z.number(), totalPoints: z.number(), grade: z.number() }).nullable(),
 });
-export type ResultCard = z.infer<typeof ResultCard>;
+export type GradeRow = z.infer<typeof GradeRow>;
+
+/** One classroom of the student's Grades page, archived ones included. */
+export const GradeGroup = z.object({
+  classroom: z.object({
+    id: z.uuid(),
+    name: z.string(),
+    courseCode: z.string(),
+    courseName: z.string(),
+    period: z.string(),
+    archived: z.boolean(),
+  }),
+  /** Newest first. */
+  rows: z.array(GradeRow),
+});
+export type GradeGroup = z.infer<typeof GradeGroup>;
+
+/**
+ * `GET /student/results` — the student's finished work, by classroom, the
+ * classroom of the newest row first (F-RES-04, F-ORG-14). No average (D06).
+ */
+export const StudentGrades = z.array(GradeGroup);
+export type StudentGrades = z.infer<typeof StudentGrades>;

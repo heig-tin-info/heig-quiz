@@ -28,6 +28,7 @@ import { DOCS_URL, SOURCES_URL } from "./Header";
 import { LOCALES, type Locale, type TFunction } from "./i18n";
 import { evaluationInView, type Route } from "./router";
 import { screenCommands } from "./screenCommands";
+import { homeLook } from "./student/BottomNav";
 import type { Theme, ThemeChoice } from "./theme";
 import type { IconType } from "./ui";
 
@@ -116,8 +117,8 @@ export function buildCommands(ctx: CommandContext): Command[] {
       // Same label and icon as the sidebar row it duplicates: the palette must
       // name things the way the screen behind it does.
       // A student's home is their Activities, the first row of their sidebar.
-      label: ctx.teacherUi ? t("nav.courses") : t("nav.activities"),
-      icon: ctx.teacherUi ? Library : CalendarRange,
+      label: t(homeLook(ctx.teacherUi).label),
+      icon: homeLook(ctx.teacherUi).icon,
       group: "navigate",
       run: () => navigate({ view: "home" }),
     },

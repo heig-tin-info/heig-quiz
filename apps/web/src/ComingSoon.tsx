@@ -2,6 +2,7 @@ import { Construction } from "lucide-react";
 
 import { type Dict, useT } from "./i18n";
 import type { Navigate } from "./router";
+import { homeLook } from "./student/BottomNav";
 import { Card, EmptyState, PageHeader, ParentLink } from "./ui";
 
 /**
@@ -23,7 +24,7 @@ export function ComingSoon({
   teacherUi: boolean;
 }) {
   const t = useT();
-  const home = teacherUi ? t("nav.courses") : t("nav.activities");
+  const home = t(homeLook(teacherUi).label);
   return (
     <div className="space-y-6">
       <PageHeader

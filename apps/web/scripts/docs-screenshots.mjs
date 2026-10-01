@@ -742,11 +742,11 @@ const scenes = [
   // Student
   {
     name: "student-home",
-    caption: "The student's home: what is open, what is coming, what is past.",
+    caption: "The student's home: what is open now and what is coming.",
     persona: "lea",
     path: "/",
     phone: true,
-    state: "As seeded: one exercise in its lobby, one scheduled test, one past test.",
+    state: "As seeded: one exercise in its lobby, one scheduled test.",
   },
   {
     name: "student-lobby",
@@ -869,6 +869,15 @@ const scenes = [
     phase: "released",
     phone: true,
     fullPage: true,
+    state: "“Test 0” released by the teacher.",
+  },
+  {
+    name: "student-grades",
+    caption: "The student's Grades: finished work by classroom, the grade once released.",
+    persona: "lea",
+    path: "/grades",
+    phase: "released",
+    phone: true,
     state: "“Test 0” released by the teacher.",
   },
   {

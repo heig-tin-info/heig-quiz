@@ -204,3 +204,86 @@ describe("mostUrgent", () => {
     expect(mostUrgent({ polls: [], open: [card({ id: "x" }), card({ id: "y" })] })).toBe("x");
   });
 });
+
+/*
+ * The Past group, which the classroom page keeps once the home's Past moved
+ * to the Grades page (F-ORG-14, 2026-10-01): its line and its one button,
+ * the shared `pastLine` and `useCardActions().review`. In French, as the
+ * home tested them.
+ */
+describe("the classroom page's Past group (issue #203, F-EVAL-15)", () => {
+  const renderFr = (past: EvaluationCard[], navigate = vi.fn()) => {
+    const activities = { polls: [], open: [], upcoming: [], past: past.map((c) => ({ ...c, kind: "evaluation" as const })) };
+    mockFetch({ [URL_R1]: ok(classroomPage({ activities })) });
+    renderWithProviders(<StudentClassroom id="r1" tab="activities" navigate={navigate} />, { locale: "fr" });
+    return navigate;
+  };
+
+  const retaking = (over: Partial<EvaluationCard["retakes"] & object> = {}) =>
+    card({
+      id: "e9",
+      title: "Série 3 — Entraînement",
+      mode: "exercise",
+      attemptId: "a9",
+      attemptState: "submitted",
+      retakes: {
+        keep: "best",
+        maxAttempts: 3,
+        attemptCount: 2,
+        canRetake: false,
+        kept: { attemptId: "a8", attemptNumber: 1, score: { points: 7.5, totalPoints: 10, pending: false } },
+        ...over,
+      },
+    });
+
+  // WP10: the one student results page, `/attempts/:id/feedback`.
+  it("opens a past attempt's feedback", async () => {
+    const navigate = renderFr([
+      card({ id: "e3", title: "Quiz 2 — Tableaux", state: "released", attemptId: "a3", attemptState: "submitted", results: "available" }),
+    ]);
+    await userEvent.click(await screen.findByRole("button", { name: "Voir mes résultats" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "feedback", attemptId: "a3" });
+  });
+
+  // Issue #203: no button that leads to "not published yet".
+  it("says the results are not out, with no button, when the server has none to show", async () => {
+    renderFr([
+      // Handed in while the quiz still runs, `on_release`.
+      card({ id: "e5", title: "Quiz 4", attemptId: "a5", attemptState: "submitted", results: "pending" }),
+      // Its time ran out, and the teacher closed it without releasing.
+      card({ id: "e6", title: "Quiz 5", state: "closed", attemptId: "a6", attemptState: "expired", results: "pending" }),
+      // Closed under `none`: nothing will ever be published, so no "yet".
+      card({ id: "e7", title: "Quiz 6", state: "closed", attemptId: "a7", attemptState: "submitted", results: "none" }),
+    ]);
+    expect((await cardOf("Quiz 4")).getByText("rendue · résultats pas encore publiés")).toBeInTheDocument();
+    expect((await cardOf("Quiz 5")).getByText("temps écoulé · résultats pas encore publiés")).toBeInTheDocument();
+    expect((await cardOf("Quiz 6")).getByText("rendue")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Voir mes résultats" })).toBeNull();
+  });
+
+  // Issue #203: with none left the server lists it under Past, and the
+  // button follows `results`.
+  it("shows the kept score once no attempt is left, results only when available", async () => {
+    const navigate = renderFr([
+      retaking({ attemptCount: 3, keep: "last" }),
+      { ...retaking({ attemptCount: 3 }), id: "e10", title: "Série 2 — Tableaux", state: "closed", results: "available" },
+    ]);
+    expect(await screen.findByText("Dernier score 7.5 / 10 · tentatives : 3 sur 3")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Recommencer" })).toBeNull();
+    expect((await cardOf("Série 3 — Entraînement")).queryByRole("button")).toBeNull();
+    await userEvent.click((await cardOf("Série 2 — Tableaux")).getByRole("button", { name: "Voir mes résultats" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "feedback", attemptId: "a8" });
+  });
+
+  it("prints no score the feedback policy hides", async () => {
+    renderFr([
+      {
+        ...retaking({ kept: { attemptId: "a8", attemptNumber: 1, score: null } }),
+        state: "closed",
+        results: "pending",
+      },
+    ]);
+    expect(await screen.findByText("tentatives : 2 sur 3 · résultats pas encore publiés")).toBeInTheDocument();
+    expect(screen.queryByText(/score/)).toBeNull();
+  });
+});

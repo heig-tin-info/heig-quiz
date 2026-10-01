@@ -252,7 +252,7 @@ layers:
   `unassigned_students`, `has_repo`, `revoke_failed`, `app_not_installed`,
   `not_frozen`, `strategy_frozen`, `publish_mode_frozen`,
   `source_not_found`, `squashed_failed`, `duplicate_slug`.
-- `ActivitySummary` and `ResultCard` become discriminated unions.
+- `ActivitySummary` and `GradeRow` (the student's Grades, ex-`ResultCard`) become discriminated unions.
 - `AppNotice` variants: `project_commit_pushed`, `protected_reverted`,
   `sync_done`, `grade_captured`, `accepted`, `deadline_applied`,
   `review_dispatched`.
