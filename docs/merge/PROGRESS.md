@@ -93,7 +93,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M4-02 | Read side and ingestion | review | M4-01, M2-02, M2-04 | `merge/M4-02-journal-read` | #414 | `modules/journal` (only with an App): `GET /classrooms/:id/journal`, `pages/*`, `JOURNAL_ASSETS_PATH/*` on `readableClassroom`, student exit `studentView.ts`; ingestion under a per-classroom advisory lock (J2), `requestIngest` for M4-03's Refresh and saves; push/repository handlers; J4 TickTask `journal.visible_from` (`student_rendered_at`, migration 0049); SSE hint `journal`; no audit action; card M4-02, "As delivered" |
 | M4-03 | Writes | review | M4-02, M2-03 | `merge/M4-03-journal-writes` | #415 | `modules/journal/writes.ts` + `registerWrites` (create, use, remove, refresh, preview, save, add, delete, upload; staff via `accessibleClassroom`); refusals `JournalErrorCode`; saves GitHub-first on `baseSha`, `version + 1`, re-read awaited; push-only invitations; nine `journal.*` audits; card M4-03, "As delivered" |
 | M4-04 | Web: reader | done | M4-02, M1-04, M1-05 | `merge/M4-04-journal-reader` | #378 | `apps/web/src/journal/`: `JournalReader({classroomId, path?, navigate, studentView})` (the page; student UI ⇒ `?view=student`; keys `journalKey(id, view)` ⊃ `journalPageKey(id, view, path)`), `JournalNav`, `JournalToc`, `JournalArticle` (+ `journalLinkTarget`), `words.ts` (`warningText`, `SYNC_ERRORS`, keyed by the contract unions). No staff action yet (sync state only, in `ReaderHeader`'s `aside`): M4-05 adds Refresh there (invalidate `journalKey`), M4-06 adds Edit (primary) and the editor (both cards say so). `isPlainClick` lives in `./ui` (controls, beside `LinkButton`). Route still `preview: true` (no API until M4-02); M5-02 mounts the reader under the student classroom header. SSE `journal` hint ⇒ invalidate `["journal", id]` (M4-02) |
-| M4-05 | Web: Journal section of Settings, teacher tab | in progress | M4-03, M2-07, D24 | `merge/M4-05-journal-settings` | | |
+| M4-05 | Web: Journal section of Settings, teacher tab | review | M4-03, M2-07, D24 | `merge/M4-05-journal-settings` | #416 | `journal/JournalSettings.tsx` (the section, in M2-07's slot), `journal/api.ts` (`useStaffJournal`, `useJournalRefresh`, the refusals worded through `JOURNAL_ERRORS`), teacher Journal tab = `ClassroomView routeTab="journal"` mounting `JournalReader`; the route and both tabs are out of `CLASSROOM_PAGES` (Grades and projects stay). **M4-06**: Edit goes in the reader's `StaffBar` (`JournalReader.tsx`), beside Refresh, as its primary; card M4-05, "As delivered" |
 | M4-06 | Web: WYSIWYG editor | todo | M4-05, D25 | | | |
 
 ## M5 — Student classroom page and gradebook
@@ -153,6 +153,10 @@ In the critical path only if D09 finds online assignments in production.
 
 Newest first. One line per session that changed the state: date, who,
 what moved, what the next session must know.
+
+- 2026-10-01 — M4-05 (#416): the Journal section of Settings, the teacher's
+  Journal tab and Refresh in review; the journal UI left `CLASSROOM_PAGES`.
+  Next: M4-06 (Edit in the reader's `StaffBar`).
 
 - 2026-10-01 — M4-03 (#415): the journal's writes in review. Next: M4-05
   (Settings section, Refresh in the reader) once M2-07 is in.
