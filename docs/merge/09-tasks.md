@@ -488,7 +488,7 @@ files it ports; writes en + fr for every string.
 ### M3-01 — `project` schema and contracts
 - **Depends on**: M2-01, M1-01, D05.
 - **Create**: `Q:db/project.ts` (§3.3 tables), one additive migration;
-  `packages/contracts/src/project.ts`; `ActivitySummary` and `ResultCard`
+  `packages/contracts/src/project.ts`; `ActivitySummary` and `GradeRow` (ex-`ResultCard`)
   project variants; import-script steps for projects, milestones, repos,
   runs, bot commits, dispatches, reverts.
 - **Acceptance**: migration on a dump copy; the partial uniques tested.
@@ -964,7 +964,8 @@ files it ports; writes en + fr for every string.
 - **Depends on**: M5-01, D07.
 - **Goal**: §5.2 — the Courses route (sidebar and bottom bar, D07), the
   classroom page (Activities, Journal tab when present), pressable home
-  cards; Grades stays an anchor of the home until M5-04.
+  cards; Grades stayed an anchor of the home until the global `/grades`
+  page (2026-10-01, below).
 - **Scenes**: `student-courses`, `student-classroom`, `-journal`,
   `-empty`, `-error`, phone and desktop.
 
@@ -976,11 +977,18 @@ files it ports; writes en + fr for every string.
   CSV/xlsx (staff rows dropped, ADR-018 §5).
 - **Tests**: equals per-evaluation results on the seeded world; only
   released grades; polls never.
+- **Note** (2026-10-01): the student's global Grades page (`/grades`,
+  `GET /app/api/student/results` → `StudentGrades`) exists before this
+  task; once D06 is settled the gradebook becomes its data source, under
+  the same feedback-policy filter (F-RES-04).
 
 ### M5-04 — Web: Grades tabs
 - **Depends on**: M5-03.
 - **Goal**: teacher Grades tab (Export primary); the student Grades tab
   reads the gradebook when enabled.
+- **Note** (2026-10-01): the student tab is `StudentGrades` with its
+  `classroomId` prop (§5.2) — the global `/grades` page filtered to the
+  classroom — plus project grades; not a second component.
 
 ## M6 — Online workspace and SEB (after the cutover if D09 says so)
 

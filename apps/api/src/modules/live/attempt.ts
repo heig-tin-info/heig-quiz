@@ -17,7 +17,11 @@ import {
   type AttemptOrLobby,
   type AttemptView,
   type EvaluationCard,
+  type GradeGroup,
+  type GradeRow,
+  type GradeStatus,
   type LobbyView,
+  type StudentGrades,
   type StudentHome,
   type StudentPollCard,
 } from "@quiz/contracts";
@@ -67,9 +71,11 @@ import { presence } from "../realtime/presence.js";
 import {
   countedAttempt,
   countedAttemptId,
+  gradeReadable,
   releasedGradesOf,
   resultsState,
   scoreVisible,
+  type ReleasedGrade,
 } from "../results/service.js";
 import { isShuffleable, studentView } from "./studentView.js";
 
@@ -1275,6 +1281,25 @@ export async function studentHome(
   now: Date,
   classroomId?: string,
 ): Promise<StudentHome> {
+  const { polls, open, upcoming, past } = await studentBoard(db, userId, now, classroomId);
+  return { polls, open, upcoming, past: past.map((entry) => entry.card), serverNow: iso(now) };
+}
+
+type StudentRow = Awaited<ReturnType<typeof studentEvaluationRows>>[number];
+
+/** A card of the student's Past, beside the row it was drawn from and its released grade. */
+interface PastEntry {
+  row: StudentRow;
+  card: EvaluationCard;
+  released: ReleasedGrade | undefined;
+}
+
+/**
+ * The student's evaluations sorted into the home's lists (F-LIVE-01): ONE
+ * rule for what is open, coming and past, which the home and the Grades page
+ * (`studentGrades`) both read.
+ */
+async function studentBoard(db: Db, userId: string, now: Date, classroomId?: string) {
   const all = await studentEvaluationRows(db, userId, classroomId).orderBy(
     desc(evaluations.createdAt),
   );
@@ -1364,45 +1389,123 @@ export async function studentHome(
     };
   };
 
-  const card = (row: (typeof rows)[number]): EvaluationCard => ({
-    id: row.evaluation.id,
-    title: row.evaluation.title,
-    mode: row.evaluation.mode,
-    state: row.evaluation.state,
-    classroomId: classroomIdOf(row.evaluation),
-    classroomName: row.classroomName,
-    courseCode: row.courseCode,
-    opensAt: isoOrNull(row.evaluation.opensAt),
-    closesAt: isoOrNull(row.evaluation.closesAt),
-    durationS: row.evaluation.durationS,
-    attemptId: row.attempt?.id ?? null,
-    attemptState: row.attempt?.state ?? null,
-    attemptStartedAt: isoOrNull(row.attempt?.startedAt ?? null),
-    deadlineAt: isoOrNull(row.attempt?.deadlineAt ?? null),
-    grade: grades.get(row.evaluation.id)?.grade ?? null,
-    retakes: retakesOf(row),
-    // Issue #203: what "See my results" would lead to, for the attempt
-    // that counts — the results service's own rule.
-    results: resultsState(row.evaluation, countedAttempt(perEvaluation, row)?.state ?? null),
-    trustedClients: trustedClients(row.evaluation),
-  });
+  const card = (row: (typeof rows)[number]): EvaluationCard => {
+    const counted = countedAttempt(perEvaluation, row)?.state ?? null;
+    return {
+      id: row.evaluation.id,
+      title: row.evaluation.title,
+      mode: row.evaluation.mode,
+      state: row.evaluation.state,
+      classroomId: classroomIdOf(row.evaluation),
+      classroomName: row.classroomName,
+      courseCode: row.courseCode,
+      opensAt: isoOrNull(row.evaluation.opensAt),
+      closesAt: isoOrNull(row.evaluation.closesAt),
+      durationS: row.evaluation.durationS,
+      attemptId: row.attempt?.id ?? null,
+      attemptState: row.attempt?.state ?? null,
+      attemptStartedAt: isoOrNull(row.attempt?.startedAt ?? null),
+      deadlineAt: isoOrNull(row.attempt?.deadlineAt ?? null),
+      // Only a grade the student may read (F-RES-04): never under `none`.
+      grade: gradeReadable(row.evaluation, counted)
+        ? (grades.get(row.evaluation.id)?.grade ?? null)
+        : null,
+      retakes: retakesOf(row),
+      // Issue #203: what "See my results" would lead to, for the attempt
+      // that counts — the results service's own rule.
+      results: resultsState(row.evaluation, counted),
+      trustedClients: trustedClients(row.evaluation),
+    };
+  };
 
   const open: EvaluationCard[] = [];
   const upcoming: EvaluationCard[] = [];
-  const past: EvaluationCard[] = [];
+  const past: PastEntry[] = [];
   for (const row of rows) {
     const state = row.evaluation.state;
     if (state === "draft") continue;
     const c = card(row);
+    const ended = { row, card: c, released: grades.get(row.evaluation.id) };
     if (state === "scheduled") upcoming.push(c);
-    else if (state !== "lobby" && state !== "running" && state !== "paused") past.push(c);
+    else if (state !== "lobby" && state !== "running" && state !== "paused") past.push(ended);
     // Issue #203: "Open now" is what the student can still DO. A finished
     // attempt that cannot be retaken has nothing left to do, whatever the
     // evaluation's state: it is past. A reopened attempt is `in_progress`
     // again, and comes back here on its own.
     else if (c.attemptState !== null && isFinishedAttempt(c.attemptState) && !c.retakes?.canRetake) {
-      past.push(c);
+      past.push(ended);
     } else open.push(c);
   }
-  return { polls, open, upcoming, past, serverNow: iso(now) };
+  return { polls, open, upcoming, past };
+}
+
+// --- Student grades (F-RES-04, F-ORG-14) ------------------------------------
+
+/**
+ * `GET /student/results`: the home's Past, every classroom's, archived ones
+ * included, by classroom — the classroom of the newest row first, each
+ * newest first. A row says where it stands; it carries points and a grade
+ * only where the student may read them (`gradeReadable`), and opens the
+ * feedback page only where the home offered "See my results". A staff seat
+ * that took no attempt is not listed (ADR-018 §3).
+ */
+export async function studentGrades(db: Db, userId: string, now: Date): Promise<StudentGrades> {
+  const { past } = await studentBoard(db, userId, now);
+  const groups = new Map<string, GradeGroup>();
+  for (const entry of past) {
+    if (entry.row.staff && entry.card.attemptId === null) continue;
+    const id = entry.card.classroomId;
+    const group = groups.get(id) ?? {
+      classroom: {
+        id,
+        name: entry.row.classroomName,
+        courseCode: entry.row.courseCode,
+        courseName: entry.row.courseName,
+        period: entry.row.period,
+        archived: entry.row.archivedAt !== null,
+      },
+      rows: [],
+    };
+    group.rows.push(gradeRow(entry));
+    groups.set(id, group);
+  }
+  const newest = (g: GradeGroup) => g.rows[0]!.date;
+  return [...groups.values()]
+    .map((g) => ({ ...g, rows: g.rows.sort((a, b) => b.date.localeCompare(a.date)) }))
+    .sort((a, b) => newest(b).localeCompare(newest(a)));
+}
+
+function gradeRow({ row, card, released }: PastEntry): GradeRow {
+  const { evaluation, attempt } = row;
+  const handedIn = card.attemptState !== null && isFinishedAttempt(card.attemptState);
+  const status: GradeStatus = !handedIn
+    ? "missed"
+    : evaluation.releasedAt !== null
+      ? "released"
+      : card.results === "available"
+        ? "available"
+        : card.results === "pending"
+          ? "pending"
+          : "submitted";
+  // The attempt "See my results" opened on the home (`useCardActions`).
+  const counted = card.retakes?.kept?.attemptId ?? card.attemptId;
+  return {
+    evaluationId: evaluation.id,
+    title: evaluation.title,
+    mode: evaluation.mode,
+    date: iso(
+      attempt?.submittedAt ??
+        attempt?.closedAt ??
+        evaluation.closedAt ??
+        evaluation.closesAt ??
+        evaluation.createdAt,
+    ),
+    status,
+    feedbackAttemptId: card.results === "available" ? counted : null,
+    // `card.grade` is set only where `gradeReadable` lets it through.
+    score:
+      card.grade !== null && released
+        ? { points: released.points, totalPoints: released.totalPoints, grade: released.grade }
+        : null,
+  };
 }

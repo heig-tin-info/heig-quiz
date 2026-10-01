@@ -64,6 +64,7 @@ export {
   closeAttempt,
   reopenAttempt,
   studentHome,
+  studentGrades,
   drawSeed,
 } from "./attempt.js";
 export { onAttemptsEnded, type EndedAttempt } from "./dwell.js";

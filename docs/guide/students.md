@@ -10,17 +10,17 @@ Your teacher adds your school e-mail address to the class list. The seat is atta
 
 ## Your home
 
-Your home shows what your classrooms have opened for you, in three sections.
+Your home shows what your classrooms have opened for you, in two sections, and your classrooms under them. What you already handed in is on the **Grades** page (below).
 
 <figure markdown="span">
-  ![The student home: an exercise open now with Enter the waiting room, a graded quiz coming up in two days, a past graded quiz handed in with results not published yet, and the classroom card with extra time](../assets/screenshots/student-home-light.png#only-light)
-  ![The student home: an exercise open now with Enter the waiting room, a graded quiz coming up in two days, a past graded quiz handed in with results not published yet, and the classroom card with extra time](../assets/screenshots/student-home-dark.png#only-dark)
-  <figcaption>The home: what is open now, what is coming up, what is past, and your classrooms.</figcaption>
+  ![The student home: an exercise open now with Enter the waiting room, a graded quiz coming up in two days, and the classroom card with extra time](../assets/screenshots/student-home-light.png#only-light)
+  ![The student home: an exercise open now with Enter the waiting room, a graded quiz coming up in two days, and the classroom card with extra time](../assets/screenshots/student-home-dark.png#only-dark)
+  <figcaption>The home: what is open now, what is coming up, and your classrooms.</figcaption>
 </figure>
 
 **Open now** lists what you can still do, each with one button: **Start**, **Resume** if you already began, or **Enter the waiting room** when the teacher has opened one. The badge says whether it is a **Graded quiz** or an **Exercise**, and the card shows how long you have or when it is due.
 
-**Coming up** shows what is scheduled and when it starts. **Past evaluations** keeps what is over for you, with its state: **handed in**, **time was up** or **not started**. A quiz you handed in moves there at once, even while the others are still writing. Its **See my results** button appears only once there are results to read; until then the card says **results not published yet**.
+**Coming up** shows what is scheduled and when it starts. A quiz you handed in leaves the home at once, even while the others are still writing, for the **Grades** page.
 
 **My classrooms** lists your classrooms with their teachers. If you were granted extra time, the card shows it, for instance **Extra time: +25%**. It applies automatically to every timed evaluation of that classroom; there is nothing to ask for at the start.
 
@@ -30,7 +30,25 @@ Your home shows what your classrooms have opened for you, in three sections.
   <figcaption>The home on a phone.</figcaption>
 </figure>
 
-On a computer, the sidebar on the left takes you to **Activities** (this home), **Courses** (your classrooms, each with a page of its own), **Drill** once a teacher of yours has turned it on, and **Grades** (the past evaluations of this home). On a phone, the same entries sit in the bar at the bottom of the screen, with **Profile** beside them; on a computer your profile is in the menu under your name.
+On a computer, the sidebar on the left takes you to **Activities** (this home), **Courses** (your classrooms, each with a page of its own), **Drill** once a teacher of yours has turned it on, and **Grades** (everything you finished, with its grade once you may read it). On a phone, the same entries sit in the bar at the bottom of the screen, with **Profile** beside them; on a computer your profile is in the menu under your name.
+
+## Your grades
+
+**Grades** lists everything you finished, one table per classroom, the most recent first; the classrooms of past years are there too, marked **archived**. Each row gives the activity, whether it is a graded quiz or an exercise, its date, and a status:
+
+- **released**: your teacher published the results. The row shows your points and your grade, unless the evaluation shows no feedback at all.
+- **results available**: an exercise whose results you may already read, before any publication.
+- **results pending**: you handed in; the results are not published yet.
+- **handed in**: you handed in, and this evaluation publishes nothing.
+- **not taken**: you did not take it. Once the results are published it carries the lowest grade, as on your teacher's list.
+
+A row you can open has an arrow: it leads to your results page. On a phone, the rows become small cards, the grade on the right.
+
+<figure markdown="span">
+  ![The Grades page: the classroom PRG1-2026 with Test 0, a graded quiz, 7 of 15 points, grade 3.3, released](../assets/screenshots/student-grades-light.png#only-light)
+  ![The Grades page: the classroom PRG1-2026 with Test 0, a graded quiz, 7 of 15 points, grade 3.3, released](../assets/screenshots/student-grades-dark.png#only-dark)
+  <figcaption>Grades: your finished work, classroom by classroom.</figcaption>
+</figure>
 
 ## The waiting room
 
@@ -54,7 +72,7 @@ Some exams are sat in [Safe Exam Browser](https://safeexambrowser.org) (SEB) onl
 
 The button appears once the exam is open; until then the card is under **Coming up**.
 
-If SEB says the file is invalid or has expired, quit SEB and download a new file from your home. Once you have handed in, you may quit SEB; your results are read later from your home, in an ordinary browser.
+If SEB says the file is invalid or has expired, quit SEB and download a new file from your home. Once you have handed in, you may quit SEB; your results are read later from your **Grades**, in an ordinary browser.
 
 ## Sitting an exam on a kiosk station
 
@@ -69,7 +87,7 @@ A code works once and the station shows a new one every 5 minutes. If your phone
 
 If the station covers the exam with **This station is suspended**, your answers are saved: call the supervisor. The exam comes back by itself once the station has been checked again.
 
-When you hand in, the station goes back to its start screen by itself. Your results are read later from your home.
+When you hand in, the station goes back to its start screen by itself. Your results are read later from your **Grades**.
 
 ## Taking an evaluation
 
@@ -161,7 +179,7 @@ You do not have to hand in. When your time is up, the attempt closes by itself a
 
 ## Your results
 
-**See my results**, on the Handed in card or on a past evaluation, opens your results page. What it shows depends on what your teacher decided.
+**See my results**, on the Handed in card, or a row of your **Grades**, opens your results page. What it shows depends on what your teacher decided.
 
 <figure markdown="span">
   ![The results page before publication: Results not published yet, and a sentence saying they will appear here as soon as the teacher publishes](../assets/screenshots/feedback-pending-light.png#only-light)

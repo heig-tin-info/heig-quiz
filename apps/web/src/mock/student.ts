@@ -7,8 +7,11 @@ import type {
   AttemptView,
   AutosaveResponse,
   EvaluationCard,
+  GradeGroup,
+  GradeRow,
   LobbyView,
   StudentClassroomPage,
+  StudentGrades,
   StudentHome as StudentHomeData,
 } from "@quiz/contracts";
 import {
@@ -557,6 +560,96 @@ const studentHome = (): StudentHomeData => {
 };
 
 on("GET", "/app/api/student/home", studentHome);
+
+// F-ORG-14, F-RES-04: the student's Grades — the home's Past of every
+// classroom, by classroom, newest first, written by hand like the home: one
+// row of each status, an archived classroom (PRG1-2024) last. The grade is
+// on a row only where the server would let the student read it. `?many=1`
+// is a whole term of weekly series; `?empty=1` nothing finished yet.
+on("GET", "/app/api/student/results", (): StudentGrades => {
+  if (flags.empty) return [];
+  const current = studentRooms()[0]!;
+  const header = (over: Partial<GradeGroup["classroom"]>): GradeGroup["classroom"] => ({
+    id: current.id,
+    name: current.name,
+    courseCode: current.courseCode,
+    courseName: current.courseName,
+    period: current.period,
+    archived: false,
+    ...over,
+  });
+  const row = (over: Partial<GradeRow> & Pick<GradeRow, "title" | "status">): GradeRow => ({
+    evaluationId: `00000000-0000-4000-8000-${String(++gradeRowSeq).padStart(12, "0")}`,
+    mode: "exam",
+    date: iso(-D),
+    feedbackAttemptId: null,
+    score: null,
+    ...over,
+  });
+  const score = (points: number, totalPoints: number) => ({
+    points,
+    totalPoints,
+    grade: Math.round((1 + (5 * points) / totalPoints) * 10) / 10,
+  });
+  gradeRowSeq = 0;
+  const series = flags.many
+    ? Array.from({ length: 12 }, (_, i) =>
+        row({
+          title: `Série ${12 - i} — exercices hebdomadaires`,
+          mode: "exercise",
+          status: "released",
+          date: iso(-(10 + 7 * i) * D),
+          // The mock's one readable feedback page (`mock/grading.ts`).
+          feedbackAttemptId: STUDENT_PAST_ATTEMPT,
+          score: score(10 - (i % 5) * 1.5, 10),
+        }),
+      )
+    : [];
+  return [
+    {
+      classroom: header({}),
+      rows: [
+        // Handed in, the quiz still running, `on_release` (issue #203).
+        row({ evaluationId: STUDENT_EVAL_HANDED_IN, title: "Quiz 3bis — Allocation dynamique", status: "pending", date: iso(-35 * 60_000) }),
+        // An exercise under the immediate policy: readable, not released.
+        row({
+          title: "Série 2 — Tableaux",
+          mode: "exercise",
+          status: "available",
+          date: iso(-3 * D),
+          feedbackAttemptId: STUDENT_PAST_ATTEMPT,
+        }),
+        row({
+          evaluationId: STUDENT_EVAL_PAST,
+          title: "Quiz 2 — Tableaux et chaînes",
+          status: "released",
+          date: iso(-8 * D),
+          feedbackAttemptId: STUDENT_PAST_ATTEMPT,
+          score: score(8.5, 12),
+        }),
+        // Released, never taken: the scale minimum (F-RES-02).
+        row({ title: "Quiz 1 — Types et opérateurs", status: "missed", date: iso(-15 * D), score: score(0, 10) }),
+        ...series,
+        // Newest first, as the server sorts them.
+      ].sort((a, b) => b.date.localeCompare(a.date)),
+    },
+    {
+      classroom: header({ id: "r6", name: "PRG1-2024", period: "2024-A", archived: true }),
+      rows: [
+        // Under the policy `none`: released, and still no grade.
+        row({ title: "Série 8 — Fichiers", mode: "exercise", status: "released", date: iso(-320 * D) }),
+        row({
+          title: "Examen final — Programmation C",
+          status: "released",
+          date: iso(-330 * D),
+          score: score(31, 40),
+        }),
+        row({ title: "Série 7 — Listes chaînées", mode: "exercise", status: "submitted", date: iso(-340 * D) }),
+      ],
+    },
+  ];
+});
+let gradeRowSeq = 0;
 
 // M5-01: the student's classroom page — the home narrowed to the classroom,
 // under the Courses card as its header. `?journal=1` gives PRG1-2026 (`r1`,

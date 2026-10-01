@@ -39,7 +39,7 @@ import {
 import { useRetake } from "./retake";
 import { SebLaunchModal } from "./SebLaunchModal";
 
-const MODE_KEY = {
+export const MODE_KEY = {
   exam: "shome.mode.exam",
   exercise: "shome.mode.exercise",
   poll: "shome.mode.poll",

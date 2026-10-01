@@ -1356,6 +1356,13 @@ Applied today: the pool table (version, updated, tags), the roster (last
 sign-in, accommodation, e-mail), the evaluation list (attempts, points,
 questions) and the grade table (duration, e-mail).
 
+A table a STUDENT reads on a phone does not scroll sideways: under 32 rem of
+container (`@lg`) its rows collapse into a divided list of small cards — the
+identity bold with kind and date under it, the figure that matters (the
+grade) on the right, the status badge below — and the `<table>` is hidden.
+Same rows, same order, same "opens on press". Applied today: the student's
+Grades (`student/StudentGrades.tsx`).
+
 ### When a row stops being a row
 
 Past seven columns there is no priority left to give: the record is not a row
@@ -1547,11 +1554,11 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
 - **Slots**, each an icon over a visible 11 px label, sharing the width
   equally: Activities (the home, "Open now"), Courses (the student's
   classrooms, `/courses`, and lit on a classroom's pages — F-ORG-14, D07),
-  Grades (the home's "Past evaluations", `/#past`, and lit on a feedback
+  Grades (the student's finished work, `/grades`, and lit on a feedback
   page), Profile (the settings), and Drill (#317, `/drill`) in the MIDDLE.
-  A slot that leads to a section of the home is an anchor on it, not a page
-  of its own: the home already is that list. Grades is the last such slot,
-  until the classroom's Grades tab (M5-04).
+  Every slot is a route: the last anchor of the home (Grades, `/#past`)
+  became the Grades page on 2026-10-01, and the home lost its Past section
+  to it.
 - **Drill is drawn only when it leads somewhere**: for a student with at
   least one classroom whose drill is on (`visibleSlots`); the four others
   share the width otherwise. Its label is `bnav.drill`, not the page title:
@@ -1563,8 +1570,8 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
   bar's order and under the same conditions, minus Profile, which is the
   account menu's at the foot of the sidebar: Activities, Courses, Drill,
   Grades (`sidebarSlots`). They take the slots' icons, lead where the slots
-  lead (Grades to `/#past`), and the lit row is the bar's (`activeSlot`), not
-  a sidebar section: those stay the teacher's.
+  lead, and the lit row is the bar's (the route's `bottomSlot`), not a
+  sidebar section: those stay the teacher's.
 - **The badge is a dot, never a count.** "Today's drill is available"
   (ADR-041 §6) is an 8 px `accent` dot on the icon's top right, ringed in
   `canvas` so it reads on the lit pill too, with the words for a screen
@@ -1578,10 +1585,10 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
   whole height while it is in the page (pure CSS, `:root:has(nav[data-bottom-dock])`
   under `lg`; zero otherwise): a spacer under the page and the toast stack
   read it, so neither the end of a page nor a toast is ever behind the bar.
-  An anchored section lands under the sticky top bar through one
+  An anchor (a journal heading) lands under the sticky top bar through one
   `scroll-padding-top` on the root, from `--topbar-h`.
 - **Where it is drawn: an allowlist**, the views the route table gives a
-  `bottomSlot` (`router.ts`: the home, a feedback page, the settings, the
+  `bottomSlot` (`router.ts`: the home, the Grades page, a feedback page, the settings, the
   drill, the Courses and a classroom's pages) and nothing else. Hidden on the
   attempt (lobby and player), the poll join page, every projection and
   preview, a SEB-confined page, and any screen with a sticky bottom bar of its
@@ -1593,8 +1600,7 @@ at the bottom (`student/BottomNav.tsx`, rules in `student/bottomNavSlots.ts`).
   the avatar menu loses Settings (the Profile slot). The avatar stays, for
   what is about the person: the inbox, the theme, signing out.
 - A `<nav>` named "Main navigation", `aria-current="page"` on the lit slot,
-  real links (a long press or a modified click opens the address, section
-  included).
+  real links (a long press or a modified click opens the address).
 
 ## The participant's poll page (`/p/:CODE`)
 

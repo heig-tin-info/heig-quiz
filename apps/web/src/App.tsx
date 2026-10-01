@@ -39,6 +39,10 @@ const Feedback = lazy(() => import("./student/Feedback").then((m) => ({ default:
 const StudentCourses = lazy(() =>
   import("./student/StudentCourses").then((m) => ({ default: m.StudentCourses })),
 );
+// F-ORG-14, F-RES-04: the student's Grades.
+const StudentGrades = lazy(() =>
+  import("./student/StudentGrades").then((m) => ({ default: m.StudentGrades })),
+);
 const StudentClassroom = lazy(() =>
   import("./student/StudentClassroom").then((m) => ({ default: m.StudentClassroom })),
 );
@@ -248,6 +252,9 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // F-ORG-14: the student's classrooms. A teacher's Courses is the home.
   studentCourses: (_, c) =>
     c.teacherUi ? <TeacherHome navigate={c.navigate} /> : <StudentCourses navigate={c.navigate} />,
+  // F-ORG-14, F-RES-04: the student's finished work. A teacher's grades are per evaluation.
+  studentGrades: (_, c) =>
+    c.teacherUi ? <TeacherHome navigate={c.navigate} /> : <StudentGrades navigate={c.navigate} />,
   // F-ORG-13 (D24): the teacher classroom's Settings tab, a route of its own.
   classroomSettings: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} routeTab="settings" />,
   // F-JRN-07: both roles, each the Journal tab of their classroom page. The

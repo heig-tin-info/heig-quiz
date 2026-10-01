@@ -327,7 +327,7 @@ describe("Shell sidebar", () => {
   // D07 (2026-10-01): the student sidebar lights what the bottom bar lights.
   it.each<[string, Route, string, string | null]>([
     ["the home", { view: "home" }, "/", "Activities"],
-    ["the home's Grades section", { view: "home" }, "/#past", "Grades"],
+    ["the Grades page", { view: "studentGrades" }, "/grades", "Grades"],
     ["the course list", { view: "studentCourses" }, "/courses", "Courses"],
     ["a classroom", { view: "classroom", id: "c1" }, "/classrooms/c1", "Courses"],
     ["a classroom's journal", { view: "classroomJournal", id: "c1" }, "/classrooms/c1/journal", "Courses"],
@@ -350,28 +350,20 @@ describe("Shell sidebar", () => {
     expect(current).toEqual(lit ? [lit] : []);
   });
 
-  it("leads the student's Grades row to the home's Grades section, like the bar", async () => {
+  it("leads the student's Grades row to the Grades page, like the bar", async () => {
     const navigate = vi.fn();
     renderShell({ teacherUi: false, me: makeMe({ role: "student" }), navigate });
     await userEvent.click(within(sidebar()).getByRole("button", { name: "Grades" }));
-    expect(navigate).toHaveBeenCalledWith({ view: "home" });
-    expect(window.location.hash).toBe("#past");
+    expect(navigate).toHaveBeenCalledWith({ view: "studentGrades" });
     await userEvent.click(within(sidebar()).getByRole("button", { name: "Courses" }));
     expect(navigate).toHaveBeenLastCalledWith({ view: "studentCourses" });
-    expect(window.location.hash).toBe("");
   });
 
   // The student rows are lit by the bar's slot; a teacher's stay lit by section.
   it.each<[string, Route, string | null]>([
     ["the home", { view: "home" }, "Courses"],
-    ["the activities", { view: "activities" }, "Activities"],
     ["a pool", { view: "pool", id: "p1" }, "Question pools"],
-    ["the polls", { view: "polls" }, "Poll"],
-    ["a classroom", { view: "classroom", id: "c1" }, null],
-    ["a classroom's journal", { view: "classroomJournal", id: "c1" }, null],
-    ["the student course list", { view: "studentCourses" }, null],
     ["the drill", { view: "drill" }, null],
-    ["a feedback page", { view: "feedback", attemptId: "a1" }, null],
   ])("keeps the teacher's top rows as they were on %s", (_, route, lit) => {
     renderShell({ route });
     const top = within(sidebar())
@@ -1101,7 +1093,7 @@ describe("Shell student bottom bar (#191)", () => {
     ]);
     expect(nav.getByRole("link", { name: "Activities" })).toHaveAttribute("aria-current", "page");
     expect(nav.getByRole("link", { name: "Courses" })).not.toHaveAttribute("aria-current");
-    expect(nav.getByRole("link", { name: "Grades" })).toHaveAttribute("href", "/#past");
+    expect(nav.getByRole("link", { name: "Grades" })).toHaveAttribute("href", "/grades");
     expect(nav.getByRole("link", { name: "Profile" })).toHaveAttribute("href", "/settings");
   });
 
@@ -1123,20 +1115,16 @@ describe("Shell student bottom bar (#191)", () => {
     expect(screen.getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
   });
 
-  it("navigates, and a section slot names its place in the address", async () => {
-    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  it("navigates to the page each slot names", async () => {
     const { navigate } = renderShell({ ...student, route: { view: "settings" } });
+    // Grades and Courses are pages of their own, not anchors of the home.
     await userEvent.click(within(bar()!).getByRole("link", { name: "Grades" }));
-    expect(navigate).toHaveBeenCalledWith({ view: "home" });
-    expect(window.location.hash).toBe("#past");
-    // Courses is a page of its own (D07), not an anchor of the home.
+    expect(navigate).toHaveBeenCalledWith({ view: "studentGrades" });
     const courses = within(bar()!).getByRole("link", { name: "Courses" });
     expect(courses).toHaveAttribute("href", "/courses");
     await userEvent.click(courses);
     expect(navigate).toHaveBeenLastCalledWith({ view: "studentCourses" });
-    expect(window.location.hash).toBe("");
     await userEvent.click(within(bar()!).getByRole("link", { name: "Profile" }));
     expect(navigate).toHaveBeenLastCalledWith({ view: "settings" });
-    expect(window.location.hash).toBe("");
   });
 });

@@ -22,6 +22,7 @@ import type {
   StudentFeedback,
   StudentHome,
 } from "@quiz/contracts";
+import { StudentGrades } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import { answers, attempts, evaluations, gradings, questions } from "../../db/schema.js";
@@ -52,7 +53,9 @@ afterAll(async () => {
 });
 
 const db = () => server.app.db;
-const get = (url: string, headers: Record<string, string>) =>
+/** The rows of the student's Grades page, every classroom's, read through the contract. */
+const gradeRows = (body: unknown) => StudentGrades.parse(body).flatMap((group) => group.rows);
+const get =(url: string, headers: Record<string, string>) =>
   server.app.inject({ method: "GET", url, headers });
 const send = (
   method: "POST" | "PATCH",
@@ -270,12 +273,8 @@ describe("an exam with negative marking", () => {
     expect(feedback.items.map((i) => i.points)).toEqual([0, -1, -4]);
     expect(feedback.items[1]!.verdict).toBe("wrong");
 
-    const cards = (await get("/app/api/student/results", students[0]!.headers)).json() as {
-      evaluationId: string;
-      points: number;
-      grade: number;
-    }[];
-    expect(cards.find((c) => c.evaluationId === evaluation.id)).toMatchObject({ points: 0, grade: 1 });
+    const rows = gradeRows((await get("/app/api/student/results", students[0]!.headers)).json());
+    expect(rows.find((c) => c.evaluationId === evaluation.id)!.score).toMatchObject({ points: 0, grade: 1 });
 
     const home = (await get("/app/api/student/home", students[0]!.headers)).json() as StudentHome;
     const card = [...home.open, ...home.upcoming, ...home.past].find((c) => c.id === evaluation.id)!;
@@ -292,11 +291,8 @@ describe("an exam with negative marking", () => {
     const feedback = (await get(`/app/api/attempts/${guesser.id}/feedback`, students[0]!.headers)).json() as StudentFeedback;
     if (!feedback.available) throw new Error("feedback expected");
     expect([feedback.points, feedback.grade]).toEqual([0, 1]);
-    const cards = (await get("/app/api/student/results", students[0]!.headers)).json() as {
-      evaluationId: string;
-      points: number;
-    }[];
-    expect(cards.find((c) => c.evaluationId === evaluation.id)!.points).toBe(0);
+    const rows = gradeRows((await get("/app/api/student/results", students[0]!.headers)).json());
+    expect(rows.find((c) => c.evaluationId === evaluation.id)!.score!.points).toBe(0);
   });
 
   it("regrades with the evaluation's setting", async () => {
