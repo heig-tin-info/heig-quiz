@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { makeEntry, makeGrading } from "../test/grading-fixtures";
 import {
   byName,
+  byVerdict,
   entryKey,
   EXPECTED,
   filterRows,
@@ -223,5 +224,14 @@ describe("panelTarget", () => {
     expect(panelTarget({ key: EXPECTED, adjust: false }, entries)).toEqual({ kind: "expected" });
     expect(panelTarget({ key: "zz:i1", adjust: false }, entries)).toBeNull();
     expect(panelTarget(null, entries)).toBeNull();
+  });
+});
+
+describe("byVerdict (ADR-056 §9)", () => {
+  it("groups the rows by verdict, wrong first, each group in the order it came in", () => {
+    const right = (id: string) => makeEntry({ attemptId: id, grading: makeGrading({ points: 2, maxPoints: 2 }) });
+    const wrong = (id: string) => makeEntry({ attemptId: id, grading: makeGrading({ points: 0, maxPoints: 2 }) });
+    const rows = byVerdict([right("a1"), wrong("a2"), right("a3"), wrong("a4")]);
+    expect(rows.map((e) => e.attemptId)).toEqual(["a2", "a4", "a1", "a3"]);
   });
 });

@@ -1,3 +1,4 @@
+import { Dices } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { AnswerDistributionEntry, ByQuestion } from "@quiz/contracts";
@@ -285,6 +286,22 @@ function ClozeText({ q, revealed, density }: { q: ByQuestion; revealed: boolean;
   );
   const n = counted(q);
   const hole = (index: number) => {
+    // A parameterized cloze groups nothing by what was written (ADR-056
+    // §9): its blanks hold the example's key, and the head says how the
+    // class fared.
+    if (q.parameterized) {
+      return (
+        <span
+          className={cx(
+            "mx-1 inline-block min-w-[8ch] border-b-2 px-2.5 text-center align-middle font-mono font-semibold leading-tight",
+            revealed ? "border-success text-success" : "border-dashed border-line-strong text-transparent",
+          )}
+          aria-hidden={!revealed}
+        >
+          {keys.get(index) ?? "…"}
+        </span>
+      );
+    }
     const groups = q.distribution.filter((d) => d.part === index);
     const sum = (keep: (d: AnswerDistributionEntry) => boolean) =>
       groups.filter(keep).reduce((s, d) => s + d.count, 0);
@@ -400,7 +417,11 @@ export function CorrectionProgram({
  */
 export const drawsKey = (type: string): boolean => type === "mcq" || type === "cloze" || type === "short";
 
-/** The statement: the prompt, or a cloze's text with its blanks in place. */
+/**
+ * The statement: the prompt, or a cloze's text with its blanks in place. A
+ * parameterized question's is the instance of its example values, and says
+ * so above it: no student read these very numbers (ADR-056 §9).
+ */
 export function CorrectionStatement({
   q,
   revealed,
@@ -410,12 +431,24 @@ export function CorrectionStatement({
   revealed: boolean;
   density?: Density;
 }) {
+  const t = useT();
   const prompt = promptOf(q);
-  if (q.item.type === "cloze") return <ClozeText q={q} revealed={revealed} density={density} />;
-  if (!prompt) return null;
+  const statement =
+    q.item.type === "cloze" ? (
+      <ClozeText q={q} revealed={revealed} density={density} />
+    ) : prompt ? (
+      <div className={SCALE[density].prompt}>
+        <MarkdownView source={prompt} inline />
+      </div>
+    ) : null;
+  if (!q.parameterized || statement === null) return statement;
   return (
-    <div className={SCALE[density].prompt}>
-      <MarkdownView source={prompt} inline />
+    <div className="flex flex-col gap-2">
+      <p className={cx("flex items-center gap-1.5 font-medium text-fg-muted", SCALE[density].caption)}>
+        <Dices className="size-[1.1em] shrink-0" aria-hidden />
+        {t("correction.param.example")}
+      </p>
+      {statement}
     </div>
   );
 }

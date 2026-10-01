@@ -3058,6 +3058,19 @@ export const en = {
   "grading.panel.statement": "Statement",
   "grading.panel.expectedHelp":
     "Wrong key? Edit the question and publish a new version, then re-grade: every answer is graded again, and the previous grading stays in its history.",
+  // Parameterized questions: grading and results (ADR-056 §9)
+  "grading.param.badge": "Own key per answer",
+  "grading.param.badgeTip":
+    "Each student had their own values, so each answer has its own key. This row shows the question as written; open an answer to see its values and its key.",
+  "grading.param.perAnswer": "per answer",
+  "grading.param.variables": "Variables",
+  "grading.param.condition": "Condition (the values are drawn again while it is false):",
+  "grading.param.example": "Example values: this key holds for these numbers only.",
+  "grading.param.values": "This student's values",
+  "grading.param.expectedHelp":
+    "Every answer is graded against its own key, computed from the values its student drew. Answers that look alike are not graded alike: the rows are grouped by verdict.",
+  "correction.param.example": "Example values: each student had their own numbers.",
+  "pool.stats.choicesDrawn": "A value drawn for each student: this share is that of the option's place, not of one mistake.",
   "grading.override.comment": "Comment",
   "grading.override.commentHelp":
     "The one comment the student may read with their result, if the feedback policy shows comments.",

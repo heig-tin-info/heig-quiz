@@ -261,24 +261,46 @@ not "Generated", which already names the LLM actions (docs/spec/08,
 §8.1 and §8.6). "Freeze", which turns one instance into a static question
 (08 §8.6), comes later.
 
-### 9. Grading table, debrief, statistics (amends ADR-044 and ADR-033)
+### 9. Grading table, debrief, statistics (amends ADR-044, ADR-033, ADR-043)
 
 The answers to a parameterized question each have their own key: "12.3" is
 right for Alice and wrong for Bob.
 
-- **The grading table (ADR-044)** pins the TEMPLATE as its first row: the
-  formulas, with the variables' names. Each answer's own instantiated key is
-  in the side panel, and the type's `Review` already shows it there. Rows
-  are grouped by verdict, not by answer text. A per-row "expected" column
-  can come later.
-- **The debrief (ADR-033)** groups a parameterized question's answers by
-  verdict only.
+- **The grading table (ADR-044)** pins the question AS WRITTEN as its first
+  row. The queue item carries `parameters`: the variables table and the
+  type's views of the template, which an `mcq` (its choices) and a `short`
+  (its `number` matcher) take as they are, so the row shows the formulas
+  (`[[t]] ± [[t/100]]`, a choice `[[sqrt(h/g)]] s`). A template the type
+  cannot draw — a `cloze` number blank `{{#[[t]]:1%}}` — is replaced by the
+  example instance (`example: true`), whose key the row never pins: each
+  cell says "per answer". The row carries an "Own key per answer" badge.
+  Each entry carries its student's `values` (in the table's order, written
+  with their formats) and its instantiated `explanation`; the side panel
+  shows them under the type's `Review`, which already gets the entry's own
+  instance and key. The key's panel lists the variables and the condition.
+  Rows are grouped by verdict, and an answer column sorts only within a
+  verdict: two alike answers to their own keys are not answers to grade
+  alike. A per-row "expected" column can come later.
+- **The debrief (ADR-033)** projects the instance of the EXAMPLE values
+  (seed 0, the draw publication validated), named "Example values: each
+  student had their own numbers" (`ByQuestion.parameterized`). Not the
+  template: a formula on a wall is a worked solution, and a `cloze`
+  template is no question the type can draw. Nothing is grouped by what was
+  written: `distribution` is empty, `outcomes` carry the verdicts, and a
+  `cloze` blank holds the example's key without a right / wrong bar. An
+  `mcq` keeps its ticks per choice: choice B is the same formula, with the
+  same verdict, on every paper.
 - **Distractor analysis (ADR-043)** groups `mcq` options by their template
-  text. That is meaningful for a formula distractor. For a `choice()` or
-  `uniform()` distractor, the analysis says so instead of comparing
-  numbers.
-- **Item statistics (ADR-038)** are pooled across instances. v1 has no
-  per-instance statistics.
+  text, which is meaningful for a formula distractor. An option whose value
+  is drawn for it alone — it depends on a row that calls `randint`,
+  `uniform` or `choice` and on which neither the statement nor a correct
+  choice depends (`drawnApart`, `@quiz/domain/parameters`) — is flagged
+  `drawn`, and the sheet says its share is that of its place, not of one
+  mistake. `[[h]]` as a distractor is a formula of the statement's values,
+  not noise.
+- **Item statistics (ADR-038)** are pooled across instances, unchanged. v1
+  has no per-instance statistics. The success-rate card shows no template
+  text, so it needs no hint.
 
 The released feedback and the student's review show the student's own
 values, because they read the stored instance.

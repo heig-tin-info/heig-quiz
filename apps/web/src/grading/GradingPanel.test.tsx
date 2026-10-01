@@ -388,6 +388,97 @@ describe("GradingPanel — the answer panel", () => {
 });
 
 /*
+ * A parameterized question (ADR-056 §9): every answer has its own key. The
+ * expected row is the question as written, the rows are grouped by verdict,
+ * and the panel lays the student's values beside their answer.
+ */
+describe("GradingPanel — a parameterized question", () => {
+  const TEMPLATE = {
+    student: {
+      prompt: "Dropped from [[h]] m: how long?",
+      choices: [
+        { id: 0, text: "[[t]] s" },
+        { id: 1, text: "[[sqrt(h/g)]] s" },
+      ],
+      mode: "single",
+    },
+    solution: { correct: [0] },
+    example: false,
+  };
+  const VARIABLES = {
+    rows: [
+      { name: "h", expr: "randint(10, 100)", format: "int" },
+      { name: "t", expr: "sqrt(2*h/9.81)", format: ".2" },
+    ],
+    condition: "t > 1.5",
+  };
+  const own = (attemptId: string, points: number, h: string) => ({
+    ...validated(attemptId, points),
+    values: [
+      { name: "h", value: h },
+      { name: "t", value: "2.02" },
+    ],
+  });
+  const queue = (template = TEMPLATE) =>
+    ok(
+      makeQueue([own("a1", 2, "20"), own("a2", 0, "45"), own("a3", 2, "80")], {
+        items: [
+          {
+            id: "i1",
+            position: 0,
+            internalName: "fall",
+            type: "mcq",
+            points: 2,
+            parameters: { variables: VARIABLES, template },
+          },
+        ],
+      }),
+    );
+
+  it("pins the question as written, says each answer has its own key, and groups the rows by verdict", async () => {
+    mockFetch(routes([], { [`GET ${QUEUE("i1")}`]: queue() }));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+
+    const t = await table();
+    const heads = within(t)
+      .getAllByRole("columnheader")
+      .map((h) => h.textContent);
+    // The template's choices, never one student's numbers.
+    expect(heads).toEqual(["Verdict", "A · [[t]] s", "B · [[sqrt(h/g)]] s", "Points", "Actions"]);
+    const [, expected] = within(t).getAllByRole("row");
+    expect(within(expected!).getByText("Own key per answer")).toBeInTheDocument();
+    // The wrong answer first, whatever the shuffle drew.
+    expect((await answerRows())[0]!.dataset.row).toBe("a2:i1");
+  });
+
+  it("opens the variables on the expected row and the student's own values on an answer", async () => {
+    mockFetch(routes([], { [`GET ${QUEUE("i1")}`]: queue() }));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    const [, expected] = within(await table()).getAllByRole("row");
+
+    await userEvent.click(expected!);
+    const key = await screen.findByRole("dialog", { name: "Question 1" });
+    expect(within(key).getByText("Variables")).toBeInTheDocument();
+    expect(within(key).getByText("= randint(10, 100)")).toBeInTheDocument();
+    expect(within(key).getByText("t > 1.5")).toBeInTheDocument();
+
+    await userEvent.click(rowOf("a2"));
+    const answer = await screen.findByRole("dialog", { name: "Anonymous answer" });
+    const values = within(answer).getByText("This student's values").parentElement!;
+    expect(values.textContent).toContain("h = 45");
+    expect(values.textContent).toContain("t = 2.02");
+  });
+
+  it("says 'per answer' instead of pinning an example's key", async () => {
+    mockFetch(routes([], { [`GET ${QUEUE("i1")}`]: queue({ ...TEMPLATE, example: true }) }));
+    renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
+    const [, expected] = within(await table()).getAllByRole("row");
+    expect(within(expected!).getAllByText("per answer")).toHaveLength(2);
+    expect(within(expected!).queryByRole("img", { name: "Expected" })).toBeNull();
+  });
+});
+
+/*
  * The round trip of ADR-044's addendum: Edit question → the editor → back
  * on the same question → Re-grade, emphasised while a newer version waits.
  */

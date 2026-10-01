@@ -28,6 +28,7 @@ import { RegradeSheet } from "./RegradeSheet";
 import {
   ANY,
   byName,
+  byVerdict,
   canBatch,
   entryKey,
   EXPECTED,
@@ -94,7 +95,7 @@ export function GradingPanel({
   const pane = useMinWidth(ASIDE_MIN_WIDTH) ? ANSWER_PANE_WIDTH : null;
 
   const data = useGradingData(evaluationId, itemParam || null, !anonymise);
-  const { items, item, index, entries } = data;
+  const { items, item, index, entries, parameters } = data;
   const actions = useGradingActions({
     evaluationId,
     navigate,
@@ -102,14 +103,18 @@ export function GradingPanel({
   });
 
   const first = entries[0];
+  // A parameterized question's columns come from the question AS WRITTEN,
+  // never from one student's instance: the expected row would otherwise
+  // pin that student's numbers as everybody's key (ADR-056 §9).
+  const shown = parameters?.template ?? first;
   const columns = useMemo(
-    () => (item && first ? gradingColumns(t, item.type, first.student, first.solution) : []),
-    [t, item, first],
+    () => (item && shown ? gradingColumns(t, item.type, shown.student, shown.solution) : []),
+    [t, item, shown],
   );
-  const base = useMemo(
-    () => (anonymise ? shuffled(entries, seed) : byName(entries)),
-    [entries, anonymise, seed],
-  );
+  const base = useMemo(() => {
+    const ordered = anonymise ? shuffled(entries, seed) : byName(entries);
+    return parameters ? byVerdict(ordered) : ordered;
+  }, [entries, anonymise, seed, parameters]);
   const visible = useMemo(
     () =>
       filterRows(base, {
@@ -120,8 +125,8 @@ export function GradingPanel({
     [base, view],
   );
   const sortable = useMemo(
-    () => sortColumns(t, columns, !anonymise, (e) => whoOf(t, e)),
-    [t, columns, anonymise],
+    () => sortColumns(t, columns, !anonymise, (e) => whoOf(t, e), parameters !== null),
+    [t, columns, anonymise, parameters],
   );
   const rows = useMemo(() => {
     const byKey = new Map(sortable.map((c) => [c.key, c]));
@@ -263,7 +268,8 @@ export function GradingPanel({
       named={!anonymise}
       pane={pane}
       columns={columns}
-      student={first?.student ?? null}
+      student={shown?.student ?? null}
+      parameters={parameters}
       explanation={data.explanation}
       onClose={close}
       onMove={move}
@@ -341,6 +347,7 @@ export function GradingPanel({
               sortable={sortable}
               rows={rows}
               maxPoints={item.points}
+              parameters={parameters}
               named={!anonymise}
               sort={sort}
               onSort={(key) => setSort((s) => nextSort(s, key))}

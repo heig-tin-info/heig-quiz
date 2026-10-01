@@ -1,4 +1,4 @@
-import { Check, GraduationCap, PencilLine, RefreshCcw } from "lucide-react";
+import { Check, Dices, GraduationCap, PencilLine, RefreshCcw } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import type { GradingColumn } from "@quiz/core/client";
@@ -11,6 +11,7 @@ import { Badge, Button, cx, IconButton, pressable, TableHead, T, Tip, type Colum
 import type { SortColumn } from "./columns";
 import { confidenceLabelShort, whoOf } from "./labels";
 import { entryKey, EXPECTED, isMissing, rowAction, type Sort } from "./rows";
+import type { GradingParameters } from "./useGradingData";
 import { ExpectedGlyph, VerdictGlyph } from "./VerdictGlyph";
 
 /**
@@ -41,6 +42,11 @@ export interface GradingTableProps {
   sortable: SortColumn[];
   rows: GradingEntry[];
   maxPoints: number;
+  /**
+   * A parameterized question (ADR-056 §9): the expected row is the question
+   * as written and says each answer has its own key; null when static.
+   */
+  parameters?: GradingParameters | null;
   /** Names shown: the Student column exists. */
   named: boolean;
   sort: Sort | null;
@@ -170,6 +176,7 @@ export function GradingTable(props: GradingTableProps) {
 function ExpectedRow({
   columns,
   maxPoints,
+  parameters,
   named,
   selected,
   onOpen,
@@ -204,7 +211,13 @@ function ExpectedRow({
       ) : null}
       {columns.map((c) => (
         <td key={c.key} className={cx(T.td, EXPECTED_CELL, c.align === "center" && "text-center")}>
-          {c.expected()}
+          {/* The example instance's key holds for its numbers only: never
+              pinned as everybody's. The panel shows it, said so. */}
+          {parameters?.template.example ? (
+            <span className="text-[13px] italic text-fg-muted">{t("grading.param.perAnswer")}</span>
+          ) : (
+            c.expected()
+          )}
         </td>
       ))}
       <td className={cx(T.td, EXPECTED_CELL, "text-right font-semibold tabular-nums")}>
@@ -212,6 +225,13 @@ function ExpectedRow({
       </td>
       <td className={cx(T.td, EXPECTED_CELL, "whitespace-nowrap text-right")}>
         <span className="inline-flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+          {parameters ? (
+            <Tip label={t("grading.param.badgeTip")}>
+              <Badge tone="zinc" icon={Dices} className="mr-1.5">
+                {t("grading.param.badge")}
+              </Badge>
+            </Tip>
+          ) : null}
           {onEdit ? (
             <IconButton label={t("grading.editQuestion")} onClick={onEdit}>
               <PencilLine />

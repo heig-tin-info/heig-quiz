@@ -3057,6 +3057,19 @@ export const fr: Record<keyof Dict, string> = {
   "grading.panel.statement": "Énoncé",
   "grading.panel.expectedHelp":
     "Clé erronée ? Modifiez la question et publiez une nouvelle version, puis re-corrigez : chaque réponse est corrigée à nouveau, et la correction précédente reste dans son historique.",
+  // Parameterized questions: grading and results (ADR-056 §9)
+  "grading.param.badge": "Clé propre à chaque réponse",
+  "grading.param.badgeTip":
+    "Chaque étudiant avait ses propres valeurs : chaque réponse a donc sa propre clé. Cette ligne montre la question telle qu'écrite ; ouvrez une réponse pour voir ses valeurs et sa clé.",
+  "grading.param.perAnswer": "propre à chaque réponse",
+  "grading.param.variables": "Variables",
+  "grading.param.condition": "Condition (les valeurs sont tirées à nouveau tant qu'elle est fausse) :",
+  "grading.param.example": "Valeurs d'exemple : cette clé ne vaut que pour ces nombres.",
+  "grading.param.values": "Valeurs de cet étudiant",
+  "grading.param.expectedHelp":
+    "Chaque réponse est corrigée selon sa propre clé, calculée à partir des valeurs tirées pour son étudiant. Deux réponses identiques ne sont pas forcément corrigées pareil : les lignes sont groupées par verdict.",
+  "correction.param.example": "Valeurs d'exemple : chaque étudiant avait ses propres nombres.",
+  "pool.stats.choicesDrawn": "Une valeur tirée pour chaque étudiant : cette part est celle de la position du choix, pas d'une erreur.",
   "grading.override.comment": "Commentaire",
   "grading.override.commentHelp":
     "Le seul commentaire que l'étudiant peut lire avec son résultat, si la politique de retour montre les commentaires.",

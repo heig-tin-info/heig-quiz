@@ -91,6 +91,21 @@ describe("ByQuestionView", () => {
     expect(screen.queryByText(/Score/)).toBeNull();
   });
 
+  it("names a parameterized question's example values, and draws its blanks without a bar (ADR-056 §9)", async () => {
+    const param = makeByQuestion({
+      ...CLOZE,
+      parameterized: true,
+      student: clozeStudentTemplate(parseCloze("It falls for {{#3.03:1%}} s."), 0, "i1", false),
+      solution: { blanks: [{ index: 0, expected: "3.03 ± 1%" }] },
+      distribution: [],
+    });
+    renderWithProviders(<ByQuestionView questions={[param]} />);
+    expect(await screen.findByText("Example values: each student had their own numbers.")).toBeVisible();
+    const hole = screen.getByText("3.03 ± 1%");
+    // The verdicts are the head's: no right / wrong split by what was written.
+    expect(within(hole.parentElement!).queryByRole("img")).toBeNull();
+  });
+
   it("leaves any other type's statement to its review, with the program below", async () => {
     renderWithProviders(<ByQuestionView questions={[CODE]} />);
     expect(await screen.findByText("Not answered.")).toBeVisible();

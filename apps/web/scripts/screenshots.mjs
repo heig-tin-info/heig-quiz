@@ -859,6 +859,12 @@ const scenes = [
   { name: "grading-codeimage", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 6) },
   { name: "grading-diagram", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 7) },
   { name: "grading-diagram-panel", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, fold: true, act: async (p) => { await nextQuestion(p, 7); await openRow(p, 1); } },
+  // ADR-056 §9: the parameterized question, the closed evaluation's tenth —
+  // the question as written on the key's row, the rows by verdict, an
+  // answer's own values and key, and the variables on the key's panel.
+  { name: "grading-param", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 9) },
+  { name: "grading-param-panel", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => { await nextQuestion(p, 9); await openRow(p, 1); } },
+  { name: "grading-param-expected", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => { await nextQuestion(p, 9); await openRow(p, 0); } },
   // ADR-044: the table and its layers — the question menu, the answer
   // panel (an answer, the key, the adjustment), the filters, a sort, names.
   { name: "grading-menu", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
@@ -909,6 +915,7 @@ const scenes = [
   { name: "correction-revealed", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: async (p) => { await projectNext(p, 1); await p.keyboard.press("r"); } },
   { name: "correction-code-revealed", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: (p) => p.keyboard.press("r") },
   { name: "correction-cloze", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: (p) => projectNext(p, 7) },
+  { name: "correction-param-revealed", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: async (p) => { await projectNext(p, 9); await p.keyboard.press("r"); } },
   { name: "correction-cloze-revealed", role: "teacher", path: "/evaluations/closed/correction", fold: true, settle: 2500, act: async (p) => { await projectNext(p, 7); await p.keyboard.press("r"); } },
   { name: "results-release-confirm", role: "teacher", path: "/evaluations/closed/results", fold: true, act: (p) => p.getByRole("button", { name: /publish results|publier les résultats/i }).first().click() },
   { name: "results-empty", role: "teacher", path: "/evaluations/closed/results?empty=1", settle: 800 },
