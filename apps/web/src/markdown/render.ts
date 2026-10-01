@@ -131,9 +131,57 @@ if (purify.isSupported) purify.addHook("uponSanitizeAttribute", (_node, data) =>
   if (!tokens.every((c) => OWN_CLASS.test(c))) data.keepAttr = false;
 });
 
+/**
+ * A `$…$` or `$$…$$` span at the start of `src`. marked must not read inside
+ * one: CommonMark unescapes `\,` into `,` and turns `a_1 … b_1` into
+ * emphasis, so KaTeX would get a formula that is not the teacher's. Kept
+ * whole here and rendered later (step 4).
+ *
+ * Neither form spans a backtick or a link, and a single `$` is held to
+ * pandoc's rule: no space after the opening one, none before the closing one,
+ * no digit after it. A lone `$` in prose ("costs $5") must not pair with one
+ * inside `` `echo $HOME` `` or a URL and swallow them. What this refuses is
+ * left to the text-node pass ({@link MATH}), exactly as before.
+ */
+const MATH_AT_START = /^(?:\$\$[^`]+?\$\$|\$(?![\s$])(?:[^$\\\n`]|\\.)*?(?<![\s\\])\$(?!\d))/;
+
+/** A link or an image inside a candidate `$…$`: not a formula. */
+const LINK_INSIDE = /\]\(/;
+
+/** The entities a formula may be written with, decoded as marked did. */
+const ENTITY = /&(?:#(\d+)|#x([0-9a-f]+)|(lt|gt|amp|quot|apos|nbsp));/gi;
+const NAMED: Record<string, string> = { lt: "<", gt: ">", amp: "&", quot: '"', apos: "'", nbsp: " " };
+
+function decodeEntities(text: string): string {
+  return text.replace(ENTITY, (all, dec?: string, hex?: string, name?: string) => {
+    if (name) return NAMED[name.toLowerCase()] ?? all;
+    const code = dec ? Number(dec) : parseInt(hex!, 16);
+    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : all;
+  });
+}
+
 const marked = new Marked({
   gfm: true, // tables, task lists, strikethrough, autolinks
   breaks: false,
+  extensions: [
+    {
+      name: "math",
+      level: "inline",
+      // Never between `\` and `$`: an escaped dollar stays marked's escape.
+      start: (src: string) => {
+        const at = src.search(/(?<!\\)\$/);
+        return at < 0 ? undefined : at;
+      },
+      tokenizer: (src: string) => {
+        const match = MATH_AT_START.exec(src);
+        if (!match || LINK_INSIDE.test(match[0])) return undefined;
+        return { type: "math", raw: match[0] };
+      },
+      // The source as text, its backslashes untouched (`renderMathIn` finds
+      // it in the DOM); entities decoded, as marked does for any text.
+      renderer: (token) => escapeHtml(decodeEntities(token.raw)),
+    },
+  ],
   renderer: {
     /**
      * Fenced code: the language becomes a class (so the stylesheet can set
