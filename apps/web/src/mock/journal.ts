@@ -27,14 +27,21 @@
 import type {
   Journal,
   JournalCreate,
+  JournalFileWritten,
   JournalNavNode,
   JournalPage,
+  JournalPageAdd,
+  JournalPageSave,
+  JournalPageStaff,
+  JournalPreview,
+  JournalPreviewResult,
   JournalRepository,
   JournalStaff,
   JournalTocEntry,
   JournalUse,
   JournalWarning,
 } from "@quiz/contracts";
+import { renderPage } from "@quiz/docrender";
 import { buildNav, homePage, placePage } from "@quiz/docrender/journalTree";
 
 import { rooms } from "./org";
@@ -161,7 +168,36 @@ const PAGES: Fixture[] = [
     ],
     draft: false,
     visibleInDays: null,
-    markdown: "# Les pointeurs\n\nUn pointeur est une variable qui contient une adresse.\n",
+    // The page the editor scenes open (M4-06): front matter, emphasis written
+    // with `_`, a fence, KaTeX, a table, a relative link and raw HTML.
+    markdown: [
+      "---",
+      "title: Les pointeurs",
+      "date: 2026-09-23",
+      "author: Équipe PRG1",
+      "---",
+      "",
+      "# Les pointeurs",
+      "",
+      "Un pointeur est une variable qui contient une _adresse_. On le déclare avec `*` :",
+      "",
+      "```c",
+      "int x = 42;",
+      "int *p = &x;",
+      "```",
+      "",
+      "## Arithmétique",
+      "",
+      "La taille du pas est celle du type pointé : $p + 1$ avance de $\\text{sizeof}(*p)$ octets.",
+      "",
+      "| Type | Pas |",
+      "| --- | --- |",
+      "| `char *` | 1 |",
+      "| `int *` | 4 |",
+      "",
+      "Retour à [la semaine 1](README.md). <kbd>Ctrl</kbd>+<kbd>S</kbd> n'enregistre pas.",
+      "",
+    ].join("\n"),
   },
   {
     // A folder with a space and an accent: the reader's addresses are encoded.
@@ -314,22 +350,132 @@ on("GET", "/app/api/classrooms/:id/journal/pages/(?<path>.+)", (m, _body, url): 
   const page = PAGES.find((p) => p.path === path);
   // A page a student may not read is a page that does not exist (F-JRN-07).
   if (!page || (studentPayload(url) && hidden(page))) throw new MockError(404, "Not found");
-  const common = {
-    path: page.path,
-    title: page.title,
-    html: page.html,
-    toc: page.toc,
-    updatedAt: iso(-3 * D),
-  };
-  if (studentPayload(url)) return { view: "student", ...common };
+  if (studentPayload(url)) return { view: "student", ...commonOf(page) };
+  return staffPageOf(page);
+});
+
+const commonOf = (page: Fixture) => ({
+  path: page.path,
+  title: page.title,
+  html: page.html,
+  toc: page.toc,
+  updatedAt: iso(-3 * D),
+});
+
+const staffPageOf = (page: Fixture): JournalPageStaff => ({
+  view: "staff",
+  ...commonOf(page),
+  draft: page.draft,
+  visibleFrom: page.visibleInDays === null ? null : iso(page.visibleInDays * D),
+  hidden: hidden(page),
+  markdown: page.markdown,
+  blobSha: blobOf(page.markdown),
+  warnings: page.warnings ?? [],
+});
+
+// --------------------------------------------------------------- writes
+// The editor's routes (M4-06): save against the blob (`?journalconflict=1`:
+// every save meets a moved file), add, delete, upload, preview. A written
+// page is rendered by the journal's own renderer (`@quiz/docrender`), as
+// the API's ingestion would; an upload is accepted and not kept (the
+// editor draws a picture it uploaded from the browser's copy).
+
+/** A 40-hex "blob sha" of a text, stable for the same text (FNV-1a, five times salted). */
+function blobOf(text: string): string {
+  let out = "";
+  for (let salt = 0; salt < 5; salt += 1) {
+    let h = 0x811c9dc5 ^ salt;
+    for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+    out += (h >>> 0).toString(16).padStart(8, "0");
+  }
+  return out;
+}
+
+/** The page rendered again from its markdown, as an ingestion would. */
+function rerender(page: Fixture): void {
+  const rendered = renderPage(page.markdown, {
+    classroomId: JOURNAL_ROOM,
+    pagePath: page.path,
+    fallbackTitle: null,
+    pages: new Set(PAGES.map((p) => p.path)),
+    assets: new Set(),
+  });
+  page.html = rendered.html;
+  page.title = rendered.title ?? page.path;
+  page.toc = rendered.toc;
+  page.draft = rendered.draft;
+  page.visibleInDays = rendered.visibleFrom ? (rendered.visibleFrom.getTime() - Date.now()) / D : null;
+  page.warnings = rendered.warnings;
+}
+
+/** A write's answer: the file, its new blob, a commit, and the page as the copy now holds it. */
+const written = (path: string, page: Fixture | null): JournalFileWritten => ({
+  path,
+  blobSha: blobOf(page?.markdown ?? path),
+  commitSha: blobOf(`commit ${path} ${Date.now()}`),
+  page: page ? staffPageOf(page) : null,
+});
+
+/** The page of a write, or the 404 a missing one is. */
+function writablePage(m: RegExpMatchArray): Fixture {
+  const id = m.groups!.id!;
+  staffRoom(id);
+  if (!journals.has(id)) throw refusal(409, "no_journal");
+  const page = PAGES.find((p) => p.path === decodeURIComponent(m.groups!.path!));
+  if (!page) throw new MockError(404, "Not found");
+  return page;
+}
+
+on("PUT", "/app/api/classrooms/:id/journal/pages/(?<path>.+)", (m, body): JournalFileWritten => {
+  const page = writablePage(m);
+  const { markdown, baseSha } = body as JournalPageSave;
+  if (flags.journalconflict || baseSha !== blobOf(page.markdown)) throw refusal(409, "conflict");
+  page.markdown = markdown;
+  rerender(page);
+  return written(page.path, page);
+});
+
+on("POST", "/app/api/classrooms/:id/journal/pages", (m, body): JournalFileWritten => {
+  const id = m.groups!.id!;
+  staffRoom(id);
+  if (!journals.has(id)) throw refusal(409, "no_journal");
+  const { path, title } = body as JournalPageAdd;
+  if (PAGES.some((p) => p.path === path)) throw refusal(409, "page_exists");
+  const page: Fixture = { path, title: title ?? path, html: "", toc: [], draft: false, visibleInDays: null, markdown: title ? `# ${title}\n` : "" };
+  PAGES.push(page);
+  rerender(page);
+  return written(path, page);
+});
+
+on("DELETE", "/app/api/classrooms/:id/journal/pages/(?<path>.+)", (m) => {
+  const page = writablePage(m);
+  PAGES.splice(PAGES.indexOf(page), 1);
+  return undefined;
+});
+
+on("POST", "/app/api/classrooms/:id/journal/assets/(?<path>.+)", (m): JournalFileWritten => {
+  const id = m.groups!.id!;
+  staffRoom(id);
+  if (!journals.has(id)) throw refusal(409, "no_journal");
+  return written(decodeURIComponent(m.groups!.path!), null);
+});
+
+on("POST", "/app/api/classrooms/:id/journal/preview", (m, body): JournalPreviewResult => {
+  staffRoom(m.groups!.id!);
+  const { path, markdown } = body as JournalPreview;
+  const rendered = renderPage(markdown, {
+    classroomId: m.groups!.id!,
+    pagePath: path,
+    fallbackTitle: null,
+    pages: new Set(PAGES.map((p) => p.path)),
+    assets: new Set(),
+  });
   return {
-    view: "staff",
-    ...common,
-    draft: page.draft,
-    visibleFrom: page.visibleInDays === null ? null : iso(page.visibleInDays * D),
-    hidden: hidden(page),
-    markdown: page.markdown,
-    blobSha: `blob-${page.path.length}`,
-    warnings: page.warnings ?? [],
+    title: rendered.title,
+    html: rendered.html,
+    toc: rendered.toc,
+    draft: rendered.draft,
+    visibleFrom: rendered.visibleFrom?.toISOString() ?? null,
+    warnings: rendered.warnings,
   };
 });

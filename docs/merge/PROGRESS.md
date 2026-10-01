@@ -94,7 +94,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M4-03 | Writes | review | M4-02, M2-03 | `merge/M4-03-journal-writes` | #415 | `modules/journal/writes.ts` + `registerWrites` (create, use, remove, refresh, preview, save, add, delete, upload; staff via `accessibleClassroom`); refusals `JournalErrorCode`; saves GitHub-first on `baseSha`, `version + 1`, re-read awaited; push-only invitations; nine `journal.*` audits; card M4-03, "As delivered" |
 | M4-04 | Web: reader | done | M4-02, M1-04, M1-05 | `merge/M4-04-journal-reader` | #378 | `apps/web/src/journal/`: `JournalReader({classroomId, path?, navigate, studentView})` (the page; student UI ⇒ `?view=student`; keys `journalKey(id, view)` ⊃ `journalPageKey(id, view, path)`), `JournalNav`, `JournalToc`, `JournalArticle` (+ `journalLinkTarget`), `words.ts` (`warningText`, `SYNC_ERRORS`, keyed by the contract unions). No staff action yet (sync state only, in `ReaderHeader`'s `aside`): M4-05 adds Refresh there (invalidate `journalKey`), M4-06 adds Edit (primary) and the editor (both cards say so). `isPlainClick` lives in `./ui` (controls, beside `LinkButton`). Route still `preview: true` (no API until M4-02); M5-02 mounts the reader under the student classroom header. SSE `journal` hint ⇒ invalidate `["journal", id]` (M4-02) |
 | M4-05 | Web: Journal section of Settings, teacher tab | review | M4-03, M2-07, D24 | `merge/M4-05-journal-settings` | #416 | `journal/JournalSettings.tsx` (the section, in M2-07's slot), `journal/api.ts` (`useStaffJournal`, `useJournalRefresh`, the refusals worded through `JOURNAL_ERRORS`), teacher Journal tab = `ClassroomView routeTab="journal"` mounting `JournalReader`; the route and both tabs are out of `CLASSROOM_PAGES` (Grades and projects stay). **M4-06**: Edit goes in the reader's `StaffBar` (`JournalReader.tsx`), beside Refresh, as its primary; card M4-05, "As delivered" |
-| M4-06 | Web: WYSIWYG editor | todo | M4-05, D25 | | | |
+| M4-06 | Web: WYSIWYG editor | review | M4-05, D25 | `merge/M4-06-journal-editor` | #417 | Edit (primary of `StaffBar`) swaps the page for `journal/editor/JournalEditor` on the same route; D25 holds WYSIWYG-first: `richTextExtensions({ journal: true })` keeps the author's spelling, `reconcile.ts` writes every unedited block as read, front matter split and rewritten line by line, pictures in `images/` beside the page by relative path, 409 keeps the draft, `useLeaveGuard` in `router.ts`; the real-corpus run needs `JOURNAL_CORPUS_DIR`; card M4-06, "As delivered" |
 
 ## M5 — Student classroom page and gradebook
 
@@ -153,6 +153,12 @@ In the critical path only if D09 finds online assignments in production.
 
 Newest first. One line per session that changed the state: date, who,
 what moved, what the next session must know.
+
+- 2026-10-01 — M4-06 (#417): the journal's editor in review, which closes the
+  journal track. The D25 round trip is the identity on the synthetic journal
+  and on classroom's production journals (5 pages, `JOURNAL_CORPUS_DIR`,
+  fetched outside the repository). Review round 1 applied (external images
+  refused, front matter read through docrender).
 
 - 2026-10-01 — M4-05 (#416): the Journal section of Settings, the teacher's
   Journal tab and Refresh in review; the journal UI left `CLASSROOM_PAGES`.

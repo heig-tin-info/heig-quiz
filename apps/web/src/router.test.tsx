@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { useSearchParam } from "./router";
+import { useLeaveGuard, useRoute, useSearchParam } from "./router";
 
 /*
  * `useSearchParam` backs the in-page tabs. The contract it has to keep: a
@@ -91,5 +91,69 @@ describe("useSearchParam", () => {
     act(() => result.current[1]("assignments"));
     expect(new URLSearchParams(window.location.search).get("q")).toBe("rochat");
     expect(new URLSearchParams(window.location.search).has("tab")).toBe(false);
+  });
+});
+
+/*
+ * The leave guard (M4-06): a screen holding unsaved work asks before the app
+ * navigates away, by `navigate` or by Back, and the browser asks on a reload.
+ */
+describe("useLeaveGuard", () => {
+  const guarded = (dirty: boolean, answer: boolean) => {
+    const ask = vi.fn(async () => answer);
+    const hooks = renderHook(
+      ({ isDirty }) => {
+        useLeaveGuard(isDirty, ask);
+        return useRoute();
+      },
+      { initialProps: { isDirty: dirty } },
+    );
+    return { ask, ...hooks };
+  };
+
+  it("lets `navigate` go at once while nothing is at stake", () => {
+    goTo("/activities");
+    const { result, ask } = guarded(false, false);
+    act(() => result.current[1]({ view: "pools" }));
+    expect(ask).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe("/pools");
+  });
+
+  it("holds `navigate` until the screen answers, and stays on a no", async () => {
+    goTo("/activities");
+    const { result, ask } = guarded(true, false);
+    await act(async () => result.current[1]({ view: "pools" }));
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(window.location.pathname).toBe("/activities");
+    expect(result.current[0].view).not.toBe("pools");
+  });
+
+  it("goes on a yes", async () => {
+    goTo("/activities");
+    const { result } = guarded(true, true);
+    await act(async () => result.current[1]({ view: "pools" }));
+    expect(window.location.pathname).toBe("/pools");
+    expect(result.current[0]).toEqual({ view: "pools" });
+  });
+
+  it("puts the page back on Back, and asks", async () => {
+    goTo("/activities");
+    const { ask } = guarded(true, false);
+    window.history.replaceState(null, "", "/pools");
+    await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(window.location.pathname).toBe("/activities");
+  });
+
+  it("asks the browser on a reload, and stops once the work is saved", () => {
+    goTo("/activities");
+    const { rerender } = guarded(true, false);
+    const unload = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+    rerender({ isDirty: false });
+    const again = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(again);
+    expect(again.defaultPrevented).toBe(false);
   });
 });

@@ -237,10 +237,35 @@
 .rt-surface td > * {
   margin-bottom: 0;
 }
+/* The long-form type gives a paragraph 16 px under it; a paragraph in a cell
+   is the cell's text, and keeps none. */
+.rt-surface.md-doc th > p,
+.rt-surface.md-doc td > p {
+  margin: 0;
+}
 .rt-surface .selectedCell::after {
   content: "";
   position: absolute;
   inset: 0;
   background: var(--accent-soft);
   pointer-events: none;
+}
+
+/* RAW HTML in a journal page (journalSchema.ts): the journal shows it as
+   text (D15), so the editor does too, in the mono face and the muted tone,
+   never as markup. A block sits on the recessed surface, like code. */
+.rt-surface .rt-raw-html {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+}
+.rt-surface pre.rt-raw-html {
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.rt-surface .rt-raw-html.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }

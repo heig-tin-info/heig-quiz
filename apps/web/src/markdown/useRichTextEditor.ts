@@ -10,7 +10,8 @@ import { protectHolePipes, restoreHolePipes } from "./clozeHole";
 import { CodeBlockView } from "./CodeBlockView";
 import { ImageView } from "./ImageView";
 import { handleRichTextKeyDown, isMathNode, type RichTextKeyDeps } from "./richTextKeys";
-import { INLINE_INPUT_RULES, richTextExtensions } from "./tiptap";
+import type { ImageUrl } from "./imageUrl";
+import { INLINE_INPUT_RULES, richTextExtensions, spellWith } from "./tiptap";
 import { emptyClozeHoles } from "./useClozeHole";
 import { emptyMath, type FormulaTarget } from "./useFormulaTarget";
 
@@ -47,7 +48,20 @@ export interface RichTextEditorOptions {
   openHole: RichTextKeyDeps["openHole"];
   openFormula: (target: FormulaTarget) => Promise<void>;
   openCreatedHole: (editor: Editor, pos: number) => void;
+  /** The journal's schema (tiptap.ts `journal`). */
+  journal: boolean;
+  /** Resolves an image's `src` for display (tiptap.ts `imageUrl`). */
+  imageUrl: ImageUrl | undefined;
+  /** Rewrites what the surface emits (`RichTextHostProps.reconcile`). */
+  reconcile: Reconcile | undefined;
 }
+
+/**
+ * Rewrites the markdown the surface emits, given how this editor spells one
+ * block unedited (`spellWith`): the journal puts back every block that was
+ * not edited (journal/editor/reconcile.ts).
+ */
+export type Reconcile = (markdown: string, spell: (block: string) => string) => string;
 
 /**
  * The editor's document as markdown.
@@ -151,6 +165,8 @@ export function useRichTextEditor(o: RichTextEditorOptions) {
   const onChangeRef = useRef(o.onChange);
   const onEnterRef = useRef(o.onEnter);
   const onTabRef = useRef(o.onTab);
+  const reconcileRef = useRef(o.reconcile);
+  reconcileRef.current = o.reconcile;
   onChangeRef.current = o.onChange;
   onEnterRef.current = o.onEnter;
   onTabRef.current = o.onTab;
@@ -210,6 +226,8 @@ export function useRichTextEditor(o: RichTextEditorOptions) {
       placeholder: o.placeholder ?? "",
       inline: o.inline,
       cloze: o.holes,
+      journal: o.journal,
+      ...(o.imageUrl === undefined ? {} : { imageUrl: o.imageUrl }),
       // The picture's own toolbar (rotate, size, delete) lives in the node
       // view; `ImageToolsContext` in RichText.tsx is how it reaches this
       // field's uploader, which is what a rotation writes its result through.
@@ -241,6 +259,8 @@ export function useRichTextEditor(o: RichTextEditorOptions) {
         // list and grows with what it holds.
         class: cx(
           "rt-surface md-body focus:outline-none",
+          // A journal page is edited in the long-form type it is read in.
+          o.journal && "md-doc",
           o.inline ? "min-h-5 md-sm" : o.rows === undefined && "min-h-32",
         ),
         // `lh`: a line of the surface's own text, whatever its size.
@@ -280,7 +300,8 @@ export function useRichTextEditor(o: RichTextEditorOptions) {
       },
     },
     onUpdate({ editor: e }) {
-      const markdown = serialize(e);
+      const reconcile = reconcileRef.current;
+      const markdown = reconcile ? reconcile(serialize(e), spellWith(e)) : serialize(e);
       if (markdown !== settled.current) {
         settled.current = markdown;
         onChangeRef.current(markdown);

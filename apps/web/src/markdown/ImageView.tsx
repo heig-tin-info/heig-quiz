@@ -1,11 +1,12 @@
 import type { NodeViewProps } from "@tiptap/core";
 import { NodeViewWrapper } from "@tiptap/react";
-import { Check, Loader2, RotateCcw, RotateCw, Scaling, Trash2 } from "lucide-react";
+import { Check, ImageOff, Loader2, RotateCcw, RotateCw, Scaling, Trash2 } from "lucide-react";
 import { createContext, useContext, useState } from "react";
 
 import { useT } from "../i18n";
 import { IconButton, Menu } from "../ui";
 import { assetUrl, assetWidth, IMAGE_WIDTHS, withAssetWidth } from "./render";
+import { REFUSED, type ImageUrl } from "./imageUrl";
 
 /*
  * The image node of the rich editor, as a Tiptap NODE VIEW (React), and not as
@@ -35,6 +36,12 @@ export interface ImageTools {
    * simply does not offer the two rotate buttons.
    */
   uploadImage?: (file: File) => Promise<string>;
+  /**
+   * Where a picture that is not an `asset:` is drawn from: the journal's
+   * relative paths (M4-06). Such a picture has no width preset and no
+   * rotation (both write an `asset:` reference), only its removal.
+   */
+  imageUrl?: ImageUrl;
 }
 
 /**
@@ -90,7 +97,7 @@ export function ImageView({
   getPos,
 }: NodeViewProps) {
   const t = useT();
-  const { uploadImage } = useContext(ImageToolsContext);
+  const { uploadImage, imageUrl } = useContext(ImageToolsContext);
   const [hover, setHover] = useState(false);
   /** Which rotation is in flight, so its own button shows the spinner. */
   const [busy, setBusy] = useState<null | "left" | "right">(null);
@@ -98,7 +105,10 @@ export function ImageView({
   const src = typeof node.attrs.src === "string" ? node.attrs.src : "";
   const alt = typeof node.attrs.alt === "string" ? node.attrs.alt : "";
   const title = typeof node.attrs.title === "string" ? node.attrs.title : undefined;
-  const url = assetUrl(src);
+  const hosted = imageUrl?.(src) ?? null;
+  // A refused picture has no asset either: no size, no rotation, only removal.
+  const url = hosted === REFUSED ? null : assetUrl(src);
+  const shown = hosted ?? url ?? src;
   const width = assetWidth(src);
 
   const editable = editor.isEditable;
@@ -142,12 +152,24 @@ export function ImageView({
       {/* `data-asset` carries the CANONICAL reference beside the resolved
           URL, exactly as the node's own `renderHTML` does: it is what the
           parser reads back, and what a test can assert the markdown on. */}
-      <img
-        src={url ?? src}
-        alt={alt}
-        data-asset={src}
-        {...(title === undefined ? {} : { title })}
-      />
+      {shown === REFUSED ? (
+        // Never fetched (an external picture in the journal): its alt text,
+        // in a frame that says what it is, and the reference kept as is.
+        <span
+          data-asset={src}
+          className="inline-flex items-center gap-2 rounded-field border border-dashed border-line-strong px-3 py-2 text-xs text-fg-muted"
+        >
+          <ImageOff className="size-4 shrink-0" aria-hidden />
+          <span>{alt ? t("md.image.refusedAlt", { alt }) : t("md.image.refused")}</span>
+        </span>
+      ) : (
+        <img
+          src={shown}
+          alt={alt}
+          data-asset={src}
+          {...(title === undefined ? {} : { title })}
+        />
+      )}
 
       {open ? (
         <div
@@ -178,27 +200,29 @@ export function ImageView({
             </>
           ) : null}
 
-          <Menu
-            label={t("md.image.size")}
-            align="end"
-            items={sizeItems}
-            trigger={
-              <IconButton
-                size="sm"
-                label={t("md.image.size")}
-                onMouseDown={(e) => e.preventDefault()}
-                // Opening the menu SELECTS the node, so the bar survives the
-                // pointer leaving the picture on its way to the panel. It is
-                // a selection, not a focus: nothing scrolls, nothing is typed.
-                onClick={() => {
-                  const pos = getPos();
-                  if (typeof pos === "number") editor.commands.setNodeSelection(pos);
-                }}
-              >
-                <Scaling />
-              </IconButton>
-            }
-          />
+          {url ? (
+            <Menu
+              label={t("md.image.size")}
+              align="end"
+              items={sizeItems}
+              trigger={
+                <IconButton
+                  size="sm"
+                  label={t("md.image.size")}
+                  onMouseDown={(e) => e.preventDefault()}
+                  // Opening the menu SELECTS the node, so the bar survives the
+                  // pointer leaving the picture on its way to the panel. It is
+                  // a selection, not a focus: nothing scrolls, nothing is typed.
+                  onClick={() => {
+                    const pos = getPos();
+                    if (typeof pos === "number") editor.commands.setNodeSelection(pos);
+                  }}
+                >
+                  <Scaling />
+                </IconButton>
+              }
+            />
+          ) : null}
 
           <IconButton
             size="sm"

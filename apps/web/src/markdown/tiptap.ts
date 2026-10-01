@@ -28,7 +28,7 @@
  * dropped, in either mode.
  */
 import { Extension, InputRule, flattenExtensions } from "@tiptap/core";
-import type { AnyExtension, Node as TiptapNode, NodeViewRenderer } from "@tiptap/core";
+import type { AnyExtension, Editor, JSONContent, Node as TiptapNode, NodeViewRenderer } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import type { EditorState, Transaction } from "@tiptap/pm/state";
 import { TextSelection } from "@tiptap/pm/state";
@@ -42,7 +42,10 @@ import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table
 
 import { clozeHoleExtensions } from "./clozeHole";
 import { CodeHighlight } from "./codeHighlight";
+import { REFUSED, type ImageUrl } from "./imageUrl";
+import { JOURNAL_KIT_OVERRIDES, journalExtensions } from "./journalSchema";
 import { assetUrl, assetWidth } from "./render";
+
 
 /** KaTeX behaves here as in the student view: a broken formula shows, it never throws. */
 const KATEX_OPTIONS = { throwOnError: false } as const;
@@ -81,9 +84,11 @@ export const INLINE_INPUT_RULES = [
  * `asset:` form — that is what `renderMarkdown` serializes and what is stored —
  * and only the rendered `src` is resolved to the same-origin endpoint. A URL
  * that is not an asset is left alone and simply does not load, which is what
- * the student view does with it too (`render.ts`).
+ * the student view does with it too (`render.ts`) — unless the host resolves
+ * it: the journal's images are RELATIVE paths in the repository (D25), which
+ * `imageUrl` turns into the journal's asset route.
  */
-const AssetImage = Image.extend({
+const assetImage = (imageUrl?: ImageUrl) => Image.extend({
   addAttributes() {
     const parent = this.parent?.() ?? {};
     return {
@@ -94,6 +99,11 @@ const AssetImage = Image.extend({
           element.getAttribute("data-asset") ?? element.getAttribute("src"),
         renderHTML: (attributes: Record<string, unknown>) => {
           const src = typeof attributes.src === "string" ? attributes.src : "";
+          const hosted = imageUrl?.(src) ?? null;
+          // Refused: no `src` at all, so nothing is fetched; the reference
+          // travels in `data-asset`, which the parser reads back.
+          if (hosted === REFUSED) return { "data-asset": src, "data-refused": "" };
+          if (hosted !== null) return { src: hosted, "data-asset": src };
           const resolved = assetUrl(src);
           if (resolved === null) return { src };
           // The WIDTH lives in the reference too (`asset:<id>?w=50`), and it
@@ -109,6 +119,10 @@ const AssetImage = Image.extend({
         },
       },
     };
+  },
+  // A refused picture is an `<img>` without `src`; the kit's rule asks for one.
+  parseHTML() {
+    return [...(this.parent?.() ?? []), { tag: "img[data-asset]" }];
   },
 });
 
@@ -513,6 +527,14 @@ export interface RichTextSchemaOptions {
    * prompt, and an input rule that swallowed them there would be a trap.
    */
   cloze?: boolean;
+  /**
+   * The journal's spelling (journalSchema.ts): delimiters and markers kept as
+   * written, raw HTML as literal nodes. Never with `cloze`: a journal page
+   * has no holes.
+   */
+  journal?: boolean;
+  /** Resolves an image's `src` for display (the journal's relative paths). */
+  imageUrl?: ImageUrl;
 }
 
 /**
@@ -528,8 +550,12 @@ export function richTextExtensions({
   codeBlockNodeView,
   inline = false,
   cloze = false,
+  journal = false,
+  imageUrl,
 }: RichTextSchemaOptions = {}): AnyExtension[] {
-  const image = imageNodeView ? AssetImage.extend({ addNodeView: imageNodeView }) : AssetImage;
+  const holes = cloze && !journal;
+  const base = assetImage(imageUrl);
+  const image = imageNodeView ? base.extend({ addNodeView: imageNodeView }) : base;
   const code = codeBlockNodeView
     ? StarterCodeBlock.extend({ addNodeView: codeBlockNodeView })
     : StarterCodeBlock;
@@ -539,7 +565,9 @@ export function richTextExtensions({
       link: { openOnClick: false },
       // Taken out of the kit and put back below, extended (see `CodeFence`).
       codeBlock: false,
+      ...(journal ? JOURNAL_KIT_OVERRIDES : {}),
     }),
+    ...(journal ? journalExtensions() : []),
     // Two spaces and not four: a snippet in a question is read in a narrow
     // column, and C in this school is written with two.
     code.configure({ enableTabIndentation: true, tabSize: 2 }),
@@ -547,7 +575,7 @@ export function richTextExtensions({
     // Inside a fenced block a hole stays TEXT — the content of a code block is
     // text, and a node cannot live in it — so it is coloured by a decoration
     // instead, like the keywords around it.
-    CodeHighlight.configure({ holes: cloze }),
+    CodeHighlight.configure({ holes }),
     image.configure({ allowBase64: false }),
     InlineMathTyping.configure({ katexOptions: KATEX_OPTIONS }),
     BlockMathTyping.configure({ katexOptions: KATEX_OPTIONS }),
@@ -570,7 +598,28 @@ export function richTextExtensions({
     TableHeader,
     TableCell,
     Placeholder.configure({ placeholder: placeholder ?? "" }),
-    ...clozeHoleExtensions(cloze),
+    ...clozeHoleExtensions(holes),
     Markdown,
   ];
+}
+
+/**
+ * How `editor` writes `markdown` when nothing is edited: parsed, built
+ * through the schema as `setContent` builds it, serialized again, trimmed as
+ * the field trims what it emits. What the journal's reconciliation matches
+ * an edited page against (journal/editor/reconcile.ts).
+ */
+export function spellWith(editor: Editor): (markdown: string) => string {
+  return (markdown) => {
+    const manager = editor.markdown;
+    if (!manager) return markdown;
+    const parsed = manager.parse(markdown);
+    let json: JSONContent = parsed;
+    try {
+      json = editor.schema.nodeFromJSON(parsed).toJSON() as JSONContent;
+    } catch {
+      // What the schema refuses, the serializer still reads as parsed.
+    }
+    return manager.serialize(json).trim();
+  };
 }

@@ -221,8 +221,25 @@ question's prose never carries it, so the question scenes do not move.
   header and tabs, with no breadcrumb of its own; the staff get one bar
   above the page, right-aligned: the sync state in 12 px `fg-faint` (red
   on a failure) and Refresh, a `secondary` `sm` button reading
-  "Refreshing…" until the copy's state moves. Edit, the primary inside a
-  page, joins that bar (M4-06).
+  "Refreshing…" until the copy's state moves, then add and delete a page
+  (two icon buttons, `Actions`), then **Edit**, the bar's one `primary`.
+
+- **The editor** (`src/journal/editor/`, M4-06) takes the page's place on
+  the same route; the navigation stays, the table of contents goes (it
+  would go stale as the teacher types), and from `xl` the page takes the
+  TOC's column. The staff bar becomes the editor's: "Unsaved changes" or
+  "No changes" in 12 px `fg-faint` on the left, Cancel (`secondary`) and
+  Save (`primary`, off while nothing differs) on the right. The page's
+  sheet holds the front matter as one row of fields (title, date, visible
+  from, draft; stacked on a phone), a hairline, then the rich field, whose
+  surface wears `.md-doc` too: the teacher writes in the type students
+  read. Raw HTML shows in the field as what it is, text: mono, `fg-muted`,
+  a block of it on `surface-2` (`.rt-raw-html`). Under the sheet, the
+  optional description of the change. A save refused because the file
+  moved is the one red block, above the sheet: the draft stays, "Copy my
+  text" (`secondary`) and "Reload the page…" (`danger`, confirmed). The
+  source view adds the server's preview under the textarea, on demand
+  (`secondary`), on `surface-2`.
 
 The rendered HTML comes from the server (`packages/docrender`, D15: the
 journal escapes raw HTML), so, like `.md-body` itself, these are tag

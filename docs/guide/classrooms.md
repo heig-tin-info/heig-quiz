@@ -116,6 +116,9 @@ GitHub is optional: a classroom that is never connected is a plain Quiz classroo
 - Once connected, the section shows the organization and three checks: the App installed with access to every repository (the only one that blocks), the organization's plan (on the free plan, no rulesets and no organization secrets for private repositories), and the `ANTHROPIC_API_KEY` secret the LLM review of projects needs (present, missing, or unknown when the App cannot read secrets).
 - **Disconnect** deletes nothing on GitHub. It is refused while the classroom has a journal: remove the journal first.
 
+!!! note "Editing a journal page"
+    **Edit**, above a page of the **Journal** tab, opens it in the editor; **Save** commits it to the repository. A picture you drop or paste is committed into the repository at once, in an `images/` folder beside the page, before you save. If you then cancel, the page is unchanged but the picture stays in the repository: delete it there if you do not want it.
+
 Your own GitHub account is linked from your **Settings** page, in its **GitHub** card, which shows once you are on the staff of a connected classroom. **Link GitHub** goes through GitHub's authorisation and comes back to the page you started from, with a message saying it is linked, already linked to another Quiz account, or failed. **Unlink** undoes it.
 
 ### Deleting a course

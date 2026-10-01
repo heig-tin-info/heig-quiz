@@ -5,25 +5,31 @@ import {
   CalendarClock,
   ChevronDown,
   EyeOff,
+  FilePlus,
   FileQuestion,
+  Pencil,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useId, useState, type ReactNode } from "react";
 
 import {
   encodeJournalPath,
   type Journal,
   type JournalNavNode,
   type JournalPage,
+  type JournalPageStaff,
   type JournalRepository,
 } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
+import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { journalKey, journalPageKey } from "../queryKeys";
 import { routeToPath, type Navigate } from "../router";
 import {
+  Actions,
   Alert,
   Badge,
   Button,
@@ -35,7 +41,9 @@ import {
   Skeleton,
   useMinWidth,
 } from "../ui";
-import { journalErrorText, useJournalRefresh } from "./api";
+import { journalErrorText, useJournalDeletePage, useJournalRefresh } from "./api";
+import { AddPageDialog } from "./editor/AddPageDialog";
+import { pageFolder } from "./editor/images";
 import { JournalArticle } from "./JournalArticle";
 import { JournalNav } from "./JournalNav";
 import { JournalToc } from "./JournalToc";
@@ -71,6 +79,9 @@ import { SYNC_ERRORS, warningText } from "./words";
  */
 
 type View = "staff" | "student";
+
+/** The editor (M4-06), a chunk of its own: the staff load it on Edit. */
+const JournalEditor = lazy(() => import("./editor/JournalEditor").then((m) => ({ default: m.JournalEditor })));
 
 /** The first node of the navigation, depth first, that `pred` accepts. */
 function findNode(nodes: JournalNavNode[], pred: (node: JournalNavNode) => boolean): JournalNavNode | null {
@@ -166,6 +177,38 @@ export function JournalReader({
     toast(journalErrorText(error, t), "error"),
   );
 
+  // The staff's writes (M4-06): the editor swaps the page on this very route,
+  // by local state, and is left as soon as another page is on view.
+  const confirm = useConfirm();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  /** Bumped by the conflict's reload: the editor reopens on the page as read again. */
+  const [reloads, setReloads] = useState(0);
+  const remove = useJournalDeletePage(classroomId);
+  useEffect(() => {
+    if (editing !== null && editing !== target) setEditing(null);
+  }, [editing, target]);
+  const staffPage: JournalPageStaff | null =
+    page.data?.view === "staff" && !page.isPlaceholderData && page.data.path === target ? page.data : null;
+  const editingPage = editing !== null && staffPage !== null && editing === staffPage.path ? staffPage : null;
+
+  const deletePage = async (doomed: JournalPageStaff) => {
+    const ok = await confirm({
+      title: t("journalPage.deleteConfirm", { name: doomed.title ?? doomed.path }),
+      message: t("journalPage.deleteBody", { path: doomed.path }),
+      confirmLabel: t("journalPage.deleteAction"),
+      danger: true,
+    });
+    if (!ok) return;
+    remove.mutate(doomed.path, {
+      onSuccess: () => {
+        toast(t("journalPage.deleted"), "success");
+        navigate({ view: "classroomJournal", id: classroomId }, { replace: true });
+      },
+      onError: (error) => toast(journalErrorText(error, t), "error"),
+    });
+  };
+
   const wide = useMinWidth(1024);
   const extraWide = useMinWidth(1280);
   const layout: Layout = extraWide ? "extraWide" : wide ? "wide" : "phone";
@@ -175,7 +218,31 @@ export function JournalReader({
   const header = (
     <>
       {outerHeader}
-      {repository ? <StaffBar repository={repository} refreshing={refreshing} onRefresh={refresh} /> : null}
+      {repository ? (
+        <StaffBar
+          repository={repository}
+          refreshing={refreshing}
+          onRefresh={refresh}
+          page={staffPage}
+          deleting={remove.isPending}
+          onEdit={() => setEditing(staffPage?.path ?? null)}
+          onAdd={() => setAdding(true)}
+          onDelete={(doomed) => void deletePage(doomed)}
+        />
+      ) : null}
+      {adding ? (
+        <AddPageDialog
+          classroomId={classroomId}
+          folder={target ? pageFolder(target) : ""}
+          onClose={() => setAdding(false)}
+          onAdded={(added) => {
+            setAdding(false);
+            toast(t("journalPage.added"), "success");
+            setEditing(added);
+            navigate({ view: "classroomJournal", id: classroomId, path: added });
+          }}
+        />
+      ) : null}
     </>
   );
 
@@ -250,34 +317,70 @@ export function JournalReader({
       ? t("journal.home")
       : (findNode(loaded.nav, (n) => n.pagePath === target)?.title ?? page.data?.title ?? t("journal.untitled"));
 
-  return (
-    <Frame header={header}>
-      {syncAlert}
-      <div className={GRID[layout]}>
-        {layout === "phone" ? (
-          <PhoneDisclosure title={currentTitle}>
-            {nav}
-            {toc}
-          </PhoneDisclosure>
-        ) : (
-          <aside className={cx("space-y-8", SIDE_COLUMN)}>
-            {nav}
-            {layout === "wide" ? toc : null}
-          </aside>
-        )}
+  /** The columns around `main`; the editor has no table of contents (it would go stale as it types). */
+  const columns = (frameHeader: ReactNode, main: ReactNode, withToc: boolean) => {
+    const grid: Layout = !withToc && layout === "extraWide" ? "wide" : layout;
+    const sideToc = withToc ? toc : null;
+    return (
+      <Frame header={frameHeader}>
+        {syncAlert}
+        <div className={GRID[grid]}>
+          {grid === "phone" ? (
+            <PhoneDisclosure title={currentTitle}>
+              {nav}
+              {sideToc}
+            </PhoneDisclosure>
+          ) : (
+            <aside className={cx("space-y-8", SIDE_COLUMN)}>
+              {nav}
+              {grid === "wide" ? sideToc : null}
+            </aside>
+          )}
 
-        <div className="min-w-0 space-y-4">
-          <PageSlot
-            page={page}
-            classroomId={classroomId}
-            onOpen={open}
-            onHome={loaded.homePath && loaded.homePath !== target ? () => open(loaded.homePath!) : null}
-          />
+          <div className="min-w-0 space-y-4">{main}</div>
+
+          {grid === "extraWide" && sideToc ? <aside className={SIDE_COLUMN}>{sideToc}</aside> : null}
         </div>
+      </Frame>
+    );
+  };
 
-        {layout === "extraWide" && toc ? <aside className={SIDE_COLUMN}>{toc}</aside> : null}
-      </div>
-    </Frame>
+  if (editingPage) {
+    return (
+      // The editor is loaded on Edit, never with the reader: Tiptap, marked
+      // and yaml stay out of what a student downloads.
+      <Suspense fallback={columns(header, <ArticleSkeleton />, false)}>
+        <JournalEditor
+          key={`${editingPage.path}:${reloads}`}
+          classroomId={classroomId}
+          page={editingPage}
+          onClose={() => setEditing(null)}
+          onReload={() => void page.refetch().then(() => setReloads((n) => n + 1))}
+        >
+          {(bar, body) =>
+            columns(
+              <>
+                {outerHeader}
+                {bar}
+              </>,
+              body,
+              false,
+            )
+          }
+        </JournalEditor>
+      </Suspense>
+    );
+  }
+
+  return columns(
+    header,
+    <PageSlot
+      page={page}
+      classroomId={classroomId}
+      onOpen={open}
+      onHome={loaded.homePath && loaded.homePath !== target ? () => open(loaded.homePath!) : null}
+    />,
+    true,
   );
 }
 
@@ -339,25 +442,58 @@ function Frame({ header, children }: { header: ReactNode; children: ReactNode })
 
 /**
  * The staff's bar above the page: where the copy of the repository stands,
- * and Refresh (F-JRN-05, secondary). Edit (M4-06, the primary inside a page)
- * joins it here. A student's payload has no repository, so no bar.
+ * Refresh (F-JRN-05, secondary), add and delete a page (two icon buttons),
+ * and Edit, the primary inside a page (M4-06). The writes wait for a copy
+ * that knows the head it writes over (`editable`); a student's payload has
+ * no repository, so no bar.
  */
 function StaffBar({
   repository,
   refreshing,
   onRefresh,
+  page,
+  deleting,
+  onEdit,
+  onAdd,
+  onDelete,
 }: {
   repository: JournalRepository;
   refreshing: boolean;
   onRefresh: () => void;
+  /** The page on view, when one is. */
+  page: JournalPageStaff | null;
+  deleting: boolean;
+  onEdit: () => void;
+  onAdd: () => void;
+  onDelete: (page: JournalPageStaff) => void;
 }) {
   const t = useT();
+  const writable = repository.editable;
   return (
     <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
       <SyncState repository={repository} refreshing={refreshing} />
-      <Button variant="secondary" size="sm" loading={refreshing} onClick={onRefresh}>
-        {refreshing ? null : <RefreshCw />} {t("journal.refresh")}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button variant="secondary" size="sm" loading={refreshing} onClick={onRefresh}>
+          {refreshing ? null : <RefreshCw />} {t("journal.refresh")}
+        </Button>
+        <Actions
+          size="sm"
+          label={t("journalPage.actions")}
+          items={[
+            { label: t("journalPage.add"), icon: FilePlus, disabled: !writable, onSelect: onAdd },
+            {
+              label: t("journalPage.delete"),
+              icon: Trash2,
+              danger: true,
+              disabled: !writable || page === null || deleting,
+              onSelect: () => (page ? onDelete(page) : undefined),
+            },
+          ]}
+        />
+        <Button size="sm" disabled={!writable || page === null} onClick={onEdit}>
+          <Pencil /> {t("journalEditor.edit")}
+        </Button>
+      </div>
     </div>
   );
 }
