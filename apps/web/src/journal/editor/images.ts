@@ -19,18 +19,28 @@
  * that the declared content type is the extension's (`assetContentType`),
  * and a `photo.JPG` of type `image/jpeg` goes in as `.jpg`.
  */
-import { encodeJournalPath, JOURNAL_ASSETS_PATH, safeJournalPath } from "@quiz/contracts";
-import { resolveRelative } from "@quiz/docrender/journalTree";
+import { JOURNAL_CONTENT_TYPES, safeJournalPath } from "@quiz/contracts";
+import { journalAssetUrl, parentOf, resolveRelative } from "@quiz/docrender";
 
-/** The picture types the journal serves, and the extension each is written with. */
-const EXTENSIONS: Readonly<Record<string, string>> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/gif": "gif",
-  "image/webp": "webp",
-  "image/svg+xml": "svg",
-  "image/avif": "avif",
-};
+import { REFUSED, type ImageUrl } from "../../markdown/imageUrl";
+
+/**
+ * The picture types the journal serves, and the extension each is written
+ * with: the contract's table read backwards, its first extension per type
+ * (`jpg` before `jpeg`).
+ */
+const EXTENSIONS: Readonly<Record<string, string>> = Object.entries(JOURNAL_CONTENT_TYPES).reduce<
+  Record<string, string>
+>((out, [extension, type]) => {
+  if (type.startsWith("image/")) out[type] ??= extension;
+  return out;
+}, {});
+
+/** The folder of a journal path, with its trailing `/`; "" at the root. */
+export function pageFolder(path: string): string {
+  const parent = parentOf(path);
+  return parent === "" ? "" : `${parent}/`;
+}
 
 /** The folder a page's pictures go into, relative to the page. */
 export const IMAGES_FOLDER = "images";
@@ -69,8 +79,7 @@ export function imagePlacement(
   const extension = EXTENSIONS[file.type];
   if (!extension) return null;
   const href = `${IMAGES_FOLDER}/${slug(file.name)}-${suffix}.${extension}`;
-  const folder = pagePath.includes("/") ? pagePath.slice(0, pagePath.lastIndexOf("/") + 1) : "";
-  const path = `${folder}${href}`;
+  const path = `${pageFolder(pagePath)}${href}`;
   return safeJournalPath(path) === null ? null : { path, href };
 }
 
@@ -78,14 +87,16 @@ export function imagePlacement(
  * Where the editor draws a picture of the page at `pagePath` from: one
  * uploaded in this session from the browser's own copy (`local`, by the
  * `src` written into the page: the journal's copy serves only what a saved
- * page references), any other relative path from the journal's asset route,
- * and anything else (an external URL) left to the editor's own rule.
+ * page references), any other relative path from the journal's asset route.
+ * Anything else (an external URL, an `asset:`, a path out of the journal) is
+ * REFUSED: never fetched, shown as its alt text, kept in the markdown as
+ * written (F-JRN-09: images come from the repository only).
  */
 export function journalImageUrl(
   classroomId: string,
   pagePath: string,
   local: ReadonlyMap<string, string>,
-): (src: string) => string | null {
+): ImageUrl {
   return (src) => {
     const uploaded = local.get(src);
     if (uploaded !== undefined) return uploaded;
@@ -96,6 +107,6 @@ export function journalImageUrl(
       // A malformed escape is a name like any other.
     }
     const path = resolveRelative(pagePath, decoded.replace(/[?#].*$/, ""));
-    return path === null ? null : `${JOURNAL_ASSETS_PATH(classroomId)}/${encodeJournalPath(path)}`;
+    return path === null ? REFUSED : journalAssetUrl(classroomId, path);
   };
 }

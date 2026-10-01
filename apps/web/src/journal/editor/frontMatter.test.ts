@@ -59,10 +59,11 @@ describe("splitPage and joinPage", () => {
     expect(splitPage("text\n\n---\n\nmore\n---\n").yaml).toBeNull();
   });
 
-  it("keeps CRLF fences and a `...` end", () => {
+  it("keeps CRLF fences, and cuts where the renderer does", () => {
     const crlf = "---\r\ntitle: a\r\n---\r\nbody\r\n";
     expect(joinPage(splitPage(crlf))).toBe(crlf);
-    expect(splitPage("---\ntitle: a\n...\nbody").body).toBe("body");
+    // `...` closes nothing for the renderer, so nothing for the editor either.
+    expect(splitPage("---\ntitle: a\n...\nbody").yaml).toBeNull();
   });
 });
 
@@ -78,6 +79,19 @@ describe("readFields", () => {
 
   it("reads `draft: true` and single quotes", () => {
     expect(readFields("title: 'l''été'\ndraft: true")).toMatchObject({ title: "l'été", draft: true });
+  });
+
+  it("reads `draft` as the renderer does: 1, y, yes and on are a draft", () => {
+    for (const value of ["1", "y", "yes", "on", "true", '"Yes"']) {
+      expect(readFields(`draft: ${value}`).draft, value).toBe(true);
+    }
+    for (const value of ["0", "no", "false", "maybe"]) {
+      expect(readFields(`draft: ${value}`).draft, value).toBe(false);
+    }
+  });
+
+  it("reads a block that does not parse as no field, as the page renders", () => {
+    expect(readFields("title: [unclosed")).toEqual({ title: "", date: "", draft: false, visibleFrom: "" });
   });
 
   it("reads nothing from no front matter", () => {

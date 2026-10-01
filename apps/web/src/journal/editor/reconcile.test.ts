@@ -57,6 +57,16 @@ describe("reconciler", () => {
     );
   });
 
+  it("keeps a link definition after its predecessor even when that block was edited", () => {
+    const withDef = "A.\n\nSee [x][r].\n\n[r]: https://x.ch\n\nEnd.\n";
+    const defs = (block: string) => (/^\[r\]:/.test(block) ? "" : block.split("\n\n")[0]!.trim());
+    expect(reconciler(withDef)("A.\n\nSee [x][r], edited.\n\nEnd.", defs)).toBe(
+      "A.\n\nSee [x][r], edited.\n\n[r]: https://x.ch\n\nEnd.\n",
+    );
+    // Its predecessor deleted: it stays where the predecessor was.
+    expect(reconciler(withDef)("A.\n\nEnd.", defs)).toBe("A.\n\n[r]: https://x.ch\n\nEnd.\n");
+  });
+
   it("writes a block the editor failed to spell as edited, without losing it", () => {
     const boom = (block: string) => {
       if (block.startsWith("A")) throw new Error("no");

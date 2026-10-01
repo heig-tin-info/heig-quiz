@@ -7,23 +7,24 @@
  * every one of them answers 404 (`githubAbsent`), and the screens then draw
  * no journal at all, as for a classroom that never had one.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import {
   assetContentType,
   encodeJournalPath,
-  JOURNAL_ASSETS_PATH,
   JournalNameTaken,
   JournalRefusal,
   type JournalErrorCode,
   type JournalFileWritten,
   type JournalPageAdd,
   type JournalPageSave,
+  type JournalPreview,
   type JournalPreviewResult,
   type JournalRepository,
   type JournalStaff,
 } from "@quiz/contracts";
+import { journalAssetUrl } from "@quiz/docrender";
 
 import { api, ApiError } from "../api";
 import type { TFunction } from "../i18n";
@@ -123,19 +124,14 @@ export const journalPageUrl = (classroomId: string, path: string) =>
 /**
  * Save (`PUT …/pages/*`): the page against the blob the editor opened. A
  * 409 `conflict` leaves everything as it was, and the caller keeps the
- * draft. The page the response carries, when the copy caught up with the
- * commit, goes into the cache at once, so the reader shows the saved text
- * without waiting for the refetch.
+ * draft.
  */
 export function useJournalSave(classroomId: string, path: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: JournalPageSave) =>
       api<JournalFileWritten>(journalPageUrl(classroomId, path), { method: "PUT", body: JSON.stringify(body) }),
-    onSuccess: async (written) => {
-      if (written.page) qc.setQueryData(journalPageKey(classroomId, "staff", path), written.page);
-      await qc.invalidateQueries({ queryKey: journalKey(classroomId, "staff") });
-    },
+    onSuccess: (written) => afterWrite(qc, classroomId, written),
   });
 }
 
@@ -145,11 +141,18 @@ export function useJournalAddPage(classroomId: string) {
   return useMutation({
     mutationFn: (body: JournalPageAdd) =>
       api<JournalFileWritten>(`${journalBase(classroomId)}/pages`, { method: "POST", body: JSON.stringify(body) }),
-    onSuccess: async (written) => {
-      if (written.page) qc.setQueryData(journalPageKey(classroomId, "staff", written.path), written.page);
-      await qc.invalidateQueries({ queryKey: journalKey(classroomId, "staff") });
-    },
+    onSuccess: (written) => afterWrite(qc, classroomId, written),
   });
+}
+
+/**
+ * After a page was written: the page the response carries (when the copy
+ * caught up with the commit) goes into the cache at once, so the reader
+ * shows it without waiting; then the journal is read again.
+ */
+async function afterWrite(qc: QueryClient, classroomId: string, written: JournalFileWritten): Promise<void> {
+  if (written.page) qc.setQueryData(journalPageKey(classroomId, "staff", written.path), written.page);
+  await qc.invalidateQueries({ queryKey: journalKey(classroomId, "staff") });
 }
 
 /** Delete a page (`DELETE …/pages/*`), against the blob the copy holds. */
@@ -170,7 +173,7 @@ export function useJournalDeletePage(classroomId: string) {
  * which is what the route checks (`JournalUploadHeaders`).
  */
 export function uploadJournalAsset(classroomId: string, path: string, file: Blob): Promise<JournalFileWritten> {
-  return api<JournalFileWritten>(`${JOURNAL_ASSETS_PATH(classroomId)}/${encodeJournalPath(path)}`, {
+  return api<JournalFileWritten>(journalAssetUrl(classroomId, path), {
     method: "POST",
     body: new Blob([file], { type: assetContentType(path) }),
   });
@@ -178,8 +181,9 @@ export function uploadJournalAsset(classroomId: string, path: string, file: Blob
 
 /** Markdown not saved yet, rendered as the page at `path` would read (`POST …/preview`). */
 export function previewJournalPage(classroomId: string, path: string, markdown: string): Promise<JournalPreviewResult> {
+  const body: JournalPreview = { path, markdown };
   return api<JournalPreviewResult>(`${journalBase(classroomId)}/preview`, {
     method: "POST",
-    body: JSON.stringify({ path, markdown }),
+    body: JSON.stringify(body),
   });
 }

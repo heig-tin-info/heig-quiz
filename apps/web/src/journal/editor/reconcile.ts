@@ -31,6 +31,8 @@
  */
 import { Lexer } from "marked";
 
+import type { Reconcile } from "../../markdown/useRichTextEditor";
+
 /** A document cut into its top-level blocks, with what lies between them. */
 export interface Blocks {
   /** The text before the first block (blank lines). */
@@ -103,12 +105,10 @@ function commonSubsequence(a: readonly string[], b: readonly string[]): Array<[n
  * A reconciler for one opened page: `(edited, spell) => markdown`, where
  * `edited` is the editor's whole output and the result keeps every unedited
  * block of `source` verbatim. `spell(block)` is how the editor writes one
- * block of source when nothing is edited. Without blocks to work with — a
- * source or an output marked cannot cut exactly — the editor's output is
+ * block of source when nothing is edited. Without blocks to work with (a
+ * source or an output marked cannot cut exactly) the editor's output is
  * returned as it is.
  */
-export type Reconcile = (edited: string, spell: (block: string) => string) => string;
-
 export function reconciler(source: string): Reconcile {
   const original = splitBlocks(source);
   let spellings: string[] | null = null;
@@ -133,31 +133,38 @@ export function reconciler(source: string): Reconcile {
     const pairs = commonSubsequence(spelled, out.blocks);
     const sourceOf = new Map(pairs.map(([i, j]) => [j, i]));
 
-    // A block with no spelling (a link definition) follows the block it followed.
+    // A block with no spelling (a link definition) stays after the block that
+    // preceded it in the source, wherever that block went: after its matched
+    // block, or after the edited blocks that came out of the ones between.
     const invisible = (i: number) => spelled[i] === "";
+    const outOf = new Map(pairs);
+    /** Output index each kept definition goes after (-1: before everything). */
     const keptAfter = new Map<number, number[]>();
-    const keptFirst: number[] = [];
-    let previous = -1;
-    for (let i = 0; i < original.blocks.length; i += 1) {
-      if (!invisible(i)) {
-        if (pairs.some(([pi]) => pi === i)) previous = i;
-        continue;
-      }
-      if (previous === -1) keptFirst.push(i);
-      else keptAfter.set(previous, [...(keptAfter.get(previous) ?? []), i]);
+    for (let d = 0; d < original.blocks.length; d += 1) {
+      if (!invisible(d)) continue;
+      let anchor = d - 1;
+      while (anchor >= 0 && !outOf.has(anchor)) anchor -= 1;
+      let next = d + 1;
+      while (next < original.blocks.length && !outOf.has(next)) next += 1;
+      // The edited blocks between the anchor and the definition, in order.
+      let edited = 0;
+      for (let i = anchor + 1; i < d; i += 1) if (!invisible(i)) edited += 1;
+      const from = anchor === -1 ? -1 : outOf.get(anchor)!;
+      const limit = next < original.blocks.length ? outOf.get(next)! : out.blocks.length;
+      const slot = Math.min(from + edited, limit - 1);
+      keptAfter.set(slot, [...(keptAfter.get(slot) ?? []), d]);
     }
 
     /** Each piece: its text, and the source block it is, when it is one. */
-    const pieces: Array<{ text: string; from: number | null }> = keptFirst.map((i) => ({
-      text: original.blocks[i]!,
-      from: i,
-    }));
+    const pieces: Array<{ text: string; from: number | null }> = [];
+    const keep = (slot: number) => {
+      for (const d of keptAfter.get(slot) ?? []) pieces.push({ text: original.blocks[d]!, from: d });
+    };
+    keep(-1);
     out.blocks.forEach((block, j) => {
       const i = sourceOf.get(j);
       pieces.push({ text: i === undefined ? block : original.blocks[i]!, from: i ?? null });
-      for (const k of i === undefined ? [] : (keptAfter.get(i) ?? [])) {
-        pieces.push({ text: original.blocks[k]!, from: k });
-      }
+      keep(j);
     });
 
     let result = original.lead;

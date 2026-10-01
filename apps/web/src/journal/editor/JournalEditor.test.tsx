@@ -214,6 +214,42 @@ describe("D25 (2): the front matter as fields", () => {
   });
 });
 
+describe("F-JRN-09: an image outside the journal is never fetched", () => {
+  it("shows its alt text, puts no external src in the DOM, and keeps the markdown", async () => {
+    const md = "# A\n\n![logo](https://evil/x.png)\n\n![](//evil/y.png)\n";
+    const { calls } = setup({
+      [`GET ${BASE}/pages/${PATH}`]: ok(page({ markdown: md })),
+      [`PUT ${BASE}/pages/${PATH}`]: (call) => ok(written((call.body as { markdown: string }).markdown)),
+    });
+    const surface = await openEditor();
+    expect(document.querySelector('img[src^="http"], img[src^="//"]')).toBeNull();
+    expect(within(surface).getByText("Image outside the journal, not shown: logo")).toBeInTheDocument();
+    expect(within(surface).getByText("Image outside the journal, not shown")).toBeInTheDocument();
+    expect(saveButton()).toBeDisabled();
+    // A field changed: the body, images included, goes back as it was read.
+    await userEvent.type(screen.getByLabelText("Title"), "T");
+    await userEvent.click(saveButton());
+    await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+    expect((calls.find((c) => c.method === "PUT")!.body as { markdown: string }).markdown).toBe(
+      `---\ntitle: T\n---\n${md}`,
+    );
+  });
+
+  it("reads `draft: 1` as the renderer does: a draft", async () => {
+    setup({ [`GET ${BASE}/pages/${PATH}`]: ok(page({ markdown: "---\ndraft: 1\n---\n# A\n" })) });
+    await openEditor();
+    expect(screen.getByRole("switch", { name: "Draft" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("words a failed preview as a journal refusal", async () => {
+    setup({ [`POST ${BASE}/preview`]: fail(409, { error: "no_journal", message: "no_journal" }) });
+    await openEditor();
+    await userEvent.click(screen.getByRole("button", { name: "Markdown source" }));
+    await userEvent.click(screen.getByRole("button", { name: "Preview" }));
+    expect(await screen.findByText("This classroom has no journal any more.")).toBeInTheDocument();
+  });
+});
+
 describe("the date fields", () => {
   it("writes a date and a visibility moment, each in its own line", async () => {
     const { calls } = setup({

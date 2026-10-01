@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { AlertTriangle, Copy, Eye, RotateCcw } from "lucide-react";
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { JOURNAL_ASSET_MAX_BYTES, type JournalPageStaff, type JournalPreviewResult } from "@quiz/contracts";
 
@@ -9,7 +9,7 @@ import { useT } from "../../i18n";
 import { RichText } from "../../markdown/RichText";
 import { useToast } from "../../notify";
 import { useLeaveGuard } from "../../router";
-import { Alert, Button, Field, QueryError } from "../../ui";
+import { Alert, Button, Field } from "../../ui";
 import { journalErrorText, journalRefusal, previewJournalPage, uploadJournalAsset, useJournalSave } from "../api";
 import { JournalArticle } from "../JournalArticle";
 import { composePage, readFields, splitPage, type PageFields } from "./frontMatter";
@@ -89,6 +89,14 @@ export function JournalEditor({ classroomId, page: current, onClose, onReload, c
   // ------------------------------------------------------------- pictures
   /** The pictures uploaded in this session, drawn from the browser's copy until a save references them. */
   const local = useRef(new Map<string, string>());
+  // The browser's copies are let go with the editor.
+  useEffect(() => {
+    const copies = local.current;
+    return () => {
+      for (const url of copies.values()) URL.revokeObjectURL(url);
+      copies.clear();
+    };
+  }, []);
   const imageUrl = useMemo(() => journalImageUrl(classroomId, page.path, local.current), [classroomId, page.path]);
   const uploadImage = useCallback(
     async (file: File): Promise<string> => {
@@ -267,7 +275,11 @@ function SourcePreview({
           {pending ? null : <Eye />} {t("journalEditor.preview")}
         </Button>
       </div>
-      {error ? <QueryError title={t("journalEditor.previewFailed")} error={error} onRetry={onPreview} /> : null}
+      {error ? (
+        <Alert tone="danger" icon={AlertTriangle} title={t("journalEditor.previewFailed")}>
+          {journalErrorText(error, t)}
+        </Alert>
+      ) : null}
       {result ? (
         <div className="rounded-field bg-surface-2 px-4 py-3">
           <JournalArticle

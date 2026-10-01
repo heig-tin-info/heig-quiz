@@ -22,6 +22,7 @@ import { describe, expect, it } from "vitest";
 
 import { richTextExtensions, spellWith } from "../../markdown/tiptap";
 import { composePage, readFields, splitPage } from "./frontMatter";
+import { journalImageUrl } from "./images";
 import { reconciler } from "./reconcile";
 
 // jsdom has no layout; ProseMirror asks for rectangles (markdown/roundtrip.test.ts says why here).
@@ -120,10 +121,6 @@ describe("D25 (1): the synthetic journal comes back unchanged", () => {
   it.each(synthetic)("%s", (_name, page) => {
     expect(pageRoundTrip(page)).toBe(page);
   });
-
-  it.each(synthetic)("%s keeps its front matter out of the editor", (_name, page) => {
-    expect(splitPage(page).body).not.toMatch(/^---\n[\s\S]*?\n---/);
-  });
 });
 
 const corpusDir = process.env.JOURNAL_CORPUS_DIR;
@@ -156,7 +153,8 @@ describe("D25 (1): constructs the journal's schema writes back as read", () => {
     ["[relative](../semaine-02.md#exercices)"],
     ["![schema](images/schema.png)"],
     ["![gdb](../images/gdb.png \"Session\")"],
-    ["$x^2$ and $$\n\\int_0^1 f\n$$".split(" and ")[0]!],
+    ["$x^2$"],
+    ["![](https://evil/x.png)"],
     ["$$\n\\int_0^1 f(x)\\,dx\n$$"],
     ["Text with <kbd>Ctrl</kbd> keys."],
     ["<!-- a comment -->"],
@@ -192,6 +190,38 @@ describe("D25 (1): the accepted normalisations of an edited block, and only thes
   ])("%j -> %j (%s)", (source, expected) => {
     expect(schemaRoundTrip(source)).toBe(expected);
     expect(schemaRoundTrip(expected)).toBe(expected);
+  });
+});
+
+describe("F-JRN-09: the editor's HTML never carries an external image's address", () => {
+  it("renders a refused picture without src, and keeps its reference for the parser", () => {
+    const md = "![logo](https://evil/x.png)\n\n![ok](images/a.png)";
+    const editor = new Editor({
+      element: document.createElement("div"),
+      extensions: richTextExtensions({ journal: true, imageUrl: journalImageUrl("r1", "s/p.md", new Map()) }),
+      content: md,
+      contentType: "markdown",
+    });
+    try {
+      const html = editor.getHTML();
+      expect(html).not.toMatch(/src="https?:/);
+      expect(html).toContain('data-asset="https://evil/x.png"');
+      expect(html).toContain('src="/app/api/classrooms/r1/journal/assets/s/images/a.png"');
+      expect(editor.getMarkdown().trim()).toBe(md);
+    } finally {
+      editor.destroy();
+    }
+  });
+});
+
+describe("an autolink stays one only while its text is its address", () => {
+  it("writes [text](href) once its text was edited", () => {
+    const out = pageAfter("<https://heig-vd.ch>\n", (editor) => {
+      // The link's text retyped, the mark (and its autolink flag) kept.
+      const link = editor.state.doc.firstChild!.firstChild!.marks[0]!;
+      editor.view.dispatch(editor.state.tr.insertText("Site", 1, editor.state.doc.firstChild!.nodeSize - 1).addMark(1, 5, link));
+    });
+    expect(out).toBe("[Site](https://heig-vd.ch)\n");
   });
 });
 

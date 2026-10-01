@@ -42,11 +42,11 @@ import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table
 
 import { clozeHoleExtensions } from "./clozeHole";
 import { CodeHighlight } from "./codeHighlight";
+import { REFUSED, type ImageUrl } from "./imageUrl";
 import { JOURNAL_KIT_OVERRIDES, journalExtensions } from "./journalSchema";
 import { assetUrl, assetWidth } from "./render";
 
-/** The URL an image's `src` is drawn from, or null to leave it to the asset rule. */
-export type ImageUrl = (src: string) => string | null;
+export { REFUSED, type ImageUrl };
 
 /** KaTeX behaves here as in the student view: a broken formula shows, it never throws. */
 const KATEX_OPTIONS = { throwOnError: false } as const;
@@ -101,6 +101,9 @@ const assetImage = (imageUrl?: ImageUrl) => Image.extend({
         renderHTML: (attributes: Record<string, unknown>) => {
           const src = typeof attributes.src === "string" ? attributes.src : "";
           const hosted = imageUrl?.(src) ?? null;
+          // Refused: no `src` at all, so nothing is fetched; the reference
+          // travels in `data-asset`, which the parser reads back.
+          if (hosted === REFUSED) return { "data-asset": src, "data-refused": "" };
           if (hosted !== null) return { src: hosted, "data-asset": src };
           const resolved = assetUrl(src);
           if (resolved === null) return { src };
@@ -117,6 +120,10 @@ const assetImage = (imageUrl?: ImageUrl) => Image.extend({
         },
       },
     };
+  },
+  // A refused picture is an `<img>` without `src`; the kit's rule asks for one.
+  parseHTML() {
+    return [...(this.parent?.() ?? []), { tag: "img[data-asset]" }];
   },
 });
 

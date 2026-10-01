@@ -43,6 +43,7 @@ import {
 } from "../ui";
 import { journalErrorText, useJournalDeletePage, useJournalRefresh } from "./api";
 import { AddPageDialog } from "./editor/AddPageDialog";
+import { pageFolder } from "./editor/images";
 import { JournalEditor } from "./editor/JournalEditor";
 import { JournalArticle } from "./JournalArticle";
 import { JournalNav } from "./JournalNav";
@@ -230,7 +231,7 @@ export function JournalReader({
       {adding ? (
         <AddPageDialog
           classroomId={classroomId}
-          folder={target && target.includes("/") ? target.slice(0, target.lastIndexOf("/") + 1) : ""}
+          folder={target ? pageFolder(target) : ""}
           onClose={() => setAdding(false)}
           onAdded={(added) => {
             setAdding(false);

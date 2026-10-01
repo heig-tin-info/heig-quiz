@@ -144,7 +144,14 @@ function cleanWarning(w: JournalWarning): JournalWarning {
   ) as JournalWarning;
 }
 
-const FRONT_MATTER = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
+/**
+ * The front matter's fences, the one rule: `---` on the first line, the
+ * block, `---` on a line of its own. Three groups (the opening fence, the
+ * block, the closing fence, each as written) so that the web editor, which
+ * rewrites the block line by line (M4-06), cuts the page where this
+ * renderer does.
+ */
+export const FRONT_MATTER = /^(---[ \t]*\r?\n)([\s\S]*?)(\r?\n---[ \t]*(?:\r?\n|$))/;
 
 /**
  * Splits the `---` block off the top of a page. A block that is not a mapping
@@ -160,7 +167,7 @@ export function splitFrontMatter(source: string): {
   if (!m) return { frontMatter: {}, body: source, warnings: [] };
   const body = source.slice(m[0].length);
   try {
-    const parsed = parseYaml(m[1]!) as unknown;
+    const parsed = parseYaml(m[2]!) as unknown;
     if (parsed === null || parsed === undefined) return { frontMatter: {}, body, warnings: [] };
     if (typeof parsed !== "object" || Array.isArray(parsed)) {
       return { frontMatter: {}, body, warnings: [{ code: "front_matter_not_mapping" }] };
@@ -176,7 +183,7 @@ export function splitFrontMatter(source: string): {
 }
 
 /** `draft: true`, `draft: "yes"`, `draft: 1` — anything a teacher may type. */
-function asBoolean(value: unknown): boolean {
+export function asBoolean(value: unknown): boolean {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
   if (typeof value === "string") return /^(true|yes|y|on|1)$/i.test(value.trim());

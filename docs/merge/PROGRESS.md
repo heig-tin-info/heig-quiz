@@ -155,9 +155,10 @@ Newest first. One line per session that changed the state: date, who,
 what moved, what the next session must know.
 
 - 2026-10-01 — M4-06 (#417): the journal's editor in review, which closes the
-  journal track. The D25 round trip is the identity on the synthetic journal;
-  it has not run on classroom's production journals yet (set
-  `JOURNAL_CORPUS_DIR` to a fetched copy, outside the repository).
+  journal track. The D25 round trip is the identity on the synthetic journal
+  and on classroom's production journals (5 pages, `JOURNAL_CORPUS_DIR`,
+  fetched outside the repository). Review round 1 applied (external images
+  refused, front matter read through docrender).
 
 - 2026-10-01 — M4-05 (#416): the Journal section of Settings, the teacher's
   Journal tab and Refresh in review; the journal UI left `CLASSROOM_PAGES`.

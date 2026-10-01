@@ -1,12 +1,12 @@
 import type { NodeViewProps } from "@tiptap/core";
 import { NodeViewWrapper } from "@tiptap/react";
-import { Check, Loader2, RotateCcw, RotateCw, Scaling, Trash2 } from "lucide-react";
+import { Check, ImageOff, Loader2, RotateCcw, RotateCw, Scaling, Trash2 } from "lucide-react";
 import { createContext, useContext, useState } from "react";
 
 import { useT } from "../i18n";
 import { IconButton, Menu } from "../ui";
 import { assetUrl, assetWidth, IMAGE_WIDTHS, withAssetWidth } from "./render";
-import type { ImageUrl } from "./tiptap";
+import { REFUSED, type ImageUrl } from "./imageUrl";
 
 /*
  * The image node of the rich editor, as a Tiptap NODE VIEW (React), and not as
@@ -105,8 +105,10 @@ export function ImageView({
   const src = typeof node.attrs.src === "string" ? node.attrs.src : "";
   const alt = typeof node.attrs.alt === "string" ? node.attrs.alt : "";
   const title = typeof node.attrs.title === "string" ? node.attrs.title : undefined;
-  const url = assetUrl(src);
-  const shown = imageUrl?.(src) ?? url ?? src;
+  const hosted = imageUrl?.(src) ?? null;
+  // A refused picture has no asset either: no size, no rotation, only removal.
+  const url = hosted === REFUSED ? null : assetUrl(src);
+  const shown = hosted ?? url ?? src;
   const width = assetWidth(src);
 
   const editable = editor.isEditable;
@@ -150,12 +152,24 @@ export function ImageView({
       {/* `data-asset` carries the CANONICAL reference beside the resolved
           URL, exactly as the node's own `renderHTML` does: it is what the
           parser reads back, and what a test can assert the markdown on. */}
-      <img
-        src={shown}
-        alt={alt}
-        data-asset={src}
-        {...(title === undefined ? {} : { title })}
-      />
+      {shown === REFUSED ? (
+        // Never fetched (an external picture in the journal): its alt text,
+        // in a frame that says what it is, and the reference kept as is.
+        <span
+          data-asset={src}
+          className="inline-flex items-center gap-2 rounded-field border border-dashed border-line-strong px-3 py-2 text-xs text-fg-muted"
+        >
+          <ImageOff className="size-4 shrink-0" aria-hidden />
+          <span>{alt ? t("md.image.refusedAlt", { alt }) : t("md.image.refused")}</span>
+        </span>
+      ) : (
+        <img
+          src={shown}
+          alt={alt}
+          data-asset={src}
+          {...(title === undefined ? {} : { title })}
+        />
+      )}
 
       {open ? (
         <div

@@ -20,6 +20,8 @@
  * until the teacher changes it.
  */
 
+import { asBoolean, FRONT_MATTER, splitFrontMatter } from "@quiz/docrender";
+
 /** The fields beside the editor. Empty string (or false) means "not set". */
 export interface PageFields {
   title: string;
@@ -42,11 +44,8 @@ export interface SplitPage {
   body: string;
 }
 
-/** `---` on the first line, a block, `---` (or `...`) on a line of its own: the renderer's rule. */
-const FENCED = /^(---[ \t]*\r?\n)([\s\S]*?)(\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$))/;
-
 export function splitPage(markdown: string): SplitPage {
-  const m = FENCED.exec(markdown);
+  const m = FRONT_MATTER.exec(markdown);
   if (!m) return { yaml: null, open: "---\n", close: "\n---\n", body: markdown };
   return { yaml: m[2]!, open: m[1]!, close: m[3]!, body: markdown.slice(m[0].length) };
 }
@@ -57,30 +56,11 @@ export function joinPage(page: SplitPage): string {
   return `${page.open}${page.yaml}${page.close}${page.body}`;
 }
 
-/** The line of a top-level key, and its raw value. */
-function findKey(lines: readonly string[], key: string): { index: number; raw: string } | null {
-  const re = new RegExp(`^${key}[ \\t]*:(.*)$`);
-  for (let index = 0; index < lines.length; index += 1) {
-    const m = re.exec(lines[index]!);
-    if (m) return { index, raw: m[1]!.trim() };
-  }
-  return null;
-}
-
-/** A scalar as read: quotes removed, a trailing comment dropped. */
-function unquote(raw: string): string {
-  if (raw.startsWith('"')) {
-    try {
-      return JSON.parse(raw.replace(/\s+#.*$/, "")) as string;
-    } catch {
-      return raw.slice(1, raw.lastIndexOf('"') > 0 ? raw.lastIndexOf('"') : undefined);
-    }
-  }
-  if (raw.startsWith("'")) {
-    const end = raw.lastIndexOf("'");
-    return (end > 0 ? raw.slice(1, end) : raw.slice(1)).replace(/''/g, "'");
-  }
-  return raw.replace(/\s+#.*$/, "");
+/** The line of a top-level key. */
+function findKey(lines: readonly string[], key: string): { index: number } | null {
+  const re = new RegExp(`^${key}[ \\t]*:`);
+  const index = lines.findIndex((line) => re.test(line));
+  return index === -1 ? null : { index };
 }
 
 /**
@@ -95,18 +75,26 @@ export function yamlScalar(value: string): string {
   return plain ? value : JSON.stringify(value);
 }
 
-/** The four fields of a page's front matter (each "not set" when absent). */
+/** A front-matter value as a field shows it: "" when absent, text otherwise. */
+function asText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) return value.toISOString();
+  return typeof value === "object" ? "" : String(value);
+}
+
+/**
+ * The four fields of a page's front matter, read as the RENDERER reads them
+ * (`splitFrontMatter`, `asBoolean`): what the fields show is what the page
+ * does (`draft: 1` is a draft for both). A block that does not parse reads
+ * as no field at all, as it renders.
+ */
 export function readFields(yaml: string | null): PageFields {
-  const lines = yaml === null ? [] : yaml.split(/\r?\n/);
-  const text = (key: string) => {
-    const found = findKey(lines, key);
-    return found ? unquote(found.raw) : "";
-  };
+  const fm = yaml === null ? {} : splitFrontMatter(`---\n${yaml}\n---\n`).frontMatter;
   return {
-    title: text(KEYS.title),
-    date: text(KEYS.date),
-    draft: /^(true|yes|on)$/i.test(text(KEYS.draft)),
-    visibleFrom: text(KEYS.visibleFrom),
+    title: asText(fm[KEYS.title]),
+    date: asText(fm[KEYS.date]),
+    draft: asBoolean(fm[KEYS.draft]),
+    visibleFrom: asText(fm[KEYS.visibleFrom]),
   };
 }
 

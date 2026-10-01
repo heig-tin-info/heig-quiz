@@ -34,7 +34,8 @@ export function AddPageDialog({
   const showInvalid = trimmed !== "" && trimmed !== folder && !valid;
 
   const submit = () => {
-    if (!valid) return;
+    // Enter in a field while the add is in flight sends nothing twice.
+    if (!valid || add.isPending) return;
     const heading = title.trim();
     add.mutate(
       { path: trimmed, ...(heading ? { title: heading } : {}) },
@@ -58,7 +59,7 @@ export function AddPageDialog({
         label={t("journalPage.path")}
         value={path}
         spellCheck={false}
-        placeholder="semaine-03/index.md"
+        placeholder={t("journalPage.pathPlaceholder")}
         aria-invalid={showInvalid || undefined}
         onChange={(e) => setPath(e.target.value)}
         onKeyDown={(e) => {

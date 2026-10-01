@@ -27,6 +27,8 @@
  */
 import { flattenExtensions, mergeAttributes, Node } from "@tiptap/core";
 import type { AnyExtension, Mark as TiptapMark, Node as TiptapNode } from "@tiptap/core";
+import type { Mark as ProseMirrorMark, MarkType } from "@tiptap/pm/model";
+import { Plugin } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 
 /** The kit's own extension by name, to be extended (tiptap.ts says why not imported directly). */
@@ -128,6 +130,9 @@ const Link = kit<TiptapMark>("link").extend({
       title: token.title || null,
       autolink: (token.raw ?? "").startsWith("<"),
     }),
+  // A mark is rendered around a placeholder (the manager cuts its opening and
+  // closing off it), so the text is not known here: `autoLinkKeeper` below
+  // drops the flag the moment the text stops being the address.
   renderMarkdown: (node, h) => {
     const href = node.attrs?.href ?? "";
     const title = node.attrs?.title ?? "";
@@ -135,7 +140,49 @@ const Link = kit<TiptapMark>("link").extend({
     if (node.attrs?.autolink) return `<${text}>`;
     return title ? `[${text}](${href} "${title}")` : `[${text}](${href})`;
   },
+  addProseMirrorPlugins() {
+    return [...(this.parent?.() ?? []), autoLinkKeeper(this.type)];
+  },
 });
+
+/**
+ * An autolink stays one only while its text IS its address. Once the text is
+ * edited (`<https://x>` retyped as "the site"), the link is an ordinary
+ * `[text](href)`, or `<…>` would write the edited text as the address.
+ */
+function autoLinkKeeper(type: MarkType): Plugin {
+  return new Plugin({
+    appendTransaction(transactions, _old, state) {
+      if (!transactions.some((t) => t.docChanged)) return null;
+      const tr = state.tr;
+      state.doc.descendants((block, blockPos) => {
+        if (!block.isTextblock) return true;
+        let run: { from: number; to: number; text: string; mark: ProseMirrorMark } | null = null;
+        const flush = () => {
+          if (run && run.text !== run.mark.attrs.href) {
+            tr.removeMark(run.from, run.to, run.mark);
+            tr.addMark(run.from, run.to, type.create({ ...run.mark.attrs, autolink: false }));
+          }
+          run = null;
+        };
+        block.forEach((child, offset) => {
+          const mark = child.marks.find((m) => m.type === type && m.attrs.autolink === true);
+          const from = blockPos + 1 + offset;
+          if (mark && child.isText && run && run.mark.eq(mark) && run.to === from) {
+            run.to = from + child.nodeSize;
+            run.text += child.text;
+            return;
+          }
+          flush();
+          if (mark && child.isText) run = { from, to: from + child.nodeSize, text: child.text ?? "", mark };
+        });
+        flush();
+        return false;
+      });
+      return tr.docChanged || tr.steps.length > 0 ? tr : null;
+    },
+  });
+}
 
 /** The kit's extensions this file replaces, to turn off in `StarterKit.configure`. */
 export const JOURNAL_KIT_OVERRIDES = {

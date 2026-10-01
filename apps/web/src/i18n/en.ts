@@ -732,6 +732,9 @@ export const en = {
   "md.image.size": "Size",
   "md.image.percent": "{n}%",
   "md.image.remove": "Remove the image",
+  // An image outside the journal, never fetched (M4-06).
+  "md.image.refused": "Image outside the journal, not shown",
+  "md.image.refusedAlt": "Image outside the journal, not shown: {alt}",
   "md.placeholder.body": "Write the question…",
   "md.placeholder.bold": "bold text",
   "md.placeholder.italic": "italic text",
@@ -3779,6 +3782,7 @@ export const en = {
   "journalPage.addAction": "Add the page",
   "journalPage.added": "Page added.",
   "journalPage.path": "File",
+  "journalPage.pathPlaceholder": "week-03/index.md",
   "journalPage.pathHelp": "A path inside the journal, ending in .md.",
   "journalPage.pathInvalid": "A page is a .md file inside the journal: no leading /, no name starting with a dot.",
   "journalPage.pageTitle": "Title",

@@ -890,7 +890,8 @@ files it ports; writes en + fr for every string.
     would spell it unedited (`spellWith`, with the page's link
     definitions): matched ⇒ written as READ, blank lines between former
     neighbours kept, lead and trail kept; unmatched ⇒ the editor's
-    spelling; a link definition is kept after the block it followed.
+    spelling; a link definition stays after its source predecessor's
+    output position, even when that block was edited or deleted.
   - Accepted normalisations, in an EDITED block only (every other block is
     byte for byte, `roundtrip.test.ts` asserts the list): a table is
     re-padded to its columns (its alignment row too); setext ⇒ ATX
@@ -906,6 +907,21 @@ files it ports; writes en + fr for every string.
     a saved page references it, any other relative image from
     `JOURNAL_ASSETS_PATH`. Over 5 MB or an unserved type ⇒ a toast, nothing
     sent. The size and rotate tools of the image stay `asset:`-only.
+    Accepted: a picture is committed on drop, before Save, so a Cancel
+    leaves the file in the repository unreferenced (the guide says so,
+    `docs/guide/classrooms.md`). The object URLs are revoked with the
+    editor.
+  - External images (F-JRN-09): the resolver answers `REFUSED`
+    (`markdown/imageUrl.ts`) for anything that is not a session copy or a
+    relative path inside the journal (`https:`, `//`, `asset:`, `/abs`,
+    `../` out of the tree): `ImageView` shows the alt text in a dashed
+    frame and `renderHTML` writes no `src` (`data-asset` keeps the
+    reference); the markdown is untouched.
+  - Front matter is read through `@quiz/docrender` (`FRONT_MATTER`, three
+    groups now, `splitFrontMatter`, `asBoolean`), so the fields show what
+    the renderer does (`draft: 1` is a draft; `...` closes nothing).
+  - An autolink stays `<href>` only while its text is its address (a
+    plugin drops the flag once the text is edited).
   - Save sends `composePage(...)` with the opened `baseSha` and the
     optional description; Save is off while that markdown equals the
     page's byte for byte (D25 condition 5). 409 `conflict` ⇒ the red
@@ -918,8 +934,9 @@ files it ports; writes en + fr for every string.
   - The D25 test: `journal/editor/roundtrip.test.ts` over
     `synthetic-journal/` (four pages, every construct the card names) and
     over `JOURNAL_CORPUS_DIR` when set (skipped with its reason in the
-    title otherwise). Not run on classroom's production journals yet: the
-    corpus is fetched outside this repository.
+    title otherwise). On classroom's production journals (5 pages, fetched
+    outside this repository): byte-identical, before and after the review
+    round.
   - Mock: save, add, delete, upload and preview, rendered with
     `@quiz/docrender`; `?journalconflict=1` makes every save a 409.
   - Scenes: `journal-edit`, `-source`, `-conflict`, `-frontmatter`,

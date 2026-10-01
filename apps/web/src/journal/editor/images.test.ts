@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { imagePlacement, journalImageUrl, randomSuffix } from "./images";
+import { REFUSED } from "../../markdown/imageUrl";
+import { imagePlacement, journalImageUrl, pageFolder, randomSuffix } from "./images";
 
 /*
  * D25 condition 3: a picture goes into the repository beside its page and is
@@ -50,9 +51,16 @@ describe("journalImageUrl", () => {
     );
   });
 
-  it("leaves what is not a path of the journal to the editor", () => {
-    expect(url("https://example.org/x.png")).toBeNull();
-    expect(url("asset:abc")).toBeNull();
-    expect(url("../../outside.png")).toBeNull();
+  it("refuses whatever is not a path of the journal: never fetched", () => {
+    for (const src of ["https://evil/x.png", "//evil/x.png", "asset:abc", "../../outside.png", "/abs.png", "blob:other", "data:image/png;base64,AA"]) {
+      expect(url(src), src).toBe(REFUSED);
+    }
+  });
+});
+
+describe("pageFolder", () => {
+  it("is the folder with its slash, or nothing at the root", () => {
+    expect(pageFolder("a/b/c.md")).toBe("a/b/");
+    expect(pageFolder("c.md")).toBe("");
   });
 });
