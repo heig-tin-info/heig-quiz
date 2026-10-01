@@ -21,7 +21,7 @@ import { LockedEditor } from "./LockedEditor.js";
 import { initialRegions } from "./segments.js";
 import type { ProgramStudent } from "./schema.js";
 import type { CodePlayerStrings } from "./strings.js";
-import { badge, buttonClass, cx, hint, markdown } from "@quiz/ui";
+import { buttonClass, cx, hint, markdown } from "@quiz/ui";
 
 /** Where a run is, for the one line the player shows while it gets there. */
 export type CodeRunStage = "loading" | "compiling" | "running";
@@ -41,7 +41,6 @@ export type ProgramPlayerStrings = Pick<
   | "files"
   | "compileFailed"
   | "compileOk"
-  | "limits"
   | "rateLimited"
 >;
 
@@ -194,7 +193,11 @@ export function regionsOf(student: ProgramStudent, answer: { regions: string[] }
   return initialRegions(student.segments).map((text, i) => answer?.regions[i] ?? text);
 }
 
-/** The statement, the language and limits as badges, and the extra files by name. */
+/**
+ * The statement, the type's own badges, and the extra files by name. The
+ * language and the limits are the teacher's settings, not the student's
+ * concern: the player does not show them.
+ */
 export function ProgramStatement({
   student,
   s,
@@ -204,7 +207,7 @@ export function ProgramStatement({
   student: ProgramStudent;
   s: ProgramPlayerStrings;
   renderMarkdown: MarkdownRenderer | undefined;
-  /** The type's own badges, after the shared ones. */
+  /** The type's own badges, if any. */
   badges?: ReactNode;
 }): ReactNode {
   return (
@@ -213,13 +216,7 @@ export function ProgramStatement({
         {markdown(renderMarkdown, student.prompt)}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={badge()}>{student.language}</span>
-        <span className={badge()}>
-          {fmt(s.limits, { timeMs: student.limits.timeMs, memoryMb: student.limits.memoryMb })}
-        </span>
-        {badges}
-      </div>
+      {badges ? <div className="flex flex-wrap items-center gap-2">{badges}</div> : null}
 
       {student.filesPreview.length > 0 ? (
         <p className={hint}>

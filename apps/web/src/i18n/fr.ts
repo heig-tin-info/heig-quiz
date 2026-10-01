@@ -1484,7 +1484,6 @@ export const fr: Record<keyof Dict, string> = {
   "qt.code.p.compileFailed": "Compilation échouée",
   "qt.code.p.compileOk": "Compilé",
   "qt.code.p.allOrNothing": "Tous les cas doivent passer pour marquer.",
-  "qt.code.p.limits": "{timeMs} ms · {memoryMb} Mo",
   "qt.code.p.loadingRuntime":
     "Chargement de l'environnement d'exécution… cela n'arrive qu'une fois.",
   "qt.code.p.noStdin": "Aucune entrée",

@@ -1493,7 +1493,6 @@ export const en = {
   "qt.code.p.compileFailed": "Compilation failed",
   "qt.code.p.compileOk": "Compiled",
   "qt.code.p.allOrNothing": "All cases must pass to score.",
-  "qt.code.p.limits": "{timeMs} ms · {memoryMb} MB",
   "qt.code.p.loadingRuntime": "Loading the language runtime… this happens once.",
   "qt.code.p.noStdin": "No input",
   "qt.code.p.command": "$ program {args}",
