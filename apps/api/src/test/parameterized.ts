@@ -79,6 +79,9 @@ export const markersIn = (text: string): string[] => MARKERS.filter((m) => text.
 /** `t` as a student reads it in one instance. */
 export const fallOf = (values: Values): string => formatValue(values["t"]!, ".2");
 
+/** `t` as a short answer's key shows it: a number, so "2.60" reads "2.6" — and "2.6" is inside "2.60" too. */
+export const fallKey = (values: Values): string => String(Number(fallOf(values)));
+
 /** One parameterized question of `type`, published through the ordinary services. */
 export async function publishParameterized(
   db: Db,

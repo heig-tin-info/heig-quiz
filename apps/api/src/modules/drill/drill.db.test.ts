@@ -28,7 +28,7 @@ import {
 } from "../../db/schema.js";
 import { testApp, testDb } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
-import { fallOf, markersIn, PARAMETERIZED, publishParameterized } from "../../test/parameterized.js";
+import { fallKey, fallOf, markersIn, PARAMETERIZED, publishParameterized } from "../../test/parameterized.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import * as live from "../live/service.js";
@@ -395,7 +395,8 @@ describe("a review of a parameterized question (ADR-056 §5)", () => {
       const t = fallOf(open!.serveValues!.values);
       expect(markersIn(JSON.stringify(served))).toEqual([]);
       // The key of a short answer or of a blank is never in the question served.
-      if (type !== "mcq") expect(JSON.stringify(served)).not.toContain(t);
+      const key = fallKey(open!.serveValues!.values);
+      if (type !== "mcq") expect(JSON.stringify(served)).not.toContain(key);
       // A reload serves the same instance.
       expect(await drill.serveCard(db, userId, card.id, app.clock.now())).toEqual(served);
 
@@ -403,7 +404,7 @@ describe("a review of a parameterized question (ADR-056 §5)", () => {
       expect(result.correctness).toBe("right");
       expect(markersIn(JSON.stringify(result))).toEqual([]);
       // The key shown after the answer is the instance's.
-      if (type !== "mcq") expect(JSON.stringify(result.solution)).toContain(t);
+      if (type !== "mcq") expect(JSON.stringify(result.solution)).toContain(key);
       const [review] = await db.select().from(drillReviews).where(eq(drillReviews.cardId, card.id));
       expect(review!.values).toEqual(open!.serveValues);
       const [closed] = await db.select().from(drillCards).where(eq(drillCards.id, card.id));

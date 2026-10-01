@@ -27,6 +27,7 @@ import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { seedLive, type Seeded } from "../../test/live.js";
 import {
   EXPLANATION,
+  fallKey,
   fallOf,
   markersIn,
   PARAMETERIZED,
@@ -140,7 +141,7 @@ describe("the attempt (ADR-056 §5, invariant 4)", () => {
         expect(Object.keys(stored.values).sort()).toEqual(["g", "h", "t"]);
         // The key of a short answer or of a blank: never in the paper.
         const own = JSON.stringify(view.items.find((i) => i.id === itemOf.get(kind))!.student);
-        if (kind !== "mcq") expect(own).not.toContain(fallOf(stored.values));
+        if (kind !== "mcq") expect(own).not.toContain(fallKey(stored.values));
         expect(own).toContain(`${stored.values["h"]} m`);
       }
     }
@@ -188,9 +189,9 @@ describe("the feedback after the release (invariant 4)", () => {
     const feedback = await feedbackOf(bob);
     expect(markersIn(JSON.stringify(feedback))).toEqual([]);
     for (const kind of ["short", "cloze"] as const) {
-      const t = fallOf((await valuesOf(attemptOf.get("bob")!, kind)).values);
+      const key = fallKey((await valuesOf(attemptOf.get("bob")!, kind)).values);
       const item = feedback.items.find((i) => i.itemId === itemOf.get(kind))!;
-      expect(JSON.stringify(item)).not.toContain(t);
+      expect(JSON.stringify(item)).not.toContain(key);
     }
   });
 
@@ -199,10 +200,10 @@ describe("the feedback after the release (invariant 4)", () => {
     const feedback = await feedbackOf(alice);
     expect(markersIn(JSON.stringify(feedback))).toEqual([]);
     for (const kind of KINDS) {
-      const t = fallOf((await valuesOf(attemptOf.get("alice")!, kind)).values);
+      const values = (await valuesOf(attemptOf.get("alice")!, kind)).values;
       const item = feedback.items.find((i) => i.itemId === itemOf.get(kind))!;
-      expect(item.explanation).toBe(EXPLANATION.replace("[[t]]", t));
-      if (kind === "short") expect(JSON.stringify(item.solution)).toContain(t);
+      expect(item.explanation).toBe(EXPLANATION.replace("[[t]]", fallOf(values)));
+      if (kind === "short") expect(JSON.stringify(item.solution)).toContain(fallKey(values));
     }
   });
 });
