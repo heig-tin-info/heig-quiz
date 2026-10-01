@@ -1,16 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { FileClock, History, RotateCcw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import { encodeJournalPath, type JournalRevision, type JournalRevisionList } from "@quiz/contracts";
+import type { JournalDeletedPage, JournalRevision } from "@quiz/contracts";
 
-import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
+import { journalRevisionRenderedKey } from "../queryKeys";
 import { Badge, Button, cx, EmptyState, isoDateTime, QueryError, Segmented, Sheet, Skeleton } from "../ui";
 import {
-  journalBase,
   journalErrorText,
   previewJournalPage,
   useJournalDeleted,
@@ -172,7 +171,7 @@ function RevisionView({ classroomId, path, revisionId }: { classroomId: string; 
   const revision = useJournalRevision(classroomId, revisionId);
   const markdown = revision.data?.markdown ?? null;
   const rendered = useQuery({
-    queryKey: ["journal", classroomId, "staff", "revision", revisionId, "rendered"],
+    queryKey: journalRevisionRenderedKey(classroomId, revisionId),
     queryFn: () => previewJournalPage(classroomId, path, markdown!),
     enabled: markdown !== null && as === "rendered",
     staleTime: Infinity,
@@ -241,37 +240,23 @@ export function DeletedSheet({
   const confirm = useConfirm();
   const deleted = useJournalDeleted(classroomId);
   const restore = useJournalRestore(classroomId);
-  const [restoring, setRestoring] = useState<string | null>(null);
-  useEffect(() => {
-    if (!restore.isPending) setRestoring(null);
-  }, [restore.isPending]);
+  const restoring = (page: JournalDeletedPage) => restore.isPending && restore.variables === page.revisionId;
 
-  const bringBack = async (path: string, title: string | null) => {
+  // The page comes back as it was last saved: its newest revision.
+  const bringBack = async ({ path, title, revisionId }: JournalDeletedPage) => {
     const ok = await confirm({
       title: t("journalDeleted.restoreTitle", { name: title ?? path }),
       message: t("journalDeleted.restoreBody", { path }),
       confirmLabel: t("journalDeleted.restore"),
     });
     if (!ok) return;
-    setRestoring(path);
-    try {
-      // The page comes back as it was last saved: its newest revision.
-      const revisions = await api<JournalRevisionList>(
-        `${journalBase(classroomId)}/revisions/${encodeJournalPath(path)}`,
-      );
-      const latest = revisions[0];
-      if (!latest) throw new Error("no revision");
-      restore.mutate(latest.id, {
-        onSuccess: (written) => {
-          toast(t("journalDeleted.restored"), "success");
-          onRestored(written.path);
-        },
-        onError: (error) => toast(journalErrorText(error, t), "error"),
-      });
-    } catch (error) {
-      setRestoring(null);
-      toast(journalErrorText(error, t), "error");
-    }
+    restore.mutate(revisionId, {
+      onSuccess: (written) => {
+        toast(t("journalDeleted.restored"), "success");
+        onRestored(written.path);
+      },
+      onError: (error) => toast(journalErrorText(error, t), "error"),
+    });
   };
 
   let body;
@@ -313,11 +298,11 @@ export function DeletedSheet({
             <Button
               variant="secondary"
               size="sm"
-              loading={restoring === page.path}
-              disabled={restoring !== null && restoring !== page.path}
-              onClick={() => void bringBack(page.path, page.title)}
+              loading={restoring(page)}
+              disabled={restore.isPending && !restoring(page)}
+              onClick={() => void bringBack(page)}
             >
-              {restoring === page.path ? null : <RotateCcw />} {t("journalDeleted.restore")}
+              {restoring(page) ? null : <RotateCcw />} {t("journalDeleted.restore")}
             </Button>
           </li>
         ))}

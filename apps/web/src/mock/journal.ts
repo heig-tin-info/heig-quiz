@@ -640,7 +640,7 @@ on("GET", "/app/api/classrooms/:id/journal/deleted", (m): JournalDeletedPage[] =
   return gone
     .map((path) => {
       const latest = revisions.filter((r) => r.path === path).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]!;
-      return { path, title: titleOf(latest.markdown), savedAt: latest.createdAt };
+      return { path, title: titleOf(latest.markdown), revisionId: latest.id, savedAt: latest.createdAt };
     })
     .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 });

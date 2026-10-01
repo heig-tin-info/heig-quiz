@@ -315,6 +315,7 @@ export async function deletedPages(db: Db, classroomId: string): Promise<Journal
   const latest = await db
     .selectDistinctOn([journalPageRevisions.path], {
       path: journalPageRevisions.path,
+      revisionId: journalPageRevisions.id,
       markdown: journalPageRevisions.markdown,
       savedAt: journalPageRevisions.createdAt,
     })
@@ -324,13 +325,14 @@ export async function deletedPages(db: Db, classroomId: string): Promise<Journal
       and(eq(journalPages.classroomId, journalPageRevisions.classroomId), eq(journalPages.path, journalPageRevisions.path)),
     )
     .where(and(eq(journalPageRevisions.classroomId, classroomId), sql`${journalPages.id} IS NULL`))
-    .orderBy(journalPageRevisions.path, desc(journalPageRevisions.createdAt));
+    .orderBy(journalPageRevisions.path, desc(journalPageRevisions.createdAt), desc(journalPageRevisions.id));
   const none = new Set<string>();
   return latest
     .sort((a, b) => b.savedAt.getTime() - a.savedAt.getTime())
-    .map(({ path, markdown, savedAt }) => ({
+    .map(({ path, revisionId, markdown, savedAt }) => ({
       path,
       title: renderAt(classroomId, path, markdown, none, none).title,
+      revisionId,
       savedAt: savedAt.toISOString(),
     }));
 }

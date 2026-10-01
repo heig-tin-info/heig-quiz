@@ -22,7 +22,7 @@ import {
   type JournalNavNode,
   type JournalPage,
   type JournalPageStaff,
-  type JournalStaff,
+  type JournalRepository,
 } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
@@ -213,11 +213,16 @@ export function JournalReader({
 
   const staffBar = (
     <>
-      {staffJournal?.mode ? (
-        <StaffBar
-          journal={staffJournal}
+      {staffJournal?.mode === "github" ? (
+        <GithubBar
+          repository={repository}
           refreshing={refreshing}
           onRefresh={refresh}
+          editUrl={staffPage?.editUrl ?? null}
+        />
+      ) : null}
+      {staffJournal?.mode === "quiz" ? (
+        <QuizBar
           page={staffPage}
           deleting={remove.isPending}
           onEdit={() => setEditing(staffPage?.path ?? null)}
@@ -309,6 +314,9 @@ export function JournalReader({
     ) : null;
 
   if (target === null) {
+    let emptyHint: "journal.emptyHint.quiz" | "journal.emptyHint.staff" | "journal.emptyHint" = "journal.emptyHint";
+    if (staffJournal?.mode === "quiz") emptyHint = "journal.emptyHint.quiz";
+    else if (staffJournal) emptyHint = "journal.emptyHint.staff";
     return (
       <Frame header={header}>
         {syncAlert}
@@ -324,11 +332,7 @@ export function JournalReader({
             ) : undefined
           }
         >
-          {staffJournal?.mode === "quiz"
-            ? t("journal.emptyHint.quiz")
-            : staffJournal
-              ? t("journal.emptyHint.staff")
-              : t("journal.emptyHint")}
+          {t(emptyHint)}
         </EmptyState>
       </Frame>
     );
@@ -469,22 +473,57 @@ function Frame({ header, children }: { header: ReactNode; children: ReactNode })
   );
 }
 
-/**
- * The staff's bar above the page, by the journal's mode (ADR-057). A
- * student's payload has no mode, so no bar.
- *
- * - GitHub mode, read-only in the platform: where the copy of the
- *   repository stands, Refresh (F-JRN-05, secondary), and **Edit on
- *   GitHub**, the bar's one primary: github.com's editor of the page's
- *   file, in a new tab (the page's `editUrl`).
- * - Quiz mode: the Pages menu (add a page, this page's history, the deleted
- *   pages, delete this page) and **Edit**, the bar's one primary, which
- *   opens the editor on this route.
+/*
+ * The staff's bar above the page, one per journal mode (ADR-057), chosen by
+ * the mode at the call site. A student's payload has no mode, so no bar.
  */
-function StaffBar({
-  journal,
+
+/**
+ * GitHub mode, read-only in the platform: where the copy of the repository
+ * stands, Refresh (F-JRN-05, secondary), and **Edit on GitHub**, the bar's
+ * one primary: github.com's editor of the page's file, in a new tab.
+ */
+function GithubBar({
+  repository,
   refreshing,
   onRefresh,
+  editUrl,
+}: {
+  repository: JournalRepository | null;
+  refreshing: boolean;
+  onRefresh: () => void;
+  /** The page on view's `editUrl`, null when no page is. */
+  editUrl: string | null;
+}) {
+  const t = useT();
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+      {repository ? <SyncState repository={repository} refreshing={refreshing} /> : null}
+      <div className="flex items-center gap-2">
+        <Button variant="secondary" size="sm" loading={refreshing} onClick={onRefresh}>
+          {refreshing ? null : <RefreshCw />} {t("journal.refresh")}
+        </Button>
+        {editUrl ? (
+          <LinkButton variant="primary" size="sm" href={editUrl} target="_blank" rel="noopener noreferrer">
+            <ExternalLink /> {t("journalEditor.editOnGithub")}
+            <span className="sr-only"> {t("common.newTab")}</span>
+          </LinkButton>
+        ) : (
+          <Button size="sm" disabled>
+            <ExternalLink /> {t("journalEditor.editOnGithub")}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Quiz mode: the Pages menu (add a page, this page's history, the deleted
+ * pages, delete this page) and **Edit**, the bar's one primary, which opens
+ * the editor on this route.
+ */
+function QuizBar({
   page,
   deleting,
   onEdit,
@@ -493,9 +532,6 @@ function StaffBar({
   onHistory,
   onDeleted,
 }: {
-  journal: JournalStaff;
-  refreshing: boolean;
-  onRefresh: () => void;
   /** The page on view, when one is. */
   page: JournalPageStaff | null;
   deleting: boolean;
@@ -506,29 +542,6 @@ function StaffBar({
   onDeleted: () => void;
 }) {
   const t = useT();
-  if (journal.repository) {
-    const editUrl = page?.editUrl ?? null;
-    return (
-      <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
-        <SyncState repository={journal.repository} refreshing={refreshing} />
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" loading={refreshing} onClick={onRefresh}>
-            {refreshing ? null : <RefreshCw />} {t("journal.refresh")}
-          </Button>
-          {editUrl ? (
-            <LinkButton variant="primary" size="sm" href={editUrl} target="_blank" rel="noopener noreferrer">
-              <ExternalLink /> {t("journalEditor.editOnGithub")}
-              <span className="sr-only"> {t("common.newTab")}</span>
-            </LinkButton>
-          ) : (
-            <Button size="sm" disabled>
-              <ExternalLink /> {t("journalEditor.editOnGithub")}
-            </Button>
-          )}
-        </div>
-      </div>
-    );
-  }
   return (
     <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
       <div className="flex items-center gap-2">

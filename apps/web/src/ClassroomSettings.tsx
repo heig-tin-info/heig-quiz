@@ -22,7 +22,7 @@ import { useConfirm } from "./confirm";
 import { ClassroomDrillSetting } from "./drill/ClassroomDrillSetting";
 import { ClassroomGithub } from "./github/ClassroomGithub";
 import { useT } from "./i18n";
-import { removalNeedsName, useStaffJournal } from "./journal/api";
+import { pagesText, removalNeedsName, useStaffJournal, withConfirm } from "./journal/api";
 import { JournalSettings } from "./journal/JournalSettings";
 import { useErrorToast, useToast } from "./notify";
 import { invalidateHint } from "./realtime/hints";
@@ -132,9 +132,7 @@ function LifecycleSection({ room, navigate }: { room: ClassroomDetail; navigate:
   });
   const remove = useMutation({
     mutationFn: (confirm?: string) =>
-      api(`/app/api/classrooms/${room.id}${confirm === undefined ? "" : `?confirm=${encodeURIComponent(confirm)}`}`, {
-        method: "DELETE",
-      }),
+      api(withConfirm(`/app/api/classrooms/${room.id}`, confirm), { method: "DELETE" }),
     onSuccess: async () => {
       await invalidateHint(qc, ["classrooms"]);
       navigate({ view: "home" });
@@ -175,12 +173,9 @@ function LifecycleSection({ room, navigate }: { room: ClassroomDetail; navigate:
                   title: t("classrooms.deleteConfirm", { name: room.name }),
                   ...(typed
                     ? {
-                        message: t(
-                          journal.data!.pageCount === 1
-                            ? "classroomSettings.deleteJournal.one"
-                            : "classroomSettings.deleteJournal",
-                          { count: journal.data!.pageCount },
-                        ),
+                        message: t("classroomSettings.deleteJournal", {
+                          pages: pagesText(t, journal.data!.pageCount),
+                        }),
                         typeToConfirm: room.name,
                       }
                     : {}),

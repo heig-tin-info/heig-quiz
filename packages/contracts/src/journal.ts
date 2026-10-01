@@ -576,11 +576,13 @@ export type JournalRevisionParams = z.infer<typeof JournalRevisionParams>;
 /**
  * `GET /classrooms/:id/journal/deleted`: the paths that have revisions and no
  * page any more, each restorable from its revisions; newest first. `title`
- * is the latest revision's, null when nothing names it.
+ * is the latest revision's, null when nothing names it; `revisionId` is that
+ * revision, the one a restore brings back.
  */
 export const JournalDeletedPage = z.strictObject({
   path: z.string(),
   title: z.string().nullable(),
+  revisionId: z.uuid(),
   savedAt: z.iso.datetime({ offset: true }),
 });
 export type JournalDeletedPage = z.infer<typeof JournalDeletedPage>;

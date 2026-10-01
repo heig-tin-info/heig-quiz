@@ -48,8 +48,9 @@ import {
 import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { githubAbsent, useClassroomGithub } from "../github/api";
-import { useT, type TFunction } from "../i18n";
+import { useT } from "../i18n";
 import { useToast } from "../notify";
+import { journalRootKey } from "../queryKeys";
 import {
   Alert,
   Button,
@@ -71,6 +72,7 @@ import {
   journalRefusal,
   journalRemoveUrl,
   nameTakenSuggestion,
+  pagesText,
   removalNeedsName,
   useJournalRefresh,
   useStaffJournal,
@@ -79,11 +81,6 @@ import { syncLevel, SyncText } from "./SyncState";
 import { SYNC_ERRORS } from "./words";
 
 type OpenDialog = "create" | "use" | null;
-
-/** "{count} pages", the one-page case worded on its own. */
-export function pagesText(t: TFunction, count: number): string {
-  return count === 1 ? t("journalSettings.pages.one") : t("journalSettings.pages", { count });
-}
 
 export function JournalSettings({ room }: { room: ClassroomDetail }) {
   const t = useT();
@@ -164,7 +161,7 @@ function NewJournal({
         body: JSON.stringify({ mode: "quiz" } satisfies JournalCreate),
       }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["journal", room.id] });
+      await qc.invalidateQueries({ queryKey: journalRootKey(room.id) });
       toast(t("journalSettings.createdQuiz"), "success");
     },
     onError: (error) => toast(journalErrorText(error, t), "error"),
@@ -235,21 +232,19 @@ function RemoveRow({ room, journal }: { room: ClassroomDetail; journal: JournalS
   const confirm = useConfirm();
   const toast = useToast();
   const typed = removalNeedsName(journal);
-  const repository = journal.repository;
+  const onGithub = journal.mode === "github";
+  const name = journal.repository?.fullName ?? "";
   const remove = useMutation({
     mutationFn: () => api(journalRemoveUrl(room.id, typed ? room.name : undefined), { method: "DELETE" }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["journal", room.id] });
-      toast(
-        repository ? t("journalSettings.removed", { name: repository.fullName }) : t("journalSettings.removedQuiz"),
-        "success",
-      );
+      await qc.invalidateQueries({ queryKey: journalRootKey(room.id) });
+      toast(onGithub ? t("journalSettings.removed", { name }) : t("journalSettings.removedQuiz"), "success");
     },
     onError: (error) => toast(journalErrorText(error, t), "error"),
   });
   const onRemove = async () => {
     let message: string;
-    if (repository) message = t("journalSettings.removeBody", { name: repository.fullName });
+    if (onGithub) message = t("journalSettings.removeBody", { name });
     else if (typed) message = t("journalSettings.removeBodyQuiz", { pages: pagesText(t, journal.pageCount) });
     else message = t("journalSettings.removeBodyQuizEmpty");
     if (
@@ -268,7 +263,7 @@ function RemoveRow({ room, journal }: { room: ClassroomDetail; journal: JournalS
   return (
     <SettingRow
       title={t("journalSettings.remove")}
-      desc={repository ? t("journalSettings.removeDesc") : t("journalSettings.removeDescQuiz")}
+      desc={onGithub ? t("journalSettings.removeDesc") : t("journalSettings.removeDescQuiz")}
     >
       <Button variant="danger-quiet" loading={remove.isPending} onClick={() => void onRemove()}>
         <Trash2 /> {t("journalSettings.removeOpen")}
@@ -360,7 +355,7 @@ function useAttach(room: ClassroomDetail, onDone: () => void) {
   const qc = useQueryClient();
   const toast = useToast();
   return async (next: JournalStaff) => {
-    await qc.invalidateQueries({ queryKey: ["journal", room.id] });
+    await qc.invalidateQueries({ queryKey: journalRootKey(room.id) });
     toast(t("journalSettings.attached", { name: next.repository?.fullName ?? "" }), "success");
     onDone();
   };

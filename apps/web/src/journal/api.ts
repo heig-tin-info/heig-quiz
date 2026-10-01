@@ -21,6 +21,7 @@ import {
   type JournalPageSave,
   type JournalPreview,
   type JournalPreviewResult,
+  type JournalRemoveQuery,
   type JournalRepository,
   type JournalRestore,
   type JournalRevisionContent,
@@ -31,7 +32,7 @@ import { journalAssetUrl } from "@quiz/docrender/assets";
 
 import { api, ApiError } from "../api";
 import type { TFunction } from "../i18n";
-import { journalDeletedKey, journalKey, journalPageKey, journalRevisionsKey } from "../queryKeys";
+import { journalDeletedKey, journalKey, journalPageKey, journalRevisionKey, journalRevisionsKey } from "../queryKeys";
 import { JOURNAL_ERRORS } from "./words";
 
 /** `/app/api/classrooms/:id/journal`, the base of every journal route. */
@@ -197,7 +198,7 @@ export function useJournalRevisions(classroomId: string, path: string) {
 /** `GET …/revision/:id`: one revision with its markdown. */
 export function useJournalRevision(classroomId: string, revisionId: string | null) {
   return useQuery<JournalRevisionContent>({
-    queryKey: [...journalKey(classroomId, "staff"), "revision", revisionId ?? ""],
+    queryKey: journalRevisionKey(classroomId, revisionId ?? ""),
     queryFn: () => api(`${journalBase(classroomId)}/revision/${revisionId!}`),
     enabled: revisionId !== null,
     // A revision never changes.
@@ -227,15 +228,31 @@ export function useJournalRestore(classroomId: string) {
 }
 
 /**
+ * `url`, with the `?confirm=` of a removal that destroys a Quiz-mode
+ * journal's pages: the journal's own (F-JRN-04) and the classroom's
+ * (F-ORG-09, `ClassroomDeleteQuery`, the same schema). Built from the
+ * contract's type, so a renamed parameter breaks here at compile time.
+ */
+export function withConfirm(url: string, confirm?: string): string {
+  if (confirm === undefined) return url;
+  const query = { confirm } satisfies JournalRemoveQuery;
+  return `${url}?${new URLSearchParams(query).toString()}`;
+}
+
+/**
  * Remove the journal (F-JRN-04): `confirm` is the classroom's name, typed,
  * which a Quiz-mode journal holding pages requires (409 `confirm_required`).
  */
-export const journalRemoveUrl = (classroomId: string, confirm?: string) =>
-  `${journalBase(classroomId)}${confirm === undefined ? "" : `?confirm=${encodeURIComponent(confirm)}`}`;
+export const journalRemoveUrl = (classroomId: string, confirm?: string) => withConfirm(journalBase(classroomId), confirm);
 
 /** Whether removing this journal destroys the only copy of pages: the classroom's name must be typed. */
 export const removalNeedsName = (journal: JournalStaff | undefined): boolean =>
   journal?.mode === "quiz" && journal.pageCount > 0;
+
+/** "{count} pages", the one-page case worded on its own. */
+export function pagesText(t: TFunction, count: number): string {
+  return count === 1 ? t("journalSettings.pages.one") : t("journalSettings.pages", { count });
+}
 
 /** Markdown not saved yet (or a revision), rendered as the page at `path` would read (`POST …/preview`). */
 export function previewJournalPage(classroomId: string, path: string, markdown: string): Promise<JournalPreviewResult> {

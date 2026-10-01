@@ -546,8 +546,10 @@ describe("the history (ADR-057)", () => {
   it("brings a deleted page back from its last revision, and opens it", async () => {
     const GONE = "semaine-01/ancien.md";
     const { calls } = setup({
-      [`GET ${BASE}/deleted`]: ok([{ path: GONE, title: "Ancien TD", savedAt: "2026-09-28T10:00:00.000Z" }]),
-      [`GET ${BASE}/revisions/${GONE}`]: ok([{ ...REVISIONS[0]!, path: GONE }]),
+      // The deleted page names its newest revision: the restore needs no other read.
+      [`GET ${BASE}/deleted`]: ok([
+        { path: GONE, title: "Ancien TD", revisionId: REVISIONS[0]!.id, savedAt: "2026-09-28T10:00:00.000Z" },
+      ]),
       [`POST ${BASE}/restore`]: ok({ path: GONE, page: page({ path: GONE, title: "Ancien TD" }) }),
       [`GET ${BASE}/pages/${GONE}`]: ok(page({ path: GONE, title: "Ancien TD" })),
     });
@@ -558,6 +560,7 @@ describe("the history (ADR-057)", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Restore" }));
     await waitFor(() => expect(calls.some((c) => c.url === `${BASE}/restore`)).toBe(true));
     expect(calls.find((c) => c.url === `${BASE}/restore`)!.body).toEqual({ revisionId: REVISIONS[0]!.id });
+    expect(calls.some((c) => c.url.includes("/revisions/"))).toBe(false);
     await waitFor(() =>
       expect(navigateSpy).toHaveBeenCalledWith({ view: "classroomJournal", id: "r1", path: GONE }, undefined),
     );

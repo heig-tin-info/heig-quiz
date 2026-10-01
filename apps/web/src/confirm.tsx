@@ -40,24 +40,25 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     options: ConfirmOptions;
     resolve: (ok: boolean) => void;
   } | null>(null);
+  const [typed, setTyped] = useState("");
   const confirm = useCallback<ConfirmFn>(
     (options) =>
-      new Promise<boolean>((resolve) =>
+      new Promise<boolean>((resolve) => {
+        // Every question starts with nothing typed, the one it replaces included.
+        setTyped("");
         setPending((previous) => {
           // One dialog at a time: a second confirm() replaces the first, so
           // settle the one leaving the screen instead of leaving its caller
           // waiting on a promise nothing will ever resolve.
           previous?.resolve(false);
           return { options, resolve };
-        }),
-      ),
+        });
+      }),
     [],
   );
-  const [typed, setTyped] = useState("");
   const settle = (ok: boolean) => {
     pending?.resolve(ok);
     setPending(null);
-    setTyped("");
   };
   const mustType = pending?.options.typeToConfirm;
   const blocked = mustType !== undefined && typed.trim() !== mustType.trim();

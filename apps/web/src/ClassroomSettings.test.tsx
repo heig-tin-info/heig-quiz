@@ -142,7 +142,7 @@ describe("the classroom's Settings tab", () => {
     await screen.findByText(/3 pages, written and kept in Quiz/);
     await userEvent.click(screen.getByRole("button", { name: /Delete classroom/ }));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Its journal and its 3 pages are deleted with it");
+    expect(dialog).toHaveTextContent("Its journal (3 pages) is deleted with it");
     const confirm = within(dialog).getByRole("button", { name: "Delete" });
     expect(confirm).toBeDisabled();
     await userEvent.type(within(dialog).getByLabelText("Type PRG1-2026 to confirm"), "PRG1-2026");

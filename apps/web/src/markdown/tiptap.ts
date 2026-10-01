@@ -545,7 +545,6 @@ export function richTextExtensions({
   cloze = false,
   imageUrl,
 }: RichTextSchemaOptions = {}): AnyExtension[] {
-  const holes = cloze;
   const base = assetImage(imageUrl);
   const image = imageNodeView ? base.extend({ addNodeView: imageNodeView }) : base;
   const code = codeBlockNodeView
@@ -565,7 +564,7 @@ export function richTextExtensions({
     // Inside a fenced block a hole stays TEXT — the content of a code block is
     // text, and a node cannot live in it — so it is coloured by a decoration
     // instead, like the keywords around it.
-    CodeHighlight.configure({ holes }),
+    CodeHighlight.configure({ holes: cloze }),
     image.configure({ allowBase64: false }),
     InlineMathTyping.configure({ katexOptions: KATEX_OPTIONS }),
     BlockMathTyping.configure({ katexOptions: KATEX_OPTIONS }),
@@ -588,7 +587,7 @@ export function richTextExtensions({
     TableHeader,
     TableCell,
     Placeholder.configure({ placeholder: placeholder ?? "" }),
-    ...clozeHoleExtensions(holes),
+    ...clozeHoleExtensions(cloze),
     Markdown,
   ];
 }
