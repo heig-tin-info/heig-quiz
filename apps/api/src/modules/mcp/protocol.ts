@@ -34,6 +34,7 @@ const INSTRUCTIONS = [
   "Model: a course has classrooms (one class of students for a period) and is linked to question pools.",
   "Questions live in pools. A question must be PUBLISHED to be used; create_question publishes by default.",
   "An evaluation (exam or exercise) belongs to a classroom and may only use questions of pools linked to that classroom's course: call link_pool_to_course first.",
+  "To make a new quiz (exam or exercise), create a TEMPLATE of the course with create_template, which keeps it for next year, and instantiate_template it into a classroom when the teacher wants it there; call create_evaluation only when the teacher explicitly asks for an evaluation in a classroom.",
   "Before writing a question, call describe_question_types with its type and follow the schema and rules exactly.",
   "Look before creating: list_courses, get_course and list_pools, so nothing is created twice. Evaluations are created as drafts; the teacher opens them from the web app. Give the teacher the returned `url` links.",
 ].join(" ");

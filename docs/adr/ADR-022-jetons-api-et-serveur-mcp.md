@@ -15,6 +15,12 @@ Amended by [ADR-052](ADR-052-questions-bonus.md) (2026-09-30): the items
 `get_evaluation` returns carry `bonus`, and `update_evaluation`'s grade
 scale is linear only (its rounding).
 
+Amended 2026-10-01 (templates first, decided with the product owner): the
+reading tool `list_templates` and the writing tools `create_template`,
+`add_questions_to_template` and `instantiate_template` join the closed
+list of §C, and a new quiz is made
+as a template of the course by default — see the addendum at the end of §C.
+
 ## Context
 
 A teacher wants to ask an assistant — Claude Desktop, Claude Code, ChatGPT,
@@ -85,12 +91,14 @@ converted with `z.toJSONSchema`.
 
 Reading: `list_courses`, `get_course`, `list_pools`, `get_pool`,
 `get_pool_question_stats`, `list_questions`, `get_question`,
-`list_evaluations`, `get_evaluation`, `describe_question_types`.
+`list_evaluations`, `get_evaluation`, `describe_question_types`,
+`list_templates`.
 
 Writing: `create_course`, `create_classroom`, `create_pool`,
 `link_pool_to_course`, `create_category`, `create_question`,
 `update_question`, `create_evaluation`, `add_questions_to_evaluation`,
-`update_evaluation`, `create_poll`.
+`update_evaluation`, `create_poll`, `create_template`,
+`add_questions_to_template`, `instantiate_template`.
 
 - `describe_question_types` hands the model the JSON Schema of the type's
   `configSchema` — generated, so it cannot drift from the publication gate —
@@ -120,6 +128,43 @@ Writing: `create_course`, `create_classroom`, `create_pool`,
   owner of the token reads the same figures in the side panel. A pool-level
   tool rather than a per-question one, because the route is pool-level and
   a model choosing questions compares them.
+
+**Addendum of 2026-10-01 — templates first.** Reading gains
+`list_templates`; writing gains `create_template`,
+`add_questions_to_template` and `instantiate_template`. Each is a thin client of the template routes of
+ADR-031, unchanged: `GET` and `POST /courses/:id/templates` (F-EVAL-24),
+`POST /templates/:id/items` (F-EVAL-25) and `POST /templates/:id/instances`.
+`create_template` takes the arguments of `create_evaluation` with a course
+in place of a classroom, creates the template with the same preset, then
+adds the questions through the template's item route, so the rules on
+published questions from the course's linked pools are the route's. Their
+refusals reach the model like any other: a teacher without a seat on the
+course's staff gets the `404` of `loadTemplate` / `accessibleCourse`, and
+an instantiation whose question sits in a pool the course no longer links
+gets `422 template_pool_unlinked`.
+
+- **Why template first.** A quiz is reused year to year. Made directly in a
+  classroom, it lives in that year's class and has to be found and copied
+  next year; made as a template, it stays in the course, and each year's
+  classroom takes its own instance (ADR-031). So when a teacher asks the
+  assistant for a new quiz, exam or exercise, the assistant makes a
+  template, and instantiates it into a classroom when the teacher wants it
+  there.
+- **Steered, not gated.** `create_evaluation` stays, for the teacher who
+  explicitly asks for an evaluation in a classroom. The steering is the tool
+  descriptions and the server's `instructions` only; no tool refuses the
+  other path. There is no fallback between the two: a classroom is reached
+  through its course's staff (`staffAccess`, invariant 6), so a teacher
+  refused a template of a course is refused an evaluation in its classrooms
+  with the same `404`.
+- **One writer, two homes.** `create_template` and `create_evaluation` share
+  their arguments and their body (create with the mode's preset, add the
+  items through the home's own item route, read the detail back). A refused
+  item leaves the template created and empty, as it leaves the evaluation:
+  the model is told not to create it again but to fix the cause and add the
+  questions with `add_questions_to_template`, the twin of
+  `add_questions_to_evaluation` over the same template item route (a new
+  revision, never a change to an instance: F-EVAL-25, F-EVAL-26).
 
 ## Consequences
 

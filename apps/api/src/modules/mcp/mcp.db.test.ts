@@ -88,6 +88,7 @@ describe("the transport", () => {
     expect(result.protocolVersion).toBe("2025-03-26");
     expect(result.capabilities.tools).toBeDefined();
     expect(result.instructions).toContain("link_pool_to_course");
+    expect(result.instructions).toContain("create_template");
 
     const unknown = await rpc("initialize", { protocolVersion: "1999-01-01" });
     expect(unknown.result.protocolVersion).toBe("2025-06-18");
@@ -137,6 +138,10 @@ describe("the transport", () => {
         "add_questions_to_evaluation",
         "update_evaluation",
         "create_poll",
+        "list_templates",
+        "create_template",
+        "add_questions_to_template",
+        "instantiate_template",
       ].sort(),
     );
     // …and its reading half, the one set annotated read-only.
@@ -153,6 +158,7 @@ describe("the transport", () => {
         "list_evaluations",
         "get_evaluation",
         "describe_question_types",
+        "list_templates",
       ].sort(),
     );
     for (const t of result.tools) expect(t.inputSchema.type, t.name).toBe("object");
@@ -366,5 +372,96 @@ describe("an authoring session", () => {
     const { isError, data } = await call("create_course", { name: "" });
     expect(isError).toBe(true);
     expect(data.error).toBe("invalid_arguments");
+  });
+});
+
+describe("templates first (ADR-022, addendum of 2026-10-01)", () => {
+  /** A course with a classroom, a linked pool and two published questions. */
+  async function courseWithQuestions(code: string) {
+    const course = await ok("create_course", { name: code, code });
+    const room = await ok("create_classroom", { courseId: course.id, name: `${code} 2026` });
+    const pool = await ok("create_pool", { name: code });
+    await ok("link_pool_to_course", { courseId: course.id, poolId: pool.id });
+    const example = (describeQuestionType("mcq") as { example: unknown }).example;
+    const ids: string[] = [];
+    for (const n of [1, 2]) {
+      const q = await ok("create_question", { poolId: pool.id, type: "mcq", internalName: `${code}-${n}`, config: example });
+      ids.push(q.questionId);
+    }
+    return { course, room, pool, ids };
+  }
+
+  it("adds questions to a template, and refuses an unpublished one", async () => {
+    const { course, pool, ids } = await courseWithQuestions("TPL-ADD");
+    const made = await ok("create_template", { courseId: course.id, title: "À compléter", questionIds: [ids[0]] });
+    const draft = await ok("create_question", {
+      poolId: pool.id,
+      type: "mcq",
+      internalName: "TPL-ADD-draft",
+      config: (describeQuestionType("mcq") as { example: unknown }).example,
+      publish: false,
+    });
+
+    const refused = await call("add_questions_to_template", { templateId: made.template.id, questionIds: [draft.questionId] });
+    expect(refused.isError).toBe(true);
+    expect(refused.data).toMatchObject({ status: 422, body: { error: "no_published_version" } });
+
+    const added = await ok("add_questions_to_template", { templateId: made.template.id, questionIds: [ids[1]] });
+    expect(added.template).toMatchObject({ id: made.template.id, itemCount: 2 });
+    expect(added.template.revision).toBeGreaterThan(made.template.revision);
+    expect(added.url).toContain(`/templates/${made.template.id}`);
+  });
+
+  it("creates a template of the course, lists it and instantiates it into a classroom", async () => {
+    const { course, room, ids } = await courseWithQuestions("TPL-MCP");
+    expect(await ok("list_templates", { courseId: course.id })).toEqual([]);
+
+    const made = await ok("create_template", {
+      courseId: course.id,
+      title: "Examen type",
+      mode: "exam",
+      questionIds: ids,
+    });
+    expect(made.template).toMatchObject({ courseId: course.id, mode: "exam", revision: 2, itemCount: 2 });
+    expect(made.items).toHaveLength(2);
+    expect(made.url).toContain(`/templates/${made.template.id}`);
+
+    const listed = await ok("list_templates", { courseId: course.id });
+    expect(listed).toEqual([expect.objectContaining({ id: made.template.id, title: "Examen type", itemCount: 2 })]);
+    expect(listed[0].url).toContain(`/templates/${made.template.id}`);
+
+    const instance = await ok("instantiate_template", { templateId: made.template.id, classroomId: room.id });
+    expect(instance.evaluation).toMatchObject({ title: "Examen type", mode: "exam", state: "draft" });
+    expect(instance.deprecatedItems).toEqual([]);
+    expect(instance.url).toContain(`/evaluations/${instance.evaluation.id}`);
+    expect((await ok("get_evaluation", { evaluationId: instance.evaluation.id })).items).toHaveLength(2);
+  });
+
+  it("refuses an instantiation once the course no longer links the pool (422), and a stranger (404)", async () => {
+    const { course, room, ids } = await courseWithQuestions("TPL-UNLINK");
+    const made = await ok("create_template", { courseId: course.id, title: "Exercice type", questionIds: ids });
+    const unlink = await server.app.inject({
+      method: "PUT",
+      url: `/app/api/courses/${course.id}/pools`,
+      headers: teacher.headers,
+      payload: { poolIds: [] },
+    });
+    expect(unlink.statusCode).toBe(200);
+
+    const refused = await call("instantiate_template", { templateId: made.template.id, classroomId: room.id });
+    expect(refused.isError).toBe(true);
+    expect(refused.data).toMatchObject({ status: 422, body: { error: "template_pool_unlinked" } });
+
+    // A classroom of another course, even the teacher's own, is the 404 of one the template does not reach.
+    const elsewhere = await courseWithQuestions("TPL-ELSEWHERE");
+    const foreign = await call("instantiate_template", { templateId: made.template.id, classroomId: elsewhere.room.id });
+    expect(foreign.isError).toBe(true);
+    expect(foreign.data.status).toBe(404);
+
+    // No seat on the course's staff: the course is the 404 of a missing one.
+    const other = await server.signIn("teacher");
+    const stranger = await call("create_template", { courseId: course.id, title: "Intrus" }, await tokenFor(other.headers));
+    expect(stranger.isError).toBe(true);
+    expect(stranger.data.status).toBe(404);
   });
 });
