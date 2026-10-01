@@ -2132,8 +2132,7 @@ export const fr: Record<keyof Dict, string> = {
   "param.title": "Valeurs aléatoires",
   "param.closedHint": "Donnez à chaque étudiant ses propres nombres.",
   "param.hide": "Masquer",
-  "param.help":
-    "Écrivez [[h]] ou [[sqrt(2*h/g)]] dans l'énoncé, les choix, le corrigé, les trous ou l'explication : chaque étudiant lit les valeurs tirées pour lui. \\[[ écrit les crochets eux-mêmes. Tirez avec randint(a, b), uniform(a, b) ou choice([…]) ; calculez avec sqrt, abs, round, min, max, sin, log… ; ^ est la puissance.",
+  "param.help": "Écrivez [[h]] ou [[sqrt(2*h/g)]] n'importe où dans la question : chaque étudiant lit les valeurs tirées pour lui.",
   "param.name": "Nom",
   "param.expr": "Expression",
   "param.format": "Format",
@@ -2143,7 +2142,7 @@ export const fr: Record<keyof Dict, string> = {
   "param.remove": "Retirer {name}",
   "param.add": "Ajouter une variable",
   "param.condition": "Condition",
-  "param.condition.hint": "Facultative. Un tirage où elle est fausse est tiré à nouveau, par exemple t > 1.",
+  "param.condition.hint": "Facultative : tiré à nouveau tant qu'elle est fausse",
   "param.format.auto": "Automatique",
   "param.format.int": "Entier",
   "param.format.decimal": "1 décimale",

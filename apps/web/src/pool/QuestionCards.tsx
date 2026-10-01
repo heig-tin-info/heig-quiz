@@ -1,4 +1,4 @@
-import { Copy, Dices, Pencil, Trash2 } from "lucide-react";
+import { Copy, Pencil, Trash2 } from "lucide-react";
 import type { DragEvent } from "react";
 
 import type { QuestionRow } from "@quiz/contracts";
@@ -9,6 +9,7 @@ import { DifficultyDots, RowStatsButton, TypeGlyph, VersionCell, type StatsFor }
 import type { QuestionGroup } from "./QuestionGroups";
 import { StarButton } from "./stars";
 import { entryKey, type RowProps } from "./useQuestionBrowse";
+import { ParameterizedBadge } from "./ParameterizedBadge";
 
 /**
  * The same questions as cards.
@@ -84,11 +85,7 @@ function QuestionCard({
           {row.internalName}
         </span>
         {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
-        {row.randomizable ? (
-          <Badge tone="zinc" icon={Dices}>
-            {t("pool.parameterized")}
-          </Badge>
-        ) : null}
+        {row.randomizable ? <ParameterizedBadge /> : null}
         <RowStatsButton row={row} statsFor={statsFor} />
         <StarButton row={row} onToggle={onStar} />
         {readOnly ? null : (

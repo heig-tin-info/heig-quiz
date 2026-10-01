@@ -1,4 +1,4 @@
-import { ArrowLeft, Copy, Dices, Eye, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Eye, Save, Trash2 } from "lucide-react";
 
 import type { QuestionDetail } from "@quiz/contracts";
 
@@ -6,6 +6,7 @@ import { useT } from "../i18n";
 import { typeIcon, typeLabel } from "../questionTypes";
 import { routeToPath } from "../router";
 import { Badge, Button, LinkButton, Menu, PageHeader, ParentLink, SyncBadge } from "../ui";
+import { ParameterizedBadge } from "../pool/ParameterizedBadge";
 import type { Autosave } from "./autosave";
 
 /**
@@ -79,11 +80,7 @@ export function QuestionHeader({
             <Badge tone="amber">{t("question.draft")}</Badge>
           )}
           {/* ADR-056 §8: its published version draws values per attempt. */}
-          {data.meta.randomizable ? (
-            <Badge tone="zinc" icon={Dices}>
-              {t("pool.parameterized")}
-            </Badge>
-          ) : null}
+          {data.meta.randomizable ? <ParameterizedBadge /> : null}
           {draftAhead ? (
             <Badge tone="amber">{t("question.unpublished")}</Badge>
           ) : null}

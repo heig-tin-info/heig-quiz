@@ -1,22 +1,20 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ChevronDown, ChevronUp, Dices, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import type { DraftInstance, DraftInstances, ParametersDraft, ZodIssueLite } from "@quiz/contracts";
+import { FORMATS, isFormat } from "@quiz/domain";
 
 import { api, apiErrorMessage } from "../api";
 import { HelpIcon } from "../help";
 import { useT, type TFunction } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { questionInstancesKey } from "../queryKeys";
-import { Alert, Button, Card, cx, IconButton, inputClass, inputSize, Select, Skeleton, T } from "../ui";
+import { Alert, Button, Card, cx, ErrorText, Field, IconButton, inputClass, inputSize, Select, Skeleton, T } from "../ui";
 import { issueMessage } from "./issues";
 import { PlayedQuestion } from "./PreviewedQuestion";
 
 type Row = ParametersDraft["rows"][number];
-
-/** The formats a row may take (ADR-056 §6), in the order the select lists them. */
-const FORMATS = ["", "int", ".1", ".2", ".3", ".4", ".5", ".6", "1s", "2s", "3s", "4s", "5s", "6s"];
 
 /** A format as a teacher reads it: "2 decimals", "3 significant figures". */
 function formatLabel(t: TFunction, format: string): string {
@@ -30,8 +28,21 @@ function formatLabel(t: TFunction, format: string): string {
   return n === 1 ? t("param.format.figure") : t("param.format.figures", { n });
 }
 
-/** At most this many variables get a column of their own in the draws; the rest share one. */
+/**
+ * At most this many variables get a column of their own in the draws; the
+ * rest share one. DESIGN.md › Tables: "At most seven visible columns" — the
+ * draw's number, four values, the others and the eye make seven.
+ */
 const VALUE_COLUMNS = 4;
+
+/** The issues of one place, each said once, in the editor's issue line. */
+function Issues({ messages }: { messages: readonly string[] }) {
+  return messages.map((message) => (
+    <ErrorText key={message} small>
+      {message}
+    </ErrorText>
+  ));
+}
 
 /**
  * Whether an issue belongs to the Variables section rather than to the
@@ -176,19 +187,15 @@ export function VariablesSection({
                         disabled={disabled}
                         onChange={(e) => patchRow(index, { format: e.target.value })}
                       >
-                        {(FORMATS.includes(row.format) ? FORMATS : [row.format, ...FORMATS]).map((format) => (
+                        {(isFormat(row.format) ? FORMATS : [row.format, ...FORMATS]).map((format) => (
                           <option key={format} value={format}>
-                            {FORMATS.includes(format) ? formatLabel(t, format) : format}
+                            {isFormat(format) ? formatLabel(t, format) : format}
                           </option>
                         ))}
                       </Select>
                     </span>
                   </div>
-                  {said.map((message) => (
-                    <p key={message} className="text-xs text-danger">
-                      {message}
-                    </p>
-                  ))}
+                  <Issues messages={said} />
                 </li>
               );
             })}
@@ -206,35 +213,24 @@ export function VariablesSection({
       </Button>
 
       {rows.length > 0 ? (
-        <div className="space-y-1.5">
-          <label htmlFor={`${questionId}-condition`} className="text-[13px] font-medium text-fg">
-            {t("param.condition")}
-          </label>
-          <input
-            id={`${questionId}-condition`}
-            type="text"
+        <div className="space-y-1">
+          <Field
+            label={t("param.condition")}
+            hint={t("param.condition.hint")}
+            fullWidth
             spellCheck={false}
             autoComplete="off"
             placeholder="t > 1"
-            className={cx(inputClass, inputSize.md, "w-full font-mono text-[13px]")}
+            className="font-mono text-[13px]"
             value={variables?.condition ?? ""}
             disabled={disabled}
             onChange={(e) => setCondition(e.target.value)}
           />
-          <p className="text-xs text-fg-muted">{t("param.condition.hint")}</p>
-          {say(rowIssues("condition")).map((message) => (
-            <p key={message} className="text-xs text-danger">
-              {message}
-            </p>
-          ))}
+          <Issues messages={say(rowIssues("condition"))} />
         </div>
       ) : null}
 
-      {say(tableIssues).map((message) => (
-        <p key={message} className="text-xs text-danger">
-          {message}
-        </p>
-      ))}
+      <Issues messages={say(tableIssues)} />
 
       {rows.length > 0 ? (
         <Draws questionId={questionId} type={type} savedStamp={savedStamp} stale={dirty} />
@@ -270,104 +266,92 @@ function Draws({
     refetchOnWindowFocus: false,
   });
 
-  const heading = (
-    <div className="space-y-0.5">
-      <h3 className="text-sm font-semibold text-fg">{t("param.draws.title")}</h3>
-      <p className="text-xs text-fg-muted">{t("param.draws.desc")}</p>
-    </div>
-  );
-
-  if (query.isLoading || (savedStamp === null && !query.data)) {
-    return (
-      <div className="space-y-2 border-t border-line pt-4">
-        {heading}
-        <Skeleton className="h-24 w-full" />
-      </div>
-    );
-  }
-  if (query.isError || !query.data) {
-    return (
-      <div className="space-y-2 border-t border-line pt-4">
-        {heading}
-        <Alert tone="warning" icon={AlertTriangle} title={t("param.draws.failed")}>
-          {apiErrorMessage(query.error, t("error.server"))}
-          <Button variant="secondary" size="sm" className="mt-2" onClick={() => void query.refetch()}>
-            {t("common.retry")}
-          </Button>
-        </Alert>
-      </div>
-    );
-  }
-
-  const { instances, issues } = query.data;
-  if (issues.length > 0 || instances.length === 0) {
-    return (
-      <div className="space-y-2 border-t border-line pt-4">
-        {heading}
-        <p className="text-[13px] text-fg-muted">{t("param.draws.blocked")}</p>
-      </div>
-    );
-  }
-
-  const names = instances[0]!.values.map((v) => v.name);
-  const own = names.slice(0, VALUE_COLUMNS);
-  const rest = names.length > VALUE_COLUMNS;
+  const instances = query.data?.instances ?? [];
+  const blocked = (query.data?.issues.length ?? 0) > 0 || instances.length === 0;
   const current = instances.find((i) => i.seed === shown) ?? null;
 
-  return (
-    <div className={cx("space-y-3 border-t border-line pt-4 transition-opacity", (stale || query.isFetching) && "opacity-60")}>
-      {heading}
-      <div className={cx(T.container, "overflow-x-auto")}>
-        <table className={T.table}>
-          <thead className={T.head}>
-            <tr>
-              <th className={T.th}>{t("param.draws.draw")}</th>
-              {own.map((name) => (
-                <th key={name} className={cx(T.th, "text-right font-mono")}>
-                  {name}
+  let body: ReactNode;
+  if (query.isLoading || (savedStamp === null && !query.data)) {
+    body = <Skeleton className="h-24 w-full" />;
+  } else if (query.isError || !query.data) {
+    body = (
+      <Alert tone="warning" icon={AlertTriangle} title={t("param.draws.failed")}>
+        {apiErrorMessage(query.error, t("error.server"))}
+        <Button variant="secondary" size="sm" className="mt-2" onClick={() => void query.refetch()}>
+          {t("common.retry")}
+        </Button>
+      </Alert>
+    );
+  } else if (blocked) {
+    body = <p className="text-[13px] text-fg-muted">{t("param.draws.blocked")}</p>;
+  } else {
+    const names = instances[0]!.values.map((v) => v.name);
+    const own = names.slice(0, VALUE_COLUMNS);
+    const rest = names.length > VALUE_COLUMNS;
+    body = (
+      <div className={cx("space-y-3 transition-opacity", (stale || query.isFetching) && "opacity-60")}>
+        <div className={cx(T.container, "overflow-x-auto")}>
+          <table className={T.table}>
+            <thead className={T.head}>
+              <tr>
+                <th className={T.th}>{t("param.draws.draw")}</th>
+                {own.map((name) => (
+                  <th key={name} className={cx(T.th, "text-right font-mono")}>
+                    {name}
+                  </th>
+                ))}
+                {rest ? <th className={T.th}>{t("param.draws.others")}</th> : null}
+                <th className={T.th}>
+                  <span className="sr-only">{t("common.actions")}</span>
                 </th>
+              </tr>
+            </thead>
+            <tbody>
+              {instances.map((instance, index) => (
+                <DrawRow
+                  key={instance.seed}
+                  instance={instance}
+                  n={index + 1}
+                  own={own}
+                  rest={rest}
+                  active={shown === instance.seed}
+                  onToggle={() => setShown(shown === instance.seed ? null : instance.seed)}
+                />
               ))}
-              {rest ? <th className={T.th}>{t("param.draws.others")}</th> : null}
-              <th className={T.th}>
-                <span className="sr-only">{t("common.actions")}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {instances.map((instance, index) => (
-              <DrawRow
-                key={instance.seed}
-                instance={instance}
-                n={index + 1}
-                own={own}
-                rest={rest}
-                active={shown === instance.seed}
-                onToggle={() => setShown(shown === instance.seed ? null : instance.seed)}
-              />
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {current ? (
-        <div className="space-y-3">
-          <PlayedQuestion
-            key={`${savedStamp}-${current.seed}`}
-            view={{ type, student: current.student, points: current.itemPoints }}
-            label={t("param.draws.drawN", { n: instances.indexOf(current) + 1 })}
-            showsAnswers
-            solution={{
-              queryKey: [...questionInstancesKey(questionId, savedStamp ?? ""), current.seed, "solution"],
-              queryFn: () => Promise.resolve({ solution: current.solution }),
-            }}
-          />
-          {current.explanation.trim() !== "" ? (
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-fg-muted">{t("question.explanation")}</p>
-              <MarkdownView source={current.explanation} size="sm" />
-            </div>
-          ) : null}
+            </tbody>
+          </table>
         </div>
-      ) : null}
+        {current ? (
+          <div className="space-y-3">
+            <PlayedQuestion
+              key={`${savedStamp}-${current.seed}`}
+              view={{ type, student: current.student, points: current.itemPoints }}
+              label={t("param.draws.drawN", { n: instances.indexOf(current) + 1 })}
+              showsAnswers
+              solution={{
+                queryKey: [...questionInstancesKey(questionId, savedStamp ?? ""), current.seed, "solution"],
+                queryFn: () => Promise.resolve({ solution: current.solution }),
+              }}
+            />
+            {current.explanation.trim() !== "" ? (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-fg-muted">{t("question.explanation")}</p>
+                <MarkdownView source={current.explanation} size="sm" />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 border-t border-line pt-4">
+      <div className="space-y-0.5">
+        <h3 className="text-sm font-semibold text-fg">{t("param.draws.title")}</h3>
+        <p className="text-xs text-fg-muted">{t("param.draws.desc")}</p>
+      </div>
+      {body}
     </div>
   );
 }

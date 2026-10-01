@@ -4,6 +4,7 @@ import {
   clozeStudentTemplate,
   describeBlank,
   displayName,
+  isVariableName,
   matchBlank,
   mcqFraction,
   parseCloze,
@@ -1655,12 +1656,13 @@ export function draftIssues(
 
 /**
  * The table's own mistakes the mock can see without an evaluator: a name
- * that is no identifier, an empty expression. The API says much more
- * (`validateParameters`); this is enough to put an issue on a row.
+ * the domain refuses (`isVariableName`, mathjs-free), an empty expression.
+ * The API says much more (`validateParameters`); this is enough to put an
+ * issue on a row.
  */
 function variablesIssues(variables: ParametersDraft | null): ZodIssueLite[] {
   return (variables?.rows ?? []).flatMap((row) => [
-    ...(/^[A-Za-z_][A-Za-z0-9_]*$/.test(row.name)
+    ...(isVariableName(row.name)
       ? []
       : [{ path: ["variables", row.name], code: "custom" as const, message: "parameters.bad_name" }]),
     ...(row.expr.trim() === ""

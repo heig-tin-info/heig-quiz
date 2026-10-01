@@ -2133,8 +2133,7 @@ export const en = {
   "param.title": "Random values",
   "param.closedHint": "Give each student their own numbers.",
   "param.hide": "Hide",
-  "param.help":
-    "Write [[h]] or [[sqrt(2*h/g)]] in the statement, the choices, the key, the blanks or the explanation: each student reads the values drawn for them. \\[[ writes the brackets themselves. Draw with randint(a, b), uniform(a, b) or choice([…]); compute with sqrt, abs, round, min, max, sin, log…; ^ is the power.",
+  "param.help": "Write [[h]] or [[sqrt(2*h/g)]] anywhere in the question: each student reads the values drawn for them.",
   "param.name": "Name",
   "param.expr": "Expression",
   "param.format": "Format",
@@ -2144,7 +2143,7 @@ export const en = {
   "param.remove": "Remove {name}",
   "param.add": "Add a variable",
   "param.condition": "Condition",
-  "param.condition.hint": "Optional. A draw where it is false is drawn again, for example t > 1.",
+  "param.condition.hint": "Optional: drawn again while false",
   "param.format.auto": "Automatic",
   "param.format.int": "Integer",
   "param.format.decimal": "1 decimal",

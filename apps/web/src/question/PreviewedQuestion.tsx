@@ -99,8 +99,10 @@ export function PlayedQuestion({
   /**
    * Whether "Show answers" is offered; by default for the types whose
    * review reads plainly from the key alone. The draws of a parameterized
-   * draft offer it for `short` too: its computed key is what the teacher
-   * checks there (ADR-056 §8).
+   * draft offer it for `short` too: there the teacher checks each draw's
+   * computed key WITH its tolerance ("6.85 ± 0.01"), which the values table
+   * does not show, while the Try tab shows a short's key only beside the
+   * grade of an answer typed (ADR-056 §8).
    */
   showsAnswers?: boolean;
 }) {
