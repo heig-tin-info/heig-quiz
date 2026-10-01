@@ -142,10 +142,26 @@ describe("MarkdownView — content", () => {
     expect(body.innerHTML).toContain("katex-html");
   });
 
+  /*
+   * marked reads before KaTeX does: without the math token, CommonMark turned
+   * `\,` into `,` ("9.81, m/s²") and `a_1 … b_1` into emphasis.
+   */
+  it("hands KaTeX the formula as written, escapes and underscores included", () => {
+    const tex = (source: string) =>
+      Array.from(view(source).querySelectorAll('annotation[encoding="application/x-tex"]'), (a) => a.textContent);
+    expect(tex("où $g = 9.81\\,\\mathrm{m/s^2}$. Combien")).toEqual(["g = 9.81\\,\\mathrm{m/s^2}"]);
+    expect(tex("$a_1 + b_1$ et $\\{x\\}\\;\\!y$")).toEqual(["a_1 + b_1", "\\{x\\}\\;\\!y"]);
+    expect(tex("$$\\sum_{i} x_i \\, dx$$")).toEqual(["\\sum_{i} x_i \\, dx"]);
+    expect(view("$a_1 + b_1$").querySelector("em")).toBeNull();
+    // An escaped dollar is still a dollar, never the start of a formula.
+    expect(view("costs 5\\$ only").textContent?.trim()).toBe("costs 5$ only");
+  });
+
   it("leaves a dollar sign inside code alone", () => {
     const body = view("```sh\necho $HOME\n```");
     expect(body.querySelector("code")?.textContent).toContain("$HOME");
     expect(body.querySelector(".katex")).toBeNull();
+    expect(view("Run `echo $a_1$` here").querySelector(".katex")).toBeNull();
   });
 
   it("gives a fenced block its language class and token spans", () => {

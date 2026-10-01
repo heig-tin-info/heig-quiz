@@ -131,9 +131,34 @@ if (purify.isSupported) purify.addHook("uponSanitizeAttribute", (_node, data) =>
   if (!tokens.every((c) => OWN_CLASS.test(c))) data.keepAttr = false;
 });
 
+/**
+ * A `$…$` or `$$…$$` span at the start of `src`, the same delimiters as
+ * {@link MATH}. marked must not read inside one: CommonMark unescapes `\,`
+ * into `,` and turns `a_1 … b_1` into emphasis, so KaTeX would get a formula
+ * that is not the teacher's. Kept whole here and rendered later (step 4).
+ */
+const MATH_AT_START = /^(?:\$\$[\s\S]+?\$\$|\$(?:[^$\\\n]|\\.)+?\$)/;
+
 const marked = new Marked({
   gfm: true, // tables, task lists, strikethrough, autolinks
   breaks: false,
+  extensions: [
+    {
+      name: "math",
+      level: "inline",
+      // Never between `\` and `$`: an escaped dollar stays marked's escape.
+      start: (src: string) => {
+        const at = src.search(/(?<!\\)\$/);
+        return at < 0 ? undefined : at;
+      },
+      tokenizer: (src: string) => {
+        const match = MATH_AT_START.exec(src);
+        return match ? { type: "math", raw: match[0] } : undefined;
+      },
+      // The source as text, untouched: `renderMathIn` finds it in the DOM.
+      renderer: (token) => escapeHtml(token.raw),
+    },
+  ],
   renderer: {
     /**
      * Fenced code: the language becomes a class (so the stylesheet can set
