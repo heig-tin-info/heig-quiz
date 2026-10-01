@@ -31,6 +31,7 @@ import {
   QuestionCreate,
   QuestionPatch,
   TemplateInstantiate,
+  SimilarQuestionSearch,
 } from "@quiz/contracts";
 
 import { checkConfig, describeQuestionType, questionTypeSummaries } from "./questionTypes.js";
@@ -243,6 +244,32 @@ export const TOOLS: Tool[] = [
   }),
 
   tool({
+    name: "find_similar_questions",
+    title: "Find questions close to one about to be written",
+    description:
+      "Call it BEFORE create_question, with the statement (or its gist) you are about to write: it returns the " +
+      "published questions closest to it, best first, from the course's pools first, then from every pool the " +
+      "teacher reaches (`scope`: `linked` for the course's pools only, `reachable` to rank every pool by " +
+      "similarity alone). Prefer reusing a hit over writing a near-duplicate: reuse makes its statistics grow, " +
+      "a copy starts with none. `linked`: usable as is in the course's evaluations. `canLink`: call " +
+      "link_pool_to_course first — note that linking makes the whole course staff contributors of that pool. " +
+      "Neither: the teacher only reads that pool; a copy would start with empty statistics. `stats` is " +
+      "`{ n, p, r }` over EXAMS only (never exercises): `n` answers, `p` mean share of the points, `r` " +
+      "discrimination (null when no exam qualifies); `stats` is null below ten answers — withheld, not zero. " +
+      "Public pools are searched too, so other teachers' published questions may appear. Ranked by shared " +
+      "words, no threshold: judge each hit's `excerpt` yourself.",
+    input: z.object({
+      courseId: Id,
+      text: SimilarQuestionSearch.shape.text.describe("The statement to compare, or its gist"),
+      type: SimilarQuestionSearch.shape.type,
+      scope: SimilarQuestionSearch.shape.scope,
+      limit: z.number().int().min(1).max(50).default(10),
+    }),
+    annotations: READ,
+    run: (api, { courseId, ...query }) => api.get(`/courses/${courseId}/similar-questions`, query),
+  }),
+
+  tool({
     name: "get_question",
     title: "Get a question",
     description: "One question: its metadata, its current draft (config and explanation) and its published versions.",
@@ -365,7 +392,8 @@ export const TOOLS: Tool[] = [
     title: "Create a question",
     description:
       "Creates a question in a pool, saves its config and explanation, and publishes it (unless " +
-      "`publish` is false). Call `describe_question_types` for the type first. An invalid config is " +
+      "`publish` is false). Call `find_similar_questions` first and reuse a close hit rather than " +
+      "writing a duplicate. Call `describe_question_types` for the type first. An invalid config is " +
       "refused with the list of issues and nothing is created. `internalName` is a unique slug inside " +
       "the pool, never shown to students (e.g. `fr-vocab-prolixe`). `explanation` is Markdown shown " +
       "after grading when the evaluation allows it.",

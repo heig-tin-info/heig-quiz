@@ -42,6 +42,7 @@ import { moveRoutes } from "./moveRoutes.js";
 import { starRoutes } from "./starRoutes.js";
 import { tryRoutes } from "./tryRoutes.js";
 import { assetRoutes } from "./assetRoutes.js";
+import { similarRoutes } from "./similarRoutes.js";
 
 /**
  * The contracts enum and the registry constant must name the same types.
@@ -83,4 +84,5 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   starRoutes(app, ctx);
   tryRoutes(app, ctx);
   assetRoutes(app, ctx);
+  similarRoutes(app, ctx);
 }

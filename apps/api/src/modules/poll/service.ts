@@ -957,9 +957,9 @@ export async function poolQuestionPage(
 ): Promise<PollPoolPage> {
   const found = await searchReachableQuestions(db, {
     poolWhere: input.poolWhere,
-    courseId: input.courseId,
+    course: input.courseId === null ? null : { id: input.courseId, only: true },
     types: POLLABLE_TYPES,
-    search: input.search,
+    order: { kind: "page", search: input.search },
   });
   return {
     items: found.items.map(({ question, pool, tags, latestNumber, latest }) => {

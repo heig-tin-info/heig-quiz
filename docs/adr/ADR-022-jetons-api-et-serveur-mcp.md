@@ -19,7 +19,10 @@ Amended 2026-10-01 (templates first, decided with the product owner): the
 reading tool `list_templates` and the writing tools `create_template`,
 `add_questions_to_template` and `instantiate_template` join the closed
 list of §C, and a new quiz is made
-as a template of the course by default — see the addendum at the end of §C.
+as a template of the course by default; and the reading tool
+`find_similar_questions` joins it too, so that an assistant looks for an
+existing question before writing a new one — see the two addenda at the
+end of §C.
 
 ## Context
 
@@ -90,9 +93,9 @@ converted with `z.toJSONSchema`.
 ### C. What the tools are, and what they are not
 
 Reading: `list_courses`, `get_course`, `list_pools`, `get_pool`,
-`get_pool_question_stats`, `list_questions`, `get_question`,
-`list_evaluations`, `get_evaluation`, `describe_question_types`,
-`list_templates`.
+`get_pool_question_stats`, `find_similar_questions`, `list_questions`,
+`get_question`, `list_evaluations`, `get_evaluation`,
+`describe_question_types`, `list_templates`.
 
 Writing: `create_course`, `create_classroom`, `create_pool`,
 `link_pool_to_course`, `create_category`, `create_question`,
@@ -165,6 +168,51 @@ gets `422 template_pool_unlinked`.
   questions with `add_questions_to_template`, the twin of
   `add_questions_to_evaluation` over the same template item route (a new
   revision, never a change to an instance: F-EVAL-25, F-EVAL-26).
+
+**Addendum of 2026-10-01 — look before writing a question.** An assistant asked for ten questions writes ten new ones, even when the
+course's pools — or a colleague's public pool — already hold the same
+question with two years of exam statistics behind it. The copy starts from
+zero answers (ADR-038), and the pool fills with near-duplicates.
+
+- **The route.** `GET /app/api/courses/:id/similar-questions?text=&type=&scope=&limit=`
+  (pool module, contracts `SimilarQuestionSearch` / `SimilarQuestions`). The
+  course is loaded through the staff predicate (404 otherwise); the
+  questions through the caller's `poolAccess`, never wider; published, live
+  questions only, never a draft. It is the poll launcher's cross-pool search
+  (`searchReachableQuestions`), generalised to every type and given a
+  `rank` order, not a second search. Each hit carries its pool, type,
+  internal name, a statement excerpt, the latest version number, `linked`
+  (the pool is linked to the course), `canLink` (the caller is at least
+  `contributor` on the pool, so `link_pool_to_course` succeeds, ADR-013) and
+  `stats` `{ n, p, r }` — the pool screen's own computation, read once per
+  distinct pool of the hits, so the ten-answer threshold and the exams-only
+  rule hold unchanged (null below the threshold). The web app may call it
+  too (docs/08 §8.1, principle 4).
+- **The ranking.** The index is a `simple` tsvector, without stemming or
+  stop words. The statement is cut into words of three characters or more,
+  outside a short French and English stop list (`similarityTerms`,
+  `@quiz/domain`), and matched as an OR against the LATEST published
+  version, ordered by `ts_rank(search, query, 1)`: it grows with each
+  distinct word shared, and the normalisation divides by `1 + log(length)`
+  so that a long code template does not win by bulk. `ts_rank_cd` was not
+  taken: on an OR query each occurrence is its own cover, so it counts
+  repetitions rather than shared words. Top `limit` (10 by default), no
+  threshold: the model judges the excerpts. `scope=linked` searches the
+  course's pools only, `scope=reachable` ranks every reachable pool by
+  similarity alone, and the default puts the course's pools first.
+- **The tool.** `find_similar_questions({ courseId, text, type?, scope? })`,
+  read-only, one call to that route. Its description, `create_question`'s
+  and the handshake instructions tell the model to call it before writing a
+  question and to prefer a hit: `linked`, use it; `canLink`, link the pool
+  first (which makes the course staff contributors of the whole pool);
+  neither, a copy starts with empty statistics. Statistics count exams only,
+  and public pools mean other teachers' questions appear.
+- **No refusal in `create_question`.** It does not demand that a search ran
+  (no `reviewedSimilar` flag). A model prepares and a teacher decides (§C):
+  whether a close question is "the same" is a judgement this server cannot
+  make, and a gate a model satisfies by passing `true` protects nothing.
+  The steering is the description and the instructions; `modules/mcp` still
+  touches no database.
 
 ## Consequences
 
