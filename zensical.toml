@@ -95,6 +95,7 @@ nav = [
       { "ADR-054 Super Powers of an admin" = "adr/ADR-054-super-powers-admin.md" },
       { "ADR-056 Parameterized questions" = "adr/ADR-056-questions-parametrees.md" },
       { "ADR-057 The journal in two modes" = "adr/ADR-057-journal-two-modes.md" },
+      { "ADR-061 Login adoption of imported accounts" = "adr/ADR-061-adoption-des-comptes-importes.md" },
     ] },
     { "Classroom merge" = [
       { "Overview" = "merge/README.md" },

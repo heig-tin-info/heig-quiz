@@ -1,10 +1,13 @@
+import { randomUUID } from "node:crypto";
+
 import { eq, isNull, sql } from "drizzle-orm";
 
 import type { AdminUser } from "@quiz/contracts";
 
 import type { AppConfig } from "../../config.js";
-import type { Db } from "../../db/client.js";
-import { avatars, classrooms, courseStaff, pools, questions, users } from "../../db/schema.js";
+import type { Db, Tx } from "../../db/client.js";
+import { avatars, classrooms, courseStaff, pools, questions, teacherGrants, users } from "../../db/schema.js";
+import { normalizeEmail } from "../../identity.js";
 import { shownAvatar } from "../avatar.js";
 import { roleDecisionsOfAll } from "../../roles.js";
 
@@ -62,4 +65,27 @@ export async function listUsers(db: Db, config: AppConfig): Promise<AdminUser[]>
       createdAt: r.createdAt.toISOString(),
     };
   });
+}
+
+/**
+ * THE writer of a teacher grant: one per address, normalized. Returns the
+ * new row, or undefined when the address already holds one; the caller
+ * recomputes the role and audits. The heig-classroom import (M1-06) gives
+ * `id` and `createdAt`, the source's.
+ */
+export async function createTeacherGrant(
+  db: Db | Tx,
+  grant: { email: string; createdBy: string; id?: string; createdAt?: Date },
+): Promise<typeof teacherGrants.$inferSelect | undefined> {
+  const [created] = await db
+    .insert(teacherGrants)
+    .values({
+      id: grant.id ?? randomUUID(),
+      email: normalizeEmail(grant.email),
+      createdBy: grant.createdBy,
+      ...(grant.createdAt ? { createdAt: grant.createdAt } : {}),
+    })
+    .onConflictDoNothing({ target: teacherGrants.email })
+    .returning();
+  return created;
 }

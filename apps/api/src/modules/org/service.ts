@@ -27,7 +27,7 @@ import {
 import { shownAvatar } from "../avatar.js";
 import { accessRevoked } from "../realtime/bus.js";
 
-export { claimEnrollments } from "./roster.js";
+export { claimEnrollments, claimLines, type ClaimMatch } from "./roster.js";
 
 type CourseRecord = typeof courses.$inferSelect;
 type ClassroomRecord = typeof classrooms.$inferSelect;
@@ -228,9 +228,14 @@ export async function setCourseHidden(
 
 // --- Course staff -----------------------------------------------------------
 
-/** Gives an account a seat on the staff; a second call is a no-op. */
-export async function addStaff(db: Db, courseId: string, userId: string): Promise<void> {
-  await db.insert(courseStaff).values({ courseId, userId }).onConflictDoNothing();
+/** Gives an account a seat on the staff; a second call is a no-op. True when the seat is new. */
+export async function addStaff(db: Db, courseId: string, userId: string): Promise<boolean> {
+  const added = await db
+    .insert(courseStaff)
+    .values({ courseId, userId })
+    .onConflictDoNothing()
+    .returning({ userId: courseStaff.userId });
+  return added.length > 0;
 }
 
 export async function staffSeatCount(db: Db, courseId: string): Promise<number> {

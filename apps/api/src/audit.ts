@@ -10,6 +10,19 @@ import { auditLog } from "./db/schema.js";
 export type AuditAction =
   | "api_token.create"
   | "api_token.revoke"
+  /**
+   * ADR-061: a first login took over the account the heig-classroom import
+   * created for the same person (subject the user; `payload.key`:
+   * `swiss_edu_id`, `institutional_address` or `private_address`;
+   * `payload.previousSub`, the `classroom:` placeholder it replaced).
+   */
+  | "auth.account_adopted"
+  /**
+   * ADR-061: a first login matched more than one imported account, or an
+   * address that is not unique; nothing adopted, a new account made (subject
+   * that new user; `payload.key`, `payload.candidates`: the user ids).
+   */
+  | "auth.adoption_ambiguous"
   | "auth.dev_login"
   | "auth.login"
   | "auth.logout"
@@ -172,6 +185,12 @@ export type AuditAction =
   | "llm.settings"
   /** An admin ran the connection test (ADR-058 §6): `payload.ok`, and the error code. */
   | "llm.test"
+  /**
+   * One `--apply` of the heig-classroom import that wrote something (M1-06,
+   * 02-data-and-migration §2.5): actor the account given as `--actor`,
+   * subject the run (`import_classroom.runs`), `payload` the report's counts.
+   */
+  | "migration.classroom_import"
   | "oauth.grant"
   | "oauth.refresh_replay"
   | "oauth.revoke"

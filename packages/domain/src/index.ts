@@ -26,6 +26,7 @@ export * from "./grade.js";
 export * from "./groupRepo.js";
 export * from "./health.js";
 export * from "./healthAlert.js";
+export * from "./identityMatch.js";
 export * from "./ipAllowlist.js";
 export * from "./itemList.js";
 export * from "./kioskAttestation.js";

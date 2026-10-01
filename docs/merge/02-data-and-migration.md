@@ -33,9 +33,9 @@ Sources: classroom `C:db/schema.ts` (27 tables, one file, migrations up to
    unit, bound to one GitHub org, one owner (`teacher_id`), its own staff,
    no course, no period. Quiz: a period instance of a course; access comes
    from course staff (`staffAccess`, `Q:modules/guards.ts`), no owner. Each
-   classroom-classroom becomes a Quiz classroom **under a course chosen in a
-   mapping file** (new course, or an existing one, or merged into an
-   existing Quiz classroom of the same class).
+   classroom-classroom is **merged into an existing Quiz classroom** named
+   in a mapping file, or dropped (D22): the teachers create their Quiz
+   classrooms, the import creates none.
 3. **Staff is lossy.** `classroom_staff` invites by e-mail before the
    person has an account and labels teacher/assistant; Quiz's
    `course_staff(course_id, user_id)` requires an account and has no label
@@ -68,21 +68,21 @@ module); DROP.
 
 | Classroom | → Quiz | Rule |
 | --- | --- | --- |
-| `users` | `users` (MAP) | merged by identity (§2.4). GitHub columns → NEW `github_accounts(user_id PK, github_user_id UNIQUE, login, linked_at)` (module `auth`, beside `users`: written by `auth/githubLink.ts` only, M2-03). `email_prefs` → `notification_preferences` rows (after the kinds exist, M3-09). Profile fields from the side with the newer `last_login_at`; earliest `created_at`; Quiz's `locale`, `date_format`, MCQ and coach settings win |
+| `users` | `users` (MAP) | merged by identity (§2.4): only the people a MAPPED classroom reaches (roster, staff seats, owner), never those of a dropped one (D08 addendum). A matched Quiz account keeps its `oidc_sub`, profile and settings untouched; a new one takes classroom's profile, `created_at` and settings, its classroom id where free, and the placeholder sub `classroom:<sub>` (ADR-061). GitHub columns → `github_accounts` through `importAccountLink` (`auth/githubLink.ts`, the table's one writer; spec 06 no. 45): same pair present, skipped; the Quiz user already linked to another GitHub id, or the GitHub id already another Quiz user's, reported and skipped; same id with another login, Quiz's login kept. `email_prefs` → `notification_preferences` rows (after the kinds exist, M3-09; reported until then) |
 | `sessions` | DROP | everyone signs in again |
 | `user_emails` | `user_emails` (MAP) | union per merged user; `first_seen_at` = min, `verified` = OR |
-| `user_idp_claims`, `avatars` | MAP | keep the row with the newer `updated_at` |
-| `teacher_grants` | MAP | union on `email`, `created_by` remapped. `codespace_enabled`, `codespace_max_active_sessions` → NEW `codespace_grants` if M6 runs, else dropped and reported |
+| `user_idp_claims`, `avatars` | MAP | claims: the row with the newer `updated_at`; avatars: a matched account keeps Quiz's (profile), a new one gets classroom's |
+| `teacher_grants` | MAP | only the grants on a verified address of a person imported; union on `email`, `created_by` remapped, else the `--actor` running the import. `codespace_enabled`, `codespace_max_active_sessions` → NEW `codespace_grants` if M6 runs, else dropped and reported |
 | `audit_log` | see D11 | suggested: NEW `legacy_classroom_audit_log`, read-only, users remapped best-effort; keeps the union closed |
 
 ### Organisation
 
 | Classroom | → Quiz | Rule |
 | --- | --- | --- |
-| `organizations` | NEW `github_organizations` | `github_org_id`, `login`, status, plan kept; `installation_id` is Quiz's App's (D23), resolved when the organization installs it, null until then |
-| `classrooms` | `classrooms` (MAP) | + `course_id` from the mapping file; `period` empty (the CHECK allows no start/end); `org_id` → NEW `github_classroom_links(classroom_id PK, org_id, linked_by, linked_at)`; `teacher_id` → a `course_staff` seat; `archived_at` kept |
-| `classroom_staff` | `course_staff` (lossy) | claimed seats → seats of the course; pending seats and the `assistant` label reported (D04) |
-| `enrollments` | `enrollments` (MAP) | `status` dropped after checking `status='claimed'` ⇔ `user_id IS NOT NULL`; when merging into an existing Quiz classroom: union on `lower(trim(email))`, conflicting users flagged with `conflict_flag` as a live claim does |
+| `organizations` | none (no. 46) | the import writes no `github_organizations` row: each teacher installs Quiz's App and connects their Quiz classrooms before the import (F-GH-02, D23), which is how Quiz learns the organization. The source org's `github_org_id` (or its login, when classroom never resolved the id) is only the check below |
+| `classrooms` | none (D22) | **no classroom and no course is created.** The mapping file sends each classroom-classroom to an EXISTING Quiz classroom (course code + classroom name, resolved to ids in the report) or drops it. A mapped classroom must be connected (`github_classroom_links`) to the organization its source used, or the import refuses and names it; no `github_classroom_links` row is written. `teacher_id` → a `course_staff` seat |
+| `classroom_staff` | `course_staff` (lossy) | claimed seats → seats of the mapped classroom's course; an `assistant` seat too, per open item 4 (`--assistants`, D04 (a): the widening is listed); pending seats reported |
+| `enrollments` | `enrollments` (MAP) | `status` dropped after checking `status='claimed'` ⇔ `user_id IS NOT NULL` (refused otherwise); merged into the mapped Quiz roster on `lower(trim(email))`: a pending Quiz line is claimed by the imported account (`conflict_flag` when that account already holds a line, as a live claim does), a line claimed by another account is kept and reported, `time_bonus_percent` and `note` never written; a line missing from the Quiz roster per open item 3 (`--missing-students`) |
 
 ### Projects and GitHub (ids kept)
 
@@ -140,13 +140,21 @@ databases:
 4. otherwise a new Quiz user keeping its classroom id, with the placeholder
    sub `classroom:<sub>`.
 
-If subs differ between the apps, rule 4 needs **login adoption** in Quiz
-(an ADR, task M1-06): when a login `sub` is unknown, look for exactly one
-`classroom:`-prefixed user with the same `swiss_edu_id` (or failing that the
-same verified address), rewrite its sub, audit it.
+Subs differ between the apps (M0-02: rule 2 never applies), so rule 4
+needs **login adoption** in Quiz
+([ADR-061](../adr/ADR-061-adoption-des-comptes-importes.md), task M1-06):
+when a login `sub` is unknown, look for exactly one `classroom:`-prefixed
+user with the same `swiss_edu_id`, or failing that holding an
+institutional address of the login, or a private one unique on both sides;
+rewrite its sub, audit it. Two or more: a new account and the ambiguity
+audited.
 
-**Never match** `dev:*` subs, `anon-*` users (imported as new, still
-anonymised), unverified addresses.
+**Never match** `dev:*` subs (a classroom `dev:` account is not imported
+at all: its placeholder would be adoptable), `anon-*` users (imported as
+new, still anonymised, without their addresses, claims or avatar),
+unverified addresses. The rule is one pure function shared with login
+adoption, `decideMatch` (`@quiz/domain`, ADR-061 §2); an address matches
+only when it has exactly one verified holder on each side.
 
 **Collisions to list in the dry-run**: two classroom accounts collapsing
 into one Quiz user (breaks the unique constraints on enrollments,
@@ -156,42 +164,66 @@ accounts after the union (makes roster claims ambiguous).
 ## 2.5 The import script
 
 `Q:apps/api/scripts/import-classroom.ts` (task M1-06 creates it, every
-porting task that adds a table extends it, M8-01 completes it).
+porting task that adds a table extends it, M8-01 completes it). Run with
+`pnpm --filter @quiz/api import:classroom`; the target is the
+environment's `DATABASE_URL`.
 
-- **Inputs**: `--source <classroom DATABASE_URL>` (read-only role),
-  `--mapping <file.json>` (required: per classroom-classroom, a new course
-  `{code, name}`, an existing `courseId`, or an existing `classroomId` to
-  merge into), `--dry-run` (default: one transaction, rolled back, full
-  report) or `--apply`.
-- **Idempotency**: schema `import_classroom` with `id_map(source_table,
-  source_id, target_id)` and `runs`; "insert unless it exists" on kept ids.
-  A second `--apply` writes nothing. The map also feeds login adoption and
-  the legacy URL resolver (M8-02).
-- **Pre-flight** (refuses to `--apply` otherwise): classroom stopped, its
-  queues empty, no unprocessed webhook delivery, no assignment deadline +
-  grace inside the window and none overdue unapplied, identity measured,
-  source consistency (enrollment status vs `user_id`, dangling grade-run
-  links, group/assignment consistency, mixed-case e-mails), mapping complete,
-  new course codes free.
-- **Order** (foreign keys): users map and new users → addresses, claims,
-  avatars, GitHub accounts, notification preferences → teacher grants
-  (+ codespace grants) → GitHub orgs → new courses → classrooms (new keep
-  their id; merge targets are only mapped) → classroom↔org links → course
-  staff (owners, claimed seats; pending ones reported) → enrollments (kept
-  or merged, remap recorded) → projects, milestones, groups → group members
-  → project repos → grade runs, push receipts, bot commits, dispatches,
-  reverts → classroom journal rows (re-ingested after) → webhook deliveries (30
-  days) → legacy audit → role recompute → one `migration.classroom_import`
-  audit row.
-- **Report**: per table inserted / merged / skipped; identity (matches per
-  rule, created, merged, ambiguous addresses, role changes); checks —
-  repositories per project, `sum(teacher_points)`, count of frozen grades,
-  every journal re-ingested with `sync_status = ok`, every grade-run link resolves, latest push receipt
-  per repository equals the source.
-- **Tests**: a synthetic classroom fixture (SQL dump of a seeded classroom
-  database, anonymised, committed under `apps/api/scripts/fixtures/`),
-  imported into a PGlite Quiz database in a `*.db.test.ts`; a second run
-  writes nothing; a merge into an existing classroom.
+- **Inputs**: `--source <classroom DATABASE_URL>` (read-only role; the
+  session is opened `default_transaction_read_only=on` and the snapshot is
+  read in one `REPEATABLE READ READ ONLY` transaction), `--mapping
+  <file.json>` (required, zod `ClassroomMapping`: per classroom-classroom,
+  by `id` and/or `name`, either `target: {course: <code>, classroom:
+  <name>}` — an existing, connected Quiz classroom — or `drop: true`),
+  `--actor <admin e-mail>` (recorded on the run and on a grant whose
+  creator is not imported), `--dry-run` (default: one transaction, rolled
+  back, full report) or `--apply`, and the open decisions
+  `--assistants staff|skip` (item 4) and `--missing-students
+  enroll|report` (item 3), which `--apply` requires explicitly.
+- **Idempotency**: schema `import_classroom` (migration `0052`) with
+  `id_map(source_table, source_id, target_id, how)` and `runs`; "insert
+  unless it exists" everywhere else. A second `--apply` writes nothing: a
+  run that changed nothing rolls back and records no run. The map also
+  feeds the legacy URL resolver (M8-02); login adoption reads the
+  `classroom:` placeholder sub, not the map.
+- **Pre-flight** (refuses to `--apply` otherwise). M1-06: mapping
+  complete and resolved (every source classroom, archived ones included,
+  mapped or dropped; the target course code and classroom name each
+  resolve to exactly one row), each mapped Quiz classroom connected to the
+  organization its source classroom used, no ambiguous identity, the
+  source consistent (enrollment status vs `user_id`), the actor an admin,
+  the open decisions given. M8-01 adds: classroom stopped, its queues
+  empty, no unprocessed webhook delivery, no assignment deadline + grace
+  inside the window and none overdue unapplied, dangling grade-run links,
+  group/assignment consistency.
+- **Order** (foreign keys). M1-06: users map and new users → addresses,
+  claims, avatars, GitHub account links → teacher grants → course staff
+  (owners, claimed seats, assistants per item 4; pending ones reported) →
+  enrollments (merged into the mapped rosters, remap recorded; missing
+  lines per item 3) → role recompute → one `migration.classroom_import`
+  audit row. M8-01 adds, before the role recompute: notification
+  preferences, (codespace grants), projects, milestones, groups → group
+  members → project repos → grade runs, push receipts, bot commits,
+  dispatches, reverts → classroom journal rows (re-ingested after) →
+  webhook deliveries (30 days) → legacy audit. No GitHub organization, no
+  classroom↔org link, no course and no classroom is ever written (D22, spec
+  06 no. 47).
+- **Report**: the mapping with the resolved ids (for the teachers to
+  check); refusals; the open decisions as given (or "suggested, NOT
+  decided"); identity (already imported, matches per rule, created,
+  ambiguous, not reached); rows written per table; findings per step
+  (shared addresses, GitHub link conflicts, grants left behind, assistants
+  widened, pending seats, roster lines added, flagged or kept, role
+  changes, what later tasks carry). M8-01 adds the checks: repositories per
+  project, `sum(teacher_points)`, count of frozen grades, every journal
+  re-ingested with `sync_status = ok`, every grade-run link resolves,
+  latest push receipt per repository equals the source.
+- **Tests**: `apps/api/scripts/fixtures/classroom-seed.sql` (classroom's
+  31 migrations concatenated, then synthetic, anonymised rows), imported
+  into a PGlite Quiz database in `scripts/import-classroom.db.test.ts`; a
+  second run writes nothing; a merge into an existing classroom; a
+  duplicate identity refused; an unconnected or wrong-org classroom
+  refused; a dropped classroom's people not imported; the GitHub link
+  cases. Login adoption: `src/auth/adoption.db.test.ts`.
 
 ## 2.6 A class present in both databases
 

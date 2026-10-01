@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import type { FastifyInstance } from "fastify";
 import { eq, sql } from "drizzle-orm";
 
@@ -32,7 +30,7 @@ import {
   scheduledTaskRow,
   systemStatus,
 } from "../system/service.js";
-import { listUsers } from "./service.js";
+import { createTeacherGrant, listUsers } from "./service.js";
 
 /**
  * Administration: the super admin (email in the environment) manages
@@ -90,11 +88,7 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
         .code(409)
         .send({ error: "is_admin", message: "This e-mail is the administrator" });
     }
-    const [created] = await app.db
-      .insert(teacherGrants)
-      .values({ id: randomUUID(), email, createdBy: req.user!.id })
-      .onConflictDoNothing({ target: teacherGrants.email })
-      .returning();
+    const created = await createTeacherGrant(app.db, { email, createdBy: req.user!.id });
     if (!created) {
       return reply
         .code(409)

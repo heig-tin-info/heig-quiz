@@ -19,7 +19,7 @@
  */
 import { sql } from "drizzle-orm";
 
-import type { Db } from "../db/client.js";
+import type { Db, Tx } from "../db/client.js";
 import { userEmails, userIdpClaims } from "../db/schema.js";
 import { normalizeEmail } from "../identity.js";
 
@@ -68,6 +68,24 @@ export function affiliationsOf(claims: Record<string, unknown>): string[] {
 }
 
 /**
+ * The claims whose addresses the home organization assigned (the school's
+ * own mailbox), as opposed to those the person chose: what login adoption
+ * accepts without asking the address to be unique (ADR-061).
+ */
+const INSTITUTIONAL_MAIL_CLAIMS = [
+  "swissEduIDLinkedAffiliationMail",
+  "swissEduPersonOrganizationalMail",
+] as const;
+
+/** The institutional addresses of a login, normalized and deduplicated. */
+export function institutionalAddressesOf(claims: Record<string, unknown>): string[] {
+  const all = INSTITUTIONAL_MAIL_CLAIMS.flatMap((claim) =>
+    claimList(claims[claim]).map(normalizeEmail),
+  );
+  return [...new Set(all)].filter((e) => e !== "");
+}
+
+/**
  * Claims carrying e-mail addresses, most trustworthy first. Only
  * `swissEduIDLinkedAffiliationMail` is released to us today; the others cost
  * nothing to read and cover a change in the Resource Registry entry.
@@ -79,7 +97,7 @@ const MAIL_CLAIMS = [
   "swissEduPersonPrivateMail",
 ] as const;
 
-interface KnownAddress {
+export interface KnownAddress {
   email: string;
   /** `login`, or the claim the address came from. */
   source: string;
@@ -155,22 +173,21 @@ export function persistableClaims(claims: Record<string, unknown>): Record<strin
  * One row per user, overwritten at each login: the point is to know what
  * the IdP says *now*, not to build a history nobody would read. The
  * affiliations it stores drive the role (roles.ts).
+ *
+ * `at` dates a snapshot taken elsewhere (the heig-classroom import, M1-06):
+ * it then replaces the stored one only if newer. Returns whether a row was
+ * written.
  */
 export async function recordIdpClaims(
-  db: Db,
+  db: Db | Tx,
   userId: string,
   claims: Record<string, unknown>,
-): Promise<void> {
+  at?: Date,
+): Promise<boolean> {
   const kept = persistableClaims(claims);
-  const values = {
-    userId,
-    claims: kept,
-    affiliations: affiliationsOf(kept),
-    updatedAt: new Date(),
-  };
-  await db
+  const written = await db
     .insert(userIdpClaims)
-    .values(values)
+    .values({ userId, claims: kept, affiliations: affiliationsOf(kept), updatedAt: at ?? new Date() })
     .onConflictDoUpdate({
       target: userIdpClaims.userId,
       set: {
@@ -178,32 +195,59 @@ export async function recordIdpClaims(
         affiliations: sql`excluded.affiliations`,
         updatedAt: sql`excluded.updated_at`,
       },
-    });
+      ...(at ? { setWhere: sql`excluded.updated_at > ${userIdpClaims.updatedAt}` } : {}),
+    })
+    .returning({ userId: userIdpClaims.userId });
+  return written.length > 0;
 }
 
 /**
- * Records the addresses a login revealed. Purely additive: an address seen
- * once is never removed, and `first_seen_at` keeps the date of the login
- * that revealed it. `verified` follows `addressesOf` and only ever rises: a
- * login address verified later becomes verified, never the reverse.
- * Returns the number of addresses added or newly verified.
+ * THE writer of an account's address set. Purely additive: an address seen
+ * once is never removed; `verified` only ever rises (a login address
+ * verified later becomes verified, never the reverse); `first_seen_at`
+ * keeps the earliest date known (a login's is now; the heig-classroom
+ * import brings older ones). Returns the number of addresses added or
+ * changed.
  */
+export async function addAddresses(
+  db: Db | Tx,
+  userId: string,
+  addresses: readonly (KnownAddress & { firstSeenAt?: Date })[],
+): Promise<number> {
+  // One row per address, or the statement would touch a row twice.
+  const merged = new Map<string, KnownAddress & { firstSeenAt?: Date }>();
+  for (const a of addresses) {
+    const email = normalizeEmail(a.email);
+    if (email === "") continue;
+    const seen = merged.get(email);
+    if (!seen) merged.set(email, { ...a, email });
+    else {
+      seen.verified ||= a.verified;
+      if (a.firstSeenAt && (!seen.firstSeenAt || a.firstSeenAt < seen.firstSeenAt)) seen.firstSeenAt = a.firstSeenAt;
+    }
+  }
+  if (merged.size === 0) return 0;
+  const written = await db
+    .insert(userEmails)
+    .values([...merged.values()].map((a) => ({ userId, email: a.email, source: a.source, verified: a.verified, ...(a.firstSeenAt ? { firstSeenAt: a.firstSeenAt } : {}) })))
+    .onConflictDoUpdate({
+      target: [userEmails.userId, userEmails.email],
+      set: {
+        verified: sql`${userEmails.verified} or excluded.verified`,
+        firstSeenAt: sql`least(${userEmails.firstSeenAt}, excluded.first_seen_at)`,
+      },
+      setWhere: sql`(excluded.verified and not ${userEmails.verified}) or excluded.first_seen_at < ${userEmails.firstSeenAt}`,
+    })
+    .returning({ email: userEmails.email });
+  return written.length;
+}
+
+/** Records the addresses a login revealed (`addressesOf`), through `addAddresses`. */
 export async function syncUserEmails(
   db: Db,
   userId: string,
   claims: Record<string, unknown>,
   loginVerified: boolean,
 ): Promise<number> {
-  const addresses = addressesOf(claims, loginVerified);
-  if (addresses.length === 0) return 0;
-  const inserted = await db
-    .insert(userEmails)
-    .values(addresses.map((a) => ({ userId, ...a })))
-    .onConflictDoUpdate({
-      target: [userEmails.userId, userEmails.email],
-      set: { verified: true },
-      setWhere: sql`excluded.verified and not ${userEmails.verified}`,
-    })
-    .returning({ email: userEmails.email });
-  return inserted.length;
+  return addAddresses(db, userId, addressesOf(claims, loginVerified));
 }

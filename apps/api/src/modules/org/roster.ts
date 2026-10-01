@@ -130,7 +130,7 @@ function countIn(
 }
 
 /** A pending roster line, and the account a claim pass would attach it to. */
-interface Match {
+export interface ClaimMatch {
   entryId: string;
   userId: string;
   classroomId: string;
@@ -150,7 +150,7 @@ interface Match {
  * classroom, with a count (#198) — never `actorId`, whose action ran the
  * pass. A line already flagged waits for a teacher: it is not said again.
  */
-async function settleClaims<M extends Match>(
+async function settleClaims<M extends ClaimMatch>(
   db: Db,
   matches: M[],
   actorId: string,
@@ -209,6 +209,19 @@ async function settleClaims<M extends Match>(
     await tellStaff(db, { kind: "roster_conflict", ...room, actorId });
   }
   return claimed;
+}
+
+/**
+ * A claim pass on matches the caller found itself: the heig-classroom import
+ * (M1-06) carries over the claims of its source rosters. Same settlement as
+ * every claim. Inside a transaction the caller marks `ambiguous` a match
+ * whose account already holds a line of the classroom: the unique violation
+ * `settleClaims` otherwise catches would abort the transaction.
+ */
+export async function claimLines(db: Db, matches: ClaimMatch[], actorId: string): Promise<number> {
+  return settleClaims(db, matches, actorId, (m) =>
+    publish("roster", [`classroom:${m.classroomId}`, `user:${m.userId}`]),
+  );
 }
 
 /**

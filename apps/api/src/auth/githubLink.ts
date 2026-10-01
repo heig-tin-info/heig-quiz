@@ -1,7 +1,8 @@
 /**
  * Linking a user's GitHub account (F-GH-05, N-SEC-16, invariant 15; merge
  * task M2-03, ported from heig-classroom's `auth/github-link.ts`). This file
- * is the one writer of `github_accounts`: the link, the unlink, the rename.
+ * is the one writer of `github_accounts`: the link, the unlink, the rename,
+ * and the links the heig-classroom import carries over (`importAccountLink`).
  *
  * The flow is the user-to-server OAuth of Quiz's OWN App (D23): no OAuth App
  * and no scope, so the user grants nothing on their repositories, and it is
@@ -45,7 +46,7 @@ import {
 import { audit } from "../audit.js";
 import { iso } from "../clock.js";
 import type { AppConfig } from "../config.js";
-import { isUniqueViolation, type Db } from "../db/client.js";
+import { isUniqueViolation, type Db, type Tx } from "../db/client.js";
 import { classrooms, courseStaff, enrollments, githubAccounts, githubClassroomLinks } from "../db/schema.js";
 import { publish } from "../events.js";
 import { githubApp } from "../github/app.js";
@@ -164,6 +165,54 @@ async function saveAccount(
     ...entry,
     action: "github.linked",
     payload: { githubUserId: account.id, login: account.login },
+  });
+  return "linked";
+}
+
+/** What became of one heig-classroom account link at the import. */
+export type ImportedLinkOutcome =
+  /** Written. */
+  | "linked"
+  /** The user already holds this very account (its login, if different, is Quiz's). */
+  | "present"
+  /** The user already holds another GitHub account: Quiz's is kept. */
+  | "user_linked_elsewhere"
+  /** The GitHub account is already another Quiz user's: nothing written. */
+  | "account_taken";
+
+/**
+ * Carries a heig-classroom account link over to the Quiz user it was matched
+ * to (spec 06 no. 44; merge task M1-06, `scripts/import-classroom.ts`). A link
+ * is an identity, not a grant — the person's GitHub id and login, no token —
+ * so the App that recorded it does not matter. Never moves an existing link:
+ * Quiz's side wins every disagreement, which the import reports.
+ */
+export async function importAccountLink(
+  db: Db | Tx,
+  userId: string,
+  account: GithubUser,
+  linkedAt: Date,
+): Promise<ImportedLinkOutcome> {
+  const [mine] = await db
+    .select({ githubUserId: githubAccounts.githubUserId })
+    .from(githubAccounts)
+    .where(eq(githubAccounts.userId, userId));
+  if (mine) return mine.githubUserId === account.id ? "present" : "user_linked_elsewhere";
+  const [taken] = await db
+    .select({ userId: githubAccounts.userId })
+    .from(githubAccounts)
+    .where(eq(githubAccounts.githubUserId, account.id));
+  if (taken) return "account_taken";
+  await db
+    .insert(githubAccounts)
+    .values({ userId, githubUserId: account.id, login: account.login, linkedAt });
+  await audit(db, {
+    actorUserId: null,
+    actorType: "system",
+    action: "github.linked",
+    subjectType: "user",
+    subjectId: userId,
+    payload: { githubUserId: account.id, login: account.login, via: "classroom_import" },
   });
   return "linked";
 }
