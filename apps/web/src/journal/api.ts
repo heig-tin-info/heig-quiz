@@ -11,16 +11,23 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import {
+  assetContentType,
+  encodeJournalPath,
+  JOURNAL_ASSETS_PATH,
   JournalNameTaken,
   JournalRefusal,
   type JournalErrorCode,
+  type JournalFileWritten,
+  type JournalPageAdd,
+  type JournalPageSave,
+  type JournalPreviewResult,
   type JournalRepository,
   type JournalStaff,
 } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
 import type { TFunction } from "../i18n";
-import { journalKey } from "../queryKeys";
+import { journalKey, journalPageKey } from "../queryKeys";
 import { JOURNAL_ERRORS } from "./words";
 
 /** `/app/api/classrooms/:id/journal`, the base of every journal route. */
@@ -102,4 +109,77 @@ export function useJournalRefresh(
   }, [waitingOn, mark]);
 
   return { refresh: () => refresh.mutate(), refreshing: refresh.isPending || waiting };
+}
+
+// ------------------------------------------------------------------ writes
+// The editor's routes (M4-06, F-JRN-10, F-JRN-11). Every write ends with the
+// journal's cache entry invalidated, pages included: the navigation, the
+// hidden pages and the copy's head all move with a commit.
+
+/** `…/journal/pages/<path>`, the path encoded segment by segment. */
+export const journalPageUrl = (classroomId: string, path: string) =>
+  `${journalBase(classroomId)}/pages/${encodeJournalPath(path)}`;
+
+/**
+ * Save (`PUT …/pages/*`): the page against the blob the editor opened. A
+ * 409 `conflict` leaves everything as it was, and the caller keeps the
+ * draft. The page the response carries, when the copy caught up with the
+ * commit, goes into the cache at once, so the reader shows the saved text
+ * without waiting for the refetch.
+ */
+export function useJournalSave(classroomId: string, path: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: JournalPageSave) =>
+      api<JournalFileWritten>(journalPageUrl(classroomId, path), { method: "PUT", body: JSON.stringify(body) }),
+    onSuccess: async (written) => {
+      if (written.page) qc.setQueryData(journalPageKey(classroomId, "staff", path), written.page);
+      await qc.invalidateQueries({ queryKey: journalKey(classroomId, "staff") });
+    },
+  });
+}
+
+/** Add a page (`POST …/pages`): an empty file, or one holding its title as a heading. */
+export function useJournalAddPage(classroomId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: JournalPageAdd) =>
+      api<JournalFileWritten>(`${journalBase(classroomId)}/pages`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: async (written) => {
+      if (written.page) qc.setQueryData(journalPageKey(classroomId, "staff", written.path), written.page);
+      await qc.invalidateQueries({ queryKey: journalKey(classroomId, "staff") });
+    },
+  });
+}
+
+/** Delete a page (`DELETE …/pages/*`), against the blob the copy holds. */
+export function useJournalDeletePage(classroomId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (path: string) => api<void>(journalPageUrl(classroomId, path), { method: "DELETE" }),
+    onSuccess: async (_, path) => {
+      qc.removeQueries({ queryKey: journalPageKey(classroomId, "staff", path) });
+      await qc.invalidateQueries({ queryKey: journalKey(classroomId, "staff") });
+    },
+  });
+}
+
+/**
+ * A file written into the repository at `path` (`POST …/assets/*`): the raw
+ * bytes, declared with exactly the content type of the path's extension,
+ * which is what the route checks (`JournalUploadHeaders`).
+ */
+export function uploadJournalAsset(classroomId: string, path: string, file: Blob): Promise<JournalFileWritten> {
+  return api<JournalFileWritten>(`${JOURNAL_ASSETS_PATH(classroomId)}/${encodeJournalPath(path)}`, {
+    method: "POST",
+    body: new Blob([file], { type: assetContentType(path) }),
+  });
+}
+
+/** Markdown not saved yet, rendered as the page at `path` would read (`POST …/preview`). */
+export function previewJournalPage(classroomId: string, path: string, markdown: string): Promise<JournalPreviewResult> {
+  return api<JournalPreviewResult>(`${journalBase(classroomId)}/preview`, {
+    method: "POST",
+    body: JSON.stringify({ path, markdown }),
+  });
 }

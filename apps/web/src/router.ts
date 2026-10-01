@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { encodeJournalPath, safeJournalPath } from "@quiz/contracts";
 
@@ -580,20 +580,81 @@ export function parsePath(path: string): Route {
  */
 export type Navigate = (r: Route, options?: { replace?: boolean }) => void;
 
+/**
+ * What asks before the app leaves a screen that holds unsaved work (the
+ * journal's editor, M4-06): resolves true to leave. One at a time — the
+ * screen on view — and null while nothing is at stake.
+ */
+export type LeaveGuard = () => Promise<boolean>;
+let leaveGuard: LeaveGuard | null = null;
+
+/**
+ * Asks `ask` before any navigation away while `dirty`: an in-app link or
+ * `navigate` (held until it answers), Back and Forward (undone, then redone
+ * once it answers yes), and a reload or a closed tab (the browser's own
+ * prompt, which is all a page may do there).
+ */
+export function useLeaveGuard(dirty: boolean, ask: LeaveGuard): void {
+  const askRef = useRef(ask);
+  askRef.current = ask;
+  useEffect(() => {
+    if (!dirty) return;
+    const guard: LeaveGuard = () => askRef.current();
+    leaveGuard = guard;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      if (leaveGuard === guard) leaveGuard = null;
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, [dirty]);
+}
+
+/** The address on view, query included, as the router last showed it. */
+const here = () => window.location.pathname + window.location.search;
+
 export function useRoute(): [Route, Navigate] {
   const [route, setRoute] = useState<Route>(() => parsePath(window.location.pathname));
+  const shown = useRef(here());
   useEffect(() => {
-    const onPop = () => setRoute(parsePath(window.location.pathname));
+    const onPop = () => {
+      const guard = leaveGuard;
+      if (guard === null) {
+        shown.current = here();
+        setRoute(parsePath(window.location.pathname));
+        return;
+      }
+      // The browser has moved already: put the page back, then ask.
+      window.history.pushState(null, "", shown.current);
+      void guard().then((ok) => {
+        if (!ok) return;
+        leaveGuard = null;
+        window.history.back();
+      });
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
   const navigate = useCallback<Navigate>((r, options) => {
     const path = routeToPath(r);
-    if (path !== window.location.pathname) {
-      if (options?.replace) window.history.replaceState(null, "", path);
-      else window.history.pushState(null, "", path);
+    const go = () => {
+      if (path !== window.location.pathname) {
+        if (options?.replace) window.history.replaceState(null, "", path);
+        else window.history.pushState(null, "", path);
+      }
+      shown.current = here();
+      setRoute(r);
+    };
+    const guard = leaveGuard;
+    if (guard === null || path === window.location.pathname) {
+      go();
+      return;
     }
-    setRoute(r);
+    void guard().then((ok) => {
+      if (!ok) return;
+      leaveGuard = null;
+      go();
+    });
   }, []);
   return [route, navigate];
 }

@@ -65,6 +65,8 @@ const ATTEMPT_OPEN = "22222222-2222-4222-8222-222222222222";
 const ATTEMPT_PAST = "22222222-2222-4222-8222-222222222223";
 /** The mock's draft made from a template that has moved since (F-EVAL-26). */
 const TEMPLATE_INSTANCE = "eeeeeeee-0000-4000-8000-000000000026";
+/** The journal page the editor scenes open (M4-06). */
+const JOURNAL_EDIT = "/classrooms/r1/journal/10-semaine-1/10-pointeurs.md";
 
 /** A pending pairing of the mock's station n° 7, code BCDF-GHJK (ADR-051 §7). */
 const KIOSK_PAIRING = {
@@ -973,6 +975,34 @@ const scenes = [
   { name: "journal-not-found", role: "student", path: "/classrooms/r1/journal/99-nulle-part.md?journal=1" },
   { name: "journal-loading", role: "student", path: "/classrooms/r1/journal?journal=1&slow=1", settle: 300 },
   { name: "journal-error", role: "student", path: "/classrooms/r1/journal?journal=1&fail=1", settle: 2500 },
+  // F-JRN-10 (M4-06): the editor, opened from Edit in the staff bar on a page
+  // with front matter, `_` emphasis, a fence, KaTeX, a table and raw HTML;
+  // its source view with the server's preview; a save refused because the
+  // file moved (`?journalconflict=1`), the draft kept; the front matter as
+  // fields, edited; and leaving with unsaved changes.
+  { name: "journal-edit", role: "teacher", path: `${JOURNAL_EDIT}?journal=1&journalconflict=0`, act: openEditor },
+  { name: "journal-edit-source", role: "teacher", path: `${JOURNAL_EDIT}?journal=1&journalconflict=0`, act: async (p) => {
+      await openEditor(p);
+      await p.getByRole("button", { name: /^(markdown source|source markdown)$/i }).first().click();
+      await p.getByRole("button", { name: /^(preview|aperçu)$/i }).click();
+      await p.waitForTimeout(600);
+    } },
+  { name: "journal-edit-conflict", role: "teacher", path: `${JOURNAL_EDIT}?journal=1&journalconflict=1`, act: async (p) => {
+      await openEditor(p);
+      await typeInEditor(p);
+      await p.getByRole("button", { name: /^(save|enregistrer)$/i }).click();
+      await p.getByText(/^(this page changed on github|cette page a changé sur github)/i).waitFor();
+    } },
+  { name: "journal-edit-frontmatter", role: "teacher", path: `${JOURNAL_EDIT}?journal=1&journalconflict=0`, act: async (p) => {
+      await openEditor(p);
+      await p.getByLabel(/^(title|titre)$/i).fill("Les pointeurs, pas à pas");
+      await p.getByRole("switch", { name: /^(draft|brouillon)$/i }).click();
+    } },
+  { name: "journal-edit-unsaved", role: "teacher", path: `${JOURNAL_EDIT}?journal=1&journalconflict=0`, fold: true, act: async (p) => {
+      await openEditor(p);
+      await typeInEditor(p);
+      await p.getByRole("button", { name: /^(cancel|annuler)$/i }).click();
+    } },
 ];
 
 /**
@@ -1073,6 +1103,19 @@ async function correctionPresent(page) {
   await page.getByRole("button", { name: /^actions$/i }).first().click();
   await page.getByRole("menuitem", { name: /(present the correction|projeter le corrigé)/i }).click();
   await page.waitForTimeout(1200);
+}
+
+/** How the journal's editor scenes open the editor (M4-06). */
+async function openEditor(page) {
+  await page.getByRole("button", { name: /^(edit|modifier)$/i }).click();
+  await page.getByRole("textbox", { name: /^(page text|texte de la page)$/i }).waitFor();
+}
+/** A sentence typed at the end of the page's first paragraph. */
+async function typeInEditor(page) {
+  const surface = page.getByRole("textbox", { name: /^(page text|texte de la page)$/i });
+  await surface.locator("p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Un ajout.");
 }
 
 /** "Create a journal" under a name the organization already has: the 409 and its suggestion. */

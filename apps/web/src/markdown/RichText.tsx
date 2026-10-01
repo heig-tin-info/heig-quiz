@@ -20,11 +20,13 @@ import {
 import { useClozeHole, useHoleSelectionPreview } from "./useClozeHole";
 import { useFormulaTarget } from "./useFormulaTarget";
 import { useImageUpload } from "./useImageUpload";
+import type { ImageUrl } from "./tiptap";
 import {
   focusFromChrome,
   useRichTextEditor,
   useRichTextSync,
   type ImageUploader,
+  type Reconcile,
 } from "./useRichTextEditor";
 
 /*
@@ -55,6 +57,21 @@ import {
 
 export type { RichTextProps };
 
+/**
+ * What only the app's own screens ask of the field, beyond the contract a
+ * question type is lent (`RichTextProps`): the journal's editor (M4-06).
+ */
+export interface RichTextHostProps extends RichTextProps {
+  /** The journal's spelling of markdown (markdown/journalSchema.ts). */
+  journal?: boolean;
+  /** Resolves an image's `src` for display: the journal's relative paths. */
+  imageUrl?: ImageUrl;
+  /** Rewrites what the rich surface emits; the source pane's text is emitted as typed. */
+  reconcile?: Reconcile;
+  /** The source pane was opened (true) or closed. */
+  onSourceChange?: (source: boolean) => void;
+}
+
 export function RichText({
   value,
   onChange,
@@ -73,7 +90,11 @@ export function RichText({
   shortcuts = [],
   holes = false,
   rows,
-}: RichTextProps) {
+  journal = false,
+  imageUrl,
+  reconcile,
+  onSourceChange,
+}: RichTextHostProps) {
   const t = useT();
   const auto = useId();
   const fieldId = id ?? auto;
@@ -112,6 +133,9 @@ export function RichText({
     openHole,
     openFormula,
     openCreatedHole,
+    journal,
+    imageUrl,
+    reconcile,
   });
   const marks = useRichTextMarks(editor);
   const selectionPreview = useHoleSelectionPreview(editor, holes);
@@ -123,8 +147,11 @@ export function RichText({
 
   /** What the image node view reads; see `ImageView.tsx` for why it is a context. */
   const imageTools = useMemo(
-    () => (uploadImage === undefined ? {} : { uploadImage }),
-    [uploadImage],
+    () => ({
+      ...(uploadImage === undefined ? {} : { uploadImage }),
+      ...(imageUrl === undefined ? {} : { imageUrl }),
+    }),
+    [uploadImage, imageUrl],
   );
 
   useRichTextShortcuts({
@@ -139,7 +166,14 @@ export function RichText({
 
   const sourceButton =
     sourceToggle && toolbar !== "never" ? (
-      <SourceToggle source={source} disabled={disabled} onToggle={() => setSource((s) => !s)} />
+      <SourceToggle
+        source={source}
+        disabled={disabled}
+        onToggle={() => {
+          setSource(!source);
+          onSourceChange?.(!source);
+        }}
+      />
     ) : null;
 
   /** The row of actions, drawn the same above a block field and inside an inline one. */

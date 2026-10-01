@@ -53,11 +53,14 @@ export function JournalArticle({
   classroomId,
   pagePath,
   onOpen,
+  keepScroll = false,
 }: {
   html: string;
   classroomId: string;
   pagePath: string;
   onOpen: (pagePath: string, hash: string) => void;
+  /** A preview inside the editor: a new rendering does not move the window. */
+  keepScroll?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -74,11 +77,12 @@ export function JournalArticle({
   // A new page starts at its top, or at the anchor its address names — which
   // did not exist yet when the address was set.
   useEffect(() => {
+    if (keepScroll) return;
     const id = decodeURIComponent(window.location.hash.slice(1));
     const heading = id ? ref.current?.querySelector(`#${CSS.escape(id)}`) : null;
     if (heading) heading.scrollIntoView({ block: "start" });
     else window.scrollTo({ top: 0 });
-  }, [html]);
+  }, [html, keepScroll]);
 
   return (
     // The click handler only ROUTES links the browser would follow anyway;

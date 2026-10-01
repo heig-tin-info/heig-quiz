@@ -36,6 +36,9 @@ export function useImageUpload(
             pos = Math.min(editor.state.selection.to, editor.state.doc.content.size);
           }
         }
+      } catch {
+        // The uploader says what went wrong (a toast); the pictures not yet
+        // laid down stay out, and nothing half-uploaded enters the text.
       } finally {
         setUploading((n) => Math.max(0, n - images.length));
       }
