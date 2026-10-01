@@ -101,8 +101,11 @@
     /* An anchored section lands under the sticky top bar, not behind it. */
     scroll-padding-top: calc(var(--topbar-h) + var(--banner-h) + 1rem);
   }
+  /* The bar floats: a 56 px pill, lifted off the bottom edge by the gap,
+     which tucks into the iOS home-indicator inset rather than stacking on it. */
   :root:has(nav[data-bottom-dock]) {
-    --bottom-nav-h: calc(3.5rem + env(safe-area-inset-bottom));
+    --bottom-nav-gap: max(0.75rem, calc(env(safe-area-inset-bottom) - 0.5rem));
+    --bottom-nav-h: calc(3.5rem + var(--bottom-nav-gap) + 0.5rem);
   }
 }
 html.dark {
