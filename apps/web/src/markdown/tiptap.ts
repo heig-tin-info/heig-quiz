@@ -41,6 +41,7 @@ import { BlockMath, InlineMath } from "@tiptap/extension-mathematics";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 
 import { clozeHoleExtensions } from "./clozeHole";
+import { ParamExpr } from "./paramExpr";
 import { CodeHighlight } from "./codeHighlight";
 import { REFUSED, type ImageUrl } from "./imageUrl";
 import { assetUrl, assetWidth } from "./render";
@@ -588,6 +589,8 @@ export function richTextExtensions({
     TableCell,
     Placeholder.configure({ placeholder: placeholder ?? "" }),
     ...clozeHoleExtensions(cloze),
+    // In EVERY field, parameterized or not (paramExpr.ts says why).
+    ParamExpr,
     Markdown,
   ];
 }

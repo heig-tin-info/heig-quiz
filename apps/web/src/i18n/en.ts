@@ -1042,6 +1042,7 @@ export const en = {
   "question.versions.failed": "This version could not be loaded.",
   "question.try.title": "Try the question",
   "question.try.hint": "Answer as a student would; nothing is recorded.",
+  "question.try.hintFirstDraw": "Answer as a student would; nothing is recorded. Random values: you answer draw 1 of the five.",
   "question.try.grade": "Grade my answer",
   "question.try.runTests": "Run all the tests",
   "question.try.runTestsHint": "Visible and hidden cases alike, graded as a student's answer: you see the score.",

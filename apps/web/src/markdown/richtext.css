@@ -250,3 +250,13 @@
   background: var(--accent-soft);
   pointer-events: none;
 }
+
+/* A `[[…]]` reference of a parameterized question (paramExpr.ts): the
+   expression as written, set apart from the prose it will be replaced in. */
+.rt-surface .rt-param {
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}

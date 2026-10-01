@@ -24,6 +24,7 @@ const PREVIEW = {
     mode: "single",
   },
   itemPoints: 1,
+  parameterized: false,
 };
 
 function renderWith(result: TryResult) {
@@ -56,5 +57,13 @@ describe("TryPanel — a proposed grade", () => {
     expect(
       await screen.findByText(/Your reference circuit did not simulate/),
     ).toBeInTheDocument();
+  });
+});
+
+describe("TryPanel — a parameterized question", () => {
+  it("says the question is tried on draw 1 of the five, as the server says", async () => {
+    mockFetch({ "POST /app/api/questions/q1/preview": ok({ ...PREVIEW, parameterized: true }) });
+    renderWithProviders(<TryPanel questionId="q1" type="mcq" />);
+    expect(await screen.findByText(/you answer draw 1 of the five/)).toBeInTheDocument();
   });
 });

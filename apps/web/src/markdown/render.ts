@@ -5,6 +5,8 @@ import { Marked, type Tokens } from "marked";
 import { TOKEN_KINDS, escapeHtml, highlight } from "@quiz/docrender/highlight";
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
 
+import { escapableStart, referenceAt } from "./delimiters";
+
 /*
  * Markdown -> sanitised HTML for content a student reads: question prompts,
  * choices, explanations, teacher comments.
@@ -164,6 +166,26 @@ const marked = new Marked({
   gfm: true, // tables, task lists, strikethrough, autolinks
   breaks: false,
   extensions: [
+    /*
+     * A `[[…]]` that reaches this renderer is LITERAL text: the server
+     * interpolates a parameterized question before anything is rendered
+     * (ADR-056), so what is left is a static question's brackets, or the
+     * `[[…]]` an escaped `\[[…]]` became. The editor stores them unescaped
+     * (paramExpr.ts), and marked would read `[[a*b]] … [[c*d]]` as emphasis
+     * across the two. Kept whole, with the grammar of the interpolation
+     * (`referenceAt`; a link's `[[1]](…)` stays a link); `\[[…]]` loses its
+     * backslash, as CommonMark's escape and the interpolation both drop it.
+     */
+    {
+      name: "bracketRef",
+      level: "inline",
+      start: (src: string) => escapableStart(src, "[["),
+      tokenizer: (src: string) => {
+        const match = referenceAt(src);
+        return match ? { type: "bracketRef", raw: match.raw, text: match.raw.slice(match.escaped ? 1 : 0) } : undefined;
+      },
+      renderer: (token) => escapeHtml(decodeEntities(String(token.text))),
+    },
     {
       name: "math",
       level: "inline",

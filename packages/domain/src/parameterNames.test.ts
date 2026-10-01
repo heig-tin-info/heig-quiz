@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FORMAT_PATTERN, FORMATS, formatStep, isVariableName } from "./parameterNames.js";
+import { FORMAT_PATTERN, FORMATS, formatStep, isVariableName, matchReference, referenceSpans } from "./parameterNames.js";
 
 describe("formatStep", () => {
   it("is 1 for int and 10^-n for .n, whatever the value", () => {
@@ -35,5 +35,52 @@ describe("isVariableName", () => {
   it("refuses the table's own word, under which the condition's issues are filed", () => {
     expect(isVariableName("condition")).toBe(false);
     expect(isVariableName("cond")).toBe(true);
+  });
+});
+
+describe("matchReference — what the rich editor tokenizes", () => {
+  it.each([
+    ["[[h]] m", { raw: "[[h]]", expr: "h", escaped: false }],
+    ["[[h*w]]", { raw: "[[h*w]]", expr: "h*w", escaped: false }],
+    ["[[max([a, b])]] x", { raw: "[[max([a, b])]]", expr: "max([a, b])", escaped: false }],
+    ['[["]]"]] x', { raw: '[["]]"]]', expr: '"]]"', escaped: false }],
+    ["\\[[x]] y", { raw: "\\[[x]]", expr: "x", escaped: true }],
+  ])("reads %j", (src, expected) => {
+    expect(matchReference(src)).toEqual(expected);
+  });
+
+  it.each([["[[h"], ["a [[h]]"], ["[h]]"], ["\\[[x"]])("does not read %j", (src) => {
+    expect(matchReference(src)).toBeUndefined();
+  });
+});
+
+describe("referenceSpans — the one walk of the interpolation", () => {
+  const spans = (text: string) => referenceSpans(text).map((s) => [text.slice(s.from, s.to), s.escaped, s.closed]);
+
+  it("finds each reference, the escape and an unclosed tail", () => {
+    expect(spans("a [[h]] b [[max([a, b])]] c")).toEqual([
+      ["[[h]]", false, true],
+      ["[[max([a, b])]]", false, true],
+    ]);
+    expect(spans("\\[[x]] and [[y]]")).toEqual([
+      ["\\[[x]]", true, true],
+      ["[[y]]", false, true],
+    ]);
+    expect(spans("\\[[x then [[y]]")).toEqual([
+      ["\\[[", true, false],
+      ["[[y]]", false, true],
+    ]);
+    expect(spans("[[h]] then [[unclosed and [[more]]")).toEqual([
+      ["[[h]]", false, true],
+      ["[[unclosed and [[more]]", false, false],
+    ]);
+    expect(spans("no reference [x] here")).toEqual([]);
+  });
+
+  it("keeps a closed escape literal as a whole, a reference inside it included", () => {
+    expect(spans("\\[[a [[b]] c]] and [[d]]")).toEqual([
+      ["\\[[a [[b]] c]]", true, true],
+      ["[[d]]", false, true],
+    ]);
   });
 });

@@ -41,6 +41,8 @@ export {
   IDENTIFIER_SOURCE,
   isFormat,
   isVariableName,
+  matchReference,
+  referenceSpans,
   MAX_EXPRESSION_LENGTH,
   PARAMETERIZED_TYPES,
   type Format,

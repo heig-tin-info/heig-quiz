@@ -10,6 +10,7 @@ import {
   TryBody,
   issuesOf,
   type DraftInstances,
+  type PreviewResult,
   type PreviewSolution,
   type TryResult,
 } from "@quiz/contracts";
@@ -24,7 +25,7 @@ import {
 import { questions } from "../../db/schema.js";
 import { studentSolutionViewOf, studentViewOf, teacherPreviewView } from "../live/studentView.js";
 import { isParameterized, loadConfig, tryLoadConfig, typeOf } from "./config.js";
-import { instanceOf, parameterIssues, previewInstances } from "./instance.js";
+import { exampleInstance, parameterIssues, previewInstances } from "./instance.js";
 import type { VersionRecord } from "./shared.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
@@ -37,7 +38,7 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
     reply: FastifyReply,
     question: typeof questions.$inferSelect,
     source: "draft" | number,
-  ): Promise<{ config: unknown } | null> {
+  ): Promise<{ config: unknown; parameterized: boolean } | null> {
     const row =
       source === "draft"
         ? await service.draftOf(app.db, question.id)
@@ -46,25 +47,28 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
       await reply.code(404).send({ error: "not_found" });
       return null;
     }
-    const outcome = isParameterized(row) ? tryInstance(question, row) : tryLoadConfig(question.type, row);
+    const parameterized = isParameterized(row);
+    const outcome = parameterized ? tryInstance(question, row) : tryLoadConfig(question.type, row);
     if (!outcome.ok) {
       await reply
         .code(422)
         .send({ error: "config_invalid", message: "This version cannot be rendered", details: outcome.issues });
       return null;
     }
-    return { config: outcome.config };
+    return { config: outcome.config, parameterized };
   }
 
   /**
-   * A parameterized draft or version is previewed and tried as the instance
-   * of the preview's seed (0) and stream (the question's id), drawn on the
-   * spot: the same numbers on every open (ADR-056 §8 shows five, PR 3). A
-   * table that cannot draw is the draft's issues, not a 500.
+   * A parameterized draft or version is previewed, shown its key and tried
+   * as its `exampleInstance`: `draw(params, 0)`, the FIRST of the five draws
+   * publication gates and the editor lists (ADR-056 §8), so the Try tab is
+   * exactly "Draw 1" and the same numbers on every open. Grading reads the
+   * same config, through this one function. A table that cannot draw is the
+   * draft's issues, not a 500.
    */
   function tryInstance(question: typeof questions.$inferSelect, row: VersionRecord) {
     try {
-      const { version } = instanceOf(question.type, row, { seed: 0, itemId: question.id });
+      const { version } = exampleInstance(question.type, row);
       return { ok: true as const, config: loadConfig(question.type, version) };
     } catch (error) {
       const issues = parameterIssues(question.type, row);
@@ -92,7 +96,8 @@ export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
           // student could ever see (invariant 4, WP5).
           student: studentViewOf(scope.question.type, loaded.config, teacherPreviewView(scope.question.id)),
           itemPoints: t.defaultPoints(loaded.config),
-        };
+          parameterized: loaded.parameterized,
+        } satisfies PreviewResult;
       },
     ),
   );

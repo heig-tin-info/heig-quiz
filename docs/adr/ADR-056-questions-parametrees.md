@@ -380,3 +380,18 @@ Dropping the column loses only drafts.
   would replay the same numbers.
 - **Variables in each type's configuration.** That means three migrations,
   and the explanation would still need a separate pass.
+
+## Addendum (2026-10-01): Try
+
+The editor's Try tab (preview, its solution, and the graded try) plays the
+first of the five gated draws, `draw(params, 0)`: exactly "Draw 1" of §8,
+and the config it grades is the one it shows. The rich editor stores
+`[[…]]` verbatim (the `paramExpr` mark: no `\[`, `\*` or `\_` inside). The
+escaped spelling it used to write (`\[\[h\]\]`) is read back as the
+reference and repaired on the next save of the field. Nothing is rewritten
+on the server: a version already PUBLISHED with that spelling shows `[[h]]`
+literally until it is re-edited and republished. The read-only renderer
+keeps a `[[…]]` left after interpolation literal, so no emphasis pairs
+across two of them; a link's `[[1]](…)` stays a link in both. The walk is
+one function, `referenceSpans`, shared by the interpolation and the editor;
+a closed `\[[…]]` is literal as a whole.

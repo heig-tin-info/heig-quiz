@@ -196,10 +196,23 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   );
 
   const startPublish = useCallback(() => setPublishing(true), []);
+  /*
+   * The Try tab renders what the SERVER holds, like the student preview
+   * above: the pending edit is sent at once rather than after the debounce.
+   * The tab switches first, so a slow save never lands on a tab chosen
+   * since; the save then refreshes the preview (`useQuestionDraft`).
+   */
+  const selectTab = useCallback(
+    (next: Tab) => {
+      setTab(next);
+      if (next === "try") void flush();
+    },
+    [flush, setTab],
+  );
   const openTry = useCallback(() => {
     followToPanel.current = true;
-    setTab("try");
-  }, [setTab]);
+    selectTab("try");
+  }, [selectTab]);
   useEditorShortcuts({
     readOnly,
     flush,
@@ -252,7 +265,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
 
       <Tabs
         value={tab}
-        onChange={(v) => setTab(v)}
+        onChange={selectTab}
         idPrefix="question"
         label={t("question.tabs")}
         items={[

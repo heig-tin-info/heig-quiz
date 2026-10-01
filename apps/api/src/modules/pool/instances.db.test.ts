@@ -126,6 +126,39 @@ describe("the five instances of a draft", () => {
   });
 });
 
+/*
+ * The Try tab shows, keys and grades the FIRST of the five draws: what the
+ * editor lists as "Draw 1", never a draw of its own (ADR-056 §8).
+ */
+describe("the Try tab of a parameterized draft", () => {
+  const post = (id: string, route: string, payload: Record<string, unknown>) =>
+    server.app.inject({ method: "POST", url: `/app/api/questions/${id}/${route}`, headers: owner.headers, payload });
+
+  it("previews, keys and grades draw 1", async () => {
+    const id = await draft("mcq", PARAMETERIZED.mcq, VARIABLES);
+    const first = (await instances(id, owner.headers)).json<DraftInstances>().instances[0]!;
+    const h = first.values.find((v) => v.name === "h")!.value;
+
+    const preview = await post(id, "preview", { source: "draft" });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json().parameterized).toBe(true);
+    const student = JSON.stringify(preview.json().student);
+    expect(student).toBe(JSON.stringify(first.student));
+    expect(student).toContain(`dropped from ${h} m`);
+    expect(student).not.toContain("[[");
+    expect(markersIn(student)).toEqual([]);
+
+    const solution = await post(id, "preview/solution", { source: "draft" });
+    expect(solution.json().solution).toEqual(first.solution);
+
+    // Choice 0 is `[[t]] s`, the key, in the canonical order the answer uses.
+    const right = await post(id, "try", { source: "draft", answer: { selected: [0] } });
+    expect(right.json()).toMatchObject({ status: "graded", points: 1, maxPoints: 1 });
+    const wrong = await post(id, "try", { source: "draft", answer: { selected: [1] } });
+    expect(wrong.json()).toMatchObject({ status: "graded", points: 0 });
+  });
+});
+
 describe("the pool list", () => {
   it("says a question is parameterized once a version with variables is published", async () => {
     const id = await draft("cloze", PARAMETERIZED.cloze, VARIABLES);

@@ -650,6 +650,22 @@ describe("QuestionEditor — keyboard", () => {
     );
   });
 
+  // The Try tab plays what the SERVER holds: the edit in flight is saved at
+  // once, and the preview is asked for again after that save.
+  it("saves the draft on the way to the Try tab, and previews what it saved", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch(routes(mcqDetail()));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    await user.type(await screen.findByLabelText("Statement"), "?");
+    await user.click(screen.getByRole("tab", { name: "Try" }));
+    await waitFor(() => {
+      const put = calls.findIndex((c) => c.method === "PUT" && c.url.endsWith("/draft"));
+      const previews = calls.flatMap((c, i) => (c.url.endsWith("/preview") ? [i] : []));
+      expect(put).toBeGreaterThanOrEqual(0);
+      expect(previews.at(-1)).toBeGreaterThan(put);
+    });
+  }, 20_000);
+
   it("Ctrl+Shift+M opens the same tab", async () => {
     const user = userEvent.setup();
     const open = vi.spyOn(window, "open").mockReturnValue(null);

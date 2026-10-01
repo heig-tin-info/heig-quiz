@@ -1,10 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 
 import type { DraftSaved, ParametersDraft, PoolDetail, QuestionDetail, ZodIssueLite } from "@quiz/contracts";
 
 import { api } from "../api";
-import { poolKey, questionKey } from "../queryKeys";
+import { poolKey, questionKey, questionPreviewKey } from "../queryKeys";
 import { useAutosave } from "./autosave";
 
 /** The working copy of a question: what the type's editor, the explanation and the Variables section edit. */
@@ -24,6 +24,7 @@ export interface Draft {
  * that arrives from the server goes through the reconciliation below instead.
  */
 export function useQuestionDraft(id: string) {
+  const qc = useQueryClient();
   const [draft, setLocalDraft] = useState<Draft | null>(null);
   const [issues, setIssues] = useState<readonly ZodIssueLite[]>([]);
   // Whether the teacher has changed anything in this session. A question is
@@ -74,9 +75,14 @@ export function useQuestionDraft(id: string) {
       ownStamp.current = saved.updatedAt;
       setSavedStamp(saved.updatedAt);
       setIssues(saved.issues);
+      // The draft's preview (the Try tab, its key) is the server's rendering
+      // of what was just replaced. Refetched rather than re-keyed: an
+      // unchanged student view keeps its reference, so an answer in progress
+      // on the Try tab is not reset by a save that changed nothing it shows.
+      void qc.invalidateQueries({ queryKey: questionPreviewKey(id, "draft") });
       return saved;
     },
-    [id],
+    [id, qc],
   );
 
   // `enabled: false` for a reader: not one `PUT /draft` leaves the browser,

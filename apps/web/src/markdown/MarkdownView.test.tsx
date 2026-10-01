@@ -146,6 +146,37 @@ describe("MarkdownView — content", () => {
    * marked reads before KaTeX does: without the math token, CommonMark turned
    * `\,` into `,` ("9.81, m/s²") and `a_1 … b_1` into emphasis.
    */
+  /*
+   * The editor stores `[[…]]` unescaped (paramExpr.ts). What reaches this
+   * renderer is literal — a static question's brackets, or what an escaped
+   * `\[[…]]` was interpolated into — and no emphasis rule may pair the `*`
+   * or `_` of two of them.
+   */
+  it("keeps `[[…]]` literal: no emphasis across two of them", () => {
+    const body = view("soit [[a*b]] et [[c*d]], puis [[x_1]] et [[y_1]]");
+    expect(body.querySelector("em")).toBeNull();
+    expect(body.textContent?.trim()).toBe("soit [[a*b]] et [[c*d]], puis [[x_1]] et [[y_1]]");
+  });
+
+  it("writes an escaped `\\[[…]]` as its brackets, and `<` as itself", () => {
+    const body = view("\\[[a*b]] et \\[[c*d]] ou [[a<b]]");
+    expect(body.querySelector("em")).toBeNull();
+    expect(body.textContent?.trim()).toBe("[[a*b]] et [[c*d]] ou [[a<b]]");
+  });
+
+  it("leaves `[[…]]` in code as code, and the rest of the markdown alone", () => {
+    const body = view("`[[a*b]]` and **bold** [[h]] and [[unclosed *x*");
+    expect(body.querySelector("code")?.textContent).toBe("[[a*b]]");
+    expect(body.querySelector("strong")?.textContent).toBe("bold");
+    expect(body.textContent).toContain("[[h]]");
+  });
+
+  it("leaves a link whose text is in brackets a link", () => {
+    const link = view("voir [[1]](https://heig-vd.ch) et [[a*b]] [[c*d]]").querySelector("a");
+    expect(link?.textContent).toBe("[1]");
+    expect(link?.getAttribute("href")).toBe("https://heig-vd.ch");
+  });
+
   it("hands KaTeX the formula as written, escapes and underscores included", () => {
     const tex = (source: string) =>
       Array.from(view(source).querySelectorAll('annotation[encoding="application/x-tex"]'), (a) => a.textContent);
