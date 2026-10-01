@@ -11,7 +11,10 @@ by `apps/web/src/grading/`, the optional `grading` member of
 every `qt-*` package (the mcq, short and cloze columns first, the other
 five in a second step), and the grading contracts
 (`packages/contracts/src/grading.ts`). The return from the question editor
-to the grading table came in a third step (addendum below).
+to the grading table came in a third step (addendum below). Amended
+2026-10-01 by ADR-056 §9: for a parameterized question the pinned row is the
+template (the formulas), each answer's own key is in the side panel, and
+rows group by verdict, not by answer text.
 
 ## Context
 

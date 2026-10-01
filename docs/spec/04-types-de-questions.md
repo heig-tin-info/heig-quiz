@@ -56,18 +56,23 @@ The `config` field is specific to the type. The header fields are common. Export
 
 ## 4.3 Random values
 
-Available for `short`, `cloze`, `mcq`, `code` in phase 2.
+Available for `mcq`, `short` (a `number` matcher) and `cloze`; `code` later. Decided by [ADR-056](../adr/ADR-056-questions-parametrees.md), which replaces the first design of this section (ranges with a step, `{{R1}}`).
 
 ```yaml
 variables:
-  R1: { min: 100, max: 10000, step: 100, unit: Ω }
-  R2: { min: 1000, max: 100000, step: 1000, unit: Ω }
-  G: { expr: "-R2 / R1", precision: 2 }
+  - { name: h, expr: "randint(1, 100)", format: int }
+  - { name: g, expr: "choice([3.71, 8.87, 9.81, 24.79])", format: ".2" }
+  - { name: t, expr: "sqrt(2*h/g)", format: ".2" }
+condition: "t > 1"
 ```
 
-- The statement and the key use `{{R1}}`, `{{G}}`. Expressions are evaluated by a restricted arithmetic evaluator, with no access to the host language: operators, the usual mathematical functions, constants.
-- The instantiation seed is the attempt's seed combined with the item id. Replaying an attempt gives the same values.
-- The editor shows five instantiations for checking, and a "freeze" button to convert into a fixed question.
+- `variables` is a header field of the version, beside `explanation`, not part of the type's configuration. A question with at least one variable is **parameterized**; `randomizable` is derived from it at publication.
+- Expressions are evaluated by a restricted mathjs instance (a whitelist of functions, no `import`, `parse` or `evaluate`, capped length, tree and ranges); `randint`, `uniform` and `choice` draw from `streamSeed(attempt.seed, item.id, "vars")`. A row reads the rows above it; the optional `condition` rejects a draw, retried at most 100 times.
+- The statement, the choices, the keys, the blanks and the explanation use `[[h]]` or `[[sqrt(2*h/g)]]`, only in a parameterized question; `\[[` escapes. An unknown name is a publication error. A cloze blank reads `{{#[[t]]:1%}}`.
+- A variable is its formatted value (`int`, `.n` decimals, `ns` significant figures), rounded half away from zero; the dot is the decimal separator in every language.
+- The values are drawn the first time the item is served in an attempt and STORED with it; every later read (review, regrade, feedback) uses them. A retake has a new seed, so new values.
+- Instantiation is one pass that turns the version into an ordinary static one before `toStudent`, `grade` or `Review` see it. The variables never reach a student (5.7).
+- Publication validates on 200 draws, on every write path. The editor shows five instances computed by the API; "freeze" comes later. A poll refuses a parameterized question.
 
 ## 4.4 Multiple choice `mcq`
 

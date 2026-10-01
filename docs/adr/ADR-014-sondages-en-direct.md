@@ -6,7 +6,9 @@ Accepted (2026-09-21, phase 2). Settles F-LIVE-13, F-LIVE-14 and F-AUTH-05, and 
 decision D7 of `docs/PLAN-MVP.md` along one path only (below). **Amended by [ADR-053](ADR-053-retrait-des-codes-d-entree.md)
 (2026-09-30):** the exam and exercise access code is removed, so the session code of
 decision 1 is now the only use of `evaluations.access_code` (CHECK
-`evaluations_access_code_poll_ck`).
+`evaluations_access_code_poll_ck`). **Amended by [ADR-056](ADR-056-questions-parametrees.md)
+(2026-10-01):** a poll refuses a parameterized question; the beamer and the phones must
+show the same values.
 
 ## Context
 

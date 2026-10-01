@@ -60,7 +60,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-QST-07 | Pasted images are stored on the server and referenced by a stable id. The canonical export embeds them. | P1 | M |
 | F-QST-08 | A question declares whether it can be shuffled and whether it supports random values. | P1 | M |
 | F-QST-09 | The editor offers a preview of the player exactly as the student will see it, with the possibility to answer and to see the grading. | P1 | M |
-| F-QST-10 | A question with random values declares variables with a range, a step and a precision. The expressions in the statement and the key are evaluated with the attempt's seed. See [04-types-de-questions.md](04-types-de-questions.md). | P2 | M |
+| F-QST-10 | A question with random values (parameterized) declares variables as one-line expressions with a format, and an optional condition. `[[expr]]` in the statement, the key and the explanation is evaluated with values drawn from the attempt's seed, stored the first time the item is served. See [04-types-de-questions.md](04-types-de-questions.md) §4.3 and ADR-056. | P2 | M |
 | F-QST-11 | Deleting a question hides it from the pool. It is still resolved by past evaluations. Permanent deletion is possible only when no evaluation references it. | P1 | M |
 
 ## F-EVAL Configuring an evaluation
