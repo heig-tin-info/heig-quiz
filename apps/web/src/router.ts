@@ -231,7 +231,7 @@ export const CLASSROOM_PAGES =
   import.meta.env.VITE_MOCK === "1" || import.meta.env.VITE_CLASSROOM_PAGES === "1";
 
 /** The tabs of the Administration page, in their order (`AdminPanel.tsx`). */
-export const ADMIN_TABS = ["people", "system", "tasks"] as const;
+export const ADMIN_TABS = ["people", "system", "tasks", "llm"] as const;
 export type AdminTab = (typeof ADMIN_TABS)[number];
 
 /** A view whose path is one fixed segment (`/settings`, `/polls`, …), whatever follows it. */

@@ -899,6 +899,8 @@ configuration.
 | `RUNNER_TOKEN` | `openssl rand -hex 32`, the same value as `/etc/quiz-runner/env` on the runner VM | sent as `Authorization: Bearer` on every call; required when `RUNNER_MODE=http`, the process does not start without it |
 | `RUNNER_TIMEOUT_MS` | default `30000` | wall-clock budget of one runner call |
 | `LLM_PROVIDER` | unset (`none`) | essays are graded by hand; `stub`, the development fake, makes the process refuse to start |
+| `LLM_KEY_SECRET` | `openssl rand -hex 32`, copied into the age vault | the master key that encrypts the Anthropic key entered in Administration › AI ([ADR-058](../adr/ADR-058-passerelle-llm.md)); empty turns the AI gateway off; under 32 characters, or containing `change-me`, the process does not start; a new value only means pasting the key again |
+| `LLM_DAILY_CAP_MAX_USD` | default `100` | the most the console may set as the AI daily spending cap |
 | `BACKUP_STATUS_FILE` | `/app/backup-status/last.json`, set by compose | the `backup` service's report of its last dump (§6); empty: the System status says "not configured" |
 | `COMMIT_SHA`, `COMMIT_DATE` | baked into the image by CI | the commit the System status shows; never set by hand |
 | `LOG_LEVEL`, `WORKER_MODE` | `info`, `all` | `web`/`worker` would split the roles without a code change ([ADR-001](../adr/ADR-001-monolithe-modulaire.md)) |

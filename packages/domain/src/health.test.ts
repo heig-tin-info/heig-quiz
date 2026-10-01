@@ -7,6 +7,7 @@ import {
   diskStatus,
   HEALTH_THRESHOLDS,
   jobsStatus,
+  llmBudgetStatus,
   overdueStatus,
   serverErrorsStatus,
   servicePolicy,
@@ -157,5 +158,15 @@ describe("serviceStatus", () => {
     // Sign-in wants three: a person's own mistakes are not the provider's.
     expect(serviceStatus(failing, now, servicePolicy("signin"))).toBe("warn");
     expect(serviceStatus({ ...failing, failuresSinceOk: 3 }, now, servicePolicy("signin"))).toBe("fail");
+  });
+});
+
+describe("llmBudgetStatus", () => {
+  it("warns from 80 % and fails at the cap, or once the cap refused a call", () => {
+    expect(llmBudgetStatus(0, 20, false)).toBe("ok");
+    expect(llmBudgetStatus(15.99, 20, false)).toBe("ok");
+    expect(llmBudgetStatus(16, 20, false)).toBe("warn");
+    expect(llmBudgetStatus(20, 20, false)).toBe("fail");
+    expect(llmBudgetStatus(3, 20, true)).toBe("fail");
   });
 });

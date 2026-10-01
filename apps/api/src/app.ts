@@ -41,6 +41,8 @@ import { createKioskAttestor } from "./modules/kiosk/attestation.js";
 import { kioskPlugin } from "./modules/kiosk/routes.js";
 import { livePlugin } from "./modules/live/routes.js";
 import { createLlm } from "./modules/llm/index.js";
+import { llmPlugin } from "./modules/llm/routes.js";
+import { LlmGateway } from "./modules/llm/service.js";
 import { previewPlugin } from "./modules/preview/routes.js";
 import { mcpPlugin } from "./modules/mcp/routes.js";
 import { registerNotificationJobs } from "./modules/notifications/jobs.js";
@@ -73,7 +75,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     logger: {
       level: config.LOG_LEVEL,
       // Never put credentials in the logs.
-      redact: ["req.headers.authorization", "req.headers.cookie"],
+      redact: ["req.headers.authorization", "req.headers.cookie", 'req.headers["x-api-key"]'],
       // Nor a one-time secret carried by a URL (`redact.ts`).
       serializers: { req: requestLog },
     },
@@ -92,6 +94,9 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   app.decorate("runner", createRunner(config));
   // At most one LLM service, chosen once by LLM_PROVIDER; null sends nothing.
   app.decorate("llm", createLlm(config));
+  // The gateway of ADR-058: off without LLM_KEY_SECRET, else a real model
+  // with the key an administrator stored, logged and capped.
+  app.decorate("llmGateway", new LlmGateway({ db: handle.db, clock: clock ?? systemClock, config }));
   // At most one station attestor, chosen once by KIOSK_ATTESTATION (ADR-051);
   // null is `off`, and then no kiosk route exists. A test may swap it.
   app.decorate("kioskAttestor", createKioskAttestor(config, app.log));
@@ -189,6 +194,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(authPlugin, { config });
   await app.register(realtimePlugin);
   await app.register(adminPlugin, { config });
+  await app.register(llmPlugin, { config });
   await app.register(avatarPlugin);
   await app.register(orgPlugin, { config });
   // Without Quiz's GitHub App (D23) none of its routes exists: a 404.

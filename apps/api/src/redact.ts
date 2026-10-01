@@ -18,7 +18,8 @@
  *    trip, or the `return=` of a GitHub account link, which carries the page
  *    to come back to, token included.
  *
- * And the GitHub tokens (N-SEC-16), wherever they appear in a text:
+ * And the GitHub tokens (N-SEC-16) and the Anthropic API keys (ADR-058 §3),
+ * wherever they appear in a text:
  * `redactTokens` is the one pattern table, used by the git wrapper
  * (`github/git.ts`) on every failure message and by the request log.
  */
@@ -59,7 +60,8 @@ export function redactTokens(text: string): string {
   return text
     .replace(/(authorization:\s*(?:basic|bearer|token)\s+)[A-Za-z0-9+/=._-]+/gi, "$1***")
     .replace(/x-access-token:[^@\s]+@/g, "x-access-token:***@")
-    .replace(/\bgh[a-z]_[A-Za-z0-9_]+/g, "gh*_***");
+    .replace(/\bgh[a-z]_[A-Za-z0-9_]+/g, "gh*_***")
+    .replace(/\bsk-ant-[A-Za-z0-9_-]+/g, "sk-ant-***");
 }
 
 /** `url` (a request's path and query) with every secret replaced by `…`. */

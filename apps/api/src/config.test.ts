@@ -98,6 +98,15 @@ describe("loadConfig", () => {
     expect(loadConfig({ NODE_ENV: "development", LLM_PROVIDER: "stub" }).LLM_PROVIDER).toBe("stub");
   });
 
+  it("takes an LLM master key of 32 characters or more, and refuses a development one in production", () => {
+    expect(() => loadConfig({ NODE_ENV: "development", LLM_KEY_SECRET: "too-short" })).toThrow(/LLM_KEY_SECRET/);
+    expect(loadConfig({ NODE_ENV: "development" }).LLM_KEY_SECRET).toBe("");
+    const dev = "dev-llm-master-key-change-me-0123456789";
+    expect(loadConfig({ NODE_ENV: "development", LLM_KEY_SECRET: dev }).LLM_KEY_SECRET).toBe(dev);
+    expect(() => loadConfig({ ...PROD, LLM_KEY_SECRET: dev })).toThrow(/LLM_KEY_SECRET/);
+    expect(() => loadConfig({ ...PROD, LLM_KEY_SECRET: "a".repeat(64) })).not.toThrow();
+  });
+
   it("refuses the embedded database in production", () => {
     expect(() => loadConfig({ ...PROD, DATABASE_URL: "pglite://.data/pglite" })).toThrow(
       /pglite/,

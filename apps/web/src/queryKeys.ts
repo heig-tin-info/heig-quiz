@@ -35,6 +35,13 @@ export const adminUsersKey = [...adminTeachersKey, "users"] as const;
  * `admin` hint another administrator's change raises reaches this list.
  */
 export const adminTasksKey = [...adminTeachersKey, "tasks"] as const;
+/**
+ * The LLM gateway's settings and the month's usage (ADR-058): under
+ * `adminTeachersKey`, so the `admin` hint of another administrator's save or
+ * test refreshes them.
+ */
+export const adminLlmKey = [...adminTeachersKey, "llm"] as const;
+export const adminLlmUsageKey = [...adminTeachersKey, "llm-usage"] as const;
 /** The kiosk station registry (ADR-051 §5). */
 export const adminKioskKey = ["admin-kiosk-devices"] as const;
 /** Whether this browser is a kiosk station: its `quiz_kiosk` cookie, read by the server. */

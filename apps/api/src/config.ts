@@ -203,6 +203,22 @@ const EnvSchema = z.object({
   LLM_PROVIDER: z.enum(["none", "stub"]).default("none"),
 
   /**
+   * The LLM gateway (ADR-058): the MASTER key that encrypts the provider key
+   * an administrator enters in the console (AES-256-GCM, `modules/llm/
+   * crypto.ts`). Empty — the default — turns the gateway off: nothing can be
+   * stored nor sent. A secret of ADR-010 (environment file, age vault), at
+   * least 32 characters; production refuses a development value. Changing it
+   * loses only the stored provider key, which is entered again. It does not
+   * touch the grading pass, which `LLM_PROVIDER` drives (ADR-058 §8).
+   */
+  LLM_KEY_SECRET: z
+    .string()
+    .default("")
+    .refine((s) => s === "" || s.length >= 32, "must be at least 32 characters"),
+  /** The most the console may set as the daily spending cap, in USD (ADR-058 §5). */
+  LLM_DAILY_CAP_MAX_USD: z.coerce.number().positive().default(100),
+
+  /**
    * Bearer token for `GET /metrics` (Prometheus, N-OPS). Empty — the default
    * — means the endpoint is open to an ADMIN SESSION only; it is never
    * public, because the default metrics carry the process's command line,
@@ -364,6 +380,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         ? []
         : [["OIDC_CLIENT_SECRET", "not-for-production"] as const]),
       ["COOKIE_SECRET", "change-me"] as const,
+      ["LLM_KEY_SECRET", "change-me"] as const,
     ];
     for (const [key, marker] of secretsInUse) {
       if (parsed.data[key].includes(marker)) {

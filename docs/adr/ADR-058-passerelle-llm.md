@@ -8,7 +8,12 @@ phases of LLM assistance; [ADR-059](ADR-059-generer-la-reponse.md) (the
 (the nightly review of the questions) build on it and are only proposed.
 
 Delivers F-LLM-04 (the call log) and N-SEC-08 (the key encrypted at rest)
-for the platform's own key. Amends:
+for the platform's own key. Delivered with `apps/api/src/modules/llm/`
+(`gateway.ts`, `service.ts`, `anthropic.ts`, `crypto.ts`, `routes.ts`),
+`@quiz/domain/llm`, `@quiz/contracts/llm`, the migration `llm_gateway`
+(which inserts the settings row), the check `llm.budget`, the audit actions
+`llm.settings` and `llm.test`, and the "AI" tab of the Administration page.
+Amends:
 
 - **F-LLM-01** (docs/spec/02): one provider (Anthropic) and one
   **institutional** key, entered by an administrator; no per-teacher key and
@@ -65,8 +70,9 @@ a zod schema the reply must satisfy. The gateway asks the provider for a
 STRUCTURED output (JSON matching the schema), parses it, retries once on an
 invalid reply, and returns the parsed value or throws a typed `LlmError`
 whose `code` comes from a closed vocabulary (`not_configured`,
-`budget_exhausted`, `key_unreadable`, `refused`, `invalid_output`,
-`provider_error`, `timeout`).
+`key_unreadable`, `budget_exhausted`, `auth_failed`, `rate_limited`,
+`refused`, `invalid_output`, `timeout`, `provider_error`; `LLM_ERROR_CODES`
+of `@quiz/contracts`).
 
 A provider is an adapter behind `LlmProvider` (`apps/api/src/modules/llm/`);
 the only one is Anthropic, through the official SDK. An OpenAI-compatible
@@ -131,15 +137,20 @@ reaches it.
 - Default **20 USD per day**, editable by an administrator in the settings,
   bounded by `LLM_DAILY_CAP_MAX_USD` (environment, default 100), so that a
   bug in the settings route cannot lift the ceiling either.
-- The day is the calendar day in `Europe/Zurich`, by the database's clock.
+- The day is the calendar day in `Europe/Zurich`, of the server's clock
+  (`app.clock`, invariant 5), computed by the database's `date_trunc`.
 - **Reserve, then call.** Under a transaction-scoped advisory lock, the
   gateway sums today's `cost_usd` and inserts a `pending` row whose cost is
   the call's WORST case (`maxTokens` at the output price plus the prompt's
-  length at the input price). Over the cap, nothing is inserted and the call
-  fails with `budget_exhausted`. After the call the row gets its real tokens,
-  cost and status. Parallel calls therefore cannot overshoot together.
-- A call refused by the cap answers `429 llm_budget_exhausted` to the
-  person who asked, and the health check of §7 turns red.
+  length at the input price). Over the cap, the call fails with
+  `budget_exhausted` and nothing reaches the provider; the day's first
+  refusal is logged, at no cost, and no later one.
+  After the call the row gets its real tokens, cost and status. Parallel
+  calls therefore cannot overshoot together.
+- A refusal turns the health check of §7 red for the rest of the day. Each
+  caller words it for its reader: the connection test answers
+  `{ ok: false, error: "budget_exhausted" }`; the routes of ADR-059 will
+  answer `429 llm_budget_exhausted`.
 
 ### 6. The connection test
 
@@ -155,9 +166,12 @@ Saving the settings is audited as `llm.settings` (never with the key).
 The periodic health checks (ADR-055) never call the provider: a check that
 spends money every five minutes would spend it for nothing. `service.llm`
 reads what the process saw of its own calls (`tracked`, ADR-055 §6), and is
-`not_configured` without a master key or a stored key. A new check,
-`llm.budget`, reads today's spend against the cap: warn from 80 %, fail at
-100 %. Neither names a person (ADR-055 §1).
+`not_configured` without a master key (and without the grading stub); with a
+master key but no stored key it reads `unused`, since that verdict is
+synchronous, from the configuration alone. A new check, `llm.budget`, reads
+today's spend against the cap: warn from 80 %, fail at the cap or once the
+cap refused a call today (`HEALTH_THRESHOLDS.llmBudgetWarn`). Neither names a
+person (ADR-055 §1).
 
 ### 8. Not wired into grading yet
 

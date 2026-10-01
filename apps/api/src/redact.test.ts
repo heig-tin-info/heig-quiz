@@ -84,6 +84,10 @@ describe("GitHub tokens (N-SEC-16)", () => {
     expect(redactTokens("authorization: token v1.abc")).toBe("authorization: token ***");
   });
 
+  it("strips an Anthropic API key wherever it appears (ADR-058 §3)", () => {
+    expect(redactTokens('{"x-api-key":"sk-ant-api03-FAKE_fake-0000"}')).toBe('{"x-api-key":"sk-ant-***"}');
+  });
+
   it("strips every bare token by its prefix", () => {
     for (const prefix of ["ghs", "ghu", "ghp", "gho", "ghr"]) {
       expect(redactTokens(`token ${prefix}_abc123XYZ leaked`)).toBe("token gh*_*** leaked");

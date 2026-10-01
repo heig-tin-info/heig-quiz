@@ -39,6 +39,11 @@ export const HEALTH_THRESHOLDS = {
   connectionsFail: 0.95,
   /** A job waiting this long in a queue that has workers is stuck. */
   jobWaitWarnMs: 10 * 60_000,
+  /**
+   * Share of the LLM gateway's daily cap spent today (ADR-058 §7): a warning
+   * from 80 %; reaching the cap, or a call refused by it, fails.
+   */
+  llmBudgetWarn: 0.8,
   /** Server errors (5xx) of the last 24 h from which the page asks for a look; never a failure. */
   serverErrorsWarn: 5,
 } as const;
@@ -107,6 +112,12 @@ export function taskAttention(task: TaskState, now: Date): "error" | "overdue" |
 
 export function dbLatencyStatus(ms: number): CheckStatus {
   return ms > T.dbLatencyWarnMs ? "warn" : "ok";
+}
+
+/** Today's LLM spend against the cap, `fail` too once the cap refused a call today. */
+export function llmBudgetStatus(spentUsd: number, capUsd: number, refusedToday: boolean): CheckStatus {
+  if (refusedToday || spentUsd >= capUsd) return "fail";
+  return spentUsd >= capUsd * T.llmBudgetWarn ? "warn" : "ok";
 }
 
 export function connectionsStatus(used: number, max: number): CheckStatus {
