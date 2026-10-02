@@ -23,11 +23,20 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { IdParam, ProjectAcceptance, ProjectCreate, ProjectListQuery, ProjectPatch, ProjectSourceParams } from "@quiz/contracts";
+import {
+  IdParam,
+  ProjectAcceptance,
+  ProjectCreate,
+  ProjectListQuery,
+  ProjectPatch,
+  ProjectRepoDeadline,
+  ProjectRepoParams,
+  ProjectSourceParams,
+} from "@quiz/contracts";
 
 import { actorOf } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { accessibleProject, projectsClassroom, studentProject } from "../guards.js";
+import { accessibleProject, accessibleProjectRepo, projectsClassroom, studentProject } from "../guards.js";
 import { notFound, studentRoute, teacherRoute } from "../http.js";
 import * as service from "./service.js";
 import { registerProjectHandlers } from "./webhooks.js";
@@ -98,6 +107,8 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     session,
     teacher({ ...onProject, body: ProjectPatch }, async ({ req, now, body, scope }) => {
       const row = await service.patchProject(app.db, scope.project.id, body, actorOf(req), now);
+      // A reopen's locks are lifted by the deadline job, never by 100 calls here (M3-05a).
+      if (body.deadlineAt !== undefined) await service.requestDeadlineWork(app, config, row.id);
       return service.projectSummary(app.db, row, now);
     }),
   );
@@ -138,6 +149,35 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
       return service.projectSummary(app.db, row, now);
     }),
   );
+
+  // ------------------------------------------------------------ one repository (M3-05a)
+
+  const onRepo = { params: ProjectRepoParams, load: accessibleProjectRepo.bind(null, app) };
+
+  /** D13 as amended: the repository's own deadline (an individual extension), or the project's again. */
+  app.put(
+    "/app/api/projects/:id/repos/:rid/deadline",
+    session,
+    teacher({ ...onRepo, body: ProjectRepoDeadline }, async ({ req, now, body, scope }) => {
+      const at = body.deadlineAt === null ? null : new Date(body.deadlineAt);
+      await service.setRepoDeadline(app.db, scope.project.id, scope.repo.id, at, actorOf(req), now);
+      await service.requestDeadlineWork(app, config, scope.project.id);
+      return service.repoDeadline(app.db, scope.repo.id);
+    }),
+  );
+
+  /** F-PROJ-09: the staff lock or unlock one repository by hand; the deadline job makes GitHub hold it. */
+  for (const action of ["lock", "unlock"] as const) {
+    app.post(
+      `/app/api/projects/:id/repos/:rid/${action}`,
+      session,
+      teacher(onRepo, async ({ req, scope }) => {
+        await service.setStaffLock(app.db, scope.project.id, scope.repo.id, action === "lock", actorOf(req));
+        await service.requestDeadlineWork(app, config, scope.project.id);
+        return service.repoDeadline(app.db, scope.repo.id);
+      }),
+    );
+  }
 
   // ------------------------------------------------------------ the student's side (M3-03)
 

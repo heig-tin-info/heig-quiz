@@ -29,7 +29,8 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Push receipt | The server's own record of a push to a tracked repository — head commit and the time the platform received the webhook — written as the webhook arrives. The legal reference of a deadline: the commit's date is never trusted (ADR-012). |
 | Grade run | One CI run of `grading.yml` on a student repository, with the score it reported (`points / max`) or why it has none. Immutable. heig-classroom's name, kept for the table (`project_grade_runs`), though it holds a score. |
 | Score | Points out of a maximum, as a project's CI reports them (`4.5/6`). Never a grade: a score becomes a grade through the project's grading scale, at the release. |
-| Frozen score | The score of a repository at its deadline: provisional at the deadline, definitive at the deadline plus the grace. Later runs never change it. |
+| Repository deadline | A student repository's own deadline, an individual extension its staff set (D13 as amended 2026-10-02). Its **effective deadline** is that one when set, else the project's: every deadline rule of a repository — its lock or commit, a late receipt, its freeze — reads the effective one. Never the roster's extra time (F-ORG-07). |
+| Frozen score | The score of a repository at its (effective) deadline: provisional at the deadline, definitive at the deadline plus the grace. Later runs never change it. |
 | Final score | The score a project's release gives a student: the teacher's, else the final review's, else the frozen score. |
 | Review checkpoint | A dated step of a project at which the repository's CI is asked for a review of the work so far (`grade-milestone` on the wire). Never counts for the score. heig-classroom's "milestone", a word Quiz keeps for an evaluation's navigation checkpoint. |
 | CI runner | The self-hosted GitHub Actions runners that run a project's CI (ADR-007). Never "runner" alone, which is `apps/runner`. |
@@ -158,8 +159,8 @@ erDiagram
 - **GITHUB_ACCOUNT**: `user_id`, `github_user_id` unique, `login`, `linked_at`.
 - **CLASSROOM_JOURNAL**: `classroom_id`, `mode` `quiz` / `github`, and in GitHub mode `github_repo_id`, `full_name`, `ref`, `root_path`, `last_commit_sha`, `sync_status`, `sync_error`.
 - **JOURNAL_PAGE**: `path`, `title`, `front_matter`, `draft`, `visible_from`, the rendered `html` and `toc`, `warnings`.
-- **PROJECT**: `id`, `classroom_id`, `name`, `slug`, `state` `draft` / `published` / `locked`, `start_at`, `deadline_at`, `grace_minutes`, the source and distribution repositories, `source_strategy` `whole` / `squash`, `deadline_strategy` `lock` / `commit`, `grading_mode` `auto` / `none`, `publish_mode`, `branches`, `protected_files`, `group_mode`, `grading_scale`, `frozen_at`, `released_at`, `archived_at`.
-- **PROJECT_REPO**: `project_id`, `user_id` (who accepted), `group_id` for a group repository, `github_repo_id`, `full_name`, `provision_status`, `invitation_status`, `locked_at`, `ci_status`, the current, frozen and review grade runs, the teacher's points and comment, `deleted_at`.
+- **PROJECT**: `id`, `classroom_id`, `name`, `slug`, `state` `draft` / `published` / `locked`, `start_at`, `deadline_at`, `grace_minutes`, the source and distribution repositories, `source_strategy` `whole` / `squash`, `deadline_strategy` `lock` / `commit`, `grading_mode` `auto` / `none`, `publish_mode`, `branches`, `protected_files`, `group_mode`, `grading_scale`, `deadline_applied_at`, `released_at`, `archived_at`.
+- **PROJECT_REPO**: `project_id`, `user_id` (who accepted), `group_id` for a group repository, `github_repo_id`, `full_name`, `provision_status`, `invitation_status`, its own `deadline_at` (null: the project's), `deadline_applied_at`, `frozen_at`, `locked_at` (and `archived_at` when the lock fell back to archiving), the staff's hand on the lock (`staff_lock`), `ci_status`, the current, frozen and review grade runs, the teacher's points and comment, `deleted_at`.
 - **GRADE_RUN**: `repo_id`, `workflow_run_id`, `run_attempt`, `head_sha`, `conclusion`, `points`, `max`, `parse_status`, `after_deadline`, `completed_at`.
 - **GRADEBOOK_COLUMN**: `classroom_id`, the activity, `counts`, `weight`; the classroom's `mean_published`.
 - **DRILL_CARD**: `user_id`, `question_id`, FSRS parameters `stability`, `difficulty`, `due_at`, `reps`, `lapses`, `last_review_at`; one per student and question, created at the release of an exam or the hand-in of an exercise (ADR-041). Its reviews record the rating, the active time and the device class.
@@ -192,6 +193,6 @@ erDiagram
 
 **Project**: `draft` → publish (now, or by the ticker at its start) → `published` → deadline → `locked`; frozen definitively at the deadline plus the grace, then the final review dispatched, then released by the staff. A deadline moved later reopens it. Archived and unarchived at any time.
 
-**Project repository**: accepted → `provision_status` `pending` → `ok` (or `error`, retried by the student) → invitation `pending` → `accepted`; locked at the deadline; `deleted` for good when the repository is gone from GitHub.
+**Project repository**: accepted → `provision_status` `pending` → `ok` (or `error`, retried by the student) → invitation `pending` → `accepted`; at its effective deadline applied (provisional freeze) and locked, frozen definitively at the effective deadline plus the grace; its own deadline moved later reopens it alone; `deleted` for good when the repository is gone from GitHub.
 
 **Grading**: `proposed` → `validated`. An `auto` grading on a fully deterministic type is born `validated`. An `llm` grading is born `proposed`. A manual grading is born `validated`.

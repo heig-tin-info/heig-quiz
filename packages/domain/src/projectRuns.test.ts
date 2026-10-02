@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { GRADING_WORKFLOW_PATH, receivedLate, runKind, selectScoreRun, type ScoredRun } from "./projectRuns.js";
+import {
+  deadlineWantsLock,
+  effectiveDeadline,
+  GRADING_WORKFLOW_PATH,
+  receivedLate,
+  reopens,
+  runKind,
+  selectScoreRun,
+  type ScoredRun,
+} from "./projectRuns.js";
 
 const at = (h: number) => new Date(Date.UTC(2026, 9, 2, h));
 let n = 0;
@@ -21,6 +30,31 @@ describe("runKind", () => {
     // A student workflow listening to repository_dispatch cannot impersonate the review.
     expect(runKind({ event: "repository_dispatch", path: ".github/workflows/own.yml" })).toBe("ci");
     expect(runKind({ event: "", path: GRADING_WORKFLOW_PATH })).toBe("ci");
+  });
+});
+
+describe("effectiveDeadline (D13 amended)", () => {
+  it("is the repository's own deadline when it has one, the project's otherwise", () => {
+    expect(effectiveDeadline({ deadlineAt: at(20) }, { deadlineAt: at(12) })).toEqual(at(20));
+    expect(effectiveDeadline({ deadlineAt: null }, { deadlineAt: at(12) })).toEqual(at(12));
+  });
+});
+
+describe("deadlineWantsLock (F-PROJ-09)", () => {
+  it("follows the staff's hand, else the applied deadline with the lock strategy", () => {
+    expect(deadlineWantsLock({ staffLock: null, deadlineAppliedAt: null }, "lock")).toBe(false);
+    expect(deadlineWantsLock({ staffLock: null, deadlineAppliedAt: at(12) }, "lock")).toBe(true);
+    expect(deadlineWantsLock({ staffLock: null, deadlineAppliedAt: at(12) }, "commit")).toBe(false);
+    expect(deadlineWantsLock({ staffLock: false, deadlineAppliedAt: at(12) }, "lock")).toBe(false);
+    expect(deadlineWantsLock({ staffLock: true, deadlineAppliedAt: null }, "commit")).toBe(true);
+  });
+});
+
+describe("reopens (F-PROJ-09)", () => {
+  it("reopens an applied deadline moved ahead of now, nothing else", () => {
+    expect(reopens(at(10), at(14), at(12))).toBe(true);
+    expect(reopens(at(10), at(11), at(12))).toBe(false);
+    expect(reopens(null, at(14), at(12))).toBe(false);
   });
 });
 

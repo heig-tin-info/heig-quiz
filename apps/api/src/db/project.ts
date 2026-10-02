@@ -119,9 +119,22 @@ export const projects = pgTable(
     syncedAt: timestamp("synced_at", { withTimezone: true }),
     /** Validated by `ProjectGradingScale` of `@quiz/contracts` (D05); no default, the service writes it. */
     gradingScale: jsonb("grading_scale").$type<ProjectGradingScale>().notNull(),
+    /**
+     * The project's deadline applied by the ticker (`locked` from then on);
+     * a repository with its own later deadline stays open until its own
+     * (`project_repos.deadline_applied_at`). Cleared by a reopen.
+     */
     deadlineAppliedAt: timestamp("deadline_applied_at", { withTimezone: true }),
-    /** The definitive freeze, at deadline + grace (F-PROJ-11). */
-    frozenAt: timestamp("frozen_at", { withTimezone: true }),
+    // No `frozen_at` (dropped by 0058, M3-05a): the freeze is a repository's,
+    // `project_repos.frozen_at`, at its effective deadline + the grace.
+    /**
+     * The lease of the project's `project.deadline` job (ADR-064): taken by
+     * the ticker, or by a staff action, with one conditional UPDATE when it
+     * is null or older than ten minutes; given back by the job that holds it
+     * once every repository is settled. A job that crashed, or exhausted its
+     * retries, leaves it to expire, and the ticker claims the work again.
+     */
+    deadlineJobAt: timestamp("deadline_job_at", { withTimezone: true }),
     /** The final review dispatched to every repository (`grade-final`). */
     reviewDispatchedAt: timestamp("review_dispatched_at", { withTimezone: true }),
     /** The day-before reminder sent (one shot, claimed by the ticker). */
@@ -148,15 +161,8 @@ export const projects = pgTable(
     index("projects_deadline_due_idx")
       .on(t.deadlineAt)
       .where(sql`${t.state} = 'published' AND ${t.deadlineAppliedAt} IS NULL`),
-    // the definitive freeze after the grace,
-    index("projects_freeze_due_idx")
-      .on(t.deadlineAt)
-      .where(sql`${t.deadlineAppliedAt} IS NOT NULL AND ${t.frozenAt} IS NULL`),
-    // the final review once frozen,
-    index("projects_review_due_idx")
-      .on(t.frozenAt)
-      .where(sql`${t.frozenAt} IS NOT NULL AND ${t.reviewDispatchedAt} IS NULL`),
-    // and the scheduled drafts waiting for their start.
+    // and the scheduled drafts waiting for their start. (The freeze and the
+    // final review are per repository since M3-05a: `project_repos`.)
     index("projects_scheduled_publish_idx")
       .on(t.startAt)
       .where(sql`${t.state} = 'draft' AND ${t.publishMode} = 'scheduled' AND ${t.archivedAt} IS NULL`),
@@ -270,7 +276,46 @@ export const projectRepos = pgTable(
     /** Accept's time (`app.clock`), or heig-classroom's for an imported row: no default. */
     acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull(),
     invitationStatus: text("invitation_status", { enum: INVITATION_STATUSES }).notNull().default("none"),
+    /**
+     * The repository's own deadline, an individual extension set by its
+     * staff (D13 as amended 2026-10-02); null: the project's. The EFFECTIVE
+     * deadline, `coalesce(deadline_at, projects.deadline_at)`, is what every
+     * deadline rule reads (`effectiveDeadline`, `@quiz/domain`).
+     */
+    deadlineAt: timestamp("deadline_at", { withTimezone: true }),
+    /**
+     * The effective deadline applied (M3-05a): the provisional freeze written
+     * (`frozen_grade_run_id`, the current score's run), the grace begun.
+     * Cleared when the effective deadline moves later (a reopen).
+     */
+    deadlineAppliedAt: timestamp("deadline_applied_at", { withTimezone: true }),
+    /** The definitive freeze, at the effective deadline + the project's grace (F-PROJ-11). */
+    frozenAt: timestamp("frozen_at", { withTimezone: true }),
+    /**
+     * Every handed-out branch carries the App's deadline commit (strategy
+     * `commit`, best effort): the repository's deadline work is done.
+     */
+    deadlineCommittedAt: timestamp("deadline_committed_at", { withTimezone: true }),
+    /**
+     * Locked on GitHub — by the deadline's ruleset, by the archive that
+     * stands for it, or by the staff's hand. What GitHub was last made to
+     * hold; what it should hold is `staff_lock`, else the deadline.
+     */
     lockedAt: timestamp("locked_at", { withTimezone: true }),
+    /**
+     * The lock fell back to archiving the repository (H8: no ruleset at
+     * provisioning, or the plan refuses rulesets), shown as degraded; a
+     * reopen or an unlock un-archives it.
+     */
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    /**
+     * The staff's hand on the lock (F-PROJ-09): true locked, false unlocked,
+     * null the deadline decides. A deadline pass never overrides it — a
+     * repository its staff unlocked is never locked again — until the
+     * repository's effective deadline moves, which clears it.
+     */
+    staffLock: boolean("staff_lock"),
+    /** The protection ruleset made at provisioning (`hgc-protect`); null on a plan without rulesets. */
     rulesetId: bigint("ruleset_id", { mode: "number" }),
     lastCommitSha: text("last_commit_sha"),
     lastCommitAt: timestamp("last_commit_at", { withTimezone: true }),
@@ -319,6 +364,10 @@ export const projectRepos = pgTable(
     index("project_repos_group_idx").on(t.groupId),
     // The student side reads its repositories by account.
     index("project_repos_user_idx").on(t.userId),
+    // The ticker's scan of the repositories in their grace (M3-05a).
+    index("project_repos_freeze_due_idx")
+      .on(t.projectId)
+      .where(sql`${t.deadlineAppliedAt} IS NOT NULL AND ${t.frozenAt} IS NULL`),
   ],
 );
 

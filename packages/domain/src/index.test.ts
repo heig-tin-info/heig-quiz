@@ -67,6 +67,11 @@ describe("@quiz/domain public surface", () => {
       // Which runs count (M3-04).
       "receivedLate",
       "selectScoreRun",
+      // A repository's own deadline, J−n in calendar days (M3-05a).
+      "effectiveDeadline",
+      "addZonedDays",
+      "deadlineWantsLock",
+      "reopens",
       "slugify",
       "zonedIso",
     ];

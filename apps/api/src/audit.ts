@@ -225,6 +225,20 @@ export type AuditAction =
   | "project.archive"
   | "project.unarchive"
   /**
+   * A project's deadline (F-PROJ-09, F-PROJ-11; merge task M3-05a), subject
+   * the project. By the ticker: `deadline_applied` (`payload.deadlineAt`;
+   * the project `locked`); by the `project.deadline` job,
+   * `deadline_enforced` — one entry per pass that changed something on
+   * GitHub, `payload.strategy`, `locked` (an archive counted as a lock),
+   * `unlocked`, `committed`, `deleted` (counts) and `failed` (full names):
+   * the facts M3-09's `project_deadline_applied` notice is worded from. By
+   * the staff: `deadline_reopened` — a deadline already applied moved later,
+   * `payload.deadlineAt`, `previous`, `repos` (the repositories reopened).
+   */
+  | "project.deadline_applied"
+  | "project.deadline_enforced"
+  | "project.deadline_reopened"
+  /**
    * A student's Accept (F-PROJ-05, merge task M3-03), subject the
    * `project_repos` row. `accept`: `payload.repo` (the student's own full
    * name), `invitation`, `protected` (false: a plan without rulesets);
@@ -241,11 +255,28 @@ export type AuditAction =
    * restore commit), `head` (the push it answered); `revert_cap`: a sixth
    * restore in an hour refused, the protection suspended until the staff
    * re-enable it (M3-08) — `payload.files`, `head`; `deleted`: the
-   * repository deleted on GitHub, `payload.via` (`webhook`).
+   * repository deleted on GitHub, `payload.via` (`webhook`, or `deadline`:
+   * the 404 a deadline's step met, M3-05a).
    */
   | "project_repo.restore"
   | "project_repo.revert_cap"
   | "project_repo.deleted"
+  /**
+   * A repository's deadline and lock (F-PROJ-09, D13 amended; merge task
+   * M3-05a), subject the `project_repos` row. By the staff: `deadline_set`
+   * (its own deadline, `payload.deadlineAt` — null: the project's again —,
+   * `previous`, `reopened`), `lock` and `unlock` (the staff's hand,
+   * `payload.staffLock`). By the deadline job: `archived` — the lock fell
+   * back to archiving the repository (H8, a plan without rulesets). By the
+   * ticker: `deadline_applied` (its provisional freeze) and `frozen` (the
+   * definitive one), `payload.projectId`, `deadlineAt` (its effective one).
+   */
+  | "project_repo.deadline_applied"
+  | "project_repo.frozen"
+  | "project_repo.deadline_set"
+  | "project_repo.lock"
+  | "project_repo.unlock"
+  | "project_repo.archived"
   | "question.copy"
   | "question.create"
   | "question.delete"

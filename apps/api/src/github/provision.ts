@@ -29,7 +29,8 @@ const PROTECT_RULESET = "hgc-protect";
  */
 const PLAN_RESTRICTION = /upgrade to github|make this repository public/i;
 
-function isPlanRestriction(err: unknown): boolean {
+/** Also the one case where the deadline's lock archives instead (H8, `lock.ts`). */
+export function isPlanRestriction(err: unknown): boolean {
   const { status, message } = err as { status?: number; message?: string };
   return status === 403 && PLAN_RESTRICTION.test(String(message ?? ""));
 }

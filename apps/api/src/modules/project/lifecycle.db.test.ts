@@ -403,12 +403,16 @@ describe("patch (F-PROJ-03)", () => {
     expect(refusal(await patch(project.id, { durationMinutes: 60 }))).toEqual([409, "publish_mode_frozen"]);
     expect(refusal(await patch(project.id, { deadlineAt: "2026-10-02T07:00:00Z" }))).toEqual([422, "deadline_past"]);
 
-    // Past the deadline, its strategy freezes; once applied, the deadline too (the reopen is M3-05's).
+    // Past the deadline, its strategy freezes; once applied, the deadline
+    // still moves later — the reopen (M3-05a, `deadline.db.test.ts`).
     server.clock.set("2026-10-11T00:00:00Z");
     expect(refusal(await patch(project.id, { deadlineStrategy: "lock" }))).toEqual([409, "strategy_frozen"]);
     await server.app.db.update(projects).set({ state: "locked", deadlineAppliedAt: new Date("2026-10-10T22:00:30Z") }).where(eq(projects.id, project.id));
-    expect(refusal(await patch(project.id, { deadlineAt: "2026-10-20T22:00:00Z" }))).toEqual([409, "deadline_applied"]);
+    expect(refusal(await patch(project.id, { deadlineAt: "2026-10-10T23:00:00Z" }))).toEqual([422, "deadline_past"]);
     expect((await patch(project.id, { name: "Still renamable" })).statusCode).toBe(200);
+    const reopened = await patch(project.id, { deadlineAt: "2026-10-20T22:00:00Z" });
+    expect(reopened.statusCode, reopened.body).toBe(200);
+    expect(ProjectSummary.parse(reopened.json())).toMatchObject({ state: "published", deadlineAppliedAt: null });
   });
 });
 

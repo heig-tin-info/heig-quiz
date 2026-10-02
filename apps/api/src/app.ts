@@ -49,6 +49,7 @@ import { registerNotificationJobs } from "./modules/notifications/jobs.js";
 import { notificationsPlugin } from "./modules/notifications/routes.js";
 import { orgPlugin } from "./modules/org/routes.js";
 import { pollPlugin } from "./modules/poll/routes.js";
+import { registerProjectJobs } from "./modules/project/jobs.js";
 import { projectPlugin } from "./modules/project/routes.js";
 import { poolPlugin } from "./modules/pool/routes.js";
 import { flushCoalescers, openStreamCount } from "./modules/realtime/bus.js";
@@ -263,6 +264,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     if (githubApp(config)) {
       await step("github jobs registration", () => registerGithubJobs(app, started, config));
       await step("journal jobs registration", () => registerJournalJobs(app, started, config));
+      await step("project jobs registration", () => registerProjectJobs(app, started, config));
     }
   }
   // The rows of the scheduled catalog (D10), once. A database down at boot

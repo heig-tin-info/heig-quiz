@@ -2,8 +2,13 @@
  * Locking/unlocking of a student repository via ruleset (GH-41), a
  * mechanism validated by spike S2: while locked, every push is refused
  * (App and org admin bypass), removal reopens the repository. Used by the
- * teacher's manual button (US-22: "one more push") and, in M4, by the
- * deadline job.
+ * deadline job and the staff's lock and unlock (F-PROJ-09, merge task
+ * M3-05a, `modules/project/deadline.ts`).
+ *
+ * The fallback H8, on a plan without rulesets: the repository is archived
+ * instead (read-only for everyone, the App included), and un-archived to
+ * unlock it. Never on a GitHub failure — a 5xx or a rate limit is retried —
+ * only where rulesets cannot exist (`isPlanRestriction`, `provision.ts`).
  */
 import type { Octokit } from "octokit";
 
@@ -50,4 +55,14 @@ export async function unlockStudentRepo(
     repo,
     ruleset_id: existing.id,
   });
+}
+
+/** Archives the repository (H8's lock), or un-archives it; idempotent. */
+export async function setRepoArchived(
+  octokit: Octokit,
+  org: string,
+  repo: string,
+  archived: boolean,
+): Promise<void> {
+  await octokit.request("PATCH /repos/{owner}/{repo}", { owner: org, repo, archived });
 }

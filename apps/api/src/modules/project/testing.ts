@@ -11,8 +11,9 @@
  * a `PATCH` sets, the rulesets (or the free plan's 403), the collaborators
  * invited and their permission. From M3-04, the Git Data API a restore
  * calls (a file's contents, blobs, trees, commits, a ref moved fast-forward
- * only), a compare, and `commit` for a push made outside the App. Test
- * support only; nothing in the application imports it.
+ * only), a compare, and `commit` for a push made outside the App. From
+ * M3-05a, a ruleset deleted and a repository archived (read-only until
+ * un-archived). Test support only; nothing in the application imports it.
  */
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -53,6 +54,8 @@ export interface RepoWorld {
   freePlan: boolean;
   /** The rulesets of each repository, by `org/name`. */
   rulesets: Map<string, { id: number; name: string }[]>;
+  /** The archived repositories (M3-05a): read-only until a `PATCH` un-archives them. */
+  archived: Set<string>;
   /** The collaborators of each repository, by `org/name`: login → permission. */
   collaborators: Map<string, Map<string, string>>;
   /** Logins GitHub refuses to invite (an account renamed away): the 403 of the collaborators endpoint. */
@@ -133,7 +136,7 @@ export function repoWorld(): RepoWorld {
     name,
     full_name: `${org}/${name}`,
     private: !world.publicRepos.has(`${org}/${name}`),
-    archived: false,
+    archived: world.archived.has(`${org}/${name}`),
     default_branch: world.exists(`${org}/${name}`) ? defaultOf(`${org}/${name}`) : "main",
     pushed_at: "2026-09-30T08:00:00Z",
     owner: { login: org, id: world.foreignOwner.has(`${org}/${name}`) ? 999_999 : (world.orgIds[org] ?? 0) },
@@ -145,9 +148,18 @@ export function repoWorld(): RepoWorld {
     const fullName = `${org}/${name}`;
     let m: RegExpExecArray | null;
     if (req.method === "PATCH" && rest === "") {
-      const { default_branch } = JSON.parse(String(req.body)) as { default_branch?: string };
+      const { default_branch, archived } = JSON.parse(String(req.body)) as { default_branch?: string; archived?: boolean };
       if (default_branch) world.git(fullName, "symbolic-ref", "HEAD", `refs/heads/${default_branch}`);
+      if (archived === true) world.archived.add(fullName);
+      if (archived === false) world.archived.delete(fullName);
       return json(repoJson(org, name));
+    }
+    // An archived repository takes no write but its un-archiving (GitHub's 403).
+    if (world.archived.has(fullName)) return json({ message: "Repository was archived so is read-only." }, 403);
+    if (req.method === "DELETE" && (m = /^\/rulesets\/(\d+)$/.exec(rest))) {
+      const id = Number(m[1]);
+      world.rulesets.set(fullName, (world.rulesets.get(fullName) ?? []).filter((r) => r.id !== id));
+      return new Response(null, { status: 204 });
     }
     const body = () => JSON.parse(String(req.body)) as Record<string, unknown>;
     if (req.method === "POST" && rest === "/git/blobs") {
@@ -202,6 +214,7 @@ export function repoWorld(): RepoWorld {
     stallPushes: false,
     freePlan: false,
     rulesets: new Map(),
+    archived: new Set(),
     collaborators: new Map(),
     uninvitable: new Set(),
     release(ok) {

@@ -11,8 +11,14 @@
  * From M3-04: GitHub's events on projects (`webhooks.ts`, registered by
  * the plugin), the grading pipeline (`grading.ts`, `ingestCompletedRun`,
  * the one path M3-06 reuses), the protected files (`protection.ts`).
+ * From M3-05a: the deadline's rules and what moving it does
+ * (`deadline.ts`: the reopen, a repository's own deadline, the staff's
+ * lock), and what applies it (`jobs.ts`: the ticker's claims, the
+ * `project.deadline` job).
  */
 export { acceptProject } from "./accept.js";
+export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
+export { requestDeadlineWork } from "./jobs.js";
 export {
   createProject,
   deleteProject,
