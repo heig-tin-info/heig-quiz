@@ -20,6 +20,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["adminTasksKey", keys.adminTasksKey, ["admin-teachers", "tasks"]],
     ["adminLlmKey", keys.adminLlmKey, ["admin-teachers", "llm"]],
     ["generateAvailabilityKey", keys.generateAvailabilityKey, ["generate-availability"]],
+    ["poolReviewsKey", keys.poolReviewsKey("p1"), ["pool", "p1", "reviews"]],
     ["adminLlmUsageKey", keys.adminLlmUsageKey, ["admin-teachers", "llm-usage"]],
     ["adminKioskKey", keys.adminKioskKey, ["admin-kiosk-devices"]],
     ["kioskStationKey", keys.kioskStationKey, ["kiosk-station"]],

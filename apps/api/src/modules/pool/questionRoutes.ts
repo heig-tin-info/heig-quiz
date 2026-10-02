@@ -15,7 +15,6 @@ import {
   QuestionPatch,
   QuestionSearch,
   VersionParam,
-  type LlmErrorCode,
   type StatsReset,
 } from "@quiz/contracts";
 
@@ -30,18 +29,7 @@ import { LlmError } from "../llm/service.js";
 import { poolChanged } from "./events.js";
 import { GenerateRefusal, generateAnswers, generatorTypes } from "./generate.js";
 import * as service from "./service.js";
-import { coreFailure, type PoolRouteContext } from "./routeContext.js";
-
-/** A held-down wand, not a quota (ADR-059): the gateway's daily cap is the ceiling. */
-const GENERATIONS_PER_MINUTE = 10;
-
-/** How a failed generation answers the editor: the gateway's code, worded by the client. */
-const LLM_FAILURES: Partial<Record<LlmErrorCode, [number, string]>> = {
-  not_configured: [409, "llm_not_configured"],
-  key_unreadable: [409, "llm_not_configured"],
-  budget_exhausted: [429, "llm_budget_exhausted"],
-  rate_limited: [429, "rate_limited"],
-};
+import { coreFailure, llmFailure, LLM_CALLS_PER_MINUTE, type PoolRouteContext } from "./routeContext.js";
 
 export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
   const { requireTeacher, trace, teacher, inPool, onQuestion } = ctx;
@@ -160,7 +148,7 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
     teacher(
       { params: IdParam, body: GenerateRequest, load: onQuestion("contributor") },
       async ({ req, reply, body, scope }) => {
-        if (!generations.spend(`generate:${req.user!.id}`, GENERATIONS_PER_MINUTE, app.clock.now())) {
+        if (!generations.spend(`generate:${req.user!.id}`, LLM_CALLS_PER_MINUTE, app.clock.now())) {
           return reply.code(429).header("retry-after", String(BUDGET_RETRY_AFTER_S)).send({ error: "rate_limited" });
         }
         try {
@@ -174,8 +162,8 @@ export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): voi
         } catch (error) {
           if (error instanceof GenerateRefusal) return reply.code(400).send({ error: error.code });
           if (error instanceof LlmError) {
-            const [status, code] = LLM_FAILURES[error.code] ?? [502, "llm_failed"];
-            return reply.code(status).send({ error: code, reason: error.code });
+            const { status, body } = llmFailure(error);
+            return reply.code(status).send(body);
           }
           throw error;
         }

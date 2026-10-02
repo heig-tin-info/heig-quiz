@@ -6,13 +6,16 @@ import type {
   QuestionMeta,
   QuestionRow,
   QuestionSearch,
+  ReviewPill,
   VersionRow,
 } from "@quiz/contracts";
+import { reviewPill } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import {
   coursePools,
   pools,
+  questionReviews,
   questionTags,
   questionVersions,
   questions,
@@ -176,6 +179,8 @@ interface VersionFacts {
   draftUpdatedAt: Date | null;
   /** The latest published config, for `keyless`. */
   latest: VersionContent | null;
+  /** The LLM review of the latest published version (ADR-060), or null. */
+  review: ReviewPill | null;
 }
 
 /** Latest published number, its deprecation, and the draft's mtime, per question. */
@@ -197,8 +202,11 @@ async function versionFactsOf(
       configVersion: questionVersions.configVersion,
       explanation: questionVersions.explanation,
       variables: questionVersions.variables,
+      reviewState: questionReviews.state,
+      reviewFindings: questionReviews.findings,
     })
     .from(questionVersions)
+    .leftJoin(questionReviews, eq(questionReviews.versionId, questionVersions.id))
     .where(inArray(questionVersions.questionId, ids));
   for (const row of rows) {
     const facts = out.get(row.questionId) ?? {
@@ -207,6 +215,7 @@ async function versionFactsOf(
       deprecated: false,
       draftUpdatedAt: null,
       latest: null,
+      review: null,
     };
     if (row.number === null) {
       facts.draftUpdatedAt = row.updatedAt;
@@ -221,6 +230,7 @@ async function versionFactsOf(
         explanation: row.explanation,
         variables: row.variables,
       };
+      facts.review = row.reviewState ? reviewPill(row.reviewState, row.reviewFindings ?? []) : null;
     }
     out.set(row.questionId, facts);
   }
@@ -273,6 +283,7 @@ function rowJson(
     keyless: isKeyless(question.type, facts?.latest ?? null),
     starred: question.starred,
     randomizable: question.randomizable,
+    review: facts?.review ?? null,
   };
 }
 

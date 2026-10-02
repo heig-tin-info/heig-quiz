@@ -13,6 +13,7 @@ import { PublishDialog } from "./PublishDialog";
 import { EditorExpandChrome } from "./EditorExpandLayer";
 import { QuestionEditTab } from "./QuestionEditTab";
 import { QuestionHeader } from "./QuestionHeader";
+import { useReviewNow } from "./reviewNow";
 import { TryPanel } from "./TryPanel";
 import { useEditorShortcuts } from "./useEditorShortcuts";
 import { useQuestionActions } from "./useQuestionActions";
@@ -190,6 +191,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   }, [flush, id]);
 
   const type = detail.data?.meta.type;
+  const reviewNow = useReviewNow(detail.data, readOnly);
   const onTry = useMemo(
     () => (type === undefined ? undefined : tryAdapterFor(type, { id, flush })),
     [type, id, flush],
@@ -261,6 +263,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         onPublish={startPublish}
         onDuplicate={() => duplicate(data.meta)}
         onDelete={() => void askDelete(data.meta)}
+        onReviewNow={reviewNow}
       />
 
       <Tabs

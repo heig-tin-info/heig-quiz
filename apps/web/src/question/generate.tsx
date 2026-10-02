@@ -1,13 +1,13 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { WandSparkles } from "lucide-react";
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
-import type { GenerateRequest, GenerateResult, LlmAvailability } from "@quiz/contracts";
+import type { GenerateRequest, GenerateResult } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { generateAvailabilityKey } from "../queryKeys";
+import { useLlmAvailability } from "../llmAvailability";
 import { Alert, Button } from "../ui";
 import type { Draft } from "./useQuestionDraft";
 
@@ -32,12 +32,7 @@ export function useGenerate({
 }) {
   const t = useT();
   const toast = useToast();
-  const availability = useQuery<LlmAvailability>({
-    queryKey: generateAvailabilityKey,
-    queryFn: () => api("/app/api/generate/availability"),
-    staleTime: 60_000,
-    retry: false,
-  });
+  const availability = useLlmAvailability();
   const enabled =
     !readOnly && draft !== null && availability.data?.available === true && availability.data.types.includes(type);
 

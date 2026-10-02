@@ -1,5 +1,13 @@
 /** Section 2 of the mock — see `index.ts` for the layout. */
-import { PoolColor, type DraftInstances, type ParametersDraft, type QuestionStats, type ZodIssueLite } from "@quiz/contracts";
+import {
+  PoolColor,
+  type DraftInstances,
+  type ParametersDraft,
+  type QuestionReview,
+  type QuestionStats,
+  type ReviewList,
+  type ZodIssueLite,
+} from "@quiz/contracts";
 import {
   clozeStudentTemplate,
   describeBlank,
@@ -9,7 +17,9 @@ import {
   mcqFraction,
   parseCloze,
   splitTemplate,
+  reviewPill,
   truncateSelection,
+  UNREVIEWED_TYPES,
 } from "@quiz/domain";
 import type {
   McqScorePolicy,
@@ -1508,6 +1518,48 @@ const poolTagDetails = (poolId: string) =>
     count: liveQuestions(poolId).filter((q) => q.tags.includes(tag)).length,
   }));
 
+// --- The LLM review (ADR-060): two remarks on ptr-null-check, ptr-arith-01
+// clean; the pool `p1` asked for the night's review. `?empty=1`: none.
+const reviewedPools = new Set<string>(flags.empty ? [] : ["p1"]);
+const reviews = new Map<string, QuestionReview>(
+  flags.empty
+    ? []
+    : [
+        [
+          "q2",
+          {
+            versionNumber: 1,
+            state: "findings",
+            reviewedAt: iso(-8 * H),
+            findings: [
+              {
+                severity: "warn",
+                path: "prompt",
+                message: "L'énoncé ne dit pas si `p` est une variable locale ou globale ; une globale serait initialisée à NULL, et le choix A deviendrait juste.",
+                fix: { from: "déclaré dans une fonction", to: "déclaré localement dans une fonction" },
+              },
+              {
+                severity: "notice",
+                path: "explanation",
+                message: "Accord : « indéterminé » devrait être « indéterminée » (une valeur).",
+                fix: { from: "valeur indéterminé ", to: "valeur indéterminée " },
+              },
+            ],
+          },
+        ],
+        ["q1", { versionNumber: 3, state: "clean", reviewedAt: iso(-8 * H), findings: [] }],
+      ],
+);
+/** The review of the latest published version, if it is the one reviewed. */
+const reviewOfLatest = (q: MockQuestion): QuestionReview | null => {
+  const review = reviews.get(q.id);
+  return review && review.versionNumber === q.versions.at(-1)?.number ? review : null;
+};
+const reviewPillOf = (q: MockQuestion) => {
+  const review = reviewOfLatest(q);
+  return review ? reviewPill(review.state, review.findings) : null;
+};
+
 const questionRow = (q: MockQuestion) => ({
   id: q.id,
   type: q.type,
@@ -1525,6 +1577,7 @@ const questionRow = (q: MockQuestion) => ({
   keyless: isKeyless(q),
   starred: stars.has(q.id) && q.deletedAt === null,
   randomizable: q.randomizable,
+  review: reviewPillOf(q),
 });
 
 /**
@@ -1581,6 +1634,7 @@ export const questionDetail = (q: MockQuestion) => ({
   versions: q.versions.map(versionRow),
   latestPublished: q.versions.length ? versionRow(q.versions.at(-1)!) : null,
   keyless: isKeyless(q),
+  review: reviewOfLatest(q),
 });
 
 /**
@@ -2623,6 +2677,49 @@ on("POST", "/app/api/questions/:id/generate", (m, body) => {
       ? body.explanation
       : "Une variable locale non initialisée a une valeur indéterminée : la lire est un comportement indéfini.";
   return { config, explanation, ...(program ? { incomplete: "runner_unavailable" } : {}) };
+});
+function poolReviewList(poolId: string): ReviewList {
+  const latest = liveQuestions(poolId).filter((q) => q.versions.length > 0 && !UNREVIEWED_TYPES.has(q.type));
+  const reviewed = latest.filter((q) => reviewOfLatest(q) !== null);
+  return {
+    enabled: reviewedPools.has(poolId),
+    reviewed: reviewed.length,
+    pending: latest.length - reviewed.length,
+    items: reviewed
+      .filter((q) => reviewOfLatest(q)!.state === "findings")
+      .map((q) => ({ questionId: q.id, internalName: q.internalName, type: q.type, review: reviewOfLatest(q)! })),
+  };
+}
+on("GET", "/app/api/pools/:id/reviews", (m) => poolReviewList(poolOr404(m.groups!.id!).id));
+on("PUT", "/app/api/pools/:id/review", (m, body) => {
+  const poolId = poolOr404(m.groups!.id!).id;
+  if (body.enabled === true) reviewedPools.add(poolId);
+  else reviewedPools.delete(poolId);
+  return poolReviewList(poolId);
+});
+on("POST", "/app/api/questions/:id/review", (m) => {
+  const q = questionOr404(m.groups!.id!);
+  const number = q.versions.at(-1)?.number;
+  if (number === undefined) throw new MockError(400, "not_published");
+  const review: QuestionReview = { versionNumber: number, state: "clean", reviewedAt: iso(0), findings: [] };
+  reviews.set(q.id, review);
+  return review;
+});
+on("POST", "/app/api/questions/:id/review/ignore", (m) => {
+  const q = questionOr404(m.groups!.id!);
+  const review = reviewOfLatest(q);
+  if (!review) throw new MockError(400, "no_review");
+  review.state = "ignored";
+  return review;
+});
+on("POST", "/app/api/questions/:id/review/fix", (m, body) => {
+  const q = questionOr404(m.groups!.id!);
+  const review = reviewOfLatest(q);
+  const finding = review?.findings[Number(body.finding)];
+  if (!review || !finding?.fix) throw new MockError(400, "no_fix");
+  // The mock applies nothing to the draft: what a fix does is the server's, tested there.
+  finding.applied = body.undo !== true;
+  return review;
 });
 on("POST", "/app/api/questions/:id/publish", (m, body) => {
   const q = questionOr404(m.groups!.id!);

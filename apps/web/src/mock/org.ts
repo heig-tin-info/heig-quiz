@@ -769,6 +769,7 @@ const tasks: AdminScheduledTask[] = [
     lastDurationMs: 95,
   }),
   task("health.checks", 5, { lastMessage: "10 ok, 2 warn, 1 unknown", lastDurationMs: 64 }),
+  task("llm.review", 60, { lastMessage: "outside the night (01:00–06:00, Zurich)", lastDurationMs: 3 }),
 ];
 const taskOf = (m: RegExpMatchArray) => {
   const found = tasks.find((x) => x.key === m.groups!.key);

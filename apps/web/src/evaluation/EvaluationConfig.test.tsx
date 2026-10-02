@@ -55,6 +55,7 @@ function routes(
           latestNumber: 1,
           hasDraftChanges: false,
           keyless: false,
+          review: null,
           updatedAt: detail.evaluation.createdAt,
           deprecated: false,
         },

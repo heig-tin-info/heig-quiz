@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, gte, sql, sum } from "drizzle-orm";
+import { and, eq, gte, isNull, sql, sum } from "drizzle-orm";
 
 import type { LlmErrorCode, LlmSettings, LlmSettingsPatch, LlmUsage } from "@quiz/contracts";
 import {
@@ -40,12 +40,24 @@ export async function settingsRow(db: Db): Promise<SettingsRow> {
 const startOf = (unit: "day" | "month", now: Date) =>
   sql`date_trunc(${unit}, ${now.toISOString()}::timestamptz, ${SCHOOL_TIME_ZONE})`;
 
-/** Today's estimated spend, calls in flight included at their reserved worst case. */
-async function spentToday(db: Db | Tx, now: Date): Promise<number> {
+/** Midnight, Europe/Zurich, of the day `now` falls in, as an SQL expression of the database. */
+export const startOfDay = (now: Date) => startOf("day", now);
+
+/**
+ * Today's estimated spend, calls in flight included at their reserved worst
+ * case. `unattributed` narrows it to the calls of a purpose made by no person:
+ * the night's review counts its own share with it (ADR-060 §5).
+ */
+export async function spentToday(db: Db | Tx, now: Date, unattributed?: LlmPurpose): Promise<number> {
   const [row] = await db
     .select({ total: sum(llmCalls.costUsd) })
     .from(llmCalls)
-    .where(gte(llmCalls.createdAt, startOf("day", now)));
+    .where(
+      and(
+        gte(llmCalls.createdAt, startOf("day", now)),
+        ...(unattributed ? [eq(llmCalls.purpose, unattributed), isNull(llmCalls.userId)] : []),
+      ),
+    );
   return Number(row?.total ?? 0);
 }
 

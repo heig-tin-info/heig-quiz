@@ -628,6 +628,9 @@ const scenes = [
   // (ADR-014, addendum 2026-09-27): the refusal, and nothing of the question.
   { name: "join-not-on-roster", role: "student", path: "/p/CL5S9P" },
   { name: "pool", role: "teacher", path: "/pools/p1" },
+  // The LLM review (ADR-060): the pool's tab, and its empty state.
+  { name: "pool-review", role: "teacher", path: "/pools/p1?tab=review&empty=0" },
+  { name: "pool-review-empty", role: "teacher", path: "/pools/p2?tab=review&empty=0" },
   { name: "pool-empty", role: "teacher", path: "/pools/p1?empty=1", settle: 800 },
   { name: "pool-error", role: "teacher", path: "/pools/p1?fail=1", settle: 2500 },
   { name: "pool-loading", role: "teacher", path: "/pools/p1?slow=1", settle: 300 },

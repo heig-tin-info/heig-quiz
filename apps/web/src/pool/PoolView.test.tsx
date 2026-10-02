@@ -62,6 +62,7 @@ const PAGE: QuestionPage = {
       latestNumber: 3,
       hasDraftChanges: true,
       keyless: false,
+      review: null,
       starred: false,
       randomizable: false,
       updatedAt: "2026-09-18T08:00:00.000Z",
@@ -78,6 +79,7 @@ const PAGE: QuestionPage = {
       latestNumber: null,
       hasDraftChanges: true,
       keyless: false,
+      review: null,
       starred: false,
       randomizable: false,
       updatedAt: "2026-09-10T08:00:00.000Z",
@@ -656,7 +658,7 @@ describe("PoolView", () => {
       expect(screen.getByText("Success 50% and up")).toBeInTheDocument();
       // The bound never travels: the API is asked for the whole search, nothing more.
       expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?limit=200")).toBe(true);
-      expect(calls.some((c) => /rate|time/.test(c.url))).toBe(false);
+      expect(calls.some((c) => /[?&](rate|time)/.test(c.url))).toBe(false);
 
       await user.click(within(await openSheet(user)).getByRole("switch", {
         name: "Include questions without statistics",

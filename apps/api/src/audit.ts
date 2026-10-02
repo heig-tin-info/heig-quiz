@@ -202,6 +202,8 @@ export type AuditAction =
   | "pool.create"
   | "pool.delete"
   | "pool.member_update"
+  /** The owner turned the night's LLM review on or off (ADR-060 §1): `payload.enabled`. */
+  | "pool.review"
   | "pool.share"
   | "pool.transfer"
   | "pool.unshare"
