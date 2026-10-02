@@ -26,7 +26,8 @@ import type { GradingLlm } from "../llm/index.js";
 import { LlmError } from "../llm/provider.js";
 import { STUB_MODEL, StubLlm } from "../llm/stub.js";
 import * as results from "../results/service.js";
-import { runEvaluationGrading } from "./jobs.js";
+import { GRADING_LLM_QUEUE, type JobQueue } from "../../jobs.js";
+import { registerGradingJobs, runEvaluationGrading } from "./jobs.js";
 import * as service from "./service.js";
 
 /** A term only the rubric holds: no answer, no statement, no key carries it. */
@@ -263,6 +264,32 @@ describe("grading.evaluation with an LLM service (F-GRADE-02)", () => {
       { reason: "llm_not_configured" },
       { reason: "llm_not_configured" },
     ]);
+  });
+
+  it("asks nothing from a job whose evaluation runs again since the pass (F-LLM-03)", async () => {
+    const { app, evaluation } = await answered({ close: true });
+    const llm = recordingStub();
+    app.llm = llm;
+    // A queue that keeps what it is sent, and its handlers, for the test to run.
+    const sent: { name: string; data: object }[] = [];
+    const handlers = new Map<string, (data: object) => Promise<void>>();
+    const queue: JobQueue = {
+      createQueue: async () => {},
+      send: async (name, data) => void sent.push({ name, data }),
+      work: async (name, handler) => void handlers.set(name, handler as (data: object) => Promise<void>),
+      stop: async () => {},
+    };
+    app.boss = queue;
+    await registerGradingJobs(app, queue);
+
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+    const jobs = sent.filter((j) => j.name === GRADING_LLM_QUEUE);
+    expect(jobs).toHaveLength(2);
+    await db.update(evaluations).set({ state: "running" }).where(eq(evaluations.id, evaluation.id));
+    for (const job of jobs) await handlers.get(GRADING_LLM_QUEUE)!(job.data);
+
+    expect(llm.requests).toHaveLength(0);
+    expect(await gradingsOf(evaluation.id)).toHaveLength(0);
   });
 
   it("asks nothing while the evaluation runs (F-LLM-03)", async () => {

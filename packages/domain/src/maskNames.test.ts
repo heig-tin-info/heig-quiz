@@ -19,9 +19,9 @@ describe("maskNames", () => {
     expect(maskNames("Alicette et Mullerin", [alice])).toBe("Alicette et Mullerin");
   });
 
-  it("masks each part of a compound name, but not a part too short to mean anything", () => {
+  it("masks a compound name whole, but not one of its short parts alone", () => {
     expect(maskNames("Jean-Pierre Le Gall a écrit le code", [jp])).toBe(`${MASK}-${MASK} ${MASK} ${MASK} a écrit le code`);
-    expect(maskNames("Le Gall seul, et le code", [jp])).toBe(`Le ${MASK} seul, et le code`);
+    expect(maskNames("Le Gall seul, et le code", [jp])).toBe(`${MASK} ${MASK} seul, et le code`);
   });
 
   it("masks a whole name of short parts, in either order, though neither part alone", () => {

@@ -9,8 +9,9 @@ export const MASK = "[student]";
 
 /**
  * Under this many letters a name part ALONE is not masked: "Le" or "Do" are
- * words of every French essay. Beside the rest of its name it is: "Wu Li"
- * goes whole, whatever the length of its parts.
+ * words of every French essay. Beside the rest of its name it is: "Wu Li",
+ * or a compound family name such as "Le Gall", goes whole, whatever the
+ * length of its parts.
  */
 const MIN_PART = 3;
 
@@ -67,6 +68,8 @@ export function maskNames(text: string, people: readonly MaskedPerson[]): string
     const family = wordsOf(p.familyName);
     for (const word of [...given, ...family]) if (word.length >= MIN_PART) parts.add(word);
     if (given.length > 0 && family.length > 0) names.push([...given, ...family], [...family, ...given]);
+    // A compound name alone ("Le Gall", "Jean Marc") is one name too.
+    for (const compound of [given, family]) if (compound.length > 1) names.push(compound);
     if (p.email.trim() !== "") emails.push(p.email.trim());
   }
   const unmailed = emails.length > 0 ? text.replace(new RegExp(emails.map(escape).join("|"), "gi"), MASK) : text;
