@@ -196,7 +196,7 @@ export function PlayerShell({
         <div
           className={cx(
             "mx-auto w-full px-4 pt-2.5 sm:px-6",
-            docked ? FRAME : column(wide, docked),
+            docked ? FRAME : column(wide, false),
             // The strip carries the bar's bottom margin; without one the bar
             // would sit on its own hairline.
             strip.length === 0 && "pb-2.5",
@@ -265,7 +265,7 @@ export function PlayerShell({
       <div
         className={cx(
           "mx-auto w-full flex-1 py-6",
-          docked ? cx(RAIL_GRID, FRAME, "px-6") : cx(column(wide, docked), "px-4 sm:px-6"),
+          docked ? cx(RAIL_GRID, FRAME, "px-6") : cx(column(wide, false), "px-4 sm:px-6"),
         )}
       >
         {aside ? (
@@ -280,7 +280,7 @@ export function PlayerShell({
         ) : null}
         {/* Beside the side column, the question is centered in the room
             right of it, and the column stays where it is. */}
-        <main className={cx("min-w-0", docked && cx("mx-auto w-full", column(wide, docked)))}>
+        <main className={cx("min-w-0", docked && cx("mx-auto w-full", column(wide, true)))}>
           {banner ? <div className="mb-5">{banner}</div> : null}
           {children}
         </main>
