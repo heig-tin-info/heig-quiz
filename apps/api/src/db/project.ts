@@ -133,6 +133,11 @@ export const projects = pgTable(
   },
   (t) => [
     uniqueIndex("projects_classroom_slug_uq").on(t.classroomId, t.slug),
+    // One project per distribution repository: two creations racing for the
+    // same empty leftover never both adopt it (ADR-062).
+    uniqueIndex("projects_distribution_repo_uq")
+      .on(t.distributionRepoId)
+      .where(sql`${t.distributionRepoId} IS NOT NULL`),
     // An organization renamed, deleted or uninstalled (F-PROJ-18).
     index("projects_org_idx").on(t.orgId),
     // The ticker's scans: deadlines due and not applied,

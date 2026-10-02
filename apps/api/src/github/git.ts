@@ -90,6 +90,7 @@ let remoteBase = GITHUB;
  * sent the token.
  */
 export function setRemoteBaseForTests(base: string | null): void {
+  if (process.env.NODE_ENV === "production") throw new Error("setRemoteBaseForTests: never in production");
   remoteBase = base ?? GITHUB;
 }
 

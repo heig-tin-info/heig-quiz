@@ -34,20 +34,29 @@ the SSE and every other request wait for it.
 
 ## Decision
 
-1. **The row first.** The draft is inserted before anything is built, with
-   `distribution_*` null: the UNIQUE (classroom, slug) decides the slug
-   (`-2` … `-20`, `409 duplicate_slug` beyond), so two creations racing
-   never take the same one and nothing built has to be undone. Then the
-   repository is built, then the row gets its name.
+1. **The row first, the claim before the push.** The draft is inserted
+   before anything is built, with `distribution_*` null: the UNIQUE
+   (classroom, slug) decides the slug (`-2` … `-20`, `409 duplicate_slug`
+   beyond), so two creations racing never take the same one and nothing
+   built has to be undone. The repository is then created or adopted, and
+   the row CLAIMS it — writes its id under a partial UNIQUE on
+   `projects.distribution_repo_id` (migration `0056`) — before anything is
+   pushed to it: two creations racing for one empty leftover, in two
+   classrooms of one organization, never both push into it; the loser steps
+   to the next name. Then the repository is built.
 2. **Never delete on GitHub.** Not a student's repository, not a
    distribution repository, not a repository the App created a second ago.
    A failed build deletes the ROW only and answers `502
    distribution_failed`; the teacher retries.
 3. **An empty leftover is adopted.** A name GitHub refuses (422) is looked
-   at: an EMPTY repository is what a failed build leaves, and the next
-   attempt builds into it. A non-empty one is someone's — another
-   classroom's project of the same slug, a year earlier, in the same
-   organization — and the name steps to `-squashed-2` … `-squashed-20`.
+   at: an EMPTY and PRIVATE repository no project holds is what a failed
+   build leaves, and the next attempt builds into it. Anything else is
+   someone's — another classroom's project of the same slug, a year
+   earlier, in the same organization; a public repository, which a
+   distribution never is (F-PROJ-02); one an interrupted build still
+   claims — and the name steps to `-squashed-2` … `-squashed-20`.
+   Conversely a distribution repository is never a source: one named
+   `…-squashed[-N]` or held by a project is refused (`source_not_found`).
 4. **Asynchronous git.** The git runner uses `execFile`; the request still
    waits for the build, the event loop does not. The token still reaches git
    through the environment of the one process only (invariant 15). The
@@ -84,3 +93,6 @@ the SSE and every other request wait for it.
 - **Building in a job.** The teacher would get a draft that is not ready
   and a second state to follow; the build is seconds, and with an
   asynchronous runner the request can wait for it without stopping anyone.
+- **Claiming after the build** (the first version of this decision). Two
+  creations adopting one empty leftover both pushed into it before either
+  wrote the row.

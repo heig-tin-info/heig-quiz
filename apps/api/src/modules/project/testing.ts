@@ -27,6 +27,8 @@ export interface RepoWorld {
   ids: Map<string, number>;
   /** Owners GitHub reports for a repository other than its organization: a transferred one. */
   foreignOwner: Set<string>;
+  /** Repositories GitHub reports public. */
+  publicRepos: Set<string>;
   /** While true, a repository the App creates refuses every push. */
   refusePushes: boolean;
   /** A repository with commits on `branches` (`file` → content), as a teacher pushed it. */
@@ -65,7 +67,7 @@ export function repoWorld(): RepoWorld {
     id: world.ids.get(`${org}/${name}`),
     name,
     full_name: `${org}/${name}`,
-    private: true,
+    private: !world.publicRepos.has(`${org}/${name}`),
     archived: false,
     default_branch: world.exists(`${org}/${name}`) ? defaultOf(`${org}/${name}`) : "main",
     pushed_at: "2026-09-30T08:00:00Z",
@@ -77,6 +79,7 @@ export function repoWorld(): RepoWorld {
     orgIds: {},
     ids: new Map(),
     foreignOwner: new Set(),
+    publicRepos: new Set(),
     refusePushes: false,
     source(org, name, branches, commits = 1) {
       const fullName = `${org}/${name}`;

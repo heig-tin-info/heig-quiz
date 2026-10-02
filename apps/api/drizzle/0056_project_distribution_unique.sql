@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "projects_distribution_repo_uq" ON "projects" USING btree ("distribution_repo_id") WHERE "projects"."distribution_repo_id" IS NOT NULL;

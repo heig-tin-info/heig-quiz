@@ -346,30 +346,24 @@ export const ProjectSummary = z.object({
 export type ProjectSummary = z.infer<typeof ProjectSummary>;
 
 /**
- * The refusals of the lifecycle, worded by the web app (`message` is a
- * sentence for the log):
- *   - `not_connected` (409) — the classroom has no organization (F-GH-01);
- *   - `app_not_installed` (409) — Quiz's App is no longer installed on it;
- *   - `source_not_found` (422) — no such repository in the classroom's
- *     organization, or a branch it does not have (`branches`);
- *   - `duplicate_slug` (409) — the name's slug and its suffixes `-2` …
- *     `-20` are all taken in the classroom;
- *   - `distribution_failed` (502) — building the distribution repository
- *     failed: nothing is kept, nothing is deleted on GitHub (ADR-062);
- *   - `distribution_missing` (409) — publishing a project whose
- *     distribution repository is still being built, or whose build was
- *     interrupted;
- *   - `deadline_past` (422) — a deadline at or before the server's now;
- *   - `deadline_applied` (409) — the deadline was applied: moving it reopens
- *     the project, which merge task M3-05 brings;
- *   - `not_draft` (409) — publishing a project already published, or
- *     changing a setting frozen at publication;
- *   - `publish_mode_frozen` (409) — the publication mode or its duration,
- *     once published;
- *   - `strategy_frozen` (409) — the deadline strategy, once the deadline
- *     has passed;
- *   - `unassigned_students` (409) — a group project with a claimed student
- *     in no group, or with no group at all (ADR-048), {@link ProjectUnassigned}.
+ * The refusals of the lifecycle, `{ error, message }`, worded by the web
+ * app; their statuses are the API's (`modules/project/errors.ts`). The
+ * cases a name does not tell:
+ *   - `source_not_found` (422) — also a branch the source lacks (the body
+ *     then names them, `branches`), a repository GitHub resolves into
+ *     another organization, or one of the platform's distribution
+ *     repositories;
+ *   - `distribution_failed` (502) — the build failed: the row is gone,
+ *     nothing was deleted on GitHub (ADR-062);
+ *   - `distribution_missing` — a draft whose build is under way, or was
+ *     interrupted, cannot be published;
+ *   - `deadline_applied` — moving a deadline already applied is the reopen
+ *     of merge task M3-05;
+ *   - `unassigned_students` — the body names the claimed students in no
+ *     group (`students`: enrollment id, nom, prenom), empty when the group
+ *     project has no group at all.
+ * The response schemas of the refusals come with their first consumer
+ * (M3-11).
  */
 export const PROJECT_REFUSALS = [
   "not_connected",
@@ -387,22 +381,6 @@ export const PROJECT_REFUSALS = [
 ] as const;
 export const ProjectErrorCode = z.enum(PROJECT_REFUSALS);
 export type ProjectErrorCode = z.infer<typeof ProjectErrorCode>;
-
-export const ProjectRefusal = z.object({
-  error: ProjectErrorCode,
-  message: z.string(),
-  /** `source_not_found`: the branches the source does not have. */
-  branches: z.array(z.string()).optional(),
-});
-export type ProjectRefusal = z.infer<typeof ProjectRefusal>;
-
-/** The 409 of a publish refused by the group guard: who is left out (nobody: no group at all). */
-export const ProjectUnassigned = z.object({
-  error: z.literal("unassigned_students"),
-  message: z.string(),
-  students: z.array(z.object({ enrollmentId: z.uuid(), nom: z.string(), prenom: z.string() })),
-});
-export type ProjectUnassigned = z.infer<typeof ProjectUnassigned>;
 
 // ---------------------------------------------------------- the organization's repositories
 

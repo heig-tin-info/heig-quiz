@@ -645,9 +645,19 @@ files it ports; writes en + fr for every string.
     `project.auto_publish` —, `setProjectArchived`, `deleteProject`,
     `unassignedStudents` (claimed non-staff seats in no group),
     `projectSummary`, `classroomProjects`, `teacherProjects`, `listSources`,
-    `sourceDetail`; refusals `ProjectError` (codes `PROJECT_REFUSALS`, plus
-    `not_connected`, `app_not_installed`, `distribution_missing`,
-    `deadline_applied`; `ProjectUnassigned` carries the students left out).
+    `sourceDetail`, and `fetchSource` (`sources.ts`), the ONE reading of a
+    source the creation and the browser share: in the classroom's
+    organization by its immutable id, never a distribution repository (by
+    name or held by a project). Refusals `ProjectError` (`errors.ts`, codes
+    `PROJECT_REFUSALS`, statuses there); `unassigned_students` carries
+    `students`, `source_not_found` may carry `branches` (no response schema
+    yet: M3-11). The classroom's installation is the `github` module's
+    `classroomInstallation(db, classroomId)` (follow-up: the journal's
+    `targetOf` in `journal/writes.ts` could use it too).
+  - **Distribution** (ADR-062): the row claims the repository (partial
+    UNIQUE `projects_distribution_repo_uq`, migration `0056`) before
+    anything is pushed; `createSquashedRepo` takes a `claim` callback and
+    never adopts a public leftover.
     `actorOf(req)` / `SYSTEM_ACTOR` in `audit.ts`, the tracer's actor rule
     for a service that audits itself.
   - **Patch rules** are `projectFieldRefusal` / `editableProjectFields`
@@ -657,17 +667,21 @@ files it ports; writes en + fr for every string.
     and the deadline strategy (until the deadline, `strategy_frozen`);
     publication mode and duration `publish_mode_frozen`; the start, grace,
     grading mode and scale, group mode and size `not_draft`. An unchanged
-    value is never refused. A moved deadline re-resolves the J−n
-    checkpoints not dispatched (`checkpointDueAt`).
+    value (`isDeepStrictEqual`) is never refused. `patchProject(db, id, …)`
+    and `publishProject` both re-read the row FOR UPDATE in their
+    transaction. The J−n checkpoints do not follow a moved deadline yet
+    (M3-05).
   - **Purge**: `purgeProjectReceipts(tx, { projectId } | { classroomId } |
-    { courseId })` in the `github` service (`receipts.ts`, light enough for
-    `org` to import), called in the deletion's
+    { courseId })` in the `github` service, called in the deletion's
     transaction by `deleteProject`, `deleteClassroom` and `deleteCourse`
-    (`org/service.ts`): the receipts of the student and distribution
-    repositories, and of the source unless another project hands it out.
-    Nothing on GitHub.
+    (`org/service.ts`): the receipts of every repository the projects gone
+    reference (student, group, distribution, source), except those a
+    remaining project still references. Nothing on GitHub. For `org` to
+    import the `github` service without pulling the notifications into its
+    graph, `redact.ts` now reads the secret paths from `auth/paths.ts`.
   - **Git**: `gitRunner` is asynchronous (`execFile`), `commit.gpgsign=false`
-    for the bot; `setRemoteBaseForTests` is the one seam of the remotes;
+    for the bot; `setRemoteBaseForTests` is the one seam of the remotes
+    (it throws under `NODE_ENV=production`);
     `squash.ts`, `sync.ts`, `provision.ts` await it. Tests push to local
     bare repositories (`Q:modules/project/testing.ts`, `repoWorld()`), the
     fake GitHub answering from what is on disk — M3-03 and M3-07 reuse it.
@@ -724,7 +738,10 @@ files it ports; writes en + fr for every string.
   (a locked project moved later is `published` again, its locks lifted)
   comes with it. Scheduled publication calls `publishProject(db, id, now,
   SYSTEM_ACTOR)` (M3-02), whose group guard the claim must also carry as SQL
-  (heig-classroom's `groupFormationComplete`).
+  (heig-classroom's `groupFormationComplete`). Also from M3-02's review: a
+  moved deadline (patch, publish) re-resolves the J−n checkpoints not
+  dispatched (`checkpointDueAt`), as ONE `UPDATE … SET due_at = deadline +
+  offset_days days` here.
 
 ### M3-06 — Reconciliation of grades and repositories
 - **Depends on**: M3-04, M2-05. ‖ M3-05, M3-07.
@@ -775,6 +792,10 @@ files it ports; writes en + fr for every string.
 - **Depends on**: M3-02 contracts, M2-07. ‖ M3-10, M3-12.
 - **Goal**: redesign of `AssignmentForm` (sheet or stepped page, decided in
   the PR's challenge step), novice/expert split (spec 08).
+- **From M3-02**: the refusal bodies have no response schema yet: add
+  `ProjectRefusal` (`{ error: ProjectErrorCode, message, branches? }`) and
+  `ProjectUnassigned` (`students`) to `contracts/src/project.ts` with this
+  form, their first consumer.
 
 ### M3-12 — Web: project page
 - **Depends on**: M3-08 contracts. ‖ M3-11.

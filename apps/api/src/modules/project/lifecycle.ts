@@ -7,51 +7,45 @@
  *
  * **Creation never deletes anything on GitHub** (ADR-062): the draft row is
  * inserted first, which reserves the slug; the distribution repository is
- * built; the row gets its name. A failed build deletes the ROW only and
- * answers `502 distribution_failed`; the repository it may have left behind
- * is adopted by the next attempt when it is empty, and a non-empty one is
+ * created or adopted and CLAIMED by the row (a partial UNIQUE on
+ * `distribution_repo_id`) before anything is pushed to it; then it is built.
+ * A failed build deletes the ROW only and answers `502 distribution_failed`;
+ * an empty private leftover is adopted by the next attempt, anything else
  * stepped over to the next `-squashed-N`.
  *
  * The request that creates a project waits for the build (seconds): the git
  * runner is asynchronous, so the event loop never does.
  */
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 
 import type { FastifyBaseLogger } from "fastify";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { defaultProjectGradingScale, type ProjectCreate, type ProjectPatch } from "@quiz/contracts";
-import {
-  checkpointDueAt,
-  PROJECT_PATCH_FIELDS,
-  projectFieldRefusal,
-  repoName,
-  SLUG_MAX,
-  slugify,
-  type ProjectPatchField,
-} from "@quiz/domain";
+import { PROJECT_PATCH_FIELDS, projectFieldRefusal, repoName, SLUG_MAX, slugify, type ProjectPatchField } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import type { Db, Tx } from "../../db/client.js";
-import { enrollments, projectCheckpoints, projectGroupMembers, projectGroups, projects } from "../../db/schema.js";
-import { githubStatus, HTTP_READ } from "../../github/app.js";
+import { isUniqueViolation, type Db, type Tx } from "../../db/client.js";
+import { enrollments, projectGroupMembers, projectGroups, projects } from "../../db/schema.js";
+import { githubStatus, type InstallationClient } from "../../github/app.js";
 import { createSquashedRepo } from "../../github/squash.js";
-import { purgeProjectReceipts } from "../github/service.js";
+import { purgeProjectReceipts, type InstalledOrg } from "../github/service.js";
 import { DomainError } from "../http.js";
 import { ProjectError } from "./errors.js";
-import { classroomClient, type OrgRow } from "./organization.js";
+import { classroomClient, fetchSource, type Source } from "./sources.js";
 import type { ProjectRow } from "./views.js";
 
-/** A name's slug is reused with `-2` … `-20` (heig-classroom cbcc780). */
-export const MAX_SLUG_SUFFIX = 20;
 /**
- * The distribution repository's name is `<slug>-squashed`, then
- * `-squashed-2` … `-squashed-20` while a non-empty repository holds it: one
- * organization serves a course year after year, and nothing is ever deleted
+ * A slug is reused with `-2` … `-20` (heig-classroom cbcc780), and so is the
+ * distribution repository's name, `<slug>-squashed-2` … `-20`: one
+ * organization serves a course year after year and nothing is ever deleted
  * there (ADR-062), so heig-classroom's five would run out.
  */
-export const MAX_DISTRIBUTION_SUFFIX = 20;
+export const MAX_SUFFIX = 20;
+
+const notFound = () => new DomainError("not_found", 404, "No such project");
 
 // ---------------------------------------------------------------- create
 
@@ -65,61 +59,25 @@ export interface CreateInput {
   log: FastifyBaseLogger;
 }
 
-/** The source repository, as the creation reads it from GitHub. */
-interface Source {
-  id: number;
-  name: string;
-  fullName: string;
-  defaultBranch: string;
-}
-
 /**
- * The source must be a repository OF THE CLASSROOM'S ORGANIZATION (`422
- * source_not_found` otherwise, F-PROJ-01), holding every branch asked for.
- * GitHub follows a renamed or transferred repository to its new place: a
- * name that now resolves into another organization is refused too.
+ * The source ({@link fetchSource}) and the branches to hand out, every one
+ * of which it must hold: `422 source_not_found` otherwise (F-PROJ-01).
  */
 async function readSource(
-  client: Awaited<ReturnType<typeof classroomClient>>["client"],
-  org: OrgRow,
+  db: Db,
+  client: InstallationClient,
+  org: InstalledOrg,
   name: string,
   asked: string[] | undefined,
 ): Promise<{ source: Source; branches: string[] }> {
-  let data;
-  try {
-    ({ data } = await client.octokit.request("GET /repos/{owner}/{repo}", {
-      owner: org.login,
-      repo: name,
-      request: { retries: 0, ...HTTP_READ },
-    }));
-  } catch (err) {
-    if (githubStatus(err) === 404) throw new ProjectError("source_not_found", `${name} is not a repository of ${org.login}`);
-    throw err;
-  }
-  const sameOrg =
-    org.githubOrgId !== null
-      ? Number(data.owner.id) === org.githubOrgId
-      : data.owner.login.toLowerCase() === org.login.toLowerCase();
-  if (!sameOrg) throw new ProjectError("source_not_found", `${name} is not a repository of ${org.login}`);
-  const branches = asked ?? [data.default_branch];
-  const held = new Set(
-    (
-      await client.octokit.paginate(client.octokit.rest.repos.listBranches, {
-        owner: org.login,
-        repo: data.name,
-        per_page: 100,
-        request: HTTP_READ,
-      })
-    ).map((b) => b.name),
-  );
-  const missing = branches.filter((b) => !held.has(b));
+  const source = await fetchSource(db, client, org, name);
+  if (!source) throw new ProjectError("source_not_found", `${name} is not a source of ${org.login}`);
+  const branches = asked ?? [source.defaultBranch];
+  const missing = branches.filter((b) => !source.branches.includes(b));
   if (missing.length > 0) {
-    throw new ProjectError("source_not_found", `${data.full_name} has no branch ${missing.join(", ")}`, { branches: missing });
+    throw new ProjectError("source_not_found", `${source.fullName} has no branch ${missing.join(", ")}`, { branches: missing });
   }
-  return {
-    source: { id: Number(data.id), name: data.name, fullName: data.full_name, defaultBranch: data.default_branch },
-    branches,
-  };
+  return { source, branches };
 }
 
 /** The draft's dates: a manual publication starts at its publication, and counts its duration from there. */
@@ -133,13 +91,13 @@ function draftDates(body: ProjectCreate, now: Date): { startAt: Date; deadlineAt
 }
 
 /**
- * Inserts the draft under the first free slug of its name (`-2` … `-20`):
- * the UNIQUE (classroom, slug) decides, so two creations racing never take
- * the same one. The row reserves the slug while the distribution is built.
+ * Inserts the draft under the first free slug of its name: the UNIQUE
+ * (classroom, slug) decides, so two creations racing never take the same
+ * one. The row reserves the slug while the distribution is built.
  */
 async function reserveDraft(db: Db, values: Omit<typeof projects.$inferInsert, "id" | "slug">, name: string): Promise<ProjectRow> {
   const base = slugify(name);
-  for (let n = 1; n <= MAX_SLUG_SUFFIX; n++) {
+  for (let n = 1; n <= MAX_SUFFIX; n++) {
     const slug = n === 1 ? base : `${base.slice(0, SLUG_MAX - 3).replace(/-+$/, "")}-${n}`;
     const [row] = await db
       .insert(projects)
@@ -152,30 +110,54 @@ async function reserveDraft(db: Db, values: Omit<typeof projects.$inferInsert, "
 }
 
 /**
- * The distribution repository (F-PROJ-02), under the first name GitHub
- * lets the App create or adopt: a name held by a NON-EMPTY repository
- * (GitHub's 422, rethrown by the adapter) steps to the next suffix.
+ * The draft takes the repository for itself, before anything is pushed: false
+ * when another project holds it already (the partial UNIQUE decides, so two
+ * creations racing for one empty leftover never both get it).
+ */
+function claimFor(db: Db, draft: ProjectRow) {
+  return async (repo: { repoId: number; fullName: string }): Promise<boolean> => {
+    try {
+      const [row] = await db
+        .update(projects)
+        .set({ distributionRepoId: repo.repoId, distributionFullName: repo.fullName })
+        .where(eq(projects.id, draft.id))
+        .returning({ id: projects.id });
+      // Deleted by its staff while it was being built: stop, push nothing.
+      if (!row) throw notFound();
+      return true;
+    } catch (err) {
+      if (isUniqueViolation(err, "projects_distribution_repo_uq")) return false;
+      throw err;
+    }
+  };
+}
+
+/**
+ * The distribution repository (F-PROJ-02), under the first name the App may
+ * create or adopt and the draft may claim: a name held by a non-empty or a
+ * public repository, or by another project, steps to the next suffix.
  */
 async function buildDistribution(
-  client: Awaited<ReturnType<typeof classroomClient>>["client"],
-  org: OrgRow,
-  project: ProjectRow,
+  db: Db,
+  client: InstallationClient,
+  org: InstalledOrg,
+  draft: ProjectRow,
   source: Source,
 ): Promise<{ repoId: number; fullName: string }> {
   for (let n = 1; ; n++) {
-    const targetRepo = repoName(`${project.slug}-squashed`, n === 1 ? undefined : String(n));
     try {
       return await createSquashedRepo({
         octokit: client.octokit,
         token: client.token,
         org: org.login,
         sourceRepo: source.name,
-        targetRepo,
-        strategy: project.sourceStrategy,
-        branches: project.branches,
+        targetRepo: repoName(`${draft.slug}-squashed`, n === 1 ? undefined : String(n)),
+        strategy: draft.sourceStrategy,
+        branches: draft.branches,
+        claim: claimFor(db, draft),
       });
     } catch (err) {
-      if (githubStatus(err) !== 422 || n >= MAX_DISTRIBUTION_SUFFIX) throw err;
+      if (githubStatus(err) !== 422 || n >= MAX_SUFFIX) throw err;
     }
   }
 }
@@ -192,7 +174,7 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
   const dates = draftDates(body, now);
   if (dates.deadlineAt.getTime() <= now.getTime()) throw new ProjectError("deadline_past", "The deadline has passed");
   const { org, client } = await classroomClient(db, config, input.classroomId);
-  const { source, branches } = await readSource(client, org, body.sourceRepo, body.branches);
+  const { source, branches } = await readSource(db, client, org, body.sourceRepo, body.branches);
 
   const draft = await reserveDraft(
     db,
@@ -222,20 +204,15 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
 
   let built: { repoId: number; fullName: string };
   try {
-    built = await buildDistribution(client, org, draft, source);
+    built = await buildDistribution(db, client, org, draft, source);
   } catch (err) {
+    if (err instanceof DomainError) throw err;
     input.log.error({ err, project: draft.id, source: source.fullName }, "building a distribution repository failed");
-    // The row only: nothing is ever deleted on GitHub (ADR-062).
+    // The row only, which frees the repository it claimed: nothing is ever
+    // deleted on GitHub (ADR-062).
     await db.delete(projects).where(eq(projects.id, draft.id));
     throw new ProjectError("distribution_failed", "Building the distribution repository failed: try again");
   }
-  const [row] = await db
-    .update(projects)
-    .set({ distributionRepoId: built.repoId, distributionFullName: built.fullName })
-    .where(eq(projects.id, draft.id))
-    .returning();
-  // Deleted by its staff while it was being built: the repository stays.
-  if (!row) throw new DomainError("not_found", 404, "The project was deleted meanwhile");
   await audit(db, {
     ...input.actor,
     action: "project.create",
@@ -243,20 +220,10 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
     subjectId: draft.id,
     payload: { slug: draft.slug, source: source.fullName, distribution: built.fullName },
   });
-  return row;
+  return { ...draft, distributionRepoId: built.repoId, distributionFullName: built.fullName };
 }
 
 // ---------------------------------------------------------------- patch
-
-/** A stable rendering for comparing a sent value with the stored one (object keys sorted). */
-function canonical(value: unknown): string {
-  if (value instanceof Date) return JSON.stringify(value.toISOString());
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
-    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
 
 /** The patch's values as the row's, dates as dates. */
 function asColumns(body: ProjectPatch): Partial<Record<ProjectPatchField, unknown>> {
@@ -269,72 +236,54 @@ function asColumns(body: ProjectPatch): Partial<Record<ProjectPatchField, unknow
   return out;
 }
 
-/** Re-resolves the checkpoints authored as J−n that have not fired (F-PROJ-11): they follow the deadline. */
-async function retargetCheckpoints(tx: Db | Tx, projectId: string, deadlineAt: Date): Promise<void> {
-  const offsets = await tx
-    .select({ id: projectCheckpoints.id, offsetDays: projectCheckpoints.offsetDays })
-    .from(projectCheckpoints)
-    .where(
-      and(
-        eq(projectCheckpoints.projectId, projectId),
-        isNotNull(projectCheckpoints.offsetDays),
-        isNull(projectCheckpoints.dispatchedAt),
-      ),
-    );
-  for (const c of offsets) {
-    await tx
-      .update(projectCheckpoints)
-      .set({ dueAt: checkpointDueAt(deadlineAt, c.offsetDays!) })
-      .where(eq(projectCheckpoints.id, c.id));
-  }
-}
-
 /**
- * `PATCH /app/api/projects/:pid` (F-PROJ-03): a field whose value changes
- * must be open (`projectFieldRefusal`), a moved deadline must lie ahead
- * (`deadline_past`); a draft's dates stay coherent (a duration only with a
- * manual publication, the deadline after the start).
+ * `PATCH /app/api/projects/:pid` (F-PROJ-03), on the row read FOR UPDATE in
+ * its transaction, so a publication running at the same time is either seen
+ * or waited for: a field whose value changes must be open
+ * (`projectFieldRefusal`), a moved deadline must lie ahead (`deadline_past`);
+ * a draft's dates stay coherent (a duration only with a manual publication,
+ * the deadline after the start). A moved deadline does not yet move the J−n
+ * checkpoints: M3-05 does, with them.
  */
 export async function patchProject(
   db: Db,
-  project: ProjectRow,
+  projectId: string,
   body: ProjectPatch,
   actor: AuditActor,
   now: Date,
 ): Promise<ProjectRow> {
-  const sent = asColumns(body);
-  const changed: Partial<Record<ProjectPatchField, unknown>> = {};
-  for (const [field, value] of Object.entries(sent) as [ProjectPatchField, unknown][]) {
-    if (canonical(value) === canonical(project[field])) continue;
-    const refusal = projectFieldRefusal(project, field, now);
-    if (refusal) throw new ProjectError(refusal, `${field} can no longer change`);
-    changed[field] = value;
-  }
-  const next = { ...project, ...changed } as ProjectRow;
-  // A duration on a manual draft keeps a provisional deadline, so that the
-  // lists stay meaningful; Publish counts it again from the publication.
-  if (changed.durationMinutes !== undefined && next.durationMinutes !== null) {
-    next.deadlineAt = new Date(now.getTime() + next.durationMinutes * 60_000);
-    changed.deadlineAt = next.deadlineAt;
-  }
-  if (changed.deadlineAt !== undefined && next.deadlineAt.getTime() <= now.getTime()) {
-    throw new ProjectError("deadline_past", "The deadline has passed");
-  }
-  if (next.publishMode === "scheduled" && next.durationMinutes !== null) {
-    throw new DomainError("validation", 400, "A duration only applies to a manual publication");
-  }
-  if (next.deadlineAt.getTime() <= next.startAt.getTime()) {
-    throw new DomainError("validation", 400, "The deadline must come after the start");
-  }
-  if (Object.keys(changed).length === 0) return project;
-
   return db.transaction(async (tx) => {
+    const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
+    if (!project) throw notFound();
+    const changed: Partial<Record<ProjectPatchField, unknown>> = {};
+    for (const [field, value] of Object.entries(asColumns(body)) as [ProjectPatchField, unknown][]) {
+      if (isDeepStrictEqual(value, project[field])) continue;
+      const refusal = projectFieldRefusal(project, field, now);
+      if (refusal) throw new ProjectError(refusal, `${field} can no longer change`);
+      changed[field] = value;
+    }
+    const next = { ...project, ...changed } as ProjectRow;
+    // A duration on a manual draft keeps a provisional deadline, so that the
+    // lists stay meaningful; Publish counts it again from the publication.
+    if (changed.durationMinutes !== undefined && next.durationMinutes !== null) {
+      next.deadlineAt = new Date(now.getTime() + next.durationMinutes * 60_000);
+      changed.deadlineAt = next.deadlineAt;
+    }
+    if (changed.deadlineAt !== undefined && next.deadlineAt.getTime() <= now.getTime()) {
+      throw new ProjectError("deadline_past", "The deadline has passed");
+    }
+    if (next.publishMode === "scheduled" && next.durationMinutes !== null) {
+      throw new DomainError("validation", 400, "A duration only applies to a manual publication");
+    }
+    if (next.deadlineAt.getTime() <= next.startAt.getTime()) {
+      throw new DomainError("validation", 400, "The deadline must come after the start");
+    }
+    if (Object.keys(changed).length === 0) return project;
     const [row] = await tx
       .update(projects)
       .set(changed as Partial<typeof projects.$inferInsert>)
       .where(eq(projects.id, project.id))
       .returning();
-    if (changed.deadlineAt !== undefined) await retargetCheckpoints(tx, project.id, row!.deadlineAt);
     await audit(tx, { ...actor, action: "project.update", subjectType: "project", subjectId: project.id, payload: body });
     return row!;
   });
@@ -380,12 +329,13 @@ export async function unassignedStudents(db: Db | Tx, project: Pick<ProjectRow, 
  * duration from now; a scheduled one published early keeps its dates.
  * Refused: `not_draft`, `distribution_missing`, `unassigned_students` (a
  * group project with a claimed student in no group, or no group at all,
- * ADR-048), `deadline_past`. Nothing is sent to the students yet (M3-09).
+ * ADR-048; `students` the ones left out), `deadline_past`. Nothing is sent
+ * to the students yet (M3-09).
  */
 export async function publishProject(db: Db, projectId: string, now: Date, actor: AuditActor): Promise<ProjectRow> {
   return db.transaction(async (tx) => {
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
-    if (!project) throw new DomainError("not_found", 404, "No such project");
+    if (!project) throw notFound();
     if (project.state !== "draft") throw new ProjectError("not_draft", "The project is already published");
     if (project.distributionRepoId === null) {
       throw new ProjectError("distribution_missing", "The project has no distribution repository");
@@ -415,7 +365,6 @@ export async function publishProject(db: Db, projectId: string, now: Date, actor
       .set({ state: "published", startAt, deadlineAt })
       .where(eq(projects.id, project.id))
       .returning();
-    if (deadlineAt.getTime() !== project.deadlineAt.getTime()) await retargetCheckpoints(tx, project.id, deadlineAt);
     await audit(tx, {
       ...actor,
       action: actor.actorType === "system" ? "project.auto_publish" : "project.publish",

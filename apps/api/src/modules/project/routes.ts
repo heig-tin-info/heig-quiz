@@ -88,7 +88,7 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     "/app/api/projects/:id",
     session,
     teacher({ ...onProject, body: ProjectPatch }, async ({ req, now, body, scope }) => {
-      const row = await service.patchProject(app.db, scope.project, body, actorOf(req), now);
+      const row = await service.patchProject(app.db, scope.project.id, body, actorOf(req), now);
       return service.projectSummary(app.db, row, now);
     }),
   );
@@ -112,17 +112,21 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     }),
   );
 
-  for (const [path, archived] of [
-    ["archive", true],
-    ["unarchive", false],
-  ] as const) {
-    app.post(
-      `/app/api/projects/:id/${path}`,
-      session,
-      teacher(onProject, async ({ req, now, scope }) => {
-        const row = await service.setProjectArchived(app.db, scope.project, archived, actorOf(req), now);
-        return service.projectSummary(app.db, row, now);
-      }),
-    );
-  }
+  app.post(
+    "/app/api/projects/:id/archive",
+    session,
+    teacher(onProject, async ({ req, now, scope }) => {
+      const row = await service.setProjectArchived(app.db, scope.project, true, actorOf(req), now);
+      return service.projectSummary(app.db, row, now);
+    }),
+  );
+
+  app.post(
+    "/app/api/projects/:id/unarchive",
+    session,
+    teacher(onProject, async ({ req, now, scope }) => {
+      const row = await service.setProjectArchived(app.db, scope.project, false, actorOf(req), now);
+      return service.projectSummary(app.db, row, now);
+    }),
+  );
 }

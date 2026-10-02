@@ -22,11 +22,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import {
   ActivitySummary,
   ProjectActivitySummary,
-  ProjectRefusal,
+  ProjectErrorCode,
   ProjectSourceDetail,
   ProjectSourceRepo,
   ProjectSummary,
-  ProjectUnassigned,
   StudentClassroomPage,
 } from "@quiz/contracts";
 
@@ -102,7 +101,7 @@ async function create(classroomId: string, body: object = LAB, headers = teacher
   return ProjectSummary.parse(res.json());
 }
 
-const refusal = (res: { statusCode: number; json: () => unknown }) => [res.statusCode, ProjectRefusal.parse(res.json()).error];
+const refusal = (res: { statusCode: number; json: () => { error: unknown } }) => [res.statusCode, ProjectErrorCode.parse(res.json().error)];
 const rowOf = async (id: string) => (await server.app.db.select().from(projects).where(eq(projects.id, id)))[0];
 const auditOf = (id: string, action: string) =>
   server.app.db
@@ -201,11 +200,21 @@ describe("create a project (F-PROJ-01, F-PROJ-02)", () => {
     world.foreignOwner.add(`${room.login}/moved`);
     const moved = await call("POST", base(room.id), teacher.headers, { ...LAB, sourceRepo: "moved" });
     expect(refusal(moved)).toEqual([422, "source_not_found"]);
+    // One of the platform's own distribution repositories, by its name or held by a project.
+    const first = await create(room.id);
+    expect(refusal(await call("POST", base(room.id), teacher.headers, { ...LAB, sourceRepo: "lab-1-squashed" }))).toEqual([422, "source_not_found"]);
+    world.source(room.login, "renamed-dist", { main: { "a.txt": "a" } });
+    await server.app.db
+      .update(projects)
+      .set({ distributionRepoId: world.ids.get(`${room.login}/renamed-dist`)! })
+      .where(eq(projects.id, first.id));
+    expect(refusal(await call("POST", base(room.id), teacher.headers, { ...LAB, sourceRepo: "renamed-dist" }))).toEqual([422, "source_not_found"]);
+    await server.app.db.delete(projects).where(eq(projects.id, first.id));
     const branch = await call("POST", base(room.id), teacher.headers, { ...LAB, branches: ["main", "dev"] });
     expect(refusal(branch)).toEqual([422, "source_not_found"]);
-    expect(ProjectRefusal.parse(branch.json()).branches).toEqual(["dev"]);
+    expect(branch.json().branches).toEqual(["dev"]);
     expect(await server.app.db.select().from(projects).where(eq(projects.classroomId, room.id))).toEqual([]);
-    expect(gh.calls.filter((c) => c === `POST api.github.com/orgs/${room.login}/repos`)).toEqual([]);
+    expect(gh.calls.filter((c) => c === `POST api.github.com/orgs/${room.login}/repos`)).toHaveLength(1);
   });
 
   it("suffixes a slug taken in the classroom, and its distribution repository with it", async () => {
@@ -221,7 +230,7 @@ describe("create a project (F-PROJ-01, F-PROJ-02)", () => {
     const row = (await rowOf(first.id))!;
     await server.app.db
       .insert(projects)
-      .values(Array.from({ length: 19 }, (_, i) => ({ ...row, id: randomUUID(), slug: `lab-1-${i + 2}` })));
+      .values(Array.from({ length: 19 }, (_, i) => ({ ...row, id: randomUUID(), slug: `lab-1-${i + 2}`, distributionRepoId: null })));
     const res = await call("POST", base(room.id), teacher.headers, LAB);
     expect(refusal(res)).toEqual([409, "duplicate_slug"]);
   });
@@ -251,6 +260,37 @@ describe("create a project (F-PROJ-01, F-PROJ-02)", () => {
     expect([project.slug, project.distribution?.fullName]).toEqual(["lab-1", `${room.login}/lab-1-squashed`]);
     expect(world.git(`${room.login}/lab-1-squashed`, "rev-list", "--count", "main").trim()).toBe("1");
     expect(githubDeletes()).toEqual([]);
+  });
+
+  it("never adopts an empty leftover another project holds, nor a public one", async () => {
+    const room = await connectedClassroom();
+    // An interrupted build: the row holds the empty repository it claimed.
+    world.empty(room.login, "lab-1-squashed");
+    const interrupted = await create(room.id, { ...LAB, name: "Other" });
+    await server.app.db
+      .update(projects)
+      .set({ distributionRepoId: world.ids.get(`${room.login}/lab-1-squashed`)!, distributionFullName: `${room.login}/lab-1-squashed` })
+      .where(eq(projects.id, interrupted.id));
+    // An empty public repository under the next name.
+    world.empty(room.login, "lab-1-squashed-2");
+    world.publicRepos.add(`${room.login}/lab-1-squashed-2`);
+    const project = await create(room.id);
+    expect(project.distribution?.fullName).toBe(`${room.login}/lab-1-squashed-3`);
+    expect(world.git(`${room.login}/lab-1-squashed`, "for-each-ref").trim()).toBe("");
+    expect(world.git(`${room.login}/lab-1-squashed-2`, "for-each-ref").trim()).toBe("");
+  });
+
+  it("gives two creations racing for one empty leftover two repositories", async () => {
+    const one = await connectedClassroom();
+    const two = await connectedClassroom();
+    // Two classrooms of one organization.
+    const [link] = await server.app.db.select().from(githubClassroomLinks).where(eq(githubClassroomLinks.classroomId, one.id));
+    await server.app.db.update(githubClassroomLinks).set({ orgId: link!.orgId }).where(eq(githubClassroomLinks.classroomId, two.id));
+    world.empty(one.login, "lab-1-squashed");
+    const [a, b] = await Promise.all([create(one.id), create(two.id, { ...LAB, sourceRepo: "lab" })]);
+    const names = [a.distribution!.fullName, b.distribution!.fullName].sort();
+    expect(names).toEqual([`${one.login}/lab-1-squashed`, `${one.login}/lab-1-squashed-2`]);
+    for (const name of names) expect(world.git(name, "rev-list", "--count", "main").trim()).toBe("1");
   });
 
   it("refuses a deadline already past, a classroom not connected, and a malformed body", async () => {
@@ -308,6 +348,27 @@ describe("patch (F-PROJ-03)", () => {
     // The source, its branches and strategy are fixed at creation.
     for (const body of [{ sourceRepo: "other" }, { branches: ["main"] }, { sourceStrategy: "whole" }]) {
       expect((await patch(project.id, body)).statusCode).toBe(400);
+    }
+  });
+
+  it("decides a patch racing a publication on the row it locks", async () => {
+    const room = await connectedClassroom();
+    const project = await create(room.id);
+    const [patched, published] = await Promise.all([
+      patch(project.id, { graceMinutes: 5 }),
+      call("POST", `/app/api/projects/${project.id}/publish`, teacher.headers),
+    ]);
+    expect(published.statusCode).toBe(200);
+    const row = (await rowOf(project.id))!;
+    if (patched.statusCode === 200) {
+      // Applied while still a draft: before the publication, in the log too.
+      expect(row.graceMinutes).toBe(5);
+      const [update] = await auditOf(project.id, "project.update");
+      const [publish] = await auditOf(project.id, "project.publish");
+      expect(update!.id).toBeLessThan(publish!.id);
+    } else {
+      expect(refusal(patched)).toEqual([409, "not_draft"]);
+      expect(row.graceMinutes).toBe(30);
     }
   });
 
@@ -394,7 +455,7 @@ describe("publish (F-PROJ-03, ADR-048)", () => {
     const none = await publish(project.id);
     expect(none.statusCode).toBe(409);
     const [seat] = await db.select().from(enrollments).where(and(eq(enrollments.classroomId, room.id), eq(enrollments.userId, student.id)));
-    expect(ProjectUnassigned.parse(none.json()).students).toEqual([{ enrollmentId: seat!.id, nom: seat!.nom, prenom: seat!.prenom }]);
+    expect(none.json().students).toEqual([{ enrollmentId: seat!.id, nom: seat!.nom, prenom: seat!.prenom }]);
 
     const groupId = randomUUID();
     await db.insert(projectGroups).values({ id: groupId, projectId: project.id, name: "G1", slug: "g1", position: 0 });
@@ -407,7 +468,7 @@ describe("publish (F-PROJ-03, ADR-048)", () => {
     await server.app.db.delete(enrollments).where(eq(enrollments.classroomId, room.id));
     const project = await create(room.id, { ...LAB, groupMode: true });
     const res = await publish(project.id);
-    expect([res.statusCode, ProjectUnassigned.parse(res.json()).students]).toEqual([409, []]);
+    expect([res.statusCode, res.json().error, res.json().students]).toEqual([409, "unassigned_students", []]);
   });
 
   it("refuses a project whose distribution repository is missing", async () => {
@@ -540,6 +601,11 @@ describe("the organization's repository browser (M3-11)", () => {
     expect(detail.branches.sort()).toEqual(["main", "solution"]);
     expect(detail.tree).toContainEqual({ path: "src", type: "tree" });
     expect((await call("GET", `${base(room.id)}/sources/nope`, teacher.headers)).statusCode).toBe(404);
+    // Resolved into another organization, or the platform's own: not a source.
+    world.source(room.login, "moved", { main: { "a.txt": "a" } });
+    world.foreignOwner.add(`${room.login}/moved`);
+    expect((await call("GET", `${base(room.id)}/sources/moved`, teacher.headers)).statusCode).toBe(404);
+    expect((await call("GET", `${base(room.id)}/sources/lab-1-squashed`, teacher.headers)).statusCode).toBe(404);
   });
 });
 

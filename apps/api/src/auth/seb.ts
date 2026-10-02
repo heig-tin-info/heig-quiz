@@ -23,12 +23,13 @@ import { users } from "../db/schema.js";
 import { sebSeat } from "../modules/live/service.js";
 import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
 import { delegated } from "./session.js";
+import { LAUNCH_PATH } from "./paths.js";
 
 /**
  * Where the `.seb` starts; the ticket secret is the last segment, which the
  * request log masks (`redact.ts`).
  */
-export const LAUNCH_PATH = "/app/auth/seb/";
+export { LAUNCH_PATH } from "./paths.js";
 
 // --- The file --------------------------------------------------------------
 

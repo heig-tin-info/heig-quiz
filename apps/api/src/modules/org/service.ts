@@ -25,7 +25,7 @@ import {
   users,
 } from "../../db/schema.js";
 import { shownAvatar } from "../avatar.js";
-import { purgeProjectReceipts } from "../github/receipts.js";
+import { purgeProjectReceipts } from "../github/service.js";
 import { accessRevoked } from "../realtime/bus.js";
 
 export { claimEnrollments, claimLines, type ClaimMatch } from "./roster.js";
