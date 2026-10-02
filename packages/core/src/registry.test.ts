@@ -82,7 +82,7 @@ describe("GradeResult narrowing", () => {
   const llm: GradeResult<{ f: number }> = {
     kind: "pending",
     via: "llm",
-    request: { rubric: "r", answer: "a", maxPoints: 2 },
+    request: { statement: "s", form: "free text", rubric: "r", answer: "a", maxPoints: 2 },
   };
 
   it("discriminates the three branches", () => {
