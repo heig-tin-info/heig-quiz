@@ -20,7 +20,13 @@
  */
 import { z } from "zod";
 
-import { PROJECT_PATCH_FIELDS, PROJECT_SCALE_KINDS, slugify } from "@quiz/domain";
+import {
+  FINAL_SCORE_SOURCES,
+  PROJECT_PATCH_FIELDS,
+  PROJECT_PRIMARY_ACTIONS,
+  PROJECT_SCALE_KINDS,
+  slugify,
+} from "@quiz/domain";
 
 import { Rounding } from "./evaluation.js";
 
@@ -517,6 +523,8 @@ export type ProjectRepoDeadline = z.infer<typeof ProjectRepoDeadline>;
  * repository (a plan without rulesets, shown as degraded); `staffLock` the
  * staff's hand — true locked, false unlocked, null the deadline decides —
  * which a lock or an unlock just asked may not have reached GitHub yet.
+ * `degraded` (H8, M3-08a): the lock fell back to archiving, or the
+ * repository was provisioned without its protection ruleset.
  */
 export const ProjectRepoDeadlineState = z.object({
   id: z.uuid(),
@@ -528,5 +536,202 @@ export const ProjectRepoDeadlineState = z.object({
   locked: z.boolean(),
   archived: z.boolean(),
   staffLock: z.boolean().nullable(),
+  degraded: z.boolean(),
 });
 export type ProjectRepoDeadlineState = z.infer<typeof ProjectRepoDeadlineState>;
+
+// ---------------------------------------------------------- the staff's project page (M3-08a)
+
+export const CiStatus = z.enum(CI_STATUSES);
+export type CiStatus = z.infer<typeof CiStatus>;
+export const GradeRunKind = z.enum(GRADE_RUN_KINDS);
+export type GradeRunKind = z.infer<typeof GradeRunKind>;
+export const GradeRunParseStatus = z.enum(GRADE_RUN_PARSE_STATUSES);
+export type GradeRunParseStatus = z.infer<typeof GradeRunParseStatus>;
+
+/**
+ * One counted run of `grading.yml` (F-PROJ-10), for the staff: `points` and
+ * `max` as the CI reported them (null without a score, `parseStatus` says
+ * why; a `malformed` run keeps the reason in `parseDetail`). `afterDeadline`
+ * — received after the repository's effective deadline, never the frozen
+ * score; `toVerify` — ingested while the protected files were not restored,
+ * or on a head whose protected files were (F-PROJ-08).
+ */
+export const GradeRunView = z.object({
+  id: z.uuid(),
+  workflowRunId: z.number().int(),
+  runAttempt: z.number().int(),
+  kind: GradeRunKind,
+  conclusion: z.string(),
+  headBranch: z.string(),
+  headSha: z.string(),
+  points: z.number().nullable(),
+  max: z.number().nullable(),
+  testsPassed: z.number().int().nullable(),
+  testsTotal: z.number().int().nullable(),
+  parseStatus: GradeRunParseStatus,
+  parseDetail: z.string().nullable(),
+  afterDeadline: z.boolean(),
+  toVerify: z.boolean(),
+  completedAt: z.iso.datetime(),
+});
+export type GradeRunView = z.infer<typeof GradeRunView>;
+
+/** How many runs {@link GradeRunList} carries at most: the newest. */
+export const GRADE_RUN_LIST_LIMIT = 100;
+
+/**
+ * `GET /app/api/projects/:id/repos/:rid/runs` (F-PROJ-13): a repository's
+ * runs, the newest first ({@link GRADE_RUN_LIST_LIMIT} at most), and which
+ * of them fill its three slots — the current score, the frozen one, the
+ * final review's — by id (null: the slot is empty). Staff only.
+ */
+export const GradeRunList = z.object({
+  currentGradeRunId: z.uuid().nullable(),
+  frozenGradeRunId: z.uuid().nullable(),
+  reviewGradeRunId: z.uuid().nullable(),
+  runs: z.array(GradeRunView),
+});
+export type GradeRunList = z.infer<typeof GradeRunList>;
+
+/** A score read as a Swiss grade by the project's scale; `fellBack` — `score_is_grade` asked, the maximum not 6. */
+export const ProjectGradeView = z.object({ grade: z.number(), fellBack: z.boolean() });
+export type ProjectGradeView = z.infer<typeof ProjectGradeView>;
+
+/** One of a repository's run slots: the run, its score, and its grade (null without points or maximum). */
+export const ProjectSlotScore = z.object({
+  runId: z.uuid(),
+  points: z.number().nullable(),
+  max: z.number().nullable(),
+  parseStatus: GradeRunParseStatus,
+  toVerify: z.boolean(),
+  grade: ProjectGradeView.nullable(),
+});
+export type ProjectSlotScore = z.infer<typeof ProjectSlotScore>;
+
+/**
+ * The final score (F-PROJ-14): the teacher's, else the review's, else the
+ * frozen one — the current one while nothing is frozen (`resolveFinalScore`
+ * of `@quiz/domain`); `source` names it (I42). `max` is null for a teacher
+ * score on a repository without a scored run (M3-08b gives it its own).
+ */
+export const ProjectFinalScore = z.object({
+  points: z.number(),
+  max: z.number().nullable(),
+  source: z.enum(FINAL_SCORE_SOURCES),
+  grade: ProjectGradeView.nullable(),
+});
+export type ProjectFinalScore = z.infer<typeof ProjectFinalScore>;
+
+/**
+ * What GitHub says of a repository now (F-PROJ-13), from the live-state
+ * cache (one minute, served `stale` up to fifteen): the commit count and
+ * the check runs of its head (any commit, the App's included). Null when it
+ * could not be read in time, or under GitHub's rate limit: the stored state
+ * stands alone.
+ */
+export const ProjectRepoLive = z.object({
+  commitCount: z.number().int(),
+  checksPassed: z.number().int().nullable(),
+  checksTotal: z.number().int().nullable(),
+  stale: z.boolean(),
+});
+export type ProjectRepoLive = z.infer<typeof ProjectRepoLive>;
+
+/**
+ * A repository on the staff's project page: its deadline and lock
+ * ({@link ProjectRepoDeadlineState}), its provisioning and invitation, the
+ * last STUDENT commit and its CI status (as the webhooks stored them), the
+ * live counters, the scores, the release's snapshot, and the flags:
+ *   - `protectionSuspended` — "protected files in conflict" (F-PROJ-08);
+ *   - `toVerify` — the run of one of its three slots is to verify;
+ *   - `multiple` — one of its runs printed several `GRADE` annotations (an
+ *     alert: a student's code could print one; F-PROJ-10);
+ *   - `malformed` — its latest run's score did not parse: the reason, else
+ *     null;
+ *   - `afterDeadlineRuns` — it has runs received after its deadline;
+ *   - `deleted` — gone from GitHub (stored, or GitHub's 404 just now);
+ *   - `changedAfterRelease` — the final score differs from the release's
+ *     snapshot (only once the project was released).
+ */
+export const ProjectRepoView = ProjectRepoDeadlineState.extend({
+  provisionStatus: ProvisionStatus,
+  provisionError: z.string().nullable(),
+  invitationStatus: InvitationStatus,
+  acceptedAt: z.iso.datetime(),
+  lastCommit: z.object({ sha: z.string(), at: z.iso.datetime().nullable() }).nullable(),
+  ciStatus: CiStatus,
+  live: ProjectRepoLive.nullable(),
+  scores: z.object({
+    current: ProjectSlotScore.nullable(),
+    frozen: ProjectSlotScore.nullable(),
+    review: ProjectSlotScore.nullable(),
+    teacher: z
+      .object({ points: z.number(), comment: z.string().nullable(), gradedAt: z.iso.datetime().nullable() })
+      .nullable(),
+    final: ProjectFinalScore.nullable(),
+  }),
+  released: z.object({ points: z.number().nullable(), max: z.number().nullable() }).nullable(),
+  flags: z.object({
+    protectionSuspended: z.boolean(),
+    toVerify: z.boolean(),
+    multiple: z.boolean(),
+    malformed: z.string().nullable(),
+    afterDeadlineRuns: z.boolean(),
+    deleted: z.boolean(),
+    changedAfterRelease: z.boolean(),
+  }),
+});
+export type ProjectRepoView = z.infer<typeof ProjectRepoView>;
+
+/**
+ * A student of the project page: their roster line (`enrollmentId` null for
+ * a repository whose student has left the roster since), whether the seat
+ * is claimed, and the GitHub account they linked.
+ */
+export const ProjectStudent = z.object({
+  enrollmentId: z.uuid().nullable(),
+  userId: z.uuid().nullable(),
+  nom: z.string(),
+  prenom: z.string(),
+  email: z.string(),
+  claimed: z.boolean(),
+  githubLogin: z.string().nullable(),
+});
+export type ProjectStudent = z.infer<typeof ProjectStudent>;
+
+/** One row of the project page: a student and their repository, null when they have not accepted. */
+export const ProjectDetailRow = z.object({ student: ProjectStudent, repo: ProjectRepoView.nullable() });
+export type ProjectDetailRow = z.infer<typeof ProjectDetailRow>;
+
+export const ProjectPrimaryAction = z.enum(PROJECT_PRIMARY_ACTIONS);
+export type ProjectPrimaryAction = z.infer<typeof ProjectPrimaryAction>;
+
+/**
+ * `GET /app/api/projects/:id` (F-PROJ-13): the project for its staff
+ * ({@link ProjectSummary}) and its page — STAFF ONLY, never reused nor
+ * filtered for a student (N-SEC-20: the student's projection is M3-09's).
+ * `counts`: the roster's students (staff seats excepted), the repositories
+ * accepted, the live ones (provisioned, not deleted, the project not
+ * archived) and how many of them are definitively frozen, the rows to
+ * verify, the rows with an alert (`multiple`, or protection suspended).
+ * `primaryAction` is the server's (`projectPrimaryAction`, `@quiz/domain`).
+ * `liveStale`: some live state was served stale, or not read in time —
+ * refetch shortly. Rows: the roster by name, then the repositories whose
+ * student left it.
+ */
+export const ProjectDetail = ProjectSummary.extend({
+  releasedAt: z.iso.datetime().nullable(),
+  primaryAction: ProjectPrimaryAction,
+  counts: z.object({
+    students: z.number().int(),
+    accepted: z.number().int(),
+    live: z.number().int(),
+    frozen: z.number().int(),
+    toVerify: z.number().int(),
+    alerts: z.number().int(),
+  }),
+  liveStale: z.boolean(),
+  rows: z.array(ProjectDetailRow),
+});
+export type ProjectDetail = z.infer<typeof ProjectDetail>;

@@ -5,6 +5,9 @@
  * publish, archive and unarchive. Every body and payload is a schema of
  * `packages/contracts/src/project.ts` (invariant 7).
  *
+ * From M3-08a, the staff's reads: the project page (`GET
+ * /app/api/projects/:id`, `ProjectDetail`) and a repository's runs.
+ *
  * Registered only when Quiz's App is configured (`app.ts`), like the
  * `github` module: without it none of these routes exists. Open to every
  * member of a course's staff (D26 addendum, 2026-10-02); the students see
@@ -96,10 +99,16 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
 
   // ------------------------------------------------------------ one project
 
+  /**
+   * F-PROJ-13: the project page — the summary, the counts, the primary
+   * action, one row per student. Staff only, never a student's (N-SEC-20).
+   */
   app.get(
     "/app/api/projects/:id",
     session,
-    teacher(onProject, async ({ now, scope }) => service.projectSummary(app.db, scope.project, now)),
+    teacher(onProject, async ({ req, now, scope }) =>
+      service.projectDetail(app.db, config, scope.project, now, { log: req.log }),
+    ),
   );
 
   app.patch(
@@ -153,6 +162,13 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   // ------------------------------------------------------------ one repository (M3-05a)
 
   const onRepo = { params: ProjectRepoParams, load: accessibleProjectRepo.bind(null, app) };
+
+  /** F-PROJ-13: a repository's runs, the newest first, and its three slots. Database only. */
+  app.get(
+    "/app/api/projects/:id/repos/:rid/runs",
+    session,
+    teacher(onRepo, async ({ scope }) => service.repoRuns(app.db, scope.repo)),
+  );
 
   /** D13 as amended: the repository's own deadline (an individual extension), or the project's again. */
   app.put(

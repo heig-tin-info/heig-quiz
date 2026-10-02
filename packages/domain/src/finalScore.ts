@@ -1,8 +1,8 @@
 /**
- * Final score of a student's project repository (ported from classroom's
- * `finalGrade.ts`): the teacher's adjustment wins,
- * else the authoritative LLM review, else the frozen CI score — and, while
- * nothing is frozen yet, the current CI score.
+ * Final score of a student's project repository (F-PROJ-14, ported from
+ * heig-classroom's `finalGrade.ts`): the teacher's score wins, else the
+ * final review's (the `review` slot, heig-classroom's "LLM"), else the
+ * frozen CI score — and, while nothing is frozen yet, the current CI score.
  *
  * Single source of truth: every view and export of a project's scores
  * resolves through this function. Only scores whose annotation parsed (`ok`)
@@ -11,7 +11,9 @@
  * (`docs/merge/08-decisions.md`), not this function.
  */
 
-export type FinalScoreSource = "teacher" | "llm" | "ci";
+/** Where a final score comes from (I42: the gradebook names it). */
+export const FINAL_SCORE_SOURCES = ["teacher", "review", "ci"] as const;
+export type FinalScoreSource = (typeof FINAL_SCORE_SOURCES)[number];
 
 /** Structural shape of a score view or of a score run row. */
 export interface ScoreLike {
@@ -23,8 +25,8 @@ export interface ScoreLike {
 export interface FinalScoreInput {
   /** Teacher override (points on the project's scale); null = none. */
   teacherPoints?: number | null;
-  /** Authoritative LLM review. */
-  llmScore?: ScoreLike | null;
+  /** The final review's score (the `review` slot). */
+  reviewScore?: ScoreLike | null;
   /** CI score frozen at the deadline. */
   frozenScore?: ScoreLike | null;
   /** Current CI score, fallback while nothing is frozen. */
@@ -44,12 +46,12 @@ function parsed(s: ScoreLike | null | undefined): (ScoreLike & { points: number 
 
 /** Resolves the final score, or null when the student has none. */
 export function resolveFinalScore(repo: FinalScoreInput): FinalScore | null {
-  const llm = parsed(repo.llmScore);
+  const review = parsed(repo.reviewScore);
   const ci = parsed(repo.frozenScore) ?? parsed(repo.score);
   if (repo.teacherPoints != null) {
-    return { points: repo.teacherPoints, max: llm?.max ?? ci?.max ?? null, source: "teacher" };
+    return { points: repo.teacherPoints, max: review?.max ?? ci?.max ?? null, source: "teacher" };
   }
-  if (llm) return { points: llm.points, max: llm.max, source: "llm" };
+  if (review) return { points: review.points, max: review.max, source: "review" };
   if (ci) return { points: ci.points, max: ci.max, source: "ci" };
   return null;
 }
