@@ -109,10 +109,17 @@ async function receiptOf(db: Db, ctx: RepoContext, headSha: string): Promise<Dat
   return receipt?.receivedAt ?? null;
 }
 
-/** The heads whose protected files the App restored (F-PROJ-08): their runs never count. */
+/**
+ * The heads whose protected files the App restored (F-PROJ-08) — the pushed
+ * head, and the head the restore was built on when a later push was
+ * already there: their runs never count.
+ */
 async function restoredHeads(db: Db, repoId: string): Promise<Set<string>> {
-  const rows = await db.select({ head: reverts.headSha }).from(reverts).where(eq(reverts.repoId, repoId));
-  return new Set(rows.flatMap((r) => (r.head === null ? [] : [r.head])));
+  const rows = await db
+    .select({ head: reverts.headSha, covered: reverts.coveredSha })
+    .from(reverts)
+    .where(eq(reverts.repoId, repoId));
+  return new Set(rows.flatMap((r) => [r.head, r.covered].filter((sha): sha is string => sha !== null)));
 }
 
 /**

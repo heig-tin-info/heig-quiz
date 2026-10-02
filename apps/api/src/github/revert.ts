@@ -20,6 +20,11 @@ import { githubStatus } from "./app.js";
 export interface RevertResult {
   sha: string;
   files: string[];
+  /**
+   * The branch head the restore was built on, its parent: the pushed head,
+   * or a later push already on the branch when the restore ran.
+   */
+  covered: string;
 }
 
 /** The distribution's blob of `path` at `ref`, with its content; null when there is no such file. */
@@ -113,7 +118,7 @@ export async function revertProtectedFiles(opts: {
     tree: newTree.sha,
     parents: [headSha],
   });
-  const result = { sha: commit.sha, files };
+  const result = { sha: commit.sha, files, covered: headSha };
   if (!(await opts.beforeMove(result))) return null;
   // Strict fast-forward: force=false; in case of a race, GitHub refuses.
   await octokit.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", {

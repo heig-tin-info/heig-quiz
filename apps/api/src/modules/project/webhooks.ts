@@ -32,7 +32,7 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { githubOrganizations, projectRepos, projects, botCommits } from "../../db/schema.js";
-import { installationClient, isZeroSha, ownerRepo } from "../../github/app.js";
+import { installationClient, isZeroSha } from "../../github/app.js";
 import { forgetRepoLiveState } from "../../github/metrics.js";
 import { onEvent, onReceipt, projectInstallation, pushedBy, type WebhookHandler } from "../github/service.js";
 import { ingestCompletedRun, isEligible, isLastStudentCommit, type CompletedRun } from "./grading.js";
@@ -187,20 +187,23 @@ const repository: WebhookHandler = async (app, _config, delivery) => {
   const ctx = await repoContext(app.db, repo.id);
   if (action === "renamed") {
     if (!changes) return;
-    const from = `${ownerRepo(repo.full_name).owner}/${changes.repository.name.from}`;
+    // The name part only: the owner may differ, an organization renamed
+    // before its own rename event was applied.
+    const from = changes.repository.name.from;
+    const named = (column: AnyPgColumn) => sql`split_part(${column}, '/', 2) = ${from}`;
     await app.db
       .update(projects)
       .set({ sourceFullName: repo.full_name })
-      .where(and(eq(projects.sourceRepoId, repo.id), eq(projects.sourceFullName, from)));
+      .where(and(eq(projects.sourceRepoId, repo.id), named(projects.sourceFullName)));
     await app.db
       .update(projects)
       .set({ distributionFullName: repo.full_name })
-      .where(and(eq(projects.distributionRepoId, repo.id), eq(projects.distributionFullName, from)));
+      .where(and(eq(projects.distributionRepoId, repo.id), named(projects.distributionFullName)));
     if (!ctx) return;
     const [renamed] = await app.db
       .update(projectRepos)
       .set({ fullName: repo.full_name })
-      .where(and(eq(projectRepos.id, ctx.repo.id), eq(projectRepos.fullName, from)))
+      .where(and(eq(projectRepos.id, ctx.repo.id), named(projectRepos.fullName)))
       .returning({ id: projectRepos.id });
     if (!renamed) return;
   } else if (action === "deleted") {

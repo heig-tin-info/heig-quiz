@@ -26,7 +26,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, count, eq, gte } from "drizzle-orm";
+import { and, count, eq, gte, inArray } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
@@ -141,14 +141,16 @@ export async function protectFiles(
     action: "project_repo.restore",
     subjectType: "project_repo",
     subjectId: repo.id,
-    payload: { files: result.files, sha: result.sha, head: push.after },
+    payload: { files: result.files, sha: result.sha, head: push.after, covered: result.covered },
   });
-  // The head's runs ran the student's copy of the protected files: flagged,
-  // and out of the score, whether they finished before the restore or after.
+  // The pushed head's runs, and those of the head the restore covered (a
+  // later push already on the branch), ran the student's copy of the
+  // protected files: flagged, and out of the score, whether they finished
+  // before the restore or after.
   await db
     .update(projectGradeRuns)
     .set({ toVerify: true })
-    .where(and(eq(projectGradeRuns.repoId, repo.id), eq(projectGradeRuns.headSha, push.after)));
+    .where(and(eq(projectGradeRuns.repoId, repo.id), inArray(projectGradeRuns.headSha, [push.after, result.covered])));
   await refreshScoreSelection(db, ctx);
 }
 
@@ -180,7 +182,15 @@ async function recordRestore(db: Db, ctx: RepoContext, push: ProtectedPush, comm
     }
     const [counted] = await tx
       .insert(reverts)
-      .values({ id: randomUUID(), repoId: row.id, revertSha: commit.sha, files: commit.files, headSha: push.after, createdAt: now })
+      .values({
+        id: randomUUID(),
+        repoId: row.id,
+        revertSha: commit.sha,
+        files: commit.files,
+        headSha: push.after,
+        coveredSha: commit.covered,
+        createdAt: now,
+      })
       .onConflictDoNothing()
       .returning({ id: reverts.id });
     if (!counted) return false; // the same push answered meanwhile

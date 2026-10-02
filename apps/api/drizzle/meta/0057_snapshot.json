@@ -1,5 +1,5 @@
 {
-  "id": "76648c82-5e55-4eea-9178-59a72089459c",
+  "id": "89c26d62-4677-4e60-ab5f-7244497261d4",
   "prevId": "02f18012-28ed-4366-81ed-262cf1cfede6",
   "version": "7",
   "dialect": "postgresql",
@@ -7799,6 +7799,12 @@
         },
         "head_sha": {
           "name": "head_sha",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "covered_sha": {
+          "name": "covered_sha",
           "type": "text",
           "primaryKey": false,
           "notNull": false

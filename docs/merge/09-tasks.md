@@ -791,7 +791,8 @@ files it ports; writes en + fr for every string.
     student's last commit ⇒ `ci_status = pending`; `completed` ⇒
     `ingestCompletedRun`, which checks eligibility); `member` added ⇒
     `invitation_status = accepted`; `repository` renamed (a student's
-    repository by id, and a project's source or distribution by its id) /
+    repository by id, and a project's source or distribution by its id,
+    matched on the name part only — the owner may have changed first) /
     deleted (`markRepoDeleted`, terminal, audited `project_repo.deleted`
     once; a deleted repository's later events change nothing);
     `organization` renamed ⇒ the `<org>/` prefix of `source_full_name`,
@@ -859,7 +860,10 @@ files it ports; writes en + fr for every string.
     `SendOptions.startAfter`;
     the in-process queue holds it in an unref'd timer.
   - **Migration `0057_project_ingest`**: `project_grade_runs.parse_detail`,
-    `to_verify`; `reverts.head_sha` + partial UNIQUE `(repo_id, head_sha)`.
+    `to_verify`; `reverts.head_sha` + partial UNIQUE `(repo_id, head_sha)`,
+    `reverts.covered_sha` (the head the restore was built on, the parent
+    `revertProtectedFiles` returns as `covered`: a later push already on the
+    branch is a restored head too, its runs never the score).
     Audit `project_repo.restore`, `project_repo.revert_cap`,
     `project_repo.deleted`.
   - `isZeroSha` and `ownerRepo(fullName)` (`Q:github/app.ts`) replace the

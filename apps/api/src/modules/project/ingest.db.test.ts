@@ -395,6 +395,30 @@ describe("protected files (F-PROJ-08)", () => {
     expect((await repoRow(f.projectId)).currentGradeRunId).toBe(honestId);
   });
 
+  it("never scores a later push the restore was built on (S, then S2 before S's delivery)", async () => {
+    const f = await acceptedRepo();
+    const honest = await push(f, { "src/main.c": "honest" });
+    scored(honest.after, { title: "GRADE", message: "3/6" });
+    const honestRun = runPayload(f, honest.after);
+    await handled("workflow_run", honestRun);
+
+    const base = head(f);
+    const s = world.commit(f.fullName, "main", { [GRADING]: "grade: always 6" });
+    const s2 = world.commit(f.fullName, "main", { "src/main.c": "more work" });
+    scored(s2, { title: "GRADE", message: "6/6" });
+    server.clock.advance(MINUTE);
+    const s2Run = runPayload(f, s2);
+    await handled("workflow_run", s2Run);
+    // S's delivery, handled once S2 is on the branch: the restore covers S2.
+    await handled("push", pushPayload(f, { branch: "main", before: base, after: s, files: { [GRADING]: "x" } }));
+    expect(world.git(f.fullName, "rev-parse", `${head(f)}^`).trim()).toBe(s2);
+    expect(await restores(f)).toEqual([expect.objectContaining({ headSha: s, coveredSha: s2 })]);
+    // S2's push touches no protected file; its run still never counts.
+    await handled("push", pushPayload(f, { branch: "main", before: s, after: s2, files: { "src/main.c": "more work" } }));
+    expect(await runOf(f, s2Run.workflow_run.id)).toMatchObject({ points: 6, toVerify: true });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe((await runOf(f, honestRun.workflow_run.id))!.id);
+  });
+
   it("shows the CI state of the student's commit after a restore, never stuck pending", async () => {
     const f = await acceptedRepo();
     const { after } = await push(f, { [GRADING]: "grade: tampered", "src/main.c": "work" });
@@ -713,6 +737,13 @@ describe("member, repository and organization events (F-PROJ-07, F-PROJ-18)", ()
     await handled("member", { action: "added", repository: { id: f.githubRepoId } });
     await handled("workflow_run", runPayload(f, head(f)));
     expect(await runs(f)).toHaveLength(0);
+  });
+
+  it("repository renamed after its organization, before the organization's event: still followed", async () => {
+    const f = await acceptedRepo({ protectedFiles: [] });
+    const name = f.fullName.split("/")[1]!;
+    await handled("repository", { action: "renamed", repository: { id: f.githubRepoId, full_name: `new-owner/${name}-v2` }, changes: renamedFrom(name) });
+    expect((await repoRow(f.projectId)).fullName).toBe(`new-owner/${name}-v2`);
   });
 
   it("repository renamed: a project's distribution follows its id too", async () => {

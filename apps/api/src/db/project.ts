@@ -440,6 +440,13 @@ export const reverts = pgTable(
      * imported rows.
      */
     headSha: text("head_sha"),
+    /**
+     * The branch head the restore commit was built on (M3-04): `head_sha`,
+     * or a later push already on the branch when the restore ran. Its runs
+     * used the student's copy of the protected files too. Null on imported
+     * rows.
+     */
+    coveredSha: text("covered_sha"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
   (t) => [
