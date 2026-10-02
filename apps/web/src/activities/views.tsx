@@ -1,7 +1,7 @@
-import { ClipboardCheck, NotebookPen, Vote } from "lucide-react";
+import { ClipboardCheck, FolderGit2, NotebookPen, Vote } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import type { EvaluationActivitySummary, EvaluationMode } from "@quiz/contracts";
+import type { ActivitySummary } from "@quiz/contracts";
 
 import { evaluationHome, evaluationStateLabel, stateTone } from "../evaluation/common";
 import { useI18n, useT, type TFunction } from "../i18n";
@@ -21,44 +21,65 @@ import {
   type IconType,
 } from "../ui";
 import { ActivityMenu } from "./actions";
-import { anchorOf, foldable, isoWeek, mondayOf, weeksOf } from "./model";
+import { projectStateLabel, projectStateTone } from "../project/common";
+import { anchorOf, closesOf, foldable, isoWeek, mondayOf, typeOf, weeksOf, type ActivityType } from "./model";
 
 /*
  * The three views of the Activities section (#190), after heig-classroom's
  * classroom list: cards, a sortable list, and a view in time. Every one
- * opens a row where the classroom's own list would (`evaluationHome`) and
+ * opens a row where the classroom's own list would (`activityHome`) and
  * carries the same overflow menu, so switching views changes the layout and
  * nothing of what a row does.
  */
 
-export const MODE_ICON: Record<EvaluationMode, IconType> = {
+export const TYPE_ICON: Record<ActivityType, IconType> = {
   exam: ClipboardCheck,
   exercise: NotebookPen,
   poll: Vote,
+  project: FolderGit2,
 };
 
+/** A type chip's word: an evaluation's mode, or "Project". */
+export function typeName(type: ActivityType, t: TFunction): string {
+  return type === "project" ? t("activities.kind.project") : t(`eval.mode.${type}`);
+}
+
+/**
+ * Where a row leads: an evaluation where the classroom's own list would take
+ * it (`evaluationHome`), a project to its page (M3-12).
+ */
+export function activityHome(row: ActivitySummary): Route {
+  return row.kind === "project" ? { view: "project", id: row.id } : evaluationHome(row);
+}
+
+/** The state's word, either kind's. */
+export function stateLabel(row: ActivitySummary, t: TFunction): string {
+  return row.kind === "project" ? projectStateLabel(row.state, t) : evaluationStateLabel(row.state, t);
+}
+
 export interface ViewProps {
-  rows: EvaluationActivitySummary[];
+  rows: ActivitySummary[];
   navigate: (r: Route) => void;
-  onEnd: (row: EvaluationActivitySummary) => void;
+  onEnd: (row: ActivitySummary) => void;
 }
 
 /** "Exercise", or "Exercise · take-home" for a series done over days. */
-export function modeLabel(row: EvaluationActivitySummary, t: TFunction): string {
-  const mode = t(`eval.mode.${row.mode}`);
-  return row.takeHome ? `${mode} · ${t("activities.takeHome")}` : mode;
+export function modeLabel(row: ActivitySummary, t: TFunction): string {
+  const mode = typeName(typeOf(row), t);
+  return row.kind === "evaluation" && row.takeHome ? `${mode} · ${t("activities.takeHome")}` : mode;
 }
 
 /** "PRG1 · PRG1-2026", or the word for an anonymous poll's lack of one. */
-export function classroomLabel(row: EvaluationActivitySummary, t: TFunction): string {
+export function classroomLabel(row: ActivitySummary, t: TFunction): string {
   return row.classroom
     ? `${row.classroom.courseCode} · ${row.classroom.name}`
     : t("activities.noClassroom");
 }
 
-function StateBadge({ row }: { row: EvaluationActivitySummary }) {
+export function StateBadge({ row }: { row: ActivitySummary }) {
   const t = useT();
-  return <Badge tone={stateTone(row.state)}>{evaluationStateLabel(row.state, t)}</Badge>;
+  const tone = row.kind === "project" ? projectStateTone(row.state) : stateTone(row.state);
+  return <Badge tone={tone}>{stateLabel(row, t)}</Badge>;
 }
 
 const dateOrDash = (iso: string | null) => (iso === null ? "—" : isoDateTime(iso));
@@ -71,7 +92,7 @@ export function ActivityTable({ rows, navigate, onEnd }: ViewProps) {
   const t = useT();
   // No initial sort: the rows arrive in `activityOrder`, which is the answer
   // to "what needs me" nobody clicked for. A click on a label replaces it.
-  const { sorted, sort, toggle } = useSortableTable<EvaluationActivitySummary, SortKey>(
+  const { sorted, sort, toggle } = useSortableTable<ActivitySummary, SortKey>(
     rows,
     (row, key) => {
       switch (key) {
@@ -82,7 +103,7 @@ export function ActivityTable({ rows, navigate, onEnd }: ViewProps) {
         case "when":
           return anchorOf(row) ?? "";
         case "closes":
-          return row.closesAt ?? "";
+          return closesOf(row) ?? "";
         default:
           return row.title;
       }
@@ -103,8 +124,8 @@ export function ActivityTable({ rows, navigate, onEnd }: ViewProps) {
         <TableHead columns={columns} sort={sort} onToggle={toggle} />
         <tbody>
           {sorted.map((row) => {
-            const open = () => navigate(evaluationHome(row));
-            const Icon = MODE_ICON[row.mode];
+            const open = () => navigate(activityHome(row));
+            const Icon = TYPE_ICON[typeOf(row)];
             return (
               <tr
                 key={row.id}
@@ -131,7 +152,7 @@ export function ActivityTable({ rows, navigate, onEnd }: ViewProps) {
                   {dateOrDash(anchorOf(row))}
                 </td>
                 <td className={`${T.td} ${T.colLow} tabular-nums text-fg-muted`}>
-                  {dateOrDash(row.closesAt)}
+                  {dateOrDash(closesOf(row))}
                 </td>
                 <td className={`${T.td} text-right`}>
                   <ActivityMenu row={row} navigate={navigate} onEnd={onEnd} />
@@ -152,9 +173,10 @@ export function ActivityCards({ rows, navigate, onEnd }: ViewProps) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {rows.map((row) => {
-        const open = () => navigate(evaluationHome(row));
-        const Icon = MODE_ICON[row.mode];
+        const open = () => navigate(activityHome(row));
+        const Icon = TYPE_ICON[typeOf(row)];
         const anchor = anchorOf(row);
+        const closes = closesOf(row);
         return (
           <Card
             key={row.id}
@@ -176,9 +198,9 @@ export function ActivityCards({ rows, navigate, onEnd }: ViewProps) {
             <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-muted">
               <StateBadge row={row} />
               {anchor ? <span className="tabular-nums">{isoDateTime(anchor)}</span> : null}
-              {row.closesAt ? (
+              {closes ? (
                 <span className="tabular-nums">
-                  {t("activities.closes", { at: isoDateTime(row.closesAt) })}
+                  {t("activities.closes", { at: isoDateTime(closes) })}
                 </span>
               ) : null}
             </div>
@@ -262,9 +284,10 @@ export function ActivitySchedule({ rows, navigate, onEnd, now }: ViewProps & { n
           </h2>
           <Card className="divide-y divide-line overflow-hidden">
             {week.rows.map((row) => {
-              const open = () => navigate(evaluationHome(row));
-              const Icon = MODE_ICON[row.mode];
+              const open = () => navigate(activityHome(row));
+              const Icon = TYPE_ICON[typeOf(row)];
               const anchor = anchorOf(row);
+              const closes = closesOf(row);
               return (
                 <div
                   key={row.id}
@@ -288,7 +311,7 @@ export function ActivitySchedule({ rows, navigate, onEnd, now }: ViewProps & { n
                     <span className="block truncate font-semibold">{row.title}</span>
                     <span className="block truncate text-fg-muted">
                       {classroomLabel(row, t)}
-                      {row.closesAt ? ` · ${t("activities.closes", { at: isoDateTime(row.closesAt) })}` : ""}
+                      {closes ? ` · ${t("activities.closes", { at: isoDateTime(closes) })}` : ""}
                     </span>
                   </span>
                   <StateBadge row={row} />

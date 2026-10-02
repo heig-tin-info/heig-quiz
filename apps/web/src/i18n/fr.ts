@@ -3821,6 +3821,20 @@ export const fr: Record<keyof Dict, string> = {
   "soon.project": "Projet",
   "soon.projectGroups": "Groupes du projet",
 
+  "activity.new": "Nouveau",
+  "activity.new.evaluation": "Évaluation",
+  "activity.new.project": "Projet",
+  "activities.kind.project": "Projet",
+  "project.new": "Nouveau projet",
+  "project.notConnected": "Connectez d'abord cette classe à GitHub",
+  "project.group": "Projets",
+  "project.start": "Début",
+  "project.deadline": "Échéance",
+  "project.loadFailed": "Impossible de charger les projets",
+  "project.state.draft": "brouillon",
+  "project.state.published": "publié",
+  "project.state.locked": "verrouillé",
+
   // The journal reader (F-JRN-07, M4-04, `journal/`). A warning or a sync
   // error is a code of `@quiz/contracts`, worded here (fix J5).
   "journal.breadcrumb": "Où vous êtes",

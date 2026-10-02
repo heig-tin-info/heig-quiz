@@ -29,6 +29,7 @@ import {
   uuid,
 } from "./evaluation";
 import { courses, rooms } from "./org";
+import { projectActivities } from "./project";
 import {
   ME_MEMBER,
   MockQuestion,
@@ -1222,8 +1223,8 @@ on("POST", "/app/api/evaluations/:id/poll/keep", (m) => {
 // Registered here, one file down from the evaluations it lists, because it
 // also lists the teacher's ANONYMOUS polls, which only this file knows. The
 // same scope as the server: every evaluation of a classroom that is not
-// archived (the mock teacher sits on every course's staff), and their own
-// classroom-less polls. `updatedAt` is "a minute ago" for a session in the
+// archived (the mock teacher sits on every course's staff), their own
+// classroom-less polls, and the projects (`project.ts`, `?projects=1`). `updatedAt` is "a minute ago" for a session in the
 // room, so the deploy guard's 12-hour rule keeps it live, as on the server.
 
 const LIVE_STATES = new Set(["lobby", "running", "paused"]);
@@ -1274,7 +1275,7 @@ on("GET", "/app/api/activities", (): ActivitySummary[] => {
       },
     ];
   });
-  return [...inClassrooms, ...anonymous].sort((a, b) =>
+  return [...inClassrooms, ...anonymous, ...projectActivities()].sort((a, b) =>
     b.id.localeCompare(a.id),
   );
 });

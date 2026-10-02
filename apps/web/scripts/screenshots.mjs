@@ -86,6 +86,9 @@ const scenes = [
   { name: "activities-schedule", role: "teacher", path: "/activities", ls: { "quiz-activities-view": "schedule" } },
   { name: "activities-empty", role: "teacher", path: "/activities?empty=1" },
   { name: "activities-error", role: "teacher", path: "/activities?fail=1", settle: 2500 },
+  // M3-10: the projects among the activities (`?projects=1`: three on r1).
+  { name: "activities-projects", role: "teacher", path: "/activities?projects=1" },
+  { name: "activities-projects-schedule", role: "teacher", path: "/activities?projects=1", ls: { "quiz-activities-view": "schedule" } },
   // Teacher home (the courses)
   { name: "teacher-home", role: "teacher", path: "/" },
   { name: "teacher-home-empty", role: "teacher", path: "/?empty=1" },
@@ -194,6 +197,11 @@ const scenes = [
   // — opened from the period beside the title (the header's overflow menu
   // left for the Settings tab, D24).
   { name: "classroom-period", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^(change period|changer la période)/i }).first().click() },
+  // M3-10: the Projects group under the evaluations, and "New ▾" on a
+  // connected classroom (r1) and on one that is not (r2: Project says so).
+  { name: "classroom-projects", role: "teacher", path: "/classrooms/r1?projects=1" },
+  { name: "classroom-new-menu", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^(new|nouveau)$/i }).first().click() },
+  { name: "classroom-new-menu-unconnected", role: "teacher", path: "/classrooms/r2", fold: true, act: (p) => p.getByRole("button", { name: /^(new|nouveau)$/i }).first().click() },
   // F-ORG-13 (D24, M2-07): the Settings tab. A classroom that is not
   // connected (r2, its course's organization suggested): "Connect to GitHub"
   // is the one accent, and the connect sheet it opens; PRG1-2026 connected,

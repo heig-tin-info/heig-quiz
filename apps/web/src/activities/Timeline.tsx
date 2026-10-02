@@ -1,14 +1,13 @@
 import { CalendarRange, ChevronDown, ChevronRight, Crosshair, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import type { EvaluationActivitySummary } from "@quiz/contracts";
+import type { ActivitySummary } from "@quiz/contracts";
 
-import { evaluationHome, evaluationStateLabel } from "../evaluation/common";
 import { useI18n, useT } from "../i18n";
 import type { Route } from "../router";
 import { Card, cx, EmptyState, IconButton, isoDateTime } from "../ui";
-import { bucketOf } from "./model";
-import { classroomLabel, MODE_ICON } from "./views";
+import { bucketOf, typeOf } from "./model";
+import { activityHome, classroomLabel, stateLabel, TYPE_ICON } from "./views";
 
 /**
  * The schedule of the Activities section (#190) as a gantt: one row per
@@ -59,7 +58,12 @@ const startOfDay = (t: number) => {
  * on the axis around the "now" line. An ended one without a closing stops at
  * its last change. A draft nobody dated has no place: null.
  */
-export function spanOf(a: EvaluationActivitySummary, now: number): Span | null {
+export function spanOf(a: ActivitySummary, now: number): Span | null {
+  // A project: its start to its deadline, both always set.
+  if (a.kind === "project") {
+    const s = new Date(a.startAt).getTime();
+    return { s, d: Math.max(s, new Date(a.deadlineAt).getTime()) };
+  }
   const open = bucketOf(a.state) === "open";
   const start = a.opensAt ?? a.startedAt;
   if (start === null && !open) return null;
@@ -145,20 +149,23 @@ function buildTicks(from: number, to: number, locale: string): Tick[] {
 /**
  * The fill of a bar, by its state's tone (evaluation/common.ts): green in
  * the room, amber waiting or paused, a calm blue for what is planned, a
- * dashed outline for a draft, the recessed surface for what is over.
+ * dashed outline for a draft, the recessed surface for what is over. A
+ * project is never in the room: blue while published, over once locked.
  */
-function barClass(a: EvaluationActivitySummary): string {
+function barClass(a: ActivitySummary): string {
   if (a.state === "draft") return "border border-dashed border-fg-faint bg-surface text-fg-muted";
+  if (a.state === "scheduled" || a.state === "published") {
+    return "bg-info-soft text-info ring-1 ring-inset ring-info";
+  }
   if (a.state === "running") return "bg-success text-on-fill";
   if (bucketOf(a.state) === "open") return "bg-warning text-on-fill";
-  if (a.state === "scheduled") return "bg-info-soft text-info ring-1 ring-inset ring-info";
   return "bg-surface-3 text-fg-muted";
 }
 
 /** The dot beside a lane's name: the bar's colour, at full strength for the pale ones. */
-function dotClass(a: EvaluationActivitySummary): string {
+function dotClass(a: ActivitySummary): string {
   if (a.state === "draft") return "border border-dashed border-fg-faint";
-  if (a.state === "scheduled") return "bg-info";
+  if (a.state === "scheduled" || a.state === "published") return "bg-info";
   if (bucketOf(a.state) === "ended") return "bg-line-strong";
   return barClass(a).split(" ")[0]!;
 }
@@ -166,7 +173,7 @@ function dotClass(a: EvaluationActivitySummary): string {
 interface Room {
   key: string;
   label: string;
-  lanes: { row: EvaluationActivitySummary; span: Span }[];
+  lanes: { row: ActivitySummary; span: Span }[];
 }
 
 export function ActivityTimeline({
@@ -174,7 +181,7 @@ export function ActivityTimeline({
   navigate,
   now,
 }: {
-  rows: EvaluationActivitySummary[];
+  rows: ActivitySummary[];
   navigate: (r: Route) => void;
   now: number;
 }) {
@@ -287,32 +294,33 @@ export function ActivityTimeline({
     });
 
   /** What a bar says to a screen reader and on hover: the title, the state, the span. */
-  const barName = (row: EvaluationActivitySummary, s: Span) =>
+  const barName = (row: ActivitySummary, s: Span) =>
     t("activities.timeline.bar", {
       title: row.title,
-      state: evaluationStateLabel(row.state, t),
+      state: stateLabel(row, t),
       from: isoDateTime(new Date(s.s).toISOString()),
       to: isoDateTime(new Date(s.d).toISOString()),
     });
 
-  const bar = (row: EvaluationActivitySummary, s: Span, compact: boolean) => {
+  const bar = (row: ActivitySummary, s: Span, compact: boolean) => {
     const l = pct(s.s);
     const r = pct(s.d);
     if (r <= 0 || l >= 100) return null; // fully outside the window
     // A bar too short to see is drawn at the minimum width, grown from the
     // end that means something: an open one ENDS on the now line (it runs up
-    // to now), anything else STARTS at its opening.
+    // to now), anything else STARTS at its opening. A project runs to its
+    // deadline, not to now: never "in the room".
+    const inRoom = row.kind === "evaluation" && bucketOf(row.state) === "open";
     const natural = Math.min(r, 100) - Math.max(l, 0);
     const width = Math.max(natural, MIN_BAR);
-    const left =
-      natural >= MIN_BAR ? Math.max(l, 0) : bucketOf(row.state) === "open" ? Math.max(r - width, 0) : Math.max(l, 0);
-    const ongoing = s.s <= now && now <= s.d && bucketOf(row.state) === "open";
+    const left = natural >= MIN_BAR ? Math.max(l, 0) : inRoom ? Math.max(r - width, 0) : Math.max(l, 0);
+    const ongoing = s.s <= now && now <= s.d && inRoom;
     const name = barName(row, s);
     return (
       <button
         key={row.id}
         type="button"
-        onClick={() => navigate(evaluationHome(row))}
+        onClick={() => navigate(activityHome(row))}
         // Out of the Tab order: the lane's label before it is the keyboard's
         // way in, and is there whatever the visible window.
         tabIndex={-1}
@@ -381,14 +389,14 @@ export function ActivityTimeline({
                   {folded
                     ? null
                     : room.lanes.map(({ row }) => {
-                        const Icon = MODE_ICON[row.mode];
+                        const Icon = TYPE_ICON[typeOf(row)];
                         return (
                           // A button, so every lane is reachable from the
                           // keyboard, its bar in the window or not.
                           <button
                             key={row.id}
                             type="button"
-                            onClick={() => navigate(evaluationHome(row))}
+                            onClick={() => navigate(activityHome(row))}
                             className={`flex ${LANE_H} w-full items-center gap-1.5 truncate rounded-field pl-5 pr-1 text-left text-xs text-fg-muted hover:text-fg`}
                             title={row.title}
                           >

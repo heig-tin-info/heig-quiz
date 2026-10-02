@@ -3826,6 +3826,22 @@ export const en = {
   "soon.project": "Project",
   "soon.projectGroups": "Project groups",
 
+  // Projects in the classroom and the Activities (M3-10): "New ▾", the
+  // Projects group, the type chip. A project, never an "assignment".
+  "activity.new": "New",
+  "activity.new.evaluation": "Evaluation",
+  "activity.new.project": "Project",
+  "activities.kind.project": "Project",
+  "project.new": "New project",
+  "project.notConnected": "Connect this classroom to GitHub first",
+  "project.group": "Projects",
+  "project.start": "Start",
+  "project.deadline": "Deadline",
+  "project.loadFailed": "Could not load the projects",
+  "project.state.draft": "draft",
+  "project.state.published": "published",
+  "project.state.locked": "locked",
+
   // The journal reader (F-JRN-07, M4-04, `journal/`). A warning or a sync
   // error is a code of `@quiz/contracts`, worded here (fix J5).
   "journal.breadcrumb": "Where you are",

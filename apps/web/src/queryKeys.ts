@@ -93,6 +93,12 @@ export const classroomDrillKey = (id: string, part: string) => ["classroom", id,
  */
 export const classroomGithubKey = (id: string) => ["classroom", id, "github"] as const;
 /**
+ * `GET /classrooms/:id/projects` (M3-10): the classroom's projects, under the
+ * classroom, so the `classrooms` hint that refreshes the classroom reaches
+ * them too.
+ */
+export const classroomProjectsKey = (id: string) => ["classroom", id, "projects"] as const;
+/**
  * The organizations Quiz's App is installed on (the connect sheet's picker).
  * Its own root, which the `classrooms` hint names: an installation that
  * completes adds a row while the sheet is open.

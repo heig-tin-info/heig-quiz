@@ -75,6 +75,7 @@ import {
   PollQuestionPick,
   PollSummary,
   PollTeacherView,
+  ProjectActivitySummary,
   PoolCandidates,
   PoolCategories,
   PoolDetail,
@@ -104,6 +105,9 @@ if (typeof window.fetch !== "function") {
 // `?journal=1`, as the runtime remembers it: PRG1-2026 has a journal, so its
 // pages are served and checked; every other classroom answers "no journal".
 localStorage.setItem("quiz-mock-journal", "1");
+// `?projects=1` (M3-10): PRG1-2026 has a project in each state, so the
+// classroom's list and the Activities' project rows are served and checked.
+localStorage.setItem("quiz-mock-projects", "1");
 await import("./index");
 const { routes } = await import("./runtime");
 const { STUDENT_ATTEMPT, STUDENT_RETAKE_ATTEMPT } = await import("./student");
@@ -435,6 +439,10 @@ const CHECKED: Case[] = [
     .flatMap((c) => c.classrooms)
     .map((r) => one("/app/api/classrooms/:id/github", `/app/api/classrooms/${r.id}/github`, GithubClassroom)),
   one("/app/api/me/github", "/app/api/me/github", GithubAccountState),
+  // The projects (M3-10): every classroom's list, three rows on PRG1-2026.
+  ...courses
+    .flatMap((c) => c.classrooms)
+    .map((r) => each("/app/api/classrooms/:id/projects", `/app/api/classrooms/${r.id}/projects`, ProjectActivitySummary)),
   // The drill (ADR-041, #317): the student's tab and the teacher's switch.
   one("/app/api/drill/session", "/app/api/drill/session", DrillSession),
   each("/app/api/drill/classrooms", "/app/api/drill/classrooms", DrillClassroom),
@@ -504,6 +512,15 @@ describe("the mock answers what the contracts describe", () => {
       .map((s) => s.replace(/\(\?<(\w+)>\[\^\/\]\+\)/g, ":$1"));
     const classified = new Set([...CHECKED.map((c) => c.route), ...UNCHECKED]);
     expect(registered.filter((r) => !classified.has(r))).toEqual([]);
+  });
+});
+
+describe("the mock's projects (?projects=1)", () => {
+  it("serves one project per state, on PRG1-2026 and in the Activities", async () => {
+    const own = (await get(`/app/api/classrooms/${classroomId}/projects`)) as { state: string }[];
+    expect(own.map((p) => p.state).sort()).toEqual(["draft", "locked", "published"]);
+    const all = (await get("/app/api/activities")) as { kind: string }[];
+    expect(all.filter((a) => a.kind === "project")).toHaveLength(3);
   });
 });
 

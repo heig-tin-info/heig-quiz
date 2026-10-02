@@ -38,6 +38,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["classroomKey", keys.classroomKey("r1"), ["classroom", "r1"]],
     ["classroomKey (not loaded)", keys.classroomKey(null), ["classroom", null]],
     ["classroomGithubKey", keys.classroomGithubKey("r1"), ["classroom", "r1", "github"]],
+    ["classroomProjectsKey", keys.classroomProjectsKey("r1"), ["classroom", "r1", "projects"]],
     ["githubOrgsKey", keys.githubOrgsKey, ["github", "orgs"]],
     ["meGithubKey", keys.meGithubKey, ["me", "github"]],
     ["poolsKey", keys.poolsKey, ["pools"]],

@@ -791,6 +791,38 @@ files it ports; writes en + fr for every string.
 - **Goal**: the classroom's Activities tab and `/activities` list projects;
   "New ▾" (Evaluation, Poll, Project) with the GitHub gate (opens M2-07's
   sheet first).
+- **As delivered** (branch `merge/M3-10-web-projects`; product owner
+  2026-10-02): projects are open to every teacher, no gate but GitHub's.
+  - **New ▾** (`Q:apps/web/src/activities/NewActivity.tsx`) replaces the
+    header's "New evaluation" on the Evaluations tab: Evaluation and
+    Project. **No Poll**: the launcher takes no classroom (its audience is
+    a remembered choice), so a Poll item could not land on this
+    classroom. GitHub read 404 (`githubAbsent`) or failed ⇒ the plain "New
+    evaluation" button; loading ⇒ Project greyed; not connected ⇒ Project
+    carries `project.notConnected` and calls `ClassroomView`'s
+    `openConnect` (`/classrooms/:id/settings?connect=1`, M2-07's sheet; no
+    return to a form, F-GH-02); connected ⇒ route `projectNew`
+    (`/classrooms/:id/projects/new`, `ComingSoon`).
+  - **Projects group** (`Q:apps/web/src/project/ProjectGroup.tsx`) under
+    `EvaluationList`, the tab unrenamed: `GET /classrooms/:id/projects`
+    (`ProjectActivitySummary[]`, key `classroomProjectsKey` under
+    `classroom`); title + state badge, Start, Deadline; a row opens
+    `project`. Drawn only with rows: nothing while loading, on `[]` or on
+    a 404; `QueryError` otherwise. `project/common.ts`: state tone/label,
+    `useClassroomProjects`.
+  - **Routes**: `project` lost `preview` (parses in every build, still
+    `ComingSoon` until M3-12; `/projects/:id/groups` reads as the project
+    while `projectGroups` stays `preview`); `projectNew` added, not
+    `preview`.
+  - **/activities** lists the union: `activities/model.ts` (`typeOf`,
+    `TYPES`, `closesOf`, `isLive` — a project never; `anchorOf` = start;
+    published ⇒ bucket `open`, locked ⇒ `ended`), a Project chip shown
+    only when a project is listed, no row menu for a project, a blue
+    (planned) bar on the gantt. Still creates nothing.
+  - Mock: `mock/project.ts`, `?projects=1` (three on PRG1-2026, one per
+    state; r2 is the unconnected classroom), checked in `contract.test.ts`.
+    Scenes `classroom-projects`, `classroom-new-menu[-unconnected]`,
+    `activities-projects[-schedule]`. Students see no project (M3-13).
 
 ### M3-11 — Web: new project form
 - **Depends on**: M3-02 contracts, M2-07. ‖ M3-10, M3-12.
@@ -800,6 +832,12 @@ files it ports; writes en + fr for every string.
   `ProjectRefusal` (`{ error: ProjectErrorCode, message, branches? }`) and
   `ProjectUnassigned` (`students`) to `contracts/src/project.ts` with this
   form, their first consumer.
+- **From M3-10**: "New ▾ › Project" on a connected classroom navigates to
+  the route `projectNew` (`/classrooms/:id/projects/new`, `router.ts`),
+  which renders `ComingSoon` (`App.tsx` `PAGES`). Replace that placeholder
+  with the form — or, if the form is a sheet of the classroom page, drop
+  the route and have `NewActivity`'s Project item open the sheet instead.
+  On create, invalidate `classroomProjectsKey(id)` and `activitiesKey`.
 
 ### M3-12 — Web: project page
 - **Depends on**: M3-08 contracts. ‖ M3-11.

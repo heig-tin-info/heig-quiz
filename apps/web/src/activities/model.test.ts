@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import type { EvaluationActivitySummary } from "@quiz/contracts";
+import type { EvaluationActivitySummary, ProjectActivitySummary } from "@quiz/contracts";
 
 import {
   activityOrder,
   anchorOf,
   bucketOf,
+  closesOf,
   foldable,
+  isLive,
   isoWeek,
   matches,
   mondayOf,
@@ -32,6 +34,20 @@ function row(over: Partial<EvaluationActivitySummary> = {}): EvaluationActivityS
   };
 }
 
+function project(over: Partial<ProjectActivitySummary> = {}): ProjectActivitySummary {
+  n += 1;
+  return {
+    kind: "project",
+    id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+    title: `P${n}`,
+    state: "published",
+    classroom: { id: "00000000-0000-4000-8000-0000000000aa", name: "PRG1-2026", courseCode: "PRG1" },
+    startAt: "2026-09-21T08:00:00.000Z",
+    deadlineAt: "2026-10-05T22:00:00.000Z",
+    ...over,
+  };
+}
+
 describe("bucketOf", () => {
   it("sorts the eight states into three ages", () => {
     expect(bucketOf("draft")).toBe("upcoming");
@@ -47,6 +63,53 @@ describe("anchorOf", () => {
     expect(anchorOf(row({ startedAt: "b", closesAt: "c" }))).toBe("b");
     expect(anchorOf(row({ closesAt: "c" }))).toBe("c");
     expect(anchorOf(row())).toBeNull();
+  });
+});
+
+describe("a project among the activities (M3-10)", () => {
+  it("is placed by its start, closes at its deadline, and ages by its state", () => {
+    const p = project();
+    expect(anchorOf(p)).toBe(p.startAt);
+    expect(closesOf(p)).toBe(p.deadlineAt);
+    expect(bucketOf("draft")).toBe("upcoming");
+    expect(bucketOf("published")).toBe("open");
+    expect(bucketOf("locked")).toBe("ended");
+  });
+
+  it("is never live, even published and in its span", () => {
+    const now = new Date("2026-09-28T10:00:00Z").getTime();
+    expect(isLive(project(), now)).toBe(false);
+    expect(isLive(row({ state: "running", startedAt: "2026-09-28T09:00:00Z", updatedAt: "2026-09-28T09:59:00Z" }), now)).toBe(true);
+  });
+
+  it("passes the type filter with no chip pressed or the Project chip on, and only then", () => {
+    const p = project();
+    expect(matches(p, { types: new Set(), buckets: new Set() })).toBe(true);
+    expect(matches(p, { types: new Set(["project"]), buckets: new Set() })).toBe(true);
+    expect(matches(p, { types: new Set(["exam", "poll"]), buckets: new Set() })).toBe(false);
+    expect(matches(p, { types: new Set(["project"]), buckets: new Set(["ended"]) })).toBe(false);
+    // The Project chip alone hides every evaluation.
+    expect(matches(row(), { types: new Set(["project"]), buckets: new Set() })).toBe(false);
+  });
+
+  it("is ordered and filed in weeks beside the evaluations", () => {
+    const now = new Date(2026, 8, 30, 12).getTime();
+    const draft = project({ title: "draft", state: "draft", startAt: new Date(2026, 9, 7, 8).toISOString() });
+    const locked = project({ title: "locked", state: "locked", startAt: new Date(2026, 8, 1, 8).toISOString() });
+    const published = project({ title: "published", startAt: new Date(2026, 8, 14, 8).toISOString() });
+    const exam = row({ title: "exam", state: "scheduled", opensAt: new Date(2026, 9, 2, 8).toISOString() });
+    expect(activityOrder([locked, draft, exam, published]).map((a) => a.title)).toEqual([
+      "published",
+      "exam",
+      "draft",
+      "locked",
+    ]);
+    // Published, it is this week's business, like an open series.
+    const weeks = weeksOf([draft, published, exam], now);
+    expect(weeks.find((w) => w.start === mondayOf(now))!.rows.map((r) => r.title).sort()).toEqual([
+      "exam",
+      "published",
+    ]);
   });
 });
 
@@ -72,12 +135,12 @@ describe("activityOrder", () => {
 describe("matches", () => {
   const poll = row({ mode: "poll", state: "running" });
   it("filters nothing with no chip pressed", () => {
-    expect(matches(poll, { modes: new Set(), buckets: new Set() })).toBe(true);
+    expect(matches(poll, { types: new Set(), buckets: new Set() })).toBe(true);
   });
   it("needs both the type and the state when both are pressed", () => {
-    expect(matches(poll, { modes: new Set(["poll"]), buckets: new Set(["open"]) })).toBe(true);
-    expect(matches(poll, { modes: new Set(["poll"]), buckets: new Set(["ended"]) })).toBe(false);
-    expect(matches(poll, { modes: new Set(["exam"]), buckets: new Set() })).toBe(false);
+    expect(matches(poll, { types: new Set(["poll"]), buckets: new Set(["open"]) })).toBe(true);
+    expect(matches(poll, { types: new Set(["poll"]), buckets: new Set(["ended"]) })).toBe(false);
+    expect(matches(poll, { types: new Set(["exam"]), buckets: new Set() })).toBe(false);
   });
 });
 
