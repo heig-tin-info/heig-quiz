@@ -11,7 +11,8 @@ import {
   foldable,
   isLive,
   isoWeek,
-  matches,
+  tabOf,
+  matchesType,
   mondayOf,
   weeksOf,
 } from "./model";
@@ -103,12 +104,11 @@ describe("a project among the activities (M3-10)", () => {
 
   it("passes the type filter with no chip pressed or the Project chip on, and only then", () => {
     const p = project();
-    expect(matches(p, { types: new Set(), buckets: new Set() })).toBe(true);
-    expect(matches(p, { types: new Set(["project"]), buckets: new Set() })).toBe(true);
-    expect(matches(p, { types: new Set(["exam", "poll"]), buckets: new Set() })).toBe(false);
-    expect(matches(p, { types: new Set(["project"]), buckets: new Set(["ended"]) })).toBe(false);
+    expect(matchesType(p, new Set())).toBe(true);
+    expect(matchesType(p, new Set(["project"]))).toBe(true);
+    expect(matchesType(p, new Set(["exam", "poll"]))).toBe(false);
     // The Project chip alone hides every evaluation.
-    expect(matches(row(), { types: new Set(["project"]), buckets: new Set() })).toBe(false);
+    expect(matchesType(row(), new Set(["project"]))).toBe(false);
   });
 
   it("is ordered and filed in weeks beside the evaluations", () => {
@@ -133,33 +133,51 @@ describe("a project among the activities (M3-10)", () => {
 });
 
 describe("activityOrder", () => {
-  it("puts what is open first, then what comes next, then what is over, newest first", () => {
+  it("puts what is open first, then what comes next, then what is over, last closed first", () => {
     const soon = row({ title: "soon", state: "scheduled", opensAt: "2026-10-01T08:00:00Z" });
     const later = row({ title: "later", state: "scheduled", opensAt: "2026-10-08T08:00:00Z" });
     const undated = row({ title: "undated", state: "draft" });
     const open = row({ title: "open", state: "running", startedAt: "2026-09-28T08:00:00Z" });
     const old = row({ title: "old", state: "released", startedAt: "2026-09-01T08:00:00Z" });
     const recent = row({ title: "recent", state: "closed", startedAt: "2026-09-21T08:00:00Z" });
-    expect(activityOrder([old, undated, later, recent, soon, open]).map((a) => a.title)).toEqual([
+    // Opened first, closed last: its end is what ranks it among the ended.
+    const long = row({
+      title: "long",
+      state: "closed",
+      startedAt: "2026-08-01T08:00:00Z",
+      closedAt: "2026-09-25T08:00:00Z",
+      closedBy: "server",
+    });
+    expect(activityOrder([old, undated, later, recent, long, soon, open]).map((a) => a.title)).toEqual([
       "open",
       "soon",
       "later",
       "undated",
+      "long",
       "recent",
       "old",
     ]);
   });
 });
 
-describe("matches", () => {
+describe("matchesType", () => {
   const poll = row({ mode: "poll", state: "running" });
-  it("filters nothing with no chip pressed", () => {
-    expect(matches(poll, { types: new Set(), buckets: new Set() })).toBe(true);
+  it("filters nothing with no chip pressed, and keeps only the pressed types", () => {
+    expect(matchesType(poll, new Set())).toBe(true);
+    expect(matchesType(poll, new Set(["poll", "exam"]))).toBe(true);
+    expect(matchesType(poll, new Set(["exam"]))).toBe(false);
   });
-  it("needs both the type and the state when both are pressed", () => {
-    expect(matches(poll, { types: new Set(["poll"]), buckets: new Set(["open"]) })).toBe(true);
-    expect(matches(poll, { types: new Set(["poll"]), buckets: new Set(["ended"]) })).toBe(false);
-    expect(matches(poll, { types: new Set(["exam"]), buckets: new Set() })).toBe(false);
+});
+
+describe("tabOf", () => {
+  it("files the drafts apart from what is planned, of either kind", () => {
+    expect(tabOf(row({ state: "draft" }))).toBe("drafts");
+    expect(tabOf(project({ state: "draft" }))).toBe("drafts");
+    expect(tabOf(row({ state: "scheduled" }))).toBe("current");
+    expect(tabOf(row({ state: "lobby" }))).toBe("current");
+    expect(tabOf(project())).toBe("current");
+    expect(tabOf(row({ state: "grading" }))).toBe("ended");
+    expect(tabOf(project({ state: "locked" }))).toBe("ended");
   });
 });
 

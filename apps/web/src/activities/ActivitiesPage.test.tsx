@@ -64,10 +64,12 @@ const SERIES = activity(3, {
 const NEXT = activity(4, { title: "Série 6 — SPI", mode: "exercise", takeHome: true, state: "scheduled", opensAt: liveAt(7 * 24 * 60 * MIN) });
 const DONE = activity(5, { title: "Test 0", state: "released", startedAt: liveAt(-30 * 24 * 60 * MIN) });
 const ALL = [EXAM, POLL, SERIES, NEXT, DONE];
+const DRAFT = activity(7, { title: "Quiz 1 — draft" });
 
 beforeEach(() => {
   gate.enabled = true;
   localStorage.removeItem("quiz-activities-view");
+  localStorage.removeItem("quiz-activities-tab");
 });
 
 /** A published project in its span, and a draft one (M3-10). */
@@ -138,7 +140,7 @@ describe("ActivitiesPage", () => {
     expect(navigate).toHaveBeenLastCalledWith({ view: "poll", id: POLL.id });
   });
 
-  it("lists every activity in the table, open first, and opens a row where its classroom would", async () => {
+  it("lists what runs and what is planned in the table, open first, and opens a row where its classroom would", async () => {
     const user = userEvent.setup();
     const { navigate } = render();
     const table = await screen.findByRole("table");
@@ -146,10 +148,38 @@ describe("ActivitiesPage", () => {
       .getAllByRole("row")
       .slice(1)
       .map((r) => r.querySelector(".font-semibold")?.textContent);
-    expect(titles.at(-1)).toBe("Test 0");
+    expect(titles.at(-1)).toBe("Série 6 — SPI");
+    expect(titles).not.toContain("Test 0");
     expect(titles.indexOf("Série 6 — SPI")).toBeGreaterThan(titles.indexOf("Série 5 — UART"));
-    await user.click(within(table).getByText("Test 0"));
+    await user.click(within(table).getByText("Série 6 — SPI"));
+    expect(navigate).toHaveBeenLastCalledWith({ view: "evaluation", id: NEXT.id });
+  });
+
+  it("splits the list in three tabs, opens on what runs and is planned, and remembers the choice", async () => {
+    const user = userEvent.setup();
+    const { navigate } = render([...ALL, DRAFT]);
+    const tabs = await screen.findByRole("tablist", { name: "Activities by state" });
+    expect(within(tabs).getByRole("tab", { name: /In progress & upcoming\s*4/, selected: true })).toBeInTheDocument();
+    expect(within(tabs).getByRole("tab", { name: /Drafts\s*1/ })).toBeInTheDocument();
+    expect(within(tabs).getByRole("tab", { name: /Ended\s*1/ })).toBeInTheDocument();
+    expect(within(screen.getByRole("table")).queryByText("Quiz 1 — draft")).not.toBeInTheDocument();
+
+    await user.click(within(tabs).getByRole("tab", { name: /Drafts/ }));
+    expect(within(screen.getByRole("table")).getByText("Quiz 1 — draft")).toBeInTheDocument();
+    expect(within(screen.getByRole("table")).queryByText("Série 6 — SPI")).not.toBeInTheDocument();
+    expect(localStorage.getItem("quiz-activities-tab")).toBe("drafts");
+
+    await user.click(within(tabs).getByRole("tab", { name: /Ended/ }));
+    await user.click(within(screen.getByRole("table")).getByText("Test 0"));
     expect(navigate).toHaveBeenLastCalledWith({ view: "results", evaluationId: DONE.id });
+    // The live block stays above the tabs, whichever is open.
+    expect(screen.getByRole("region", { name: "Live now" })).toBeInTheDocument();
+  });
+
+  it("says so when the open tab holds nothing", async () => {
+    render([DONE]);
+    expect(await screen.findByText("Nothing in progress or planned")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Ended\s*1/ })).toBeInTheDocument();
   });
 
   it("dates a row by its distance, and marks the poll a teacher ended by hand", async () => {
@@ -161,32 +191,31 @@ describe("ActivitiesPage", () => {
       closedAt: liveAt(-3 * 24 * 60 * MIN + 10 * MIN),
       closedBy: "teacher",
     });
+    const user = userEvent.setup();
     render([NEXT, DONE, ended]);
-    const table = await screen.findByRole("table");
+    const next = within(await screen.findByRole("table")).getByText("Série 6 — SPI").closest("tr")!;
+    expect(within(next).getByText("in 7 days")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: /Ended/ }));
+    const table = screen.getByRole("table");
     const row = within(table).getByText("C'est quoi un BDFL").closest("tr")!;
     expect(within(row).getAllByText("3 days ago")).toHaveLength(2);
     expect(within(row).getByText("Closed by hand")).toBeInTheDocument();
-    const next = within(table).getByText("Série 6 — SPI").closest("tr")!;
-    expect(within(next).getByText("in 7 days")).toBeInTheDocument();
     expect(within(table).getAllByText("Closed by hand")).toHaveLength(1);
   });
 
-  it("filters by type and by state, and says how many are left", async () => {
+  it("filters by type within the tab, and says how many are left", async () => {
     const user = userEvent.setup();
     render();
     const table = await screen.findByRole("table");
     await user.click(screen.getByRole("button", { name: "Exercise" }));
-    expect(within(table).queryByText("Test 0")).not.toBeInTheDocument();
+    expect(within(table).queryByText("Quiz 3 — pointers")).not.toBeInTheDocument();
     expect(within(table).getByText("Série 5 — UART")).toBeInTheDocument();
-    expect(screen.getByText("2 of 5 activities")).toBeInTheDocument();
+    expect(screen.getByText("2 of 4 activities")).toBeInTheDocument();
+    // The counts of the tabs follow the chips.
+    expect(screen.getByRole("tab", { name: /Ended\s*0/ })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Upcoming" }));
-    expect(within(table).queryByText("Série 5 — UART")).not.toBeInTheDocument();
-    expect(within(table).getByText("Série 6 — SPI")).toBeInTheDocument();
-
-    // A filter that leaves nothing says so, and clears in one click.
-    await user.click(screen.getByRole("button", { name: "Poll" }));
-    await user.click(screen.getByRole("button", { name: "Exercise" }));
+    // A filter that leaves the tab empty says so, and clears in one click.
+    await user.click(screen.getByRole("tab", { name: /Ended/ }));
     expect(await screen.findByText("Nothing matches these filters")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Clear the filters" }));
     expect(await screen.findByRole("table")).toBeInTheDocument();
@@ -199,14 +228,15 @@ describe("ActivitiesPage", () => {
 
     await user.click(screen.getByRole("radio", { name: "Cards" }));
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Test 0" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Série 6 — SPI" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("radio", { name: "Schedule" }));
     expect(screen.getByText(/This week/)).toBeInTheDocument();
     // The open series (opened days ago) is this week's, never behind the fold.
     expect(screen.getByText("Série 5 — UART")).toBeInTheDocument();
     expect(screen.getByText(/Next week/)).toBeInTheDocument();
-    // The weeks already over fold under one button.
+    // On the Ended tab, the weeks already over fold under one button.
+    await user.click(screen.getByRole("tab", { name: /Ended/ }));
     expect(screen.queryByText("Test 0")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Show the/ }));
     expect(screen.getByText("Test 0")).toBeInTheDocument();
@@ -284,13 +314,16 @@ describe("ActivitiesPage", () => {
       render([...ALL, LAB, LAB3]);
       const table = await screen.findByRole("table");
       await user.click(screen.getByRole("button", { name: "Project" }));
-      expect(within(table).queryByText("Test 0")).not.toBeInTheDocument();
-      expect(within(table).getByText("Labo 3")).toBeInTheDocument();
-      expect(screen.getByText("2 of 7 activities")).toBeInTheDocument();
+      expect(within(table).queryByText("Quiz 3 — pointers")).not.toBeInTheDocument();
+      expect(within(table).getByText("Labo 2 — pointeurs")).toBeInTheDocument();
+      expect(screen.getByText("1 of 5 activities")).toBeInTheDocument();
       // Another type pressed beside it adds its rows; the projects stay.
       await user.click(screen.getByRole("button", { name: "Exam" }));
-      expect(within(table).getByText("Test 0")).toBeInTheDocument();
-      expect(within(table).getByText("Labo 3")).toBeInTheDocument();
+      expect(within(table).getByText("Quiz 3 — pointers")).toBeInTheDocument();
+      expect(within(table).getByText("Labo 2 — pointeurs")).toBeInTheDocument();
+      // The draft project waits under Drafts.
+      await user.click(screen.getByRole("tab", { name: /Drafts/ }));
+      expect(within(screen.getByRole("table")).getByText("Labo 3")).toBeInTheDocument();
     });
 
     it("draws a type chip only for a type that has rows", async () => {

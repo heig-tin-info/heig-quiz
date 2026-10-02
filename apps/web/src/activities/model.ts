@@ -22,9 +22,21 @@ import { projectStateLabel, projectStateTone } from "../project/common";
 import { routeEnabled, type Route } from "../router";
 import type { Tone } from "../ui";
 
-/** The three ages of an activity, as the state filter offers them. */
+/** The three ages of an activity. */
 export type Bucket = "upcoming" | "open" | "ended";
-export const BUCKETS: readonly Bucket[] = ["upcoming", "open", "ended"];
+
+/**
+ * The tabs of the section: what runs or is planned (the default — what needs
+ * the teacher), what is not launched yet, and what is over. A draft is
+ * "upcoming" by its age but not by its tab: nothing is planned for it.
+ */
+export type Tab = "current" | "drafts" | "ended";
+export const TABS: readonly Tab[] = ["current", "drafts", "ended"];
+
+export function tabOf(a: ActivitySummary): Tab {
+  if (a.state === "draft") return "drafts";
+  return bucketOf(a.state) === "ended" ? "ended" : "current";
+}
 
 /** What the type chips filter on: an evaluation's mode, or "project". */
 export type ActivityType = EvaluationMode | "project";
@@ -184,32 +196,26 @@ const time = (iso: string | null) => (iso === null ? null : new Date(iso).getTim
 /**
  * The order nobody clicked for: what is open first, then what comes next
  * (the soonest first, the undated drafts last), then what is over (the most
- * recent first). It answers "what needs me" before "what happened".
+ * recently closed first). It answers "what needs me" before "what happened".
  */
 export function activityOrder(rows: readonly ActivitySummary[]): ActivitySummary[] {
   const rank: Record<Bucket, number> = { open: 0, upcoming: 1, ended: 2 };
   return [...rows].sort((a, b) => {
     const byBucket = rank[bucketOf(a.state)] - rank[bucketOf(b.state)];
     if (byBucket !== 0) return byBucket;
-    const [ta, tb] = [time(anchorOf(a)), time(anchorOf(b))];
+    const ended = bucketOf(a.state) === "ended";
+    const key = (r: ActivitySummary) => time(ended ? (closesOf(r) ?? anchorOf(r)) : anchorOf(r));
+    const [ta, tb] = [key(a), key(b)];
     if (ta === tb) return a.title.localeCompare(b.title);
     if (ta === null) return 1;
     if (tb === null) return -1;
-    return bucketOf(a.state) === "ended" ? tb - ta : ta - tb;
+    return ended ? tb - ta : ta - tb;
   });
 }
 
-export interface Filters {
-  types: ReadonlySet<ActivityType>;
-  buckets: ReadonlySet<Bucket>;
-}
-
-/** An empty set filters nothing: no chip pressed is "everything". */
-export function matches(a: ActivitySummary, f: Filters): boolean {
-  return (
-    (f.types.size === 0 || f.types.has(typeOf(a))) &&
-    (f.buckets.size === 0 || f.buckets.has(bucketOf(a.state)))
-  );
+/** The type chips: an empty set filters nothing, no chip pressed is "every type". */
+export function matchesType(a: ActivitySummary, types: ReadonlySet<ActivityType>): boolean {
+  return types.size === 0 || types.has(typeOf(a));
 }
 
 // --- The schedule ------------------------------------------------------------

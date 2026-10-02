@@ -71,7 +71,10 @@ describe("the schedule view", () => {
   const original = window.matchMedia;
   const wide = (on: boolean) =>
     vi.stubGlobal("matchMedia", (query: string) => ({ ...original(query), matches: on }));
-  beforeEach(() => localStorage.setItem("quiz-activities-view", "schedule"));
+  beforeEach(() => {
+    localStorage.setItem("quiz-activities-view", "schedule");
+    localStorage.removeItem("quiz-activities-tab");
+  });
   afterEach(() => vi.stubGlobal("matchMedia", original));
 
   it("draws the gantt on a wide window: every dated activity a bar, the open ones around now", async () => {
@@ -95,9 +98,8 @@ describe("the schedule view", () => {
     await user.click(screen.getByRole("button", { name: "Zoom out" }));
     expect(screen.getByRole("button", { name: nextBar })).toBeInTheDocument();
     expect(screen.getByTestId("timeline-now")).toBeInTheDocument();
-    // The undated draft has no bar, and the legend says so.
+    // The draft waits under its own tab, off this one.
     expect(screen.queryByRole("button", { name: "Quiz 1 — undated" })).not.toBeInTheDocument();
-    expect(screen.getByText("One undated draft is not on the timeline")).toBeInTheDocument();
     // A classroom row per classroom, the anonymous polls together.
     expect(screen.getByRole("button", { name: /EMB · EMB-2026/, expanded: true })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /No classroom/, expanded: true })).toBeInTheDocument();
