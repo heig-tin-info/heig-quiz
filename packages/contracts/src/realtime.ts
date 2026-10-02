@@ -283,6 +283,7 @@ export type PollTallyEvent = z.infer<typeof PollTallyEvent>;
 export const ServerEvent = z.discriminatedUnion("type", [
   SnapshotEvent,
   ClockEvent,
+  z.object({ type: z.literal("platform.updating") }),
   EvaluationStateEvent,
   AttemptDeadlineEvent,
   AttemptClosedEvent,

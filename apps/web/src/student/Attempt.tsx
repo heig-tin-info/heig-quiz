@@ -75,7 +75,10 @@ export function AttemptPage({
 
   if (entry.isLoading) return <Spinner label={t("player.loading")} className="py-24" />;
 
-  if (entry.isError) {
+  // A failed background read must not unmount the player and discard its
+  // unacknowledged answers. An explicit access refusal still takes it away.
+  const transient = !(entry.error instanceof ApiError) || entry.error.status >= 500;
+  if (entry.isError && (!entry.data || !transient)) {
     const code = errorCode(entry.error);
     /*
      * The refusals that are an ANSWER and not a failure: retrying changes

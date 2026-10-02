@@ -388,6 +388,9 @@ export async function realtimePlugin(app: FastifyInstance) {
   // coalescers included: a lobby window flushed at shutdown counts nothing.
   app.addHook("preClose", async () => {
     closing.add(app);
+    // End long-lived responses before Fastify waits for them to drain. The
+    // final frame distinguishes a graceful restart from a broken network.
+    for (const stream of [...open]) stream.close(true);
   });
   app.addHook("onClose", async () => {
     clearInterval(sweep);
@@ -458,8 +461,9 @@ export async function realtimePlugin(app: FastifyInstance) {
       lastWriteAt: Date.now(),
       running: false,
       stateSeq: 0,
-      close: () => {
+      close: (updating = false) => {
         if (closed) return;
+        if (updating) sendNamed(stream, { type: "platform.updating" }, Date.now());
         closed = true;
         open.delete(stream);
         index.delete(stream);

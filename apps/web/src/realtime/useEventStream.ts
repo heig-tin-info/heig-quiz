@@ -34,6 +34,8 @@ import {
   type WatchSubject,
 } from "@quiz/contracts";
 
+import { connection } from "./connection";
+
 /**
  * Every frame the server sends under a name; the hint travels unnamed.
  *
@@ -93,6 +95,7 @@ function deliver(raw: string): void {
     if (import.meta.env.DEV) console.warn("[events] unreadable frame", data);
     return;
   }
+  if (parsed.data.type === "platform.updating") connection.updating();
   if (parsed.data.type === "clock") lastClockAt = Date.now();
   for (const s of subscribers) s.handle(parsed.data);
 }
@@ -120,6 +123,7 @@ function open(): void {
   es.onerror = () => {
     // EventSource reconnects on its own; a fresh snapshot arrives on reopen.
     announce(false);
+    connection.suspect();
   };
   // The inherited hint frame, unnamed so `onmessage` is the only way in.
   es.onmessage = (e: MessageEvent) => deliver(String(e.data));
@@ -153,6 +157,7 @@ function reconcile(): void {
       // Silent for half a minute: the browser still believes in this socket,
       // we do not.
       announce(false);
+      connection.suspect();
       close();
       open();
     }, WATCHDOG_MS);
