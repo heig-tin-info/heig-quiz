@@ -36,7 +36,6 @@ import {
   pools,
   questionVersions,
   questions,
-  githubOrganizations,
   ownedPollSql,
   projects,
   STAFF_ROLES,
@@ -441,18 +440,16 @@ export async function projectsClassroom(
  * The student's side of a project (F-PROJ-05, N-SEC-20; merge task M3-03):
  * a project that is not a draft nor archived, of a classroom where the
  * caller holds a claimed STUDENT seat — a staff seat (ADR-018) never
- * accepts —, with the organization its repositories live in. Null
- * otherwise: a draft never shows.
+ * accepts. Null otherwise: a draft never shows.
  */
 export async function findStudentProject(db: Db, userId: string, projectId: string) {
   const [row] = await db
-    .select({ project: projects, seat: enrollments, org: githubOrganizations })
+    .select({ project: projects, seat: enrollments })
     .from(projects)
     .innerJoin(
       enrollments,
       and(eq(enrollments.classroomId, projects.classroomId), eq(enrollments.userId, userId), eq(enrollments.staff, false)),
     )
-    .innerJoin(githubOrganizations, eq(githubOrganizations.id, projects.orgId))
     .where(and(eq(projects.id, projectId), ne(projects.state, "draft"), isNull(projects.archivedAt)))
     .limit(1);
   return row ?? null;

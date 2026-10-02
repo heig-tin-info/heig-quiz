@@ -28,6 +28,7 @@ const STATUS: Record<ProjectErrorCode | ProjectAcceptErrorCode, number> = {
   github_not_linked: 409,
   github_account_stale: 409,
   provision_in_progress: 409,
+  repo_name_taken: 409,
   provision_failed: 502,
 };
 

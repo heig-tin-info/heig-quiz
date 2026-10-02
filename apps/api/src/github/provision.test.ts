@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Octokit } from "octokit";
 
-import { provisionStudentRepo } from "./provision.js";
+import { provisionStudentRepo, RepoNameTaken } from "./provision.js";
 
 /** Octokit's own shape for an HTTP failure: only `status` and `message` matter here. */
 function httpError(status: number, message: string) {
@@ -47,6 +47,7 @@ function provision(octokit: Octokit) {
     branches: ["main"],
     defaultBranch: "main",
     studentLogin: "student",
+    claim: async () => true,
   });
 }
 
@@ -106,13 +107,13 @@ describe("provisionStudentRepo", () => {
     );
   });
 
-  it("refuses to adopt an existing repository the guard rejects, before any invitation", async () => {
+  it("refuses to adopt an existing repository the claim rejects, before any push, change or invitation", async () => {
     const { octokit, request } = fakeOctokit({
       ...baseRoutes(),
       "GET /repos/{owner}/{repo}/rulesets": () => ({ data: [] }),
       "POST /repos/{owner}/{repo}/rulesets": () => ({ data: { id: 7 } }),
     });
-    const canAdopt = vi.fn(async () => false);
+    const claim = vi.fn(async () => false);
 
     await expect(
       provisionStudentRepo({
@@ -124,13 +125,11 @@ describe("provisionStudentRepo", () => {
         branches: ["main"],
         defaultBranch: "main",
         studentLogin: "student",
-        canAdopt,
+        claim,
       }),
-    ).rejects.toThrow(/another tracked repository/);
-    expect(canAdopt).toHaveBeenCalledWith(REPO.id);
-    expect(request).not.toHaveBeenCalledWith(
-      "PUT /repos/{owner}/{repo}/collaborators/{username}",
-      expect.anything(),
-    );
+    ).rejects.toBeInstanceOf(RepoNameTaken);
+    expect(claim).toHaveBeenCalledWith(REPO.id, false);
+    // The creation's 422 and the read of the existing repository, nothing else.
+    expect(request.mock.calls.map(([route]) => route)).toEqual(["POST /orgs/{org}/repos", "GET /repos/{owner}/{repo}"]);
   });
 });

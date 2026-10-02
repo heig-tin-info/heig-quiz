@@ -149,7 +149,6 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
       ProjectAcceptance.parse(
         await service.acceptProject(app.db, config, {
           project: scope.project,
-          org: scope.org,
           userId: req.user!.id,
           actor: actorOf(req),
           now,

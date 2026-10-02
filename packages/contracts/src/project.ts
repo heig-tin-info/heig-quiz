@@ -450,7 +450,11 @@ export type ProjectAcceptance = z.infer<typeof ProjectAcceptance>;
  *   - `app_not_installed` — Quiz's App no longer acts on the project's
  *     organization; `distribution_missing` — nothing to hand out;
  *   - `provision_in_progress` — another Accept of the same repository is
- *     under way: try again in a moment.
+ *     under way: try again in a moment;
+ *   - `repo_name_taken` — `<slug>-<login>` names a repository of the
+ *     organization this Accept did not make: nothing was done to it;
+ *   - `provision_failed` — GitHub failed, or could not tell the account's
+ *     login today: try again.
  */
 export const PROJECT_ACCEPT_REFUSALS = [
   "not_started",
@@ -461,6 +465,7 @@ export const PROJECT_ACCEPT_REFUSALS = [
   "app_not_installed",
   "distribution_missing",
   "provision_in_progress",
+  "repo_name_taken",
   "provision_failed",
 ] as const;
 export const ProjectAcceptErrorCode = z.enum(PROJECT_ACCEPT_REFUSALS);

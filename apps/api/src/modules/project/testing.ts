@@ -96,9 +96,15 @@ export function repoWorld(): RepoWorld {
   });
 
   let nextRuleset = 1;
-  /** A write on an existing repository: a ruleset, an invitation. */
-  const repoWrite = (fullName: string, rest: string, req: RequestInit & { method: string }): Response | undefined => {
+  /** A write on an existing repository: its default branch, a ruleset, an invitation. */
+  const repoWrite = (org: string, name: string, rest: string, req: RequestInit & { method: string }): Response | undefined => {
+    const fullName = `${org}/${name}`;
     let m: RegExpExecArray | null;
+    if (req.method === "PATCH" && rest === "") {
+      const { default_branch } = JSON.parse(String(req.body)) as { default_branch?: string };
+      if (default_branch) world.git(fullName, "symbolic-ref", "HEAD", `refs/heads/${default_branch}`);
+      return json(repoJson(org, name));
+    }
     if (req.method === "POST" && rest === "/rulesets") {
       if (world.freePlan) return planRefusal();
       const { name } = JSON.parse(String(req.body)) as { name: string };
@@ -193,14 +199,8 @@ export function repoWorld(): RepoWorld {
         }
         return json(repoJson(org, name), 201);
       }
-      if ((m = /^\/repos\/([^/]+)\/([^/]+)(\/.*)$/.exec(path)) && req.method !== "GET" && world.exists(`${m[1]}/${m[2]}`)) {
-        return repoWrite(`${m[1]}/${m[2]}`, m[3]!, req);
-      }
-      if (req.method === "PATCH" && (m = /^\/repos\/([^/]+)\/([^/]+)$/.exec(path)) && world.exists(`${m[1]}/${m[2]}`)) {
-        const fullName = `${m[1]}/${m[2]}`;
-        const { default_branch } = JSON.parse(String(req.body)) as { default_branch?: string };
-        if (default_branch) world.git(fullName, "symbolic-ref", "HEAD", `refs/heads/${default_branch}`);
-        return json(repoJson(m[1]!, m[2]!));
+      if ((m = /^\/repos\/([^/]+)\/([^/]+)(\/.*)?$/.exec(path)) && req.method !== "GET" && world.exists(`${m[1]}/${m[2]}`)) {
+        return repoWrite(m[1]!, m[2]!, m[3] ?? "", req);
       }
       if (req.method !== "GET") return undefined;
       if ((m = /^\/orgs\/([^/]+)\/repos$/.exec(path))) {

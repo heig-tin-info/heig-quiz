@@ -719,29 +719,41 @@ files it ports; writes en + fr for every string.
     (M3-09).
   - **Loader** `studentProject` / `findStudentProject` (`guards.ts`): a
     claimed STUDENT seat of the project's classroom (a staff seat is a 404),
-    a project neither draft nor archived, with the organization of
-    `projects.org_id` (not the classroom's current link); by the caller's own
-    portal session (`ownPortalSession`). An impersonation POST meets
-    ADR-034's read-only `403 impersonation_read_only` first outside
-    development, the loader's 404 in it; a Bearer token 404, `seb` 401.
+    a project neither draft nor archived; by the caller's own portal session
+    (`ownPortalSession`). An impersonation POST meets ADR-034's read-only
+    `403 impersonation_read_only` first outside development, the loader's
+    404 in it; a Bearer token 404, `seb` 401. TODO (product owner, asked by
+    the orchestrator): a student of an ARCHIVED classroom can still accept.
+  - **Installation**: `projectInstallation(db, orgId)` in the `github`
+    service, on `projects.org_id` (not the classroom's current link); the
+    one rule "installed and active" (`installed`) is shared with
+    `classroomInstallation`.
   - **Service** `acceptProject` (`Q:modules/project/accept.ts`): the row
     first — `ok` or `deleted_at` set (dead stays dead), it is the answer, no
-    call to GitHub, even after the deadline. Then the `409`s, in order:
-    `not_started`, `deadline_passed` (`now >= deadline`, no grace), `no_group`,
-    `distribution_missing`, `github_not_linked`, `app_not_installed` (no
-    installation or `status <> active`), `github_account_stale` (`linkedLogin`;
-    a lookup failure goes on with the stored login), `provision_in_progress`;
-    a GitHub failure is `502 provision_failed`; an invitation GitHub refuses
+    call to GitHub, even after the deadline. Then the project's refusals,
+    `acceptRefusal(project, now)` of `@quiz/domain` (pure, unit-tested):
+    `not_started`, `deadline_passed` (`now >= deadline`, no grace),
+    `no_group`, `distribution_missing`; then `github_not_linked`,
+    `app_not_installed`, `github_account_stale` (`linkedLogin`, given the
+    link already read), `provision_in_progress`, `repo_name_taken`, all 409.
+    GitHub failing is `502 provision_failed` — its login lookup included:
+    the stored login is never used unconfirmed (renamed away, it may be
+    somebody else's now). An invitation GitHub refuses
     (`isInvitationRefused`) is `409 github_account_stale`. Codes in
     `PROJECT_ACCEPT_REFUSALS` (contracts; `has_repo` and `revoke_failed` left
     to M3-15, which serves them), statuses in `errors.ts`.
   - **Provisioning** in the request: the row inserted (`accepted_at` the
-    server's clock) under the partial UNIQUE, then claimed
-    (`provision_claimed_at`, taken over after `PROVISION_CLAIM_STALE_MS`,
-    5 min, by `app.clock`); `provisionStudentRepo` with `canAdopt` (a 422
-    adopts the existing repository unless another row records its id),
-    `repoName(slug, login)`. `full_name` is written on success only.
-    `markProvisionFailed` never touches an `ok` row and returns true for the
+    server's clock) under the partial UNIQUE, then claimed and returned in
+    one `UPDATE … RETURNING` (`provision_claimed_at`, taken over after 5 min
+    by `app.clock`); `repoName(slug, login)`. **Allow-list** (review round 1):
+    `provisionStudentRepo`'s `claim(repoId, created)` runs before any push,
+    change or invitation — a created repository's id is written on the row
+    at once; an existing one (422) is adopted only when its id is the row's
+    own (a replay), else `RepoNameTaken` → `409 repo_name_taken`, nothing
+    touched on it (a login naming the distribution, a source, another row's
+    repository). `full_name` is written on success.
+    `markProvisionFailed(db, rowId, claimedAt, error)` never touches an `ok`
+    row nor a row claimed since by another holder, and returns true for the
     row's FIRST failure (`provision_error` was null): audited
     `project.accept_failed` `{notify}`, false for a refused invitation.
   - `provision.ts` lost its work mode (D09): always `push`, never `none`.

@@ -93,10 +93,10 @@ const accept = async (projectId: string, who: { headers: Headers }) => {
 const refusal = (res: { statusCode: number; json: () => { error: unknown } }) => [res.statusCode, ProjectAcceptErrorCode.parse(res.json().error)];
 
 /** A student with a linked GitHub account (unless `linked: false`). */
-async function newStudent(opts: { linked?: boolean } = {}): Promise<Student> {
+async function newStudent(opts: { linked?: boolean; login?: string } = {}): Promise<Student> {
   const signed = await server.signIn("student");
   const githubUserId = nextAccount++;
-  const login = `kid${githubUserId}`;
+  const login = opts.login ?? `kid${githubUserId}`;
   if (opts.linked !== false) {
     await server.app.db.insert(githubAccounts).values({ userId: signed.id, githubUserId, login });
     accounts.set(githubUserId, login);
@@ -104,10 +104,22 @@ async function newStudent(opts: { linked?: boolean } = {}): Promise<Student> {
   return { ...signed, githubUserId, login };
 }
 
-/** A classroom of `teacher`'s course connected to an organization holding the source `starter`, `students` enrolled. */
-async function connectedClassroom(students: Student[]) {
+interface Org {
+  login: string;
+  orgId: string;
+}
+
+/**
+ * A classroom of `teacher`'s course connected to an organization holding the
+ * source `starter` (a new one, unless `org` is given), `students` enrolled.
+ */
+async function connectedClassroom(students: Student[], org?: Org) {
   const db = server.app.db;
   const seeded = await seedLive(db, { teacherId: teacher.id, studentIds: students.map((s) => s.id), questions: 0 });
+  if (org) {
+    await db.insert(githubClassroomLinks).values({ classroomId: seeded.classroomId, orgId: org.orgId, linkedBy: teacher.id, linkedAt: new Date() });
+    return { id: seeded.classroomId, ...org };
+  }
   const n = nextOrg++;
   const login = `org-${n}`;
   world.orgIds[login] = n;
@@ -119,9 +131,9 @@ async function connectedClassroom(students: Student[]) {
 }
 
 /** A project `Lab 1` of a fresh classroom, published (unless `publish: false`), and its students. */
-async function publishedProject(opts: { students?: Student[]; publish?: boolean; body?: object } = {}) {
+async function publishedProject(opts: { students?: Student[]; publish?: boolean; body?: object; org?: Org } = {}) {
   const students = opts.students ?? [await newStudent()];
-  const room = await connectedClassroom(students);
+  const room = await connectedClassroom(students, opts.org);
   const res = await call("POST", `/app/api/classrooms/${room.id}/projects`, teacher.headers, {
     name: "Lab 1",
     sourceRepo: "starter",
@@ -302,27 +314,57 @@ describe("a failure leaves a state the student retries", () => {
     const { project, student } = await publishedProject();
     await accept(project.id, student);
     const [row] = await repoRows(project.id);
-    expect(await markProvisionFailed(server.app.db, row!.id, "a late failure")).toBe(false);
+    expect(await markProvisionFailed(server.app.db, row!.id, row!.provisionClaimedAt!, "a late failure")).toBe(false);
     const [after] = await repoRows(project.id);
     expect([after!.provisionStatus, after!.provisionError]).toEqual(["ok", null]);
   });
 
-  it("does not adopt a repository another row records", async () => {
-    const { project, room, student } = await publishedProject();
-    const name = `${room.login}/lab-1-${student.login}`;
-    world.empty(room.login, `lab-1-${student.login}`);
-    const other = await publishedProject();
+  it("never records a stale holder's failure over the claim that took it over", async () => {
+    const { project, student } = await publishedProject();
+    const id = randomUUID();
+    const takenOver = new Date(Date.parse(NOW) - 10 * MINUTE);
     await server.app.db.insert(projectRepos).values({
-      id: randomUUID(),
-      projectId: other.project.id,
-      userId: other.student.id,
+      id,
+      projectId: project.id,
+      userId: student.id,
       acceptedAt: new Date(NOW),
-      githubRepoId: world.ids.get(name)!,
-      fullName: name,
-      provisionStatus: "ok",
+      provisionClaimedAt: new Date(NOW),
     });
-    expect(refusal(await accept(project.id, student))).toEqual([502, "provision_failed"]);
-    expect(world.collaborators.get(name)).toBeUndefined();
+    expect(await markProvisionFailed(server.app.db, id, takenOver, "late")).toBe(false);
+    const [row] = await repoRows(project.id);
+    expect([row!.provisionStatus, row!.provisionError]).toEqual(["pending", null]);
+    expect(await markProvisionFailed(server.app.db, id, new Date(NOW), "now")).toBe(true);
+  });
+
+  it("never adopts a repository it did not make: a login naming the distribution", async () => {
+    // `lab-1` + the login `squashed` = `lab-1-squashed`, the project's own distribution.
+    const student = await newStudent({ login: "squashed" });
+    const { project, room } = await publishedProject({ students: [student] });
+    const distribution = `${room.login}/lab-1-squashed`;
+    const head = world.git(distribution, "rev-parse", "main");
+    const before = gh.calls.length;
+    expect(refusal(await accept(project.id, student))).toEqual([409, "repo_name_taken"]);
+    // The create's 422 and the read of the repository: nothing pushed, changed or granted.
+    expect(gh.calls.slice(before).filter((c) => c.includes("/repos/"))).toEqual([`GET api.github.com/repos/${distribution}`]);
+    expect(world.collaborators.get(distribution)).toBeUndefined();
+    expect(world.rulesets.get(distribution)).toBeUndefined();
+    expect(world.git(distribution, "rev-parse", "main")).toBe(head);
+    const [row] = await repoRows(project.id);
+    expect([row!.provisionStatus, row!.githubRepoId, row!.fullName]).toEqual(["error", null, null]);
+  });
+
+  it("gives one repository name to one row only, when two rows map to it", async () => {
+    // The same student in two classrooms of one organization, a project `Lab 1` in each.
+    const student = await newStudent();
+    const first = await publishedProject({ students: [student] });
+    const second = await publishedProject({ students: [student], org: { login: first.room.login, orgId: first.room.orgId } });
+    const name = `${first.room.login}/lab-1-${student.login}`;
+    expect((await accept(first.project.id, student)).json()).toMatchObject({ status: "ok", fullName: name });
+    const seats = Object.fromEntries(world.collaborators.get(name)!);
+    expect(refusal(await accept(second.project.id, student))).toEqual([409, "repo_name_taken"]);
+    expect(Object.fromEntries(world.collaborators.get(name)!)).toEqual(seats);
+    const [other] = await repoRows(second.project.id);
+    expect([other!.provisionStatus, other!.githubRepoId]).toEqual(["error", null]);
   });
 });
 
@@ -350,11 +392,13 @@ describe("the student's GitHub account", () => {
     expect([...world.collaborators.get(res.json().fullName)!.keys()]).toEqual([`${student.login}-new`]);
   });
 
-  it("goes on with the stored login when GitHub cannot say", async () => {
+  it("names nothing when GitHub cannot tell today's login: 502, retried", async () => {
     const { project, room, student } = await publishedProject();
     accounts.set(student.githubUserId, "down");
-    const res = await accept(project.id, student);
-    expect(res.json()).toMatchObject({ status: "ok", fullName: `${room.login}/lab-1-${student.login}` });
+    expect(refusal(await accept(project.id, student))).toEqual([502, "provision_failed"]);
+    expect(await repoRows(project.id)).toEqual([]);
+    accounts.set(student.githubUserId, student.login);
+    expect((await accept(project.id, student)).json()).toMatchObject({ status: "ok", fullName: `${room.login}/lab-1-${student.login}` });
   });
 
   it("answers an invitation GitHub refuses with github_account_stale, the staff not told", async () => {

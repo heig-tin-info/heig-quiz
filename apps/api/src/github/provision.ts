@@ -35,6 +35,17 @@ function isPlanRestriction(err: unknown): boolean {
 }
 
 
+/**
+ * The target name is held by a repository the caller may not adopt: nothing
+ * was pushed to it, changed on it, nor anyone invited on it.
+ */
+export class RepoNameTaken extends Error {
+  constructor(readonly fullName: string) {
+    super(`${fullName} already exists and is not this row's repository`);
+    this.name = "RepoNameTaken";
+  }
+}
+
 export interface ProvisionResult {
   repoId: number;
   fullName: string;
@@ -54,12 +65,15 @@ export async function provisionStudentRepo(opts: {
   defaultBranch: string;
   studentLogin: string;
   /**
-   * Adoption guard: called when the repository name already exists on
-   * GitHub, with that repository's id, BEFORE anything is pushed to it or
-   * anyone invited on it. False aborts the provisioning. Group repositories
-   * use it so a name collision never hands a group someone else's repository.
+   * The allow-list of the repository (M3-03 review): called with its id and
+   * whether this call created it, BEFORE anything is pushed to it, changed
+   * on it or anyone invited on it. A created repository is recorded by the
+   * caller; an existing one (the 422 of a name taken) is adopted only when
+   * the caller recorded it already — a replay of its own creation. False
+   * aborts with {@link RepoNameTaken}: a name is chosen by a student (their
+   * login), so it may name any repository of the organization.
    */
-  canAdopt?: (repoId: number) => Promise<boolean>;
+  claim: (repoId: number, created: boolean) => Promise<boolean>;
 }): Promise<ProvisionResult> {
   const { octokit, token, org, squashedRepo, targetRepo, branches, studentLogin } = opts;
   // Provisioning only clones and pushes existing refs: no bot identity needed.
@@ -92,10 +106,8 @@ export async function provisionStudentRepo(opts: {
     });
     repoId = Number(data.id);
     fullName = data.full_name;
-    if (opts.canAdopt && !(await opts.canAdopt(repoId))) {
-      throw new Error(`${fullName} already exists and belongs to another tracked repository`);
-    }
   }
+  if (!(await opts.claim(repoId, created))) throw new RepoNameTaken(fullName);
 
   // 2. Push of the squashed repo's refs (skipped if the default branch already exists).
   let needPush = true;
