@@ -732,7 +732,9 @@ describe("a completed run (F-PROJ-10, ADR-011)", () => {
 });
 
 describe("a review run (F-PROJ-11)", () => {
-  const review = (f: Fixture, sha: string, over: Record<string, unknown> = {}) => runPayload(f, sha, { event: "repository_dispatch", ...over });
+  /** A review run, dispatched by Quiz's App unless `over` says otherwise. */
+  const review = (f: Fixture, sha: string, over: Record<string, unknown> = {}) =>
+    runPayload(f, sha, { event: "repository_dispatch", actor: { login: APP_BOT }, triggering_actor: { login: APP_BOT }, ...over });
 
   it("is stored, and fills the review slot only once the freeze is definitive, parsed and successful", async () => {
     const f = await acceptedRepo();
@@ -756,6 +758,28 @@ describe("a review run (F-PROJ-11)", () => {
     expect(row.reviewGradeRunId).toBe((await runOf(f, final.workflow_run.id))!.id);
     // Never the current score.
     expect(row.currentGradeRunId).toBeNull();
+  });
+
+  it("fills the slot only for a review Quiz's App triggered: a student's dispatch or re-run is a trace (M3-05b)", async () => {
+    const f = await acceptedRepo();
+    await push(f, { "src/main.c": "int main(){return 0;}" });
+    const sha = head(f);
+    scored(sha, { title: "GRADE", message: "6/6" });
+    await server.app.db.update(projectRepos).set({ frozenAt: new Date(DEADLINE) }).where(eq(projectRepos.id, f.repo.id));
+
+    const own = review(f, sha, { actor: { login: f.student.login }, triggering_actor: { login: f.student.login } });
+    await handled("workflow_run", own);
+    expect(await runOf(f, own.workflow_run.id)).toMatchObject({ kind: "review", points: 6 });
+    expect((await repoRow(f.projectId)).reviewGradeRunId).toBeNull();
+
+    // The App's dispatch, re-run by the student: who re-ran it decides.
+    const rerun = review(f, sha, { run_attempt: 2, triggering_actor: { login: f.student.login } });
+    await handled("workflow_run", rerun);
+    expect((await repoRow(f.projectId)).reviewGradeRunId).toBeNull();
+
+    const app = review(f, sha);
+    await handled("workflow_run", app);
+    expect((await repoRow(f.projectId)).reviewGradeRunId).toBe((await runOf(f, app.workflow_run.id))!.id);
   });
 });
 

@@ -77,6 +77,18 @@ export const JOURNAL_INGEST_QUEUE = "journal.ingest";
 export const PROJECT_DEADLINE_QUEUE = "project.deadline";
 
 /**
+ * The review dispatches of one project (merge task M3-05b, ADR-064
+ * addendum): `{ projectId, lease }`, sent by the ticker only once it holds
+ * the project's OTHER lease (`projects.dispatch_job_at`) — the final review
+ * of each repository frozen, the checkpoints due. As
+ * {@link PROJECT_DEADLINE_QUEUE}: `standard`, no dedupe, no retry by the
+ * queue (a failure backdates the lease); and each repository's dispatch is
+ * claimed in the `grade_dispatches` ledger before GitHub is called, at most
+ * once.
+ */
+export const PROJECT_DISPATCH_QUEUE = "project.dispatch";
+
+/**
  * No `singletonKey`, on purpose (#273). Our queues are pg-boss `standard`
  * queues (`createQueue` passes no policy, and pg-boss 12 refuses to change a
  * policy after creation), on which a key without `singletonSeconds` dedupes

@@ -55,6 +55,13 @@ export interface CompletedRun {
   path: string;
   /** What triggered it: `push`, `repository_dispatch` (the review), ... */
   event: string;
+  /**
+   * Who triggered it (`pushedBy` of the run's `triggering_actor`, else its
+   * `actor`): only a review run Quiz's App dispatched — `app` — fills the
+   * review slot; a student may dispatch one too, or re-run the App's on a
+   * later head (M3-05b).
+   */
+  triggeredBy: "app" | "workflow" | "person";
   checkSuiteId: number | null;
   /** GitHub's completion time. */
   completedAt: Date;
@@ -249,9 +256,11 @@ async function aggregateCiStatus(
  * Ingests a completed run, idempotently: the id of the grade run created,
  * or null when the run does not count or was already ingested (a replay
  * reads no annotation again). A `ci` run reselects the current score; a
- * `review` run fills the review slot only once it parsed, succeeded and the
- * repository's freeze is definitive (`project_repos.frozen_at`, M3-05a): a checkpoint's review before it is a
- * trace, never the final review (F-PROJ-11 as amended, M3-04).
+ * `review` run fills the review slot only once it parsed, succeeded, was
+ * triggered by Quiz's App (M3-05b) and the repository's freeze is
+ * definitive (`project_repos.frozen_at`, M3-05a): a checkpoint's review
+ * before it, or a review a student dispatched, is a trace, never the final
+ * review (F-PROJ-11 as amended, M3-04, M3-05b).
  *
  * `to_verify`: ingested while the repository's protection is suspended, or
  * on a head whose protected files were restored (F-PROJ-08).
@@ -332,8 +341,10 @@ export async function ingestCompletedRun(
 
   if (kind === "review") {
     // The final review only: a failed run (grading.yml's fallback "1/6"
-    // when the review step dies) is a trace, never the review's score.
-    if (score?.status === "ok" && run.conclusion === "success" && ctx.repo.frozenAt !== null) {
+    // when the review step dies) is a trace, never the review's score; so
+    // is a review the App did not trigger (M3-05b) — a student's own
+    // dispatch, or their re-run of the App's.
+    if (score?.status === "ok" && run.conclusion === "success" && run.triggeredBy === "app" && ctx.repo.frozenAt !== null) {
       await db.update(projectRepos).set({ reviewGradeRunId: id }).where(eq(projectRepos.id, ctx.repo.id));
     }
     return id;

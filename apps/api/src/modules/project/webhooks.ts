@@ -108,6 +108,8 @@ const WorkflowRunEvent = z.object({
     event: z.string().optional(),
     check_suite_id: z.number().int().nullish(),
     updated_at: z.string().optional(),
+    actor: z.object({ login: z.string() }).nullish(),
+    triggering_actor: z.object({ login: z.string() }).nullish(),
   }),
 });
 
@@ -133,6 +135,8 @@ const workflowRun: WebhookHandler = async (app, config, delivery) => {
     conclusion: raw.conclusion ?? "unknown",
     path: raw.path ?? "",
     event: raw.event ?? "",
+    // A re-run's triggering actor is who re-ran it, its actor who first triggered it.
+    triggeredBy: pushedBy(config, (raw.triggering_actor ?? raw.actor)?.login),
     checkSuiteId: raw.check_suite_id ?? null,
     completedAt: Number.isNaN(completedAt.getTime()) ? delivery.receivedAt : completedAt,
   };

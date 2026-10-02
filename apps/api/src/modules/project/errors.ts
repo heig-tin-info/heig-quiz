@@ -1,14 +1,17 @@
 /**
- * The project lifecycle's refusals (`ProjectErrorCode`) and Accept's
- * (`ProjectAcceptErrorCode`), worded by the web app (invariant 1): one
+ * The project lifecycle's refusals (`ProjectErrorCode`), Accept's
+ * (`ProjectAcceptErrorCode`) and the review checkpoints'
+ * (`ProjectCheckpointErrorCode`), worded by the web app (invariant 1): one
  * class, its status by code.
  */
-import type { ProjectAcceptErrorCode, ProjectErrorCode } from "@quiz/contracts";
+import type { ProjectAcceptErrorCode, ProjectCheckpointErrorCode, ProjectErrorCode } from "@quiz/contracts";
 
 import { DomainError } from "../http.js";
 
+type Code = ProjectErrorCode | ProjectAcceptErrorCode | ProjectCheckpointErrorCode;
+
 /** The state of things is a 409; what the clock or GitHub's contents refuse a 422; GitHub failing a 502. */
-const STATUS: Record<ProjectErrorCode | ProjectAcceptErrorCode, number> = {
+const STATUS: Record<Code, number> = {
   not_connected: 409,
   app_not_installed: 409,
   source_not_found: 422,
@@ -30,11 +33,16 @@ const STATUS: Record<ProjectErrorCode | ProjectAcceptErrorCode, number> = {
   provision_in_progress: 409,
   repo_name_taken: 409,
   provision_failed: 502,
+  // The review checkpoints (M3-05b).
+  due_past: 422,
+  due_after_deadline: 422,
+  duplicate_checkpoint: 409,
+  checkpoint_dispatched: 409,
 };
 
 /** A refusal: `{ error: code, message, ...details }`. */
 export class ProjectError extends DomainError {
-  constructor(code: ProjectErrorCode | ProjectAcceptErrorCode, message?: string, details?: Readonly<Record<string, unknown>>) {
+  constructor(code: Code, message?: string, details?: Readonly<Record<string, unknown>>) {
     super(code, STATUS[code], message ?? code, details);
     this.name = "ProjectError";
   }

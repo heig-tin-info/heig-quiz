@@ -52,7 +52,7 @@ import {
 } from "../../db/schema.js";
 import { setRemoteBaseForTests } from "../../github/git.js";
 import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
-import type { JobQueue } from "../../jobs.js";
+import { PROJECT_DEADLINE_QUEUE, type JobQueue } from "../../jobs.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { accessibleProjectRepo } from "../guards.js";
@@ -165,7 +165,8 @@ const sent: DeadlineJob[] = [];
 async function tick(): Promise<boolean> {
   const queue: JobQueue = {
     createQueue: async () => {},
-    send: async (_name, data) => void sent.push(data as DeadlineJob),
+    // The deadline's jobs only: the review dispatches are dispatch.db.test's.
+    send: async (name, data) => void (name === PROJECT_DEADLINE_QUEUE && sent.push(data as DeadlineJob)),
     work: async () => {},
     stop: async () => {},
   };
@@ -551,6 +552,7 @@ describe("a repository's own deadline (D13 amended)", () => {
       conclusion: "success",
       path: ".github/workflows/build.yml",
       event: "push",
+      triggeredBy: "person",
       checkSuiteId: null,
       completedAt: at(DEADLINE, 61 * MINUTE),
     });
@@ -611,7 +613,7 @@ describe("the reopen (F-PROJ-09)", () => {
     server.clock.set("2026-10-10T08:00:00Z");
     const moved = await call("PATCH", `/app/api/projects/${p.id}`, teacher.headers, { deadlineAt: "2026-10-12T22:00:00Z" });
     expect(moved.statusCode, moved.body).toBe(200);
-    expect(await projectRow(p.id)).toMatchObject({ state: "published", deadlineAppliedAt: null, reviewDispatchedAt: null });
+    expect(await projectRow(p.id)).toMatchObject({ state: "published", deadlineAppliedAt: null });
     // The late run was received before the new deadline: it is the score now.
     const [lateRun] = await server.app.db.select().from(projectGradeRuns).where(eq(projectGradeRuns.id, late));
     expect(lateRun!.afterDeadline).toBe(false);

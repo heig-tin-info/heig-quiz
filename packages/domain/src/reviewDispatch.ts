@@ -2,12 +2,15 @@
  * The LLM reviews a project requests from its student repositories (ported
  * from classroom's `dispatch.ts`, `grading.ts` and `milestones.ts`).
  *
- * Once a project's score is frozen (deadline + grace, ADR-012), the server
- * fires ONE `repository_dispatch` per student repository carrying the frozen
- * commit; the repository's `grading.yml` runs its LLM review, whose run comes
- * back through the ordinary ingestion as a `review` run. A review checkpoint
- * (classroom's "milestone", `docs/merge/07-incompatibilities.md` §7.4) does
- * the same before the deadline, on the last commit received before it.
+ * Once a repository's score is frozen for good (its effective deadline +
+ * grace, ADR-012, ADR-064), the server fires ONE `repository_dispatch` to it
+ * carrying the frozen commit and that EFFECTIVE deadline (the caller passes
+ * it as `deadlineAt`, M3-05b); the repository's `grading.yml` runs its LLM
+ * review, whose run comes back through the ordinary ingestion as a `review`
+ * run. A review checkpoint (classroom's "milestone",
+ * `docs/merge/07-incompatibilities.md` §7.4) does the same before the
+ * deadline, on the last commit no bot pushed received before it. The API's
+ * `modules/project/review.ts` sends them.
  *
  * These are the pure decisions. The event types and the `client_payload`
  * keys (`assignment_id`, `milestone`, …) are read by the workflows already

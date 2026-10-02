@@ -1060,6 +1060,76 @@ under the half that serves them.
   `projects.frozen_at` any more, nor a `projects_review_due_idx`: the
   review scan is over `project_repos` (frozen, no `deadline` dispatch);
   whether `projects.review_dispatched_at` still serves is this task's call.
+- **Decided for it** (product owner, 2026-10-02; point 5 by the
+  orchestrator): (1) at most once — the ledger row claimed before the
+  call, an unconfirmed row never sent again (a manual re-dispatch is a
+  later option); (2) only Quiz's review counts — the slot takes a review
+  run only when the App triggered it; (3) a repository archived as its
+  lock gets no review, without a ledger row, audited degraded, never
+  un-archived for it; (4) checkpoints against the project's deadline,
+  calendar days, to every live repository not yet frozen, on the last
+  non-bot receipt before the date, `due_past` / `due_after_deadline`, void
+  after an earlier deadline, delete refused once any ledger row exists;
+  (5) per repository at its definitive freeze, `none` never, no frozen run
+  no review, the effective deadline in the payload, the sha recorded, even
+  without `ANTHROPIC_API_KEY`; a separate lease and queue, no HTTP in a
+  tick; `review_dispatched_at` dropped.
+- **As delivered** (branch `merge/M3-05b-project-review`). What M3-06,
+  M3-08, M3-09 and M8-01 inherit:
+  - **Migration `0060_project_review`**: `projects.review_dispatched_at`
+    DROPPED (whether a repository's final review was asked is its
+    `grade_dispatches` row), `projects.dispatch_job_at` (the dispatch
+    lease).
+  - **Leases** (`Q:modules/project/lease.ts`, shared with the deadline):
+    `claimLeases(db, key, now, work, projectId?)`, `heldLease(app, key,
+    projectId, lease)` (renew, release, `expireSoon`), `forEachLimit`,
+    `REPO_CONCURRENCY`, `LEASE_MS`, `FAILED_RETRY_MS`; `jobs.ts` keeps
+    `DEADLINE_LEASE_MS` and `DeadlineJob` as aliases. `hintStaff` moved to
+    `repos.ts` as `hintProjectStaff`.
+  - **The dispatch** (`Q:modules/project/review.ts`): the tick's step 6,
+    `claimReviewWork` (queue only) → `project.dispatch` (`PROJECT_DISPATCH_QUEUE`,
+    `retryLimit: 0`) → `runReviewJob`: first the final reviews
+    (`FINAL_REVIEW_DUE`: `LIVE`, graded `auto`, `frozen_at` and
+    `frozen_grade_run_id` set, `archived_at` null, no `deadline` ledger
+    row), then each checkpoint due (`checkpointDue`: date come, not
+    dispatched, before the project's deadline, project not a draft) to the
+    `LIVE` repositories with `deadline_applied_at` null — "not yet frozen"
+    read as not even provisionally, so a checkpoint's run never lands in
+    the freeze and fills the review slot. Each repository: one transaction
+    (project `FOR SHARE`, checkpoint `FOR SHARE`, repository `FOR UPDATE`)
+    re-reads it and claims the ledger row (`createdAt` = the clock, `sha`
+    sent); then `POST /repos/{o}/{r}/dispatches` with Octokit's retries off.
+    Outcomes: accepted ⇒ `dispatched_at`; an error GitHub answered ⇒ the
+    row deleted and the repository counted `failed` (lease backdated, job
+    throws), a 404 ⇒ `markRepoDeleted(…, "dispatch")`; no response ⇒ the row
+    left unconfirmed, counted `unconfirmed`, not a failure. A checkpoint is
+    marked `dispatched_at` after a pass with no `failed` for it. Audit
+    `project.review_dispatched` and `project.checkpoint_dispatched`
+    (`checkpointId`, `name`) `{dispatched, deleted, unconfirmed, failed}`
+    per pass that changed something; `project_repo.review_skipped`
+    `{projectId, reason: "archived"}` written by the freeze step of the
+    tick (archived before the freeze) or by the job (archived meanwhile).
+  - **The review slot** (`grading.ts`): `CompletedRun.triggeredBy`
+    (`pushedBy` of `workflow_run.triggering_actor`, else `actor`); the
+    slot fills only for `app`. A student's own dispatch, or their re-run of
+    the App's, is stored as a `review` trace.
+  - **Checkpoints** (`Q:modules/project/checkpoints.ts`, staff,
+    `accessibleProject`): `GET|POST /app/api/projects/:id/checkpoints`
+    (`ReviewCheckpointCreate` → `ReviewCheckpoint`, 201; resolved under the
+    project's row lock), `DELETE …/checkpoints/:cid`
+    (`ProjectCheckpointParams`, 204, 404 for another project's). Refusals
+    `PROJECT_CHECKPOINT_REFUSALS` (own contract block): `due_past`,
+    `due_after_deadline` (422), `duplicate_checkpoint`,
+    `checkpoint_dispatched` (409). Audit `project_checkpoint.create|delete`
+    (subject the checkpoint, `{projectId, name, dueAt, offsetDays}`).
+  - **Tests** `Q:modules/project/dispatch.db.test.ts`; the review-slot case
+    in `ingest.db.test.ts`.
+  - Not done here: notices and mails (M3-09); the staff's view of the
+    ledger and of void checkpoints (M3-08); a manual re-dispatch (later).
+    Without a queue (`JOBS_DISABLED=1`) no review is ever dispatched
+    (`docs/development/index.md`). A repository archived as its lock and
+    later un-archived by a staff unlock after its freeze gets its final
+    review then (it is due again: frozen, no ledger row, not archived).
 
 ### M3-06 — Reconciliation of grades and repositories
 - **Depends on**: M3-04, M2-05. ‖ M3-05, M3-07.
@@ -1090,6 +1160,11 @@ under the half that serves them.
   branch on `reverts`; after a 422 whose retry finds nothing to restore,
   S's runs stay unflagged. Close them here, where the reconciliation reads
   the same rows.
+- **From M3-05b** (2026-10-02): `CompletedRun` gained `triggeredBy`
+  (`pushedBy(config, run.triggering_actor?.login ?? run.actor?.login)`):
+  the listing of `actions/runs` carries both, and a reconciled review run
+  fills the review slot only when it is `app`. The reconciliation never
+  re-sends a review dispatch: an unconfirmed ledger row stays as it is.
 
 ### M3-07 — Sync of the source repository
 - **Depends on**: M2-04, M3-02, D12. ‖ M3-05, M3-06.
@@ -1273,6 +1348,20 @@ that serves them.
   5. **Invitation resend**: staff only, a pending invitation only (409
      otherwise), at most once per repository per minute (429), audited,
      independent of M3-06's daily re-invite.
+- **From M3-05b** (product owner, 2026-10-02): each repository shows its
+  **final review** from its `grade_dispatches` row (`trigger = deadline`):
+  none and frozen with no frozen run ⇒ "no review"; none and archived as
+  its lock ⇒ "no review" as degraded (audit `project_repo.review_skipped`);
+  a row with `dispatched_at` ⇒ asked at that time, of `sha`; a row without
+  ⇒ **"not confirmed"** (claimed, GitHub's acceptance never recorded: a
+  crash or no response — never sent again; a manual re-dispatch is a later
+  option); then the review slot when the run came back. There is no
+  `projects.review_dispatched_at` any more (migration `0060`): derive a
+  project's "review dispatched" from the ledger. The checkpoints list
+  (`GET …/checkpoints`, `ReviewCheckpoint`) shows a checkpoint not
+  dispatched whose `dueAt` is at or after the project's deadline as
+  **void** (it never fires; deletable), and a deletion refused with `409
+  checkpoint_dispatched` once any ledger row names it.
 
 ### M3-09 — Student side, SSE, notifications
 - **Depends on**: M3-04, D18. ‖ M3-08.
@@ -1322,6 +1411,17 @@ that serves them.
   worded from the audit `project.deadline_enforced` (`locked`, `archived`,
   `committed`, …) the deadline job writes; the student's view shows their
   own effective deadline.
+- **From M3-05b** (2026-10-02): the staff's notice of a review asked
+  (heig-classroom's `llm_review_dispatched`, "(n/N repositories)") is
+  worded from the audits `project.review_dispatched` and
+  `project.checkpoint_dispatched` (`dispatched`, `deleted`, `unconfirmed`,
+  `failed`; at most one per pass that changed something — a pass that only
+  fails again writes none, heig-classroom issue #10); the review job hints
+  the course's staff only (`hintProjectStaff`). The final review's mail
+  (`grade.final`) is sent when `review_grade_run_id` is filled, which now
+  happens only for a run Quiz's App triggered. A student's own dispatch is
+  never worth a notice. A `project_repo.review_skipped` (archived as its
+  lock) is the staff's, never the student's.
 
 ### M3-10 — Web: projects in Activities, "New ▾"
 - **Depends on**: M3-01 contracts, M1-05. ‖ M3-11.
@@ -2106,7 +2206,8 @@ that serves them.
   `ON CONFLICT DO NOTHING`, in FK order. `assignments` → `projects`
   (`classroom_id` mapped; `org_id` = the mapped classroom's
   `github_classroom_links.org_id`; `squashed_*` → `distribution_*`;
-  `llm_dispatched_at` → `review_dispatched_at`; `grades_validated_at/by` →
+  `llm_dispatched_at` dropped (M3-05b: the column is gone, migration
+  `0060`; see the note below); `grades_validated_at/by` →
   `released_at/by`; `created_by` = the remapped classroom owner;
   `grading_scale` = `{kind: "score_is_grade"}`, heig-classroom's own
   reading — a score out of 6 is the grade, any other maximum linear
@@ -2129,6 +2230,20 @@ that serves them.
   by the restores and counted as student commits. Imported `reverts` rows
   keep `head_sha` null (the column is new, migration `0057`), and imported
   `project_grade_runs` take `to_verify = false`, `parse_detail` null.
+- **From M3-05b** (2026-10-02): Quiz derives "the final review was asked"
+  from the `grade_dispatches` ledger alone (`projects.review_dispatched_at`
+  is dropped), and its ticker dispatches a `grade-final` to EVERY live
+  repository frozen with a frozen run and no `deadline` ledger row, of a
+  project graded `auto`. So the import must leave no such repository it
+  does not mean to review again: for an assignment whose
+  `llm_dispatched_at` is set, a repository with a frozen run and no
+  `deadline` row (a row lost, or older than the ledger) gets a confirmed
+  synthetic row (`sha` = its frozen run's head, `dispatched_at` =
+  `llm_dispatched_at`), counted in the report. heig-classroom's ledger rows
+  left unconfirmed (`dispatched_at` null, which it would have retried) are
+  imported as they are: Quiz never sends them again, its staff see them
+  "not confirmed". Likewise a milestone already dispatched keeps its
+  `dispatched_at` (`project_checkpoints`), or it fires again.
 
 ### M8-02 — Legacy URL resolver
 - **Depends on**: M8-01 (id map), M3-12, M4-04.
