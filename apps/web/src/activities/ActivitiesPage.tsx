@@ -21,6 +21,7 @@ import {
   SectionHeading,
   Segmented,
   Skeleton,
+  Tabs,
   ToggleChip,
   useMinWidth,
   useNow,
@@ -29,14 +30,15 @@ import {
 import { endable, useEndPoll } from "./actions";
 import {
   activityOrder,
-  BUCKETS,
   isLive,
-  matches,
+  matchesType,
+  tabOf,
+  TABS,
   typeName,
   typeOf,
   TYPES,
   type ActivityType,
-  type Bucket,
+  type Tab,
 } from "./model";
 import { ActivityTimeline } from "./Timeline";
 import {
@@ -63,6 +65,10 @@ import {
  * first. The empty state, where there is nothing to reach, offers the one
  * creation that needs no classroom.
  *
+ * Three tabs split the list by age: what runs or is planned (the default:
+ * what the teacher came for), the drafts nobody launched, and what is over.
+ * The type chips narrow whichever tab is open.
+ *
  * The data is one read, refreshed by the SSE hints that already refresh a
  * classroom's list (`activities` is an evaluation root in `realtime/hints.ts`).
  * The filters are client-side. What bounds the list is the server: the
@@ -87,14 +93,17 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   const now = useNow(30_000);
   const [view, setView] = usePersistentChoice<View>("quiz-activities-view", VIEWS, "list");
   const [types, setTypes] = useState<ReadonlySet<ActivityType>>(new Set());
-  const [buckets, setBuckets] = useState<ReadonlySet<Bucket>>(new Set());
+  const [tab, setTab] = usePersistentChoice<Tab>("quiz-activities-tab", TABS, "current");
   const { end, pending } = useEndPoll();
   const wide = useMinWidth(640);
 
   const ordered = useMemo(() => activityOrder(list.data ?? []), [list.data]);
   const live = ordered.filter((row): row is EvaluationActivitySummary => isLive(row, now));
-  const shown = ordered.filter((row) => matches(row, { types, buckets }));
-  const filtering = types.size > 0 || buckets.size > 0;
+  const typed = ordered.filter((row) => matchesType(row, types));
+  const inTab = (t: Tab) => typed.filter((row) => tabOf(row) === t);
+  const shown = inTab(tab);
+  const tabTotal = ordered.filter((row) => tabOf(row) === tab).length;
+  const filtering = types.size > 0;
   // A type chip only where there is a row of that type to find: a chip that
   // can only empty the list is noise (a platform without projects keeps the
   // three it had).
@@ -143,6 +152,12 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
         </EmptyState>
       </Card>
     );
+  } else if (shown.length === 0 && !filtering) {
+    body = (
+      <Card>
+        <EmptyState icon={CalendarRange} title={t(`activities.tab.${tab}.empty`)} />
+      </Card>
+    );
   } else if (shown.length === 0) {
     body = (
       <Card>
@@ -152,10 +167,7 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
           action={
             <Button
               variant="secondary"
-              onClick={() => {
-                setTypes(new Set());
-                setBuckets(new Set());
-              }}
+              onClick={() => setTypes(new Set())}
             >
               {t("activities.filtered.clear")}
             </Button>
@@ -185,6 +197,19 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
       ) : null}
 
       {ordered.length > 0 ? (
+        <Tabs<Tab>
+          value={tab}
+          onChange={setTab}
+          label={t("activities.tabs")}
+          items={TABS.map((value) => ({
+            value,
+            label: t(`activities.tab.${value}`),
+            count: inTab(value).length,
+          }))}
+        />
+      ) : null}
+
+      {ordered.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
           <div role="group" aria-label={t("activities.filter.type")} className="flex flex-wrap gap-2">
             {chips.map((type) => (
@@ -194,17 +219,6 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
                 label={typeName(type, t)}
                 pressed={types.has(type)}
                 onToggle={() => setTypes((s) => toggle(s, type))}
-              />
-            ))}
-          </div>
-          <span aria-hidden className="mx-1 hidden h-5 w-px bg-line sm:block" />
-          <div role="group" aria-label={t("activities.filter.state")} className="flex flex-wrap gap-2">
-            {BUCKETS.map((bucket) => (
-              <ToggleChip
-                key={bucket}
-                label={t(`activities.bucket.${bucket}`)}
-                pressed={buckets.has(bucket)}
-                onToggle={() => setBuckets((s) => toggle(s, bucket))}
               />
             ))}
           </div>
@@ -224,7 +238,7 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
 
       {filtering && shown.length > 0 ? (
         <p className="-mt-3 text-[13px] text-fg-muted">
-          {t("activities.filtered.count", { n: shown.length, total: ordered.length })}
+          {t("activities.filtered.count", { n: shown.length, total: tabTotal })}
         </p>
       ) : null}
 
