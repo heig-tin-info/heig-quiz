@@ -98,7 +98,7 @@ describe("the new project form", () => {
     const { calls } = routes();
     renderPage();
     await userEvent.click(await screen.findByRole("button", { name: "Create" }));
-    expect(await screen.findByText("Give the project a name.")).toBeInTheDocument();
+    expect(await screen.findByText("Give the project a name, with at least one letter or digit.")).toBeInTheDocument();
     expect(screen.getByText("Choose the repository to hand out.")).toBeInTheDocument();
     expect(screen.getByText("Enter the deadline.")).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toHaveFocus();
@@ -118,11 +118,10 @@ describe("the new project form", () => {
     await userEvent.clear(grace);
     await userEvent.type(grace, "60");
     await userEvent.click(screen.getByRole("radio", { name: "Score is the grade" }));
-    expect(screen.getByText(/A score out of 6 is the grade itself/)).toBeInTheDocument();
+    expect(screen.getByText(/a score out of 6 is the grade itself/)).toBeInTheDocument();
     expect(screen.queryByText(/workflow can be changed by the student/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("checkbox", { name: ".github/workflows/grading.yml" }));
     expect(screen.getByText(/workflow can be changed by the student/)).toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText("Protect another file…"), "src/arbre.c");
     await userEvent.click(screen.getByRole("switch", { name: "Groups" }));
     await userEvent.type(screen.getByLabelText("Maximum group size"), "3");
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
@@ -133,7 +132,7 @@ describe("the new project form", () => {
       deadlineStrategy: "commit",
       graceMinutes: 60,
       gradingScale: { kind: "score_is_grade" },
-      protectedFiles: ["criteria.yml", "README.md", "src/arbre.c"],
+      protectedFiles: ["criteria.yml", "README.md"],
       groupMode: true,
       groupMaxSize: 3,
     });
@@ -146,7 +145,7 @@ describe("the new project form", () => {
     await userEvent.click(screen.getByRole("button", { name: "Advanced options" }));
     await userEvent.click(screen.getByRole("radio", { name: "A duration" }));
     expect(screen.queryByLabelText("Deadline")).not.toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText("Days"), "14");
+    await userEvent.type(screen.getByLabelText("Duration in days"), "14");
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(posted(calls)).toHaveLength(1));
     expect(posted(calls)[0]).toMatchObject({ publishMode: "manual", durationMinutes: 14 * 1440 });
@@ -161,7 +160,7 @@ describe("the new project form", () => {
     await userEvent.click(screen.getByRole("radio", { name: "A duration" }));
     await userEvent.click(screen.getByRole("radio", { name: "At the start" }));
     expect(screen.queryByRole("radiogroup", { name: "Deadline as" })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Days")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Duration in days")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
     expect(await screen.findByText("Enter the start.")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Start"), { target: { value: "2099-06-10T08:00" } });
@@ -230,7 +229,7 @@ describe("the new project form", () => {
     renderPage();
     await fillNovice();
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
-    expect(await screen.findByText("Could not create the project")).toBeInTheDocument();
+    expect(await screen.findByText("Creation failed.")).toBeInTheDocument();
   });
 
   it("disables the form once sent, with one honest label, so nothing is created twice", async () => {
@@ -298,11 +297,16 @@ describe("the new project form", () => {
   });
 
   it("says a source that could not be read, with its retry", async () => {
-    routes(undefined, { [`GET ${BASE}/projects/sources/prg1-labo-04`]: fail(500, { message: "boom" }) });
+    const { calls } = routes(undefined, { [`GET ${BASE}/projects/sources/prg1-labo-04`]: fail(500, { message: "boom" }) });
     renderPage();
+    await userEvent.type(await screen.findByLabelText("Name"), "Labo 4");
     await userEvent.selectOptions(await screen.findByLabelText("Source repository"), "prg1-labo-04");
+    fireEvent.change(screen.getByLabelText("Deadline"), { target: { value: "2099-06-01T23:59" } });
     expect(await screen.findByText("Could not read this repository.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    // No body without the source's detail: its protected files would be lost.
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    expect(posted(calls)).toHaveLength(0);
   });
 
   it("says an empty organization", async () => {

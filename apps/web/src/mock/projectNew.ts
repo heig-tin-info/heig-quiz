@@ -9,24 +9,27 @@
  *
  * Scene flags: `?projects=1` serves PRG1-2026's organization's repositories
  * (without it the organization has none, the form's empty source);
- * `?srcmissing=1` refuses the create `422 source_not_found` — naming the
- * branches it lacks when the body asks for more than the default one;
- * `?distfail=1` refuses it `502 distribution_failed`. A create takes 2.5 s,
+ * `?srcmissing=1` refuses the create `422 source_not_found`, the source
+ * gone (a branch the mocked source lacks is refused with its name, as
+ * `lifecycle.ts` does, flag or not); a body `ProjectCreate` refuses is a
+ * `400 validation`; `?distfail=1` refuses it `502 distribution_failed`. A create takes 2.5 s,
  * the time GitHub takes to build the students' repository, so the form's
  * building state is seen.
  */
 import {
   PROTECTED_FILE_SUGGESTIONS,
-  type ProjectCreate,
+  ProjectCreate,
   type ProjectSourceDetail,
   type ProjectSourceRepo,
   type ProjectSummary,
 } from "@quiz/contracts";
 
+import { slugify } from "@quiz/domain";
+
 import { mockClassroomOrg } from "./github";
 import { courses, rooms } from "./org";
 import { addMockProject } from "./project";
-import { D, flags, H, iso, MockError, MockPayload, nextId, now, on, role } from "./runtime";
+import { D, flags, H, iso, MockError, MockPayload, nextId, on, role } from "./runtime";
 
 /** How long the mock's GitHub takes to build a distribution repository. */
 const BUILD_MS = 2500;
@@ -116,28 +119,25 @@ on("GET", "/app/api/classrooms/:id/projects/sources/:repo", (m): ProjectSourceDe
 on("POST", "/app/api/classrooms/:id/projects", async (m, raw): Promise<ProjectSummary> => {
   const id = m.groups!.id!;
   const { room, org } = connectedRoom(id);
-  const body = raw as unknown as ProjectCreate;
-  const source = sourcesOf(id).find((s) => s.repo.name === body.sourceRepo);
-  const branches = body.branches ?? (source ? [source.repo.defaultBranch] : []);
-  const deadline =
-    body.durationMinutes !== undefined ? now + body.durationMinutes * 60_000 : Date.parse(body.deadlineAt ?? "");
-  if (!(deadline > Date.now())) {
-    throw new MockPayload(422, { error: "deadline_past", message: "The deadline has passed" });
-  }
-  if (flags.srcmissing || !source) {
-    const extra = branches.filter((b) => b !== source?.repo.defaultBranch);
-    throw new MockPayload(422, {
-      error: "source_not_found",
-      message: "The source repository was not found",
-      ...(source && extra.length > 0 ? { branches: extra } : {}),
-    });
+  const parsed = ProjectCreate.safeParse(raw);
+  if (!parsed.success) throw new MockPayload(400, { error: "validation", message: parsed.error.message });
+  const body = parsed.data;
+  const at = Date.now();
+  const deadline = body.durationMinutes !== undefined ? at + body.durationMinutes * 60_000 : Date.parse(body.deadlineAt!);
+  if (deadline <= at) throw new MockPayload(422, { error: "deadline_past", message: "The deadline has passed" });
+  const source = flags.srcmissing ? undefined : sourcesOf(id).find((s) => s.repo.name === body.sourceRepo);
+  if (!source) throw new MockPayload(422, { error: "source_not_found", message: "The source repository was not found" });
+  const branches = body.branches ?? [source.repo.defaultBranch];
+  const lacking = branches.filter((b) => !source.branches.includes(b));
+  if (lacking.length > 0) {
+    throw new MockPayload(422, { error: "source_not_found", message: "The source lacks a branch", branches: lacking });
   }
   await new Promise((resolve) => setTimeout(resolve, BUILD_MS));
   if (flags.distfail) {
     throw new MockPayload(502, { error: "distribution_failed", message: "Building the distribution repository failed: try again" });
   }
-  const start = body.publishMode === "scheduled" && body.startAt ? body.startAt : iso(0);
-  const slug = body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const start = body.publishMode === "scheduled" && body.startAt ? body.startAt : new Date(at).toISOString();
+  const slug = slugify(body.name);
   const project: ProjectSummary = {
     id: nextId("pj-"),
     classroomId: id,
@@ -152,7 +152,7 @@ on("POST", "/app/api/classrooms/:id/projects", async (m, raw): Promise<ProjectSu
     sourceStrategy: body.sourceStrategy,
     deadlineStrategy: body.deadlineStrategy,
     gradingMode: body.gradingMode,
-    gradingScale: { kind: body.gradingScale?.kind ?? "linear", rounding: body.gradingScale?.rounding ?? "nearest" },
+    gradingScale: body.gradingScale ?? { kind: "linear", rounding: "nearest" },
     branches,
     protectedFiles: body.protectedFiles,
     groupMode: body.groupMode,
@@ -161,7 +161,7 @@ on("POST", "/app/api/classrooms/:id/projects", async (m, raw): Promise<ProjectSu
     distribution: { fullName: `${org.login}/${slug}-squashed` },
     deadlineAppliedAt: null,
     archivedAt: null,
-    createdAt: iso(0),
+    createdAt: new Date(at).toISOString(),
     accepted: false,
     editable: [],
   };

@@ -33,6 +33,7 @@ import {
   EmptyState,
   isoDateParts,
   isoDateTime,
+  localTimeZone,
   pressable,
   QueryError,
   Skeleton,
@@ -159,9 +160,6 @@ const DAY_KEY = {
   week: "shome.day.week",
   later: "shome.day.later",
 } as const satisfies Record<DayBucket, string>;
-
-/** The browser's time zone: where the student's day begins and ends. */
-const localTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 /**
  * "Coming up" as an agenda (product owner, 2026-10-01): the cards under

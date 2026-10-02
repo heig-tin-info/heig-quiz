@@ -72,7 +72,7 @@ const LINKS: Record<string, GithubClassroomLink> = {
 /** The organization a classroom is connected to, null when it is not (`projectNew.ts`). */
 export const mockClassroomOrg = (id: string): GithubOrg | null => LINKS[id]?.org ?? null;
 
-const INSTALL_URL ="https://github.com/apps/heig-quiz/installations/new";
+const INSTALL_URL = "https://github.com/apps/heig-quiz/installations/new";
 
 on("GET", "/app/api/github/orgs", () => {
   if (role === "student") throw new MockError(403, "Forbidden");

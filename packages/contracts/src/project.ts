@@ -486,15 +486,3 @@ export const ProjectRefusal = z.object({
   branches: z.array(z.string()).optional(),
 });
 export type ProjectRefusal = z.infer<typeof ProjectRefusal>;
-
-/**
- * `409 unassigned_students` (F-PROJ-06): the claimed students of the
- * classroom in no group of the project, by name; empty when the group
- * project has no group at all.
- */
-export const ProjectUnassigned = z.object({
-  error: z.literal("unassigned_students"),
-  message: z.string(),
-  students: z.array(z.object({ enrollmentId: z.uuid(), nom: z.string(), prenom: z.string() })),
-});
-export type ProjectUnassigned = z.infer<typeof ProjectUnassigned>;

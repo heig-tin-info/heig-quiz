@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ProjectSourceDetail } from "@quiz/contracts";
 
 import { ApiError } from "../api";
-import { chosenBranches, durationMinutes, emptyDraft, projectBody, refusalPlace, type ProjectDraft } from "./newProject";
+import { chosenBranches, emptyDraft, projectBody, refusalPlace, type ProjectDraft } from "./newProject";
 
 const DETAIL: ProjectSourceDetail = {
   name: "labo",
@@ -27,8 +27,11 @@ describe("the new project's body", () => {
     expect(body).toMatchObject({ branches: ["main"], protectedFiles: ["criteria.yml"], graceMinutes: 30 });
   });
 
-  it("needs the source's detail", () => {
-    expect(projectBody(draft(), undefined).missing).toEqual({ source: "project.source.detailFailed" });
+  it("asks for a source, and sends no branches nor protected files without its detail", () => {
+    expect(projectBody(draft({ sourceRepo: "" }), DETAIL).missing).toEqual({ source: "project.missing.source" });
+    const { body } = projectBody(draft(), undefined);
+    expect(body).not.toHaveProperty("branches");
+    expect(body?.protectedFiles).toEqual([]);
   });
 
   it("names every missing field at once, dates included", () => {
@@ -43,7 +46,7 @@ describe("the new project's body", () => {
   it("refuses a name without a letter, a bad grace, a group size out of range", () => {
     const { missing } = projectBody(draft({ name: "--", graceMinutes: "x", groupMode: true, groupMaxSize: "99" }), DETAIL);
     expect(missing).toEqual({
-      name: "project.missing.nameSlug",
+      name: "project.missing.name",
       grace: "project.missing.grace",
       groupMaxSize: "project.missing.groupMaxSize",
     });
@@ -54,11 +57,14 @@ describe("the new project's body", () => {
     expect(chosenBranches(draft({ branches: ["solution", "gone", "main"] }), DETAIL)).toEqual(["solution", "main"]);
   });
 
-  it("counts a duration in days and hours, and refuses one under 15 minutes", () => {
-    expect(durationMinutes(draft({ durationDays: "1", durationHours: "2" }))).toBe(26 * 60);
-    expect(durationMinutes(draft({ durationDays: "1.5" }))).toBeUndefined();
-    const { missing } = projectBody(draft({ deadlineKind: "duration", durationDays: "0", durationHours: "0" }), DETAIL);
-    expect(missing).toEqual({ duration: "project.missing.duration" });
+  it("counts a duration in whole days, from 1 to 400", () => {
+    expect(projectBody(draft({ deadlineKind: "duration", durationDays: "3" }), DETAIL).body).toMatchObject({
+      durationMinutes: 3 * 1440,
+    });
+    for (const durationDays of ["", "0", "1.5", "401"]) {
+      const { missing } = projectBody(draft({ deadlineKind: "duration", durationDays }), DETAIL);
+      expect(missing).toEqual({ duration: "project.missing.duration" });
+    }
   });
 });
 

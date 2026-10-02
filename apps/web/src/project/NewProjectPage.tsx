@@ -2,7 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, RotateCw } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
-import type { ClassroomDetail, ProjectSourceDetail, ProjectSourceRepo, ProjectSummary } from "@quiz/contracts";
+import type {
+  ClassroomDetail,
+  ProjectCreate,
+  ProjectSourceDetail,
+  ProjectSourceRepo,
+  ProjectSummary,
+} from "@quiz/contracts";
 
 import { api } from "../api";
 import { toLocalInput } from "../evaluation/timing";
@@ -16,6 +22,8 @@ import {
   Card,
   EmptyState,
   Field,
+  FieldError,
+  fieldErrorProps,
   GithubIcon,
   PageHeader,
   ParentLink,
@@ -25,14 +33,15 @@ import {
   Skeleton,
 } from "../ui";
 import {
+  byDuration,
   emptyDraft,
+  FIELD_ID,
   foreignZone,
   projectBody,
   refusalPlace,
   type ProjectDraft,
   type ProjectField,
 } from "./newProject";
-import { FIELD_ID, FieldMessage, invalidProps } from "./fields";
 import { ProjectAdvanced } from "./ProjectAdvanced";
 
 /** The fields under "Advanced options": a message there unfolds it. */
@@ -52,7 +61,7 @@ const ADVANCED_FIELDS: readonly ProjectField[] = ["grace", "groupMaxSize"];
  * source's detail as soon as one is picked.
  *
  * Times are the browser's zone (`datetime-local`, as for an evaluation),
- * named under the dates when it is not Europe/Zurich.
+ * named under the dates when it is not the school's (`SCHOOL_TIME_ZONE`).
  *
  * A refusal is said where it belongs: the source, the deadline, the name; a
  * classroom that is not (or no longer) connected replaces the form with the
@@ -86,7 +95,7 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
   const detail = useQuery({ ...detailOf(draft.sourceRepo), enabled: draft.sourceRepo !== "" });
 
   const create = useMutation({
-    mutationFn: (body: unknown) =>
+    mutationFn: (body: ProjectCreate) =>
       api<ProjectSummary>(`/app/api/classrooms/${classroomId}/projects`, {
         method: "POST",
         body: JSON.stringify(body),
@@ -164,18 +173,14 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
 
   const built = projectBody(draft, detail.data);
   const shown = tried && built.missing ? built.missing : {};
-  /**
-   * The message under a field: a source that could not be read, the
-   * server's refusal, else what the form still misses — but not a source
-   * whose detail is merely still on its way.
-   */
+  /** The message under a field: a source that could not be read, the server's refusal, else what the form misses. */
   const message = (field: ProjectField): string | undefined => {
     if (field === "source" && detail.isError) return t("project.source.detailFailed");
     if (refusal?.at === "field" && refusal.field === field) {
       return t(refusal.message, { branches: refusal.branches?.join(", ") ?? "" });
     }
     const key = shown[field];
-    return key && key !== "project.source.detailFailed" ? t(key) : undefined;
+    return key ? t(key) : undefined;
   };
   const advancedOpen = advanced || ADVANCED_FIELDS.some((f) => shown[f]);
 
@@ -191,6 +196,8 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
       read = await qc.ensureQueryData(detailOf(draft.sourceRepo)).catch(() => undefined);
       setReading(false);
     }
+    // No body without the source's detail: the source field says it could not be read.
+    if (draft.sourceRepo !== "" && !read) return;
     const next = projectBody(draft, read);
     if (next.body) {
       create.mutate(next.body);
@@ -205,7 +212,6 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
   const zone = foreignZone();
   const picked = sources.data?.find((s) => s.name === draft.sourceRepo);
   const scheduled = draft.publishMode === "scheduled";
-  const byDuration = !scheduled && draft.deadlineKind === "duration";
 
   return (
     <div className="space-y-6">
@@ -226,7 +232,7 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
               {t(refusal.message)}
             </Alert>
           ) : create.isError && !refusal ? (
-            <Alert tone="danger" title={t("project.createFailed")}>
+            <Alert tone="danger" title={t("eval.createFailed")}>
               {t("error.server")}
             </Alert>
           ) : null}
@@ -240,9 +246,9 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
                 maxLength={200}
                 value={draft.name}
                 onChange={(e) => update({ name: e.target.value })}
-                {...invalidProps("name", message("name"))}
+                {...fieldErrorProps(FIELD_ID.name, message("name"))}
               />
-              <FieldMessage field="name">{message("name")}</FieldMessage>
+              <FieldError id={FIELD_ID.name}>{message("name")}</FieldError>
             </div>
 
             <div className="flex flex-col gap-1">
@@ -262,7 +268,7 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
                   value={draft.sourceRepo}
                   onChange={(e) => update({ sourceRepo: e.target.value, branches: null, protectedFiles: null })}
                   className="font-mono"
-                  {...invalidProps("source", message("source"))}
+                  {...fieldErrorProps(FIELD_ID.source, message("source"))}
                 >
                   <option value="">{t("project.source.pick")}</option>
                   {sources.data?.map((s) => (
@@ -284,7 +290,7 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
                 </p>
               ) : null}
               <div className="flex flex-wrap items-center gap-2">
-                <FieldMessage field="source">{message("source")}</FieldMessage>
+                <FieldError id={FIELD_ID.source}>{message("source")}</FieldError>
                 {detail.isError ? (
                   <Button size="sm" variant="ghost" loading={detail.isFetching} onClick={() => void detail.refetch()}>
                     <RotateCw /> {t("common.retry")}
@@ -304,33 +310,21 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
                     onChange={(startLocal) => update({ startLocal })}
                   />
                 ) : null}
-                {byDuration ? (
+                {byDuration(draft) ? (
                   <div className="flex flex-col gap-1">
-                    <div className="flex items-end gap-2">
-                      <Field
-                        id={FIELD_ID.duration}
-                        label={t("project.duration.days")}
-                        type="number"
-                        min={0}
-                        max={400}
-                        width="w-24"
-                        className="text-right tabular-nums"
-                        value={draft.durationDays}
-                        onChange={(e) => update({ durationDays: e.target.value })}
-                        {...invalidProps("duration", message("duration"))}
-                      />
-                      <Field
-                        label={t("project.duration.hours")}
-                        type="number"
-                        min={0}
-                        max={23}
-                        width="w-24"
-                        className="text-right tabular-nums"
-                        value={draft.durationHours}
-                        onChange={(e) => update({ durationHours: e.target.value })}
-                      />
-                    </div>
-                    <FieldMessage field="duration">{message("duration")}</FieldMessage>
+                    <Field
+                      id={FIELD_ID.duration}
+                      label={t("project.duration")}
+                      type="number"
+                      min={1}
+                      max={400}
+                      width="w-32"
+                      className="text-right tabular-nums"
+                      value={draft.durationDays}
+                      onChange={(e) => update({ durationDays: e.target.value })}
+                      {...fieldErrorProps(FIELD_ID.duration, message("duration"))}
+                    />
+                    <FieldError id={FIELD_ID.duration}>{message("duration")}</FieldError>
                   </div>
                 ) : (
                   <DateInput
@@ -342,17 +336,14 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
                   />
                 )}
               </div>
-              <p className="text-[13px] text-fg-muted">
-                {byDuration ? t("project.duration.desc") : scheduled ? t("project.schedule.desc") : t("project.deadline.desc")}
-                {zone ? ` ${t("project.zone", { zone })}` : null}
-              </p>
+              {zone ? <p className="text-[13px] text-fg-muted">{t("project.zone", { zone })}</p> : null}
             </div>
           </Card>
 
           <div className="space-y-3">
             <Button variant="secondary" aria-expanded={advancedOpen} onClick={() => setAdvanced(!advancedOpen)}>
               {advancedOpen ? <ChevronUp /> : <ChevronDown />}{" "}
-              {t(advancedOpen ? "project.advanced.hide" : "project.advanced")}
+              {t(advancedOpen ? "eval.advanced.hide" : "eval.advanced")}
             </Button>
             {advancedOpen ? (
               <ProjectAdvanced draft={draft} detail={detail.data} update={update} message={message} />
@@ -364,7 +355,7 @@ export function NewProjectPage({ classroomId, navigate }: { classroomId: string;
               {t("common.cancel")}
             </Button>
             <Button type="submit" loading={create.isPending || reading}>
-              {create.isPending ? t("project.building") : t("project.create")}
+              {create.isPending ? t("project.building") : t("common.create")}
             </Button>
           </div>
         </fieldset>
@@ -397,9 +388,9 @@ function DateInput({
         min={toLocalInput(new Date().toISOString())}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        {...invalidProps(field, message)}
+        {...fieldErrorProps(FIELD_ID[field], message)}
       />
-      <FieldMessage field={field}>{message}</FieldMessage>
+      <FieldError id={FIELD_ID[field]}>{message}</FieldError>
     </div>
   );
 }

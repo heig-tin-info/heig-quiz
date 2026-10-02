@@ -939,25 +939,28 @@ files it ports; writes en + fr for every string.
   - `Q:apps/web/src/project/NewProjectPage.tsx` (page, queries, create),
     `ProjectAdvanced.tsx` ("Advanced options"), `newProject.ts` (pure: the
     draft, `projectBody` — parsed by `ProjectCreate` itself —, the missing
-    fields, `refusalPlace`), `fields.tsx` (ids and messages of the fields).
+    fields and their ids, `refusalPlace`), `ProtectedFiles.tsx` (the
+    suggestions as checkboxes and the `grading.yml` warning, for M3-12 too).
+    A field's error is the shared `fieldErrorProps` / `<FieldError>` of
+    `src/ui/` (the evaluation's timing step uses them too).
   - **Novice** (spec 08): name, source (`GET …/sources`, as sorted by the
     API; its default branch and last push under it), deadline
-    (`datetime-local`, the browser's zone, named when it is not
-    Europe/Zurich). Picking a source reads `GET …/sources/:repo`; its
+    (`datetime-local`, the browser's zone — `localTimeZone`, `ui/dates` —
+    named when it is not `SCHOOL_TIME_ZONE`). Picking a source reads `GET …/sources/:repo`; its
     `suggestedProtected` are sent even while Advanced stays folded (a
     Create pressed while it is read waits for it).
   - **Advanced** (folded, not remembered): branches (chips in the order
     chosen, the first the students' default; default the source's default
     branch), history (`squash`/`whole`), publication (by hand / at the
-    start), deadline as a date or a duration (by hand only; days + hours),
+    start), deadline as a date or a duration (by hand only; in days),
     at the deadline (`lock`/`commit`), grace, score (`auto`/`none`) and
     scale (linear / score is the grade, its fallback said as static text),
-    protected files (the suggestions as checkboxes, any file of the tree
-    added from a select; unchecking `grading.yml` warns), groups and their
+    protected files (the source's suggestions only; unchecking
+    `grading.yml` warns), groups and their
     advisory maximum. A start only with a scheduled publication, a
     duration only with a manual one: the form never sends both.
-  - **Refusals** (`ProjectRefusal`, `ProjectUnassigned` added to
-    `contracts/src/project.ts`): `source_not_found` under the source (with
+  - **Refusals** (`ProjectRefusal` added to `contracts/src/project.ts`;
+    `ProjectUnassigned` waits for Publish, M3-12): `source_not_found` under the source (with
     `branches`: names them and unfolds Advanced; the sources and detail are
     re-read), `deadline_past` under the deadline, `duplicate_slug` under
     the name, `not_connected`/`app_not_installed` (from the sources' read or
@@ -990,7 +993,11 @@ files it ports; writes en + fr for every string.
   `ComingSoon` after a create. **Drop `preview` from `projectNew` and
   `project` together in this task**: that turns "New ▾" on in production
   (`NewActivity`), the form, and the page it navigates to after a create
-  (`{ view: "project", id }`).
+  (`{ view: "project", id }`). Publish is this page's: its `409
+  unassigned_students` body (`students`: enrollment id, nom, prenom) gets
+  its response schema here, `ProjectUnassigned` beside M3-11's
+  `ProjectRefusal`. The protected files' edit reuses
+  `project/ProtectedFiles.tsx`.
 
 ### M3-13 — Web: student `ProjectRow`
 - **Depends on**: M3-09 contracts, M2-07.

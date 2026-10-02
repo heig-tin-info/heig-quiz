@@ -14,7 +14,8 @@ import {
   Button,
   Card,
   cx,
-  ErrorText,
+  FieldError,
+  fieldErrorProps,
   Field,
   FormError,
   isoDateTime,
@@ -104,22 +105,20 @@ function PresetCard({
 /**
  * The line under a field the launch needs (#76): quiet until the teacher has
  * tried to go on to the launch step, then one sentence that says what to
- * enter, tied to the control by `aria-describedby`.
+ * enter, tied to the control by `aria-describedby` (`FieldError`).
  */
 function MissingNote({ field }: { field: TimingField }) {
   const t = useT();
   return (
-    <ErrorText id={`${TIMING_FIELD_ID[field]}-missing`} className="max-w-52">
+    <FieldError id={TIMING_FIELD_ID[field]} className="max-w-52">
       {t(missingTimingKey(field))}
-    </ErrorText>
+    </FieldError>
   );
 }
 
 /** `aria-invalid` and the note's id, for a control whose field is missing (#76). */
 function invalid(missing: ReadonlySet<TimingField>, field: TimingField) {
-  return missing.has(field)
-    ? { "aria-invalid": true, "aria-describedby": `${TIMING_FIELD_ID[field]}-missing` }
-    : {};
+  return fieldErrorProps(TIMING_FIELD_ID[field], missing.has(field) ? field : null);
 }
 
 /**
@@ -226,7 +225,7 @@ export function ConfigSettings({
             <>
               {t(`eval.timing.desc.${settings.timing}` as keyof Dict)}
               {missing.has("timing") ? (
-                <span id={`${TIMING_FIELD_ID.timing}-missing`} className="mt-0.5 block text-danger">
+                <span id={`${TIMING_FIELD_ID.timing}-error`} className="mt-0.5 block text-danger">
                   {t(missingTimingKey("timing"))}
                 </span>
               ) : null}

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import {
   buttonClass,
   cx,
+  ErrorText as ErrorTextBase,
   inputClass,
   inputSize,
   label as fieldLabel,
@@ -433,6 +434,23 @@ export function Switch({
  */
 export { Segmented };
 export { ErrorText } from "@quiz/ui";
+
+/**
+ * A field's error, said under it: `fieldErrorProps` on the control whose id
+ * is `id` (`aria-invalid`, and `aria-describedby` pointing at the message),
+ * `<FieldError id>` under it. Both are nothing while there is no message.
+ */
+export function fieldErrorProps(id: string, message: ReactNode) {
+  return message ? { "aria-invalid": true as const, "aria-describedby": `${id}-error` } : {};
+}
+
+export function FieldError({ id, className, children }: { id: string; className?: string; children: ReactNode }) {
+  return children ? (
+    <ErrorTextBase id={`${id}-error`} className={className}>
+      {children}
+    </ErrorTextBase>
+  ) : null;
+}
 
 /**
  * Settings row: label + a description of the CURRENT choice on the left

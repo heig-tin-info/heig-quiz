@@ -1,18 +1,22 @@
-import { AlertTriangle } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { ProjectSourceDetail } from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { Alert, Card, Checkbox, cx, inputClass, inputSize, Segmented, Select, SettingRow, Switch, ToggleChip } from "../ui";
-import { FIELD_ID, FieldMessage, invalidProps } from "./fields";
 import {
-  chosenBranches,
-  chosenProtected,
-  gradingUnprotected,
-  type ProjectDraft,
-  type ProjectField,
-} from "./newProject";
+  Card,
+  cx,
+  FieldError,
+  fieldErrorProps,
+  inputClass,
+  inputSize,
+  Segmented,
+  SettingRow,
+  Switch,
+  ToggleChip,
+} from "../ui";
+import { chosenBranches, chosenProtected, FIELD_ID, type ProjectDraft, type ProjectField } from "./newProject";
+import { ProtectedFiles } from "./ProtectedFiles";
 
 /** A setting whose control is a list, laid under its title rather than beside it. */
 function StackedRow({ title, desc, children }: { title: ReactNode; desc?: ReactNode; children: ReactNode }) {
@@ -52,11 +56,12 @@ function NumberRow({
   message: string | undefined;
   onChange: (value: string) => void;
 }) {
+  const id = FIELD_ID[field];
   return (
     <div>
       <SettingRow title={title} desc={desc}>
         <input
-          id={FIELD_ID[field]}
+          id={id}
           type="number"
           aria-label={title}
           min={min}
@@ -64,13 +69,13 @@ function NumberRow({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={cx(inputClass, inputSize.sm, "w-20 text-right tabular-nums")}
-          {...invalidProps(field, message)}
+          {...fieldErrorProps(id, message)}
         />
         <span className="text-[13px] text-fg-muted">{unit}</span>
       </SettingRow>
       {message ? (
         <div className="pb-3">
-          <FieldMessage field={field}>{message}</FieldMessage>
+          <FieldError id={id}>{message}</FieldError>
         </div>
       ) : null}
     </div>
@@ -79,14 +84,14 @@ function NumberRow({
 
 /**
  * "Advanced options" of the new project (F-PROJ-01, docs/spec/08 §8.2):
- * every setting a novice never needs to read, each with its default and one
- * line on what the current choice does. The branches and the protected
- * files need the source's detail; before a source is picked they say so.
+ * every setting a novice never needs to read, each at its default. A line
+ * of description only where the choice is not self-explanatory. The
+ * branches and the protected files appear once a source is read.
  *
- * The publication: by hand (the deadline a date, or a duration counted from
- * the publication) or at a start. The form never holds a start and a
+ * The publication: by hand (the deadline a date, or a number of days counted
+ * from the publication) or at a start. The form never holds a start and a
  * duration at once: the duration is offered for a manual publication only,
- * and the start for a scheduled one only, as `ProjectCreate` requires.
+ * the start for a scheduled one only, as `ProjectCreate` requires.
  */
 export function ProjectAdvanced({
   draft,
@@ -101,28 +106,17 @@ export function ProjectAdvanced({
 }) {
   const t = useT();
   const branches = detail ? chosenBranches(draft, detail) : [];
-  const protectedFiles = detail ? chosenProtected(draft, detail) : [];
-  // The suggestions the source holds, then any file added by hand.
-  const listed = detail ? [...new Set([...detail.suggestedProtected, ...protectedFiles])] : [];
-  const addable = detail ? detail.tree.filter((e) => e.type === "blob" && !listed.includes(e.path)) : [];
 
   const toggleBranch = (branch: string) => {
     if (!branches.includes(branch)) update({ branches: [...branches, branch] });
     // The last one stays: a project hands out at least one branch.
     else if (branches.length > 1) update({ branches: branches.filter((b) => b !== branch) });
   };
-  const toggleProtected = (path: string, on: boolean) =>
-    update({ protectedFiles: on ? [...protectedFiles, path] : protectedFiles.filter((p) => p !== path) });
 
   return (
     <Card className="divide-y divide-line px-4">
-      <StackedRow
-        title={t("project.branches")}
-        desc={
-          detail ? t("project.branches.desc", { branch: branches[0] ?? detail.defaultBranch }) : t("project.needSource")
-        }
-      >
-        {detail ? (
+      {detail ? (
+        <StackedRow title={t("project.branches")} desc={t("project.branches.desc", { branch: branches[0]! })}>
           <div className="flex flex-wrap gap-2">
             {detail.branches.map((b) => (
               <ToggleChip
@@ -134,8 +128,8 @@ export function ProjectAdvanced({
               />
             ))}
           </div>
-        ) : null}
-      </StackedRow>
+        </StackedRow>
+      ) : null}
 
       <SettingRow title={t("project.sourceStrategy")} desc={t(`project.sourceStrategy.desc.${draft.sourceStrategy}`)}>
         <Segmented
@@ -150,7 +144,7 @@ export function ProjectAdvanced({
         />
       </SettingRow>
 
-      <SettingRow title={t("project.publishMode")} desc={t(`project.publishMode.desc.${draft.publishMode}`)}>
+      <SettingRow title={t("project.publishMode")}>
         <Segmented
           name="publishMode"
           label={t("project.publishMode")}
@@ -164,7 +158,7 @@ export function ProjectAdvanced({
       </SettingRow>
 
       {draft.publishMode === "manual" ? (
-        <SettingRow title={t("project.deadlineKind")} desc={t(`project.deadlineKind.desc.${draft.deadlineKind}`)}>
+        <SettingRow title={t("project.deadlineKind")}>
           <Segmented
             name="deadlineKind"
             label={t("project.deadlineKind")}
@@ -202,7 +196,7 @@ export function ProjectAdvanced({
         onChange={(graceMinutes) => update({ graceMinutes })}
       />
 
-      <SettingRow title={t("project.gradingMode")} desc={t(`project.gradingMode.desc.${draft.gradingMode}`)}>
+      <SettingRow title={t("project.gradingMode")}>
         <Segmented
           name="gradingMode"
           label={t("project.gradingMode")}
@@ -216,7 +210,7 @@ export function ProjectAdvanced({
       </SettingRow>
 
       {draft.gradingMode === "auto" ? (
-        <SettingRow title={t("project.scale")} desc={t(`project.scale.desc.${draft.scaleKind}`)}>
+        <SettingRow title={t("project.scale")} desc={t("project.scale.desc")}>
           <Segmented
             name="scale"
             label={t("project.scale")}
@@ -230,52 +224,17 @@ export function ProjectAdvanced({
         </SettingRow>
       ) : null}
 
-      <StackedRow
-        title={t("project.protected")}
-        desc={detail ? t("project.protected.desc") : t("project.needSource")}
-      >
-        {detail ? (
-          <div className="space-y-3">
-            {listed.length > 0 ? (
-              <div className="flex flex-col gap-2">
-                {listed.map((path) => (
-                  <Checkbox
-                    key={path}
-                    label={<span className="font-mono text-[13px]">{path}</span>}
-                    checked={protectedFiles.includes(path)}
-                    onChange={(e) => toggleProtected(path, e.target.checked)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="text-[13px] text-fg-faint">{t("project.protected.none")}</p>
-            )}
-            {gradingUnprotected(draft, detail) ? (
-              <Alert tone="warning" icon={AlertTriangle} title={t("project.protected.gradingWarning")} />
-            ) : null}
-            {addable.length > 0 ? (
-              <Select
-                aria-label={t("project.protected.add")}
-                size="sm"
-                width="w-full sm:w-80"
-                value=""
-                onChange={(e) => {
-                  if (e.target.value) toggleProtected(e.target.value, true);
-                }}
-              >
-                <option value="">{t("project.protected.add")}</option>
-                {addable.map((e) => (
-                  <option key={e.path} value={e.path}>
-                    {e.path}
-                  </option>
-                ))}
-              </Select>
-            ) : null}
-          </div>
-        ) : null}
-      </StackedRow>
+      {detail && detail.suggestedProtected.length > 0 ? (
+        <StackedRow title={t("project.protected")}>
+          <ProtectedFiles
+            suggested={detail.suggestedProtected}
+            value={chosenProtected(draft, detail)}
+            onChange={(protectedFiles) => update({ protectedFiles })}
+          />
+        </StackedRow>
+      ) : null}
 
-      <SettingRow title={t("project.groups")} desc={t(`project.groups.desc.${draft.groupMode ? "on" : "off"}`)}>
+      <SettingRow title={t("project.groups")}>
         <Switch checked={draft.groupMode} label={t("project.groups")} onChange={(groupMode) => update({ groupMode })} />
       </SettingRow>
       {draft.groupMode ? (
