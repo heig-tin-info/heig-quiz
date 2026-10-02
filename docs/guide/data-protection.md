@@ -70,7 +70,12 @@ The data is used to:
 - produce statistics: per evaluation for the teacher, and per question in a pool (see [Statistics](#statistics-and-anonymisation));
 - keep a trace of changes (the audit log) and diagnose failures (the technical log).
 
-The code contains no advertising or commercial use, and no data is sent to an AI model. The grading pass can ask a model for a proposal on an essay, but the only service the code contains is a development stub, which the server refuses to start with in production (`LLM_PROVIDER` in `apps/api/src/config.ts`, ADR-045). When a real provider is added, what a request carries is fixed already: the rubric, the model answer, the student's answer and the maximum points, with no name, address or identifier (ADR-045 §3, N-DATA-05). The model's justification would be shown to the teacher only.
+The code contains no advertising or commercial use. Content is sent to an AI model (Anthropic's Claude, through the platform's one key, ADR-058) once an administrator has stored a key, for three purposes:
+
+- **Generating the answer of a question** in the editor, on a teacher's click (ADR-059), and **reviewing published questions** at night, in the pools whose owner turned it on (ADR-060): the question's content, never a student's.
+- **Proposing a grade for essays and diagrams**, automatically after an evaluation closes (ADR-063): the statement, the rubric, the model answer and the student's answer (a diagram in its text form). Before it leaves, the answer is masked: the first names, last names and e-mail addresses of the classroom's students and of whoever sat the evaluation are replaced by `[student]` (`packages/domain/src/maskNames.ts`); the request carries no identifier, no evaluation and no classroom. The proposal, its justification and its points per criterion are shown to the teacher only, who validates the grade; the student reads only the comment the teacher writes or accepts by hand. Circuits are never sent: their simulation grades them. No model is called while an evaluation runs.
+
+Every call is logged with its model, its token counts and its estimated cost, never its content (`llm_calls`). Whether the provider keeps the data it receives (no-retention mode), and whether a European or local model is required: **To be confirmed** (open question 43, deferred to the next data-protection audit by the product owner on 2026-10-02).
 
 ## Who reaches what
 
@@ -125,7 +130,7 @@ External services called:
 | Scaleway Transactional Email (Paris region by default) | The recipient's address, the title of the evaluation or the name of the pool concerned; no grade, according to the code (`apps/api/src/modules/notifications/`) |
 | Microsoft Teams | For a linked account, a notification with the title concerned; limited to the authorised organisations |
 | The host of the edu-ID picture | A browser showing a portrait that was not uploaded loads it directly from the address edu-ID provided, without sending the page's address |
-| An AI model | Nothing: no provider is configured (see [Purposes](#purposes)) |
+| Anthropic (Claude), once a key is stored | Question content; after the close, essay and diagram answers masked of the students' names (see [Purposes](#purposes)) |
 
 E-mails and Teams messages carry titles, names of classrooms and pools, and counts; they never carry a grade or a question's content: "your grade changed" says that it changed, not what it is (`apps/api/src/modules/notifications/templates.ts`). Whether e-mail and Teams are enabled in production: **To be confirmed**. The platform loads no analytics script, and no font or library from a third party: everything is served by the server itself.
 

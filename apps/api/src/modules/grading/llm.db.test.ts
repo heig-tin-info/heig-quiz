@@ -1,16 +1,18 @@
 /**
- * The LLM half of the grading pass (F-GRADE-02, ADR-045): a type's
- * `pending: llm` goes to the process's LLM service as the type built it, and
- * comes back as a batchable proposal with the model's confidence — its
- * justification kept for the teacher, out of every student payload (open
- * question 27), never asked while the evaluation runs (F-LLM-03).
+ * The LLM half of the grading pass (F-GRADE-02, ADR-045, ADR-063): a type's
+ * `pending: llm` goes to the process's LLM service as the type built it, the
+ * answer masked of the evaluation's names, and comes back as a batchable
+ * proposal with the model's confidence, criteria and name — kept for the
+ * teacher, out of every student payload (open question 27), never asked
+ * while the evaluation runs (F-LLM-03), nor twice for the same answer.
  */
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { justificationOf } from "@quiz/contracts";
 import { isBatchable } from "@quiz/domain";
-import type { GradeResult, LlmGradeRequest, LlmService } from "@quiz/core/server";
+import { aiOf } from "@quiz/contracts";
+import type { GradeResult, LlmGradeRequest } from "@quiz/core/server";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
@@ -20,9 +22,12 @@ import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { applyState, joinedItems } from "../evaluation/service.js";
 import * as live from "../live/service.js";
-import { StubLlm } from "../llm/stub.js";
+import type { GradingLlm } from "../llm/index.js";
+import { LlmError } from "../llm/provider.js";
+import { STUB_MODEL, StubLlm } from "../llm/stub.js";
 import * as results from "../results/service.js";
-import { runEvaluationGrading } from "./jobs.js";
+import { GRADING_LLM_QUEUE, type JobQueue } from "../../jobs.js";
+import { registerGradingJobs, runEvaluationGrading } from "./jobs.js";
 import * as service from "./service.js";
 
 /** A term only the rubric holds: no answer, no statement, no key carries it. */
@@ -40,6 +45,8 @@ const fakeEssay = {
       kind: "pending",
       via: "llm",
       request: {
+        statement: config.statement,
+        form: "free text",
         rubric: `${RUBRIC_TERM}: ${config.answer} explained at length`,
         answer: answer ?? "",
         maxPoints: ctx.itemPoints,
@@ -59,13 +66,14 @@ beforeAll(async () => {
 afterAll(() => restore());
 
 /** Two students answered the first question: one with the rubric's words, one without. */
-async function answered(options: { close: boolean }) {
+async function answered(options: { close: boolean; texts?: (names: string[]) => string[] }) {
   const app = await testApp(db);
   app.clock.set("2026-09-20T09:00:00.000Z");
   const seed = await seedLive(db, { students: 2, questions: 1 });
   let evaluation = await applyState(db, await reload(db, seed.evaluationId), "running", app.clock.now());
   const [item] = await joinedItems(db, evaluation.id);
-  const texts = [
+  const names = (await db.select().from(users).where(inArray(users.id, seed.studentIds))).map((u) => u.givenName);
+  const texts = options.texts?.(names) ?? [
     "The answer-q0 is the right one, explained at length as the statement asked for it.",
     "No idea.",
   ];
@@ -98,15 +106,21 @@ const gradingsOf = async (evaluationId: string) =>
     .map((r) => r.grading)
     .filter((g) => g.state !== "superseded");
 
-/** The stub, with every request it received kept for inspection. */
-function recordingStub(): LlmService & { requests: LlmGradeRequest[] } {
+/** The stub, with every request it received, and whom it was billed to, kept for inspection. */
+function recordingStub(
+  options: { ready?: boolean; fail?: LlmError } = {},
+): GradingLlm & { requests: LlmGradeRequest[]; billed: (string | null)[] } {
   const stub = new StubLlm();
   const requests: LlmGradeRequest[] = [];
+  const billed: (string | null)[] = [];
   return {
     requests,
-    grade: (req) => {
+    billed,
+    ready: () => Promise.resolve(options.ready ?? true),
+    grade: (req, billedTo) => {
       requests.push(req);
-      return stub.grade(req);
+      billed.push(billedTo);
+      return options.fail ? Promise.reject(options.fail) : stub.grade(req);
     },
   };
 }
@@ -125,9 +139,79 @@ describe("grading.evaluation with an LLM service (F-GRADE-02)", () => {
       expect(grading.comment).toBeNull();
       expect(grading.confidence).not.toBeNull();
       expect(justificationOf(grading.details)).toMatch(/^Development stub, not a model/);
+      expect(aiOf(grading.details)).toMatchObject({ model: STUB_MODEL, criteria: [{ maxPoints: 1 }] });
       expect(isBatchable({ ...grading, points: Number(grading.points) })).toBe(true);
     }
     expect(rows.map((r) => Number(r.points)).sort()).toEqual([0, 1]);
+  });
+
+  it("bills the call to the evaluation's creator", async () => {
+    const { app, evaluation } = await answered({ close: true });
+    const llm = recordingStub();
+    app.llm = llm;
+
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+
+    expect(llm.billed).toEqual([evaluation.createdBy, evaluation.createdBy]);
+  });
+
+  it("masks the names of the class wherever a student typed them (N-DATA-05)", async () => {
+    const { app, evaluation } = await answered({
+      close: true,
+      texts: ([mine, theirs]) => [`I am ${mine}, and ${theirs} helped me.`, "No idea."],
+    });
+    const llm = recordingStub();
+    app.llm = llm;
+
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+
+    expect(llm.requests.map((r) => r.answer)).toContain("I am [student], and [student] helped me.");
+  });
+
+  it("does not ask twice for the same answer, but asks again on a re-grade", async () => {
+    const { app, evaluation } = await answered({ close: true });
+    const llm = recordingStub();
+    app.llm = llm;
+
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+    expect(llm.requests).toHaveLength(2);
+
+    await runEvaluationGrading(app, { evaluationId: evaluation.id, regradeNote: "rubric fixed" });
+    expect(llm.requests).toHaveLength(4);
+  });
+
+  it("leaves a cell the cap refused as `llm_budget`, which the next pass asks again", async () => {
+    const { app, evaluation } = await answered({ close: true });
+    app.llm = recordingStub({ fail: new LlmError("budget_exhausted") });
+
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+    const refused = await gradingsOf(evaluation.id);
+    expect(refused.map((r) => r.details)).toEqual([{ reason: "llm_budget" }, { reason: "llm_budget" }]);
+    expect(refused.every((r) => r.source === "llm" && Number(r.points) === 0)).toBe(true);
+
+    const llm = recordingStub();
+    app.llm = llm;
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+    expect(llm.requests).toHaveLength(2);
+  });
+
+  it("says `grader_error` for any other failure, and `llm_not_configured` for a key gone", async () => {
+    const failed = await answered({ close: true });
+    failed.app.llm = recordingStub({ fail: new LlmError("provider_error") });
+    await runEvaluationGrading(failed.app, { evaluationId: failed.evaluation.id });
+    expect((await gradingsOf(failed.evaluation.id)).map((r) => r.details)).toEqual([
+      { reason: "grader_error" },
+      { reason: "grader_error" },
+    ]);
+
+    const gone = await answered({ close: true });
+    gone.app.llm = recordingStub({ fail: new LlmError("key_unreadable") });
+    await runEvaluationGrading(gone.app, { evaluationId: gone.evaluation.id });
+    expect((await gradingsOf(gone.evaluation.id)).map((r) => r.details)).toEqual([
+      { reason: "llm_not_configured" },
+      { reason: "llm_not_configured" },
+    ]);
   });
 
   it("sends the request exactly as the type built it: nothing that names the student (F-LLM-04)", async () => {
@@ -139,7 +223,7 @@ describe("grading.evaluation with an LLM service (F-GRADE-02)", () => {
 
     expect(llm.requests).toHaveLength(2);
     for (const req of llm.requests) {
-      expect(Object.keys(req).sort()).toEqual(["answer", "maxPoints", "rubric"]);
+      expect(Object.keys(req).sort()).toEqual(["answer", "form", "maxPoints", "rubric", "statement"]);
     }
     const attemptRows = await db.select().from(attempts).where(eq(attempts.evaluationId, evaluation.id));
     const people = await db.select().from(users).where(inArray(users.id, seed.studentIds));
@@ -166,6 +250,46 @@ describe("grading.evaluation with an LLM service (F-GRADE-02)", () => {
       { reason: "llm_not_configured" },
     ]);
     expect(rows.every((r) => r.confidence === null && Number(r.points) === 0)).toBe(true);
+  });
+
+  it("asks nothing when the service has no key behind it", async () => {
+    const { app, evaluation } = await answered({ close: true });
+    const llm = recordingStub({ ready: false });
+    app.llm = llm;
+
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+
+    expect(llm.requests).toHaveLength(0);
+    expect((await gradingsOf(evaluation.id)).map((r) => r.details)).toEqual([
+      { reason: "llm_not_configured" },
+      { reason: "llm_not_configured" },
+    ]);
+  });
+
+  it("asks nothing from a job whose evaluation runs again since the pass (F-LLM-03)", async () => {
+    const { app, evaluation } = await answered({ close: true });
+    const llm = recordingStub();
+    app.llm = llm;
+    // A queue that keeps what it is sent, and its handlers, for the test to run.
+    const sent: { name: string; data: object }[] = [];
+    const handlers = new Map<string, (data: object) => Promise<void>>();
+    const queue: JobQueue = {
+      createQueue: async () => {},
+      send: async (name, data) => void sent.push({ name, data }),
+      work: async (name, handler) => void handlers.set(name, handler as (data: object) => Promise<void>),
+      stop: async () => {},
+    };
+    app.boss = queue;
+    await registerGradingJobs(app, queue);
+
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+    const jobs = sent.filter((j) => j.name === GRADING_LLM_QUEUE);
+    expect(jobs).toHaveLength(2);
+    await db.update(evaluations).set({ state: "running" }).where(eq(evaluations.id, evaluation.id));
+    for (const job of jobs) await handlers.get(GRADING_LLM_QUEUE)!(job.data);
+
+    expect(llm.requests).toHaveLength(0);
+    expect(await gradingsOf(evaluation.id)).toHaveLength(0);
   });
 
   it("asks nothing while the evaluation runs (F-LLM-03)", async () => {
@@ -217,6 +341,7 @@ describe("the justification never reaches a student (ADR-045, open question 27)"
         expect(feedback.available).toBe(true);
         const payload = JSON.stringify(feedback);
         expect(payload).not.toContain("Development stub");
+        expect(payload).not.toContain(STUB_MODEL);
         expect(payload).not.toContain("justification");
         expect(payload).not.toContain(RUBRIC_TERM);
       }

@@ -7,7 +7,8 @@ const RUBRIC =
   "- **1 pt** : le dépassement touche une page non allouée (page de garde).\n" +
   "- **1 pt** : le noyau envoie `SIGSEGV`, le programme s'arrête.";
 
-const grade = (answer: string, maxPoints = 4) => stubGrade({ rubric: RUBRIC, answer, maxPoints });
+const grade = (answer: string, maxPoints = 4) =>
+  stubGrade({ statement: "Pourquoi une récursion infinie plante-t-elle ?", form: "free text", rubric: RUBRIC, answer, maxPoints });
 
 describe("the stub LLM grader", () => {
   it("gives full marks, with high confidence, to an answer that covers the rubric", () => {
@@ -55,13 +56,13 @@ describe("the stub LLM grader", () => {
   });
 
   it("falls back on the model answer when the rubric is empty", () => {
-    const out = stubGrade({ rubric: "", reference: "garbage collector", answer: "garbage collector", maxPoints: 1 });
+    const out = stubGrade({ statement: "Q", form: "free text", rubric: "", reference: "garbage collector", answer: "garbage collector", maxPoints: 1 });
     expect(out.points).toBe(1);
   });
 
   it("is deterministic", async () => {
     const llm = new StubLlm();
-    const req = { rubric: RUBRIC, answer: "Stack overflow.", maxPoints: 4 };
+    const req = { statement: "Q", form: "free text", rubric: RUBRIC, answer: "Stack overflow.", maxPoints: 4 };
     expect(await llm.grade(req)).toEqual(await llm.grade(req));
   });
 });

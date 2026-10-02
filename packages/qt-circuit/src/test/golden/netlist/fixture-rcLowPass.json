@@ -421,10 +421,7 @@
  },
  "decks": {
   "common-default-rails/sine": "* quiz circuit\nR1 in out 1.59e+3\nC1 out 0 1e-7\nVin in 0 SIN(5e-1 1e+0 1e+3)\nRload out outl 1e+12\nVmeas outl 0 0\n.tran 1e-5 5e-3 0\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
-  "common-default-rails/bare": "* quiz circuit\nR1 in out 1.59e+3\nC1 out 0 1e-7\n.end\n",
   "split-dual-rails/step": "* quiz circuit\n* issue: unconnected_port in-\n* issue: unconnected_port out-\nR1 in out 1.59e+3\nC1 out 0 1e-7\nVcc vcc 0 DC 1.5e+1\nVee vee 0 DC -1.5e+1\nVin src inn PWL(0 0 1e-3 0 1.000001e-3 5e+0)\nRs src in 5e+1\nRload out outl 1e+4\nVmeas outl outn 0\n.tran 4.5e-5 1e-2 1e-3\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
-  "split-dual-rails/bare": "* quiz circuit\n* issue: unconnected_port in-\n* issue: unconnected_port out-\nR1 in out 1.59e+3\nC1 out 0 1e-7\n.end\n",
-  "common-single-rail/pulse": "* quiz circuit\nR1 in out 1.59e+3\nC1 out 0 1e-7\nVcc vcc 0 DC 5e+0\nVin in 0 PULSE(-1e+0 1e+0 0 1n 1n 5e-5 2e-4)\nCload out outl 1e-9\nVmeas outl 0 0\n.tran 1e-5 1e-3 0\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
-  "common-single-rail/bare": "* quiz circuit\nR1 in out 1.59e+3\nC1 out 0 1e-7\n.end\n"
+  "common-single-rail/pulse": "* quiz circuit\nR1 in out 1.59e+3\nC1 out 0 1e-7\nVcc vcc 0 DC 5e+0\nVin in 0 PULSE(-1e+0 1e+0 0 1n 1n 5e-5 2e-4)\nCload out outl 1e-9\nVmeas outl 0 0\n.tran 1e-5 1e-3 0\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n"
  }
 }

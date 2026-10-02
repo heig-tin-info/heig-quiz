@@ -10,9 +10,10 @@
  *    no answer row at all                         → 0, validated, auto  (F-GRADE-01)
  *    type.grade() returns 'graded'                → validated (or proposed if it says so)
  *    type.grade() returns pending: 'runner'       → grading.runner, low priority
- *    type.grade() returns pending: 'llm'          → app.llm.grade() → proposed, source 'llm',
- *                                                   with the model's confidence
- *                                                   (no provider: reason 'llm_not_configured')
+ *    a successful LLM proposal for the same answer → kept, unless a re-grade (ADR-063 §3)
+ *    type.grade() returns pending: 'llm'          → grading.llm (no model while the
+ *                                                   evaluation runs, nor without a key:
+ *                                                   the type then proposes by hand)
  *    then, the grid complete                      → grading_ready, once (`ready.ts`)
  *
  * grading.runner, for one answer:
@@ -20,6 +21,14 @@
  *    RunnerUnavailable (the stub, decision D14)   → proposed, reason 'runner_unavailable'
  *    RunnerBusy                                   → rethrown, pg-boss retries
  *    anything else                                → proposed, reason 'runner_error'
+ *    then, the grid complete                      → grading_ready, once (`ready.ts`)
+ *
+ * grading.llm, for one answer (ADR-063):
+ *    the answer masked of the evaluation's names → app.llm.grade() → proposed, source 'llm',
+ *                                                   its confidence, criteria and model
+ *    budget_exhausted                             → proposed, reason 'llm_budget'
+ *    no key any more                              → proposed, reason 'llm_not_configured'
+ *    anything else                                → proposed, reason 'grader_error'
  *    then, the grid complete                      → grading_ready, once (`ready.ts`)
  * ```
  *
@@ -30,24 +39,26 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq, inArray } from "drizzle-orm";
 
-import type {
-  GradeContext,
-  GradeResult,
-  LlmGradeOutcome,
-  PendingLlmResult,
-  RunnerRequest,
-} from "@quiz/core/server";
-import { INSTANCE_WARNING_KEY, JUSTIFICATION_KEY, type PassReason } from "@quiz/contracts";
+import type { GradeContext, GradeResult, LlmGradeRequest, RunnerRequest } from "@quiz/core/server";
+import {
+  AI_KEY,
+  INSTANCE_WARNING_KEY,
+  JUSTIFICATION_KEY,
+  justificationOf,
+  type PassReason,
+} from "@quiz/contracts";
 import { RunnerBusy, RunnerUnavailable, isGraded, isPendingRunner } from "@quiz/core/server";
-import { isLiveState, itemPoints, round2 } from "@quiz/domain";
+import { isLiveState, itemPoints, maskNames, round2, type MaskedPerson } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { answers, attempts, gradings } from "../../db/schema.js";
+import { answers, attempts, enrollments, gradings, users } from "../../db/schema.js";
 import {
   GRADING_EVALUATION_QUEUE,
+  GRADING_LLM_QUEUE,
   GRADING_RUNNER_QUEUE,
   type JobQueue,
 } from "../../jobs.js";
+import { LlmError } from "../llm/service.js";
 import {
   byId,
   gradeDefaults,
@@ -119,6 +130,23 @@ interface RunnerGradingJob {
   regradeNote?: string;
 }
 
+interface LlmGradingJob {
+  evaluationId: string;
+  attemptId: string;
+  itemId: string;
+  answerId: string;
+  /** As the type built it; `runLlmGrading`, the one way to the model, masks it. */
+  request: LlmGradeRequest;
+  /** The type's own details, kept beside the model's reply. */
+  details?: unknown;
+  /** A bonus item never takes points away (ADR-052). */
+  bonus: boolean;
+  regradeNote?: string;
+}
+
+/** Two calls at a time: a class of essays in minutes, without a burst the provider would rate-limit. */
+const LLM_CONCURRENCY = 2;
+
 /**
  * Enqueues the pass, or runs it inline when this process has no queue.
  *
@@ -164,7 +192,7 @@ export async function enqueueEvaluationGrading(
   return true;
 }
 
-/** Registers the two handlers. Called once, from `buildApp`. */
+/** Registers the three handlers. Called once, from `buildApp`. */
 export async function registerGradingJobs(app: FastifyInstance, queue: JobQueue): Promise<void> {
   await queue.createQueue(GRADING_EVALUATION_QUEUE, { retryLimit: 1 });
   await queue.createQueue(GRADING_RUNNER_QUEUE, {
@@ -176,6 +204,12 @@ export async function registerGradingJobs(app: FastifyInstance, queue: JobQueue)
     runEvaluationGrading(app, data),
   );
   await queue.work<RunnerGradingJob>(GRADING_RUNNER_QUEUE, (data) => runRunnerGrading(app, data));
+  // No retry: the provider's SDK already retries a rate limit, and a cap
+  // reached now is still reached in a minute (ADR-063 §2).
+  await queue.createQueue(GRADING_LLM_QUEUE, { retryLimit: 0 });
+  await queue.work<LlmGradingJob>(GRADING_LLM_QUEUE, (data) => runLlmGrading(app, data), {
+    localConcurrency: LLM_CONCURRENCY,
+  });
 }
 
 // --- The evaluation pass --------------------------------------------------
@@ -244,7 +278,7 @@ function progressReporter(evaluation: EvaluationRecord, teacherIds: string[], to
       sinceEvent = 0;
       events.progress(evaluation, teacherIds, { done, total, phase: "auto" });
     },
-    finish(phase: "runner" | "done"): void {
+    finish(phase: "pending" | "done"): void {
       events.progress(evaluation, teacherIds, { done, total, phase });
     },
   };
@@ -318,8 +352,10 @@ async function gradeCell(
     config: CellConfig | null;
     attempt: AttemptRecord;
     answer: typeof answers.$inferSelect | null;
+    /** Whether a model may be asked (`offersLlm`), decided once per pass. */
+    llm: boolean;
   },
-): Promise<{ write: WriteGradingInput } | { runner: RunnerGradingJob }> {
+): Promise<{ write: WriteGradingInput } | { runner: RunnerGradingJob } | { llm: LlmGradingJob }> {
   const { evaluation, job, item, attempt, answer } = cell;
   const base = {
     attemptId: attempt.id,
@@ -354,9 +390,7 @@ async function gradeCell(
       itemPoints: item.item.points,
       now: base.now,
       runner: app.runner,
-      // F-LLM-03: no model is consulted while the evaluation runs (a
-      // retake's own pass); the close's pass asks it.
-      ...(app.llm && !isLiveState(evaluation.state) ? { llm: app.llm } : {}),
+      ...(cell.llm ? { llm: true as const } : {}),
       // The evaluation's per-type settings: what a question config
       // that says "inherit" defers to (an mcq's scoring policy).
       defaults: gradeDefaults(evaluation),
@@ -368,16 +402,18 @@ async function gradeCell(
     const points = itemPoints(outcome.grading.points, item.item.bonus);
     return { write: { ...base, ...outcome.grading, details: withWarning(outcome.grading.details, warning), points } };
   }
-  return {
-    runner: {
-      evaluationId: evaluation.id,
-      attemptId: attempt.id,
-      itemId: item.item.id,
-      answerId: answer.id,
-      request: outcome.request,
-      ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
-    },
+  const cellOf = {
+    evaluationId: evaluation.id,
+    attemptId: attempt.id,
+    itemId: item.item.id,
+    answerId: answer.id,
+    ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
   };
+  if (outcome.kind === "llm") {
+    const details = withWarning(outcome.details, warning);
+    return { llm: { ...cellOf, request: outcome.request, details, bonus: item.item.bonus } };
+  }
+  return { runner: { ...cellOf, request: outcome.request } };
 }
 
 /**
@@ -410,7 +446,9 @@ export async function runEvaluationGrading(
     pass.teacherIds,
     pass.items.length * pass.attempts.length,
   );
+  const llm = await offersLlm(app, evaluation);
   const runnerJobs: RunnerGradingJob[] = [];
+  const llmJobs: LlmGradingJob[] = [];
   // Every grading of the pass, written at the end by ONE batched writer
   // (D-01): a transaction per 500 cells instead of one per cell. A pass that
   // dies half-way writes nothing and is simply run again (idempotency).
@@ -426,21 +464,27 @@ export async function runEvaluationGrading(
     }
     for (const attempt of pass.attempts) {
       const key = pairKey(attempt.id, item.item.id);
+      const standing = pass.standing.get(key);
+      const answer = pass.answers.get(key) ?? null;
       // Idempotency (§5.4): a cell a teacher already settled is never
-      // touched again, so running the job twice changes nothing.
-      if (pass.standing.get(key)?.state !== "validated") {
-        const answer = pass.answers.get(key) ?? null;
+      // touched again, so running the job twice changes nothing; nor is a
+      // model asked twice for the same answer (ADR-063 §3).
+      if (standing?.state !== "validated" && !(standing && keepsLlmProposal(standing, answer, job))) {
         const config = configOf(attempt);
-        const graded = await gradeCell(app, { evaluation, job, item, config, attempt, answer });
+        const graded = await gradeCell(app, { evaluation, job, item, config, attempt, answer, llm });
         if ("write" in graded) writes.push(graded.write);
-        else runnerJobs.push(graded.runner);
+        else if ("runner" in graded) runnerJobs.push(graded.runner);
+        else llmJobs.push(graded.llm);
       }
       progress.tick();
     }
   }
   await writeGradings(app.db, writes);
-  progress.finish(runnerJobs.length > 0 ? "runner" : "done");
-  for (const runnerJob of runnerJobs) await enqueueRunnerGrading(app, runnerJob);
+  progress.finish(runnerJobs.length + llmJobs.length > 0 ? "pending" : "done");
+  for (const runnerJob of runnerJobs) {
+    await enqueueOrRun(app, GRADING_RUNNER_QUEUE, runnerJob, runRunnerGrading, { priority: RUNNER_PRIORITY });
+  }
+  for (const llmJob of llmJobs) await enqueueOrRun(app, GRADING_LLM_QUEUE, llmJob, runLlmGrading);
   // After its own write, whatever the pass filled: the grid as it stands
   // now, with every runner job that committed meanwhile (#286).
   await announceGradingReady(app, evaluation);
@@ -458,7 +502,8 @@ type GradeOutcome =
         confidence?: "low" | "medium" | "high";
       };
     }
-  | { kind: "runner"; request: RunnerRequest };
+  | { kind: "runner"; request: RunnerRequest }
+  | { kind: "llm"; request: LlmGradeRequest; details?: unknown };
 
 /**
  * One answer through `type.grade`. Everything that can go wrong — an answer
@@ -508,62 +553,26 @@ async function gradeOne(
     };
   }
   if (isPendingRunner(result)) return { kind: "runner", request: result.request };
-
-  return gradeWithLlm(app, result, input.ctx);
-}
-
-/**
- * A `pending: llm` result through the service `gradeCell` offered: the
- * model's points and confidence, as a PROPOSAL a teacher validates
- * (F-GRADE-02). The request goes as the type built it — anonymous by
- * construction, nothing is added here (F-LLM-04). The justification is the
- * TEACHER's (ADR-045, open question 27): it goes in the details under
- * `JUSTIFICATION_KEY`, which every student payload strips, and never in the
- * comment, which a validation would hand to the student. No service: a
- * proposal worth zero that says so (§5.4); a failed call: the same, with
- * `grader_error`, so a new pass retries it.
- */
-async function gradeWithLlm(
-  app: FastifyInstance,
-  pending: PendingLlmResult,
-  ctx: GradeContext,
-): Promise<GradeOutcome> {
-  // None without a provider, nor while the evaluation runs (F-LLM-03).
-  if (!ctx.llm) return { kind: "written", grading: failedProposal("llm_not_configured", "llm") };
-
-  let outcome: LlmGradeOutcome;
-  try {
-    outcome = await ctx.llm.grade(pending.request);
-  } catch (err) {
-    app.log.error({ err, itemId: ctx.itemId }, "grading: llm call failed");
-    return { kind: "written", grading: failedProposal("grader_error", "llm") };
-  }
-  const own = pending.details && typeof pending.details === "object" ? pending.details : {};
-  const max = pending.request.maxPoints;
-  return {
-    kind: "written",
-    grading: {
-      points: round2(Math.min(max, Math.max(0, outcome.points))),
-      source: "llm",
-      state: "proposed",
-      details: { ...own, [JUSTIFICATION_KEY]: outcome.justification },
-      confidence: outcome.confidence,
-    },
-  };
+  // A type asks for a model only when `ctx.llm` is offered (F-LLM-03).
+  if (!input.ctx.llm) return { kind: "written", grading: failedProposal("llm_not_configured", "llm") };
+  return { kind: "llm", request: result.request, details: result.details };
 }
 
 // --- The runner pass ------------------------------------------------------
 
-async function enqueueRunnerGrading(
+/** One job of a pass on its queue, or run inline when this process has none (see `enqueueEvaluationGrading`). */
+async function enqueueOrRun<T extends object>(
   app: FastifyInstance,
-  job: RunnerGradingJob,
+  name: string,
+  job: T,
+  run: (app: FastifyInstance, job: T) => Promise<void>,
+  options?: { priority: number },
 ): Promise<void> {
-  const queue = app.boss;
-  if (!queue) {
-    await runRunnerGrading(app, job);
+  if (!app.boss) {
+    await run(app, job);
     return;
   }
-  await queue.send(GRADING_RUNNER_QUEUE, job, { priority: RUNNER_PRIORITY });
+  await app.boss.send(name, job, options);
 }
 
 /**
@@ -681,4 +690,119 @@ async function isValidated(db: Db, attemptId: string, itemId: string): Promise<b
     )
     .limit(1);
   return rows.length > 0;
+}
+
+// --- The LLM pass (ADR-063) -----------------------------------------------
+
+/**
+ * Whether this pass may ask a model: a service, a key behind it, and an
+ * evaluation that no longer runs (F-LLM-03: a retake's own pass leaves the
+ * essay to the close's). Asked once per pass.
+ */
+async function offersLlm(app: FastifyInstance, evaluation: EvaluationRecord): Promise<boolean> {
+  return !!app.llm && !isLiveState(evaluation.state) && (await app.llm.ready());
+}
+
+/**
+ * A cell whose standing grading is a SUCCESSFUL model proposal for the same
+ * answer is not asked again: the model is neither free nor deterministic,
+ * and its new reply would replace the one a teacher may be reading. A
+ * re-grade asks again (its note says why), and so does a failure, which
+ * carries no justification.
+ */
+function keepsLlmProposal(
+  standing: GradingRecord,
+  answer: typeof answers.$inferSelect | null,
+  job: EvaluationGradingJob,
+): boolean {
+  return (
+    job.regradeNote === undefined &&
+    standing.source === "llm" &&
+    standing.state === "proposed" &&
+    standing.answerId === answer?.id &&
+    justificationOf(standing.details) !== null
+  );
+}
+
+/**
+ * Whom an answer of this evaluation may name: the classroom's roster, and
+ * whoever sat it with an account (a poll has no roster). Their names are
+ * masked before an answer leaves (N-DATA-05).
+ */
+async function peopleOf(db: Db, evaluation: EvaluationRecord): Promise<MaskedPerson[]> {
+  const sat = await db
+    .select({ givenName: users.givenName, familyName: users.familyName, email: users.email })
+    .from(attempts)
+    .innerJoin(users, eq(attempts.userId, users.id))
+    .where(eq(attempts.evaluationId, evaluation.id));
+  if (evaluation.classroomId === null) return sat;
+  const roster = await db
+    .select({ givenName: enrollments.prenom, familyName: enrollments.nom, email: enrollments.email })
+    .from(enrollments)
+    .where(eq(enrollments.classroomId, evaluation.classroomId));
+  return [...sat, ...roster];
+}
+
+/** The reason a failed call leaves on its cell (ADR-063 §2). */
+function llmFailure(err: unknown): PassReason {
+  if (!(err instanceof LlmError)) return "grader_error";
+  if (err.code === "budget_exhausted") return "llm_budget";
+  if (err.code === "not_configured" || err.code === "key_unreadable") return "llm_not_configured";
+  return "grader_error";
+}
+
+/**
+ * The second half of a `pending: llm` grading, and the one way to the model:
+ * the answer masked of the evaluation's names (N-DATA-05), then the model's
+ * points, confidence and criteria, as a PROPOSAL a teacher validates
+ * (F-GRADE-02). The justification and the rest of the reply are the
+ * TEACHER's (ADR-045, ADR-063 §4): under `JUSTIFICATION_KEY` and `AI_KEY`,
+ * which every student payload strips, never in the comment a validation
+ * would hand to the student. A failed call: a proposal worth zero that says
+ * why (§5.4).
+ */
+async function runLlmGrading(app: FastifyInstance, job: LlmGradingJob): Promise<void> {
+  const db = app.db;
+  const evaluation = await byId(db, job.evaluationId);
+  // F-LLM-03 again: an evaluation reopened since the pass is not graded
+  // while it runs; the pass of its next close asks.
+  if (!evaluation || isLiveState(evaluation.state)) return;
+  if (!(await isValidated(db, job.attemptId, job.itemId))) {
+    const base = {
+      attemptId: job.attemptId,
+      itemId: job.itemId,
+      answerId: job.answerId,
+      maxPoints: job.request.maxPoints,
+      now: app.clock.now(),
+      ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
+    };
+    await writeGrading(db, { ...base, ...(await askModel(app, evaluation, job)) });
+  }
+  await announceGradingReady(app, evaluation);
+}
+
+/** The model's proposal for one answer, or the failed proposal that says why. */
+async function askModel(app: FastifyInstance, evaluation: EvaluationRecord, job: LlmGradingJob) {
+  if (!app.llm) return failedProposal("llm_not_configured", "llm");
+  const request = { ...job.request, answer: maskNames(job.request.answer, await peopleOf(app.db, evaluation)) };
+  try {
+    const outcome = await app.llm.grade(request, evaluation.createdBy);
+    const own = job.details && typeof job.details === "object" ? job.details : {};
+    const points = round2(Math.min(request.maxPoints, Math.max(0, outcome.points)));
+    return {
+      points: itemPoints(points, job.bonus),
+      source: "llm" as const,
+      state: "proposed" as const,
+      details: {
+        ...own,
+        [JUSTIFICATION_KEY]: outcome.justification,
+        [AI_KEY]: { model: outcome.model, criteria: outcome.criteria },
+      },
+      confidence: outcome.confidence,
+    };
+  } catch (err) {
+    const reason = llmFailure(err);
+    if (reason === "grader_error") app.log.error({ err, itemId: job.itemId }, "grading: llm call failed");
+    return failedProposal(reason, "llm");
+  }
 }

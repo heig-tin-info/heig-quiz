@@ -11,7 +11,8 @@
  * - `simulation`: the student's netlist and the teacher's reference are run
  *   through ngspice (`apps/runner`, language `spice`) under every stimulus,
  *   and the output waveforms are compared;
- * - `llm`: phase 2 — the netlist and the rubric go to the LLM service.
+ * - `llm`: closed (ADR-063) — refused at publication, graded as `manual`;
+ *   kept in the schema so a version published with it still reads.
  *
  * Five shapes, one schema each, exactly as `qt-code` does:
  * - {@link CircuitConfig}   what the teacher authors (the reference lives here);
@@ -299,7 +300,7 @@ export const Grading = z.object({
   tolerance: z.number().min(0.001).max(1).default(0.05),
   /** `simulation`, AC stimuli: the envelope around the reference's Bode plot. */
   bode: BodeTolerance.default(() => BodeTolerance.parse({})),
-  /** `llm` and `manual`: the criteria, for the model or for the teacher's own eyes. */
+  /** `manual`: the criteria, for the teacher's own eyes. */
   rubric: z.string().max(8000).default(""),
 });
 export type Grading = z.infer<typeof Grading>;

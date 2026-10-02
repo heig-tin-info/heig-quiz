@@ -199,7 +199,7 @@ describe("progress events of the pass (§5.4)", () => {
     expect(second).toEqual(["25/26/auto", "26/26/done"]);
   });
 
-  it("ends in the runner phase when a cell went to the runner", async () => {
+  it("ends in the pending phase when a cell went to the runner", async () => {
     const restore = registerForTests(fakeRunnableCode);
     try {
       const app = await appFor();
@@ -207,7 +207,7 @@ describe("progress events of the pass (§5.4)", () => {
       const frames = await progressDuring(fixture.evaluationId, () =>
         runEvaluationGrading(app, { evaluationId: fixture.evaluationId }),
       );
-      expect(frames).toEqual(["1/1/runner"]);
+      expect(frames).toEqual(["1/1/pending"]);
     } finally {
       restore();
     }

@@ -1,6 +1,6 @@
 {
   "generatedBy": "apps/web/scripts/docs-screenshots.mjs",
-  "base": "http://localhost:3105",
+  "base": "http://localhost:3317",
   "viewports": {
     "desktop": {
       "width": 1440,
@@ -831,7 +831,7 @@
       "name": "grading-essay",
       "caption": "Grading an essay: the first lines of each answer, and the AI's proposal with its confidence.",
       "persona": "teacher",
-      "path": "/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading",
+      "path": "/evaluations/c78511b3-f11c-4113-884a-34bd5b270a61/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -846,15 +846,15 @@
         "light": "grading-essay-light.png",
         "dark": "grading-essay-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-02T06:54:40.961Z",
+      "commit": "54a727b0",
+      "base": "http://localhost:3317"
     },
     {
       "name": "grading-ai-justification",
       "caption": "An AI proposal opened: the model's justification, for the teacher only.",
       "persona": "teacher",
-      "path": "/evaluations/91add22f-aa91-4693-bbef-7346a38daa89/grading",
+      "path": "/evaluations/c78511b3-f11c-4113-884a-34bd5b270a61/grading",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -869,9 +869,9 @@
         "light": "grading-ai-justification-light.png",
         "dark": "grading-ai-justification-dark.png"
       },
-      "takenAt": "2026-09-29T22:12:45.552Z",
-      "commit": "a1c9c76",
-      "base": "http://localhost:3100"
+      "takenAt": "2026-10-02T07:02:53.613Z",
+      "commit": "54a727b0",
+      "base": "http://localhost:3317"
     },
     {
       "name": "grading-override",

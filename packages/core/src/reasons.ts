@@ -6,11 +6,12 @@
  * web, and the grading columns of the question types (`@quiz/ui`), which
  * cannot depend on `@quiz/contracts`. No runtime import: plain values.
  */
+import type { LlmCriterion } from "./llm.js";
 
 /**
  * Why a machine PROPOSED instead of grading: the `details.reason` (and the
  * `comment`) of a grading no grader could settle. Wire values, closed here
- * once: the grading pass writes the first eight (`jobs.ts`), question types
+ * once: the grading pass writes the first nine (`jobs.ts`), question types
  * the next four (a circuit's or a program's own fault, issue #267), and the
  * runner's saturation the last. The web translates every one of them.
  */
@@ -19,6 +20,7 @@ export const PASS_REASONS = [
   "answer_invalid",
   "grader_error",
   "llm_not_configured",
+  "llm_budget",
   "not_finalizable",
   "runner_unavailable",
   "runner_error",
@@ -51,6 +53,7 @@ export const RETRYABLE_REASONS = [
   "runner_error",
   "runner_busy",
   "grader_error",
+  "llm_budget",
   "finalize_error",
   "not_finalizable",
 ] as const satisfies readonly MachineReason[];
@@ -83,6 +86,27 @@ export const JUSTIFICATION_KEY = "justification";
  * every student payload whatever the policy — the student never sees an error.
  */
 export const INSTANCE_WARNING_KEY = "instanceWarning";
+
+/**
+ * Where a grading's `details` keep the rest of an LLM's reply (ADR-063): the
+ * model that answered and its points per criterion. The teacher's, like
+ * {@link JUSTIFICATION_KEY}: stripped from every student payload.
+ */
+export const AI_KEY = "ai";
+
+export interface AiDetails {
+  model: string;
+  criteria: LlmCriterion[];
+}
+
+/** `details.ai`, when an LLM wrote it. */
+export function aiOf(details: unknown): AiDetails | null {
+  if (details && typeof details === "object" && AI_KEY in details) {
+    const ai = (details as Record<string, unknown>)[AI_KEY];
+    if (ai && typeof ai === "object" && Array.isArray((ai as AiDetails).criteria)) return ai as AiDetails;
+  }
+  return null;
+}
 
 /** `details.justification`, when an LLM wrote one. */
 export function justificationOf(details: unknown): string | null {

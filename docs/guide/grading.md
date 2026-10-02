@@ -4,7 +4,7 @@ Closing an evaluation starts the grading. Most of it is automatic; your part is 
 
 ## What happens at the close
 
-The moment an evaluation is closed, by you or by the server at the last deadline, every answer of a deterministic type is graded: multiple choice, short answer and fill in the blanks are scored on the spot and come back already validated. Code answers are sent to the runner, which compiles and runs each one against the question's test cases in an isolated container; their gradings come back as validated too once the runner has spoken. Code-to-picture and circuit answers go to the runner too, to draw the picture or simulate the schematic. A categorize question is scored on the spot. A diagram waits for you, as a proposal of 0 points (an empty one, or the starter handed back untouched, is a validated zero). An essay waits for you, unless the platform has a language model to propose a grade (see [Essays and AI proposals](#essays-and-ai-proposals)). A missing answer is worth 0 and the entry says so (**No answer**, graded zero).
+The moment an evaluation is closed, by you or by the server at the last deadline, every answer of a deterministic type is graded: multiple choice, short answer and fill in the blanks are scored on the spot and come back already validated. Code answers are sent to the runner, which compiles and runs each one against the question's test cases in an isolated container; their gradings come back as validated too once the runner has spoken. Code-to-picture and circuit answers go to the runner too, to draw the picture or simulate the schematic. A categorize question is scored on the spot. An essay or a diagram is proposed a grade by the platform's language model when one is configured, else it waits for you as a proposal of 0 points (an empty one, or a diagram's starter handed back untouched, is a validated zero); see [Essays, diagrams and AI proposals](#essays-diagrams-and-ai-proposals). A missing answer is worth 0 and the entry says so (**No answer**, graded zero).
 
 While some answers of the question you are on have not been graded — still at the runner, or left by a grader that could not decide — a banner above the table counts them and offers **Run grading**, which starts the pass again on that question. The command palette runs it on the whole evaluation.
 
@@ -96,7 +96,7 @@ A code-to-picture question draws the picture the program printed beside its sour
 
 A circuit shows what each schematic holds, and a chip that counts the stimuli it passed once the simulator (the runner's) has run it. Opened, it shows the drawing and, once simulated, the student's and the reference's curves side by side. A circuit graded by hand gets the curves too, for your eyes, and a 0-point proposal for you to settle.
 
-### Essays and AI proposals
+### Essays, diagrams and AI proposals
 
 <figure markdown="span">
   ![Grading essays with the AI's proposals](../assets/screenshots/grading-essay-light.png#only-light)
@@ -104,16 +104,20 @@ A circuit shows what each schematic holds, and a chip that counts the stimuli it
   <figcaption>An essay: the first three lines of each answer, the model answer on the expected row, and under each score the AI's confidence.</figcaption>
 </figure>
 
-An essay is graded by you: without a language model, each written essay arrives as a 0-point proposal to read and grade, and an empty one as a validated zero. When the platform has a language model configured, the essay, your rubric and the model answer are sent to it, with nothing that names the student, and it proposes points, a confidence and a short justification. The justification is for you alone: it appears in the open answer as **The AI's justification, never shown to the student**, and a validation does not turn it into the comment a student reads; write your own through **Adjust** if the student should know why.
+When the platform has a language model configured, every written essay and every drawn diagram is sent to it a few minutes after the close, without you pressing anything: the statement, your rubric, the model answer (for a diagram, the reference and the answer in their text form: PlantUML, Mermaid or DOT) and the answer, with the names of the class masked. It proposes points per criterion, a total, a confidence and a short justification. A free drawing, which has no text form, waits for you; a circuit is never sent, its simulation grades it. Without a model, each essay and diagram arrives as a 0-point proposal to read and grade.
+
+You remain the grader: a proposal is never final until you validate it. The justification and the points per criterion are for you alone: they appear in the open answer as **The AI's justification, never shown to the student**, with the name of the model under them, and a validation does not turn them into the comment a student reads. To pass the justification on, open **Adjust** and press **Use the AI's justification**: it fills the comment, which you edit before saving.
+
+A proposal is asked once: closing again, or a retake, keeps it; a **Re-grade** asks the model again. When the platform's daily spending cap is reached half-way, the rest of the answers say so and wait for **Run grading**, the next day or once an administrator has raised the cap.
 
 <figure markdown="span">
   ![An AI proposal opened, with its justification](../assets/screenshots/grading-ai-justification-light.png#only-light)
   ![An AI proposal opened, with its justification](../assets/screenshots/grading-ai-justification-dark.png#only-dark)
   <figcaption>An AI proposal opened: the answer beside the criteria and the model answer, then the model's justification, for your eyes only.</figcaption>
-</figure> Under the points the row then reads `AI · High`, `AI · Medium` or `AI · Low`; the **Graded by** filter set to **AI** adds a **Confidence** filter, so you can validate the confident proposals together and read the others one by one. A proposal is never final until you validate it. No model is called while an evaluation is running.
+</figure> Under the points the row then reads `AI · High`, `AI · Medium` or `AI · Low`, beside a wand that stays once you validate it; the **Graded by** filter set to **AI** adds a **Confidence** filter, so you can validate the confident proposals together and read the others one by one. A proposal is never final until you validate it. No model is called while an evaluation is running.
 
 !!! note
-    No language model is configured on the platform yet: your essays arrive as proposals to grade by hand. The screenshots on this page come from the demo world, graded by a development stand-in that proposes a grade from the rubric's words and says so in every justification.
+    The screenshots on this page come from the demo world, graded by a development stand-in that proposes a grade from the rubric's words and says so in every justification.
 
 ## Acting on an answer
 

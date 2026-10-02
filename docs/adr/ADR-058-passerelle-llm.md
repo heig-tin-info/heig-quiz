@@ -175,6 +175,8 @@ person (ADR-055 §1).
 
 ### 8. Not wired into grading yet
 
+*Superseded (2026-10-02) by [ADR-063](ADR-063-correction-llm.md), which wires the grading pass to the gateway after the product owner accepted sending student answers.*
+
 The grading pass keeps `app.llm`, chosen by `LLM_PROVIDER` as ADR-045 says:
 `stub` in development, `none` in production. A stored key does NOT make the
 essays graded by Anthropic. Before it does, the grading needs what ADR-045's

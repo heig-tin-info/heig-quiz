@@ -1,7 +1,8 @@
 # Grading a circuit
 
-A circuit question is marked in one of three ways. The choice is not about
-how strict you are; it is about what the question asks for.
+A circuit question is marked in one of two ways. The choice is not about
+how strict you are; it is about what the question asks for. A language model
+never grades a circuit: the simulation is the grading.
 
 ## You
 
@@ -32,11 +33,6 @@ This mode needs a reference circuit and at least one stimulus, and the
 question will not publish without them. A student whose circuit cannot be
 turned into a netlist — a floating pin, a value out of range — scores nothing
 on that stimulus, and the reason is shown to them.
-
-## Assistant
-
-Phase 2: the netlist and your criteria go to the language model. It is
-listed here so the choice is visible, and it does not run yet.
 
 ## Hidden stimuli
 

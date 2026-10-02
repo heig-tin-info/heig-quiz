@@ -165,11 +165,13 @@ describe("the pg-boss adapter", () => {
     const seen: string[] = [];
     await queue.work<{ id: string }>("q", async ({ id }) => void seen.push(id));
     expect(instance.work).toHaveBeenCalledTimes(1);
-    const [name, batchHandler] = instance.work.mock.calls[0] as [
+    const [name, options, batchHandler] = instance.work.mock.calls[0] as [
       string,
+      object,
       (jobs: { data: { id: string } }[]) => Promise<void>,
     ];
     expect(name).toBe("q");
+    expect(options).toEqual({});
     await batchHandler([{ data: { id: "a" } }, { data: { id: "b" } }]);
     expect(seen).toEqual(["a", "b"]);
   });

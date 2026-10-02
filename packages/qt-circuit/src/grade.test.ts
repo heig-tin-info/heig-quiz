@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { FinalizeContext, GradeContext, RunnerService } from "@quiz/core/server";
-import { isGraded, isPendingLlm, isPendingRunner } from "@quiz/core/server";
+import { isGraded, isPendingRunner } from "@quiz/core/server";
 
 import {
   buildRunnerRequest,
@@ -294,33 +294,28 @@ describe("gradeCircuit", () => {
     expect(result.request.cases.map((c) => c.name)).toEqual(["s0", "s1", "s2", "r0", "r1", "r2"]);
   });
 
-  it("hands `llm` the rubric and the two netlists", () => {
-    const config = circuitConfig({
-      grading: { mode: "llm", tolerance: 0.05, rubric: SECRET_RUBRIC },
-    });
-    const result = gradeCircuit(config, rcAnswer(), ctx);
-    expect(isPendingLlm(result)).toBe(true);
-    if (!isPendingLlm(result)) return;
-    expect(result.request.rubric).toBe(SECRET_RUBRIC);
-    expect(result.request.maxPoints).toBe(8);
-    expect(result.request.answer).toContain("R1 in out 1.59e+3");
-    expect(result.request.reference).toContain("Rsecret");
-    // The details every circuit review reads, not null (ADR-045).
-    expect(CircuitDetails.safeParse(result.details).success).toBe(true);
-    expect(result.details).toMatchObject({ mode: "llm", runner: "none", reason: "llm", stimuli: [] });
+  it("grades a version published in the closed `llm` mode as `manual` (ADR-063)", () => {
+    const withStimuli = gradeCircuit(
+      circuitConfig({ grading: { mode: "llm", tolerance: 0.05, rubric: SECRET_RUBRIC } }),
+      rcAnswer(),
+      ctx,
+    );
+    // Stimuli still run, for the curves the teacher reads, as in `manual`.
+    expect(isPendingRunner(withStimuli)).toBe(true);
+    const bare = gradeCircuit(
+      circuitConfig({ stimuli: [], showExpected: false, grading: { mode: "llm", tolerance: 0.05, rubric: SECRET_RUBRIC } }),
+      rcAnswer(),
+      ctx,
+    );
+    expect(bare).toMatchObject({ kind: "graded", state: "proposed", details: { mode: "manual", reason: "manual" } });
   });
 
-  it("falls back to a bare netlist for an `llm` question with no stimulus", () => {
-    const config = circuitConfig({
-      stimuli: [],
-      showExpected: false,
-      grading: { mode: "llm", tolerance: 0.05, rubric: SECRET_RUBRIC },
-    });
-    const result = gradeCircuit(config, rcAnswer(), ctx);
-    expect(isPendingLlm(result)).toBe(true);
-    if (!isPendingLlm(result)) return;
-    expect(result.request.answer).not.toContain("Vin");
-    expect(result.request.answer).toContain(".end");
+  it("refuses the `llm` mode at publication", () => {
+    const config = circuitConfig({ grading: { mode: "llm", tolerance: 0.05, rubric: SECRET_RUBRIC } });
+    expect(circuitServer.publicationIssues?.(config)).toEqual([
+      { path: ["grading", "mode"], message: "circuit.llm_not_available" },
+    ]);
+    expect(circuitServer.publicationIssues?.(circuitConfig())).toEqual([]);
   });
 });
 

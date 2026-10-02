@@ -37,6 +37,8 @@ export type GradingConfidence = z.infer<typeof GradingConfidence>;
  * re-exported here for the routes and the web.
  */
 export {
+  AI_KEY,
+  aiOf,
   isMachineReason,
   isRetryableReason,
   INSTANCE_WARNING_KEY,
@@ -46,6 +48,7 @@ export {
   PASS_REASONS,
   reasonOf,
   RETRYABLE_REASONS,
+  type AiDetails,
   type MachineReason,
   type PassReason,
 } from "@quiz/core/reasons";

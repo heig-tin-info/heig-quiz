@@ -13,7 +13,7 @@ const graded = (state?: "validated" | "proposed"): GradeResult => ({
 const pendingLlm: GradeResult = {
   kind: "pending",
   via: "llm",
-  request: { rubric: "r", answer: "a", maxPoints: 1 },
+  request: { statement: "s", form: "free text", rubric: "r", answer: "a", maxPoints: 1 },
 };
 
 describe("isDrillEligible", () => {

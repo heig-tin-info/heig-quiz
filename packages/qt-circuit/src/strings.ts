@@ -136,10 +136,8 @@ export interface CircuitEditorStrings {
   grading: string;
   modeManual: string;
   modeSimulation: string;
-  modeLlm: string;
   modeManualHint: string;
   modeSimulationHint: string;
-  modeLlmHint: string;
   tolerance: string;
   toleranceHint: string;
   bodeMagDb: string;
@@ -250,11 +248,9 @@ export const EDITOR_STRINGS: CircuitEditorStrings = {
   grading: "Grading",
   modeManual: "You",
   modeSimulation: "Simulation",
-  modeLlm: "Assistant",
   modeManualHint: "You look at the circuit and give the marks yourself.",
   modeSimulationHint:
     "Every stimulus is simulated on both circuits and the output waveforms are compared.",
-  modeLlmHint: "The circuit and the criteria go to the assistant. Not available yet.",
   tolerance: "Tolerance",
   toleranceHint:
     "A stimulus passes when the distance to the reference output stays under this share of its swing.",
@@ -428,7 +424,6 @@ export interface CircuitReviewStrings {
   log: string;
 
   manualGrade: string;
-  llmPending: string;
   runnerUnavailable: string;
   runnerBusy: string;
   runnerError: string;
@@ -477,7 +472,6 @@ export const REVIEW_STRINGS: CircuitReviewStrings = {
   log: "Simulator output",
 
   manualGrade: "This circuit is graded by the teacher.",
-  llmPending: "This circuit is waiting for the assistant.",
   runnerUnavailable: "The simulator was unavailable; this answer is waiting for a manual grade.",
   runnerBusy: "The simulator was busy; this answer is waiting for a manual grade.",
   runnerError: "The circuit could not be simulated; it is waiting for a manual grade.",

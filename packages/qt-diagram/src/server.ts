@@ -11,7 +11,7 @@
  * the reference and both text forms.
  */
 import { ConfigMigrationError, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
-import { isEmptyScene, kindIssues, sameScene, type Scene } from "@quiz/diagram/server";
+import { formOf, isEmptyScene, kindIssues, sameScene, toText, type Scene } from "@quiz/diagram/server";
 
 import {
   DIAGRAM_CONFIG_VERSION,
@@ -112,9 +112,10 @@ export const diagramServer: QuestionTypeServer<
 
   /**
    * No answer, an empty scene or the untouched starter is worth 0, and that
-   * IS the grade. Anything else is a proposal of 0 points that a teacher
-   * settles (F-GRADE-01): automatic proposals per kind wait for their own
-   * ADR (ADR-046 §5).
+   * IS the grade. Anything else goes to the LLM service when there is one,
+   * in the kind's text form beside the reference's (ADR-063); otherwise, and
+   * for `free`, which has no text form, it is a proposal of 0 points that a
+   * teacher settles (F-GRADE-01).
    *
    * An answer drawn for ANOTHER kind is possible: a regrade may repoint an
    * item at a newer published version (F-GRADE-06), and a version published
@@ -133,7 +134,21 @@ export const diagramServer: QuestionTypeServer<
     if (sameScene(answer.scene, startingScene(config.starter))) {
       return { kind: "graded", points: 0, maxPoints: ctx.itemPoints, details: { reason: "empty", nodes, links } };
     }
-    return proposal("manual");
+    const form = formOf(config.kind);
+    if (ctx.llm === undefined || form === null) return proposal("manual");
+    return {
+      kind: "pending",
+      via: "llm",
+      request: {
+        statement: config.prompt,
+        form,
+        rubric: config.rubric,
+        reference: toText(config.reference, config.kind) ?? "",
+        answer: toText(answer.scene, config.kind) ?? "",
+        maxPoints: ctx.itemPoints,
+      },
+      details: { reason: "llm", nodes, links },
+    };
   },
 
   /**

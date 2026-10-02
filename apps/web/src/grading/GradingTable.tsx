@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { GradingColumn } from "@quiz/core/client";
 import type { GradingEntry } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
-import { Dash, NoAnswer } from "@quiz/ui";
+import { Dash, NoAnswer, WandIcon } from "@quiz/ui";
 
 import { useT } from "../i18n";
 import { Badge, Button, cx, IconButton, pressable, TableHead, T, Tip, type Column } from "../ui";
@@ -319,7 +319,9 @@ function AnswerRow({
           <Dash />
         )}
         {grading?.source === "llm" && grading.confidence ? (
-          <span className="block text-[11px] text-info">
+          // Graded by a model (ADR-063), proposed or validated since.
+          <span className="flex items-center justify-end gap-1 text-[11px] text-info">
+            <WandIcon className="size-3" />
             {t("grading.row.ai", {
               confidence: confidenceLabelShort(t, grading.confidence),
             })}

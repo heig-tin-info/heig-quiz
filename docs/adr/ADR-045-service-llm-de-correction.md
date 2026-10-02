@@ -14,6 +14,12 @@ gateway (`complete()`, an institutional key, `llm_calls`, a daily cap). It is
 not wired into the grading pass: `app.llm` stays chosen by `LLM_PROVIDER` as
 below, and the consequences listed here are still owed before it is.
 
+*Note (2026-10-02, ADR-063):* the grading pass now asks the real model
+through the gateway, by a `grading.llm` queue (§4 is superseded); the
+statement, the per-criterion reply, the masking of names and the model's
+name are paid. A teacher may copy the justification into the comment by
+hand (§6 amended).
+
 ## Context
 
 The **Validate N** button of the grading table (ADR-044 §4) validates the

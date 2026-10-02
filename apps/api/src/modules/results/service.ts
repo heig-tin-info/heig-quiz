@@ -35,7 +35,7 @@ import type {
   StudentFeedback,
   StudentResultItem,
 } from "@quiz/contracts";
-import { INSTANCE_WARNING_KEY, JUSTIFICATION_KEY } from "@quiz/contracts";
+import { AI_KEY, INSTANCE_WARNING_KEY, JUSTIFICATION_KEY } from "@quiz/contracts";
 import {
   evaluationTotal,
   attemptTotal,
@@ -865,8 +865,9 @@ export async function studentFeedback(
  *
  * `showKey` means the teacher chose to publish the key: the details travel
  * whole, both layers off — but for an LLM's justification
- * (`JUSTIFICATION_KEY`), which is the teacher's under every policy
- * (ADR-045, open question 27) and is stripped first, as is the warning of
+ * (`JUSTIFICATION_KEY`) and the rest of its reply (`AI_KEY`, ADR-063),
+ * which are the teacher's under every policy (ADR-045, open question 27)
+ * and are stripped first, as is the warning of
  * a parameterized question served from a fallback draw
  * (`INSTANCE_WARNING_KEY`, ADR-056 §7).
  *
@@ -886,8 +887,8 @@ export const FORBIDDEN_DETAIL_KEYS: readonly string[] = [
   "referenceSolution",
 ];
 
-const forbiddenDetailKeys = new Set([...FORBIDDEN_DETAIL_KEYS, JUSTIFICATION_KEY, INSTANCE_WARNING_KEY]);
-const teacherOnlyDetailKeys = new Set([JUSTIFICATION_KEY, INSTANCE_WARNING_KEY]);
+const teacherOnlyDetailKeys = new Set([JUSTIFICATION_KEY, AI_KEY, INSTANCE_WARNING_KEY]);
+const forbiddenDetailKeys = new Set([...FORBIDDEN_DETAIL_KEYS, ...teacherOnlyDetailKeys]);
 
 /**
  * The one exception of layer 2, and it is the published half of a `code`

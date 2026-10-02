@@ -3,8 +3,9 @@ import { ArrowDown, ArrowUp, Check, PencilLine, RefreshCcw } from "lucide-react"
 import { useId, useState, type ComponentProps, type ReactNode } from "react";
 
 import type { GradingColumn } from "@quiz/core/client";
-import { justificationOf, type Grading, type GradingEntry } from "@quiz/contracts";
-import { formatPoints } from "@quiz/domain";
+import { WandIcon } from "@quiz/ui";
+import { aiOf, justificationOf, type AiDetails, type Grading, type GradingEntry } from "@quiz/contracts";
+import { formatPoints, LLM_MODELS } from "@quiz/domain";
 
 import { api } from "../api";
 import { useT } from "../i18n";
@@ -352,10 +353,11 @@ function EntryPanel({
           </NotePanel>
         ) : null}
         {/* An LLM's why: the teacher's alone, stripped from every student
-            payload (ADR-045, open question 27). */}
+            payload (ADR-045, ADR-063, open question 27). */}
         {justification ? (
           <NotePanel tone="soft" eyebrow={t("grading.aiJustification")}>
             <p className="text-[13px] text-fg">{justification}</p>
+            <AiBreakdown ai={aiOf(grading?.details ?? null)} />
           </NotePanel>
         ) : null}
         {ownExplanation ? (
@@ -372,6 +374,7 @@ function EntryPanel({
               entry={entry}
               maxPoints={grading?.maxPoints ?? item.points}
               minPoints={item.minPoints ?? 0}
+              justification={justification}
               onSave={(body) => save.mutate(body)}
               error={<FormError error={save.error} title={t("grading.override.failed")} />}
             />
@@ -396,6 +399,7 @@ function AdjustForm({
   entry,
   maxPoints,
   minPoints,
+  justification,
   onSave,
   error,
 }: {
@@ -404,6 +408,8 @@ function AdjustForm({
   maxPoints: number;
   /** 0, or `-maxPoints` for a choice question under negative marking (ADR-026). */
   minPoints: number;
+  /** The AI's, which the teacher may copy into the comment and edit (ADR-063 §7). */
+  justification: string | null;
   onSave: (body: { points: number; comment: string }) => void;
   error: ReactNode;
 }) {
@@ -460,6 +466,11 @@ function AdjustForm({
           onChange={(e) => setComment(e.target.value)}
           aria-invalid={touched && commentInvalid}
         />
+        {justification && comment.trim() !== justification ? (
+          <Button variant="ghost" size="sm" onClick={() => setComment(justification)}>
+            <WandIcon /> {t("grading.ai.useAsComment")}
+          </Button>
+        ) : null}
         {touched && commentInvalid ? (
           <ErrorText>{t("grading.override.commentRequired")}</ErrorText>
         ) : (
@@ -470,5 +481,35 @@ function AdjustForm({
       </div>
       {error}
     </form>
+  );
+}
+
+/**
+ * The rest of an AI proposal (ADR-063 §4): its points per criterion and the
+ * model that wrote it (N-DATA-05), under its justification.
+ */
+function AiBreakdown({ ai }: { ai: AiDetails | null }) {
+  const t = useT();
+  if (ai === null) return null;
+  const model = LLM_MODELS.find((m) => m.id === ai.model)?.label ?? ai.model;
+  return (
+    <>
+      {ai.criteria.length > 0 ? (
+        <ul className="mt-3 space-y-2" aria-label={t("grading.ai.criteria")}>
+          {ai.criteria.map((c, i) => (
+            <li key={i} className="text-[13px]">
+              <span className="flex items-baseline justify-between gap-3">
+                <span className="font-medium text-fg">{c.criterion}</span>
+                <span className="shrink-0 tabular-nums text-fg-muted">
+                  {formatPoints(c.points)} / {formatPoints(c.maxPoints)}
+                </span>
+              </span>
+              <span className="block text-fg-muted">{c.comment}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="mt-3 text-xs text-fg-faint">{t("grading.ai.model", { model })}</p>
+    </>
   );
 }

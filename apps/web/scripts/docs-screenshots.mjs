@@ -527,7 +527,11 @@ const scenes = [
       await nextQuestion(p, 8);
       // The first row that the AI graded: its Validate button says so.
       await p.locator("tbody tr").filter({ hasText: /AI ·/ }).first().click();
-      await p.getByRole("dialog").getByText(/never shown to the student/i).waitFor();
+      // A side pane at this width, a dialog on a narrow one: wait for the
+      // text, and bring the justification and its criteria into view.
+      const why = p.getByText("The AI's justification, never shown to the student", { exact: true });
+      await why.waitFor();
+      await why.evaluate((el) => el.scrollIntoView({ block: "center" }));
     },
     action: "Moved to the essay and opened the first AI proposal.",
     state: TEST0_GRADED,

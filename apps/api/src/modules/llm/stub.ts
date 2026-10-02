@@ -12,7 +12,7 @@
  * in the answer — and its justification says it is a stub without naming
  * the terms.
  */
-import type { LlmGradeOutcome, LlmGradeRequest, LlmService } from "@quiz/core/server";
+import type { LlmGradeOutcome, LlmGradeRequest } from "@quiz/core/server";
 
 /** Words shorter than this are too common to say anything about an answer. */
 const MIN_TERM = 5;
@@ -68,10 +68,15 @@ export function stubGrade(req: LlmGradeRequest): LlmGradeOutcome {
   const points = Math.min(req.maxPoints, Math.round(raw * 4) / 4);
   const confidence = terms.size === 0 ? "low" : confidenceOf(coverage, req.answer);
   const justification = `Development stub, not a model: ${JUDGEMENTS[confidence]}.`;
-  return { points, justification, confidence };
+  // One criterion, the whole question: the stub reads no rubric's structure.
+  const criteria = [{ criterion: "Coverage of the rubric", points, maxPoints: req.maxPoints, comment: justification }];
+  return { points, justification, confidence, criteria, model: STUB_MODEL };
 }
 
-export class StubLlm implements LlmService {
+/** What a stub proposal names as its model: never a real one. */
+export const STUB_MODEL = "development-stub";
+
+export class StubLlm {
   grade(req: LlmGradeRequest): Promise<LlmGradeOutcome> {
     return Promise.resolve(stubGrade(req));
   }

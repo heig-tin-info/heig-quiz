@@ -64,12 +64,17 @@ describe("the blind strip of `details` (layer 2, H1)", () => {
     expect(service.filterDetails("short", leaky, policy(true))).toEqual(leaky);
   });
 
-  it("strips an LLM's justification under every policy, the published key included (ADR-045)", () => {
-    const withJustification = { ...leaky, justification: "why, for the teacher" };
+  it("strips an LLM's reply under every policy, the published key included (ADR-045, ADR-063)", () => {
+    const withReply = {
+      ...leaky,
+      justification: "why, for the teacher",
+      ai: { model: "claude-sonnet-5-5", criteria: [{ criterion: "Rubric line", points: 1, maxPoints: 2, comment: "half" }] },
+    };
     for (const showKey of [false, true]) {
-      expect(service.filterDetails("short", withJustification, policy(showKey))).not.toHaveProperty(
-        "justification",
-      );
+      const filtered = service.filterDetails("short", withReply, policy(showKey));
+      expect(filtered).not.toHaveProperty("justification");
+      expect(filtered).not.toHaveProperty("ai");
+      expect(JSON.stringify(filtered)).not.toContain("Rubric line");
     }
   });
 

@@ -18,7 +18,6 @@ import { round2 } from "@quiz/domain/round";
 
 import { extractNets, formatIssue, hasPaletteViolation } from "./netlist.js";
 import {
-  buildBareNetlist,
   buildNetlist,
   decimate,
   parseSpiceOutput,
@@ -383,7 +382,8 @@ function baseDetails(
   runner: CircuitDetails["runner"],
 ): CircuitDetails {
   return {
-    mode: config.grading.mode,
+    // A version published in the closed `llm` mode is graded by hand (ADR-063).
+    mode: config.grading.mode === "simulation" ? "simulation" : "manual",
     runner,
     netlist: diagnosis.netlist,
     stimuli: [],
@@ -430,39 +430,9 @@ export function gradeCircuit(
     };
   }
 
-  if (config.grading.mode === "llm") {
-    // The grading pass hands it to the LLM service (ADR-045), or writes a
-    // proposal with reason `llm_not_configured` when the process has none.
-    const harness = harnessOf(config);
-    const first = config.stimuli[0];
-    const studentText =
-      first === undefined
-        ? buildBareNetlist(drawn.schematic, harness).text
-        : buildNetlist(drawn.schematic, first, harness).text;
-    const referenceText =
-      config.reference === null
-        ? undefined
-        : first === undefined
-          ? buildBareNetlist(config.reference, harness).text
-          : buildNetlist(config.reference, first, harness).text;
-    return {
-      kind: "pending",
-      via: "llm",
-      request: {
-        rubric: config.grading.rubric,
-        ...(referenceText === undefined ? {} : { reference: referenceText }),
-        answer: studentText,
-        maxPoints: ctx.itemPoints,
-      },
-      // The shape every circuit review reads, so the panel draws the
-      // schematic beside the model's proposal (no stimulus was run).
-      details: { ...baseDetails(config, diagnosis, "none"), reason: "llm" },
-    };
-  }
-
   const indexes = config.stimuli.map((_stimulus, i) => i);
 
-  if (config.grading.mode === "manual" && indexes.length === 0) {
+  if (config.grading.mode !== "simulation" && indexes.length === 0) {
     // Nothing to run and nothing to compare: the teacher grades the drawing.
     return {
       kind: "graded",
