@@ -2,8 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarRange, LayoutGrid, List, Radio, SearchX, Square } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
-import type { ActivitySummary, EvaluationActivitySummary, EvaluationMode } from "@quiz/contracts";
-import { isLiveNow } from "@quiz/domain";
+import type { ActivitySummary, EvaluationActivitySummary } from "@quiz/contracts";
 
 import { api } from "../api";
 import { evaluationHome, evaluationStateLabel, stateTone } from "../evaluation/common";
@@ -28,24 +27,36 @@ import {
   usePersistentChoice,
 } from "../ui";
 import { endable, useEndPoll } from "./actions";
-import { activityOrder, BUCKETS, matches, MODES, type Bucket } from "./model";
+import {
+  activityOrder,
+  BUCKETS,
+  isLive,
+  matches,
+  typeName,
+  typeOf,
+  TYPES,
+  type ActivityType,
+  type Bucket,
+} from "./model";
 import { ActivityTimeline } from "./Timeline";
 import {
   ActivityCards,
   ActivitySchedule,
   ActivityTable,
   classroomLabel,
-  MODE_ICON,
+  TYPE_ICON,
   type ViewProps,
 } from "./views";
 
 /**
  * The Activities section (issue #190): every exam, exercise and poll the
  * teacher runs, across their classrooms, in one place — a semester of weekly
- * series, the exams, the polls — with what is live right now on top.
+ * series, the exams, the polls — with what is live right now on top. The
+ * projects of those classrooms are listed beside them since M3-10, between
+ * their start and their deadline, and never "live".
  *
- * No primary button. Nothing is CREATED here: an exam or an exercise is born
- * in its classroom (it needs one), a poll in the launcher, and both are one
+ * No primary button. Nothing is CREATED here: an exam, an exercise or a
+ * project is born in its classroom ("New ▾"), a poll in the launcher, and both are one
  * click away in the sidebar; a "New activity" would be a third, classroom
  * picking door to the same two flows. What this page is for is reaching the
  * activity that needs you, and the "Live now" block is where the eye goes
@@ -67,25 +78,27 @@ const VIEWS: readonly View[] = ["cards", "list", "schedule"];
 
 export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
-  const list = useQuery<ActivitySummary[], Error, EvaluationActivitySummary[]>({
+  const list = useQuery<ActivitySummary[]>({
     queryKey: activitiesKey,
     queryFn: () => api("/app/api/activities"),
-    // The projects are drawn by M3-10; until then the section lists the evaluations.
-    select: (rows) => rows.filter((row) => row.kind === "evaluation"),
   });
   // "Live" moves with the clock too (a scheduled exam 15 minutes out), not
   // only with the hints: re-evaluated every half minute.
   const now = useNow(30_000);
   const [view, setView] = usePersistentChoice<View>("quiz-activities-view", VIEWS, "list");
-  const [modes, setModes] = useState<ReadonlySet<EvaluationMode>>(new Set());
+  const [types, setTypes] = useState<ReadonlySet<ActivityType>>(new Set());
   const [buckets, setBuckets] = useState<ReadonlySet<Bucket>>(new Set());
   const { end, pending } = useEndPoll();
   const wide = useMinWidth(640);
 
   const ordered = useMemo(() => activityOrder(list.data ?? []), [list.data]);
-  const live = ordered.filter((row) => isLiveNow(row, now));
-  const shown = ordered.filter((row) => matches(row, { modes, buckets }));
-  const filtering = modes.size > 0 || buckets.size > 0;
+  const live = ordered.filter((row): row is EvaluationActivitySummary => isLive(row, now));
+  const shown = ordered.filter((row) => matches(row, { types, buckets }));
+  const filtering = types.size > 0 || buckets.size > 0;
+  // A type chip only where there is a row of that type to find: a chip that
+  // can only empty the list is noise (a platform without projects keeps the
+  // three it had).
+  const chips = TYPES.filter((type) => ordered.some((row) => typeOf(row) === type));
 
   const toggle = <V,>(set: ReadonlySet<V>, value: V): Set<V> => {
     const next = new Set(set);
@@ -140,7 +153,7 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
             <Button
               variant="secondary"
               onClick={() => {
-                setModes(new Set());
+                setTypes(new Set());
                 setBuckets(new Set());
               }}
             >
@@ -174,13 +187,13 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
       {ordered.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
           <div role="group" aria-label={t("activities.filter.type")} className="flex flex-wrap gap-2">
-            {MODES.map((mode) => (
+            {chips.map((type) => (
               <ToggleChip
-                key={mode}
-                icon={MODE_ICON[mode]}
-                label={t(`eval.mode.${mode}`)}
-                pressed={modes.has(mode)}
-                onToggle={() => setModes((s) => toggle(s, mode))}
+                key={type}
+                icon={TYPE_ICON[type]}
+                label={typeName(type, t)}
+                pressed={types.has(type)}
+                onToggle={() => setTypes((s) => toggle(s, type))}
               />
             ))}
           </div>
@@ -248,7 +261,7 @@ function LiveNow({
       />
       <Card className="divide-y divide-line">
         {rows.map((row) => {
-          const Icon = MODE_ICON[row.mode];
+          const Icon = TYPE_ICON[row.mode];
           return (
             // A phone stacks the facts over the buttons; a desktop keeps one line.
             <div key={row.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-3">

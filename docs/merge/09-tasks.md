@@ -791,6 +791,50 @@ files it ports; writes en + fr for every string.
 - **Goal**: the classroom's Activities tab and `/activities` list projects;
   "New ▾" (Evaluation, Poll, Project) with the GitHub gate (opens M2-07's
   sheet first).
+- **As delivered** (branch `merge/M3-10-web-projects`; product owner
+  2026-10-02): projects are open to every teacher, no gate but GitHub's —
+  and no door to a page that does not parse: `project` and `projectNew`
+  stay `preview` (`CLASSROOM_PAGES`) until M3-12 and M3-11, and a screen
+  asks `routeEnabled(view)` (`router.ts`) before linking to one.
+  - **New ▾** (`Q:apps/web/src/activities/NewActivity.tsx`, stateless:
+    `ClassroomView` hands it its GitHub read) replaces the header's "New
+    evaluation" on the Evaluations tab: Evaluation and Project. **No
+    Poll**: the launcher takes no classroom (its audience is a remembered
+    choice), so a Poll item could not land on this classroom. The plain
+    "New evaluation" button stays until the GitHub read is a success
+    (loading, failed, or the 404 of a platform without the App) and
+    wherever `projectNew` does not parse — so production keeps the plain
+    button until M3-11. Not connected ⇒ Project carries
+    `project.notConnected` and calls `ClassroomView`'s `openConnect`
+    (`/classrooms/:id/settings?connect=1`, M2-07's sheet; no return to a
+    form, F-GH-02); connected ⇒ route `projectNew`
+    (`/classrooms/:id/projects/new`, `ComingSoon`, no `section`).
+  - **Projects group** (`Q:apps/web/src/project/ProjectGroup.tsx`) under
+    `EvaluationList`, the tab unrenamed, the only one of the two with a
+    heading (the tab names the evaluations): `GET /classrooms/:id/projects`
+    (`ProjectActivitySummary[]`, key `classroomProjectsKey` under
+    `classroom`); title + `StateBadge`, Start, Deadline. Drawn only with
+    rows: nothing while loading, on `[]` or on a 404; `QueryError`
+    otherwise. A row opens `project` only where it parses (not clickable
+    in production until M3-12).
+  - **`KIND`** (`activities/model.ts`): one entry per `ActivitySummary`
+    kind, the client mirror of the server's `ActivityKind` — type, type
+    label, anchor (a project's start), closes (its deadline), live (a
+    project never), in the room, gantt span, home (`null` where the page
+    does not parse), state label and tone; `kindOf(row)` is the one cast.
+    Views, the gantt, the menu and the Projects group read it; no view
+    branches on `kind` (but `ActivityMenu`'s narrowing to read `mode`). A
+    published project is bucket `open` (amber badge and bar, the legend
+    now "waiting room, paused, open project"), a locked one `ended`.
+    `project/common.ts`: the state's tone and word, pure.
+  - **/activities** lists the union and still creates nothing; a type chip
+    is drawn only for a type that has rows (every chip, one rule); no row
+    menu for a project.
+  - `project` takes no tail: `/projects/:id/groups` is home in production.
+  - Mock: `mock/project.ts`, `?projects=1` (three on PRG1-2026, one per
+    state; r2 is the unconnected classroom), checked in `contract.test.ts`.
+    Scenes `classroom-projects`, `classroom-new-menu[-unconnected]`,
+    `activities-projects[-schedule]`. Students see no project (M3-13).
 
 ### M3-11 — Web: new project form
 - **Depends on**: M3-02 contracts, M2-07. ‖ M3-10, M3-12.
@@ -800,11 +844,24 @@ files it ports; writes en + fr for every string.
   `ProjectRefusal` (`{ error: ProjectErrorCode, message, branches? }`) and
   `ProjectUnassigned` (`students`) to `contracts/src/project.ts` with this
   form, their first consumer.
+- **From M3-10**: "New ▾ › Project" on a connected classroom navigates to
+  the route `projectNew` (`/classrooms/:id/projects/new`, `router.ts`),
+  which renders `ComingSoon` (`App.tsx` `PAGES`) and is still `preview`:
+  **dropping `preview` from `projectNew` turns "New ▾" on in production**
+  (`NewActivity` asks `routeEnabled("projectNew")`). Replace that placeholder
+  with the form — or, if the form is a sheet of the classroom page, drop
+  the route and have `NewActivity`'s Project item open the sheet instead.
+  On create, invalidate `classroomProjectsKey(id)` and `activitiesKey`.
 
 ### M3-12 — Web: project page
 - **Depends on**: M3-08 contracts. ‖ M3-11.
 - **Goal**: redesign of `AssignmentDetail` in sections; grade history and
   override inside. Scenes `project`, `-grades`, `-sync-banner`.
+- **From M3-10**: the route `project` renders `ComingSoon` and is still
+  `preview`; **dropping `preview` from `project` makes the project rows
+  clickable in production** (the Projects group and /activities, through
+  `KIND.project.home` in `activities/model.ts`, which asks
+  `routeEnabled("project")`).
 
 ### M3-13 — Web: student `ProjectRow`
 - **Depends on**: M3-09 contracts, M2-07.

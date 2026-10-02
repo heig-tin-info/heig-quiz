@@ -3700,7 +3700,7 @@ export const fr: Record<keyof Dict, string> = {
   "activities.timeline.empty.title": "Rien de daté pour l'instant",
   "activities.timeline.empty.body": "Une activité apparaît sur la frise dès qu'elle a une date d'ouverture ou qu'elle a commencé.",
   "activities.timeline.legend.live": "en salle",
-  "activities.timeline.legend.waiting": "salle d'attente ou en pause",
+  "activities.timeline.legend.waiting": "salle d'attente, en pause, projet ouvert",
   "activities.timeline.legend.scheduled": "planifiée",
   "activities.timeline.legend.draft": "brouillon",
   "activities.timeline.legend.ended": "terminée",
@@ -3820,6 +3820,20 @@ export const fr: Record<keyof Dict, string> = {
   "soon.body": "Cette page est en préparation. Tout le reste fonctionne comme avant.",
   "soon.project": "Projet",
   "soon.projectGroups": "Groupes du projet",
+
+  "activity.new": "Nouveau",
+  "activity.new.evaluation": "Évaluation",
+  "activity.new.project": "Projet",
+  "activities.kind.project": "Projet",
+  "project.new": "Nouveau projet",
+  "project.notConnected": "Connectez d'abord cette classe à GitHub",
+  "project.group": "Projets",
+  "project.start": "Début",
+  "project.deadline": "Échéance",
+  "project.loadFailed": "Impossible de charger les projets",
+  "project.state.draft": "brouillon",
+  "project.state.published": "publié",
+  "project.state.locked": "verrouillé",
 
   // The journal reader (F-JRN-07, M4-04, `journal/`). A warning or a sync
   // error is a code of `@quiz/contracts`, worded here (fix J5).

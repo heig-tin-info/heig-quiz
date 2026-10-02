@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { EvaluationActivitySummary } from "@quiz/contracts";
+import type { ActivitySummary, EvaluationActivitySummary, ProjectActivitySummary } from "@quiz/contracts";
 
 import { id, liveAt } from "../test/live-fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
@@ -12,6 +12,16 @@ import { ActivitiesPage } from "./ActivitiesPage";
  * The Activities section (#190): the three views, the filters, the "Live
  * now" block, and End — for a running poll only, behind a confirmation.
  */
+
+/*
+ * Whether a `preview` route parses is a build flag (`CLASSROOM_PAGES`): the
+ * project page opens from a row only where it does (M3-12).
+ */
+const gate = vi.hoisted(() => ({ enabled: true }));
+vi.mock("../router", async (original) => ({
+  ...(await original<typeof import("../router")>()),
+  routeEnabled: () => gate.enabled,
+}));
 
 const MIN = 60_000;
 const ROOM = { id: id("classroom", 1), name: "PRG1-2026", courseCode: "PRG1" };
@@ -54,10 +64,23 @@ const DONE = activity(5, { title: "Test 0", state: "released", startedAt: liveAt
 const ALL = [EXAM, POLL, SERIES, NEXT, DONE];
 
 beforeEach(() => {
+  gate.enabled = true;
   localStorage.removeItem("quiz-activities-view");
 });
 
-const render = (rows: EvaluationActivitySummary[] = ALL, navigate = vi.fn()) => {
+/** A published project in its span, and a draft one (M3-10). */
+const LAB: ProjectActivitySummary = {
+  kind: "project",
+  id: id("project", 1),
+  title: "Labo 2 — pointeurs",
+  state: "published",
+  classroom: ROOM,
+  startAt: liveAt(-7 * 24 * 60 * MIN),
+  deadlineAt: liveAt(7 * 24 * 60 * MIN),
+};
+const LAB3: ProjectActivitySummary = { ...LAB, id: id("project", 2), title: "Labo 3", state: "draft" };
+
+const render = (rows: ActivitySummary[] = ALL, navigate = vi.fn()) => {
   const stub = mockFetch({ "GET /app/api/activities": ok(rows) });
   renderWithProviders(<ActivitiesPage navigate={navigate} />);
   return { navigate, ...stub };
@@ -207,5 +230,66 @@ describe("ActivitiesPage", () => {
     await user.click(screen.getByRole("radio", { name: "Schedule" }));
     expect(screen.getByText("Série 4 — deux semaines")).toBeInTheDocument();
     expect(screen.queryByText("Test 0")).not.toBeInTheDocument();
+  });
+
+  describe("with projects (M3-10)", () => {
+    it("lists a project beside the evaluations, never live, and opens its page", async () => {
+      const user = userEvent.setup();
+      const { navigate } = render([...ALL, LAB, LAB3]);
+      const live = await liveBlock();
+      expect(within(live).queryByText("Labo 2 — pointeurs")).not.toBeInTheDocument();
+      const table = screen.getByRole("table");
+      const row = within(table).getByText("Labo 2 — pointeurs").closest("tr")!;
+      expect(within(row).getByText("published")).toBeInTheDocument();
+      // No overflow menu: its actions live on its page (M3-12).
+      expect(within(row).queryByRole("button", { name: /Actions/ })).not.toBeInTheDocument();
+      await user.click(within(table).getByText("Labo 2 — pointeurs"));
+      expect(navigate).toHaveBeenLastCalledWith({ view: "project", id: LAB.id });
+    });
+
+    it("opens no project where its page does not parse (production until M3-12)", async () => {
+      gate.enabled = false;
+      const user = userEvent.setup();
+      const { navigate } = render([LAB, DONE]);
+      const table = await screen.findByRole("table");
+      const row = within(table).getByText("Labo 2 — pointeurs").closest("tr")!;
+      expect(row).not.toHaveAttribute("tabindex");
+      await user.click(row);
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it("offers a Project chip only when there is a project, and filters by it", async () => {
+      const user = userEvent.setup();
+      render([...ALL, LAB, LAB3]);
+      const table = await screen.findByRole("table");
+      await user.click(screen.getByRole("button", { name: "Project" }));
+      expect(within(table).queryByText("Test 0")).not.toBeInTheDocument();
+      expect(within(table).getByText("Labo 3")).toBeInTheDocument();
+      expect(screen.getByText("2 of 7 activities")).toBeInTheDocument();
+      // Another type pressed beside it adds its rows; the projects stay.
+      await user.click(screen.getByRole("button", { name: "Exam" }));
+      expect(within(table).getByText("Test 0")).toBeInTheDocument();
+      expect(within(table).getByText("Labo 3")).toBeInTheDocument();
+    });
+
+    it("draws a type chip only for a type that has rows", async () => {
+      render([EXAM, SERIES]);
+      await screen.findByRole("table");
+      expect(screen.getByRole("button", { name: "Exam" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Exercise" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Poll" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Project" })).not.toBeInTheDocument();
+    });
+
+    it("shows a project in the cards and on the schedule", async () => {
+      const user = userEvent.setup();
+      render([LAB, DONE]);
+      await screen.findByRole("table");
+      await user.click(screen.getByRole("radio", { name: "Cards" }));
+      expect(screen.getByRole("button", { name: "Labo 2 — pointeurs" })).toBeInTheDocument();
+      await user.click(screen.getByRole("radio", { name: "Schedule" }));
+      // Published, it is this week's business, like an open series.
+      expect(screen.getByText("Labo 2 — pointeurs")).toBeInTheDocument();
+    });
   });
 });

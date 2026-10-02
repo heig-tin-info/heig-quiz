@@ -70,8 +70,8 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| M3-01 | `project` schema and contracts | review | M2-01, M1-01, D05 | `merge/M3-01-project-schema` | #468 | Tables in `Q:db/project.ts` (migration `0054_project`), contracts in `packages/contracts/src/project.ts`, `GradeRow` and the activity unions widened, an empty `projectActivity` in `KINDS`, `projectGrade` in `@quiz/domain`; what M3-02…M3-13 inherit: card M3-01, "As delivered". Import steps moved to M8-01 |
-| M3-02 | Project lifecycle | review | M3-01, M2-02, D19 | `merge/M3-02-project-lifecycle` | #471 | `Q:modules/project/` (lifecycle, views, sources, routes), migration `0056` (one project per distribution repository), `findAccessibleProject`, `projectActivity.listForTeacher`, `purgeProjectReceipts` (`github`) also called by classroom and course deletion, async git runner, ADR-062; what M3-03…M3-11 inherit: card M3-02, "As delivered". Reopen moved to M3-05; student cards stay empty until M3-09 |
+| M3-01 | `project` schema and contracts | done | M2-01, M1-01, D05 | `merge/M3-01-project-schema` | #468 | Tables in `Q:db/project.ts` (migration `0054_project`), contracts in `packages/contracts/src/project.ts`, `GradeRow` and the activity unions widened, an empty `projectActivity` in `KINDS`, `projectGrade` in `@quiz/domain`; what M3-02…M3-13 inherit: card M3-01, "As delivered". Import steps moved to M8-01 |
+| M3-02 | Project lifecycle | done | M3-01, M2-02, D19 | `merge/M3-02-project-lifecycle` | #471 | `Q:modules/project/` (lifecycle, views, sources, routes), migration `0056` (one project per distribution repository), `findAccessibleProject`, `projectActivity.listForTeacher`, `purgeProjectReceipts` (`github`) also called by classroom and course deletion, async git runner, ADR-062; what M3-03…M3-11 inherit: card M3-02, "As delivered". Reopen moved to M3-05; student cards stay empty until M3-09 |
 | M3-03 | Acceptance and provisioning | todo | M3-02, M2-03 | | | |
 | M3-04 | Ingestion and grading pipeline | todo | M2-04, M3-03 | | | |
 | M3-05 | Deadline, freeze, dispatch, checkpoints | todo | M3-04, D13 | | | |
@@ -79,7 +79,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M3-07 | Sync of the source repository | todo | M2-04, M3-02, D12 | | | |
 | M3-08 | Teacher views, grades, release | todo | M3-04, M3-05 | | | |
 | M3-09 | Student side, SSE, notifications | todo | M3-04, D18 | | | |
-| M3-10 | Web: projects in Activities, New ▾ | todo | M3-01, M1-05 | | | |
+| M3-10 | Web: projects in Activities, New ▾ | review | M3-01, M1-05 | `merge/M3-10-web-projects` | #470 | "New ▾" (`activities/NewActivity.tsx`: Evaluation, Project; no Poll — the launcher takes no classroom) with the GitHub gate (absent ⇒ plain "New evaluation", unconnected ⇒ `settings?connect=1`, connected ⇒ route `projectNew`); `projectNew` and `project` stay `preview` (`routeEnabled`): New ▾ turns on when M3-11 drops it, project rows open when M3-12 does; `project/ProjectGroup.tsx` under the evaluations (`GET /classrooms/:id/projects`, drawn only with rows); `/activities` lists the union through `KIND` (`activities/model.ts`, never live); mock `?projects=1`; card M3-10, "As delivered" |
 | M3-11 | Web: new project form | todo | M3-02, M2-07 | | | |
 | M3-12 | Web: project page | todo | M3-08 | | | |
 | M3-13 | Web: student `ProjectRow` | todo | M3-09, M2-07 | | | |

@@ -253,7 +253,10 @@ export function EvaluationList({
     <section className="space-y-3">
       {/* No heading and no button: the tab above names the list, and "New
           evaluation" sits in the page header, where "Add students" stands on
-          the roster tab — one primary per tab, always in the same place. */}
+          the roster tab — one primary per tab, always in the same place.
+          The classroom's projects, when it has any, follow under a heading
+          of their own (`ProjectGroup`, M3-10): the tab names this list, not
+          the second one. */}
       {list.isLoading ? (
         <Skeleton className="h-40 w-full" />
       ) : list.isError || !list.data ? (

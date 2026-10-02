@@ -114,9 +114,14 @@ describe("ClassroomView", () => {
     });
     renderWithProviders(<ClassroomView id="r1" navigate={navigate} />);
     await screen.findByText("Test 0");
-    // The list has rows, so the header's button is the only one.
-    const buttons = screen.getAllByRole("button", { name: /New evaluation/ });
-    expect(buttons).toHaveLength(1);
+    // The list has rows, so the header's button is the only one: the plain
+    // one, on a platform without Quiz's App (the GitHub read answers 404;
+    // "New ▾" and its Project are `activities/NewActivity.test.tsx`).
+    const buttons = await waitFor(() => {
+      const found = screen.getAllByRole("button", { name: /New evaluation/ });
+      expect(found).toHaveLength(1);
+      return found;
+    });
     expect(buttons[0]!.className).toMatch(/bg-accent/);
     await userEvent.click(buttons[0]!);
 

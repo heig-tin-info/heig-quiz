@@ -4,6 +4,7 @@ import {
   evaluationInView,
   parsePath,
   ROUTE_VIEWS,
+  routeEnabled,
   ROUTES,
   routeToPath,
   sectionOf,
@@ -73,6 +74,15 @@ describe("routeToPath / parsePath", () => {
     expect(parsePath("/classrooms/c-1/grades")).toEqual({ view: "classroom", id: "c-1" });
     expect(parsePath("/projects/p-1")).toEqual({ view: "home" });
     expect(parsePath("/projects/p-1/groups")).toEqual({ view: "home" });
+    expect(parsePath("/projects/x/groups")).toEqual({ view: "home" });
+    // M3-10's new project: the classroom, as an unknown tab is.
+    expect(parsePath("/classrooms/c-1/projects/new")).toEqual({ view: "classroom", id: "c-1" });
+  });
+
+  it("enables exactly the routes that parse in this build (M3-10)", () => {
+    expect(routeEnabled("project")).toBe(false);
+    expect(routeEnabled("projectNew")).toBe(false);
+    expect(routeEnabled("classroomSettings")).toBe(true);
   });
 
   it("parses the page of one course, a page of the Courses section (F-ORG-12)", () => {
@@ -185,6 +195,7 @@ describe("ROUTES", () => {
     classroomGrades: { view: "classroomGrades", id: "c-1" },
     project: { view: "project", id: "p-1" },
     projectGroups: { view: "projectGroups", id: "p-1" },
+    projectNew: { view: "projectNew", classroomId: "c-1" },
     activities: { view: "activities" },
     pools: { view: "pools" },
     poolCategories: { view: "poolCategories", id: "p-1" },
@@ -288,6 +299,7 @@ describe("ROUTES", () => {
         "live",
         "oauthConsent",
         "pair",
+        "projectNew",
         "questionPreview",
         "results",
         "settings",

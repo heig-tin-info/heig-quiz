@@ -4,7 +4,6 @@ import {
   ClipboardList,
   Dumbbell,
   GraduationCap,
-  Plus,
   Settings as SettingsIcon,
   UserPlus,
   Users,
@@ -13,6 +12,7 @@ import { useEffect, useState } from "react";
 
 import { ClassroomPatch, type ClassroomDetail, type EvaluationSummary } from "@quiz/contracts";
 
+import { NewActivity } from "./activities/NewActivity";
 import { api, useMe } from "./api";
 import { PeriodFields, periodBody, periodInvalid, type PeriodDraft } from "./ClassroomPeriod";
 import { ClassroomSettings } from "./ClassroomSettings";
@@ -24,6 +24,7 @@ import { JournalReader } from "./journal/JournalReader";
 // WP8: evaluation + dashboard
 import { EvaluationList, NewEvaluationModal } from "./evaluation/EvaluationList";
 import { useErrorToast, useToast } from "./notify";
+import { ProjectGroup } from "./project/ProjectGroup";
 import { RosterImport } from "./RosterImport";
 import { RosterTable } from "./RosterTable";
 import { useSearchParam, type ClassroomQueryTab, type Navigate, type Route } from "./router";
@@ -54,7 +55,9 @@ import { invalidateHint } from "./realtime/hints";
  * tabs also settle the primary action, and the page header carries it in the
  * same slot whichever tab is open: "Add students" on the roster — an empty
  * roster is the only thing that blocks everything a classroom is for — and
- * "New evaluation" on the evaluations (#295). The third tab, the drill
+ * "New evaluation" on the evaluations (#295), a "New ▾" of Evaluation and
+ * Project since M3-10 (`NewActivity`), whose projects are a group under the
+ * evaluations (`ProjectGroup`). The third tab, the drill
  * (ADR-041, #317), is a read view — each student's practice — so the slot
  * stays empty there. The fourth, Settings (F-ORG-13, D24), is a route of its
  * own (`/classrooms/:id/settings`): rename, archive, delete and the drill
@@ -320,9 +323,13 @@ export function ClassroomView({
                 <UserPlus /> {t("roster.add")}
               </Button>
             ) : tab === "evaluations" ? (
-              <Button onClick={() => setCreating(true)}>
-                <Plus /> {t("eval.new")}
-              </Button>
+              <NewActivity
+                classroomId={id}
+                github={github.isSuccess ? github.data : undefined}
+                navigate={navigate}
+                onEvaluation={() => setCreating(true)}
+                onConnect={openConnect}
+              />
             ) : null}
           </>
         }
@@ -381,8 +388,12 @@ export function ClassroomView({
             </Card>
           </section>
         ) : tab === "evaluations" ? (
-          // WP8: evaluation + dashboard
-          <EvaluationList classroomId={id} navigate={navigate} onNew={() => setCreating(true)} />
+          <div className="space-y-8">
+            {/* WP8: evaluation + dashboard */}
+            <EvaluationList classroomId={id} navigate={navigate} onNew={() => setCreating(true)} />
+            {/* M3-10: the projects, a group of their own under the evaluations. */}
+            <ProjectGroup classroomId={id} navigate={navigate} />
+          </div>
         ) : tab === "journal" ? (
           <JournalReader classroomId={id} path={journalPath} navigate={navigate} studentView={false} />
         ) : tab === "drill" ? (

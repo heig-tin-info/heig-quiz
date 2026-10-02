@@ -61,6 +61,7 @@ export const FLAG_NAMES = [
   "journalgithub",
   "journalerror",
   "journalconflict",
+  "projects",
   "superpowers",
   "lastminutes",
   "degraded",

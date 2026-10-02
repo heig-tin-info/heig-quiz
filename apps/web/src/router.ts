@@ -61,9 +61,20 @@ export type Route =
   | { view: "classroomJournal"; id: string; path?: string }
   /** The classroom's Grades tab: the teacher's export, the student's table (§5.2). */
   | { view: "classroomGrades"; id: string }
-  /** One project (M3-12), and its groups. Declared: no screen reaches them yet. */
+  /**
+   * One project (M3-12), and its groups. Behind `CLASSROOM_PAGES` until their
+   * screens ship: a project's row opens `project` only where it parses
+   * (`routeEnabled`).
+   */
   | { view: "project"; id: string }
   | { view: "projectGroups"; id: string }
+  /**
+   * A new project in one classroom (F-PROJ-01): where "New ▾ › Project" leads
+   * on a connected classroom (M3-10). `preview` and `ComingSoon` until M3-11
+   * builds the form there (or replaces the route with a sheet): while it does
+   * not parse, the classroom offers no "New ▾" at all (`routeEnabled`).
+   */
+  | { view: "projectNew"; classroomId: string }
   /**
    * Every evaluation and poll the teacher manages, across classrooms (#190):
    * a table, cards or a week-by-week schedule, "Live now" on top.
@@ -217,8 +228,10 @@ export interface RouteSpec<V extends Route["view"]> {
 /**
  * The gate of the classroom merge's routes (ADR-035, `docs/merge/05-web.md`
  * §5.1–§5.2) whose routes exist before their screens do: the classroom's
- * Grades tab and the project pages. Each renders a placeholder
- * (`ComingSoon`) until its task ships the real screen (M5-04, M3-12).
+ * Grades tab, the new project, a project and its groups. Each renders a
+ * placeholder (`ComingSoon`) until its task ships the real screen (M5-04,
+ * M3-11, M3-12, M3-16). A screen that links to one asks `routeEnabled`
+ * first, so production never shows a door to a page that does not parse.
  *
  * Off in a production build: the `preview` routes do not parse. On in the
  * browser mock (`VITE_MOCK=1`), and wherever `VITE_CLASSROOM_PAGES=1` is set
@@ -229,6 +242,9 @@ export interface RouteSpec<V extends Route["view"]> {
  */
 export const CLASSROOM_PAGES =
   import.meta.env.VITE_MOCK === "1" || import.meta.env.VITE_CLASSROOM_PAGES === "1";
+
+/** Whether `view` parses in this build: not a `preview` route, or `CLASSROOM_PAGES` on. */
+export const routeEnabled = (view: Route["view"]): boolean => !ROUTES[view].preview || CLASSROOM_PAGES;
 
 /** The tabs of the Administration page, in their order (`AdminPanel.tsx`). */
 export const ADMIN_TABS = ["people", "system", "tasks", "llm"] as const;
@@ -334,6 +350,16 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
       head === "classrooms" && id && tail === "settings" ? { view: "classroomSettings", id } : null,
     studentSafe: false,
   },
+  // M3-10: "New ▾ › Project" on a connected classroom; M3-11 builds it.
+  projectNew: {
+    path: (r) => `/classrooms/${r.classroomId}/projects/new`,
+    match: ([head, id, tail, leaf]) =>
+      head === "classrooms" && id && tail === "projects" && leaf === "new"
+        ? { view: "projectNew", classroomId: id }
+        : null,
+    studentSafe: false,
+    preview: true,
+  },
   classroomJournal: {
     path: (r) => `/classrooms/${r.id}/journal${r.path ? `/${encodeJournalPath(r.path)}` : ""}`,
     match: ([head, id, tail, ...rest]) => {
@@ -360,8 +386,9 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     studentSafe: true,
     bottomSlot: "courses",
   },
-  // M3-12: declared, no screen links to them yet. `projectGroups` first:
-  // `project` takes any tail after the id.
+  // M3-12, M3-16: behind `CLASSROOM_PAGES` until their screens ship. `project`
+  // takes no tail, so `/projects/:id/groups` reads as home in a production
+  // build rather than as the project.
   projectGroups: {
     path: (r) => `/projects/${r.id}/groups`,
     match: ([head, id, tail]) =>
@@ -372,7 +399,8 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   },
   project: {
     path: (r) => `/projects/${r.id}`,
-    match: ([head, id]) => (head === "projects" && id ? { view: "project", id } : null),
+    match: ([head, id, tail]) =>
+      head === "projects" && id && tail === undefined ? { view: "project", id } : null,
     studentSafe: false,
     section: "activities",
     preview: true,

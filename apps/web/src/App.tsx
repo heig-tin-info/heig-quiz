@@ -270,6 +270,8 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   classroomGrades: (_, c) => <ComingSoon title="bnav.grades" navigate={c.navigate} teacherUi={c.teacherUi} />,
   project: (_, c) => <ComingSoon title="soon.project" navigate={c.navigate} teacherUi={c.teacherUi} />,
   projectGroups: (_, c) => <ComingSoon title="soon.projectGroups" navigate={c.navigate} teacherUi={c.teacherUi} />,
+  // F-PROJ-01: "New ▾ › Project" (M3-10) leads here; M3-11 builds the form.
+  projectNew: (_, c) => <ComingSoon title="project.new" navigate={c.navigate} teacherUi={c.teacherUi} />,
   activities: (_, c) => <ActivitiesPage navigate={c.navigate} />,
   polls: (_, c) => <PollLauncher navigate={c.navigate} />,
   // The projection is for a beamer: no sidebar, no chrome.

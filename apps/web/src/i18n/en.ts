@@ -3702,7 +3702,7 @@ export const en = {
   "activities.timeline.empty.title": "Nothing dated yet",
   "activities.timeline.empty.body": "Activities appear on the timeline once they have an opening date or have started.",
   "activities.timeline.legend.live": "in the room",
-  "activities.timeline.legend.waiting": "waiting room or paused",
+  "activities.timeline.legend.waiting": "waiting room, paused, open project",
   "activities.timeline.legend.scheduled": "scheduled",
   "activities.timeline.legend.draft": "draft",
   "activities.timeline.legend.ended": "over",
@@ -3825,6 +3825,22 @@ export const en = {
   "soon.body": "This page is on its way. Everything else works as before.",
   "soon.project": "Project",
   "soon.projectGroups": "Project groups",
+
+  // Projects in the classroom and the Activities (M3-10): "New ▾", the
+  // Projects group, the type chip. A project, never an "assignment".
+  "activity.new": "New",
+  "activity.new.evaluation": "Evaluation",
+  "activity.new.project": "Project",
+  "activities.kind.project": "Project",
+  "project.new": "New project",
+  "project.notConnected": "Connect this classroom to GitHub first",
+  "project.group": "Projects",
+  "project.start": "Start",
+  "project.deadline": "Deadline",
+  "project.loadFailed": "Could not load the projects",
+  "project.state.draft": "draft",
+  "project.state.published": "published",
+  "project.state.locked": "locked",
 
   // The journal reader (F-JRN-07, M4-04, `journal/`). A warning or a sync
   // error is a code of `@quiz/contracts`, worded here (fix J5).

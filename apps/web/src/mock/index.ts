@@ -30,6 +30,8 @@
  *  - `unlinked` — the persona has no linked GitHub account (section 8);
  *  - `journal` — the classroom PRG1-2026 has a journal (section 9);
  *    `journalerror` — and its last synchronisation failed;
+ *  - `projects` — the classroom PRG1-2026 has three projects, one per
+ *    state (section 5c);
  *  - `scene` — the student player's state, and only that one screen's:
  *    `?scene=lobby|running|paused|closed|extend|single|marks|forward|exercise` (`running` by default).
  *
@@ -49,6 +51,7 @@
  *   student.ts     4.  the student's home, lobby and player;
  *   grading.ts     5.  grading, results and the student's feedback;
  *   preview.ts     5b. the teacher's stateless preview of an evaluation;
+ *   project.ts     5c. a classroom's projects (`?projects=1`, M3-10);
  *   poll.ts        6.  the participant's poll page and the teacher's half;
  *   drill.ts       7.  the student's drill, the teacher's drill switches and view;
  *   github.ts      8.  GitHub: the App's organizations and a classroom's link
@@ -119,6 +122,7 @@ import {
 } from "./student";
 import "./grading";
 import "./preview";
+import "./project";
 import "./drill";
 import "./github";
 import "./journal";
