@@ -953,6 +953,14 @@ files it ports; writes en + fr for every string.
   the push handler (without `protectFiles`: restoring is the webhook's).
   A rate limit inside a scheduled task is waited out by Octokit once; a
   task is not a delivery, so it is the next period that retries.
+  Three narrow edges of M3-04's restored-heads window, left by its review
+  (round 3): the window ends at `reverts.created_at`, taken before the ref
+  read, so a head received in between (other than `covered_sha`) escapes —
+  bound it by the receipt of `covered_sha` instead; a sha first received on
+  another branch makes the join take that branch — store the restore's
+  branch on `reverts`; after a 422 whose retry finds nothing to restore,
+  S's runs stay unflagged. Close them here, where the reconciliation reads
+  the same rows.
 
 ### M3-07 — Sync of the source repository
 - **Depends on**: M2-04, M3-02, D12. ‖ M3-05, M3-06.
