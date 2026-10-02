@@ -14,6 +14,22 @@ ADR-020 (presence counts a body in the room). Wording aligned 2026-09-30
 (D16, `docs/merge/08-decisions.md`): the attempt's "journal" is now called
 the attempt log, "journal" meaning only a classroom's journal (ADR-049).
 
+## Reading map
+
+Read the Status above for cross-record amendments. Within this record, use
+the sections below before applying the original Decision; earlier wording
+is historical where these sections change it.
+
+| Topic | Read |
+| --- | --- |
+| Per-window frame switch; replaces localStorage | [Frame and window](#addendum-2026-09-22-the-switch-belongs-to-the-frame-and-to-the-window) |
+| Removes the original page button and old read-only preview | [Single entry point](#addendum-2026-09-22-second-the-page-button-goes-the-frame-switch-stays) |
+| Return from a real attempt without ending it | [Return banner](#addendum-2026-09-24-third-the-way-back-from-the-attempt-itself) |
+| New interactive preview without a real attempt | [Stateless preview](#addendum-2026-09-25-fourth-a-stateless-preview-of-the-whole-evaluation) |
+| Waiting-room preview | [Launch preview](#addendum-2026-09-27-fifth-the-waiting-room-previewed-from-the-launch-step) |
+| Edit and resume the preview | [Preserving the walk](#addendum-2026-09-29-sixth-fixing-a-question-without-losing-the-walk) |
+| Preview mode and edit tool location; amends the preceding banner | [Preview as a mode](#addendum-2026-10-01-seventh-the-preview-is-a-mode-not-a-notice) |
+
 ## Context
 
 The product owner asked, in these terms: from an evaluation, a button that

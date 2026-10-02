@@ -77,6 +77,25 @@ job re-reads the recipient's role, and the bell hides the kind from an
 account that is no longer admin. Not folded: one notification per run and
 per kind of notice.
 
+Amended by [ADR-053](ADR-053-retrait-des-codes-d-entree.md): `student_joined` comes from sign-in claims;
+the classroom join-code path is removed.
+
+## Reading map
+
+Read the Status above for cross-record amendments. Within this record, use
+the sections below before applying the original Decision; earlier wording
+is historical where these sections change it.
+
+| Topic | Read |
+| --- | --- |
+| Current Teams transport; earlier bot designs are history | [Graph activity feed](#4-teams-activity-feed-notifications-through-microsoft-graph) |
+| Toast throttling, quiet pages and kind-specific overrides | [Evening amendments](#h-decisions-of-2026-09-28-evening) |
+| Fold writes, catalogue and manifest evolution | [Step 4](#step-4-fold-writes-and-teams-manifest) |
+| Recipients and at-most-once grading-ready claims | [Step 5](#step-5-grading-ready-and-pool-publication) |
+| Activity notifications; read Status for kind-neutral payloads | [Step 6](#step-6-scheduled-and-available-activities) |
+| Reminder window and atomic claim | [Step 7](#step-7-deadline-reminders) |
+| After-commit grading hook; replaces §c, with residual limitation retained | [Step 8](#step-8-results-updated) |
+
 ## Context
 
 The bell (F-POOL-05) tells an account what happened while it was away, but
@@ -154,6 +173,10 @@ accounts are a copy of production's (ADR-028) and must never be written to.
 No user configuration: the address is `users.email`.
 
 ### 4. Teams: activity-feed notifications through Microsoft Graph
+
+Manifest versions below record delivery history. The later
+[Step 4](#step-4-fold-writes-and-teams-manifest) and the ADR-055 amendment in Status govern
+the catalogue; `system_alert` has no Teams channel.
 
 **Why, twice.** The first version (2026-09-26) installed a Teams app for
 each user through Graph with an APPLICATION permission and posted in their
@@ -476,6 +499,9 @@ released result.
 
 ### a. The App channel is the bell plus the toast
 
+Qualified by [§h, point 2](#h-decisions-of-2026-09-28-evening): folded toasts
+are throttled and full-screen/live dashboard views stay quiet.
+
 - The `bell` channel is shown as **App**. It means an entry in the bell,
   plus a toast in every tab that is open. `NoticeKind`, the `localStorage`
   preferences and the "Popup alerts" card are removed. `student_joined` and
@@ -509,6 +535,12 @@ grid an account sees (§5). The three kinds of this ADR keep bell, e-mail and Te
 the change made no difference a user could see.
 
 ### c. The kinds
+
+This is the original catalogue. [Step 5](#step-5-grading-ready-and-pool-publication) amends
+the `grading_ready` audience (including the teacher who closed), and
+[Step 8](#step-8-results-updated) replaces the `results_updated` hook with
+`writeGradings` and after-commit notification. Read those rules before using
+the original event descriptions below.
 
 | Role | Kind | App | E-mail / Teams | Trigger |
 |---|---|---|---|---|
@@ -560,6 +592,9 @@ the change made no difference a user could see.
   sent before #198.
 
 ### d. `deadline_approaching`: keyed on `closesAt` alone
+
+Completed by [Step 7](#step-7-deadline-reminders): the window also requires
+`now < closesAt`, excludes finished attempts and uses an atomic claim.
 
 The reminder does not depend on the timing mode. `duration` and `manual`
 evaluations can carry a `closesAt` too, and the ticker closes them on it.
@@ -663,6 +698,8 @@ review above, and applied from step 4 on:
    its app entry folds per evaluation, and no delay is added before it is
    sent.
 
+#### Step 4: Fold writes and Teams manifest
+
 Step 4 also settled how the fold is written: the kind is read from the
 payload, so each partial unique index is on `(user_id, classroom_id) WHERE
 payload->>'kind' = '<kind>' AND read_at IS NULL`
@@ -681,6 +718,8 @@ type the user's installed manifest does not declare) is a permanent Teams
 failure, like a 403 or a 404, and is not retried. The manifest was
 bumped once, to 2.1.0, declaring the activity types of every kind of steps 4
 to 8.
+
+#### Step 5: Grading ready and pool publication
 
 Step 5 (`grading_ready`, `pool_question_added`) settled:
 
@@ -725,6 +764,8 @@ Step 5 (`grading_ready`, `pool_question_added`) settled:
   `pool_question_added` folds on `(user_id, pool_id)`, migration
   `0028_notification_pool_fold`.
 
+#### Step 6: Scheduled and available activities
+
 Step 6 (`activity_scheduled`, `activity_available`) settled:
 
 - **One entry, `announceMove`** (`modules/evaluation/announce.ts`), called
@@ -766,6 +807,8 @@ Step 6 (`activity_scheduled`, `activity_available`) settled:
 - Best-effort, as `tellStaff`: a failure is logged and never fails the
   transition, the start or the ticker pass.
 
+#### Step 7: Deadline reminders
+
 Step 7 (`deadline_approaching`) settled:
 
 - **A tick task, `notifications.deadline_reminders`**, once a minute in
@@ -797,6 +840,8 @@ Step 7 (`deadline_approaching`) settled:
   logged, the other evaluations of the pass are still told, and the scan
   never throws at the ticker. The markers of a failed fan-out stay claimed
   and are not retried.
+
+#### Step 8: Results updated
 
 Step 8 (`results_updated`) settled:
 

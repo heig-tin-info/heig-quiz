@@ -322,7 +322,9 @@ refuses a `pglite://` URL there.
   module may read it by join; it never writes it.
 - Database tests are `*.db.test.ts` and run on PGlite through
   `apps/api/src/test/db.ts`, against the real migrations.
-- A non-trivial decision becomes an ADR in `docs/adr/`, in the format of the
-  inherited ones.
+- Start ADR research at [the topic index](docs/adr/README.md); read each
+  record's Status and scoped amendments before applying its Decision.
+- A non-trivial decision becomes an ADR in `docs/adr/`, using
+  [the template](docs/adr/TEMPLATE.md) and the index's maintenance rules.
 - Before declaring a screen finished, look at it: `pnpm dev:mock`, then the
   screenshots (`apps/web/scripts/screenshots.mjs`).

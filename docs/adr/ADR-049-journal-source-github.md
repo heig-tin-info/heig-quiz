@@ -216,18 +216,7 @@ for Quiz.
 
 ## Addendum (2026-10-01): two modes (ADR-057)
 
-[ADR-057](ADR-057-journal-two-modes.md) gives a journal a mode, chosen at
-its creation. **In a GitHub repository** is this ADR and its first
-addendum, except that the platform no longer writes into the repository
-from the browser: no save, add, delete nor upload; each page links to
-"Edit on GitHub" instead. **In Quiz** needs no GitHub at all: the database
-is the content (point 2 does not hold there), edited with the platform's
-standard editor, with revisions. In consequence:
-
-- addendum point 2: the Journal section of Settings is available whether
-  the classroom is connected or not; only the GitHub mode needs a
-  connection;
-- addendum point 3 (D27): the App writes into a journal repository only to
-  seed a new one and for the initial commit of "Move to GitHub", into a
-  new or empty repository;
-- addendum point 7 (D25) is superseded: no WYSIWYG round trip over git.
+The authoritative mode decision is [ADR-057](ADR-057-journal-two-modes.md):
+read its §§1–3 for storage, editing and migration between modes. It amends
+this record's body point 2 and the first addendum's points 2, 3 and 7.
+The remaining port rules and security fixes J1–J7 still apply.

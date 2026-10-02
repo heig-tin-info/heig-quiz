@@ -10,6 +10,21 @@ decision 1 is now the only use of `evaluations.access_code` (CHECK
 (2026-10-01):** a poll refuses a parameterized question; the beamer and the phones must
 show the same values.
 
+## Reading map
+
+Read the Status above for cross-record amendments. Within this record, use
+the sections below before applying the original Decision; earlier wording
+is historical where these sections change it.
+
+| Topic | Read |
+| --- | --- |
+| Audience and access; replaces original classroom/anonymous coupling | [Audience](#addendum-2026-09-27-the-audience-of-a-poll-anonymous-in-no-classroom-or-a-classrooms-by-name) |
+| Question creation without a pool | [Inline questions](#addendum-2026-09-23-a-question-written-in-the-launcher-is-not-saved) |
+| Retrieval of unsaved questions; qualifies the earlier absence from lists | [Recent polls](#addendum-2026-09-27-recent-polls-lists-every-question-the-teacher-ran) |
+| Question sources beyond the personal pool | [Accessible pools](#addendum-2026-09-27-from-pools-a-poll-borrows-from-any-pool-the-teacher-reaches) |
+| Expiration without answers | [12-hour expiry](#addendum-2026-09-28-a-poll-left-without-answers-for-12-hours-ends-on-its-own-190) |
+| Votes and reveal; replaces the earlier three-step progression | [Independent switches](#addendum-2026-09-29-only-end-closes-the-vote-votes-and-reveal-are-independent-switches) |
+
 ## Context
 
 A teacher in front of a class wants to ask ONE question, right now, and watch the answers

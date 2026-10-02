@@ -16,7 +16,7 @@ No functional requirement depends on real time — it is a display comfort.
 
 ## Decision
 
-1. **Server-Sent Events** on `GET /app/events` (session cookie required, the same AU-06 auth
+1. **Server-Sent Events** on `GET /app/api/events` (formerly `/app/events`; see Status) (session cookie required, the same AU-06 auth
    scheme as the portal, outside the `/api/v1` surface reserved for the key-based API).
 2. Authorization filtering on the server side: a student only receives the events of their
    own repositories (AU-26).

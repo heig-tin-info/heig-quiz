@@ -7,6 +7,10 @@ optional hook `studentSolution` of `QuestionTypeServer` in `@quiz/core` and
 `studentSolutionView` in `apps/api/src/modules/live/studentView.ts`). No
 migration. Settles question 27 of docs/spec/06.
 
+Amended by [ADR-063](ADR-063-correction-llm.md) §7: a teacher may explicitly copy an AI
+justification into the student-visible comment. Grading criteria stay private;
+there is no automatic disclosure of the justification.
+
 ## Context
 
 A type's `toSolution` is served whole to the teacher's surfaces, and was

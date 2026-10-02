@@ -30,13 +30,14 @@ pnpm docs:build               # zensical build: the static site in site/ (gitign
 | `zensical.toml` | the site configuration: title, theme, Markdown extensions, and the navigation |
 | `docs/index.md` | the home page |
 | `docs/spec/` | the product specification, nine chapters |
-| `docs/adr/` | the architecture decision records |
+| [`docs/adr/README.md`](../adr/README.md) | the topic index and reading protocol for architecture decisions |
 | `docs/development/` | these pages |
 | `docs/PLAN-MVP.md` | the phase-1 implementation plan, archived |
 | `docs/assets/screenshots/` | the screenshots, two files per image (see below) |
 
-A page appears in the site only when it is listed in the `nav` array of
-`zensical.toml`; adding a file under `docs/` is not enough. Links between
+The `nav` array of `zensical.toml` controls the site navigation. The ADR
+records are reached through the [decision index](../adr/README.md), so their
+individual links are maintained there instead of in a second navigation list. Links between
 pages are relative Markdown links to the `.md` file
 (`../spec/05-architecture.md`, `deployment.md#rollback`); zensical rewrites
 them at build time and warns about a target that does not exist, which is
