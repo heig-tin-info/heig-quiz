@@ -700,7 +700,7 @@ async function isValidated(db: Db, attemptId: string, itemId: string): Promise<b
  * essay to the close's). Asked once per pass.
  */
 async function offersLlm(app: FastifyInstance, evaluation: EvaluationRecord): Promise<boolean> {
-  return app.llm !== null && !isLiveState(evaluation.state) && (await app.llm.ready());
+  return !!app.llm && !isLiveState(evaluation.state) && (await app.llm.ready());
 }
 
 /**
