@@ -9,8 +9,10 @@
  * repository may refuse pushes (a `pre-receive` hook), to stand for GitHub
  * failing a build halfway. In memory beside them (M3-03): the default branch
  * a `PATCH` sets, the rulesets (or the free plan's 403), the collaborators
- * invited and their permission. Test support only; nothing in the
- * application imports it.
+ * invited and their permission. From M3-04, the Git Data API a restore
+ * calls (a file's contents, blobs, trees, commits, a ref moved fast-forward
+ * only), a compare, and `commit` for a push made outside the App. Test
+ * support only; nothing in the application imports it.
  */
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -20,6 +22,15 @@ import { dirname, join } from "node:path";
 import { json, type Route } from "../../github/testing.js";
 
 const sh = (...args: string[]) => execFileSync("git", args, { stdio: "pipe" }).toString();
+/** `git` with an environment (a temporary index, an author) and a standard input. */
+const shWith = (env: Record<string, string>, input: string | Buffer | undefined, ...args: string[]) =>
+  execFileSync("git", args, { stdio: "pipe", input, env: { ...process.env, ...env } }).toString().trim();
+const AUTHOR = {
+  GIT_AUTHOR_NAME: "t",
+  GIT_AUTHOR_EMAIL: "t@x",
+  GIT_COMMITTER_NAME: "t",
+  GIT_COMMITTER_EMAIL: "t@x",
+};
 
 export interface RepoWorld {
   /** The directory `setRemoteBaseForTests` is given (as `file://<dir>`). */
@@ -55,6 +66,13 @@ export interface RepoWorld {
   exists: (fullName: string) => boolean;
   /** `git` on a bare repository of the world. */
   git: (fullName: string, ...args: string[]) => string;
+  /**
+   * A commit on `branch` of `fullName` changing `files` (content, or null
+   * to delete), as a student or a workflow pushes it; its sha.
+   */
+  commit: (fullName: string, branch: string, files: Record<string, string | null>) => string;
+  /** The content of `path` at `ref`, or null when there is none. */
+  read: (fullName: string, ref: string, path: string) => string | null;
   remove: () => void;
   route: Route;
 }
@@ -84,6 +102,32 @@ export function repoWorld(): RepoWorld {
     if (branches.includes(head)) return head;
     return branches.includes("main") ? "main" : (branches[0] ?? "main");
   };
+  let nextIndex = 0;
+  /** A tree: `base`'s (none: empty) with `entries` set (a blob's sha) or removed (null). */
+  const buildTree = (fullName: string, base: string | null, entries: { path: string; sha: string | null }[]) => {
+    const env = { GIT_INDEX_FILE: join(dir, `index-${nextIndex++}`) };
+    const git = (...args: string[]) => shWith(env, undefined, "--git-dir", pathOf(fullName), ...args);
+    try {
+      if (base) git("read-tree", base);
+      else git("read-tree", "--empty");
+      // Mode 0 removes a path: `--index-info` needs no work tree.
+      const info = entries.map((e) => (e.sha ? `100644 ${e.sha}\t${e.path}` : `0 ${"0".repeat(40)}\t${e.path}`));
+      if (info.length > 0) shWith(env, `${info.join("\n")}\n`, "--git-dir", pathOf(fullName), "update-index", "--index-info");
+      return git("write-tree");
+    } finally {
+      rmSync(env.GIT_INDEX_FILE, { force: true });
+    }
+  };
+  const writeBlob = (fullName: string, bytes: Buffer) =>
+    shWith({}, bytes, "--git-dir", pathOf(fullName), "hash-object", "-w", "--stdin");
+  const commitTree = (fullName: string, tree: string, parents: string[], message: string) =>
+    shWith(AUTHOR, message, "--git-dir", pathOf(fullName), "commit-tree", tree, ...parents.flatMap((p) => ["-p", p]));
+  /** `path`'s blob sha at `ref`, or null. */
+  const blobOf = (fullName: string, ref: string, path: string) => {
+    const line = sh("--git-dir", pathOf(fullName), "ls-tree", ref, "--", path).trim();
+    const [meta] = line.split("\t");
+    return line && meta!.split(" ")[1] === "blob" ? meta!.split(" ")[2]! : null;
+  };
   const repoJson = (org: string, name: string) => ({
     id: world.ids.get(`${org}/${name}`),
     name,
@@ -104,6 +148,30 @@ export function repoWorld(): RepoWorld {
       const { default_branch } = JSON.parse(String(req.body)) as { default_branch?: string };
       if (default_branch) world.git(fullName, "symbolic-ref", "HEAD", `refs/heads/${default_branch}`);
       return json(repoJson(org, name));
+    }
+    const body = () => JSON.parse(String(req.body)) as Record<string, unknown>;
+    if (req.method === "POST" && rest === "/git/blobs") {
+      const { content, encoding } = body() as { content: string; encoding: string };
+      return json({ sha: writeBlob(fullName, Buffer.from(content, encoding === "base64" ? "base64" : "utf8")) }, 201);
+    }
+    if (req.method === "POST" && rest === "/git/trees") {
+      const { base_tree, tree } = body() as { base_tree?: string; tree: { path: string; sha: string | null }[] };
+      return json({ sha: buildTree(fullName, base_tree ?? null, tree) }, 201);
+    }
+    if (req.method === "POST" && rest === "/git/commits") {
+      const { tree, parents, message } = body() as { tree: string; parents: string[]; message: string };
+      return json({ sha: commitTree(fullName, tree, parents, message) }, 201);
+    }
+    if (req.method === "PATCH" && (m = /^\/git\/refs\/heads\/(.+)$/.exec(rest))) {
+      const { sha, force } = body() as { sha: string; force?: boolean };
+      const current = world.git(fullName, "rev-parse", `refs/heads/${m[1]}`).trim();
+      try {
+        if (!force) world.git(fullName, "merge-base", "--is-ancestor", current, sha);
+      } catch {
+        return json({ message: "Update is not a fast forward" }, 422);
+      }
+      world.git(fullName, "update-ref", `refs/heads/${m[1]}`, sha);
+      return json({ ref: `refs/heads/${m[1]}`, object: { sha } });
     }
     if (req.method === "POST" && rest === "/rulesets") {
       if (world.freePlan) return planRefusal();
@@ -172,6 +240,20 @@ export function repoWorld(): RepoWorld {
     },
     exists: (fullName) => existsSync(pathOf(fullName)),
     git: (fullName, ...args) => sh("--git-dir", pathOf(fullName), ...args),
+    commit(fullName, branch, files) {
+      const head = world.git(fullName, "rev-parse", `refs/heads/${branch}`).trim();
+      const entries = Object.entries(files).map(([path, content]) => ({
+        path,
+        sha: content === null ? null : writeBlob(fullName, Buffer.from(content)),
+      }));
+      const sha = commitTree(fullName, buildTree(fullName, head, entries), [head], "work");
+      world.git(fullName, "update-ref", `refs/heads/${branch}`, sha);
+      return sha;
+    },
+    read(fullName, ref, path) {
+      const sha = blobOf(fullName, ref, path);
+      return sha ? world.git(fullName, "cat-file", "blob", sha) : null;
+    },
     remove: () => rmSync(dir, { recursive: true, force: true }),
     route: (url, req) => {
       if (url.host !== "api.github.com") return undefined;
@@ -225,6 +307,28 @@ export function repoWorld(): RepoWorld {
         return json(branches.filter((b) => b === m![1]).map((b) => ({ ref: `refs/heads/${b}` })));
       }
       if (rest === "/rulesets") return world.freePlan ? planRefusal() : json(world.rulesets.get(fullName) ?? []);
+      if ((m = /^\/contents\/(.+)$/.exec(rest))) {
+        const sha = blobOf(fullName, url.searchParams.get("ref") ?? "HEAD", m[1]!);
+        if (!sha) return undefined;
+        const content = execFileSync("git", ["--git-dir", join(dir, `${fullName}.git`), "cat-file", "blob", sha]).toString("base64");
+        return json({ type: "file", path: m[1], sha, content, encoding: "base64" });
+      }
+      if ((m = /^\/git\/ref\/heads\/(.+)$/.exec(rest))) {
+        if (!branches.includes(m[1]!)) return undefined;
+        return json({ ref: `refs/heads/${m[1]}`, object: { sha: world.git(fullName, "rev-parse", m[1]!).trim() } });
+      }
+      if ((m = /^\/git\/commits\/([0-9a-f]+)$/.exec(rest))) {
+        return json({ sha: m[1], tree: { sha: world.git(fullName, "rev-parse", `${m[1]}^{tree}`).trim() } });
+      }
+      if ((m = /^\/compare\/([0-9a-f]+)\.\.\.([0-9a-f]+)$/.exec(rest))) {
+        const base = world.git(fullName, "merge-base", m[1]!, m[2]!).trim();
+        const files = world
+          .git(fullName, "diff", "--name-only", "--no-renames", base, m[2]!)
+          .split("\n")
+          .filter(Boolean)
+          .map((filename) => ({ filename, status: "modified" }));
+        return json({ files });
+      }
       if ((m = /^\/git\/trees\/(.+)$/.exec(rest))) {
         if (branches.length === 0) return json({ message: "Git Repository is empty." }, 409);
         const entries = world

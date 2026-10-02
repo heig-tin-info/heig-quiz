@@ -38,7 +38,7 @@ import { linkedLogin } from "../../auth/githubLink.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { githubAccounts, projectRepos } from "../../db/schema.js";
-import { installationClient } from "../../github/app.js";
+import { installationClient, ownerRepo } from "../../github/app.js";
 import { isInvitationRefused } from "../../github/collaborators.js";
 import { provisionStudentRepo, RepoNameTaken } from "../../github/provision.js";
 import { redactTokens } from "../../redact.js";
@@ -166,7 +166,7 @@ export async function acceptProject(db: Db, config: AppConfig, input: AcceptInpu
       octokit: client.octokit,
       token: client.token,
       org: org.login,
-      squashedRepo: project.distributionFullName!.split("/")[1]!,
+      squashedRepo: ownerRepo(project.distributionFullName!).repo,
       targetRepo: repoName(project.slug, login),
       branches: project.branches,
       defaultBranch: project.branches[0]!,

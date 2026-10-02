@@ -234,6 +234,18 @@ export type AuditAction =
    */
   | "project.accept"
   | "project.accept_failed"
+  /**
+   * What GitHub's webhooks did to a student's repository (F-PROJ-08,
+   * F-PROJ-18; merge task M3-04), by the system, subject the
+   * `project_repos` row. `restore`: `payload.files`, `sha` (the App's
+   * restore commit), `head` (the push it answered); `revert_cap`: a sixth
+   * restore in an hour refused, the protection suspended until the staff
+   * re-enable it (M3-08) — `payload.files`, `head`; `deleted`: the
+   * repository deleted on GitHub, `payload.via` (`webhook`).
+   */
+  | "project_repo.restore"
+  | "project_repo.revert_cap"
+  | "project_repo.deleted"
   | "question.copy"
   | "question.create"
   | "question.delete"

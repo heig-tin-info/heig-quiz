@@ -75,6 +75,11 @@ interface SendOptions {
   retryDelay?: number;
   /** Higher runs first; the in-process development runner ignores it. */
   priority?: number;
+  /**
+   * Not before this instant: a job sent again past a GitHub rate limit's
+   * reset (N-PERF-07). The in-process runner holds it in a timer.
+   */
+  startAfter?: Date;
 }
 
 interface WorkOptions {
@@ -137,8 +142,13 @@ export class InProcessQueue implements JobQueue {
     /* nothing to create: the queue is an array */
   }
 
-  async send<T extends object>(name: string, data: T) {
+  async send<T extends object>(name: string, data: T, options?: SendOptions) {
     if (this.stopped) return;
+    const delay = options?.startAfter ? options.startAfter.getTime() - Date.now() : 0;
+    if (delay > 0) {
+      setTimeout(() => void this.send(name, data), delay).unref();
+      return;
+    }
     this.pending.push({ name, data });
     void this.drain();
   }

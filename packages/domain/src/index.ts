@@ -62,6 +62,7 @@ export * from "./pollTally.js";
 export * from "./poolRole.js";
 export * from "./projectGrade.js";
 export * from "./projectAccept.js";
+export * from "./projectRuns.js";
 export * from "./projectPatch.js";
 export * from "./pseudonym.js";
 export * from "./questionProgress.js";

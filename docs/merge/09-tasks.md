@@ -770,6 +770,117 @@ files it ports; writes en + fr for every string.
   pull_request handlers, `C:grading.ts`, reverts with cap.
 - **Tests**: port `grading.db.test` and the rest of `webhooks.db.test`;
   bot commits ignored; GR-14.3.
+- **Decided for it** (product owner, 2026-10-02; points 5–8 by the
+  orchestrator): a restore puts back the distribution's CURRENT version
+  (F-PROJ-08 amended, ADR-062 addendum); a workflow's commit is checked
+  too; the cap suspends until the staff re-enable; the current score's
+  rule and the `fallback` rule (F-PROJ-10 amended); review runs stored, the
+  review slot filled only once frozen (F-PROJ-11 amended); a long or forced
+  push read through GitHub's compare; a rate limit waited out without a
+  retry; the bots are Quiz's App and `github-actions[bot]` only.
+- **As delivered** (branch `merge/M3-04-project-ingest`). What M3-05…M3-09
+  and M8 inherit:
+  - **Handlers** (`Q:modules/project/webhooks.ts`, registered by
+    `projectPlugin`, so only with an App): `onReceipt(tracksRepo)` (a push
+    on a `project_repos.github_repo_id` gets its receipt in the intake's
+    transaction); `push` (a deleted branch ignored; `github-actions[bot]` ⇒
+    `bot_commits(grader)`; a person's push ⇒ `last_commit_sha/at` —
+    `head_commit.timestamp`, else the receipt time; the App's push moves
+    nothing; every push but the App's through `protectFiles`);
+    `workflow_run` (`requested`/`in_progress` of an eligible run on the
+    student's last commit ⇒ `ci_status = pending`; `completed` ⇒
+    `ingestCompletedRun`, which checks eligibility); `member` added ⇒
+    `invitation_status = accepted`; `repository` renamed (a student's
+    repository by id, and a project's source or distribution by its id,
+    matched on the name part only — the owner may have changed first) /
+    deleted (`markRepoDeleted`, terminal, audited `project_repo.deleted`
+    once; a deleted repository's later events change nothing);
+    `organization` renamed ⇒ the `<org>/` prefix of `source_full_name`,
+    `distribution_full_name`, `project_repos.full_name` of the
+    organization's projects, by its GitHub id (order-free beside
+    `github`'s own handler). A rename applies only where
+    the stored name is the one it left (`changes.repository.name.from`,
+    `changes.login.from`), so a stale replay changes nothing. Each drops
+    the live-state cache entry (`forgetRepoLiveState`) and hints.
+  - **The last commit** is the last STUDENT commit: only a person's push
+    moves `last_commit_sha/at`; it is the ONE commit whose CI state the
+    repository shows (`isLastStudentCommit`, `grading.ts`): `pending` is set
+    only for it, the aggregated state is computed only for it.
+  - **Who pushed**: `pushedBy(config, login)` (`github` service): `app`
+    (`<slug>[bot]`), `workflow` (`github-actions[bot]`), `person`; the
+    intake's `is_bot` is `!== "person"`.
+  - **Grading** (`Q:modules/project/grading.ts`), ONE path for M3-06:
+    `ingestCompletedRun(app, octokit, ctx, run: CompletedRun)` → the new
+    run's id or null (ineligible, or already there: no annotation read
+    again). `ctx` is `repoContext(db, githubRepoId)` (`repos.ts`: `{repo,
+    project, courseId}`). Eligibility `isEligible(db, ctx, run)` (handed-out
+    branch; head neither in `bot_commits`, any kind, nor received as a bot's
+    push, `push_receipts.is_bot` — the review skips both); annotations of
+    the run's own check suite only, GRADE through `extractScore`, TESTS
+    counters; another workflow ⇒ `fallback`; `parse_detail` the malformed
+    message (≤ 500); `after_deadline` by `receivedLate(receipt, deadline,
+    now)`; `to_verify` while `protection_suspended_at`, or on a restored
+    head; the CI state of the student's last commit (`actions/runs` of that
+    sha). The pure rules are `@quiz/domain`'s `projectRuns.ts`:
+    `GRADING_WORKFLOW_PATH`, `runKind` (`review`, moved there from
+    `reviewDispatch.ts`, which said `llm`), `receivedLate`,
+    `selectScoreRun(runs, restoredHeads)`: latest `ci`, not late, `ok` — or
+    `fallback` while the repository has no other run at all — by
+    `completed_at`, never a run on a restored head. `refreshScoreSelection` writes
+    `current_grade_run_id`, and `frozen_grade_run_id` too while
+    `deadline_applied_at` is set and `frozen_at` is not (inert until M3-05).
+    A `review` run: stored; `review_grade_run_id` only when `ok`,
+    `success` and `frozen_at` set; never the current score.
+  - **Protected files** (`Q:modules/project/protection.ts`,
+    `Q:github/revert.ts`): `protectFiles` on a handed-out branch, a project
+    with protected files and a distribution, a repository not suspended, a
+    head not yet answered (`reverts.head_sha`); touched files from the
+    payload, or `changedFiles` (GitHub's compare `before...after`) when
+    forced or 20 commits listed, every protected file for a new branch;
+    `revertProtectedFiles` (the distribution's blob at the branch, skipped
+    when the head's tree — read once, recursive — already has it) hands the
+    restore commit to `beforeMove` = `recordRestore`: in ONE transaction,
+    the repository row `FOR UPDATE`, the cap `MAX_RESTORES_PER_HOUR` (5,
+    `reverts.created_at` by `app.clock`) ⇒ `protection_suspended_at`, audit
+    `project_repo.revert_cap` `{files, head}`, the move refused; else the
+    `reverts` row and `bot_commits(revert)`. Then the non-forced move, audit
+    `project_repo.restore` `{files, sha, head}`, the head's stored runs
+    `to_verify` and the score reselected. A 422 race takes the `reverts`
+    row back and throws: the delivery is retried.
+  - **Hints**: kind `projects` (contracts, `events.ts`, web
+    `HINT_ROOTS.projects = ["classroom"]`), to `course:<id>` and the
+    repository's students' `user:` topics (`hintRepo`, `repos.ts`; a
+    group's members by `project_group_members` → `enrollments`), never
+    `classroom:` (tested: no topic of another student, no `classroom:`).
+  - **Rate limit** (N-PERF-07): `processDelivery` meeting
+    `rateLimitReset(err)` (`github/app.ts`, moved from `metrics.ts`) with a
+    queue sends the delivery again with `startAfter` the reset and returns:
+    no retry spent, the error kept on the row; `reconcile.deliveries` may
+    replay it before the reset, accepted (it is sent again for the reset).
+    `SendOptions.startAfter`;
+    the in-process queue holds it in an unref'd timer.
+  - **Migration `0057_project_ingest`**: `project_grade_runs.parse_detail`,
+    `to_verify`; `reverts.head_sha` + partial UNIQUE `(repo_id, head_sha)`,
+    `reverts.covered_sha` (the head the restore was built on, the parent
+    `revertProtectedFiles` returns as `covered`). The restored heads
+    (`restoredHeads`, `grading.ts`) are `head_sha`, `covered_sha` and every
+    head with a push receipt on that branch from the tampering push's
+    receipt to the restore's `created_at`: their runs `to_verify`, never the
+    score; a push after the restore counts again.
+    Audit `project_repo.restore`, `project_repo.revert_cap`,
+    `project_repo.deleted`.
+  - `isZeroSha` and `ownerRepo(fullName)` (`Q:github/app.ts`) replace the
+    zero-sha regexes and the `split("/")` of the GitHub code.
+  - `repoWorld()` (`Q:modules/project/testing.ts`) now answers the Git Data
+    API (contents, blobs, trees, commits, ref read, ref moved fast-forward
+    only), compare, and `commit(fullName, branch, files)` / `read(...)` for
+    a push from outside the App.
+  - Not done here: a push on a source repository and `pull_request` on
+    `sync/*` (M3-07); the live cache's reads, the re-enable route, the
+    `multiple` alert's view (M3-08); notices, mails, notifications, the
+    `org_lost` path (M3-09); the deadline, freeze and dispatch (M3-05); the
+    reconciliations (M3-06). The App must subscribe to `workflow_run`,
+    `member` and `repository` (M2-06).
 
 ### M3-05 — Deadline, freeze, dispatch, review checkpoints
 - **Depends on**: M3-04, D13.
@@ -804,6 +915,22 @@ files it ports; writes en + fr for every string.
   plan without rulesets has `ruleset_id` null (audit `project.accept`
   `protected: false`): the deadline's `lock` falls back to archiving it
   (H8), and the staff are shown it as degraded.
+- **From M3-04** (2026-10-02): the provisional freeze is the current
+  score's run (`refreshScoreSelection`, `grading.ts`). **The grace refresh
+  of the frozen slot is already done here, verify it** with the freeze:
+  `refreshScoreSelection` writes `frozen_grade_run_id` too while
+  `deadline_applied_at` is set and `frozen_at` null. A deadline commit does
+  not move `last_commit_sha` (only a person's push does). The reopen
+  requalifies runs then calls `refreshScoreSelection` per repository. Bot
+  commits of a deadline (`commit` strategy) go to `bot_commits(deadline)`
+  BEFORE the ref moves, like the restore's `beforeMove`. A 404 on a
+  repository is `markRepoDeleted(db, repoId, now, via)` (`repos.ts`; widen
+  `via` beyond `webhook`). **The review slot**: F-PROJ-11 is amended — a
+  dispatched run runs on the default branch's head, not on
+  `client_payload.sha`, so M3-04 fills the slot for an `ok`, `success`
+  `review` run received once `frozen_at` is set, never by comparing the
+  head with the frozen commit; the dispatch must record the sha it sent
+  (`grade_dispatches.sha`) as the only trace of what was asked.
 
 ### M3-06 — Reconciliation of grades and repositories
 - **Depends on**: M3-04, M2-05. ‖ M3-05, M3-07.
@@ -816,11 +943,37 @@ files it ports; writes en + fr for every string.
   the create and the update) leaves that student on `repo_name_taken`
   until staff recover it; and a renamed account before success leaves a
   stray private repository, possibly with the student still invited.
+- **From M3-04** (2026-10-02): `reconcile.grades` builds a `CompletedRun`
+  from `GET /repos/{o}/{r}/actions/runs` (the last 20 completed, any
+  workflow) and calls `ingestCompletedRun(app, octokit, repoContext(…),
+  run)` — idempotent, a known run reads no annotation; `completedAt` is the
+  run's `updated_at`. A reconciled run has no receipt: `isAfterDeadline`
+  makes it late once the deadline passed (GR-14.3). `reconcile.repos`
+  writes `invitation_status` like the `member` handler and the head like
+  the push handler (without `protectFiles`: restoring is the webhook's).
+  A rate limit inside a scheduled task is waited out by Octokit once; a
+  task is not a delivery, so it is the next period that retries.
+  Three narrow edges of M3-04's restored-heads window, left by its review
+  (round 3): the window ends at `reverts.created_at`, taken before the ref
+  read, so a head received in between (other than `covered_sha`) escapes —
+  bound it by the receipt of `covered_sha` instead; a sha first received on
+  another branch makes the join take that branch — store the restore's
+  branch on `reverts`; after a 422 whose retry finds nothing to restore,
+  S's runs stay unflagged. Close them here, where the reconciliation reads
+  the same rows.
 
 ### M3-07 — Sync of the source repository
 - **Depends on**: M2-04, M3-02, D12. ‖ M3-05, M3-06.
 - **Port from**: `C:sync.ts`, `github/sync.ts`.
 - **Tests**: new (classroom has none): fake octokit + a local bare repo.
+- **From M3-04** (2026-10-02): the source push (`source_ahead_sha`) and
+  `pull_request` on `sync/*` handlers register beside M3-04's in
+  `Q:modules/project/webhooks.ts` (`registerProjectHandlers`). A sync
+  updates the distribution repository, which is also the restore's
+  reference (ADR-062 addendum): after a sync, a protected file is restored
+  to the new version. The sync's own commits go to `bot_commits(sync)`
+  before the ref moves. The `repository` handler already follows a renamed
+  source or distribution by id; a deleted one is this task's to surface.
 
 ### M3-08 — Teacher views, grades, release
 - **Depends on**: M3-04, M3-05.
@@ -837,6 +990,19 @@ files it ports; writes en + fr for every string.
 - **From M3-03** (orchestrator, 2026-10-02): the staff's resend of an
   invitation (F-PROJ-07) and each repository's `invitation_status` and
   `provision_status` in the teacher's views.
+- **From M3-04** (product owner, 2026-10-02): **the re-enable route** of
+  the protected files (F-PROJ-08) — clears `project_repos.protection_suspended_at`,
+  audited, staff only; the views show a suspended repository as
+  "protected files in conflict" and every run with `to_verify` as "to
+  verify" (a suspended protection, or a head whose protected files were
+  restored — a head in `reverts.head_sha`), a `multiple` run as an alert
+  (it notifies nobody), a `malformed` run with its `parse_detail`.
+  Follow-up (here or later): store a repository's name without its owner
+  (the organization is `projects.org_id`), so the `organization` rename
+  handler of `webhooks.ts` can go. `GRADE_RUN_PARSE_STATUSES` etc.
+  as zod enums here. The live-state cache is already dropped by every
+  project webhook (`forgetRepoLiveState`); the views' `projects` hint
+  roots join `HINT_ROOTS.projects` (web).
 
 ### M3-09 — Student side, SSE, notifications
 - **Depends on**: M3-04, D18. ‖ M3-08.
@@ -863,6 +1029,16 @@ files it ports; writes en + fr for every string.
   A `repo_name_taken` failure is audited with `notify` too: the
   notification text must cover a name collision, which only staff can
   resolve.
+- **From M3-04** (2026-10-02): the hints exist (kind `projects`, to the
+  repository's students' `user:` and the course's `course:`, never
+  `classroom:`; `Q:modules/project/events.ts`, tested); this task adds the
+  worded notices of F-PROJ-21 from the facts M3-04 records: a push (the
+  receipt), a restore (audit `project_repo.restore` `{files}`), a score
+  captured (a `project_grade_runs` row `ok`), the suspension (audit
+  `project_repo.revert_cap`), a repository deleted (audit
+  `project_repo.deleted`); the final review's mail to every member when
+  `review_grade_run_id` is filled (heig-classroom's `grade.final`); and
+  `github_org_lost`.
 
 ### M3-10 — Web: projects in Activities, "New ▾"
 - **Depends on**: M3-01 contracts, M1-05. ‖ M3-11.
@@ -1654,6 +1830,13 @@ files it ports; writes en + fr for every string.
   `kind` `llm` → `review`); `bot_commits`, `grade_dispatches` (`trigger`
   `milestone` → `checkpoint`, `milestone_id` → `checkpoint_id`),
   `reverts` (`student_repo_id` → `repo_id`).
+- **From M3-04** (orchestrator, 2026-10-02): Quiz counts two bots only,
+  its own App and `github-actions[bot]`: **heig-classroom's App must stop
+  acting on a repository once it is imported** (no restore, deadline commit
+  nor sync of its own), or its pushes would be a person's to Quiz — checked
+  by the restores and counted as student commits. Imported `reverts` rows
+  keep `head_sha` null (the column is new, migration `0057`), and imported
+  `project_grade_runs` take `to_verify = false`, `parse_detail` null.
 
 ### M8-02 — Legacy URL resolver
 - **Depends on**: M8-01 (id map), M3-12, M4-04.

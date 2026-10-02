@@ -97,6 +97,35 @@ export function githubStatus(err: unknown): number | undefined {
   return typeof status === "number" ? status : undefined;
 }
 
+/** GitHub's all-zeros sha: a push's `after` deleting a branch, its `before` creating one. */
+export function isZeroSha(sha: string): boolean {
+  return /^0+$/.test(sha);
+}
+
+/** `owner/name` as the REST API's two path parameters. */
+export function ownerRepo(fullName: string): { owner: string; repo: string } {
+  const slash = fullName.indexOf("/");
+  return { owner: fullName.slice(0, slash), repo: fullName.slice(slash + 1) };
+}
+
+/**
+ * Epoch ms when a request GitHub refused for its rate limit (a 403 or 429
+ * with the quota exhausted, or a `retry-after`) may be made again; null for
+ * any other failure. The live-state cache skips an installation until then
+ * (`metrics.ts`); a background job is sent again at that time without
+ * spending a retry (N-PERF-07, `modules/github/deliveries.ts`).
+ */
+export function rateLimitReset(err: unknown, now: number): number | null {
+  const e = err as { status?: number; response?: { headers?: Record<string, string> } };
+  if (e.status !== 403 && e.status !== 429) return null;
+  const headers = e.response?.headers ?? {};
+  if (headers["x-ratelimit-remaining"] === "0" && headers["x-ratelimit-reset"]) {
+    return Number(headers["x-ratelimit-reset"]) * 1000;
+  }
+  if (headers["retry-after"]) return now + Number(headers["retry-after"]) * 1000;
+  return null;
+}
+
 /**
  * One installation of Quiz's App on an organization, as GitHub describes it
  * (`GET /app/installations/{id}`, `/orgs/{org}/installation`, the listing).

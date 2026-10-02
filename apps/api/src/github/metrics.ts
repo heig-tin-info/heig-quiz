@@ -5,6 +5,8 @@
  */
 import type { Octokit } from "octokit";
 
+import { ownerRepo, rateLimitReset } from "./app.js";
+
 export interface RepoLiveState {
   lastCommitSha: string | null;
   lastCommitAt: string | null;
@@ -20,7 +22,7 @@ export async function fetchRepoLiveState(
   fullName: string,
   opts: { noRateLimitWait?: boolean } = {},
 ): Promise<RepoLiveState | null> {
-  const [owner, repo] = fullName.split("/") as [string, string];
+  const { owner, repo } = ownerRepo(fullName);
   const request = { retries: 0, noRateLimitWait: opts.noRateLimitWait === true };
   try {
     const commits = await octokit.request("GET /repos/{owner}/{repo}/commits", {
@@ -118,18 +120,6 @@ export function forgetRepoLiveState(fullName: string | null | undefined): void {
 export function resetLiveStateCache(): void {
   liveCache.clear();
   rateLimitedUntil.clear();
-}
-
-/** Epoch ms when a rate-limited request may be retried, or null. */
-function rateLimitReset(err: unknown, now: number): number | null {
-  const e = err as { status?: number; response?: { headers?: Record<string, string> } };
-  if (e.status !== 403 && e.status !== 429) return null;
-  const headers = e.response?.headers ?? {};
-  if (headers["x-ratelimit-remaining"] === "0" && headers["x-ratelimit-reset"]) {
-    return Number(headers["x-ratelimit-reset"]) * 1000;
-  }
-  if (headers["retry-after"]) return now + Number(headers["retry-after"]) * 1000;
-  return null;
 }
 
 export interface LiveRead {
