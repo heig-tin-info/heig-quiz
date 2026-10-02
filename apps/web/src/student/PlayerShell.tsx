@@ -58,21 +58,23 @@ import {
 
 /**
  * With the side column, the bar and the body share one frame: the column and
- * its gap (the two terms of `RAIL_GRID`), then the room of the question, up
- * to the 1600 px of a wide one (`max-w-400`), and the gutters: 1872 px. Up to
- * there the frame is the screen; past it the frame is centered, rather than
- * the list alone at the edge of a 2560 px screen and "Hand in" at the other.
+ * its gap (the two terms of `RAIL_GRID`), the room of a wide question (the
+ * `max-w-400` of `column`) and the gutters (`px-6`) — 1872 px. Up to there
+ * the frame is the screen; past it the frame is centered, rather than the
+ * list alone at the edge of a 2560 px screen and "Hand in" at the other.
  */
-const FRAME = "max-w-[117rem]";
+const FRAME = "max-w-[calc(12rem_+_2rem_+_100rem_+_3rem)]";
 const RAIL_GRID = "grid grid-cols-[12rem_minmax(0,1fr)] gap-8";
 
 /**
- * The question's column: 760 px of reading (`max-w-190`), or up to 1600 px
- * for a type that asks for it (`QuestionTypeClient.wide`) — from 1024 px of
- * viewport only, so a narrow screen, where the strip lives in the bar, keeps
- * one width from one question to the next.
+ * The question's column: 760 px of reading (`max-w-190`), or 1600 px for a
+ * type that asks for it (`QuestionTypeClient.wide`). Beside the side column
+ * the screen is wide already — the player decided it; without one, from
+ * 1024 px of viewport only, so a narrow screen, where the strip lives in the
+ * bar, keeps one width from one question to the next.
  */
-const column = (wide: boolean) => (wide ? "max-w-190 lg:max-w-400" : "max-w-190");
+const column = (wide: boolean, docked: boolean) =>
+  !wide ? "max-w-190" : docked ? "max-w-400" : "max-w-190 lg:max-w-400";
 
 export function PlayerShell({
   title,
@@ -138,8 +140,9 @@ export function PlayerShell({
   aside?: ReactNode;
   /**
    * The question on screen asks for the room (`isWide`): its column grows
-   * from 760 px to the room right of the side column, or, without one, to
-   * the frame. Every other question keeps the reading column.
+   * from 760 to 1600 px — beside the side column, the room right of it;
+   * without one, the body, gutters included as for the 760 px. Every other
+   * question keeps the reading column.
    */
   wide?: boolean;
   children: ReactNode;
@@ -193,7 +196,7 @@ export function PlayerShell({
         <div
           className={cx(
             "mx-auto w-full px-4 pt-2.5 sm:px-6",
-            docked ? FRAME : column(wide),
+            docked ? FRAME : column(wide, docked),
             // The strip carries the bar's bottom margin; without one the bar
             // would sit on its own hairline.
             strip.length === 0 && "pb-2.5",
@@ -262,7 +265,7 @@ export function PlayerShell({
       <div
         className={cx(
           "mx-auto w-full flex-1 py-6",
-          docked ? cx(RAIL_GRID, FRAME, "px-6") : cx(column(wide), "px-4 sm:px-6"),
+          docked ? cx(RAIL_GRID, FRAME, "px-6") : cx(column(wide, docked), "px-4 sm:px-6"),
         )}
       >
         {aside ? (
@@ -277,7 +280,7 @@ export function PlayerShell({
         ) : null}
         {/* Beside the side column, the question is centered in the room
             right of it, and the column stays where it is. */}
-        <main className={cx("min-w-0", docked && cx("mx-auto w-full", column(wide)))}>
+        <main className={cx("min-w-0", docked && cx("mx-auto w-full", column(wide, docked)))}>
           {banner ? <div className="mb-5">{banner}</div> : null}
           {children}
         </main>

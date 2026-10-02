@@ -23,14 +23,15 @@ describe("the zen player's frame", () => {
     const at = { frame: frame.className, bar: bar.className };
     const main = container.querySelector("main")!;
     expect(main).toHaveClass("max-w-190");
-    expect(main).not.toHaveClass("lg:max-w-400");
+    expect(main).not.toHaveClass("max-w-400");
 
     rerender(shell(true, true));
     // The frame and the bar are the same: the list does not move.
     expect(frame.className).toBe(at.frame);
     expect(bar.className).toBe(at.bar);
     // The question's column alone takes the room right of the list.
-    expect(main).toHaveClass("lg:max-w-400");
+    expect(main).toHaveClass("max-w-400");
+    expect(main).not.toHaveClass("max-w-190");
   });
 
   it("without a side column, sets the bar and the body to the question's column", () => {

@@ -1005,8 +1005,9 @@ live in `ui/state.ts`, each written once.
 - Wide question (`QuestionTypeClient.wide`, ADR-066): the one exception to
   the 760 px, for a statement that must stay in sight beside a program —
   `code` and `codeimage`. From 1024 px of viewport its column takes the room
-  right of the rail, up to 1600 px (`max-w-400`), or the frame when there is
-  no rail. Inside, the player decides by its OWN width (a container query):
+  right of the rail, up to 1600 px (`max-w-400`); without a rail, the body
+  takes 1600 px, gutters included as for the 760 px. Inside, the player
+  decides by its OWN width (a container query):
   from 60rem the statement (2fr) stands beside the editor and its tools
   (3fr), the cases or the picture across the whole width under them;
   narrower — a 1280 px screen, a 12" Chromebook, a tablet, the teacher's

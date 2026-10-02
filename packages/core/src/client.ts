@@ -289,13 +289,11 @@ export interface QuestionTypeClient<
   readonly hintKey: string;
   readonly Icon: ComponentType<{ className?: string }>;
   /**
-   * The player wants more than the reading column. On a screen wide enough
-   * for the player's side column, the host gives such a question the room
-   * right of that column (capped, `apps/web/DESIGN.md`), and the player
-   * arranges itself by its OWN width — a container query, never the
-   * viewport's, so a narrow host gets the narrow layout. Absent, the question
-   * keeps the 760 px column. The program types (`code`, `codeimage`) set it:
-   * their statement and their editor stand side by side.
+   * The player wants more than the reading column — a need, not a layout
+   * (ADR-066). On a wide screen the host gives such a question the room it
+   * has, and the player arranges itself by its OWN width (a container query,
+   * never the viewport's), so a narrow host gets the narrow layout. Absent,
+   * the question keeps the host's reading column.
    */
   readonly wide?: boolean;
 

@@ -199,14 +199,11 @@ export function regionsOf(student: ProgramStudent, answer: { regions: string[] }
  * whole width.
  *
  * The room is the player's OWN width (a container query), never the
- * viewport's: 60rem, so that the program's 3fr never falls under 560 px —
- * some sixty-five characters of the editor's 13 px, and about 590 px on a
- * 1366 px laptop, the screen this is for: beside the side column, the card's
- * padding and its flag, the player there is 1016 px wide (999 under a
- * classic scrollbar), and a 1280 px screen stays one over the other. One
- * tree, one stylesheet: crossing the threshold (a resize, a zoom) moves the
- * two halves without remounting the editor, whose undo history and cursor
- * stay.
+ * viewport's: 60rem, so that the program's 3fr never falls under 560 px,
+ * some sixty-five characters of the editor's 13 px (ADR-066 has the screens
+ * this splits). One tree, one stylesheet: crossing the threshold (a resize,
+ * a zoom) moves the two halves without remounting the editor, whose undo
+ * history and cursor stay.
  */
 export function ProgramSplit({
   statement,
