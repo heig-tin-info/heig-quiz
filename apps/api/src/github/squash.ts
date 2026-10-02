@@ -77,26 +77,26 @@ export async function createSquashedRepo(opts: {
   try {
     const heads: Record<string, string> = {};
     if (strategy === "whole") {
-      git(work, "clone", "--quiet", "--bare", url(sourceRepo), "src.git");
+      await git(work, "clone", "--quiet", "--bare", url(sourceRepo), "src.git");
       const src = join(work, "src.git");
       const refspecs = branches.map((b) => `refs/heads/${b}:refs/heads/${b}`);
       await pushWithRetry(() => gitBare(src, "push", "--quiet", url(targetRepo), ...refspecs));
       for (const b of branches) {
-        heads[b] = gitBare(src, "rev-parse", `refs/heads/${b}`).trim();
+        heads[b] = (await gitBare(src, "rev-parse", `refs/heads/${b}`)).trim();
       }
     } else {
       for (const branch of branches) {
         const dir = join(work, `b-${branch.replace(/[^a-zA-Z0-9]/g, "_")}`);
-        git(work, "clone", "--quiet", "--depth", "1", "--branch", branch, url(sourceRepo), dir);
+        await git(work, "clone", "--quiet", "--depth", "1", "--branch", branch, url(sourceRepo), dir);
         // A single initial commit: replay the head tree without history.
         rmSync(join(dir, ".git"), { recursive: true, force: true });
         // `student/` overlay and `.studentignore`: the solution stays private.
         applyStudentHandout(dir);
-        git(dir, "init", "-q", "-b", branch);
-        git(dir, "add", "-A");
-        git(dir, "commit", "-q", "-m", "Initial assignment commit");
+        await git(dir, "init", "-q", "-b", branch);
+        await git(dir, "add", "-A");
+        await git(dir, "commit", "-q", "-m", "Initial assignment commit");
         await pushWithRetry(() => git(dir, "push", "-q", url(targetRepo), `${branch}:${branch}`));
-        heads[branch] = git(dir, "rev-parse", "HEAD").trim();
+        heads[branch] = (await git(dir, "rev-parse", "HEAD")).trim();
       }
     }
     return { repoId: created.id, fullName: created.full_name, heads };

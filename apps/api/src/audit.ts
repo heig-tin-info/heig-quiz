@@ -208,6 +208,22 @@ export type AuditAction =
   | "pool.transfer"
   | "pool.unshare"
   | "pool.update"
+  /**
+   * A project's lifecycle (F-PROJ-01, F-PROJ-03, F-PROJ-16; merge task
+   * M3-02), subject the project. `create`: `payload.slug`, `source`,
+   * `distribution` (full names); `update`: the fields sent; `publish`:
+   * `payload.startAt`, `deadlineAt` — `auto_publish` the same, by the
+   * ticker (M3-05); `delete`: `payload.name`, `slug`, `source`,
+   * `distribution`, `receipts` (the push receipts purged) — no repository
+   * is ever deleted on GitHub; `archive`, `unarchive`.
+   */
+  | "project.create"
+  | "project.update"
+  | "project.delete"
+  | "project.publish"
+  | "project.auto_publish"
+  | "project.archive"
+  | "project.unarchive"
   | "question.copy"
   | "question.create"
   | "question.delete"
@@ -283,6 +299,27 @@ export async function audit(
   });
 }
 
+/** Who an audit entry names as acting: a person (through a session or a token), or the system. */
+export interface AuditActor {
+  actorUserId: string | null;
+  actorType: "user" | "system" | "api_key";
+}
+
+/** The ticker, a job, a webhook: nobody asked. */
+export const SYSTEM_ACTOR: AuditActor = { actorUserId: null, actorType: "system" };
+
+/**
+ * The actor of an HTTP request, for a service that audits for itself: the
+ * person acting, who is not the user when a session was delegated (ADR-027),
+ * `api_key` when they asked through a personal API token (ADR-022).
+ */
+export function actorOf(req: FastifyRequest): AuditActor {
+  return {
+    actorUserId: req.auth?.actorUserId ?? req.user?.id ?? null,
+    actorType: req.authVia === "token" ? "api_key" : "user",
+  };
+}
+
 /** What {@link tracer} hands a route module: one line per audited write. */
 type Trace = (
   req: FastifyRequest,
@@ -308,9 +345,7 @@ type Trace = (
 export function tracer(app: FastifyInstance): Trace {
   return (req, action, subjectType, subjectId, payload) =>
     audit(app.db, {
-      // The person acting, who is not the user when a session was delegated (ADR-027).
-      actorUserId: req.auth?.actorUserId ?? req.user?.id ?? null,
-      actorType: req.authVia === "token" ? "api_key" : "user",
+      ...actorOf(req),
       action,
       subjectType,
       subjectId,

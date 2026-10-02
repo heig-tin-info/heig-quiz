@@ -6,11 +6,11 @@
 const TRANSIENT_PUSH =
   /error:? (500|502|503)|hung up unexpectedly|early EOF|RPC failed|Internal Server Error|Failed sending data/i;
 
-export async function pushWithRetry(fn: () => void): Promise<void> {
+export async function pushWithRetry(fn: () => unknown): Promise<void> {
   const delays = [1000, 2000, 4000];
   for (let attempt = 0; ; attempt += 1) {
     try {
-      fn();
+      await fn();
       return;
     } catch (err) {
       // `gitRunner` rethrows a plain Error whose message carries git's

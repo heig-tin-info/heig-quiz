@@ -706,6 +706,11 @@ async function downloadAvatar(githubOrgId: number): Promise<OrgAvatar | null> {
   return { bytes, mime: declared };
 }
 
+// ---------------------------------------------------------------- push receipts of a deletion
+
+/** In a file of its own, light to import: `org` calls it from its deletions. */
+export { purgeProjectReceipts, type ProjectsGone } from "./receipts.js";
+
 // ---------------------------------------------------------------- the webhook registry
 
 /**

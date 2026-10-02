@@ -66,6 +66,9 @@ layers:
   `student/` overlay and `.studentignore`, safe against symlinks and path
   escapes, #33); collisions retry `-squashed-2..-5` (e26ba59); an EMPTY
   leftover is adopted; on the unique-slug race the new repo is deleted.
+  *Quiz (M3-02, [ADR-062](../adr/ADR-062-depot-de-distribution.md)): the
+  draft row first, then the build; a failure deletes the row only, never a
+  repository; suffixes up to `-squashed-20`; the git runner asynchronous.*
 - Org repository browser with protected-file suggestions.
 - Settings: publish manual/scheduled, duration, grace (30 min), source
   strategy, deadline strategy lock/commit, grading none/auto, branches,
