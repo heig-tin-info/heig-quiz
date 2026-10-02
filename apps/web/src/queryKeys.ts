@@ -208,6 +208,8 @@ export const evaluationsKey = (classroomId: string) => ["evaluations", classroom
  * (`realtime/hints.ts`).
  */
 export const activitiesKey = ["activities"] as const;
+/** Under `activitiesKey`, so every hint that refreshes the list refreshes it too. */
+export const activityStatsKey = ["activities", "stats"] as const;
 export const evaluationKey = (id: string) => ["evaluation", id] as const;
 /** The summary of a template pull (F-EVAL-26): under the evaluation, so its refresh reaches it. */
 export const templatePullKey = (id: string) => ["evaluation", id, "pull-template"] as const;

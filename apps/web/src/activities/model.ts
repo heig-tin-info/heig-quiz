@@ -14,7 +14,7 @@ import type {
   EvaluationState,
   ProjectState,
 } from "@quiz/contracts";
-import { isLiveNow } from "@quiz/domain";
+import { activityBucket, isLiveNow, type ActivityBucket } from "@quiz/domain";
 
 import { evaluationHome, evaluationStateLabel, stateTone } from "../evaluation/common";
 import type { TFunction } from "../i18n";
@@ -22,8 +22,8 @@ import { projectStateLabel, projectStateTone } from "../project/common";
 import { routeEnabled, type Route } from "../router";
 import type { Tone } from "../ui";
 
-/** The three ages of an activity. */
-export type Bucket = "upcoming" | "open" | "ended";
+/** The three ages of an activity (`activityBucket`, shared with the server). */
+export type Bucket = ActivityBucket;
 
 /**
  * The tabs of the section: what runs or is planned (the default — what needs
@@ -47,26 +47,8 @@ export function typeName(type: ActivityType, t: TFunction): string {
   return type === "project" ? t("activities.kind.project") : t(`eval.mode.${type}`);
 }
 
-/**
- * Both kinds' states, one table: a draft is a draft either way; a published
- * project is open (the students work in it — published by hand ahead of its
- * start, it is listed but not yet accepted, F-PROJ-04), a locked one is over.
- */
-const BUCKET_OF: Record<EvaluationState | ProjectState, Bucket> = {
-  draft: "upcoming",
-  scheduled: "upcoming",
-  lobby: "open",
-  running: "open",
-  paused: "open",
-  published: "open",
-  closed: "ended",
-  grading: "ended",
-  released: "ended",
-  locked: "ended",
-};
-
 export function bucketOf(state: EvaluationState | ProjectState): Bucket {
-  return BUCKET_OF[state];
+  return activityBucket(state);
 }
 
 /** Where a row sits on the gantt, in ms: from `s` to `d`. */
@@ -300,4 +282,72 @@ export function foldable(week: Week, now: number): boolean {
     week.start < mondayOf(now) &&
     week.rows.every((row) => bucketOf(row.state) === "ended")
   );
+}
+
+// --- The summary -------------------------------------------------------------
+
+const WEEK_MS = 7 * 86_400_000;
+
+/** The next thing that happens to a row: it opens, or it closes, at `at`. */
+export interface NextEvent {
+  row: ActivitySummary;
+  at: string;
+  what: "opens" | "closes";
+}
+
+/**
+ * What the summary tiles above the tabs say, from the rows alone (the
+ * students of what is open come from the server, `ActivityStats`):
+ * - `open`: what runs now (the "open" age);
+ * - `toRelease`: the evaluations closed or in grading, results not out — a
+ *   poll stops at closed and is never released (ADR-014), so it is not one;
+ * - `week`: the rows that open or close in the next seven days, and the
+ *   first of those events;
+ * - `projects`: the published projects and the nearest deadline; null where
+ *   the teacher has no project at all, so the tile is not drawn.
+ */
+export interface ActivitiesSummary {
+  open: number;
+  toRelease: number;
+  week: { count: number; next: NextEvent | null };
+  projects: { count: number; next: NextEvent | null } | null;
+}
+
+/** Closed or in grading, results not released: the teacher's next task. */
+export const awaitsRelease = (a: ActivitySummary): boolean =>
+  a.kind === "evaluation" && a.mode !== "poll" && (a.state === "closed" || a.state === "grading");
+
+/** What will happen to a row from `now` on: its opening if still ahead, its closing if it is not over. */
+function eventsOf(a: ActivitySummary, now: number): NextEvent[] {
+  if (tabOf(a) !== "current") return [];
+  const events: NextEvent[] = [];
+  const anchor = anchorOf(a);
+  if (bucketOf(a.state) === "upcoming" && anchor !== null) events.push({ row: a, at: anchor, what: "opens" });
+  const closes = closesOf(a);
+  if (closes !== null) events.push({ row: a, at: closes, what: "closes" });
+  return events.filter((e) => new Date(e.at).getTime() >= now);
+}
+
+const first = (events: NextEvent[]): NextEvent | null =>
+  events.reduce<NextEvent | null>(
+    (min, e) => (min === null || new Date(e.at).getTime() < new Date(min.at).getTime() ? e : min),
+    null,
+  );
+
+export function summaryOf(rows: readonly ActivitySummary[], now: number): ActivitiesSummary {
+  const soon = rows.flatMap((a) => eventsOf(a, now).filter((e) => new Date(e.at).getTime() < now + WEEK_MS));
+  const projects = rows.filter((a) => a.kind === "project");
+  const running = projects.filter((a) => bucketOf(a.state) === "open");
+  return {
+    open: rows.filter((a) => bucketOf(a.state) === "open").length,
+    toRelease: rows.filter(awaitsRelease).length,
+    week: { count: new Set(soon.map((e) => e.row.id)).size, next: first(soon) },
+    projects:
+      projects.length === 0
+        ? null
+        : {
+            count: running.length,
+            next: first(running.flatMap((a) => eventsOf(a, now).filter((e) => e.what === "closes"))),
+          },
+  };
 }

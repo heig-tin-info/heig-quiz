@@ -14,7 +14,7 @@
  * Pure: the instant is the caller's.
  */
 import { isInClass, type EvaluationModeName, type LobbyName } from "./evaluationConfig.js";
-import { isEvaluationOpen } from "./itemList.js";
+import { isEvaluationOpen, type EvaluationStateName } from "./itemList.js";
 
 /** A `scheduled` activity is live this long before it opens. */
 export const LIVE_LEAD_MS = 15 * 60_000;
@@ -53,4 +53,34 @@ export function isLiveNow(row: LiveFacts, now: Date | number): boolean {
     return opens < t + LIVE_LEAD_MS && opens > t - LIVE_STALE_MS;
   }
   return false;
+}
+
+/** A project's states (F-PROJ), as `@quiz/contracts` lists them. */
+export type ProjectStateName = "draft" | "published" | "locked";
+
+/** The three ages of an activity, whatever its kind. */
+export type ActivityBucket = "upcoming" | "open" | "ended";
+
+/**
+ * Both kinds' states, one table: a draft is a draft either way; a published
+ * project is open (the students work in it — published by hand ahead of its
+ * start, it is listed but not yet accepted, F-PROJ-04), a locked one is over.
+ * The Activities page files its rows by it, and the server counts the
+ * students of what is open by it: the two never disagree.
+ */
+const ACTIVITY_BUCKET: Record<EvaluationStateName | ProjectStateName, ActivityBucket> = {
+  draft: "upcoming",
+  scheduled: "upcoming",
+  lobby: "open",
+  running: "open",
+  paused: "open",
+  published: "open",
+  closed: "ended",
+  grading: "ended",
+  released: "ended",
+  locked: "ended",
+};
+
+export function activityBucket(state: EvaluationStateName | ProjectStateName): ActivityBucket {
+  return ACTIVITY_BUCKET[state];
 }

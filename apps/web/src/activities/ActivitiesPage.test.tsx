@@ -85,10 +85,16 @@ const LAB: ProjectActivitySummary = {
 const LAB3: ProjectActivitySummary = { ...LAB, id: id("project", 2), title: "Labo 3", state: "draft" };
 
 const render = (rows: ActivitySummary[] = ALL, navigate = vi.fn()) => {
-  const stub = mockFetch({ "GET /app/api/activities": ok(rows) });
+  const stub = mockFetch({
+    "GET /app/api/activities": ok(rows),
+    "GET /app/api/activities/stats": ok({ studentsInProgress: 42 }),
+  });
   renderWithProviders(<ActivitiesPage navigate={navigate} />);
   return { navigate, ...stub };
 };
+
+/** This week's list of the phone schedule (the summary tiles name titles too). */
+const thisWeek = () => within(screen.getByRole("heading", { name: /This week/ }).closest("section")!);
 
 const liveBlock = async () =>
   screen.findByRole("region", { name: "Live now" });
@@ -174,6 +180,30 @@ describe("ActivitiesPage", () => {
     expect(navigate).toHaveBeenLastCalledWith({ view: "results", evaluationId: DONE.id });
     // The live block stays above the tabs, whichever is open.
     expect(screen.getByRole("region", { name: "Live now" })).toBeInTheDocument();
+  });
+
+  it("sums up what runs and whom it involves, and each tile leads to its rows", async () => {
+    const user = userEvent.setup();
+    const GRADING = activity(8, { title: "Test 1", state: "grading", closedAt: liveAt(-60 * MIN), closedBy: "server" });
+    render([...ALL, GRADING, LAB]);
+    const open = await screen.findByRole("button", { name: /^In progress/ });
+    expect(open).toHaveTextContent(/^In progress\s*4/);
+    expect(await within(open).findByText("42 students involved")).toBeInTheDocument();
+    const toRelease = screen.getByRole("button", { name: /^Results to release/ });
+    expect(toRelease).toHaveTextContent(/^Results to release\s*1/);
+
+    await user.click(toRelease);
+    expect(screen.getByRole("tab", { name: /Ended/, selected: true })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Results not released", pressed: true })).toBeInTheDocument();
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Test 1")).toBeInTheDocument();
+    expect(within(table).queryByText("Test 0")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^Projects in progress/ }));
+    expect(screen.getByRole("tab", { name: /In progress & upcoming/, selected: true })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Project", pressed: true })).toBeInTheDocument();
+    expect(within(screen.getByRole("table")).getByText("Labo 2 — pointeurs")).toBeInTheDocument();
+    expect(within(screen.getByRole("table")).queryByText("Quiz 3 — pointers")).not.toBeInTheDocument();
   });
 
   it("says so when the open tab holds nothing", async () => {
@@ -279,7 +309,7 @@ describe("ActivitiesPage", () => {
     render([twoWeeks, DONE]);
     await screen.findByRole("table");
     await user.click(screen.getByRole("radio", { name: "Schedule" }));
-    expect(screen.getByText("Série 4 — deux semaines")).toBeInTheDocument();
+    expect(thisWeek().getByText("Série 4 — deux semaines")).toBeInTheDocument();
     expect(screen.queryByText("Test 0")).not.toBeInTheDocument();
   });
 
@@ -343,7 +373,7 @@ describe("ActivitiesPage", () => {
       expect(screen.getByRole("button", { name: "Labo 2 — pointeurs" })).toBeInTheDocument();
       await user.click(screen.getByRole("radio", { name: "Schedule" }));
       // Published, it is this week's business, like an open series.
-      expect(screen.getByText("Labo 2 — pointeurs")).toBeInTheDocument();
+      expect(thisWeek().getByText("Labo 2 — pointeurs")).toBeInTheDocument();
     });
   });
 });

@@ -14,6 +14,7 @@ import {
   tabOf,
   matchesType,
   mondayOf,
+  summaryOf,
   weeksOf,
 } from "./model";
 
@@ -239,5 +240,45 @@ describe("weeks", () => {
     const [week] = weeksOf([late], now);
     expect(week!.start).toBeLessThan(mondayOf(now));
     expect(foldable(week!, now)).toBe(false);
+  });
+});
+
+describe("summaryOf", () => {
+  const now = new Date("2026-10-02T10:00:00Z").getTime();
+  const at = (days: number) => new Date(now + days * 86_400_000).toISOString();
+
+  it("counts what runs, what waits for its results (never a poll), and the week ahead", () => {
+    const rows = [
+      row({ title: "running", state: "running", startedAt: at(-1), closesAt: at(2) }),
+      row({ title: "soon", state: "scheduled", opensAt: at(1), closesAt: at(1.1) }),
+      row({ title: "later", state: "scheduled", opensAt: at(9) }),
+      row({ title: "draft", state: "draft", opensAt: at(3) }),
+      row({ title: "closed", state: "closed", closedAt: at(-1), closedBy: "server" }),
+      row({ title: "grading", state: "grading" }),
+      row({ title: "released", state: "released" }),
+      row({ title: "poll", mode: "poll", state: "closed" }),
+    ];
+    const summary = summaryOf(rows, now);
+    expect(summary.open).toBe(1);
+    expect(summary.toRelease).toBe(2);
+    // "soon" opens and closes within the week: one row, its opening first.
+    expect(summary.week.count).toBe(2);
+    expect(summary.week.next).toMatchObject({ what: "opens", at: at(1) });
+    expect(summary.week.next!.row.title).toBe("soon");
+    expect(summary.projects).toBeNull();
+  });
+
+  it("gives the projects' nearest deadline still ahead, and none past it", () => {
+    const summary = summaryOf(
+      [
+        project({ title: "late", startAt: at(-20), deadlineAt: at(-1) }),
+        project({ title: "next", startAt: at(-3), deadlineAt: at(4) }),
+        project({ title: "far", startAt: at(-3), deadlineAt: at(20) }),
+        project({ title: "draft", state: "draft", startAt: at(5), deadlineAt: at(6) }),
+      ],
+      now,
+    );
+    expect(summary.projects!.count).toBe(3);
+    expect(summary.projects!.next!.row.title).toBe("next");
   });
 });

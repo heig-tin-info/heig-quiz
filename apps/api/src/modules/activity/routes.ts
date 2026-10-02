@@ -22,6 +22,14 @@ export async function activityPlugin(app: FastifyInstance) {
   );
 
   /**
+   * The summary of the Activities section: what the rows cannot count, the
+   * students of what is open. Same caller, same scope as the list.
+   */
+  app.get("/app/api/activities/stats", { preHandler: requireTeacher }, async (req) =>
+    service.statsForTeacher(app.db, callerOf(req), app.clock.now()),
+  );
+
+  /**
    * The student's classroom page (F-ORG-15). It serves the STUDENT payload
    * and nothing else, so it asks `readableClassroom` for it: a student with a
    * claimed seat, a teacher in the student view or not (the staff read their

@@ -30,6 +30,7 @@ import {
 import { endable, useEndPoll } from "./actions";
 import {
   activityOrder,
+  awaitsRelease,
   isLive,
   matchesType,
   tabOf,
@@ -40,6 +41,7 @@ import {
   type ActivityType,
   type Tab,
 } from "./model";
+import { ActivitiesSummaryTiles, type SummaryTarget } from "./Summary";
 import { ActivityTimeline } from "./Timeline";
 import {
   ActivityCards,
@@ -67,7 +69,9 @@ import {
  *
  * Three tabs split the list by age: what runs or is planned (the default:
  * what the teacher came for), the drafts nobody launched, and what is over.
- * The type chips narrow whichever tab is open.
+ * The type chips narrow whichever tab is open. Above them, the summary
+ * tiles (`Summary.tsx`) count what runs, what waits for its results, the
+ * week ahead and the projects, each one a way into the rows it counts.
  *
  * The data is one read, refreshed by the SSE hints that already refresh a
  * classroom's list (`activities` is an evaluation root in `realtime/hints.ts`).
@@ -94,6 +98,8 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   const [view, setView] = usePersistentChoice<View>("quiz-activities-view", VIEWS, "list");
   const [types, setTypes] = useState<ReadonlySet<ActivityType>>(new Set());
   const [tab, setTab] = usePersistentChoice<Tab>("quiz-activities-tab", TABS, "current");
+  // The Ended tab narrowed to what waits for its results (the summary's tile).
+  const [unreleased, setUnreleased] = useState(false);
   const { end, pending } = useEndPoll();
   const wide = useMinWidth(640);
 
@@ -101,9 +107,20 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   const live = ordered.filter((row): row is EvaluationActivitySummary => isLive(row, now));
   const typed = ordered.filter((row) => matchesType(row, types));
   const inTab = (t: Tab) => typed.filter((row) => tabOf(row) === t);
-  const shown = inTab(tab);
+  const narrowing = unreleased && tab === "ended";
+  const shown = inTab(tab).filter((row) => !narrowing || awaitsRelease(row));
   const tabTotal = ordered.filter((row) => tabOf(row) === tab).length;
-  const filtering = types.size > 0;
+  const filtering = types.size > 0 || narrowing;
+  const clearFilters = () => {
+    setTypes(new Set());
+    setUnreleased(false);
+  };
+  const pick = (target: SummaryTarget) => {
+    clearFilters();
+    setTab(target === "toRelease" ? "ended" : "current");
+    if (target === "toRelease") setUnreleased(true);
+    if (target === "projects") setTypes(new Set(["project"]));
+  };
   // A type chip only where there is a row of that type to find: a chip that
   // can only empty the list is noise (a platform without projects keeps the
   // three it had).
@@ -167,7 +184,7 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
           action={
             <Button
               variant="secondary"
-              onClick={() => setTypes(new Set())}
+              onClick={clearFilters}
             >
               {t("activities.filtered.clear")}
             </Button>
@@ -191,6 +208,8 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   return (
     <div className="space-y-6">
       <PageHeader title={t("activities.title")} description={t("activities.subtitle")} />
+
+      {ordered.length > 0 ? <ActivitiesSummaryTiles rows={ordered} now={now} onPick={pick} /> : null}
 
       {live.length > 0 ? (
         <LiveNow rows={live} navigate={navigate} onEnd={end} pending={pending} />
@@ -222,6 +241,18 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
               />
             ))}
           </div>
+          {/* Only where it can find something: the Ended tab, holding a run
+              whose results are not out. */}
+          {tab === "ended" && ordered.some(awaitsRelease) ? (
+            <>
+              <span aria-hidden className="mx-1 hidden h-5 w-px bg-line sm:block" />
+              <ToggleChip
+                label={t("activities.filter.unreleased")}
+                pressed={unreleased}
+                onToggle={() => setUnreleased((v) => !v)}
+              />
+            </>
+          ) : null}
           <span className="flex-1" />
           <Segmented
             name="activities-view"
