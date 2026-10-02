@@ -79,6 +79,17 @@ const KIOSK_PAIRING = {
   }),
 };
 
+/** The new project's three fields (M3-11): a name, the newest source, a deadline in a fortnight. */
+async function fillProject(p) {
+  await p.getByLabel(/^(name|nom)$/i).fill("Labo 4 — arbres binaires");
+  await p.getByLabel(/^(source repository|dépôt source)$/i).selectOption("prg1-labo-04-arbres");
+  const deadline = new Date(Date.now() + 14 * 86_400_000);
+  deadline.setHours(23, 59, 0, 0);
+  const local = new Date(deadline.getTime() - deadline.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  await p.getByLabel(/^(deadline|échéance)$/i).fill(local);
+  await p.getByText(/^(Default branch|Branche par défaut)/).waitFor();
+}
+
 const scenes = [
   // The Activities section (#190): the three views, the states.
   { name: "activities", role: "teacher", path: "/activities" },
@@ -202,6 +213,30 @@ const scenes = [
   { name: "classroom-projects", role: "teacher", path: "/classrooms/r1?projects=1" },
   { name: "classroom-new-menu", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^(new|nouveau)$/i }).first().click() },
   { name: "classroom-new-menu-unconnected", role: "teacher", path: "/classrooms/r2", fold: true, act: (p) => p.getByRole("button", { name: /^(new|nouveau)$/i }).first().click() },
+  // F-PROJ-01 (M3-11): the new project, its three fields filled; with the
+  // advanced options open; refused, the source gone (`?srcmissing=1`); and
+  // on a classroom that is not connected (r2).
+  { name: "project-new", role: "teacher", path: "/classrooms/r1/projects/new?projects=1", act: fillProject },
+  {
+    name: "project-new-advanced",
+    role: "teacher",
+    path: "/classrooms/r1/projects/new?projects=1",
+    act: async (p) => {
+      await fillProject(p);
+      await p.getByRole("button", { name: /^(advanced options|options avancées)$/i }).click();
+    },
+  },
+  {
+    name: "project-new-refusal",
+    role: "teacher",
+    path: "/classrooms/r1/projects/new?projects=1&srcmissing=1",
+    act: async (p) => {
+      await fillProject(p);
+      await p.getByRole("button", { name: /^(create|créer)$/i }).click();
+      await p.getByText(/(can no longer be handed out|ne peut plus être distribué)/).waitFor();
+    },
+  },
+  { name: "project-new-unconnected", role: "teacher", path: "/classrooms/r2/projects/new" },
   // F-ORG-13 (D24, M2-07): the Settings tab. A classroom that is not
   // connected (r2, its course's organization suggested): "Connect to GitHub"
   // is the one accent, and the connect sheet it opens; PRG1-2026 connected,

@@ -51,8 +51,12 @@ export type Route =
    * classroom, `/grades`. The bottom bar's and the sidebar's Grades slot.
    */
   | { view: "studentGrades" }
-  /** The teacher classroom's Settings tab (F-ORG-13, D24): GitHub, Journal, rename… */
-  | { view: "classroomSettings"; id: string }
+  /**
+   * The teacher classroom's Settings tab (F-ORG-13, D24): GitHub, Journal,
+   * rename… `connect` opens its "Connect to GitHub" sheet (`?connect=1`,
+   * M2-07), for a page that needs the classroom connected (M3-11).
+   */
+  | { view: "classroomSettings"; id: string; connect?: true }
   /**
    * The classroom's journal, both roles (F-JRN-07): `path` is the page's
    * journal path, DECODED (`20-semaine 2/10-tableaux.md`), absent for the
@@ -70,9 +74,9 @@ export type Route =
   | { view: "projectGroups"; id: string }
   /**
    * A new project in one classroom (F-PROJ-01): where "New ▾ › Project" leads
-   * on a connected classroom (M3-10). `preview` and `ComingSoon` until M3-11
-   * builds the form there (or replaces the route with a sheet): while it does
-   * not parse, the classroom offers no "New ▾" at all (`routeEnabled`).
+   * on a connected classroom (M3-10), M3-11's form (`project/NewProjectPage`).
+   * Still `preview` until M3-12 ships the project page it lands on: while it
+   * does not parse, the classroom offers no "New ▾" at all (`routeEnabled`).
    */
   | { view: "projectNew"; classroomId: string }
   /**
@@ -345,12 +349,13 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   // The classroom's tabs that are routes (§5.2). Before `classroom`, which
   // takes any tail after the id.
   classroomSettings: {
-    path: (r) => `/classrooms/${r.id}/settings`,
+    path: (r) => `/classrooms/${r.id}/settings${r.connect ? "?connect=1" : ""}`,
     match: ([head, id, tail]) =>
       head === "classrooms" && id && tail === "settings" ? { view: "classroomSettings", id } : null,
     studentSafe: false,
   },
-  // M3-10: "New ▾ › Project" on a connected classroom; M3-11 builds it.
+  // M3-10: "New ▾ › Project" on a connected classroom, M3-11's form. M3-12
+  // drops `preview` here and on `project` together.
   projectNew: {
     path: (r) => `/classrooms/${r.classroomId}/projects/new`,
     match: ([head, id, tail, leaf]) =>

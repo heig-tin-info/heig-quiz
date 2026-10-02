@@ -76,6 +76,11 @@ import {
   PollSummary,
   PollTeacherView,
   ProjectActivitySummary,
+  ProjectCreate,
+  ProjectRefusal,
+  ProjectSourceDetail,
+  ProjectSourceRepo,
+  ProjectSummary,
   PoolCandidates,
   PoolCategories,
   PoolDetail,
@@ -195,6 +200,10 @@ const templateItems = (
 const polls = (await get("/app/api/polls")) as { id: string; code: string | null }[];
 /** A student seat of the classroom, for one student's drill progression. */
 const firstSeat = ((await get(`/app/api/classrooms/${classroomId}`)) as { roster: Ref[] }).roster[0]!.id;
+/** The repositories PRG1-2026's organization may hand out (M3-11, `?projects=1`). */
+const sourceNames = ((await get(`/app/api/classrooms/${classroomId}/projects/sources`)) as { name: string }[]).map(
+  (s) => s.name,
+);
 /** Every page of the classroom's journal (its home and its staff navigation), and whether a student reads it. */
 interface Nav {
   pagePath: string | null;
@@ -443,6 +452,15 @@ const CHECKED: Case[] = [
   ...courses
     .flatMap((c) => c.classrooms)
     .map((r) => each("/app/api/classrooms/:id/projects", `/app/api/classrooms/${r.id}/projects`, ProjectActivitySummary)),
+  // The new project's picker (M3-11): the connected classroom's repositories, each in detail.
+  each("/app/api/classrooms/:id/projects/sources", `/app/api/classrooms/${classroomId}/projects/sources`, ProjectSourceRepo),
+  ...sourceNames.map((name) =>
+    one(
+      "/app/api/classrooms/:id/projects/sources/:repo",
+      `/app/api/classrooms/${classroomId}/projects/sources/${name}`,
+      ProjectSourceDetail,
+    ),
+  ),
   // The drill (ADR-041, #317): the student's tab and the teacher's switch.
   one("/app/api/drill/session", "/app/api/drill/session", DrillSession),
   each("/app/api/drill/classrooms", "/app/api/drill/classrooms", DrillClassroom),
@@ -530,5 +548,36 @@ describe("the mock numbers what the API numbers", () => {
   it.each(evaluations.map((e) => [e.id] as const))("items of %s count from 0", async (id) => {
     const body = (await get(`/app/api/evaluations/${id}`)) as { items: { position: number }[] };
     expect(body.items.map((i) => i.position)).toEqual(body.items.map((_, i) => i));
+  });
+});
+
+// Last: the create adds a draft to PRG1-2026's projects, which the checks above count.
+describe("the mock's new project (M3-11)", () => {
+  const post = async (classroom: string, body: unknown) => {
+    const res = await fetch(`/app/api/classrooms/${classroom}/projects`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    return { status: res.status, body: (await res.json()) as unknown };
+  };
+  const body = (sourceRepo: string) =>
+    ProjectCreate.parse({ name: "Labo 4", sourceRepo, deadlineAt: new Date(Date.now() + 7 * 86_400_000).toISOString() });
+
+  it("creates a draft the classroom's projects then list", { timeout: 10_000 }, async () => {
+    const created = await post(classroomId, body(sourceNames[0]!));
+    expect(created.status).toBe(200);
+    expect(issuesOf(ProjectSummary, created.body)).toEqual([]);
+    const own = (await get(`/app/api/classrooms/${classroomId}/projects`)) as { id: string }[];
+    expect(own.map((p) => p.id)).toContain((created.body as { id: string }).id);
+  });
+
+  it("refuses with the bodies the form reads", async () => {
+    const other = courses.flatMap((c) => c.classrooms).find((r) => r.id !== classroomId)!.id;
+    const notConnected = await post(other, body(sourceNames[0]!));
+    expect(notConnected.status).toBe(409);
+    expect(ProjectRefusal.parse(notConnected.body).error).toBe("not_connected");
+    const unknown = await post(classroomId, body("no-such-repo"));
+    expect(unknown.status).toBe(422);
+    expect(ProjectRefusal.parse(unknown.body).error).toBe("source_not_found");
   });
 });

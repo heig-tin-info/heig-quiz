@@ -99,6 +99,13 @@ export const classroomGithubKey = (id: string) => ["classroom", id, "github"] as
  */
 export const classroomProjectsKey = (id: string) => ["classroom", id, "projects"] as const;
 /**
+ * The organization's repositories a project may hand out, and one of them
+ * read in detail (M3-11's form): beside the projects, not under them, so a
+ * create's invalidation of the list leaves the picker as it was.
+ */
+export const projectSourcesKey = (id: string) => ["classroom", id, "project-sources"] as const;
+export const projectSourceKey = (id: string, repo: string) => [...projectSourcesKey(id), repo] as const;
+/**
  * The organizations Quiz's App is installed on (the connect sheet's picker).
  * Its own root, which the `classrooms` hint names: an installation that
  * completes adds a row while the sheet is open.

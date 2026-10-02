@@ -38,6 +38,8 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  * `journalerror`: ...in a GitHub repository whose last synchronisation failed.
  * `journalconflict`: ...and every save of a page meets a page saved
  *   meanwhile, `409 conflict` (`mock/journal.ts`).
+ * `srcmissing`: a new project's create is refused `422 source_not_found`
+ *   (`mock/projectNew.ts`); `distfail`: ...`502 distribution_failed`.
  * `superpowers`: the admin persona's Super Powers are on, 54 minutes left (ADR-054).
  * `lastminutes`: ...with 4 min 30 s left instead, the banner's countdown.
  * `degraded`: the admin's system status has a dead clock, a stale backup and
@@ -62,6 +64,8 @@ export const FLAG_NAMES = [
   "journalerror",
   "journalconflict",
   "projects",
+  "srcmissing",
+  "distfail",
   "superpowers",
   "lastminutes",
   "degraded",

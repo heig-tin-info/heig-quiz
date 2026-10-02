@@ -470,3 +470,19 @@ export const PROJECT_ACCEPT_REFUSALS = [
 ] as const;
 export const ProjectAcceptErrorCode = z.enum(PROJECT_ACCEPT_REFUSALS);
 export type ProjectAcceptErrorCode = z.infer<typeof ProjectAcceptErrorCode>;
+
+// ---------------------------------------------------------- the lifecycle's refusal bodies (M3-11)
+
+/**
+ * The body of a lifecycle refusal (`ProjectError`, `modules/project/
+ * errors.ts`): its code, the server's English `message` (for logs and API
+ * clients; the web app words the code), and, for `source_not_found` on a
+ * branch the source lacks, the `branches` it lacks. Read by the new project
+ * form (M3-11), its first consumer.
+ */
+export const ProjectRefusal = z.object({
+  error: ProjectErrorCode,
+  message: z.string(),
+  branches: z.array(z.string()).optional(),
+});
+export type ProjectRefusal = z.infer<typeof ProjectRefusal>;

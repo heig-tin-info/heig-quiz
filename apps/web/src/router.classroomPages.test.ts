@@ -37,6 +37,10 @@ describe("the classroom merge's routes, CLASSROOM_PAGES on", () => {
     }
   });
 
+  it("opens the Settings' connect sheet by its query, which the page itself reads (M3-11)", () => {
+    expect(routeToPath({ view: "classroomSettings", id: "c-1", connect: true })).toBe("/classrooms/c-1/settings?connect=1");
+  });
+
   it("tells /courses (the student's) from /courses/:id (one course)", () => {
     expect(parsePath("/courses/")).toEqual({ view: "studentCourses" });
     expect(parsePath("/courses/k-1")).toEqual({ view: "course", id: "k-1" });

@@ -25,12 +25,20 @@ const PROJECTS: { id: string; title: string; state: ProjectActivitySummary["stat
     { id: "pj-locked", title: "Labo 1 — premiers pas en C", state: "locked", start: -35 * D, deadline: -7 * D },
   ];
 
-/** Every project the staff persona's lists show: none without `?projects=1`. */
+/** The projects created in this page's life (M3-11's form, `projectNew.ts`), any classroom. */
+const CREATED: ProjectActivitySummary[] = [];
+
+/** A project the new project form created, a draft on the lists from now on. */
+export function addMockProject(project: ProjectActivitySummary): void {
+  CREATED.push(project);
+}
+
+/** Every project the staff persona's lists show: none without `?projects=1`, but those created. */
 export function projectActivities(): ProjectActivitySummary[] {
   const room = rooms.find((r) => r.id === "r1");
-  if (!flags.projects || !room || room.archivedAt !== null) return [];
+  if (!flags.projects || !room || room.archivedAt !== null) return [...CREATED];
   const course = courses.find((c) => c.id === room.courseId);
-  return PROJECTS.map((p) => ({
+  const seeded = PROJECTS.map((p): ProjectActivitySummary => ({
     kind: "project",
     id: p.id,
     title: p.title,
@@ -39,6 +47,7 @@ export function projectActivities(): ProjectActivitySummary[] {
     startAt: iso(p.start),
     deadlineAt: iso(p.deadline),
   }));
+  return [...seeded, ...CREATED];
 }
 
 /** A classroom's projects, for its staff; anyone else reads the 404 of a missing classroom. */
