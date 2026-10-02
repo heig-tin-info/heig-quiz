@@ -15,8 +15,11 @@
  * (`deadline.ts`: the reopen, a repository's own deadline, the staff's
  * lock), and what applies it (`jobs.ts`: the ticker's claims, the
  * `project.deadline` job).
+ * From M3-08a: the staff's project page and a repository's runs
+ * (`detail.ts`).
  */
 export { acceptProject } from "./accept.js";
+export { projectDetail, repoRuns } from "./detail.js";
 export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
 export { requestDeadlineWork } from "./jobs.js";
 export {
