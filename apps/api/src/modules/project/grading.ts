@@ -20,14 +20,22 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Octokit } from "octokit";
 
-import { extractScore, GRADING_WORKFLOW_PATH, receivedLate, runKind, selectScoreRun, type ScoreParse } from "@quiz/domain";
+import {
+  effectiveDeadline,
+  extractScore,
+  GRADING_WORKFLOW_PATH,
+  receivedLate,
+  runKind,
+  selectScoreRun,
+  type ScoreParse,
+} from "@quiz/domain";
 
-import type { Db } from "../../db/client.js";
-import { botCommits, projectGradeRuns, projectRepos, pushReceipts, reverts } from "../../db/schema.js";
+import type { Db, Tx } from "../../db/client.js";
+import { botCommits, projectGradeRuns, projectRepos, projects, pushReceipts, reverts } from "../../db/schema.js";
 import { ownerRepo } from "../../github/app.js";
 import type { RepoContext } from "./repos.js";
 
@@ -120,7 +128,7 @@ async function receiptOf(db: Db, ctx: RepoContext, headSha: string): Promise<Dat
  * files in all three. Derived from the receipts the intake wrote, no
  * GitHub read; a push after the restore builds on it and counts again.
  */
-export async function restoredHeads(db: Db, ctx: RepoContext): Promise<Set<string>> {
+export async function restoredHeads(db: Db | Tx, ctx: { repo: Pick<RepoContext["repo"], "id" | "githubRepoId"> }): Promise<Set<string>> {
   const tampering = alias(pushReceipts, "tampering");
   const between = alias(pushReceipts, "between");
   const [rows, window] = await Promise.all([
@@ -150,20 +158,28 @@ export async function restoredHeads(db: Db, ctx: RepoContext): Promise<Set<strin
 
 /**
  * The current score reselected (`selectScoreRun` of `@quiz/domain`) and,
- * while the deadline is applied but the freeze not yet definitive (the
- * grace, F-PROJ-11), the frozen one with it: a run on a commit received in
- * time may still improve it. Inert until the deadline is applied (M3-05).
+ * while the repository's deadline is applied but its freeze not yet
+ * definitive (the grace, F-PROJ-11), the frozen one with it: a run on a
+ * commit received in time may still improve it. The grace is judged on the
+ * row as the write finds it, never on the caller's copy, so a refresh
+ * racing the ticker's definitive freeze never moves a frozen score (M3-05a).
  */
-export async function refreshScoreSelection(db: Db, ctx: RepoContext): Promise<void> {
+export async function refreshScoreSelection(
+  db: Db | Tx,
+  ctx: { repo: Pick<RepoContext["repo"], "id" | "githubRepoId"> },
+): Promise<void> {
   const [runs, restored] = await Promise.all([
     db.select().from(projectGradeRuns).where(eq(projectGradeRuns.repoId, ctx.repo.id)),
     restoredHeads(db, ctx),
   ]);
   const selected = selectScoreRun(runs, restored);
-  const inGrace = ctx.project.deadlineAppliedAt !== null && ctx.project.frozenAt === null;
   await db
     .update(projectRepos)
-    .set({ currentGradeRunId: selected, ...(inGrace ? { frozenGradeRunId: selected } : {}) })
+    .set({
+      currentGradeRunId: selected,
+      frozenGradeRunId: sql`CASE WHEN ${projectRepos.deadlineAppliedAt} IS NOT NULL AND ${projectRepos.frozenAt} IS NULL
+        THEN ${selected}::uuid ELSE ${projectRepos.frozenGradeRunId} END`,
+    })
     .where(eq(projectRepos.id, ctx.repo.id));
 }
 
@@ -234,7 +250,7 @@ async function aggregateCiStatus(
  * or null when the run does not count or was already ingested (a replay
  * reads no annotation again). A `ci` run reselects the current score; a
  * `review` run fills the review slot only once it parsed, succeeded and the
- * freeze is definitive (`frozen_at`): a checkpoint's review before it is a
+ * repository's freeze is definitive (`project_repos.frozen_at`, M3-05a): a checkpoint's review before it is a
  * trace, never the final review (F-PROJ-11 as amended, M3-04).
  *
  * `to_verify`: ingested while the repository's protection is suspended, or
@@ -267,37 +283,57 @@ export async function ingestCompletedRun(
       ? await readAnnotations(octokit, ctx.repo.fullName, run.headSha, run.checkSuiteId)
       : { score: null, tests: null };
   const restored = (await restoredHeads(db, ctx)).has(run.headSha);
+  const receivedAt = await receiptOf(db, ctx, run.headSha);
   const id = randomUUID();
-  const [inserted] = await db
-    .insert(projectGradeRuns)
-    .values({
-      id,
-      repoId: ctx.repo.id,
-      workflowRunId: run.workflowRunId,
-      runAttempt: run.runAttempt,
-      headBranch: run.headBranch,
-      headSha: run.headSha,
-      conclusion: run.conclusion,
-      points: score?.status === "ok" ? score.points : null,
-      max: score?.status === "ok" ? score.max : null,
-      testsPassed: tests?.passed ?? null,
-      testsTotal: tests?.total ?? null,
-      // Another workflow than grading.yml: a pass / fail run, no score.
-      parseStatus: score?.status ?? "fallback",
-      parseDetail: score?.status === "malformed" ? score.message.slice(0, PARSE_DETAIL_MAX) : null,
-      kind,
-      afterDeadline: receivedLate(await receiptOf(db, ctx, run.headSha), ctx.project.deadlineAt, app.clock.now()),
-      toVerify: ctx.repo.protectionSuspendedAt !== null || restored,
-      completedAt: run.completedAt,
-    })
-    .onConflictDoNothing()
-    .returning({ id: projectGradeRuns.id });
-  if (!inserted) return null; // another worker ingested it meanwhile
+  // `after_deadline` on the deadlines as they stand when the run is written,
+  // the project's and the repository's rows read under a share lock: a
+  // deadline moving meanwhile (which takes them for update) either comes
+  // first and is read here, or waits and requalifies this run (M3-05a).
+  const inserted = await db.transaction(async (tx) => {
+    const [project] = await tx
+      .select({ deadlineAt: projects.deadlineAt })
+      .from(projects)
+      .where(eq(projects.id, ctx.project.id))
+      .for("share");
+    const [repo] = await tx
+      .select({ deadlineAt: projectRepos.deadlineAt })
+      .from(projectRepos)
+      .where(eq(projectRepos.id, ctx.repo.id))
+      .for("share");
+    if (!project || !repo) return undefined;
+    const [row] = await tx
+      .insert(projectGradeRuns)
+      .values({
+        id,
+        repoId: ctx.repo.id,
+        workflowRunId: run.workflowRunId,
+        runAttempt: run.runAttempt,
+        headBranch: run.headBranch,
+        headSha: run.headSha,
+        conclusion: run.conclusion,
+        points: score?.status === "ok" ? score.points : null,
+        max: score?.status === "ok" ? score.max : null,
+        testsPassed: tests?.passed ?? null,
+        testsTotal: tests?.total ?? null,
+        // Another workflow than grading.yml: a pass / fail run, no score.
+        parseStatus: score?.status ?? "fallback",
+        parseDetail: score?.status === "malformed" ? score.message.slice(0, PARSE_DETAIL_MAX) : null,
+        kind,
+        // The repository's own deadline when its staff extended it (D13 amended).
+        afterDeadline: receivedLate(receivedAt, effectiveDeadline(repo, project), app.clock.now()),
+        toVerify: ctx.repo.protectionSuspendedAt !== null || restored,
+        completedAt: run.completedAt,
+      })
+      .onConflictDoNothing()
+      .returning({ id: projectGradeRuns.id });
+    return row;
+  });
+  if (!inserted) return null; // another worker ingested it meanwhile, or the repository is gone
 
   if (kind === "review") {
     // The final review only: a failed run (grading.yml's fallback "1/6"
     // when the review step dies) is a trace, never the review's score.
-    if (score?.status === "ok" && run.conclusion === "success" && ctx.project.frozenAt !== null) {
+    if (score?.status === "ok" && run.conclusion === "success" && ctx.repo.frozenAt !== null) {
       await db.update(projectRepos).set({ reviewGradeRunId: id }).where(eq(projectRepos.id, ctx.repo.id));
     }
     return id;

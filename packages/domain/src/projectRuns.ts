@@ -17,6 +17,39 @@ export function runKind(run: { event: string; path: string }): "ci" | "review" {
 }
 
 /**
+ * A repository's own deadline (D13 as amended 2026-10-02, merge task
+ * M3-05a): the staff's individual extension when it has one, the project's
+ * otherwise. Everything a deadline decides — the lock or the commit, a late
+ * receipt, the provisional and the definitive freeze — reads this one.
+ * `coalesce(r.deadline_at, p.deadline_at)` is its SQL twin
+ * (`modules/project/deadline.ts`).
+ */
+export function effectiveDeadline(repo: { deadlineAt: Date | null }, project: { deadlineAt: Date }): Date {
+  return repo.deadlineAt ?? project.deadlineAt;
+}
+
+/**
+ * Whether GitHub should hold a repository locked (F-PROJ-09, M3-05a): the
+ * staff's hand when they set one (true locked, false unlocked), else the
+ * deadline's — applied, with the `lock` strategy. The ticker's scans carry
+ * its SQL twin (`WANTS_LOCK`, `modules/project/deadline.ts`).
+ */
+export function deadlineWantsLock(
+  repo: { staffLock: boolean | null; deadlineAppliedAt: Date | null },
+  strategy: "lock" | "commit",
+): boolean {
+  return repo.staffLock ?? (repo.deadlineAppliedAt !== null && strategy === "lock");
+}
+
+/**
+ * Whether moving a repository's (or a project's) deadline reopens it
+ * (F-PROJ-09): it was applied, and the new deadline lies ahead.
+ */
+export function reopens(appliedAt: Date | null, deadline: Date, now: Date): boolean {
+  return appliedAt !== null && deadline.getTime() > now.getTime();
+}
+
+/**
  * Whether a commit came in after the deadline, by the server's receipt of
  * its push (ADR-012), never the commit's date. An unknown receipt — a lost
  * webhook, a run reconciled after the fact — is late once the deadline has

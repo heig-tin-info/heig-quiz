@@ -16,11 +16,11 @@ const STATUS: Record<ProjectErrorCode | ProjectAcceptErrorCode, number> = {
   distribution_failed: 502,
   distribution_missing: 409,
   deadline_past: 422,
-  deadline_applied: 409,
   not_draft: 409,
   publish_mode_frozen: 409,
   strategy_frozen: 409,
   unassigned_students: 409,
+  repo_unavailable: 409,
   // Accept (M3-03).
   not_started: 409,
   deadline_passed: 409,

@@ -3,15 +3,15 @@
  * merge task M3-02). The rule follows the spec, not heig-classroom:
  *
  * - a **draft** is freely editable;
- * - once published, only the name, the protected files, the deadline (while
- *   it has not been applied) and the deadline strategy (until the deadline)
- *   change;
+ * - once published, only the name, the protected files, the deadline and
+ *   the deadline strategy (until the deadline) change;
  * - the publication mode and its duration freeze at publication
  *   (`publish_mode_frozen`); the deadline strategy at the deadline
  *   (`strategy_frozen`); everything else at publication (`not_draft`): the
  *   start, the grace, the grading mode and scale, the group mode and size;
- * - a deadline already applied does not move here (`deadline_applied`): the
- *   reopen that moving it would mean is merge task M3-05's.
+ * - a deadline already applied still moves, to a later date (the service
+ *   refuses one already past, `deadline_past`): that **reopens** the
+ *   project (F-PROJ-09, merge task M3-05a).
  *
  * The source repository, its branches and the source strategy are not in
  * the list at all: they are fixed at creation (product owner, 2026-10-02;
@@ -38,13 +38,12 @@ export const PROJECT_PATCH_FIELDS = [
 export type ProjectPatchField = (typeof PROJECT_PATCH_FIELDS)[number];
 
 /** Why a field cannot change now: the code of the 409. */
-export type ProjectFieldRefusal = "not_draft" | "publish_mode_frozen" | "strategy_frozen" | "deadline_applied";
+export type ProjectFieldRefusal = "not_draft" | "publish_mode_frozen" | "strategy_frozen";
 
 /** The facts of a project the rule reads. */
 export interface ProjectLifeLike {
   state: "draft" | "published" | "locked";
   deadlineAt: Date;
-  deadlineAppliedAt: Date | null;
 }
 
 /** Why `field` of `project` cannot change at `now`, or null when it may. */
@@ -54,13 +53,13 @@ export function projectFieldRefusal(
   now: Date,
 ): ProjectFieldRefusal | null {
   if (project.state === "draft") return null;
-  const applied = project.deadlineAppliedAt !== null || project.state === "locked";
+  // `locked` is the deadline applied: a reopen makes it `published` again (M3-05a).
+  const applied = project.state === "locked";
   switch (field) {
     case "name":
     case "protectedFiles":
-      return null;
     case "deadlineAt":
-      return applied ? "deadline_applied" : null;
+      return null;
     case "deadlineStrategy":
       return applied || now.getTime() >= project.deadlineAt.getTime() ? "strategy_frozen" : null;
     case "publishMode":

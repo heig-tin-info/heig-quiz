@@ -14,9 +14,9 @@
  * living in the student repositories: they are wire names, kept as they are.
  */
 
-// `GRADING_WORKFLOW_PATH` and `runKind` live in `projectRuns.ts` (M3-04).
+import { addZonedDays } from "./zone.js";
 
-const DAY_MS = 86_400_000;
+// `GRADING_WORKFLOW_PATH` and `runKind` live in `projectRuns.ts` (M3-04).
 
 export interface FinalReviewDispatch {
   /** Frozen commit to review (`client_payload.sha`). */
@@ -93,10 +93,13 @@ export function planCheckpointReviewDispatch(
 }
 
 /**
- * The instant of a checkpoint authored as J±n: `offsetDays` whole days of
- * 24 h around the deadline (negative before it). Re-resolved when the
- * deadline moves.
+ * The instant of a checkpoint authored as J±n: `offsetDays` CALENDAR days
+ * around the deadline (negative before it) in the school's time zone, at
+ * the deadline's local time (product owner, 2026-10-02; merge task M3-05a)
+ * — never 24-hour days, which put J−3 of a deadline at 23:59 at 00:59 or
+ * 22:59 across a change of the clocks. Re-resolved, by this one rule, when
+ * the deadline moves.
  */
 export function checkpointDueAt(deadlineAt: Date, offsetDays: number): Date {
-  return new Date(deadlineAt.getTime() + offsetDays * DAY_MS);
+  return addZonedDays(deadlineAt, offsetDays);
 }

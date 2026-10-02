@@ -357,8 +357,12 @@ export type ProjectSummary = z.infer<typeof ProjectSummary>;
  *     nothing was deleted on GitHub (ADR-062);
  *   - `distribution_missing` — a draft whose build is under way, or was
  *     interrupted, cannot be published;
- *   - `deadline_applied` — moving a deadline already applied is the reopen
- *     of merge task M3-05;
+ *   - `deadline_past` (422) — a deadline, or a repository's own deadline,
+ *     at or before now; moving a deadline already applied to a later date
+ *     is not refused: it reopens the project (F-PROJ-09, M3-05a);
+ *   - `repo_unavailable` — a repository's lock, unlock or own deadline
+ *     asked of a repository that is not provisioned, or was deleted on
+ *     GitHub (M3-05a);
  *   - `unassigned_students` — the body names the claimed students in no
  *     group (`students`: enrollment id, nom, prenom), empty when the group
  *     project has no group at all.
@@ -373,11 +377,11 @@ export const PROJECT_REFUSALS = [
   "distribution_failed",
   "distribution_missing",
   "deadline_past",
-  "deadline_applied",
   "not_draft",
   "publish_mode_frozen",
   "strategy_frozen",
   "unassigned_students",
+  "repo_unavailable",
 ] as const;
 export const ProjectErrorCode = z.enum(PROJECT_REFUSALS);
 export type ProjectErrorCode = z.infer<typeof ProjectErrorCode>;
@@ -486,3 +490,43 @@ export const ProjectRefusal = z.object({
   branches: z.array(z.string()).optional(),
 });
 export type ProjectRefusal = z.infer<typeof ProjectRefusal>;
+
+// ---------------------------------------------------------- a repository's deadline and lock (M3-05a)
+
+/** `/app/api/projects/:id/repos/:rid/…`: the project, and one of its repositories. */
+export const ProjectRepoParams = z.object({ id: z.uuid(), rid: z.uuid() });
+export type ProjectRepoParams = z.infer<typeof ProjectRepoParams>;
+
+/**
+ * `PUT /app/api/projects/:id/repos/:rid/deadline` (F-PROJ-09, D13 as amended
+ * 2026-10-02): the repository's own deadline, an individual extension, or
+ * null to follow the project's again. A date must lie ahead (`422
+ * deadline_past`); moving it later on a repository whose deadline was
+ * applied reopens that repository alone. The roster's extra time (F-ORG-07)
+ * never applies to a project.
+ */
+export const ProjectRepoDeadline = z.strictObject({ deadlineAt: Instant.nullable() });
+export type ProjectRepoDeadline = z.infer<typeof ProjectRepoDeadline>;
+
+/**
+ * One repository's deadline and lock, for its staff (the answer of the
+ * repository's deadline, lock and unlock): `deadlineAt` its own deadline or
+ * null, `effectiveDeadlineAt` the one that applies; `deadlineAppliedAt` the
+ * provisional freeze, `frozenAt` the definitive one. `locked` is what GitHub
+ * was last made to hold, `archived` when the lock fell back to archiving the
+ * repository (a plan without rulesets, shown as degraded); `staffLock` the
+ * staff's hand — true locked, false unlocked, null the deadline decides —
+ * which a lock or an unlock just asked may not have reached GitHub yet.
+ */
+export const ProjectRepoDeadlineState = z.object({
+  id: z.uuid(),
+  fullName: z.string().nullable(),
+  deadlineAt: z.iso.datetime().nullable(),
+  effectiveDeadlineAt: z.iso.datetime(),
+  deadlineAppliedAt: z.iso.datetime().nullable(),
+  frozenAt: z.iso.datetime().nullable(),
+  locked: z.boolean(),
+  archived: z.boolean(),
+  staffLock: z.boolean().nullable(),
+});
+export type ProjectRepoDeadlineState = z.infer<typeof ProjectRepoDeadlineState>;

@@ -26,6 +26,22 @@ export function zoneOffset(at: Date, timeZone: string): number {
   return local - Math.floor(at.getTime() / 1000) * 1000;
 }
 
+const DAY_MS = 86_400_000;
+
+/**
+ * `days` calendar days from `at` on `timeZone`'s wall clock (negative:
+ * before), at the same local time: J−3 of a deadline at 23:59 is 23:59
+ * three days earlier, 73 hours before it when the clocks went back in
+ * between (25 October 2026), 71 when they went forward. A local time the
+ * clocks skip resolves to the instant an hour away.
+ */
+export function addZonedDays(at: Date, days: number, timeZone: string = SCHOOL_TIME_ZONE): Date {
+  const local = at.getTime() + zoneOffset(at, timeZone) + days * DAY_MS;
+  // The target's own offset, found from a first guess on the source's.
+  const guess = local - zoneOffset(at, timeZone);
+  return new Date(local - zoneOffset(new Date(guess), timeZone));
+}
+
 /**
  * An instant as ISO 8601 with the school's offset, to the second:
  * `2026-07-03T23:59:00+02:00`. What a text written into GitHub carries (a

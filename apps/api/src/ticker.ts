@@ -34,6 +34,7 @@ import { JOURNAL_TASKS } from "./modules/journal/jobs.js";
 import { KIOSK_TASKS } from "./modules/kiosk/jobs.js";
 import { perApp } from "./perApp.js";
 import { LIVE_TASKS } from "./modules/live/jobs.js";
+import { PROJECT_TASKS } from "./modules/project/jobs.js";
 import { scheduledTasksTick } from "./modules/system/jobs.js";
 
 export interface TickTask {
@@ -84,6 +85,9 @@ export const TICK_TASKS: TickTask[] = [
   // Fix J4 (M4-02): a journal page appears to students when its
   // `visible_from` passes, a date, so clock-bound too (spec 05 §5.11).
   ...JOURNAL_TASKS,
+  // ADR-006 addendum (M3-05a): a project's scheduled publication, deadline
+  // and freeze are dates — claimed and enqueued, never a GitHub call here.
+  ...PROJECT_TASKS,
   scheduledTasksTick(),
 ];
 

@@ -882,55 +882,184 @@ files it ports; writes en + fr for every string.
     reconciliations (M3-06). The App must subscribe to `workflow_run`,
     `member` and `repository` (M2-06).
 
-### M3-05 — Deadline, freeze, dispatch, review checkpoints
-- **Depends on**: M3-04, D13.
-- **Port from**: `C:deadline.ts`, `C:dispatch.ts`, `github/lock.ts`,
-  `github/commit.ts`, the ticker duties.
-- **Create**: `PROJECT_TASKS` on `Q:ticker.ts` (claim + enqueue only).
+### M3-05 — split (orchestrator, 2026-10-02)
+M3-05 (deadline, freeze, dispatch, review checkpoints) is split in two:
+**M3-05a** the deadline (scheduled publication, the deadline and its
+strategies, the freeze, the reopen, a repository's own deadline, the
+staff's lock), **M3-05b** the review (the final review's dispatch, the
+review checkpoints and their routes). The original card's notes are kept
+under the half that serves them.
+
+### M3-05a — Deadline, freeze, reopen, per-repository deadlines
+- **Depends on**: M3-04, D13 (amended 2026-10-02).
+- **Port from**: `C:deadline.ts`, `github/lock.ts`, `github/commit.ts`, the
+  ticker duties, the reopen of `C:modules/assignments/lifecycle.ts`.
+- **Tests**: port `deadline.test`; TestClock: single claim, rescheduling
+  between sweep and run, resume after a crashed or exhausted job (lease),
+  404 terminal, archive fallback only where rulesets cannot exist,
+  idempotent commit strategy, freeze at the effective deadline + grace, a
+  repository's own deadline, reopen in the middle of a job, a staff unlock
+  never locked again, reopen un-archives, J−n across the DST change, **no
+  HTTP inside a tick**.
+- **From M3-02** (orchestrator, 2026-10-02): **the reopen** (F-PROJ-09)
+  replaces M3-02's `409 deadline_applied`: the locks lifted,
+  `deadline_applied_at`, `frozen_at`, `review_dispatched_at`,
+  `reminder_sent_at` cleared, the frozen and review slots emptied, the
+  `deadline` dispatches forgotten, the runs requalified and each current
+  score reselected; teacher scores and a release kept; audited
+  `project.deadline_reopened`. Scheduled publication calls
+  `publishProject(db, id, now, SYSTEM_ACTOR)`, whose group guard the scan
+  carries as SQL (heig-classroom's `groupFormationComplete`). A moved
+  deadline (patch, publish) re-resolves the J−n checkpoints not dispatched.
+- **From M3-03**: a repository provisioned on a plan without rulesets has
+  `ruleset_id` null: the deadline's `lock` falls back to archiving it (H8),
+  shown to the staff as degraded.
+- **From M3-04**: the provisional freeze is the current score's run; verify
+  the grace refresh of the frozen slot; a deadline commit does not move
+  `last_commit_sha`; bot commits of a deadline go to
+  `bot_commits(deadline)` BEFORE the ref moves; a 404 is
+  `markRepoDeleted(…, via)` with `via` widened.
+- **Decided for it** (product owner, 2026-10-02; points 5–8 by the
+  orchestrator): (1) a repository's own deadline, an individual extension
+  (D13 addendum), and everything deadline-shaped per repository on its
+  effective deadline; (2) the `commit` strategy is best effort (N-PERF-07
+  binds `lock`); (3) a reopen un-archives, and the archive is only for a
+  repository without its protection ruleset or a plan refusing rulesets,
+  never a 5xx or a rate limit; (4) J−n in calendar days in Europe/Zurich,
+  one rule in `@quiz/domain`; (5) claims and leases instead of queue
+  singletons (#273), a standard queue `project.deadline`, no GitHub call in
+  a tick; (6) the reopen's unlocks on `project.deadline`, never in the
+  PATCH, a failed unlock retried; (7) the staff's lock and unlock per
+  repository, with an exemption a resumed pass never overrides; (8) the
+  freeze provisional at the effective deadline, definitive at the effective
+  deadline + grace. **The reminder (claim and send) moves to M3-09**: the
+  students see nothing yet, and claiming without sending would lose it.
+- **As delivered** (branch `merge/M3-05a-project-deadline`). What M3-05b,
+  M3-06, M3-08 and M3-09 inherit:
+  - **Migration `0059_project_deadline`**: `projects.deadline_job_at` (the
+    lease); `projects.frozen_at` DROPPED with the indexes
+    `projects_freeze_due_idx` and `projects_review_due_idx` (the freeze is a
+    repository's; M8-01 maps heig-classroom's `assignments.frozen_at` onto
+    the repositories); `project_repos.deadline_at` (its own deadline),
+    `deadline_applied_at`, `frozen_at`, `deadline_committed_at`,
+    `archived_at` (H8), `staff_lock` (the staff's hand: true, false, null
+    = the deadline decides); partial index `project_repos_freeze_due_idx`.
+    `ruleset_id` stays the protection ruleset made at provisioning; the lock
+    ruleset (`hgc-deadline-lock`) is found by name.
+  - **Rules**: pure in `@quiz/domain` (`projectRuns.ts`):
+    `effectiveDeadline`, `deadlineWantsLock(repo, strategy)` (the staff's
+    hand, else applied and strategy `lock`), `reopens(appliedAt, deadline,
+    now)`. Their SQL twins, for the scans only, in
+    `Q:modules/project/deadline.ts`: `EFFECTIVE_DEADLINE`, `WANTS_LOCK`;
+    with `COMMIT_DUE`, `NEEDS_WORK` (wanted ≠ `locked_at`, or a commit
+    due) and `LIVE` (provisioned, not deleted, project not archived — #476;
+    `isLive` its TypeScript twin). `effectiveDeadlineMoved(tx, project,
+    repoIds, now)` — the ONE path of a moved deadline: reopens a repository
+    applied and now ahead (markers, frozen and review slots,
+    `deadline_committed_at`, `staff_lock`, its `deadline` dispatches),
+    drops a staff unlock, requalifies every run by `receivedLate` against
+    the new effective deadline (receipt: the earliest `push_receipts` of
+    the head), reselects the score of the repositories reopened or whose
+    runs flipped. `projectDeadlineMoved` (the patch) adds the project's
+    reopen (`published`, `deadline_applied_at`, `review_dispatched_at`
+    cleared; audited `project.deadline_reopened` `{deadlineAt, previous,
+    repos}`), re-arms `reminder_sent_at` on ANY move, and re-resolves the
+    checkpoints (`rescheduleCheckpoints`, in TS by `checkpointDueAt`, now
+    calendar days in Europe/Zurich through `addZonedDays`).
+    `publishProject` re-resolves them when it counts a duration.
+    `projectFieldRefusal` reads `state` alone (`locked` = applied).
+  - **Ticker and job** (`Q:modules/project/jobs.ts`): `PROJECT_TASKS` (one
+    tick task `project.deadlines`, 20 s, in `TICK_TASKS`; skips without an
+    App): (1) scheduled drafts published by `publishProject` (its row lock
+    and refusals are the claim; an incomplete group project meets
+    `unassigned_students` and stays a draft; audit `project.auto_publish`);
+    (2) `published` → `locked` at the project's deadline (audit
+    `project.deadline_applied`); (3) each `LIVE` repository's provisional
+    freeze at its effective deadline (`frozen_grade_run_id :=
+    current_grade_run_id`, `deadline_applied_at`; audit
+    `project_repo.deadline_applied`); (4) its definitive freeze at effective
+    deadline + grace (`frozen_at`; audit `project_repo.frozen`); (5) WITH A
+    QUEUE ONLY, the lease of each project with `NEEDS_WORK` (free or older
+    than `DEADLINE_LEASE_MS`, 10 min) and one `project.deadline` job
+    `{projectId, lease}` — without a queue the tick claims nothing, so a job
+    never runs in the ticker's process. Hints `projects` to the courses'
+    staff only. `runDeadlineJob`: nothing unless the lease is the row's;
+    four repositories at a time, each re-read before each step (lock —
+    archive where `ruleset_id` is null or the plan refuses —, unlock —
+    un-archive first —, or the commit), `locked_at`/`archived_at` written
+    after the call as facts; the lease RENEWED after each repository
+    (`heldLease`; the job stops when another took it over); a 404 ⇒
+    `markRepoDeleted(…, "deadline")`; a failure backdates the lease
+    (`FAILED_RETRY_MS`, the work claimed again some 30 s on, N-PERF-07) and
+    throws, the queue does not retry (`retryLimit: 0`); a crash leaves the
+    lease to expire; success gives it back. Also noted in
+    `docs/development/index.md`: without a queue, GitHub follows a deadline
+    only on a staff action. Audit
+    `project.deadline_enforced` `{strategy, locked (an archive counted),
+    unlocked, committed, deleted, failed}` per pass that changed something
+    (M3-09's `project_deadline_applied` is worded from it), and
+    `project_repo.archived` (degraded). `requestDeadlineWork(app, config,
+    projectId)` — the staff actions' claim; without a queue the job runs
+    awaited in that request.
+  - **Routes** (staff, `staffAccess`, own portal session, loader
+    `accessibleProjectRepo` in `guards.ts`, params `ProjectRepoParams`;
+    a Bearer token 404, an impersonation 403 `impersonation_read_only`, the
+    loader's 404 behind it): `PUT /app/api/projects/:id/repos/:rid/deadline`
+    (`ProjectRepoDeadline` `{deadlineAt | null}`; `422 deadline_past`;
+    audited `project_repo.deadline_set` `{deadlineAt, previous,
+    reopened}`), `POST …/repos/:rid/{lock,unlock}` (audited
+    `project_repo.lock|unlock` `{staffLock}`), each answering
+    `ProjectRepoDeadlineState` after asking for the deadline work; `409
+    repo_unavailable` for a repository not provisioned, deleted, or of an
+    archived project. `PATCH /app/api/projects/:id` with a `deadlineAt`
+    asks for it too (the reopen's unlocks). `PROJECT_REFUSALS` lost
+    `deadline_applied`, gained `repo_unavailable`.
+  - **M3-04 updated**: `after_deadline` on the effective deadline, read
+    with the project's and the repository's rows under a share lock in the
+    insert's transaction (a deadline moving meanwhile comes first or
+    requalifies the run); `refreshScoreSelection(db | tx, { repo })` writes
+    the frozen slot by a SQL `CASE` on the row's own `deadline_applied_at`
+    / `frozen_at` (a refresh racing the definitive freeze never moves it);
+    the review slot reads the repository's `frozen_at`. `pushEmptyCommit`
+    takes `isDone` and `beforeMove`; `lock.ts` gained `setRepoArchived`;
+    `isPlanRestriction` is exported (`provision.ts`). `repoWorld()` deletes
+    rulesets and archives (an archived repository refuses writes).
+  - Not done here: the reminder (M3-09); the final review's dispatch and
+    the checkpoints' routes (M3-05b); the views of a repository's deadline,
+    lock and degraded state (M3-08); notices and mails (M3-09).
+
+### M3-05b — Final review dispatch, review checkpoints
+- **Depends on**: M3-05a.
+- **Port from**: `C:dispatch.ts`, `C:milestones.ts`, the ticker duties.
+- **Create**: the review dispatch and the checkpoints' sweeps in
+  `Q:modules/project/jobs.ts`'s `projectTick` (claim + enqueue only); a
+  `project.dispatch` queue (claims and leases, ADR-064, not singletons).
 - **Contracts**: `ReviewCheckpoint` `{id, name, dueAt, offsetDays,
   dispatchedAt}` and `ReviewCheckpointCreate` (a `criteria.yml`-friendly
   name `^[a-z0-9][a-z0-9_-]{0,49}$`; a date or an offset of −365…−1 days,
-  exactly one; heig-classroom's `milestones.ts`).
-- **Tests**: port `deadline.test`, `dispatch.test`, `dispatch.db.test`;
-  TestClock: single claim, rescheduling between sweep and run, 404
-  terminal, archive fallback, idempotent commit strategy, freeze at
-  deadline + grace, ledger, **no HTTP inside a tick**.
-- **From M3-02** (orchestrator, 2026-10-02): **the reopen moves here**
-  (F-PROJ-09): M3-02's `PATCH` refuses to move a deadline already applied
-  (`409 deadline_applied`, `projectFieldRefusal`); this task replaces that
-  refusal by heig-classroom's reopen (`lifecycle.ts` PATCH): the locks
-  lifted, `deadline_applied_at`, `frozen_at`, `review_dispatched_at`,
-  `reminder_sent_at` cleared, the frozen and review slots emptied, the
-  `deadline` dispatches forgotten, the runs requalified
-  (`after_deadline = false`) and each current score reselected; teacher
-  scores and a release kept; audited `project.deadline_reopened`. Its test
-  (a locked project moved later is `published` again, its locks lifted)
-  comes with it. Scheduled publication calls `publishProject(db, id, now,
-  SYSTEM_ACTOR)` (M3-02), whose group guard the claim must also carry as SQL
-  (heig-classroom's `groupFormationComplete`). Also from M3-02's review: a
-  moved deadline (patch, publish) re-resolves the J−n checkpoints not
-  dispatched (`checkpointDueAt`), as ONE `UPDATE … SET due_at = deadline +
-  offset_days days` here.
-- **From M3-03** (orchestrator, 2026-10-02): a repository provisioned on a
-  plan without rulesets has `ruleset_id` null (audit `project.accept`
-  `protected: false`): the deadline's `lock` falls back to archiving it
-  (H8), and the staff are shown it as degraded.
-- **From M3-04** (2026-10-02): the provisional freeze is the current
-  score's run (`refreshScoreSelection`, `grading.ts`). **The grace refresh
-  of the frozen slot is already done here, verify it** with the freeze:
-  `refreshScoreSelection` writes `frozen_grade_run_id` too while
-  `deadline_applied_at` is set and `frozen_at` null. A deadline commit does
-  not move `last_commit_sha` (only a person's push does). The reopen
-  requalifies runs then calls `refreshScoreSelection` per repository. Bot
-  commits of a deadline (`commit` strategy) go to `bot_commits(deadline)`
-  BEFORE the ref moves, like the restore's `beforeMove`. A 404 on a
-  repository is `markRepoDeleted(db, repoId, now, via)` (`repos.ts`; widen
-  `via` beyond `webhook`). **The review slot**: F-PROJ-11 is amended — a
-  dispatched run runs on the default branch's head, not on
+  exactly one; heig-classroom's `milestones.ts`), and their routes.
+- **Tests**: port `dispatch.test`, `dispatch.db.test`; the ledger
+  (`grade_dispatches`, claimed `ON CONFLICT DO NOTHING` before GitHub is
+  called), **no HTTP inside a tick**.
+- **From M3-04** (2026-10-02): **the review slot** — F-PROJ-11 is amended:
+  a dispatched run runs on the default branch's head, not on
   `client_payload.sha`, so M3-04 fills the slot for an `ok`, `success`
-  `review` run received once `frozen_at` is set, never by comparing the
-  head with the frozen commit; the dispatch must record the sha it sent
-  (`grade_dispatches.sha`) as the only trace of what was asked.
+  `review` run received once the repository's `frozen_at` is set, never by
+  comparing the head with the frozen commit; the dispatch must record the
+  sha it sent (`grade_dispatches.sha`) as the only trace of what was asked.
+- **From M3-05a** (2026-10-02): the final review is per repository — at
+  ITS definitive freeze (`project_repos.frozen_at`, its effective deadline
+  + grace), not the project's; a reopen already forgets the repository's
+  `deadline` dispatches and empties its review slot
+  (`effectiveDeadlineMoved`), and clears `projects.review_dispatched_at`.
+  The J−n checkpoints are re-resolved by `rescheduleCheckpoints`
+  (`deadline.ts`, calendar days) on every move of the project's deadline;
+  a checkpoint's creation resolves its offset by the same
+  `checkpointDueAt`. Reuse `LIVE`, the lease pattern (renewed as the job
+  goes, `heldLease`) and the bounded concurrency of `jobs.ts`. There is no
+  `projects.frozen_at` any more, nor a `projects_review_due_idx`: the
+  review scan is over `project_repos` (frozen, no `deadline` dispatch);
+  whether `projects.review_dispatched_at` still serves is this task's call.
 
 ### M3-06 — Reconciliation of grades and repositories
 - **Depends on**: M3-04, M2-05. ‖ M3-05, M3-07.
@@ -1003,6 +1132,18 @@ files it ports; writes en + fr for every string.
   as zod enums here. The live-state cache is already dropped by every
   project webhook (`forgetRepoLiveState`); the views' `projects` hint
   roots join `HINT_ROOTS.projects` (web).
+- **From M3-05a** (2026-10-02): each repository of the views shows its
+  **own deadline** when it has one (`project_repos.deadline_at`) beside
+  its effective deadline, its freeze (`deadline_applied_at`, `frozen_at`),
+  its lock as GitHub holds it (`locked_at`) and the staff's hand
+  (`staff_lock`: a lock or unlock asked may not have reached GitHub yet),
+  and a lock that fell back to archiving (`archived_at`) as **degraded**
+  (H8; also a repository provisioned without rulesets, `ruleset_id` null).
+  `ProjectRepoDeadlineState` (`contracts/src/project.ts`,
+  `repoDeadline` in `deadline.ts`) is the shape the three repository
+  routes already answer; fold it into the repository rows. The
+  `not_frozen` refusal of the release reads the repositories' `frozen_at`
+  (a repository with a later deadline may not be frozen yet).
 
 ### M3-09 — Student side, SSE, notifications
 - **Depends on**: M3-04, D18. ‖ M3-08.
@@ -1039,6 +1180,19 @@ files it ports; writes en + fr for every string.
   `project_repo.deleted`); the final review's mail to every member when
   `review_grade_run_id` is filled (heig-classroom's `grade.final`); and
   `github_org_lost`.
+- **From M3-05a** (orchestrator, 2026-10-02): **the day-before reminder
+  is this task's, claim and send together** (`project_deadline_reminder`,
+  F-NOTIF-13): claimed by a conditional UPDATE of
+  `projects.reminder_sent_at` in the ticker's `projectTick`
+  (`modules/project/jobs.ts`), sent in the same task — never claimed
+  without being sent. M3-05a re-arms `reminder_sent_at` on every move of
+  the project's deadline. A student whose repository has its own deadline
+  (`project_repos.deadline_at`) is reminded of THAT one (the effective
+  deadline), so the claim is per repository for them. The staff's
+  `project_deadline_applied` (one entry per project, the count locked) is
+  worded from the audit `project.deadline_enforced` (`locked`, `archived`,
+  `committed`, …) the deadline job writes; the student's view shows their
+  own effective deadline.
 
 ### M3-10 — Web: projects in Activities, "New ▾"
 - **Depends on**: M3-01 contracts, M1-05. ‖ M3-11.

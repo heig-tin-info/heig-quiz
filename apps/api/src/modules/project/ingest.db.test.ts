@@ -705,14 +705,14 @@ describe("a completed run (F-PROJ-10, ADR-011)", () => {
     expect(await runOf(f, payload.workflow_run.id)).toMatchObject({ afterDeadline: false });
   });
 
-  it("refreshes the frozen slot during the grace, not before the deadline is applied (inert until M3-05)", async () => {
+  it("refreshes the frozen slot during the grace, not before the repository's deadline is applied", async () => {
     const f = await acceptedRepo({ protectedFiles: [] });
     const a = await push(f, { "g.c": "1" });
     scored(a.after, { title: "GRADE", message: "2/6" });
     await handled("workflow_run", runPayload(f, a.after));
     expect((await repoRow(f.projectId)).frozenGradeRunId).toBeNull();
 
-    await server.app.db.update(projects).set({ deadlineAppliedAt: new Date(DEADLINE) }).where(eq(projects.id, f.projectId));
+    await server.app.db.update(projectRepos).set({ deadlineAppliedAt: new Date(DEADLINE) }).where(eq(projectRepos.id, f.repo.id));
     const b = await push(f, { "g.c": "2" });
     scored(b.after, { title: "GRADE", message: "5/6" });
     server.clock.advance(MINUTE);
@@ -746,7 +746,7 @@ describe("a review run (F-PROJ-11)", () => {
     expect(await runOf(f, checkpoint.workflow_run.id)).toMatchObject({ kind: "review", points: 5 });
     expect((await repoRow(f.projectId)).reviewGradeRunId).toBeNull();
 
-    await server.app.db.update(projects).set({ frozenAt: new Date(DEADLINE) }).where(eq(projects.id, f.projectId));
+    await server.app.db.update(projectRepos).set({ frozenAt: new Date(DEADLINE) }).where(eq(projectRepos.id, f.repo.id));
     const failed = review(f, botHead, { conclusion: "failure" });
     await handled("workflow_run", failed);
     expect((await repoRow(f.projectId)).reviewGradeRunId).toBeNull();

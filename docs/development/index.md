@@ -125,7 +125,9 @@ Two consequences:
   `send`/`work` surface (`apps/api/src/jobs.ts`). It is not durable: a job
   that has not run yet dies with the process. Acceptable in development,
   and one of the reasons `config.ts` refuses a `pglite://` URL in
-  production.
+  production. With no queue at all (`JOBS_DISABLED=1`), GitHub follows a
+  project's deadline only when a staff action asks for it: the ticker
+  never runs the deadline job itself (ADR-064).
 
 To start over, delete the directory. That is also how an existing database
 gets a newer demo world, such as the nine-question "Test 0": the seed only

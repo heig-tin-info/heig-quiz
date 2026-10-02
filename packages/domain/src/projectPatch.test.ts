@@ -9,7 +9,6 @@ const EARLIER = new Date("2026-10-01T22:00:00Z");
 const project = (over: Partial<ProjectLifeLike> = {}): ProjectLifeLike => ({
   state: "published",
   deadlineAt: LATER,
-  deadlineAppliedAt: null,
   ...over,
 });
 
@@ -35,12 +34,12 @@ describe("projectFieldRefusal (F-PROJ-03)", () => {
 
   it("freezes the deadline strategy at the deadline, applied or not", () => {
     expect(projectFieldRefusal(project({ deadlineAt: NOW }), "deadlineStrategy", NOW)).toBe("strategy_frozen");
-    expect(projectFieldRefusal(project({ deadlineAppliedAt: NOW }), "deadlineStrategy", NOW)).toBe("strategy_frozen");
+    expect(projectFieldRefusal(project({ state: "locked" }), "deadlineStrategy", NOW)).toBe("strategy_frozen");
   });
 
-  it("does not move a deadline already applied: the reopen is M3-05's", () => {
-    expect(projectFieldRefusal(project({ deadlineAppliedAt: EARLIER }), "deadlineAt", NOW)).toBe("deadline_applied");
-    expect(projectFieldRefusal(project({ state: "locked" }), "deadlineAt", NOW)).toBe("deadline_applied");
-    expect(editableProjectFields(project({ state: "locked", deadlineAt: EARLIER }), NOW)).toEqual(["name", "protectedFiles"]);
+  it("still moves a deadline already applied: the reopen (M3-05a)", () => {
+    expect(projectFieldRefusal(project({ state: "locked", deadlineAt: EARLIER }), "deadlineAt", NOW)).toBeNull();
+    expect(projectFieldRefusal(project({ state: "locked" }), "deadlineAt", NOW)).toBeNull();
+    expect(editableProjectFields(project({ state: "locked", deadlineAt: EARLIER }), NOW)).toEqual(["name", "deadlineAt", "protectedFiles"]);
   });
 });

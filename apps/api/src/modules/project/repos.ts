@@ -69,9 +69,10 @@ export async function hintRepo(db: Db, ctx: RepoContext): Promise<void> {
 /**
  * Terminal and idempotent: the repository is gone from GitHub (F-PROJ-18).
  * Nothing retries a deleted repository, nothing is deleted here. True only
- * for the call that marked it, which audits it.
+ * for the call that marked it, which audits it. `via`: GitHub's `repository`
+ * event, or the 404 a deadline's lock, unlock or commit met (M3-05a).
  */
-export async function markRepoDeleted(db: Db, repoId: string, now: Date, via: "webhook"): Promise<boolean> {
+export async function markRepoDeleted(db: Db, repoId: string, now: Date, via: "webhook" | "deadline"): Promise<boolean> {
   const marked = await db
     .update(projectRepos)
     .set({ deletedAt: now })

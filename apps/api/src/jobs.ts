@@ -63,6 +63,20 @@ export const GITHUB_WEBHOOK_QUEUE = "github.webhook";
 export const JOURNAL_INGEST_QUEUE = "journal.ingest";
 
 /**
+ * The deadline work of one project (spec 05 §5.11, merge task M3-05a,
+ * ADR-064): `{ projectId, lease }`, sent by the ticker or a staff action
+ * once it holds the project's lease (`projects.deadline_job_at`). A
+ * `standard` queue, no dedupe: the lease, not the queue, is what keeps two
+ * jobs of one project apart — a job whose lease is no longer the row's does
+ * nothing —, and every repository's step re-reads its row and is idempotent.
+ * No retry by the queue: the job renews its lease as it goes, so a retry
+ * would carry a stale one; a failed job backdates its lease so that the
+ * ticker claims the work again some 30 s on, a crashed one leaves it to
+ * expire, ten minutes after its last renewal.
+ */
+export const PROJECT_DEADLINE_QUEUE = "project.deadline";
+
+/**
  * No `singletonKey`, on purpose (#273). Our queues are pg-boss `standard`
  * queues (`createQueue` passes no policy, and pg-boss 12 refuses to change a
  * policy after creation), on which a key without `singletonSeconds` dedupes

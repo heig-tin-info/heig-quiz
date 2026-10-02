@@ -35,6 +35,7 @@ import { githubStatus, type InstallationClient } from "../../github/app.js";
 import { createSquashedRepo } from "../../github/squash.js";
 import { purgeProjectReceipts, type InstalledOrg } from "../github/service.js";
 import { DomainError } from "../http.js";
+import { projectDeadlineMoved, rescheduleCheckpoints } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 import { classroomClient, fetchSource, type Source } from "./sources.js";
 import type { ProjectRow } from "./views.js";
@@ -255,8 +256,10 @@ function asColumns(body: ProjectPatch): Partial<Record<ProjectPatchField, unknow
  * or waited for: a field whose value changes must be open
  * (`projectFieldRefusal`), a moved deadline must lie ahead (`deadline_past`);
  * a draft's dates stay coherent (a duration only with a manual publication,
- * the deadline after the start). A moved deadline does not yet move the J−n
- * checkpoints: M3-05 does, with them.
+ * the deadline after the start). A moved deadline takes its J−n checkpoints
+ * and the runs of the repositories following it along, and one already
+ * applied reopens the project (`projectDeadlineMoved`, M3-05a): the route
+ * then asks for the deadline work, which lifts the locks.
  */
 export async function patchProject(
   db: Db,
@@ -292,13 +295,20 @@ export async function patchProject(
       throw new DomainError("validation", 400, "The deadline must come after the start");
     }
     if (Object.keys(changed).length === 0) return project;
-    const [row] = await tx
-      .update(projects)
-      .set(changed as Partial<typeof projects.$inferInsert>)
-      .where(eq(projects.id, project.id))
-      .returning();
+    const { deadlineAt: movedTo, ...others } = changed;
+    let row = project;
+    if (Object.keys(others).length > 0) {
+      [row] = (await tx
+        .update(projects)
+        .set(others as Partial<typeof projects.$inferInsert>)
+        .where(eq(projects.id, project.id))
+        .returning()) as [ProjectRow];
+    }
+    // The checkpoints, the repositories following it, and the reopen of a
+    // deadline already applied (F-PROJ-09, M3-05a).
+    if (movedTo !== undefined) row = await projectDeadlineMoved(tx, row, movedTo as Date, actor, now);
     await audit(tx, { ...actor, action: "project.update", subjectType: "project", subjectId: project.id, payload: body });
-    return row!;
+    return row;
   });
 }
 
@@ -378,6 +388,7 @@ export async function publishProject(db: Db, projectId: string, now: Date, actor
       .set({ state: "published", startAt, deadlineAt })
       .where(eq(projects.id, project.id))
       .returning();
+    if (deadlineAt.getTime() !== project.deadlineAt.getTime()) await rescheduleCheckpoints(tx, project.id, deadlineAt);
     await audit(tx, {
       ...actor,
       action: actor.actorType === "system" ? "project.auto_publish" : "project.publish",

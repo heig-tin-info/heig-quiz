@@ -210,6 +210,19 @@ Status values: `open`, `settled`, `superseded`.
   cases.
 - Blocks: M3-05.
 - **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion.
+- **Addendum (2026-10-02, product owner; merge task M3-05a)**: the
+  per-student extension is not "later" but now, as **a repository's own
+  deadline** — a nullable `project_repos.deadline_at` the course's staff
+  set (`PUT /app/api/projects/:id/repos/:rid/deadline`, a date ahead of
+  now, or null for the project's again; audited). A repository's
+  **effective deadline** is its own, else the project's, and everything a
+  deadline decides is per repository on it: the lock or the commit, a late
+  receipt (`after_deadline`), the provisional and the definitive freeze.
+  The project is `locked` at its own deadline; a repository with a later
+  one stays open and is locked, and frozen, at its own; moving it later on
+  a repository already locked reopens and unlocks that repository alone.
+  The roster's time bonus (F-ORG-07) still never applies to a project.
+  F-PROJ-09 and F-PROJ-11 are amended; the mechanism is ADR-064.
 
 ### D14 — Journal asset storage
 - **Suggested**: `bytea` as ported (a rebuildable read model, ≤ 5 MB per

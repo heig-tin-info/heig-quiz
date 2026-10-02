@@ -54,6 +54,8 @@ describe("registration", () => {
     expect(names).toContain("system.scheduled_tasks");
     // …and the journal's `visible_from` sweep (fix J4): a date, clock-bound.
     expect(names).toContain("journal.visible_from");
+    // …and the projects' publication, deadline and freeze (M3-05a): dates too.
+    expect(names).toContain("project.deadlines");
   });
 
   it("keeps the clock-bound work out of the scheduled catalog (invariant 5, D10)", () => {

@@ -37,6 +37,7 @@ import {
   questionVersions,
   questions,
   ownedPollSql,
+  projectRepos,
   projects,
   STAFF_ROLES,
   users,
@@ -423,6 +424,35 @@ export async function accessibleProject(
 ) {
   if (!ownPortalSession(req.auth)) return notFound(reply);
   return (await findAccessibleProject(app.db, callerOf(req), params.id)) ?? notFound(reply);
+}
+
+/**
+ * A repository of a project the caller reaches (M3-05a): the project under
+ * the same `staffAccess` as {@link findAccessibleProject}, in the WHERE, and
+ * the repository by its id AND its project's — a repository of another
+ * project is as missing as one that does not exist.
+ */
+export async function findAccessibleProjectRepo(db: Db, user: Caller, projectId: string, repoId: string) {
+  const [row] = await db
+    .select({ project: projects, repo: projectRepos })
+    .from(projectRepos)
+    .innerJoin(projects, eq(projectRepos.projectId, projects.id))
+    .innerJoin(classrooms, eq(projects.classroomId, classrooms.id))
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .where(and(eq(projectRepos.id, repoId), eq(projects.id, projectId), accessWhere(user, staffAccess(user.id))))
+    .limit(1);
+  return row ?? null;
+}
+
+/** {@link findAccessibleProjectRepo} for the caller's own portal session, answering the 404 (invariant 6). */
+export async function accessibleProjectRepo(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  params: { id: string; rid: string },
+) {
+  if (!ownPortalSession(req.auth)) return notFound(reply);
+  return (await findAccessibleProjectRepo(app.db, callerOf(req), params.id, params.rid)) ?? notFound(reply);
 }
 
 /** {@link accessibleClassroom} for the projects' classroom routes: the caller's own portal session only. */

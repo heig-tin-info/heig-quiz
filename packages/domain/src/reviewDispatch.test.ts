@@ -54,4 +54,13 @@ describe("checkpointDueAt", () => {
     expect(checkpointDueAt(deadline, -3)).toEqual(new Date("2026-07-07T22:00:00Z"));
     expect(checkpointDueAt(deadline, 0)).toEqual(deadline);
   });
+
+  it("counts calendar days in Zurich across the change of the clocks (25 October 2026)", () => {
+    // 23:59 winter time on the 27th; J−3 is 23:59 summer time on the 24th: 73 h earlier.
+    expect(checkpointDueAt(new Date("2026-10-27T22:59:00Z"), -3)).toEqual(new Date("2026-10-24T21:59:00Z"));
+    // On the day of the change itself: 23:59 on the 25th (winter), J−1 at 23:59 on the 24th (summer).
+    expect(checkpointDueAt(new Date("2026-10-25T22:59:00Z"), -1)).toEqual(new Date("2026-10-24T21:59:00Z"));
+    // And in spring (29 March 2026): 71 h.
+    expect(checkpointDueAt(new Date("2026-03-30T21:59:00Z"), -3)).toEqual(new Date("2026-03-27T22:59:00Z"));
+  });
 });

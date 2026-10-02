@@ -13,6 +13,16 @@ import type { Topic } from "@quiz/contracts";
 
 import * as bus from "../realtime/bus.js";
 
+/**
+ * Something of a project changed for its staff alone — published by the
+ * ticker, locked, frozen (M3-05a): the courses' `course:` topics. The
+ * students hear of nothing of a project until its student view (M3-09).
+ */
+export function projectsChanged(courseIds: readonly string[]): void {
+  if (courseIds.length === 0) return;
+  bus.hint("projects", [...new Set(courseIds)].map((id): Topic => `course:${id}`));
+}
+
 /** Something of a project repository changed: its students and the course's staff re-read. */
 export function repoChanged(courseId: string, userIds: readonly string[]): void {
   const topics: Topic[] = [`course:${courseId}`, ...new Set(userIds.map(bus.userTopic))];
