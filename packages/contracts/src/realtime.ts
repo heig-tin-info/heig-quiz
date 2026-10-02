@@ -250,6 +250,12 @@ export const HintEvent = z.object({
       // A classroom's journal copy changed: a synchronisation, or a page's
       // `visible_from` passed (M4-02). On `classroom:<id>`, no data.
       "journal",
+      // A project's repository changed: a push, a restore, a run, an
+      // invitation accepted, a rename (M3-04). On `user:<id>` of the
+      // repository's students and `course:<id>` of its staff, NEVER on
+      // `classroom:<id>`, which every student of the classroom reads
+      // (N-SEC-20, I41). No data.
+      "projects",
       "mutation",
     ]),
   ),

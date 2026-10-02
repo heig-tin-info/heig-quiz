@@ -346,10 +346,21 @@ export const projectGradeRuns = pgTable(
     testsPassed: integer("tests_passed"),
     testsTotal: integer("tests_total"),
     parseStatus: text("parse_status", { enum: GRADE_RUN_PARSE_STATUSES }).notNull(),
+    /**
+     * Why a `malformed` run has no score: the GRADE annotation's message as
+     * the run printed it (F-PROJ-10), at most 500 characters. Null otherwise.
+     */
+    parseDetail: text("parse_detail"),
     /** `ci` — a push; `review` — the final review (heig-classroom's `llm`). */
     kind: text("kind", { enum: GRADE_RUN_KINDS }).notNull().default("ci"),
     /** Its commit was received after the deadline (ADR-012): never changes the frozen score. */
     afterDeadline: boolean("after_deadline").notNull().default(false),
+    /**
+     * Ingested while the repository's protected files were no longer
+     * restored (`project_repos.protection_suspended_at`, F-PROJ-08): its
+     * score may come from an altered `grading.yml`, and the staff verify it.
+     */
+    toVerify: boolean("to_verify").notNull().default(false),
     /** GitHub's completion time of the run: no default. */
     completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -423,7 +434,18 @@ export const reverts = pgTable(
       .references(() => projectRepos.id, { onDelete: "cascade" }),
     revertSha: text("revert_sha").notNull(),
     files: text("files").array().notNull(),
+    /**
+     * The pushed head the restore answered (M3-04): a push redelivered never
+     * restores, nor counts toward the cap, twice. Null on heig-classroom's
+     * imported rows.
+     */
+    headSha: text("head_sha"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
-  (t) => [index("reverts_repo_time_idx").on(t.repoId, t.createdAt)],
+  (t) => [
+    index("reverts_repo_time_idx").on(t.repoId, t.createdAt),
+    uniqueIndex("reverts_repo_head_uq")
+      .on(t.repoId, t.headSha)
+      .where(sql`${t.headSha} IS NOT NULL`),
+  ],
 );

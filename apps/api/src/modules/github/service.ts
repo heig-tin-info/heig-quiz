@@ -798,6 +798,7 @@ export async function purgeProjectReceipts(tx: Db | Tx, gone: ProjectsGone): Pro
 export {
   onEvent,
   onReceipt,
+  pushedBy,
   type ReceiptTracker,
   type WebhookDelivery,
   type WebhookHandler,

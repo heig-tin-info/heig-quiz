@@ -30,9 +30,12 @@ import type { AppConfig } from "../../config.js";
 import { accessibleProject, projectsClassroom, studentProject } from "../guards.js";
 import { notFound, studentRoute, teacherRoute } from "../http.js";
 import * as service from "./service.js";
+import { registerProjectHandlers } from "./webhooks.js";
 
 export async function projectPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
+  // GitHub's events on projects (M3-04), on the `github` module's registry.
+  registerProjectHandlers();
   const teacher = teacherRoute(app);
   const student = studentRoute(app);
   const session = { preHandler: (req: FastifyRequest, reply: FastifyReply) => app.requireSession(req, reply) };

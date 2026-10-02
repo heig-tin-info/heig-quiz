@@ -8,6 +8,9 @@
  * From M3-02: the lifecycle (`lifecycle.ts`), the staff's views
  * (`views.ts`), the organization's repository browser (`sources.ts`).
  * From M3-03: a student's Accept and its provisioning (`accept.ts`).
+ * From M3-04: GitHub's events on projects (`webhooks.ts`, registered by
+ * the plugin), the grading pipeline (`grading.ts`, `ingestCompletedRun`,
+ * the one path M3-06 reuses), the protected files (`protection.ts`).
  */
 export { acceptProject } from "./accept.js";
 export {

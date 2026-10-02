@@ -39,7 +39,7 @@ import type { GithubWebhookBody } from "@quiz/contracts";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { pushReceipts, webhookDeliveries } from "../../db/schema.js";
-import { githubApp, recentHookDeliveries, redeliverHookDelivery } from "../../github/app.js";
+import { githubApp, rateLimitReset, recentHookDeliveries, redeliverHookDelivery } from "../../github/app.js";
 import { GITHUB_WEBHOOK_QUEUE } from "../../jobs.js";
 import { redactTokens } from "../../redact.js";
 
@@ -111,13 +111,17 @@ const DELETED = /^0+$/;
 /** The workflows' own token (GR-16): the grader's commits, never a student's. */
 const GITHUB_ACTIONS_BOT = "github-actions[bot]";
 
-/** Pushed by Quiz's App (D23) or by a workflow: a bot commit, never graded. */
-function pushedByBot(config: AppConfig, login: string | undefined): boolean {
-  return (
-    login !== undefined &&
-    (login === GITHUB_ACTIONS_BOT ||
-      (config.GITHUB_APP_SLUG !== "" && login === `${config.GITHUB_APP_SLUG}[bot]`))
-  );
+/**
+ * Who pushed, by the push's sender (D23, M3-04): Quiz's own App (`app`),
+ * a workflow's `GITHUB_TOKEN` (`workflow`), or anyone else (`person`).
+ * The bots are these two only: heig-classroom's App stops acting on a
+ * repository once it is imported (M8). Both bots' pushes are bot commits,
+ * never graded; only the App's are spared the protected-file check.
+ */
+export function pushedBy(config: AppConfig, login: string | undefined): "app" | "workflow" | "person" {
+  if (login === GITHUB_ACTIONS_BOT) return "workflow";
+  if (config.GITHUB_APP_SLUG !== "" && login === `${config.GITHUB_APP_SLUG}[bot]`) return "app";
+  return "person";
 }
 
 async function writeReceipt(tx: Tx, config: AppConfig, delivery: WebhookDelivery): Promise<void> {
@@ -136,7 +140,7 @@ async function writeReceipt(tx: Tx, config: AppConfig, delivery: WebhookDelivery
       branch: push.data.ref.replace(/^refs\/heads\//, ""),
       headSha: push.data.after,
       receivedAt: delivery.receivedAt,
-      isBot: pushedByBot(config, push.data.sender?.login),
+      isBot: pushedBy(config, push.data.sender?.login) !== "person",
       forced: push.data.forced ?? false,
     })
     // The FIRST receipt of a head stands: a redelivery never moves it later.
@@ -206,6 +210,14 @@ export async function processDelivery(
       .update(webhookDeliveries)
       .set({ error: message })
       .where(eq(webhookDeliveries.deliveryId, deliveryId));
+    // GitHub's rate limit (N-PERF-07): the job waits until its reset, sent
+    // again for then, without spending one of the queue's retries (the
+    // handlers are idempotent, so the part already done is a no-op then).
+    const reset = rateLimitReset(err, Date.now());
+    if (reset !== null && app.boss) {
+      await app.boss.send(GITHUB_WEBHOOK_QUEUE, { deliveryId }, { startAfter: new Date(reset) });
+      return;
+    }
     throw new Error(message);
   }
   await app.db

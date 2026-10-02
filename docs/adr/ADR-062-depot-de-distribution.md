@@ -11,6 +11,37 @@ git runner (`apps/api/src/github/git.ts`). Tested by
 Completes ADR-035 (the merge), D19 (`docs/merge/08-decisions.md`) and
 F-PROJ-02, F-PROJ-16.
 
+**Addendum (2026-10-02, product owner; merge task M3-04): the distribution
+repository is also the reference of the protected files.** F-PROJ-08 is
+amended to match:
+
+1. A restore puts back the distribution repository's **current** version
+   of each protected file on the pushed branch, as heig-classroom's
+   `revert.ts` did — not "the last commit the App pushed there", which
+   Quiz never recorded per file. A teacher who fixes `grading.yml` in the
+   distribution (a sync, M3-07) has the fix restored from then on.
+2. **Every push but Quiz's App's is checked**, a workflow's own commit
+   included: a `github-actions[bot]` push is recorded as a `grader` bot
+   commit (its runs never count, N-SEC-21) and its protected files are
+   restored like a student's, so a student's workflow cannot rewrite
+   `grading.yml` on their behalf. Only the App's pushes (restores, deadline
+   commits, syncs) are exempt; the bot logins are these two only
+   (heig-classroom's App stops acting on a repository once it is imported,
+   M8).
+3. **The cap suspends until the staff re-enable.** Past five restores in an
+   hour on one repository (the server's clock), `project_repos.protection_suspended_at`
+   is set, audited `project_repo.revert_cap`, and nothing is restored until
+   the staff clear it (M3-08); every run ingested meanwhile is
+   `project_grade_runs.to_verify`. A push is answered once, by its head
+   (`reverts.head_sha`, unique per repository, migration `0057`), so a
+   redelivery neither restores nor counts twice; a restore leaves out a file
+   already the distribution's, so a retry after a crash commits nothing.
+   The restore commit is recorded as a bot commit before the branch moves
+   onto it (N-RES-08).
+4. Which files a push touched: the payload's lists, or GitHub's compare when
+   they cannot tell (a forced push, or the 20 commits GitHub lists at most);
+   a new branch counts every protected file as touched.
+
 ## Context
 
 Creating a project builds its **distribution repository** in the

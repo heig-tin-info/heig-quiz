@@ -50,7 +50,7 @@ PR.
 | # | Risk | Resolution | Task |
 | --- | --- | --- | --- |
 | I40 | **Staging restores production dumps** (ADR-028): with the production App key, staging's ticker would act on real student repositories | a separate staging App on a test org; tasks no-op without an App; the refresh nulls `installation_id` | M2-06 |
-| I41 | **SSE `classroom:` topic reaches students unfiltered** in Quiz: per-repo hints there reintroduce classroom #38 (DoS, grade leak) | per-repo hints to `course:` + `user:` topics only; a test that a student never receives another student's hint | M3-09 |
+| I41 | **SSE `classroom:` topic reaches students unfiltered** in Quiz: per-repo hints there reintroduce classroom #38 (DoS, grade leak) | per-repo hints to `course:` + `user:` topics only; a test that a student never receives another student's hint | M3-04 (the hints, tested), M3-09 |
 | I42 | Forged CI grades (classroom H5) | indicative until a teacher release; the gradebook shows the source | M3-08, M5-03 |
 | I43 | Journal assets of hidden pages readable (J1) | visibility-aware asset route | M4-02 |
 | I44 | Concurrent journal ingestions (J2); J3 dropped (D03) | queue or advisory lock per classroom journal row + transaction | M4-02 |
