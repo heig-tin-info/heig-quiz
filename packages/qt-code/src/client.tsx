@@ -35,6 +35,9 @@ export const codeClient: QuestionTypeClient<
   labelKey: "qt.code.label",
   hintKey: "qt.code.hint",
   Icon: CodeIcon,
+  // The statement and the editor side by side when the player has the room
+  // (`ProgramSplit`).
+  wide: true,
 
   Editor: lazy(() => import("./Editor.js")),
   Player: lazy(() => import("./Player.js")),

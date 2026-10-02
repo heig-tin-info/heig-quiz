@@ -7,6 +7,7 @@ import { apiErrorMessage } from "../api";
 import { useT } from "../i18n";
 import { PlayedQuestion } from "./PreviewedQuestion";
 import { PlayerShell } from "../student/PlayerShell";
+import { isWide } from "../student/QuestionHost";
 import { Alert, Button, Card, Skeleton } from "../ui";
 import { questionPreviewQuery, questionSolutionQuery } from "./previewQuery";
 
@@ -35,7 +36,8 @@ import { questionPreviewQuery, questionSolutionQuery } from "./previewQuery";
  *     says that nothing is kept, so the question is the first thing under
  *     the bar, as in the exam. "Show answers" is secondary: it changes
  *     nothing but this tab.
- *   - Space: the player's 760 px column, the player's spacing.
+ *   - Space: the player's column (760 px, or the room a wide type asks
+ *     for), the player's spacing.
  *   - Finish: the player's hairline bar over the warm canvas, no shadow.
  *
  * The teacher may type in the fields — a preview one cannot touch does not
@@ -56,6 +58,7 @@ export function StudentPreviewPage({ id }: { id: string }) {
       title={t("question.preview.pageTitle")}
       subtitle={t("question.preview.pageSubtitle")}
       deadlineAt={null}
+      wide={preview.data !== undefined && isWide(preview.data.type)}
       headerAction={
         // The one thing this page does besides being read. It is secondary:
         // a preview has no primary action (DESIGN.md, one primary action).

@@ -67,7 +67,7 @@ import { PlayerEnd } from "./PlayerEnd";
 import { PlayerQuestion, QuestionHeading } from "./PlayerQuestion";
 import { PlayerRail } from "./PlayerRail";
 import { PlayerShell } from "./PlayerShell";
-import { isAnswered } from "./QuestionHost";
+import { isAnswered, isWide } from "./QuestionHost";
 import { FlagButton, QuestionTools } from "./QuestionTools";
 import { SubmitDialog } from "./SubmitDialog";
 import { usePlayerCommands } from "./usePlayerCommands";
@@ -382,6 +382,7 @@ export function PlayerView({
         onSelectSegment={selectSegment}
         progressLabel={progressLabel}
         commands={commands}
+        wide={item !== undefined && isWide(item.type)}
         // Issue #125: an exercise may be left and continued later; an exam
         // may not look like it can. The teacher's preview, exam or not, has
         // no clock to stop: its way out is the same quiet button.

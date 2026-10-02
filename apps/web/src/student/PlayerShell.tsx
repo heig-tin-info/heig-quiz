@@ -13,10 +13,14 @@
  *     between the header and the body, 32 to the footer). The column is
  *     capped at 760 px: a statement that runs the full width of a laptop is
  *     unreadable, and the strip stays over its own question. On a wide
- *     screen the strip leaves the bar for a side column (`aside`) left of
- *     the question: the room a laptop has is beside the statement, not
- *     above it, and every pixel of bar is a pixel of answer field lost.
- *     The bar then spans both columns, so the title lines up with the list.
+ *     screen the strip leaves the bar for a side column (`aside`) pinned
+ *     to the left of the frame: the room a laptop has is beside the
+ *     statement, not above it, and every pixel of bar is a pixel of answer
+ *     field lost. The column never moves from one question to the next:
+ *     the question is centered in the room right of it, in its 760 px, or
+ *     in the whole room for a type that asks for it (`wide`: a statement
+ *     beside an editor). The bar spans the frame, so the title lines up
+ *     with the list.
  *   - Finish: hairlines top and bottom, `surface` bars on the warm canvas, no
  *     shadow — both bars are in the page flow, not above it.
  *
@@ -53,12 +57,22 @@ import {
 } from "../ui";
 
 /**
- * With the side column, the bar and the body share one width: the 760 px
- * question column (`max-w-190`), unchanged, plus the column and its gap —
- * the two terms of `RAIL_GRID`.
+ * With the side column, the bar and the body share one frame: the column and
+ * its gap (the two terms of `RAIL_GRID`), then the room of the question, up
+ * to the 1600 px of a wide one (`max-w-400`), and the gutters: 1872 px. Up to
+ * there the frame is the screen; past it the frame is centered, rather than
+ * the list alone at the edge of a 2560 px screen and "Hand in" at the other.
  */
-const WIDE = "max-w-[61.5rem]";
+const FRAME = "max-w-[117rem]";
 const RAIL_GRID = "grid grid-cols-[12rem_minmax(0,1fr)] gap-8";
+
+/**
+ * The question's column: 760 px of reading (`max-w-190`), or up to 1600 px
+ * for a type that asks for it (`QuestionTypeClient.wide`) — from 1024 px of
+ * viewport only, so a narrow screen, where the strip lives in the bar, keeps
+ * one width from one question to the next.
+ */
+const column = (wide: boolean) => (wide ? "max-w-190 lg:max-w-400" : "max-w-190");
 
 export function PlayerShell({
   title,
@@ -76,6 +90,7 @@ export function PlayerShell({
   banner,
   footer,
   aside,
+  wide = false,
   children,
 }: {
   title: string;
@@ -121,6 +136,12 @@ export function PlayerShell({
    * adds the move keys under it, visible.
    */
   aside?: ReactNode;
+  /**
+   * The question on screen asks for the room (`isWide`): its column grows
+   * from 760 px to the room right of the side column, or, without one, to
+   * the frame. Every other question keeps the reading column.
+   */
+  wide?: boolean;
   children: ReactNode;
 }) {
   const t = useT();
@@ -172,7 +193,7 @@ export function PlayerShell({
         <div
           className={cx(
             "mx-auto w-full px-4 pt-2.5 sm:px-6",
-            aside ? WIDE : "max-w-190",
+            docked ? FRAME : column(wide),
             // The strip carries the bar's bottom margin; without one the bar
             // would sit on its own hairline.
             strip.length === 0 && "pb-2.5",
@@ -241,7 +262,7 @@ export function PlayerShell({
       <div
         className={cx(
           "mx-auto w-full flex-1 py-6",
-          aside ? cx(RAIL_GRID, WIDE, "px-6") : "max-w-190 px-4 sm:px-6",
+          docked ? cx(RAIL_GRID, FRAME, "px-6") : cx(column(wide), "px-4 sm:px-6"),
         )}
       >
         {aside ? (
@@ -254,7 +275,9 @@ export function PlayerShell({
             </p>
           </aside>
         ) : null}
-        <main className="min-w-0">
+        {/* Beside the side column, the question is centered in the room
+            right of it, and the column stays where it is. */}
+        <main className={cx("min-w-0", docked && cx("mx-auto w-full", column(wide)))}>
           {banner ? <div className="mb-5">{banner}</div> : null}
           {children}
         </main>
