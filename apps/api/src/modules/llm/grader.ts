@@ -1,5 +1,5 @@
 /**
- * The GRADING service over the gateway (ADR-063): one `LlmService` whose
+ * The GRADING service over the gateway (ADR-063): one `GradingLlm` whose
  * `grade` is one call of purpose `grade`, logged and capped like any other.
  * The request arrives as the question type built it and the grading job
  * masked it; nothing here adds to it.
@@ -9,6 +9,7 @@ import { z } from "zod";
 import type { LlmGradeOutcome, LlmGradeRequest } from "@quiz/core/server";
 
 import type { LlmGateway } from "./gateway.js";
+import type { GradingLlm } from "./index.js";
 
 /** A criterion's sentence, the justification: long enough to say why, short enough to read beside a copy. */
 const SENTENCE_MAX = 600;
@@ -60,7 +61,7 @@ export function gradePrompt(req: LlmGradeRequest): string {
   ].join("\n\n");
 }
 
-export function gatewayGrader(gateway: LlmGateway) {
+export function gatewayGrader(gateway: LlmGateway): GradingLlm {
   return {
     ready: () => gateway.ready(),
     async grade(req: LlmGradeRequest, billedTo: string | null): Promise<LlmGradeOutcome> {

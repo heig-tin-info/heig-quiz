@@ -223,7 +223,8 @@ export const GradingProgressEvent = z.object({
   evaluationId: z.uuid(),
   done: z.number().int(),
   total: z.number().int(),
-  phase: z.enum(["auto", "runner", "done"]),
+  /** `pending`: the deterministic half is written, runner or model jobs are still out (ADR-063). */
+  phase: z.enum(["auto", "pending", "done"]),
 });
 export type GradingProgressEvent = z.infer<typeof GradingProgressEvent>;
 

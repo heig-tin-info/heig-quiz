@@ -120,7 +120,10 @@ student sidebar that mirrors the bottom bar. Later on 2026-10-01 the
 `student-home` scenes were retaken without the Past section, and the
 `student-grades` scenes (the `/grades` page) added, on a fresh seed with no
 runner. The `student-home` scenes were retaken once more that day, on a
-fresh seed with no runner, for Coming up grouped by day.
+fresh seed with no runner, for Coming up grouped by day. The
+`grading-essay` and `grading-ai-justification` scenes were retaken on
+2026-10-02, on a fresh seed with `LLM_PROVIDER=stub` and no runner, for the
+AI's wand, criteria and model (ADR-063).
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |
@@ -159,8 +162,8 @@ fresh seed with no runner, for Coming up grouped by day.
 | `grading-categorize` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | graded | Moved five questions forward (the categorize question). | 1440×900, full page |
 | `grading-codeimage` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | graded | Moved six questions forward (the code-to-picture question). | 1440×900, full page |
 | `grading-circuit` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | graded | Moved seven questions forward (the circuit). | 1440×900, full page |
-| `grading-essay` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | graded | Moved eight questions forward (the essay). | 1440×900, full page |
-| `grading-ai-justification` | teacher | `/evaluations/91add22f-aa91-4693-bbef-7346a38daa89/grading` | graded | Moved to the essay and opened the first AI proposal. | 1440×900 |
+| `grading-essay` | teacher | `/evaluations/c78511b3-f11c-4113-884a-34bd5b270a61/grading` | graded | Moved eight questions forward (the essay). | 1440×900, full page |
+| `grading-ai-justification` | teacher | `/evaluations/c78511b3-f11c-4113-884a-34bd5b270a61/grading` | graded | Moved to the essay and opened the first AI proposal. | 1440×900 |
 | `grading-override` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | graded | Opened the first answer and clicked “Adjust” in its panel. | 1440×900 |
 | `grading-batch` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/grading` | seeded | Moved to the essay and hovered the primary button, which offers to validate its four proposals. | 1440×900 |
 | `results` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results` | graded | Nothing: the page as it loads. | 1440×900, full page |

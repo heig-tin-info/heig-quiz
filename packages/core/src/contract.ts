@@ -8,7 +8,7 @@
  */
 import type { z } from "zod";
 import type { AnswerGenerator } from "./generate.js";
-import type { LlmGradeRequest, LlmService } from "./llm.js";
+import type { LlmGradeRequest } from "./llm.js";
 import type { RunnerOutcome, RunnerRequest, RunnerService } from "./runner.js";
 
 /**
@@ -74,10 +74,7 @@ export interface PendingRunnerResult {
 export interface PendingLlmResult {
   kind: "pending";
   via: "llm";
-  /**
-   * Handed to `app.llm` by the grading pass; with no service configured the
-   * pass writes a proposal with reason `llm_not_configured` instead.
-   */
+  /** Handed to the model by the grading pass, only when `GradeContext.llm` said one would be asked. */
   request: LlmGradeRequest;
   /** The type's own details, stored beside the model's points (as a runner result's). */
   details?: unknown;
@@ -167,11 +164,12 @@ export interface GradeContext {
   /** Always present; may be the unavailable stub (throws `RunnerUnavailable`). */
   runner: RunnerService;
   /**
-   * The LLM grading service, when the process has one (`LLM_PROVIDER`; only
-   * the development stub exists yet). A type that can grade without it — the
-   * essay, by hand — returns `pending: "llm"` only when it is present.
+   * Present when a model will grade a `pending: "llm"` result: the process
+   * has a grading service with a key behind it, and the evaluation no longer
+   * runs (F-LLM-03). A type that can grade without it — the essay, by hand —
+   * returns `pending: "llm"` only then. A type never calls a model itself.
    */
-  llm?: LlmService;
+  llm?: true;
   /**
    * Per-type settings of the EVALUATION being graded, keyed by type id — what
    * a config that says "inherit" defers to (an mcq's scoring policy). The

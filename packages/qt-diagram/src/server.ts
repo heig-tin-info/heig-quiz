@@ -11,7 +11,7 @@
  * the reference and both text forms.
  */
 import { ConfigMigrationError, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
-import { isEmptyScene, kindIssues, sameScene, toText, type DiagramKind, type Scene } from "@quiz/diagram/server";
+import { formOf, isEmptyScene, kindIssues, sameScene, toText, type Scene } from "@quiz/diagram/server";
 
 import {
   DIAGRAM_CONFIG_VERSION,
@@ -35,18 +35,6 @@ const textsOf = (scene: Scene): string[] => [
   ...scene.nodes.flatMap((n) => [n.name ?? "", n.stereo ?? "", ...(n.body ?? [])]),
   ...scene.links.map((l) => l.name ?? ""),
 ];
-
-/** What the model reads, per kind: the text form of its codec (ADR-046 §2); `free` has none. */
-const FORMS: Readonly<Record<DiagramKind, string | null>> = {
-  class: "a UML class diagram in PlantUML",
-  usecase: "a UML use case diagram in PlantUML",
-  state: "a state diagram in Mermaid",
-  er: "an entity-relationship diagram in Mermaid",
-  flow: "a flowchart in Mermaid",
-  automaton: "a finite automaton in Graphviz DOT",
-  graph: "a graph in Graphviz DOT",
-  free: null,
-};
 
 export const diagramServer: QuestionTypeServer<
   DiagramConfig,
@@ -146,9 +134,8 @@ export const diagramServer: QuestionTypeServer<
     if (sameScene(answer.scene, startingScene(config.starter))) {
       return { kind: "graded", points: 0, maxPoints: ctx.itemPoints, details: { reason: "empty", nodes, links } };
     }
-    const form = FORMS[config.kind];
-    const answerText = ctx.llm === undefined || form === null ? null : toText(answer.scene, config.kind);
-    if (form === null || answerText === null) return proposal("manual");
+    const form = formOf(config.kind);
+    if (ctx.llm === undefined || form === null) return proposal("manual");
     return {
       kind: "pending",
       via: "llm",
@@ -157,7 +144,7 @@ export const diagramServer: QuestionTypeServer<
         form,
         rubric: config.rubric,
         reference: toText(config.reference, config.kind) ?? "",
-        answer: answerText,
+        answer: toText(answer.scene, config.kind) ?? "",
         maxPoints: ctx.itemPoints,
       },
       details: { reason: "llm", nodes, links },

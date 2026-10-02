@@ -98,12 +98,15 @@ class diagram", …). It still holds the rubric, the reference and the
 item's points, and nothing that names the evaluation, the class or the
 student (F-LLM-04).
 
-Before the call, the answer is MASKED (N-DATA-05): the first names, last
-names, full names and email addresses of the students who sat the
-evaluation are replaced by `[student]`, whole words, ignoring case and
-accents. A name that is also a word of the subject (a student called
-Pascal in a programming course) is masked too: a lost word costs less than
-a leaked name. The statement, the rubric and the reference are the
+Just before the call, in the job that is the one way to the model, the
+answer is MASKED (N-DATA-05, `maskNames`, `@quiz/domain`): for the
+classroom's roster and whoever sat the evaluation, a full name in either
+order, every part of a name of three letters or more, and every e-mail
+address become `[student]`, whole words, ignoring case and accents. A part
+shorter than that is masked only beside the rest of its name ("Le" alone is
+a French word; "Wu Li" goes whole). A name that is also a word of the
+subject (a student called Pascal in a programming course) is masked too: a
+lost word costs less than a leaked name. The statement, the rubric and the reference are the
 teacher's text and are sent as written.
 
 The reply (`LlmGradeOutcome`) gains a breakdown PER CRITERION: the
@@ -136,10 +139,12 @@ F-LLM-04), and to no one for an evaluation without one; its purpose is
   until it can be sent as a picture (see Consequences).
 - **Circuit**: not graded by a model (§6).
 
-`app.llm` remains the one `LlmService` of the process: the stub when
+`app.llm` remains the one grading service of the process: the stub when
 `LLM_PROVIDER=stub` (development, the seed, the tests; still refused in
 production), else a service over the gateway, which the pass offers only
-when the gateway holds a key (`ready()`).
+when the gateway holds a key (`ready()`). A question type never calls a
+model: `GradeContext.llm` is now a flag that says one will be asked, and
+the service, with the person a call is billed to, belongs to the API.
 
 ### 6. Circuits are graded by simulation, never by a model
 

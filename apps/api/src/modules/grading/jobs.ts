@@ -58,7 +58,7 @@ import {
   GRADING_RUNNER_QUEUE,
   type JobQueue,
 } from "../../jobs.js";
-import { LlmError } from "../llm/provider.js";
+import { LlmError } from "../llm/service.js";
 import {
   byId,
   gradeDefaults,
@@ -135,7 +135,7 @@ interface LlmGradingJob {
   attemptId: string;
   itemId: string;
   answerId: string;
-  /** As the type built it, the answer masked of the evaluation's names (N-DATA-05). */
+  /** As the type built it; `runLlmGrading`, the one way to the model, masks it. */
   request: LlmGradeRequest;
   /** The type's own details, kept beside the model's reply. */
   details?: unknown;
@@ -278,7 +278,7 @@ function progressReporter(evaluation: EvaluationRecord, teacherIds: string[], to
       sinceEvent = 0;
       events.progress(evaluation, teacherIds, { done, total, phase: "auto" });
     },
-    finish(phase: "runner" | "done"): void {
+    finish(phase: "pending" | "done"): void {
       events.progress(evaluation, teacherIds, { done, total, phase });
     },
   };
@@ -390,7 +390,7 @@ async function gradeCell(
       itemPoints: item.item.points,
       now: base.now,
       runner: app.runner,
-      ...(cell.llm && app.llm ? { llm: app.llm } : {}),
+      ...(cell.llm ? { llm: true as const } : {}),
       // The evaluation's per-type settings: what a question config
       // that says "inherit" defers to (an mcq's scoring policy).
       defaults: gradeDefaults(evaluation),
@@ -480,13 +480,11 @@ export async function runEvaluationGrading(
     }
   }
   await writeGradings(app.db, writes);
-  progress.finish(runnerJobs.length + llmJobs.length > 0 ? "runner" : "done");
-  for (const runnerJob of runnerJobs) await enqueueRunnerGrading(app, runnerJob);
-  const people = llmJobs.length > 0 ? await peopleOf(app.db, evaluation) : [];
-  for (const llmJob of llmJobs) {
-    const request = { ...llmJob.request, answer: maskNames(llmJob.request.answer, people) };
-    await enqueueLlmGrading(app, { ...llmJob, request });
+  progress.finish(runnerJobs.length + llmJobs.length > 0 ? "pending" : "done");
+  for (const runnerJob of runnerJobs) {
+    await enqueueOrRun(app, GRADING_RUNNER_QUEUE, runnerJob, runRunnerGrading, { priority: RUNNER_PRIORITY });
   }
+  for (const llmJob of llmJobs) await enqueueOrRun(app, GRADING_LLM_QUEUE, llmJob, runLlmGrading);
   // After its own write, whatever the pass filled: the grid as it stands
   // now, with every runner job that committed meanwhile (#286).
   await announceGradingReady(app, evaluation);
@@ -562,16 +560,19 @@ async function gradeOne(
 
 // --- The runner pass ------------------------------------------------------
 
-async function enqueueRunnerGrading(
+/** One job of a pass on its queue, or run inline when this process has none (see `enqueueEvaluationGrading`). */
+async function enqueueOrRun<T extends object>(
   app: FastifyInstance,
-  job: RunnerGradingJob,
+  name: string,
+  job: T,
+  run: (app: FastifyInstance, job: T) => Promise<void>,
+  options?: { priority: number },
 ): Promise<void> {
-  const queue = app.boss;
-  if (!queue) {
-    await runRunnerGrading(app, job);
+  if (!app.boss) {
+    await run(app, job);
     return;
   }
-  await queue.send(GRADING_RUNNER_QUEUE, job, { priority: RUNNER_PRIORITY });
+  await app.boss.send(name, job, options);
 }
 
 /**
@@ -742,15 +743,6 @@ async function peopleOf(db: Db, evaluation: EvaluationRecord): Promise<MaskedPer
   return [...sat, ...roster];
 }
 
-async function enqueueLlmGrading(app: FastifyInstance, job: LlmGradingJob): Promise<void> {
-  const queue = app.boss;
-  if (!queue) {
-    await runLlmGrading(app, job);
-    return;
-  }
-  await queue.send(GRADING_LLM_QUEUE, job);
-}
-
 /** The reason a failed call leaves on its cell (ADR-063 §2). */
 function llmFailure(err: unknown): PassReason {
   if (!(err instanceof LlmError)) return "grader_error";
@@ -760,17 +752,21 @@ function llmFailure(err: unknown): PassReason {
 }
 
 /**
- * The second half of a `pending: llm` grading: the model's points,
- * confidence and criteria, as a PROPOSAL a teacher validates (F-GRADE-02).
- * The justification and the rest of the reply are the TEACHER's (ADR-045,
- * ADR-063 §4): under `JUSTIFICATION_KEY` and `AI_KEY`, which every student
- * payload strips, never in the comment a validation would hand to the
- * student. A failed call: a proposal worth zero that says why (§5.4).
+ * The second half of a `pending: llm` grading, and the one way to the model:
+ * the answer masked of the evaluation's names (N-DATA-05), then the model's
+ * points, confidence and criteria, as a PROPOSAL a teacher validates
+ * (F-GRADE-02). The justification and the rest of the reply are the
+ * TEACHER's (ADR-045, ADR-063 §4): under `JUSTIFICATION_KEY` and `AI_KEY`,
+ * which every student payload strips, never in the comment a validation
+ * would hand to the student. A failed call: a proposal worth zero that says
+ * why (§5.4).
  */
 async function runLlmGrading(app: FastifyInstance, job: LlmGradingJob): Promise<void> {
   const db = app.db;
   const evaluation = await byId(db, job.evaluationId);
-  if (!evaluation) return;
+  // F-LLM-03 again: an evaluation reopened since the pass is not graded
+  // while it runs; the pass of its next close asks.
+  if (!evaluation || isLiveState(evaluation.state)) return;
   if (!(await isValidated(db, job.attemptId, job.itemId))) {
     const base = {
       attemptId: job.attemptId,
@@ -780,28 +776,33 @@ async function runLlmGrading(app: FastifyInstance, job: LlmGradingJob): Promise<
       now: app.clock.now(),
       ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
     };
-    try {
-      if (!app.llm) throw new LlmError("not_configured");
-      const outcome = await app.llm.grade(job.request, evaluation.createdBy);
-      const own = job.details && typeof job.details === "object" ? job.details : {};
-      const points = round2(Math.min(job.request.maxPoints, Math.max(0, outcome.points)));
-      await writeGrading(db, {
-        ...base,
-        points: itemPoints(points, job.bonus),
-        source: "llm",
-        state: "proposed",
-        details: {
-          ...own,
-          [JUSTIFICATION_KEY]: outcome.justification,
-          [AI_KEY]: { model: outcome.model, criteria: outcome.criteria },
-        },
-        confidence: outcome.confidence,
-      });
-    } catch (err) {
-      const reason = llmFailure(err);
-      if (reason === "grader_error") app.log.error({ err, itemId: job.itemId }, "grading: llm call failed");
-      await writeGrading(db, { ...base, ...failedProposal(reason, "llm") });
-    }
+    await writeGrading(db, { ...base, ...(await askModel(app, evaluation, job)) });
   }
   await announceGradingReady(app, evaluation);
+}
+
+/** The model's proposal for one answer, or the failed proposal that says why. */
+async function askModel(app: FastifyInstance, evaluation: EvaluationRecord, job: LlmGradingJob) {
+  if (!app.llm) return failedProposal("llm_not_configured", "llm");
+  const request = { ...job.request, answer: maskNames(job.request.answer, await peopleOf(app.db, evaluation)) };
+  try {
+    const outcome = await app.llm.grade(request, evaluation.createdBy);
+    const own = job.details && typeof job.details === "object" ? job.details : {};
+    const points = round2(Math.min(request.maxPoints, Math.max(0, outcome.points)));
+    return {
+      points: itemPoints(points, job.bonus),
+      source: "llm" as const,
+      state: "proposed" as const,
+      details: {
+        ...own,
+        [JUSTIFICATION_KEY]: outcome.justification,
+        [AI_KEY]: { model: outcome.model, criteria: outcome.criteria },
+      },
+      confidence: outcome.confidence,
+    };
+  } catch (err) {
+    const reason = llmFailure(err);
+    if (reason === "grader_error") app.log.error({ err, itemId: job.itemId }, "grading: llm call failed");
+    return failedProposal(reason, "llm");
+  }
 }

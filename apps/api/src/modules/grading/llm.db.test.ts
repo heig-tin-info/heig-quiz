@@ -119,7 +119,7 @@ function recordingStub(
     grade: (req, billedTo) => {
       requests.push(req);
       billed.push(billedTo);
-      return options.fail ? Promise.reject(options.fail) : stub.grade(req, billedTo);
+      return options.fail ? Promise.reject(options.fail) : stub.grade(req);
     },
   };
 }

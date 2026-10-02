@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import type { LlmService } from "@quiz/core/server";
 import { emptyScene, sameScene, toText, type Scene } from "@quiz/diagram/server";
 
 import { config, gradeContext, REFERENCE, STARTER } from "./test/fixtures.js";
@@ -105,7 +104,7 @@ describe("grade", () => {
   });
 
   it("sends a drawn answer to the LLM service in its text form, beside the reference's", async () => {
-    const result = await diagramServer.grade(config(), answer(drawn), { ...ctx, llm: unusedLlm });
+    const result = await diagramServer.grade(config(), answer(drawn), { ...ctx, llm: true as const });
     expect(result).toMatchObject({
       kind: "pending",
       via: "llm",
@@ -125,17 +124,11 @@ describe("grade", () => {
   it("keeps a free drawing, which has no text form, for the teacher", async () => {
     const scene: Scene = { nodes: [{ id: "free0001", t: "rect", x: 0, y: 0, w: 80, h: 40 }], links: [] };
     const free = config({ kind: "free", reference: scene, starter: undefined });
-    const result = await diagramServer.grade(free, answer({ nodes: [{ ...scene.nodes[0]!, x: 40 }], links: [] }), { ...ctx, llm: unusedLlm });
+    const result = await diagramServer.grade(free, answer({ nodes: [{ ...scene.nodes[0]!, x: 40 }], links: [] }), { ...ctx, llm: true as const });
     expect(result).toMatchObject({ kind: "graded", state: "proposed", details: { reason: "manual" } });
   });
 });
 
-/** `grade` only checks that a service exists; the grading pass is the one that calls it. */
-const unusedLlm: LlmService = {
-  grade() {
-    throw new Error("the diagram type must never call the LLM itself");
-  },
-};
 
 describe("the rest of the contract", () => {
   it("counts an answer as answered as soon as its scene holds something", () => {

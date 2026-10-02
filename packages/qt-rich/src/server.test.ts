@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isGraded, type LlmService } from "@quiz/core/server";
+import { isGraded } from "@quiz/core/server";
 import { richServer } from "./server.js";
 import { config, gradeContext, SECRET_CONFIG } from "./test/fixtures.js";
 
@@ -30,7 +30,7 @@ describe("grade", () => {
   });
 
   it("sends a written answer to the LLM service when there is one", async () => {
-    const ctx = { ...gradeContext(4), llm: unusedLlm };
+    const ctx = { ...gradeContext(4), llm: true as const };
     const result = await richServer.grade(SECRET_CONFIG, { text: "The guard page." }, ctx);
     expect(result).toEqual({
       kind: "pending",
@@ -48,7 +48,7 @@ describe("grade", () => {
   });
 
   it("keeps an essay with nothing to grade against, and a blank one, off the LLM", async () => {
-    const ctx = { ...gradeContext(4), llm: unusedLlm };
+    const ctx = { ...gradeContext(4), llm: true as const };
     const bare = await richServer.grade(config(), { text: "The guard page." }, ctx);
     expect(isGraded(bare) && bare.details.reason).toBe("manual");
     const blank = await richServer.grade(SECRET_CONFIG, { text: "  " }, ctx);
@@ -56,12 +56,6 @@ describe("grade", () => {
   });
 });
 
-/** `grade` only checks that a service exists; the grading pass is the one that calls it. */
-const unusedLlm: LlmService = {
-  grade() {
-    throw new Error("the rich type must never call the LLM itself");
-  },
-};
 
 describe("answerMisfit", () => {
   it("refuses an answer over the question's limit", () => {

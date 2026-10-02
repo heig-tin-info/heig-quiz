@@ -1,17 +1,14 @@
 /**
- * The LLM grading service (F-GRADE-02, ADR-045).
+ * LLM grading (F-GRADE-02, ADR-045, ADR-063): what a question type asks of a
+ * model, and what comes back.
  *
  * A question type that wants a model's opinion returns `pending: "llm"` with
- * an {@link LlmGradeRequest}; the grading pass hands it to the ONE service of
- * the process (`app.llm`) and writes the reply as a PROPOSAL carrying the
- * model's confidence, its justification kept for the teacher alone. Without
- * a service the pass writes a 0-point proposal with reason
- * `llm_not_configured`, and a type that can grade otherwise (the essay, by
- * hand) does not ask at all: it reads `GradeContext.llm` first.
- *
- * Two providers (ADR-063): the real model, through the gateway of the API,
- * and the deterministic stub of development, which `config.ts` refuses in
- * production.
+ * an {@link LlmGradeRequest}; the grading pass hands it to the ONE grading
+ * service of the API (`app.llm`: the real model through the gateway, or the
+ * development stub) and writes the reply as a PROPOSAL, kept for the teacher
+ * alone. A type never calls a model: it reads `GradeContext.llm`, which says
+ * whether one will be asked, and a type that can grade otherwise (the essay,
+ * by hand) does not ask when none will.
  */
 
 /**
@@ -67,10 +64,3 @@ export interface LlmCriterion {
   comment: string;
 }
 
-export interface LlmService {
-  /**
-   * `billedTo` is the person the call is logged against (`llm_calls`,
-   * F-LLM-04); it is never sent to the model.
-   */
-  grade(req: LlmGradeRequest, billedTo: string | null): Promise<LlmGradeOutcome>;
-}

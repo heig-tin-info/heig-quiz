@@ -12,7 +12,7 @@
  * in the answer — and its justification says it is a stub without naming
  * the terms.
  */
-import type { LlmGradeOutcome, LlmGradeRequest, LlmService } from "@quiz/core/server";
+import type { LlmGradeOutcome, LlmGradeRequest } from "@quiz/core/server";
 
 /** Words shorter than this are too common to say anything about an answer. */
 const MIN_TERM = 5;
@@ -76,8 +76,8 @@ export function stubGrade(req: LlmGradeRequest): LlmGradeOutcome {
 /** What a stub proposal names as its model: never a real one. */
 export const STUB_MODEL = "development-stub";
 
-export class StubLlm implements LlmService {
-  grade(req: LlmGradeRequest, _billedTo: string | null): Promise<LlmGradeOutcome> {
+export class StubLlm {
+  grade(req: LlmGradeRequest): Promise<LlmGradeOutcome> {
     return Promise.resolve(stubGrade(req));
   }
 }

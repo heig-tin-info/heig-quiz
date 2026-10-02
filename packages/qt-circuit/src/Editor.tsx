@@ -794,8 +794,10 @@ function GradingSection({
     { value: "manual", label: s.modeManual },
     { value: "simulation", label: s.modeSimulation },
   ];
-  // `llm` is closed (ADR-063): never offered, refused at publication.
-  const modeHint = { manual: s.modeManualHint, simulation: s.modeSimulationHint, llm: s.modeManualHint };
+  const modeHint = { manual: s.modeManualHint, simulation: s.modeSimulationHint };
+  // `llm` is closed (ADR-063): a draft that still holds it reads, and is
+  // graded, as `manual`; publication refuses it until the teacher picks.
+  const mode = config.grading.mode === "llm" ? "manual" : config.grading.mode;
   // Every read parses the config; only an invalid draft reaches this screen as
   // stored, and one saved before the AC sweep has no `bode` yet.
   const hasAc = config.stimuli.some((st) => st.analysis.kind === "ac");
@@ -807,7 +809,7 @@ function GradingSection({
     <AsideSection aside={aside}>
       {/*
        * The "?" is a SIBLING of the heading, never inside it (DESIGN.md):
-       * the three modes are the one choice on this screen a teacher cannot
+       * the grading modes are the one choice on this screen a teacher cannot
        * guess from a label, and the long form belongs in the drawer.
        */}
       <div className="flex flex-wrap items-center gap-1.5">
@@ -819,12 +821,12 @@ function GradingSection({
       <Segmented
         name={`${ids}-mode`}
         labelledBy={`${ids}-grading`}
-        value={config.grading.mode}
+        value={mode}
         options={modeOptions}
         disabled={disabled}
         onChange={(mode) => patch({ grading: { ...config.grading, mode } })}
       />
-      <p className={hint}>{modeHint[config.grading.mode]}</p>
+      <p className={hint}>{modeHint[mode]}</p>
       <IssueList issues={issuesAt(issues, "grading")} />
 
       {/* The tolerance means nothing outside `simulation`, and the criteria

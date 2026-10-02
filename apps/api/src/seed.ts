@@ -149,7 +149,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const config = loadConfig();
   const handle = createDb(config.DATABASE_URL);
   await handle.migrate(MIGRATIONS_DIR);
-  await seed(handle.db, console.log, createLlm(config));
+  // No gateway: the seed never calls a real model, only the stub.
+  await seed(handle.db, console.log, createLlm(config, null));
   await handle.close();
   console.log("seed done");
 }

@@ -63,6 +63,6 @@ describe("the stub LLM grader", () => {
   it("is deterministic", async () => {
     const llm = new StubLlm();
     const req = { statement: "Q", form: "free text", rubric: RUBRIC, answer: "Stack overflow.", maxPoints: 4 };
-    expect(await llm.grade(req, null)).toEqual(await llm.grade(req, null));
+    expect(await llm.grade(req)).toEqual(await llm.grade(req));
   });
 });

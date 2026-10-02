@@ -20,7 +20,18 @@ describe("maskNames", () => {
   });
 
   it("masks each part of a compound name, but not a part too short to mean anything", () => {
-    expect(maskNames("Jean-Pierre Le Gall a écrit le code", [jp])).toBe(`${MASK}-${MASK} Le ${MASK} a écrit le code`);
+    expect(maskNames("Jean-Pierre Le Gall a écrit le code", [jp])).toBe(`${MASK}-${MASK} ${MASK} ${MASK} a écrit le code`);
+    expect(maskNames("Le Gall seul, et le code", [jp])).toBe(`Le ${MASK} seul, et le code`);
+  });
+
+  it("masks a whole name of short parts, in either order, though neither part alone", () => {
+    const wu = { givenName: "Li", familyName: "Wu", email: "" };
+    expect(maskNames("Je suis Li Wu, ou WU-Li, ou wu li.", [wu])).toBe(
+      `Je suis ${MASK} ${MASK}, ou ${MASK}-${MASK}, ou ${MASK} ${MASK}.`,
+    );
+    expect(maskNames("Li seul, et Wu seul.", [wu])).toBe("Li seul, et Wu seul.");
+    // Two words of one name, not across a sentence.
+    expect(maskNames("Wu. Li", [wu])).toBe("Wu. Li");
   });
 
   it("masks a name that is also a word: a lost word costs less than a leaked name", () => {
@@ -30,5 +41,9 @@ describe("maskNames", () => {
 
   it("leaves a text alone when nobody is given", () => {
     expect(maskNames("Alice", [])).toBe("Alice");
+  });
+
+  it("masks a person known by one name only", () => {
+    expect(maskNames("Signé Prince", [{ givenName: "Prince", familyName: "", email: "" }])).toBe(`Signé ${MASK}`);
   });
 });

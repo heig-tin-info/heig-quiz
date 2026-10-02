@@ -1,7 +1,8 @@
 # Correction d'un circuit
 
-Une question de type circuit se corrige de trois manières. Le choix ne
-concerne pas votre sévérité, mais ce que la question demande.
+Une question de type circuit se corrige de deux manières. Le choix ne
+concerne pas votre sévérité, mais ce que la question demande. Un modèle de
+langage ne corrige jamais un circuit : la simulation est la correction.
 
 ## Vous
 
@@ -34,12 +35,6 @@ Ce mode exige un circuit de référence et au moins un stimulus, sans quoi la
 question ne se publie pas. Un étudiant dont le circuit ne peut pas être
 transformé en netlist — broche en l'air, valeur hors plage — n'obtient rien
 sur ce stimulus, et la raison lui est indiquée.
-
-## Assistant
-
-Phase 2 : la netlist et vos critères sont transmis au modèle de langage. Le
-mode est listé pour que le choix soit visible, mais il ne fonctionne pas
-encore.
 
 ## Stimuli cachés
 

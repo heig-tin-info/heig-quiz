@@ -4,7 +4,7 @@ import { applyParsed } from "../apply.js";
 import { EXAMPLES } from "../examples.js";
 import { estimateText } from "../geometry.js";
 import { DIAGRAM_KINDS, type DiagramKind } from "../kinds.js";
-import { CODECS, toText } from "./index.js";
+import { CODECS, formOf, toText } from "./index.js";
 import { MAX_LINE } from "./parsed.js";
 
 const TEXT_KINDS = DIAGRAM_KINDS.filter((k) => CODECS[k] !== null);
@@ -32,6 +32,13 @@ describe("the text round trip", () => {
 });
 
 const parse = (kind: DiagramKind, text: string) => parseText(text, kind);
+
+describe("formOf", () => {
+  it("names the notation of every kind with a text form, and none for `free`", () => {
+    for (const kind of DIAGRAM_KINDS) expect(formOf(kind) === null).toBe(CODECS[kind] === null);
+    expect(formOf("class")).toBe("a UML class diagram in PlantUML");
+  });
+});
 
 describe("PlantUML", () => {
   it("reads reversed arrows, multiplicities and a label", () => {
