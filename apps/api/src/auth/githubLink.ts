@@ -269,8 +269,8 @@ async function linkRelevant(db: Db, userId: string): Promise<boolean> {
  * login. `octokit` is an installation client of the caller's organization
  * (an App JWT cannot read users).
  *
- * For the tasks that name or invite a student on GitHub (M3-03, M4-03);
- * nothing calls it yet.
+ * For the tasks that name or invite a student on GitHub: a project's
+ * Accept (`modules/project/accept.ts`, M3-03), and M4-03.
  */
 export async function linkedLogin(
   db: Db,
