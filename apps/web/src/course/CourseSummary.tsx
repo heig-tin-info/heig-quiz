@@ -1,10 +1,10 @@
-import { Library, Plus, School } from "lucide-react";
+import { FileStack, Library, School } from "lucide-react";
 
 import type { CourseSummary } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import type { Route } from "../router";
-import { Actions, Button, Card, PeopleStack, SectionHeading, T } from "../ui";
+import { Actions, Card, PeopleStack, SectionHeading, T } from "../ui";
 import { CoursePools } from "./CoursePools";
 import { ArchivedClassrooms, ClassroomRow, HiddenBadge } from "./parts";
 import { useCourseActions } from "./useCourseActions";
@@ -40,7 +40,7 @@ export function CourseCard({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
-  const { items, staffActions, newClassroom, dialogs } = useCourseActions(course);
+  const { items, staffActions, dialogs } = useCourseActions(course);
 
   return (
     <Card className="flex min-w-0 flex-col p-5">
@@ -57,14 +57,9 @@ export function CourseCard({
             <PeopleStack people={course.staff} actions={staffActions} className="ml-2" />
           </span>
         }
-        actions={
-          <>
-            <Button size="sm" variant="secondary" onClick={newClassroom}>
-              <Plus /> {t("classrooms.new")}
-            </Button>
-            <Actions items={items} label={t("common.actions")} />
-          </>
-        }
+        // No "New classroom" here: the card is a summary, and a classroom is
+        // made on the course page, whose one primary action it is.
+        actions={<Actions items={items} label={t("common.actions")} />}
       />
 
       <div className="mt-4 flex-1 space-y-1.5">
@@ -79,6 +74,19 @@ export function CourseCard({
       </div>
 
       <CoursePools course={course} navigate={navigate} />
+
+      {/* The templates are counted, not listed: they live on the course page
+          (ADR-031), which the count opens. */}
+      <button
+        type="button"
+        onClick={() => navigate({ view: "course", id: course.id })}
+        className="mt-4 flex items-center gap-2 self-start rounded-field px-2 py-1 text-[13px] text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+      >
+        <FileStack className="size-3.5 shrink-0 text-fg-faint" />
+        {course.templates === 0
+          ? t("templates.count.none")
+          : t(course.templates === 1 ? "templates.count.one" : "templates.count", { n: course.templates })}
+      </button>
 
       {dialogs}
     </Card>

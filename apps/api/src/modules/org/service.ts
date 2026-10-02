@@ -25,6 +25,7 @@ import {
   users,
 } from "../../db/schema.js";
 import { shownAvatar } from "../avatar.js";
+import { countTemplates } from "../evaluation/service.js";
 import { purgeProjectReceipts } from "../github/service.js";
 import { accessRevoked } from "../realtime/bus.js";
 
@@ -103,12 +104,14 @@ export async function listCourses(db: Db, access: SQL | undefined, viewerId: str
         .orderBy(classrooms.createdAt)
     : [];
   const staff = await staffOf(db, ids);
+  const templates = await countTemplates(db, ids);
   return rows.map((c) => ({
     id: c.id,
     name: c.name,
     code: c.code,
     createdAt: c.createdAt.toISOString(),
     hidden: c.hiddenAt !== null,
+    templates: templates.get(c.id) ?? 0,
     classrooms: rooms
       .filter((r) => r.courseId === c.id)
       .map((r) => ({

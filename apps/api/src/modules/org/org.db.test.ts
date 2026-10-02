@@ -708,6 +708,26 @@ describe("GET /courses/:id", () => {
   });
 });
 
+describe("GET /courses", () => {
+  it("counts the templates each course keeps", async () => {
+    const count = async () =>
+      (
+        await server.app.inject({ method: "GET", url: "/app/api/courses", headers: teacher.headers })
+      )
+        .json()
+        .find((c: { id: string }) => c.id === courseId).templates;
+    const before = await count();
+    const made = await server.app.inject({
+      method: "POST",
+      url: `/app/api/courses/${courseId}/templates`,
+      headers: teacher.headers,
+      payload: { title: "Final exam", mode: "exam", preset: "exam" },
+    });
+    expect(made.statusCode).toBe(201);
+    expect(await count()).toBe(before + 1);
+  });
+});
+
 /**
  * The order of the refusals, which the org routes keep on `teacherRoute`
  * (audit B-02, B-12): session and role (preHandler) → params (404) → the

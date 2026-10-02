@@ -6,15 +6,16 @@ Un cours est l'unité durable que vous enseignez — « Programmation C » — a
 un nom et un code court. Il survit à une classe : le même cours porte les
 classes de 2026, puis celles de 2027.
 
-Une carte par cours. Ses classes y sont listées avec leur période et leur
-effectif ; un clic en ouvre une. Le nom du cours ouvre sa page, qui le
-réunit tout entier : ses classes (les archivées derrière **Afficher les
+Une carte par cours, un résumé : ses classes avec leur période et leur
+effectif (un clic en ouvre une), ses banques et le nombre de ses modèles.
+Le nom du cours ouvre sa page, qui le réunit tout entier et où il se
+modifie : ses classes (les archivées derrière **Afficher les
 archivées**), ses banques et ses modèles d'évaluation. Un clic sur le nom,
 sur cette page, renomme le cours ; son code reste celui de sa création.
 
 ## Classes
 
-**Nouvelle classe** demande un nom et une période. Une classe est un groupe
+**Nouvelle classe**, sur la page du cours, demande un nom et une période. Une classe est un groupe
 qui suit ce cours pendant une période ; c'est là que vivent la liste des
 étudiants, les évaluations et les résultats.
 
@@ -36,7 +37,7 @@ retirer quelqu'un de l'équipe.
 ## Banques de ce cours
 
 Les évaluations d'un cours puisent leurs questions dans les banques qui lui
-sont liées. **Lier une banque** en ajoute une ; **Délier de ce cours** retire
+sont liées. Sur la page du cours, **Lier une banque** en ajoute une ; **Délier de ce cours** retire
 le lien et rien d'autre — la banque et ses questions restent en place. Une
 banque liée à aucun cours reste la vôtre, elle n'est simplement pas proposée
 au moment de remplir une évaluation.

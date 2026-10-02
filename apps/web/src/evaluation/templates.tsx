@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CopyPlus, FileStack, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -32,7 +32,7 @@ import {
   Skeleton,
 } from "../ui";
 import { ModeChoice, type CreatedMode } from "./ModeChoice";
-import { courseTemplatesKey, evaluationKey, evaluationsKey } from "../queryKeys";
+import { coursesKey, courseTemplatesKey, evaluationKey, evaluationsKey } from "../queryKeys";
 
 /**
  * Evaluation templates of a course (ADR-031): the section of the course page,
@@ -44,7 +44,7 @@ import { courseTemplatesKey, evaluationKey, evaluationsKey } from "../queryKeys"
  * who opened a course has asked to see all of it, and the empty state is
  * where they learn the two doors in — "New template" here (F-EVAL-24), and
  * "Save as template" in an evaluation's menu. The novice home is spared: the
- * course card lists no template.
+ * course card lists no template, it counts them.
  */
 
 export function useCourseTemplates(courseId: string | null) {
@@ -54,6 +54,13 @@ export function useCourseTemplates(courseId: string | null) {
     queryFn: () => api(`/app/api/courses/${courseId}/templates`),
   });
 }
+
+/** After a template is made or deleted: the course's list, and the count on its card. */
+const templatesChanged = (qc: QueryClient, courseId: string | null) =>
+  Promise.all([
+    qc.invalidateQueries({ queryKey: courseTemplatesKey(courseId) }),
+    qc.invalidateQueries({ queryKey: coursesKey }),
+  ]);
 
 /** The names of the items a refusal or a warning is about, in order. */
 export const itemNames = (items: readonly TemplateItemRef[]) =>
@@ -191,7 +198,7 @@ export function useTemplateActions(
     mutationFn: (template: EvaluationTemplate) =>
       api(`/app/api/templates/${template.id}`, { method: "DELETE" }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: courseTemplatesKey(courseId) });
+      await templatesChanged(qc, courseId);
       options.onDeleted?.();
     },
     onError: toastError("error.save"),
@@ -249,7 +256,7 @@ export function NewTemplateDialog({
         body: JSON.stringify({ title: title.trim(), mode, preset: mode } satisfies TemplateNew),
       }),
     onSuccess: async (made) => {
-      await qc.invalidateQueries({ queryKey: courseTemplatesKey(courseId) });
+      await templatesChanged(qc, courseId);
       navigate({ view: "template", id: made.id });
     },
   });
@@ -404,7 +411,7 @@ export function SaveAsTemplateDialog({
       // The source is now linked to the template it gave (F-EVAL-18): its row
       // and its launch checklist read that origin.
       await Promise.all([
-        qc.invalidateQueries({ queryKey: courseTemplatesKey(course.id) }),
+        templatesChanged(qc, course.id),
         qc.invalidateQueries({ queryKey: evaluationsKey(classroomId) }),
         qc.invalidateQueries({ queryKey: evaluationKey(evaluationId) }),
       ]);

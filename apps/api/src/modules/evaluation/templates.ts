@@ -13,7 +13,7 @@
  */
 import { isDeepStrictEqual } from "node:util";
 
-import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type {
   EvaluationMode,
@@ -172,6 +172,17 @@ export async function listTemplates(db: Db, courseId: string): Promise<Evaluatio
     .where(eq(evaluations.courseId, courseId))
     .orderBy(desc(evaluations.createdAt));
   return withStats(db, rows);
+}
+
+/** How many templates each of these courses keeps; a course without one is absent. */
+export async function countTemplates(db: Db, courseIds: string[]): Promise<Map<string, number>> {
+  if (courseIds.length === 0) return new Map();
+  const rows = await db
+    .select({ courseId: evaluations.courseId, n: sql<number>`count(*)::int` })
+    .from(evaluations)
+    .where(inArray(evaluations.courseId, courseIds))
+    .groupBy(evaluations.courseId);
+  return new Map(rows.map((r) => [r.courseId!, r.n]));
 }
 
 /** One template in the list's shape, after a write. */

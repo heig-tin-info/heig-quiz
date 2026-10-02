@@ -441,12 +441,20 @@ const adminUsers = buildAdminUsers();
 
 // --- Views ---
 
+/**
+ * How many templates a course keeps. The templates live in `./evaluation`,
+ * which imports this file: it plugs its count in here rather than this file
+ * importing it back.
+ */
+export const templateCount = { of: (_courseId: string): number => 0 };
+
 const courseSummary = (c: Course): CourseSummary => ({
   id: c.id,
   name: c.name,
   code: c.code,
   createdAt: c.createdAt,
   hidden: c.hidden ?? false,
+  templates: templateCount.of(c.id),
   staff: c.staff,
   classrooms: rooms
     .filter((r) => r.courseId === c.id && !r.archivedAt)
