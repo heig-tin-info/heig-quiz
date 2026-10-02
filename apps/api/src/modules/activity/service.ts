@@ -6,9 +6,18 @@
  * `KINDS` is a plain list, not a registry: a kind is added here by hand, in
  * the same pull request as its kind (the projects: M3-01, filled by M3-02).
  */
-import type { ActivitySummary, StudentActivities, StudentClassroomPage } from "@quiz/contracts";
+import { and, countDistinct, eq, inArray } from "drizzle-orm";
+
+import type {
+  ActivityStats,
+  ActivitySummary,
+  StudentActivities,
+  StudentClassroomPage,
+} from "@quiz/contracts";
+import { activityBucket } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
+import { enrollments } from "../../db/schema.js";
 import type { Caller, ReadableClassroom } from "../guards.js";
 import { hasJournal } from "../journal/service.js";
 import { studentClassroomHeader } from "../org/service.js";
@@ -20,6 +29,28 @@ const KINDS = [evaluationActivity, projectActivity] as const;
 /** `GET /activities`: what the caller manages in their own name, every kind. */
 export async function listForTeacher(db: Db, caller: Caller, now: Date): Promise<ActivitySummary[]> {
   return (await Promise.all(KINDS.map((k) => k.listForTeacher(db, caller, now)))).flat();
+}
+
+/**
+ * `GET /activities/stats`: the students of what is open, each once. The
+ * classrooms come from the caller's own list, so the scope is the kinds'
+ * access predicates and nothing new (invariant 6); "open" is
+ * `activityBucket`, the page's own rule. A student is an enrollment that is
+ * not a staff seat, known by its email (claimed or not), so one enrolled in
+ * two of those classrooms counts once.
+ */
+export async function statsForTeacher(db: Db, caller: Caller, now: Date): Promise<ActivityStats> {
+  const open = new Set(
+    (await listForTeacher(db, caller, now))
+      .filter((a) => activityBucket(a.state) === "open" && a.classroom !== null)
+      .map((a) => a.classroom!.id),
+  );
+  if (open.size === 0) return { studentsInProgress: 0 };
+  const [row] = await db
+    .select({ n: countDistinct(enrollments.email) })
+    .from(enrollments)
+    .where(and(inArray(enrollments.classroomId, [...open]), eq(enrollments.staff, false)));
+  return { studentsInProgress: row?.n ?? 0 };
 }
 
 /** The Activities tab of the student's classroom page: every kind's groups, concatenated. */

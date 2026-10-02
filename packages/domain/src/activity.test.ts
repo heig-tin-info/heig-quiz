@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isLiveNow, isTakeHome } from "./activity.js";
+import { activityBucket, isLiveNow, isTakeHome } from "./activity.js";
 
 const NOW = new Date("2026-09-28T10:00:00Z");
 const MIN = 60_000;
@@ -56,5 +56,23 @@ describe("isLiveNow", () => {
 
   it("reads ISO strings and epoch milliseconds alike", () => {
     expect(isLiveNow(row({ updatedAt: NOW.toISOString() }), NOW.getTime())).toBe(true);
+  });
+});
+
+describe("activityBucket", () => {
+  it("sorts both kinds' states into three ages", () => {
+    expect((["draft", "scheduled"] as const).map(activityBucket)).toEqual(["upcoming", "upcoming"]);
+    expect((["lobby", "running", "paused", "published"] as const).map(activityBucket)).toEqual([
+      "open",
+      "open",
+      "open",
+      "open",
+    ]);
+    expect((["closed", "grading", "released", "locked"] as const).map(activityBucket)).toEqual([
+      "ended",
+      "ended",
+      "ended",
+      "ended",
+    ]);
   });
 });

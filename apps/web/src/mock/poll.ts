@@ -1,12 +1,13 @@
 /** Section 6 of the mock — see `index.ts` for the layout. */
 import {
   PollQuestionType,
+  type ActivityStats,
   type ActivitySummary,
   type PollPoolPage,
   type PollPublicView,
   type PollQuestionPick,
 } from "@quiz/contracts";
-import { pollOutcome, type PollRunCounts } from "@quiz/domain";
+import { activityBucket, pollOutcome, type PollRunCounts } from "@quiz/domain";
 import { hasKey } from "../poll/pollTally";
 import {
   D,
@@ -1230,7 +1231,22 @@ on("POST", "/app/api/evaluations/:id/poll/keep", (m) => {
 
 const LIVE_STATES = new Set(["lobby", "running", "paused"]);
 
-on("GET", "/app/api/activities", (): ActivitySummary[] => {
+on("GET", "/app/api/activities", (): ActivitySummary[] => teacherActivities());
+
+/** The server's rule: the class members of the classrooms holding an open activity, each once. */
+on("GET", "/app/api/activities/stats", (): ActivityStats => {
+  const open = new Set(
+    teacherActivities()
+      .filter((a) => activityBucket(a.state) === "open" && a.classroom !== null)
+      .map((a) => a.classroom!.id),
+  );
+  const emails = rooms
+    .filter((r) => open.has(r.id))
+    .flatMap((r) => r.roster.filter((s) => !s.staff).map((s) => s.email));
+  return { studentsInProgress: new Set(emails).size };
+});
+
+function teacherActivities(): ActivitySummary[] {
   const inClassrooms = evaluations.flatMap((e): ActivitySummary[] => {
     const room = rooms.find((r) => r.id === e.classroomId);
     if (!room || room.archivedAt !== null) return [];
@@ -1283,4 +1299,4 @@ on("GET", "/app/api/activities", (): ActivitySummary[] => {
   return [...inClassrooms, ...anonymous, ...projectActivities()].sort((a, b) =>
     b.id.localeCompare(a.id),
   );
-});
+}

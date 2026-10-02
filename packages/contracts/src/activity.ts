@@ -69,3 +69,14 @@ void SAME_KINDS;
 
 export const ActivityList = z.array(ActivitySummary);
 export type ActivityList = z.infer<typeof ActivityList>;
+
+/**
+ * `GET /activities/stats`: what the summary of the Activities page cannot
+ * count from the rows. `studentsInProgress` is the class members (staff
+ * seats excluded) of the classrooms holding an open activity, each counted
+ * once across classrooms — an anonymous poll has none.
+ */
+export const ActivityStats = z.object({
+  studentsInProgress: z.number().int().nonnegative(),
+});
+export type ActivityStats = z.infer<typeof ActivityStats>;

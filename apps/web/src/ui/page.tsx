@@ -363,27 +363,49 @@ export function SectionHeading({
   );
 }
 
-/** Key figure: a small label over a large tabular number. */
+/**
+ * Key figure: a small label over a large tabular number. With `onClick` it
+ * is a button that leads to what it counts (the Activities summary), with
+ * the hover of an interactive `Card`.
+ */
 export function Stat({
   label,
   value,
   hint,
   icon: Icon,
+  onClick,
 }: {
   label: ReactNode;
   value: ReactNode;
   hint?: ReactNode;
   icon?: IconType;
+  onClick?: () => void;
 }) {
-  return (
-    <div className="rounded-card border border-line bg-surface px-4 py-3">
-      <p className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
+  const body = (
+    <>
+      <span className="flex items-center gap-1.5 text-xs font-medium text-fg-muted">
         {Icon ? <Icon className="size-3.5 text-fg-faint" /> : null}
         {label}
-      </p>
-      <p className="mt-1 text-[22px] font-bold leading-none tabular-nums tracking-tight">{value}</p>
-      {hint ? <p className="mt-1.5 text-xs text-fg-faint">{hint}</p> : null}
-    </div>
+      </span>
+      <span className="mt-1 block text-[22px] font-bold leading-none tabular-nums tracking-tight">{value}</span>
+      {hint ? <span className="mt-1.5 block text-xs text-fg-faint">{hint}</span> : null}
+    </>
+  );
+  const box = "rounded-card border border-line bg-surface px-4 py-3";
+  return onClick ? (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        box,
+        // Top-aligned like the `div` form: a button centres its content.
+        "flex w-full flex-col items-stretch justify-start text-left transition-colors duration-150 hover:border-line-strong hover:bg-surface-2/40",
+      )}
+    >
+      {body}
+    </button>
+  ) : (
+    <div className={box}>{body}</div>
   );
 }
 

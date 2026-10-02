@@ -75,6 +75,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ],
     ["evaluationsKey", keys.evaluationsKey("r1"), ["evaluations", "r1"]],
     ["activitiesKey", keys.activitiesKey, ["activities"]],
+    ["activityStatsKey", keys.activityStatsKey, ["activities", "stats"]],
     ["evaluationKey", keys.evaluationKey("e1"), ["evaluation", "e1"]],
     ["templatePullKey", keys.templatePullKey("e1"), ["evaluation", "e1", "pull-template"]],
     ["templateKey", keys.templateKey("t1"), ["template", "t1"]],

@@ -9,9 +9,9 @@ import { randomUUID } from "node:crypto";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { ActivityList } from "@quiz/contracts";
+import { ActivityList, ActivityStats } from "@quiz/contracts";
 
-import { classrooms, courseStaff, courses, evaluations } from "../../db/schema.js";
+import { classrooms, courseStaff, courses, enrollments, evaluations } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 
 type Signed = { id: string; headers: Record<string, string> };
@@ -22,6 +22,8 @@ let bob: Signed;
 let admin: Signed;
 let student: Signed;
 const ids: Record<string, string> = {};
+let aliceCourse: string;
+let a1: string;
 
 async function course(code: string, staff: string[]): Promise<string> {
   const id = randomUUID();
@@ -73,10 +75,10 @@ beforeAll(async () => {
   admin = await server.signIn("admin");
   student = await server.signIn("student");
 
-  const aliceCourse = await course("PRG1", [alice.id]);
+  aliceCourse = await course("PRG1", [alice.id]);
   const shared = await course("EMB", [alice.id, bob.id]);
   const bobCourse = await course("ALG", [bob.id]);
-  const a1 = await classroom(aliceCourse, "PRG1-2026");
+  a1 = await classroom(aliceCourse, "PRG1-2026");
   const archived = await classroom(aliceCourse, "PRG1-2024", true);
   const s1 = await classroom(shared, "EMB-2026");
   const b1 = await classroom(bobCourse, "ALG-2026");
@@ -179,6 +181,32 @@ describe("GET /app/api/activities", () => {
       closedBy: "teacher",
     });
     expect(byTitle.get("alice exam")).toMatchObject({ closedAt: null, closedBy: null });
+  });
+
+  it("counts the students of what is open, each once, never a staff seat (stats)", async () => {
+    const stats = async (user: Signed) => {
+      const response = await server.app.inject({
+        method: "GET",
+        url: "/app/api/activities/stats",
+        headers: user.headers,
+      });
+      expect(response.statusCode).toBe(200);
+      return ActivityStats.parse(response.json());
+    };
+    const enroll = (classroomId: string, email: string, staff = false) =>
+      server.app.db.insert(enrollments).values({ id: randomUUID(), classroomId, nom: "N", prenom: "P", email, staff });
+    // "alice exam" runs in PRG1-2026; a second classroom with an open series
+    // shares one student with it; "shared exam" (closed) counts nothing.
+    const a2 = await classroom(aliceCourse, "PRG1-2026-B");
+    await evaluation("alice open series", { classroomId: a2 }, { mode: "exercise", state: "running" });
+    await enroll(a1, "ann@heig-vd.ch");
+    await enroll(a1, "ben@heig-vd.ch");
+    await enroll(a1, "teacher@heig-vd.ch", true);
+    await enroll(a2, "ben@heig-vd.ch");
+    await enroll(a2, "cid@heig-vd.ch");
+    expect(await stats(alice)).toEqual({ studentsInProgress: 3 });
+    // Bob reaches none of those classrooms; his own open poll has no class.
+    expect(await stats(bob)).toEqual({ studentsInProgress: 0 });
   });
 
   it("is a teacher route", async () => {
