@@ -141,12 +141,25 @@ describe("the student home after a hand-in (issue #203)", () => {
     });
   });
 
-  it("offers the results at once under the immediate policy, while the quiz still runs", async () => {
-    const { app, evaluation, student } = await runningEvaluation("immediate");
+  it("offers the results at once under the immediate policy, while the exercise still runs", async () => {
+    const { app, evaluation, student } = await runningEvaluation("immediate", { mode: "exercise" });
     await handIn(app, evaluation, student);
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "past",
       card: { state: "running", attemptState: "submitted", results: "available" },
+    });
+  });
+
+  it("offers nothing of an exam before its close, even under a legacy immediate policy", async () => {
+    const { app, evaluation, student } = await runningEvaluation("immediate");
+    await handIn(app, evaluation, student);
+    expect(await cardOf(app, student, evaluation.id)).toMatchObject({
+      section: "past",
+      card: { state: "running", attemptState: "submitted", results: "pending" },
+    });
+    await live.closeEvaluation(db, await reload(db, evaluation.id), app.clock.now(), "teacher", app);
+    expect(await cardOf(app, student, evaluation.id)).toMatchObject({
+      card: { results: "available" },
     });
   });
 
@@ -163,6 +176,7 @@ describe("the student home after a hand-in (issue #203)", () => {
 
   it("treats an expiry like a hand-in", async () => {
     const { app, evaluation, student } = await runningEvaluation("immediate", {
+      mode: "exercise",
       durationS: 60,
       settings: { timing: "duration" },
     });

@@ -4,6 +4,7 @@ import { EVALUATION_STATES } from "./itemList.js";
 import {
   correctionPublishRefusal,
   feedbackGate,
+  feedbackGradeShown,
   isDebriefOpen,
 } from "./correction.js";
 
@@ -35,6 +36,8 @@ describe("correctionPublishRefusal (ADR-050)", () => {
 
 describe("feedbackGate (F-RES-04, ADR-025 §4, ADR-050)", () => {
   const base = {
+    exam: false,
+    evaluationOver: false,
     attemptOpen: false,
     retakesOpen: false,
     released: false,
@@ -105,5 +108,57 @@ describe("feedbackGate (F-RES-04, ADR-025 §4, ADR-050)", () => {
         ).toEqual({ ok: false, reason: "attempt_open" });
       }
     });
+  });
+
+  describe("an exam", () => {
+    const exam = { ...base, exam: true } as const;
+
+    it("shows nothing before its close, even under a legacy immediate policy", () => {
+      for (const when of ["immediate", "on_release"] as const) {
+        expect(feedbackGate({ ...exam, when })).toEqual({ ok: false, reason: "exam_open" });
+      }
+      // A finished attempt while the exam runs: still closed.
+      expect(feedbackGate({ ...exam, when: "immediate", attemptOpen: false })).toEqual({
+        ok: false,
+        reason: "exam_open",
+      });
+    });
+
+    it("keeps the other reasons first: an open attempt, a policy that never shows", () => {
+      expect(feedbackGate({ ...exam, when: "immediate", attemptOpen: true })).toEqual({
+        ok: false,
+        reason: "attempt_open",
+      });
+      expect(feedbackGate({ ...exam, when: "none" })).toEqual({ ok: false, reason: "no_feedback" });
+    });
+
+    it("follows its policy once over", () => {
+      const over = { ...exam, evaluationOver: true } as const;
+      expect(feedbackGate({ ...over, when: "immediate" })).toEqual({ ok: true });
+      expect(feedbackGate({ ...over, when: "on_release" })).toEqual({
+        ok: false,
+        reason: "results_pending",
+      });
+      expect(feedbackGate({ ...over, when: "on_release", released: true })).toEqual({ ok: true });
+    });
+  });
+});
+
+describe("feedbackGradeShown (F-RES-04)", () => {
+  it("never with a cell pending, released or not, whatever the mode", () => {
+    for (const mode of ["exam", "exercise"] as const) {
+      for (const released of [false, true]) {
+        expect(feedbackGradeShown({ mode, released, pendingCount: 1 })).toBe(false);
+      }
+    }
+  });
+
+  it("an exercise: points only before the release, the grade after", () => {
+    expect(feedbackGradeShown({ mode: "exercise", released: false, pendingCount: 0 })).toBe(false);
+    expect(feedbackGradeShown({ mode: "exercise", released: true, pendingCount: 0 })).toBe(true);
+  });
+
+  it("an exam: the grade once every cell is validated", () => {
+    expect(feedbackGradeShown({ mode: "exam", released: false, pendingCount: 0 })).toBe(true);
   });
 });

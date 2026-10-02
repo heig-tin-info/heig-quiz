@@ -374,7 +374,7 @@ describe("grading and results with several attempts", () => {
       available: false,
       reason: "retakes_open",
       evaluation: { id: evaluation.id, title: evaluation.title },
-      score: { points: 1, totalPoints: 2, pending: false },
+      score: { points: 1, totalPoints: 2, pendingCount: 0 },
       // The results page offers the retake the route would accept (#120, #121).
       retake: {
         evaluationId: evaluation.id,
@@ -512,7 +512,7 @@ describe("the screens with several attempts", () => {
       maxAttempts: 3,
       attemptCount: 1,
       canRetake: true,
-      kept: { attemptNumber: 1, score: { points: 1, totalPoints: 2, pending: false } },
+      kept: { attemptNumber: 1, score: { points: 1, totalPoints: 2, pendingCount: 0 } },
     });
 
     // During the retake: no Retake, the score of attempt 1 still stands.

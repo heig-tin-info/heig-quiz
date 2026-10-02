@@ -347,13 +347,14 @@ export type SimulateBody = z.infer<typeof SimulateBody>;
 /**
  * The score of one attempt as a student may read it between two attempts
  * (F-EVAL-15, ADR-025): the validated points and nothing else — no item, no
- * verdict, no key. `pending` says some answer still waits for a teacher (a
- * hand-graded question), so the points may still rise.
+ * verdict, no key. `pendingCount` is how many questions still wait for a
+ * validated grading (the runner, a hand-graded question): they count
+ * nowhere, so the points may still rise.
  */
 export const AttemptScore = z.object({
   points: z.number(),
   totalPoints: z.number(),
-  pending: z.boolean(),
+  pendingCount: z.number().int().nonnegative(),
 });
 export type AttemptScore = z.infer<typeof AttemptScore>;
 

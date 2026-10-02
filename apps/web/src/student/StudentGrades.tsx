@@ -51,7 +51,7 @@ import {
   type Column,
   type Tone,
 } from "../ui";
-import { MODE_KEY } from "./cards";
+import { MODE_KEY, pendingLabel } from "./cards";
 
 const STATUS: Record<GradeStatus, { label: keyof Dict; tone: Tone }> = {
   released: { label: "sgrades.status.released", tone: "green" },
@@ -171,6 +171,7 @@ function GradeTable({ rows, open }: { rows: GradeRow[]; open: Opener }) {
               </td>
               <td className={T.td}>
                 <StatusBadge status={row.status} />
+                <Pending row={row} />
               </td>
               <td className={cx(T.td, "text-right")}>
                 {go ? <ChevronRight aria-hidden className="ml-auto size-4 text-fg-faint" /> : null}
@@ -204,6 +205,7 @@ function GradeList({ rows, open }: { rows: GradeRow[]; open: Opener }) {
               <p className="mt-0.5 text-[13px] text-fg-muted">{caption(row, t)}</p>
               <div className="mt-2">
                 <StatusBadge status={row.status} />
+                <Pending row={row} />
               </div>
             </div>
             <div className="shrink-0 text-right">
@@ -260,6 +262,14 @@ function GradeCell({ row }: { row: GradeRow }) {
   if (!row.score) return <Dash />;
   if (row.score.grade === null) return <Badge tone="zinc">{t("sgrades.indicative")}</Badge>;
   return <Grade value={row.score.grade} />;
+}
+
+/** Under the status of points read before the release: the questions still to grade. */
+function Pending({ row }: { row: GradeRow }) {
+  const t = useT();
+  const n = row.kind === "evaluation" ? (row.score?.pendingCount ?? 0) : 0;
+  if (n === 0) return null;
+  return <span className="mt-1 block text-[13px] text-fg-muted">{pendingLabel(n, t)}</span>;
 }
 
 function StatusBadge({ status }: { status: GradeStatus }) {

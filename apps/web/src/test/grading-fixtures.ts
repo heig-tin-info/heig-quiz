@@ -272,7 +272,8 @@ export function makeFeedback(over: Partial<Extract<StudentFeedback, { available:
     attemptId: "a1",
     points: 4,
     totalPoints: 5,
-    grade: 5,
+    grade: 5 as number | null,
+    pendingCount: 0,
     items: [
       {
         itemId: "i1",
