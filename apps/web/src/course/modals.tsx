@@ -52,6 +52,7 @@ export function NewCourseModal({ onClose }: { onClose: () => void }) {
         required
         fullWidth
         placeholder={t("courses.codePlaceholder")}
+        description={t("courses.codeHint")}
         value={form.code}
         onChange={(e) => setForm({ ...form, code: e.target.value })}
       />

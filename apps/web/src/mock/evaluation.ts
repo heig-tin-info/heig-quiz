@@ -54,6 +54,7 @@ import {
   courses,
   roomOr404,
   rooms,
+  templateCount,
 } from "./org";
 import {
   me,
@@ -1185,6 +1186,7 @@ interface MockTemplate {
 }
 
 const templates: MockTemplate[] = [];
+templateCount.of = (courseId) => templates.filter((x) => x.courseId === courseId).length;
 
 function makeTemplate(courseId: string, source: MockEvaluation): MockTemplate {
   const shell: MockEvaluation = {

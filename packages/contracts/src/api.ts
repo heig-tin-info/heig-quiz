@@ -180,6 +180,8 @@ export interface CourseSummary {
    * pickers keep it. Per user, never seen by the other staff members.
    */
   hidden: boolean;
+  /** How many evaluation templates the course keeps (ADR-031). */
+  templates: number;
   /** Non-archived classrooms of this course, oldest first. */
   classrooms: ClassroomSummary[];
   staff: CourseStaffMember[];

@@ -6,15 +6,16 @@ A course is the lasting unit you teach — "Programmation C" — with a name and
 a short code. It outlives a class: the same course carries the classrooms of
 2026, then those of 2027.
 
-One card per course. Its classrooms are listed with their period and their
-headcount; a click opens one. The course's name opens its page, which holds
-all of it: its classrooms (archived ones behind **Show archived**), its pools
+One card per course, a summary: its classrooms with their period and their
+headcount (a click opens one), its pools, and how many templates it keeps.
+The course's name opens its page, which holds all of it and is where it is
+changed: its classrooms (archived ones behind **Show archived**), its pools
 and its evaluation templates. A click on the name there renames the course;
 its code stays the one it was created with.
 
 ## Classrooms
 
-**New classroom** asks for a name and a period. A classroom is one group
+**New classroom**, on the course page, asks for a name and a period. A classroom is one group
 following this course for one period, and it is where rosters, evaluations
 and results live.
 
@@ -36,7 +37,7 @@ someone from the staff.
 ## Pools of this course
 
 The evaluations of a course draw their questions from the pools linked to
-it. **Link a pool** adds one; **Unlink from this course** removes the link
+it. On the course page, **Link a pool** adds one; **Unlink from this course** removes the link
 and nothing else — the pool and its questions stay where they are. A pool
 that is not linked to any course is still yours, it is simply not offered
 when you fill an evaluation.

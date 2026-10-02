@@ -21,6 +21,7 @@ import {
   courseStaff,
   courses,
   enrollments,
+  evaluations,
   userCoursePrefs,
   users,
 } from "../../db/schema.js";
@@ -103,12 +104,22 @@ export async function listCourses(db: Db, access: SQL | undefined, viewerId: str
         .orderBy(classrooms.createdAt)
     : [];
   const staff = await staffOf(db, ids);
+  // A template is an evaluation homed on the course rather than a classroom
+  // (ADR-031): read by join, the table stays the `evaluation` module's.
+  const templates = ids.length
+    ? await db
+        .select({ courseId: evaluations.courseId, n: sql<number>`count(*)::int` })
+        .from(evaluations)
+        .where(inArray(evaluations.courseId, ids))
+        .groupBy(evaluations.courseId)
+    : [];
   return rows.map((c) => ({
     id: c.id,
     name: c.name,
     code: c.code,
     createdAt: c.createdAt.toISOString(),
     hidden: c.hiddenAt !== null,
+    templates: templates.find((t) => t.courseId === c.id)?.n ?? 0,
     classrooms: rooms
       .filter((r) => r.courseId === c.id)
       .map((r) => ({

@@ -46,7 +46,7 @@ describe("TeacherHome", () => {
   });
 
   it("opens the course page from the card's title, and lists no template there (F-ORG-12)", async () => {
-    const { calls } = mockFetch({ [`GET ${COURSES}`]: ok([makeCourseSummary()]) });
+    const { calls } = mockFetch({ [`GET ${COURSES}`]: ok([makeCourseSummary({ templates: 2 })]) });
     const navigate = vi.fn();
     renderWithProviders(<TeacherHome navigate={navigate} />);
     await userEvent.click(await screen.findByRole("button", { name: "Programmation C" }));
@@ -55,6 +55,30 @@ describe("TeacherHome", () => {
     // shows a section for them nor asks for them.
     expect(screen.queryByText("Evaluation templates")).toBeNull();
     expect(calls.some((c) => c.url.endsWith("/templates"))).toBe(false);
+    // It counts them, from the course list, and the count opens the page.
+    navigate.mockClear();
+    await userEvent.click(screen.getByRole("button", { name: "2 templates" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "course", id: "c1" });
+  });
+
+  it("lists the pools on the card, and leaves classrooms and pool links to the course page", async () => {
+    const { calls } = mockFetch({
+      [`GET ${COURSES}`]: ok([makeCourseSummary()]),
+      "GET /app/api/courses/c1": ok({
+        course: { id: "c1", name: "Programmation C", code: "PRG1" },
+        staff: [],
+        pools: [{ id: "p1", name: "Pointers", questionCount: 7 }],
+        classrooms: [],
+      }),
+    });
+    renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+
+    expect(await screen.findByRole("button", { name: /Pointers/ })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Link a pool" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Unlink from this course" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "New classroom" })).toBeNull();
+    // What could be linked is not even read.
+    expect(calls.some((c) => c.url === "/app/api/pools")).toBe(false);
   });
 
   it("offers the one action from the empty state, and creates a course with it", async () => {
@@ -106,80 +130,6 @@ describe("TeacherHome", () => {
     unmount();
     renderWithProviders(<TeacherHome navigate={vi.fn()} />);
     expect(await screen.findByRole("radio", { name: "List" })).toBeChecked();
-  });
-
-  it("links a pool straight from the menu, with no dialog in the way", async () => {
-    const { calls } = mockFetch({
-      [`GET ${COURSES}`]: ok([makeCourseSummary()]),
-      "GET /app/api/courses/c1": ok({
-        course: { id: "c1", name: "Programmation C", code: "PRG1" },
-        staff: [],
-        pools: [],
-        classrooms: [],
-      }),
-      "GET /app/api/pools": ok([
-        {
-          id: "p1",
-          name: "Pointers",
-          visibility: "private",
-          ownerId: "u-1",
-          isPersonal: true,
-          createdAt: "2026-01-01T08:00:00.000Z",
-          questionCount: 7,
-          role: "owner",
-        },
-        {
-          id: "p2",
-          name: "Colleague's public pool",
-          visibility: "public",
-          ownerId: "u-2",
-          isPersonal: false,
-          createdAt: "2026-01-01T08:00:00.000Z",
-          questionCount: 3,
-          role: "reader",
-        },
-      ]),
-      "PUT /app/api/courses/c1/pools": ok(undefined),
-    });
-    renderWithProviders(<TeacherHome navigate={vi.fn()} />);
-
-    await userEvent.click(await screen.findByRole("button", { name: "Link a pool" }));
-    // A pool the teacher only reads is not offered: linking it is refused (ADR-013).
-    expect(screen.queryByRole("menuitem", { name: "Colleague's public pool" })).toBeNull();
-    await userEvent.click(screen.getByRole("menuitem", { name: "Pointers" }));
-    // `PUT` replaces the WHOLE set, which is the only route there is.
-    expect(calls.filter((c) => c.method === "PUT")).toEqual([
-      { url: "/app/api/courses/c1/pools", method: "PUT", body: { poolIds: ["p1"] } },
-    ]);
-  });
-
-  it("prefills a new classroom with the current semester, dates and label (#156)", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date(2026, 7, 20)); // August: the coming autumn
-    try {
-      const { calls } = mockFetch({
-        [`GET ${COURSES}`]: ok([makeCourseSummary()]),
-        "POST /app/api/courses/c1/classrooms": ok({ id: "r9" }),
-      });
-      renderWithProviders(<TeacherHome navigate={vi.fn()} />);
-      await userEvent.click(await screen.findByRole("button", { name: "New classroom" }));
-      const dialog = await screen.findByRole("dialog", { name: "New classroom" });
-      expect(within(dialog).getByLabelText("First month")).toHaveValue("2026-09");
-      expect(within(dialog).getByLabelText("Last month")).toHaveValue("2027-01");
-      expect(within(dialog).getByRole("textbox", { name: "Period label" })).toHaveValue(
-        "Autumn 2026",
-      );
-      await userEvent.type(within(dialog).getByRole("textbox", { name: /^Name/ }), "PRG1-2026");
-      await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
-      expect(calls.find((c) => c.method === "POST")?.body).toEqual({
-        name: "PRG1-2026",
-        period: "Autumn 2026",
-        periodStart: "2026-09",
-        periodEnd: "2027-01",
-      });
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it("offers the three course actions in one menu", async () => {
@@ -318,31 +268,6 @@ describe("TeacherHome", () => {
     );
     expect(calls.filter((c) => c.method === "DELETE")).toEqual([
       { url: "/app/api/courses/c1/staff/u-2", method: "DELETE", body: null },
-    ]);
-  });
-
-  it("unlinks a pool from the icon beside it", async () => {
-    const { calls } = mockFetch({
-      [`GET ${COURSES}`]: ok([makeCourseSummary()]),
-      "GET /app/api/courses/c1": ok({
-        course: { id: "c1", name: "Programmation C", code: "PRG1" },
-        staff: [],
-        pools: [{ id: "p1", name: "Pointers", questionCount: 7 }],
-        classrooms: [],
-      }),
-      "GET /app/api/pools": ok([]),
-      "PUT /app/api/courses/c1/pools": ok(undefined),
-    });
-    renderWithProviders(<TeacherHome navigate={vi.fn()} />);
-
-    // One action, one icon: no menu to open on the way to it.
-    await userEvent.click(await screen.findByRole("button", { name: "Unlink from this course" }));
-    const dialog = await screen.findByRole("dialog", { name: /Unlink from this course/ });
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "Unlink from this course" }),
-    );
-    expect(calls.filter((c) => c.method === "PUT")).toEqual([
-      { url: "/app/api/courses/c1/pools", method: "PUT", body: { poolIds: [] } },
     ]);
   });
 

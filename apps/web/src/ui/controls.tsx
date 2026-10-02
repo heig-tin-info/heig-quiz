@@ -131,6 +131,7 @@ export function Field({
   label,
   help,
   hint,
+  description,
   fullWidth,
   size = "md",
   width = "w-52",
@@ -141,6 +142,8 @@ export function Field({
   help?: string;
   /** Right-aligned note on the label line. */
   hint?: ReactNode;
+  /** What the value is, one line under the input, read with it (`aria-describedby`). */
+  description?: ReactNode;
   /** Stretch label and input to the parent width (grid cells). */
   fullWidth?: boolean;
   /** Control height: `sm` 28 px for dense rows, `md` 34 px by default. */
@@ -159,7 +162,17 @@ export function Field({
       <FieldLabel htmlFor={id} help={help} hint={hint}>
         {label}
       </FieldLabel>
-      <input {...props} id={id} className={cx(inputClass, inputSize[size], "w-full", className)} />
+      <input
+        aria-describedby={description ? `${id}-description` : undefined}
+        {...props}
+        id={id}
+        className={cx(inputClass, inputSize[size], "w-full", className)}
+      />
+      {description ? (
+        <p id={`${id}-description`} className="text-xs text-fg-muted">
+          {description}
+        </p>
+      ) : null}
     </div>
   );
 }

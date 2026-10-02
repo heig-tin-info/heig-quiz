@@ -4,13 +4,16 @@ A course is the lasting unit you teach; a classroom is one group following it fo
 
 ## Creating a course
 
-On **Courses**, click **New course**. A course has a **Name**, for example "Programmation C", and a short **Code**, for example `PRG1`; the code is shown beside every classroom of the course in the sidebar. **Create course** adds the card.
+On **Courses**, click **New course**. A course has a **Name**, for example "Programmation C", and a short **Code**, the course's acronym or institutional name, for example `PRG1`; the code is shown beside every classroom of the course in the sidebar. **Create course** adds the card.
 
-A course card holds three things:
+A course card is a summary of four things:
 
 - its **classrooms**, listed with their period and their headcount;
 - its **Staff**, the colleagues who share it;
-- the **Pools of this course**, the pools its evaluations may draw from.
+- the **Pools of this course**, the pools its evaluations may draw from;
+- how many **evaluation templates** it keeps; the count opens the course page.
+
+The course's name opens its page, where classrooms are created and pools linked.
 
 A course outlives a class. The same "Programmation C" carries the classroom of 2026, then the one of 2027, and its staff and pools stay in place from one year to the next.
 
@@ -24,11 +27,11 @@ Being on the staff of a course is enough to be a teacher: a colleague you add do
 
 ### Linking a pool
 
-The evaluations of a course draw their questions from the pools linked to it, and only from those. **Link a pool** on the card offers your pools; a linked pool appears with its question count. From the pool's own menu, **Unlink from this course** removes the link and nothing else: the pool and its questions stay where they are, and the evaluations that already use its questions keep them. One pool can feed several courses. See [Question pools](pools.md) for the pools themselves.
+The evaluations of a course draw their questions from the pools linked to it, and only from those. **Link a pool**, on the course page, offers your pools; a linked pool appears with its question count. From the pool's own menu there, **Unlink from this course** removes the link and nothing else: the pool and its questions stay where they are, and the evaluations that already use its questions keep them. One pool can feed several courses. See [Question pools](pools.md) for the pools themselves.
 
 ## Creating a classroom
 
-On the course card, click **New classroom**. A classroom has a **Name**, such as `PRG1-2026`, and an optional **Period**, such as `2026-A`. It appears in the card and in the **Classrooms** section of the sidebar.
+On the course page, click **New classroom**. A classroom has a **Name**, such as `PRG1-2026`, and an optional **Period**, such as `2026-A`. It appears in the card and in the **Classrooms** section of the sidebar.
 
 ### The classroom screen
 

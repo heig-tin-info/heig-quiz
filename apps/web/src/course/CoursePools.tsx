@@ -18,6 +18,9 @@ import { CoursePart, useCourseDetail } from "./parts";
  * replaces the WHOLE set in one call, so both the link and the unlink send
  * the list the course should end up with — there is no add/remove route, and
  * inventing one on the client would be a second way to do one thing.
+ *
+ * The links are tended on the course page only: the card on the Courses home
+ * is a summary, so it lists the pools and offers neither link nor unlink.
  */
 export function CoursePools({
   course,
@@ -38,6 +41,8 @@ export function CoursePools({
   const pools = useQuery<PoolSummary[]>({
     queryKey: poolsKey,
     queryFn: () => api("/app/api/pools"),
+    // What could be linked is read where linking is offered.
+    enabled: page,
   });
 
   const linked = detail.data?.pools ?? [];
@@ -80,6 +85,7 @@ export function CoursePools({
         // One click, no dialog: linking a pool is picking a name out of a
         // short list, and a modal with a select and two buttons was three
         // interactions for one decision.
+        page ? (
         <Menu
           label={t("pools.linkAction")}
           trigger={
@@ -97,6 +103,7 @@ export function CoursePools({
               : [{ label: t("pools.linkEmpty"), disabled: true }]
           }
         />
+        ) : undefined
       }
     >
       {detail.isLoading ? (
@@ -129,13 +136,15 @@ export function CoursePools({
                   })}
                 </span>
               </button>
-              <Actions
-                label={t("common.actions")}
-                size="sm"
-                items={[
-                  { label: t("pools.unlink"), icon: Unlink, danger: true, onSelect: () => void unlink(pool) },
-                ]}
-              />
+              {page ? (
+                <Actions
+                  label={t("common.actions")}
+                  size="sm"
+                  items={[
+                    { label: t("pools.unlink"), icon: Unlink, danger: true, onSelect: () => void unlink(pool) },
+                  ]}
+                />
+              ) : null}
             </li>
           ))}
         </ul>
