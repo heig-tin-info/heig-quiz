@@ -35,18 +35,29 @@ import { useScrollFade } from "./page";
 // (`useServerClock`), never the browser's.
 
 /**
- * "12:47", or "1:05:00" past an hour. Tabular digits are applied by the
- * component; the zero-padding is here so a minute never shifts the layout.
+ * The time left on a countdown, in three ranges:
+ *  - under an hour, "12:47": tabular digits are applied by the component, the
+ *    zero-padding is here so a second never shifts the layout;
+ *  - from one hour to under 48, "47 h 03 min 17 s";
+ *  - from 48 hours on, "6 d 20 h" ("6 j 20 h"): an exercise open for a week
+ *    is read in days, and the seconds of it mean nothing.
+ * The units go through `t` (the `dur.*` keys, like `formatSpan` in `i18n`), with
+ * non-breaking spaces so the label never breaks across two lines.
  * Past the deadline it is "0:00", never a negative: the server closes the
  * attempt, and a client counting into the red would be inventing a rule.
  */
-export function formatRemaining(ms: number): string {
+export function formatRemaining(ms: number, t: TFunction): string {
   const total = Math.max(0, Math.ceil(ms / 1000));
+  const pad = (n: number) => String(n).padStart(2, "0");
   const seconds = total % 60;
   const minutes = Math.floor(total / 60) % 60;
   const hours = Math.floor(total / 3600);
-  const mm = hours > 0 ? String(minutes).padStart(2, "0") : String(minutes);
-  return `${hours > 0 ? `${hours}:` : ""}${mm}:${String(seconds).padStart(2, "0")}`;
+  if (hours < 1) return `${minutes}:${pad(seconds)}`;
+  const text =
+    hours < 48
+      ? t("dur.hourMinSec", { h: hours, m: pad(minutes), s: pad(seconds) })
+      : t("dur.dayHour", { d: Math.floor(hours / 24), h: hours % 24 });
+  return text.replace(/ /g, "\u00a0");
 }
 
 /** Under a minute everything is urgent, whatever the evaluation's own threshold. */
@@ -113,7 +124,7 @@ export function Countdown({
   const lastRunning = useRef(now);
   if (!paused) lastRunning.current = now;
   const remaining = deadlineAt - (paused ? lastRunning.current : now);
-  const label = formatRemaining(remaining);
+  const label = formatRemaining(remaining, t);
   const phase = paused ? "normal" : countdownPhase(remaining, warnUnderS);
   const [announced, setAnnounced] = useState("");
   useEffect(() => {
