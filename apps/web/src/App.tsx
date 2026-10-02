@@ -244,7 +244,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // route parses in every build; this is what refuses to render it.
   devUi: (_, c) => (import.meta.env.DEV ? <DevGallery /> : <TeacherHome navigate={c.navigate} />),
   admin: (_, c) => (c.me.role === "admin" ? <AdminPage /> : <TeacherHome navigate={c.navigate} />),
-  course: (r, c) => <CoursePage id={r.id} navigate={c.navigate} />,
+  course: (r, c) => <CoursePage id={r.id} tab={r.tab} navigate={c.navigate} />,
   template: (r, c) => <TemplateEditor id={r.id} navigate={c.navigate} />,
   // F-ORG-15: one address, two pages; the student's opens on its Activities.
   classroom: (r, c) =>

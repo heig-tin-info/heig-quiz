@@ -6,6 +6,15 @@ import { encodeJournalPath, safeJournalPath } from "@quiz/contracts";
 export type ClassroomQueryTab = "roster" | "evaluations" | "drill";
 
 /**
+ * The tabs of a course's page (F-ORG-12), each a path of its own
+ * (`/courses/:id/<tab>`); the classrooms are the bare `/courses/:id`.
+ */
+export const COURSE_TABS = ["classrooms", "templates", "pools", "members", "settings"] as const;
+export type CourseTab = (typeof COURSE_TABS)[number];
+const isCourseTab = (s: string | undefined): s is CourseTab =>
+  (COURSE_TABS as readonly (string | undefined)[]).includes(s);
+
+/**
  * Minimal history-backed router: every in-app navigation pushes a real URL,
  * so the browser (and mouse) back/forward buttons work, and deep links
  * survive a reload (the server falls back to index.html for non-API GETs).
@@ -20,11 +29,12 @@ export type Route =
    */
   | { view: "admin"; tab?: AdminTab }
   /**
-   * One course: its classrooms, its linked pools and its evaluation
-   * templates (F-ORG-12). The Courses row stays lit: it is a page of that
-   * section, as a pool is one of the pools'.
+   * One course, in tabs: its classrooms, its evaluation templates, its
+   * linked pools, its members and its settings (F-ORG-12). `tab` absent is
+   * the classrooms. The Courses row stays lit: it is a page of that section,
+   * as a pool is one of the pools'.
    */
-  | { view: "course"; id: string }
+  | { view: "course"; id: string; tab?: CourseTab }
   /**
    * One evaluation template of a course, edited in place (F-EVAL-25). A page
    * of its course, so the Courses row stays lit too.
@@ -323,8 +333,14 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     section: "admin",
   },
   course: {
-    path: (r) => `/courses/${r.id}`,
-    match: ([head, id]) => (head === "courses" && id ? { view: "course", id } : null),
+    path: (r) => `/courses/${r.id}${r.tab && r.tab !== "classrooms" ? `/${r.tab}` : ""}`,
+    // An unknown tail is the course's classrooms, never the home.
+    match: ([head, id, tail]) =>
+      head === "courses" && id
+        ? isCourseTab(tail) && tail !== "classrooms"
+          ? { view: "course", id, tab: tail }
+          : { view: "course", id }
+        : null,
     studentSafe: false,
     section: "home",
   },

@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { Archive, EyeOff, School } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 
 import type { CourseDetail, CourseSummary } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
 import type { Route } from "../router";
-import { Badge, Card, cx, type IconType, SectionHeading, ToggleChip } from "../ui";
+import { Badge, cx, ToggleChip } from "../ui";
 import { courseKey, coursesKey } from "../queryKeys";
 
 /**
@@ -87,47 +87,6 @@ export function ClassroomRow({
         </span>
       ) : null}
     </button>
-  );
-}
-
-/**
- * The frame of one part of a course (its pools, its templates) in the two
- * places a course is read. On the card it is an eyebrow under the
- * classrooms, because the card is a summary among others; on the course page
- * it is a section of its own, an `h2` over a card, because there it IS the
- * page and a reader moves through it by its headings.
- */
-export function CoursePart({
-  page,
-  icon,
-  title,
-  action,
-  children,
-}: {
-  page: boolean;
-  icon: IconType;
-  title: string;
-  action?: ReactNode;
-  children: ReactNode;
-}) {
-  if (page) {
-    return (
-      <section className="space-y-3">
-        <SectionHeading icon={icon} title={title} actions={action} />
-        <Card className="p-3">{children}</Card>
-      </section>
-    );
-  }
-  return (
-    <div className="mt-4">
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
-          {title}
-        </span>
-        {action ? <div className="ml-auto">{action}</div> : null}
-      </div>
-      {children}
-    </div>
   );
 }
 

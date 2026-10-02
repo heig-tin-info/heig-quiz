@@ -120,6 +120,8 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   no_review: "error.noReview",
   no_fix: "error.noFix",
   fix_stale: "error.fixStale",
+  // A course's code is unique across the instance: at creation and on edit.
+  duplicate_code: "courses.codeTaken",
 };
 
 /** Server-provided error message of a failed call (or its worded code), or the fallback. */

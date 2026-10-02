@@ -21,8 +21,8 @@
 //             by their number (Actions), on layers and menu.
 //   popover   the small floating card anchored on a trigger (Popover), on
 //             layers and menu (menuPosition).
-//   people    a person as a disc, and a row of them (PersonPill,
-//             PeopleStack), on actions, popover and identity.
+//   people    a person as a disc, its card, and a row of them (PersonPill,
+//             PersonCard, PeopleStack), on actions, popover and identity.
 //   live      the live primitives (PLAN-MVP §6.4).
 //   bar       a thin segmented bar of counts (SegmentedBar), on layers.
 //   forms     the short form in a dialog (FormDialog), on layers + controls.

@@ -1,50 +1,56 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Library, Plus, School } from "lucide-react";
+import { FileStack, FolderTree, Library, Plus, School, Settings as SettingsIcon, UserPlus, Users } from "lucide-react";
+import { useState } from "react";
 
-import type { CoursePatch, CourseSummary } from "@quiz/contracts";
+import type { CourseSummary } from "@quiz/contracts";
 
-import { api } from "../api";
-import { CourseTemplates } from "../evaluation/templates";
+import { CourseTemplates, useCourseTemplates } from "../evaluation/templates";
 import { useT } from "../i18n";
-import { useErrorToast } from "../notify";
-import { invalidateHint } from "../realtime/hints";
-import type { Route } from "../router";
+import type { CourseTab, Route } from "../router";
 import {
-  Actions,
   Button,
   Card,
-  EditableTitle,
   EmptyState,
+  type MenuItem,
   PageError,
   PageHeader,
   ParentLink,
-  PeopleStack,
-  SectionHeading,
+  type Person,
+  PersonCard,
   Skeleton,
+  Tabs,
 } from "../ui";
-import { CoursePools } from "./CoursePools";
-import { ArchivedClassrooms, ClassroomRow, HiddenBadge, useCourses } from "./parts";
+import { CourseSettings } from "./CourseSettings";
+import { LinkedPools, LinkPoolMenu } from "./CoursePools";
+import { ArchivedClassrooms, ClassroomRow, HiddenBadge, useCourseDetail, useCourses } from "./parts";
 import { useCourseActions } from "./useCourseActions";
 
 /**
- * The page of one course (F-ORG-12): what the course holds, in the order a
- * teacher reaches for it — its classrooms, the pools it draws from, and its
- * evaluation templates, which live here and nowhere else (ADR-031).
+ * The page of one course (F-ORG-12), in tabs as the classroom's: its
+ * classrooms (the default), its evaluation templates, which live here and
+ * nowhere else (ADR-031), the pools it draws from, its members and its
+ * settings. Each tab is a path of its own (`/courses/:id/<tab>`).
  *
- * The ONE primary action is "New classroom": a course exists to hold
- * classrooms, and the pools and templates are sections to read and tend, not
- * the reason the page was opened. The course's own actions (a colleague,
- * hiding it, deletion) sit in the header's menu, the staff on the title line
- * — the same `useCourseActions` as the card, so the two cannot drift.
+ * The header's one primary action is the open tab's: New classroom, New
+ * template, Link a pool, Add a staff member; Settings has none. The course's
+ * actions are `useCourseActions`, the card's copy, so the two cannot drift —
+ * the card keeps them in its menu, the page spreads them over its tabs.
  *
  * The course comes from the course LIST (`GET /courses`), not from its
  * detail: the list is what carries `hidden`, the staff and the headcounts the
  * actions and the rows need, the sidebar already holds it, and an id missing
  * from it is a course the caller does not reach — said as such, never a
  * crash. The detail (`GET /courses/:id`) brings the pools and the archived
- * classrooms, inside the sections that show them.
+ * classrooms, inside the tabs that show them.
  */
-export function CoursePage({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
+export function CoursePage({
+  id,
+  tab = "classrooms",
+  navigate,
+}: {
+  id: string;
+  tab?: CourseTab | undefined;
+  navigate: (r: Route) => void;
+}) {
   const t = useT();
   const courses = useCourses();
 
@@ -83,89 +89,133 @@ export function CoursePage({ id, navigate }: { id: string; navigate: (r: Route) 
   }
   // Keyed on the id: a move from one course page to another (the sidebar,
   // the palette) starts the next one with its own dialogs and toggles closed.
-  return <Course key={course.id} course={course} navigate={navigate} />;
+  return <Course key={course.id} course={course} tab={tab} navigate={navigate} />;
 }
 
-/**
- * The course name, renamed where it is written, as the classroom's is
- * (`EditableTitle`, #294). The name only: the code is unique across the
- * instance and printed in the exports, so it stays what it was created as.
- */
-function CourseName({ course }: { course: CourseSummary }) {
+function Course({
+  course,
+  tab,
+  navigate,
+}: {
+  course: CourseSummary;
+  tab: CourseTab;
+  navigate: (r: Route) => void;
+}) {
   const t = useT();
-  const qc = useQueryClient();
-  const toastError = useErrorToast();
-  const rename = useMutation({
-    mutationFn: (name: string) =>
-      api(`/app/api/courses/${course.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name } satisfies CoursePatch),
-      }),
-    // The name is in the sidebar, on the course cards and in every classroom's
-    // eyebrow: every family a `courses` hint refreshes.
-    onSuccess: () => invalidateHint(qc, ["courses"]),
-    onError: toastError("courses.renameFailed"),
-  });
-  return (
-    <EditableTitle
-      value={course.name}
-      pending={rename.isPending ? rename.variables : undefined}
-      onSave={(name) => rename.mutate(name)}
-      editLabel={t("courses.renameName", { name: course.name })}
-      inputLabel={t("courses.name")}
-    />
-  );
-}
-
-function Course({ course, navigate }: { course: CourseSummary; navigate: (r: Route) => void }) {
-  const t = useT();
-  const { items, staffActions, newClassroom, dialogs } = useCourseActions(course, {
-    onDeleted: () => navigate({ view: "home" }),
-  });
+  const actions = useCourseActions(course, { onDeleted: () => navigate({ view: "home" }) });
+  const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const templates = useCourseTemplates(course.id);
+  const pools = useCourseDetail(course.id).data?.pools;
+  const open = (next: CourseTab) => navigate({ view: "course", id: course.id, tab: next });
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         help="courses"
         eyebrow={
           <ParentLink onClick={() => navigate({ view: "home" })}>{t("courses.title")}</ParentLink>
         }
         title={
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <CourseName course={course} />
+          <span className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
+            {course.name}
             <span className="text-base font-normal text-fg-muted">{course.code}</span>
             <HiddenBadge course={course} />
-            <PeopleStack people={course.staff} actions={staffActions} />
           </span>
         }
         actions={
-          <Button onClick={newClassroom}>
-            <Plus /> {t("classrooms.new")}
-          </Button>
+          // The open tab's one primary action, always in this slot.
+          tab === "classrooms" ? (
+            <Button onClick={actions.newClassroom}>
+              <Plus /> {t("classrooms.new")}
+            </Button>
+          ) : tab === "templates" ? (
+            <Button onClick={() => setCreatingTemplate(true)}>
+              <Plus /> {t("templates.new")}
+            </Button>
+          ) : tab === "pools" ? (
+            <LinkPoolMenu course={course} />
+          ) : tab === "members" ? (
+            <Button onClick={actions.addStaff}>
+              <UserPlus /> {t("courses.staffAdd")}
+            </Button>
+          ) : null
         }
-        menu={<Actions items={items} label={t("common.actions")} />}
       />
 
-      <section className="space-y-3">
-        <SectionHeading icon={School} title={t("classrooms.title")} count={course.classrooms.length} />
-        <Card className="space-y-1 p-3">
-          {course.classrooms.length === 0 ? (
-            // Words, not a second button: "New classroom" is in the header,
-            // and two accent fills of the same action is noise (W19).
-            <p className="px-2.5 py-2 text-sm text-fg-muted">{t("classrooms.empty")}</p>
-          ) : (
-            course.classrooms.map((room) => (
-              <ClassroomRow key={room.id} room={room} students={room.students} navigate={navigate} />
-            ))
-          )}
-          <ArchivedClassrooms course={course} navigate={navigate} />
-        </Card>
-      </section>
+      <div className="space-y-4">
+        <Tabs
+          value={tab}
+          onChange={open}
+          label={t("courses.tabs")}
+          items={[
+            // No number while a list is loading or failed: a "0" that means
+            // "not known yet" is worse than no count at all.
+            { value: "classrooms", label: t("classrooms.title"), count: course.classrooms.length, icon: School },
+            { value: "templates", label: t("courses.tab.templates"), count: templates.data?.length, icon: FileStack },
+            { value: "pools", label: t("courses.tab.pools"), count: pools?.length, icon: FolderTree },
+            { value: "members", label: t("courses.tab.members"), count: course.staff.length, icon: Users },
+            { value: "settings", label: t("courses.tab.settings"), icon: SettingsIcon },
+          ]}
+        />
 
-      <CoursePools course={course} navigate={navigate} page />
-      <CourseTemplates courseId={course.id} classrooms={course.classrooms} navigate={navigate} />
+        {tab === "classrooms" ? (
+          <Card className="space-y-1 p-3">
+            {course.classrooms.length === 0 ? (
+              // Words, not a second button: "New classroom" is in the header,
+              // and two accent fills of the same action is noise (W19).
+              <p className="px-2.5 py-2 text-sm text-fg-muted">{t("classrooms.empty")}</p>
+            ) : (
+              course.classrooms.map((room) => (
+                <ClassroomRow key={room.id} room={room} students={room.students} navigate={navigate} />
+              ))
+            )}
+            <ArchivedClassrooms course={course} navigate={navigate} />
+          </Card>
+        ) : tab === "templates" ? (
+          <CourseTemplates
+            courseId={course.id}
+            classrooms={course.classrooms}
+            navigate={navigate}
+            creating={creatingTemplate}
+            onCreating={setCreatingTemplate}
+          />
+        ) : tab === "pools" ? (
+          <LinkedPools course={course} navigate={navigate} />
+        ) : tab === "members" ? (
+          <CourseMembers course={course} staffActions={actions.staffActions} />
+        ) : (
+          <CourseSettings course={course} actions={actions} />
+        )}
+      </div>
 
-      {dialogs}
+      {actions.dialogs}
+    </div>
+  );
+}
+
+/**
+ * The staff of the course, one row each, with its removal (the server keeps
+ * the last one, `useCourseActions`). No roles: every member reaches the whole
+ * course (D04), which the line under the list says, with how one is added.
+ */
+function CourseMembers({
+  course,
+  staffActions,
+}: {
+  course: CourseSummary;
+  staffActions: (person: Person) => MenuItem[];
+}) {
+  const t = useT();
+  return (
+    <div className="max-w-3xl space-y-3">
+      <Card className="divide-y divide-line px-4">
+        {course.staff.map((person) => (
+          <div key={person.userId} className="py-3">
+            <PersonCard person={person} actions={staffActions(person)} />
+          </div>
+        ))}
+      </Card>
+      <p className="text-[13px] text-fg-muted">{t("courses.members.hint")}</p>
     </div>
   );
 }

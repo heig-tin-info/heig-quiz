@@ -31,8 +31,11 @@ const fullName = (p: Person) => `${p.givenName} ${p.familyName}`;
 /** The disc itself, at the one size a row of people uses. */
 const DISC = "size-6 text-[10px]";
 
-/** The card behind a disc: the face, the name, the address, the actions. */
-function PersonCard({ person, actions }: { person: Person; actions?: MenuItem[] }) {
+/**
+ * The card behind a disc: the face, the name, the address, the actions. Also
+ * a row of its own where a list of people is the page (a course's members).
+ */
+export function PersonCard({ person, actions }: { person: Person; actions?: MenuItem[] }) {
   const t = useT();
   return (
     <div className="flex items-center gap-2.5">

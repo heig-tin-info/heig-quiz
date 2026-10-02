@@ -115,12 +115,17 @@ const scenes = [
   { name: "course-link-pool", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /link a pool|lier une banque/i }).first().click() },
   { name: "course-new", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /new course/i }).first().click() },
   { name: "classroom-new", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /new classroom/i }).first().click() },
-  // F-ORG-12: the page of one course — classrooms, pools, templates. PRG1
-  // holds the mock's two templates, EMB none (the empty state), and an id
-  // nobody reaches is the not-found state.
+  // F-ORG-12: the page of one course, in tabs. PRG1 holds the mock's two
+  // templates, EMB none (the empty state), and an id nobody reaches is the
+  // not-found state.
   { name: "course-page", role: "teacher", path: "/courses/c1" },
-  { name: "course-page-no-templates", role: "teacher", path: "/courses/c2" },
-  { name: "course-page-actions", role: "teacher", path: "/courses/c1", fold: true, act: async (p) => { await p.getByRole("button", { name: /^actions$/i }).first().click(); } },
+  { name: "course-page-templates", role: "teacher", path: "/courses/c1/templates" },
+  { name: "course-page-no-templates", role: "teacher", path: "/courses/c2/templates" },
+  { name: "course-page-pools", role: "teacher", path: "/courses/c1/pools" },
+  { name: "course-page-link-pool", role: "teacher", path: "/courses/c1/pools", fold: true, act: (p) => p.getByRole("button", { name: /link a pool|lier une banque/i }).first().click() },
+  { name: "course-page-members", role: "teacher", path: "/courses/c1/members" },
+  { name: "course-page-settings", role: "teacher", path: "/courses/c1/settings" },
+  { name: "course-page-edit", role: "teacher", path: "/courses/c1/settings", act: (p) => p.getByRole("button", { name: /^(edit|modifier)$/i }).first().click() },
   { name: "course-page-not-found", role: "teacher", path: "/courses/nope" },
   { name: "course-page-error", role: "teacher", path: "/courses/c1?fail=1", settle: 2500 },
   { name: "course-page-loading", role: "teacher", path: "/courses/c1?slow=1", settle: 300 },

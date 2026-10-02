@@ -8,7 +8,7 @@ import { useCourses } from "../course/parts";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import { templateKey } from "../queryKeys";
-import type { Route } from "../router";
+import type { CourseTab, Route } from "../router";
 import { useSearchParam } from "../router";
 import {
   Actions,
@@ -113,9 +113,12 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
   const target = templateTarget(template.id, template.courseId);
   const patch = useConfigPatch(target);
   const actions = useTemplateActions(template.courseId, classrooms, {
-    onDeleted: () => navigate({ view: "course", id: template.courseId }),
+    onDeleted: () => navigate({ view: "course", id: template.courseId, tab: "templates" }),
   });
-  const toCourse = () => navigate({ view: "course", id: template.courseId });
+  // Up to the course's Templates tab, where this template is a row; its pools
+  // are relinked on the Linked pools tab.
+  const toCourse = (tab: CourseTab = "templates") =>
+    navigate({ view: "course", id: template.courseId, tab });
 
   // The same schema the route validates: a title trimmed to nothing never
   // leaves the browser. A title alone does not move the revision.
@@ -136,7 +139,7 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
       <PageHeader
         help="courses"
         eyebrow={
-          <ParentLink onClick={toCourse}>
+          <ParentLink onClick={() => toCourse()}>
             {course ? `${course.code} — ${course.name}` : t("templates.title")}
           </ParentLink>
         }
@@ -197,7 +200,7 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
                       : t("templates.unlinkedCount", { n: unlinked })
                   }
                   action={
-                    <Button size="sm" variant="secondary" onClick={toCourse}>
+                    <Button size="sm" variant="secondary" onClick={() => toCourse("pools")}>
                       {t("templates.openCourse")}
                     </Button>
                   }

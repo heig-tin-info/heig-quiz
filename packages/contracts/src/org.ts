@@ -14,8 +14,8 @@ export type RosterEntryParams = z.infer<typeof RosterEntryParams>;
 /** A course: the unit a staff, a pool and a set of classrooms hang off. */
 export const CourseCreate = z.object({
   name: z.string().trim().min(1).max(200),
-  /** Short school code (`PRG1`); normalized to upper case server-side. */
-  code: z.string().min(1).max(32),
+  /** Short school code (`PRG1`), trimmed and upper-cased here, on both sides. */
+  code: z.string().trim().toUpperCase().min(1).max(32),
 });
 export type CourseCreate = z.infer<typeof CourseCreate>;
 
