@@ -1165,8 +1165,11 @@ that serves them.
     alerts}`; `liveStale`; `rows`, the roster by name
     (`ProjectDetailRow` `{student, repo | null}`, null being "not
     accepted"), then the repositories whose student left the roster
-    (`enrollmentId` null). Individual repositories only: a group's rows
-    (members by `project_group_members`) are M3-15's.
+    (`enrollmentId` null). A repository of a user who now holds a STAFF
+    seat of the classroom is left out of the rows, the counts and the
+    release's readiness (a staff seat is never a student's, ADR-018).
+    Individual repositories only: a group's rows (members by
+    `project_group_members`) are M3-15's.
   - **A repository's row** (`ProjectRepoView`) extends
     `ProjectRepoDeadlineState`, which gained **`degraded`** (`archived_at`
     set, or provisioned with `ruleset_id` null; the three repository routes
@@ -1174,8 +1177,8 @@ that serves them.
     the pure half of `repoDeadline`): `provisionStatus`, `provisionError`,
     `invitationStatus`, `acceptedAt`, `lastCommit` (the stored STUDENT
     commit, M3-04), `ciStatus`, `live`, `scores` `{current, frozen,
-    review}` (`ProjectSlotScore`: run id, points, max, parse status,
-    `toVerify`, `grade`), `teacher` `{points, comment, gradedAt}`, `final`
+    review}` (`ProjectSlotScore`: run id, points, max, `grade`; a run's
+    parse status and `to_verify` are the run list's), `teacher` `{points, comment, gradedAt}`, `final`
     (`ProjectFinalScore`: points, max, `source` teacher | review | ci —
     I42 —, grade); `released` (the snapshot `{points, max}` once the
     project is released, else null); `flags`: `protectionSuspended`,
@@ -1183,8 +1186,10 @@ that serves them.
     a restored head, never in a slot, shows in the history only),
     `multiple` (ANY run of the repository: an alert does not fade),
     `malformed` (the LATEST run's `parse_detail` when it is malformed,
-    else null), `afterDeadlineRuns`, `deleted` (stored, or the live read's
-    404), `changedAfterRelease`. `alerts` counts `multiple` or
+    else null), `deleted` (stored, or the live read's 404),
+    `changedAfterRelease`. A late run shows in the run list
+    (`afterDeadline`), not as a row flag. `multiple` and `malformed` come
+    from one `GROUP BY` over the repositories' runs. `alerts` counts `multiple` or
     `protectionSuspended`.
   - **Grades**: every score converts with its own maximum through
     `scoreGrade(points, max, scale)` (`@quiz/domain` `projectView.ts`,
@@ -1208,14 +1213,17 @@ that serves them.
     cache, none is started after it, and the next view (the client
     refetches shortly) finds them warm: a cold page of 100 repositories
     costs at most eight requests in flight and fills over a few
-    refetches. A rate-limited installation answers `live: null` at once
-    (the cache skips it until GitHub's reset). The live read only ADDS
+    refetches. A rate-limited installation answers `live: null` at once:
+    `isRateLimited` (`github/metrics.ts`) is asked before the
+    installation's token is even minted, until GitHub's reset. The live read only ADDS
     counters (`ProjectRepoLive`: commit count, check runs passed / total,
     `stale`) and is never written back: GitHub's head may be the App's (a
     restore, a deadline commit), the stored one is the student's —
-    heig-classroom wrote the head back on a view. `forEachLimit` is
-    duplicated from `jobs.ts`, left untouched while M3-05b works there:
-    merge the two afterwards.
+    heig-classroom wrote the head back on a view. **`forEachLimit` is
+    duplicated on purpose** (`detail.ts` and `jobs.ts`), so that M3-08a
+    and M3-05b, built in parallel, never edit the same file: whichever of
+    the two merges second imports it from `modules/project/lease.ts`
+    (which M3-05b creates) and deletes its own copy.
   - Not done here: the writes (M3-08b), the web page (M3-12), the
     student's view (M3-09), a group's row (M3-15); heig-classroom's
     `/activity` route (the commit graph) is not ported, no card asks for

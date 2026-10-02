@@ -235,6 +235,28 @@ describe("the project page (F-PROJ-13)", () => {
     expect(d.rows.at(-1)!.student).toMatchObject({ enrollmentId: null, userId: leaver.id, claimed: false });
   });
 
+  it("leaves out the repository of a user who now holds a staff seat", async () => {
+    const w = await world({ students: 1 });
+    const student = w.students[0]!;
+    await repoOf(w, student.id, { frozenAt: at(NOW), deadlineAppliedAt: at(NOW) });
+    const promoted = await server.signIn("student");
+    const promotedRepo = await repoOf(w, promoted.id);
+    await server.app.db.insert(enrollments).values({
+      id: randomUUID(),
+      classroomId: w.classroomId,
+      nom: "Assistant",
+      prenom: "Now",
+      email: `assistant-${randomUUID()}@heig.test`,
+      userId: promoted.id,
+      staff: true,
+    });
+
+    const d = await detail(w.projectId);
+    expect(d.rows.map((r) => r.student.userId)).toEqual([student.id]);
+    expect(d.rows.some((r) => r.repo?.id === promotedRepo)).toBe(false);
+    expect(d.counts).toMatchObject({ students: 1, accepted: 1, live: 1, frozen: 1 });
+  });
+
   it("raises each flag of a repository", async () => {
     const w = await world({ students: 5 });
     const [s1, s2, s3, s4, s5] = w.students;
@@ -256,7 +278,7 @@ describe("the project page (F-PROJ-13)", () => {
     expect(flags(s1!.id)).toMatchObject({ protectionSuspended: true, toVerify: false });
     expect(flags(s2!.id)).toMatchObject({ toVerify: true, protectionSuspended: false, multiple: false });
     // `malformed` is the latest run's: the last run here was scored.
-    expect(flags(s3!.id)).toMatchObject({ multiple: true, malformed: null, afterDeadlineRuns: true });
+    expect(flags(s3!.id)).toMatchObject({ multiple: true, malformed: null });
     expect(flags(s4!.id)).toMatchObject({ deleted: true });
     expect(rowOf(d, s5!.id).repo!.degraded).toBe(true);
     expect(d.counts).toMatchObject({ accepted: 5, live: 4, toVerify: 1, alerts: 2 });
@@ -347,11 +369,11 @@ describe("the live state never holds the page (N-PERF-07)", () => {
       [null, "fail"],
       [null, "fail"],
     ]);
-    const calls = liveCalls(`${w.org}/`);
-    expect(calls).toBeGreaterThan(0);
-    // The installation is skipped until GitHub's reset: not one more request.
+    expect(liveCalls(`${w.org}/`)).toBeGreaterThan(0);
+    // The installation is skipped until GitHub's reset: not one more request, not even a token.
+    const calls = gh.calls.length;
     await detail(w.projectId);
-    expect(liveCalls(`${w.org}/`)).toBe(calls);
+    expect(gh.calls.length).toBe(calls);
   });
 
   it("answers within its budget when GitHub is slow, marked stale", async () => {

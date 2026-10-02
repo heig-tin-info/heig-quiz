@@ -598,13 +598,15 @@ export type GradeRunList = z.infer<typeof GradeRunList>;
 export const ProjectGradeView = z.object({ grade: z.number(), fellBack: z.boolean() });
 export type ProjectGradeView = z.infer<typeof ProjectGradeView>;
 
-/** One of a repository's run slots: the run, its score, and its grade (null without points or maximum). */
+/**
+ * One of a repository's run slots: the run, its score, and its grade (null
+ * without points or maximum). Its parse status and `to_verify` are the run
+ * list's; the row's flags sum them up.
+ */
 export const ProjectSlotScore = z.object({
   runId: z.uuid(),
   points: z.number().nullable(),
   max: z.number().nullable(),
-  parseStatus: GradeRunParseStatus,
-  toVerify: z.boolean(),
   grade: ProjectGradeView.nullable(),
 });
 export type ProjectSlotScore = z.infer<typeof ProjectSlotScore>;
@@ -649,7 +651,6 @@ export type ProjectRepoLive = z.infer<typeof ProjectRepoLive>;
  *     alert: a student's code could print one; F-PROJ-10);
  *   - `malformed` — its latest run's score did not parse: the reason, else
  *     null;
- *   - `afterDeadlineRuns` — it has runs received after its deadline;
  *   - `deleted` — gone from GitHub (stored, or GitHub's 404 just now);
  *   - `changedAfterRelease` — the final score differs from the release's
  *     snapshot (only once the project was released).
@@ -677,7 +678,6 @@ export const ProjectRepoView = ProjectRepoDeadlineState.extend({
     toVerify: z.boolean(),
     multiple: z.boolean(),
     malformed: z.string().nullable(),
-    afterDeadlineRuns: z.boolean(),
     deleted: z.boolean(),
     changedAfterRelease: z.boolean(),
   }),

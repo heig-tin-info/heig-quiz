@@ -24,7 +24,7 @@
  * repositories therefore costs at most eight requests to GitHub in flight
  * and 1.5 s, and fills over a few refetches.
  */
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 
 import {
@@ -45,7 +45,7 @@ import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { enrollments, githubAccounts, projectGradeRuns, projectRepos, users } from "../../db/schema.js";
 import { installationClient } from "../../github/app.js";
-import { readRepoLiveState, type LiveRead } from "../../github/metrics.js";
+import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
 import { isLive, repoDeadlineState } from "./deadline.js";
 import type { RepoRow } from "./repos.js";
@@ -86,7 +86,8 @@ async function liveStates(
   let done = false;
   const read = async () => {
     const org = await projectInstallation(db, project.orgId);
-    if (!org) return;
+    // Under GitHub's rate limit every read answers null: not even a token.
+    if (!org || isRateLimited(org.installationId)) return;
     const { octokit } = await installationClient(config, org.installationId);
     await forEachLimit(
       repos,
@@ -124,39 +125,39 @@ function slotScore(run: RunRow | undefined, scale: ProjectScale): ProjectSlotSco
     runId: run.id,
     points: run.points,
     max: run.max,
-    parseStatus: run.parseStatus,
-    toVerify: run.toVerify,
     grade: scoreGrade(run.points, run.max, scale),
   };
 }
 
-/** What the page reads of a repository's runs besides its slots, by repository id. */
-async function runFacts(db: Db, repoIds: string[]) {
-  const facts = new Map<string, { multiple: boolean; afterDeadline: boolean; malformed: string | null }>();
-  if (repoIds.length === 0) return facts;
-  const counts = await db
+interface RunFacts {
+  multiple: boolean;
+  malformed: string | null;
+}
+
+/**
+ * What the page reads of a repository's runs besides its slots, by
+ * repository id, in one pass: whether any run printed several `GRADE`
+ * annotations, and the latest run's parse detail when it is malformed.
+ */
+async function runFacts(db: Db, repoIds: string[]): Promise<Map<string, RunFacts>> {
+  if (repoIds.length === 0) return new Map();
+  const latest = (column: SQL) => sql`(array_agg(${column} ORDER BY ${projectGradeRuns.completedAt} DESC))[1]`;
+  const rows = await db
     .select({
       repoId: projectGradeRuns.repoId,
       multiple: sql<boolean>`bool_or(${projectGradeRuns.parseStatus} = 'multiple')`,
-      afterDeadline: sql<boolean>`bool_or(${projectGradeRuns.afterDeadline})`,
+      latestStatus: sql<string>`${latest(sql`${projectGradeRuns.parseStatus}`)}`,
+      latestDetail: sql<string | null>`${latest(sql`${projectGradeRuns.parseDetail}`)}`,
     })
     .from(projectGradeRuns)
     .where(inArray(projectGradeRuns.repoId, repoIds))
     .groupBy(projectGradeRuns.repoId);
-  const latest = await db
-    .selectDistinctOn([projectGradeRuns.repoId], {
-      repoId: projectGradeRuns.repoId,
-      parseStatus: projectGradeRuns.parseStatus,
-      parseDetail: projectGradeRuns.parseDetail,
-    })
-    .from(projectGradeRuns)
-    .where(inArray(projectGradeRuns.repoId, repoIds))
-    .orderBy(projectGradeRuns.repoId, desc(projectGradeRuns.completedAt));
-  const malformed = new Map(latest.map((r) => [r.repoId, r.parseStatus === "malformed" ? (r.parseDetail ?? "") : null]));
-  for (const c of counts) {
-    facts.set(c.repoId, { multiple: c.multiple, afterDeadline: c.afterDeadline, malformed: malformed.get(c.repoId) ?? null });
-  }
-  return facts;
+  return new Map(
+    rows.map((r) => [
+      r.repoId,
+      { multiple: r.multiple, malformed: r.latestStatus === "malformed" ? (r.latestDetail ?? "") : null },
+    ]),
+  );
 }
 
 function liveView(read: LiveRead | undefined): ProjectRepoLive | null {
@@ -170,7 +171,7 @@ function repoView(
   project: ProjectRow,
   repo: RepoRow,
   runs: Map<string, RunRow>,
-  facts: { multiple: boolean; afterDeadline: boolean; malformed: string | null } | undefined,
+  facts: RunFacts | undefined,
   read: LiveRead | undefined,
 ): ProjectRepoView {
   const scale = project.gradingScale;
@@ -208,7 +209,6 @@ function repoView(
       toVerify: [current, frozen, review].some((r) => r?.toVerify === true),
       multiple: facts?.multiple ?? false,
       malformed: facts?.malformed ?? null,
-      afterDeadlineRuns: facts?.afterDeadline ?? false,
       deleted: repo.deletedAt !== null || read?.state?.missing === true,
       changedAfterRelease: changedAfterRelease(released, final, { points: repo.releasedPoints, max: repo.releasedMax }),
     },
@@ -225,7 +225,10 @@ export interface DetailOptions {
  * `GET /app/api/projects/:id` (F-PROJ-13): the project's summary, its
  * counts, its primary action, and one row per student of the roster
  * (staff seats excepted) with their repository — null when they have not
- * accepted —, then the repositories whose student has left the roster.
+ * accepted —, then the repositories whose student has left the roster. A
+ * repository of a user who now holds a STAFF seat of the classroom is left
+ * out altogether — rows, counts and the release's readiness: a staff seat
+ * is never a student's (ADR-018).
  * The project was loaded under `staffAccess` by the route (invariant 6).
  */
 export async function projectDetail(
@@ -235,8 +238,9 @@ export async function projectDetail(
   now: Date,
   opts: DetailOptions,
 ): Promise<ProjectDetail> {
-  const roster = await db
+  const seats = await db
     .select({
+      staff: enrollments.staff,
       enrollmentId: enrollments.id,
       userId: enrollments.userId,
       nom: enrollments.nom,
@@ -247,15 +251,19 @@ export async function projectDetail(
     })
     .from(enrollments)
     .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
-    .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, false)))
+    .where(eq(enrollments.classroomId, project.classroomId))
     .orderBy(enrollments.nom, enrollments.prenom, enrollments.id);
+  const roster = seats.filter((s) => !s.staff);
+  const staffUsers = new Set(seats.filter((s) => s.staff).map((s) => s.userId));
   // Individual repositories (M3-03); a group's rows join their members with M3-15.
-  const repos = await db
-    .select({ repo: projectRepos, user: users, githubLogin: githubAccounts.login })
-    .from(projectRepos)
-    .innerJoin(users, eq(users.id, projectRepos.userId))
-    .leftJoin(githubAccounts, eq(githubAccounts.userId, projectRepos.userId))
-    .where(eq(projectRepos.projectId, project.id));
+  const repos = (
+    await db
+      .select({ repo: projectRepos, user: users, githubLogin: githubAccounts.login })
+      .from(projectRepos)
+      .innerJoin(users, eq(users.id, projectRepos.userId))
+      .leftJoin(githubAccounts, eq(githubAccounts.userId, projectRepos.userId))
+      .where(eq(projectRepos.projectId, project.id))
+  ).filter(({ repo }) => !staffUsers.has(repo.userId));
 
   const slotIds = repos.flatMap(({ repo }) =>
     [repo.currentGradeRunId, repo.frozenGradeRunId, repo.reviewGradeRunId].filter((id): id is string => id !== null),

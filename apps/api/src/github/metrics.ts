@@ -116,6 +116,14 @@ export function forgetRepoLiveState(fullName: string | null | undefined): void {
   if (fullName) liveCache.delete(fullName.toLowerCase());
 }
 
+/**
+ * The installation is skipped until GitHub's reset: a read would answer
+ * null without asking. A caller may stop before it mints a token.
+ */
+export function isRateLimited(installationId: number, now = Date.now()): boolean {
+  return (rateLimitedUntil.get(installationId) ?? 0) > now;
+}
+
 /** Test hook: start from an empty cache and no rate-limited installation. */
 export function resetLiveStateCache(): void {
   liveCache.clear();
@@ -136,7 +144,7 @@ export async function readRepoLiveState(
 ): Promise<LiveRead> {
   const key = fullName.toLowerCase();
   const hit = liveCache.get(key);
-  const limited = (rateLimitedUntil.get(installationId) ?? 0) > now;
+  const limited = isRateLimited(installationId, now);
 
   if (hit) {
     const age = now - hit.at;
