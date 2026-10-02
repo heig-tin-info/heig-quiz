@@ -811,6 +811,11 @@ files it ports; writes en + fr for every string.
 - **From M3-03** (orchestrator, 2026-10-02): the daily re-invite of
   F-PROJ-07 (a student still without access, at most once a day per
   repository) is this task's, through `inviteCollaborator` with `push`.
+  Two leftovers of Accept to reconcile (reviewers of M3-03): a repository
+  GitHub created whose id never reached the row (the process died between
+  the create and the update) leaves that student on `repo_name_taken`
+  until staff recover it; and a renamed account before success leaves a
+  stray private repository, possibly with the student still invited.
 
 ### M3-07 — Sync of the source repository
 - **Depends on**: M2-04, M3-02, D12. ‖ M3-05, M3-06.
@@ -855,6 +860,9 @@ files it ports; writes en + fr for every string.
   invitation (`markProvisionFailed`, `modules/project/accept.ts`);
   `project_repo_invited` after a successful Accept; the student's resend of
   an invitation (F-PROJ-07); the `user:` and course hints of an Accept.
+  A `repo_name_taken` failure is audited with `notify` too: the
+  notification text must cover a name collision, which only staff can
+  resolve.
 
 ### M3-10 — Web: projects in Activities, "New ▾"
 - **Depends on**: M3-01 contracts, M1-05. ‖ M3-11.
