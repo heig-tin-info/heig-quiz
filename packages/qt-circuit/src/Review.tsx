@@ -194,7 +194,6 @@ export function CircuitReview({
       <div className="flex flex-wrap items-center gap-2">
         <span className={cx(sectionTitle, "tabular-nums")}>{fmt(s.score, { points: pointsOrDash(points), max: maxPoints })}</span>
         {breakdown?.mode === "manual" ? <span className={badge()}>{s.manualGrade}</span> : null}
-        {breakdown?.mode === "llm" ? <span className={badge()}>{s.llmPending}</span> : null}
         {breakdown?.runner === "unavailable" ? (
           <span className={badge("warning")}>{s.runnerUnavailable}</span>
         ) : null}

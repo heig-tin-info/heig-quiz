@@ -11,7 +11,7 @@
  * the reference and both text forms.
  */
 import { ConfigMigrationError, type PublicationIssue, type QuestionTypeServer } from "@quiz/core/server";
-import { isEmptyScene, kindIssues, sameScene, type Scene } from "@quiz/diagram/server";
+import { isEmptyScene, kindIssues, sameScene, toText, type DiagramKind, type Scene } from "@quiz/diagram/server";
 
 import {
   DIAGRAM_CONFIG_VERSION,
@@ -35,6 +35,18 @@ const textsOf = (scene: Scene): string[] => [
   ...scene.nodes.flatMap((n) => [n.name ?? "", n.stereo ?? "", ...(n.body ?? [])]),
   ...scene.links.map((l) => l.name ?? ""),
 ];
+
+/** What the model reads, per kind: the text form of its codec (ADR-046 §2); `free` has none. */
+const FORMS: Readonly<Record<DiagramKind, string | null>> = {
+  class: "a UML class diagram in PlantUML",
+  usecase: "a UML use case diagram in PlantUML",
+  state: "a state diagram in Mermaid",
+  er: "an entity-relationship diagram in Mermaid",
+  flow: "a flowchart in Mermaid",
+  automaton: "a finite automaton in Graphviz DOT",
+  graph: "a graph in Graphviz DOT",
+  free: null,
+};
 
 export const diagramServer: QuestionTypeServer<
   DiagramConfig,
@@ -112,9 +124,10 @@ export const diagramServer: QuestionTypeServer<
 
   /**
    * No answer, an empty scene or the untouched starter is worth 0, and that
-   * IS the grade. Anything else is a proposal of 0 points that a teacher
-   * settles (F-GRADE-01): automatic proposals per kind wait for their own
-   * ADR (ADR-046 §5).
+   * IS the grade. Anything else goes to the LLM service when there is one,
+   * in the kind's text form beside the reference's (ADR-063); otherwise, and
+   * for `free`, which has no text form, it is a proposal of 0 points that a
+   * teacher settles (F-GRADE-01).
    *
    * An answer drawn for ANOTHER kind is possible: a regrade may repoint an
    * item at a newer published version (F-GRADE-06), and a version published
@@ -133,7 +146,22 @@ export const diagramServer: QuestionTypeServer<
     if (sameScene(answer.scene, startingScene(config.starter))) {
       return { kind: "graded", points: 0, maxPoints: ctx.itemPoints, details: { reason: "empty", nodes, links } };
     }
-    return proposal("manual");
+    const form = FORMS[config.kind];
+    const answerText = ctx.llm === undefined || form === null ? null : toText(answer.scene, config.kind);
+    if (form === null || answerText === null) return proposal("manual");
+    return {
+      kind: "pending",
+      via: "llm",
+      request: {
+        statement: config.prompt,
+        form,
+        rubric: config.rubric,
+        reference: toText(config.reference, config.kind) ?? "",
+        answer: answerText,
+        maxPoints: ctx.itemPoints,
+      },
+      details: { reason: "llm", nodes, links },
+    };
   },
 
   /**

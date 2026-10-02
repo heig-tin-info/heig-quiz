@@ -25,10 +25,12 @@ import type { FastifyInstance } from "fastify";
  * waiting. The reasoning is in `modules/grading/jobs.ts`.
  * `grading.runner` is one job per answer, at low priority, because a
  * container run is the slow half and must never hold up the deterministic
- * grading of the other questions.
+ * grading of the other questions. `grading.llm` is one job per answer too,
+ * a call to the model (ADR-063).
  */
 export const GRADING_EVALUATION_QUEUE = "grading.evaluation";
 export const GRADING_RUNNER_QUEUE = "grading.runner";
+export const GRADING_LLM_QUEUE = "grading.llm";
 
 /**
  * One run of a scheduled task (D10, `modules/system/jobs.ts`): `{ key }`,
@@ -75,6 +77,11 @@ interface SendOptions {
   priority?: number;
 }
 
+interface WorkOptions {
+  /** Jobs of this queue run at once in this process; the in-process runner runs one. */
+  localConcurrency?: number;
+}
+
 interface JobHandler<T> {
   (data: T): Promise<void>;
 }
@@ -83,7 +90,7 @@ interface JobHandler<T> {
 export interface JobQueue {
   createQueue(name: string, options?: SendOptions): Promise<void>;
   send<T extends object>(name: string, data: T, options?: SendOptions): Promise<void>;
-  work<T extends object>(name: string, handler: JobHandler<T>): Promise<void>;
+  work<T extends object>(name: string, handler: JobHandler<T>, options?: WorkOptions): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -98,9 +105,9 @@ class PgBossQueue implements JobQueue {
   async send<T extends object>(name: string, data: T, options?: SendOptions) {
     await this.boss.send(name, data, (options ?? {}) as never);
   }
-  async work<T extends object>(name: string, handler: JobHandler<T>) {
+  async work<T extends object>(name: string, handler: JobHandler<T>, options?: WorkOptions) {
     if (!this.runWorkers) return;
-    await this.boss.work<T>(name, async (jobs) => {
+    await this.boss.work<T>(name, { ...options }, async (jobs) => {
       for (const job of jobs) await handler(job.data);
     });
   }

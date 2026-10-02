@@ -68,11 +68,16 @@ export function stubGrade(req: LlmGradeRequest): LlmGradeOutcome {
   const points = Math.min(req.maxPoints, Math.round(raw * 4) / 4);
   const confidence = terms.size === 0 ? "low" : confidenceOf(coverage, req.answer);
   const justification = `Development stub, not a model: ${JUDGEMENTS[confidence]}.`;
-  return { points, justification, confidence };
+  // One criterion, the whole question: the stub reads no rubric's structure.
+  const criteria = [{ criterion: "Coverage of the rubric", points, maxPoints: req.maxPoints, comment: justification }];
+  return { points, justification, confidence, criteria, model: STUB_MODEL };
 }
 
+/** What a stub proposal names as its model: never a real one. */
+export const STUB_MODEL = "development-stub";
+
 export class StubLlm implements LlmService {
-  grade(req: LlmGradeRequest): Promise<LlmGradeOutcome> {
+  grade(req: LlmGradeRequest, _billedTo: string | null): Promise<LlmGradeOutcome> {
     return Promise.resolve(stubGrade(req));
   }
 }

@@ -9,8 +9,9 @@
  * `llm_not_configured`, and a type that can grade otherwise (the essay, by
  * hand) does not ask at all: it reads `GradeContext.llm` first.
  *
- * The only provider today is the deterministic stub of development, which
- * `config.ts` refuses in production.
+ * Two providers (ADR-063): the real model, through the gateway of the API,
+ * and the deterministic stub of development, which `config.ts` refuses in
+ * production.
  */
 
 /**
@@ -20,6 +21,13 @@
  * id — the grading pass adds none.
  */
 export interface LlmGradeRequest {
+  /** The question's statement, as the student read it. */
+  statement: string;
+  /**
+   * What the answer and the reference are, in a few English words the
+   * prompt quotes: "free text", "a PlantUML class diagram".
+   */
+  form: string;
   /** The teacher's rubric, verbatim. */
   rubric: string;
   /** An optional reference answer. */
@@ -41,8 +49,28 @@ export interface LlmGradeOutcome {
   justification: string;
   /** How sure the model says it is: what the batch and its filter read (F-GRADE-04). */
   confidence: "low" | "medium" | "high";
+  /**
+   * The points per criterion (F-GRADE-02): the model's reading of the
+   * free-text rubric, or of the reference when the rubric is empty. The
+   * teacher's, like the justification.
+   */
+  criteria: LlmCriterion[];
+  /** The model that answered, shown beside the proposal (N-DATA-05). */
+  model: string;
+}
+
+export interface LlmCriterion {
+  criterion: string;
+  points: number;
+  maxPoints: number;
+  /** One sentence. */
+  comment: string;
 }
 
 export interface LlmService {
-  grade(req: LlmGradeRequest): Promise<LlmGradeOutcome>;
+  /**
+   * `billedTo` is the person the call is logged against (`llm_calls`,
+   * F-LLM-04); it is never sent to the model.
+   */
+  grade(req: LlmGradeRequest, billedTo: string | null): Promise<LlmGradeOutcome>;
 }

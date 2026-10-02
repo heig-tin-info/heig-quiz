@@ -6,7 +6,6 @@ import {
   OUTPUT_COLUMNS,
   acLine,
   acSourceSpec,
-  buildBareNetlist,
   buildNetlist,
   decimate,
   elementName,
@@ -291,13 +290,6 @@ describe("buildNetlist: the devices", () => {
     const built = buildNetlist({ components: [r], wires: [] }, sine(), GROUNDED);
     expect(built.issues.map((i) => i.code)).toContain("invalid_value");
     expect(built.text).toContain("R1 n1 n2 1e+4");
-  });
-});
-
-describe("buildBareNetlist", () => {
-  it("drops the harness: no source, no load, no analysis", () => {
-    const text = buildBareNetlist(rcLowPass().schematic, GROUNDED).text;
-    expect(lines(text)).toEqual(["* quiz circuit", "R1 in out 1.59e+3", "C1 out 0 1e-7", ".end"]);
   });
 });
 

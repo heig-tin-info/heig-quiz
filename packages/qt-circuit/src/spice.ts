@@ -444,22 +444,6 @@ export function buildNetlist(
   return { text: `${lines.join("\n")}\n`, issues: devices.issues };
 }
 
-/**
- * The same devices with NO harness: no source, no load, no analysis.
- *
- * The `llm` mode sends the student's circuit and the teacher's to a model
- * side by side, and a question with no stimulus has no harness to wrap them
- * in — this is the netlist a human would read, and nothing else needs it.
- */
-export function buildBareNetlist(
-  schematic: Schematic,
-  harness: Harness,
-): { text: string; issues: NetlistIssue[] } {
-  const devices = emitDevices(schematic, harness);
-  const lines = [...header(devices.issues), ...devices.elements, ...devices.models, ".end"];
-  return { text: `${lines.join("\n")}\n`, issues: devices.issues };
-}
-
 // ---------------------------------------------------------------------------
 // Parsing ngspice's batch output
 // ---------------------------------------------------------------------------

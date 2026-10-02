@@ -356,7 +356,13 @@ describe("GradingPanel — the answer panel", () => {
         source: "llm",
         confidence: "high",
         comment: null,
-        details: { justification: "Covers the rubric." },
+        details: {
+          justification: "Covers the rubric.",
+          ai: {
+            model: "claude-sonnet-5-5",
+            criteria: [{ criterion: "The stack is bounded", points: 1.5, maxPoints: 2, comment: "Said, not explained." }],
+          },
+        },
       }),
     });
     mockFetch(routes([ai]));
@@ -367,6 +373,17 @@ describe("GradingPanel — the answer panel", () => {
     const panel = await screen.findByRole("dialog", { name: "Anonymous answer" });
     expect(within(panel).getByText("The AI's justification, never shown to the student")).toBeInTheDocument();
     expect(within(panel).getByText("Covers the rubric.")).toBeInTheDocument();
+    // Its points per criterion and the model that wrote it (ADR-063).
+    const criteria = within(panel).getByRole("list", { name: "Points per criterion" });
+    expect(within(criteria).getByText("The stack is bounded")).toBeInTheDocument();
+    expect(within(criteria).getByText("Said, not explained.")).toBeInTheDocument();
+    expect(within(panel).getByText("Proposed by Claude Sonnet 5.5")).toBeInTheDocument();
+
+    // The teacher may copy it into the comment, which they then edit (ADR-063 §7).
+    await userEvent.click(within(panel).getByRole("button", { name: /Adjust/ }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Use the AI's justification" }));
+    expect(within(panel).getByRole("textbox", { name: /comment/i })).toHaveValue("Covers the rubric.");
+    expect(within(panel).queryByRole("button", { name: "Use the AI's justification" })).toBeNull();
   });
 
   it("opens the key from the expected row, with Re-grade and Edit question", async () => {

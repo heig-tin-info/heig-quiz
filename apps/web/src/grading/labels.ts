@@ -55,6 +55,7 @@ const REASON_KEYS: Record<MachineReason, keyof Dict> = {
   answer_invalid: "grading.reason.answer_invalid",
   grader_error: "grading.reason.grader_error",
   llm_not_configured: "grading.reason.llm_not_configured",
+  llm_budget: "grading.reason.llm_budget",
   not_finalizable: "grading.reason.not_finalizable",
   runner_unavailable: "grading.reason.runner_unavailable",
   runner_error: "grading.reason.runner_error",

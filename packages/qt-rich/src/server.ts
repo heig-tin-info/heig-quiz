@@ -116,6 +116,8 @@ export const richServer: QuestionTypeServer<
         kind: "pending",
         via: "llm",
         request: {
+          statement: config.prompt,
+          form: config.format === "markdown" ? "free text, in markdown" : "free text",
           rubric: config.rubric,
           ...(reference === "" ? {} : { reference }),
           answer: answer.text,

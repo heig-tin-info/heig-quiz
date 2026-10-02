@@ -793,9 +793,9 @@ function GradingSection({
   const modeOptions: ReadonlyArray<{ value: GradingMode; label: string }> = [
     { value: "manual", label: s.modeManual },
     { value: "simulation", label: s.modeSimulation },
-    { value: "llm", label: s.modeLlm },
   ];
-  const modeHint = { manual: s.modeManualHint, simulation: s.modeSimulationHint, llm: s.modeLlmHint };
+  // `llm` is closed (ADR-063): never offered, refused at publication.
+  const modeHint = { manual: s.modeManualHint, simulation: s.modeSimulationHint, llm: s.modeManualHint };
   // Every read parses the config; only an invalid draft reaches this screen as
   // stored, and one saved before the AC sweep has no `bode` yet.
   const hasAc = config.stimuli.some((st) => st.analysis.kind === "ac");

@@ -280,9 +280,9 @@ nineteen published questions of all nine types, and four evaluations — one
 `draft`, one `scheduled`, one exercise in `lobby`, and `Test 0 — bases du C`
 closed, ten questions of all nine types answered by five of the six
 students, graded by the real grading pass (no runner: code, picture and
-circuit answers wait for one; essays proposed by the stub LLM when
-`LLM_PROVIDER=stub`, refused in production like the dev login; diagrams
-proposed at 0 for the teacher, an untouched starter validated at 0) and left
+circuit answers wait for one; essays and diagrams proposed by the stub LLM
+when `LLM_PROVIDER=stub`, refused in production like the dev login, else at
+0 for the teacher; an untouched diagram starter validated at 0) and left
 UNRELEASED so the panel has proposals to validate. Keyed on internal names
 and titles, so a second run writes nothing.
 

@@ -80,10 +80,11 @@ export type DiagramSolution = z.infer<typeof DiagramSolutionSchema>;
  * answer, or the starter untouched, and the 0 is the grade. `kind_mismatch`:
  * the answer holds what the question's kind does not have — a regrade against
  * a newer version of another kind (F-GRADE-06) — and a person grades it too.
- * The counts are what the grading table shows (decision 3 of the addendum).
+ * `llm`: the text forms went to the model, whose proposal a person validates
+ * (ADR-063). The counts are what the grading table shows (decision 3 of the addendum).
  */
 export const DiagramDetailsSchema = z.object({
-  reason: z.enum(["manual", "empty", "kind_mismatch"]),
+  reason: z.enum(["manual", "empty", "kind_mismatch", "llm"]),
   nodes: z.number().int().min(0),
   links: z.number().int().min(0),
 });

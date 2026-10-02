@@ -1882,12 +1882,9 @@ export const en = {
   "qt.circuit.e.grading": "Grading",
   "qt.circuit.e.modeManual": "You",
   "qt.circuit.e.modeSimulation": "Simulation",
-  "qt.circuit.e.modeLlm": "Assistant",
   "qt.circuit.e.modeManualHint": "You look at the circuit and give the marks yourself.",
   "qt.circuit.e.modeSimulationHint":
     "Every stimulus is simulated on both circuits and the output waveforms are compared.",
-  "qt.circuit.e.modeLlmHint":
-    "The circuit and the criteria go to the assistant. Not available yet.",
   "qt.circuit.e.tolerance": "Tolerance",
   "qt.circuit.e.toleranceHint":
     "A stimulus passes when the distance to the reference output stays under this share of its swing.",
@@ -1992,7 +1989,6 @@ export const en = {
   "qt.circuit.r.reasonOther": "Not comparable",
   "qt.circuit.r.log": "Simulator output",
   "qt.circuit.r.manualGrade": "This circuit is graded by the teacher.",
-  "qt.circuit.r.llmPending": "This circuit is waiting for the assistant.",
   "qt.circuit.r.runnerUnavailable":
     "The simulator was unavailable; this answer is waiting for a manual grade.",
   "qt.circuit.r.runnerBusy": "The simulator was busy; this answer is waiting for a manual grade.",
@@ -2209,6 +2205,8 @@ export const en = {
   "issue.short.length_range": "The maximum length is below the minimum length.",
   "issue.short.number_range": "The maximum is below the minimum.",
   "issue.short.date_range": "The last day is before the first one.",
+  "issue.circuit.llm_not_available":
+    "A circuit is graded by simulation or by hand, never by the AI: pick one of those two modes to publish.",
   "issue.short.llm_not_available": "An LLM matcher cannot be published yet: remove it to publish.",
   "issue.parameters.bad_name": "A variable name is a letter or _ followed by letters, digits or _, and shadows no function nor constant.",
   "issue.parameters.duplicate_name": "Two variables have the same name.",
@@ -3077,6 +3075,9 @@ export const en = {
   "grading.comment": "Your comment, visible to the student",
   "grading.machineComment": "Grading note",
   "grading.aiJustification": "The AI's justification, never shown to the student",
+  "grading.ai.criteria": "Points per criterion",
+  "grading.ai.model": "Proposed by {model}",
+  "grading.ai.useAsComment": "Use the AI's justification",
   "grading.reason.reference_failed": "Your reference circuit did not simulate: check it, this answer could not be compared.",
   "grading.reason.palette_violation": "The schematic uses components the palette does not offer.",
   "grading.reason.runner_request_invalid": "The program or circuit is too large to be run.",
@@ -3086,6 +3087,8 @@ export const en = {
   "grading.reason.answer_invalid":
     "The stored answer no longer fits the question: grade it by hand.",
   "grading.reason.grader_error": "The automatic grader failed on this answer: grade it by hand.",
+  "grading.reason.llm_budget":
+    "The AI's daily spending cap was reached before this answer: run grading again tomorrow, or grade it by hand.",
   "grading.reason.llm_not_configured":
     "No AI model is configured on this server: grade this answer by hand.",
   "grading.reason.not_finalizable":

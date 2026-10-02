@@ -36,6 +36,8 @@ describe("grade", () => {
       kind: "pending",
       via: "llm",
       request: {
+        statement: SECRET_CONFIG.prompt,
+        form: "free text, in markdown",
         rubric: SECRET_CONFIG.rubric,
         reference: SECRET_CONFIG.reference,
         answer: "The guard page.",

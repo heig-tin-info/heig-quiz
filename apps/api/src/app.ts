@@ -93,11 +93,12 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   // One runner for the whole process, chosen once by RUNNER_MODE. Everything
   // that grades code takes `app.runner` and never reads the configuration.
   app.decorate("runner", createRunner(config));
-  // At most one LLM service, chosen once by LLM_PROVIDER; null sends nothing.
-  app.decorate("llm", createLlm(config));
   // The gateway of ADR-058: off without LLM_KEY_SECRET, else a real model
   // with the key an administrator stored, logged and capped.
-  app.decorate("llmGateway", new LlmGateway({ db: handle.db, clock: clock ?? systemClock, config }));
+  const llmGateway = new LlmGateway({ db: handle.db, clock: clock ?? systemClock, config });
+  app.decorate("llmGateway", llmGateway);
+  // The grading service (ADR-063): the stub of LLM_PROVIDER, else the gateway's; null sends nothing.
+  app.decorate("llm", createLlm(config, llmGateway));
   // At most one station attestor, chosen once by KIOSK_ATTESTATION (ADR-051);
   // null is `off`, and then no kiosk route exists. A test may swap it.
   app.decorate("kioskAttestor", createKioskAttestor(config, app.log));

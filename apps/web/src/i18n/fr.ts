@@ -1876,12 +1876,9 @@ export const fr: Record<keyof Dict, string> = {
   "qt.circuit.e.grading": "Correction",
   "qt.circuit.e.modeManual": "Vous",
   "qt.circuit.e.modeSimulation": "Simulation",
-  "qt.circuit.e.modeLlm": "Assistant",
   "qt.circuit.e.modeManualHint": "Vous regardez le circuit et attribuez les points vous-même.",
   "qt.circuit.e.modeSimulationHint":
     "Chaque stimulus est simulé sur les deux circuits et les signaux de sortie sont comparés.",
-  "qt.circuit.e.modeLlmHint":
-    "Le circuit et les critères sont transmis à l'assistant. Pas encore disponible.",
   "qt.circuit.e.tolerance": "Tolérance",
   "qt.circuit.e.toleranceHint":
     "Un stimulus est réussi quand l'écart à la sortie de référence reste sous cette fraction de son amplitude.",
@@ -1987,7 +1984,6 @@ export const fr: Record<keyof Dict, string> = {
   "qt.circuit.r.reasonOther": "Non comparable",
   "qt.circuit.r.log": "Sortie du simulateur",
   "qt.circuit.r.manualGrade": "Ce circuit est corrigé par l'enseignant.",
-  "qt.circuit.r.llmPending": "Ce circuit attend l'assistant.",
   "qt.circuit.r.runnerUnavailable":
     "Le simulateur était indisponible ; cette réponse attend une correction manuelle.",
   "qt.circuit.r.runnerBusy":
@@ -2208,6 +2204,8 @@ export const fr: Record<keyof Dict, string> = {
   "issue.short.length_range": "La longueur maximale est inférieure à la longueur minimale.",
   "issue.short.number_range": "Le maximum est inférieur au minimum.",
   "issue.short.date_range": "Le dernier jour précède le premier.",
+  "issue.circuit.llm_not_available":
+    "Un circuit se corrige par simulation ou à la main, jamais par l'IA : choisissez l'un de ces deux modes pour publier.",
   "issue.short.llm_not_available": "Un critère IA ne peut pas encore être publié : retirez-le pour publier.",
   "issue.parameters.bad_name": "Un nom de variable commence par une lettre ou _, suivie de lettres, chiffres ou _, et ne masque aucune fonction ni constante.",
   "issue.parameters.duplicate_name": "Deux variables portent le même nom.",
@@ -3071,6 +3069,9 @@ export const fr: Record<keyof Dict, string> = {
   "grading.comment": "Votre commentaire, visible de l'étudiant",
   "grading.machineComment": "Note de correction",
   "grading.aiJustification": "Justification de l'IA, jamais montrée à l'étudiant",
+  "grading.ai.criteria": "Points par critère",
+  "grading.ai.model": "Proposé par {model}",
+  "grading.ai.useAsComment": "Reprendre la justification de l'IA",
   "grading.reason.reference_failed": "Votre circuit de référence n'a pas pu être simulé : vérifiez-le, cette réponse n'a pas pu être comparée.",
   "grading.reason.palette_violation": "Le schéma utilise des composants que la palette n'offre pas.",
   "grading.reason.runner_request_invalid": "Le programme ou le circuit est trop grand pour être exécuté.",
@@ -3081,6 +3082,8 @@ export const fr: Record<keyof Dict, string> = {
     "La réponse enregistrée ne correspond plus à la question : corrigez-la à la main.",
   "grading.reason.grader_error":
     "Le correcteur automatique a échoué sur cette réponse : corrigez-la à la main.",
+  "grading.reason.llm_budget":
+    "Le plafond de dépense quotidien de l'IA a été atteint avant cette réponse : relancez la correction demain, ou corrigez-la à la main.",
   "grading.reason.llm_not_configured":
     "Aucun modèle d'IA n'est configuré sur ce serveur : corrigez cette réponse à la main.",
   "grading.reason.not_finalizable":

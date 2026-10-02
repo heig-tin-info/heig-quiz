@@ -18,7 +18,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
-import type { LlmService } from "@quiz/core/server";
+import type { GradingLlm } from "./modules/llm/index.js";
 
 import { PERSONAS, upsertPersona, type Persona } from "./auth/dev.js";
 import { systemClock } from "./clock.js";
@@ -48,7 +48,7 @@ const TIME_BONUS: Record<string, number> = { lea: 25 };
  * configuration, not a failure — the grading pass then runs inline
  * (`modules/grading/jobs.ts`), which is what lets the seed wait for it.
  */
-function seedApp(db: Db, llm: LlmService | null, log: (msg: string) => void): FastifyInstance {
+function seedApp(db: Db, llm: GradingLlm | null, log: (msg: string) => void): FastifyInstance {
   const noop = () => {};
   return {
     db,
@@ -73,7 +73,7 @@ function seedApp(db: Db, llm: LlmService | null, log: (msg: string) => void): Fa
 export async function seed(
   db: Db,
   log: (msg: string) => void = console.log,
-  llm: LlmService | null = null,
+  llm: GradingLlm | null = null,
 ) {
   const app = seedApp(db, llm, log);
   const now = systemClock.now();

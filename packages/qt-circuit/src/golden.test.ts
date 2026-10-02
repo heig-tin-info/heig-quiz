@@ -14,7 +14,7 @@ import { describe, it } from "vitest";
 import { COMPONENT_KINDS, LIBRARY, type ComponentKind } from "./library.js";
 import { extractNets, type ExtractOptions, type Netlist } from "./netlist.js";
 import type { Orientation, Schematic, SchematicComponent, Stimulus, Wire } from "./schema.js";
-import { buildBareNetlist, buildNetlist, type Harness } from "./spice.js";
+import { buildNetlist, type Harness } from "./spice.js";
 import {
   LEFT,
   RAIL,
@@ -105,10 +105,7 @@ function golden(schematic: Schematic): unknown {
   const decks = Object.fromEntries(
     HARNESSES.flatMap(([label, harness], h) => {
       const stimulus = STIMULI[h % STIMULI.length] as Stimulus;
-      return [
-        [`${label}/${stimulus.name}`, buildNetlist(schematic, stimulus, harness).text],
-        [`${label}/bare`, buildBareNetlist(schematic, harness).text],
-      ];
+      return [[`${label}/${stimulus.name}`, buildNetlist(schematic, stimulus, harness).text]];
     }),
   );
   return { nets, decks };

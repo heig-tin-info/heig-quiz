@@ -55,6 +55,14 @@ export const circuitServer: QuestionTypeServer<
     return total > 0 ? total : 1;
   },
 
+  /**
+   * The simulation is a circuit's grading, never a model (ADR-063): the
+   * `llm` mode round-trips through a draft and an import, but publication
+   * refuses it; a version published with it before is graded as `manual`.
+   */
+  publicationIssues: (config) =>
+    config.grading.mode === "llm" ? [{ path: ["grading", "mode"], message: "circuit.llm_not_available" }] : [],
+
   /** Nothing to shuffle: a schematic has no order and the stimuli are the teacher's. */
   shuffleable() {
     return false;

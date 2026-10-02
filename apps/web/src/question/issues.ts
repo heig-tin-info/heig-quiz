@@ -29,6 +29,7 @@ const KNOWN: Record<string, keyof Dict> = {
   "short.number_range": "issue.short.number_range",
   "short.date_range": "issue.short.date_range",
   "short.llm_not_available": "issue.short.llm_not_available",
+  "circuit.llm_not_available": "issue.circuit.llm_not_available",
   "short.unresolved_reference": "issue.short.unresolved_reference",
   "short.computed_text_key": "issue.short.computed_text_key",
   "short.tolerance_below_format": "issue.short.tolerance_below_format",
