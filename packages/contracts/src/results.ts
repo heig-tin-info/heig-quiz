@@ -268,8 +268,8 @@ const StudentResults = z.object({
   points: z.number(),
   totalPoints: z.number(),
   /**
-   * Null while a cell is pending, and on an exercise before its release —
-   * points only then (`feedbackGradeShown`).
+   * Null before the release and while a cell is pending — points only then
+   * (`feedbackGradeShown`).
    */
   grade: z.number().nullable(),
   /** How many questions still wait for a validated grading. */
