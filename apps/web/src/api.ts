@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { Me, MePatch, PublicConfig } from "@quiz/contracts";
 
+import { connection } from "./realtime/connection";
+
 import type { Dict } from "./i18n/en";
 import { translateNow } from "./i18n/current";
 import { configKey, meKey } from "./queryKeys";
@@ -57,7 +59,14 @@ export async function api<T>(
     headers.set("content-type", "text/csv");
     init.body = init.csv;
   }
-  const res = await fetch(path, { ...init, headers, credentials: "same-origin" });
+  let res: Response;
+  try {
+    res = await fetch(path, { ...init, headers, credentials: "same-origin" });
+  } catch (error) {
+    if (!init.signal?.aborted) connection.suspect();
+    throw error;
+  }
+  if ([502, 503, 504].includes(res.status)) connection.suspect();
   if (!res.ok) {
     const error = new ApiError(res.status, await res.json().catch(() => null));
     // ADR-051 §6: whichever write learnt it, the station's page is told once.

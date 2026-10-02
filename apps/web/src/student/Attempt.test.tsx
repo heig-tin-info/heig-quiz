@@ -5,7 +5,7 @@ import type { AttemptOrLobby, AttemptView, LobbyView, ServerEvent } from "@quiz/
 
 import { makeAttemptView } from "../test/attempt-fixtures";
 import { elapse, flowingClock } from "../test/clock";
-import { mockFetch, noContent, ok, renderWithProviders } from "../test/render";
+import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { AttemptPage } from "./Attempt";
 
 /*
@@ -159,4 +159,23 @@ describe("/take/:id", () => {
     });
     await waitFor(() => expect(entryCalls(calls)).toHaveLength(3));
   });
+});
+
+
+it("keeps the mounted player and its local answer across a failed background entry read", async () => {
+  const { start, queryClient } = render();
+  await screen.findByText("Salle d'attente");
+  start();
+  streams.at(-1)!.emit(started);
+  await screen.findByText("Question 1");
+  const input = screen.getAllByRole("radio")[0]!;
+  await act(async () => { input.click(); });
+  expect(input).toBeChecked();
+  mockFetch({ [`POST /app/api/evaluations/${EVAL}/attempt`]: fail(503) });
+  await act(async () => {
+    await queryClient.refetchQueries({ queryKey: ["attempt", "enter", EVAL] });
+  });
+  expect(screen.getByText("Question 1")).toBeInTheDocument();
+  expect(screen.getAllByRole("radio")[0]).toBe(input);
+  expect(input).toBeChecked();
 });

@@ -29,6 +29,7 @@ import {
 const STAFF_ONLY: Record<ServerEventName, boolean> = {
   snapshot: false,
   clock: false,
+  "platform.updating": false,
   "evaluation.state": false,
   "attempt.deadline": false,
   "attempt.closed": false,

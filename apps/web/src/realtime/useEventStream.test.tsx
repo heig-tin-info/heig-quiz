@@ -2,6 +2,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { connection } from "./connection";
+
 import { SERVER_EVENT_NAMES, type ServerEvent } from "@quiz/contracts";
 
 import { useGradingProgress } from "../grading/progress";
@@ -355,4 +357,12 @@ describe("useEventStream", () => {
     render(<Probe enabled={false} />);
     expect(FakeEventSource.instances).toHaveLength(0);
   });
+});
+
+
+it("passes the validated shutdown frame to the connection overlay", () => {
+  const updating = vi.spyOn(connection, "updating").mockImplementation(() => {});
+  render(<Probe />);
+  act(() => live()[0]!.send({ type: "platform.updating" }));
+  expect(updating).toHaveBeenCalledOnce();
 });

@@ -17,7 +17,7 @@
 | Id | Requirement |
 |---|---|
 | N-RES-01 | No acknowledged answer is lost. The acknowledgement is sent only after the write to the database. |
-| N-RES-02 | The client keeps unacknowledged answers in memory and resends them with their revision on reconnection. A visible indicator signals the offline state. |
+| N-RES-02 | The client keeps unacknowledged answers in memory and resends them with their revision on reconnection. A visible indicator signals the offline state. A persistent connection failure also blurs the mounted page with an automatic-reconnection dialog; an explicit graceful server restart uses update wording (ADR-065). Pending work stays in memory: no automatic page reload, and the server deadline keeps running. |
 | N-RES-03 | The real-time connection re-establishes itself automatically with exponential backoff, and replays the current state of the evaluation on reconnection. |
 | N-RES-04 | A restart of the application server during an evaluation invalidates neither the sessions nor the attempts. Deadlines are in the database, not in memory. |
 | N-RES-05 | Database backup every hour during teaching hours and daily otherwise, kept for 30 days, off the VM. Restoration tested before going to production. |

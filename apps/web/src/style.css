@@ -815,3 +815,12 @@ html.dark {
   86% { transform: rotate(-1deg); }
   100% { transform: none; }
 }
+
+/* The top-layer connection dialog leaves the mounted page visible underneath. */
+.connection-overlay::backdrop {
+  background: color-mix(in srgb, var(--color-canvas) 65%, transparent);
+  backdrop-filter: blur(4px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .connection-overlay .animate-spin { animation: none; }
+}

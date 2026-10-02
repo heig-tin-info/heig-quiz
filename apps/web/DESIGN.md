@@ -1792,3 +1792,15 @@ waiting room — and "Schedule…" is its only secondary.
   frame, in a 320 px sticky column from `lg` up; below `lg`, one chevron row
   that opens it in a sheet. It is a picture, never the connected lobby
   (ADR-018, fifth addendum), and it is absent when there is no waiting room.
+
+## Connection recovery
+
+A native modal dialog sits in the browser's top layer, above sheets and help,
+and makes all underlying controls inert without unmounting their editors.
+Its backdrop uses `canvas` at 65% with a 4 px blur, so the current task stays
+recognisable. The centred panel uses the sheet radius, a hairline, 32 px
+padding, a 20 px bold heading and 14 px muted copy. No accent and no primary
+button: recovery is automatic. The existing spinner is still under reduced
+motion. An ordinary failure has a 1.2 s grace to avoid flashes; an explicit
+server shutdown appears immediately. Escape cannot dismiss the interruption;
+focus returns to the previous control when it clears.

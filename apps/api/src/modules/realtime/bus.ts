@@ -53,7 +53,7 @@ export interface OpenStream {
   lastWriteAt: number;
   /** The session that opened it (`sid_hash`), closed by an `end` message; null for a bearer token. */
   sid: string | null;
-  close: () => void;
+  close: (updating?: boolean) => void;
 }
 export const openStreams = new Set<OpenStream>();
 export const openStreamCount = (): number => openStreams.size;
