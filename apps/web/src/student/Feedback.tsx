@@ -23,7 +23,7 @@ import {
 } from "../ui";
 import { attemptFeedbackKey } from "../queryKeys";
 import { BonusLabel } from "../BonusLabel";
-import { pendingLabel } from "./cards";
+import { PendingLine } from "./cards";
 import { useRetake } from "./retake";
 
 /**
@@ -78,13 +78,6 @@ const REFUSAL: Partial<Record<RetakeStatus["refusal"] & string, keyof Dict>> = {
  */
 const SCORE_POLL_MS = 2_500;
 const SCORE_POLLS = 8;
-
-/** The questions still waiting for a grading, under the points; nothing at 0. */
-function PendingLine({ count }: { count: number }) {
-  const t = useT();
-  if (count === 0) return null;
-  return <p className="text-[13px] text-fg-muted">{pendingLabel(count, t)}</p>;
-}
 
 /** "attempts: n of max", under the score or beside a published correction. */
 function AttemptCount({ retake }: { retake: RetakeStatus }) {

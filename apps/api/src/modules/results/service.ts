@@ -832,17 +832,14 @@ export async function studentFeedback(
   // negative marking, ADR-026), over the same validated gradings. A cell
   // still pending counts nowhere — never as a 0.
   const points = attemptTotal(result.flatMap((r) => (r.points === null ? [] : [r.points])));
+  // Must equal `pendingCells` (grading/kept.ts), the count of the Grades page and the card.
   const pendingCount = result.filter((r) => r.points === null).length;
   // The total is the frozen one while it still holds (D-06); the per-item
   // points above always come from the gradings, which the snapshot mirrors.
   const hit =
     attempt.userId === null ? null : cachedGrade(evaluation, attempt.userId, attempt.id);
-  // No grade while a cell is pending, nor on an exercise before its release.
-  const gradeShown = feedbackGradeShown({
-    mode: evaluation.mode,
-    released: evaluation.releasedAt !== null,
-    pendingCount,
-  });
+  // No grade before the release, nor while a cell is pending.
+  const gradeShown = feedbackGradeShown({ released: evaluation.releasedAt !== null, pendingCount });
   return {
     available: true,
     evaluation: {

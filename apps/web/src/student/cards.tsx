@@ -90,8 +90,15 @@ export const finished = (card: EvaluationCardData): boolean =>
  * grading yet, which count nowhere. The same words wherever points are shown
  * beside them — the feedback page, the Grades page, this card.
  */
-export const pendingLabel = (n: number, t: TFunction): string =>
+const pendingLabel = (n: number, t: TFunction): string =>
   t(n === 1 ? "feedback.pendingCount.one" : "feedback.pendingCount", { n });
+
+/** {@link pendingLabel} as a muted line, under points; nothing at 0. */
+export function PendingLine({ count, className }: { count: number; className?: string }) {
+  const t = useT();
+  if (count === 0) return null;
+  return <span className={cx("block text-[13px] text-fg-muted", className)}>{pendingLabel(count, t)}</span>;
+}
 
 /**
  * F-EVAL-15: the line of an exercise with retakes once an attempt is done —

@@ -364,8 +364,8 @@ export const EvaluationGradeRow = z.object({
       points: z.number(),
       totalPoints: z.number(),
       grade: z.number().nullable(),
-      /** Only on an `available` row. */
-      pendingCount: z.number().int().nonnegative().optional(),
+      /** The questions still pending on an `available` row; 0 on a released one. */
+      pendingCount: z.number().int().nonnegative(),
     })
     .nullable(),
 });

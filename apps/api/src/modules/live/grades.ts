@@ -1,16 +1,13 @@
 /**
  * The student's Grades page (`GET /student/results`, F-RES-04, F-ORG-14):
  * the home's Past (`studentBoard`), every classroom's, archived ones
- * included, by classroom. Depends on `attempt.ts`, and reads the pending
- * cells of the rows the feedback page already shows (`pendingCells`).
+ * included, by classroom. Depends on `attempt.ts` only.
  */
 import { isFinishedAttempt } from "@quiz/domain";
 import type { CardResults, EvaluationGradeRow, GradeGroup, GradeStatus, StudentGrades } from "@quiz/contracts";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { itemCountsByEvaluation } from "../evaluation/service.js";
-import { pendingCells, tallyByAttempt } from "../grading/service.js";
 import { gradeReadable } from "../results/service.js";
 import { studentBoard, type PastEntry } from "./attempt.js";
 
@@ -24,7 +21,6 @@ import { studentBoard, type PastEntry } from "./attempt.js";
  */
 export async function studentGrades(db: Db, userId: string, now: Date): Promise<StudentGrades> {
   const { past } = await studentBoard(db, userId, now);
-  const pending = await pendingOfEarly(db, past);
   const groups = new Map<string, GradeGroup>();
   for (const entry of past) {
     if (entry.row.staff && entry.row.attempt === null) continue;
@@ -40,33 +36,13 @@ export async function studentGrades(db: Db, userId: string, now: Date): Promise<
       },
       rows: [],
     };
-    group.rows.push(gradeRow(entry, pending));
+    group.rows.push(gradeRow(entry));
     groups.set(id, group);
   }
   const newest = (g: GradeGroup) => g.rows[0]!.date;
   return [...groups.values()]
     .map((g) => ({ ...g, rows: g.rows.sort((a, b) => b.date.localeCompare(a.date)) }))
     .sort((a, b) => newest(b).localeCompare(newest(a)));
-}
-
-/**
- * The pending cells of the counted attempt of every row read before its
- * release (`early`), keyed by that attempt: the count the feedback page
- * prints beside the same points. Two grouped queries, none without such a row.
- */
-async function pendingOfEarly(db: Db, past: readonly PastEntry[]): Promise<Map<string, number>> {
-  const early = past.flatMap((e) => (e.early && e.counted ? [{ e, id: e.counted.id }] : []));
-  if (early.length === 0) return new Map();
-  const [tallies, itemCounts] = await Promise.all([
-    tallyByAttempt(db, early.map((x) => x.id)),
-    itemCountsByEvaluation(db, [...new Set(early.map((x) => x.e.row.evaluation.id))]),
-  ]);
-  return new Map(
-    early.map(({ e, id }) => [
-      id,
-      pendingCells(tallies.get(id), itemCounts.get(e.row.evaluation.id) ?? 0),
-    ]),
-  );
 }
 
 /**
@@ -91,18 +67,23 @@ export function gradeStatus(fact: {
  * release, the feedback page's points, indicative, no grade, and its count
  * of questions still pending.
  */
-function scoreOf(
-  { row, counted, released, early }: PastEntry,
-  pending: ReadonlyMap<string, number>,
-): EvaluationGradeRow["score"] {
+function scoreOf({ row, counted, released, early }: PastEntry): EvaluationGradeRow["score"] {
   if (released && gradeReadable(row.evaluation, counted?.state ?? null)) {
-    return { points: released.points, totalPoints: released.totalPoints, grade: released.grade };
+    return {
+      points: released.points,
+      totalPoints: released.totalPoints,
+      grade: released.grade,
+      pendingCount: 0,
+    };
   }
-  if (early) return { ...early, grade: null, pendingCount: pending.get(counted?.id ?? "") ?? 0 };
+  if (early) {
+    const { points, totalPoints, pendingCount } = early;
+    return { points, totalPoints, grade: null, pendingCount };
+  }
   return null;
 }
 
-function gradeRow(entry: PastEntry, pending: ReadonlyMap<string, number>): EvaluationGradeRow {
+function gradeRow(entry: PastEntry): EvaluationGradeRow {
   const { row, card, counted } = entry;
   const { evaluation, attempt } = row;
   return {
@@ -124,6 +105,6 @@ function gradeRow(entry: PastEntry, pending: ReadonlyMap<string, number>): Evalu
     }),
     // `results` is the counted attempt's own (`resultsState`).
     feedbackAttemptId: card.results === "available" ? (counted?.id ?? null) : null,
-    score: scoreOf(entry, pending),
+    score: scoreOf(entry),
   };
 }

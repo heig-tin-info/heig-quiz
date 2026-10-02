@@ -13,6 +13,7 @@ import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import {
   EvaluationSettings,
   type AttemptClosed,
+  type AttemptScore,
   type AttemptItem,
   type AttemptOrLobby,
   type AttemptView,
@@ -1336,14 +1337,15 @@ type StudentRow = Awaited<ReturnType<typeof studentEvaluationRows>>[number];
  * A card of the student's Past, beside the row it was drawn from, the
  * attempt that counts (`countedAttempt`), the released grade, and `early`:
  * the points the feedback page shows for that attempt BEFORE the release
- * (results `available`, not released), null everywhere else.
+ * (results `available`, not released), with its count of questions still
+ * pending, null everywhere else.
  */
 export interface PastEntry {
   row: StudentRow;
   card: EvaluationCard;
   counted: { id: string; state: string } | null;
   released: ReleasedGrade | undefined;
-  early: { points: number; totalPoints: number } | null;
+  early: AttemptScore | null;
 }
 
 /**
@@ -1392,7 +1394,6 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
   // score of a kept attempt what its feedback page would show — so are the
   // points of a row readable before its release (`early`). A fixed number of
   // queries for the whole page, not one per card.
-  const retakeIds = withRetakes.map((r) => r.evaluation.id);
   const readableEarly = rows.filter((row) => {
     const kept = countedAttempt(perEvaluation, row);
     return (
@@ -1402,10 +1403,11 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
     );
   });
   const scored = [...new Set([...withRetakes, ...readableEarly])];
+  const scoredIds = [...new Set(scored.map((r) => r.evaluation.id))];
   const [grades, totals, itemCounts, keptTallies] = await Promise.all([
     releasedGradesOf(db, userId, rows, perEvaluation),
-    totalPointsByEvaluation(db, [...new Set(scored.map((r) => r.evaluation.id))]),
-    itemCountsByEvaluation(db, retakeIds),
+    totalPointsByEvaluation(db, scoredIds),
+    itemCountsByEvaluation(db, scoredIds),
     tallyByAttempt(
       db,
       scored
@@ -1492,10 +1494,11 @@ export async function studentBoard(db: Db, userId: string, now: Date, classroomI
     const c = card(row, counted?.state ?? null);
     const early =
       counted !== null && readableEarly.includes(row)
-        ? {
-            points: keptTallies.get(counted.id)?.points ?? 0,
-            totalPoints: totals.get(row.evaluation.id) ?? 0,
-          }
+        ? scoreOf(
+            keptTallies.get(counted.id),
+            itemCounts.get(row.evaluation.id) ?? 0,
+            totals.get(row.evaluation.id) ?? 0,
+          )
         : null;
     const ended = { row, card: c, counted, released: grades.get(row.evaluation.id), early };
     if (state === "scheduled") upcoming.push(c);

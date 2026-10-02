@@ -630,6 +630,7 @@ on("GET", "/app/api/student/results", (): StudentGrades => {
     points,
     totalPoints,
     grade: Math.round((1 + (5 * points) / totalPoints) * 10) / 10,
+    pendingCount: 0,
   });
   const series = flags.many
     ? Array.from({ length: 12 }, (_, i) =>

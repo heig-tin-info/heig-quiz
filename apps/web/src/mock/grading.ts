@@ -6,6 +6,7 @@ import {
   evaluationTotal,
   histogram,
   correctionPublishRefusal,
+  feedbackGradeShown,
   isBatchable,
   isDebriefOpen,
   itemPoints,
@@ -1149,8 +1150,8 @@ function feedbackPage(attemptId: string) {
     attemptId: attempt.id,
     points,
     totalPoints: total,
-    // No grade while a question waits for its grading (F-RES-04).
-    grade: pendingCount > 0 ? null : gradeOf(points, total),
+    // The server's rule (F-RES-04): released, and no question pending.
+    grade: feedbackGradeShown({ released: true, pendingCount }) ? gradeOf(points, total) : null,
     pendingCount,
     items: e.items.map((item) => {
       const q = questions.find((x) => x.id === item.questionId)!;

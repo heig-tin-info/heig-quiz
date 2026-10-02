@@ -105,19 +105,16 @@ export function feedbackGate(input: {
 }
 
 /**
- * Whether the student's feedback page carries a GRADE (F-RES-04): never
- * while a cell still waits for a validated grading — a pending cell is not
- * a zero, so a grade then would be false — and, for an exercise, only once
- * its results are released: before that it shows its points alone. An
- * exam's page, once it shows anything (after the close), carries the grade
- * of its validated cells.
+ * Whether the student's feedback page carries a GRADE (F-RES-04): only once
+ * the results are released, and never while a cell still waits for a
+ * validated grading — a pending cell is not a zero, so a grade then would be
+ * false. Before that the page shows its points alone, whatever the mode, as
+ * the Grades page does.
  */
 export function feedbackGradeShown(input: {
-  mode: EvaluationModeName;
   released: boolean;
   /** The cells of the attempt with no validated grading. */
   pendingCount: number;
 }): boolean {
-  if (input.pendingCount > 0) return false;
-  return input.mode !== "exercise" || input.released;
+  return input.released && input.pendingCount === 0;
 }

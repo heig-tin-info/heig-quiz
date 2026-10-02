@@ -145,20 +145,10 @@ describe("feedbackGate (F-RES-04, ADR-025 §4, ADR-050)", () => {
 });
 
 describe("feedbackGradeShown (F-RES-04)", () => {
-  it("never with a cell pending, released or not, whatever the mode", () => {
-    for (const mode of ["exam", "exercise"] as const) {
-      for (const released of [false, true]) {
-        expect(feedbackGradeShown({ mode, released, pendingCount: 1 })).toBe(false);
-      }
-    }
-  });
-
-  it("an exercise: points only before the release, the grade after", () => {
-    expect(feedbackGradeShown({ mode: "exercise", released: false, pendingCount: 0 })).toBe(false);
-    expect(feedbackGradeShown({ mode: "exercise", released: true, pendingCount: 0 })).toBe(true);
-  });
-
-  it("an exam: the grade once every cell is validated", () => {
-    expect(feedbackGradeShown({ mode: "exam", released: false, pendingCount: 0 })).toBe(true);
+  it("only once released, and never with a cell pending", () => {
+    expect(feedbackGradeShown({ released: true, pendingCount: 0 })).toBe(true);
+    expect(feedbackGradeShown({ released: true, pendingCount: 1 })).toBe(false);
+    expect(feedbackGradeShown({ released: false, pendingCount: 0 })).toBe(false);
+    expect(feedbackGradeShown({ released: false, pendingCount: 2 })).toBe(false);
   });
 });

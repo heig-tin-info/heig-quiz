@@ -71,7 +71,7 @@ export function scoreOf(
 }
 
 /** How many of an attempt's `itemCount` cells hold no validated grading. */
-export function pendingCells(tally: AttemptTally | undefined, itemCount: number): number {
+function pendingCells(tally: AttemptTally | undefined, itemCount: number): number {
   return Math.max(0, itemCount - (tally?.graded ?? 0));
 }
 

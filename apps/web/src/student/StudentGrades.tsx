@@ -51,7 +51,7 @@ import {
   type Column,
   type Tone,
 } from "../ui";
-import { MODE_KEY, pendingLabel } from "./cards";
+import { MODE_KEY, PendingLine } from "./cards";
 
 const STATUS: Record<GradeStatus, { label: keyof Dict; tone: Tone }> = {
   released: { label: "sgrades.status.released", tone: "green" },
@@ -265,12 +265,10 @@ function GradeCell({ row }: { row: GradeRow }) {
 }
 
 /** Under the status of points read before the release: the questions still to grade. */
-function Pending({ row }: { row: GradeRow }) {
-  const t = useT();
-  const n = row.kind === "evaluation" ? (row.score?.pendingCount ?? 0) : 0;
-  if (n === 0) return null;
-  return <span className="mt-1 block text-[13px] text-fg-muted">{pendingLabel(n, t)}</span>;
-}
+const Pending = ({ row }: { row: GradeRow }) =>
+  row.kind === "evaluation" && row.score ? (
+    <PendingLine count={row.score.pendingCount} className="mt-1" />
+  ) : null;
 
 function StatusBadge({ status }: { status: GradeStatus }) {
   const t = useT();
