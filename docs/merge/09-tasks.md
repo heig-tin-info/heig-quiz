@@ -722,8 +722,8 @@ files it ports; writes en + fr for every string.
     a project neither draft nor archived; by the caller's own portal session
     (`ownPortalSession`). An impersonation POST meets ADR-034's read-only
     `403 impersonation_read_only` first outside development, the loader's
-    404 in it; a Bearer token 404, `seb` 401. TODO (product owner, asked by
-    the orchestrator): a student of an ARCHIVED classroom can still accept.
+    404 in it; a Bearer token 404, `seb` 401. A classroom that is archived
+    takes no new work: Accept answers its 404 (product owner, 2026-10-02).
   - **Installation**: `projectInstallation(db, orgId)` in the `github`
     service, on `projects.org_id` (not the classroom's current link); the
     one rule "installed and active" (`installed`) is shared with

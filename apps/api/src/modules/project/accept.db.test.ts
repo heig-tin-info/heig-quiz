@@ -29,6 +29,7 @@ import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.j
 import { createApiToken } from "../../auth/tokens.js";
 import {
   auditLog,
+  classrooms,
   enrollments,
   githubAccounts,
   githubClassroomLinks,
@@ -482,6 +483,10 @@ describe("what Accept refuses", () => {
     const seeded = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id], questions: 0 });
     const seb = await session({ kind: "seb", actorUserId: null, evaluationId: seeded.evaluationId });
     expect((await accept(project.id, { headers: seb })).statusCode).toBe(401);
+
+    await server.app.db.update(classrooms).set({ archivedAt: new Date(NOW) }).where(eq(classrooms.id, room.id));
+    expect((await accept(project.id, student)).statusCode, "an archived classroom").toBe(404);
+    await server.app.db.update(classrooms).set({ archivedAt: null }).where(eq(classrooms.id, room.id));
 
     await server.app.db.update(projects).set({ archivedAt: new Date(NOW) }).where(eq(projects.id, project.id));
     expect((await accept(project.id, student)).statusCode).toBe(404);

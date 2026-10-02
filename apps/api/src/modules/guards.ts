@@ -450,6 +450,8 @@ export async function findStudentProject(db: Db, userId: string, projectId: stri
       enrollments,
       and(eq(enrollments.classroomId, projects.classroomId), eq(enrollments.userId, userId), eq(enrollments.staff, false)),
     )
+    // An archived classroom takes no new work (product owner, 2026-10-02).
+    .innerJoin(classrooms, and(eq(classrooms.id, projects.classroomId), isNull(classrooms.archivedAt)))
     .where(and(eq(projects.id, projectId), ne(projects.state, "draft"), isNull(projects.archivedAt)))
     .limit(1);
   return row ?? null;
