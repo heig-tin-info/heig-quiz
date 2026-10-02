@@ -8,7 +8,8 @@ Accepted (2026-09-25, issue #92, with `@quiz/domain/retake`,
 open question 12 of `docs/spec/06-questions-ouvertes.md`. Amended
 2026-09-30 (§3): the pool's question statistics no longer read exercises.
 Amended 2026-09-30 by ADR-050: §4's score-only masking is lifted once the
-teacher publishes the correction of the exercise.
+teacher publishes the correction of the exercise. Amended 2026-10-02 by
+ADR-067: §4's grading at hand-in now covers every exercise, retakes or not.
 
 ## Context
 
@@ -126,6 +127,10 @@ correction, the key per `showKey` — while the retakes go on; under `none`
 the score stays. From then on every attempt is graded at hand-in, retakes
 or not. That the key of attempt n−1 may now help attempt n is accepted: the
 teacher chose to publish.*
+
+*Amended by ADR-067 (2026-10-02): every attempt of an exercise is graded
+alone at hand-in while it runs, with or without retakes and whatever the
+feedback policy; an exam is graded at its close.*
 
 ### 5. Teacher screens
 

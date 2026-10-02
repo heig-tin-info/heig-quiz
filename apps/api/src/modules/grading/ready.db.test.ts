@@ -224,7 +224,7 @@ describe("grading_ready", () => {
       const fixture = await closedEvaluation(true);
       const queue = new InProcessQueue(true, fixture.app.log);
       const queued = Object.assign(Object.create(fixture.app), { boss: queue }) as typeof fixture.app;
-      await registerGradingJobs(queued, queue);
+      await registerGradingJobs(queued, queue, { GRADING_RUNNER_CONCURRENCY: 1 });
       // A job on its own queue, sent last: the queue is FIFO, so once it has
       // run, every pass sent before it has run too. A barrier for the PASSES
       // only: the `grading.runner` jobs they enqueue go on another queue and

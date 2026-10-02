@@ -64,7 +64,7 @@ import { endAttempts, seated } from "./dwell.js";
 import { endKioskSessions } from "../../auth/session.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
-import { scoreOf, studentAttempts, tallyByAttempt } from "../grading/service.js";
+import { scoreOf, standDownAutomaticGradings, studentAttempts, tallyByAttempt } from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
 import {
   countedAttempt,
@@ -147,8 +147,7 @@ export class RetakeRefused extends LiveError {
 
 /**
  * An exercise that allows several attempts reopens none (ADR-025): the
- * student starts another attempt instead, and a reopened attempt that was
- * already graded would keep its first grades.
+ * student starts another attempt instead, which is what retakes are for.
  */
 export class RetakesEnabled extends LiveError {
   constructor() {
@@ -157,10 +156,8 @@ export class RetakesEnabled extends LiveError {
 }
 
 /**
- * Nor does an exercise whose correction is published (ADR-050): its finished
- * attempts are graded at hand-in, and the pass never re-grades a validated
- * cell, so what a reopened student rewrote would never be graded — and they
- * could rewrite it with the correction in hand.
+ * Nor does an exercise whose correction is published (ADR-050): a reopened
+ * student would rewrite their answers with the correction in hand.
  */
 export class CorrectionPublished extends LiveError {
   constructor() {
@@ -748,12 +745,15 @@ export async function retakeAttempt(
 }
 
 /**
- * An attempt is graded alone as soon as it is finished — handed in, expired,
- * or closed by the teacher — on an exercise that allows retakes (ADR-025):
- * its score is what the student reads before deciding to try again; and on
- * an exercise whose correction is published (ADR-050): the correction the
- * student reads is graded. Everywhere else the pass of the evaluation's
- * close grades every attempt, as before.
+ * An attempt of an EXERCISE is graded alone as soon as it is finished —
+ * handed in, expired, or closed by the teacher — while the exercise runs
+ * (ADR-067): whatever its feedback policy, retakes or not, correction
+ * published or not, its automatic cells are settled at once, so the student
+ * reads points at hand-in rather than a grid of "not graded" for as long as
+ * the exercise stays open. What only a person or a model can grade (an
+ * essay, a diagram) stays pending until the close: no model is asked while
+ * an evaluation runs (F-LLM-03). An exam is graded at its close, as before,
+ * and so is everything a poll holds (nothing: a poll has no key).
  */
 export async function gradeAtHandIn(
   app: FastifyInstance,
@@ -761,7 +761,7 @@ export async function gradeAtHandIn(
   attemptIds: readonly string[],
 ): Promise<void> {
   if (attemptIds.length === 0) return;
-  if (!retakesEnabled(evaluation) && evaluation.correctionPublishedAt === null) return;
+  if (evaluation.mode !== "exercise") return;
   if (evaluation.state !== "running" && evaluation.state !== "paused") return;
   await enqueueEvaluationGrading(app, {
     evaluationId: evaluation.id,
@@ -1197,7 +1197,7 @@ export function assertOpen(
 /**
  * F-LIVE-10. Terminal and irreversible for the student.
  *
- * With `app`, an exercise with retakes grades the attempt now (ADR-025) —
+ * With `app`, an exercise grades the attempt now (ADR-067) —
  * only when THIS call is the one that finished it: a repeated or concurrent
  * submit of the same attempt updates nothing and enqueues nothing.
  */
@@ -1284,19 +1284,30 @@ export async function reopenAttempt(
     timeBonusPercent: participant.timeBonusPercent,
     extraS: attempt.extraS,
   });
-  await db
-    .update(attempts)
-    .set({
-      state: "in_progress",
-      startedAt: attempt.startedAt ?? now,
-      deadlineAt,
-      bonusS,
-      closedAt: null,
-      closedBy: null,
-      submittedAt: null,
-      updatedAt: now,
-    })
-    .where(eq(attempts.id, attempt.id));
+  await db.transaction(async (tx) => {
+    // The attempt's row lock, which every grading write of the jobs takes
+    // too before re-reading the attempt's state (ADR-067): a pass that
+    // loaded this attempt finished either commits before the stand-down
+    // below (which then supersedes what it wrote) or sees it reopened.
+    await tx.select({ id: attempts.id }).from(attempts).where(eq(attempts.id, attempt.id)).for("update");
+    await tx
+      .update(attempts)
+      .set({
+        state: "in_progress",
+        startedAt: attempt.startedAt ?? now,
+        deadlineAt,
+        bonusS,
+        closedAt: null,
+        closedBy: null,
+        submittedAt: null,
+        updatedAt: now,
+      })
+      .where(eq(attempts.id, attempt.id));
+    // An exercise graded this attempt at its hand-in (ADR-067): those grades
+    // no longer describe what the student will hand in next, and the next
+    // hand-in grades it again. What a teacher settled by hand stays.
+    await standDownAutomaticGradings(tx, attempt.id);
+  });
   const row = (await attemptById(db, attempt.id))!;
   events.deadlineChanged(evaluation, row, "reopen", now);
   return row;
