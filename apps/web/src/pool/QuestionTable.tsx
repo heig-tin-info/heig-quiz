@@ -23,6 +23,7 @@ import type { QuestionSort, SortDir } from "./filters";
 import { StarButton } from "./stars";
 import { entryKey, type RowProps } from "./useQuestionBrowse";
 import { ParameterizedBadge } from "./ParameterizedBadge";
+import { ReviewBadge } from "./ReviewBadge";
 
 /**
  * The questions of a pool, as the table of the pool screen.
@@ -291,6 +292,7 @@ export function QuestionTable({
                     </span>
                     {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
                     {row.randomizable ? <ParameterizedBadge /> : null}
+                    <ReviewBadge review={row.review} />
                     <RowStatsButton row={row} statsFor={statsFor} />
                   </span>
                 </td>

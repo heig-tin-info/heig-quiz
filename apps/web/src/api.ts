@@ -108,6 +108,12 @@ const WORDED: Partial<Record<string, keyof Dict>> = {
   statement_empty: "error.statementEmpty",
   item_not_empty: "error.itemNotEmpty",
   generate_unsupported: "error.generateUnsupported",
+  // ADR-060: the LLM review.
+  not_published: "error.notPublished",
+  review_unsupported: "error.reviewUnsupported",
+  no_review: "error.noReview",
+  no_fix: "error.noFix",
+  fix_stale: "error.fixStale",
 };
 
 /** Server-provided error message of a failed call (or its worded code), or the fallback. */

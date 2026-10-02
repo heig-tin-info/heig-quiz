@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import { BoolFlag, IntList, StringList, ZodIssueLite, pageOf } from "./common.js";
 import { NamedValues, ParametersDraft } from "./parameters.js";
+import { QuestionReview, ReviewPill } from "./review.js";
 
 /**
  * The question types of the MVP. `QUESTION_TYPE_IDS` in `@quiz/core` is the
@@ -290,6 +291,8 @@ export const QuestionRow = z.object({
    * publication.
    */
   randomizable: z.boolean(),
+  /** The LLM review of the latest published version (ADR-060 §3): the pill; null when not reviewed. */
+  review: ReviewPill.nullable(),
 });
 export type QuestionRow = z.infer<typeof QuestionRow>;
 
@@ -407,6 +410,8 @@ export const QuestionDetail = z.object({
   latestPublished: VersionRow.nullable(),
   /** Same as `QuestionRow.keyless`: the latest published version has no key. */
   keyless: z.boolean(),
+  /** The LLM review of the latest published version (ADR-060), findings included; null when not reviewed. */
+  review: QuestionReview.nullable(),
 });
 export type QuestionDetail = z.infer<typeof QuestionDetail>;
 

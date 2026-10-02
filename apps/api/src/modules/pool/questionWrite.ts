@@ -45,6 +45,7 @@ import { tellPoolOfPublication } from "./members.js";
 import { ensurePersonalPool } from "./pools.js";
 import { normalizeTag, ensurePoolTags } from "./tags.js";
 import { tagsOf, isKeyless, metaJson, versionJson, draftJson } from "./questionList.js";
+import { reviewJson, reviewOf } from "./reviewStore.js";
 
 /**
  * A new question and its first draft, pre-filled by the type's
@@ -311,12 +312,15 @@ export async function questionDetail(db: Db, question: QuestionRecord): Promise<
     tagsOf(db, [question.id]),
   ]);
   const rows = versions.map(versionJson);
+  const latest = versions[0];
+  const review = latest ? await reviewOf(db, latest.id) : null;
   return {
     meta: metaJson(question, tags.get(question.id) ?? []),
     draft: draftJson(question.type, draft),
     versions: rows,
     latestPublished: rows[0] ?? null,
     keyless: isKeyless(question.type, versions[0] ?? null),
+    review: review && latest ? reviewJson(review, latest.number!) : null,
   };
 }
 

@@ -1,12 +1,14 @@
-import { ArrowLeft, Copy, Eye, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Eye, Save, ScanSearch, Trash2 } from "lucide-react";
 
 import type { QuestionDetail } from "@quiz/contracts";
+import { reviewPill } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { typeIcon, typeLabel } from "../questionTypes";
 import { routeToPath } from "../router";
 import { Badge, Button, LinkButton, Menu, PageHeader, ParentLink, SyncBadge } from "../ui";
 import { ParameterizedBadge } from "../pool/ParameterizedBadge";
+import { ReviewBadge } from "../pool/ReviewBadge";
 import type { Autosave } from "./autosave";
 
 /**
@@ -26,6 +28,7 @@ export function QuestionHeader({
   onPublish,
   onDuplicate,
   onDelete,
+  onReviewNow,
 }: {
   id: string;
   data: QuestionDetail;
@@ -43,6 +46,8 @@ export function QuestionHeader({
   onPublish: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  /** "Review now" (ADR-060), in the menu; undefined when it is not offered. */
+  onReviewNow?: (() => void) | undefined;
 }) {
   const t = useT();
   const latest = data.latestPublished;
@@ -81,6 +86,7 @@ export function QuestionHeader({
           )}
           {/* ADR-056 §8: its published version draws values per attempt. */}
           {data.meta.randomizable ? <ParameterizedBadge /> : null}
+          <ReviewBadge review={data.review ? reviewPill(data.review.state, data.review.findings) : null} />
           {draftAhead ? (
             <Badge tone="amber">{t("question.unpublished")}</Badge>
           ) : null}
@@ -133,6 +139,7 @@ export function QuestionHeader({
                 icon: Copy,
                 onSelect: onDuplicate,
               },
+              ...(onReviewNow ? [{ label: t("review.now"), icon: ScanSearch, onSelect: onReviewNow }] : []),
               {
                 label: t("question.delete"),
                 icon: Trash2,

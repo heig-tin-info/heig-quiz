@@ -145,6 +145,8 @@ export const poolQuestionsKey = (poolId: string, search: string) =>
  * patches in place (F-POOL-10), rather than refetching every page it holds.
  */
 export const poolQuestionListsKey = (poolId: string) => ["pool", poolId, "questions"] as const;
+/** The pool's "LLM review" tab (ADR-060): under the pool's key, so its hint refreshes it. */
+export const poolReviewsKey = (poolId: string) => ["pool", poolId, "reviews"] as const;
 /**
  * The caller's favourites of a pool (`?starred=1`, F-POOL-10): one query for
  * the pool screen's "Clear favourites" count and the picker's section. Under

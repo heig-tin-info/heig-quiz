@@ -97,6 +97,7 @@ function mcqDetail(over: Partial<QuestionDetail> = {}): QuestionDetail {
     versions: [],
     latestPublished: null,
     keyless: false,
+    review: null,
     ...over,
   };
 }

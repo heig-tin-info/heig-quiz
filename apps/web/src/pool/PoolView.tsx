@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Eye, Plus, StarOff } from "lucide-react";
+import { ArrowLeft, Eye, ListChecks, Plus, ScanSearch, StarOff } from "lucide-react";
 import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent } from "react";
 
 import type {
@@ -34,6 +34,8 @@ import {
   useCoarsePointer,
   useMinWidth,
   usePersistentChoice,
+  TabPanel,
+  Tabs,
 } from "../ui";
 import { BulkBar } from "./BulkBar";
 import { categoryPaths, findCategory } from "./categories";
@@ -57,7 +59,11 @@ import { useSetStars, useStarredQuestions } from "./stars";
 import { useQuestionBrowse } from "./useQuestionBrowse";
 import { QuestionPreview } from "../question/QuestionPreview";
 import { useQuestionActions } from "../question/useQuestionActions";
+import { useLlmAvailability } from "../llmAvailability";
 import { poolKey, poolQuestionStatsKey, poolQuestionsKey } from "../queryKeys";
+import { ReviewTab } from "./ReviewTab";
+
+type PoolTab = "questions" | "review";
 
 /**
  * The pool screen: the questions across the full
@@ -188,6 +194,11 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   // sidebar's selection, and "" means "all questions".
   const [filters, setFilters] = useState<QuestionFilters>(EMPTY_FILTERS);
   const [categoryParam] = useSearchParam("category", "");
+  // The "LLM review" tab (ADR-060), offered while the platform has a model.
+  const [tabParam, setTab] = useSearchParam("tab", "questions");
+  const tab: PoolTab = tabParam === "review" ? "review" : "questions";
+  const llm = useLlmAvailability();
+  const reviewTab = llm.data?.available === true;
   const categoryId = categoryParam === "" ? null : categoryParam;
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [creating, setCreating] = useState<{ type: string | null } | null>(null);
@@ -380,7 +391,24 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
         }
       />
 
-      {/* Escape closes the pane from anywhere in the list or the pane. */}
+      {reviewTab ? (
+        <Tabs<PoolTab>
+          value={tab}
+          onChange={setTab}
+          idPrefix="pool"
+          items={[
+            { value: "questions", label: t("pool.tab.questions"), icon: ListChecks },
+            { value: "review", label: t("review.title"), icon: ScanSearch },
+          ]}
+        />
+      ) : null}
+
+      {tab === "review" && reviewTab ? (
+        <TabPanel idPrefix="pool" value="review">
+          <ReviewTab poolId={id} role={detail.role} navigate={navigate} />
+        </TabPanel>
+      ) : (
+      /* Escape closes the pane from anywhere in the list or the pane. */
       <div onKeyDown={closeOnEscape}>
         {shown && !docked ? (
           <div className="space-y-4">
@@ -513,6 +541,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           </div>
         )}
       </div>
+      )}
 
       {checkedIds.length > 0 && !readOnly ? (
         <BulkBar
