@@ -476,6 +476,9 @@ const scenes = [
   // and the score-only feedback between two attempts.
   { name: "student-home-retake", role: "student", path: "/" },
   { name: "student-feedback-retake", role: "student", path: "/attempts/22222222-2222-4222-8222-222222222224/feedback" },
+  // F-RES-04: an exercise read before its release, two questions still
+  // waiting for a grading — points and the pending count, no grade.
+  { name: "student-feedback-early", role: "student", path: "/attempts/22222222-2222-4222-8222-222222222226/feedback" },
 
   // WP9: student player. `TAKE` is the mock's evaluation; `?scene=` picks the
   // state the fake backend serves (see the WP9 block of src/mock/student.ts).

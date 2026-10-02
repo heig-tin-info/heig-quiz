@@ -57,9 +57,18 @@ export function correctionPublishRefusal(evaluation: {
  *   `none`, where enabling retakes is the teacher's consent to the score;
  * - `no_feedback`: the policy is `none`;
  * - `attempt_open`: the attempt is not handed in yet;
- * - `results_pending`: `on_release`, and neither released nor published.
+ * - `results_pending`: `on_release`, and neither released nor published;
+ * - `exam_open`: an exam not closed yet — whatever its policy, a student
+ *   reads nothing of an exam before its close, since the others are still
+ *   sitting it (an `immediate` exam is refused by the contracts, docs/06 #5,
+ *   but a legacy row may still carry one).
  */
-export type FeedbackRefusal = "results_pending" | "no_feedback" | "attempt_open" | "retakes_open";
+export type FeedbackRefusal =
+  | "results_pending"
+  | "no_feedback"
+  | "attempt_open"
+  | "retakes_open"
+  | "exam_open";
 
 export type FeedbackGate = { ok: true } | { ok: false; reason: FeedbackRefusal };
 
@@ -69,10 +78,15 @@ export type FeedbackGate = { ok: true } | { ok: false; reason: FeedbackRefusal }
  * and `immediate` show it — and lifts the score-only masking of an open
  * exercise with retakes; `none` stays nothing (the score included, once the
  * retakes are no longer the reason to show it). The policy's other options
- * (key, explanation, …) are applied by the caller, unchanged.
+ * (key, explanation, …) are applied by the caller, unchanged. An exam shows
+ * nothing before its close, whatever the policy.
  */
 export function feedbackGate(input: {
   when: FeedbackWhen;
+  /** The evaluation is an exam (mode `exam`). */
+  exam: boolean;
+  /** The evaluation is over: closed, being graded or released. */
+  evaluationOver: boolean;
   /** The attempt is `not_started` or `in_progress`. */
   attemptOpen: boolean;
   /** The evaluation is an exercise with retakes, still open. */
@@ -85,6 +99,22 @@ export function feedbackGate(input: {
   if (!attemptOpen && scoreOnly) return { ok: false, reason: "retakes_open" };
   if (when === "none") return { ok: false, reason: "no_feedback" };
   if (attemptOpen) return { ok: false, reason: "attempt_open" };
+  if (input.exam && !input.evaluationOver) return { ok: false, reason: "exam_open" };
   if (when === "immediate") return { ok: true };
   return released || correctionPublished ? { ok: true } : { ok: false, reason: "results_pending" };
+}
+
+/**
+ * Whether the student's feedback page carries a GRADE (F-RES-04): only once
+ * the results are released, and never while a cell still waits for a
+ * validated grading — a pending cell is not a zero, so a grade then would be
+ * false. Before that the page shows its points alone, whatever the mode, as
+ * the Grades page does.
+ */
+export function feedbackGradeShown(input: {
+  released: boolean;
+  /** The cells of the attempt with no validated grading. */
+  pendingCount: number;
+}): boolean {
+  return input.released && input.pendingCount === 0;
 }

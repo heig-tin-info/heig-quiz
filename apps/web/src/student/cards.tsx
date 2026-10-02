@@ -86,6 +86,21 @@ export const finished = (card: EvaluationCardData): boolean =>
   card.attemptState === "submitted" || card.attemptState === "expired";
 
 /**
+ * "n questions awaiting grading": the cells of an attempt with no validated
+ * grading yet, which count nowhere. The same words wherever points are shown
+ * beside them — the feedback page, the Grades page, this card.
+ */
+const pendingLabel = (n: number, t: TFunction): string =>
+  t(n === 1 ? "feedback.pendingCount.one" : "feedback.pendingCount", { n });
+
+/** {@link pendingLabel} as a muted line, under points; nothing at 0. */
+export function PendingLine({ count, className }: { count: number; className?: string }) {
+  const t = useT();
+  if (count === 0) return null;
+  return <span className={cx("block text-[13px] text-fg-muted", className)}>{pendingLabel(count, t)}</span>;
+}
+
+/**
  * F-EVAL-15: the line of an exercise with retakes once an attempt is done —
  * the score that counts (best or last) and how many attempts were taken.
  * The score is all the student reads between two attempts (ADR-025).
@@ -109,7 +124,7 @@ function retakeLine(card: EvaluationCardData, t: TFunction): string | null {
       ? t("shome.attempts", { n: r.attemptCount })
       : t("shome.attemptsOf", { n: r.attemptCount, max: r.maxAttempts }),
   );
-  if (r.kept?.score?.pending) parts.push(t("shome.kept.pending"));
+  if (r.kept?.score?.pendingCount) parts.push(pendingLabel(r.kept.score.pendingCount, t));
   return parts.join(" · ");
 }
 

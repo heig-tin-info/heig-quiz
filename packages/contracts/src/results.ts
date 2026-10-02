@@ -264,9 +264,16 @@ const StudentResults = z.object({
     releasedAt: z.iso.datetime().nullable(),
   }),
   attemptId: z.uuid(),
+  /** The validated points: a cell still pending counts nowhere, never as 0. */
   points: z.number(),
   totalPoints: z.number(),
-  grade: z.number(),
+  /**
+   * Null before the release and while a cell is pending — points only then
+   * (`feedbackGradeShown`).
+   */
+  grade: z.number().nullable(),
+  /** How many questions still wait for a validated grading. */
+  pendingCount: z.number().int().nonnegative(),
   items: z.array(StudentResultItem),
   /**
    * While an exercise with retakes is open and its correction published
@@ -290,8 +297,11 @@ export const FeedbackPending = z.object({
    * nothing else, whatever the policy says about the correction. Once the
    * evaluation is closed, or its correction published (ADR-050), the
    * feedback policy decides what is shown.
+   *
+   * `exam_open`: an exam not closed yet shows nothing, whatever its policy:
+   * the results come after the deadline.
    */
-  reason: z.enum(["results_pending", "no_feedback", "attempt_open", "retakes_open"]),
+  reason: z.enum(["results_pending", "no_feedback", "attempt_open", "retakes_open", "exam_open"]),
   evaluation: z.object({ id: z.uuid(), title: z.string() }),
   /** Only with `retakes_open`: the points of this attempt, and nothing else. */
   score: AttemptScore.optional(),
@@ -345,11 +355,18 @@ export const EvaluationGradeRow = z.object({
    * The points and the Swiss grade, ONLY once the results are released and
    * the feedback policy lets the student read them — never under `none`
    * (F-RES-04). On an `available` row, the points the feedback page shows
-   * for the attempt that counts, indicative, and `grade` null: no grade
-   * before the release. Null everywhere else.
+   * for the attempt that counts, indicative, `grade` null — no grade
+   * before the release — and `pendingCount`, the questions still waiting
+   * for a validated grading, as on that page. Null everywhere else.
    */
   score: z
-    .object({ points: z.number(), totalPoints: z.number(), grade: z.number().nullable() })
+    .object({
+      points: z.number(),
+      totalPoints: z.number(),
+      grade: z.number().nullable(),
+      /** The questions still pending on an `available` row; 0 on a released one. */
+      pendingCount: z.number().int().nonnegative(),
+    })
     .nullable(),
 });
 export type EvaluationGradeRow = z.infer<typeof EvaluationGradeRow>;

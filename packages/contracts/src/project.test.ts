@@ -72,7 +72,7 @@ describe("the student's Grades: a project row (F-PROJ-14, product owner 2026-10-
       date: START,
       status: "released",
       feedbackAttemptId: null,
-      score: { points: 12, totalPoints: 18, grade: 4.3 },
+      score: { points: 12, totalPoints: 18, grade: 4.3, pendingCount: 0 },
     } as const;
     const grades = [
       {

@@ -6,6 +6,7 @@ import {
   evaluationTotal,
   histogram,
   correctionPublishRefusal,
+  feedbackGradeShown,
   isBatchable,
   isDebriefOpen,
   itemPoints,
@@ -69,6 +70,7 @@ import {
 } from "./pool";
 import {
   STUDENT_ATTEMPT,
+  STUDENT_EARLY_ATTEMPT,
   STUDENT_PAST_ATTEMPT,
 } from "./student";
 
@@ -1106,25 +1108,51 @@ on("POST", "/app/api/evaluations/:id/unrelease", (m) => {
 
 on("GET", "/app/api/attempts/:id/feedback", (m) => {
   const attemptId = String(m.groups!.id);
+  // The Grades page's early row: the released world's page, seen as an
+  // exercise before its release whose last two questions wait for a grading
+  // — points only, the count, no grade (F-RES-04).
+  if (attemptId === STUDENT_EARLY_ATTEMPT) {
+    const released = feedbackPage(STUDENT_PAST_ATTEMPT);
+    if (!released.available) return released;
+    const items = released.items.map((item, index, all) =>
+      index < all.length - 2 ? item : { ...item, points: null, verdict: null, details: null, comment: null },
+    );
+    return {
+      ...released,
+      evaluation: { ...released.evaluation, title: "Série 2 — Tableaux", releasedAt: null },
+      attemptId,
+      points: items.reduce((sum, item) => sum + (item.points ?? 0), 0),
+      grade: null,
+      pendingCount: 2,
+      items,
+    };
+  }
+  return feedbackPage(attemptId);
+});
+
+function feedbackPage(attemptId: string) {
   const e = gradingWorlds.find((x) => x.attempts.some((a) => a.id === attemptId));
   if (!e) throw new MockError(404, "Attempt not found");
   const attempt = e.attempts.find((a) => a.id === attemptId)!;
   if (e.evaluation.releasedAt === null) {
     return {
-      available: false,
+      available: false as const,
       reason: "results_pending",
       evaluation: { id: e.evaluation.id, title: e.evaluation.title },
     };
   }
   const { points } = attemptPoints(e, attempt.id);
   const total = gradedTotalPointsOf(e);
+  const pendingCount = e.items.filter((item) => !standingGrading(e, attempt.id, item.id)).length;
   return {
-    available: true,
+    available: true as const,
     evaluation: { id: e.evaluation.id, title: e.evaluation.title, releasedAt: e.evaluation.releasedAt },
     attemptId: attempt.id,
     points,
     totalPoints: total,
-    grade: gradeOf(points, total),
+    // The server's rule (F-RES-04): released, and no question pending.
+    grade: feedbackGradeShown({ released: true, pendingCount }) ? gradeOf(points, total) : null,
+    pendingCount,
     items: e.items.map((item) => {
       const q = questions.find((x) => x.id === item.questionId)!;
       const config = attemptConfig(q, attempt.id);
@@ -1159,7 +1187,7 @@ on("GET", "/app/api/attempts/:id/feedback", (m) => {
       };
     }),
   };
-});
+}
 
 
 /*

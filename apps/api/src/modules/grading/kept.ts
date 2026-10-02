@@ -56,7 +56,7 @@ export async function tallyByAttempt(
 
 /**
  * The score a student reads between two attempts (ADR-025): the validated
- * points, and whether some item has none yet.
+ * points, and how many items have none yet.
  */
 export function scoreOf(
   tally: AttemptTally | undefined,
@@ -66,8 +66,13 @@ export function scoreOf(
   return {
     points: tally?.points ?? 0,
     totalPoints,
-    pending: (tally?.graded ?? 0) < itemCount,
+    pendingCount: pendingCells(tally, itemCount),
   };
+}
+
+/** How many of an attempt's `itemCount` cells hold no validated grading. */
+function pendingCells(tally: AttemptTally | undefined, itemCount: number): number {
+  return Math.max(0, itemCount - (tally?.graded ?? 0));
 }
 
 /** One student's attempts, the kept one among them by the evaluation's rule. */
