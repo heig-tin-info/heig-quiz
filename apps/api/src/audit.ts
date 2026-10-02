@@ -224,6 +224,16 @@ export type AuditAction =
   | "project.auto_publish"
   | "project.archive"
   | "project.unarchive"
+  /**
+   * A student's Accept (F-PROJ-05, merge task M3-03), subject the
+   * `project_repos` row. `accept`: `payload.repo` (the student's own full
+   * name), `invitation`, `protected` (false: a plan without rulesets);
+   * `accept_failed`: `payload.notify` — true on the row's FIRST failure
+   * only, which M3-09 tells the staff about (F-NOTIF-13), never for an
+   * invitation GitHub refused (the student relinks).
+   */
+  | "project.accept"
+  | "project.accept_failed"
   | "question.copy"
   | "question.create"
   | "question.delete"

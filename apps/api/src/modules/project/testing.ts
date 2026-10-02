@@ -5,9 +5,12 @@
  * remotes there, and a route of the fake GitHub (`github/testing.ts`) that
  * answers the REST calls about them from what is on disk: create (422 on a
  * name taken), a repository, its first commit (409 when empty), its
- * branches, an organization's listing, a tree. A repository may refuse
- * pushes (a `pre-receive` hook), to stand for GitHub failing a build
- * halfway. Test support only; nothing in the application imports it.
+ * branches and matching refs, an organization's listing, a tree. A
+ * repository may refuse pushes (a `pre-receive` hook), to stand for GitHub
+ * failing a build halfway. In memory beside them (M3-03): the default branch
+ * a `PATCH` sets, the rulesets (or the free plan's 403), the collaborators
+ * invited and their permission. Test support only; nothing in the
+ * application imports it.
  */
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -35,6 +38,14 @@ export interface RepoWorld {
   stallPushes: boolean;
   /** Ends the stalled pushes: accepted (`ok`), or refused. */
   release: (ok: boolean) => void;
+  /** While true, GitHub serves no ruleset: the free plan's 403 "Upgrade to GitHub Pro". */
+  freePlan: boolean;
+  /** The rulesets of each repository, by `org/name`. */
+  rulesets: Map<string, { id: number; name: string }[]>;
+  /** The collaborators of each repository, by `org/name`: login → permission. */
+  collaborators: Map<string, Map<string, string>>;
+  /** Logins GitHub refuses to invite (an account renamed away): the 403 of the collaborators endpoint. */
+  uninvitable: Set<string>;
   /** A repository with commits on `branches` (`file` → content), as a teacher pushed it. */
   source: (org: string, name: string, branches: Record<string, Record<string, string>>, commits?: number) => void;
   /** The empty repository `org/name`, as a failed build leaves it. */
@@ -47,6 +58,9 @@ export interface RepoWorld {
   remove: () => void;
   route: Route;
 }
+
+/** GitHub Free's answer to a ruleset on a private repository. */
+const planRefusal = () => json({ message: "Upgrade to GitHub Pro or make this repository public to enable this feature." }, 403);
 
 export function repoWorld(): RepoWorld {
   const dir = mkdtempSync(join(tmpdir(), "quiz-remotes-"));
@@ -63,8 +77,11 @@ export function repoWorld(): RepoWorld {
     sh("--git-dir", pathOf(fullName), "for-each-ref", "--format=%(refname:short)", "refs/heads")
       .split("\n")
       .filter(Boolean);
+  /** HEAD's branch when it exists (a `PATCH` moves it), else `main`, else the first. */
   const defaultOf = (fullName: string) => {
     const branches = branchesOf(fullName);
+    const head = sh("--git-dir", pathOf(fullName), "symbolic-ref", "--short", "HEAD").trim();
+    if (branches.includes(head)) return head;
     return branches.includes("main") ? "main" : (branches[0] ?? "main");
   };
   const repoJson = (org: string, name: string) => ({
@@ -78,6 +95,35 @@ export function repoWorld(): RepoWorld {
     owner: { login: org, id: world.foreignOwner.has(`${org}/${name}`) ? 999_999 : (world.orgIds[org] ?? 0) },
   });
 
+  let nextRuleset = 1;
+  /** A write on an existing repository: its default branch, a ruleset, an invitation. */
+  const repoWrite = (org: string, name: string, rest: string, req: RequestInit & { method: string }): Response | undefined => {
+    const fullName = `${org}/${name}`;
+    let m: RegExpExecArray | null;
+    if (req.method === "PATCH" && rest === "") {
+      const { default_branch } = JSON.parse(String(req.body)) as { default_branch?: string };
+      if (default_branch) world.git(fullName, "symbolic-ref", "HEAD", `refs/heads/${default_branch}`);
+      return json(repoJson(org, name));
+    }
+    if (req.method === "POST" && rest === "/rulesets") {
+      if (world.freePlan) return planRefusal();
+      const { name } = JSON.parse(String(req.body)) as { name: string };
+      const ruleset = { id: nextRuleset++, name };
+      world.rulesets.set(fullName, [...(world.rulesets.get(fullName) ?? []), ruleset]);
+      return json(ruleset, 201);
+    }
+    if (req.method === "PUT" && (m = /^\/collaborators\/([^/]+)$/.exec(rest))) {
+      const login = m[1]!;
+      if (world.uninvitable.has(login)) return json({ message: "Resource not accessible by integration" }, 403);
+      const seats = world.collaborators.get(fullName) ?? new Map<string, string>();
+      world.collaborators.set(fullName, seats);
+      const invited = seats.has(login);
+      seats.set(login, (JSON.parse(String(req.body)) as { permission: string }).permission);
+      return invited ? new Response(null, { status: 204 }) : json({ id: 1, invitee: { login } }, 201);
+    }
+    return undefined;
+  };
+
   const world: RepoWorld = {
     dir,
     orgIds: {},
@@ -86,6 +132,10 @@ export function repoWorld(): RepoWorld {
     publicRepos: new Set(),
     refusePushes: false,
     stallPushes: false,
+    freePlan: false,
+    rulesets: new Map(),
+    collaborators: new Map(),
+    uninvitable: new Set(),
     release(ok) {
       writeFileSync(join(dir, "release"), ok ? "0" : "1");
     },
@@ -149,6 +199,9 @@ export function repoWorld(): RepoWorld {
         }
         return json(repoJson(org, name), 201);
       }
+      if ((m = /^\/repos\/([^/]+)\/([^/]+)(\/.*)?$/.exec(path)) && req.method !== "GET" && world.exists(`${m[1]}/${m[2]}`)) {
+        return repoWrite(m[1]!, m[2]!, m[3] ?? "", req);
+      }
       if (req.method !== "GET") return undefined;
       if ((m = /^\/orgs\/([^/]+)\/repos$/.exec(path))) {
         const org = m[1]!;
@@ -167,6 +220,11 @@ export function repoWorld(): RepoWorld {
           : json([{ sha: world.git(fullName, "rev-parse", branches[0]!).trim() }]);
       }
       if (rest === "/branches") return json(branches.map((b) => ({ name: b, protected: false })));
+      if ((m = /^\/git\/matching-refs\/heads\/(.+)$/.exec(rest))) {
+        if (branches.length === 0) return json({ message: "Git Repository is empty." }, 409);
+        return json(branches.filter((b) => b === m![1]).map((b) => ({ ref: `refs/heads/${b}` })));
+      }
+      if (rest === "/rulesets") return world.freePlan ? planRefusal() : json(world.rulesets.get(fullName) ?? []);
       if ((m = /^\/git\/trees\/(.+)$/.exec(rest))) {
         if (branches.length === 0) return json({ message: "Git Repository is empty." }, 409);
         const entries = world

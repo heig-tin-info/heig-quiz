@@ -709,6 +709,60 @@ files it ports; writes en + fr for every string.
 - **Tests** (fake octokit): idempotent accept, `provision_in_progress`, an
   `ok` row survives a failure, teacher notified once, stale account ⇒ 409,
   renamed login followed, refused under impersonation.
+- **As delivered** (branch `merge/M3-03-project-accept`; product owner and
+  orchestrator, 2026-10-02):
+  - **Route**: `POST /app/api/student/projects/:id/accept` (`routes.ts`,
+    `studentRoute`), answering `ProjectAcceptance` `{status, fullName,
+    invitationStatus}` — the caller's own repository, nothing else
+    (N-SEC-20; the test searches every student response for the source and
+    the distribution). No student listing: `studentCards` stays empty
+    (M3-09).
+  - **Loader** `studentProject` / `findStudentProject` (`guards.ts`): a
+    claimed STUDENT seat of the project's classroom (a staff seat is a 404),
+    a project neither draft nor archived; by the caller's own portal session
+    (`ownPortalSession`). An impersonation POST meets ADR-034's read-only
+    `403 impersonation_read_only` first outside development, the loader's
+    404 in it; a Bearer token 404, `seb` 401. TODO (product owner, asked by
+    the orchestrator): a student of an ARCHIVED classroom can still accept.
+  - **Installation**: `projectInstallation(db, orgId)` in the `github`
+    service, on `projects.org_id` (not the classroom's current link); the
+    one rule "installed and active" (`installed`) is shared with
+    `classroomInstallation`.
+  - **Service** `acceptProject` (`Q:modules/project/accept.ts`): the row
+    first — `ok` or `deleted_at` set (dead stays dead), it is the answer, no
+    call to GitHub, even after the deadline. Then the project's refusals,
+    `acceptRefusal(project, now)` of `@quiz/domain` (pure, unit-tested):
+    `not_started`, `deadline_passed` (`now >= deadline`, no grace),
+    `no_group`, `distribution_missing`; then `github_not_linked`,
+    `app_not_installed`, `github_account_stale` (`linkedLogin`, given the
+    link already read), `provision_in_progress`, `repo_name_taken`, all 409.
+    GitHub failing is `502 provision_failed` — its login lookup included:
+    the stored login is never used unconfirmed (renamed away, it may be
+    somebody else's now). An invitation GitHub refuses
+    (`isInvitationRefused`) is `409 github_account_stale`. Codes in
+    `PROJECT_ACCEPT_REFUSALS` (contracts; `has_repo` and `revoke_failed` left
+    to M3-15, which serves them), statuses in `errors.ts`.
+  - **Provisioning** in the request: the row inserted (`accepted_at` the
+    server's clock) under the partial UNIQUE, then claimed and returned in
+    one `UPDATE … RETURNING` (`provision_claimed_at`, taken over after 5 min
+    by `app.clock`); `repoName(slug, login)`. **Allow-list** (review round 1):
+    `provisionStudentRepo`'s `claim(repoId, created)` runs before any push,
+    change or invitation — a created repository's id is written on the row
+    at once; an existing one (422) is adopted only when its id is the row's
+    own (a replay), else `RepoNameTaken` → `409 repo_name_taken`, nothing
+    touched on it (a login naming the distribution, a source, another row's
+    repository). `full_name` is written on success.
+    `markProvisionFailed(db, rowId, claimedAt, error)` never touches an `ok`
+    row nor a row claimed since by another holder, and returns true for the
+    row's FIRST failure (`provision_error` was null): audited
+    `project.accept_failed` `{notify}`, false for a refused invitation.
+  - `provision.ts` lost its work mode (D09): always `push`, never `none`.
+    `repoWorld()` (`modules/project/testing.ts`) now answers matching refs,
+    the default branch's `PATCH`, rulesets (`freePlan` for the 403),
+    collaborators (`collaborators`, `uninvitable`).
+  - Not done here: the staff's notification (M3-09), resend and re-invite
+    (M3-06, M3-08, M3-09), groups and revocation (M3-15), the ruleset of a
+    free plan surfaced to the staff (M3-05).
 
 ### M3-04 — Ingestion and grading pipeline
 - **Depends on**: M2-04, M3-03.
@@ -746,10 +800,22 @@ files it ports; writes en + fr for every string.
   moved deadline (patch, publish) re-resolves the J−n checkpoints not
   dispatched (`checkpointDueAt`), as ONE `UPDATE … SET due_at = deadline +
   offset_days days` here.
+- **From M3-03** (orchestrator, 2026-10-02): a repository provisioned on a
+  plan without rulesets has `ruleset_id` null (audit `project.accept`
+  `protected: false`): the deadline's `lock` falls back to archiving it
+  (H8), and the staff are shown it as degraded.
 
 ### M3-06 — Reconciliation of grades and repositories
 - **Depends on**: M3-04, M2-05. ‖ M3-05, M3-07.
 - **Port from**: `reconcile.grades`, `reconcile.repos`.
+- **From M3-03** (orchestrator, 2026-10-02): the daily re-invite of
+  F-PROJ-07 (a student still without access, at most once a day per
+  repository) is this task's, through `inviteCollaborator` with `push`.
+  Two leftovers of Accept to reconcile (reviewers of M3-03): a repository
+  GitHub created whose id never reached the row (the process died between
+  the create and the update) leaves that student on `repo_name_taken`
+  until staff recover it; and a renamed account before success leaves a
+  stray private repository, possibly with the student still invited.
 
 ### M3-07 — Sync of the source repository
 - **Depends on**: M2-04, M3-02, D12. ‖ M3-05, M3-06.
@@ -768,6 +834,9 @@ files it ports; writes en + fr for every string.
   `projectGrade` and writes `released_points/max`.
 - **Tests**: port `grades.db.test`; a deleted repo never calls GitHub; a
   rate-limited detail returns stored state at once.
+- **From M3-03** (orchestrator, 2026-10-02): the staff's resend of an
+  invitation (F-PROJ-07) and each repository's `invitation_status` and
+  `provision_status` in the teacher's views.
 
 ### M3-09 — Student side, SSE, notifications
 - **Depends on**: M3-04, D18. ‖ M3-08.
@@ -785,6 +854,15 @@ files it ports; writes en + fr for every string.
   for in every student response). This task fills `studentCards` and the
   publish notification (`project_published`) that M3-02's `publishProject`
   does not send.
+- **From M3-03** (orchestrator, 2026-10-02): `project_provision_failed`
+  goes to the course's staff for a `project.accept_failed` whose
+  `payload.notify` is true — the row's first failure, never a refused
+  invitation (`markProvisionFailed`, `modules/project/accept.ts`);
+  `project_repo_invited` after a successful Accept; the student's resend of
+  an invitation (F-PROJ-07); the `user:` and course hints of an Accept.
+  A `repo_name_taken` failure is audited with `notify` too: the
+  notification text must cover a name collision, which only staff can
+  resolve.
 
 ### M3-10 — Web: projects in Activities, "New ▾"
 - **Depends on**: M3-01 contracts, M1-05. ‖ M3-11.
@@ -882,6 +960,11 @@ files it ports; writes en + fr for every string.
 - **Port from**: `C:modules/assignments/groups.ts`, `C:group-repos.ts`,
   `inviteOnGithubLink`; the org pre-removal hook in
   `Q:modules/org/service.ts`.
+- **From M3-03** (orchestrator, 2026-10-02): Accept answers `409 no_group`
+  for any group project: this task replaces it by the group's repository
+  (`claimGroupRepo`, `joinGroupRepo`), adds `has_repo` and `revoke_failed`
+  to `PROJECT_ACCEPT_REFUSALS`, and covers the revocation on leaving the
+  roster (F-PROJ-17) for the INDIVIDUAL repositories M3-03 makes too.
 - **Tests**: port `groups.db.test` (22) and `group-repos.db.test` (21).
 
 ### M3-16 — Groups (web)

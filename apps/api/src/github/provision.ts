@@ -17,12 +17,6 @@ import { inviteCollaborator } from "./collaborators.js";
 import { gitRunner, repoUrl } from "./git.js";
 import { pushWithRetry } from "./retry.js";
 
-/**
- * How a student works in a project (classroom ADR-013, now ADR-047). Local
- * until M3-01 gives projects their contracts (`packages/contracts`).
- */
-export type WorkMode = "free" | "online" | "online_seb";
-
 // Classroom's name, kept: the repositories it provisioned carry this ruleset,
 // and Quiz's App manages them after the cutover (03-github-projects.md §3.4).
 const PROTECT_RULESET = "hgc-protect";
@@ -41,16 +35,24 @@ function isPlanRestriction(err: unknown): boolean {
 }
 
 
+/**
+ * The target name is held by a repository the caller may not adopt: nothing
+ * was pushed to it, changed on it, nor anyone invited on it.
+ */
+export class RepoNameTaken extends Error {
+  constructor(readonly fullName: string) {
+    super(`${fullName} already exists and is not this row's repository`);
+    this.name = "RepoNameTaken";
+  }
+}
+
 export interface ProvisionResult {
   repoId: number;
   fullName: string;
   defaultBranch: string;
   rulesetId: number | null;
-  /**
-   * `pending` if an invitation was created, `accepted` if already a
-   * collaborator, `none` in exam mode where the student is not invited at all.
-   */
-  invitationStatus: "none" | "pending" | "accepted";
+  /** `pending` if an invitation was created, `accepted` if already a collaborator. */
+  invitationStatus: "pending" | "accepted";
 }
 
 export async function provisionStudentRepo(opts: {
@@ -63,22 +65,17 @@ export async function provisionStudentRepo(opts: {
   defaultBranch: string;
   studentLogin: string;
   /**
-   * ADR-013. `free`: the historical flow, the student pushes with their own
-   * account. `online`: read-only (`pull`) — the portal pushes for them, so no
-   * student credential exists anywhere. `online_seb`: not invited at all, the
-   * student has no access to the repository before grading.
+   * The allow-list of the repository (M3-03 review): called with its id and
+   * whether this call created it, BEFORE anything is pushed to it, changed
+   * on it or anyone invited on it. A created repository is recorded by the
+   * caller; an existing one (the 422 of a name taken) is adopted only when
+   * the caller recorded it already — a replay of its own creation. False
+   * aborts with {@link RepoNameTaken}: a name is chosen by a student (their
+   * login), so it may name any repository of the organization.
    */
-  workMode?: WorkMode;
-  /**
-   * Adoption guard: called when the repository name already exists on
-   * GitHub, with that repository's id, BEFORE anything is pushed to it or
-   * anyone invited on it. False aborts the provisioning. Group repositories
-   * use it so a name collision never hands a group someone else's repository.
-   */
-  canAdopt?: (repoId: number) => Promise<boolean>;
+  claim: (repoId: number, created: boolean) => Promise<boolean>;
 }): Promise<ProvisionResult> {
   const { octokit, token, org, squashedRepo, targetRepo, branches, studentLogin } = opts;
-  const workMode: WorkMode = opts.workMode ?? "free";
   // Provisioning only clones and pushes existing refs: no bot identity needed.
   const { git, gitBare } = gitRunner({ token });
   const url = (repo: string) => repoUrl(org, repo);
@@ -109,10 +106,8 @@ export async function provisionStudentRepo(opts: {
     });
     repoId = Number(data.id);
     fullName = data.full_name;
-    if (opts.canAdopt && !(await opts.canAdopt(repoId))) {
-      throw new Error(`${fullName} already exists and belongs to another tracked repository`);
-    }
   }
+  if (!(await opts.claim(repoId, created))) throw new RepoNameTaken(fullName);
 
   // 2. Push of the squashed repo's refs (skipped if the default branch already exists).
   let needPush = true;
@@ -193,21 +188,10 @@ export async function provisionStudentRepo(opts: {
     rulesetId = null;
   }
 
-  // 4. Invite the student (idempotent: 204 = already a collaborator).
-  //    Exam mode grants nothing: the repository stays invisible to the
-  //    student until the teacher opens it after grading.
-  let invitationStatus: ProvisionResult["invitationStatus"] = "none";
-  if (workMode !== "online_seb") {
-    invitationStatus = await inviteCollaborator(
-      octokit,
-      org,
-      targetRepo,
-      studentLogin,
-      // `pull` in online mode: no write access means no student credential
-      // to manage, and the force-push ruleset above still stands.
-      workMode === "free" ? "push" : "pull",
-    );
-  }
+  // 4. Invite the student (idempotent: 204 = already a collaborator), with
+  //    the `push` permission and never more (N-SEC-21). Quiz has no work
+  //    mode (D09): heig-classroom's `pull` and no-invitation modes are gone.
+  const invitationStatus = await inviteCollaborator(octokit, org, targetRepo, studentLogin, "push");
 
   return {
     repoId,

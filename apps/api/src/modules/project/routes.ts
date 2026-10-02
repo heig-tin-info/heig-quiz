@@ -8,27 +8,33 @@
  * Registered only when Quiz's App is configured (`app.ts`), like the
  * `github` module: without it none of these routes exists. Open to every
  * member of a course's staff (D26 addendum, 2026-10-02); the students see
- * nothing of projects until M3-09.
+ * nothing of projects until M3-09 but Accept (below).
  *
  * Access is loaded, never checked afterwards (invariant 6): a classroom or
  * a project is reached through its course's `staffAccess`, by the caller's
  * own portal session only (`projectsClassroom`, `accessibleProject`); a
  * student, a teacher off the staff, an impersonation, a `seb` or `kiosk`
  * session get the 404 of a missing entity.
+ *
+ * The student's side (M3-03): Accept, on a project of a classroom where the
+ * caller holds a claimed student seat (`studentProject`), by their own
+ * portal session only. Nothing else of a project reaches a student until
+ * the project's student view (M3-09).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { IdParam, ProjectCreate, ProjectListQuery, ProjectPatch, ProjectSourceParams } from "@quiz/contracts";
+import { IdParam, ProjectAcceptance, ProjectCreate, ProjectListQuery, ProjectPatch, ProjectSourceParams } from "@quiz/contracts";
 
 import { actorOf } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { accessibleProject, projectsClassroom } from "../guards.js";
-import { notFound, teacherRoute } from "../http.js";
+import { accessibleProject, projectsClassroom, studentProject } from "../guards.js";
+import { notFound, studentRoute, teacherRoute } from "../http.js";
 import * as service from "./service.js";
 
 export async function projectPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
   const teacher = teacherRoute(app);
+  const student = studentRoute(app);
   const session = { preHandler: (req: FastifyRequest, reply: FastifyReply) => app.requireSession(req, reply) };
   const onClassroom = { params: IdParam, load: projectsClassroom.bind(null, app) };
   const onProject = { params: IdParam, load: accessibleProject.bind(null, app) };
@@ -128,5 +134,27 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
       const row = await service.setProjectArchived(app.db, scope.project, false, actorOf(req), now);
       return service.projectSummary(app.db, row, now);
     }),
+  );
+
+  // ------------------------------------------------------------ the student's side (M3-03)
+
+  /**
+   * F-PROJ-05: the caller's own repository, provisioned in the request.
+   * The answer names that repository only (`ProjectAcceptance`, N-SEC-20).
+   */
+  app.post(
+    "/app/api/student/projects/:id/accept",
+    session,
+    student({ params: IdParam, load: studentProject.bind(null, app) }, async ({ req, now, scope }) =>
+      ProjectAcceptance.parse(
+        await service.acceptProject(app.db, config, {
+          project: scope.project,
+          userId: req.user!.id,
+          actor: actorOf(req),
+          now,
+          log: req.log,
+        }),
+      ),
+    ),
   );
 }

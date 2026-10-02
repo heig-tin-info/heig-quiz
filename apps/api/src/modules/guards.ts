@@ -13,7 +13,7 @@
  * the reply-aware loader is that finder plus the 404. One query, two doors.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { and, eq, getTableName, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, eq, getTableName, isNull, ne, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
 import type { PoolRole } from "@quiz/contracts";
 import { effectivePoolRole, ipAllowed, poolRoleAllows } from "@quiz/domain";
@@ -434,6 +434,40 @@ export async function projectsClassroom(
 ) {
   if (!ownPortalSession(req.auth)) return notFound(reply);
   return accessibleClassroom(app, req, reply, params);
+}
+
+/**
+ * The student's side of a project (F-PROJ-05, N-SEC-20; merge task M3-03):
+ * a project that is not a draft nor archived, of a classroom where the
+ * caller holds a claimed STUDENT seat — a staff seat (ADR-018) never
+ * accepts. Null otherwise: a draft never shows.
+ */
+export async function findStudentProject(db: Db, userId: string, projectId: string) {
+  const [row] = await db
+    .select({ project: projects, seat: enrollments })
+    .from(projects)
+    .innerJoin(
+      enrollments,
+      and(eq(enrollments.classroomId, projects.classroomId), eq(enrollments.userId, userId), eq(enrollments.staff, false)),
+    )
+    .where(and(eq(projects.id, projectId), ne(projects.state, "draft"), isNull(projects.archivedAt)))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * {@link findStudentProject} for the caller's own portal session, answering
+ * the 404 (invariant 6): an impersonation (in every environment, ADR-034),
+ * a Bearer token, a `seb` or `kiosk` session never accept a project.
+ */
+export async function studentProject(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  params: { id: string },
+) {
+  if (!ownPortalSession(req.auth)) return notFound(reply);
+  return (await findStudentProject(app.db, callerOf(req).id, params.id)) ?? notFound(reply);
 }
 
 // ---------------------------------------------------------------------------

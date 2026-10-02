@@ -415,3 +415,58 @@ export const ProjectSourceDetail = z.object({
   suggestedProtected: z.array(z.enum(PROTECTED_FILE_SUGGESTIONS)),
 });
 export type ProjectSourceDetail = z.infer<typeof ProjectSourceDetail>;
+
+// ---------------------------------------------------------- the acceptance (M3-03)
+
+export const ProvisionStatus = z.enum(PROVISION_STATUSES);
+export type ProvisionStatus = z.infer<typeof ProvisionStatus>;
+export const InvitationStatus = z.enum(INVITATION_STATUSES);
+export type InvitationStatus = z.infer<typeof InvitationStatus>;
+
+/**
+ * `POST /app/api/student/projects/:id/accept` (F-PROJ-05): the student's OWN
+ * repository and nothing else — never the source nor the distribution
+ * repository (N-SEC-20). `fullName` is null until the repository exists;
+ * `invitationStatus` is the student's invitation on it (F-PROJ-07). A second
+ * Accept answers the same row; a repository deleted on GitHub is answered as
+ * it stands, never made again.
+ */
+export const ProjectAcceptance = z.object({
+  status: ProvisionStatus,
+  fullName: z.string().nullable(),
+  invitationStatus: InvitationStatus,
+});
+export type ProjectAcceptance = z.infer<typeof ProjectAcceptance>;
+
+/**
+ * The refusals of Accept, `{ error, message }` (statuses in the API's
+ * `modules/project/errors.ts`). Every one but `provision_failed` (502, retry)
+ * is a 409:
+ *   - `not_started`, `deadline_passed` — judged on the project's dates and
+ *     the server's clock, no grace;
+ *   - `no_group` — a group project (groups come with merge task M3-15);
+ *   - `github_not_linked`; `github_account_stale` — the linked account was
+ *     deleted, or GitHub refused to invite it (renamed away): relink;
+ *   - `app_not_installed` — Quiz's App no longer acts on the project's
+ *     organization; `distribution_missing` — nothing to hand out;
+ *   - `provision_in_progress` — another Accept of the same repository is
+ *     under way: try again in a moment;
+ *   - `repo_name_taken` — `<slug>-<login>` names a repository of the
+ *     organization this Accept did not make: nothing was done to it;
+ *   - `provision_failed` — GitHub failed, or could not tell the account's
+ *     login today: try again.
+ */
+export const PROJECT_ACCEPT_REFUSALS = [
+  "not_started",
+  "deadline_passed",
+  "no_group",
+  "github_not_linked",
+  "github_account_stale",
+  "app_not_installed",
+  "distribution_missing",
+  "provision_in_progress",
+  "repo_name_taken",
+  "provision_failed",
+] as const;
+export const ProjectAcceptErrorCode = z.enum(PROJECT_ACCEPT_REFUSALS);
+export type ProjectAcceptErrorCode = z.infer<typeof ProjectAcceptErrorCode>;

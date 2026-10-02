@@ -712,6 +712,21 @@ async function downloadAvatar(githubOrgId: number): Promise<OrgAvatar | null> {
 /** An organization row with Quiz's App installed on it. */
 export type InstalledOrg = OrgRow & { installationId: number };
 
+/** THE rule of an organization Quiz's App acts on: installed, and active. Null otherwise. */
+function installed(org: OrgRow): InstalledOrg | null {
+  return org.installationId !== null && org.status === "active" ? { ...org, installationId: org.installationId } : null;
+}
+
+/**
+ * A project's organization (`projects.org_id`, kept when its classroom is
+ * disconnected) when Quiz's App acts on it ({@link installed}); null
+ * otherwise, the `app_not_installed` of a student's Accept (M3-03).
+ */
+export async function projectInstallation(db: Db, orgId: string): Promise<InstalledOrg | null> {
+  const [org] = await db.select().from(githubOrganizations).where(eq(githubOrganizations.id, orgId));
+  return org ? installed(org) : null;
+}
+
 /**
  * The classroom's organization when Quiz's App is installed there and the
  * organization is active, else why not: `not_connected` without a link,
@@ -731,9 +746,8 @@ export async function classroomInstallation(
     .where(eq(githubClassroomLinks.classroomId, classroomId))
     .limit(1);
   if (!row) return { refused: "not_connected", login: null };
-  const { org } = row;
-  if (org.installationId === null || org.status !== "active") return { refused: "app_not_installed", login: org.login };
-  return { org: { ...org, installationId: org.installationId } };
+  const org = installed(row.org);
+  return org ? { org } : { refused: "app_not_installed", login: row.org.login };
 }
 
 // ---------------------------------------------------------------- push receipts of a deletion

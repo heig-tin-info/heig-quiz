@@ -7,7 +7,9 @@
  *
  * From M3-02: the lifecycle (`lifecycle.ts`), the staff's views
  * (`views.ts`), the organization's repository browser (`sources.ts`).
+ * From M3-03: a student's Accept and its provisioning (`accept.ts`).
  */
+export { acceptProject } from "./accept.js";
 export {
   createProject,
   deleteProject,

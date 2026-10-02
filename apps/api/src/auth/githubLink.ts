@@ -269,15 +269,17 @@ async function linkRelevant(db: Db, userId: string): Promise<boolean> {
  * login. `octokit` is an installation client of the caller's organization
  * (an App JWT cannot read users).
  *
- * For the tasks that name or invite a student on GitHub (M3-03, M4-03);
- * nothing calls it yet.
+ * For the tasks that name or invite a student on GitHub: a project's
+ * Accept (`modules/project/accept.ts`, M3-03), and M4-03.
  */
 export async function linkedLogin(
   db: Db,
   octokit: Octokit,
   userId: string,
+  /** The user's link when the caller has read it already. */
+  loaded?: typeof githubAccounts.$inferSelect,
 ): Promise<string | typeof GITHUB_ACCOUNT_STALE> {
-  const [linked] = await db.select().from(githubAccounts).where(eq(githubAccounts.userId, userId));
+  const [linked] = loaded ? [loaded] : await db.select().from(githubAccounts).where(eq(githubAccounts.userId, userId));
   if (!linked) return GITHUB_ACCOUNT_STALE;
   const login = await currentLogin(octokit, linked.githubUserId);
   if (login === null) return GITHUB_ACCOUNT_STALE;
