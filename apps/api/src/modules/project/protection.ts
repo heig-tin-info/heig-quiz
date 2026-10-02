@@ -36,7 +36,7 @@ import { botCommits, projectGradeRuns, projectRepos, reverts } from "../../db/sc
 import { githubStatus, installationClient, isZeroSha, ownerRepo } from "../../github/app.js";
 import { changedFiles, revertProtectedFiles, type RevertResult } from "../../github/revert.js";
 import { projectInstallation } from "../github/service.js";
-import { refreshScoreSelection } from "./grading.js";
+import { refreshScoreSelection, restoredHeads } from "./grading.js";
 import type { RepoContext } from "./repos.js";
 
 /** Restores in an hour past which restoring stops (F-PROJ-08). */
@@ -143,14 +143,14 @@ export async function protectFiles(
     subjectId: repo.id,
     payload: { files: result.files, sha: result.sha, head: push.after, covered: result.covered },
   });
-  // The pushed head's runs, and those of the head the restore covered (a
-  // later push already on the branch), ran the student's copy of the
-  // protected files: flagged, and out of the score, whether they finished
-  // before the restore or after.
+  // Every head the restore covered (`restoredHeads`: the pushed one and the
+  // later pushes already on the branch) ran the student's copy of the
+  // protected files: its runs flagged, and out of the score, whether they
+  // finished before the restore or after.
   await db
     .update(projectGradeRuns)
     .set({ toVerify: true })
-    .where(and(eq(projectGradeRuns.repoId, repo.id), inArray(projectGradeRuns.headSha, [push.after, result.covered])));
+    .where(and(eq(projectGradeRuns.repoId, repo.id), inArray(projectGradeRuns.headSha, [...(await restoredHeads(db, ctx))])));
   await refreshScoreSelection(db, ctx);
 }
 

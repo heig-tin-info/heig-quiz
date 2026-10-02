@@ -127,6 +127,11 @@ const ciRoute: Route = (url, req) => {
   return undefined;
 };
 
+/** While true, GitHub refuses to read a branch's ref: a restore fails, its delivery stays to retry. */
+let refsRefused = false;
+const refsDown: Route = (url) =>
+  refsRefused && /\/git\/ref\//.test(url.pathname) ? json({ message: "Unprocessable" }, 422) : undefined;
+
 /** Every hint published, as the bus carried it. */
 const hints: Extract<BusMessage, { kind: "hint" }>[] = [];
 
@@ -274,7 +279,7 @@ beforeAll(async () => {
   vi.stubGlobal("fetch", gh.fetch);
   setRemoteBaseForTests(`file://${world.dir}`);
   server = await testServer(ENV);
-  gh.routes = [orgsRoute(() => []), usersRoute, ciRoute, world.route];
+  gh.routes = [orgsRoute(() => []), usersRoute, refsDown, ciRoute, world.route];
   teacher = await server.signIn("teacher");
   unsubscribe = subscribe((m) => {
     if (m.kind === "hint") hints.push(m);
@@ -417,6 +422,56 @@ describe("protected files (F-PROJ-08)", () => {
     await handled("push", pushPayload(f, { branch: "main", before: s, after: s2, files: { "src/main.c": "more work" } }));
     expect(await runOf(f, s2Run.workflow_run.id)).toMatchObject({ points: 6, toVerify: true });
     expect((await repoRow(f.projectId)).currentGradeRunId).toBe((await runOf(f, honestRun.workflow_run.id))!.id);
+  });
+
+  it("never scores a head received between the tampering push and its restore (S, S1, S2); a later push counts again", async () => {
+    const f = await acceptedRepo();
+    const honest = await push(f, { "src/main.c": "honest" });
+    scored(honest.after, { title: "GRADE", message: "3/6" });
+    await handled("workflow_run", runPayload(f, honest.after));
+
+    // S's delivery fails at first (GitHub refuses), S1 and S2 come in meanwhile.
+    refsRefused = true;
+    server.clock.advance(MINUTE);
+    const base = head(f);
+    const sha = world.commit(f.fullName, "main", { [GRADING]: "grade: always 6" });
+    const sId = randomUUID();
+    expect((await deliver("push", pushPayload(f, { branch: "main", before: base, after: sha, files: { [GRADING]: "x" } }), sId)).statusCode).toBe(200);
+    await vi.waitFor(async () => {
+      const [row] = await server.app.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.deliveryId, sId));
+      expect(row?.error).toBeTruthy();
+    }, { timeout: 20_000 });
+    refsRefused = false;
+    const later: string[] = [];
+    for (const content of ["more", "and more"]) {
+      server.clock.advance(MINUTE);
+      later.push((await push(f, { "src/main.c": content })).after);
+    }
+    server.clock.advance(MINUTE);
+    await processDelivery(server.app, loadConfig({ NODE_ENV: "test", ...ENV }), sId);
+    expect(world.git(f.fullName, "rev-parse", `${head(f)}^`).trim()).toBe(later[1]);
+
+    const tampered = [];
+    for (const h of [sha, ...later]) {
+      scored(h, { title: "GRADE", message: "6/6" });
+      server.clock.advance(MINUTE);
+      const r = runPayload(f, h);
+      await handled("workflow_run", r);
+      tampered.push(r.workflow_run.id);
+    }
+    for (const id of tampered) expect(await runOf(f, id)).toMatchObject({ points: 6, toVerify: true });
+    const honestRow = (await runs(f)).find((r) => r.headSha === honest.after)!;
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe(honestRow.id);
+
+    // A push on top of the restore counts again.
+    server.clock.advance(MINUTE);
+    const fresh = await push(f, { "src/main.c": "after the restore" });
+    scored(fresh.after, { title: "GRADE", message: "5/6" });
+    server.clock.advance(MINUTE);
+    const freshRun = runPayload(f, fresh.after);
+    await handled("workflow_run", freshRun);
+    expect(await runOf(f, freshRun.workflow_run.id)).toMatchObject({ toVerify: false });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe((await runOf(f, freshRun.workflow_run.id))!.id);
   });
 
   it("shows the CI state of the student's commit after a restore, never stuck pending", async () => {

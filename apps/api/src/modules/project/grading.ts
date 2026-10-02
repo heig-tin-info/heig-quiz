@@ -20,7 +20,8 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { Octokit } from "octokit";
 
 import { extractScore, GRADING_WORKFLOW_PATH, receivedLate, runKind, selectScoreRun, type ScoreParse } from "@quiz/domain";
@@ -110,16 +111,41 @@ async function receiptOf(db: Db, ctx: RepoContext, headSha: string): Promise<Dat
 }
 
 /**
- * The heads whose protected files the App restored (F-PROJ-08) — the pushed
- * head, and the head the restore was built on when a later push was
- * already there: their runs never count.
+ * The heads a restore covered (F-PROJ-08): their runs used the student's
+ * copy of the protected files and never count. For each restore, the
+ * tampering push's head (`reverts.head_sha`), the head the restore was
+ * built on (`covered_sha`), and every head received on that branch from
+ * the tampering push's receipt to the restore (`reverts.created_at`) — a
+ * student pushing S, S1, S2 before S's delivery is handled ran the altered
+ * files in all three. Derived from the receipts the intake wrote, no
+ * GitHub read; a push after the restore builds on it and counts again.
  */
-async function restoredHeads(db: Db, repoId: string): Promise<Set<string>> {
-  const rows = await db
-    .select({ head: reverts.headSha, covered: reverts.coveredSha })
-    .from(reverts)
-    .where(eq(reverts.repoId, repoId));
-  return new Set(rows.flatMap((r) => [r.head, r.covered].filter((sha): sha is string => sha !== null)));
+export async function restoredHeads(db: Db, ctx: RepoContext): Promise<Set<string>> {
+  const tampering = alias(pushReceipts, "tampering");
+  const between = alias(pushReceipts, "between");
+  const [rows, window] = await Promise.all([
+    db.select({ head: reverts.headSha, covered: reverts.coveredSha }).from(reverts).where(eq(reverts.repoId, ctx.repo.id)),
+    ctx.repo.githubRepoId === null
+      ? []
+      : db
+          .select({ head: between.headSha })
+          .from(reverts)
+          .innerJoin(tampering, and(eq(tampering.githubRepoId, ctx.repo.githubRepoId), eq(tampering.headSha, reverts.headSha)))
+          .innerJoin(
+            between,
+            and(
+              eq(between.githubRepoId, tampering.githubRepoId),
+              eq(between.branch, tampering.branch),
+              gte(between.receivedAt, tampering.receivedAt),
+              lte(between.receivedAt, reverts.createdAt),
+            ),
+          )
+          .where(eq(reverts.repoId, ctx.repo.id)),
+  ]);
+  return new Set([
+    ...rows.flatMap((r) => [r.head, r.covered].filter((sha): sha is string => sha !== null)),
+    ...window.map((r) => r.head),
+  ]);
 }
 
 /**
@@ -131,7 +157,7 @@ async function restoredHeads(db: Db, repoId: string): Promise<Set<string>> {
 export async function refreshScoreSelection(db: Db, ctx: RepoContext): Promise<void> {
   const [runs, restored] = await Promise.all([
     db.select().from(projectGradeRuns).where(eq(projectGradeRuns.repoId, ctx.repo.id)),
-    restoredHeads(db, ctx.repo.id),
+    restoredHeads(db, ctx),
   ]);
   const selected = selectScoreRun(runs, restored);
   const inGrace = ctx.project.deadlineAppliedAt !== null && ctx.project.frozenAt === null;
@@ -240,7 +266,7 @@ export async function ingestCompletedRun(
     run.path === GRADING_WORKFLOW_PATH
       ? await readAnnotations(octokit, ctx.repo.fullName, run.headSha, run.checkSuiteId)
       : { score: null, tests: null };
-  const restored = (await restoredHeads(db, ctx.repo.id)).has(run.headSha);
+  const restored = (await restoredHeads(db, ctx)).has(run.headSha);
   const id = randomUUID();
   const [inserted] = await db
     .insert(projectGradeRuns)

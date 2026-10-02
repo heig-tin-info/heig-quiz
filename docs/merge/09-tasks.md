@@ -862,8 +862,11 @@ files it ports; writes en + fr for every string.
   - **Migration `0057_project_ingest`**: `project_grade_runs.parse_detail`,
     `to_verify`; `reverts.head_sha` + partial UNIQUE `(repo_id, head_sha)`,
     `reverts.covered_sha` (the head the restore was built on, the parent
-    `revertProtectedFiles` returns as `covered`: a later push already on the
-    branch is a restored head too, its runs never the score).
+    `revertProtectedFiles` returns as `covered`). The restored heads
+    (`restoredHeads`, `grading.ts`) are `head_sha`, `covered_sha` and every
+    head with a push receipt on that branch from the tampering push's
+    receipt to the restore's `created_at`: their runs `to_verify`, never the
+    score; a push after the restore counts again.
     Audit `project_repo.restore`, `project_repo.revert_cap`,
     `project_repo.deleted`.
   - `isZeroSha` and `ownerRepo(fullName)` (`Q:github/app.ts`) replace the

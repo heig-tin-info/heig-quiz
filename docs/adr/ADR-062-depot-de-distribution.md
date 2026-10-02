@@ -48,11 +48,16 @@ amended to match:
    M3-04): the commit the student pushed ran their own copy of the protected
    files — a tampered `grading.yml` reports what it likes. Its runs are kept
    in the history, `to_verify`, and `selectScoreRun` (`@quiz/domain`) skips
-   every head in `reverts.head_sha` — and in `reverts.covered_sha`, the
-   head the restore was built on when a later push was already on the
-   branch (S then S2 before S's delivery: S2 ran the altered workflow too)
-   — whichever came first, the run or the restore (the restore re-flags the
-   runs already stored and reselects).
+   every head the restore covered, whichever came first, the run or the
+   restore (the restore re-flags the runs already stored and reselects):
+   the tampering push's head (`reverts.head_sha`), the head the restore was
+   built on (`reverts.covered_sha`), and every head received on that branch
+   between the tampering push's receipt and the restore
+   (`reverts.created_at`), read from `push_receipts` — S, S1, S2 pushed
+   before S's delivery is handled all ran the altered workflow. No GitHub
+   read. `covered_sha` stays beside the window because the covered head's
+   own receipt may arrive after the restore. A push on top of the restore
+   counts again.
    Defence in depth: a head received as a bot's push (`push_receipts.is_bot`)
    never counts either, even with no `bot_commits` row.
 
