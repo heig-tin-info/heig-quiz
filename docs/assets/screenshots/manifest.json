@@ -1360,7 +1360,7 @@
       "name": "player-mcq",
       "caption": "The player on a multiple-choice question.",
       "persona": "lea",
-      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "path": "/take/a62530fb-8262-401e-9f13-d088005150d9",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1375,15 +1375,15 @@
         "light": "player-mcq-light.png",
         "dark": "player-mcq-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-02T14:14:37.245Z",
+      "commit": "c2a3aa7c",
       "base": "http://localhost:3100"
     },
     {
       "name": "player-mcq-phone",
       "caption": "The player on a multiple-choice question.",
       "persona": "lea",
-      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "path": "/take/a62530fb-8262-401e-9f13-d088005150d9",
       "width": 390,
       "height": 844,
       "fullPage": false,
@@ -1398,15 +1398,15 @@
         "light": "player-mcq-phone-light.png",
         "dark": "player-mcq-phone-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-02T14:14:37.245Z",
+      "commit": "c2a3aa7c",
       "base": "http://localhost:3100"
     },
     {
       "name": "player-cloze",
       "caption": "The player on a fill-in-the-blanks question.",
       "persona": "lea",
-      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "path": "/take/a62530fb-8262-401e-9f13-d088005150d9",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1421,15 +1421,15 @@
         "light": "player-cloze-light.png",
         "dark": "player-cloze-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-02T14:14:37.245Z",
+      "commit": "c2a3aa7c",
       "base": "http://localhost:3100"
     },
     {
       "name": "player-short",
       "caption": "The player on a short-answer question.",
       "persona": "lea",
-      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "path": "/take/a62530fb-8262-401e-9f13-d088005150d9",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1444,15 +1444,15 @@
         "light": "player-short-light.png",
         "dark": "player-short-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-02T14:14:37.245Z",
+      "commit": "c2a3aa7c",
       "base": "http://localhost:3100"
     },
     {
       "name": "player-code",
       "caption": "The player on a code question: the editable regions of the template.",
       "persona": "lea",
-      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "path": "/take/a62530fb-8262-401e-9f13-d088005150d9",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1461,14 +1461,14 @@
         "dark"
       ],
       "action": "Moved to question 5 through the progress strip.",
-      "state": "“Quiz d'entraînement” running; Léa's region holds a solution, not yet marked done.",
+      "state": "“Quiz d'entraînement” running; Léa's region holds a solution.",
       "phase": "running",
       "files": {
         "light": "player-code-light.png",
         "dark": "player-code-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-02T14:14:37.245Z",
+      "commit": "c2a3aa7c",
       "base": "http://localhost:3100"
     },
     {
@@ -1498,7 +1498,7 @@
       "name": "player-submit",
       "caption": "Handing in: the confirmation names what is still unanswered.",
       "persona": "lea",
-      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "path": "/take/a62530fb-8262-401e-9f13-d088005150d9",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1513,15 +1513,15 @@
         "light": "player-submit-light.png",
         "dark": "player-submit-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-10-02T14:14:37.245Z",
+      "commit": "c2a3aa7c",
       "base": "http://localhost:3100"
     },
     {
       "name": "player-done",
       "caption": "After handing in.",
       "persona": "lea",
-      "path": "/take/39e9fb59-2ddb-43a1-ad68-e2eea5efc518",
+      "path": "/take/6188c969-2eb9-41f1-8111-2597c5e1602e",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -1536,8 +1536,8 @@
         "light": "player-done-light.png",
         "dark": "player-done-dark.png"
       },
-      "takenAt": "2026-09-29T21:46:10.647Z",
-      "commit": "a1c9c76",
+      "takenAt": "2026-10-02T14:14:37.245Z",
+      "commit": "c2a3aa7c",
       "base": "http://localhost:3100"
     },
     {

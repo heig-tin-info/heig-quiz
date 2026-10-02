@@ -1,8 +1,16 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { QUESTION_TYPE_IDS } from "../questionTypes";
 import { renderWithProviders } from "../test/render";
-import { QuestionHost } from "./QuestionHost";
+import { isWide, QuestionHost } from "./QuestionHost";
+
+describe("isWide", () => {
+  it("gives the room to the program types only, a statement beside an editor", () => {
+    expect(QUESTION_TYPE_IDS.filter(isWide)).toEqual(["code", "codeimage"]);
+    expect(isWide("nope")).toBe(false);
+  });
+});
 
 /*
  * The student's host lends the `rich` player the app's formatted editor

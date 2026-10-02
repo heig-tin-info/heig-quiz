@@ -17,6 +17,10 @@
  * and the free try share one cooldown (`useCooldown`); Compile has none, and
  * any of them runs the same code again once ready (ADR-024, addendum of
  * 2026-09-25, #129). The last result of each stays on screen.
+ *
+ * The statement and the program stand side by side when the player has the
+ * room (`ProgramSplit`); the free try and the visible cases come after them,
+ * across the whole width.
  */
 import { useId, useState } from "react";
 
@@ -28,6 +32,7 @@ import { ArgsInput } from "./ArgsInput.js";
 import { HammerIcon, ListChecksIcon, TerminalIcon } from "./icons.js";
 import {
   ProgramRegions,
+  ProgramSplit,
   ProgramStatement,
   regionsOf,
   RunButton,
@@ -218,79 +223,85 @@ export function CodePlayer({
 
   return (
     <div className="flex flex-col gap-5">
-      <ProgramStatement
-        student={student}
-        s={s}
-        renderMarkdown={renderMarkdown}
-        badges={
-          student.allOrNothing ? <span className={badge("warning")}>{s.allOrNothing}</span> : null
+      <ProgramSplit
+        statement={
+          <ProgramStatement
+            student={student}
+            s={s}
+            renderMarkdown={renderMarkdown}
+            badges={
+              student.allOrNothing ? (
+                <span className={badge("warning")}>{s.allOrNothing}</span>
+              ) : null
+            }
+          />
         }
-      />
+      >
+        <div className="flex flex-col gap-2">
+          <ProgramRegions
+            student={student}
+            regions={regions}
+            locked={locked}
+            onWrite={writeRegion}
+            onWriteRegions={writeRegions}
+            s={s}
+            monaco={monaco}
+            compileStderr={compileStderr}
+          />
 
-      <div className="flex flex-col gap-2">
-        <ProgramRegions
-          student={student}
-          regions={regions}
-          locked={locked}
-          onWrite={writeRegion}
-          onWriteRegions={writeRegions}
-          s={s}
-          monaco={monaco}
-          compileStderr={compileStderr}
-        />
-
-        {/*
-         * The toolbar of the student's tools, right under the code. ONE
-         * primary action — Run the tests, the question's own check — and
-         * two secondary ones: Compile, the quick look at the compiler's
-         * words, and Free try, which opens a panel rather than running.
-         */}
-        {canRun ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <RunButton
-              state={compile}
-              variant="secondary"
-              className=""
-              icon={<HammerIcon />}
-              label={s.compile}
-              busyLabel={s.compiling}
-              disabled={locked || busy}
-              onClick={() => {
-                setLastAction("compile");
-                void runInto(compileInto, { compileOnly: true });
-              }}
-              s={s}
-            />
-            <RunButton
-              state={run}
-              className=""
-              icon={<ListChecksIcon />}
-              label={s.runTests}
-              variant={testsPrimary ? "primary" : "secondary"}
-              disabled={locked || busy}
-              cooldown={cooldown}
-              onClick={() => {
-                setLastAction("tests");
-                void runInto(runVisibleInto, {});
-              }}
-              s={s}
-            />
-            {canFreeTry ? (
-              <button
-                type="button"
-                className={buttonClass(freeOpen ? "subtle" : "secondary", "sm")}
-                aria-expanded={freeOpen}
-                aria-controls={`${ids}-free`}
-                onClick={() => setFreeOpen((open) => !open)}
-              >
-                <TerminalIcon />
-                {s.freeTry}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        <RunStatus state={status} s={s} />
-      </div>
+          {/*
+           * The toolbar of the student's tools, right under the code. ONE
+           * primary action — Run the tests, the question's own check — and
+           * two secondary ones: Compile, the quick look at the compiler's
+           * words, and Free try, which opens a panel rather than running.
+           */}
+          {canRun ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <RunButton
+                state={compile}
+                variant="secondary"
+                className=""
+                icon={<HammerIcon />}
+                label={s.compile}
+                busyLabel={s.compiling}
+                disabled={locked || busy}
+                onClick={() => {
+                  setLastAction("compile");
+                  void runInto(compileInto, { compileOnly: true });
+                }}
+                s={s}
+              />
+              <RunButton
+                state={run}
+                className=""
+                icon={<ListChecksIcon />}
+                label={s.runTests}
+                variant={testsPrimary ? "primary" : "secondary"}
+                disabled={locked || busy}
+                cooldown={cooldown}
+                onClick={() => {
+                  setLastAction("tests");
+                  void runInto(runVisibleInto, {});
+                }}
+                s={s}
+              />
+              {canFreeTry ? (
+                <button
+                  type="button"
+                  className={buttonClass(freeOpen ? "subtle" : "secondary", "sm")}
+                  aria-expanded={freeOpen}
+                  aria-controls={`${ids}-free`}
+                  onClick={() => setFreeOpen((open) => !open)}
+                >
+                  <TerminalIcon />
+                  {s.freeTry}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          <RunStatus state={status} s={s} />
+        </div>
+      </ProgramSplit>
 
       {/*
        * The free try of §4.7: one command line and one stdin of the student's

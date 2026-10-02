@@ -92,7 +92,7 @@ When you hand in, the station goes back to its start screen by itself. Your resu
 
 ## Taking an evaluation
 
-The player shows one question per screen. The strip at the top is the list of the questions, one segment per question, and clicking a segment moves to that question when the navigation allows it. Each segment says where you stand, by its shape as well as its colour: a solid bar with a check for a question that holds an answer, a dashed bar with a dash for one you left unanswered, a hollow bar for one with nothing yet, and a small flag beside the number of a question you flagged for review. The current question is outlined in red. The header carries the countdown when the evaluation is timed, the saving indicator, a theme toggle and **Hand in**.
+The player shows one question per screen. The strip at the top is the list of the questions, one segment per question, and clicking a segment moves to that question when the navigation allows it. Each segment says where you stand, by its shape as well as its colour: a solid bar with a check for a question that holds an answer, a dashed bar with a dash for one you left unanswered, a hollow bar for one with nothing yet, and a small flag beside the number of a question you flagged for review. The current question is outlined in red. The header carries the countdown when the evaluation is timed, the saving indicator, a theme toggle and **Hand in**. On a wide screen the list stands in a column at the left edge instead of the strip, and stays in the same place from one question to the next.
 
 <figure markdown="span">
   ![The player on a phone: the progress strip, question 1 marked Done, four choices with B selected, and the Previous, Done and Next buttons](../assets/screenshots/player-mcq-phone-light.png#only-light){ width="390" }
@@ -105,7 +105,7 @@ The player shows one question per screen. The strip at the top is the list of th
 - A **multiple-choice** question lists its choices; the line under the statement says whether to choose one answer or several.
 - A **short-answer** question has one field under **Your answer**. Spelling counts as far as the teacher decided.
 - A **fill-in-the-blanks** question shows a text or a piece of code with fields inside it; fill every blank.
-- A **code** question shows the template with the parts you cannot change greyed out and an editor for the part you write. It is described below.
+- A **code** question shows the template with the parts you cannot change greyed out and an editor for the part you write. On a screen wide enough (a laptop of 1366 px or more) the statement stands on the left and the editor on the right, so the statement stays in sight while you write; on a smaller screen they follow each other. It is described below.
 
 How each type is graded is explained from the teacher's side in `question-types.md`.
 

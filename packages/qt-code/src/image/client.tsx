@@ -38,6 +38,8 @@ export const codeimageClient: QuestionTypeClient<
   labelKey: "qt.codeimage.label",
   hintKey: "qt.codeimage.hint",
   Icon: CodeImageIcon,
+  // `code`'s program half, and the room to set it beside the statement.
+  wide: true,
 
   Editor: lazy(() => import("./Editor.js")),
   Player: lazy(() => import("./Player.js")),

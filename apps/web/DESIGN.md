@@ -985,9 +985,13 @@ live in `ui/state.ts`, each written once.
   column from 1024 px of viewport up. A laptop has width to spare and height
   to none, so the list and what the current question is worth move out of
   the bar and from over the question into a
-  12rem column left of it (sticky, bounded to the viewport); the question
-  column keeps its 760 px and the bar widens to span both, so the title
-  lines up with the list. Same circles, same four facts, same connector
+  12rem column left of it (sticky, bounded to the viewport). The column is
+  PINNED to the left edge of the frame, for every evaluation, and never
+  moves from one question to the next (ADR-066): the question is centered
+  in the room right of it — a text question in its 760 px, a wide one
+  (below) in the whole room. The frame is the screen up to 1872 px and
+  centered past it; the bar spans the frame, so the title lines up with the
+  list. Same circles, same four facts, same connector
   (drawn down), same accessible names as the strip; each row adds
   "Question n" in words, so nothing thins out and nothing compresses — a
   long paper scrolls inside the list, which keeps the current row in view.
@@ -998,6 +1002,17 @@ live in `ui/state.ts`, each written once.
   corner, "Leave unanswered" and "Clear" under the question: they act on
   the question and its answer, not on the list. One question, or under
   1024 px, the column is absent and the strip is back in the bar.
+- Wide question (`QuestionTypeClient.wide`, ADR-066): the one exception to
+  the 760 px, for a statement that must stay in sight beside a program —
+  `code` and `codeimage`. From 1024 px of viewport its column takes the room
+  right of the rail, up to 1600 px (`max-w-400`); without a rail, the body
+  takes 1600 px, gutters included as for the 760 px. Inside, the player
+  decides by its OWN width (a container query):
+  from 60rem the statement (2fr) stands beside the editor and its tools
+  (3fr), the cases or the picture across the whole width under them;
+  narrower — a 1280 px screen, a 12" Chromebook, a tablet, the teacher's
+  sheets — the same tree stacks, so Monaco never remounts. A canvas
+  (`circuit`, `diagram`) is not wide: it has Expand.
 - Pastille (`packages/qt-mcq/src/ui.tsx`): the letter of a choice IS its
   checkbox — a circle, 32 px in the teacher's editor, 40 px under a student's
   finger. A hairline `line-strong` circle on `surface` with a bold `fg-muted`

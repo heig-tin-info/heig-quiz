@@ -288,6 +288,14 @@ export interface QuestionTypeClient<
   readonly labelKey: string;
   readonly hintKey: string;
   readonly Icon: ComponentType<{ className?: string }>;
+  /**
+   * The player wants more than the reading column — a need, not a layout
+   * (ADR-066). On a wide screen the host gives such a question the room it
+   * has, and the player arranges itself by its OWN width (a container query,
+   * never the viewport's), so a narrow host gets the narrow layout. Absent,
+   * the question keeps the host's reading column.
+   */
+  readonly wide?: boolean;
 
   /** `React.lazy`, so `qt-code` (Monaco) never enters the initial bundle (N-PERF-05). */
   readonly Editor: LazyExoticComponent<ComponentType<EditorProps<TConfig>>>;
