@@ -280,7 +280,7 @@ describe("grading.evaluation with an LLM service (F-GRADE-02)", () => {
       stop: async () => {},
     };
     app.boss = queue;
-    await registerGradingJobs(app, queue);
+    await registerGradingJobs(app, queue, { GRADING_RUNNER_CONCURRENCY: 1 });
 
     await runEvaluationGrading(app, { evaluationId: evaluation.id });
     const jobs = sent.filter((j) => j.name === GRADING_LLM_QUEUE);

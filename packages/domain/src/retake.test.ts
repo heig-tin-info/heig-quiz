@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  gradableNow,
   keptAttempt,
   latestAttempt,
   retakeRefusal,
@@ -131,5 +132,21 @@ describe("keptAttempt (F-EVAL-15)", () => {
   it("is the only attempt of a student who took one", () => {
     expect(keptAttempt([a(1, 2, "expired")], "best")?.attemptNumber).toBe(1);
     expect(keptAttempt([a(1, 2, "expired")], "last")?.attemptNumber).toBe(1);
+  });
+});
+
+describe("gradableNow (ADR-067)", () => {
+  it("grades only a finished attempt while the evaluation runs", () => {
+    for (const evaluation of ["running", "paused"] as const) {
+      expect(gradableNow(evaluation, "submitted")).toBe(true);
+      expect(gradableNow(evaluation, "expired")).toBe(true);
+      expect(gradableNow(evaluation, "in_progress")).toBe(false);
+      expect(gradableNow(evaluation, "not_started")).toBe(false);
+    }
+  });
+
+  it("grades every attempt once the evaluation is over", () => {
+    expect(gradableNow("closed", "in_progress")).toBe(true);
+    expect(gradableNow("released", "submitted")).toBe(true);
   });
 });

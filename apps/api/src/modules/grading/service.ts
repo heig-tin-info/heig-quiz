@@ -43,7 +43,7 @@ import {
 } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import { answers, attempts, gradings, questionVersions, users } from "../../db/schema.js";
 import { DomainError } from "../http.js";
 import {
@@ -172,10 +172,16 @@ const WRITE_CHUNK = 500;
  * grading on one cell.
  *
  * The rows come back in the order of `inputs`.
+ *
+ * `guard`, when given, runs first inside each chunk's transaction and returns
+ * the inputs that may still be written: the grading jobs lock the attempts
+ * there and drop the cells of one reopened meanwhile (ADR-067). The rows of
+ * the dropped inputs are simply not returned.
  */
 export async function writeGradings(
   db: Db,
   inputs: readonly WriteGradingInput[],
+  guard?: WriteGuard,
 ): Promise<GradingRecord[]> {
   const seen = new Set<PairKey>();
   for (const input of inputs) {
@@ -195,22 +201,37 @@ export async function writeGradings(
   );
   const out: GradingRecord[] = [];
   for (let start = 0; start < inputs.length; start += WRITE_CHUNK) {
-    out.push(...(await writeChunk(db, inputs.slice(start, start + WRITE_CHUNK))));
+    out.push(...(await writeChunk(db, inputs.slice(start, start + WRITE_CHUNK), guard)));
   }
   await watch.announce();
   return out;
 }
 
-async function writeChunk(db: Db, inputs: readonly WriteGradingInput[]): Promise<GradingRecord[]> {
-  const cells = (state: WriteGradingInput["state"]) => {
-    const pairs = inputs
-      .filter((i) => i.state === state)
-      .map((i) => sql`(${i.attemptId}::uuid, ${i.itemId}::uuid)`);
-    return pairs.length === 0
-      ? sql`false`
-      : sql`(${gradings.attemptId}, ${gradings.itemId}) in (${sql.join(pairs, sql`, `)})`;
-  };
+/**
+ * Which of `inputs` may still be written, decided inside the write's
+ * transaction (see {@link writeGradings}).
+ */
+export type WriteGuard = (
+  tx: Tx,
+  inputs: readonly WriteGradingInput[],
+) => Promise<readonly WriteGradingInput[]>;
+
+async function writeChunk(
+  db: Db,
+  chunk: readonly WriteGradingInput[],
+  guard: WriteGuard | undefined,
+): Promise<GradingRecord[]> {
   return db.transaction(async (tx) => {
+    const inputs = guard ? await guard(tx, chunk) : chunk;
+    if (inputs.length === 0) return [];
+    const cells = (state: WriteGradingInput["state"]) => {
+      const pairs = inputs
+        .filter((i) => i.state === state)
+        .map((i) => sql`(${i.attemptId}::uuid, ${i.itemId}::uuid)`);
+      return pairs.length === 0
+        ? sql`false`
+        : sql`(${gradings.attemptId}, ${gradings.itemId}) in (${sql.join(pairs, sql`, `)})`;
+    };
     const superseded = await tx
       .update(gradings)
       .set({ state: "superseded" })
@@ -910,10 +931,14 @@ export async function regradeItem(
  * grades the cell again, and nothing is deleted (F-GRADE-05). What a teacher
  * settled stays: an override (`manual`), a proposal they validated (it keeps
  * its source but carries their `gradedBy`), and a model's proposal (`llm`,
- * never written while an evaluation runs). Returns how many were stood down.
+ * never written while an evaluation runs).
+ *
+ * The caller holds the attempt's row lock (`reopenAttempt`): a grading write
+ * of the jobs takes the same lock and re-reads the attempt's state under it,
+ * so a pass that loaded the attempt finished never lands after this.
  */
-export async function standDownAutomaticGradings(db: DbOrTx, attemptId: string): Promise<number> {
-  const rows = await db
+export async function standDownAutomaticGradings(db: DbOrTx, attemptId: string): Promise<void> {
+  await db
     .update(gradings)
     .set({ state: "superseded" })
     .where(
@@ -923,9 +948,7 @@ export async function standDownAutomaticGradings(db: DbOrTx, attemptId: string):
         isNull(gradings.gradedBy),
         ne(gradings.state, "superseded"),
       ),
-    )
-    .returning({ id: gradings.id });
-  return rows.length;
+    );
 }
 
 /**

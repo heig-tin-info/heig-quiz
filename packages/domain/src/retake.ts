@@ -13,7 +13,7 @@
  *
  * Pure: the current instant is injected, nothing is read from a database.
  */
-import type { EvaluationModeName } from "./evaluationConfig.js";
+import { isLiveState, type EvaluationModeName } from "./evaluationConfig.js";
 import type { EvaluationStateName } from "./itemList.js";
 
 /** Which attempt a student's result is: the best score, or the last attempt. */
@@ -33,6 +33,19 @@ export type AttemptStateName = "not_started" | "in_progress" | "submitted" | "ex
 /** An attempt is finished once it is handed in or closed; only then may another start. */
 export function isFinishedAttempt(state: AttemptStateName): boolean {
   return state === "submitted" || state === "expired";
+}
+
+/**
+ * Whether the grading may write on an attempt now (ADR-067): while the
+ * evaluation runs, only a finished attempt — one reopened since its hand-in
+ * is graded at its next; once it is over, every attempt (an attempt left
+ * open by a reopen before #95 included).
+ */
+export function gradableNow(
+  evaluationState: EvaluationStateName,
+  attemptState: AttemptStateName,
+): boolean {
+  return !isLiveState(evaluationState) || isFinishedAttempt(attemptState);
 }
 
 /**

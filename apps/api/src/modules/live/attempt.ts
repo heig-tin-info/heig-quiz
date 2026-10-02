@@ -1285,6 +1285,11 @@ export async function reopenAttempt(
     extraS: attempt.extraS,
   });
   await db.transaction(async (tx) => {
+    // The attempt's row lock, which every grading write of the jobs takes
+    // too before re-reading the attempt's state (ADR-067): a pass that
+    // loaded this attempt finished either commits before the stand-down
+    // below (which then supersedes what it wrote) or sees it reopened.
+    await tx.select({ id: attempts.id }).from(attempts).where(eq(attempts.id, attempt.id)).for("update");
     await tx
       .update(attempts)
       .set({

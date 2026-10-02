@@ -55,7 +55,7 @@ import {
 } from "@quiz/contracts";
 import { RunnerBusy, RunnerUnavailable, isGraded, isPendingRunner } from "@quiz/core/server";
 import {
-  isFinishedAttempt,
+  gradableNow,
   isLiveState,
   itemPoints,
   maskNames,
@@ -65,7 +65,7 @@ import {
 
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { answers, attempts, enrollments, gradings, users } from "../../db/schema.js";
+import { answers, attempts, enrollments, evaluations, gradings, users } from "../../db/schema.js";
 import {
   GRADING_EVALUATION_QUEUE,
   GRADING_LLM_QUEUE,
@@ -94,6 +94,7 @@ import {
   type GradingRecord,
   type PairKey,
   type WriteGradingInput,
+  type WriteGuard,
 } from "./service.js";
 
 /** How often the progress event goes out while a pass is running (§5.4). */
@@ -140,11 +141,8 @@ interface RunnerGradingJob {
   attemptId: string;
   itemId: string;
   answerId: string | null;
-  /**
-   * The answer's revision the request was built from. Absent on a job sent
-   * before ADR-067, which is then never taken for stale.
-   */
-  revision?: number;
+  /** The answer's revision the request was built from (ADR-067). */
+  revision: number;
   request: RunnerRequest;
   regradeNote?: string;
 }
@@ -222,7 +220,7 @@ export async function enqueueEvaluationGrading(
 export async function registerGradingJobs(
   app: FastifyInstance,
   queue: JobQueue,
-  config: Pick<AppConfig, "GRADING_RUNNER_CONCURRENCY"> = { GRADING_RUNNER_CONCURRENCY: 1 },
+  config: Pick<AppConfig, "GRADING_RUNNER_CONCURRENCY">,
 ): Promise<void> {
   await queue.createQueue(GRADING_EVALUATION_QUEUE, { retryLimit: 1 });
   await queue.createQueue(GRADING_RUNNER_QUEUE, {
@@ -275,9 +273,8 @@ async function loadPass(
     );
   // While the evaluation runs, only a finished attempt is graded (ADR-067):
   // one reopened since the hand-in that sent this pass is graded at its next.
-  const gradable = isLiveState(evaluation.state)
-    ? attemptRows.filter((a) => isFinishedAttempt(a.state))
-    : attemptRows;
+  // The write checks it again, under the attempt's lock (`passGuard`).
+  const gradable = attemptRows.filter((a) => gradableNow(evaluation.state, a.state));
   if (items.length === 0 || gradable.length === 0) return null;
 
   const answerRows = await db
@@ -516,7 +513,7 @@ export async function runEvaluationGrading(
       progress.tick();
     }
   }
-  await writeGradings(app.db, writes);
+  await writeGradings(app.db, writes, passGuard);
   progress.finish(runnerJobs.length + llmJobs.length > 0 ? "pending" : "done");
   for (const runnerJob of runnerJobs) {
     await enqueueOrRun(app, GRADING_RUNNER_QUEUE, runnerJob, runRunnerGrading, { priority: RUNNER_PRIORITY });
@@ -634,7 +631,10 @@ async function runRunnerGrading(
   await announceGradingReady(app, evaluation);
 }
 
-/** The runner half proper: whatever happens, the cell ends with a grading — unless the job is retried, or stale. */
+/**
+ * The runner half proper: whatever happens, the cell ends with a grading —
+ * unless the job is retried, or stale (ADR-067).
+ */
 async function gradeWithRunner(
   app: FastifyInstance,
   evaluation: EvaluationRecord,
@@ -646,6 +646,12 @@ async function gradeWithRunner(
   if (!item) return;
   const [attempt] = await db.select().from(attempts).where(eq(attempts.id, job.attemptId)).limit(1);
   if (!attempt) return;
+  const answerRow = job.answerId
+    ? (await db.select().from(answers).where(eq(answers.id, job.answerId)).limit(1))[0]
+    : undefined;
+  // A cheap early exit, so a stale job never takes a runner slot. What
+  // decides is the guard of the write, under the attempt's lock.
+  if (isStale(evaluation.state, attempt.state, answerRow, job)) return;
 
   const now = app.clock.now();
   const base = {
@@ -656,42 +662,38 @@ async function gradeWithRunner(
     now,
     ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
   };
+  const write = (grading: Omit<WriteGradingInput, keyof typeof base>) =>
+    writeGradings(db, [{ ...base, ...grading }], runnerGuard(job));
 
   const type = typeOf(item.question.type);
   if (!type.finalizeRunner) {
-    await writeGrading(db, { ...base, ...failedProposal("not_finalizable") });
+    await write(failedProposal("not_finalizable"));
     return;
   }
 
-  // Before the run, and again before the write: a run takes seconds, and a
-  // reopen may come in between.
-  if (await isStale(db, evaluation, job)) return;
-  let outcome;
-  try {
-    outcome = await app.runner.run(job.request);
-  } catch (err) {
-    if (err instanceof RunnerBusy) throw err; // the queue retries with backoff
-    const reason = err instanceof RunnerUnavailable ? "runner_unavailable" : "runner_error";
+  const run = await app.runner.run(job.request).then(
+    (outcome) => ({ outcome }),
+    (err: unknown) => ({ err }),
+  );
+  if ("err" in run) {
+    if (run.err instanceof RunnerBusy) throw run.err; // the queue retries with backoff
+    const reason = run.err instanceof RunnerUnavailable ? "runner_unavailable" : "runner_error";
     if (reason === "runner_error") {
-      app.log.error({ err, itemId: job.itemId }, "grading: runner failed");
+      app.log.error({ err: run.err, itemId: job.itemId }, "grading: runner failed");
     }
-    if (await isStale(db, evaluation, job)) return;
-    await writeGrading(db, { ...base, ...failedProposal(reason) });
+    await write(failedProposal(reason));
     return;
   }
-  if (await isStale(db, evaluation, job)) return;
 
   const config = loadConfig(item.question.type, itemInstance(item, attempt).version);
-  const answerRow = job.answerId
-    ? (await db.select().from(answers).where(eq(answers.id, job.answerId)).limit(1))[0]
-    : undefined;
   const parsed =
     answerRow && answerRow.payload !== null
       ? type.answerSchema.safeParse(answerRow.payload)
       : null;
 
+  let graded;
   try {
-    const graded = type.finalizeRunner(
+    graded = type.finalizeRunner(
       config,
       parsed?.success ? parsed.data : null,
       {
@@ -702,45 +704,78 @@ async function gradeWithRunner(
         now,
         defaults: gradeDefaults(evaluation),
       },
-      outcome,
+      run.outcome,
     );
-    await writeGrading(db, {
-      ...base,
-      points: itemPoints(graded.points, item.item.bonus),
-      source: "auto",
-      state: graded.state ?? "validated",
-      details: graded.details,
-      ...(graded.comment === undefined ? {} : { comment: graded.comment }),
-    });
   } catch (err) {
     app.log.error({ err, itemId: job.itemId }, "grading: finalizeRunner threw");
-    await writeGrading(db, { ...base, ...failedProposal("finalize_error") });
+    await write(failedProposal("finalize_error"));
+    return;
   }
+  await write({
+    points: itemPoints(graded.points, item.item.bonus),
+    source: "auto",
+    state: graded.state ?? "validated",
+    details: graded.details,
+    ...(graded.comment === undefined ? {} : { comment: graded.comment }),
+  });
 }
 
 /**
- * Whether a runner job no longer describes its cell (ADR-067): while the
- * evaluation runs, its attempt was reopened since the hand-in that sent it,
- * or the answer was rewritten since (a reopened attempt handed in again: its
+ * Whether a runner job no longer describes its cell (ADR-067): its attempt
+ * was reopened since the hand-in that sent it, while the evaluation runs, or
+ * its answer was rewritten since (a reopened attempt handed in again, whose
  * own pass sent a job of its own). Writing would grade an answer the student
  * no longer holds, and the pass never re-grades a validated cell.
  */
-async function isStale(db: Db, evaluation: EvaluationRecord, job: RunnerGradingJob): Promise<boolean> {
-  const [attempt] = await db
-    .select({ state: attempts.state })
-    .from(attempts)
-    .where(eq(attempts.id, job.attemptId))
-    .limit(1);
-  if (!attempt) return true;
-  const current = await byId(db, evaluation.id);
-  if (current && isLiveState(current.state) && !isFinishedAttempt(attempt.state)) return true;
-  if (job.revision === undefined || job.answerId === null) return false;
-  const [answer] = await db
-    .select({ revision: answers.revision })
-    .from(answers)
-    .where(eq(answers.id, job.answerId))
-    .limit(1);
+function isStale(
+  evaluationState: EvaluationRecord["state"],
+  attemptState: AttemptRecord["state"],
+  answer: { revision: number } | undefined,
+  job: RunnerGradingJob,
+): boolean {
+  if (!gradableNow(evaluationState, attemptState)) return true;
   return answer !== undefined && answer.revision !== job.revision;
+}
+
+/**
+ * The guard of every grading write of the jobs (ADR-067): locks the attempts
+ * of the cells, in id order, re-reads their state and their evaluation's
+ * under the lock, and keeps the cells still {@link gradableNow}. A reopen
+ * takes the same row lock before it stands the attempt's automatic gradings
+ * down (`reopenAttempt`), so a pass that loaded an attempt finished either
+ * commits first — and the stand-down supersedes what it wrote — or sees the
+ * attempt reopened here and writes nothing on it.
+ */
+const passGuard: WriteGuard = async (tx, inputs) => {
+  const ids = [...new Set(inputs.map((i) => i.attemptId))];
+  if (ids.length === 0) return inputs;
+  const rows = await tx
+    .select({ id: attempts.id, state: attempts.state, evaluationState: evaluations.state })
+    .from(attempts)
+    .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
+    .where(inArray(attempts.id, ids))
+    .orderBy(attempts.id)
+    .for("update", { of: attempts });
+  const gradable = new Set(
+    rows.filter((r) => gradableNow(r.evaluationState, r.state)).map((r) => r.id),
+  );
+  return inputs.filter((i) => gradable.has(i.attemptId));
+};
+
+/** {@link passGuard}, and the answer still at the revision the job was built from. */
+function runnerGuard(job: RunnerGradingJob): WriteGuard {
+  return async (tx, inputs) => {
+    const kept = await passGuard(tx, inputs);
+    if (kept.length === 0 || job.answerId === null) return kept;
+    // Under the attempt's lock: an answer is written only while its attempt
+    // is open, and opening it again takes that lock.
+    const [answer] = await tx
+      .select({ revision: answers.revision })
+      .from(answers)
+      .where(eq(answers.id, job.answerId))
+      .limit(1);
+    return answer !== undefined && answer.revision !== job.revision ? [] : kept;
+  };
 }
 
 /** Whether one cell holds a validated grading. */

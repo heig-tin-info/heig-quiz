@@ -3,18 +3,28 @@
  * attempt is graded as soon as it is finished, whatever its feedback policy
  * and without retakes; an exam waits for its close; a reopen stands the
  * attempt's automatic gradings down (a teacher's stay), and the next hand-in
- * grades it again; a runner job overtaken by a reopen writes nothing.
+ * grades it again; a pass or a runner job overtaken by a reopen — even
+ * between its load and its write — writes nothing; a poll's hand-in grades
+ * nothing; and graded at hand-in is not shown at hand-in.
  *
  * The queue is a recorder wired through the real `registerGradingJobs`: a
  * test sees which jobs were sent and drains them itself, in order.
  */
+import { randomUUID } from "node:crypto";
+
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { defaultFeedbackPolicy, type EvaluationMode, type FeedbackPolicy, type McqPolicy } from "@quiz/contracts";
+import {
+  defaultFeedbackPolicy,
+  type EvaluationMode,
+  type FeedbackPolicy,
+  type McqPolicy,
+} from "@quiz/contracts";
 import type { RunnerOutcome, RunnerService } from "@quiz/core/server";
 import { registerForTests } from "@quiz/registry/server";
 
+import { loadConfig as loadAppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { evaluations, gradings, questions } from "../../db/schema.js";
 import { GRADING_EVALUATION_QUEUE, GRADING_RUNNER_QUEUE, type JobQueue } from "../../jobs.js";
@@ -27,6 +37,7 @@ import { registerGradingJobs } from "../grading/jobs.js";
 import { manualOverride } from "../grading/service.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import * as poolService from "../pool/service.js";
+import * as results from "../results/service.js";
 import * as live from "./service.js";
 
 let db: Db;
@@ -76,7 +87,7 @@ async function queuedApp(runner: RunnerService = countingRunner()) {
     stop: async () => {},
   };
   const app = Object.assign(Object.create(base), { boss: queue, runner }) as typeof base;
-  await registerGradingJobs(app, queue);
+  await registerGradingJobs(app, queue, { GRADING_RUNNER_CONCURRENCY: 1 });
   /** Runs every job sent to `name`, oldest first, the ones they send included. */
   const drain = async (name: string) => {
     const next = () => sent.findIndex((j) => j.name === name);
@@ -308,9 +319,127 @@ describe("a reopen of an exercise attempt graded at hand-in", () => {
   });
 });
 
+describe("a reopen racing a grading write (ADR-067)", () => {
+  it("drops a pass's cells when the attempt is reopened between its load and its write", async () => {
+    const { app, drain } = await queuedApp();
+    const { evaluation, attempt, mcq } = await running(app, "exercise", "immediate");
+    const now = app.clock.now();
+    await answer(evaluation, attempt, mcq.id, { selected: [0, 1] }, 1, now);
+    await live.submitAttempt(db, evaluation, attempt, now, app);
+
+    // The mcq is graded after the pass has loaded the attempt finished and
+    // before it writes: the reopen lands in between.
+    const mcqType = typeOf("mcq");
+    let reopened: live.AttemptRecord | null = null;
+    restores.push(
+      registerForTests({
+        ...mcqType,
+        grade: async (...args: Parameters<typeof mcqType.grade>) => {
+          if (!reopened) {
+            const finished = (await live.attemptById(db, attempt.id))!;
+            reopened = await live.reopenAttempt(db, evaluation, finished, app.clock.now());
+          }
+          return mcqType.grade(...args);
+        },
+      }),
+    );
+    try {
+      await drain(GRADING_EVALUATION_QUEUE);
+    } finally {
+      restores.pop()!();
+    }
+    expect(reopened).not.toBeNull();
+    expect(await standing(attempt.id)).toEqual([]);
+
+    // Handed in again, it is graded.
+    await live.submitAttempt(db, evaluation, reopened!, app.clock.now(), app);
+    await drain(GRADING_EVALUATION_QUEUE);
+    expect((await standing(attempt.id)).find((r) => r.itemId === mcq.id)).toMatchObject({
+      state: "validated",
+      points: mcq.points,
+    });
+  });
+
+  it("drops a runner job's write when the attempt is reopened during the run", async () => {
+    let reopen: (() => Promise<unknown>) | null = null;
+    const runner = countingRunner();
+    const inner = runner.run;
+    runner.run = async (request) => {
+      await reopen?.();
+      return inner(request);
+    };
+    const { app, drain } = await queuedApp(runner);
+    const { evaluation, attempt, code } = await running(app, "exercise", "on_release");
+    await answer(evaluation, attempt, code.id, { regions: ["return 0;"] }, 1, app.clock.now());
+    await live.submitAttempt(db, evaluation, attempt, app.clock.now(), app);
+    await drain(GRADING_EVALUATION_QUEUE);
+    reopen = async () =>
+      live.reopenAttempt(db, evaluation, (await live.attemptById(db, attempt.id))!, app.clock.now());
+
+    await drain(GRADING_RUNNER_QUEUE);
+    expect(runner.calls).toBe(1);
+    expect(await standing(attempt.id)).toEqual([]);
+  });
+});
+
+describe("what a hand-in does NOT do", () => {
+  it("sends nothing for a poll", async () => {
+    // A poll is answered at `/p/:code`, never handed in through the player
+    // (`enterEvaluation` refuses one): the rule itself is what is asserted.
+    const { app, sent } = await queuedApp();
+    // Polls are created by their own module; the row is what the rule reads.
+    const seed = await seedLive(db, { mode: "exercise", students: 1, questions: 1, durationS: null });
+    await db
+      .update(evaluations)
+      .set({ mode: "poll", state: "running" })
+      .where(eq(evaluations.id, seed.evaluationId));
+    const poll = await reload(db, seed.evaluationId);
+    await live.gradeAtHandIn(app, poll, [randomUUID()]);
+    expect(sent).toEqual([]);
+  });
+
+  /**
+   * Graded at hand-in is not shown at hand-in: under `none` nothing of the
+   * score reaches the student, under `on_release` no grade and no item before
+   * the release — on the feedback page, the home card and the Grades page.
+   */
+  it.each(["none", "on_release"] as const)(
+    "shows no grade nor item before the release under %s",
+    async (when) => {
+      const { app, drain } = await queuedApp();
+      const { seed, evaluation, attempt, mcq } = await running(app, "exercise", when);
+      const student = seed.studentIds[0]!;
+      await answer(evaluation, attempt, mcq.id, { selected: [0, 1] }, 1, app.clock.now());
+      await live.submitAttempt(db, evaluation, attempt, app.clock.now(), app);
+      await drain(GRADING_EVALUATION_QUEUE);
+      expect(await standing(attempt.id)).toHaveLength(2);
+
+      const now = app.clock.now();
+      const finished = (await live.attemptById(db, attempt.id))!;
+      const feedback = await results.studentFeedback(db, await reload(db, evaluation.id), finished, now);
+      expect(feedback).not.toHaveProperty("items");
+      expect(feedback).not.toHaveProperty("grade");
+      if (when === "none") {
+        expect(feedback).not.toHaveProperty("points");
+        expect(feedback).not.toHaveProperty("score");
+      }
+
+      const card = (await live.studentHome(db, student, now)).past.find((c) => c.id === evaluation.id);
+      expect(card).toBeDefined();
+      expect(card!.grade).toBeNull();
+
+      const rows = (await live.studentGrades(db, student, now)).flatMap((g) => g.rows);
+      const row = rows.find((r) => r.kind === "evaluation" && r.evaluationId === evaluation.id);
+      expect(row).toBeDefined();
+      expect(row!.score?.grade ?? null).toBeNull();
+      if (when === "none") expect(row!.score).toBeNull();
+    },
+  );
+});
+
 describe("the grading.runner queue", () => {
   /** The options each queue's worker was registered with. */
-  async function workOptions(config?: { GRADING_RUNNER_CONCURRENCY: number }) {
+  async function workOptions(config: { GRADING_RUNNER_CONCURRENCY: number }) {
     const options = new Map<string, unknown>();
     const queue: JobQueue = {
       createQueue: async () => {},
@@ -323,12 +452,13 @@ describe("the grading.runner queue", () => {
   }
 
   it("takes one job at a time by default, so grading never fills the runner's queue", async () => {
-    expect((await workOptions()).get(GRADING_RUNNER_QUEUE)).toEqual({ localConcurrency: 1 });
+    const defaults = loadAppConfig({});
+    expect(defaults.GRADING_RUNNER_CONCURRENCY).toBe(1);
+    expect((await workOptions(defaults)).get(GRADING_RUNNER_QUEUE)).toEqual({ localConcurrency: 1 });
   });
 
   it("takes GRADING_RUNNER_CONCURRENCY at a time when configured", async () => {
-    expect((await workOptions({ GRADING_RUNNER_CONCURRENCY: 3 })).get(GRADING_RUNNER_QUEUE)).toEqual({
-      localConcurrency: 3,
-    });
+    const config = loadAppConfig({ GRADING_RUNNER_CONCURRENCY: "3" });
+    expect((await workOptions(config)).get(GRADING_RUNNER_QUEUE)).toEqual({ localConcurrency: 3 });
   });
 });

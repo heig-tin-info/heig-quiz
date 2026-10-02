@@ -7,8 +7,10 @@ production). Implemented by `gradeAtHandIn` and `reopenAttempt`
 (`apps/api/src/modules/live/attempt.ts`), `standDownAutomaticGradings`
 (`apps/api/src/modules/grading/service.ts`), the pass and the runner job of
 `apps/api/src/modules/grading/jobs.ts`, and `GRADING_RUNNER_CONCURRENCY`
-(`apps/api/src/config.ts`); the student's page by the sibling change to
-`results/service.ts` and `@quiz/domain` (`feedbackGate`). Amends ADR-025 §4
+(`apps/api/src/config.ts`), the rule `gradableNow` (`@quiz/domain`,
+`retake.ts`); the student's page by the sibling pull request
+`feedback-pending` (`results/service.ts`, `feedbackGate`), merged right
+after this one. Amends ADR-025 §4
 and ADR-050 §3, and F-GRADE-01 of `docs/spec/02-exigences-fonctionnelles.md`.
 Settles open question 50 of `docs/spec/06-questions-ouvertes.md`.
 
@@ -66,13 +68,31 @@ part of an attempt the student has not handed in.
    grades the stood-down cells again. Extra time (`extendTime`) never
    revives a finished attempt, so the reopen is the only path concerned.
 
-   Two guards keep a job sent before a reopen from writing over it. A pass
-   run while the evaluation is live grades finished attempts only. A runner
-   job carries the revision of the answer it was built from, and writes
-   nothing — checked before the run and again before the write — when its
-   attempt is no longer finished while the evaluation runs, or when the
-   answer holds another revision: the hand-in after the reopen sent a job of
-   its own.
+   **A reopen and a grading write are serialised on the attempt's row.**
+   A pass loads its attempts, grades, then writes; a reopen may land in
+   between, and a check made at load time cannot see it: the pass would
+   write the old answers' grades, validated, on an attempt the student is
+   rewriting, and no later pass re-grades a validated cell. So:
+
+   - `reopenAttempt` takes the attempt's row lock (`SELECT … FOR UPDATE`)
+     in the transaction that reopens it and stands its gradings down;
+   - every grading write of the jobs (the pass's batch, the runner job's
+     single write) runs a guard first inside its own transaction
+     (`writeGradings(db, inputs, guard)`): it locks the attempts of its
+     cells, in id order, re-reads their state and their evaluation's under
+     the lock, and drops the cells of an attempt that is no longer gradable
+     — `gradableNow`: while the evaluation runs, only a finished attempt;
+   - the runner job's guard also re-reads, under the same lock, the
+     revision of the answer, which every runner job now carries: an answer
+     is written only while its attempt is open, and opening it takes the
+     lock, so a job built from another revision writes nothing — the hand-in
+     after the reopen sent a job of its own.
+
+   Either the write commits first, and the reopen's stand-down supersedes
+   what it wrote, or the reopen commits first, and the write drops those
+   cells. The checks made before (the pass's load, the runner job's check
+   before the run) remain as cheap early exits — a stale job takes no runner
+   slot — but the one under the lock decides.
 
 5. **The runner is shared with the students.** The runner serves the
    grading and the students' Run clicks from one FIFO of its own
@@ -82,7 +102,8 @@ part of an attempt the student has not handed in.
    at a time, one by default: a background grading holds at most one slot,
    and the rest stays the students'.
 
-6. **What the student reads** (the sibling change, recorded here because it
+6. **What the student reads** (landing with the sibling pull request
+   `feedback-pending`, merged right after this one; recorded here because it
    is the other half of the incident):
 
    - the feedback page never computes a grade while cells are pending: it
@@ -113,7 +134,7 @@ part of an attempt the student has not handed in.
 ## Rollback
 
 Restore the condition "retakes enabled OR correction published" in
-`gradeAtHandIn`. The supersede on reopen and the two guards are harmless
+`gradeAtHandIn`. The supersede on reopen and the lock are harmless
 without it (nothing is graded before the close, so a reopen finds nothing
 to stand down), and `GRADING_RUNNER_CONCURRENCY=1` is pg-boss's own default.
 No schema change to undo.
