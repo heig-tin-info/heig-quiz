@@ -23,6 +23,9 @@ import { AddStaffModal, NewClassroomModal } from "./modals";
  * the title, and "remove from the staff" waits inside the card of the
  * colleague it is about, where the name is already written.
  *
+ * The course page reads the same actions by name, in its tabs rather than a
+ * menu: `addStaff` on Members, `setHidden` and `remove` on Settings.
+ *
  * `onDeleted` runs once the course is gone: the course page leaves for the
  * Courses home rather than stay on a course that no longer exists.
  */
@@ -33,6 +36,11 @@ export function useCourseActions(
   items: MenuItem[];
   staffActions: (person: Person) => MenuItem[];
   newClassroom: () => void;
+  addStaff: () => void;
+  setHidden: (hidden: boolean) => void;
+  hiding: boolean;
+  remove: () => Promise<void>;
+  removing: boolean;
   dialogs: ReactNode;
 } {
   const t = useT();
@@ -58,7 +66,7 @@ export function useCourseActions(
   });
   const toast = useToast();
   // A hidden course leaves the list at once, so the toast says where it went.
-  const setHidden = useMutation({
+  const hide = useMutation({
     mutationFn: (hidden: boolean) =>
       api(`/app/api/courses/${course.id}/${hidden ? "hide" : "unhide"}`, { method: "POST" }),
     onSuccess: async (_data, hidden) => {
@@ -68,8 +76,53 @@ export function useCourseActions(
     onError: toastError("error.save"),
   });
 
+  const remove = async () => {
+    // The confirmation names what else goes (ADR-031): the course's
+    // templates cascade with it, and neither the card nor the table row
+    // lists them. A count that could not be read is not confirmed as
+    // zero.
+    let templates: number;
+    try {
+      templates = (
+        await qc.fetchQuery<EvaluationTemplate[]>({
+          queryKey: courseTemplatesKey(course.id),
+          queryFn: () => api(`/app/api/courses/${course.id}/templates`),
+        })
+      ).length;
+    } catch (error) {
+      toastError("error.server")(error);
+      return;
+    }
+    if (
+      await confirm({
+        title:
+          templates === 0
+            ? t("courses.deleteConfirm", { name: course.name })
+            : t(
+                templates === 1
+                  ? "courses.deleteConfirmTemplates.one"
+                  : "courses.deleteConfirmTemplates",
+                { name: course.name, n: templates },
+              ),
+        confirmLabel: t("common.delete"),
+        cancelLabel: t("common.cancel"),
+        danger: true,
+      })
+    ) {
+      removeCourse.mutate();
+    }
+  };
+
+  const addStaff = () => setNewStaff(true);
+  const setHidden = (hidden: boolean) => hide.mutate(hidden);
+
   return {
     newClassroom: () => setNewRoom(true),
+    addStaff,
+    setHidden,
+    hiding: hide.isPending,
+    remove,
+    removing: removeCourse.isPending,
     // The server refuses to empty a staff (409 `last_staff`); an action that
     // can only fail is not offered at all, so the last colleague standing has
     // a card with nothing in it but their address.
@@ -101,57 +154,22 @@ export function useCourseActions(
       {
         label: t("courses.staffAdd"),
         icon: UserPlus,
-        onSelect: () => setNewStaff(true),
+        onSelect: addStaff,
       },
       course.hidden
-        ? { label: t("courses.unhide"), icon: Eye, onSelect: () => setHidden.mutate(false) }
+        ? { label: t("courses.unhide"), icon: Eye, onSelect: () => setHidden(false) }
         : {
             label: t("courses.hide"),
             description: t("courses.hideHint"),
             icon: EyeOff,
-            onSelect: () => setHidden.mutate(true),
+            onSelect: () => setHidden(true),
           },
       {
         label: t("courses.delete"),
         icon: Trash2,
         danger: true,
         separator: true,
-        onSelect: async () => {
-          // The confirmation names what else goes (ADR-031): the course's
-          // templates cascade with it, and neither the card nor the table row
-          // lists them. A count that could not be read is not confirmed as
-          // zero.
-          let templates: number;
-          try {
-            templates = (
-              await qc.fetchQuery<EvaluationTemplate[]>({
-                queryKey: courseTemplatesKey(course.id),
-                queryFn: () => api(`/app/api/courses/${course.id}/templates`),
-              })
-            ).length;
-          } catch (error) {
-            toastError("error.server")(error);
-            return;
-          }
-          if (
-            await confirm({
-              title:
-                templates === 0
-                  ? t("courses.deleteConfirm", { name: course.name })
-                  : t(
-                      templates === 1
-                        ? "courses.deleteConfirmTemplates.one"
-                        : "courses.deleteConfirmTemplates",
-                      { name: course.name, n: templates },
-                    ),
-              confirmLabel: t("common.delete"),
-              cancelLabel: t("common.cancel"),
-              danger: true,
-            })
-          ) {
-            removeCourse.mutate();
-          }
-        },
+        onSelect: remove,
       },
     ],
     dialogs: (

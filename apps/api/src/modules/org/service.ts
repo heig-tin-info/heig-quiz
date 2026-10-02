@@ -14,7 +14,7 @@ import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 
 import type { EnrollmentPatch, StudentClassroom, StudentClassroomPage } from "@quiz/contracts";
 
-import type { Db } from "../../db/client.js";
+import { isUniqueViolation, type Db } from "../../db/client.js";
 import {
   avatars,
   classrooms,
@@ -161,21 +161,31 @@ export async function createCourse(
   return created;
 }
 
+/**
+ * Renames a course, its name or its code. `null` when the new code is
+ * already another course's: the code is unique across the instance, and the
+ * caller answers 409 `duplicate_code` as the creation does.
+ */
 export async function updateCourse(
   db: Db,
   courseId: string,
   patch: { name?: string | undefined; code?: string | undefined },
 ) {
-  const [updated] = await db
-    .update(courses)
-    .set({
-      ...(patch.name ? { name: patch.name } : {}),
-      ...(patch.code ? { code: patch.code.trim().toUpperCase() } : {}),
-      updatedAt: new Date(),
-    })
-    .where(eq(courses.id, courseId))
-    .returning();
-  return updated;
+  try {
+    const [updated] = await db
+      .update(courses)
+      .set({
+        ...(patch.name ? { name: patch.name } : {}),
+        ...(patch.code ? { code: patch.code } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(courses.id, courseId))
+      .returning();
+    return updated;
+  } catch (err) {
+    if (isUniqueViolation(err, "courses_code_unique")) return null;
+    throw err;
+  }
 }
 
 /**

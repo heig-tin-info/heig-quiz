@@ -89,6 +89,11 @@ describe("routeToPath / parsePath", () => {
     expect(routeToPath({ view: "course", id: "k-1" })).toBe("/courses/k-1");
     expect(parsePath("/courses/k-1")).toEqual({ view: "course", id: "k-1" });
     expect(sectionOf({ view: "course", id: "k-1" })).toBe("home");
+    // Its tabs are paths of their own; the classrooms are the bare address.
+    expect(routeToPath({ view: "course", id: "k-1", tab: "members" })).toBe("/courses/k-1/members");
+    expect(parsePath("/courses/k-1/members")).toEqual({ view: "course", id: "k-1", tab: "members" });
+    expect(routeToPath({ view: "course", id: "k-1", tab: "classrooms" })).toBe("/courses/k-1");
+    expect(parsePath("/courses/k-1/nope")).toEqual({ view: "course", id: "k-1" });
   });
 
   it("parses the editor of one template, a page of its course (F-EVAL-25)", () => {

@@ -656,6 +656,20 @@ describe("PATCH /courses/:id (#294)", () => {
     const [row] = await server.app.db.select().from(courses).where(eq(courses.id, id));
     expect(row!.name).toBe("Old name");
   });
+
+  it("changes the code, upper-cased, and refuses another course's with a 409", async () => {
+    const id = await course("RECODE1");
+    await course("RECODE2");
+    const res = await patch(id, { code: "recode3" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ code: "RECODE3" });
+
+    const taken = await patch(id, { code: "recode2" });
+    expect(taken.statusCode).toBe(409);
+    expect(taken.json()).toMatchObject({ error: "duplicate_code" });
+    const [row] = await server.app.db.select().from(courses).where(eq(courses.id, id));
+    expect(row!.code).toBe("RECODE3");
+  });
 });
 
 describe("a blank classroom name", () => {

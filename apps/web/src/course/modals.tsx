@@ -1,42 +1,116 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { ClassroomCreate, type CourseSummary } from "@quiz/contracts";
+import { ClassroomCreate, CourseCreate, type CoursePatch, type CourseSummary } from "@quiz/contracts";
 
 import { api } from "../api";
 import { newPeriodDraft, PeriodFields, periodBody, periodInvalid } from "../ClassroomPeriod";
 import { useT } from "../i18n";
+import { useToast } from "../notify";
+import { invalidateHint } from "../realtime/hints";
 import { Field, FormDialog, FormError } from "../ui";
 import { coursesKey } from "../queryKeys";
 
 /**
- * The three short forms around a course, each in a `Modal` because none has
- * more than three fields: a new course (the Courses home's one primary
- * action), a new classroom in a course, and a colleague on its staff. All
- * three refresh the course list, which is where their result is read.
+ * The short forms around a course, each in a `Modal` because none has more
+ * than three fields: a new course (the Courses home's one primary action),
+ * its name and code (its Settings tab), a new classroom in a course, and a
+ * colleague on its staff. All refresh the course list, which is where their
+ * result is read.
  */
 
 export function NewCourseModal({ onClose }: { onClose: () => void }) {
   const t = useT();
+  return (
+    <CourseFormModal
+      title={t("courses.new")}
+      submitLabel={t("courses.newAction")}
+      fallback={t("courses.createFailed")}
+      initial={{ name: "", code: "" }}
+      save={(course) => api("/app/api/courses", { method: "POST", body: JSON.stringify(course) })}
+      onClose={onClose}
+    />
+  );
+}
+
+/**
+ * The course's name and code, from its Settings tab. The code is unique
+ * across the instance and printed in the exports, so a code another course
+ * holds is refused (409 `duplicate_code`) and said here; only what changed is
+ * sent.
+ */
+export function EditCourseModal({ course, onClose }: { course: CourseSummary; onClose: () => void }) {
+  const t = useT();
+  const toast = useToast();
+  return (
+    <CourseFormModal
+      title={t("courses.settings.editTitle")}
+      submitLabel={t("common.save")}
+      fallback={t("error.save")}
+      initial={course}
+      changed={(next) => next.name !== course.name || next.code !== course.code}
+      save={(next) =>
+        api(`/app/api/courses/${course.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            ...(next.name !== course.name ? { name: next.name } : {}),
+            ...(next.code !== course.code ? { code: next.code } : {}),
+          } satisfies CoursePatch),
+        })
+      }
+      onSaved={() => toast(t("courses.settings.saved"), "success")}
+      onClose={onClose}
+    />
+  );
+}
+
+/**
+ * The one form of a course, its name and its code, for its creation and its
+ * edit. `CourseCreate` trims and upper-cases the code, so what `changed` and
+ * `save` receive is what the server will store.
+ */
+function CourseFormModal({
+  title,
+  submitLabel,
+  fallback,
+  initial,
+  changed = () => true,
+  save,
+  onSaved,
+  onClose,
+}: {
+  title: string;
+  submitLabel: string;
+  fallback: string;
+  initial: { name: string; code: string };
+  changed?: (course: CourseCreate) => boolean;
+  save: (course: CourseCreate) => Promise<unknown>;
+  onSaved?: () => void;
+  onClose: () => void;
+}) {
+  const t = useT();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ name: "", code: "" });
-  const create = useMutation({
-    mutationFn: () =>
-      api("/app/api/courses", { method: "POST", body: JSON.stringify(form) }),
+  const [form, setForm] = useState({ name: initial.name, code: initial.code });
+  const parsed = CourseCreate.safeParse(form);
+  const mutation = useMutation({
+    mutationFn: () => save(parsed.data!),
+    // The name and the code are in the sidebar, on the course cards and in
+    // every classroom's eyebrow: every family a `courses` hint refreshes.
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: coursesKey });
+      await invalidateHint(qc, ["courses"]);
+      onSaved?.();
       onClose();
     },
   });
   return (
     <FormDialog
-      title={t("courses.new")}
+      title={title}
       onClose={onClose}
-      onSubmit={() => create.mutate()}
-      submitLabel={t("courses.newAction")}
-      submitting={create.isPending}
-      canSubmit={form.name.trim() !== "" && form.code.trim() !== ""}
-      error={<FormError error={create.error} fallback={t("courses.createFailed")} />}
+      onSubmit={() => mutation.mutate()}
+      submitLabel={submitLabel}
+      submitting={mutation.isPending}
+      canSubmit={parsed.success && changed(parsed.data)}
+      error={<FormError error={mutation.error} fallback={fallback} />}
     >
       <Field
         label={t("courses.name")}

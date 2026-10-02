@@ -18,10 +18,10 @@ import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
-import { CoursePart } from "../course/parts";
 import {
   Actions,
   Button,
+  Card,
   EmptyState,
   ErrorText,
   Field,
@@ -285,35 +285,33 @@ export function NewTemplateDialog({
 }
 
 /**
- * The templates of one course, as a section of its page. A row opens the
+ * The templates of one course, the Templates tab of its page. A row opens the
  * template's editor, like a classroom row opens the classroom; beside it sit
  * what a template is for — a new evaluation in one of the course's
  * classrooms — and its deletion; two actions, so two icon buttons
- * (`Actions`). "New template" is the section's own action, ghost like the
- * pools' "Link a pool": the page's one primary stays "New classroom".
+ * (`Actions`). "New template" is the tab's one primary, in the page header,
+ * which owns `creating` so the header and the empty state open one dialog.
  */
 export function CourseTemplates({
   courseId,
   classrooms,
   navigate,
+  creating,
+  onCreating,
 }: {
   courseId: string;
   classrooms: ClassroomSummary[];
   navigate: (r: Route) => void;
+  creating: boolean;
+  onCreating: (open: boolean) => void;
 }) {
   const t = useT();
   const list = useCourseTemplates(courseId);
   const actions = useTemplateActions(courseId, classrooms);
-  const [creating, setCreating] = useState(false);
 
   const templates = list.data ?? [];
-  const newButton = (variant: "ghost" | "secondary") => (
-    <Button size="sm" variant={variant} onClick={() => setCreating(true)}>
-      <Plus /> {t("templates.new")}
-    </Button>
-  );
   return (
-    <CoursePart page icon={FileStack} title={t("templates.title")} action={newButton("ghost")}>
+    <Card className="p-3">
       {list.isLoading ? (
         <Skeleton className="h-6 w-64" />
       ) : list.isError ? (
@@ -328,7 +326,11 @@ export function CourseTemplates({
           icon={FileStack}
           title={t("templates.empty.title")}
           className="py-8"
-          action={newButton("secondary")}
+          action={
+            <Button size="sm" variant="secondary" onClick={() => onCreating(true)}>
+              <Plus /> {t("templates.new")}
+            </Button>
+          }
         >
           {t("templates.empty.body")}
         </EmptyState>
@@ -377,9 +379,9 @@ export function CourseTemplates({
         />
       ) : null}
       {creating ? (
-        <NewTemplateDialog courseId={courseId} onClose={() => setCreating(false)} navigate={navigate} />
+        <NewTemplateDialog courseId={courseId} onClose={() => onCreating(false)} navigate={navigate} />
       ) : null}
-    </CoursePart>
+    </Card>
   );
 }
 

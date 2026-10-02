@@ -13,25 +13,25 @@ A course card is a summary of four things:
 - the **Pools of this course**, the pools its evaluations may draw from;
 - how many **evaluation templates** it keeps; the count opens the course page.
 
-The course's name opens its page, where classrooms are created and pools linked.
+The course's name opens its page. Under the title, five tabs, and the primary action at the right of the title changes with the tab: **Classrooms** (the default, with **New classroom**), **Templates** (**New template**), **Linked pools** (**Link a pool**), **Members** (**Add a staff member**) and **Settings**, which has none.
 
 A course outlives a class. The same "Programmation C" carries the classroom of 2026, then the one of 2027, and its staff and pools stay in place from one year to the next.
 
-To rename a course, open its page and click its name: it turns into a field, **Enter** saves and **Escape** cancels. The code stays the one it was created with, since it is unique and printed in the exports.
+To rename a course or change its code, open its **Settings** tab and click **Edit** on the **Name and code** row. The code is unique across the platform: a code another course already uses is refused. The same tab hides the course from your own navigation (**Hide for me**) and deletes it.
 
 ### Adding a colleague to the staff
 
-Open the card's menu (the three dots) and choose **Add a staff member**. The field asks for the **E-mail of an existing account**: the colleague must have signed in once, otherwise the form answers "No account has signed in with this address yet." Every member of the staff has the same rights on the course and its classrooms; there is no owner. The same menu carries **Remove from the staff** for each member.
+On the course page's **Members** tab, click **Add a staff member** (the card's menu, the three dots, offers it too). The field asks for the **E-mail of an existing account**: the colleague must have signed in once, otherwise the form answers "No account has signed in with this address yet." Every member of the staff has the same rights on the course and its classrooms; there is no owner. Each member's row on the **Members** tab carries **Remove from the staff**; the last member cannot be removed.
 
 Being on the staff of a course is enough to be a teacher: a colleague you add does not need a grant from the administrator.
 
 ### Linking a pool
 
-The evaluations of a course draw their questions from the pools linked to it, and only from those. **Link a pool**, on the course page, offers your pools; a linked pool appears with its question count. From the pool's own menu there, **Unlink from this course** removes the link and nothing else: the pool and its questions stay where they are, and the evaluations that already use its questions keep them. One pool can feed several courses. See [Question pools](pools.md) for the pools themselves.
+The evaluations of a course draw their questions from the pools linked to it, and only from those. **Link a pool**, on the course page's **Linked pools** tab, offers your pools; a linked pool appears with its question count. From the pool's own menu there, **Unlink from this course** removes the link and nothing else: the pool and its questions stay where they are, and the evaluations that already use its questions keep them. One pool can feed several courses. See [Question pools](pools.md) for the pools themselves.
 
 ## Creating a classroom
 
-On the course page, click **New classroom**. A classroom has a **Name**, such as `PRG1-2026`, and an optional **Period**, such as `2026-A`. It appears in the card and in the **Classrooms** section of the sidebar.
+On the course page's **Classrooms** tab, click **New classroom**. A classroom has a **Name**, such as `PRG1-2026`, and an optional **Period**, such as `2026-A`. It appears in the card and in the **Classrooms** section of the sidebar.
 
 ### The classroom screen
 
@@ -136,4 +136,4 @@ Your own GitHub account is linked from your **Settings** page, in its **GitHub**
 
 **I changed an address and the student lost the classroom.** Changing the address revokes the claim on purpose, so that a seat never stays attached to the wrong account. The student claims it again at their next sign-in with the new address.
 
-**A colleague cannot open my classroom.** Access follows the staff of the course, not the classroom. Add them with **Add a staff member** on the course card.
+**A colleague cannot open my classroom.** Access follows the staff of the course, not the classroom. Add them with **Add a staff member** on the course page's **Members** tab.
