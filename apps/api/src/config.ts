@@ -191,6 +191,14 @@ const EnvSchema = z.object({
   RUNNER_TOKEN: z.string().default(""),
   /** Wall-clock budget of one runner call, compilation and every case included. */
   RUNNER_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
+  /**
+   * Runner jobs of the background grading (`grading.runner`) this process
+   * runs at once (ADR-067). An exercise grades every hand-in while it runs,
+   * and the runner serves the grading and the students' Run clicks from ONE
+   * queue of its own (`RUNNER_CONCURRENCY`): one grading run at a time
+   * leaves the other slots to the students.
+   */
+  GRADING_RUNNER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(1),
 
   /**
    * LLM grading (F-GRADE-02, ADR-045). `none` — the default — sends nothing

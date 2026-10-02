@@ -70,9 +70,8 @@ export async function expireDueAttempts(
   for (const evaluationId of new Set(closed.map((row) => row.evaluationId))) {
     await endKioskSessions(db, evaluationId, seated(closed.filter((row) => row.evaluationId === evaluationId)));
   }
-  // An exercise with retakes, or whose correction is published, grades each
-  // attempt as it ends (ADR-025, ADR-050), the ones time ran out on
-  // included: the student reads that score, or that correction, next.
+  // An exercise grades each attempt as it ends (ADR-067), the ones time ran
+  // out on included: the student reads that score next.
   if (app) {
     const byEvaluation = new Map<string, string[]>();
     for (const row of closed) {

@@ -17,7 +17,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 
 import type {
   Grading,
@@ -53,6 +53,7 @@ import {
   negativeMarkingEnabled,
   retargetItemVersion,
   clearGradingReady,
+  type DbOrTx,
   staffAttemptIds,
   type EvaluationRecord,
   type JoinedItem,
@@ -897,6 +898,34 @@ export async function regradeItem(
     await clearGradingReady(tx, item.evaluationId);
     return note;
   });
+}
+
+/**
+ * Stands down the AUTOMATIC gradings of one attempt (ADR-067): a reopened
+ * exercise attempt was graded at its hand-in, and the pass never touches a
+ * validated cell, so without this what the student rewrites would keep its
+ * first grades. Every standing grading the machine alone wrote (`source`
+ * `auto`, the runner's included, no `gradedBy`) is superseded with no
+ * successor, the way {@link regradeItem} stands a cell down: the next hand-in
+ * grades the cell again, and nothing is deleted (F-GRADE-05). What a teacher
+ * settled stays: an override (`manual`), a proposal they validated (it keeps
+ * its source but carries their `gradedBy`), and a model's proposal (`llm`,
+ * never written while an evaluation runs). Returns how many were stood down.
+ */
+export async function standDownAutomaticGradings(db: DbOrTx, attemptId: string): Promise<number> {
+  const rows = await db
+    .update(gradings)
+    .set({ state: "superseded" })
+    .where(
+      and(
+        eq(gradings.attemptId, attemptId),
+        eq(gradings.source, "auto"),
+        isNull(gradings.gradedBy),
+        ne(gradings.state, "superseded"),
+      ),
+    )
+    .returning({ id: gradings.id });
+  return rows.length;
 }
 
 /**

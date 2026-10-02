@@ -898,6 +898,7 @@ configuration.
 | `RUNNER_MODE`, `RUNNER_URL` | `http`, `https://code.chevallier.io:8443` | `http` without a URL is refused; `stub` disables the runner, see below |
 | `RUNNER_TOKEN` | `openssl rand -hex 32`, the same value as `/etc/quiz-runner/env` on the runner VM | sent as `Authorization: Bearer` on every call; required when `RUNNER_MODE=http`, the process does not start without it |
 | `RUNNER_TIMEOUT_MS` | default `30000` | wall-clock budget of one runner call |
+| `GRADING_RUNNER_CONCURRENCY` | default `1` | runner jobs of the background grading the API runs at once ([ADR-067](../adr/ADR-067-correction-a-la-remise-des-exercices.md)): exercises are graded at every hand-in, and the runner's queue (`RUNNER_CONCURRENCY`) also serves the students' Run clicks; raise it only with the runner's own concurrency |
 | `LLM_PROVIDER` | unset (`none`) | essays are graded by hand; `stub`, the development fake, makes the process refuse to start |
 | `LLM_KEY_SECRET` | `openssl rand -hex 32`, copied into the age vault | the master key that encrypts the Anthropic key entered in Administration › AI ([ADR-058](../adr/ADR-058-passerelle-llm.md)); empty turns the AI gateway off; under 32 characters, or containing `change-me`, the process does not start; a new value only means pasting the key again |
 | `LLM_DAILY_CAP_MAX_USD` | default `100` | the most the console may set as the AI daily spending cap |

@@ -251,7 +251,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     // The grading queues and their handlers (PLAN-MVP §5.4). Without a queue
     // — `JOBS_DISABLED=1`, or a database that was unreachable at boot — the
     // grading pass runs inline at the call site instead of being dropped.
-    await step("grading jobs registration", () => registerGradingJobs(app, started));
+    await step("grading jobs registration", () => registerGradingJobs(app, started, config));
     // The e-mail and Teams deliveries (ADR-030). Without a queue they are not
     // made at all — the bell row stands alone, nothing is sent inline.
     await step("notification jobs registration", () =>
