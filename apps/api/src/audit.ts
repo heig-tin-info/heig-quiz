@@ -289,9 +289,10 @@ export type AuditAction =
    * back to archiving the repository (H8, a plan without rulesets). By the
    * ticker: `deadline_applied` (its provisional freeze) and `frozen` (the
    * definitive one), `payload.projectId`, `deadlineAt` (its effective one).
-   * `review_skipped` (M3-05b): a repository archived for its lock (H8) gets
-   * no final review, degraded — `payload.projectId`, `reason: "archived"`;
-   * by the ticker at its freeze, or by the dispatch job meeting it.
+   * `review_skipped` (M3-05b): a repository frozen gets no final review,
+   * degraded — `payload.projectId`, `reason`: `archived` (as its lock, H8)
+   * or `protection_suspended` (F-PROJ-08); by the ticker at its freeze, or
+   * by the deadline job archiving a repository already frozen.
    */
   | "project_repo.deadline_applied"
   | "project_repo.frozen"

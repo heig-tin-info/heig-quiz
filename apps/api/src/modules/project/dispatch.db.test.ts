@@ -84,8 +84,8 @@ const usersRoute: Route = (url, req) => {
 
 /** The `repository_dispatch` events GitHub accepted, by repository. */
 const dispatched: { fullName: string; body: { event_type: string; client_payload: Record<string, unknown> } }[] = [];
-/** How GitHub answers a dispatch to a repository: refused (500), gone (404), or never (the connection dies). */
-const failing = new Map<string, "500" | "404" | "network">();
+/** How GitHub answers a dispatch to a repository: refused (422), gone (404), failing (502), or never (the connection dies). */
+const failing = new Map<string, "422" | "404" | "502" | "network">();
 /** Runs while GitHub receives a dispatch, once: what happens "in the middle of a job". */
 let duringDispatch: (() => Promise<void>) | null = null;
 const dispatchesRoute: Route = (url, req) => {
@@ -100,7 +100,8 @@ const dispatchesRoute: Route = (url, req) => {
     }
     const mode = failing.get(fullName);
     if (mode === "network") throw new TypeError("fetch failed");
-    if (mode === "500") return json({ message: "Server Error" }, 500);
+    if (mode === "422") return json({ message: "Validation Failed" }, 422);
+    if (mode === "502") return json({ message: "Bad Gateway" }, 502);
     if (mode === "404") return json({ message: "Not Found" }, 404);
     dispatched.push({ fullName, body: JSON.parse(String(req.body)) });
     return new Response(null, { status: 204 });
@@ -333,27 +334,42 @@ describe("the final review (F-PROJ-11, GR-16)", () => {
     expect(skipped!.payload).toEqual({ projectId: p.id, reason: "archived" });
     expect(world.archived.has(repo!.fullName!)).toBe(true);
   });
+
+  it("skips a repository whose protected files are no longer restored: audited, the teacher's score settles it", async () => {
+    const p = await project({ students: 2 });
+    const [suspended, plain] = p.repos;
+    await scoredRun(suspended!);
+    await scoredRun(plain!);
+    await server.app.db.update(projectRepos).set({ protectionSuspendedAt: new Date(NOW) }).where(eq(projectRepos.id, suspended!.id));
+    await freeze(p.id);
+    await runDispatches(p.id);
+    expect(sentTo(suspended!.fullName!)).toEqual([]);
+    expect(sentTo(plain!.fullName!)).toHaveLength(1);
+    expect(await ledger(suspended!.id)).toEqual([]);
+    const [skipped] = await auditOf(suspended!.id, "project_repo.review_skipped");
+    expect(skipped!.payload).toEqual({ projectId: p.id, reason: "protection_suspended" });
+  });
 });
 
 describe("at most once (product owner, 2026-10-02)", () => {
-  it("never sends again a dispatch claimed and left unconfirmed — a crash, or an answer that never came", async () => {
-    const p = await project({ students: 2 });
-    const [crashed, silent] = p.repos;
-    await scoredRun(crashed!);
-    await scoredRun(silent!);
+  it("never sends again a dispatch claimed and left unconfirmed — a crash, an answer that never came, a 5xx", async () => {
+    const p = await project({ students: 3 });
+    const [crashed, silent, failing5xx] = p.repos;
+    for (const repo of p.repos) await scoredRun(repo);
     // A crash between the claim and the call: the row is there, unconfirmed.
     await server.app.db
       .insert(gradeDispatches)
       .values({ id: randomUUID(), repoId: crashed!.id, trigger: "deadline", sha: "c".repeat(40), createdAt: at(DEADLINE, GRACE) });
     failing.set(silent!.fullName!, "network");
+    // GitHub may have acted on a 502 before failing: never sent again either.
+    failing.set(failing5xx!.fullName!, "502");
 
     await freeze(p.id);
     await runDispatches(p.id);
     expect(dispatched).toEqual([]);
-    const [unconfirmed] = await ledger(silent!.id);
-    expect(unconfirmed).toMatchObject({ dispatchedAt: null });
+    for (const repo of [silent!, failing5xx!]) expect(await ledger(repo.id)).toEqual([expect.objectContaining({ dispatchedAt: null })]);
     const [entry] = await auditOf(p.id, "project.review_dispatched");
-    expect(entry!.payload).toMatchObject({ dispatched: 0, unconfirmed: 1, failed: [] });
+    expect(entry!.payload).toMatchObject({ dispatched: 0, unconfirmed: 2, failed: [] });
     // Not a failure: the lease given back, and nothing claimed again.
     expect((await projectRow(p.id)).dispatchJobAt).toBeNull();
     failing.clear();
@@ -364,12 +380,12 @@ describe("at most once (product owner, 2026-10-02)", () => {
     expect(await ledger(crashed!.id)).toHaveLength(1);
   });
 
-  it("gives back the claim GitHub refused and sends it some 30 s on; a 404 is terminal", async () => {
+  it("gives back the claim GitHub refused (a 4xx) and sends it some 30 s on; a 404 is terminal", async () => {
     const p = await project({ students: 2 });
     const [refused, gone] = p.repos;
     await scoredRun(refused!);
     await scoredRun(gone!);
-    failing.set(refused!.fullName!, "500");
+    failing.set(refused!.fullName!, "422");
     failing.set(gone!.fullName!, "404");
     await freeze(p.id);
     const [job] = jobsOf(p.id);

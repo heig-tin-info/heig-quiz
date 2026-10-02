@@ -452,8 +452,8 @@ export const botCommits = pgTable(
  * dispatch; `dispatched_at` is set once GitHub accepted it. AT MOST ONCE
  * (product owner, 2026-10-02; M3-05b): a row is never sent again — one left
  * without `dispatched_at` (a crash between the claim and the call, a call
- * whose answer never came) stays "not confirmed" for the staff; only a call
- * GitHub answered with an error gives its claim back. One row per
+ * whose answer never came, a 5xx) stays "not confirmed" for the staff; only
+ * a 4xx gives its claim back. One row per
  * (repository, final review) and per (repository, checkpoint): the unique
  * index coalesces the final review's null checkpoint. A reopen forgets a
  * repository's `deadline` rows (M3-05a).

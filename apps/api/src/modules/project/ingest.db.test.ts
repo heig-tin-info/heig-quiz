@@ -41,6 +41,7 @@ import {
   githubAccounts,
   githubClassroomLinks,
   githubOrganizations,
+  gradeDispatches,
   projectGradeRuns,
   projectRepos,
   projects,
@@ -732,9 +733,24 @@ describe("a completed run (F-PROJ-10, ADR-011)", () => {
 });
 
 describe("a review run (F-PROJ-11)", () => {
-  /** A review run, dispatched by Quiz's App unless `over` says otherwise. */
+  const MINUTE = 60_000;
+  const ago = (ms: number) => new Date(server.clock.now().getTime() - ms).toISOString();
+  /** A review run, dispatched by Quiz's App and started now, unless `over` says otherwise. */
   const review = (f: Fixture, sha: string, over: Record<string, unknown> = {}) =>
-    runPayload(f, sha, { event: "repository_dispatch", actor: { login: APP_BOT }, triggering_actor: { login: APP_BOT }, ...over });
+    runPayload(f, sha, {
+      event: "repository_dispatch",
+      actor: { login: APP_BOT },
+      triggering_actor: { login: APP_BOT },
+      run_started_at: server.clock.now().toISOString(),
+      ...over,
+    });
+  /** Frozen for good two minutes ago, its final review asked a minute ago (`grade_dispatches`). */
+  const frozenAndAsked = async (f: Fixture, sha: string) => {
+    await server.app.db.update(projectRepos).set({ frozenAt: new Date(ago(2 * MINUTE)) }).where(eq(projectRepos.id, f.repo.id));
+    await server.app.db
+      .insert(gradeDispatches)
+      .values({ id: randomUUID(), repoId: f.repo.id, trigger: "deadline", sha, createdAt: new Date(ago(MINUTE)), dispatchedAt: new Date(ago(MINUTE)) });
+  };
 
   it("is stored, and fills the review slot only once the freeze is definitive, parsed and successful", async () => {
     const f = await acceptedRepo();
@@ -748,7 +764,7 @@ describe("a review run (F-PROJ-11)", () => {
     expect(await runOf(f, checkpoint.workflow_run.id)).toMatchObject({ kind: "review", points: 5 });
     expect((await repoRow(f.projectId)).reviewGradeRunId).toBeNull();
 
-    await server.app.db.update(projectRepos).set({ frozenAt: new Date(DEADLINE) }).where(eq(projectRepos.id, f.repo.id));
+    await frozenAndAsked(f, botHead);
     const failed = review(f, botHead, { conclusion: "failure" });
     await handled("workflow_run", failed);
     expect((await repoRow(f.projectId)).reviewGradeRunId).toBeNull();
@@ -765,7 +781,7 @@ describe("a review run (F-PROJ-11)", () => {
     await push(f, { "src/main.c": "int main(){return 0;}" });
     const sha = head(f);
     scored(sha, { title: "GRADE", message: "6/6" });
-    await server.app.db.update(projectRepos).set({ frozenAt: new Date(DEADLINE) }).where(eq(projectRepos.id, f.repo.id));
+    await frozenAndAsked(f, sha);
 
     const own = review(f, sha, { actor: { login: f.student.login }, triggering_actor: { login: f.student.login } });
     await handled("workflow_run", own);
@@ -777,9 +793,57 @@ describe("a review run (F-PROJ-11)", () => {
     await handled("workflow_run", rerun);
     expect((await repoRow(f.projectId)).reviewGradeRunId).toBeNull();
 
+    // No triggering actor at all: a person's, failing closed — the actor alone is not trusted.
+    const anonymous = review(f, sha, { triggering_actor: null });
+    await handled("workflow_run", anonymous);
+    expect((await repoRow(f.projectId)).reviewGradeRunId).toBeNull();
+
     const app = review(f, sha);
     await handled("workflow_run", app);
     expect((await repoRow(f.projectId)).reviewGradeRunId).toBe((await runOf(f, app.workflow_run.id))!.id);
+  });
+
+  it("never takes for the final review a run started before the freeze or before it was asked: a checkpoint's, a pre-reopen one (M3-05b)", async () => {
+    const f = await acceptedRepo({ protectedFiles: [] });
+    await push(f, { "src/main.c": "int main(){return 1;}" });
+    const sha = head(f);
+    scored(sha, { title: "GRADE", message: "4/6" });
+
+    // Frozen, but no final review asked: a run started now is a checkpoint's (or a student's).
+    await server.app.db.update(projectRepos).set({ frozenAt: new Date(ago(2 * MINUTE)) }).where(eq(projectRepos.id, f.repo.id));
+    const unasked = review(f, sha);
+    await handled("workflow_run", unasked);
+    expect((await repoRow(f.projectId)).reviewGradeRunId).toBeNull();
+
+    await frozenAndAsked(f, sha);
+    // Started before the freeze — a checkpoint's run, or one from before a reopen — delivered after it.
+    const early = review(f, sha, { run_started_at: ago(3 * MINUTE) });
+    await handled("workflow_run", early);
+    // Started after the freeze but before the dispatch was claimed.
+    const between = review(f, sha, { run_started_at: ago(MINUTE + 30_000) });
+    await handled("workflow_run", between);
+    // No start time known: never.
+    const unknown = review(f, sha, { run_started_at: null });
+    await handled("workflow_run", unknown);
+    expect((await repoRow(f.projectId)).reviewGradeRunId).toBeNull();
+    expect(await runOf(f, early.workflow_run.id)).toMatchObject({ kind: "review", points: 4 });
+
+    const final = review(f, sha);
+    await handled("workflow_run", final);
+    expect((await repoRow(f.projectId)).reviewGradeRunId).toBe((await runOf(f, final.workflow_run.id))!.id);
+  });
+
+  it("never fills the slot with a run to verify: the protection suspended (M3-05b)", async () => {
+    const f = await acceptedRepo({ protectedFiles: [] });
+    await push(f, { "src/main.c": "int main(){return 2;}" });
+    const sha = head(f);
+    scored(sha, { title: "GRADE", message: "6/6" });
+    await frozenAndAsked(f, sha);
+    await server.app.db.update(projectRepos).set({ protectionSuspendedAt: new Date(ago(MINUTE)) }).where(eq(projectRepos.id, f.repo.id));
+    const run = review(f, sha);
+    await handled("workflow_run", run);
+    expect(await runOf(f, run.workflow_run.id)).toMatchObject({ kind: "review", toVerify: true });
+    expect((await repoRow(f.projectId)).reviewGradeRunId).toBeNull();
   });
 });
 

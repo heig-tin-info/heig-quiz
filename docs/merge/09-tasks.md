@@ -1081,38 +1081,52 @@ under the half that serves them.
     `grade_dispatches` row), `projects.dispatch_job_at` (the dispatch
     lease).
   - **Leases** (`Q:modules/project/lease.ts`, shared with the deadline):
-    `claimLeases(db, key, now, work, projectId?)`, `heldLease(app, key,
-    projectId, lease)` (renew, release, `expireSoon`), `forEachLimit`,
-    `REPO_CONCURRENCY`, `LEASE_MS`, `FAILED_RETRY_MS`; `jobs.ts` keeps
-    `DEADLINE_LEASE_MS` and `DeadlineJob` as aliases. `hintStaff` moved to
-    `repos.ts` as `hintProjectStaff`.
+    `claimLeases(db, key, now, work, projectId?)`, `ProjectJob`,
+    `LEASE_MS`, `FAILED_RETRY_MS`, and ONE frame for both jobs,
+    `runLeased(app, config, key, job, label, body)`: the lease compared,
+    the installation's client, `each(repos, settle)` (four at a time, a
+    renewal after each, a throw counted failed and logged; returns the
+    failed full names), then lost ⇒ return, failed ⇒ backdated lease and
+    throw, else released. `runDeadlineJob` and `runReviewJob` are bodies
+    in it. `hintStaff` moved to `repos.ts` as `hintProjectStaff`.
   - **The dispatch** (`Q:modules/project/review.ts`): the tick's step 6,
-    `claimReviewWork` (queue only) → `project.dispatch` (`PROJECT_DISPATCH_QUEUE`,
-    `retryLimit: 0`) → `runReviewJob`: first the final reviews
-    (`FINAL_REVIEW_DUE`: `LIVE`, graded `auto`, `frozen_at` and
-    `frozen_grade_run_id` set, `archived_at` null, no `deadline` ledger
-    row), then each checkpoint due (`checkpointDue`: date come, not
-    dispatched, before the project's deadline, project not a draft) to the
-    `LIVE` repositories with `deadline_applied_at` null — "not yet frozen"
-    read as not even provisionally, so a checkpoint's run never lands in
-    the freeze and fills the review slot. Each repository: one transaction
-    (project `FOR SHARE`, checkpoint `FOR SHARE`, repository `FOR UPDATE`)
-    re-reads it and claims the ledger row (`createdAt` = the clock, `sha`
-    sent); then `POST /repos/{o}/{r}/dispatches` with Octokit's retries off.
-    Outcomes: accepted ⇒ `dispatched_at`; an error GitHub answered ⇒ the
-    row deleted and the repository counted `failed` (lease backdated, job
-    throws), a 404 ⇒ `markRepoDeleted(…, "dispatch")`; no response ⇒ the row
-    left unconfirmed, counted `unconfirmed`, not a failure. A checkpoint is
-    marked `dispatched_at` after a pass with no `failed` for it. Audit
+    `claimReviewWork` (queue only) → `project.dispatch`
+    (`PROJECT_DISPATCH_QUEUE`, `retryLimit: 0`) → `runReviewJob`: first
+    the final reviews (`FINAL_REVIEW_DUE`: `LIVE`, graded `auto`,
+    `frozen_at` and `frozen_grade_run_id` set, `archived_at` and
+    `protection_suspended_at` null, no `deadline` ledger row), then each
+    checkpoint that fires (`checkpointFires` of `@quiz/domain`; its SQL
+    twin `checkpointDue` only in the claim) to `CHECKPOINT_TARGET` (`LIVE`,
+    `deadline_applied_at` null — "not yet frozen" read as not even
+    provisionally). Each repository: one transaction (`lockedRepo`: the
+    project `FOR SHARE` read once, the repository `FOR UPDATE` among its
+    target; then the checkpoint `FOR SHARE`) re-reads it and claims the
+    ledger row (`createdAt` = the clock, `sha` sent); then `POST
+    /repos/{o}/{r}/dispatches` with Octokit's retries off. Outcomes:
+    accepted ⇒ `dispatched_at`; a 4xx ⇒ the row deleted, the repository
+    failed (lease backdated, job throws), a 404 ⇒
+    `markRepoDeleted(…, "dispatch")`; no response or a 5xx ⇒ the row left
+    unconfirmed, counted `unconfirmed`, not a failure. A checkpoint is
+    marked `dispatched_at` after a pass with no failure for it. Audit
     `project.review_dispatched` and `project.checkpoint_dispatched`
     (`checkpointId`, `name`) `{dispatched, deleted, unconfirmed, failed}`
     per pass that changed something; `project_repo.review_skipped`
-    `{projectId, reason: "archived"}` written by the freeze step of the
-    tick (archived before the freeze) or by the job (archived meanwhile).
+    `{projectId, reason: "archived" | "protection_suspended"}` written by
+    `jobs.ts` only: the freeze step, or the deadline job archiving a
+    repository already frozen.
   - **The review slot** (`grading.ts`): `CompletedRun.triggeredBy`
-    (`pushedBy` of `workflow_run.triggering_actor`, else `actor`); the
-    slot fills only for `app`. A student's own dispatch, or their re-run of
-    the App's, is stored as a `review` trace.
+    (`pushedBy` of `workflow_run.triggering_actor` alone; none ⇒ `person`)
+    and `startedAt` (`run_started_at`; null ⇒ never). The slot fills for a
+    parsed, successful `review` run only when `app`, not `to_verify`, and
+    started at or after the repository's `frozen_at` and after its
+    `deadline` ledger row's `created_at` (a conditional UPDATE on the row
+    as it stands). A student's own dispatch or re-run, a checkpoint's run,
+    a pre-reopen run are `review` traces. The `workflow_run` event carries
+    no `client_payload`: a checkpoint's run STARTED after the final review
+    was asked would pass, which `CHECKPOINT_TARGET` makes impossible in
+    practice.
+  - **Domain** (`@quiz/domain` `reviewDispatch.ts`): `isVoidCheckpoint`,
+    `checkpointRefusal(dueAt, deadlineAt, now)`, `checkpointFires`.
   - **Checkpoints** (`Q:modules/project/checkpoints.ts`, staff,
     `accessibleProject`): `GET|POST /app/api/projects/:id/checkpoints`
     (`ReviewCheckpointCreate` → `ReviewCheckpoint`, 201; resolved under the
@@ -1161,10 +1175,13 @@ under the half that serves them.
   S's runs stay unflagged. Close them here, where the reconciliation reads
   the same rows.
 - **From M3-05b** (2026-10-02): `CompletedRun` gained `triggeredBy`
-  (`pushedBy(config, run.triggering_actor?.login ?? run.actor?.login)`):
-  the listing of `actions/runs` carries both, and a reconciled review run
-  fills the review slot only when it is `app`. The reconciliation never
-  re-sends a review dispatch: an unconfirmed ledger row stays as it is.
+  (`pushedBy(config, run.triggering_actor?.login)` — the triggering actor
+  alone, none is a person's) and `startedAt` (`run_started_at`, null when
+  absent): the listing of `actions/runs` carries both, and a reconciled
+  review run fills the review slot only under the same rule as the
+  webhook's (App-triggered, not `to_verify`, started after the freeze and
+  after the `deadline` ledger row). The reconciliation never re-sends a
+  review dispatch: an unconfirmed ledger row stays as it is.
 
 ### M3-07 — Sync of the source repository
 - **Depends on**: M2-04, M3-02, D12. ‖ M3-05, M3-06.
@@ -1351,7 +1368,9 @@ that serves them.
 - **From M3-05b** (product owner, 2026-10-02): each repository shows its
   **final review** from its `grade_dispatches` row (`trigger = deadline`):
   none and frozen with no frozen run ⇒ "no review"; none and archived as
-  its lock ⇒ "no review" as degraded (audit `project_repo.review_skipped`);
+  its lock, or with its protection suspended ⇒ "no review" as degraded
+  (audit `project_repo.review_skipped`, `reason`; a re-enabled protection
+  makes the review due again); a 5xx is "not confirmed" too;
   a row with `dispatched_at` ⇒ asked at that time, of `sha`; a row without
   ⇒ **"not confirmed"** (claimed, GitHub's acceptance never recorded: a
   crash or no response — never sent again; a manual re-dispatch is a later

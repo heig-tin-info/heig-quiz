@@ -19,7 +19,8 @@
  *    `deadline_applied_at` (audited `project_repo.deadline_applied`);
  * 4. a repository past its effective deadline + the grace is frozen for
  *    good (`frozen_at`, audited `project_repo.frozen`; one archived as its
- *    lock is audited `project_repo.review_skipped`, M3-05b);
+ *    lock or with its protection suspended is audited
+ *    `project_repo.review_skipped`, M3-05b);
  * 5. with a queue only, a project with GitHub work left (`NEEDS_WORK`) has
  *    its LEASE taken (`deadline_job_at`, null or ten minutes old) and one
  *    `project.deadline` job sent;
@@ -55,34 +56,26 @@ import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { botCommits, classrooms, projectRepos, projects } from "../../db/schema.js";
-import { githubApp, githubStatus, installationClient, ownerRepo } from "../../github/app.js";
+import { githubApp, githubStatus, ownerRepo } from "../../github/app.js";
 import { pushEmptyCommit } from "../../github/commit.js";
 import { lockStudentRepo, setRepoArchived, unlockStudentRepo } from "../../github/lock.js";
 import { isPlanRestriction } from "../../github/provision.js";
 import { PROJECT_DEADLINE_QUEUE, PROJECT_DISPATCH_QUEUE, type JobQueue } from "../../jobs.js";
 import type { TickTask } from "../../ticker.js";
-import { projectInstallation } from "../github/service.js";
 import { DomainError } from "../http.js";
 import { COMMIT_DUE, EFFECTIVE_DEADLINE, LIVE, NEEDS_WORK, ts } from "./deadline.js";
-import { claimLeases, forEachLimit, heldLease, LEASE_MS, REPO_CONCURRENCY, type ProjectJob } from "./lease.js";
+import { claimLeases, runLeased, type ProjectJob } from "./lease.js";
 import { publishProject } from "./lifecycle.js";
 import { hintProjectStaff, hintRepo, markRepoDeleted, type RepoRow } from "./repos.js";
-import { auditReviewSkipped, claimReviewWork, runReviewJob } from "./review.js";
+import { claimReviewWork, runReviewJob } from "./review.js";
 import type { ProjectRow } from "./views.js";
-
-export { FAILED_RETRY_MS } from "./lease.js";
 
 /** How often the ticker looks (N-PERF-07: a deadline starts applying within 60 s). */
 export const PROJECT_TICK_MS = 20_000;
-/** A lease older than this was left by a job that crashed or gave up: the work is claimed again. */
-export const DEADLINE_LEASE_MS = LEASE_MS;
 /** Steps one repository may take in one job (a lock, then the unlock asked meanwhile, ...). */
 const MAX_STEPS = 3;
 
 // ---------------------------------------------------------------- the ticker: claim and enqueue
-
-/** One project's deadline work, as the queue carries it: `projects.deadline_job_at` as the claim set it. */
-export type DeadlineJob = ProjectJob;
 
 /**
  * Step 1: the scheduled drafts whose start has come, published by
@@ -197,15 +190,37 @@ async function freezeDue(db: Db, now: Date): Promise<string[]> {
         projectId: projectRepos.projectId,
         deadlineAt: EFFECTIVE_DEADLINE.mapWith(projects.deadlineAt),
         archivedAt: projectRepos.archivedAt,
+        protectionSuspendedAt: projectRepos.protectionSuspendedAt,
         gradingMode: projects.gradingMode,
       });
     await auditRepos(tx, "project_repo.frozen", frozen);
-    // A repository archived for its lock (H8) gets no final review (M3-05b): said once, here.
-    await auditReviewSkipped(
-      tx,
-      frozen.filter((r) => r.archivedAt !== null && r.gradingMode === "auto"),
-    );
+    for (const repo of frozen) {
+      if (repo.gradingMode !== "auto") continue;
+      if (repo.archivedAt !== null) await auditReviewSkipped(tx, repo, "archived");
+      else if (repo.protectionSuspendedAt !== null) await auditReviewSkipped(tx, repo, "protection_suspended");
+    }
     return frozen.map((r) => r.projectId);
+  });
+}
+
+/**
+ * `project_repo.review_skipped` (M3-05b): a repository frozen for good gets
+ * no final review — archived as its lock (H8; never un-archived for a
+ * review), or its protected files no longer restored (F-PROJ-08; its
+ * teacher's score settles it). Said at the freeze, or when the archive
+ * comes after it.
+ */
+async function auditReviewSkipped(
+  db: Db | Tx,
+  repo: { id: string; projectId: string },
+  reason: "archived" | "protection_suspended",
+): Promise<void> {
+  await audit(db, {
+    ...SYSTEM_ACTOR,
+    action: "project_repo.review_skipped",
+    subjectType: "project_repo",
+    subjectId: repo.id,
+    payload: { projectId: repo.projectId, reason },
   });
 }
 
@@ -214,7 +229,7 @@ async function freezeDue(db: Db, now: Date): Promise<string[]> {
  * GitHub work left (or of `projectId` only), taken when it is free or
  * expired.
  */
-function claimDeadlineWork(db: Db, now: Date, projectId?: string): Promise<DeadlineJob[]> {
+function claimDeadlineWork(db: Db, now: Date, projectId?: string): Promise<ProjectJob[]> {
   const work = sql`EXISTS (SELECT 1 FROM ${projectRepos} WHERE ${projectRepos.projectId} = ${projects.id} AND ${LIVE} AND ${NEEDS_WORK})`;
   return claimLeases(db, "deadlineJobAt", now, work, projectId);
 }
@@ -225,7 +240,7 @@ function claimDeadlineWork(db: Db, now: Date, projectId?: string): Promise<Deadl
  * them here, in the request. The ticker never gets here without a queue
  * ({@link projectTick}).
  */
-async function dispatch(app: FastifyInstance, config: AppConfig, jobs: DeadlineJob[]): Promise<void> {
+async function sendDeadlineJobs(app: FastifyInstance, config: AppConfig, jobs: ProjectJob[]): Promise<void> {
   for (const job of jobs) {
     if (app.boss) {
       await app.boss.send(PROJECT_DEADLINE_QUEUE, job);
@@ -254,14 +269,14 @@ export async function projectTick(app: FastifyInstance, config: AppConfig): Prom
   ];
   await hintProjectStaff(app.db, changed);
   if (!app.boss) return;
-  await dispatch(app, config, await claimDeadlineWork(app.db, now));
+  await sendDeadlineJobs(app, config, await claimDeadlineWork(app.db, now));
   // The final reviews and the checkpoints due (M3-05b): their own lease, their own queue.
   for (const job of await claimReviewWork(app.db, now)) await app.boss.send(PROJECT_DISPATCH_QUEUE, job);
 }
 
 /** The project's deadline work, asked by a staff action: claimed and run unless a job already holds it. */
 export async function requestDeadlineWork(app: FastifyInstance, config: AppConfig, projectId: string): Promise<void> {
-  await dispatch(app, config, await claimDeadlineWork(app.db, app.clock.now(), projectId));
+  await sendDeadlineJobs(app, config, await claimDeadlineWork(app.db, app.clock.now(), projectId));
 }
 
 /** The ticker's project task (ADR-006 addendum): clock-bound, neither configurable nor disableable. */
@@ -270,7 +285,7 @@ export const PROJECT_TASKS: readonly TickTask[] = [{ name: "project.deadlines", 
 /** The workers of `project.deadline` and `project.dispatch`, registered only with Quiz's App (`app.ts`). */
 export async function registerProjectJobs(app: FastifyInstance, queue: JobQueue, config: AppConfig): Promise<void> {
   await queue.createQueue(PROJECT_DEADLINE_QUEUE, { retryLimit: 0 });
-  await queue.work<DeadlineJob>(PROJECT_DEADLINE_QUEUE, (job) => runDeadlineJob(app, config, job));
+  await queue.work<ProjectJob>(PROJECT_DEADLINE_QUEUE, (job) => runDeadlineJob(app, config, job));
   await queue.createQueue(PROJECT_DISPATCH_QUEUE, { retryLimit: 0 });
   await queue.work<ProjectJob>(PROJECT_DISPATCH_QUEUE, (job) => runReviewJob(app, config, job));
 }
@@ -408,6 +423,8 @@ async function settleRepo(app: FastifyInstance, octokit: Octokit, repoId: string
           subjectId: repo.id,
           payload: { projectId: project.id, protected: repo.rulesetId !== null },
         });
+        // Archived after its freeze (a staff lock): its final review, if not asked yet, never comes.
+        if (repo.frozenAt !== null && project.gradingMode === "auto") await auditReviewSkipped(db, repo, "archived");
       }
       steps.push(archived ? "archived" : "locked");
     } else if (!state.wantsLock && locked) {
@@ -431,59 +448,37 @@ async function settleRepo(app: FastifyInstance, octokit: Octokit, repoId: string
 }
 
 /**
- * The `project.deadline` job: every repository of the project with GitHub
- * work left settled, the lease renewed after each, then given back.
- * Nothing when the lease is no longer the job's (given back, or taken over
- * after it expired), and it stops as soon as a renewal finds it taken
- * over. Without the App on the organization it waits, the lease kept, for
- * the sweep ten minutes on — no retry loop. A repository that fails throws
- * once the others are done: the lease is backdated, and the next tick resumes.
+ * The `project.deadline` job, in the leased frame (`runLeased`): every
+ * repository of the project with GitHub work left settled, four at a time.
+ * A 404 is the repository deleted: terminal, never retried (F-PROJ-18); any
+ * other failure fails the job once the others are done.
  */
-export async function runDeadlineJob(app: FastifyInstance, config: AppConfig, job: DeadlineJob): Promise<void> {
+export async function runDeadlineJob(app: FastifyInstance, config: AppConfig, job: ProjectJob): Promise<void> {
   const db = app.db;
-  const [project] = await db.select().from(projects).where(eq(projects.id, job.projectId));
-  if (!project || project.deadlineJobAt?.toISOString() !== job.lease) return;
-  const org = await projectInstallation(db, project.orgId);
-  if (!org) return;
-  const { octokit } = await installationClient(config, org.installationId);
-  const repos = await db
-    .select({ id: projectRepos.id, fullName: projectRepos.fullName })
-    .from(projectRepos)
-    .innerJoin(projects, eq(projects.id, projectRepos.projectId))
-    .where(and(eq(projectRepos.projectId, project.id), LIVE, NEEDS_WORK));
-
-  const lease = heldLease(app, "deadlineJobAt", project.id, project.deadlineJobAt);
-  const tally: Tally = { locked: 0, unlocked: 0, committed: 0, deleted: 0 };
-  const failed: string[] = [];
-  const settle = async (repo: (typeof repos)[number]) => {
-    try {
-      for (const step of await settleRepo(app, octokit, repo.id)) tally[step === "archived" ? "locked" : step] += 1;
-    } catch (err) {
-      if (githubStatus(err) === 404) {
-        // Gone from GitHub: terminal, never retried (F-PROJ-18).
+  await runLeased(app, config, "deadlineJobAt", job, "project deadline", async ({ project, octokit, each }) => {
+    const repos = await db
+      .select({ id: projectRepos.id, fullName: projectRepos.fullName })
+      .from(projectRepos)
+      .innerJoin(projects, eq(projects.id, projectRepos.projectId))
+      .where(and(eq(projectRepos.projectId, project.id), LIVE, NEEDS_WORK));
+    const tally: Tally = { locked: 0, unlocked: 0, committed: 0, deleted: 0 };
+    const failed = await each(repos, async (repo) => {
+      try {
+        for (const step of await settleRepo(app, octokit, repo.id)) tally[step === "archived" ? "locked" : step] += 1;
+      } catch (err) {
+        if (githubStatus(err) !== 404) throw err;
         if (await markRepoDeleted(db, repo.id, app.clock.now(), "deadline")) tally.deleted += 1;
-      } else {
-        app.log.error({ err, repo: repo.fullName }, "project deadline: a repository failed");
-        failed.push(repo.fullName!);
       }
-    }
-    await lease.renew();
-  };
-  await forEachLimit(repos, REPO_CONCURRENCY, settle, lease.lost);
-  // One entry per pass that changed something: a retry that only fails again stays in the log.
-  if (Object.values(tally).some((n) => n > 0)) {
-    await audit(db, {
-      ...SYSTEM_ACTOR,
-      action: "project.deadline_enforced",
-      subjectType: "project",
-      subjectId: project.id,
-      payload: { strategy: project.deadlineStrategy, ...tally, failed },
     });
-  }
-  if (lease.lost()) return; // the job that took over finishes the work
-  if (failed.length > 0) {
-    await lease.expireSoon();
-    throw new Error(`project deadline incomplete: ${failed.join(", ")}`);
-  }
-  await lease.release();
+    // One entry per pass that changed something: a retry that only fails again stays in the log.
+    if (Object.values(tally).some((n) => n > 0)) {
+      await audit(db, {
+        ...SYSTEM_ACTOR,
+        action: "project.deadline_enforced",
+        subjectType: "project",
+        subjectId: project.id,
+        payload: { strategy: project.deadlineStrategy, ...tally, failed },
+      });
+    }
+  });
 }

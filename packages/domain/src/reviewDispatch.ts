@@ -106,3 +106,42 @@ export function planCheckpointReviewDispatch(
 export function checkpointDueAt(deadlineAt: Date, offsetDays: number): Date {
   return addZonedDays(deadlineAt, offsetDays);
 }
+
+/**
+ * A checkpoint is void once its date is no longer before the project's
+ * deadline (the deadline moved earlier): it never fires, and may be deleted
+ * (product owner, 2026-10-02; merge task M3-05b).
+ */
+export function isVoidCheckpoint(dueAt: Date, deadlineAt: Date): boolean {
+  return dueAt.getTime() >= deadlineAt.getTime();
+}
+
+/**
+ * Why a checkpoint cannot be created at `dueAt` (its resolved date): at or
+ * before now (`due_past`), or void from the start (`due_after_deadline`).
+ * Null when it may.
+ */
+export function checkpointRefusal(dueAt: Date, deadlineAt: Date, now: Date): "due_past" | "due_after_deadline" | null {
+  if (dueAt.getTime() <= now.getTime()) return "due_past";
+  if (isVoidCheckpoint(dueAt, deadlineAt)) return "due_after_deadline";
+  return null;
+}
+
+/**
+ * A checkpoint fires now: not dispatched, its date come, not void, on a
+ * project out of its draft that reviews (graded `auto`, not archived).
+ */
+export function checkpointFires(
+  checkpoint: { dueAt: Date; dispatchedAt: Date | null },
+  project: { deadlineAt: Date; state: string; gradingMode: string; archivedAt: Date | null },
+  now: Date,
+): boolean {
+  return (
+    checkpoint.dispatchedAt === null &&
+    checkpoint.dueAt.getTime() <= now.getTime() &&
+    !isVoidCheckpoint(checkpoint.dueAt, project.deadlineAt) &&
+    project.state !== "draft" &&
+    project.gradingMode === "auto" &&
+    project.archivedAt === null
+  );
+}

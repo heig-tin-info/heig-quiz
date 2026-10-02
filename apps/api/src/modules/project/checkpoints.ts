@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 
 import type { ReviewCheckpoint, ReviewCheckpointCreate } from "@quiz/contracts";
-import { checkpointDueAt } from "@quiz/domain";
+import { checkpointDueAt, checkpointRefusal } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import { isoOrNull } from "../../clock.js";
@@ -61,9 +61,12 @@ export async function createCheckpoint(
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
     const deadline = project!.deadlineAt;
     const dueAt = body.offsetDays !== undefined ? checkpointDueAt(deadline, body.offsetDays) : new Date(body.dueAt!);
-    if (dueAt.getTime() <= now.getTime()) throw new ProjectError("due_past", "The checkpoint's date has passed");
-    if (dueAt.getTime() >= deadline.getTime()) {
-      throw new ProjectError("due_after_deadline", "A checkpoint must come before the project's deadline");
+    const refusal = checkpointRefusal(dueAt, deadline, now);
+    if (refusal) {
+      throw new ProjectError(
+        refusal,
+        refusal === "due_past" ? "The checkpoint's date has passed" : "A checkpoint must come before the project's deadline",
+      );
     }
     const [row] = await tx
       .insert(projectCheckpoints)

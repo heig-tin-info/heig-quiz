@@ -123,44 +123,56 @@ win over a pass already under way.
 ## Addendum (2026-10-02, merge task M3-05b): the review dispatches
 
 The final review and the review checkpoints take the same shape, decided
-by the product owner (points 1 to 4) and the orchestrator (point 5):
+by the product owner (points 2 to 5) and the orchestrator (points 1, 6 and
+the review round's tightening of 2, 4 and 6):
 
-1. **A lease of their own.** `projects.dispatch_job_at` (migration `0060`),
-   taken, renewed, backdated and given back exactly as `deadline_job_at`
-   (`modules/project/lease.ts`, now shared by both), so a deadline's locks
-   never wait for a review nor the reverse. The ticker claims it, WITH A
-   QUEUE ONLY, for each project with a final review or a checkpoint due,
-   and sends one `project.dispatch` job (`retryLimit: 0`); nothing in a
-   tick calls GitHub, and without a queue no review is ever dispatched.
+1. **A lease of their own, one frame.** `projects.dispatch_job_at`
+   (migration `0060`), taken, renewed, backdated and given back exactly as
+   `deadline_job_at`; both jobs run in ONE frame, `runLeased` of
+   `modules/project/lease.ts` (the lease compared, the installation's
+   client, the repositories four at a time with a renewal after each, a
+   lost lease → stop, a failure → backdated lease and throw, else
+   released). The ticker claims the dispatch lease, WITH A QUEUE ONLY, for
+   each project with a final review or a checkpoint due, and sends one
+   `project.dispatch` job (`retryLimit: 0`); nothing in a tick calls
+   GitHub, and without a queue no review is ever dispatched.
 2. **At most once.** Each repository's dispatch is claimed in the
    `grade_dispatches` ledger (`ON CONFLICT DO NOTHING`, the sha it sends
    recorded) in a transaction that re-reads the repository under its row
    lock — a reopen landing meanwhile wins, and forgets the repository's
    `deadline` rows. A ledger row is NEVER sent again: one left without
-   `dispatched_at` (a crash between the claim and the call, a request
-   that got no response) is "not confirmed" for the staff (M3-08). Only an
-   error GitHub answered gives the claim back for the next pass (the lease
-   backdated); a 404 marks the repository deleted. Octokit's retries are
-   turned off for this one call. heig-classroom retried an unconfirmed row
-   (at least once): a review costs the organization an LLM call and may
-   overwrite the slot, so a duplicate is worse than a missing one, which
-   the staff see.
+   `dispatched_at` — a crash between the claim and the call, a request that
+   got no response, or a **5xx**, which GitHub may have acted on — is "not
+   confirmed" for the staff (M3-08). Only a **4xx** gives the claim back
+   for the next pass (the lease backdated); a 404 marks the repository
+   deleted. Octokit's retries are turned off for this one call.
+   heig-classroom retried an unconfirmed row (at least once): a review
+   costs the organization an LLM call and may overwrite the slot, so a
+   duplicate is worse than a missing one, which the staff see.
 3. **Per repository, at its definitive freeze**, at the frozen run's
    commit with the repository's EFFECTIVE deadline in the payload; never
-   for a project graded `none`, a repository without a frozen run, nor one
-   archived as its lock (H8: no ledger row, audited
-   `project_repo.review_skipped` — by the ticker at the freeze, or by the
-   job meeting it —, never un-archived for a review).
-   `projects.review_dispatched_at` is dropped: the ledger says it.
-4. **Only Quiz's review counts**: the review slot takes a `review` run
-   only when its triggering actor (else its actor) is Quiz's App
-   (`CompletedRun.triggeredBy`).
+   for a project graded `none`, a repository without a frozen run, one
+   archived as its lock (H8; never un-archived for a review) nor one whose
+   protection is suspended (F-PROJ-08; its teacher's score settles it) —
+   both audited `project_repo.review_skipped` with their `reason`, by the
+   ticker at the freeze or by the deadline job archiving a repository
+   already frozen. `projects.review_dispatched_at` is dropped: the ledger
+   says it.
+4. **Only Quiz's final review counts**: the review slot takes a `review`
+   run only when its `triggering_actor` is Quiz's App (none: a person's,
+   failing closed), it is not `to_verify`, and it STARTED
+   (`run_started_at`) at or after the repository's `frozen_at` and after
+   its `deadline` ledger row was claimed — so neither a checkpoint's run
+   nor one from before a reopen, delivered late, is taken for it. The
+   `workflow_run` event does not carry the dispatch's `client_payload`:
+   a checkpoint's run started after the final review was asked would
+   still pass, which (5) makes impossible in practice.
 5. **Checkpoints** fire at their date while they lie before the project's
-   deadline (else void: never, but deletable), to every live repository
-   whose effective deadline has not come, on the last receipt before the
-   date that no bot pushed; a checkpoint is marked dispatched once a pass
-   met no refusal. A repository already at its deadline (even in its
-   grace) gets none, so a checkpoint's run can never arrive after the
-   freeze and be taken for the final review. Deleting one is refused once
-   any ledger row names it; the deletion and the claim are ordered by the
-   checkpoint's row lock.
+   deadline (else void: never, but deletable; `checkpointFires` and
+   `checkpointRefusal` of `@quiz/domain`, their SQL twin only in the
+   claim), to every live repository whose effective deadline has not
+   come (`CHECKPOINT_TARGET`), on the last receipt before the date that no
+   bot pushed; a checkpoint is marked dispatched once a pass met no
+   refusal. A repository already at its deadline (even in its grace) gets
+   none. Deleting one is refused once any ledger row names it; the
+   deletion and the claim are ordered by the checkpoint's row lock.
