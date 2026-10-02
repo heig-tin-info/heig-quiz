@@ -27,7 +27,17 @@ import {
   usePersistentChoice,
 } from "../ui";
 import { endable, useEndPoll } from "./actions";
-import { activityOrder, BUCKETS, isLive, matches, TYPES, type ActivityType, type Bucket } from "./model";
+import {
+  activityOrder,
+  BUCKETS,
+  isLive,
+  matches,
+  typeName,
+  typeOf,
+  TYPES,
+  type ActivityType,
+  type Bucket,
+} from "./model";
 import { ActivityTimeline } from "./Timeline";
 import {
   ActivityCards,
@@ -35,7 +45,6 @@ import {
   ActivityTable,
   classroomLabel,
   TYPE_ICON,
-  typeName,
   type ViewProps,
 } from "./views";
 
@@ -86,9 +95,10 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   const live = ordered.filter((row): row is EvaluationActivitySummary => isLive(row, now));
   const shown = ordered.filter((row) => matches(row, { types, buckets }));
   const filtering = types.size > 0 || buckets.size > 0;
-  // The Project chip only where there is a project to find: a platform or a
-  // teacher without any keeps the three chips it had.
-  const chips = ordered.some((row) => row.kind === "project") ? TYPES : TYPES.filter((v) => v !== "project");
+  // A type chip only where there is a row of that type to find: a chip that
+  // can only empty the list is noise (a platform without projects keeps the
+  // three it had).
+  const chips = TYPES.filter((type) => ordered.some((row) => typeOf(row) === type));
 
   const toggle = <V,>(set: ReadonlySet<V>, value: V): Set<V> => {
     const next = new Set(set);

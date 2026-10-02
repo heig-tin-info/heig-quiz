@@ -1,15 +1,18 @@
+import { useQuery } from "@tanstack/react-query";
 import { FolderGit2 } from "lucide-react";
 
 import type { ProjectActivitySummary } from "@quiz/contracts";
 
+import { kindOf } from "../activities/model";
+import { openProps, StateBadge } from "../activities/views";
+import { api } from "../api";
 import { githubAbsent } from "../github/api";
 import { useT } from "../i18n";
+import { classroomProjectsKey } from "../queryKeys";
 import type { Route } from "../router";
 import {
-  Badge,
   Card,
   isoDateTime,
-  pressable,
   QueryError,
   SectionHeading,
   T,
@@ -17,7 +20,6 @@ import {
   useSortableTable,
   type Column,
 } from "../ui";
-import { projectStateLabel, projectStateTone, useClassroomProjects } from "./common";
 
 type SortKey = "title" | "start" | "deadline";
 
@@ -31,9 +33,13 @@ type SortKey = "title" | "start" | "deadline";
  * known yet, and a skeleton that collapses to nothing on most classrooms is
  * a jump on every visit. A failure says so, with a retry.
  *
+ * It carries a heading and the evaluations do not: the tab already names
+ * the evaluations, and the projects are the second thing on it.
+ *
  * No button: "New ▾ › Project" is in the page header, the tab's one primary.
  * A row is a title, its state, its start and its deadline, and opens the
- * project (`ComingSoon` until M3-12); its counts come with M3-08.
+ * project where its page parses (`KIND`'s `home`, M3-12); elsewhere it is
+ * not clickable. Its counts come with M3-08.
  */
 export function ProjectGroup({
   classroomId,
@@ -43,7 +49,11 @@ export function ProjectGroup({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
-  const list = useClassroomProjects(classroomId);
+  // `GET /classrooms/:id/projects` (M3-02), archived ones excepted.
+  const list = useQuery<ProjectActivitySummary[]>({
+    queryKey: classroomProjectsKey(classroomId),
+    queryFn: () => api(`/app/api/classrooms/${classroomId}/projects`),
+  });
   const rows = list.data ?? [];
   const { sorted, sort, toggle } = useSortableTable<ProjectActivitySummary, SortKey>(
     rows,
@@ -81,18 +91,17 @@ export function ProjectGroup({
           <TableHead columns={columns} sort={sort} onToggle={toggle} />
           <tbody>
             {sorted.map((row) => {
-              const open = () => navigate({ view: "project", id: row.id });
+              const opens = kindOf(row).home(row) !== null;
               return (
                 <tr
                   key={row.id}
-                  className={`${T.row} ${T.rowHover} cursor-pointer`}
-                  onClick={open}
-                  {...pressable(open, "row")}
+                  className={opens ? `${T.row} ${T.rowHover} cursor-pointer` : T.row}
+                  {...openProps(row, navigate, "row")}
                 >
                   <td className={T.td}>
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold">{row.title}</span>
-                      <Badge tone={projectStateTone(row.state)}>{projectStateLabel(row.state, t)}</Badge>
+                      <StateBadge row={row} />
                     </span>
                   </td>
                   <td className={`${T.td} ${T.colHigh} tabular-nums text-fg-muted`}>{isoDateTime(row.startAt)}</td>

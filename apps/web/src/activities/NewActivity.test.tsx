@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GithubClassroom } from "@quiz/contracts";
 
@@ -12,8 +12,22 @@ import { fail, mockFetch, ok, renderWithProviders, type Reply } from "../test/re
  * "New ▾" (M3-10): the classroom's one primary on its activities tab, and
  * the GitHub gate of Project — absent without Quiz's App, the Settings'
  * connect sheet on a classroom not connected, the new project on a
- * connected one.
+ * connected one — and nothing of it in a build where the new project does
+ * not parse yet (M3-11).
  */
+
+/*
+ * Whether a `preview` route parses is a build flag (`CLASSROOM_PAGES`); the
+ * tests choose it per case through `routeEnabled`.
+ */
+const gate = vi.hoisted(() => ({ enabled: true }));
+vi.mock("../router", async (original) => ({
+  ...(await original<typeof import("../router")>()),
+  routeEnabled: () => gate.enabled,
+}));
+beforeEach(() => {
+  gate.enabled = true;
+});
 
 const ROOM = "/app/api/classrooms/r1";
 const INSTALL = "https://github.com/apps/heig-quiz/installations/new?state=r1";
@@ -96,8 +110,16 @@ describe("New ▾ on the classroom's activities", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "projectNew", classroomId: "r1" });
   });
 
-  it("greys Project out while the link is not known yet", async () => {
-    // Never answers: the read is still loading when the menu opens.
+  it("is the plain New evaluation where the new project does not parse (production until M3-11)", async () => {
+    gate.enabled = false;
+    renderClassroom(ok(connected));
+    await screen.findByText("No evaluation yet");
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /New evaluation/ })).toHaveLength(2));
+    expect(screen.queryByRole("button", { name: /^New$/ })).toBeNull();
+  });
+
+  it("is the plain New evaluation while the link is not known yet: no menu that turns back", async () => {
+    // Never answers: the read is still loading.
     const navigate = vi.fn();
     mockFetch({
       [`GET ${ROOM}`]: ok(makeClassroomDetail()),
@@ -109,8 +131,9 @@ describe("New ▾ on the classroom's activities", () => {
       String(input).endsWith("/github") ? new Promise<Response>(() => {}) : answer(input, init),
     );
     renderWithProviders(<ClassroomView id="r1" navigate={navigate} />);
-    const menu = await openNew();
-    expect(within(menu).getByRole("menuitem", { name: /Project/ })).toHaveAttribute("aria-disabled", "true");
+    await screen.findByText("No evaluation yet");
+    expect(screen.getAllByRole("button", { name: /New evaluation/ })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /^New$/ })).toBeNull();
   });
 
   it("speaks French", async () => {

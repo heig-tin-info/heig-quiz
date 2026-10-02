@@ -79,7 +79,7 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 | M3-07 | Sync of the source repository | todo | M2-04, M3-02, D12 | | | |
 | M3-08 | Teacher views, grades, release | todo | M3-04, M3-05 | | | |
 | M3-09 | Student side, SSE, notifications | todo | M3-04, D18 | | | |
-| M3-10 | Web: projects in Activities, New ▾ | review | M3-01, M1-05 | `merge/M3-10-web-projects` | | "New ▾" (`activities/NewActivity.tsx`: Evaluation, Project; no Poll — the launcher takes no classroom) with the GitHub gate (absent ⇒ plain "New evaluation", unconnected ⇒ `settings?connect=1`, connected ⇒ route `projectNew`, `ComingSoon` until M3-11); `project/ProjectGroup.tsx` under the evaluations (`GET /classrooms/:id/projects`, drawn only with rows); `/activities` lists the union (Project chip, never live); `project` route out of `preview`; mock `?projects=1`; card M3-10, "As delivered" |
+| M3-10 | Web: projects in Activities, New ▾ | review | M3-01, M1-05 | `merge/M3-10-web-projects` | | "New ▾" (`activities/NewActivity.tsx`: Evaluation, Project; no Poll — the launcher takes no classroom) with the GitHub gate (absent ⇒ plain "New evaluation", unconnected ⇒ `settings?connect=1`, connected ⇒ route `projectNew`); `projectNew` and `project` stay `preview` (`routeEnabled`): New ▾ turns on when M3-11 drops it, project rows open when M3-12 does; `project/ProjectGroup.tsx` under the evaluations (`GET /classrooms/:id/projects`, drawn only with rows); `/activities` lists the union through `KIND` (`activities/model.ts`, never live); mock `?projects=1`; card M3-10, "As delivered" |
 | M3-11 | Web: new project form | todo | M3-02, M2-07 | | | |
 | M3-12 | Web: project page | todo | M3-08 | | | |
 | M3-13 | Web: student `ProjectRow` | todo | M3-09, M2-07 | | | |

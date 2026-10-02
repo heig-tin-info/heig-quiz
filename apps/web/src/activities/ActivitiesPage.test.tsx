@@ -13,6 +13,16 @@ import { ActivitiesPage } from "./ActivitiesPage";
  * now" block, and End — for a running poll only, behind a confirmation.
  */
 
+/*
+ * Whether a `preview` route parses is a build flag (`CLASSROOM_PAGES`): the
+ * project page opens from a row only where it does (M3-12).
+ */
+const gate = vi.hoisted(() => ({ enabled: true }));
+vi.mock("../router", async (original) => ({
+  ...(await original<typeof import("../router")>()),
+  routeEnabled: () => gate.enabled,
+}));
+
 const MIN = 60_000;
 const ROOM = { id: id("classroom", 1), name: "PRG1-2026", courseCode: "PRG1" };
 
@@ -54,6 +64,7 @@ const DONE = activity(5, { title: "Test 0", state: "released", startedAt: liveAt
 const ALL = [EXAM, POLL, SERIES, NEXT, DONE];
 
 beforeEach(() => {
+  gate.enabled = true;
   localStorage.removeItem("quiz-activities-view");
 });
 
@@ -236,6 +247,17 @@ describe("ActivitiesPage", () => {
       expect(navigate).toHaveBeenLastCalledWith({ view: "project", id: LAB.id });
     });
 
+    it("opens no project where its page does not parse (production until M3-12)", async () => {
+      gate.enabled = false;
+      const user = userEvent.setup();
+      const { navigate } = render([LAB, DONE]);
+      const table = await screen.findByRole("table");
+      const row = within(table).getByText("Labo 2 — pointeurs").closest("tr")!;
+      expect(row).not.toHaveAttribute("tabindex");
+      await user.click(row);
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
     it("offers a Project chip only when there is a project, and filters by it", async () => {
       const user = userEvent.setup();
       render([...ALL, LAB, LAB3]);
@@ -250,10 +272,12 @@ describe("ActivitiesPage", () => {
       expect(within(table).getByText("Labo 3")).toBeInTheDocument();
     });
 
-    it("draws no Project chip without a project", async () => {
-      render();
+    it("draws a type chip only for a type that has rows", async () => {
+      render([EXAM, SERIES]);
       await screen.findByRole("table");
       expect(screen.getByRole("button", { name: "Exam" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Exercise" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Poll" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Project" })).not.toBeInTheDocument();
     });
 

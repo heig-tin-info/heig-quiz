@@ -3,7 +3,6 @@ import { useState, type ReactNode } from "react";
 
 import type { ActivitySummary } from "@quiz/contracts";
 
-import { evaluationHome, evaluationStateLabel, stateTone } from "../evaluation/common";
 import { useI18n, useT, type TFunction } from "../i18n";
 import type { Route } from "../router";
 import {
@@ -21,13 +20,22 @@ import {
   type IconType,
 } from "../ui";
 import { ActivityMenu } from "./actions";
-import { projectStateLabel, projectStateTone } from "../project/common";
-import { anchorOf, closesOf, foldable, isoWeek, mondayOf, typeOf, weeksOf, type ActivityType } from "./model";
+import {
+  anchorOf,
+  closesOf,
+  foldable,
+  isoWeek,
+  kindOf,
+  mondayOf,
+  typeOf,
+  weeksOf,
+  type ActivityType,
+} from "./model";
 
 /*
  * The three views of the Activities section (#190), after heig-classroom's
  * classroom list: cards, a sortable list, and a view in time. Every one
- * opens a row where the classroom's own list would (`activityHome`) and
+ * opens a row where the classroom's own list would (`KIND`'s `home`, `model.ts`) and
  * carries the same overflow menu, so switching views changes the layout and
  * nothing of what a row does.
  */
@@ -39,22 +47,16 @@ export const TYPE_ICON: Record<ActivityType, IconType> = {
   project: FolderGit2,
 };
 
-/** A type chip's word: an evaluation's mode, or "Project". */
-export function typeName(type: ActivityType, t: TFunction): string {
-  return type === "project" ? t("activities.kind.project") : t(`eval.mode.${type}`);
+/** What a click on a row does (its kind's `home`), or nothing where that page does not parse in this build. */
+export function openerOf(row: ActivitySummary, navigate: (r: Route) => void): (() => void) | undefined {
+  const home = kindOf(row).home(row);
+  return home ? () => navigate(home) : undefined;
 }
 
-/**
- * Where a row leads: an evaluation where the classroom's own list would take
- * it (`evaluationHome`), a project to its page (M3-12).
- */
-export function activityHome(row: ActivitySummary): Route {
-  return row.kind === "project" ? { view: "project", id: row.id } : evaluationHome(row);
-}
-
-/** The state's word, either kind's. */
-export function stateLabel(row: ActivitySummary, t: TFunction): string {
-  return row.kind === "project" ? projectStateLabel(row.state, t) : evaluationStateLabel(row.state, t);
+/** The click and the keyboard of a row that opens its activity ({@link openerOf}), or none at all. */
+export function openProps(row: ActivitySummary, navigate: (r: Route) => void, role?: string) {
+  const open = openerOf(row, navigate);
+  return open ? { onClick: open, ...pressable(open, role) } : {};
 }
 
 export interface ViewProps {
@@ -64,10 +66,7 @@ export interface ViewProps {
 }
 
 /** "Exercise", or "Exercise · take-home" for a series done over days. */
-export function modeLabel(row: ActivitySummary, t: TFunction): string {
-  const mode = typeName(typeOf(row), t);
-  return row.kind === "evaluation" && row.takeHome ? `${mode} · ${t("activities.takeHome")}` : mode;
-}
+export const modeLabel = (row: ActivitySummary, t: TFunction): string => kindOf(row).typeLabel(row, t);
 
 /** "PRG1 · PRG1-2026", or the word for an anonymous poll's lack of one. */
 export function classroomLabel(row: ActivitySummary, t: TFunction): string {
@@ -76,10 +75,11 @@ export function classroomLabel(row: ActivitySummary, t: TFunction): string {
     : t("activities.noClassroom");
 }
 
+/** The state of a row, either kind's: the Activities' views and the classroom's Projects group. */
 export function StateBadge({ row }: { row: ActivitySummary }) {
   const t = useT();
-  const tone = row.kind === "project" ? projectStateTone(row.state) : stateTone(row.state);
-  return <Badge tone={tone}>{stateLabel(row, t)}</Badge>;
+  const kind = kindOf(row);
+  return <Badge tone={kind.stateTone(row)}>{kind.stateLabel(row, t)}</Badge>;
 }
 
 const dateOrDash = (iso: string | null) => (iso === null ? "—" : isoDateTime(iso));
@@ -124,14 +124,13 @@ export function ActivityTable({ rows, navigate, onEnd }: ViewProps) {
         <TableHead columns={columns} sort={sort} onToggle={toggle} />
         <tbody>
           {sorted.map((row) => {
-            const open = () => navigate(activityHome(row));
             const Icon = TYPE_ICON[typeOf(row)];
+            const opens = kindOf(row).home(row) !== null;
             return (
               <tr
                 key={row.id}
-                className={`${T.row} ${T.rowHover} cursor-pointer`}
-                onClick={open}
-                {...pressable(open, "row")}
+                className={opens ? `${T.row} ${T.rowHover} cursor-pointer` : T.row}
+                {...openProps(row, navigate, "row")}
               >
                 <td className={T.td}>
                   <span className="flex flex-wrap items-center gap-2">
@@ -173,16 +172,14 @@ export function ActivityCards({ rows, navigate, onEnd }: ViewProps) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {rows.map((row) => {
-        const open = () => navigate(activityHome(row));
         const Icon = TYPE_ICON[typeOf(row)];
         const anchor = anchorOf(row);
         const closes = closesOf(row);
         return (
           <Card
             key={row.id}
-            interactive
-            onClick={open}
-            {...pressable(open)}
+            interactive={kindOf(row).home(row) !== null}
+            {...openProps(row, navigate)}
             aria-label={row.title}
             className="flex flex-col gap-3 p-5"
           >
@@ -284,16 +281,17 @@ export function ActivitySchedule({ rows, navigate, onEnd, now }: ViewProps & { n
           </h2>
           <Card className="divide-y divide-line overflow-hidden">
             {week.rows.map((row) => {
-              const open = () => navigate(activityHome(row));
               const Icon = TYPE_ICON[typeOf(row)];
               const anchor = anchorOf(row);
               const closes = closesOf(row);
               return (
                 <div
                   key={row.id}
-                  onClick={open}
-                  {...pressable(open)}
-                  className="flex cursor-pointer items-center gap-3 px-4 py-2.5 text-[13px] transition-colors hover:bg-surface-2/70"
+                  {...openProps(row, navigate)}
+                  className={cx(
+                    "flex items-center gap-3 px-4 py-2.5 text-[13px] transition-colors hover:bg-surface-2/70",
+                    kindOf(row).home(row) !== null && "cursor-pointer",
+                  )}
                 >
                   <span className="w-14 shrink-0 tabular-nums text-fg-muted">
                     {anchor ? (

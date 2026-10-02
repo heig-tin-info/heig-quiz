@@ -19,6 +19,7 @@ import { useErrorToast } from "../notify";
 import { activitiesKey, pollKey } from "../queryKeys";
 import type { Route } from "../router";
 import { Menu, type MenuItem } from "../ui";
+import { typeOf } from "./model";
 
 /**
  * Ending a poll from the Activities section (#190): the projection's own
@@ -56,12 +57,11 @@ export function useEndPoll(): { end: (row: ActivitySummary) => void; pending: st
 }
 
 /** A running poll: the one activity a list may end. */
-export const endable = (row: ActivitySummary) =>
-  row.kind === "evaluation" && row.mode === "poll" && row.state === "running";
+export const endable = (row: ActivitySummary) => typeOf(row) === "poll" && row.state === "running";
 
 /**
  * The overflow menu of one row, on every view: where else the activity
- * leads (the click on the row goes to `activityHome`), and End for a
+ * leads (the click on the row goes to its kind's `home`), and End for a
  * running poll. Always a menu, never icon buttons: its length follows the
  * state, and a row that flickers between shapes under the pointer is worse
  * than one more click (`Actions` › `menu`). A project has none yet: its one
@@ -77,7 +77,8 @@ export function ActivityMenu({
   onEnd: (row: ActivitySummary) => void;
 }) {
   const t = useT();
-  if (row.kind === "project") return null;
+  // The narrowing the items below read (`mode`), not a rule of a kind.
+  if (row.kind !== "evaluation") return null;
   const items: MenuItem[] =
     row.mode === "poll"
       ? [

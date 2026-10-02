@@ -3700,7 +3700,7 @@ export const fr: Record<keyof Dict, string> = {
   "activities.timeline.empty.title": "Rien de daté pour l'instant",
   "activities.timeline.empty.body": "Une activité apparaît sur la frise dès qu'elle a une date d'ouverture ou qu'elle a commencé.",
   "activities.timeline.legend.live": "en salle",
-  "activities.timeline.legend.waiting": "salle d'attente ou en pause",
+  "activities.timeline.legend.waiting": "salle d'attente, en pause, projet ouvert",
   "activities.timeline.legend.scheduled": "planifiée",
   "activities.timeline.legend.draft": "brouillon",
   "activities.timeline.legend.ended": "terminée",

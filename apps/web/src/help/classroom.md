@@ -26,7 +26,7 @@ The evaluations of this classroom, each with its state — draft, scheduled,
 waiting room, running, paused, closed, grading, released. From a row you
 reach its configuration, the live dashboard, the grading panel or the
 results, depending on where it stands. **New evaluation**, at the top right
-while this tab is open, creates one. Where the platform has GitHub, that
+while this tab is open, creates one. Where the platform offers projects, that
 button is **New**, a menu of **Evaluation** and **Project**: a project needs
 the classroom connected to GitHub, and on a classroom that is not, Project
 opens the connection in the Settings first. The classroom's projects are

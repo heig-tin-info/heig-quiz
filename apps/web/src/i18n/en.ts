@@ -3702,7 +3702,7 @@ export const en = {
   "activities.timeline.empty.title": "Nothing dated yet",
   "activities.timeline.empty.body": "Activities appear on the timeline once they have an opening date or have started.",
   "activities.timeline.legend.live": "in the room",
-  "activities.timeline.legend.waiting": "waiting room or paused",
+  "activities.timeline.legend.waiting": "waiting room, paused, open project",
   "activities.timeline.legend.scheduled": "scheduled",
   "activities.timeline.legend.draft": "draft",
   "activities.timeline.legend.ended": "over",

@@ -29,7 +29,7 @@ planifiée, salle d'attente, en cours, en pause, clôturée, correction,
 publiée. Depuis une ligne, vous atteignez sa configuration, le tableau de
 bord, le panneau de correction ou les résultats, selon l'endroit où elle en
 est. **Nouvelle évaluation**, en haut à droite tant que cet onglet est
-ouvert, en crée une. Là où la plateforme a GitHub, ce bouton est
+ouvert, en crée une. Là où la plateforme offre les projets, ce bouton est
 **Nouveau**, un menu d'**Évaluation** et de **Projet** : un projet demande
 la classe connectée à GitHub, et sur une classe qui ne l'est pas, Projet
 ouvre d'abord la connexion dans les Réglages. Les projets de la classe sont

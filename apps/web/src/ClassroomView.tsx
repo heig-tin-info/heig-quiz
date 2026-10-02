@@ -325,6 +325,7 @@ export function ClassroomView({
             ) : tab === "evaluations" ? (
               <NewActivity
                 classroomId={id}
+                github={github.isSuccess ? github.data : undefined}
                 navigate={navigate}
                 onEvaluation={() => setCreating(true)}
                 onConnect={openConnect}

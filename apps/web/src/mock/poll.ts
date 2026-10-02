@@ -1224,8 +1224,9 @@ on("POST", "/app/api/evaluations/:id/poll/keep", (m) => {
 // also lists the teacher's ANONYMOUS polls, which only this file knows. The
 // same scope as the server: every evaluation of a classroom that is not
 // archived (the mock teacher sits on every course's staff), their own
-// classroom-less polls, and the projects (`project.ts`, `?projects=1`). `updatedAt` is "a minute ago" for a session in the
-// room, so the deploy guard's 12-hour rule keeps it live, as on the server.
+// classroom-less polls, and the projects (`project.ts`, `?projects=1`).
+// `updatedAt` is "a minute ago" for a session in the room, so the deploy
+// guard's 12-hour rule keeps it live, as on the server.
 
 const LIVE_STATES = new Set(["lobby", "running", "paused"]);
 

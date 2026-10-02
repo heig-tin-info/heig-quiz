@@ -4,6 +4,7 @@ import {
   evaluationInView,
   parsePath,
   ROUTE_VIEWS,
+  routeEnabled,
   ROUTES,
   routeToPath,
   sectionOf,
@@ -71,17 +72,17 @@ describe("routeToPath / parsePath", () => {
   it("parses none of the classroom merge's other routes while CLASSROOM_PAGES is off", () => {
     // A production build: every such address reads as it did before them.
     expect(parsePath("/classrooms/c-1/grades")).toEqual({ view: "classroom", id: "c-1" });
-    // The groups are the project's, as any unknown tail is (M3-10).
-    expect(parsePath("/projects/p-1/groups")).toEqual({ view: "project", id: "p-1" });
+    expect(parsePath("/projects/p-1")).toEqual({ view: "home" });
+    expect(parsePath("/projects/p-1/groups")).toEqual({ view: "home" });
+    expect(parsePath("/projects/x/groups")).toEqual({ view: "home" });
+    // M3-10's new project: the classroom, as an unknown tab is.
+    expect(parsePath("/classrooms/c-1/projects/new")).toEqual({ view: "classroom", id: "c-1" });
   });
 
-  it("parses a project and a new project in every build, since M3-10 (F-PROJ-01)", () => {
-    expect(ROUTES.project.preview).toBeUndefined();
-    expect(parsePath("/projects/p-1")).toEqual({ view: "project", id: "p-1" });
-    expect(routeToPath({ view: "projectNew", classroomId: "c-1" })).toBe("/classrooms/c-1/projects/new");
-    expect(parsePath("/classrooms/c-1/projects/new")).toEqual({ view: "projectNew", classroomId: "c-1" });
-    // Any other tail under `projects` is the classroom, as an unknown tab is.
-    expect(parsePath("/classrooms/c-1/projects")).toEqual({ view: "classroom", id: "c-1" });
+  it("enables exactly the routes that parse in this build (M3-10)", () => {
+    expect(routeEnabled("project")).toBe(false);
+    expect(routeEnabled("projectNew")).toBe(false);
+    expect(routeEnabled("classroomSettings")).toBe(true);
   });
 
   it("parses the page of one course, a page of the Courses section (F-ORG-12)", () => {
@@ -275,7 +276,6 @@ describe("ROUTES", () => {
       admin: "admin",
       project: "activities",
       projectGroups: "activities",
-      projectNew: "activities",
     });
     const unlit = ROUTE_VIEWS.filter((v) => lit[v] === null).sort();
     expect(unlit).toEqual(
@@ -299,6 +299,7 @@ describe("ROUTES", () => {
         "live",
         "oauthConsent",
         "pair",
+        "projectNew",
         "questionPreview",
         "results",
         "settings",
