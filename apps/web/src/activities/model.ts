@@ -78,8 +78,13 @@ export interface ActivityKindSpec<A extends ActivitySummary> {
    * dated yet — the schedule files it under "Not scheduled".
    */
   anchor(a: A): string | null;
-  /** When it closes, if it does. */
+  /**
+   * When it closes, if it does — or, once over, when it actually closed: an
+   * exam ended early, a poll ended by hand, has no deadline worth showing.
+   */
   closes(a: A): string | null;
+  /** It was ended by a person, not by its clock: the list marks it. */
+  closedByHand(a: A): boolean;
   /** On the "Live now" block. */
   live(a: A, now: number): boolean;
   /** Someone is in the room: the gantt's bar runs up to now, ringed green. */
@@ -95,24 +100,31 @@ export interface ActivityKindSpec<A extends ActivitySummary> {
   stateTone(a: A): Tone;
 }
 
+/** Its closing time, or once over the instant it actually closed. */
+const evaluationCloses = (a: EvaluationActivitySummary): string | null =>
+  bucketOf(a.state) === "ended" ? (a.closedAt ?? a.closesAt) : a.closesAt;
+
 /**
  * An evaluation's span: from its opening (or its actual start) to its
  * closing; an OPEN one without a closing runs up to now, and one without any
  * date at all (an exam in its lobby) sits on now, so whatever is in the room
- * is always on the axis around the "now" line. An ended one without a closing
- * stops at its last change. A draft nobody dated has no place: null.
+ * is always on the axis around the "now" line. An ended one stops where it
+ * actually closed, failing that at its closing time, failing both at its
+ * last change. A draft nobody dated has no place: null.
  */
 function evaluationSpan(a: EvaluationActivitySummary, now: number): Span | null {
   const open = bucketOf(a.state) === "open";
   const start = a.opensAt ?? a.startedAt;
   if (start === null && !open) return null;
   const s = start === null ? now : new Date(start).getTime();
+  const ended = bucketOf(a.state) === "ended";
+  const close = evaluationCloses(a);
   const end =
-    a.closesAt !== null
-      ? new Date(a.closesAt).getTime()
+    close !== null
+      ? new Date(close).getTime()
       : open
         ? now
-        : bucketOf(a.state) === "ended"
+        : ended
           ? new Date(a.updatedAt).getTime()
           : s;
   return { s, d: Math.max(s, end) };
@@ -126,7 +138,8 @@ export const KIND: { [K in ActivitySummary["kind"]]: ActivityKindSpec<Extract<Ac
       return a.takeHome ? `${mode} · ${t("activities.takeHome")}` : mode;
     },
     anchor: (a) => a.opensAt ?? a.startedAt ?? a.closesAt,
-    closes: (a) => a.closesAt,
+    closes: evaluationCloses,
+    closedByHand: (a) => bucketOf(a.state) === "ended" && a.closedBy === "teacher",
     live: (a, now) => isLiveNow(a, now),
     inRoom: (a) => bucketOf(a.state) === "open",
     span: evaluationSpan,
@@ -139,6 +152,7 @@ export const KIND: { [K in ActivitySummary["kind"]]: ActivityKindSpec<Extract<Ac
     typeLabel: (_, t) => typeName("project", t),
     anchor: (a) => a.startAt,
     closes: (a) => a.deadlineAt,
+    closedByHand: () => false,
     live: () => false,
     inRoom: () => false,
     span: (a) => {
@@ -162,6 +176,7 @@ export const kindOf = <A extends ActivitySummary>(a: A): ActivityKindSpec<A> =>
 export const typeOf = (a: ActivitySummary): ActivityType => kindOf(a).type(a);
 export const anchorOf = (a: ActivitySummary): string | null => kindOf(a).anchor(a);
 export const closesOf = (a: ActivitySummary): string | null => kindOf(a).closes(a);
+export const closedByHand = (a: ActivitySummary): boolean => kindOf(a).closedByHand(a);
 export const isLive = (a: ActivitySummary, now: number): boolean => kindOf(a).live(a, now);
 
 const time = (iso: string | null) => (iso === null ? null : new Date(iso).getTime());

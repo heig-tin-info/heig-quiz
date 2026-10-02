@@ -172,6 +172,7 @@ export async function tryApplyState(
   row: EvaluationRecord,
   to: EvaluationState,
   now: Date,
+  closedBy: "server" | "teacher" = "teacher",
 ): Promise<EvaluationRecord | null> {
   const next: Partial<typeof evaluations.$inferInsert> = { state: to, updatedAt: now };
   if (to === "running") {
@@ -179,13 +180,19 @@ export async function tryApplyState(
     next.pausedAt = null;
   }
   if (to === "paused") next.pausedAt = now;
-  if (to === "closed") next.closedAt = now;
+  // The end of the RUN, once: a withdrawn release (`released → closed`)
+  // keeps the instant and the hand that closed it.
+  if (to === "closed" && row.closedAt === null) {
+    next.closedAt = now;
+    next.closedBy = closedBy;
+  }
   if (to === "draft") {
     // A reopened evaluation forgets that it ever ran; no attempt exists, so
     // there is nothing whose clock those instants would contradict.
     next.startedAt = null;
     next.pausedAt = null;
     next.closedAt = null;
+    next.closedBy = null;
     next.gradingReadyAt = null;
     // `closed → draft` needs no attempt: a correction published during that
     // run was nobody's, and the next run starts unpublished (ADR-050).
@@ -214,8 +221,9 @@ export async function applyState(
   row: EvaluationRecord,
   to: EvaluationState,
   now: Date,
+  closedBy?: "server" | "teacher",
 ): Promise<EvaluationRecord> {
-  return (await tryApplyState(db, row, to, now)) ?? (await byId(db, row.id))!;
+  return (await tryApplyState(db, row, to, now, closedBy)) ?? (await byId(db, row.id))!;
 }
 
 /**

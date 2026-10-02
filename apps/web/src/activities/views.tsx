@@ -1,4 +1,4 @@
-import { ClipboardCheck, FolderGit2, NotebookPen, Vote } from "lucide-react";
+import { ClipboardCheck, FolderGit2, Hand, NotebookPen, Vote } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import type { ActivitySummary } from "@quiz/contracts";
@@ -11,10 +11,11 @@ import {
   Card,
   cx,
   isoDateParts,
-  isoDateTime,
   pressable,
+  RelativeTime,
   T,
   TableHead,
+  Tip,
   useSortableTable,
   type Column,
   type IconType,
@@ -22,6 +23,8 @@ import {
 import { ActivityMenu } from "./actions";
 import {
   anchorOf,
+  bucketOf,
+  closedByHand,
   closesOf,
   foldable,
   isoWeek,
@@ -82,7 +85,34 @@ export function StateBadge({ row }: { row: ActivitySummary }) {
   return <Badge tone={kind.stateTone(row)}>{kind.stateLabel(row, t)}</Badge>;
 }
 
-const dateOrDash = (iso: string | null) => (iso === null ? "—" : isoDateTime(iso));
+const dateOrDash = (iso: string | null) => (iso === null ? "—" : <RelativeTime iso={iso} />);
+
+/**
+ * When a row closes, or closed — a distance, the date on hover (`RelativeTime`)
+ * — and a hand where a person ended it rather than its clock. `labelled`
+ * says which ("closes in 3 days", "closed 2 weeks ago") where no column
+ * heading does.
+ */
+export function Closing({ row, labelled = false }: { row: ActivitySummary; labelled?: boolean }) {
+  const t = useT();
+  const at = closesOf(row);
+  if (at === null) return <>—</>;
+  const label = t("activities.closedByHand");
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {labelled ? (
+        <span>{t(bucketOf(row.state) === "ended" ? "activities.closed" : "activities.closes")}</span>
+      ) : null}
+      <RelativeTime iso={at} />
+      {closedByHand(row) ? (
+        <Tip label={label}>
+          <Hand aria-hidden className="size-3.5 text-fg-faint" />
+          <span className="sr-only">{label}</span>
+        </Tip>
+      ) : null}
+    </span>
+  );
+}
 
 // --- List ------------------------------------------------------------------------
 
@@ -150,8 +180,8 @@ export function ActivityTable({ rows, navigate, onEnd }: ViewProps) {
                 <td className={`${T.td} ${T.colHigh} tabular-nums text-fg-muted`}>
                   {dateOrDash(anchorOf(row))}
                 </td>
-                <td className={`${T.td} ${T.colLow} tabular-nums text-fg-muted`}>
-                  {dateOrDash(closesOf(row))}
+                <td className={`${T.td} ${T.colLow} text-fg-muted`}>
+                  <Closing row={row} />
                 </td>
                 <td className={`${T.td} text-right`}>
                   <ActivityMenu row={row} navigate={navigate} onEnd={onEnd} />
@@ -194,12 +224,8 @@ export function ActivityCards({ rows, navigate, onEnd }: ViewProps) {
             </div>
             <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-muted">
               <StateBadge row={row} />
-              {anchor ? <span className="tabular-nums">{isoDateTime(anchor)}</span> : null}
-              {closes ? (
-                <span className="tabular-nums">
-                  {t("activities.closes", { at: isoDateTime(closes) })}
-                </span>
-              ) : null}
+              {anchor ? <RelativeTime iso={anchor} /> : null}
+              {closes ? <Closing row={row} labelled /> : null}
             </div>
           </Card>
         );
@@ -309,7 +335,12 @@ export function ActivitySchedule({ rows, navigate, onEnd, now }: ViewProps & { n
                     <span className="block truncate font-semibold">{row.title}</span>
                     <span className="block truncate text-fg-muted">
                       {classroomLabel(row, t)}
-                      {closes ? ` · ${t("activities.closes", { at: isoDateTime(closes) })}` : ""}
+                      {closes ? (
+                        <>
+                          {" · "}
+                          <Closing row={row} labelled />
+                        </>
+                      ) : null}
                     </span>
                   </span>
                   <StateBadge row={row} />

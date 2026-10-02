@@ -80,6 +80,21 @@ describe("state machine (§5.1)", () => {
     expect(row.pausedAt).toBeNull();
     row = await service.applyState(db, row, "closed", server.clock.now());
     expect(row.closedAt).not.toBeNull();
+    expect(row.closedBy).toBe("teacher");
+  });
+
+  it("keeps when and by whom the run closed through a withdrawn release, and forgets both on draft", async () => {
+    const seed = await seedLive(db);
+    const closedAt = server.clock.now();
+    let row = await service.applyState(db, await reload(db, seed.evaluationId), "closed", closedAt, "server");
+    row = await service.applyState(db, row, "released", server.clock.now());
+    server.clock.advance(3_600_000);
+    // `released → closed` is the withdrawal of the release, not a second end.
+    row = await service.applyState(db, row, "closed", server.clock.now());
+    expect(row.closedAt!.toISOString()).toBe(closedAt.toISOString());
+    expect(row.closedBy).toBe("server");
+    row = await service.transition(db, row, "draft", server.clock.now());
+    expect(row).toMatchObject({ closedAt: null, closedBy: null });
   });
 
 

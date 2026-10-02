@@ -16,6 +16,8 @@ const evaluation = {
   opensAt: "2026-10-01T08:00:00.000Z",
   closesAt: null,
   startedAt: null,
+  closedAt: null,
+  closedBy: null,
   updatedAt: "2026-09-30T08:00:00.000Z",
 } as const;
 

@@ -873,7 +873,7 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
     clock.set(new Date(both[0]!.deadlineAt!.getTime() + GRACE_MS + 1));
     await service.expireDueAttempts(db, clock.now());
     expect(await service.autoCloseDue(db, clock.now())).toHaveLength(1);
-    expect((await reload(db, seed.evaluationId)).state).toBe("closed");
+    expect(await reload(db, seed.evaluationId)).toMatchObject({ state: "closed", closedBy: "server" });
   });
 
   /*
@@ -965,7 +965,7 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
   it("closing the evaluation expires every open attempt", async () => {
     const { evaluation, attempt } = await running();
     const closed = await service.closeEvaluation(db, evaluation, clock.now());
-    expect(closed.state).toBe("closed");
+    expect(closed).toMatchObject({ state: "closed", closedBy: "teacher" });
     const row = (await service.attemptById(db, attempt.id))!;
     expect(row.state).toBe("expired");
     expect(row.closedBy).toBe("teacher");
