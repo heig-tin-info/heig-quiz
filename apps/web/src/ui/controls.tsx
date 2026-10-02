@@ -163,8 +163,13 @@ export function Field({
         {label}
       </FieldLabel>
       <input
-        aria-describedby={description ? `${id}-description` : undefined}
         {...props}
+        // Added to, never replaced by, a caller's own (`fieldErrorProps`).
+        aria-describedby={
+          [description ? `${id}-description` : null, props["aria-describedby"]]
+            .filter(Boolean)
+            .join(" ") || undefined
+        }
         id={id}
         className={cx(inputClass, inputSize[size], "w-full", className)}
       />

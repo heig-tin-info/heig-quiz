@@ -47,6 +47,7 @@ export {
 export type { JoinedItem } from "./reads.js";
 export { listActivities } from "./activities.js";
 export { announceMove } from "./announce.js";
+export { countTemplates } from "./templates.js";
 export {
   seatsOf,
   classroomIdOf,

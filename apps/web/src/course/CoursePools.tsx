@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderTree, Link2, Unlink } from "lucide-react";
+import type { ReactNode } from "react";
 
 import type { CourseSummary, PoolSummary } from "@quiz/contracts";
 import { poolRoleAllows } from "@quiz/domain";
@@ -13,14 +14,12 @@ import { Actions, Button, Menu, QueryError, Skeleton } from "../ui";
 import { courseKey, poolsKey } from "../queryKeys";
 import { CoursePart, useCourseDetail } from "./parts";
 
+type LinkedPool = { id: string; name: string; questionCount: number };
+
 /**
- * The pools a course draws from (F-POOL-05). `PUT /courses/:id/pools`
- * replaces the WHOLE set in one call, so both the link and the unlink send
- * the list the course should end up with — there is no add/remove route, and
- * inventing one on the client would be a second way to do one thing.
- *
- * The links are tended on the course page only: the card on the Courses home
- * is a summary, so it lists the pools and offers neither link nor unlink.
+ * The pools a course draws from (F-POOL-05). The links are tended on the
+ * course page only: the card on the Courses home is a summary, so it lists
+ * the pools and offers neither link nor unlink.
  */
 export function CoursePools({
   course,
@@ -32,20 +31,30 @@ export function CoursePools({
   /** Drawn as a section of the course page rather than a part of its card. */
   page?: boolean;
 }) {
+  return page ? (
+    <EditablePools course={course} navigate={navigate} />
+  ) : (
+    <PoolList course={course} navigate={navigate} page={false} />
+  );
+}
+
+/**
+ * The page's pools, with their links. `PUT /courses/:id/pools` replaces the
+ * WHOLE set in one call, so both the link and the unlink send the list the
+ * course should end up with — there is no add/remove route, and inventing one
+ * on the client would be a second way to do one thing.
+ */
+function EditablePools({ course, navigate }: { course: CourseSummary; navigate: (r: Route) => void }) {
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
   const toastError = useErrorToast();
 
-  const detail = useCourseDetail(course.id);
+  const linked = useCourseDetail(course.id).data?.pools ?? [];
   const pools = useQuery<PoolSummary[]>({
     queryKey: poolsKey,
     queryFn: () => api("/app/api/pools"),
-    // What could be linked is read where linking is offered.
-    enabled: page,
   });
-
-  const linked = detail.data?.pools ?? [];
   // Linking makes the whole staff contributors of the pool, so the server
   // refuses a pool the caller only reads (ADR-013): it is not offered.
   const available = (pools.data ?? []).filter(
@@ -66,7 +75,7 @@ export function CoursePools({
     onError: toastError("pools.linkSaveFailed"),
   });
 
-  const unlink = async (pool: { id: string; name: string }) => {
+  const unlink = async (pool: LinkedPool) => {
     const ok = await confirm({
       title: t("pools.unlink"),
       message: t("pools.unlinkConfirm", { name: pool.name, course: course.name }),
@@ -77,15 +86,14 @@ export function CoursePools({
   };
 
   return (
-    <CoursePart
-      page={page}
-      icon={FolderTree}
-      title={t("pools.link")}
+    <PoolList
+      course={course}
+      navigate={navigate}
+      page
       action={
         // One click, no dialog: linking a pool is picking a name out of a
         // short list, and a modal with a select and two buttons was three
         // interactions for one decision.
-        page ? (
         <Menu
           label={t("pools.linkAction")}
           trigger={
@@ -103,9 +111,38 @@ export function CoursePools({
               : [{ label: t("pools.linkEmpty"), disabled: true }]
           }
         />
-        ) : undefined
       }
-    >
+      rowAction={(pool) => (
+        <Actions
+          label={t("common.actions")}
+          size="sm"
+          items={[{ label: t("pools.unlink"), icon: Unlink, danger: true, onSelect: () => void unlink(pool) }]}
+        />
+      )}
+    />
+  );
+}
+
+/** The linked pools, each opening its pool; the actions, when given, beside them. */
+function PoolList({
+  course,
+  navigate,
+  page,
+  action,
+  rowAction,
+}: {
+  course: CourseSummary;
+  navigate: (r: Route) => void;
+  page: boolean;
+  action?: ReactNode;
+  rowAction?: (pool: LinkedPool) => ReactNode;
+}) {
+  const t = useT();
+  const detail = useCourseDetail(course.id);
+  const linked = detail.data?.pools ?? [];
+
+  return (
+    <CoursePart page={page} icon={FolderTree} title={t("pools.link")} action={action}>
       {detail.isLoading ? (
         <Skeleton className="mt-2 h-6 w-48" />
       ) : detail.isError ? (
@@ -136,15 +173,7 @@ export function CoursePools({
                   })}
                 </span>
               </button>
-              {page ? (
-                <Actions
-                  label={t("common.actions")}
-                  size="sm"
-                  items={[
-                    { label: t("pools.unlink"), icon: Unlink, danger: true, onSelect: () => void unlink(pool) },
-                  ]}
-                />
-              ) : null}
+              {rowAction?.(pool)}
             </li>
           ))}
         </ul>
