@@ -8,25 +8,35 @@
  * Past five restores in an hour on one repository, restoring stops: the
  * repository's `protection_suspended_at` is set (audited
  * `project_repo.revert_cap`) until the staff re-enable it (M3-08), and the
- * runs ingested meanwhile are `to_verify` (`grading.ts`).
+ * runs ingested meanwhile are `to_verify` (`grading.ts`). The cap is
+ * counted under the repository row's lock, as the restore is recorded.
+ *
+ * A run on a head the App restored ran the student's own copy of the
+ * protected files (a tampered `grading.yml`): it is kept, `to_verify`, and
+ * never the score (`selectScoreRun` of `@quiz/domain`), whichever of the
+ * run and the restore came first.
  *
  * Idempotent (ADR-011): a push is answered once, by its head
  * (`reverts.head_sha`, unique per repository), so a redelivery never
  * restores, nor counts toward the cap, twice; and a restore leaves out every
  * file already the distribution's, so a retry after a crash commits nothing.
+ * The restore is recorded (its count and its bot commit) BEFORE the branch
+ * moves, so a crash after the move loses neither.
  */
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, count, eq, gte, isNull } from "drizzle-orm";
+import { and, count, eq, gte } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { botCommits, projectRepos, reverts } from "../../db/schema.js";
-import { installationClient } from "../../github/app.js";
-import { changedFiles, revertProtectedFiles } from "../../github/revert.js";
+import type { Db } from "../../db/client.js";
+import { botCommits, projectGradeRuns, projectRepos, reverts } from "../../db/schema.js";
+import { githubStatus, installationClient, isZeroSha, ownerRepo } from "../../github/app.js";
+import { changedFiles, revertProtectedFiles, type RevertResult } from "../../github/revert.js";
 import { projectInstallation } from "../github/service.js";
+import { refreshScoreSelection } from "./grading.js";
 import type { RepoContext } from "./repos.js";
 
 /** Restores in an hour past which restoring stops (F-PROJ-08). */
@@ -34,7 +44,6 @@ export const MAX_RESTORES_PER_HOUR = 5;
 const HOUR_MS = 3_600_000;
 /** GitHub lists at most this many commits in a push's payload. */
 const PAYLOAD_COMMITS_MAX = 20;
-const ZERO_SHA = /^0+$/;
 
 /** What the check reads of a push. */
 export interface ProtectedPush {
@@ -52,9 +61,9 @@ export interface ProtectedPush {
  * has nothing to compare with.
  */
 async function touchedFiles(octokit: Octokit, fullName: string, push: ProtectedPush): Promise<Set<string> | null> {
-  if (!push.before || ZERO_SHA.test(push.before)) return null;
+  if (!push.before || isZeroSha(push.before)) return null;
   if (push.forced || push.commits.length >= PAYLOAD_COMMITS_MAX) {
-    const [owner, repo] = fullName.split("/") as [string, string];
+    const { owner, repo } = ownerRepo(fullName);
     const files = await changedFiles(octokit, owner, repo, push.before, push.after);
     return files === null ? null : new Set(files);
   }
@@ -99,52 +108,83 @@ export async function protectFiles(
   if (hit.length === 0) return;
 
   const now = app.clock.now();
-  const [recent] = await db
-    .select({ n: count() })
-    .from(reverts)
-    .where(and(eq(reverts.repoId, repo.id), gte(reverts.createdAt, new Date(now.getTime() - HOUR_MS))));
-  if ((recent?.n ?? 0) >= MAX_RESTORES_PER_HOUR) {
-    const [suspended] = await db
-      .update(projectRepos)
-      .set({ protectionSuspendedAt: now })
-      .where(and(eq(projectRepos.id, repo.id), isNull(projectRepos.protectionSuspendedAt)))
-      .returning({ id: projectRepos.id });
-    if (suspended) {
-      await audit(db, {
-        ...SYSTEM_ACTOR,
-        action: "project_repo.revert_cap",
-        subjectType: "project_repo",
-        subjectId: repo.id,
-        payload: { files: hit, head: push.after },
-      });
+  const { owner, repo: studentRepo } = ownerRepo(repo.fullName);
+  /** The restore commit recorded, once `beforeMove` has. */
+  const recorded: { sha: string | null } = { sha: null };
+  let result: RevertResult | null;
+  try {
+    result = await revertProtectedFiles({
+      octokit,
+      org: owner,
+      studentRepo,
+      squashedRepo: ownerRepo(project.distributionFullName).repo,
+      branch: push.branch,
+      paths: hit,
+      beforeMove: async (commit) => {
+        if (!(await recordRestore(db, ctx, push, commit, now))) return false;
+        recorded.sha = commit.sha;
+        return true;
+      },
+    });
+  } catch (err) {
+    // GitHub refused the move (a student's push raced it): the restore did
+    // not happen, so it neither counts nor answers the push. Any other
+    // failure may have moved the branch: the record stays.
+    if (recorded.sha !== null && githubStatus(err) === 422) {
+      await db.delete(reverts).where(and(eq(reverts.repoId, repo.id), eq(reverts.revertSha, recorded.sha)));
     }
-    return;
+    throw err;
   }
-
-  const [owner, studentRepo] = repo.fullName.split("/") as [string, string];
-  const result = await revertProtectedFiles({
-    octokit,
-    org: owner,
-    studentRepo,
-    squashedRepo: project.distributionFullName.split("/")[1]!,
-    branch: push.branch,
-    paths: hit,
-    beforeMove: async (sha) => {
-      await db.insert(botCommits).values({ repoId: repo.id, sha, kind: "revert" }).onConflictDoNothing();
-    },
-  });
   if (!result) return;
-  const [recorded] = await db
-    .insert(reverts)
-    .values({ id: randomUUID(), repoId: repo.id, revertSha: result.sha, files: result.files, headSha: push.after, createdAt: now })
-    .onConflictDoNothing()
-    .returning({ id: reverts.id });
-  if (!recorded) return;
   await audit(db, {
     ...SYSTEM_ACTOR,
     action: "project_repo.restore",
     subjectType: "project_repo",
     subjectId: repo.id,
     payload: { files: result.files, sha: result.sha, head: push.after },
+  });
+  // The head's runs ran the student's copy of the protected files: flagged,
+  // and out of the score, whether they finished before the restore or after.
+  await db
+    .update(projectGradeRuns)
+    .set({ toVerify: true })
+    .where(and(eq(projectGradeRuns.repoId, repo.id), eq(projectGradeRuns.headSha, push.after)));
+  await refreshScoreSelection(db, ctx);
+}
+
+/**
+ * Records a restore commit before the branch moves onto it, under the
+ * repository row's lock so that two pushes cannot both pass the cap: the
+ * bot commit and the `reverts` row (the restore's count, answering the push
+ * by its head). Past the cap, the protection is suspended instead (audited
+ * once) and false refuses the move.
+ */
+async function recordRestore(db: Db, ctx: RepoContext, push: ProtectedPush, commit: RevertResult, now: Date): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx.select().from(projectRepos).where(eq(projectRepos.id, ctx.repo.id)).for("update");
+    if (!row || row.protectionSuspendedAt !== null) return false;
+    const [recent] = await tx
+      .select({ n: count() })
+      .from(reverts)
+      .where(and(eq(reverts.repoId, row.id), gte(reverts.createdAt, new Date(now.getTime() - HOUR_MS))));
+    if ((recent?.n ?? 0) >= MAX_RESTORES_PER_HOUR) {
+      await tx.update(projectRepos).set({ protectionSuspendedAt: now }).where(eq(projectRepos.id, row.id));
+      await audit(tx, {
+        ...SYSTEM_ACTOR,
+        action: "project_repo.revert_cap",
+        subjectType: "project_repo",
+        subjectId: row.id,
+        payload: { files: commit.files, head: push.after },
+      });
+      return false;
+    }
+    const [counted] = await tx
+      .insert(reverts)
+      .values({ id: randomUUID(), repoId: row.id, revertSha: commit.sha, files: commit.files, headSha: push.after, createdAt: now })
+      .onConflictDoNothing()
+      .returning({ id: reverts.id });
+    if (!counted) return false; // the same push answered meanwhile
+    await tx.insert(botCommits).values({ repoId: row.id, sha: commit.sha, kind: "revert" }).onConflictDoNothing();
+    return true;
   });
 }

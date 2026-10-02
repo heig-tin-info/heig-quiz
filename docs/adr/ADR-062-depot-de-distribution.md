@@ -36,11 +36,22 @@ amended to match:
    (`reverts.head_sha`, unique per repository, migration `0057`), so a
    redelivery neither restores nor counts twice; a restore leaves out a file
    already the distribution's, so a retry after a crash commits nothing.
-   The restore commit is recorded as a bot commit before the branch moves
-   onto it (N-RES-08).
+   The restore — its bot commit and its `reverts` row — is recorded before
+   the branch moves onto it (N-RES-08), under the repository row's lock
+   where the cap is counted, so two pushes cannot both pass it and a crash
+   after the move loses neither; GitHub refusing the move (a 422 race)
+   takes the row back.
 4. Which files a push touched: the payload's lists, or GitHub's compare when
    they cannot tell (a forced push, or the 20 commits GitHub lists at most);
    a new branch counts every protected file as touched.
+5. **A run on a restored head never counts** (orchestrator, review of
+   M3-04): the commit the student pushed ran their own copy of the protected
+   files — a tampered `grading.yml` reports what it likes. Its runs are kept
+   in the history, `to_verify`, and `selectScoreRun` (`@quiz/domain`) skips
+   every head in `reverts.head_sha`, whichever came first, the run or the
+   restore (the restore re-flags the runs already stored and reselects).
+   Defence in depth: a head received as a bot's push (`push_receipts.is_bot`)
+   never counts either, even with no `bot_commits` row.
 
 ## Context
 

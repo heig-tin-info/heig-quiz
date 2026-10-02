@@ -7,10 +7,11 @@
  * push fails cleanly (GitHub's 422) and the delivery is retried.
  *
  * Idempotent (M3-04): a file whose blob at the branch's head is already the
- * distribution's is left out, so a redelivered push, or a retry after the
- * ref moved, commits nothing. The restore commit's sha is handed to
- * `beforeMove` BEFORE the ref moves (N-RES-08): it is a bot commit from the
- * instant it can carry a run (N-SEC-21).
+ * distribution's is left out (the head's tree, read once), so a redelivered
+ * push, or a retry after the ref moved, commits nothing. The restore commit
+ * is handed to `beforeMove` BEFORE the ref moves (N-RES-08): the caller
+ * records it — a bot commit from the instant it can carry a run (N-SEC-21),
+ * and the restore's count — or refuses it (the cap), and the ref stays.
  */
 import type { Octokit } from "octokit";
 
@@ -21,8 +22,8 @@ export interface RevertResult {
   files: string[];
 }
 
-/** GitHub's blob sha of `path` at `ref`, with its content; null when there is no such file. */
-async function blobAt(
+/** The distribution's blob of `path` at `ref`, with its content; null when there is no such file. */
+async function referenceBlob(
   octokit: Octokit,
   owner: string,
   repo: string,
@@ -54,8 +55,11 @@ export async function revertProtectedFiles(opts: {
   branch: string;
   /** Protected files the push may have touched. */
   paths: string[];
-  /** Records the restore commit, before the branch moves onto it. */
-  beforeMove: (sha: string) => Promise<void>;
+  /**
+   * Records the restore commit before the branch moves onto it; false
+   * refuses it: the branch is left where it is and nothing is restored.
+   */
+  beforeMove: (commit: RevertResult) => Promise<boolean>;
 }): Promise<RevertResult | null> {
   const { octokit, org, studentRepo, squashedRepo, branch, paths } = opts;
   if (paths.length === 0) return null;
@@ -66,14 +70,25 @@ export async function revertProtectedFiles(opts: {
     ref: `heads/${branch}`,
   });
   const headSha = ref.object.sha;
+  const { data: headCommit } = await octokit.request("GET /repos/{owner}/{repo}/git/commits/{commit_sha}", {
+    owner: org,
+    repo: studentRepo,
+    commit_sha: headSha,
+  });
+  const { data: headTree } = await octokit.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", {
+    owner: org,
+    repo: studentRepo,
+    tree_sha: headCommit.tree.sha,
+    recursive: "true",
+  });
+  // A truncated listing knows nothing of the paths it left out: they are restored.
+  const atHead = new Map(headTree.truncated ? [] : headTree.tree.map((e) => [e.path, e.sha] as const));
 
   const tree: { path: string; mode: "100644"; type: "blob"; sha: string }[] = [];
   for (const path of paths) {
     // Absent from the distribution: the protected file has no reference.
-    const reference = await blobAt(octokit, org, squashedRepo, path, branch);
-    if (!reference) continue;
-    // Already the distribution's: nothing to cover.
-    if ((await blobAt(octokit, org, studentRepo, path, headSha))?.sha === reference.sha) continue;
+    const reference = await referenceBlob(octokit, org, squashedRepo, path, branch);
+    if (!reference || atHead.get(path) === reference.sha) continue;
     const { data: blob } = await octokit.request("POST /repos/{owner}/{repo}/git/blobs", {
       owner: org,
       repo: studentRepo,
@@ -84,10 +99,6 @@ export async function revertProtectedFiles(opts: {
   }
   if (tree.length === 0) return null;
 
-  const { data: headCommit } = await octokit.request(
-    "GET /repos/{owner}/{repo}/git/commits/{commit_sha}",
-    { owner: org, repo: studentRepo, commit_sha: headSha },
-  );
   const { data: newTree } = await octokit.request("POST /repos/{owner}/{repo}/git/trees", {
     owner: org,
     repo: studentRepo,
@@ -102,7 +113,8 @@ export async function revertProtectedFiles(opts: {
     tree: newTree.sha,
     parents: [headSha],
   });
-  await opts.beforeMove(commit.sha);
+  const result = { sha: commit.sha, files };
+  if (!(await opts.beforeMove(result))) return null;
   // Strict fast-forward: force=false; in case of a race, GitHub refuses.
   await octokit.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", {
     owner: org,
@@ -111,7 +123,7 @@ export async function revertProtectedFiles(opts: {
     sha: commit.sha,
     force: false,
   });
-  return { sha: commit.sha, files };
+  return result;
 }
 
 /** GitHub's compare lists at most this many files: past it, the list is not the whole change. */

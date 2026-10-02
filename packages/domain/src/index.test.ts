@@ -64,6 +64,9 @@ describe("@quiz/domain public surface", () => {
       "repoName",
       "resolveFinalScore",
       "runKind",
+      // Which runs count (M3-04).
+      "receivedLate",
+      "selectScoreRun",
       "slugify",
       "zonedIso",
     ];

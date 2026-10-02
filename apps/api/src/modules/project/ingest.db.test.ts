@@ -12,13 +12,15 @@
  *   student's push and after a workflow's commit, never after the App's; a
  *   long or forced push read through GitHub's compare; a redelivery never
  *   restores twice; past five restores in an hour, suspended, audited once,
- *   its runs `to_verify`;
+ *   its runs `to_verify`; a run on a restored head never the score, in
+ *   either order; the CI state of the student's commit after a restore;
  * - runs: counted only on a handed-out branch and a head that is no bot
  *   commit; once per (repository, run, attempt); GRADE parsed (`ok`,
  *   `multiple`, `malformed` with its reason, `no_annotation`); the current
  *   score's rule, the `fallback` rule; GR-14.3; the review slot only once
  *   frozen; the grace refresh of the frozen slot;
- * - `member`, `repository` (renamed, deleted), `organization` renamed;
+ * - `member`, `repository` (renamed, deleted), `organization` renamed — a
+ *   stale rename replayed changes nothing, another organization untouched;
  * - hints to the repository's student and the course's staff, never to the
  *   classroom nor another student (N-SEC-20, I41);
  * - a rate-limited delivery sent again at the reset, no retry spent.
@@ -29,6 +31,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProjectSummary } from "@quiz/contracts";
+import { GRADING_WORKFLOW_PATH } from "@quiz/domain";
 
 import { loadConfig } from "../../config.js";
 
@@ -53,7 +56,6 @@ import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { processDelivery } from "../github/deliveries.js";
 import { onEvent } from "../github/service.js";
-import { GRADING_WORKFLOW_PATH } from "./grading.js";
 import { MAX_RESTORES_PER_HOUR } from "./protection.js";
 import { repoWorld } from "./testing.js";
 
@@ -353,14 +355,56 @@ describe("protected files (F-PROJ-08)", () => {
     expect(await restores(f)).toEqual([expect.objectContaining({ revertSha: restored, files: [GRADING], headSha: pushed.after })]);
     expect(await auditOf(f.repo.id, "project_repo.restore")).toHaveLength(1);
 
-    // The App's own push of the restore: no check, the last commit follows.
+    // The App's own push of the restore: no check, and not the student's last commit.
     await handled("push", { ...pushed.payload, before: pushed.after, after: restored, sender: { login: APP_BOT } });
-    expect((await repoRow(f.projectId)).lastCommitSha).toBe(restored);
+    expect((await repoRow(f.projectId)).lastCommitSha).toBe(pushed.after);
 
     // The student's push redelivered (a new delivery id): nothing restored twice, nothing counted twice.
     await handled("push", pushed.payload);
     expect(head(f)).toBe(restored);
     expect(await restores(f)).toHaveLength(1);
+  });
+
+  it("never scores a run on a restored head, whether it finished before the restore or after", async () => {
+    const f = await acceptedRepo();
+    const honest = await push(f, { "src/main.c": "honest" });
+    scored(honest.after, { title: "GRADE", message: "3/6" });
+    const honestRun = runPayload(f, honest.after);
+    await handled("workflow_run", honestRun);
+    const honestId = (await runOf(f, honestRun.workflow_run.id))!.id;
+
+    // Before: the tampered run is in, then the push is restored.
+    const before = head(f);
+    const tamperedFirst = world.commit(f.fullName, "main", { [GRADING]: "grade: always 6" });
+    scored(tamperedFirst, { title: "GRADE", message: "6/6" });
+    server.clock.advance(MINUTE);
+    const early = runPayload(f, tamperedFirst);
+    await handled("workflow_run", early);
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe((await runOf(f, early.workflow_run.id))!.id);
+    await handled("push", pushPayload(f, { branch: "main", before, after: tamperedFirst, files: { [GRADING]: "x" } }));
+    expect(await runOf(f, early.workflow_run.id)).toMatchObject({ points: 6, toVerify: true });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe(honestId);
+
+    // After: restored first, the run comes in flagged and out of the score.
+    const late = await push(f, { [GRADING]: "grade: 6 again" });
+    scored(late.after, { title: "GRADE", message: "6/6" });
+    server.clock.advance(MINUTE);
+    const after = runPayload(f, late.after);
+    await handled("workflow_run", after);
+    expect(await runOf(f, after.workflow_run.id)).toMatchObject({ points: 6, toVerify: true });
+    expect((await repoRow(f.projectId)).currentGradeRunId).toBe(honestId);
+  });
+
+  it("shows the CI state of the student's commit after a restore, never stuck pending", async () => {
+    const f = await acceptedRepo();
+    const { after } = await push(f, { [GRADING]: "grade: tampered", "src/main.c": "work" });
+    scored(after, { title: "GRADE", message: "4/6" });
+    await handled("workflow_run", runPayload(f, after, {}, "requested"));
+    expect((await repoRow(f.projectId)).ciStatus).toBe("pending");
+    // The restore's own run is a bot commit's: it never marks pending.
+    await handled("workflow_run", runPayload(f, head(f), {}, "requested"));
+    await handled("workflow_run", runPayload(f, after));
+    expect((await repoRow(f.projectId)).ciStatus).toBe("pass");
   });
 
   it("puts back the distribution's CURRENT version of the branch (2026-10-02)", async () => {
@@ -470,6 +514,14 @@ describe("a completed run (F-PROJ-10, ADR-011)", () => {
     expect(annotationReads).toBe(reads);
     await handled("workflow_run", { ...payload, workflow_run: { ...payload.workflow_run, run_attempt: 2 } });
     expect((await runs(f)).filter((r) => r.workflowRunId === payload.workflow_run.id)).toHaveLength(2);
+  });
+
+  it("ignores a run on a head received as a bot's push, even without its bot commit recorded", async () => {
+    const f = await acceptedRepo({ protectedFiles: [] });
+    const { after } = await push(f, { "src/main.c": "the App's" }, { login: APP_BOT });
+    scored(after, { title: "GRADE", message: "6/6" });
+    await handled("workflow_run", runPayload(f, after));
+    expect(await runs(f)).toHaveLength(0);
   });
 
   it("ignores a run on a branch not handed out, and a run on a bot commit", async () => {
@@ -584,6 +636,7 @@ describe("a completed run (F-PROJ-10, ADR-011)", () => {
     await server.app.db.update(projects).set({ deadlineAppliedAt: new Date(DEADLINE) }).where(eq(projects.id, f.projectId));
     const b = await push(f, { "g.c": "2" });
     scored(b.after, { title: "GRADE", message: "5/6" });
+    server.clock.advance(MINUTE);
     const run = runPayload(f, b.after);
     await handled("workflow_run", run);
     const row = await repoRow(f.projectId);
@@ -637,10 +690,18 @@ describe("member, repository and organization events (F-PROJ-07, F-PROJ-18)", ()
     expect((await repoRow(f.projectId)).invitationStatus).toBe("accepted");
   });
 
+  const renamedFrom = (from: string) => ({ repository: { name: { from } } });
+
   it("repository renamed: the name follows the id; deleted: marked once, terminal", async () => {
     const f = await acceptedRepo({ protectedFiles: [] });
-    await handled("repository", { action: "renamed", repository: { id: f.githubRepoId, full_name: `${f.org}/renamed` } });
+    const first = { action: "renamed", repository: { id: f.githubRepoId, full_name: `${f.org}/renamed` }, changes: renamedFrom(f.fullName.split("/")[1]!) };
+    await handled("repository", first);
     expect((await repoRow(f.projectId)).fullName).toBe(`${f.org}/renamed`);
+    await handled("repository", { action: "renamed", repository: { id: f.githubRepoId, full_name: `${f.org}/again` }, changes: renamedFrom("renamed") });
+    // The first rename replayed after the second: stale, nothing changes.
+    await handled("repository", first);
+    expect((await repoRow(f.projectId)).fullName).toBe(`${f.org}/again`);
+    await server.app.db.update(projectRepos).set({ fullName: `${f.org}/renamed` }).where(eq(projectRepos.id, f.repo.id));
 
     server.clock.set("2026-10-04T10:00:00.000Z");
     const deleted = { action: "deleted", repository: { id: f.githubRepoId, full_name: `${f.org}/renamed` } };
@@ -657,16 +718,30 @@ describe("member, repository and organization events (F-PROJ-07, F-PROJ-18)", ()
   it("repository renamed: a project's distribution follows its id too", async () => {
     const f = await acceptedRepo();
     const [project] = await server.app.db.select().from(projects).where(eq(projects.id, f.projectId));
-    await handled("repository", { action: "renamed", repository: { id: project!.distributionRepoId, full_name: `${f.org}/dist-renamed` } });
+    await handled("repository", {
+      action: "renamed",
+      repository: { id: project!.distributionRepoId, full_name: `${f.org}/dist-renamed` },
+      changes: renamedFrom("lab-1-squashed"),
+    });
     const [after] = await server.app.db.select().from(projects).where(eq(projects.id, f.projectId));
     expect(after!.distributionFullName).toBe(`${f.org}/dist-renamed`);
   });
 
-  it("organization renamed: every name stored for its projects takes the new prefix, idempotently", async () => {
+  it("organization renamed: every name stored for its projects takes the new prefix, idempotently, nobody else's", async () => {
     const f = await acceptedRepo({ protectedFiles: [] });
+    const bystander = await acceptedRepo({ protectedFiles: [] });
     const event = { action: "renamed", organization: { id: f.githubOrgId, login: "renamed-org" }, changes: { login: { from: f.org } } };
     await handled("organization", event);
     await handled("organization", event);
+    // A later rename, then the first replayed: stale, nothing changes.
+    await handled("organization", { action: "renamed", organization: { id: f.githubOrgId, login: "renamed-twice" }, changes: { login: { from: "renamed-org" } } });
+    await handled("organization", event);
+    const [twice] = await server.app.db.select().from(projects).where(eq(projects.id, f.projectId));
+    expect(twice!.sourceFullName).toBe("renamed-twice/starter");
+    await handled("organization", { action: "renamed", organization: { id: f.githubOrgId, login: "renamed-org" }, changes: { login: { from: "renamed-twice" } } });
+    const [other] = await server.app.db.select().from(projects).where(eq(projects.id, bystander.projectId));
+    expect(other).toMatchObject({ sourceFullName: `${bystander.org}/starter`, distributionFullName: bystander.distribution });
+    expect((await repoRow(bystander.projectId)).fullName).toBe(bystander.fullName);
     const [project] = await server.app.db.select().from(projects).where(eq(projects.id, f.projectId));
     expect(project).toMatchObject({ sourceFullName: "renamed-org/starter", distributionFullName: "renamed-org/lab-1-squashed" });
     expect((await repoRow(f.projectId)).fullName).toBe(`renamed-org/lab-1-${f.student.login}`);

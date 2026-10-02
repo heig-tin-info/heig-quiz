@@ -39,7 +39,7 @@ import type { GithubWebhookBody } from "@quiz/contracts";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { pushReceipts, webhookDeliveries } from "../../db/schema.js";
-import { githubApp, rateLimitReset, recentHookDeliveries, redeliverHookDelivery } from "../../github/app.js";
+import { githubApp, isZeroSha, rateLimitReset, recentHookDeliveries, redeliverHookDelivery } from "../../github/app.js";
 import { GITHUB_WEBHOOK_QUEUE } from "../../jobs.js";
 import { redactTokens } from "../../redact.js";
 
@@ -106,7 +106,6 @@ const PushEvent = z.object({
   repository: z.object({ id: z.number().int() }),
   sender: z.object({ login: z.string() }).optional(),
 });
-const DELETED = /^0+$/;
 
 /** The workflows' own token (GR-16): the grader's commits, never a student's. */
 const GITHUB_ACTIONS_BOT = "github-actions[bot]";
@@ -127,7 +126,7 @@ export function pushedBy(config: AppConfig, login: string | undefined): "app" | 
 async function writeReceipt(tx: Tx, config: AppConfig, delivery: WebhookDelivery): Promise<void> {
   if (trackers.size === 0) return;
   const push = PushEvent.safeParse(delivery.payload);
-  if (!push.success || DELETED.test(push.data.after)) return;
+  if (!push.success || isZeroSha(push.data.after)) return;
   const repoId = push.data.repository.id;
   let tracked = false;
   for (const tracks of trackers) if ((tracked = await tracks(tx, repoId))) break;
@@ -291,6 +290,9 @@ export async function reconcileDeliveries(
     )
     .orderBy(asc(webhookDeliveries.receivedAt))
     .limit(MAX_REPLAYS);
+  // A delivery waiting out a rate limit (`processDelivery`) may be replayed
+  // here before its reset: accepted — it meets the limit again and is sent
+  // again for the reset, at the cost of a few calls once a day.
   for (const { deliveryId } of stuck) {
     await dispatchDelivery(app, config, deliveryId, { wait: true });
   }

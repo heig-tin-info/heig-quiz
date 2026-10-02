@@ -5,7 +5,7 @@
  */
 import type { Octokit } from "octokit";
 
-import { rateLimitReset } from "./app.js";
+import { ownerRepo, rateLimitReset } from "./app.js";
 
 export interface RepoLiveState {
   lastCommitSha: string | null;
@@ -22,7 +22,7 @@ export async function fetchRepoLiveState(
   fullName: string,
   opts: { noRateLimitWait?: boolean } = {},
 ): Promise<RepoLiveState | null> {
-  const [owner, repo] = fullName.split("/") as [string, string];
+  const { owner, repo } = ownerRepo(fullName);
   const request = { retries: 0, noRateLimitWait: opts.noRateLimitWait === true };
   try {
     const commits = await octokit.request("GET /repos/{owner}/{repo}/commits", {

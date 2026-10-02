@@ -5,7 +5,7 @@
  * Once a project's score is frozen (deadline + grace, ADR-012), the server
  * fires ONE `repository_dispatch` per student repository carrying the frozen
  * commit; the repository's `grading.yml` runs its LLM review, whose run comes
- * back through the ordinary ingestion as an `llm` run. A review checkpoint
+ * back through the ordinary ingestion as a `review` run. A review checkpoint
  * (classroom's "milestone", `docs/merge/07-incompatibilities.md` §7.4) does
  * the same before the deadline, on the last commit received before it.
  *
@@ -14,20 +14,9 @@
  * living in the student repositories: they are wire names, kept as they are.
  */
 
-/** The one workflow whose runs carry a score. */
-export const GRADING_WORKFLOW_PATH = ".github/workflows/grading.yml";
+// `GRADING_WORKFLOW_PATH` and `runKind` live in `projectRuns.ts` (M3-04).
 
 const DAY_MS = 86_400_000;
-
-/**
- * The grading workflow fired by the platform's `repository_dispatch`
- * is the authoritative LLM review; every other run is the indicative CI tier
- * — a student workflow listening to `repository_dispatch` cannot impersonate
- * the review.
- */
-export function runKind(run: { event: string; path: string }): "ci" | "llm" {
-  return run.event === "repository_dispatch" && run.path === GRADING_WORKFLOW_PATH ? "llm" : "ci";
-}
 
 export interface FinalReviewDispatch {
   /** Frozen commit to review (`client_payload.sha`). */

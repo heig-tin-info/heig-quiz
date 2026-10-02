@@ -1,9 +1,10 @@
 /**
  * The grading pipeline of projects (F-PROJ-10, F-PROJ-11, N-SEC-21; merge
  * task M3-04), ported from heig-classroom's `grading.ts` (sync point
- * `ab98cc0`, no later fix): which runs count, the score read from the
- * run's GRADE annotation, the current score, the grace-period refresh of
- * the frozen one.
+ * `ab98cc0`, no later fix): the reads and writes around the pure rules of
+ * `@quiz/domain` (`projectRuns.ts`: `runKind`, `receivedLate`,
+ * `selectScoreRun`) — which runs count, the score read from the run's GRADE
+ * annotation, the current score, the grace-period refresh of the frozen one.
  *
  * ONE ingestion path (ADR-011): the `workflow_run` webhook and the
  * reconciliation of M3-06 both call {@link ingestCompletedRun}, idempotent
@@ -12,26 +13,23 @@
  * A run's score is a SCORE, points out of a maximum, never a grade, and it
  * is indicative until the staff release it (F-PROJ-14): a run with several
  * GRADE annotations has none (a student's code could print one), a run on
- * a commit the App pushed never counts, and what decides "before the
- * deadline" is the server's receipt time of the push (ADR-012).
+ * a commit a bot pushed never counts, a run on a head whose protected files
+ * were restored never counts, and what decides "before the deadline" is the
+ * server's receipt time of the push (ADR-012).
  */
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, desc, eq, or, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
-import type { GRADE_RUN_KINDS } from "@quiz/contracts";
-import { extractScore, type ScoreParse } from "@quiz/domain";
+import { extractScore, GRADING_WORKFLOW_PATH, receivedLate, runKind, selectScoreRun, type ScoreParse } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { botCommits, projectGradeRuns, projectRepos, pushReceipts } from "../../db/schema.js";
+import { botCommits, projectGradeRuns, projectRepos, pushReceipts, reverts } from "../../db/schema.js";
+import { ownerRepo } from "../../github/app.js";
 import type { RepoContext } from "./repos.js";
 
-type GradeRunKind = (typeof GRADE_RUN_KINDS)[number];
-
-/** The workflow whose runs carry a score (a wire name, I16). */
-export const GRADING_WORKFLOW_PATH = ".github/workflows/grading.yml";
 /** The raw test counters `score` ≥ 0.7.2 prints beside the score: "passed/total". */
 const TESTS_ANNOTATION_TITLE = "TESTS";
 /** How much of a malformed annotation is kept as the reason (F-PROJ-10). */
@@ -54,97 +52,81 @@ export interface CompletedRun {
 }
 
 /**
- * The review dispatched by Quiz (`grade-final`, `grade-milestone`, M3-05) is
- * a `review` run; every other run is the indicative `ci` tier.
- */
-export function runKind(run: Pick<CompletedRun, "event" | "path">): GradeRunKind {
-  return run.event === "repository_dispatch" && run.path === GRADING_WORKFLOW_PATH ? "review" : "ci";
-}
-
-/**
- * A run counts on a handed-out branch, on a head commit that is not a bot
- * commit (`bot_commits`: the App's restores, deadline commits and syncs,
- * and the workflows' own commits). A review run skips the bot check: a
- * dispatched run runs on the default branch's head, which may be a deadline
- * commit or an earlier review's.
+ * A run counts on a handed-out branch, on a head commit no bot pushed: not
+ * in `bot_commits` (the App's restores, deadline commits and syncs, the
+ * workflows' own commits), nor received as a bot's push (`push_receipts.is_bot`,
+ * the defence in depth when a bot commit was not recorded). A review run
+ * skips the bot check: a dispatched run runs on the default branch's head,
+ * which may be a deadline commit or an earlier review's.
  */
 export async function isEligible(
   db: Db,
   ctx: RepoContext,
-  headBranch: string | null | undefined,
-  headSha: string | null | undefined,
-  kind: GradeRunKind,
+  run: Pick<CompletedRun, "headBranch" | "headSha" | "event" | "path">,
 ): Promise<boolean> {
-  if (!headBranch || !headSha || !ctx.project.branches.includes(headBranch)) return false;
-  if (kind === "review") return true;
-  const [bot] = await db
-    .select({ sha: botCommits.sha })
-    .from(botCommits)
-    .where(and(eq(botCommits.repoId, ctx.repo.id), eq(botCommits.sha, headSha)))
-    .limit(1);
-  return bot === undefined;
-}
-
-/**
- * Whether `headSha` came in after the deadline, by the server's receipt of
- * its push (ADR-012), never the commit's date. Unknown receipt — a lost
- * webhook, a run reconciled after the fact — is late once the deadline has
- * passed (GR-14.3, ADR-011 §4); ahead of it, it is on time.
- */
-export async function isAfterDeadline(db: Db, ctx: RepoContext, headSha: string, now: Date): Promise<boolean> {
-  const deadline = ctx.project.deadlineAt.getTime();
-  const [receipt] =
+  if (!run.headBranch || !run.headSha || !ctx.project.branches.includes(run.headBranch)) return false;
+  if (runKind(run) === "review") return true;
+  const [[bot], [botPush]] = await Promise.all([
+    db
+      .select({ sha: botCommits.sha })
+      .from(botCommits)
+      .where(and(eq(botCommits.repoId, ctx.repo.id), eq(botCommits.sha, run.headSha)))
+      .limit(1),
     ctx.repo.githubRepoId === null
       ? []
-      : await db
-          .select({ receivedAt: pushReceipts.receivedAt })
+      : db
+          .select({ id: pushReceipts.id })
           .from(pushReceipts)
-          .where(and(eq(pushReceipts.githubRepoId, ctx.repo.githubRepoId), eq(pushReceipts.headSha, headSha)))
-          .limit(1);
-  if (receipt) return receipt.receivedAt.getTime() > deadline;
-  return now.getTime() > deadline;
+          .where(
+            and(
+              eq(pushReceipts.githubRepoId, ctx.repo.githubRepoId),
+              eq(pushReceipts.headSha, run.headSha),
+              eq(pushReceipts.isBot, true),
+            ),
+          )
+          .limit(1),
+  ]);
+  return bot === undefined && botPush === undefined;
 }
 
 /**
- * The current score's run (F-PROJ-10; product owner, 2026-10-02): the
- * latest counted `ci` run, by GitHub's completion time, on a commit received
- * before the deadline, with a score (`ok`). A pass / fail `fallback` run
- * (a workflow other than `grading.yml`) counts only when the repository has
- * no `grading.yml` run at all: a build workflow beside the grading one never
- * displaces the score.
+ * The commit whose CI state the repository shows (F-PROJ-10): the student's
+ * last commit (`last_commit_sha`, never moved by a bot's push), or any while
+ * none is known. The ONE rule for `pending` and for the aggregated state.
  */
-export async function selectScoreRun(db: Db, repoId: string): Promise<string | null> {
-  const r = projectGradeRuns;
-  const [row] = await db
-    .select({ id: r.id })
-    .from(r)
-    .where(
-      and(
-        eq(r.repoId, repoId),
-        eq(r.kind, "ci"),
-        eq(r.afterDeadline, false),
-        or(
-          eq(r.parseStatus, "ok"),
-          and(
-            eq(r.parseStatus, "fallback"),
-            sql`NOT EXISTS (SELECT 1 FROM project_grade_runs g WHERE g.repo_id = ${repoId} AND g.parse_status <> 'fallback')`,
-          ),
-        ),
-      ),
-    )
-    .orderBy(desc(r.completedAt))
+export function isLastStudentCommit(ctx: RepoContext, sha: string): boolean {
+  return ctx.repo.lastCommitSha === null || ctx.repo.lastCommitSha === sha;
+}
+
+/** The server's receipt time of `headSha` on the repository, or null when none was written. */
+async function receiptOf(db: Db, ctx: RepoContext, headSha: string): Promise<Date | null> {
+  if (ctx.repo.githubRepoId === null) return null;
+  const [receipt] = await db
+    .select({ receivedAt: pushReceipts.receivedAt })
+    .from(pushReceipts)
+    .where(and(eq(pushReceipts.githubRepoId, ctx.repo.githubRepoId), eq(pushReceipts.headSha, headSha)))
     .limit(1);
-  return row?.id ?? null;
+  return receipt?.receivedAt ?? null;
+}
+
+/** The heads whose protected files the App restored (F-PROJ-08): their runs never count. */
+async function restoredHeads(db: Db, repoId: string): Promise<Set<string>> {
+  const rows = await db.select({ head: reverts.headSha }).from(reverts).where(eq(reverts.repoId, repoId));
+  return new Set(rows.flatMap((r) => (r.head === null ? [] : [r.head])));
 }
 
 /**
- * The current score reselected and, while the deadline is applied but the
- * freeze not yet definitive (the grace, F-PROJ-11), the frozen one with it:
- * a run on a commit received in time may still improve it. Inert until the
- * deadline is applied (M3-05).
+ * The current score reselected (`selectScoreRun` of `@quiz/domain`) and,
+ * while the deadline is applied but the freeze not yet definitive (the
+ * grace, F-PROJ-11), the frozen one with it: a run on a commit received in
+ * time may still improve it. Inert until the deadline is applied (M3-05).
  */
 export async function refreshScoreSelection(db: Db, ctx: RepoContext): Promise<void> {
-  const selected = await selectScoreRun(db, ctx.repo.id);
+  const [runs, restored] = await Promise.all([
+    db.select().from(projectGradeRuns).where(eq(projectGradeRuns.repoId, ctx.repo.id)),
+    restoredHeads(db, ctx.repo.id),
+  ]);
+  const selected = selectScoreRun(runs, restored);
   const inGrace = ctx.project.deadlineAppliedAt !== null && ctx.project.frozenAt === null;
   await db
     .update(projectRepos)
@@ -162,7 +144,7 @@ async function readAnnotations(
   headSha: string,
   checkSuiteId: number | null,
 ): Promise<{ score: ScoreParse; tests: { passed: number; total: number } | null }> {
-  const [owner, repo] = fullName.split("/") as [string, string];
+  const { owner, repo } = ownerRepo(fullName);
   const { data: checks } = await octokit.request("GET /repos/{owner}/{repo}/commits/{ref}/check-runs", {
     owner,
     repo,
@@ -199,7 +181,7 @@ async function aggregateCiStatus(
   fullName: string,
   headSha: string,
 ): Promise<"none" | "pending" | "pass" | "fail"> {
-  const [owner, repo] = fullName.split("/") as [string, string];
+  const { owner, repo } = ownerRepo(fullName);
   const { data } = await octokit.request("GET /repos/{owner}/{repo}/actions/runs", {
     owner,
     repo,
@@ -222,8 +204,8 @@ async function aggregateCiStatus(
  * freeze is definitive (`frozen_at`): a checkpoint's review before it is a
  * trace, never the final review (F-PROJ-11 as amended, M3-04).
  *
- * A run ingested while the repository's protection is suspended
- * (F-PROJ-08) is marked `to_verify`: its `grading.yml` may be the student's.
+ * `to_verify`: ingested while the repository's protection is suspended, or
+ * on a head whose protected files were restored (F-PROJ-08).
  */
 export async function ingestCompletedRun(
   app: FastifyInstance,
@@ -233,7 +215,7 @@ export async function ingestCompletedRun(
 ): Promise<string | null> {
   const db = app.db;
   const kind = runKind(run);
-  if (!ctx.repo.fullName || !(await isEligible(db, ctx, run.headBranch, run.headSha, kind))) return null;
+  if (!ctx.repo.fullName || !(await isEligible(db, ctx, run))) return null;
   const [existing] = await db
     .select({ id: projectGradeRuns.id })
     .from(projectGradeRuns)
@@ -247,10 +229,11 @@ export async function ingestCompletedRun(
     .limit(1);
   if (existing) return null;
 
-  const grading = run.path === GRADING_WORKFLOW_PATH;
-  const { score, tests } = grading
-    ? await readAnnotations(octokit, ctx.repo.fullName, run.headSha, run.checkSuiteId)
-    : { score: null, tests: null };
+  const { score, tests } =
+    run.path === GRADING_WORKFLOW_PATH
+      ? await readAnnotations(octokit, ctx.repo.fullName, run.headSha, run.checkSuiteId)
+      : { score: null, tests: null };
+  const restored = (await restoredHeads(db, ctx.repo.id)).has(run.headSha);
   const id = randomUUID();
   const [inserted] = await db
     .insert(projectGradeRuns)
@@ -270,8 +253,8 @@ export async function ingestCompletedRun(
       parseStatus: score?.status ?? "fallback",
       parseDetail: score?.status === "malformed" ? score.message.slice(0, PARSE_DETAIL_MAX) : null,
       kind,
-      afterDeadline: await isAfterDeadline(db, ctx, run.headSha, app.clock.now()),
-      toVerify: ctx.repo.protectionSuspendedAt !== null,
+      afterDeadline: receivedLate(await receiptOf(db, ctx, run.headSha), ctx.project.deadlineAt, app.clock.now()),
+      toVerify: ctx.repo.protectionSuspendedAt !== null || restored,
       completedAt: run.completedAt,
     })
     .onConflictDoNothing()
@@ -288,8 +271,7 @@ export async function ingestCompletedRun(
   }
 
   await refreshScoreSelection(db, ctx);
-  // The CI state of the repository's last known commit only.
-  if (!ctx.repo.lastCommitSha || ctx.repo.lastCommitSha === run.headSha) {
+  if (isLastStudentCommit(ctx, run.headSha)) {
     try {
       const ciStatus = await aggregateCiStatus(octokit, ctx.repo.fullName, run.headSha);
       await db.update(projectRepos).set({ ciStatus }).where(eq(projectRepos.id, ctx.repo.id));

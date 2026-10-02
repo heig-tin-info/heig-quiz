@@ -97,6 +97,17 @@ export function githubStatus(err: unknown): number | undefined {
   return typeof status === "number" ? status : undefined;
 }
 
+/** GitHub's all-zeros sha: a push's `after` deleting a branch, its `before` creating one. */
+export function isZeroSha(sha: string): boolean {
+  return /^0+$/.test(sha);
+}
+
+/** `owner/name` as the REST API's two path parameters. */
+export function ownerRepo(fullName: string): { owner: string; repo: string } {
+  const slash = fullName.indexOf("/");
+  return { owner: fullName.slice(0, slash), repo: fullName.slice(slash + 1) };
+}
+
 /**
  * Epoch ms when a request GitHub refused for its rate limit (a 403 or 429
  * with the quota exhausted, or a `retry-after`) may be made again; null for
