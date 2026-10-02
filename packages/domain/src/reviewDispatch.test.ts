@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { checkpointDueAt, planCheckpointReviewDispatch, planFinalReviewDispatch } from "./reviewDispatch.js";
+import {
+  checkpointDueAt,
+  checkpointFires,
+  checkpointRefusal,
+  isVoidCheckpoint,
+  planCheckpointReviewDispatch,
+  planFinalReviewDispatch,
+} from "./reviewDispatch.js";
 
 describe("planFinalReviewDispatch", () => {
   const project = { id: "p-1", deadlineAt: new Date("2026-07-03T21:59:00Z") };
@@ -62,5 +69,38 @@ describe("checkpointDueAt", () => {
     expect(checkpointDueAt(new Date("2026-10-25T22:59:00Z"), -1)).toEqual(new Date("2026-10-24T21:59:00Z"));
     // And in spring (29 March 2026): 71 h.
     expect(checkpointDueAt(new Date("2026-03-30T21:59:00Z"), -3)).toEqual(new Date("2026-03-27T22:59:00Z"));
+  });
+});
+
+describe("the checkpoints' rules (M3-05b)", () => {
+  const deadline = new Date("2026-10-09T22:00:00Z");
+  const now = new Date("2026-10-02T08:00:00Z");
+  const at = (iso: string) => new Date(iso);
+
+  it("refuses a date at or before now, then one at or after the deadline", () => {
+    expect(checkpointRefusal(now, deadline, now)).toBe("due_past");
+    expect(checkpointRefusal(at("2026-10-01T08:00:00Z"), deadline, now)).toBe("due_past");
+    expect(checkpointRefusal(deadline, deadline, now)).toBe("due_after_deadline");
+    expect(checkpointRefusal(at("2026-10-12T08:00:00Z"), deadline, now)).toBe("due_after_deadline");
+    expect(checkpointRefusal(at("2026-10-05T08:00:00Z"), deadline, now)).toBeNull();
+  });
+
+  it("is void once its date is no longer before the deadline", () => {
+    expect(isVoidCheckpoint(at("2026-10-09T21:59:59Z"), deadline)).toBe(false);
+    expect(isVoidCheckpoint(deadline, deadline)).toBe(true);
+  });
+
+  it("fires at its date, once, never void, never on a draft, a project graded none or archived", () => {
+    const due = at("2026-10-05T08:00:00Z");
+    const later = at("2026-10-05T08:00:01Z");
+    const project = { deadlineAt: deadline, state: "published", gradingMode: "auto", archivedAt: null };
+    const open = { dueAt: due, dispatchedAt: null };
+    expect(checkpointFires(open, project, at("2026-10-05T07:59:59Z"))).toBe(false);
+    expect(checkpointFires(open, project, later)).toBe(true);
+    expect(checkpointFires({ dueAt: due, dispatchedAt: later }, project, later)).toBe(false);
+    expect(checkpointFires(open, { ...project, deadlineAt: due }, later)).toBe(false);
+    expect(checkpointFires(open, { ...project, state: "draft" }, later)).toBe(false);
+    expect(checkpointFires(open, { ...project, gradingMode: "none" }, later)).toBe(false);
+    expect(checkpointFires(open, { ...project, archivedAt: later }, later)).toBe(false);
   });
 });

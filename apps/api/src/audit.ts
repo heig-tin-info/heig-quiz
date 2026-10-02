@@ -249,14 +249,33 @@ export type AuditAction =
   | "project.accept"
   | "project.accept_failed"
   /**
+   * The review dispatches (F-PROJ-11; merge task M3-05b), by the
+   * `project.dispatch` job, subject the project, one entry per pass that
+   * changed something: `review_dispatched` — the final reviews,
+   * `checkpoint_dispatched` — one checkpoint's, `payload.checkpointId` and
+   * `name` besides; both `dispatched`, `deleted` (404: the repository gone),
+   * `unconfirmed` (counts: GitHub's answer never came, never sent again) and
+   * `failed` (full names: GitHub refused, sent again on the next pass).
+   */
+  | "project.review_dispatched"
+  | "project.checkpoint_dispatched"
+  /**
+   * A review checkpoint authored or removed by the staff (F-PROJ-11; merge
+   * task M3-05b), subject the checkpoint: `payload.projectId`, `name`,
+   * `dueAt`, `offsetDays` (null: an absolute date).
+   */
+  | "project_checkpoint.create"
+  | "project_checkpoint.delete"
+  /**
    * What GitHub's webhooks did to a student's repository (F-PROJ-08,
    * F-PROJ-18; merge task M3-04), by the system, subject the
    * `project_repos` row. `restore`: `payload.files`, `sha` (the App's
    * restore commit), `head` (the push it answered); `revert_cap`: a sixth
    * restore in an hour refused, the protection suspended until the staff
    * re-enable it (M3-08) — `payload.files`, `head`; `deleted`: the
-   * repository deleted on GitHub, `payload.via` (`webhook`, or `deadline`:
-   * the 404 a deadline's step met, M3-05a).
+   * repository deleted on GitHub, `payload.via` (`webhook`, `deadline`:
+   * the 404 a deadline's step met, M3-05a, or `dispatch`: a review
+   * dispatch's, M3-05b).
    */
   | "project_repo.restore"
   | "project_repo.revert_cap"
@@ -270,6 +289,10 @@ export type AuditAction =
    * back to archiving the repository (H8, a plan without rulesets). By the
    * ticker: `deadline_applied` (its provisional freeze) and `frozen` (the
    * definitive one), `payload.projectId`, `deadlineAt` (its effective one).
+   * `review_skipped` (M3-05b): a repository frozen gets no final review,
+   * degraded — `payload.projectId`, `reason`: `archived` (as its lock, H8)
+   * or `protection_suspended` (F-PROJ-08); by the ticker at its freeze, or
+   * by the deadline job archiving a repository already frozen.
    */
   | "project_repo.deadline_applied"
   | "project_repo.frozen"
@@ -277,6 +300,7 @@ export type AuditAction =
   | "project_repo.lock"
   | "project_repo.unlock"
   | "project_repo.archived"
+  | "project_repo.review_skipped"
   | "question.copy"
   | "question.create"
   | "question.delete"

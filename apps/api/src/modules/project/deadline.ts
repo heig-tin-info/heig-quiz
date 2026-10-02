@@ -210,7 +210,7 @@ export async function projectDeadlineMoved(
     .set({
       deadlineAt,
       reminderSentAt: null,
-      ...(reopen ? { state: "published" as const, deadlineAppliedAt: null, reviewDispatchedAt: null } : {}),
+      ...(reopen ? { state: "published" as const, deadlineAppliedAt: null } : {}),
     })
     .where(eq(projects.id, before.id))
     .returning();

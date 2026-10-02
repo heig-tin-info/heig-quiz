@@ -127,7 +127,9 @@ Two consequences:
   and one of the reasons `config.ts` refuses a `pglite://` URL in
   production. With no queue at all (`JOBS_DISABLED=1`), GitHub follows a
   project's deadline only when a staff action asks for it: the ticker
-  never runs the deadline job itself (ADR-064).
+  never runs the deadline job itself (ADR-064), and no review is ever
+  dispatched — the final reviews and the checkpoints wait for a process
+  with a queue (`project.dispatch`, M3-05b).
 
 To start over, delete the directory. That is also how an existing database
 gets a newer demo world, such as the nine-question "Test 0": the seed only

@@ -48,6 +48,7 @@ import { installationClient } from "../../github/app.js";
 import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
 import { isLive, repoDeadlineState } from "./deadline.js";
+import { forEachLimit } from "./lease.js";
 import type { RepoRow } from "./repos.js";
 import { projectSummary, type ProjectRow } from "./views.js";
 
@@ -57,15 +58,6 @@ export const LIVE_CONCURRENCY = 8;
 export const LIVE_BUDGET_MS = 1_500;
 
 type RunRow = typeof projectGradeRuns.$inferSelect;
-
-/** `items` through `run`, `limit` at a time, none started once `stopped()` (as `jobs.ts`'s). */
-async function forEachLimit<T>(items: readonly T[], limit: number, run: (item: T) => Promise<void>, stopped: () => boolean) {
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length && !stopped()) await run(items[next++]!);
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-}
 
 /**
  * The live state of `repos` read within `budgetMs`, by repository id: a

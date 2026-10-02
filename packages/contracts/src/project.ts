@@ -735,3 +735,65 @@ export const ProjectDetail = ProjectSummary.extend({
   rows: z.array(ProjectDetailRow),
 });
 export type ProjectDetail = z.infer<typeof ProjectDetail>;
+// ---------------------------------------------------------- review checkpoints (M3-05b)
+
+/**
+ * A checkpoint's name: the tag of `criteria.yml`'s `milestone:` entries and
+ * the argument of `score grade --milestone` (a wire name, I16), so shell-
+ * and YAML-friendly.
+ */
+export const CheckpointName = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9_-]{0,49}$/, "lowercase letters, digits, - and _ (at most 50)");
+
+/**
+ * `POST /app/api/projects/:id/checkpoints` (F-PROJ-11): a name and EITHER an
+ * absolute date OR an offset of −365…−1 days from the project's deadline
+ * (J−n, calendar days in Europe/Zurich, `checkpointDueAt`; re-resolved when
+ * the deadline moves). The resolved date must lie ahead (`422 due_past`) and
+ * before the project's deadline (`422 due_after_deadline`).
+ */
+export const ReviewCheckpointCreate = z
+  .strictObject({
+    name: CheckpointName,
+    dueAt: Instant.optional(),
+    offsetDays: z.number().int().min(-365).max(-1).optional(),
+  })
+  .refine((b) => (b.dueAt === undefined) !== (b.offsetDays === undefined), {
+    message: "Give either a date or an offset, not both",
+    path: ["dueAt"],
+  });
+export type ReviewCheckpointCreate = z.infer<typeof ReviewCheckpointCreate>;
+
+/**
+ * One review checkpoint, for its staff: `dueAt` its date as resolved,
+ * `offsetDays` the J−n it was authored as (null: an absolute date),
+ * `dispatchedAt` once its `grade-milestone` dispatch reached every
+ * repository it was due to. A checkpoint not dispatched whose date is no
+ * longer before the project's deadline (the deadline moved earlier) never
+ * fires: it is void, and may be deleted.
+ */
+export const ReviewCheckpoint = z.object({
+  id: z.uuid(),
+  name: CheckpointName,
+  dueAt: z.iso.datetime(),
+  offsetDays: z.number().int().nullable(),
+  dispatchedAt: z.iso.datetime().nullable(),
+});
+export type ReviewCheckpoint = z.infer<typeof ReviewCheckpoint>;
+
+/** `DELETE /app/api/projects/:id/checkpoints/:cid`: the project, and one of its checkpoints. */
+export const ProjectCheckpointParams = z.object({ id: z.uuid(), cid: z.uuid() });
+export type ProjectCheckpointParams = z.infer<typeof ProjectCheckpointParams>;
+
+/**
+ * The refusals of the checkpoints' routes, `{ error, message }` (statuses in
+ * the API's `modules/project/errors.ts`): `due_past` and `due_after_deadline`
+ * (422) — the resolved date at or before now, or at or after the project's
+ * deadline; `duplicate_checkpoint` (409) — the name is taken on the project;
+ * `checkpoint_dispatched` (409) — a deletion once a dispatch of it was
+ * claimed for any repository (the ledger keeps what was asked of GitHub).
+ */
+export const PROJECT_CHECKPOINT_REFUSALS = ["due_past", "due_after_deadline", "duplicate_checkpoint", "checkpoint_dispatched"] as const;
+export const ProjectCheckpointErrorCode = z.enum(PROJECT_CHECKPOINT_REFUSALS);
+export type ProjectCheckpointErrorCode = z.infer<typeof ProjectCheckpointErrorCode>;

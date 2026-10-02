@@ -52,12 +52,13 @@ import {
 } from "../../db/schema.js";
 import { setRemoteBaseForTests } from "../../github/git.js";
 import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
-import type { JobQueue } from "../../jobs.js";
+import { PROJECT_DEADLINE_QUEUE, type JobQueue } from "../../jobs.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { accessibleProjectRepo } from "../guards.js";
 import { refreshScoreSelection, ingestCompletedRun } from "./grading.js";
-import { DEADLINE_LEASE_MS, FAILED_RETRY_MS, projectTick, runDeadlineJob, type DeadlineJob } from "./jobs.js";
+import { projectTick, runDeadlineJob } from "./jobs.js";
+import { FAILED_RETRY_MS, LEASE_MS, type ProjectJob } from "./lease.js";
 import { repoContext } from "./repos.js";
 import { repoWorld } from "./testing.js";
 
@@ -160,12 +161,13 @@ const auditOf = (subjectId: string, action: string) =>
   server.app.db.select().from(auditLog).where(and(eq(auditLog.subjectId, subjectId), eq(auditLog.action, action)));
 
 /** The jobs the ticker sent, as a queue would have carried them. */
-const sent: DeadlineJob[] = [];
+const sent: ProjectJob[] = [];
 /** One pass of the ticker, a queue in place; true when it made no request to GitHub. */
 async function tick(): Promise<boolean> {
   const queue: JobQueue = {
     createQueue: async () => {},
-    send: async (_name, data) => void sent.push(data as DeadlineJob),
+    // The deadline's jobs only: the review dispatches are dispatch.db.test's.
+    send: async (name, data) => void (name === PROJECT_DEADLINE_QUEUE && sent.push(data as ProjectJob)),
     work: async () => {},
     stop: async () => {},
   };
@@ -180,7 +182,7 @@ async function tick(): Promise<boolean> {
   return gh.calls.length === before;
 }
 /** The jobs sent for `projectId` since the last call, taken off the list. */
-function jobsOf(projectId: string): DeadlineJob[] {
+function jobsOf(projectId: string): ProjectJob[] {
   const mine = sent.filter((j) => j.projectId === projectId);
   for (const job of mine) sent.splice(sent.indexOf(job), 1);
   return mine;
@@ -309,7 +311,7 @@ describe("the ticker (ADR-006, ADR-064)", () => {
     await tick();
     const [crashed] = jobsOf(p.id);
 
-    server.clock.advance(DEADLINE_LEASE_MS - MINUTE);
+    server.clock.advance(LEASE_MS - MINUTE);
     await tick();
     expect(jobsOf(p.id)).toEqual([]);
 
@@ -334,7 +336,7 @@ describe("the ticker (ADR-006, ADR-064)", () => {
     expect(world.archived.has(p.repos[0]!.fullName!)).toBe(false);
     expect((await repoRow(p.repos[0]!.id)).lockedAt).toBeNull();
     // Held still, but expiring 30 s on (N-PERF-07), not ten minutes.
-    expect((await projectRow(p.id)).deadlineJobAt).toEqual(at(DEADLINE, 1000 - DEADLINE_LEASE_MS + FAILED_RETRY_MS));
+    expect((await projectRow(p.id)).deadlineJobAt).toEqual(at(DEADLINE, 1000 - LEASE_MS + FAILED_RETRY_MS));
     rulesetsDown = false;
     server.clock.advance(FAILED_RETRY_MS - 1000);
     await tick();
@@ -354,7 +356,7 @@ describe("the ticker (ADR-006, ADR-064)", () => {
     // One repository settles nine minutes on; while the other is still being
     // locked, eighteen minutes after the claim, the ticker looks again.
     server.clock.advance(9 * MINUTE);
-    let overlapping: DeadlineJob[] | null = null;
+    let overlapping: ProjectJob[] | null = null;
     duringLock = async () => {
       await vi.waitFor(
         async () => expect((await projectRow(p.id)).deadlineJobAt).toEqual(at(DEADLINE, 1000 + 9 * MINUTE)),
@@ -404,7 +406,7 @@ describe("the ticker (ADR-006, ADR-064)", () => {
     const [deleted] = await auditOf(p.repos[0]!.id, "project_repo.deleted");
     expect(deleted!.payload).toEqual({ via: "deadline" });
     expect((await projectRow(p.id)).deadlineJobAt).toBeNull();
-    server.clock.advance(DEADLINE_LEASE_MS * 2);
+    server.clock.advance(LEASE_MS * 2);
     await tick();
     expect(jobsOf(p.id)).toEqual([]);
   });
@@ -551,6 +553,8 @@ describe("a repository's own deadline (D13 amended)", () => {
       conclusion: "success",
       path: ".github/workflows/build.yml",
       event: "push",
+      triggeredBy: "person",
+      startedAt: null,
       checkSuiteId: null,
       completedAt: at(DEADLINE, 61 * MINUTE),
     });
@@ -611,7 +615,7 @@ describe("the reopen (F-PROJ-09)", () => {
     server.clock.set("2026-10-10T08:00:00Z");
     const moved = await call("PATCH", `/app/api/projects/${p.id}`, teacher.headers, { deadlineAt: "2026-10-12T22:00:00Z" });
     expect(moved.statusCode, moved.body).toBe(200);
-    expect(await projectRow(p.id)).toMatchObject({ state: "published", deadlineAppliedAt: null, reviewDispatchedAt: null });
+    expect(await projectRow(p.id)).toMatchObject({ state: "published", deadlineAppliedAt: null });
     // The late run was received before the new deadline: it is the score now.
     const [lateRun] = await server.app.db.select().from(projectGradeRuns).where(eq(projectGradeRuns.id, late));
     expect(lateRun!.afterDeadline).toBe(false);
@@ -661,7 +665,7 @@ describe("the reopen (F-PROJ-09)", () => {
     expect(ProjectRepoDeadlineState.parse((await lock("unlock")).json())).toMatchObject({ locked: false, staffLock: false });
     expect(lockRuleset(repo!.fullName!)).toBe(false);
     expect(await auditOf(repo!.id, "project_repo.unlock")).toHaveLength(2);
-    server.clock.advance(DEADLINE_LEASE_MS * 2);
+    server.clock.advance(LEASE_MS * 2);
     await tick();
     expect(jobsOf(p.id)).toEqual([]);
     expect(lockRuleset(repo!.fullName!)).toBe(false);

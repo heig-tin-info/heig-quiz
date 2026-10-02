@@ -29,12 +29,14 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   IdParam,
   ProjectAcceptance,
+  ProjectCheckpointParams,
   ProjectCreate,
   ProjectListQuery,
   ProjectPatch,
   ProjectRepoDeadline,
   ProjectRepoParams,
   ProjectSourceParams,
+  ReviewCheckpointCreate,
 } from "@quiz/contracts";
 
 import { actorOf } from "../../audit.js";
@@ -194,6 +196,34 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
       }),
     );
   }
+
+  // ------------------------------------------------------------ review checkpoints (M3-05b)
+
+  /** F-PROJ-11: the project's review checkpoints, the earliest first. */
+  app.get(
+    "/app/api/projects/:id/checkpoints",
+    session,
+    teacher(onProject, async ({ scope }) => service.listCheckpoints(app.db, scope.project.id)),
+  );
+
+  /** A checkpoint: a name and a date, absolute or J−n of the deadline; dispatched by the `project.dispatch` job. */
+  app.post(
+    "/app/api/projects/:id/checkpoints",
+    session,
+    teacher({ ...onProject, body: ReviewCheckpointCreate }, async ({ req, reply, now, body, scope }) =>
+      reply.code(201).send(await service.createCheckpoint(app.db, scope.project.id, body, actorOf(req), now)),
+    ),
+  );
+
+  /** Refused once a dispatch of it was claimed for any repository (409 `checkpoint_dispatched`). */
+  app.delete(
+    "/app/api/projects/:id/checkpoints/:cid",
+    session,
+    teacher({ params: ProjectCheckpointParams, load: accessibleProject.bind(null, app) }, async ({ req, reply, params, scope }) => {
+      if (!(await service.deleteCheckpoint(app.db, scope.project.id, params.cid, actorOf(req)))) return notFound(reply);
+      return reply.code(204).send();
+    }),
+  );
 
   // ------------------------------------------------------------ the student's side (M3-03)
 
