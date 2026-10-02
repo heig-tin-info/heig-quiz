@@ -57,6 +57,10 @@ const TemplateEditor = lazy(() =>
 const ClassroomView = lazy(() =>
   import("./ClassroomView").then((m) => ({ default: m.ClassroomView })),
 );
+// F-PROJ-01 (M3-11): the new project.
+const NewProjectPage = lazy(() =>
+  import("./project/NewProjectPage").then((m) => ({ default: m.NewProjectPage })),
+);
 // The pool screens (WP7): the teacher's authoring surface, one chunk each,
 // so a student — or a teacher who only runs quizzes — never downloads them.
 const PoolsPage = lazy(() => import("./pool/PoolsPage").then((m) => ({ default: m.PoolsPage })));
@@ -270,8 +274,8 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   classroomGrades: (_, c) => <ComingSoon title="bnav.grades" navigate={c.navigate} teacherUi={c.teacherUi} />,
   project: (_, c) => <ComingSoon title="soon.project" navigate={c.navigate} teacherUi={c.teacherUi} />,
   projectGroups: (_, c) => <ComingSoon title="soon.projectGroups" navigate={c.navigate} teacherUi={c.teacherUi} />,
-  // F-PROJ-01: "New ▾ › Project" (M3-10) leads here; M3-11 builds the form.
-  projectNew: (_, c) => <ComingSoon title="project.new" navigate={c.navigate} teacherUi={c.teacherUi} />,
+  // F-PROJ-01: "New ▾ › Project" (M3-10) leads here, M3-11's form.
+  projectNew: (r, c) => <NewProjectPage classroomId={r.classroomId} navigate={c.navigate} />,
   activities: (_, c) => <ActivitiesPage navigate={c.navigate} />,
   polls: (_, c) => <PollLauncher navigate={c.navigate} />,
   // The projection is for a beamer: no sidebar, no chrome.

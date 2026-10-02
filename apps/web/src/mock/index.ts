@@ -31,7 +31,9 @@
  *  - `journal` — the classroom PRG1-2026 has a journal (section 9);
  *    `journalerror` — and its last synchronisation failed;
  *  - `projects` — the classroom PRG1-2026 has three projects, one per
- *    state (section 5c);
+ *    state (section 5c), and its organization repositories to hand out
+ *    (section 8b); `srcmissing` and `distfail` — a new project's create is
+ *    refused, the source not found or the build failed;
  *  - `scene` — the student player's state, and only that one screen's:
  *    `?scene=lobby|running|paused|closed|extend|single|marks|forward|exercise` (`running` by default).
  *
@@ -56,6 +58,8 @@
  *   drill.ts       7.  the student's drill, the teacher's drill switches and view;
  *   github.ts      8.  GitHub: the App's organizations and a classroom's link
  *                      (`?unlinked=1` declared for the account, M2-01);
+ *   projectNew.ts  8b. the new project: the organization's repositories, one
+ *                      in detail, and the create (M3-11);
  *   journal.ts     9.  a classroom's journal, its navigation and its rendered
  *                      pages (`?journal=1`), and the staff's writes (M4-05);
  *   kiosk.ts       10. the kiosk stations: the admin's registry, and what a
@@ -125,6 +129,7 @@ import "./preview";
 import "./project";
 import "./drill";
 import "./github";
+import "./projectNew";
 import "./journal";
 import "./kiosk";
 import {
@@ -174,7 +179,8 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
     const m = url.pathname.match(r.re);
     if (!m) continue;
     try {
-      const result = r.h(m, body, url);
+      // Awaited: a handler that takes GitHub's time (a project's build) is async.
+      const result = await r.h(m, body, url);
       if (result === undefined) return new Response(null, { status: 204 });
       return new Response(JSON.stringify(result), {
         status: 200,

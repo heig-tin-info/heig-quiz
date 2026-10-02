@@ -930,6 +930,51 @@ files it ports; writes en + fr for every string.
   with the form — or, if the form is a sheet of the classroom page, drop
   the route and have `NewActivity`'s Project item open the sheet instead.
   On create, invalidate `classroomProjectsKey(id)` and `activitiesKey`.
+- **Decided for it** (product owner and orchestrator, 2026-10-02): **one
+  page** at the `projectNew` route, not a sheet nor steps, one primary
+  action **Create** (no Publish: F-PROJ-13 gives it to the project page);
+  `projectNew` stays `preview` until M3-12 (the form lands on the project
+  page, still `ComingSoon`).
+- **As delivered** (branch `merge/M3-11-project-form`):
+  - `Q:apps/web/src/project/NewProjectPage.tsx` (page, queries, create),
+    `ProjectAdvanced.tsx` ("Advanced options"), `newProject.ts` (pure: the
+    draft, `projectBody` — parsed by `ProjectCreate` itself —, the missing
+    fields, `refusalPlace`), `fields.tsx` (ids and messages of the fields).
+  - **Novice** (spec 08): name, source (`GET …/sources`, as sorted by the
+    API; its default branch and last push under it), deadline
+    (`datetime-local`, the browser's zone, named when it is not
+    Europe/Zurich). Picking a source reads `GET …/sources/:repo`; its
+    `suggestedProtected` are sent even while Advanced stays folded (a
+    Create pressed while it is read waits for it).
+  - **Advanced** (folded, not remembered): branches (chips in the order
+    chosen, the first the students' default; default the source's default
+    branch), history (`squash`/`whole`), publication (by hand / at the
+    start), deadline as a date or a duration (by hand only; days + hours),
+    at the deadline (`lock`/`commit`), grace, score (`auto`/`none`) and
+    scale (linear / score is the grade, its fallback said as static text),
+    protected files (the suggestions as checkboxes, any file of the tree
+    added from a select; unchecking `grading.yml` warns), groups and their
+    advisory maximum. A start only with a scheduled publication, a
+    duration only with a manual one: the form never sends both.
+  - **Refusals** (`ProjectRefusal`, `ProjectUnassigned` added to
+    `contracts/src/project.ts`): `source_not_found` under the source (with
+    `branches`: names them and unfolds Advanced; the sources and detail are
+    re-read), `deadline_past` under the deadline, `duplicate_slug` under
+    the name, `not_connected`/`app_not_installed` (from the sources' read or
+    the create) a page state whose action is the route
+    `{ view: "classroomSettings", id, connect: true }` (new `connect` on
+    that route, `?connect=1`), `distribution_failed` a danger alert above
+    the form with Retry, values kept; anything else "Could not create the
+    project". While the POST runs, the whole form is a disabled fieldset
+    and Create reads "Building the students' repository…".
+  - Success: invalidate `classroomProjectsKey(id)` and `activitiesKey`,
+    toast, navigate to `project` (M3-12). Keys `projectSourcesKey`,
+    `projectSourceKey` (beside the projects, not under them).
+  - Mock `mock/projectNew.ts` (section 8b, after GitHub whose link it reads):
+    sources and details under `?projects=1`, `?srcmissing=1`,
+    `?distfail=1`, a 2.5 s build; the dispatcher now awaits a handler.
+    Scenes `project-new`, `-advanced`, `-refusal`, `-unconnected`.
+  - Not done: checkpoints (M3-05), the project page (M3-12).
 
 ### M3-12 — Web: project page
 - **Depends on**: M3-08 contracts. ‖ M3-11.
@@ -940,6 +985,12 @@ files it ports; writes en + fr for every string.
   clickable in production** (the Projects group and /activities, through
   `KIND.project.home` in `activities/model.ts`, which asks
   `routeEnabled("project")`).
+- **From M3-11** (product owner, 2026-10-02): the new project form is
+  shipped but `projectNew` stays `preview` so production never lands on a
+  `ComingSoon` after a create. **Drop `preview` from `projectNew` and
+  `project` together in this task**: that turns "New ▾" on in production
+  (`NewActivity`), the form, and the page it navigates to after a create
+  (`{ view: "project", id }`).
 
 ### M3-13 — Web: student `ProjectRow`
 - **Depends on**: M3-09 contracts, M2-07.
