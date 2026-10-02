@@ -65,10 +65,16 @@ export async function api<T>(
     throw error;
   }
   // No body to parse: a 204, or a 202 (the journal's Refresh).
-  if (res.status === 202 || res.status === 204) {
+  if (res.status === 204) {
     return undefined as T;
   }
-  return (await res.json()) as T;
+  // A 202 may carry a body (a student's run, a grading pass) or none (the
+  // journal's Refresh); only the empty one reads as undefined.
+  const text = await res.text();
+  if (res.status === 202 && text === "") {
+    return undefined as T;
+  }
+  return JSON.parse(text) as T;
 }
 
 /**

@@ -7,11 +7,14 @@ afterEach(() => {
 });
 
 describe("api", () => {
-  it("reads no body from a 202 or a 204, and parses every other success", async () => {
+  it("reads no body from a 204 or an empty 202, and parses every other success", async () => {
     const reply = (status: number, body: string | null) =>
       vi.stubGlobal("fetch", async () => new Response(body, { status }));
     reply(202, null);
     await expect(api("/x")).resolves.toBeUndefined();
+    // `POST /attempts/:id/run` answers 202 with the run's result in the body.
+    reply(202, '{"requestId":"r","result":{"status":"ok"}}');
+    await expect(api("/x")).resolves.toEqual({ requestId: "r", result: { status: "ok" } });
     reply(204, null);
     await expect(api("/x")).resolves.toBeUndefined();
     reply(200, '{"a":1}');
