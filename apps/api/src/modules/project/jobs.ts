@@ -423,7 +423,7 @@ async function settleRepo(app: FastifyInstance, octokit: Octokit, repoId: string
           subjectId: repo.id,
           payload: { projectId: project.id, protected: repo.rulesetId !== null },
         });
-        // Archived after its freeze (a staff lock): its final review, if not asked yet, never comes.
+        // Archived after its freeze (a staff lock): a final review not asked yet never comes; audited even when it was asked.
         if (repo.frozenAt !== null && project.gradingMode === "auto") await auditReviewSkipped(db, repo, "archived");
       }
       steps.push(archived ? "archived" : "locked");

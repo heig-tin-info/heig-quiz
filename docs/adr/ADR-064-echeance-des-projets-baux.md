@@ -166,7 +166,18 @@ the review round's tightening of 2, 4 and 6):
    nor one from before a reopen, delivered late, is taken for it. The
    `workflow_run` event does not carry the dispatch's `client_payload`:
    a checkpoint's run started after the final review was asked would
-   still pass, which (5) makes impossible in practice.
+   still pass. (5) leaves that only to a GitHub delay longer than the
+   gap from the checkpoint to the deadline, plus the grace, plus one
+   tick — an Actions incident, not a student's doing. The slot also
+   compares GitHub's clock (`run_started_at`) with ours (`frozen_at`, the
+   ledger's `created_at`): a clock of ours running ahead of GitHub's by
+   more than the dispatch's round trip would leave a real final review as
+   a trace (negligible under NTP, visible as "no review" to the staff).
+   The rules of this point and of the at-most-once 5xx case were decided
+   by the orchestrator during the review of M3-05b (2026-10-02), within
+   the product owner's choices: only Quiz's review counts, never twice,
+   and a review on a tampered workflow (protection suspended) counts
+   for nothing.
 5. **Checkpoints** fire at their date while they lie before the project's
    deadline (else void: never, but deletable; `checkpointFires` and
    `checkpointRefusal` of `@quiz/domain`, their SQL twin only in the

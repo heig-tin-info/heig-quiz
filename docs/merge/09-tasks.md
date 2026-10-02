@@ -1123,8 +1123,8 @@ under the half that serves them.
     as it stands). A student's own dispatch or re-run, a checkpoint's run,
     a pre-reopen run are `review` traces. The `workflow_run` event carries
     no `client_payload`: a checkpoint's run STARTED after the final review
-    was asked would pass, which `CHECKPOINT_TARGET` makes impossible in
-    practice.
+    was asked would pass; `CHECKPOINT_TARGET` leaves that only to a
+    GitHub delay longer than checkpoint-to-deadline + grace (ADR-064).
   - **Domain** (`@quiz/domain` `reviewDispatch.ts`): `isVoidCheckpoint`,
     `checkpointRefusal(dueAt, deadlineAt, now)`, `checkpointFires`.
   - **Checkpoints** (`Q:modules/project/checkpoints.ts`, staff,
