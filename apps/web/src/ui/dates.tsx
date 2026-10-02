@@ -40,10 +40,10 @@ export function formatDateTimeAs(iso: string, f: DateFormat): string {
   return `${date} ${time}`;
 }
 
-/** Local date-time in the user's preferred format; ISO `2026-09-01 08:00` by default. */
 /** The browser's time zone: where the reader's day begins and ends, and what a `datetime-local` means. */
 export const localTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+/** Local date-time in the user's preferred format; ISO `2026-09-01 08:00` by default. */
 export function isoDateTime(iso: string): string {
   return formatDateTimeAs(iso, dateFormat);
 }
