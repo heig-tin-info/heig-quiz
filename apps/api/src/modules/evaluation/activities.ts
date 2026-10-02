@@ -46,6 +46,8 @@ export async function listActivities(
       opensAt: evaluations.opensAt,
       closesAt: evaluations.closesAt,
       startedAt: evaluations.startedAt,
+      closedAt: evaluations.closedAt,
+      closedBy: evaluations.closedBy,
       updatedAt: evaluations.updatedAt,
       classroomId: classrooms.id,
       classroomName: classrooms.name,
@@ -70,6 +72,8 @@ export async function listActivities(
     opensAt: isoOrNull(r.opensAt),
     closesAt: isoOrNull(r.closesAt),
     startedAt: isoOrNull(r.startedAt),
+    closedAt: isoOrNull(r.closedAt),
+    closedBy: r.closedBy,
     updatedAt: iso(r.updatedAt),
   }));
 }

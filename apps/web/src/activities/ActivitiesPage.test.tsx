@@ -38,6 +38,8 @@ function activity(n: number, over: Partial<EvaluationActivitySummary> = {}): Eva
     opensAt: null,
     closesAt: null,
     startedAt: null,
+    closedAt: null,
+    closedBy: null,
     updatedAt: liveAt(-MIN),
     ...over,
   };
@@ -148,6 +150,25 @@ describe("ActivitiesPage", () => {
     expect(titles.indexOf("Série 6 — SPI")).toBeGreaterThan(titles.indexOf("Série 5 — UART"));
     await user.click(within(table).getByText("Test 0"));
     expect(navigate).toHaveBeenLastCalledWith({ view: "results", evaluationId: DONE.id });
+  });
+
+  it("dates a row by its distance, and marks the poll a teacher ended by hand", async () => {
+    const ended = activity(6, {
+      title: "C'est quoi un BDFL",
+      mode: "poll",
+      state: "closed",
+      startedAt: liveAt(-3 * 24 * 60 * MIN),
+      closedAt: liveAt(-3 * 24 * 60 * MIN + 10 * MIN),
+      closedBy: "teacher",
+    });
+    render([NEXT, DONE, ended]);
+    const table = await screen.findByRole("table");
+    const row = within(table).getByText("C'est quoi un BDFL").closest("tr")!;
+    expect(within(row).getAllByText("3 days ago")).toHaveLength(2);
+    expect(within(row).getByText("Closed by hand")).toBeInTheDocument();
+    const next = within(table).getByText("Série 6 — SPI").closest("tr")!;
+    expect(within(next).getByText("in 7 days")).toBeInTheDocument();
+    expect(within(table).getAllByText("Closed by hand")).toHaveLength(1);
   });
 
   it("filters by type and by state, and says how many are left", async () => {

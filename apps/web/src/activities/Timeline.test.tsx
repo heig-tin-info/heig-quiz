@@ -31,6 +31,8 @@ function activity(n: number, over: Partial<EvaluationActivitySummary> = {}): Eva
     opensAt: null,
     closesAt: null,
     startedAt: null,
+    closedAt: null,
+    closedBy: null,
     updatedAt: liveAt(-MIN),
     ...over,
   };

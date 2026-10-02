@@ -196,7 +196,7 @@ export async function closeEvaluation(
   // `running` and inserts. Whichever goes first, no attempt opened by a
   // retake is left `in_progress` on a closed evaluation — either the retake
   // commits first and is expired below, or it reads `closed` and refuses.
-  const next = await applyState(db, evaluation, "closed", now);
+  const next = await applyState(db, evaluation, "closed", now, runCloser(closedBy));
   return afterClose(db, next, now, closedBy, app);
 }
 
@@ -212,9 +212,13 @@ export async function tryCloseEvaluation(
   closedBy: ClosedBy,
   app?: FastifyInstance,
 ): Promise<EvaluationRecord | null> {
-  const next = await tryApplyState(db, evaluation, "closed", now);
+  const next = await tryApplyState(db, evaluation, "closed", now, runCloser(closedBy));
   return next && afterClose(db, next, now, closedBy, app);
 }
+
+/** Who closed the run, as the evaluation keeps it: the server, or a person. */
+const runCloser = (closedBy: ClosedBy): "server" | "teacher" =>
+  closedBy === "server" ? "server" : "teacher";
 
 /** What follows the flip to `closed`: the attempts, the frames, the grading. */
 async function afterClose(

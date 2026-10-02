@@ -24,7 +24,8 @@ export type ActivityKindName = z.infer<typeof ActivityKindName>;
  * classroom the caller teaches, or one of their own anonymous polls. What it
  * needs to tell "live" (`isLiveNow` in `@quiz/domain`: `state`, `takeHome`,
  * `opensAt`, `updatedAt`) and to place the row in a week (`opensAt`,
- * `startedAt`, `closesAt`), and nothing more: the counts of the classroom
+ * `startedAt`, `closesAt`), when and how it ended (`closedAt`, `closedBy`),
+ * and nothing more: the counts of the classroom
  * list cost a query each and the section does not show them. No template
  * ever: it is never run.
  */
@@ -43,6 +44,9 @@ export const EvaluationActivitySummary = z.object({
   opensAt: z.iso.datetime().nullable(),
   closesAt: z.iso.datetime().nullable(),
   startedAt: z.iso.datetime().nullable(),
+  /** When its run ended, and whose hand ended it; both null until then. */
+  closedAt: z.iso.datetime().nullable(),
+  closedBy: z.enum(["server", "teacher"]).nullable(),
   updatedAt: z.iso.datetime(),
 });
 export type EvaluationActivitySummary = z.infer<typeof EvaluationActivitySummary>;

@@ -1251,6 +1251,8 @@ on("GET", "/app/api/activities", (): ActivitySummary[] => {
         opensAt: e.opensAt,
         closesAt: e.closesAt,
         startedAt: e.startedAt,
+        closedAt: e.closedAt,
+        closedBy: e.closedAt === null ? null : e.closesAt !== null && e.closedAt >= e.closesAt ? "server" : "teacher",
         updatedAt: LIVE_STATES.has(e.state)
           ? iso(-60_000)
           : (e.closedAt ?? e.createdAt),
@@ -1272,6 +1274,8 @@ on("GET", "/app/api/activities", (): ActivitySummary[] => {
         opensAt: null,
         closesAt: null,
         startedAt: tp.createdAt,
+        closedAt: poll.state === "ended" ? tp.createdAt : null,
+        closedBy: poll.state === "ended" ? "teacher" : null,
         updatedAt: poll.state === "ended" ? tp.createdAt : iso(-60_000),
       },
     ];

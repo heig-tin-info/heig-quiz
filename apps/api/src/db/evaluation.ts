@@ -124,6 +124,14 @@ export const evaluations = pgTable(
     pausedAt: timestamp("paused_at", { withTimezone: true }),
     closedAt: timestamp("closed_at", { withTimezone: true }),
     /**
+     * Who ended the run: the ticker past its closing time (`server`), or a
+     * person — the teacher's Close or End (`teacher`). Written with
+     * `closed_at` by the first arrow into `closed`, cleared with it on the
+     * way back to draft; null for what never closed. The Activities list
+     * marks a run a person ended.
+     */
+    closedBy: text("closed_by", { enum: ["server", "teacher"] }),
+    /**
      * When the students were told that this exercise was scheduled
      * (`activity_scheduled`, ADR-030 §c and §h): at most once in its life,
      * whatever reschedules or trips back to draft follow. Claimed by one

@@ -98,7 +98,7 @@ beforeAll(async () => {
   const DAY = 86_400_000;
   const ago = (days: number) => new Date(server.clock.now().getTime() - days * DAY);
   await evaluation("old poll", { owner: alice.id }, { mode: "poll", state: "closed", closedAt: ago(121), createdAt: ago(121) });
-  await evaluation("recent poll", { owner: alice.id }, { mode: "poll", state: "closed", closedAt: ago(119), createdAt: ago(119) });
+  await evaluation("recent poll", { owner: alice.id }, { mode: "poll", state: "closed", closedAt: ago(119), closedBy: "teacher", createdAt: ago(119) });
   await evaluation("old class poll", { classroomId: a1, owner: alice.id }, { mode: "poll", state: "closed", closedAt: ago(200) });
 });
 
@@ -173,6 +173,12 @@ describe("GET /app/api/activities", () => {
     expect(byTitle.get("alice poll")!.classroom).toBeNull();
     expect(byTitle.get("alice series")!.takeHome).toBe(true);
     expect(byTitle.get("alice exam")!.takeHome).toBe(false);
+    // When and by whom a run ended: the list marks a poll ended by hand.
+    expect(byTitle.get("recent poll")).toMatchObject({
+      closedAt: new Date(server.clock.now().getTime() - 119 * 86_400_000).toISOString(),
+      closedBy: "teacher",
+    });
+    expect(byTitle.get("alice exam")).toMatchObject({ closedAt: null, closedBy: null });
   });
 
   it("is a teacher route", async () => {

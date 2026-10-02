@@ -6,6 +6,7 @@ import {
   activityOrder,
   anchorOf,
   bucketOf,
+  closedByHand,
   closesOf,
   foldable,
   isLive,
@@ -29,6 +30,8 @@ function row(over: Partial<EvaluationActivitySummary> = {}): EvaluationActivityS
     opensAt: null,
     closesAt: null,
     startedAt: null,
+    closedAt: null,
+    closedBy: null,
     updatedAt: "2026-09-28T08:00:00.000Z",
     ...over,
   };
@@ -63,6 +66,22 @@ describe("anchorOf", () => {
     expect(anchorOf(row({ startedAt: "b", closesAt: "c" }))).toBe("b");
     expect(anchorOf(row({ closesAt: "c" }))).toBe("c");
     expect(anchorOf(row())).toBeNull();
+  });
+});
+
+describe("closesOf and closedByHand", () => {
+  it("is the closing time while it runs, and the actual closing once over", () => {
+    expect(closesOf(row({ state: "running", closesAt: "c", closedAt: null }))).toBe("c");
+    expect(closesOf(row({ state: "closed", closesAt: "c", closedAt: "x", closedBy: "teacher" }))).toBe("x");
+    // A poll ended by hand had no closing time: its end is the date.
+    expect(closesOf(row({ mode: "poll", state: "closed", closedAt: "x", closedBy: "teacher" }))).toBe("x");
+    expect(closesOf(row({ state: "released", closesAt: "c" }))).toBe("c");
+  });
+
+  it("marks only a run a person ended", () => {
+    expect(closedByHand(row({ state: "closed", closedAt: "x", closedBy: "teacher" }))).toBe(true);
+    expect(closedByHand(row({ state: "released", closedAt: "x", closedBy: "server" }))).toBe(false);
+    expect(closedByHand(row({ state: "running" }))).toBe(false);
   });
 });
 
