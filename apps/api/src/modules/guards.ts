@@ -37,6 +37,7 @@ import {
   questionVersions,
   questions,
   ownedPollSql,
+  projects,
   STAFF_ROLES,
   users,
 } from "../db/schema.js";
@@ -392,6 +393,47 @@ export async function accessibleClassroom(
   params: { id: string },
 ) {
   return (await findAccessibleClassroom(app.db, callerOf(req), params.id)) ?? notFound(reply);
+}
+
+// ---------------------------------------------------------------------------
+// Projects (F-PROJ, merge task M3-02): the staff's routes, portal sessions
+// only. A project is reached through its classroom's course, `staffAccess`
+// in the WHERE; an impersonation, a `seb` or `kiosk` session, a Bearer
+// token and anyone off the staff get the 404 of a missing project.
+// ---------------------------------------------------------------------------
+
+/** The project, its classroom and course, if the caller is on the course's staff; null otherwise. */
+export async function findAccessibleProject(db: Db, user: Caller, projectId: string) {
+  const [row] = await db
+    .select({ project: projects, room: classrooms, course: courses })
+    .from(projects)
+    .innerJoin(classrooms, eq(projects.classroomId, classrooms.id))
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .where(and(eq(projects.id, projectId), accessWhere(user, staffAccess(user.id))))
+    .limit(1);
+  return row ?? null;
+}
+
+/** {@link findAccessibleProject} for the caller's own portal session, answering the 404 (invariant 6). */
+export async function accessibleProject(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  params: { id: string },
+) {
+  if (!ownPortalSession(req.auth)) return notFound(reply);
+  return (await findAccessibleProject(app.db, callerOf(req), params.id)) ?? notFound(reply);
+}
+
+/** {@link accessibleClassroom} for the projects' classroom routes: the caller's own portal session only. */
+export async function projectsClassroom(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  params: { id: string },
+) {
+  if (!ownPortalSession(req.auth)) return notFound(reply);
+  return accessibleClassroom(app, req, reply, params);
 }
 
 // ---------------------------------------------------------------------------

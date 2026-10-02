@@ -31,6 +31,12 @@ export async function createSquashedRepo(opts: {
   targetRepo: string;
   strategy: "whole" | "squash";
   branches: string[];
+  /**
+   * Takes the repository for this caller BEFORE anything is pushed to it
+   * (Quiz, ADR-062): false — another project already holds it — refuses it
+   * like a name taken (422), and the caller steps to the next name.
+   */
+  claim?: (repo: { repoId: number; fullName: string }) => Promise<boolean>;
 }): Promise<SquashedResult> {
   const { octokit, token, org, sourceRepo, targetRepo, strategy, branches } = opts;
   // Squashing creates commits: run git with the bot identity.
@@ -38,8 +44,9 @@ export async function createSquashedRepo(opts: {
   const url = (repo: string) => repoUrl(org, repo);
 
   // Creation of the target repository. A name collision (422) is tolerated
-  // when the existing repository is EMPTY: it is the leftover of a previous
-  // failed attempt, and reusing it makes "try again" actually work.
+  // when the existing repository is EMPTY and PRIVATE: it is the leftover of
+  // a previous failed attempt, and reusing it makes "try again" actually
+  // work. A public one is never adopted: a distribution is private (F-PROJ-02).
   let created: { id: number; full_name: string };
   try {
     const res = await octokit.request("POST /orgs/{org}/repos", {
@@ -69,34 +76,37 @@ export async function createSquashedRepo(opts: {
     } catch (probe) {
       empty = (probe as { status?: number }).status === 409; // 409 = empty git repository
     }
-    if (!empty) throw err; // a real collision with content: surface the 422
+    if (!empty || !existing.private) throw err; // a real collision: surface the 422
     created = { id: Number(existing.id), full_name: existing.full_name };
+  }
+  if (opts.claim && !(await opts.claim({ repoId: created.id, fullName: created.full_name }))) {
+    throw Object.assign(new Error(`${created.full_name} is another project's`), { status: 422 });
   }
 
   const work = mkdtempSync(join(tmpdir(), "quiz-squash-"));
   try {
     const heads: Record<string, string> = {};
     if (strategy === "whole") {
-      git(work, "clone", "--quiet", "--bare", url(sourceRepo), "src.git");
+      await git(work, "clone", "--quiet", "--bare", url(sourceRepo), "src.git");
       const src = join(work, "src.git");
       const refspecs = branches.map((b) => `refs/heads/${b}:refs/heads/${b}`);
       await pushWithRetry(() => gitBare(src, "push", "--quiet", url(targetRepo), ...refspecs));
       for (const b of branches) {
-        heads[b] = gitBare(src, "rev-parse", `refs/heads/${b}`).trim();
+        heads[b] = (await gitBare(src, "rev-parse", `refs/heads/${b}`)).trim();
       }
     } else {
       for (const branch of branches) {
         const dir = join(work, `b-${branch.replace(/[^a-zA-Z0-9]/g, "_")}`);
-        git(work, "clone", "--quiet", "--depth", "1", "--branch", branch, url(sourceRepo), dir);
+        await git(work, "clone", "--quiet", "--depth", "1", "--branch", branch, url(sourceRepo), dir);
         // A single initial commit: replay the head tree without history.
         rmSync(join(dir, ".git"), { recursive: true, force: true });
         // `student/` overlay and `.studentignore`: the solution stays private.
         applyStudentHandout(dir);
-        git(dir, "init", "-q", "-b", branch);
-        git(dir, "add", "-A");
-        git(dir, "commit", "-q", "-m", "Initial assignment commit");
+        await git(dir, "init", "-q", "-b", branch);
+        await git(dir, "add", "-A");
+        await git(dir, "commit", "-q", "-m", "Initial assignment commit");
         await pushWithRetry(() => git(dir, "push", "-q", url(targetRepo), `${branch}:${branch}`));
-        heads[branch] = git(dir, "rev-parse", "HEAD").trim();
+        heads[branch] = (await git(dir, "rev-parse", "HEAD")).trim();
       }
     }
     return { repoId: created.id, fullName: created.full_name, heads };

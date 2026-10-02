@@ -130,7 +130,7 @@ export async function provisionStudentRepo(opts: {
   if (needPush) {
     const work = mkdtempSync(join(tmpdir(), "quiz-prov-"));
     try {
-      git(work, "clone", "--quiet", "--bare", url(squashedRepo), "src.git");
+      await git(work, "clone", "--quiet", "--bare", url(squashedRepo), "src.git");
       const refspecs = branches.map((b) => `refs/heads/${b}:refs/heads/${b}`);
       // The freshly created repository may still be provisioning on GitHub's
       // side: retry the push on transient failures instead of surfacing

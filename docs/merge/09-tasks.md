@@ -595,8 +595,9 @@ files it ports; writes en + fr for every string.
 - **Create**: `Q:modules/project/{routes,service,lifecycle}.ts`; loaders
   `findAccessibleProject`; the `ActivityKind` implementation for projects;
   audit `project.*`.
-- **Tests**: source missing, slug and squashed suffixes and cleanup, patch
-  rules, publish, reopen, archive, 404 for non-staff; deletion leaves
+- **Tests**: source missing, slug and squashed suffixes and the adoption of
+  an empty leftover (no cleanup on GitHub, ADR-062), patch rules, publish,
+  archive (the reopen moved to M3-05), 404 for non-staff; deletion leaves
   repositories.
 - **From M3-01**: deleting a project (or its classroom) cascades every
   `project` row but never reaches `push_receipts`, which is `github`'s and
@@ -611,6 +612,90 @@ files it ports; writes en + fr for every string.
   `contracts/src/project.ts`. Define the column defaults (`grace_minutes`
   30, `squash`, `lock`, `auto`, `manual`) once, as named constants used by
   both the schema's `.default()` and the zod `.default()`.
+- **Decided for it** (product owner and orchestrator, 2026-10-02): nothing
+  is ever deleted on GitHub, the row is inserted before the build
+  ([ADR-062](../adr/ADR-062-depot-de-distribution.md)); the source, branches
+  and source strategy are fixed at creation (F-PROJ-03 amended); projects
+  open to every teacher now (D26 addendum); the reopen moved to M3-05; the
+  git runner asynchronous.
+- **As delivered** (branch `merge/M3-02-project-lifecycle`). What M3-03…M3-11
+  inherit:
+  - **Routes** (`Q:modules/project/routes.ts`, registered only with an App
+    configured, every body a strict schema of `contracts/src/project.ts`):
+    `GET /app/api/classrooms/:id/projects[?archived=1]` →
+    `ProjectActivitySummary[]` (drafts included; the archive instead when
+    asked) — M3-10's contract; `POST` same path, `ProjectCreate` → `201
+    ProjectSummary`; `GET …/projects/sources` → `ProjectSourceRepo[]` (the
+    organization's repositories, `-squashed[-N]` and archived ones left
+    out) and `GET …/projects/sources/:repo` → `ProjectSourceDetail`
+    (branches, the default branch's tree capped at 800, `suggestedProtected`
+    among `PROTECTED_FILE_SUGGESTIONS`) — M3-11's browser; `GET|PATCH|DELETE
+    /app/api/projects/:id` (`ProjectPatch` → `ProjectSummary`; delete 204);
+    `POST /app/api/projects/:id/{publish,archive,unarchive}` →
+    `ProjectSummary`.
+  - **Access** (`guards.ts`): `findAccessibleProject(db, caller, id)`
+    (projects → classrooms → courses, `accessWhere(staffAccess)` in the
+    WHERE) and `accessibleProject`, `projectsClassroom` — the caller's own
+    portal session only (`ownPortalSession`): an impersonation, a Bearer
+    token, a student, a teacher off the staff get the 404; a `seb` or
+    `kiosk` session is nobody (401).
+  - **Services** (`Q:modules/project/service.ts`): `createProject`,
+    `patchProject`, `publishProject(db, id, now, actor)` — the ticker
+    (M3-05) calls it with `SYSTEM_ACTOR` (`audit.ts`), audited
+    `project.auto_publish` —, `setProjectArchived`, `deleteProject`,
+    `unassignedStudents` (claimed non-staff seats in no group),
+    `projectSummary`, `classroomProjects`, `teacherProjects`, `listSources`,
+    `sourceDetail`, and `fetchSource` (`sources.ts`), the ONE reading of a
+    source the creation and the browser share: in the classroom's
+    organization by its immutable id, never a distribution repository (by
+    name or held by a project). Refusals `ProjectError` (`errors.ts`, codes
+    `PROJECT_REFUSALS`, statuses there); `unassigned_students` carries
+    `students`, `source_not_found` may carry `branches` (no response schema
+    yet: M3-11). The classroom's installation is the `github` module's
+    `classroomInstallation(db, classroomId)` (follow-up: the journal's
+    `targetOf` in `journal/writes.ts` could use it too).
+  - **Distribution** (ADR-062): the row claims the repository (partial
+    UNIQUE `projects_distribution_repo_uq`, migration `0056`) before
+    anything is pushed, and gets its `distribution_full_name` only once it
+    is built: that name is the mark `publishProject` requires
+    (`distribution_missing`) — M3-05's auto-publish and M3-09's accept read
+    the same mark. `createSquashedRepo` takes a `claim` callback and never
+    adopts a public leftover. `repoWorld()` can refuse or stall pushes
+    (`refusePushes`, `stallPushes` + `release`).
+    `actorOf(req)` / `SYSTEM_ACTOR` in `audit.ts`, the tracer's actor rule
+    for a service that audits itself.
+  - **Patch rules** are `projectFieldRefusal` / `editableProjectFields`
+    (`@quiz/domain`), `ProjectSummary.editable` the list for the form: a
+    draft changes everything; once published, the name, the protected files,
+    the deadline (while not applied; `422 deadline_past` at or before now)
+    and the deadline strategy (until the deadline, `strategy_frozen`);
+    publication mode and duration `publish_mode_frozen`; the start, grace,
+    grading mode and scale, group mode and size `not_draft`. An unchanged
+    value (`isDeepStrictEqual`) is never refused. `patchProject(db, id, …)`
+    and `publishProject` both re-read the row FOR UPDATE in their
+    transaction. The J−n checkpoints do not follow a moved deadline yet
+    (M3-05).
+  - **Purge**: `purgeProjectReceipts(tx, { projectId } | { classroomId } |
+    { courseId })` in the `github` service, called in the deletion's
+    transaction by `deleteProject`, `deleteClassroom` and `deleteCourse`
+    (`org/service.ts`): the receipts of every repository the projects gone
+    reference (student, group, distribution, source), except those a
+    remaining project still references. Nothing on GitHub. For `org` to
+    import the `github` service without pulling the notifications into its
+    graph, `redact.ts` now reads the secret paths from `auth/paths.ts`.
+  - **Git**: `gitRunner` is asynchronous (`execFile`), `commit.gpgsign=false`
+    for the bot; `setRemoteBaseForTests` is the one seam of the remotes
+    (it throws under `NODE_ENV=production`);
+    `squash.ts`, `sync.ts`, `provision.ts` await it. Tests push to local
+    bare repositories (`Q:modules/project/testing.ts`, `repoWorld()`), the
+    fake GitHub answering from what is on disk — M3-03 and M3-07 reuse it.
+  - `PROJECT_DEFAULTS` (contracts) feeds the columns' and the zod defaults;
+    `projectActivity.listForTeacher` lists the staff's projects (drafts in,
+    archived projects and classrooms out); `studentCards` stays empty
+    (M3-09).
+  - Not done here: notifications and SSE on publish (M3-09), the reopen
+    (M3-05), a GitHub failure while reading the source is a 500 (not
+    mapped to a refusal).
 
 ### M3-03 — Acceptance and provisioning
 - **Depends on**: M3-02, M2-03.
@@ -645,6 +730,22 @@ files it ports; writes en + fr for every string.
   TestClock: single claim, rescheduling between sweep and run, 404
   terminal, archive fallback, idempotent commit strategy, freeze at
   deadline + grace, ledger, **no HTTP inside a tick**.
+- **From M3-02** (orchestrator, 2026-10-02): **the reopen moves here**
+  (F-PROJ-09): M3-02's `PATCH` refuses to move a deadline already applied
+  (`409 deadline_applied`, `projectFieldRefusal`); this task replaces that
+  refusal by heig-classroom's reopen (`lifecycle.ts` PATCH): the locks
+  lifted, `deadline_applied_at`, `frozen_at`, `review_dispatched_at`,
+  `reminder_sent_at` cleared, the frozen and review slots emptied, the
+  `deadline` dispatches forgotten, the runs requalified
+  (`after_deadline = false`) and each current score reselected; teacher
+  scores and a release kept; audited `project.deadline_reopened`. Its test
+  (a locked project moved later is `published` again, its locks lifted)
+  comes with it. Scheduled publication calls `publishProject(db, id, now,
+  SYSTEM_ACTOR)` (M3-02), whose group guard the claim must also carry as SQL
+  (heig-classroom's `groupFormationComplete`). Also from M3-02's review: a
+  moved deadline (patch, publish) re-resolves the J−n checkpoints not
+  dispatched (`checkpointDueAt`), as ONE `UPDATE … SET due_at = deadline +
+  offset_days days` here.
 
 ### M3-06 — Reconciliation of grades and repositories
 - **Depends on**: M3-04, M2-05. ‖ M3-05, M3-07.
@@ -675,6 +776,15 @@ files it ports; writes en + fr for every string.
   kinds with ADR-030 defaults and templates (en/fr), one Teams manifest bump.
 - **Tests**: a student never receives another student's repo or grade hint;
   leak test of the project student view.
+- **From M3-02** (product owner, D26 addendum 2026-10-02): teachers create
+  projects before the cutover, so **the students must see nothing until
+  this task**: `projectActivity.studentCards` stays empty and
+  `StudentClassroomPage.hasProjects` false until the project's student view
+  lands here, with its N-SEC-20 leak test (a draft, another student's
+  repository and score, the source and distribution repositories searched
+  for in every student response). This task fills `studentCards` and the
+  publish notification (`project_published`) that M3-02's `publishProject`
+  does not send.
 
 ### M3-10 — Web: projects in Activities, "New ▾"
 - **Depends on**: M3-01 contracts, M1-05. ‖ M3-11.
@@ -686,6 +796,10 @@ files it ports; writes en + fr for every string.
 - **Depends on**: M3-02 contracts, M2-07. ‖ M3-10, M3-12.
 - **Goal**: redesign of `AssignmentForm` (sheet or stepped page, decided in
   the PR's challenge step), novice/expert split (spec 08).
+- **From M3-02**: the refusal bodies have no response schema yet: add
+  `ProjectRefusal` (`{ error: ProjectErrorCode, message, branches? }`) and
+  `ProjectUnassigned` (`students`) to `contracts/src/project.ts` with this
+  form, their first consumer.
 
 ### M3-12 — Web: project page
 - **Depends on**: M3-08 contracts. ‖ M3-11.

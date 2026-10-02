@@ -36,6 +36,7 @@ import {
   classrooms,
   githubClassroomLinks,
   githubOrganizations,
+  pushReceipts,
 } from "../../db/schema.js";
 import {
   fetchInstallation,
@@ -704,6 +705,73 @@ async function downloadAvatar(githubOrgId: number): Promise<OrgAvatar | null> {
   // The bytes decide, not the header (as for an uploaded avatar).
   if (!bytes || sniffImage(bytes)?.mime !== declared) return null;
   return { bytes, mime: declared };
+}
+
+// ---------------------------------------------------------------- what projects read of a classroom's link
+
+/** An organization row with Quiz's App installed on it. */
+export type InstalledOrg = OrgRow & { installationId: number };
+
+/**
+ * The classroom's organization when Quiz's App is installed there and the
+ * organization is active, else why not: `not_connected` without a link,
+ * `app_not_installed` otherwise. What a project's creation and the
+ * repository browser start from. (The journal's `targetOf`,
+ * `journal/writes.ts`, reads the same link its own way: a follow-up may
+ * move it here.)
+ */
+export async function classroomInstallation(
+  db: Db,
+  classroomId: string,
+): Promise<{ org: InstalledOrg } | { refused: "not_connected" | "app_not_installed"; login: string | null }> {
+  const [row] = await db
+    .select({ org: githubOrganizations })
+    .from(githubClassroomLinks)
+    .innerJoin(githubOrganizations, eq(githubOrganizations.id, githubClassroomLinks.orgId))
+    .where(eq(githubClassroomLinks.classroomId, classroomId))
+    .limit(1);
+  if (!row) return { refused: "not_connected", login: null };
+  const { org } = row;
+  if (org.installationId === null || org.status !== "active") return { refused: "app_not_installed", login: org.login };
+  return { org: { ...org, installationId: org.installationId } };
+}
+
+// ---------------------------------------------------------------- push receipts of a deletion
+
+/** The projects a deletion takes with it: one project, a classroom's, or a course's. */
+export type ProjectsGone = { projectId: string } | { classroomId: string } | { courseId: string };
+
+/**
+ * The push receipts of the repositories the projects a deletion takes with
+ * it touched (N-DATA-03, D19, F-PROJ-16, F-ORG-09): their students' and
+ * groups' repositories, their distribution repositories, their sources —
+ * each only if no project that stays still references it (a source another
+ * project hands out). Called in the deletion's own transaction, BEFORE the
+ * rows go: `push_receipts` is keyed on GitHub's repository id, with no
+ * foreign key a cascade could follow. Reads the `project` tables by join, as
+ * this module reads the journal's (D28); writes only its own. Nothing on
+ * GitHub is touched. Returns the number of receipts deleted.
+ */
+export async function purgeProjectReceipts(tx: Db | Tx, gone: ProjectsGone): Promise<number> {
+  const goneIds =
+    "projectId" in gone
+      ? sql`SELECT ${gone.projectId}::uuid`
+      : "classroomId" in gone
+        ? sql`SELECT p.id FROM projects p WHERE p.classroom_id = ${gone.classroomId}`
+        : sql`SELECT p.id FROM projects p JOIN classrooms c ON c.id = p.classroom_id WHERE c.course_id = ${gone.courseId}`;
+  /** Every repository id the projects `ids` reference. */
+  const referenced = (ids: SQL) => sql`
+    SELECT r.github_repo_id FROM project_repos r WHERE r.project_id IN (${ids}) AND r.github_repo_id IS NOT NULL
+    UNION SELECT p.distribution_repo_id FROM projects p WHERE p.id IN (${ids}) AND p.distribution_repo_id IS NOT NULL
+    UNION SELECT p.source_repo_id FROM projects p WHERE p.id IN (${ids})`;
+  const staying = sql`SELECT p.id FROM projects p WHERE p.id NOT IN (${goneIds})`;
+  const deleted = await tx
+    .delete(pushReceipts)
+    .where(
+      sql`${pushReceipts.githubRepoId} IN (${referenced(goneIds)}) AND ${pushReceipts.githubRepoId} NOT IN (${referenced(staying)})`,
+    )
+    .returning({ id: pushReceipts.id });
+  return deleted.length;
 }
 
 // ---------------------------------------------------------------- the webhook registry

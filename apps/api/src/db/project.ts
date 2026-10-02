@@ -25,8 +25,9 @@
  * Deleting a project, or its classroom, deletes these rows and never a
  * repository on GitHub (D19, F-PROJ-16). `push_receipts` is the `github`
  * module's, keyed on GitHub's repository id with no foreign key into this
- * module: the project service purges a deleted project's receipts through
- * a `github` service function (M3-02, N-DATA-03).
+ * module: a project's deletion, its classroom's and its course's purge
+ * those receipts first, in their transaction, through the `github`
+ * module's `purgeProjectReceipts` (M3-02, N-DATA-03).
  */
 import { sql } from "drizzle-orm";
 import {
@@ -49,6 +50,7 @@ import {
   CI_STATUSES,
   DEADLINE_STRATEGIES,
   INVITATION_STATUSES,
+  PROJECT_DEFAULTS,
   PROJECT_GRADING_MODES,
   PROJECT_STATES,
   PROVISION_STATUSES,
@@ -88,17 +90,21 @@ export const projects = pgTable(
     startAt: timestamp("start_at", { withTimezone: true }).notNull(),
     deadlineAt: timestamp("deadline_at", { withTimezone: true }).notNull(),
     /** Minutes after the deadline before the freeze is definitive (F-PROJ-11). */
-    graceMinutes: integer("grace_minutes").notNull().default(30),
+    graceMinutes: integer("grace_minutes").notNull().default(PROJECT_DEFAULTS.graceMinutes),
     /** The teacher's repository; never shown to a student, nor its existence (N-SEC-20). */
     sourceRepoId: bigint("source_repo_id", { mode: "number" }).notNull(),
     sourceFullName: text("source_full_name").notNull(),
-    /** The distribution repository (`<slug>-squashed`, F-PROJ-02); null until built. */
+    /**
+     * The distribution repository (`<slug>-squashed`, F-PROJ-02): its id is
+     * written when the draft claims it, before the build; its name once the
+     * build is done — the mark Publish requires (ADR-062).
+     */
     distributionRepoId: bigint("distribution_repo_id", { mode: "number" }),
     distributionFullName: text("distribution_full_name"),
-    sourceStrategy: text("source_strategy", { enum: SOURCE_STRATEGIES }).notNull().default("squash"),
-    deadlineStrategy: text("deadline_strategy", { enum: DEADLINE_STRATEGIES }).notNull().default("lock"),
-    gradingMode: text("grading_mode", { enum: PROJECT_GRADING_MODES }).notNull().default("auto"),
-    publishMode: text("publish_mode", { enum: PUBLISH_MODES }).notNull().default("manual"),
+    sourceStrategy: text("source_strategy", { enum: SOURCE_STRATEGIES }).notNull().default(PROJECT_DEFAULTS.sourceStrategy),
+    deadlineStrategy: text("deadline_strategy", { enum: DEADLINE_STRATEGIES }).notNull().default(PROJECT_DEFAULTS.deadlineStrategy),
+    gradingMode: text("grading_mode", { enum: PROJECT_GRADING_MODES }).notNull().default(PROJECT_DEFAULTS.gradingMode),
+    publishMode: text("publish_mode", { enum: PUBLISH_MODES }).notNull().default(PROJECT_DEFAULTS.publishMode),
     /** Manual publication: the deadline is publication + this; null for an absolute deadline. */
     durationMinutes: integer("duration_minutes"),
     /** One repository per group (ADR-048); chosen while a draft. */
@@ -131,6 +137,11 @@ export const projects = pgTable(
   },
   (t) => [
     uniqueIndex("projects_classroom_slug_uq").on(t.classroomId, t.slug),
+    // One project per distribution repository: two creations racing for the
+    // same empty leftover never both adopt it (ADR-062).
+    uniqueIndex("projects_distribution_repo_uq")
+      .on(t.distributionRepoId)
+      .where(sql`${t.distributionRepoId} IS NOT NULL`),
     // An organization renamed, deleted or uninstalled (F-PROJ-18).
     index("projects_org_idx").on(t.orgId),
     // The ticker's scans: deadlines due and not applied,

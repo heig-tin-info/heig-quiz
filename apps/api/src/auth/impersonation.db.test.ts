@@ -18,7 +18,7 @@ import { fakeShort } from "../test/fakeType.js";
 import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive, type Seeded } from "../test/live.js";
 import { redactUrl } from "../redact.js";
-import { IMPERSONATION_PATH } from "./impersonation.js";
+import { IMPERSONATION_PATH } from "./paths.js";
 import { issueLaunchTicket } from "./launch.js";
 import { purgeExpiredSessions } from "./session.js";
 import { issueImpersonation, openImpersonation } from "./testing.js";

@@ -49,6 +49,7 @@ import { registerNotificationJobs } from "./modules/notifications/jobs.js";
 import { notificationsPlugin } from "./modules/notifications/routes.js";
 import { orgPlugin } from "./modules/org/routes.js";
 import { pollPlugin } from "./modules/poll/routes.js";
+import { projectPlugin } from "./modules/project/routes.js";
 import { poolPlugin } from "./modules/pool/routes.js";
 import { flushCoalescers, openStreamCount } from "./modules/realtime/bus.js";
 import { realtimePlugin } from "./modules/realtime/routes.js";
@@ -199,6 +200,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(orgPlugin, { config });
   // Without Quiz's GitHub App (D23) none of its routes exists: a 404.
   if (githubApp(config)) await app.register(githubPlugin, { config });
+  // Projects drive GitHub through the App: no App, no project route (M3-02).
+  if (githubApp(config)) await app.register(projectPlugin, { config });
   await app.register(poolPlugin, { config });
   await app.register(pollPlugin, { config });
   if (app.kioskAttestor) await app.register(kioskPlugin, { config });

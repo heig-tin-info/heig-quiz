@@ -25,6 +25,7 @@ import {
   users,
 } from "../../db/schema.js";
 import { shownAvatar } from "../avatar.js";
+import { purgeProjectReceipts } from "../github/service.js";
 import { accessRevoked } from "../realtime/bus.js";
 
 export { claimEnrollments, claimLines, type ClaimMatch } from "./roster.js";
@@ -174,8 +175,17 @@ export async function updateCourse(
   return updated;
 }
 
+/**
+ * Deletes the course and, by cascade, its classrooms and everything they
+ * hold (F-ORG-09). Its projects' push receipts go first, in the same
+ * transaction: no foreign key reaches them (N-DATA-03). Nothing is deleted
+ * on GitHub (D19).
+ */
 export async function deleteCourse(db: Db, courseId: string): Promise<void> {
-  await db.delete(courses).where(eq(courses.id, courseId));
+  await db.transaction(async (tx) => {
+    await purgeProjectReceipts(tx, { courseId });
+    await tx.delete(courses).where(eq(courses.id, courseId));
+  });
 }
 
 /**
@@ -321,8 +331,16 @@ export async function setArchived(db: Db, classroomId: string, archived: boolean
     .where(eq(classrooms.id, classroomId));
 }
 
+/**
+ * Deletes the classroom and, by cascade, its evaluations, journal and
+ * projects (F-ORG-09); its projects' push receipts first, in the same
+ * transaction (N-DATA-03). Nothing is deleted on GitHub (D19, F-PROJ-16).
+ */
 export async function deleteClassroom(db: Db, classroomId: string): Promise<void> {
-  await db.delete(classrooms).where(eq(classrooms.id, classroomId));
+  await db.transaction(async (tx) => {
+    await purgeProjectReceipts(tx, { classroomId });
+    await tx.delete(classrooms).where(eq(classrooms.id, classroomId));
+  });
 }
 
 // --- The drill switches (ADR-041 §6) -------------------------------------------

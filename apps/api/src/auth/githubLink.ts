@@ -61,10 +61,10 @@ import { githubApp } from "../github/app.js";
 import { currentLogin } from "../github/collaborators.js";
 import { ownSessionGuard } from "../modules/guards.js";
 import { safeReturnTo } from "./returnTo.js";
+// GitHub's return. Its query carries the one-time `code`: the request log masks it (`redact.ts`).
+import { GITHUB_CALLBACK_PATH } from "./paths.js";
 
 export const GITHUB_LINK_PATH = "/app/auth/github/link";
-/** GitHub's return. Its query carries the one-time `code`: the request log masks it (`redact.ts`). */
-export const GITHUB_CALLBACK_PATH = "/app/auth/github/callback";
 const ACCOUNT_PATH = "/app/api/me/github";
 
 const STATE_COOKIE = "quiz_github_link";

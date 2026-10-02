@@ -29,7 +29,7 @@ describe("pushWithRetry", () => {
     let calls = 0;
     const fn = vi.fn(() => {
       calls += 1;
-      // The shape gitRunner rethrows: execFileSync's message, stderr appended.
+      // The shape gitRunner rethrows: execFile's message, stderr appended.
       if (calls === 1) throw new Error("Command failed: git push -q https://github.com/o/r.git\nfatal: early EOF");
     });
     const done = pushWithRetry(fn);

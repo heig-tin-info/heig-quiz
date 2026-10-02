@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { ProjectGradingScale, StudentProjectCard, defaultProjectGradingScale } from "./project.js";
+import {
+  BranchName,
+  PROJECT_DEFAULTS,
+  ProjectCreate,
+  ProjectGradingScale,
+  ProjectPatch,
+  ProtectedPath,
+  StudentProjectCard,
+  defaultProjectGradingScale,
+} from "./project.js";
 import { GradeRow, ProjectGradeRow, StudentGrades } from "./results.js";
 import { StudentActivityCard } from "./student.js";
 
@@ -94,5 +103,57 @@ describe("the student's Grades: a project row (F-PROJ-14, product owner 2026-10-
     for (const forbidden of ["source", "teacherComment", "See me", "repoFullName", "lab2-alice", "review"]) {
       expect(parsed).not.toContain(forbidden);
     }
+  });
+});
+
+describe("ProjectCreate and ProjectPatch (F-PROJ-01, F-PROJ-03, M3-02)", () => {
+  const LAB = { name: "Lab 1", sourceRepo: "lab", deadlineAt: DEADLINE };
+
+  it("fills the defaults defined once with the columns'", () => {
+    expect(ProjectCreate.parse(LAB)).toEqual({
+      ...LAB,
+      publishMode: PROJECT_DEFAULTS.publishMode,
+      graceMinutes: PROJECT_DEFAULTS.graceMinutes,
+      sourceStrategy: PROJECT_DEFAULTS.sourceStrategy,
+      deadlineStrategy: PROJECT_DEFAULTS.deadlineStrategy,
+      gradingMode: PROJECT_DEFAULTS.gradingMode,
+      protectedFiles: [],
+      groupMode: false,
+    });
+    expect(PROJECT_DEFAULTS).toEqual({ graceMinutes: 30, sourceStrategy: "squash", deadlineStrategy: "lock", gradingMode: "auto", publishMode: "manual" });
+  });
+
+  it("asks a manual publication for a deadline or a duration, a scheduled one for both dates", () => {
+    expect(ProjectCreate.safeParse({ ...LAB, deadlineAt: undefined, durationMinutes: 90 }).success).toBe(true);
+    expect(ProjectCreate.safeParse({ ...LAB, durationMinutes: 90 }).success).toBe(false);
+    expect(ProjectCreate.safeParse({ ...LAB, deadlineAt: undefined }).success).toBe(false);
+    expect(ProjectCreate.safeParse({ ...LAB, startAt: START }).success).toBe(false);
+    expect(ProjectCreate.safeParse({ ...LAB, publishMode: "scheduled", startAt: START }).success).toBe(true);
+    expect(ProjectCreate.safeParse({ ...LAB, publishMode: "scheduled" }).success).toBe(false);
+    expect(ProjectCreate.safeParse({ ...LAB, publishMode: "scheduled", startAt: DEADLINE }).success).toBe(false);
+  });
+
+  it("is strict, and has no work mode (F-PROJ-19)", () => {
+    expect(ProjectCreate.safeParse({ ...LAB, workMode: "free" }).success).toBe(false);
+    expect(ProjectPatch.safeParse({ sourceRepo: "other" }).success).toBe(false);
+    expect(ProjectPatch.safeParse({ branches: ["main"] }).success).toBe(false);
+    expect(ProjectPatch.safeParse({ sourceStrategy: "whole" }).success).toBe(false);
+    expect(ProjectPatch.safeParse({}).success).toBe(false);
+    expect(ProjectPatch.safeParse({ durationMinutes: null }).success).toBe(true);
+  });
+
+  it("takes a repository name, branches and protected files that cannot leave their place", () => {
+    for (const sourceRepo of ["../x", "org/x", ".", "..", "a b", ""]) {
+      expect(ProjectCreate.safeParse({ ...LAB, sourceRepo }).success, sourceRepo).toBe(false);
+    }
+    for (const branch of ["-x", "a..b", "a/", "/a", ".hidden", "a.lock", "a//b", "a b"]) {
+      expect(BranchName.safeParse(branch).success, branch).toBe(false);
+    }
+    expect(BranchName.safeParse("feature/lab-2.1").success).toBe(true);
+    for (const path of ["/etc/passwd", "../x", "a/../b", "a\\b", "a//b", "./a"]) {
+      expect(ProtectedPath.safeParse(path).success, path).toBe(false);
+    }
+    expect(ProtectedPath.safeParse(".github/workflows/grading.yml").success).toBe(true);
+    expect(ProjectCreate.safeParse({ ...LAB, name: "!!!" }).success).toBe(false);
   });
 });

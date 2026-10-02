@@ -18,9 +18,8 @@ import type { AppConfig } from "../config.js";
 import type { Db } from "../db/client.js";
 import { enrollments, users } from "../db/schema.js";
 import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
-
-/** Where the link lands; the secret is the last segment, which the request log masks (`redact.ts`). */
-export const IMPERSONATION_PATH = "/app/auth/as/";
+// Where the link lands; the secret is the last segment, which the request log masks (`redact.ts`).
+import { IMPERSONATION_PATH } from "./paths.js";
 
 /**
  * The account `userId` if it may be acted as: a student, holding a student

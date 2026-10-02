@@ -25,9 +25,8 @@
  */
 import type { FastifyRequest } from "fastify";
 
-import { GITHUB_CALLBACK_PATH } from "./auth/githubLink.js";
-import { IMPERSONATION_PATH } from "./auth/impersonation.js";
-import { LAUNCH_PATH } from "./auth/seb.js";
+// The paths alone, from a file that imports nothing: every module logs.
+import { GITHUB_CALLBACK_PATH, IMPERSONATION_PATH, LAUNCH_PATH } from "./auth/paths.js";
 
 /** Everything after one of these prefixes is a secret. */
 const SECRET_PREFIXES: readonly string[] = [

@@ -98,7 +98,7 @@ Carried by the task cards of [`docs/merge/09-tasks.md`](../merge/09-tasks.md), i
 | GitHub | Connect a classroom to an organization where Quiz's App is installed, with its checks; link one's GitHub account (F-GH) | M |
 | Journal | A classroom's course documentation in one GitHub repository, rendered on the server, read by the class, edited in the browser (F-JRN) | M |
 | Student | A **Courses** route and a classroom page: its activities, its journal, later its projects and grades (F-ORG-14, F-ORG-15) | M |
-| Projects | A repository per student or group from a source repository, protected files, the deadline on the server's receipt time, the CI score captured, frozen, reviewed and released, groups, sync of the source (F-PROJ). They open together with the import of heig-classroom's data, never before it (D26) | M |
+| Projects | A repository per student or group from a source repository, protected files, the deadline on the server's receipt time, the CI score captured, frozen, reviewed and released, groups, sync of the source (F-PROJ). Every teacher may create them in Quiz before the cutover; the import still brings heig-classroom's (D26 and its addendum of 2026-10-02) | M |
 | Gradebook | The classroom's grades of its released exams and projects in one table, a weighted mean, a CSV (F-GBOOK) | M |
 | Online workspace, unified SEB | Phase M6, after the cutover: rebuilt in Quiz, tried by users, then its migration considered (D09); a `seb` session confined to an activity, `packages/seb` (D21; ADR-047) | S |
 
@@ -150,3 +150,4 @@ Carried by the task cards of [`docs/merge/09-tasks.md`](../merge/09-tasks.md), i
 | 2026-09-30 | The journal first, live before the cutover, through Quiz's own GitHub App; one journal per classroom, a journal is a repository; a Settings tab on the classroom (D03, D07, D23–D25, D27) |
 | 2026-10-01 | Projects open with the import of heig-classroom's data, the cutover during the autumn semester; a project's score reaches the gradebook only after a release, on a per-project scale; the gradebook counts exams and projects; GitHub repositories are never deleted (D05, D06, D11–D13, D17–D20, D22, D26) |
 | 2026-10-01 | The journal in two modes: in Quiz (the default, no GitHub, the standard editor, revisions) or in a GitHub repository (read-only in the platform, Edit on GitHub); D25 superseded (ADR-057, D29) |
+| 2026-10-02 | Every teacher may create projects before the cutover, the students seeing none until their view lands; a project's source, branches and source strategy fixed at creation; nothing deleted on GitHub, not even a failed build's repository (D26 addendum, F-PROJ-03, ADR-062) |

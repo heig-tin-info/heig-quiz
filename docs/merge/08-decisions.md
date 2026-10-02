@@ -246,6 +246,10 @@ Status values: `open`, `settled`, `superseded`.
   deleted (classroom H11), and the confirmation says so.
 - Blocks: M3-02.
 - **Status**: settled 2026-10-01 (product owner, conversation), on the suggestion.
+- **Addendum (2026-10-02, product owner)**: nothing at all is deleted on
+  GitHub, not even the distribution repository the App just built for a
+  creation that failed: the row goes, an empty leftover is adopted by the
+  next attempt ([ADR-062](../adr/ADR-062-depot-de-distribution.md)).
 
 ### D20 — The cutover window
 - **Suggested**: the intersemester (February 2027), a weekday morning with
@@ -345,6 +349,16 @@ Status values: `open`, `settled`, `superseded`.
   went.
 - Blocks: M3-14.
 - **Status**: settled 2026-10-01 (product owner, conversation): **projects open in Quiz together with the import, never before it.** The day project creation is released in a classroom is the day classroom's data (projects, deadlines, repositories, grades) is imported: Quiz then mirrors classroom, and the teachers change nothing in classroom between that import and the final migration. No project is created in Quiz before the import; M3-14's pilot runs on staging only.
+- **Addendum (2026-10-02, product owner, conversation; merge task M3-02)**:
+  **project creation opens to every teacher now**, with no admin gate nor
+  environment switch: any member of a connected classroom's staff may create
+  and run projects in Quiz before the cutover, where Quiz's App is
+  installed. The import (M8-01) still brings heig-classroom's projects, with
+  their state, into the classrooms the correspondence table names (D22); a
+  project created in Quiz meanwhile is Quiz's own and is not touched by it.
+  The students see no project until the project's student view lands
+  (M3-09), with its leak test (N-SEC-20): until then the staff alone see
+  them. M3-14's pilot still runs on staging with the staging App.
 
 ### D27 — Which repositories a journal may use
 - **Answer**: any repository of the classroom's organization, as in

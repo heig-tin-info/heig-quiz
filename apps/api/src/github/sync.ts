@@ -23,14 +23,14 @@ export interface SquashedUpdate {
 }
 
 /** GH-51 step 1: bring the squashed repo up to date with the source. */
-export function updateSquashedRepo(opts: {
+export async function updateSquashedRepo(opts: {
   token: string;
   org: string;
   sourceRepo: string;
   squashedRepo: string;
   strategy: "whole" | "squash";
   branches: string[];
-}): SquashedUpdate {
+}): Promise<SquashedUpdate> {
   const { token, org, sourceRepo, squashedRepo, strategy, branches } = opts;
   // Sync creates the per-branch primary commits: bot identity required.
   const runner = gitRunner({ identity: true, token });
@@ -42,15 +42,15 @@ export function updateSquashedRepo(opts: {
     const changed: string[] = [];
 
     if (strategy === "whole") {
-      git(work, "clone", "--quiet", "--bare", repoUrl(org, sourceRepo), "src.git");
+      await git(work, "clone", "--quiet", "--bare", repoUrl(org, sourceRepo), "src.git");
       const src = join(work, "src.git");
       for (const b of branches) {
-        sourceHeads[b] = gitBare(src, "rev-parse", `refs/heads/${b}`).trim();
+        sourceHeads[b] = (await gitBare(src, "rev-parse", `refs/heads/${b}`)).trim();
       }
       // Fast-forward only: the squashed repo is never rewritten (GH-13).
       const refspecs = branches.map((b) => `refs/heads/${b}:refs/heads/${b}`);
-      const before = squashedBranchHeads(runner, repoUrl(org, squashedRepo), branches, work);
-      gitBare(src, "push", "--quiet", repoUrl(org, squashedRepo), ...refspecs);
+      const before = await squashedBranchHeads(runner, repoUrl(org, squashedRepo), branches, work);
+      await gitBare(src, "push", "--quiet", repoUrl(org, squashedRepo), ...refspecs);
       for (const b of branches) {
         heads[b] = sourceHeads[b]!;
         if (before[b] !== heads[b]) changed.push(b);
@@ -64,9 +64,9 @@ export function updateSquashedRepo(opts: {
       const safe = branch.replace(/[^a-zA-Z0-9]/g, "_");
       const sqDir = join(work, `sq-${safe}`);
       const srcDir = join(work, `src-${safe}`);
-      git(work, "clone", "--quiet", "--branch", branch, repoUrl(org, squashedRepo), sqDir);
-      git(work, "clone", "--quiet", "--depth", "1", "--branch", branch, repoUrl(org, sourceRepo), srcDir);
-      sourceHeads[branch] = git(srcDir, "rev-parse", "HEAD").trim();
+      await git(work, "clone", "--quiet", "--branch", branch, repoUrl(org, squashedRepo), sqDir);
+      await git(work, "clone", "--quiet", "--depth", "1", "--branch", branch, repoUrl(org, sourceRepo), srcDir);
+      sourceHeads[branch] = (await git(srcDir, "rev-parse", "HEAD")).trim();
       // Same handout conventions as at creation, or an update would bring
       // the solution back.
       applyStudentHandout(srcDir);
@@ -78,20 +78,20 @@ export function updateSquashedRepo(opts: {
       for (const entry of readdirSync(srcDir)) {
         if (entry !== ".git") cpSync(join(srcDir, entry), join(sqDir, entry), { recursive: true });
       }
-      git(sqDir, "add", "-A");
-      if (git(sqDir, "status", "--porcelain").trim() === "") {
-        heads[branch] = git(sqDir, "rev-parse", "HEAD").trim();
+      await git(sqDir, "add", "-A");
+      if ((await git(sqDir, "status", "--porcelain")).trim() === "") {
+        heads[branch] = (await git(sqDir, "rev-parse", "HEAD")).trim();
         continue; // already up to date
       }
-      git(
+      await git(
         sqDir,
         "commit",
         "-q",
         "-m",
         `Assignment update (${sourceHeads[branch]!.slice(0, 7)})`,
       );
-      git(sqDir, "push", "-q", repoUrl(org, squashedRepo), `${branch}:${branch}`);
-      heads[branch] = git(sqDir, "rev-parse", "HEAD").trim();
+      await git(sqDir, "push", "-q", repoUrl(org, squashedRepo), `${branch}:${branch}`);
+      heads[branch] = (await git(sqDir, "rev-parse", "HEAD")).trim();
       changed.push(branch);
     }
     return { heads, sourceHeads, changed };
@@ -100,14 +100,14 @@ export function updateSquashedRepo(opts: {
   }
 }
 
-function squashedBranchHeads(
+async function squashedBranchHeads(
   { git }: GitRunner,
   squashedUrl: string,
   branches: string[],
   work: string,
-): Record<string, string> {
+): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
-  for (const line of git(work, "ls-remote", squashedUrl).split("\n")) {
+  for (const line of (await git(work, "ls-remote", squashedUrl)).split("\n")) {
     const [sha, ref] = line.split("\t");
     const b = ref?.replace("refs/heads/", "");
     if (sha && b && branches.includes(b)) out[b] = sha;
@@ -121,23 +121,23 @@ function squashedBranchHeads(
  * allowed on this bot-only ref).
  */
 export interface SyncWorkspace {
-  pushSyncRef: (studentRepo: string, branch: string) => string;
+  pushSyncRef: (studentRepo: string, branch: string) => Promise<string>;
   dispose: () => void;
 }
 
-export function openSyncWorkspace(opts: {
+export async function openSyncWorkspace(opts: {
   token: string;
   org: string;
   squashedRepo: string;
-}): SyncWorkspace {
+}): Promise<SyncWorkspace> {
   const { token, org, squashedRepo } = opts;
   const { git, gitBare } = gitRunner({ identity: true, token });
   const work = mkdtempSync(join(tmpdir(), "quiz-syncpush-"));
-  git(work, "clone", "--quiet", "--bare", repoUrl(org, squashedRepo), "sq.git");
+  await git(work, "clone", "--quiet", "--bare", repoUrl(org, squashedRepo), "sq.git");
   const sq = join(work, "sq.git");
   return {
-    pushSyncRef(studentRepo: string, branch: string): string {
-      gitBare(
+    async pushSyncRef(studentRepo: string, branch: string): Promise<string> {
+      await gitBare(
         sq,
         "push",
         "--quiet",
@@ -145,7 +145,7 @@ export function openSyncWorkspace(opts: {
         repoUrl(org, studentRepo),
         `refs/heads/${branch}:refs/heads/sync/${branch}`,
       );
-      return gitBare(sq, "rev-parse", `refs/heads/${branch}`).trim();
+      return (await gitBare(sq, "rev-parse", `refs/heads/${branch}`)).trim();
     },
     dispose() {
       rmSync(work, { recursive: true, force: true });
