@@ -7,8 +7,10 @@
  *
  * **Creation never deletes anything on GitHub** (ADR-062): the draft row is
  * inserted first, which reserves the slug; the distribution repository is
- * created or adopted and CLAIMED by the row (a partial UNIQUE on
- * `distribution_repo_id`) before anything is pushed to it; then it is built.
+ * created or adopted and CLAIMED by the row (`distribution_repo_id`, under a
+ * partial UNIQUE) before anything is pushed to it; then it is built, and
+ * only then does the row get its name (`distribution_full_name`): the BUILT
+ * mark, without which the draft is not published (`distribution_missing`).
  * A failed build deletes the ROW only and answers `502 distribution_failed`;
  * an empty private leftover is adopted by the next attempt, anything else
  * stepped over to the next `-squashed-N`.
@@ -112,14 +114,15 @@ async function reserveDraft(db: Db, values: Omit<typeof projects.$inferInsert, "
 /**
  * The draft takes the repository for itself, before anything is pushed: false
  * when another project holds it already (the partial UNIQUE decides, so two
- * creations racing for one empty leftover never both get it).
+ * creations racing for one empty leftover never both get it). The id only:
+ * the name is written once the build is done.
  */
 function claimFor(db: Db, draft: ProjectRow) {
-  return async (repo: { repoId: number; fullName: string }): Promise<boolean> => {
+  return async (repo: { repoId: number }): Promise<boolean> => {
     try {
       const [row] = await db
         .update(projects)
-        .set({ distributionRepoId: repo.repoId, distributionFullName: repo.fullName })
+        .set({ distributionRepoId: repo.repoId })
         .where(eq(projects.id, draft.id))
         .returning({ id: projects.id });
       // Deleted by its staff while it was being built: stop, push nothing.
@@ -209,10 +212,20 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
     if (err instanceof DomainError) throw err;
     input.log.error({ err, project: draft.id, source: source.fullName }, "building a distribution repository failed");
     // The row only, which frees the repository it claimed: nothing is ever
-    // deleted on GitHub (ADR-062).
-    await db.delete(projects).where(eq(projects.id, draft.id));
+    // deleted on GitHub (ADR-062). Still an unbuilt draft, which nothing can
+    // have published (`distribution_missing`): the condition says so.
+    await db
+      .delete(projects)
+      .where(and(eq(projects.id, draft.id), eq(projects.state, "draft"), isNull(projects.distributionFullName)));
     throw new ProjectError("distribution_failed", "Building the distribution repository failed: try again");
   }
+  const [row] = await db
+    .update(projects)
+    .set({ distributionFullName: built.fullName })
+    .where(eq(projects.id, draft.id))
+    .returning();
+  // Deleted by its staff while it was being built: the repository stays.
+  if (!row) throw notFound();
   await audit(db, {
     ...input.actor,
     action: "project.create",
@@ -220,7 +233,7 @@ export async function createProject(db: Db, config: AppConfig, input: CreateInpu
     subjectId: draft.id,
     payload: { slug: draft.slug, source: source.fullName, distribution: built.fullName },
   });
-  return { ...draft, distributionRepoId: built.repoId, distributionFullName: built.fullName };
+  return row;
 }
 
 // ---------------------------------------------------------------- patch
@@ -337,8 +350,8 @@ export async function publishProject(db: Db, projectId: string, now: Date, actor
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
     if (!project) throw notFound();
     if (project.state !== "draft") throw new ProjectError("not_draft", "The project is already published");
-    if (project.distributionRepoId === null) {
-      throw new ProjectError("distribution_missing", "The project has no distribution repository");
+    if (project.distributionFullName === null) {
+      throw new ProjectError("distribution_missing", "The project's distribution repository is not built");
     }
     if (project.groupMode) {
       const left = await unassignedStudents(tx, project);

@@ -16,7 +16,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -269,7 +269,7 @@ describe("create a project (F-PROJ-01, F-PROJ-02)", () => {
     const interrupted = await create(room.id, { ...LAB, name: "Other" });
     await server.app.db
       .update(projects)
-      .set({ distributionRepoId: world.ids.get(`${room.login}/lab-1-squashed`)!, distributionFullName: `${room.login}/lab-1-squashed` })
+      .set({ distributionRepoId: world.ids.get(`${room.login}/lab-1-squashed`)!, distributionFullName: null })
       .where(eq(projects.id, interrupted.id));
     // An empty public repository under the next name.
     world.empty(room.login, "lab-1-squashed-2");
@@ -469,6 +469,43 @@ describe("publish (F-PROJ-03, ADR-048)", () => {
     const project = await create(room.id, { ...LAB, groupMode: true });
     const res = await publish(project.id);
     expect([res.statusCode, res.json().error, res.json().students]).toEqual([409, "unassigned_students", []]);
+  });
+
+  /** Starts a creation whose push stalls, and waits until its row has claimed its repository. */
+  async function stalledCreation(roomId: string) {
+    world.stallPushes = true;
+    const pending = call("POST", base(roomId), teacher.headers, LAB);
+    let row;
+    for (let i = 0; i < 400 && !row; i++) {
+      [row] = await server.app.db.select().from(projects).where(and(eq(projects.classroomId, roomId), isNotNull(projects.distributionRepoId)));
+      if (!row) await new Promise((r) => setTimeout(r, 25));
+    }
+    expect(row, "the draft claimed its repository").toBeDefined();
+    return { pending, id: row!.id };
+  }
+
+  it("refuses to publish a draft whose distribution is still being built, then publishes it built", async () => {
+    const room = await connectedClassroom();
+    const { pending, id } = await stalledCreation(room.id);
+    expect(refusal(await publish(id))).toEqual([409, "distribution_missing"]);
+    const during = ProjectSummary.parse((await call("GET", `/app/api/projects/${id}`, teacher.headers)).json());
+    expect([during.state, during.distribution]).toEqual(["draft", null]);
+    world.release(true);
+    expect((await pending).statusCode).toBe(201);
+    world.allowPushes();
+    expect((await publish(id)).statusCode).toBe(200);
+  });
+
+  it("keeps a draft whose build fails unpublished, and deletes it as a draft", async () => {
+    const room = await connectedClassroom();
+    const { pending, id } = await stalledCreation(room.id);
+    expect(refusal(await publish(id))).toEqual([409, "distribution_missing"]);
+    world.release(false);
+    expect(refusal(await pending)).toEqual([502, "distribution_failed"]);
+    world.allowPushes();
+    expect(await rowOf(id)).toBeUndefined();
+    expect(await auditOf(id, "project.publish")).toEqual([]);
+    expect(githubDeletes()).toEqual([]);
   });
 
   it("refuses a project whose distribution repository is missing", async () => {

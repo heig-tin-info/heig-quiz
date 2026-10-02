@@ -43,7 +43,9 @@ the SSE and every other request wait for it.
    `projects.distribution_repo_id` (migration `0056`) — before anything is
    pushed to it: two creations racing for one empty leftover, in two
    classrooms of one organization, never both push into it; the loser steps
-   to the next name. Then the repository is built.
+   to the next name. Then the repository is built, and only then does the
+   row get the repository's name (`distribution_full_name`), the mark of a
+   BUILT distribution.
 2. **Never delete on GitHub.** Not a student's repository, not a
    distribution repository, not a repository the App created a second ago.
    A failed build deletes the ROW only and answers `502
@@ -62,9 +64,12 @@ the SSE and every other request wait for it.
    through the environment of the one process only (invariant 15). The
    remotes have one seam (`setRemoteBaseForTests`), so the tests push to
    local bare repositories.
-5. **A draft without its repository** is listed and may be deleted, but not
-   published (`409 distribution_missing`): it is being built, or its build
-   was interrupted (the process stopped between the two writes).
+5. **A draft whose distribution is not built** — its name not written — is
+   listed and may be deleted, but not published (`409 distribution_missing`),
+   by hand or by the ticker: it is being built, or its build was
+   interrupted. So a failed build only ever deletes an unpublished draft (the
+   deletion says so in its condition), and nothing hands out a half-built
+   repository.
 
 ## Consequences
 

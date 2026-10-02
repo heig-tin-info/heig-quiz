@@ -94,7 +94,11 @@ export const projects = pgTable(
     /** The teacher's repository; never shown to a student, nor its existence (N-SEC-20). */
     sourceRepoId: bigint("source_repo_id", { mode: "number" }).notNull(),
     sourceFullName: text("source_full_name").notNull(),
-    /** The distribution repository (`<slug>-squashed`, F-PROJ-02); null until built. */
+    /**
+     * The distribution repository (`<slug>-squashed`, F-PROJ-02): its id is
+     * written when the draft claims it, before the build; its name once the
+     * build is done — the mark Publish requires (ADR-062).
+     */
     distributionRepoId: bigint("distribution_repo_id", { mode: "number" }),
     distributionFullName: text("distribution_full_name"),
     sourceStrategy: text("source_strategy", { enum: SOURCE_STRATEGIES }).notNull().default(PROJECT_DEFAULTS.sourceStrategy),

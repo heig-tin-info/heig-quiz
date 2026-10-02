@@ -31,11 +31,15 @@ export interface RepoWorld {
   publicRepos: Set<string>;
   /** While true, a repository the App creates refuses every push. */
   refusePushes: boolean;
+  /** While true, a push to a repository the App creates waits for {@link release}. */
+  stallPushes: boolean;
+  /** Ends the stalled pushes: accepted (`ok`), or refused. */
+  release: (ok: boolean) => void;
   /** A repository with commits on `branches` (`file` → content), as a teacher pushed it. */
   source: (org: string, name: string, branches: Record<string, Record<string, string>>, commits?: number) => void;
   /** The empty repository `org/name`, as a failed build leaves it. */
   empty: (org: string, name: string) => void;
-  /** Lets every repository refused so far take pushes again. */
+  /** Lets every repository refused or stalled so far take pushes again. */
   allowPushes: () => void;
   exists: (fullName: string) => boolean;
   /** `git` on a bare repository of the world. */
@@ -81,6 +85,10 @@ export function repoWorld(): RepoWorld {
     foreignOwner: new Set(),
     publicRepos: new Set(),
     refusePushes: false,
+    stallPushes: false,
+    release(ok) {
+      writeFileSync(join(dir, "release"), ok ? "0" : "1");
+    },
     source(org, name, branches, commits = 1) {
       const fullName = `${org}/${name}`;
       init(fullName);
@@ -108,7 +116,9 @@ export function repoWorld(): RepoWorld {
     },
     allowPushes() {
       for (const hook of refusing.splice(0)) rmSync(hook, { force: true });
+      rmSync(join(dir, "release"), { force: true });
       world.refusePushes = false;
+      world.stallPushes = false;
     },
     exists: (fullName) => existsSync(pathOf(fullName)),
     git: (fullName, ...args) => sh("--git-dir", pathOf(fullName), ...args),
@@ -125,9 +135,15 @@ export function repoWorld(): RepoWorld {
           return json({ message: "Repository creation failed.", errors: [{ message: "name already exists on this account" }] }, 422);
         }
         init(fullName);
-        if (world.refusePushes) {
+        if (world.refusePushes || world.stallPushes) {
           const hook = join(pathOf(fullName), "hooks", "pre-receive");
-          writeFileSync(hook, "#!/bin/sh\necho refused >&2\nexit 1\n");
+          const release = join(dir, "release");
+          writeFileSync(
+            hook,
+            world.refusePushes
+              ? "#!/bin/sh\necho refused >&2\nexit 1\n"
+              : `#!/bin/sh\nwhile [ ! -f "${release}" ]; do sleep 0.05; done\nexit $(cat "${release}")\n`,
+          );
           chmodSync(hook, 0o755);
           refusing.push(hook);
         }

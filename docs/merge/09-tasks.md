@@ -656,8 +656,12 @@ files it ports; writes en + fr for every string.
     `targetOf` in `journal/writes.ts` could use it too).
   - **Distribution** (ADR-062): the row claims the repository (partial
     UNIQUE `projects_distribution_repo_uq`, migration `0056`) before
-    anything is pushed; `createSquashedRepo` takes a `claim` callback and
-    never adopts a public leftover.
+    anything is pushed, and gets its `distribution_full_name` only once it
+    is built: that name is the mark `publishProject` requires
+    (`distribution_missing`) — M3-05's auto-publish and M3-09's accept read
+    the same mark. `createSquashedRepo` takes a `claim` callback and never
+    adopts a public leftover. `repoWorld()` can refuse or stall pushes
+    (`refusePushes`, `stallPushes` + `release`).
     `actorOf(req)` / `SYSTEM_ACTOR` in `audit.ts`, the tracer's actor rule
     for a service that audits itself.
   - **Patch rules** are `projectFieldRefusal` / `editableProjectFields`
