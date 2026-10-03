@@ -390,8 +390,12 @@ confirmation (past activity stays visible; the teacher sees the opt-out).
 
 ### Rollback
 
-Slice 1 is additive and unused until slice 2: removing its files and the
-dependency restores the package.
+The original slice-1 rollback removed the unused pure rules and dependency.
+That description applies only before the persisted drill and its screens
+were delivered; it is not a rollback procedure for the current feature.
+Use the [deployment runbook](../development/deployment.md) for deployment
+and database recovery. Cards and reviews contain student history and must
+not be discarded as if the scheduler were still unused.
 
 ## Alternatives considered
 

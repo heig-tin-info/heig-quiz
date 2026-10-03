@@ -11,22 +11,23 @@ A type is a TypeScript package that exports a `QuestionType` object:
 | `answerSchema` | Zod schema of the student's answer. Validated at every autosave. |
 | `defaultPoints(config)` | Default points when the question is added to an evaluation. |
 | `toStudent(config, seed)` | Returns the configuration visible to the student: no key, no explanation, no hidden tests, choices shuffled according to the seed. Pure function, tested. |
-| `grade(config, answer, ctx)` | Returns `{ points, maxPoints, details }` or `{ pending: 'runner' | 'llm' }`. `ctx` provides the seed, the item's points, and the runner and LLM services. |
+| `grade(config, answer, ctx)` | Returns a graded result or a pending runner/LLM request (`GradeResult` in `packages/core/src/contract.ts`). `ctx` provides the seed, the item's points, the runner service and an LLM-availability flag; the API owns model calls (ADR-063). |
 | `distinctTexts(config)` | Optional (`mcq`). The texts an instance of a parameterized question keeps distinct (ADR-056 §7). Variables themselves are a header field of the version, instantiated by the API before any hook is called, never by the type. |
 | `parameterIssues(template)` | Optional (`short`). What a parameterized template may not do although its instances could (a computed text key, ADR-056 §10). |
 | `sampleIssues(template, sample)` | Optional (`short`). What a parameterized template may not do given the values publication drew: a tolerance below half the step of its key's format (ADR-056 §6). |
 | `Editor` | React component for editing the draft. |
 | `Player` | React component for answering. Receives the student configuration, the current answer, an `onChange` callback. |
 | `Review` | React component for review: answer, key, grading, for the teacher and for the student feedback. |
+| `grading` | Required client member: the type supplies its grading-table columns, expected cells and answer sort keys (ADR-044). |
 | `toCanonical` / `fromCanonical` | Conversion from and to the canonical format, if it differs from the raw configuration. |
 | `configVersion`, `migrate(config, from)` | Version of the configuration schema and upgrade on read. Lets a type evolve without an SQL migration, see 5.2. |
-| `generate(ctx)` | Optional. The type's LLM templates for "Generate the answer", "Generate the explanation", "Generate a variant", see 8.2. |
+| `generator` | Optional `AnswerGenerator`: a narrow proposal schema, instructions and merge; an optional runner settlement computes expected outputs. The API calls the model (ADR-059); variants remain deferred. |
 | `searchText(config)` | Text indexed for the full-text search of the pool. |
 
 Rules:
 
 - A type has no tables. Its configuration and its answers live in JSONB in the core tables.
-- A type makes no direct network call. It goes through `ctx.runner` and `ctx.llm`.
+- A type makes no direct network call. Runner execution uses `ctx.runner`; an LLM request is returned as a pending result for the API to execute. `ctx.llm` is an availability flag, not a service.
 - A type has no drill hook (ADR-041 §4). A question is drillable when its type is in the drill's scope — `mcq`, `short`, `cloze` and `categorize` in v1, `DRILL_TYPES` in `@quiz/domain` — and `grade` settles its answer automatically and finally: graded at once, not pending a runner or an LLM, not a proposal for the teacher. The drill takes its correctness from `grade`'s points and its time from the review.
 - The phase 1 types live in the monorepo under `packages/qt-*`, with two entry points `server` and `client`, see 5.2. Loading is static, through two registries.
 
@@ -243,13 +244,13 @@ Shown as **Essay** / « Rédaction » in the interface; the id `rich` is the one
 
 **Answer**: `{ text }`, markdown or plain text according to `format`. No image in v1: pool assets are readable by every teacher session of the pool, and a student upload would need an ADR on personal data and retention.
 
-**Scoring, v1**: manual. `grade` proposes 0 points (`state: proposed`, `details.reason: manual`) for a written answer, and a validated 0 for nothing written (`reason: empty`); the teacher sets the points and a comment in the grading panel, which shows the answer beside the rubric and the model answer (`toSolution`). The dashboard cell shows the character count, never the text. Not pollable, no drill.
+**Manual fallback**: `grade` proposes 0 points (`state: proposed`, `details.reason: manual`) for a written answer, and a validated 0 for nothing written (`reason: empty`); the teacher sets the points and a comment in the grading panel, which shows the answer beside the rubric and the model answer (`toSolution`). The dashboard cell shows the character count, never the text. Not pollable, no drill.
 
 **The key a student reads**: the rubric never reaches a student, even under `showKey`; the `studentSolution` hook keeps the model answer alone, or nothing (ADR-037).
 
-**Scoring, later**: `grade` returns `pending: 'llm'`. The LLM service receives the statement, the rubric, the reference, the anonymised answer, and must reply in JSON: points per criterion, short justification per criterion, confidence `low` / `medium` / `high`. The teacher validates in the grading panel (F-LLM-01..04). A rubric of criteria with `label`, `points` and `description`, used as the grading form, comes with it.
+**LLM scoring** ([ADR-063](../adr/ADR-063-correction-llm.md)): after the close, when a model is available and the question has a rubric or model answer, `grade` returns a pending LLM request. The API queues it, masks student names in the answer, and sends the statement, rubric, reference, answer and item's points. The reply is a proposal with confidence and a per-criterion breakdown inferred from the free-text rubric. The teacher validates it; a successful proposal is retained unless explicitly regraded. There is no model call while the evaluation runs or is paused. Without a model or grading material, the manual fallback applies.
 
-*Amendment (ADR-045): the path exists, with a development stub as its only provider. `grade` returns `pending: 'llm'` when the process has an LLM service (`GradeContext.llm`, `LLM_PROVIDER`) and the question has a rubric or a model answer; the request holds the rubric, the model answer, the answer text and the item's points, not yet the statement nor a per-criterion reply. The pass writes the reply as an `llm` proposal with its confidence, the justification in its details for the teacher only (open question 27). Without a service, v1's manual scoring above is unchanged.* *Amendment (ADR-063): wired to the real model through the gateway, automatically after the close, through a `grading.llm` job per answer. The request holds the statement too, the answer masked of the names of the students who sat; the reply holds a breakdown per criterion, read by the model from the free-text rubric (the structured rubric above stays deferred), kept with the model's name under `details.ai`, teacher-only like the justification. A successful proposal is not asked again except by a re-grade.*
+The justification and `details.ai` (model and criteria) remain teacher-only even after validation. A teacher may explicitly copy the justification into the comment and edit it before saving (ADR-063 §7). A structured rubric with `label`, `points` and `description` remains deferred. [ADR-045](../adr/ADR-045-service-llm-de-correction.md) preserves the development-stub history.
 
 ## 4.9 Code image `codeimage`
 
@@ -329,10 +330,10 @@ config:
       points: 1
   reference: { components: [...], wires: [...] }     # the teacher's own circuit: the key
   grading:
-    mode: simulation         # manual (default), simulation, llm (phase 2)
+    mode: simulation         # manual (default) or simulation; llm is closed (ADR-063)
     tolerance: 0.05          # simulation, transient stimuli: the pass threshold
     bode: { magDb: 1, floorDb: 60, phaseDeg: 10 }    # simulation, AC stimuli: the envelope
-    rubric: "..."            # manual and llm: the criteria
+    rubric: "..."            # criteria for the teacher's manual grading
   showExpected: false        # overlay the reference's curve on the visible stimuli
   simulationsPerMinute: 10   # N-SEC-07, the budget of the Simulate button
 ```
