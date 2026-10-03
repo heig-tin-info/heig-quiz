@@ -29,7 +29,7 @@ import { useT } from "../i18n";
 import { ClozeMarkdownText } from "../markdown/ClozeMarkdownText";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { Alert, ScrollableCode, Spinner } from "../ui";
-import { canvasStringsProp, LazyRichText } from "../questionTypes";
+import { canvasStringsProp, LazyRichText, questionType } from "../questionTypes";
 import { playerStringsFor } from "./questionStrings";
 
 /** What every shipped player accepts on top of the core contract. */
@@ -66,6 +66,15 @@ export function isAnswered(type: string, answer: unknown): boolean {
   } catch {
     return true;
   }
+}
+
+/**
+ * The type asks for more than the reading column (`QuestionTypeClient.wide`):
+ * the shell then gives its question the room right of the side column. A type
+ * this build does not carry keeps the reading column.
+ */
+export function isWide(type: string): boolean {
+  return questionType(type)?.wide === true;
 }
 
 /**

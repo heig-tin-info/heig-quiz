@@ -194,6 +194,36 @@ export function regionsOf(student: ProgramStudent, answer: { regions: string[] }
 }
 
 /**
+ * The statement beside the program once the player has the room, one over
+ * the other otherwise; what a run is judged against comes after, across the
+ * whole width.
+ *
+ * The room is the player's OWN width (a container query), never the
+ * viewport's: 60rem, so that the program's 3fr never falls under 560 px,
+ * some sixty-five characters of the editor's 13 px (ADR-066 has the screens
+ * this splits). One tree, one stylesheet: crossing the threshold (a resize,
+ * a zoom) moves the two halves without remounting the editor, whose undo
+ * history and cursor stay.
+ */
+export function ProgramSplit({
+  statement,
+  children,
+}: {
+  statement: ReactNode;
+  /** The program and its tools. */
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <div className="@container">
+      <div className="flex flex-col gap-5 @min-[60rem]:grid @min-[60rem]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] @min-[60rem]:items-start @min-[60rem]:gap-6">
+        <div className="flex flex-col gap-5">{statement}</div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
  * The statement, the type's own badges, and the extra files by name. The
  * language and the limits are the teacher's settings, not the student's
  * concern: the player does not show them.

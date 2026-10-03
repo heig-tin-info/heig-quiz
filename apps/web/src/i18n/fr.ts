@@ -6,6 +6,12 @@ import type { Dict } from "./en";
  */
 export const fr: Record<keyof Dict, string> = {
   "app.title": "Quiz",
+  "connection.updating": "Mise à jour en cours",
+  "connection.lost": "Connexion perdue",
+  "connection.retrying": "Tentative de reconnexion…",
+  "connection.updateDetail": "Reconnexion automatique dès le retour du service.",
+  "connection.keepOpen": "Gardez cet onglet ouvert pour conserver votre travail.",
+
   "landing.tagline":
     "Banques de questions, évaluations en direct et correction automatique pour les cours de la HEIG-VD.",
   "landing.signin": "Se connecter avec Switch edu-ID",
@@ -717,6 +723,8 @@ export const fr: Record<keyof Dict, string> = {
   "dur.s": "{n} s",
   "dur.minSec": "{m} min {s} s",
   "dur.hourMin": "{h} h {m} min",
+  "dur.hourMinSec": "{h} h {m} min {s} s",
+  "dur.dayHour": "{d} j {h} h",
   "time.now": "à l'instant",
 
   // --- Live primitives (ui/live.tsx) ---

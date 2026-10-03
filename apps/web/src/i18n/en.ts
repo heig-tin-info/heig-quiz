@@ -5,6 +5,12 @@
  */
 export const en = {
   "app.title": "Quiz",
+  "connection.updating": "Platform update in progress",
+  "connection.lost": "Connection lost",
+  "connection.retrying": "Trying to reconnect…",
+  "connection.updateDetail": "Reconnecting automatically as soon as the service returns.",
+  "connection.keepOpen": "Keep this tab open to preserve your work.",
+
   "landing.tagline":
     "Question pools, live evaluations and automatic grading for HEIG-VD courses.",
   "landing.signin": "Sign in with Switch edu-ID",
@@ -719,6 +725,8 @@ export const en = {
   "dur.s": "{n} s",
   "dur.minSec": "{m} min {s} s",
   "dur.hourMin": "{h} h {m} min",
+  "dur.hourMinSec": "{h} h {m} min {s} s",
+  "dur.dayHour": "{d} d {h} h",
   "time.now": "just now",
 
   // --- Live primitives (ui/live.tsx) ---

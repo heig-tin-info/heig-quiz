@@ -108,6 +108,8 @@ const WorkflowRunEvent = z.object({
     event: z.string().optional(),
     check_suite_id: z.number().int().nullish(),
     updated_at: z.string().optional(),
+    run_started_at: z.string().nullish(),
+    triggering_actor: z.object({ login: z.string() }).nullish(),
   }),
 });
 
@@ -125,6 +127,7 @@ const workflowRun: WebhookHandler = async (app, config, delivery) => {
   forgetRepoLiveState(ctx.repo.fullName);
   const raw = event.data.workflow_run;
   const completedAt = raw.updated_at ? new Date(raw.updated_at) : delivery.receivedAt;
+  const startedAt = raw.run_started_at ? new Date(raw.run_started_at) : null;
   const run: CompletedRun = {
     workflowRunId: raw.id,
     runAttempt: raw.run_attempt ?? 1,
@@ -133,7 +136,10 @@ const workflowRun: WebhookHandler = async (app, config, delivery) => {
     conclusion: raw.conclusion ?? "unknown",
     path: raw.path ?? "",
     event: raw.event ?? "",
+    // A re-run's triggering actor is who re-ran it; none at all counts as a person's (fail closed).
+    triggeredBy: pushedBy(config, raw.triggering_actor?.login),
     checkSuiteId: raw.check_suite_id ?? null,
+    startedAt: startedAt && !Number.isNaN(startedAt.getTime()) ? startedAt : null,
     completedAt: Number.isNaN(completedAt.getTime()) ? delivery.receivedAt : completedAt,
   };
   if (event.data.action !== "completed") {

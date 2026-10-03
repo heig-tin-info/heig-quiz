@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 
 import { ApiError } from "./api";
 import App from "./App";
+import { ConnectionOverlay } from "./realtime/ConnectionOverlay";
 import { CrashBoundary } from "./CrashBoundary";
 import { ConfirmProvider } from "./confirm";
 import { HelpProvider } from "./help";
@@ -50,6 +51,7 @@ async function boot() {
               <ConfirmProvider>
                 <HelpProvider>
                   <App />
+                  <ConnectionOverlay />
                 </HelpProvider>
               </ConfirmProvider>
             </ToastProvider>

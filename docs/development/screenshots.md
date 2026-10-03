@@ -123,7 +123,10 @@ runner. The `student-home` scenes were retaken once more that day, on a
 fresh seed with no runner, for Coming up grouped by day. The
 `grading-essay` and `grading-ai-justification` scenes were retaken on
 2026-10-02, on a fresh seed with `LLM_PROVIDER=stub` and no runner, for the
-AI's wand, criteria and model (ADR-063).
+AI's wand, criteria and model (ADR-063). The `player-*` scenes but
+`player-run` were retaken on 2026-10-02, on a fresh seed with no runner,
+for the pinned rail and the wide code question (ADR-066); `player-run` and
+`try-code` need a code runner and were not.
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |
@@ -185,14 +188,14 @@ AI's wand, criteria and model (ADR-063).
 | `student-home` | lea | `/` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `student-home-phone` | lea | `/` | seeded | Nothing: the page as it loads. | 390×844 |
 | `student-lobby` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | lobby | Nothing: the page as it loads. | 1440×900 |
-| `player-mcq` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | running | Nothing: the page as it loads. | 1440×900 |
-| `player-mcq-phone` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | running | Nothing: the page as it loads. | 390×844 |
-| `player-cloze` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | running | Moved to question 3 through the progress strip. | 1440×900 |
-| `player-short` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | running | Moved to question 4 through the progress strip. | 1440×900 |
-| `player-code` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | running | Moved to question 5 through the progress strip. | 1440×900 |
+| `player-mcq` | lea | `/take/a62530fb-8262-401e-9f13-d088005150d9` | running | Nothing: the page as it loads. | 1440×900 |
+| `player-mcq-phone` | lea | `/take/a62530fb-8262-401e-9f13-d088005150d9` | running | Nothing: the page as it loads. | 390×844 |
+| `player-cloze` | lea | `/take/a62530fb-8262-401e-9f13-d088005150d9` | running | Moved to question 3 through the progress strip. | 1440×900 |
+| `player-short` | lea | `/take/a62530fb-8262-401e-9f13-d088005150d9` | running | Moved to question 4 through the progress strip. | 1440×900 |
+| `player-code` | lea | `/take/a62530fb-8262-401e-9f13-d088005150d9` | running | Moved to question 5 through the progress strip. | 1440×900 |
 | `player-run` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | running | Moved to question 5, clicked “Run”, waited for “Compiled”. | 1440×900, full page |
-| `player-submit` | lea | `/take/2d031274-da46-4a00-9f8d-f5056e933cb9` | running | Clicked “Hand in”. | 1440×900 |
-| `player-done` | lea | `/take/39e9fb59-2ddb-43a1-ad68-e2eea5efc518` | graded | Nothing: the page as it loads. | 1440×900 |
+| `player-submit` | lea | `/take/a62530fb-8262-401e-9f13-d088005150d9` | running | Clicked “Hand in”. | 1440×900 |
+| `player-done` | lea | `/take/6188c969-2eb9-41f1-8111-2597c5e1602e` | graded | Nothing: the page as it loads. | 1440×900 |
 | `feedback-pending` | lea | `/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback` | graded | Nothing: the page as it loads. | 1440×900 |
 | `results-released` | teacher | `/evaluations/39e9fb59-2ddb-43a1-ad68-e2eea5efc518/results` | released | Nothing: the page as it loads. | 1440×900, full page |
 | `feedback` | lea | `/attempts/e90062a1-e6df-4ec7-8e4e-245b4c4ae1c1/feedback` | released | Nothing: the page as it loads. | 1440×900, full page |

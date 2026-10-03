@@ -67,7 +67,7 @@ import { PlayerEnd } from "./PlayerEnd";
 import { PlayerQuestion, QuestionHeading } from "./PlayerQuestion";
 import { PlayerRail } from "./PlayerRail";
 import { PlayerShell } from "./PlayerShell";
-import { isAnswered } from "./QuestionHost";
+import { isAnswered, isWide } from "./QuestionHost";
 import { FlagButton, QuestionTools } from "./QuestionTools";
 import { SubmitDialog } from "./SubmitDialog";
 import { usePlayerCommands } from "./usePlayerCommands";
@@ -288,7 +288,7 @@ export function PlayerView({
   const desktop = useMinWidth(640);
   // Wider still, the question list and the points stand in a column beside
   // the question rather than over it.
-  const wide = useMinWidth(1024);
+  const railScreen = useMinWidth(1024);
   const segments = useMemo(() => segmentsOf(state, isAnswered), [state]);
   const unanswered = state.items.filter(
     (i) => !isAnswered(i.type, state.answers[i.id] ?? null),
@@ -353,7 +353,7 @@ export function PlayerView({
   const manyItems = total > 1;
   // One question has no list to stand beside it: the heading keeps the
   // points, as on a narrow screen.
-  const rail = wide && manyItems && item !== undefined;
+  const rail = railScreen && manyItems && item !== undefined;
   const selectSegment = (itemId: string) => dispatch({ type: "goto", itemId });
   const progressLabel = t("player.progress", { n: state.index + 1, total });
   const actions =
@@ -382,6 +382,7 @@ export function PlayerView({
         onSelectSegment={selectSegment}
         progressLabel={progressLabel}
         commands={commands}
+        wide={item !== undefined && isWide(item.type)}
         // Issue #125: an exercise may be left and continued later; an exam
         // may not look like it can. The teacher's preview, exam or not, has
         // no clock to stop: its way out is the same quiet button.

@@ -35,7 +35,7 @@ import {
 } from "@quiz/domain";
 
 import type { Db, Tx } from "../../db/client.js";
-import { botCommits, projectGradeRuns, projectRepos, projects, pushReceipts, reverts } from "../../db/schema.js";
+import { botCommits, gradeDispatches, projectGradeRuns, projectRepos, projects, pushReceipts, reverts } from "../../db/schema.js";
 import { ownerRepo } from "../../github/app.js";
 import type { RepoContext } from "./repos.js";
 
@@ -55,7 +55,20 @@ export interface CompletedRun {
   path: string;
   /** What triggered it: `push`, `repository_dispatch` (the review), ... */
   event: string;
+  /**
+   * Who triggered it (`pushedBy` of the run's `triggering_actor` alone; none
+   * is a `person`, failing closed): only a review run Quiz's App dispatched —
+   * `app` — fills the review slot; a student may dispatch one too, or re-run
+   * the App's on a later head (M3-05b).
+   */
+  triggeredBy: "app" | "workflow" | "person";
   checkSuiteId: number | null;
+  /**
+   * GitHub's start time of the run (`run_started_at`), or null when unknown:
+   * a review run fills the slot only when it started after the freeze and
+   * after the final review was asked (M3-05b); unknown never does.
+   */
+  startedAt: Date | null;
   /** GitHub's completion time. */
   completedAt: Date;
 }
@@ -249,9 +262,11 @@ async function aggregateCiStatus(
  * Ingests a completed run, idempotently: the id of the grade run created,
  * or null when the run does not count or was already ingested (a replay
  * reads no annotation again). A `ci` run reselects the current score; a
- * `review` run fills the review slot only once it parsed, succeeded and the
- * repository's freeze is definitive (`project_repos.frozen_at`, M3-05a): a checkpoint's review before it is a
- * trace, never the final review (F-PROJ-11 as amended, M3-04).
+ * `review` run fills the review slot only once it parsed, succeeded, was
+ * triggered by Quiz's App (M3-05b) and the repository's freeze is
+ * definitive (`project_repos.frozen_at`, M3-05a): a checkpoint's review
+ * before it, or a review a student dispatched, is a trace, never the final
+ * review (F-PROJ-11 as amended, M3-04, M3-05b).
  *
  * `to_verify`: ingested while the repository's protection is suspended, or
  * on a head whose protected files were restored (F-PROJ-08).
@@ -283,6 +298,7 @@ export async function ingestCompletedRun(
       ? await readAnnotations(octokit, ctx.repo.fullName, run.headSha, run.checkSuiteId)
       : { score: null, tests: null };
   const restored = (await restoredHeads(db, ctx)).has(run.headSha);
+  const toVerify = ctx.repo.protectionSuspendedAt !== null || restored;
   const receivedAt = await receiptOf(db, ctx, run.headSha);
   const id = randomUUID();
   // `after_deadline` on the deadlines as they stand when the run is written,
@@ -321,7 +337,7 @@ export async function ingestCompletedRun(
         kind,
         // The repository's own deadline when its staff extended it (D13 amended).
         afterDeadline: receivedLate(receivedAt, effectiveDeadline(repo, project), app.clock.now()),
-        toVerify: ctx.repo.protectionSuspendedAt !== null || restored,
+        toVerify,
         completedAt: run.completedAt,
       })
       .onConflictDoNothing()
@@ -332,9 +348,25 @@ export async function ingestCompletedRun(
 
   if (kind === "review") {
     // The final review only: a failed run (grading.yml's fallback "1/6"
-    // when the review step dies) is a trace, never the review's score.
-    if (score?.status === "ok" && run.conclusion === "success" && ctx.repo.frozenAt !== null) {
-      await db.update(projectRepos).set({ reviewGradeRunId: id }).where(eq(projectRepos.id, ctx.repo.id));
+    // when the review step dies) is a trace, never the review's score; so
+    // is a review the App did not trigger (M3-05b) — a student's own
+    // dispatch, or their re-run of the App's —, one whose protected files
+    // may have been altered (`to_verify`), and one that started before
+    // this freeze or before its final review was asked (a checkpoint's, or
+    // one from before a reopen): judged on the row as the write finds it.
+    if (score?.status === "ok" && run.conclusion === "success" && run.triggeredBy === "app" && !toVerify && run.startedAt) {
+      const started = sql`${run.startedAt.toISOString()}::timestamptz`;
+      await db
+        .update(projectRepos)
+        .set({ reviewGradeRunId: id })
+        .where(
+          and(
+            eq(projectRepos.id, ctx.repo.id),
+            sql`${projectRepos.frozenAt} <= ${started}`,
+            sql`EXISTS (SELECT 1 FROM ${gradeDispatches} WHERE ${gradeDispatches.repoId} = ${projectRepos.id}
+              AND ${gradeDispatches.trigger} = 'deadline' AND ${gradeDispatches.createdAt} <= ${started})`,
+          ),
+        );
     }
     return id;
   }

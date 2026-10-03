@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { connection } from "./realtime/connection";
 import { api, ApiError, apiErrorMessage } from "./api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("api", () => {
@@ -36,5 +38,24 @@ describe("apiErrorMessage", () => {
     expect(apiErrorMessage(refused, "Failed")).toBe(
       "You are acting as a student, read only: nothing can be changed from this window.",
     );
+  });
+});
+
+
+describe("connection signals", () => {
+  it("reports transport failures and gateway outages, never permission refusals or cancellations", async () => {
+    const suspect = vi.spyOn(connection, "suspect").mockImplementation(() => {});
+    for (const status of [401, 403, 404, 500, 502, 503, 504]) {
+      vi.stubGlobal("fetch", async () => new Response("{}", { status }));
+      await expect(api("/x")).rejects.toBeInstanceOf(ApiError);
+    }
+    expect(suspect).toHaveBeenCalledTimes(3);
+    vi.stubGlobal("fetch", async () => { throw new TypeError("Failed to fetch"); });
+    await expect(api("/x")).rejects.toThrow("Failed to fetch");
+    expect(suspect).toHaveBeenCalledTimes(4);
+    const controller = new AbortController();
+    controller.abort();
+    await expect(api("/x", { signal: controller.signal })).rejects.toThrow();
+    expect(suspect).toHaveBeenCalledTimes(4);
   });
 });

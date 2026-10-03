@@ -135,8 +135,15 @@ export const projects = pgTable(
      * retries, leaves it to expire, and the ticker claims the work again.
      */
     deadlineJobAt: timestamp("deadline_job_at", { withTimezone: true }),
-    /** The final review dispatched to every repository (`grade-final`). */
-    reviewDispatchedAt: timestamp("review_dispatched_at", { withTimezone: true }),
+    /**
+     * The lease of the project's `project.dispatch` job (the final reviews
+     * and the checkpoints' dispatches, M3-05b): the same claim, renewal and
+     * expiry as `deadline_job_at`, apart from it so that a deadline's lock
+     * never waits for a review, nor the reverse. (No `review_dispatched_at`
+     * since 0060: whether a repository's final review was asked is its
+     * `grade_dispatches` row.)
+     */
+    dispatchJobAt: timestamp("dispatch_job_at", { withTimezone: true }),
     /** The day-before reminder sent (one shot, claimed by the ticker). */
     reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
     /** The final scores made the students' and the gradebook's (F-PROJ-14). */
@@ -441,10 +448,15 @@ export const botCommits = pgTable(
 
 /**
  * The ledger of review dispatches (F-PROJ-11): a row claimed with `ON
- * CONFLICT DO NOTHING` BEFORE GitHub is called, so a restarted worker never
- * dispatches twice; `dispatched_at` is set after the call (at-least-once).
- * One row per (repository, final review) and per (repository, checkpoint):
- * the unique index coalesces the final review's null checkpoint.
+ * CONFLICT DO NOTHING` BEFORE GitHub is called, so two workers never both
+ * dispatch; `dispatched_at` is set once GitHub accepted it. AT MOST ONCE
+ * (product owner, 2026-10-02; M3-05b): a row is never sent again — one left
+ * without `dispatched_at` (a crash between the claim and the call, a call
+ * whose answer never came, a 5xx) stays "not confirmed" for the staff; only
+ * a 4xx gives its claim back. One row per
+ * (repository, final review) and per (repository, checkpoint): the unique
+ * index coalesces the final review's null checkpoint. A reopen forgets a
+ * repository's `deadline` rows (M3-05a).
  */
 export const gradeDispatches = pgTable(
   "grade_dispatches",

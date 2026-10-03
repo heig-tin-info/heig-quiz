@@ -3,9 +3,11 @@
  *
  * The program half is `code`'s own (`../ProgramPlayer.tsx`): the statement,
  * the template as a stack of locked blocks and editable regions, the Run
- * button and its status lines. Under it, instead of a table of cases, the
- * picture: the target the teacher set, the image the last run printed, and
- * their difference, one grid or two side by side.
+ * button and its status lines, the statement beside the program when the
+ * player has the room (`ProgramSplit`). Under them, across the whole width
+ * and instead of a table of cases, the picture: the target the teacher set,
+ * the image the last run printed, and their difference, one grid or two side
+ * by side.
  *
  * Every run — in the browser or on the server, the host decides exactly as
  * it does for `code` — replaces the computed image. Its stdout is read with
@@ -21,6 +23,7 @@ import { badge, card, cx, isLocked, sectionTitle } from "@quiz/ui";
 
 import {
   ProgramRegions,
+  ProgramSplit,
   ProgramStatement,
   regionsOf,
   RunButton,
@@ -144,27 +147,31 @@ export function CodeImagePlayer({
 
   return (
     <div className="flex flex-col gap-5">
-      <ProgramStatement
-        student={student}
-        s={s}
-        renderMarkdown={renderMarkdown}
-        badges={
-          <span className={badge()}>
-            {spec.width} × {spec.height}
-          </span>
+      <ProgramSplit
+        statement={
+          <ProgramStatement
+            student={student}
+            s={s}
+            renderMarkdown={renderMarkdown}
+            badges={
+              <span className={badge()}>
+                {spec.width} × {spec.height}
+              </span>
+            }
+          />
         }
-      />
-
-      <ProgramRegions
-        student={student}
-        regions={regions}
-        locked={locked}
-        onWrite={writeRegion}
-        onWriteRegions={(next) => onChange({ regions: next })}
-        s={s}
-        monaco={monaco}
-        compileStderr={compileStderr}
-      />
+      >
+        <ProgramRegions
+          student={student}
+          regions={regions}
+          locked={locked}
+          onWrite={writeRegion}
+          onWriteRegions={(next) => onChange({ regions: next })}
+          s={s}
+          monaco={monaco}
+          compileStderr={compileStderr}
+        />
+      </ProgramSplit>
 
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
         <div className="flex flex-wrap items-center gap-3">

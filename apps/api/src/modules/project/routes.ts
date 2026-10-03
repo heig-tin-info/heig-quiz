@@ -5,6 +5,9 @@
  * publish, archive and unarchive. Every body and payload is a schema of
  * `packages/contracts/src/project.ts` (invariant 7).
  *
+ * From M3-08a, the staff's reads: the project page (`GET
+ * /app/api/projects/:id`, `ProjectDetail`) and a repository's runs.
+ *
  * Registered only when Quiz's App is configured (`app.ts`), like the
  * `github` module: without it none of these routes exists. Open to every
  * member of a course's staff (D26 addendum, 2026-10-02); the students see
@@ -26,12 +29,14 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   IdParam,
   ProjectAcceptance,
+  ProjectCheckpointParams,
   ProjectCreate,
   ProjectListQuery,
   ProjectPatch,
   ProjectRepoDeadline,
   ProjectRepoParams,
   ProjectSourceParams,
+  ReviewCheckpointCreate,
 } from "@quiz/contracts";
 
 import { actorOf } from "../../audit.js";
@@ -96,10 +101,16 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
 
   // ------------------------------------------------------------ one project
 
+  /**
+   * F-PROJ-13: the project page — the summary, the counts, the primary
+   * action, one row per student. Staff only, never a student's (N-SEC-20).
+   */
   app.get(
     "/app/api/projects/:id",
     session,
-    teacher(onProject, async ({ now, scope }) => service.projectSummary(app.db, scope.project, now)),
+    teacher(onProject, async ({ req, now, scope }) =>
+      service.projectDetail(app.db, config, scope.project, now, { log: req.log }),
+    ),
   );
 
   app.patch(
@@ -154,6 +165,13 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
 
   const onRepo = { params: ProjectRepoParams, load: accessibleProjectRepo.bind(null, app) };
 
+  /** F-PROJ-13: a repository's runs, the newest first, and its three slots. Database only. */
+  app.get(
+    "/app/api/projects/:id/repos/:rid/runs",
+    session,
+    teacher(onRepo, async ({ scope }) => service.repoRuns(app.db, scope.repo)),
+  );
+
   /** D13 as amended: the repository's own deadline (an individual extension), or the project's again. */
   app.put(
     "/app/api/projects/:id/repos/:rid/deadline",
@@ -178,6 +196,34 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
       }),
     );
   }
+
+  // ------------------------------------------------------------ review checkpoints (M3-05b)
+
+  /** F-PROJ-11: the project's review checkpoints, the earliest first. */
+  app.get(
+    "/app/api/projects/:id/checkpoints",
+    session,
+    teacher(onProject, async ({ scope }) => service.listCheckpoints(app.db, scope.project.id)),
+  );
+
+  /** A checkpoint: a name and a date, absolute or J−n of the deadline; dispatched by the `project.dispatch` job. */
+  app.post(
+    "/app/api/projects/:id/checkpoints",
+    session,
+    teacher({ ...onProject, body: ReviewCheckpointCreate }, async ({ req, reply, now, body, scope }) =>
+      reply.code(201).send(await service.createCheckpoint(app.db, scope.project.id, body, actorOf(req), now)),
+    ),
+  );
+
+  /** Refused once a dispatch of it was claimed for any repository (409 `checkpoint_dispatched`). */
+  app.delete(
+    "/app/api/projects/:id/checkpoints/:cid",
+    session,
+    teacher({ params: ProjectCheckpointParams, load: accessibleProject.bind(null, app) }, async ({ req, reply, params, scope }) => {
+      if (!(await service.deleteCheckpoint(app.db, scope.project.id, params.cid, actorOf(req)))) return notFound(reply);
+      return reply.code(204).send();
+    }),
+  );
 
   // ------------------------------------------------------------ the student's side (M3-03)
 

@@ -15,8 +15,16 @@
  * (`deadline.ts`: the reopen, a repository's own deadline, the staff's
  * lock), and what applies it (`jobs.ts`: the ticker's claims, the
  * `project.deadline` job).
+ * From M3-08a: the staff's project page and a repository's runs
+ * (`detail.ts`).
+ * From M3-05b: the review dispatches (`review.ts`: the final review per
+ * repository, the checkpoints', the `project.dispatch` job, its own lease
+ * — `lease.ts`, shared with the deadline's) and the checkpoints' authoring
+ * (`checkpoints.ts`).
  */
 export { acceptProject } from "./accept.js";
+export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoints.js";
+export { projectDetail, repoRuns } from "./detail.js";
 export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
 export { requestDeadlineWork } from "./jobs.js";
 export {

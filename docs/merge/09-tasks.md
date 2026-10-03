@@ -1060,6 +1060,90 @@ under the half that serves them.
   `projects.frozen_at` any more, nor a `projects_review_due_idx`: the
   review scan is over `project_repos` (frozen, no `deadline` dispatch);
   whether `projects.review_dispatched_at` still serves is this task's call.
+- **Decided for it** (product owner, 2026-10-02; point 5 by the
+  orchestrator): (1) at most once — the ledger row claimed before the
+  call, an unconfirmed row never sent again (a manual re-dispatch is a
+  later option); (2) only Quiz's review counts — the slot takes a review
+  run only when the App triggered it; (3) a repository archived as its
+  lock gets no review, without a ledger row, audited degraded, never
+  un-archived for it; (4) checkpoints against the project's deadline,
+  calendar days, to every live repository not yet frozen, on the last
+  non-bot receipt before the date, `due_past` / `due_after_deadline`, void
+  after an earlier deadline, delete refused once any ledger row exists;
+  (5) per repository at its definitive freeze, `none` never, no frozen run
+  no review, the effective deadline in the payload, the sha recorded, even
+  without `ANTHROPIC_API_KEY`; a separate lease and queue, no HTTP in a
+  tick; `review_dispatched_at` dropped.
+- **As delivered** (branch `merge/M3-05b-project-review`). What M3-06,
+  M3-08, M3-09 and M8-01 inherit:
+  - **Migration `0060_project_review`**: `projects.review_dispatched_at`
+    DROPPED (whether a repository's final review was asked is its
+    `grade_dispatches` row), `projects.dispatch_job_at` (the dispatch
+    lease).
+  - **Leases** (`Q:modules/project/lease.ts`, shared with the deadline):
+    `claimLeases(db, key, now, work, projectId?)`, `ProjectJob`,
+    `LEASE_MS`, `FAILED_RETRY_MS`, and ONE frame for both jobs,
+    `runLeased(app, config, key, job, label, body)`: the lease compared,
+    the installation's client, `each(repos, settle)` (four at a time, a
+    renewal after each, a throw counted failed and logged; returns the
+    failed full names), then lost ⇒ return, failed ⇒ backdated lease and
+    throw, else released. `runDeadlineJob` and `runReviewJob` are bodies
+    in it. `hintStaff` moved to `repos.ts` as `hintProjectStaff`.
+  - **The dispatch** (`Q:modules/project/review.ts`): the tick's step 6,
+    `claimReviewWork` (queue only) → `project.dispatch`
+    (`PROJECT_DISPATCH_QUEUE`, `retryLimit: 0`) → `runReviewJob`: first
+    the final reviews (`FINAL_REVIEW_DUE`: `LIVE`, graded `auto`,
+    `frozen_at` and `frozen_grade_run_id` set, `archived_at` and
+    `protection_suspended_at` null, no `deadline` ledger row), then each
+    checkpoint that fires (`checkpointFires` of `@quiz/domain`; its SQL
+    twin `checkpointDue` only in the claim) to `CHECKPOINT_TARGET` (`LIVE`,
+    `deadline_applied_at` null — "not yet frozen" read as not even
+    provisionally). Each repository: one transaction (`lockedRepo`: the
+    project `FOR SHARE` read once, the repository `FOR UPDATE` among its
+    target; then the checkpoint `FOR SHARE`) re-reads it and claims the
+    ledger row (`createdAt` = the clock, `sha` sent); then `POST
+    /repos/{o}/{r}/dispatches` with Octokit's retries off. Outcomes:
+    accepted ⇒ `dispatched_at`; a 4xx ⇒ the row deleted, the repository
+    failed (lease backdated, job throws), a 404 ⇒
+    `markRepoDeleted(…, "dispatch")`; no response or a 5xx ⇒ the row left
+    unconfirmed, counted `unconfirmed`, not a failure. A checkpoint is
+    marked `dispatched_at` after a pass with no failure for it. Audit
+    `project.review_dispatched` and `project.checkpoint_dispatched`
+    (`checkpointId`, `name`) `{dispatched, deleted, unconfirmed, failed}`
+    per pass that changed something; `project_repo.review_skipped`
+    `{projectId, reason: "archived" | "protection_suspended"}` written by
+    `jobs.ts` only: the freeze step, or the deadline job archiving a
+    repository already frozen.
+  - **The review slot** (`grading.ts`): `CompletedRun.triggeredBy`
+    (`pushedBy` of `workflow_run.triggering_actor` alone; none ⇒ `person`)
+    and `startedAt` (`run_started_at`; null ⇒ never). The slot fills for a
+    parsed, successful `review` run only when `app`, not `to_verify`, and
+    started at or after the repository's `frozen_at` and after its
+    `deadline` ledger row's `created_at` (a conditional UPDATE on the row
+    as it stands). A student's own dispatch or re-run, a checkpoint's run,
+    a pre-reopen run are `review` traces. The `workflow_run` event carries
+    no `client_payload`: a checkpoint's run STARTED after the final review
+    was asked would pass; `CHECKPOINT_TARGET` leaves that only to a
+    GitHub delay longer than checkpoint-to-deadline + grace (ADR-064).
+  - **Domain** (`@quiz/domain` `reviewDispatch.ts`): `isVoidCheckpoint`,
+    `checkpointRefusal(dueAt, deadlineAt, now)`, `checkpointFires`.
+  - **Checkpoints** (`Q:modules/project/checkpoints.ts`, staff,
+    `accessibleProject`): `GET|POST /app/api/projects/:id/checkpoints`
+    (`ReviewCheckpointCreate` → `ReviewCheckpoint`, 201; resolved under the
+    project's row lock), `DELETE …/checkpoints/:cid`
+    (`ProjectCheckpointParams`, 204, 404 for another project's). Refusals
+    `PROJECT_CHECKPOINT_REFUSALS` (own contract block): `due_past`,
+    `due_after_deadline` (422), `duplicate_checkpoint`,
+    `checkpoint_dispatched` (409). Audit `project_checkpoint.create|delete`
+    (subject the checkpoint, `{projectId, name, dueAt, offsetDays}`).
+  - **Tests** `Q:modules/project/dispatch.db.test.ts`; the review-slot case
+    in `ingest.db.test.ts`.
+  - Not done here: notices and mails (M3-09); the staff's view of the
+    ledger and of void checkpoints (M3-08); a manual re-dispatch (later).
+    Without a queue (`JOBS_DISABLED=1`) no review is ever dispatched
+    (`docs/development/index.md`). A repository archived as its lock and
+    later un-archived by a staff unlock after its freeze gets its final
+    review then (it is due again: frozen, no ledger row, not archived).
 
 ### M3-06 — Reconciliation of grades and repositories
 - **Depends on**: M3-04, M2-05. ‖ M3-05, M3-07.
@@ -1090,6 +1174,14 @@ under the half that serves them.
   branch on `reverts`; after a 422 whose retry finds nothing to restore,
   S's runs stay unflagged. Close them here, where the reconciliation reads
   the same rows.
+- **From M3-05b** (2026-10-02): `CompletedRun` gained `triggeredBy`
+  (`pushedBy(config, run.triggering_actor?.login)` — the triggering actor
+  alone, none is a person's) and `startedAt` (`run_started_at`, null when
+  absent): the listing of `actions/runs` carries both, and a reconciled
+  review run fills the review slot only under the same rule as the
+  webhook's (App-triggered, not `to_verify`, started after the freeze and
+  after the `deadline` ledger row). The reconciliation never re-sends a
+  review dispatch: an unconfirmed ledger row stays as it is.
 
 ### M3-07 — Sync of the source repository
 - **Depends on**: M2-04, M3-02, D12. ‖ M3-05, M3-06.
@@ -1104,34 +1196,34 @@ under the half that serves them.
   before the ref moves. The `repository` handler already follows a renamed
   source or distribution by id; a deleted one is this task's to surface.
 
-### M3-08 — Teacher views, grades, release
-- **Depends on**: M3-04, M3-05.
-- **Port from**: `C:modules/assignments/detail.ts`, grade history,
-  override, validate ⇒ release; the live-state cache (#37/#40).
+### M3-08 — split (orchestrator, 2026-10-02)
+M3-08 (teacher views, grades, release) is split in two: **M3-08a** the
+reads (the project page, a repository's runs, the live state), **M3-08b**
+the writes (the teacher's score, the release, the invitation resend, the
+protection's re-enable). The original card's notes are kept under the half
+that serves them.
+
+### M3-08a — Teacher views: the project page, the runs, the live state
+- **Depends on**: M3-04, M3-05a.
+- **Port from**: `C:modules/assignments/detail.ts` (the detail table, the
+  grade-run history), the final-score rule of `C:modules/grades.ts`, the
+  live-state cache (#37/#40).
 - **Contracts**: the grade runs' views (`GradeRunView`, `GradeRunList`
   with the current, frozen and review run ids; zod enums of
   `GRADE_RUN_KINDS`, `GRADE_RUN_PARSE_STATUSES`, `CI_STATUSES`),
-  `ScoreOverride` (`PATCH …/repos/:rid/score`, points 0…1000 or null, a
-  comment ≤ 2000), `not_frozen`, `ProjectDetail`. The release calls
-  `projectGrade` and writes `released_points/max`.
-- **Tests**: port `grades.db.test`; a deleted repo never calls GitHub; a
-  rate-limited detail returns stored state at once.
-- **From M3-03** (orchestrator, 2026-10-02): the staff's resend of an
-  invitation (F-PROJ-07) and each repository's `invitation_status` and
-  `provision_status` in the teacher's views.
-- **From M3-04** (product owner, 2026-10-02): **the re-enable route** of
-  the protected files (F-PROJ-08) — clears `project_repos.protection_suspended_at`,
-  audited, staff only; the views show a suspended repository as
-  "protected files in conflict" and every run with `to_verify` as "to
-  verify" (a suspended protection, or a head whose protected files were
-  restored — a head in `reverts.head_sha`), a `multiple` run as an alert
-  (it notifies nobody), a `malformed` run with its `parse_detail`.
-  Follow-up (here or later): store a repository's name without its owner
-  (the organization is `projects.org_id`), so the `organization` rename
-  handler of `webhooks.ts` can go. `GRADE_RUN_PARSE_STATUSES` etc.
-  as zod enums here. The live-state cache is already dropped by every
+  `ProjectDetail`.
+- **Tests**: port `grades.db.test` and the detail's; a deleted repo never
+  calls GitHub; a rate-limited detail returns stored state at once.
+- **From M3-03** (orchestrator, 2026-10-02): each repository's
+  `invitation_status` and `provision_status` in the teacher's views.
+- **From M3-04** (product owner, 2026-10-02): the views show a suspended
+  repository as "protected files in conflict" and every run with
+  `to_verify` as "to verify" (a suspended protection, or a head whose
+  protected files were restored — a head in `reverts.head_sha`), a
+  `multiple` run as an alert (it notifies nobody), a `malformed` run with
+  its `parse_detail`. The live-state cache is already dropped by every
   project webhook (`forgetRepoLiveState`); the views' `projects` hint
-  roots join `HINT_ROOTS.projects` (web).
+  roots join `HINT_ROOTS.projects` (web, M3-12).
 - **From M3-05a** (2026-10-02): each repository of the views shows its
   **own deadline** when it has one (`project_repos.deadline_at`) beside
   its effective deadline, its freeze (`deadline_applied_at`, `frozen_at`),
@@ -1141,9 +1233,154 @@ under the half that serves them.
   (H8; also a repository provisioned without rulesets, `ruleset_id` null).
   `ProjectRepoDeadlineState` (`contracts/src/project.ts`,
   `repoDeadline` in `deadline.ts`) is the shape the three repository
-  routes already answer; fold it into the repository rows. The
-  `not_frozen` refusal of the release reads the repositories' `frozen_at`
-  (a repository with a later deadline may not be frozen yet).
+  routes already answer; fold it into the repository rows.
+- **As delivered** (branch `merge/M3-08a-project-views`). What M3-08b,
+  M3-09, M3-12 and M5-03 inherit:
+  - **`GET /app/api/projects/:id`** now answers `ProjectDetail`
+    (`modules/project/detail.ts`), a superset of `ProjectSummary`: every
+    client parsing the summary keeps working; PATCH, publish, archive
+    still answer `ProjectSummary`. Staff only, through
+    `accessibleProject` (invariant 6): a student, another teacher, an
+    impersonation, a Bearer token get the 404 of a missing project
+    (tested). **N-SEC-20**: never reused nor filtered for a student; the
+    student's projection is M3-09's own. Added: `releasedAt`;
+    `primaryAction` (`publish` | `sync` | `release` | `none`,
+    `projectPrimaryAction` of `@quiz/domain`: an archived project none, a
+    draft Publish, Release once `scoresFinal` — graded (`auto`), every
+    LIVE repository definitively frozen, at least one; deleted,
+    never-provisioned and archived-project repositories do not hold it
+    back — and not yet released or a score changed since; then Sync when
+    `projects.source_ahead_sha` is set, which M3-07 fills; Release comes
+    before Sync, since once every repository is frozen a sync reaches
+    nobody's score); `counts` `{students (the roster, staff seats
+    excepted), accepted, live, frozen (live and frozen), toVerify,
+    alerts}`; `liveStale`; `rows`, the roster by name
+    (`ProjectDetailRow` `{student, repo | null}`, null being "not
+    accepted"), then the repositories whose student left the roster
+    (`enrollmentId` null). A repository of a user who now holds a STAFF
+    seat of the classroom is left out of the rows, the counts and the
+    release's readiness (a staff seat is never a student's, ADR-018).
+    Individual repositories only: a group's rows (members by
+    `project_group_members`) are M3-15's.
+  - **A repository's row** (`ProjectRepoView`) extends
+    `ProjectRepoDeadlineState`, which gained **`degraded`** (`archived_at`
+    set, or provisioned with `ruleset_id` null; the three repository routes
+    answer it too; `repoDeadlineState(repo, project)` in `deadline.ts` is
+    the pure half of `repoDeadline`): `provisionStatus`, `provisionError`,
+    `invitationStatus`, `acceptedAt`, `lastCommit` (the stored STUDENT
+    commit, M3-04), `ciStatus`, `live`, `scores` `{current, frozen,
+    review}` (`ProjectSlotScore`: run id, points, max, `grade`; a run's
+    parse status and `to_verify` are the run list's), `teacher` `{points, comment, gradedAt}`, `final`
+    (`ProjectFinalScore`: points, max, `source` teacher | review | ci —
+    I42 —, grade); `released` (the snapshot `{points, max}` once the
+    project is released, else null); `flags`: `protectionSuspended`,
+    `toVerify` (the run of one of the THREE SLOTS is `to_verify`; a run on
+    a restored head, never in a slot, shows in the history only),
+    `multiple` (ANY run of the repository: an alert does not fade),
+    `malformed` (the LATEST run's `parse_detail` when it is malformed,
+    else null), `deleted` (stored, or the live read's 404),
+    `changedAfterRelease`. A late run shows in the run list
+    (`afterDeadline`), not as a row flag. `multiple` and `malformed` come
+    from one `GROUP BY` over the repositories' runs. `alerts` counts `multiple` or
+    `protectionSuspended`.
+  - **Grades**: every score converts with its own maximum through
+    `scoreGrade(points, max, scale)` (`@quiz/domain` `projectView.ts`,
+    `projectGrade`; null without a maximum), `fellBack` carried.
+    `resolveFinalScore` (`finalScore.ts`) is settled on `review`: input
+    `reviewScore`, source `"review"`, `FINAL_SCORE_SOURCES`; no `llm` is
+    left in the project code. `changedAfterRelease(released, final,
+    snapshot)` compares points AND max, a score that appeared or vanished
+    included.
+  - **`GET /app/api/projects/:id/repos/:rid/runs`** → `GradeRunList`
+    (loader `accessibleProjectRepo`): the newest `GRADE_RUN_LIST_LIMIT`
+    (100) runs by `completed_at`, each a `GradeRunView` (kind, conclusion,
+    branch, head sha, points/max, TESTS counters, parse status and detail,
+    `afterDeadline`, `toVerify`, `completedAt`), and the three slot ids.
+    Database only.
+  - **The live state** (decided here): `readRepoLiveState` for every LIVE
+    repository (never a deleted one, nor one of an archived project),
+    `LIVE_CONCURRENCY` (8) at a time within `LIVE_BUDGET_MS` (1.5 s, the
+    installation's token included). Past the budget the page answers with
+    what it has and `liveStale: true`; the reads under way finish into the
+    cache, none is started after it, and the next view (the client
+    refetches shortly) finds them warm: a cold page of 100 repositories
+    costs at most eight requests in flight and fills over a few
+    refetches. A rate-limited installation answers `live: null` at once:
+    `isRateLimited` (`github/metrics.ts`) is asked before the
+    installation's token is even minted, until GitHub's reset. The live read only ADDS
+    counters (`ProjectRepoLive`: commit count, check runs passed / total,
+    `stale`) and is never written back: GitHub's head may be the App's (a
+    restore, a deadline commit), the stored one is the student's —
+    heig-classroom wrote the head back on a view. **`forEachLimit` is
+    duplicated on purpose** (`detail.ts` and `jobs.ts`), so that M3-08a
+    and M3-05b, built in parallel, never edit the same file: whichever of
+    the two merges second imports it from `modules/project/lease.ts`
+    (which M3-05b creates) and deletes its own copy.
+  - Not done here: the writes (M3-08b), the web page (M3-12), the
+    student's view (M3-09), a group's row (M3-15); heig-classroom's
+    `/activity` route (the commit graph) is not ported, no card asks for
+    it.
+
+### M3-08b — Teacher score, release, invitation resend, protection re-enable
+- **Depends on**: M3-08a.
+- **Port from**: heig-classroom's override, validate ⇒ release,
+  invitation resend.
+- **Contracts**: `ScoreOverride` (`PATCH …/repos/:rid/score`, points
+  0…1000 or null, a comment ≤ 2000), the refusals `not_frozen` and
+  `grading_none`. The release calls `projectGrade` and writes
+  `released_points/max`.
+- **From M3-03** (orchestrator, 2026-10-02): the staff's resend of an
+  invitation (F-PROJ-07).
+- **From M3-04** (product owner, 2026-10-02): **the re-enable route** of
+  the protected files (F-PROJ-08), which clears
+  `project_repos.protection_suspended_at`, audited, staff only.
+  Follow-up (here or later): store a repository's name without its owner
+  (the organization is `projects.org_id`), so the `organization` rename
+  handler of `webhooks.ts` can go.
+- **From M3-05a** (2026-10-02): the `not_frozen` refusal of the release
+  reads the repositories' `frozen_at` (a repository with a later deadline
+  may not be frozen yet).
+- **From M3-08a**: the page's `primaryAction` offers Release by
+  `scoresFinal` (`@quiz/domain`), and the release's own guard is the same
+  rule; `changedAfterRelease` and the snapshot's shape are there.
+  `resolveFinalScore` still gives a teacher score on a repository without
+  a scored run a null maximum: decision (1) replaces that.
+- **Decided for it** (product owner, 2026-10-02):
+  1. **A teacher score's maximum**: its own, given with it, when the
+     repository has no scored run (pass / fail only, malformed,
+     multiple); otherwise the CI score's maximum. Under `grading_mode:
+     none`, no teacher score and no release (`409 grading_none`).
+  2. **The release waits until every LIVE repository is frozen**
+     (deleted, never-provisioned and archived-project repositories do not
+     block); `409 not_frozen` otherwise; no partial release.
+  3. **After the release** the student and the gradebook read the LIVE
+     final score, flagged "changed after release" when it differs from
+     the snapshot (`released_points/max`); a re-release rewrites the
+     snapshot, audited, without a new notification; no withdrawal. A
+     reopen after the release is accepted (the teacher's score waits for
+     the new freeze).
+  4. **Re-enabling the protection**: only the restores after the
+     re-enable count toward the cap; the runs flagged during the
+     suspension stay `to_verify`; nothing is restored at the re-enable.
+  5. **Invitation resend**: staff only, a pending invitation only (409
+     otherwise), at most once per repository per minute (429), audited,
+     independent of M3-06's daily re-invite.
+- **From M3-05b** (product owner, 2026-10-02): each repository shows its
+  **final review** from its `grade_dispatches` row (`trigger = deadline`):
+  none and frozen with no frozen run ⇒ "no review"; none and archived as
+  its lock, or with its protection suspended ⇒ "no review" as degraded
+  (audit `project_repo.review_skipped`, `reason`; a re-enabled protection
+  makes the review due again); a 5xx is "not confirmed" too;
+  a row with `dispatched_at` ⇒ asked at that time, of `sha`; a row without
+  ⇒ **"not confirmed"** (claimed, GitHub's acceptance never recorded: a
+  crash or no response — never sent again; a manual re-dispatch is a later
+  option); then the review slot when the run came back. There is no
+  `projects.review_dispatched_at` any more (migration `0060`): derive a
+  project's "review dispatched" from the ledger. The checkpoints list
+  (`GET …/checkpoints`, `ReviewCheckpoint`) shows a checkpoint not
+  dispatched whose `dueAt` is at or after the project's deadline as
+  **void** (it never fires; deletable), and a deletion refused with `409
+  checkpoint_dispatched` once any ledger row names it.
 
 ### M3-09 — Student side, SSE, notifications
 - **Depends on**: M3-04, D18. ‖ M3-08.
@@ -1193,6 +1430,17 @@ under the half that serves them.
   worded from the audit `project.deadline_enforced` (`locked`, `archived`,
   `committed`, …) the deadline job writes; the student's view shows their
   own effective deadline.
+- **From M3-05b** (2026-10-02): the staff's notice of a review asked
+  (heig-classroom's `llm_review_dispatched`, "(n/N repositories)") is
+  worded from the audits `project.review_dispatched` and
+  `project.checkpoint_dispatched` (`dispatched`, `deleted`, `unconfirmed`,
+  `failed`; at most one per pass that changed something — a pass that only
+  fails again writes none, heig-classroom issue #10); the review job hints
+  the course's staff only (`hintProjectStaff`). The final review's mail
+  (`grade.final`) is sent when `review_grade_run_id` is filled, which now
+  happens only for a run Quiz's App triggered. A student's own dispatch is
+  never worth a notice. A `project_repo.review_skipped` (archived as its
+  lock) is the staff's, never the student's.
 
 ### M3-10 — Web: projects in Activities, "New ▾"
 - **Depends on**: M3-01 contracts, M1-05. ‖ M3-11.
@@ -1310,7 +1558,16 @@ under the half that serves them.
   - Not done: checkpoints (M3-05), the project page (M3-12).
 
 ### M3-12 — Web: project page
-- **Depends on**: M3-08 contracts. ‖ M3-11.
+- **Depends on**: M3-08a contracts (M3-08b for the writes). ‖ M3-11.
+- **From M3-08a** (2026-10-02): the page reads `GET /app/api/projects/:id`
+  (`ProjectDetail`: the summary, `counts`, `primaryAction` decided by the
+  server — draw that one action, never derive it —, `rows` with `repo:
+  null` as "not accepted", the flags, the scores with their `source` and
+  `grade.fellBack` for the scale's warning) and, when a row opens, `GET
+  …/repos/:rid/runs` (`GradeRunList`; the three slot ids mark the current,
+  frozen and review runs). `liveStale` true: refetch once a few seconds
+  on (the live state fills the cache meanwhile). Card M3-08a, "As
+  delivered".
 - **Goal**: redesign of `AssignmentDetail` in sections; grade history and
   override inside. Scenes `project`, `-grades`, `-sync-banner`.
 - **From M3-10**: the route `project` renders `ComingSoon` and is still
@@ -1861,7 +2118,7 @@ under the half that serves them.
   `-empty`, `-error`, phone and desktop.
 
 ### M5-03 — Gradebook module
-- **Depends on**: M3-08, D06.
+- **Depends on**: M3-08a, M3-08b, D06.
 - **Create**: `Q:modules/gradebook/` owning `gradebook_columns` (nullable
   `evaluation_id` / `project_id` + CHECK exactly one, weight, position);
   `packages/domain/src/gradebook.ts` (weighted mean); teacher Grades API,
@@ -1968,7 +2225,8 @@ under the half that serves them.
   `ON CONFLICT DO NOTHING`, in FK order. `assignments` → `projects`
   (`classroom_id` mapped; `org_id` = the mapped classroom's
   `github_classroom_links.org_id`; `squashed_*` → `distribution_*`;
-  `llm_dispatched_at` → `review_dispatched_at`; `grades_validated_at/by` →
+  `llm_dispatched_at` dropped (M3-05b: the column is gone, migration
+  `0060`; see the note below); `grades_validated_at/by` →
   `released_at/by`; `created_by` = the remapped classroom owner;
   `grading_scale` = `{kind: "score_is_grade"}`, heig-classroom's own
   reading — a score out of 6 is the grade, any other maximum linear
@@ -1991,6 +2249,20 @@ under the half that serves them.
   by the restores and counted as student commits. Imported `reverts` rows
   keep `head_sha` null (the column is new, migration `0057`), and imported
   `project_grade_runs` take `to_verify = false`, `parse_detail` null.
+- **From M3-05b** (2026-10-02): Quiz derives "the final review was asked"
+  from the `grade_dispatches` ledger alone (`projects.review_dispatched_at`
+  is dropped), and its ticker dispatches a `grade-final` to EVERY live
+  repository frozen with a frozen run and no `deadline` ledger row, of a
+  project graded `auto`. So the import must leave no such repository it
+  does not mean to review again: for an assignment whose
+  `llm_dispatched_at` is set, a repository with a frozen run and no
+  `deadline` row (a row lost, or older than the ledger) gets a confirmed
+  synthetic row (`sha` = its frozen run's head, `dispatched_at` =
+  `llm_dispatched_at`), counted in the report. heig-classroom's ledger rows
+  left unconfirmed (`dispatched_at` null, which it would have retried) are
+  imported as they are: Quiz never sends them again, its staff see them
+  "not confirmed". Likewise a milestone already dispatched keeps its
+  `dispatched_at` (`project_checkpoints`), or it fires again.
 
 ### M8-02 — Legacy URL resolver
 - **Depends on**: M8-01 (id map), M3-12, M4-04.

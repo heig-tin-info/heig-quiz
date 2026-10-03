@@ -3,12 +3,12 @@
  * found by GitHub's immutable repository id, never by name; who hears of a
  * change to it; and its one terminal state, deleted on GitHub.
  */
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
 import { classrooms, enrollments, projectGroupMembers, projectRepos, projects } from "../../db/schema.js";
-import { repoChanged } from "./events.js";
+import { projectsChanged, repoChanged } from "./events.js";
 
 export type RepoRow = typeof projectRepos.$inferSelect;
 type ProjectRow = typeof projects.$inferSelect;
@@ -66,13 +66,30 @@ export async function hintRepo(db: Db, ctx: RepoContext): Promise<void> {
   repoChanged(ctx.courseId, await repoUserIds(db, ctx.repo));
 }
 
+/** The staff of the projects `projectIds` hear of them (course topics only): the ticker's and the jobs' changes. */
+export async function hintProjectStaff(db: Db, projectIds: readonly string[]): Promise<void> {
+  if (projectIds.length === 0) return;
+  const rows = await db
+    .selectDistinct({ courseId: classrooms.courseId })
+    .from(projects)
+    .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
+    .where(inArray(projects.id, [...new Set(projectIds)]));
+  projectsChanged(rows.map((r) => r.courseId));
+}
+
 /**
  * Terminal and idempotent: the repository is gone from GitHub (F-PROJ-18).
  * Nothing retries a deleted repository, nothing is deleted here. True only
  * for the call that marked it, which audits it. `via`: GitHub's `repository`
- * event, or the 404 a deadline's lock, unlock or commit met (M3-05a).
+ * event, the 404 a deadline's lock, unlock or commit met (M3-05a), or a
+ * review dispatch's (M3-05b).
  */
-export async function markRepoDeleted(db: Db, repoId: string, now: Date, via: "webhook" | "deadline"): Promise<boolean> {
+export async function markRepoDeleted(
+  db: Db,
+  repoId: string,
+  now: Date,
+  via: "webhook" | "deadline" | "dispatch",
+): Promise<boolean> {
   const marked = await db
     .update(projectRepos)
     .set({ deletedAt: now })

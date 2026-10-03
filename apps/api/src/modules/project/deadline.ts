@@ -210,7 +210,7 @@ export async function projectDeadlineMoved(
     .set({
       deadlineAt,
       reminderSentAt: null,
-      ...(reopen ? { state: "published" as const, deadlineAppliedAt: null, reviewDispatchedAt: null } : {}),
+      ...(reopen ? { state: "published" as const, deadlineAppliedAt: null } : {}),
     })
     .where(eq(projects.id, before.id))
     .returning();
@@ -246,7 +246,11 @@ export async function repoDeadline(db: Db, repoId: string): Promise<ProjectRepoD
     .from(projectRepos)
     .innerJoin(projects, eq(projects.id, projectRepos.projectId))
     .where(eq(projectRepos.id, repoId));
-  const { repo, project } = row!;
+  return repoDeadlineState(row!.repo, row!.project);
+}
+
+/** {@link repoDeadline} of rows already read: the shape the project page's rows extend (M3-08a). */
+export function repoDeadlineState(repo: RepoRow, project: ProjectRow): ProjectRepoDeadlineState {
   return {
     id: repo.id,
     fullName: repo.fullName,
@@ -257,6 +261,8 @@ export async function repoDeadline(db: Db, repoId: string): Promise<ProjectRepoD
     locked: repo.lockedAt !== null,
     archived: repo.archivedAt !== null,
     staffLock: repo.staffLock,
+    // H8: archived for want of a ruleset, or provisioned without one.
+    degraded: repo.archivedAt !== null || (repo.provisionStatus === "ok" && repo.rulesetId === null),
   };
 }
 

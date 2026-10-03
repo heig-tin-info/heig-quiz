@@ -2,12 +2,15 @@
  * The LLM reviews a project requests from its student repositories (ported
  * from classroom's `dispatch.ts`, `grading.ts` and `milestones.ts`).
  *
- * Once a project's score is frozen (deadline + grace, ADR-012), the server
- * fires ONE `repository_dispatch` per student repository carrying the frozen
- * commit; the repository's `grading.yml` runs its LLM review, whose run comes
- * back through the ordinary ingestion as a `review` run. A review checkpoint
- * (classroom's "milestone", `docs/merge/07-incompatibilities.md` §7.4) does
- * the same before the deadline, on the last commit received before it.
+ * Once a repository's score is frozen for good (its effective deadline +
+ * grace, ADR-012, ADR-064), the server fires ONE `repository_dispatch` to it
+ * carrying the frozen commit and that EFFECTIVE deadline (the caller passes
+ * it as `deadlineAt`, M3-05b); the repository's `grading.yml` runs its LLM
+ * review, whose run comes back through the ordinary ingestion as a `review`
+ * run. A review checkpoint (classroom's "milestone",
+ * `docs/merge/07-incompatibilities.md` §7.4) does the same before the
+ * deadline, on the last commit no bot pushed received before it. The API's
+ * `modules/project/review.ts` sends them.
  *
  * These are the pure decisions. The event types and the `client_payload`
  * keys (`assignment_id`, `milestone`, …) are read by the workflows already
@@ -102,4 +105,43 @@ export function planCheckpointReviewDispatch(
  */
 export function checkpointDueAt(deadlineAt: Date, offsetDays: number): Date {
   return addZonedDays(deadlineAt, offsetDays);
+}
+
+/**
+ * A checkpoint is void once its date is no longer before the project's
+ * deadline (the deadline moved earlier): it never fires, and may be deleted
+ * (product owner, 2026-10-02; merge task M3-05b).
+ */
+export function isVoidCheckpoint(dueAt: Date, deadlineAt: Date): boolean {
+  return dueAt.getTime() >= deadlineAt.getTime();
+}
+
+/**
+ * Why a checkpoint cannot be created at `dueAt` (its resolved date): at or
+ * before now (`due_past`), or void from the start (`due_after_deadline`).
+ * Null when it may.
+ */
+export function checkpointRefusal(dueAt: Date, deadlineAt: Date, now: Date): "due_past" | "due_after_deadline" | null {
+  if (dueAt.getTime() <= now.getTime()) return "due_past";
+  if (isVoidCheckpoint(dueAt, deadlineAt)) return "due_after_deadline";
+  return null;
+}
+
+/**
+ * A checkpoint fires now: not dispatched, its date come, not void, on a
+ * project out of its draft that reviews (graded `auto`, not archived).
+ */
+export function checkpointFires(
+  checkpoint: { dueAt: Date; dispatchedAt: Date | null },
+  project: { deadlineAt: Date; state: string; gradingMode: string; archivedAt: Date | null },
+  now: Date,
+): boolean {
+  return (
+    checkpoint.dispatchedAt === null &&
+    checkpoint.dueAt.getTime() <= now.getTime() &&
+    !isVoidCheckpoint(checkpoint.dueAt, project.deadlineAt) &&
+    project.state !== "draft" &&
+    project.gradingMode === "auto" &&
+    project.archivedAt === null
+  );
 }
