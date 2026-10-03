@@ -1,0 +1,286 @@
+file,category,lines,bytes
+.claude/settings.json,configuration/data,18,324
+.github/actions/setup/action.yml,CI configuration,16,471
+.github/dependabot.yml,CI configuration,79,3220
+.github/workflows/ci.yml,CI configuration,312,13867
+.github/workflows/coverage.yml,CI configuration,45,1537
+.github/workflows/docs.yml,CI configuration,61,1450
+.github/workflows/image-artifact.yml,CI configuration,28,951
+.github/workflows/runner-integration.yml,CI configuration,83,3439
+Caddyfile,configuration/data,32,1248
+Caddyfile.staging,configuration/data,31,1170
+Dockerfile,configuration/data,56,2784
+apps/api/drizzle/0000_init.sql,migration,128,6465
+apps/api/drizzle/0001_pool.sql,migration,144,9618
+apps/api/drizzle/0002_evaluation.sql,migration,104,6397
+apps/api/drizzle/0003_grading.sql,migration,60,3885
+apps/api/drizzle/0004_goofy_george_stacy.sql,migration,18,867
+apps/api/drizzle/0005_strange_master_chief.sql,migration,2,163
+apps/api/drizzle/0006_high_starhawk.sql,migration,17,1103
+apps/api/drizzle/0007_poll_guests.sql,migration,11,1228
+apps/api/drizzle/0008_schema_audit.sql,migration,35,2950
+apps/api/drizzle/0009_audit_log_indexes.sql,migration,2,214
+apps/api/drizzle/0010_poll_unsaved_questions.sql,migration,1,61
+apps/api/drizzle/0011_api_tokens.sql,migration,15,714
+apps/api/drizzle/0012_oauth.sql,migration,52,2870
+apps/api/drizzle/0013_coach_marks.sql,migration,2,159
+apps/api/drizzle/0014_answer_skip_flag.sql,migration,16,1091
+apps/api/drizzle/0015_exercise_retakes.sql,migration,8,761
+apps/api/drizzle/0016_seb_launch.sql,migration,23,1885
+apps/api/drizzle/0017_notification_channels.sql,migration,22,1389
+apps/api/drizzle/0018_poll_audience.sql,migration,3,450
+apps/api/drizzle/0019_evaluation_templates.sql,migration,12,2183
+apps/api/drizzle/0020_user_course_prefs.sql,migration,9,643
+apps/api/drizzle/0021_classroom_period_months.sql,migration,3,586
+apps/api/drizzle/0022_teams_uploaded_app.sql,migration,27,1321
+apps/api/drizzle/0023_teams_graph_activity.sql,migration,17,1627
+apps/api/drizzle/0024_enrollments_user_idx.sql,migration,1,77
+apps/api/drizzle/0025_pool_color.sql,migration,1,44
+apps/api/drizzle/0026_evaluation_closes_at_shift.sql,migration,2,178
+apps/api/drizzle/0027_notification_folds.sql,migration,5,877
+apps/api/drizzle/0028_notification_pool_fold.sql,migration,1,220
+apps/api/drizzle/0029_activity_notifications.sql,migration,2,335
+apps/api/drizzle/0030_deadline_reminders.sql,migration,9,684
+apps/api/drizzle/0031_results_updated_fold.sql,migration,1,218
+apps/api/drizzle/0032_question_stats_since.sql,migration,1,74
+apps/api/drizzle/0033_grading_ready_claim.sql,migration,6,591
+apps/api/drizzle/0034_answer_dwell.sql,migration,12,1055
+apps/api/drizzle/0035_question_stars.sql,migration,10,779
+apps/api/drizzle/0036_drill.sql,migration,46,3275
+apps/api/drizzle/0037_activity_payload_neutral.sql,migration,14,866
+apps/api/drizzle/0038_journal.sql,migration,57,3230
+apps/api/drizzle/0039_correction_published.sql,migration,1,88
+apps/api/drizzle/0040_evaluation_item_bonus.sql,migration,8,898
+apps/api/drizzle/0041_drop_join_code.sql,migration,6,484
+apps/api/drizzle/0042_scheduled_tasks.sql,migration,10,302
+apps/api/drizzle/0043_evaluation_access_code_poll.sql,migration,6,522
+apps/api/drizzle/0044_super_powers.sql,migration,1,80
+apps/api/drizzle/0045_kiosk.sql,migration,40,2693
+apps/api/drizzle/0046_kiosk_watch.sql,migration,1,74
+apps/api/drizzle/0047_health_check_states.sql,migration,9,290
+apps/api/drizzle/0048_github.sql,migration,54,2883
+apps/api/drizzle/0049_journal_student_rendered.sql,migration,2,197
+apps/api/drizzle/0050_journal_modes.sql,migration,23,2168
+apps/api/drizzle/0051_parameterized_questions.sql,migration,9,802
+apps/api/drizzle/0052_llm_gateway.sql,migration,32,1550
+apps/api/drizzle/0053_import_classroom.sql,migration,20,682
+apps/api/drizzle/0054_project.sql,migration,183,11878
+apps/api/drizzle/0055_question_reviews.sql,migration,20,1304
+apps/api/drizzle/0056_project_distribution_unique.sql,migration,1,155
+apps/api/drizzle/0057_project_ingest.sql,migration,5,482
+apps/api/drizzle/0058_evaluation_closed_by.sql,migration,7,385
+apps/api/drizzle/0059_project_deadline.sql,migration,11,1101
+apps/api/drizzle/0060_project_review.sql,migration,2,161
+apps/api/drizzle/meta/0000_snapshot.json,generated migration snapshot,935,23552
+apps/api/drizzle/meta/0001_snapshot.json,generated migration snapshot,2123,54516
+apps/api/drizzle/meta/0002_snapshot.json,generated migration snapshot,2958,76669
+apps/api/drizzle/meta/0003_snapshot.json,generated migration snapshot,3448,89485
+apps/api/drizzle/meta/0004_snapshot.json,generated migration snapshot,3509,90980
+apps/api/drizzle/meta/0005_snapshot.json,generated migration snapshot,3522,91322
+apps/api/drizzle/meta/0006_snapshot.json,generated migration snapshot,3608,93495
+apps/api/drizzle/meta/0007_snapshot.json,generated migration snapshot,3653,94819
+apps/api/drizzle/meta/0008_snapshot.json,generated migration snapshot,3326,86608
+apps/api/drizzle/meta/0009_snapshot.json,generated migration snapshot,3363,87584
+apps/api/drizzle/meta/0010_snapshot.json,generated migration snapshot,3363,87585
+apps/api/drizzle/meta/0011_snapshot.json,generated migration snapshot,3469,90283
+apps/api/drizzle/meta/0012_snapshot.json,generated migration snapshot,3839,99939
+apps/api/drizzle/meta/0013_snapshot.json,generated migration snapshot,3852,100286
+apps/api/drizzle/meta/0014_snapshot.json,generated migration snapshot,3866,100636
+apps/api/drizzle/meta/0015_snapshot.json,generated migration snapshot,3901,101670
+apps/api/drizzle/meta/0016_snapshot.json,generated migration snapshot,4089,106753
+apps/api/drizzle/meta/0017_snapshot.json,generated migration snapshot,4248,110938
+apps/api/drizzle/meta/0018_snapshot.json,generated migration snapshot,4275,111821
+apps/api/drizzle/meta/0019_snapshot.json,generated migration snapshot,4351,114686
+apps/api/drizzle/meta/0020_snapshot.json,generated migration snapshot,4417,116448
+apps/api/drizzle/meta/0021_snapshot.json,generated migration snapshot,4434,117262
+apps/api/drizzle/meta/0022_snapshot.json,generated migration snapshot,4566,120774
+apps/api/drizzle/meta/0023_snapshot.json,generated migration snapshot,4562,120663
+apps/api/drizzle/meta/0024_snapshot.json,generated migration snapshot,4577,121059
+apps/api/drizzle/meta/0025_snapshot.json,generated migration snapshot,4583,121200
+apps/api/drizzle/meta/0026_snapshot.json,generated migration snapshot,4590,121391
+apps/api/drizzle/meta/0027_snapshot.json,generated migration snapshot,4668,123793
+apps/api/drizzle/meta/0028_snapshot.json,generated migration snapshot,4690,124519
+apps/api/drizzle/meta/0029_snapshot.json,generated migration snapshot,4718,125442
+apps/api/drizzle/meta/0030_snapshot.json,generated migration snapshot,4784,127253
+apps/api/drizzle/meta/0031_snapshot.json,generated migration snapshot,4806,127973
+apps/api/drizzle/meta/0032_snapshot.json,generated migration snapshot,4812,128146
+apps/api/drizzle/meta/0033_snapshot.json,generated migration snapshot,4818,128329
+apps/api/drizzle/meta/0034_snapshot.json,generated migration snapshot,4854,129385
+apps/api/drizzle/meta/0035_snapshot.json,generated migration snapshot,4937,131590
+apps/api/drizzle/meta/0036_snapshot.json,generated migration snapshot,5326,142087
+apps/api/drizzle/meta/0037_snapshot.json,generated migration snapshot,5326,142087
+apps/api/drizzle/meta/0038_snapshot.json,generated migration snapshot,5748,153350
+apps/api/drizzle/meta/0039_snapshot.json,generated migration snapshot,5754,153547
+apps/api/drizzle/meta/0040_snapshot.json,generated migration snapshot,5761,153718
+apps/api/drizzle/meta/0041_snapshot.json,generated migration snapshot,5740,153171
+apps/api/drizzle/meta/0042_snapshot.json,generated migration snapshot,5802,154773
+apps/api/drizzle/meta/0043_snapshot.json,generated migration snapshot,5806,154980
+apps/api/drizzle/meta/0044_snapshot.json,generated migration snapshot,5812,155167
+apps/api/drizzle/meta/0045_snapshot.json,generated migration snapshot,6121,163578
+apps/api/drizzle/meta/0046_snapshot.json,generated migration snapshot,6128,163747
+apps/api/drizzle/meta/0047_snapshot.json,generated migration snapshot,6183,165161
+apps/api/drizzle/meta/0048_snapshot.json,generated migration snapshot,6560,175145
+apps/api/drizzle/meta/0049_snapshot.json,generated migration snapshot,6573,175505
+apps/api/drizzle/meta/0050_snapshot.json,generated migration snapshot,6703,179420
+apps/api/drizzle/meta/0051_snapshot.json,generated migration snapshot,6732,180264
+apps/api/drizzle/meta/0052_snapshot.json,generated migration snapshot,6934,185396
+apps/api/drizzle/meta/0053_snapshot.json,generated migration snapshot,7043,188141
+apps/api/drizzle/meta/0054_snapshot.json,generated migration snapshot,8537,228835
+apps/api/drizzle/meta/0055_snapshot.json,generated migration snapshot,8679,232609
+apps/api/drizzle/meta/0056_snapshot.json,generated migration snapshot,8695,233107
+apps/api/drizzle/meta/0057_snapshot.json,generated migration snapshot,8742,234358
+apps/api/drizzle/meta/0058_snapshot.json,generated migration snapshot,8748,234507
+apps/api/drizzle/meta/0059_snapshot.json,generated migration snapshot,8768,235075
+apps/api/drizzle/meta/0060_snapshot.json,generated migration snapshot,8768,235064
+apps/api/drizzle/meta/_journal.json,generated migration snapshot,433,8871
+apps/api/package.json,configuration/data,48,1439
+apps/api/scripts/fixtures/classroom-seed.sql,migration,587,37217
+apps/api/tsconfig.json,configuration/data,6,205
+apps/api/tsconfig.test.json,configuration/data,8,348
+apps/runner/Dockerfile,configuration/data,65,3313
+apps/runner/deploy/Caddyfile,configuration/data,36,1245
+apps/runner/deploy/deploy.sh,operational tool,65,3378
+apps/runner/images/Containerfile,configuration/data,34,1620
+apps/runner/images/build.sh,operational tool,74,3097
+apps/runner/images/js/Containerfile,configuration/data,11,329
+apps/runner/infra/seccomp/runner.json,configuration/data,1184,22781
+apps/runner/package.json,configuration/data,25,618
+apps/runner/scripts/smoke.py,operational tool,100,5063
+apps/runner/tsconfig.json,configuration/data,1,42
+apps/runner/tsconfig.test.json,configuration/data,5,112
+apps/web/index.html,configuration/data,32,1670
+apps/web/package.json,configuration/data,79,2597
+apps/web/src/markdown/formula.css,runtime style,74,2724
+apps/web/src/markdown/richtext.css,runtime style,262,8393
+apps/web/src/style.css,runtime style,826,29878
+apps/web/tsconfig.json,configuration/data,15,355
+compose.prod.yml,configuration/data,128,5025
+compose.staging.yml,configuration/data,98,3414
+coverage.floors.json,configuration/data,92,1541
+deploy.sh,operational tool,172,8625
+docker-compose.dev.yml,configuration/data,38,1124
+docs/assets/screenshots/manifest.json,configuration/data,1705,53195
+extensions/kiosk-attestation/manifest.json,configuration/data,15,482
+infra/keycloak/quiz-dev-realm.json,configuration/data,101,2113
+mockups/categorize.html,design prototype,506,29189
+mockups/circuit.html,design prototype,783,37791
+mockups/grading.html,design prototype,657,49382
+mockups/uml.html,design prototype,1988,106130
+package.json,configuration/data,43,1404
+packages/contracts/package.json,configuration/data,28,559
+packages/contracts/tsconfig.json,configuration/data,1,42
+packages/contracts/tsconfig.test.json,configuration/data,5,112
+packages/core/package.json,configuration/data,52,1135
+packages/core/tsconfig.json,configuration/data,4,115
+packages/core/tsconfig.test.json,configuration/data,5,112
+packages/diagram/package.json,configuration/data,52,1157
+packages/diagram/tsconfig.json,configuration/data,4,115
+packages/diagram/tsconfig.test.json,configuration/data,5,112
+packages/docrender/package.json,configuration/data,50,1159
+packages/docrender/tsconfig.json,configuration/data,1,84
+packages/docrender/tsconfig.test.json,configuration/data,5,112
+packages/domain/package.json,configuration/data,31,644
+packages/domain/tsconfig.json,configuration/data,4,95
+packages/domain/tsconfig.test.json,configuration/data,5,112
+packages/qt-categorize/package.json,configuration/data,61,1449
+packages/qt-categorize/tsconfig.json,configuration/data,4,115
+packages/qt-categorize/tsconfig.test.json,configuration/data,5,112
+packages/qt-circuit/package.json,configuration/data,57,1329
+packages/qt-circuit/src/test/golden/netlist/bad-names-and-values.json,configuration/data,1273,17547
+packages/qt-circuit/src/test/golden/netlist/empty.json,configuration/data,297,4687
+packages/qt-circuit/src/test/golden/netlist/every-kind-every-orientation.json,configuration/data,2545,35751
+packages/qt-circuit/src/test/golden/netlist/fixture-circuitConfig-reference.json,configuration/data,427,5755
+packages/qt-circuit/src/test/golden/netlist/fixture-rcLowPass-odd-values-.json,configuration/data,461,6396
+packages/qt-circuit/src/test/golden/netlist/fixture-rcLowPass.json,configuration/data,427,5722
+packages/qt-circuit/src/test/golden/netlist/fixture-referenceSchematic.json,configuration/data,427,5755
+packages/qt-circuit/src/test/golden/netlist/junctions.json,configuration/data,633,8315
+packages/qt-circuit/src/test/golden/netlist/random-1.json,configuration/data,1745,24828
+packages/qt-circuit/src/test/golden/netlist/random-10.json,configuration/data,1101,15666
+packages/qt-circuit/src/test/golden/netlist/random-11.json,configuration/data,1297,17927
+packages/qt-circuit/src/test/golden/netlist/random-12.json,configuration/data,1189,17276
+packages/qt-circuit/src/test/golden/netlist/random-13.json,configuration/data,1373,19629
+packages/qt-circuit/src/test/golden/netlist/random-14.json,configuration/data,1089,15649
+packages/qt-circuit/src/test/golden/netlist/random-15.json,configuration/data,753,10422
+packages/qt-circuit/src/test/golden/netlist/random-16.json,configuration/data,1729,24228
+packages/qt-circuit/src/test/golden/netlist/random-17.json,configuration/data,1589,22688
+packages/qt-circuit/src/test/golden/netlist/random-18.json,configuration/data,1057,14161
+packages/qt-circuit/src/test/golden/netlist/random-19.json,configuration/data,729,10746
+packages/qt-circuit/src/test/golden/netlist/random-2.json,configuration/data,1081,15333
+packages/qt-circuit/src/test/golden/netlist/random-20.json,configuration/data,1253,17466
+packages/qt-circuit/src/test/golden/netlist/random-21.json,configuration/data,1085,15620
+packages/qt-circuit/src/test/golden/netlist/random-22.json,configuration/data,1273,18008
+packages/qt-circuit/src/test/golden/netlist/random-23.json,configuration/data,537,7974
+packages/qt-circuit/src/test/golden/netlist/random-24.json,configuration/data,1005,13949
+packages/qt-circuit/src/test/golden/netlist/random-3.json,configuration/data,1441,20417
+packages/qt-circuit/src/test/golden/netlist/random-4.json,configuration/data,1485,21175
+packages/qt-circuit/src/test/golden/netlist/random-5.json,configuration/data,1637,23528
+packages/qt-circuit/src/test/golden/netlist/random-6.json,configuration/data,1093,15244
+packages/qt-circuit/src/test/golden/netlist/random-7.json,configuration/data,517,7375
+packages/qt-circuit/src/test/golden/netlist/random-8.json,configuration/data,753,10598
+packages/qt-circuit/src/test/golden/netlist/random-9.json,configuration/data,681,9688
+packages/qt-circuit/src/test/golden/router/case-a-wall-forces-the-second-whole-box-pass.json,configuration/data,18,83
+packages/qt-circuit/src/test/golden/router/case-around-an-op-amp-body.json,configuration/data,18,83
+packages/qt-circuit/src/test/golden/router/case-arrives-at-a-pin-from-the-wrong-side.json,configuration/data,10,43
+packages/qt-circuit/src/test/golden/router/case-box-corners.json,configuration/data,14,57
+packages/qt-circuit/src/test/golden/router/case-leaves-a-pin-the-way-it-points.json,configuration/data,18,79
+packages/qt-circuit/src/test/golden/router/case-off-grid-ends.json,configuration/data,14,63
+packages/qt-circuit/src/test/golden/router/case-one-corner.json,configuration/data,14,63
+packages/qt-circuit/src/test/golden/router/case-port-to-port-with-waypoints.json,configuration/data,30,139
+packages/qt-circuit/src/test/golden/router/case-prefers-not-to-run-on-another-wire.json,configuration/data,18,81
+packages/qt-circuit/src/test/golden/router/case-same-point.json,configuration/data,10,43
+packages/qt-circuit/src/test/golden/router/case-single-end.json,configuration/data,10,43
+packages/qt-circuit/src/test/golden/router/case-straight.json,configuration/data,10,42
+packages/qt-circuit/src/test/golden/router/case-the-goal-walled-in-the-fallback-L.json,configuration/data,14,61
+packages/qt-circuit/src/test/golden/router/case-through-a-crowd-of-parts.json,configuration/data,18,81
+packages/qt-circuit/src/test/golden/router/fixture-rcLowPass.json,configuration/data,122,851
+packages/qt-circuit/src/test/golden/router/fixture-referenceSchematic.json,configuration/data,122,851
+packages/qt-circuit/src/test/golden/router/random-1.json,configuration/data,340,2486
+packages/qt-circuit/src/test/golden/router/random-10.json,configuration/data,226,1599
+packages/qt-circuit/src/test/golden/router/random-11.json,configuration/data,89,652
+packages/qt-circuit/src/test/golden/router/random-12.json,configuration/data,388,2837
+packages/qt-circuit/src/test/golden/router/random-13.json,configuration/data,274,1987
+packages/qt-circuit/src/test/golden/router/random-14.json,configuration/data,280,2019
+packages/qt-circuit/src/test/golden/router/random-15.json,configuration/data,302,2227
+packages/qt-circuit/src/test/golden/router/random-16.json,configuration/data,255,1892
+packages/qt-circuit/src/test/golden/router/random-2.json,configuration/data,86,615
+packages/qt-circuit/src/test/golden/router/random-3.json,configuration/data,286,2099
+packages/qt-circuit/src/test/golden/router/random-4.json,configuration/data,42,323
+packages/qt-circuit/src/test/golden/router/random-5.json,configuration/data,42,321
+packages/qt-circuit/src/test/golden/router/random-6.json,configuration/data,378,2762
+packages/qt-circuit/src/test/golden/router/random-7.json,configuration/data,254,1821
+packages/qt-circuit/src/test/golden/router/random-8.json,configuration/data,97,718
+packages/qt-circuit/src/test/golden/router/random-9.json,configuration/data,330,2379
+packages/qt-circuit/tsconfig.json,configuration/data,6,264
+packages/qt-circuit/tsconfig.test.json,configuration/data,5,112
+packages/qt-cloze/package.json,configuration/data,53,1232
+packages/qt-cloze/tsconfig.json,configuration/data,4,115
+packages/qt-cloze/tsconfig.test.json,configuration/data,5,112
+packages/qt-code/package.json,configuration/data,50,1208
+packages/qt-code/tsconfig.json,configuration/data,6,264
+packages/qt-code/tsconfig.test.json,configuration/data,5,112
+packages/qt-diagram/package.json,configuration/data,58,1343
+packages/qt-diagram/tsconfig.json,configuration/data,4,115
+packages/qt-diagram/tsconfig.test.json,configuration/data,5,112
+packages/qt-mcq/package.json,configuration/data,61,1442
+packages/qt-mcq/tsconfig.json,configuration/data,4,115
+packages/qt-mcq/tsconfig.test.json,configuration/data,5,112
+packages/qt-rich/package.json,configuration/data,52,1196
+packages/qt-rich/tsconfig.json,configuration/data,4,115
+packages/qt-rich/tsconfig.test.json,configuration/data,5,112
+packages/qt-short/package.json,configuration/data,53,1232
+packages/qt-short/tsconfig.json,configuration/data,4,115
+packages/qt-short/tsconfig.test.json,configuration/data,5,112
+packages/registry/package.json,configuration/data,39,978
+packages/registry/tsconfig.json,configuration/data,4,95
+packages/registry/tsconfig.test.json,configuration/data,5,112
+packages/ui/package.json,configuration/data,37,846
+packages/ui/tsconfig.json,configuration/data,4,115
+packages/ui/tsconfig.test.json,configuration/data,5,112
+pnpm-lock.yaml,configuration/data,5935,198684
+pnpm-workspace.yaml,configuration/data,3,36
+scripts/live-evaluations.sql,migration,43,2403
+scripts/smoke.sh,operational tool,233,12491
+scripts/staging-export.sh,operational tool,44,2062
+scripts/staging-refresh.sh,operational tool,66,3151
+tsconfig.base.json,configuration/data,32,1176
+zensical.toml,configuration/data,178,9146
