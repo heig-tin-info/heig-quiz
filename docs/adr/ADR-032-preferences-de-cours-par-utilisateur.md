@@ -7,6 +7,10 @@ table `user_course_prefs` (migration `0020_user_course_prefs`), the routes
 `POST /courses/:id/hide` and `POST /courses/:id/unhide` of the `org` module,
 the `hidden` flag of `CourseSummary`, F-ORG-11 and 06 no. 26).
 
+Amended by [ADR-053](ADR-053-retrait-des-codes-d-entree.md) (archiving no longer closes a join code)
+and [ADR-054](ADR-054-super-powers-admin.md) (cross-course admin access requires Super Powers).
+Personal hiding remains the decision of this record.
+
 ## Context
 
 A teacher keeps every course they ever taught: a course is persistent from

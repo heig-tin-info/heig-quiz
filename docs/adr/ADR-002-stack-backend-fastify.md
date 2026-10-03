@@ -2,43 +2,37 @@
 
 ## Status
 
-Accepted (2026-07-03, phase 3).
+Accepted (2026-07-03, inherited from heig-classroom). The language/framework
+choice remains; version pins and integration mechanisms below describe Quiz.
+The [inherited record](history/ADR-002-stack-backend-fastify.md) preserves the original library shortlist.
 
 ## Context
 
-The backend has to integrate deeply with GitHub (App, webhooks, Git Data) and with OIDC
-Switch edu-ID, and to expose some thirty REST endpoints plus an SSE stream. There is a single
-maintainer, and the code is often picked up by assistants; debugging at night before a
-deadline is the sizing scenario. Octokit, the official GitHub client, is TypeScript.
+One maintainer needs readable control flow and shared types across the API,
+SPA and tools, including GitHub and OIDC integrations.
 
 ## Decision
 
-1. **Node.js 22 LTS + TypeScript 5 strict**, a single language for back end, front end and
-   CLI, with shared Zod schemas (`packages/contracts`): one contract, zero type duplication.
-2. **Fastify 5** as the HTTP framework: lightweight, native schema validation (Zod via the
-   type provider), trivial SSE, generated OpenAPI (`@fastify/swagger`), rate limiting
-   (`@fastify/rate-limit`).
-3. Systematic authorization (AU-23/24) is an **explicit Fastify middleware** applied to
-   every route (classroom ownership for a teacher, `claimed` enrollment for a student).
-4. Integration libraries: `octokit` plus the `retry`/`throttling` plugins (NFR-10, GH-63),
-   `@octokit/webhooks` (HMAC), `openid-client` (AU-01), Luxon (C-02), pino (AU-41).
+1. Strict TypeScript and Node.js, with Zod contracts in `packages/contracts`.
+   Runtime and compiler versions belong to `package.json`, workspace manifests,
+   `pnpm-lock.yaml` and the Dockerfiles, not a second dependency list in this ADR.
+2. Fastify, explicit plugin/service wiring, no DI framework or decorators.
+   Routes validate with shared contracts; `modules/guards.ts` loads authorized
+   entities. Access rules are the invariants in `CLAUDE.md`.
+3. Quiz uses Octokit, `openid-client` and Fastify's structured logging.
+   The installed dependencies are in `apps/api/package.json`; webhook HMAC,
+   request validation and rate limits are implemented in the corresponding
+   auth/GitHub modules, not guaranteed by the libraries once proposed here.
 
 ## Consequences
 
-- No dependency injection and no decorators: the execution flow reads line by line, and an
-  assistant finds its bearings without learning a framework.
-- Structural discipline (which NestJS would impose) rests on the module boundaries of
-  ADR-001 and on code review.
-- In development, a test OIDC IdP (Keycloak or a mock) stands in for Switch edu-ID behind
-  `openid-client`: milestone M1 does not depend on the institutional process.
+Client and server share schemas, while module discipline stays explicit.
+Development can use Keycloak for real OIDC independently of institutional
+configuration. The inherited Swagger/type-provider/Luxon dependency proposals
+are not evidence that those packages or generated clients exist in Quiz.
 
 ## Rejected alternatives
 
-1. **NestJS** (productivity proposal: modules, DI, guards as the implementation of AU-24):
-   an unnecessary layer for some thirty endpoints; DI errors and decorator magic are exactly
-   what we do not want to debug the night before a submission. The guards are replaced by an
-   explicit middleware, with the same AU-24 guarantee.
-2. **ts-rest** (productivity): type sharing is already covered by Zod plus a client generated
-   from the OpenAPI document; one structural dependency fewer.
-3. **Another runtime or language** (Go, Python): would lose the single front/back/CLI
-   language and the official Octokit ecosystem.
+NestJS would add framework indirection; another backend language would lose
+shared contracts. No second route-contract framework is needed merely to
+duplicate Zod. See the inherited rationale before reconsidering those choices.

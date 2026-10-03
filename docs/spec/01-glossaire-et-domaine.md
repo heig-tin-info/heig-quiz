@@ -42,7 +42,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Instance | An evaluation linked to a template: instantiated from it into a classroom, or saved as it (*Save as template*, at revision 1). It records the template and the revision it came from, and editing the template never changes it: a newer revision reaches it only when the teacher pulls it (ADR-031). |
 | Evaluation mode | `exam` timed and graded, `exercise` open with a deadline, `poll` one live question. |
 | Attempt log | The server's record of an attempt's events (`attempt_events`): focus and visibility changes, reconnections, IP changes, time added, pauses, runs. Formerly called the attempt's "journal" (D16); "journal" now means the course journal only. |
-| Attempt | A student's participation in an evaluation. Only one per student and per evaluation in phase 1. Carries the start time, the effective end, the state. |
+| Attempt | A student's participation in an evaluation. An exam has one attempt per student; an exercise may allow retakes, each a new attempt with a new seed (ADR-025). Carries the start time, the effective end, the state. |
 | Answer | The current state of a student's answer to a question of an evaluation. One record per attempt and per question, updated on every autosave. |
 | Grading | The result of assessing an answer: points, source, state, justification. Several successive gradings are possible, the last one is authoritative. |
 | Grader | The function of the question type that produces a grading from the configuration and the answer. Synchronous, asynchronous through the runner, or LLM. |
@@ -74,7 +74,8 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Create, launch, drive, grade an evaluation | No | On own classrooms | With Super Powers, else as a teacher |
 | Create, instantiate, delete an evaluation template | No | On own courses | With Super Powers, else as a teacher |
 | See the grades of a classroom | Own grades | On own classrooms | With Super Powers, else as a teacher |
-| Configure the LLM providers, the runner languages, the admins | No | Own API key | Yes |
+| Configure the institutional LLM gateway | No | No | Yes |
+| Configure runner languages and admins | No | No | Yes |
 | Connect a classroom to a GitHub organization, create, choose or remove its journal, edit its pages | No | On own classrooms | With Super Powers, else as a teacher |
 | Read a classroom's journal | Own classrooms, pages neither draft nor before their `visible_from` | On own classrooms, drafts included | With Super Powers, else as a teacher |
 | Link or unlink own GitHub account | Yes | Yes | Yes |
@@ -84,7 +85,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Delete a classroom or an evaluation and its data | No | On own classrooms | With Super Powers, else as a teacher |
 | Act as a student (a one-time link, ADR-034) | No | No | With Super Powers |
 
-Roles on a shared pool, phase 2: `reader` may read and copy into their own pool, `contributor` may create and publish versions, `owner` manages members and deletes.
+Roles on a shared pool: `reader` may read and copy into their own pool, `contributor` may create and publish versions, `owner` manages members and deletes.
 
 A course may have several teachers. They all have the same rights on its classrooms.
 
@@ -142,7 +143,7 @@ erDiagram
 
 ### Key attributes
 
-- **USER**: `id`, `eduid_sub`, `email`, `display_name`, `role`, `locale`, `theme`, `llm_api_key` encrypted.
+- **USER**: `id`, `oidc_sub`, `email`, `given_name`, `family_name`, `role`, `locale`. The display name is derived. The institutional LLM key belongs to `llm_settings`, never a user (ADR-058).
 - **COURSE**: `id`, `name`, `code`.
 - **CLASSROOM**: `id`, `course_id`, `name`, `period`, `period_start`, `period_end`, `archived_at`.
 - **ENROLLMENT**: `classroom_id`, `user_id`, `time_bonus_percent` integer, 0 by default, `note`.
@@ -151,7 +152,7 @@ erDiagram
 - **QUESTION_VERSION**: `question_id`, `number` null for the draft, `config` JSONB conforming to the type's schema, `explanation`, `published_at`, `published_by`, `change_note`.
 - **EVALUATION**: `id`, `classroom_id`, `course_id` set on a template only (exactly one home: a classroom, a course, or — an anonymous poll — its owner), `revision` on a template, `origin_template_id` and `origin_revision` on an instance, `title`, `mode`, `state`, `settings` JSONB, see [02-exigences-fonctionnelles.md](02-exigences-fonctionnelles.md) F-EVAL, `grading_scale`, `feedback_policy`, `opens_at`, `closes_at`, `duration_s`, `correction_published_at` (an exercise's published correction, ADR-050), `access_code` (a poll's session code only, ADR-014; an exam or an exercise has none, [ADR-053](../adr/ADR-053-retrait-des-codes-d-entree.md)).
 - **EVALUATION_ITEM**: `evaluation_id`, `position`, `question_version_id`, `points`, `milestone` boolean, `bonus` boolean (ADR-052).
-- **ATTEMPT**: `evaluation_id`, `user_id`, `state`, `started_at`, `deadline_at` computed with the bonus, `submitted_at`, `seed`, `client_events` JSONB for light cheating events.
+- **ATTEMPT**: `evaluation_id`, `user_id`, `state`, `started_at`, `deadline_at` computed with the bonus, `submitted_at`, `seed`, `instances` for stored parameter draws, `attempt_number` for retakes. Attempt events are separate rows in `attempt_events` (ADR-056).
 - **ANSWER**: `attempt_id`, `item_id`, `payload` JSONB conforming to the type's answer schema, `revision` integer incremented on every autosave, `marked_done` (the question was validated in a locking navigation), `skipped` ("Leave unanswered": left blank on purpose), `flagged` (the student's review flag), `updated_at`.
 - **GRADING**: `answer_id`, `points`, `max_points`, `source` `auto` / `llm` / `manual`, `state` `proposed` / `validated` / `superseded`, `details` JSONB, `graded_by`, `graded_at`, `note` for the annotation of a re-grading.
 - **GITHUB_ORGANIZATION**: `github_org_id`, `login`, `installation_id` of Quiz's App (null until installed), `status`, `plan`.
@@ -185,11 +186,11 @@ erDiagram
 
 **Evaluation template**: always `draft`; its `revision` starts at 1 and moves with every committed change to its items or template-level settings, never with its title (ADR-031).
 
-**Evaluation**: `draft` → `scheduled` → `lobby` waiting room → `running` → `paused` ↔ `running` → `closed` → `grading` → `released`. The `exercise` mode skips `lobby` and `paused`. The `poll` mode goes from `running` to `released` directly.
+**Evaluation**: `draft` → `scheduled` → `lobby` waiting room → `running` → `paused` ↔ `running` → `closed` → `grading` → `released`. An exercise may use a waiting room (`lobby`) but cannot be paused; only an exam can be paused. A poll ends at `closed`, with deterministic grading and no results release (ADR-014).
 
 **Attempt**: `not_started` → `in_progress` → `submitted` by the student or `expired` by the server at the deadline. Both terminal states can be graded.
 
-**Journal**: none → created or chosen (`sync_status` `pending`) → `ok` after each ingestion, `error` when GitHub refused it or the repository is gone (the pages already mirrored stay readable) → removed (the classroom's copy is dropped, the repository kept).
+**Journal**: in Quiz, created with an editable home page and versioned in the database; in GitHub mode, created or chosen → `sync_status` `pending` → `ok` after ingestion, or `error` when GitHub refuses access (the mirrored pages stay readable). Removal drops the platform's copy, never a GitHub repository (ADR-057).
 
 **Project**: `draft` → publish (now, or by the ticker at its start) → `published` → deadline → `locked`; frozen definitively at the deadline plus the grace, then the final review dispatched, then released by the staff. A deadline moved later reopens it. Archived and unarchived at any time.
 

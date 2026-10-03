@@ -22,6 +22,11 @@ Classroom's ADRs imported with it: its ADR-011 as
 [ADR-048](ADR-048-projets-de-groupe.md), its ADR-015 as
 [ADR-049](ADR-049-journal-source-github.md).
 
+Follow-up decisions: [ADR-057](ADR-057-journal-two-modes.md) for the journal modes, [ADR-061](ADR-061-adoption-des-comptes-importes.md)
+for imported identities, [ADR-062](ADR-062-depot-de-distribution.md) for distribution repositories and
+[ADR-064](ADR-064-echeance-des-projets-baux.md) for project deadlines. These refine their respective scopes,
+not the whole merge decision.
+
 ## Context
 
 Quiz started as a pruned copy of heig-classroom
@@ -83,8 +88,8 @@ behaviour Quiz lacks, never copied beside it.
 ### 2. A classroom hosts activities of several kinds, and a journal
 
 A student who enters a classroom sees three things: its **activities**, its
-**journal** if there is one, and a **grades** tab (its rules are D06,
-open). The door is **Courses**, the list of the student's classrooms, each
+**journal** if there is one, and a **grades** tab (D06, settled
+2026-10-01; see §3). The door is **Courses**, the list of the student's classrooms, each
 opening its page; **Activities** stays the summary of the active
 activities across every classroom (D07). The teacher's classroom page
 gains a **Settings** tab, home of the GitHub connection and of the
@@ -96,8 +101,9 @@ journal (D24).
   group, with a deadline, protected files, CI (and later runner or LLM)
   grading, optionally an online workspace. The French UI word is "Projet".
   "Assignment" stays a forbidden synonym (glossary).
-- **Journal** — not an activity: course documentation from a GitHub
-  repository, read-only for students, never graded.
+- **Journal** — not an activity: course documentation, read-only for
+  students, never graded. [ADR-057](ADR-057-journal-two-modes.md) amends its source: in Quiz
+  or in a GitHub repository.
 
 The activity abstraction is **thin**: a TypeScript interface
 (`ActivityKind`) implemented by the service of each owning module (list for

@@ -29,18 +29,33 @@ pnpm docs:build               # zensical build: the static site in site/ (gitign
 | --- | --- |
 | `zensical.toml` | the site configuration: title, theme, Markdown extensions, and the navigation |
 | `docs/index.md` | the home page |
-| `docs/spec/` | the product specification, nine chapters |
-| `docs/adr/` | the architecture decision records |
+| [`docs/spec/README.md`](../spec/README.md) | the specification reading index; detailed data model and history are loaded only for relevant tasks |
+| [`docs/adr/README.md`](../adr/README.md) | the topic index and reading protocol for architecture decisions |
 | `docs/development/` | these pages |
 | `docs/PLAN-MVP.md` | the phase-1 implementation plan, archived |
 | `docs/assets/screenshots/` | the screenshots, two files per image (see below) |
 
-A page appears in the site only when it is listed in the `nav` array of
-`zensical.toml`; adding a file under `docs/` is not enough. Links between
+The `nav` array of `zensical.toml` controls the site navigation. The ADR
+records are reached through the [decision index](../adr/README.md), so their
+individual links are maintained there instead of in a second navigation list. Links between
 pages are relative Markdown links to the `.md` file
 (`../spec/05-architecture.md`, `deployment.md#rollback`); zensical rewrites
 them at build time and warns about a target that does not exist, which is
 the check to read after `pnpm docs:build`.
+
+## Current context and history
+
+Current specs and consolidated ADRs state the rules an agent should apply.
+Move long delivery chronicles and superseded alternatives into `history/`
+only with a link back to the current source and a clear historical notice.
+Archived pages use `search: { exclude: true }` in YAML front matter so the
+site search does not present obsolete instructions alongside current ones.
+Preserve existing URLs and section anchors as pointers when consolidating.
+
+Do not archive unresolved product questions or remove an accepted requirement
+because its code is not implemented. Record a verified delivery boundary and
+link its task. Exact library versions and declarations belong in manifests,
+contracts and schemas; documentation explains their purpose and constraints.
 
 ## Publication
 

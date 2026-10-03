@@ -2,6 +2,11 @@
 
 ## Status
 
+Quiz implementation status (verified 2026-10-03): group API/web remain
+M3-15/M3-16 in [merge progress](../merge/PROGRESS.md).
+`modules/project/accept.ts` currently provisions individual repositories.
+The delivered lots below refer to heig-classroom, not Quiz.
+
 **Imported from heig-classroom** (2026-09-30, merge task M0-03, ADR-035),
 where it is ADR-014 — Quiz's own ADR-014 is live polls, so it takes the
 next free number, 048. The body below is classroom's, verbatim. Read it

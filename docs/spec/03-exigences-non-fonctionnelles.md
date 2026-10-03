@@ -36,7 +36,7 @@
 | N-SEC-05 | Rendered markdown is sanitised. Images are served from the same domain. This is the rule of question content (statements, explanations, answers), an allow-list; the journal keeps its own, stricter rule (N-SEC-14, D15). |
 | N-SEC-06 | Runner sandbox: one container per execution, no network, read-only file system except a temporary working directory, limits on CPU, memory, pids, output size and wall-clock time, unprivileged user, gVisor runtime. No platform secret is mounted. |
 | N-SEC-07 | Rate limiting of executions per student and per minute, and per evaluation. |
-| N-SEC-08 | LLM API keys are encrypted at rest with an application key kept out of the database. Never sent back to the client. |
+| N-SEC-08 | The institutional LLM API key is encrypted at rest with an application key kept out of the database (ADR-058). Never sent back to the client. |
 | N-SEC-09 | Audit log of sensitive actions with author, timestamp, resource. |
 | N-SEC-10 | Light anti-cheating, never blocking: logging of focus losses and IP address changes during an attempt, optional IP restriction (no access code since [ADR-053](../adr/ADR-053-retrait-des-codes-d-entree.md)). The student is informed that these events are recorded. One exception, on the kiosk stations only: a refused hardware attestation suspends the sitting, answers kept (ADR-051 §6). |
 | N-SEC-11 | Dependencies updated automatically by PR, runner base image rebuilt every week. |
@@ -104,7 +104,7 @@
 
 ## 3.9 UX principles
 
-These principles frame the design system, detailed later in a dedicated document.
+These principles frame the design system in `apps/web/DESIGN.md`.
 
 1. **Restraint**: no borders around fields, hierarchy through space and typography, a single primary action per screen.
 2. **Predictability on the student side**: the exam interface is conventional in its affordances. Input fields are identifiable at rest, buttons have a label. Visual innovation is focused on the teacher interface.

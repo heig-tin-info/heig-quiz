@@ -2,41 +2,39 @@
 
 ## Status
 
-Accepted (2026-07-03, phase 3).
+Accepted (2026-07-03, inherited from heig-classroom). The durable Postgres
+queue remains. Quiz's queue policies are in `apps/api/src/jobs.ts` and each
+module's job registration; the [inherited record](history/ADR-004-jobs-pg-boss.md) is not their configuration.
 
 ## Context
 
-The critical jobs (provisioning, deadline, revert, grading, synchronization, e-mails) must be
-durable, idempotent, replayable and caught up after an outage (NFR-09). Webhooks are
-acknowledged in under 5 s (GH-60) and then processed asynchronously. The worst expected
-throughput is a deadline burst: about 100 pushes plus 100 `workflow_run` events within a few
-minutes, i.e. fewer than 10 jobs/s.
+Grading, external notifications and GitHub work must outlive an HTTP request
+and, in production, survive a process restart without a second stateful service.
 
 ## Decision
 
-1. **pg-boss 10**: a job queue persisted **in PostgreSQL** — exponential retries,
-   `singletonKey` (idempotency), scheduled jobs, built-in cron, retention and archiving.
-2. Bounded concurrency per job type (10 workers): bursts fill the queue without ever
-   threatening webhook acknowledgement or the GitHub quotas.
-3. Handler failure: 5 attempts with exponential backoff, then **dead-letter**, visible in the
-   technical administration screen with manual replay and a log alert.
-4. Normalized singleton keys: `provision:<assignment>:<user>` (GH-20),
-   `deadline:<assignment>` (GH-43), `revert:<repo>:<head_sha>`.
+1. Use pg-boss on PostgreSQL. `jobs.ts` exposes the shared `JobQueue` interface;
+   the manifest/lockfile own its version. PGlite development uses an in-process,
+   non-durable adapter; production refuses PGlite.
+2. Register concurrency and retry policy per queue. There is no universal
+   ten-worker/five-retry rule: grading, LLM, notifications, scheduled tasks and
+   project leases have different failure semantics.
+3. Do not assume `singletonKey` deduplicates a standard queue. Quiz does not
+   expose it in `SendOptions`; idempotent handlers, database claims and leases
+   own duplicate protection. See ADR-006/011/064 and the queue's owner.
+4. Use [ADR-055](ADR-055-etat-du-systeme.md) and the deployment runbook for
+   monitoring. The inherited generic dead-letter replay screen is not an
+   implemented operator contract.
 
 ## Consequences
 
-- No broker and no Redis to operate: the queue survives a crash together with the database,
-  is covered by the same backup, and can be inspected in SQL.
-- The required throughput is orders of magnitude below what pg-boss can do; the load the
-  queue puts on Postgres is negligible at this scale.
-- Operational metrics (queue depth, lag, dead-lettered jobs) are exposed on `/metrics`
-  (borrowed from the robustness proposal).
+One database backup covers durable jobs and business data. Failure recovery
+is part of each handler: for example `grading.llm` has no queue retry
+(ADR-063), whereas notification delivery retries with backoff (ADR-030).
+The development adapter is not evidence of production durability or concurrency.
 
 ## Rejected alternatives
 
-1. **BullMQ + Redis**: a fast queue, but it imposes a second stateful component to back up,
-   monitor and secure, for throughput the project does not need.
-2. **RabbitMQ, SQS or a dedicated broker**: obvious over-engineering for 20 classrooms; no
-   NFR justifies it.
-3. **System cron + home-made tables**: reinventing retries, backoff and singletons without
-   the proven guarantees of pg-boss.
+Redis/BullMQ or a dedicated broker add another service to operate. System
+cron and hand-built queue tables would recreate persistence, retries and
+worker coordination. The inherited record retains the original trade-offs.

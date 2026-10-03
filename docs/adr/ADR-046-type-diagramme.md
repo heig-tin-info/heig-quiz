@@ -9,6 +9,10 @@ replaces the drawing type of docs/spec/04 §4.10, and a starter diagram may
 be given to the student. Open: whether a drawing-only schematic is a kind of
 `diagram` (docs/spec/06 Q29). No migration.
 
+Amended by [ADR-063](ADR-063-correction-llm.md) §5: diagrams can receive LLM grading proposals
+through their text form. The manual-only v1 scope of §5 below is historical;
+the diagram engine and student editing decisions remain in force.
+
 ## Context
 
 Teachers of software engineering, databases, digital systems and
@@ -110,6 +114,8 @@ student's task is to draw. Showing it later, read-only or editable, is a
 decision of its own.
 
 ### 5. Graded by hand in v1
+
+Historical v1 scope; [ADR-063](ADR-063-correction-llm.md) §5 adds LLM grading through the text form.
 
 `grade` proposes 0 points (`proposed`, `reason: manual`) for an answer and
 validates 0 for no answer or the untouched starter, exactly like `rich`

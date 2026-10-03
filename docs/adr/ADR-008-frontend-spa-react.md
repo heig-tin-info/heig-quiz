@@ -2,42 +2,41 @@
 
 ## Status
 
-Accepted (2026-07-03, phase 3).
+Accepted (2026-07-03, inherited from heig-classroom). React/Vite SPA remains
+the choice; the [inherited record](history/ADR-008-frontend-spa-react.md)'s frontend library list was not carried into Quiz
+as a package requirement. Current implementation is evidenced below.
 
 ## Context
 
-The portal is an authenticated application (teacher, student) with no SEO need whatsoever.
-Table views must render in under 2 s at 100 rows (NFR-11). The interface ships in French with
-English addable without a rewrite (NFR-14), dates in Europe/Zurich (C-02), and nine WCAG 2.1
-AA criteria are required on the main journeys (NFR-15).
+An authenticated teaching application needs no SEO or server rendering.
+Static frontend assets keep deployment simple; accessibility and translated
+teacher/student surfaces remain requirements (spec 03, `apps/web/DESIGN.md`).
 
 ## Decision
 
-1. A **React 19 + Vite 7 SPA**, served as static files by the monolith: no front-end server
-   to operate, trivial redeployment.
-2. **TanStack Router + Query + Table**: cache and invalidation driven by the SSE events
-   (ADR-005), 100-row tables without on-the-fly aggregation.
-3. **Radix UI (headless)** as the component foundation: keyboard, focus and ARIA covered by
-   construction — NFR-15 compliance does not rest on a continuous effort.
-4. **i18next** with externalized strings (NFR-14); **Luxon** for Europe/Zurich display
-   (C-02).
-5. Types shared with the backend and the CLI through the Zod schemas of
-   `packages/contracts`.
+1. A React SPA built by Vite, served with the API. Versions live in
+   `apps/web/package.json` and `pnpm-lock.yaml`.
+2. TanStack Query owns server-state caching and invalidation. Quiz's typed
+   history router is `apps/web/src/router.ts`; table and accessible UI
+   primitives are in `apps/web/src/ui/`. TanStack Router/Table and Radix
+   from the inherited shortlist are not installed frontend foundations.
+3. Typed flat dictionaries in `apps/web/src/i18n/` own English/French UI
+   strings; date formatting lives in `ui/dates.tsx`. Quiz does not use the
+   inherited i18next/Luxon proposal. The same contract schemas are shared
+   through `packages/contracts`.
+4. SSE invalidates reads or carries the authorized live events of spec 05
+   §5.4. Reconnection uses snapshots/refetch; preserve mounted student work
+   as [ADR-065](ADR-065-reconnection-overlay.md) requires.
 
 ## Consequences
 
-- The front end is a folder of static files versioned with the backend: the portal API does
-  not need to be versioned (they are deployed together).
-- The acceptance accessibility audit (axe-core, NFR-15) checks a foundation that is already
-  accessible instead of catching up on home-made components.
-- SSE reconnection is resolved by a TanStack Query refetch: no duplicated real-time state.
+No separate frontend server. Frontend/API deploy together, but already-open
+exam tabs still require compatibility. Accessibility must be verified in
+our primitives/tests; it is not guaranteed by an uninstalled headless library.
 
 ## Rejected alternatives
 
-1. **Next.js or SSR**: no server rendering is needed (the portal sits behind a login, SEO is
-   irrelevant); it would add a front-end server to operate and a deployment coupling.
-2. **Home-made UI components**: a recurring accessibility cost and a permanent risk on
-   NFR-15; all three proposals converged on a headless foundation.
-3. **A Turborepo + pnpm multi-pipeline monorepo setup** (productivity proposal): six packages
-   and build pipelines for a one-maintainer project; plain pnpm workspaces are enough for the
-   three shared packages.
+SSR/Next.js adds a server without an application need. An extra monorepo
+orchestrator is unnecessary alongside pnpm workspaces. The inherited rejection
+of custom components described a proposal; use Quiz's existing primitives
+and accessibility rules instead of introducing a second UI system.

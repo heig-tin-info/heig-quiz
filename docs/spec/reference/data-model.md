@@ -1,0 +1,115 @@
+# Data model reference
+
+This is the detailed schema intent extracted from spec 05 §5.3. Read it only
+for persistence work. For exact implemented fields, indexes and migrations,
+read `apps/api/src/db/schema.ts` and its module exports, plus `apps/api/drizzle/`.
+A named table here does not imply that all associated operations have shipped;
+use [merge progress](../../merge/PROGRESS.md) for pending work. The gradebook
+is explicitly still planned. Requirements and design constraints below remain
+applicable; discrepancies with code must be reported, not silently discarded.
+
+### Tables
+
+Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
+
+**Identity and organisation**, reused from heig-classroom
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `users` | `role` enum student / teacher / admin, `display_name`, `locale`, `theme`, `date_format` | Global role |
+| `user_emails` | `user_id`, `email` unique, `source` login / idp / roster | Identity = set of addresses |
+| `user_idp_claims` | `user_id`, `claims` jsonb, `seen_at` | Never exposed |
+| `sessions` | `sid_hash` pk, `user_id`, `expires_at`, `kind` portal / seb / impersonation / kiosk, `actor_user_id` nullable, `evaluation_id` nullable, `device_id` nullable (FK `kiosk_devices`), `seb_config_key` nullable | ADR-027, ADR-034, ADR-051. `evaluation_id` set on a confined session (`seb`, `kiosk`); partial unique index on `device_id`: one session per station |
+| `kiosk_devices` | `google_device_id` unique, `label`, `status` unnamed / active / retired, `attested_at`, `checked_at`, `attestation` ok / unavailable / refused, `credential_hash`, `watch` ok / unavailable / suspended (what the supervisor was last told) | The station registry, admin-only (ADR-051 §5, §6) |
+| `kiosk_pairings` | `device_id`, `device_code_hash`, `user_code_hash`, `state` pending / approved / consumed / expired, `user_id`, `evaluation_id`, `approved_by`, `expires_at` | RFC 8628 device authorization (ADR-051 §7) |
+| `api_tokens` | `user_id`, `token_hash`, `label`, `scopes` text[], `last_used_at`, `expires_at` | Expert, API and CLI |
+| `courses` | `name`, `code` | |
+| `course_staff` | `course_id`, `user_id` | composite pk |
+| `user_course_prefs` | `user_id`, `course_id`, `hidden_at` nullable | composite pk, both FKs cascade; one user's display state for one course (ADR-032), no `id` nor timestamps |
+| `course_pools` | `course_id`, `pool_id` | composite pk |
+| `classrooms` | `course_id`, `name`, `period`, `period_start` / `period_end` text `YYYY-MM` nullable, `archived_at` | `period` is a free label; the months are both or neither, end ≥ start (CHECK). Text, not `date`: a month has no day to pin nor time zone to shift, and `YYYY-MM` compares in calendar order |
+| `enrollments` | `classroom_id`, `user_id`, `time_bonus_percent` int default 0, `note` | unique (classroom, user) |
+| `audit_log` | `actor_id`, `action`, `target_type`, `target_id`, `details` jsonb | Closed catalogue of actions |
+
+**Pool**
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `pools` | `name`, `visibility` private / shared / public, `owner_id` | |
+| `pool_members` | `pool_id`, `user_id`, `role` reader / contributor / owner | Phase 2 |
+| `categories` | `pool_id`, `parent_id` nullable, `name`, `position` | Tree by parent |
+| `questions` | `pool_id` nullable (an unsaved poll question, ADR-014 addendum), `category_id` nullable, `type` text, `internal_name`, `difficulty` smallint 1 to 5, `shuffleable` bool, `randomizable` bool (derived: the latest published version declares variables, ADR-056 §1), `origin_question_id` nullable, `stats_since` nullable, `deleted_at` | Stable metadata. `stats_since`: written only by the statistics reset (ADR-038) |
+| `question_stars` | `user_id`, `question_id`, `starred_at` | composite pk, both FKs cascade, index on `question_id`; one user's favourite (F-POOL-10, [ADR-040](../../adr/ADR-040-favoris-de-question.md)). "Per pool" is a join on `questions.pool_id` |
+| `question_tags` | `question_id`, `tag` text | composite pk, index on `tag`. No `tags` table: tags are normalised strings, the distinct list comes from a query |
+| `question_versions` | `question_id`, `number` int nullable, `config` jsonb, `config_version` int, `explanation` text, `variables` jsonb nullable (the variables table of a parameterized question, ADR-056; null = static), `search` generated tsvector, `published_at`, `published_by`, `change_note`, `deprecated_at`, `deprecation_note` | unique (question_id, number). `number` null = draft, a single one per question thanks to a partial unique index `WHERE number IS NULL` |
+| `assets` | `owner_id`, `pool_id`, `sha256`, `mime`, `bytes`, `width`, `height`, `path` | Deduplicated by hash. Referenced in the markdown by `asset:<id>` |
+| `question_version_assets` | `version_id`, `asset_id` | For export and cleanup |
+
+**Evaluation**
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `evaluations` | `classroom_id`, `course_id` (FK, cascade) — exactly one home, CHECK `evaluations_home_ck`: a classroom; a course, for an evaluation template (ADR-031); or neither, for an anonymous poll owned by `created_by` (ADR-014 addendum 2026-09-27). `revision` int (template), `origin_template_id` (self FK, set null) and `origin_revision` (instance), `title`, `mode` exam / exercise / poll, `state`, `settings` jsonb, `grading_scale` jsonb (`{ kind: "linear", rounding }`, ADR-052), `feedback_policy` jsonb, `opens_at`, `closes_at`, `closes_at_shift_s` int (how far the live controls — an extension to all, a resume — moved `closes_at` since the teacher last set the timing; `closes_at − opens_at − closes_at_shift_s` is the announced window, the base of the accommodation, decision D8, #253), `duration_s`, `access_code` (a poll's session code, ADR-014), `ip_allowlist` text[], `released_at`, `released_grades` jsonb, `modified_after_release` bool, `correction_published_at` (the instant the teacher published the correction of an exercise still open, from the server's clock; set once by a conditional UPDATE, cleared only by a return to `draft`, ADR-050) | `settings` validated by a schema from `contracts`: navigation, presentation, shuffling, waiting room. CHECK `evaluations_template_ck`: a row with `course_id` has no `opens_at`, `closes_at`, `access_code` nor IP, stays `draft`, is not a `poll`, has a `revision` and no origin. CHECK `evaluations_access_code_poll_ck`: `access_code is null or mode = 'poll'` — an exam or an exercise has no access code ([ADR-053](../../adr/ADR-053-retrait-des-codes-d-entree.md), migration `0043_evaluation_access_code_poll`). The `revision` moves only through `bumpTemplateRevision` (`evaluation/templates.ts`), `+ 1` in SQL inside the transaction of the template write that changed the content (ADR-031 addendum d). "Owned poll" is ONE predicate (`classroom_id` and `course_id` null, `mode = 'poll'`), used by every site that used to read `classroom_id is null`; partial indexes `evaluations_owned_poll_idx` and `evaluations_template_idx (course_id)` |
+| `evaluation_items` | `evaluation_id`, `position`, `question_version_id`, `points` numeric, `milestone` bool, `bonus` bool (ADR-052: left out of the total, floored at 0) | unique (evaluation, position). Frozen copy of `question_version_id` |
+| `attempts` | `evaluation_id`, `user_id`, `attempt_number` int (1, then n + 1 per retake), `state`, `seed` int, `instances` jsonb default `{}` (the values of each parameterized item, `{ [itemId]: { versionId, values } }`, drawn at the attempt's creation, ADR-056 §5), `started_at`, `deadline_at`, `bonus_s` int, `submitted_at`, `closed_at`, `closed_by` server / student / teacher, `last_item_id` (the reload bookmark), `shown_item_id` and `shown_since` (the open interval of the dwell, both null or both set), `display_tracked` bool (false for the attempts older than ADR-039) | unique (evaluation, user, attempt_number); partial unique (evaluation, user) `WHERE state IN ('not_started', 'in_progress')`: one unfinished attempt per student (ADR-025). One attempt per student except on an `exercise` with retakes (F-EVAL-15). Partial index `(deadline_at) WHERE state = 'in_progress'` for the ticker |
+| `answers` | `attempt_id`, `item_id`, `payload` jsonb, `revision` int, `marked_done` bool (validated: "Validate and continue", a crossed checkpoint), `skipped` bool ("Leave unanswered"), `flagged` bool (review flag), `first_seen_at`, `first_shown_at` (first on screen, ADR-039), `dwell_ms` int (time on screen, never sent to anyone), `updated_at` | unique (attempt, item). The payload is validated by the type's `answerSchema`. An accepted answer that holds something clears `skipped` (issue #89) |
+| `attempt_events` | `attempt_id`, `kind`, `at`, `details` jsonb. Client kinds (`ClientEventKind`, the only ones `POST /attempts/:id/events` accepts): visibility `{state}`, focus `{focused}`, reconnect. Server kinds, never writable by a client: ip_change, time_added, paused, resumed, run | Light anti-cheat and support log. The client body is a strict schema under a 4 KB limit |
+| `guest_participants` | `evaluation_id`, `pseudonym`, `token_hash` | `poll` mode without an account, phase 2. A guest has an `attempts` row with `user_id` null and `guest_id` |
+
+**Grading and results**
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `gradings` | `answer_id`, `points` numeric, `max_points` numeric, `source` auto / llm / manual, `state` proposed / validated / superseded, `details` jsonb, `confidence` low / medium / high nullable, `comment` text, `graded_by` nullable, `graded_at`, `supersedes_id` nullable, `regrade_note` text | Partial unique index `(answer_id) WHERE state = 'validated'`. `details`: verdict per test case, points per criterion, matcher match |
+| `answer_flags` | `answer_id`, `user_id`, `reason`, `resolved_at` | Student flag, phase 2 |
+| `llm_calls` | `user_id` nullable, `purpose` test / grade / generate / review, `provider`, `model`, `input_tokens`, `output_tokens`, `cost_usd`, `duration_ms`, `status` pending / ok / error, `error` | Never the prompt or reply. Cost is an estimate stored at write time; pending calls reserve budget (ADR-058). |
+
+**Drill**
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `drill_cards` | `user_id`, `question_id`, `classroom_id` and `evaluation_id` (where it was met first), `stability`, `difficulty`, `due_at`, `reps`, `lapses`, `last_review_at` null for a new card, `key_hash` (the answer key it was last reviewed on), and the review in progress: `serve_seed` (null when none), `serve_values` (a parameterized question's values, null without a `serve_seed`, ADR-056 §5), `shown_since` (the open interval on screen), `active_ms` | unique (user, question). Created at the release of an exam, at the hand-in of an exercise (ADR-041 §1). A different `key_hash` at a review resets the card (§7). Cascades from the classroom, the evaluation and the question (06, question 28 (a)). Kept five years after its last review (N-DATA-03), purged by the `drill.purge` ticker task |
+| `drill_reviews` | `card_id`, `rating` 1 to 4, `correctness` right / partial / wrong, `elapsed_ms` the ACTIVE time summed by the server, `device_class` coarse / fine, `reviewed_at`, `answer_payload` jsonb, `values` jsonb (the values of a parameterized question it was answered on, ADR-056 §5) | History for the reference times (the `right` reviews of the same device class), the teacher's view, and recomputing the parameters. Kept five years (N-DATA-03) |
+
+The drill's switches live on the rows they qualify, and belong to those rows' modules: `classrooms.drill_enabled_at` (the teacher enabled it, null otherwise) and `enrollments.drill_opted_out_at` (the student opted out of that classroom's drill), written by `org`'s `setClassroomDrill` and `setDrillOptOut`; `allowDrill` in the evaluation's `settings` (ADR-041 §2, §6), absent meaning on for an exercise and off for an exam, chosen at creation and then written only by `evaluation`'s `setAllowDrill`, until the release (the settings PATCH does not carry it). `drill_cards` and `drill_reviews` belong to the `drill` module (migration `0036_drill`).
+
+**GitHub**, module `github` (`db/github.ts`, ADR-035)
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `github_organizations` | `github_org_id` unique nullable, `login` unique, `installation_id` unique nullable, `status` active / deleted, `plan` | One row per organization known to Quiz's App, never deleted; no timestamps. Installed or not is `installation_id` null or not, and nothing else: it is Quiz's App's (D23), null until the organization installs it, and nulled on staging by every refresh from production (N-SEC-18). `status` says only whether the organization still exists on GitHub. The avatar is served same-origin by `GET /app/api/github/orgs/:id/avatar`, from a source derived from `github_org_id` |
+| `github_classroom_links` | `classroom_id` pk (FK, cascade), `org_id`, `linked_by`, `linked_at` | At most one organization per classroom (D02); no `id` nor timestamps |
+| `github_accounts` | `user_id` pk (FK, cascade), `github_user_id` unique, `login`, `linked_at` | The GitHub account link. The id is the person's, not the App's; the login is followed when it changes. `users` stays with `auth` |
+| `webhook_deliveries` | `delivery_id` uuid pk (GitHub's `X-GitHub-Delivery`), `event`, `action`, `payload` jsonb nullable, `received_at` (the intake's clock, no default), `processed_at`, `error` | The primary key is the deduplication, and the row outlives its payload. The payload is what the worker handles and what a replay of an unprocessed delivery re-reads (ADR-011); set to null 30 days after receipt once processed. Partial index `(received_at) WHERE processed_at IS NULL` for the reconciliation |
+| `push_receipts` | `github_repo_id`, `branch`, `head_sha`, `received_at` (the intake's clock, no default), `is_bot`, `forced` | Written synchronously by the intake for the repositories a handler tracks, the repositories of projects (heig-classroom ADR-012: `received_at` is the server's receipt time, the legal reference of a deadline); unique (`github_repo_id`, `head_sha`), the first receipt kept. Keyed on GitHub's repository id, not on a project's row, so `github` holds no foreign key into `project` (the direction is project → github); projects join it through their repositories' `github_repo_id`. The journal writes none |
+
+**Journal**, module `journal` (`db/journal.ts`, `docs/merge/04-journal.md` §4.2): one row per classroom, no shared mirror (D03), two modes (ADR-057). The mode columns were delivered in M4-07; mode-switch operations remain pending
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `classroom_journals` | `classroom_id` pk (FK, cascade), `mode` quiz / github (*ADR-057*), `github_repo_id`, `full_name`, `ref` (nullable, *ADR-057*), `root_path`, `last_commit_sha`, `sync_status` pending / ok / error, `sync_error`, `created_by`, `version` | CHECK: the three repository columns are set in `github` mode and null in `quiz` mode; rows created before ADR-057 are `github`. In GitHub mode a journal is a repository (D03): two classrooms on the same repository are two rows, each ingested on its own; a push fans out to every row holding that `github_repo_id`. `version` is bumped by every writer of the copy (J2) |
+| `journal_pages` | `classroom_id`, `path`, `parent_path`, `sort_key`, `title`, `front_matter` jsonb, `blob_sha`, `markdown`, `html_staff`, `html_student`, `toc` jsonb, `draft` bool, `visible_from` nullable, `warnings` jsonb, `asset_paths`, `version` int and an explicit order among siblings (*ADR-057*) | unique (classroom, path). In GitHub mode the rendered read model, ordered by `sort_key` from the file names; in Quiz mode the content itself: the path never changes, `parent_path` is the parent page and the order field orders siblings, `version` is the save's optimistic lock. `markdown`, `blob_sha` and `warnings` never leave the staff payload (N-SEC-12) |
+| `journal_assets` | `classroom_id`, `path`, `blob_sha`, `content_type`, `size`, `data` bytea | unique (classroom, path). ≤ 5 MB each (D14). GitHub mode: only the files a page references, a read model rebuilt from the repository. Quiz mode: the content, under a relative path beside its page, `blob_sha` the sha256 of the bytes (the ETag), append-only, collected when no page references it |
+| `journal_page_revisions` (ADR-057) | `id`, `classroom_id`, `path`, `markdown`, `front_matter` jsonb, `author_id`, `created_at` | Quiz mode: one row per save, ordered by `created_at`; no revision number, no limit, no asset copy. Survives page deletion, cascades with the journal. Staff only: no student route ever joins it (N-SEC-12). |
+
+**Projects**, module `project` (`db/project.ts`, `docs/merge/03-github-projects.md` §3.3), ported from heig-classroom's tables under the merge's words (assignment ⇒ project, student repo ⇒ project repo, milestone ⇒ review checkpoint); the UNIQUE constraints remain the idempotency mechanism:
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `projects` | `classroom_id` (cascade), `org_id` (the organization, copied from the classroom's link at creation), `name`, `slug`, `state`, `start_at`, `deadline_at`, `grace_minutes`, source and distribution repository ids and names, `source_strategy`, `deadline_strategy`, `grading_mode`, `publish_mode`, `duration_minutes`, `group_mode`, `group_max_size`, `branches`, `protected_files`, `grading_scale`, the markers `deadline_applied_at`, `review_dispatched_at`, `reminder_sent_at`, `released_at`, `released_by`, `archived_at`, `created_by`, the lease of the deadline job `deadline_job_at` (ADR-064) | unique (classroom, slug). Two partial indexes feed the ticker's scans: deadline due and not applied, scheduled publication (the freeze is a repository's since M3-05a: `project_repos_freeze_due_idx`) |
+| `project_checkpoints` | `project_id`, `name`, `due_at`, `offset_days` (J±n, re-resolved when the deadline moves), `dispatched_at` | unique (project, name) |
+| `project_groups`, `project_group_members` | the group's `name`, `slug`, `position`; a member is an `enrollment_id` | unique (project, enrollment) (ADR-048) |
+| `project_repos` | `project_id`, `user_id`, `group_id` (set null), `github_repo_id` unique, `full_name`, `provision_status`, `provision_claimed_at`, `invitation_status`, the repository's own `deadline_at` (D13 amended) and its markers `deadline_applied_at`, `frozen_at`, `deadline_committed_at`, `locked_at` (what GitHub holds), `archived_at` (the lock's fallback H8), `staff_lock` (the staff's hand), `ruleset_id` (the protection made at provisioning), `last_commit_*`, `ci_status`, `current_` / `frozen_` / `review_grade_run_id`, `teacher_points`, `teacher_comment`, `released_points` / `released_max` (the release's snapshot: a later difference is "changed after release"), `protection_suspended_at` (F-PROJ-08), `deleted_at` | partial uniques (project, user) for an individual repository and (project, group) for a group's: the idempotency of Accept |
+| `project_grade_runs` | `repo_id`, `workflow_run_id`, `run_attempt`, `head_branch`, `head_sha`, `conclusion`, `points`, `max` (doubles, as reported), `parse_status`, `parse_detail` (a malformed annotation's message), `after_deadline`, `to_verify` (ingested while the protection was suspended, or on a head whose protected files were restored: never the score), `kind` (`ci`, or `review` for the final review) | unique (repo, run, attempt). Immutable |
+| `bot_commits`, `grade_dispatches`, `reverts` | the App's own commits (restore, deadline, sync), the review dispatches (claimed before the call: **at-most-once**; unconfirmed requests are not resent, [ADR-064](../../adr/ADR-064-echeance-des-projets-baux.md)), the restore counter (`reverts.head_sha`, unique per repository: a push is restored once; `covered_sha`, the head the restore was built on) | What tells a bot push from a student's, and what keeps a retry from doubling a write |
+
+**Gradebook**, planned module `gradebook` (the table below is accepted design, not an existing schema): `gradebook_columns` (`classroom_id`, the activity's kind and id, `counts`, `weight`) and the classroom's `mean_published_at`. It stores no grade: a cell is read from the released results of the activity, so a regrade after the release shows at once (F-GBOOK-03).
+
+**Infrastructure**: the `pgboss` schema is managed by pg-boss. The `llm` module owns the singleton `llm_settings` row (provider, encrypted key, models by purpose, daily cap; ADR-058). The earlier generic jsonb `settings` table and per-teacher `providers` design are not implemented.
+
+**Scheduled tasks**, module `system` (`db/system.ts`, D10):
+
+| Table | Key columns | Notes |
+|---|---|---|
+| `scheduled_tasks` | `key` text pk, `enabled` bool, `interval_minutes`, `last_run_at`, `last_status` running / ok / error, `last_message`, `last_duration_ms`, `last_ok_at` | One row per task of the catalog, which is code: inserted with the defaults at boot, never deleted; a row whose key left the catalog is ignored. `last_run_at` is the claim (5.4, Clock) |
+| `health_check_states` | `key` text pk (a `SYSTEM_CHECK_KEYS` key), `status` ok / warn / fail / unknown, `since`, `consecutive`, `notified_status` fail / ok, `notified_at`, `checked_at` | What the `health.checks` task keeps of each health check between two runs (ADR-055 §5): the streak the anti-flap rule (`nextCheckState`, `@quiz/domain`) reads, and the last notice sent. Written only by that task, one run at a time |
