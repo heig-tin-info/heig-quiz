@@ -7,7 +7,7 @@ The platform serves two profiles of teachers with the same interface. The novice
 1. **Progressive disclosure.** The simple path is the default path. Advanced options sit behind a toggle, a menu or the command palette, never in the main flow.
 2. **A single source of truth.** The WYSIWYG and the source view edit the same markdown. The "expected answer" form and the regex matcher write the same configuration. Switching from one mode to the other loses nothing. The journal's two levels are two modes of the journal itself, In Quiz (the novice, edited in the platform) and In a GitHub repository (the expert, edited in their own tools; ADR-057); within the Quiz editor, the WYSIWYG and the source still edit the same markdown.
 3. **The LLM does the thankless work, the teacher decides.** Every "Generate" button produces a proposal in the draft, visible, editable, never published on its own.
-4. **Everything the interface does, the API does.** The UI uses `/app/api`; supported public automation is exposed through `/api/v1` and MCP (ADR-022, ADR-023). A screen's presence does not imply its session-only route is available to an API token.
+4. **Everything the interface does, the API does.** The UI and API tokens share `/app/api`; MCP is exposed at `/app/api/mcp` (ADR-022, ADR-023). Token scopes and route restrictions still apply. A screen's presence does not imply its session-only route is available to an API token.
 5. **Keyboard first for the expert, never required for the novice.** Every shortcut has a clickable equivalent.
 
 ## 8.2 Novice mode

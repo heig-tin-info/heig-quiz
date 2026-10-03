@@ -2,6 +2,13 @@
 
 ## Status
 
+For current journal behavior read [ADR-057](ADR-057-journal-two-modes.md)
+first. Quiz-mode writes/revisions and GitHub read-only mode are implemented;
+rename/reorder/nest and mode switches remain M4-10–M4-13. See
+[merge progress](../merge/PROGRESS.md), `modules/journal/quiz.ts` and
+`modules/journal/mode.ts`. The imported body is rationale, subject to both
+addenda; it is not an instruction to restore browser writes into GitHub.
+
 **Imported from heig-classroom** (2026-09-30, merge task M0-03, ADR-035),
 where it is ADR-015 — Quiz's own ADR-015 is browser run and server grade,
 so it takes the next free number, 049. The body below is classroom's,

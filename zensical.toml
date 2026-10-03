@@ -41,6 +41,7 @@ nav = [
     { "Writing the documentation" = "development/documentation.md" },
     { "Screenshots" = "development/screenshots.md" },
     { "Specification" = [
+      { "Reading index" = "spec/README.md" },
       { "0. Scope and objectives" = "spec/00-cadre-et-perimetre.md" },
       { "1. Glossary and domain model" = "spec/01-glossaire-et-domaine.md" },
       { "2. Functional requirements" = "spec/02-exigences-fonctionnelles.md" },

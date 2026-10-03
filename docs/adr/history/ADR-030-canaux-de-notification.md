@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 > Historical snapshot: superseded wording and delivery history are preserved here.
 > For current decisions, read [the active ADR](../ADR-030-canaux-de-notification.md). Load this archive only for rationale or a historical section reference.
 

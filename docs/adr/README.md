@@ -6,16 +6,17 @@ status and amendment history.
 
 ## Reading protocol
 
-1. Read the relevant [specification chapter](../spec/05-architecture.md)
+1. Read the relevant [specification chapter](../spec/README.md)
    and check [open questions](../spec/06-questions-ouvertes.md). Repository
    invariants are in `CLAUDE.md`; an unresolved conflict is not permission to
    change a product rule.
 2. Pick a topic below. Read the record's **Status** before its **Decision**,
    then follow its named amendments. A later record overrides only the scope
    it explicitly changes; a higher number alone establishes no precedence.
-3. For records with dated addenda, read the **Reading map** first when present. Historical
-   alternatives and superseded paragraphs explain past choices, not current
-   instructions. Cite the full file and section when handing work to another agent.
+3. Consolidated records put the current rule first and link to historical
+   snapshots only for rationale or old section references. Do not load `history/`
+   by default. In other records, follow the Reading map when present. Cite the
+   full file and section when handing work to another agent.
 4. **Accepted is a decision state, not a deployment state.** Check the code,
    tests and [merge progress](../merge/PROGRESS.md) for implementation. Imported
    records describe heig-classroom until their Quiz status/addendum adapts them;
@@ -46,6 +47,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-028 — A staging environment on the production VM, and promotion by sha](ADR-028-recette-sur-la-meme-vm.md)
 - [ADR-030 — Notification channels: the bell, e-mail and Microsoft Teams](ADR-030-canaux-de-notification.md)
 - [ADR-055 — The system status: one registry of health checks, a narrow `/healthz`, a backup report](ADR-055-etat-du-systeme.md)
+- [ADR-065 — Connection recovery without reloading student work](ADR-065-reconnection-overlay.md)
 
 ### Identity, access and exam confinement
 
@@ -88,6 +90,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-044 — The grading table: one question at a time, anonymous by default](ADR-044-grille-de-correction.md)
 - [ADR-050 — Publishing the correction of an exercise that is still running](ADR-050-publier-la-correction-d-un-exercice.md)
 - [ADR-052 — Bonus questions replace the threshold grade scale](ADR-052-questions-bonus.md)
+- [ADR-066 — A wide question beside a pinned rail](ADR-066-question-large-et-rail-fixe.md)
 
 ### Question analytics
 

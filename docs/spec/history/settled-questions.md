@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 # Settled specification questions
 
 Historical answers retained with their original question numbers and rationale.

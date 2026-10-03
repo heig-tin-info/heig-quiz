@@ -1,133 +1,47 @@
 # quiz
 
-A quiz platform for HEIG-VD teachers: question pools, live evaluations with a
-server-side clock, automatic grading (including sandboxed code execution) and
-results. One VM, one PostgreSQL, one repository, operable by one person.
+A HEIG-VD teaching platform: question pools, live evaluations, grading,
+practice, classroom journals and GitHub projects. One application monolith,
+one PostgreSQL and a separate hardened question runner.
 
-This repository started as a **pruned copy of `~/heig-classroom`** (same
-author, same stack, same identity provider, in production). Its ADRs 001–010
-and 012 live in `docs/adr/` and apply here as written, except where their
-status says amended; ADR-007 applies again, to the CI of projects (the code
-of a question still runs on `apps/runner`, ADR-016). What was reused, adapted
-or dropped is spelled out in `docs/spec/07-reutilisation-heig-classroom.md`
-(frozen as history).
+## Working rules and reading order
 
-heig-classroom is being **merged into this repository** (ADR-035, which
-supersedes ADR-029). Classroom's later ADRs are imported as ADR-011, ADR-047
-(online workspace), ADR-048 (group projects) and ADR-049 (the journal). Merge
-work follows `docs/merge/`: read its `README.md`, then `PROGRESS.md`, then
-your task card.
+Read `AGENTS.md` first: each agent uses its own worktree, stages by path and
+opens a PR. `main` receives merges only; a push deploys staging, production
+requires approval. Limit test workers and stop servers you start.
 
-## Several agents at once
+Read [the specification index](docs/spec/README.md), then only the chapters
+or sections relevant to the task. Check [unresolved questions](docs/spec/06-questions-ouvertes.md)
+before deciding behavior. Use [the ADR topic index](docs/adr/README.md) for
+rationale and scoped amendments. Historical snapshots are optional evidence,
+not default context or current implementation instructions. Code and tests
+establish what exists; a mismatch with an accepted requirement must be
+reported, not silently turned into a new product decision.
 
-Other sessions work on this repository concurrently, and every push to
-`main` deploys to staging (`quiz.dev.chevallier.io`), then to production on
-approval (ADR-028). `AGENTS.md` has the rules: a worktree per agent, `main` by
-merge only, staging by path, atomic lockfile commits. Read it first.
-
-## The rule about the spec
-
-**The specification lives in `docs/spec/`. Read the file that covers a feature
-before implementing it.** It is nine documents; the relevant one is short.
-
-| File | What it settles |
-| --- | --- |
-| `00-cadre-et-perimetre.md` | Scope, what is explicitly out |
-| `01-glossaire-et-domaine.md` | The vocabulary and the domain objects |
-| `02-exigences-fonctionnelles.md` | Numbered requirements (F-ORG-07, F-LIVE-11, …) |
-| `03-exigences-non-fonctionnelles.md` | N-SEC-06, N-I18N-01, performance, operations |
-| `04-types-de-questions.md` | Every question type and its behaviour |
-| `05-architecture.md` | Layout, database schema, real-time, runner, grading |
-| `06-questions-ouvertes.md` | What is still undecided — do not decide it silently |
-| `07-reutilisation-heig-classroom.md` | What comes from the sibling project |
-| `08-experience-deux-niveaux.md` | The novice / expert split |
-
-The screens as they ship are in the user guide's screenshots
-(`docs/assets/screenshots/`); `apps/web/DESIGN.md` is the design reference.
+For classroom migration work, read `docs/merge/README.md`, then the relevant
+row of `PROGRESS.md` and task card. Those files own delivery progress; an
+accepted ADR does not imply that its feature has shipped.
 
 ## Layout
 
-```
-apps/
-  api/        Fastify: modules, SSE, jobs, ticker, Drizzle schema + migrations,
-              src/github/ (the GitHub adapters), modules/github and
-              modules/journal; to come: modules/project|gradebook
-  web/        React SPA (Vite, Tailwind, TanStack Query)
-  runner/     code execution in hardened Podman containers (@quiz/runner)
-packages/
-  core/       the QuestionType contract, the seeded RNG, the runner interface
-  registry/   the two static question-type registries (./server, ./client)
-  contracts/  zod schemas and payload types shared api <-> web
-  domain/     pure business rules: grade scale, deadlines, policies, cloze, roster
-  ui/         the shared primitives of the question-type surfaces (@quiz/ui)
-  qt-mcq/     question type: multiple choice (./server, ./client)
-  qt-short/   question type: short answer (./server, ./client)
-  qt-cloze/   question type: fill in the blanks (./server, ./client)
-  qt-code/    question types: code graded by the runner, and its variant
-              codeimage graded pixel by pixel (./server, ./client)
-  qt-circuit/ question type: two-port schematic, graded by ngspice simulation
-              (./server, ./client, ./canvas)
-  qt-rich/    question type: essay, graded by hand (./server, ./client)
-  qt-categorize/ question type: cards sorted into columns (./server, ./client)
-  diagram/    the diagram engine: scene, kinds, router, text forms (./server),
-              DiagramEditor and DiagramView (./client) — ADR-046
-  qt-diagram/ question type: a diagram of one notation, graded by hand
-              (./server, ./client)
-docs/
-  spec/       the product specification (above)
-  adr/        the architecture decisions, inherited (001–010, 012), imported
-              from heig-classroom (011, 047–049) and our own
-  merge/      the heig-classroom merge: plan, decisions, task cards, PROGRESS
-  guide/      the user guide
-  development/  the developer pages, deployment runbook included
-mockups/      circuit.html, the origin of qt-circuit's schematic editor;
-              categorize.html, the origin of qt-categorize's board;
-              uml.html, the origin of the diagram engine's editor;
-              grading.html, the origin of the grading table (ADR-044)
-extensions/   kiosk-attestation/, the companion Chrome extension of the kiosk
-              stations (ADR-051)
-infra/        Keycloak development realm
-```
+The [repository map](docs/development/repository.md) owns the detailed layout.
+For orientation: `apps/api` is Fastify; `apps/web` is the React SPA;
+`apps/runner` executes question code. `packages/contracts` owns HTTP schemas,
+`packages/domain` pure rules, `packages/core` the question-type contracts,
+`packages/registry` their static wiring, `packages/qt-*` the types,
+`packages/diagram` the diagram engine and `packages/docrender` journal rendering.
 
-`packages/qt-mcq`, `qt-short`, `qt-cloze`, `qt-code`, `qt-circuit`, `qt-rich`,
-`qt-categorize` and `qt-diagram` exist and are registered in `packages/registry` in two places (`./server` and
-`./client`). `qt-circuit` (ADR-019) grades a schematic by simulating it with
-ngspice through the runner's `spice` language; its rules are in
-`docs/spec/04-types-de-questions.md` §4.11. `qt-code` also carries a second
-type, `codeimage` (ADR-021, §4.9): the same program half (`src/Program*.tsx`,
-`programFields`), judged by the picture its stdout draws (`src/image/`),
-exported as `codeimageServer` / `codeimageClient` and registered beside `code`.
-`qt-categorize` (ADR-036, §4.13) sorts cards into columns; its scoring rules
-live in `@quiz/domain/categorizeScore`, an `inherit` question takes the
-evaluation's `settings.categorizePolicy`, and negative marking (ADR-026)
-covers it like `mcq`.
-`packages/ui` exists since the refactoring campaign of 2026-09-23 (PR #51): the
-shared primitives of the question-type surfaces (`@quiz/ui`, React as a
-peer, `@quiz/core` its only dependency; it never imports a `qt-*` package nor
-`apps/web`). The generic primitives stay in `apps/web/src/ui/` until they
-move to `packages/ui-kit`, a workspace package never published, on which
-`@quiz/ui` will build (ADR-035; there is no `@heig-platform/ui`, ADR-029 is
-superseded): a new generic primitive goes in `apps/web/src/ui/`.
-Packages still to create: `packages/docrender` (the journal's server-side
-renderer, merge task M4-01), `packages/ui-kit` (above), then
-`packages/canonical` and `packages/cli`, in this order
-(`docs/spec/05-architecture.md`, 5.2 and `docs/PLAN-MVP.md` §8).
+`core` never imports a `qt-*` package: register types through both registry
+entry points (`./server`, `./client`). Generic web primitives go in
+`apps/web/src/ui/`; `packages/ui` holds primitives shared by question types
+and must not import a `qt-*` package or `apps/web`. The accepted `ui-kit`
+extraction remains in ADR-035; do not create the superseded external npm
+library of ADR-029. `canonical`, `cli`, `ui-kit` and `apps/codespace` are
+planned, not present; consult the relevant spec/task before implementing them.
 
-`packages/core` is split in two entry points: `@quiz/core/server` (no React,
-anywhere) and `@quiz/core/client` (React as type-only imports). The static
-wiring lives in `packages/registry` so that `core` never imports a `qt-*`
-package — the cycle that decision D1 breaks.
-
-`apps/runner` is the code execution service (WP11): Fastify on :3200,
-`POST /run` + `GET /health`, one hardened container per request driven over
-the Podman socket. It was built from the material lifted from the sibling
-codespace project, which `apps/runner/README.md` credits and which the
-package now replaces — the seccomp profile lives at
-`apps/runner/infra/seccomp/runner.json`, the flag list is asserted by
-`src/engine.test.ts`, and the language images come from
-`images/Containerfile` (the Alpine ones, parameterised by `images/build.sh`)
-and `images/js/Containerfile`. Its unit tests need no container; `pnpm --filter @quiz/runner
-test:integration` really starts them and skips itself without Podman.
+For UI work, read `apps/web/DESIGN.md` and `.claude/skills/quiz-ui/SKILL.md`.
+Screenshots are in `docs/assets/screenshots/`. Runner work also requires
+`apps/runner/README.md` (hardening, images and integration checks).
 
 ## Invariants
 
@@ -171,9 +85,10 @@ Never work around these, not even "temporarily".
    `410 attempt_closed`.
 6. **Access is loaded, never checked afterwards.** One predicate,
    `staffAccess` in `apps/api/src/modules/guards.ts`: a user reaches a
-   classroom if and only if they hold a seat on its course's staff (or are
-   an admin). An entity is loaded only if that holds; otherwise the answer is
-   a 404 indistinguishable from a missing entity.
+   classroom if and only if they hold a seat on its course's staff, or an admin
+   session has active Super Powers (`accessWhere`, ADR-054). An entity is loaded
+   only if that holds; otherwise the answer is a 404 indistinguishable from a
+   missing entity.
    **The student branch** is `readableClassroom`, in the same file (its
    rule is the pure `classroomPayload`), for the classroom routes a student
    reads: the course's staff (through `staffAccess`) get the staff payload,
@@ -257,58 +172,33 @@ internal bridge).
 
 ## Development
 
-No Docker, no Podman and no PostgreSQL are needed to run this.
+The [development guide](docs/development/index.md) owns setup, demo personas,
+the smoke test and optional PostgreSQL/OIDC/Podman paths. Use Node as required
+by `package.json` and the pinned pnpm version. Build packages before running
+the apps: they import workspace `dist/` outputs.
 
 ```bash
-corepack enable pnpm && pnpm install
-pnpm build                      # the packages: the apps resolve them through dist/
-cp .env.example .env            # pglite:// database + AUTH_DEV_LOGIN=1
-pnpm seed                       # the whole demo world (below)
-pnpm dev                        # API :3000, Vite :5173 — and the runner on
-                                # :3200 when the machine has a Podman socket
-pnpm smoke                      # end-to-end HTTP walk, against a running API
+pnpm install --frozen-lockfile
+pnpm build
+cp .env.example .env
+pnpm seed
+pnpm dev
 ```
 
-Then open <http://localhost:5173>, click **Dev login** and pick a persona.
-The embedded database is a directory (`apps/api/.data/pglite`, gitignored);
-delete it to start over. It is single-process: stop the API before `pnpm seed`.
-
-`pnpm seed` (`apps/api/src/seed.ts`, content in `apps/api/src/seed/`) is
-idempotent and builds everything through the ORDINARY SERVICES, never by raw
-inserts: course PRG1, classroom PRG1-2026, six students, two pools with
-nineteen published questions of all nine types, and four evaluations — one
-`draft`, one `scheduled`, one exercise in `lobby`, and `Test 0 — bases du C`
-closed, ten questions of all nine types answered by five of the six
-students, graded by the real grading pass (no runner: code, picture and
-circuit answers wait for one; essays and diagrams proposed by the stub LLM
-when `LLM_PROVIDER=stub`, refused in production like the dev login, else at
-0 for the teacher; an untouched diagram starter validated at 0) and left
-UNRELEASED so the panel has proposals to validate. Keyed on internal names
-and titles, so a second run writes nothing.
-
-`pnpm smoke` (`scripts/smoke.sh`) needs a running API and a seeded database.
-It walks one whole life of an evaluation over HTTP — login, author, publish,
-build, open, answer, submit, close, grade, release, CSV, feedback — and exits
-non-zero on the first failed expectation. A base URL may be passed as its only
-argument.
+Local PGlite is single-process: stop the API before seeding. The seed is
+idempotent and uses ordinary services, never raw inserts. Production refuses
+PGlite, development login and the LLM stub.
 
 ```bash
-pnpm build && pnpm typecheck && pnpm test    # what CI runs
-pnpm test:coverage                           # coverage per package, against coverage.floors.json
-pnpm dev:mock                                # the SPA alone, no backend at all
-pnpm db:generate                             # a migration, after a schema change
+pnpm build && pnpm typecheck
+VITEST_MAX_WORKERS=4 pnpm -r --workspace-concurrency=1 test
+pnpm dev:mock       # UI only; stop it when finished
+pnpm db:generate    # schema changes include the generated migration
 ```
 
-To exercise the REAL paths — a true PostgreSQL (and therefore pg-boss) and a
-true OIDC login — bring up the optional services:
-
-```bash
-docker compose -f docker-compose.dev.yml up -d
-DATABASE_URL=postgres://quiz:quiz@localhost:5432/quiz AUTH_DEV_LOGIN=0 pnpm dev
-```
-
-Production always uses a real PostgreSQL: pg-boss needs one, and `config.ts`
-refuses a `pglite://` URL there.
+While iterating, test only the affected files; run the full suite once at the
+end with the memory guard of `AGENTS.md`. Use `pnpm smoke` against a seeded
+API for an HTTP lifecycle check; `pnpm test:coverage` for the coverage gate.
 
 ## Conventions
 

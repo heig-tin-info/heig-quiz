@@ -33,10 +33,13 @@ Rules:
 
 ## 4.2 Canonical format
 
-One YAML file per question. Images live in a sibling `assets/` folder, referenced by relative path.
+Planned import/export format (F-EXP): the canonical package and CLI are not
+implemented yet. The examples describe the intended interchange format, not
+a current API payload. One YAML file per question; images live in a sibling
+`assets/` folder, referenced by relative path.
 
 ```yaml
-id: 01J8Z3K9M2X5V7N4Q6R8T0W2Y4      # stable ULID, generated at creation
+id: 01920e6d-1e00-7000-8000-000000000001  # stable UUID v7, generated at creation
 type: mcq
 name: pointeurs-arithmetique-01      # internal name
 tags: [c, pointers, arithmetic]

@@ -1,3 +1,8 @@
+---
+search:
+  exclude: true
+---
+
 # Original scope, phases and decision log
 
 Historical planning material preserved on 2026-10-03. These tables record
