@@ -47,11 +47,9 @@ import {
   useNow,
 } from "../ui";
 import {
+  ActivityCard,
   BonusBadge,
-  EvaluationRow,
   finished,
-  openLine,
-  pastLine,
   PollRow,
   UpcomingByDay,
   useCardActions,
@@ -61,35 +59,27 @@ export type ClassroomTab = "activities" | "journal";
 
 type Header = StudentClassroomPage["classroom"];
 
-type EvaluationCard = Extract<StudentActivityCard, { kind: "evaluation" }>;
-
-/** The groups of the Activities tab, holding the evaluations' cards. M3-13 removes it. */
-type EvaluationActivities = Pick<StudentActivities, "polls"> & Record<"open" | "upcoming" | "past", EvaluationCard[]>;
-
-/**
- * The evaluations' cards: the projects' are drawn by M3-13 (none is served
- * before), which removes this narrowing and `EvaluationActivities`.
- */
-function evaluationsOf({ polls, open, upcoming, past }: StudentActivities): EvaluationActivities {
-  const only = (cards: StudentActivityCard[]) => cards.filter((card) => card.kind === "evaluation");
-  return { polls, open: only(open), upcoming: only(upcoming), past: only(past) };
+/** What an open card is due by: an attempt's deadline, else the evaluation's closing; a project's deadline. */
+function dueAt(card: StudentActivityCard): string | null {
+  return card.kind === "project" ? card.deadlineAt : (card.deadlineAt ?? card.closesAt);
 }
 
 /**
  * The single most urgent open activity, the one whose button is the page's
  * primary (F-ORG-15), by rank then by due time:
  *   0. a card still to do that has a deadline (the attempt's, else the
- *      evaluation's closing), the soonest first — a grade is at stake;
+ *      evaluation's closing; a project's deadline), the soonest first — a
+ *      grade is at stake;
  *   1. a running poll — it happens in the room, now, and lasts minutes;
  *   2. a card still to do with no deadline;
  *   3. a card already done and open to a retake.
  * Ties keep the server's order. `null` when nothing is open.
  */
-export function mostUrgent({ polls, open }: Pick<EvaluationActivities, "polls" | "open">): string | null {
+export function mostUrgent({ polls, open }: Pick<StudentActivities, "polls" | "open">): string | null {
   const ranked = [
     ...open.map((card) => {
-      const due = card.deadlineAt ?? card.closesAt;
-      const rank = finished(card) ? 3 : due === null ? 2 : 0;
+      const due = dueAt(card);
+      const rank = card.kind === "evaluation" && finished(card) ? 3 : due === null ? 2 : 0;
       return { id: card.id, rank, due: due === null ? 0 : Date.parse(due) };
     }),
     ...polls.map((poll) => ({ id: poll.id, rank: 1, due: 0 })),
@@ -206,7 +196,7 @@ export function StudentClassroom({
     <div className="space-y-6">
       <ClassroomHeader room={data.classroom} onCourses={toCourses} />
       {tabs}
-      <Activities activities={evaluationsOf(data.activities)} navigate={navigate} />
+      <Activities activities={data.activities} navigate={navigate} />
     </div>
   );
 }
@@ -257,7 +247,7 @@ function Breadcrumb({ room, onCourses }: { room: Header; onCourses: () => void }
  * Open now, Upcoming (by day, as on the home), Past: the home's cards for
  * this classroom, one accent among them.
  */
-function Activities({ activities, navigate }: { activities: EvaluationActivities; navigate: Navigate }) {
+function Activities({ activities, navigate }: { activities: StudentActivities; navigate: Navigate }) {
   const t = useT();
   const now = useNow(30_000);
   const actions = useCardActions(navigate);
@@ -279,13 +269,7 @@ function Activities({ activities, navigate }: { activities: EvaluationActivities
           <PollRow key={poll.id} poll={poll} navigate={navigate} primary={poll.id === urgent} showWhere={false} />
         ))}
         {open.map((card) => (
-          <EvaluationRow
-            key={card.id}
-            card={card}
-            showWhere={false}
-            line={openLine(card, now, t)}
-            action={actions.open(card, card.id === urgent)}
-          />
+          <ActivityCard key={card.id} card={card} group="open" now={now} primary={card.id === urgent} showWhere={false} actions={actions} />
         ))}
       </section>
 
@@ -300,13 +284,7 @@ function Activities({ activities, navigate }: { activities: EvaluationActivities
         <section className="space-y-3">
           <SectionHeading title={t("shome.past")} />
           {past.map((card) => (
-            <EvaluationRow
-              key={card.id}
-              card={card}
-              showWhere={false}
-              line={pastLine(card, t)}
-              action={actions.review(card)}
-            />
+            <ActivityCard key={card.id} card={card} group="past" now={now} showWhere={false} actions={actions} />
           ))}
         </section>
       ) : null}

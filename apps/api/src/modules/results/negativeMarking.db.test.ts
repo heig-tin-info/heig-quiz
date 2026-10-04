@@ -56,6 +56,11 @@ afterAll(async () => {
 const db = () => server.app.db;
 /** The rows of the student's Grades page, every classroom's, read through the contract. */
 const gradeRows = (body: unknown) => evaluationRows(StudentGrades.parse(body));
+/** The evaluation card of `id` on the home, whichever group holds it (the home lists every kind since M3-09a). */
+const evaluationCardOf = (home: StudentHome, id: string) =>
+  [...home.open, ...home.upcoming, ...home.past].find(
+    (c): c is Extract<StudentHome["open"][number], { kind: "evaluation" }> => c.kind === "evaluation" && c.id === id,
+  )!;
 const get = (url: string, headers: Record<string, string>) =>
   server.app.inject({ method: "GET", url, headers });
 const send = (
@@ -278,7 +283,7 @@ describe("an exam with negative marking", () => {
     expect(rows.find((c) => c.evaluationId === evaluation.id)!.score).toMatchObject({ points: 0, grade: 1 });
 
     const home = (await get("/app/api/student/home", students[0]!.headers)).json() as StudentHome;
-    const card = [...home.open, ...home.upcoming, ...home.past].find((c) => c.id === evaluation.id)!;
+    const card = evaluationCardOf(home, evaluation.id);
     expect(card.grade).toBe(1);
   });
 
@@ -481,7 +486,7 @@ describe("retakes keep the best or the last FLOORED total (ADR-025)", () => {
     expect([row.points, row.grade]).toEqual([0, 1]);
 
     const home = (await get("/app/api/student/home", students[0]!.headers)).json() as StudentHome;
-    const card = [...home.open, ...home.upcoming, ...home.past].find((c) => c.id === evaluation.id)!;
+    const card = evaluationCardOf(home, evaluation.id);
     expect(card.retakes?.kept?.attemptId).toBe(second.id);
     expect(card.retakes?.kept?.score?.points).toBe(0);
   });

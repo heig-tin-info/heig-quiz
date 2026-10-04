@@ -19,8 +19,8 @@ const tagged = (cards: EvaluationCard[]): CardOf<"evaluation">[] =>
 export const evaluationActivity: ActivityKind<"evaluation"> = {
   kind: "evaluation",
   listForTeacher: (db, caller, now) => listActivities(db, ownEvaluationAccess(caller), now),
-  /** The student home narrowed to the classroom: the same rows, sorted the same way. */
-  async studentCards(db, caller, classroomId, now) {
+  /** The evaluations' board, every classroom or one: the same rows, sorted the same way. */
+  async studentCards(db, caller, now, classroomId) {
     const home = await studentHome(db, caller.id, now, classroomId);
     return {
       polls: home.polls,

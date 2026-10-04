@@ -1519,76 +1519,185 @@ that serves them.
     owner (the M3-04 follow-up, still open); a manual re-dispatch of an
     unconfirmed review.
 
-### M3-09 — Student side, SSE, notifications
-- **Depends on**: M3-04, D18. ‖ M3-08.
-- **Goal**: student project cards (home and classroom payload), the project
-  student view (single exit), `course:` + `user:` topics, notification
-  kinds with ADR-030 defaults and templates (en/fr), one Teams manifest bump.
-- **Tests**: a student never receives another student's repo or grade hint;
-  leak test of the project student view.
+### M3-09 — split (orchestrator, 2026-10-04)
+
+Three tasks, from the spec: **M3-09a** the student's side as it reads
+(the view, the cards, the home, the student's resend, the leak test);
+**M3-09b** the notifications (the seven kinds, the Teams manifest bump, the
+day-before reminder, the sends at the trigger sites); **M3-09c** the
+real-time notices of F-PROJ-21, done client-side. The "From …" notes of the
+former M3-09 card are kept below, under the task that inherits each.
+
+### M3-09a — The student's project view, the cards, the student's resend
+- **Depends on**: M3-04, M3-08b, D18. ‖ M3-12b.
+- **Goal**: the project's student view (THE single exit, N-SEC-20), the
+  student's project cards on the home and the classroom page through
+  `KINDS`, the student's own resend of a pending invitation, the leak test.
+- **Decisions** (orchestrator, 2026-10-04, from the spec; the product
+  owner's D18/D26/F-PROJ-15 stand):
+  1. **The home shows projects too** (F-ORG-14: Activities is the summary
+     of every activity): `StudentHome.open/upcoming/past` become the
+     `StudentActivityCard` union through `KINDS`; the web renders a project
+     card minimally (title, status, deadline), the full `ProjectRow` being
+     M3-13's; `StudentClassroomPage` lists projects in Activities and has
+     **no Projects tab** (F-ORG-15): `hasProjects` dropped.
+  2. **Card status words** stay the spec's (`to_accept | in_progress |
+     locked`, plus `released`); the card gains `invitation`,
+     `githubLinked`, `released`, `repoUrl` (own repository only), and
+     `deadlineAt` is the student's **effective** deadline.
+  3. **The view** `GET /app/api/student/projects/:id` is loaded through the
+     classroom's student branch (the rule of `readableClassroom`, the
+     student payload forced): a teacher in the student view sees no
+     repository and no Accept; an impersonation gets the student payload
+     and stays read-only. Between the provisional and the definitive
+     freeze the score shows as frozen, marked indicative until the release.
+  4. The student's resend reuses `resendInvitation` and its minute column,
+     never the staff's route.
 - **From M3-02** (product owner, D26 addendum 2026-10-02): teachers create
-  projects before the cutover, so **the students must see nothing until
-  this task**: `projectActivity.studentCards` stays empty and
-  `StudentClassroomPage.hasProjects` false until the project's student view
-  lands here, with its N-SEC-20 leak test (a draft, another student's
-  repository and score, the source and distribution repositories searched
-  for in every student response). This task fills `studentCards` and the
-  publish notification (`project_published`) that M3-02's `publishProject`
-  does not send.
-- **From M3-03** (orchestrator, 2026-10-02): `project_provision_failed`
-  goes to the course's staff for a `project.accept_failed` whose
-  `payload.notify` is true — the row's first failure, never a refused
-  invitation (`markProvisionFailed`, `modules/project/accept.ts`);
-  `project_repo_invited` after a successful Accept; the student's resend of
-  an invitation (F-PROJ-07); the `user:` and course hints of an Accept.
-  A `repo_name_taken` failure is audited with `notify` too: the
-  notification text must cover a name collision, which only staff can
-  resolve.
+  projects before the cutover, so the students saw nothing until this
+  task: `projectActivity.studentCards` stayed empty until the view landed
+  with its N-SEC-20 leak test.
+- **From M3-03** (orchestrator, 2026-10-02): the student's resend of an
+  invitation (F-PROJ-07).
+- **From M3-08b** (2026-10-04): the student's own resend of an invitation
+  (F-PROJ-07) reuses the staff's rule and column (`resendInvitation`,
+  `invitation.ts`; `project_repos.invitation_resent_at`: one minute per
+  repository, shared by whoever asks) through the student view, never the
+  staff's route.
+- **As delivered** (branch `merge/M3-09a-student-project-view`). What
+  M3-13, M3-09b, M3-09c and M5-03 inherit:
+  - **Contracts** (`packages/contracts/src/project.ts`, `student.ts`):
+    `StudentProjectCard` `{ kind: "project", id, title, classroomId,
+    classroomName, courseCode, startAt, deadlineAt (EFFECTIVE), status:
+    StudentProjectStatus (to_accept | in_progress | locked | released),
+    invitation: "pending" | "accepted" | null, githubLinked, released,
+    repoFullName, repoUrl }` — the repository named only when provisioned
+    and not deleted. `StudentProject` = the card's facts without the three
+    repository fields + `{ gradingMode, repo: StudentProjectRepo | null,
+    release: StudentProjectRelease | null, serverNow }`;
+    `StudentProjectRepo` `{ fullName, url, invitation: "pending" |
+    "accepted", deleted, locked, lastCommit: { sha, at } | null, ciStatus,
+    run: { sha, url, conclusion, completedAt } | null, score: { points,
+    max, grade, frozen } | null }` (the score INDICATIVE until the release,
+    null under grading `none`); `StudentProjectRelease` `{ at, points, max,
+    grade, comment }`. `StudentHome` moved from `live.ts` to `student.ts`
+    as `StudentActivities.extend({ serverNow })`; `StudentClassroomPage`
+    lost `hasProjects`.
+  - **Pure rules** (`@quiz/domain/projectStudent.ts`, unit-tested):
+    `studentProjectStatus` (released → locked at the effective deadline or
+    while GitHub holds the repository locked → in progress once provisioned
+    → to accept), `studentProjectGroup` (upcoming before the start, past
+    once locked or released, open between), `studentScoreRun` (the frozen
+    slot once the deadline is applied — never a run after it —, the current
+    slot before; never the review's nor the teacher's).
+  - **The view** (`Q:modules/project/studentView.ts`, the one exit):
+    `studentProjectCards(db, userId, now, classroomId?)` (every classroom
+    where the caller holds a claimed seat, or one; the repository joined
+    through a STUDENT seat only, ADR-018; never a draft nor an archived
+    project; the soonest project deadline first), `studentProject(db,
+    scope, userId, now)`, `studentResendInvitation` (`409 repo_unavailable`
+    before Accept, then `resendInvitation`'s refusals). Loader
+    `studentProjectView` / `findStudentProjectView` (`guards.ts`):
+    `classroomPayload` with `studentView` forced on a project neither draft
+    nor archived — the course's staff, a claimed seat, an impersonation
+    through the seat; a `seb`/`kiosk` session, a stranger get the 404; an
+    API token reads (as it reads the classroom page) and never writes. The
+    resend route takes `studentProject` (a claimed student seat, own portal
+    session).
+  - **Routes** (`project/routes.ts`, with the App only): `GET
+    /app/api/student/projects/:id` → `StudentProject`; `POST
+    /app/api/student/projects/:id/invite` → `ProjectInvitationResent`,
+    audited `project_repo.invite_resent` with the student as actor.
+  - **The home** `GET /app/api/student/home` is the `activity` module's
+    (`activity/routes.ts`, `studentHome` in `activity/service.ts`):
+    `ActivityKind.studentCards(db, caller, now, classroomId?)` — one
+    signature for the home and the classroom page. `live.studentHome` now
+    answers an `EvaluationHome` (evaluation cards only), read by the
+    evaluation adapter and the kiosk's `pairableEvaluations`.
+  - **Web** (minimal, the full row is M3-13's): `student/cards.tsx` gains
+    `ActivityCard` (one switch over the union for Open now, Upcoming and
+    Past; a project draws `ActivityRow` with its title, the status word
+    `sproj.status.*`, the deadline or the start, no button) and
+    `UpcomingByDay` groups by `opensAt(card)` (a project's `startAt`);
+    `mostUrgent` ranks a project by its deadline. Mock: `?projects=1`
+    gives the student persona three projects (`STUDENT_PROJECT_OPEN`,
+    `_SOON`, `_PAST` in `mock/student.ts`), each served as a view and
+    checked by `contract.test.ts`.
+  - **Leak test** (`studentView.db.test.ts`, N-SEC-20): a second student's
+    repository, login, id, score, review score, teacher score and comment,
+    the source and distribution names, a draft's title, the staff's flags
+    (`toVerify`, `multiple`, `malformed`, `protectionSuspended`), the first
+    student's own teacher score and comment before the release — searched
+    for in every response of the first student (home, classroom page, view,
+    Accept, resend), for each caller (student, teacher in the student view,
+    impersonation), before and after the release; the second student's hint
+    never on a topic the first listens to.
+  - Not done here: the notifications (M3-09b), the F-PROJ-21 notices
+    (M3-09c), the `ProjectRow` button and its indicative score (M3-13), a
+    group's repository (M3-15).
+
+### M3-09b — Notifications of projects
+- **Depends on**: M3-09a, M3-04, M3-05a, M3-05b, M3-08b.
+- **Goal**: the seven notification kinds of F-NOTIF-13 with ADR-030
+  defaults and templates (en/fr), one Teams manifest bump, the day-before
+  reminder, and the sends at the trigger sites.
+- **The kinds and their defaults** (F-NOTIF-13): `project_published` (the
+  students of the classroom, on publish — `publishProject` sends none
+  today, scheduled publication included), `project_repo_invited` (the
+  student, after a successful Accept), `project_provision_failed` (the
+  course's staff, for a `project.accept_failed` whose `payload.notify` is
+  true — the row's first failure, never a refused invitation; the text must
+  cover a name collision, `repo_name_taken`, which only staff can resolve),
+  `project_deadline_reminder` (the student, the day before THEIR effective
+  deadline), `project_deadline_applied` (the staff, one entry per project
+  with the count locked, worded from the audit `project.deadline_enforced`
+  — `locked`, `archived`, `committed`), `project_grade_final` (the
+  students, on the FIRST release only: `ProjectReleaseResult.first` and
+  the audit's `payload.first`; the place is marked in the release route; a
+  release again notifies nobody — product owner, decision 3 of M3-08b),
+  `github_org_lost` (the staff, on GitHub's delete events only — an
+  installation or an organization gone — never on a transient failure).
+  The staff's notice of a review asked (heig-classroom's
+  `llm_review_dispatched`, "(n/N repositories)") is worded from the audits
+  `project.review_dispatched` and `project.checkpoint_dispatched`
+  (`dispatched`, `deleted`, `unconfirmed`, `failed`; at most one per pass
+  that changed something); `project_repo.review_skipped` is the staff's.
+- **The reminder** mirrors F-NOTIF-06's: claimed by a conditional UPDATE
+  and sent in the same task, never claimed without being sent, in the
+  ticker's `projectTick` (`modules/project/jobs.ts`). M3-05a re-arms
+  `projects.reminder_sent_at` on every move of the project's deadline; a
+  student whose repository has its own deadline is reminded of THAT one,
+  so the claim is **per repository** for them: a `project_repos`
+  reminder column beside the project's.
+- **Dropped**: heig-classroom's `grade.final` mail on the final review
+  (sent when `review_grade_run_id` is filled). F-PROJ-15: the final score
+  reaches a student only after the release; `project_grade_final` covers
+  it. A student's own dispatch is never worth a notice.
 - **From M3-04** (2026-10-02): the hints exist (kind `projects`, to the
   repository's students' `user:` and the course's `course:`, never
-  `classroom:`; `Q:modules/project/events.ts`, tested); this task adds the
-  worded notices of F-PROJ-21 from the facts M3-04 records: a push (the
-  receipt), a restore (audit `project_repo.restore` `{files}`), a score
-  captured (a `project_grade_runs` row `ok`), the suspension (audit
+  `classroom:`; `Q:modules/project/events.ts`, tested).
+- **Tests**: each kind sent once at its trigger, to its audience and nobody
+  else (a student never receives another student's notification); the
+  reminder claimed and sent together, per repository where a repository has
+  its own deadline; `project_grade_final` on the first release only.
+
+### M3-09c — Real-time notices of projects (F-PROJ-21)
+- **Depends on**: M3-09a, M3-12a.
+- **Goal**: the worded notices of F-PROJ-21 on the project page and the
+  student's project — a push received, protected files restored, a score
+  captured, an acceptance, a deadline applied, a review dispatched, a sync
+  done — **client-side**, by comparing the payload re-read on a `projects`
+  hint with the one before it (no data-carrying SSE frame: the hints stay
+  what ADR-005 makes them). Worded through `t()` from the structured
+  difference, never a server sentence.
+- **From M3-04** (2026-10-02): the facts the notices read are recorded —
+  a push (the receipt and `lastCommit`), a restore (audit
+  `project_repo.restore` `{files}`), a score captured (a
+  `project_grade_runs` row `ok`), the suspension (audit
   `project_repo.revert_cap`), a repository deleted (audit
-  `project_repo.deleted`); the final review's mail to every member when
-  `review_grade_run_id` is filled (heig-classroom's `grade.final`); and
-  `github_org_lost`.
-- **From M3-05a** (orchestrator, 2026-10-02): **the day-before reminder
-  is this task's, claim and send together** (`project_deadline_reminder`,
-  F-NOTIF-13): claimed by a conditional UPDATE of
-  `projects.reminder_sent_at` in the ticker's `projectTick`
-  (`modules/project/jobs.ts`), sent in the same task — never claimed
-  without being sent. M3-05a re-arms `reminder_sent_at` on every move of
-  the project's deadline. A student whose repository has its own deadline
-  (`project_repos.deadline_at`) is reminded of THAT one (the effective
-  deadline), so the claim is per repository for them. The staff's
-  `project_deadline_applied` (one entry per project, the count locked) is
-  worded from the audit `project.deadline_enforced` (`locked`, `archived`,
-  `committed`, …) the deadline job writes; the student's view shows their
-  own effective deadline.
-- **From M3-05b** (2026-10-02): the staff's notice of a review asked
-  (heig-classroom's `llm_review_dispatched`, "(n/N repositories)") is
-  worded from the audits `project.review_dispatched` and
-  `project.checkpoint_dispatched` (`dispatched`, `deleted`, `unconfirmed`,
-  `failed`; at most one per pass that changed something — a pass that only
-  fails again writes none, heig-classroom issue #10); the review job hints
-  the course's staff only (`hintProjectStaff`). The final review's mail
-  (`grade.final`) is sent when `review_grade_run_id` is filled, which now
-  happens only for a run Quiz's App triggered. A student's own dispatch is
-  never worth a notice. A `project_repo.review_skipped` (archived as its
-  lock) is the staff's, never the student's.
-- **From M3-08b** (2026-10-04): the release notification
-  (`project_grade_final`, F-PROJ-14, F-GRADE-09) is sent on the FIRST
-  release only: `releaseProject` (`modules/project/grades.ts`) answers
-  `ProjectReleaseResult.first` and audits `project.release` with
-  `payload.first`; the place to send it is marked in the release route
-  (`routes.ts`). A release again (a score changed after the release)
-  rewrites the snapshots and notifies nobody (product owner, decision 3).
-  The student's own resend of an invitation (F-PROJ-07) reuses the staff's
-  rule and column (`resendInvitation`, `invitation.ts`;
-  `project_repos.invitation_resent_at`: one minute per repository, shared
-  by whoever asks) through the student view, never the staff's route.
+  `project_repo.deleted`).
+- **Tests**: web, on the re-read payloads: each notice from its difference,
+  nothing on an unchanged payload.
 
 ### M3-10 — Web: projects in Activities, "New ▾"
 - **Depends on**: M3-01 contracts, M1-05. ‖ M3-11.
@@ -1903,11 +2012,28 @@ release. The original card's notes stay here; each part has its card below.
   status sentence stays (`projectStatus`).
 
 ### M3-13 — Web: student `ProjectRow`
-- **Depends on**: M3-09 contracts, M2-07.
-- **Goal**: the four-state onboarding of §5.3 on the student home (and the
-  classroom page once M5-02 lands).
-- **Scenes**: `-unlinked`, `-accept`, `-invitation-pending`, `-ready`; the
-  default `student-home` unchanged.
+- **Depends on**: M3-09a contracts, M2-07.
+- **Goal**: the four-state onboarding of §5.3 on the student home and the
+  classroom page, and the student's project page.
+- **From M3-09a** (2026-10-04): the cards arrive in the `StudentActivityCard`
+  union on both pages already; `student/cards.tsx` draws a project through
+  `ActivityCard` as a plain `ActivityRow` (title, `sproj.status.*`, the
+  deadline or the start, NO button) — replace that branch by `ProjectRow`.
+  The card carries what the four states need: `githubLinked` (false ⇒ "Link
+  my GitHub account"), `repoUrl` null ⇒ "Create my repository" (`POST
+  /app/api/student/projects/:id/accept`, its refusals `ProjectRefusal`),
+  `invitation: "pending"` ⇒ the link to accept on GitHub and the resend
+  (`POST /app/api/student/projects/:id/invite`, `429 resend_too_soon`
+  worded), `"accepted"` ⇒ "Open repository"; `status` the badge word;
+  `startAt` in the future ⇒ no Accept yet. The page reads `GET
+  /app/api/student/projects/:id` (`StudentProject`): the indicative score
+  (`repo.score`, say "indicative"; `frozen` ⇒ "frozen at the deadline"),
+  the evaluated commit and its run (`repo.run`), the release block once
+  `release` is set (the final score, its grade, the teacher's comment).
+  Mock: `?projects=1`, ids `STUDENT_PROJECT_OPEN`, `_SOON`, `_PAST` of
+  `mock/student.ts`.
+- **Scenes**: `-unlinked`, `-accept`, `-invitation-pending`, `-ready`,
+  `-released`; the default `student-home` unchanged.
 
 ### M3-14 — Pilot and load test
 - **Depends on**: M3-01…13, M2-06.

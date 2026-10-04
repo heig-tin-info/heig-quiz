@@ -2407,6 +2407,11 @@ export const en = {
   "shome.state.notStarted": "not started",
   "shome.state.submitted": "handed in",
   "shome.state.expired": "time was up",
+  // F-PROJ-04 (M3-09a): the status word of a project card; its button and score are M3-13's.
+  "sproj.status.to_accept": "to accept",
+  "sproj.status.in_progress": "in progress",
+  "sproj.status.locked": "locked",
+  "sproj.status.released": "scores published",
   "shome.empty.title": "Nothing to do right now",
   "shome.empty.body": "Nothing is open for you. A quiz shows up here the moment a teacher opens one.",
   "shome.retake": "Try again",

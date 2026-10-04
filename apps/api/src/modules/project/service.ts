@@ -24,6 +24,9 @@
  * From M3-08b: the staff's writes — the teacher's score and the release
  * (`grades.ts`), the protection re-enabled (`protection.ts`), an
  * invitation resent (`invitation.ts`).
+ * From M3-09a: the project's student view (`studentView.ts`), the ONE exit
+ * of a project towards a student (N-SEC-20): their cards, their project's
+ * page, their own resend of an invitation.
  */
 export { acceptProject } from "./accept.js";
 export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoints.js";
@@ -45,4 +48,5 @@ export {
 } from "./lifecycle.js";
 export { ProjectError } from "./errors.js";
 export { listSources, sourceDetail } from "./sources.js";
+export { studentProject, studentProjectCards, studentResendInvitation } from "./studentView.js";
 export { classroomProjects, projectSummary, teacherProjects, type ProjectRow } from "./views.js";

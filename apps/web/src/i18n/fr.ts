@@ -2406,6 +2406,11 @@ export const fr: Record<keyof Dict, string> = {
   "shome.state.notStarted": "pas commencée",
   "shome.state.submitted": "rendue",
   "shome.state.expired": "temps écoulé",
+  // F-PROJ-04 (M3-09a): the status word of a project card; its button and score are M3-13's.
+  "sproj.status.to_accept": "à accepter",
+  "sproj.status.in_progress": "en cours",
+  "sproj.status.locked": "verrouillé",
+  "sproj.status.released": "notes publiées",
   "shome.empty.title": "Rien à faire pour l'instant",
   "shome.empty.body": "Rien n'est ouvert pour vous. Un quiz apparaît ici dès qu'un enseignant en ouvre un.",
   "shome.retake": "Recommencer",

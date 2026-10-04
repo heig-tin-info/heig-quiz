@@ -11,7 +11,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import type { EvaluationCard, FeedbackPolicy, RetakeSettings, StudentHome } from "@quiz/contracts";
+import type { EvaluationCard, FeedbackPolicy, RetakeSettings } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
@@ -95,7 +95,7 @@ async function cardOf(app: App, userId: string, evaluationId: string) {
  * `results` says exactly what the feedback route would answer for the
  * attempt the card links to (the kept one with retakes).
  */
-async function agrees(app: App, home: StudentHome) {
+async function agrees(app: App, home: Awaited<ReturnType<typeof live.studentHome>>) {
   const cards: EvaluationCard[] = [...home.open, ...home.upcoming, ...home.past];
   for (const card of cards) {
     const linked = card.retakes ? (card.retakes.kept?.attemptId ?? null) : card.attemptId;

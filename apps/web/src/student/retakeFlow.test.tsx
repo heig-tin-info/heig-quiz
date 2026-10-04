@@ -154,7 +154,7 @@ function card(canRetake: boolean, keep: Keep = "best"): EvaluationCard {
 
 const home = (c: EvaluationCard): StudentHomeData => ({
   polls: [],
-  open: [c],
+  open: [{ kind: "evaluation", ...c }],
   upcoming: [],
   past: [],
   serverNow: "2026-09-20T10:00:00.000Z",

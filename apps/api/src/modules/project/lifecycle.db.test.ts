@@ -549,17 +549,19 @@ describe("the lists, archive and unarchive (F-PROJ-16)", () => {
     expect(await auditOf(archived.id, "project.unarchive")).toHaveLength(1);
   });
 
-  it("shows a student no project before M3-09, published or not", async () => {
+  it("shows a student a project once published, never as a draft, and never its distribution (M3-09a)", async () => {
     const room = await connectedClassroom();
     const project = await create(room.id);
+    const cardsOf = async () => {
+      const res = await call("GET", `/app/api/student/classrooms/${room.id}`, student.headers);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).not.toContain("squashed");
+      const page = StudentClassroomPage.parse(res.json());
+      return [...page.activities.open, ...page.activities.upcoming, ...page.activities.past].filter((c) => c.kind === "project");
+    };
+    expect(await cardsOf()).toEqual([]);
     await call("POST", `/app/api/projects/${project.id}/publish`, teacher.headers);
-    const res = await call("GET", `/app/api/student/classrooms/${room.id}`, student.headers);
-    expect(res.statusCode).toBe(200);
-    const page = StudentClassroomPage.parse(res.json());
-    const cards = [...page.activities.open, ...page.activities.upcoming, ...page.activities.past];
-    expect(cards.filter((c) => c.kind === "project")).toEqual([]);
-    expect(res.body).not.toContain(project.id);
-    expect(res.body).not.toContain("squashed");
+    expect((await cardsOf()).map((c) => [c.id, c.status])).toEqual([[project.id, "to_accept"]]);
   });
 });
 

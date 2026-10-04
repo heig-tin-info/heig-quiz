@@ -128,7 +128,6 @@ describe("the student's Courses and classroom page (M5-02, F-ORG-14/15)", () => 
         },
         activities: { polls: [], open: [], upcoming: [], past: [] },
         hasJournal: true,
-        hasProjects: false,
         serverNow: new Date().toISOString(),
       }),
     });

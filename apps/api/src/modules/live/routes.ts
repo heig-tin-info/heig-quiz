@@ -137,9 +137,8 @@ export async function livePlugin(app: FastifyInstance) {
   // Student side
   // =========================================================================
 
-  app.get("/app/api/student/home", { preHandler: requireSession }, async (req) =>
-    service.studentHome(app.db, req.user!.id, app.clock.now()),
-  );
+  // The student's home, `GET /app/api/student/home`, is the `activity`
+  // module's since M3-09a: it lists every kind of activity.
 
   /** F-LIVE-01. Idempotent: the same student always lands on the same attempt. */
   app.post(

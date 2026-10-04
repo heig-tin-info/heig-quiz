@@ -572,6 +572,65 @@ export async function studentProject(
   return (await findStudentProject(app.db, callerOf(req).id, params.id)) ?? notFound(reply);
 }
 
+/** A project loaded through {@link findStudentProjectView}: the student payload's scope. */
+export interface StudentProjectScope {
+  project: typeof projects.$inferSelect;
+  room: typeof classrooms.$inferSelect;
+  course: typeof courses.$inferSelect;
+  /** The caller's own claimed seat in the classroom; null for a staff member without one. */
+  seat: { id: string; staff: boolean } | null;
+}
+
+/**
+ * The project's student view (F-PROJ-15, N-SEC-20; merge task M3-09a):
+ * {@link classroomPayload}'s student branch, the student payload FORCED —
+ * the course's staff (a teacher in the student view, ADR-018), a claimed
+ * seat, an impersonation session through the seat alone (ADR-034) — on a
+ * project neither draft nor archived. Null otherwise: the 404 of a missing
+ * project. The repository the view shows is the seat's, read by the
+ * `project` module through a STUDENT seat only: a staff seat holds none.
+ */
+export async function findStudentProjectView(
+  db: Db,
+  user: Caller,
+  auth: Pick<SessionAuth, "kind" | "actorUserId"> | null,
+  projectId: string,
+): Promise<StudentProjectScope | null> {
+  const [row] = await db
+    .select({
+      project: projects,
+      room: classrooms,
+      course: courses,
+      seat: { id: enrollments.id, staff: enrollments.staff },
+      staff: sql<boolean>`${accessWhere(user, staffAccess(user.id)) ?? sql`true`}`,
+    })
+    .from(projects)
+    .innerJoin(classrooms, eq(projects.classroomId, classrooms.id))
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .leftJoin(enrollments, and(eq(enrollments.classroomId, classrooms.id), eq(enrollments.userId, user.id)))
+    .where(and(eq(projects.id, projectId), ne(projects.state, "draft"), isNull(projects.archivedAt)))
+    .limit(1);
+  if (!row) return null;
+  const payload = classroomPayload({
+    confined: auth !== null && auth.kind !== "portal" && !delegated(auth),
+    delegated: delegated(auth),
+    staff: row.staff,
+    seat: row.seat !== null,
+    studentView: true,
+  });
+  return payload === null ? null : { project: row.project, room: row.room, course: row.course, seat: row.seat };
+}
+
+/** {@link findStudentProjectView} for the request's own session, answering the 404 (invariant 6). */
+export async function studentProjectView(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  params: { id: string },
+): Promise<StudentProjectScope | null> {
+  return (await findStudentProjectView(app.db, callerOf(req), req.auth, params.id)) ?? notFound(reply);
+}
+
 // ---------------------------------------------------------------------------
 // The student branch (invariant 6, spec 05 §5.7): the classroom routes a
 // student reads — the student's classroom page, the journal.

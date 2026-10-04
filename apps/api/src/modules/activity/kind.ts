@@ -9,9 +9,10 @@
  *
  * A member lands with the first task that calls it through `KINDS`
  * (`docs/merge/09-tasks.md`, M1-03 "As delivered"): the student's cards with
- * M5-01, the gradebook entries with M5-03, the deadlines with M3-05. A method
- * that takes a classroom id is reached only after the route has loaded the
- * classroom (`staffAccess` or `readableClassroom`, invariant 6).
+ * M5-01 (the home too since M3-09a), the gradebook entries with M5-03, the
+ * deadlines with M3-05. A method that takes a classroom id is reached only
+ * after the route has loaded the classroom (`staffAccess` or
+ * `readableClassroom`, invariant 6).
  */
 import type {
   ActivityKindName,
@@ -29,7 +30,7 @@ export type SummaryOf<K extends ActivityKindName> = Extract<ActivitySummary, { k
 /** The student's card of a kind. */
 export type CardOf<K extends ActivityKindName> = Extract<StudentActivityCard, { kind: K }>;
 
-/** The groups of the student's classroom page, holding the cards of one kind. */
+/** The groups of the student's Activities, holding the cards of one kind. */
 export type StudentCardsOf<K extends ActivityKindName> = Pick<StudentActivities, "polls"> & {
   [G in "open" | "upcoming" | "past"]: CardOf<K>[];
 };
@@ -46,11 +47,12 @@ export interface ActivityKind<K extends ActivityKindName> {
   listForTeacher(db: Db, caller: Caller, now: Date): Promise<SummaryOf<K>[]>;
 
   /**
-   * The Activities tab of the student's classroom page (F-ORG-15): the
-   * caller's own cards in `classroomId`, drawn through the caller's claimed
-   * seat there, so a staff member without one gets none. The student payload
-   * whoever asks: no draft, nothing of another student. Reached only after
-   * the route loaded the classroom through `readableClassroom`.
+   * The student's Activities (F-ORG-14, F-ORG-15): the caller's own cards,
+   * drawn through their claimed seats — in every classroom for the home, in
+   * `classroomId` alone for the classroom page, which the route loaded
+   * through `readableClassroom` first (so a staff member without a seat
+   * there gets none). The student payload whoever asks: no draft, nothing
+   * of another student.
    */
-  studentCards(db: Db, caller: Caller, classroomId: string, now: Date): Promise<StudentCardsOf<K>>;
+  studentCards(db: Db, caller: Caller, now: Date, classroomId?: string): Promise<StudentCardsOf<K>>;
 }

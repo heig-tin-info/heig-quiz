@@ -13,9 +13,11 @@ import type {
   ActivitySummary,
   StudentActivities,
   StudentClassroomPage,
+  StudentHome,
 } from "@quiz/contracts";
 import { activityBucket } from "@quiz/domain";
 
+import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { enrollments } from "../../db/schema.js";
 import type { Caller, ReadableClassroom } from "../guards.js";
@@ -53,15 +55,15 @@ export async function statsForTeacher(db: Db, caller: Caller, now: Date): Promis
   return { studentsInProgress: row?.n ?? 0 };
 }
 
-/** The Activities tab of the student's classroom page: every kind's groups, concatenated. */
+/** The student's Activities, every classroom or one: every kind's groups, concatenated. */
 async function studentCards(
   db: Db,
   caller: Caller,
-  classroomId: string,
   now: Date,
+  classroomId?: string,
 ): Promise<StudentActivities> {
   const kinds: StudentActivities[] = await Promise.all(
-    KINDS.map((k) => k.studentCards(db, caller, classroomId, now)),
+    KINDS.map((k) => k.studentCards(db, caller, now, classroomId)),
   );
   return {
     polls: kinds.flatMap((k) => k.polls),
@@ -72,10 +74,22 @@ async function studentCards(
 }
 
 /**
+ * `GET /student/home` (F-ORG-14): the Activities of every classroom the
+ * caller holds a claimed seat in, every kind — the summary of what is open
+ * now and what is coming. The student payload whoever asks: a student, a
+ * teacher through their staff seat (ADR-018), an impersonation session.
+ */
+export async function studentHome(db: Db, caller: Caller, now: Date): Promise<StudentHome> {
+  return { ...(await studentCards(db, caller, now)), serverNow: iso(now) };
+}
+
+/**
  * `GET /student/classrooms/:id` (F-ORG-15): the student payload of a
  * classroom `scope` loaded through `readableClassroom`, whoever the caller
  * is — a student, a teacher in the student view, an impersonation session.
- * Whether the Journal tab exists is the `journal` module's answer.
+ * Whether the Journal tab exists is the `journal` module's answer; a
+ * project is listed in Activities like an evaluation, never in a tab of its
+ * own.
  */
 export async function studentClassroomPage(
   db: Db,
@@ -85,14 +99,13 @@ export async function studentClassroomPage(
 ): Promise<StudentClassroomPage> {
   const [classroom, activities, journal] = await Promise.all([
     studentClassroomHeader(db, scope),
-    studentCards(db, caller, scope.room.id, now),
+    studentCards(db, caller, now, scope.room.id),
     hasJournal(db, scope.room.id),
   ]);
   return {
     classroom,
     activities,
     hasJournal: journal,
-    hasProjects: false,
-    serverNow: now.toISOString(),
+    serverNow: iso(now),
   };
 }

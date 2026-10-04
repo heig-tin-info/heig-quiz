@@ -25,7 +25,6 @@ const page = (hasJournal: boolean): StudentClassroomPage => ({
   },
   activities: { polls: [], open: [], upcoming: [], past: [] },
   hasJournal,
-  hasProjects: false,
   serverNow: new Date().toISOString(),
 });
 

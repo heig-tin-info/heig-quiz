@@ -204,7 +204,6 @@ describe("GET /app/api/student/classrooms/:id", () => {
       archived: false,
     });
     expect(p.hasJournal).toBe(true);
-    expect(p.hasProjects).toBe(false);
     expect(titles(p)).toEqual({ open: ["running exam"], upcoming: ["scheduled exam"], past: ["closed exam"] });
     expect(p.activities.open.every((c) => c.kind === "evaluation")).toBe(true);
     expect(p.activities.polls.map((c) => c.code)).toEqual(["POLL42"]);
