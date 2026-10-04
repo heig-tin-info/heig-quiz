@@ -141,8 +141,12 @@ interface RunnerGradingJob {
   attemptId: string;
   itemId: string;
   answerId: string | null;
-  /** The answer's revision the request was built from (ADR-067). */
-  revision: number;
+  /**
+   * The answer's revision the request was built from (ADR-067). Absent on a
+   * job queued before ADR-067 was deployed: such a job is taken as current,
+   * since nothing would send it again once its evaluation is closed.
+   */
+  revision?: number;
   request: RunnerRequest;
   regradeNote?: string;
 }
@@ -513,7 +517,11 @@ export async function runEvaluationGrading(
       progress.tick();
     }
   }
-  await writeGradings(app.db, writes, passGuard);
+  await writeGradings(
+    app.db,
+    writes,
+    passGuard(new Map(pass.attempts.map((a) => [a.id, endOf(a.closedAt)]))),
+  );
   progress.finish(runnerJobs.length + llmJobs.length > 0 ? "pending" : "done");
   for (const runnerJob of runnerJobs) {
     await enqueueOrRun(app, GRADING_RUNNER_QUEUE, runnerJob, runRunnerGrading, { priority: RUNNER_PRIORITY });
@@ -734,7 +742,12 @@ function isStale(
   job: RunnerGradingJob,
 ): boolean {
   if (!gradableNow(evaluationState, attemptState)) return true;
-  return answer !== undefined && answer.revision !== job.revision;
+  return answer !== undefined && rewritten(answer.revision, job);
+}
+
+/** Whether the answer moved past the revision the job was built from (none: current). */
+function rewritten(revision: number, job: RunnerGradingJob): boolean {
+  return job.revision !== undefined && revision !== job.revision;
 }
 
 /**
@@ -745,27 +758,44 @@ function isStale(
  * down (`reopenAttempt`), so a pass that loaded an attempt finished either
  * commits first — and the stand-down supersedes what it wrote — or sees the
  * attempt reopened here and writes nothing on it.
+ *
+ * `loadedEnd` is each attempt's `closedAt` as the pass loaded it. A reopen
+ * clears it and the next hand-in writes a new one, so an attempt reopened
+ * AND handed in again between the pass's load and its write — finished
+ * again, but on other answers — is dropped too: its own hand-in grades it.
  */
-const passGuard: WriteGuard = async (tx, inputs) => {
-  const ids = [...new Set(inputs.map((i) => i.attemptId))];
-  if (ids.length === 0) return inputs;
-  const rows = await tx
-    .select({ id: attempts.id, state: attempts.state, evaluationState: evaluations.state })
-    .from(attempts)
-    .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
-    .where(inArray(attempts.id, ids))
-    .orderBy(attempts.id)
-    .for("update", { of: attempts });
-  const gradable = new Set(
-    rows.filter((r) => gradableNow(r.evaluationState, r.state)).map((r) => r.id),
-  );
-  return inputs.filter((i) => gradable.has(i.attemptId));
-};
+function passGuard(loadedEnd?: ReadonlyMap<string, number | null>): WriteGuard {
+  return async (tx, inputs) => {
+    const ids = [...new Set(inputs.map((i) => i.attemptId))];
+    if (ids.length === 0) return inputs;
+    const rows = await tx
+      .select({
+        id: attempts.id,
+        state: attempts.state,
+        closedAt: attempts.closedAt,
+        evaluationState: evaluations.state,
+      })
+      .from(attempts)
+      .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
+      .where(inArray(attempts.id, ids))
+      .orderBy(attempts.id)
+      .for("update", { of: attempts });
+    const gradable = new Set(
+      rows
+        .filter((r) => gradableNow(r.evaluationState, r.state))
+        .filter((r) => loadedEnd === undefined || loadedEnd.get(r.id) === endOf(r.closedAt))
+        .map((r) => r.id),
+    );
+    return inputs.filter((i) => gradable.has(i.attemptId));
+  };
+}
+
+const endOf = (closedAt: Date | null): number | null => closedAt?.getTime() ?? null;
 
 /** {@link passGuard}, and the answer still at the revision the job was built from. */
 function runnerGuard(job: RunnerGradingJob): WriteGuard {
   return async (tx, inputs) => {
-    const kept = await passGuard(tx, inputs);
+    const kept = await passGuard()(tx, inputs);
     if (kept.length === 0 || job.answerId === null) return kept;
     // Under the attempt's lock: an answer is written only while its attempt
     // is open, and opening it again takes that lock.
@@ -774,7 +804,7 @@ function runnerGuard(job: RunnerGradingJob): WriteGuard {
       .from(answers)
       .where(eq(answers.id, job.answerId))
       .limit(1);
-    return answer !== undefined && answer.revision !== job.revision ? [] : kept;
+    return answer !== undefined && rewritten(answer.revision, job) ? [] : kept;
   };
 }
 

@@ -360,6 +360,65 @@ describe("a reopen racing a grading write (ADR-067)", () => {
     });
   });
 
+  it("drops a pass's cells when the attempt is reopened AND handed in again before its write", async () => {
+    const { app, drain } = await queuedApp();
+    const { evaluation, attempt, mcq } = await running(app, "exercise", "immediate");
+    await answer(evaluation, attempt, mcq.id, { selected: [0, 1] }, 1, app.clock.now());
+    await live.submitAttempt(db, evaluation, attempt, app.clock.now(), app);
+
+    // Between the first pass's load and its write, the attempt is reopened,
+    // rewritten wrong and handed in again: finished again, on other answers.
+    const mcqType = typeOf("mcq");
+    let raced = false;
+    restores.push(
+      registerForTests({
+        ...mcqType,
+        grade: async (...args: Parameters<typeof mcqType.grade>) => {
+          if (!raced) {
+            raced = true;
+            app.clock.advance(1000);
+            const finished = (await live.attemptById(db, attempt.id))!;
+            const reopened = await live.reopenAttempt(db, evaluation, finished, app.clock.now());
+            await answer(evaluation, reopened, mcq.id, { selected: [2] }, 2, app.clock.now());
+            app.clock.advance(1000);
+            await live.submitAttempt(db, evaluation, reopened, app.clock.now(), app);
+          }
+          return mcqType.grade(...args);
+        },
+      }),
+    );
+    try {
+      // The first pass, then the second hand-in's.
+      await drain(GRADING_EVALUATION_QUEUE);
+    } finally {
+      restores.pop()!();
+    }
+    expect(raced).toBe(true);
+    // The first pass wrote nothing: the grade is the second hand-in's.
+    const rows = (await standing(attempt.id)).filter((r) => r.itemId === mcq.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ state: "validated", source: "auto", points: 0 });
+  });
+
+  it("grades with a runner job queued before ADR-067, which carries no revision", async () => {
+    const runner = countingRunner();
+    const { app, sent, drain } = await queuedApp(runner);
+    const { evaluation, attempt, code } = await running(app, "exercise", "on_release");
+    await answer(evaluation, attempt, code.id, { regions: ["return 0;"] }, 1, app.clock.now());
+    await live.submitAttempt(db, evaluation, attempt, app.clock.now(), app);
+    await drain(GRADING_EVALUATION_QUEUE);
+    const job = sent.find((j) => j.name === GRADING_RUNNER_QUEUE)!;
+    const { revision: _, ...legacy } = job.data as { revision: number };
+    job.data = legacy;
+
+    await drain(GRADING_RUNNER_QUEUE);
+    expect(runner.calls).toBe(1);
+    expect((await standing(attempt.id)).find((r) => r.itemId === code.id)).toMatchObject({
+      state: "validated",
+      points: code.points,
+    });
+  });
+
   it("drops a runner job's write when the attempt is reopened during the run", async () => {
     let reopen: (() => Promise<unknown>) | null = null;
     const runner = countingRunner();
@@ -379,6 +438,26 @@ describe("a reopen racing a grading write (ADR-067)", () => {
     await drain(GRADING_RUNNER_QUEUE);
     expect(runner.calls).toBe(1);
     expect(await standing(attempt.id)).toEqual([]);
+  });
+});
+
+describe("a save racing a hand-in (ADR-067)", () => {
+  it("refuses a save that passed the gate before the hand-in but writes after it", async () => {
+    const { app, drain } = await queuedApp();
+    const { evaluation, attempt, mcq } = await running(app, "exercise", "immediate");
+    await answer(evaluation, attempt, mcq.id, { selected: [0, 1] }, 1, app.clock.now());
+    await live.submitAttempt(db, evaluation, attempt, app.clock.now(), app);
+    await drain(GRADING_EVALUATION_QUEUE);
+
+    // `attempt` is the row as the save's route loaded it, still in progress:
+    // the gate under the attempt's lock reads the hand-in and refuses.
+    await expect(
+      answer(evaluation, attempt, mcq.id, { selected: [2] }, 2, app.clock.now()),
+    ).rejects.toMatchObject({ status: 410, reason: "submitted" });
+    expect((await standing(attempt.id)).find((r) => r.itemId === mcq.id)).toMatchObject({
+      state: "validated",
+      points: mcq.points,
+    });
   });
 });
 

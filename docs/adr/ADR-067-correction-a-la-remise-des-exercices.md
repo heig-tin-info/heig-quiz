@@ -82,11 +82,23 @@ part of an attempt the student has not handed in.
      cells, in id order, re-reads their state and their evaluation's under
      the lock, and drops the cells of an attempt that is no longer gradable
      — `gradableNow`: while the evaluation runs, only a finished attempt;
+     the pass's guard also drops an attempt whose `closedAt` differs from
+     the one it loaded: a reopen clears it and the next hand-in writes a new
+     one, so an attempt reopened AND handed in again between the pass's load
+     and its write — finished again, on other answers — is left to its own
+     hand-in's pass;
    - the runner job's guard also re-reads, under the same lock, the
      revision of the answer, which every runner job now carries: an answer
      is written only while its attempt is open, and opening it takes the
      lock, so a job built from another revision writes nothing — the hand-in
-     after the reopen sent a job of its own.
+     after the reopen sent a job of its own. A job queued before this
+     decision was deployed carries no revision and is taken as current:
+     nothing would send it again once its evaluation is closed;
+   - an answer save takes the attempt's row in share mode and re-runs the
+     write gate under it: a hand-in ends the attempt under the update lock
+     and its pass reads the answers right after, so a save racing the
+     hand-in either commits before it or is refused (`410 attempt_closed`),
+     never lands after the pass has read.
 
    Either the write commits first, and the reopen's stand-down supersedes
    what it wrote, or the reopen commits first, and the write drops those

@@ -325,31 +325,44 @@ export async function saveAnswer(
   // answer, and the student may have said "won't answer" just before it.
   const answered = type.isAnswered(payload);
 
-  const written = await db
-    .insert(answers)
-    .values({
-      id: randomUUID(),
-      attemptId: attempt.id,
-      itemId,
-      payload,
-      revision,
-      firstSeenAt: now,
-      firstShownAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: [answers.attemptId, answers.itemId],
-      set: {
-        payload: sql`excluded.payload`,
-        revision: sql`excluded.revision`,
-        ...(answered ? { skipped: false } : {}),
-        // Written, therefore shown (ADR-039), whatever the player reported.
-        firstShownAt: sql`coalesce(${answers.firstShownAt}, excluded.first_shown_at)`,
+  // Under a share lock of the attempt row, re-checked (ADR-067): a hand-in
+  // ends the attempt under the row's update lock, and its grading pass reads
+  // the answers right after, so a save that passed the gate above just
+  // before the hand-in must either commit first or be refused like any
+  // write to a finished attempt — never land after the pass has read.
+  const written = await db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select()
+      .from(attempts)
+      .where(eq(attempts.id, attempt.id))
+      .for("share");
+    assertWritable(evaluation, locked ?? attempt, now);
+    return tx
+      .insert(answers)
+      .values({
+        id: randomUUID(),
+        attemptId: attempt.id,
+        itemId,
+        payload,
+        revision,
+        firstSeenAt: now,
+        firstShownAt: now,
         updatedAt: now,
-      },
-      setWhere: sql`${answers.revision} < excluded.revision`,
-    })
-    .returning();
+      })
+      .onConflictDoUpdate({
+        target: [answers.attemptId, answers.itemId],
+        set: {
+          payload: sql`excluded.payload`,
+          revision: sql`excluded.revision`,
+          ...(answered ? { skipped: false } : {}),
+          // Written, therefore shown (ADR-039), whatever the player reported.
+          firstShownAt: sql`coalesce(${answers.firstShownAt}, excluded.first_shown_at)`,
+          updatedAt: now,
+        },
+        setWhere: sql`${answers.revision} < excluded.revision`,
+      })
+      .returning();
+  });
 
   if (written.length === 0) {
     // Stale: the row in the database is newer. Hand it back so the client
