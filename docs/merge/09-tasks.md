@@ -2278,8 +2278,10 @@ that serves them.
   here (M3-01's `project_repos` has no row to hold it).
 - **From M3-08b** (2026-10-04): a released project's grade is read, not
   stored: the gradebook reads the LIVE final score (`repoScores` of
-  `modules/project/detail.ts`, or `resolveFinalScore` with `teacherMax`),
-  graded by `scoreGrade(points, max, projects.grading_scale)`, and marks
+  `modules/project/detail.ts`, or `resolveFinalScore` with `teacherMax`)
+  passed through `releasableScore(project, repo, final)` (`detail.ts`: a
+  non-live repository's to-verify final is no score), graded by
+  `scoreGrade(points, max, projects.grading_scale)`, and marks
   the cell "changed after release" when `changedAfterRelease(true, final,
   { released_points, released_max })` says so — the same reading as the
   staff's page (decision 3). A repository with a null snapshot
