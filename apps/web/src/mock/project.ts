@@ -48,6 +48,7 @@ import {
   editableProjectFields,
   projectPrimaryAction,
   resolveFinalScore,
+  reviewState,
   scoreGrade,
 } from "@quiz/domain";
 
@@ -242,7 +243,7 @@ function seedRepos(seed: (typeof SEEDS)[number], project: ProjectSummary, roster
       }
       // A late push: in the history, never the frozen score.
       if (i % 4 === 1) scored(8, seed.deadline + 2 * H, { points: 10, max: 10, testsPassed: 10, afterDeadline: true, headSha: sha(i * 7 + 2) });
-      if (i === 3) base.teacher = { points: 9, comment: "Excellent travail sur la gestion mémoire.", gradedAt: iso(-6 * D) };
+      if (i === 3) base.teacher = { points: 9, max: 10, comment: "Excellent travail sur la gestion mémoire.", gradedAt: iso(-6 * D) };
       // Released five days ago at the final score of the day; on `i === 5` the review came in after it.
       const frozenRun = runs.find((r) => r.id === base.frozenRunId)!;
       const final = finalOf(base);
@@ -458,6 +459,20 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
       teacher: r.teacher,
       final: final ? { ...final, grade: scoreGrade(final.points, final.max, scale) } : null,
     },
+    // The final review's state, by the server's own rule (F-PROJ-11); the
+    // mock keeps no dispatch ledger, so a review is done or not yet asked.
+    review: (() => {
+      const state = reviewState({
+        gradingMode: p.summary.gradingMode,
+        frozenAt: r.frozenAt ? new Date(r.frozenAt) : null,
+        frozenGradeRunId: r.frozenRunId,
+        reviewGradeRunId: r.reviewRunId,
+        archivedAt: r.archived ? new Date(0) : null,
+        protectionSuspendedAt: r.protectionSuspended ? new Date(0) : null,
+        dispatch: null,
+      });
+      return { ...state, askedAt: state.askedAt?.toISOString() ?? null };
+    })(),
     released: r.released,
     flags: {
       protectionSuspended: r.protectionSuspended,
@@ -527,6 +542,7 @@ function detailOf(p: MockProject): ProjectDetail {
       sourceAhead: false,
       live: counts.live,
       frozen: counts.frozen,
+      unverified: live.filter((r) => finalOf(r)?.toVerify === true).length,
       released: p.releasedAt !== null,
       changedAfterRelease: views.filter((r) => r.flags.changedAfterRelease).length,
     }),

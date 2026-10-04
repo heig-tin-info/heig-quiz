@@ -59,8 +59,9 @@ export function makeRepo(n: number, over: Partial<ProjectRepoView> = {}): Projec
       frozen: null,
       review: null,
       teacher: null,
-      final: { points: 8, max: 10, source: "ci", grade: { grade: 5, fellBack: false } },
+      final: { points: 8, max: 10, source: "ci", toVerify: false, grade: { grade: 5, fellBack: false } },
     },
+    review: { status: "pending", reason: null, askedAt: null, sha: null, runId: null },
     released: null,
     flags: {
       protectionSuspended: false,
