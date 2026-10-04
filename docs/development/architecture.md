@@ -9,10 +9,11 @@ parts.
 
 ## System context
 
-One process for the API, one PostgreSQL, one runner service. In production
+The evaluation execution path uses one API process, one PostgreSQL and one runner service. In production
 the runner sits on a second VM; everything else shares one. The browser
-talks to Caddy only. The API talks to the database, the runner and the
-identity provider. Nothing else talks to anything.
+talks to Caddy only. This diagram covers the evaluation path. GitHub projects/journals, the LLM
+gateway and notification providers are additional integrations, described
+in spec 05 and their ADRs.
 
 ```mermaid
 flowchart TB
@@ -51,9 +52,9 @@ provider is Switch edu-ID; in development it is a Keycloak realm from
 
 ## Repository and package graph
 
-Three applications and ten workspace packages. The arrows below are the
-`workspace:*` dependencies read from the `package.json` files, and nothing
-else.
+The diagram shows question-type dependency boundaries. Consult the
+[repository map](repository.md) and workspace manifests for the complete
+package inventory, including journal rendering; this is not a package count.
 
 ```mermaid
 flowchart TB

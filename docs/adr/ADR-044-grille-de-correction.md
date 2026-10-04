@@ -6,7 +6,7 @@ Accepted (2026-09-29, decided by the teacher who owns the product, on the
 mockup `mockups/grading.html`). Rewrites F-GRADE-03 (docs/spec/02), amends
 decision D20 of `docs/PLAN-MVP.md` (pseudonyms now belong to the live
 dashboard only) and the grading shortcuts of docs/spec/08 §8.5. Implemented
-by `apps/web/src/grading/`, the optional `grading` member of
+by `apps/web/src/grading/`, the required `grading` member of
 `QuestionTypeClient` (`packages/core/src/client.ts`), the `grading.tsx` of
 every `qt-*` package (the mcq, short and cloze columns first, the other
 five in a second step), and the grading contracts

@@ -723,6 +723,8 @@ export const fr: Record<keyof Dict, string> = {
   "dur.s": "{n} s",
   "dur.minSec": "{m} min {s} s",
   "dur.hourMin": "{h} h {m} min",
+  "dur.hourMinSec": "{h} h {m} min {s} s",
+  "dur.dayHour": "{d} j {h} h",
   "time.now": "à l'instant",
 
   // --- Live primitives (ui/live.tsx) ---

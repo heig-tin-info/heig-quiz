@@ -5,6 +5,9 @@
 Accepted (2026-09-29, with `packages/qt-categorize`, `@quiz/domain/categorizeScore`
 and the evaluation setting `settings.categorizePolicy`). No migration.
 
+Extended by [ADR-041](ADR-041-entrainement-espace.md): `categorize` participates in the drill.
+The absence of a drill rating in this record describes the earlier version.
+
 ## Context
 
 The specification (docs/spec/04) lists no type where the student SORTS:

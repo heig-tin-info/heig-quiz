@@ -2,6 +2,9 @@
 
 ## Status
 
+This historical ID is shared with [another record](ADR-040-stimulus-frequentiel-de-circuit.md).
+Cite this record by its full filename or title, not by `ADR-040` alone.
+
 Accepted (2026-09-29, settled with the product owner; with the table
 `question_stars` (migration `0035_question_stars`), the routes
 `PUT`/`DELETE /questions/star` and `DELETE /pools/:id/stars` of the `pool`

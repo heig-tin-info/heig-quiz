@@ -3,7 +3,7 @@
 ## Status
 
 Accepted (2026-09-22, with `packages/qt-circuit` and the `spice` language of the runner).
-Extended by ADR-040: a stimulus may also be an AC sweep, graded by an envelope around the reference's Bode plot.
+Extended by [ADR-040 — Frequency-domain stimuli](ADR-040-stimulus-frequentiel-de-circuit.md): a stimulus may also be an AC sweep, graded by an envelope around the reference's Bode plot.
 
 ## Context
 

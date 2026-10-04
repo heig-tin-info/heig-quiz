@@ -10,10 +10,11 @@ on the host, backups are Hetzner Backups plus an on-VM `pg_dump`). **Decision 4 
 amended by ADR-055**: `/healthz` stays narrow (database, and coarse words),
 and the technical administration screen is the admin's System status.
 
-ADR-011 of heig-classroom (its reconciliation handlers, which the restore
-runbook below cites) is deliberately not carried over: quiz has no GitHub
-webhooks to reconcile. The GitHub-specific metrics of decision 4 do not apply
-either.
+Historical Quiz scope before the classroom merge excluded GitHub reconciliation
+and its metrics. Since 2026-09-30, [ADR-011](ADR-011-reconciliation-par-les-handlers.md) is imported through
+[ADR-035](ADR-035-fusion-de-classroom.md). Read those records for reconciliation and [ADR-055](ADR-055-etat-du-systeme.md)
+for current observability; the original deployment below is historical where
+the Status amendments change it.
 
 ## Context
 

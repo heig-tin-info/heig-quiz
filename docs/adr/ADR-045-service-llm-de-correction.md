@@ -9,7 +9,8 @@ path, with one provider, a development stub. Amends docs/spec/04 §4.8
 `llm_calls` table), which a real provider will still owe. Leaves the LLM-reasoning
 part of question 27 (docs/spec/06) open.
 
-*Note (2026-10-01, ADR-058):* the real provider arrived as a separate
+*Historical intermediate state (2026-10-01, ADR-058; superseded by the
+2026-10-02 note below):* the real provider arrived as a separate
 gateway (`complete()`, an institutional key, `llm_calls`, a daily cap). It is
 not wired into the grading pass: `app.llm` stays chosen by `LLM_PROVIDER` as
 below, and the consequences listed here are still owed before it is.
@@ -65,6 +66,9 @@ asks too, with the details every circuit review reads.
 
 ### 4. An inline call, not a queue
 
+Historical stub path. Superseded for gateway grading by [ADR-063](ADR-063-correction-llm.md) §2
+(the `grading.llm` queue).
+
 The pass calls the service inline, cell by cell, where docs/05 §5.6 plans a
 `grading.llm` job per answer. The stub answers in microseconds and cannot
 fail for a network reason, so a queue would carry no load and no retry. A
@@ -80,6 +84,9 @@ close asks the model.
 
 ### 6. The justification is the teacher's
 
+Amended by [ADR-063](ADR-063-correction-llm.md) §7: the teacher may explicitly copy the
+justification into the comment; validation alone still does not copy it.
+
 The pass writes a PROPOSAL (`source: llm`, the confidence) and stores the
 justification in the grading's `details` under `justification`
 (`JUSTIFICATION_KEY`, `@quiz/core/reasons`), NEVER in `comment`: a
@@ -91,6 +98,10 @@ student". Whether a student will ever read an LLM's reasoning is open
 question 27, which this decision does not settle.
 
 ## Consequences
+
+The real-provider work listed below was pending at acceptance. Read
+[ADR-063](ADR-063-correction-llm.md) for the subsequent grading decision and the obligations it
+fulfils; this list is not a current implementation backlog.
 
 - The grading table shows AI proposals, their confidence filter and a
   working **Validate N** in development and in the guide's screenshots.

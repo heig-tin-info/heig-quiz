@@ -3,8 +3,11 @@
 ## Status
 
 Accepted (2026-10-01, decided by the product owner in conversation;
-`docs/merge/08-decisions.md` D29). Not implemented yet: task cards M4-07 to
-M4-13 of `docs/merge/09-tasks.md`. It supersedes D25 (the journal's WYSIWYG
+`docs/merge/08-decisions.md` D29). The mode schema, Quiz-mode writes and
+revisions, standard editor and read-only GitHub mode are implemented
+(M4-07–M4-09). Explicit ordering/nesting, mode switches and copying remain
+pending (M4-10–M4-13); their decisions below are accepted, not yet delivered.
+See [merge progress](../merge/PROGRESS.md) and [task cards](../merge/09-tasks.md). It supersedes D25 (the journal's WYSIWYG
 editor over git). It amends [ADR-049](ADR-049-journal-source-github.md):
 point 2 of its body (Postgres is never what a teacher edits) holds for the
 GitHub mode only, and points 2 (Settings, enabled once connected) and 7

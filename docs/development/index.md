@@ -248,21 +248,20 @@ pnpm --filter @quiz/runner test:integration    # real containers; skips itself w
 
 ## LLM grading
 
-An essay is graded by hand unless the process has an LLM service, chosen
-once at boot by `LLM_PROVIDER` (`apps/api/src/modules/llm/`):
+Real grading uses the institutional gateway configured by an administrator
+([ADR-058](../adr/ADR-058-passerelle-llm.md)); essays and diagrams receive
+proposals through `grading.llm` after closing, never during a live evaluation
+([ADR-063](../adr/ADR-063-correction-llm.md)). The teacher validates the
+proposal. The provider key, model, cap and call log belong to the gateway;
+`LLM_PROVIDER` is not the production provider selector.
 
-| Provider | When | Behaviour |
-| --- | --- | --- |
-| `none` (default) | production, and any machine that does not set it | nothing is sent to any model; a written essay arrives in the grading table as a 0-point placeholder |
-| `stub` | development, the seed, the screenshots (`.env.example` sets it) | a DETERMINISTIC fake: the essay, its rubric and its model answer go through the real path (`pending: llm`, `app.llm.grade`), and the stub proposes points from the share of the rubric's words found in the answer, a confidence and a justification ("Development stub, not a model: …"); `config.ts` refuses to start with it under `NODE_ENV=production` |
-
-The request holds the rubric, the model answer, the essay and the item's
-points, nothing that names the student (F-LLM-04), and no model is asked
-while the evaluation runs (F-LLM-03). The justification is the teacher's:
-it is stored in the grading's details, shown in the grading panel, and
-stripped from every student payload (open question 27). No real provider
-exists yet (F-LLM-01); what one must add is listed in
-[ADR-045](../adr/ADR-045-service-llm-de-correction.md).
+For a deterministic local demo, `.env.example` sets `LLM_PROVIDER=stub`.
+The stub is refused in production. Without a configured real gateway or the
+local stub, grading leaves a placeholder for the teacher. See
+`apps/api/src/modules/llm/service.ts`, `llm/gateway.ts` and
+`grading/jobs.ts` for configuration and dispatch, and ADR-045 for stub history.
+A teacher may explicitly copy an AI justification into a comment; validation
+alone does not expose it to students.
 
 ## The smoke test
 
@@ -296,8 +295,10 @@ reported and skipped, not failed.
 pnpm build && pnpm typecheck && pnpm test
 ```
 
-`.github/workflows/ci.yml` runs the same three steps on every push and
-pull request, on Node 24 with a frozen lockfile, split into parallel jobs
+On a workstation, run the suites one package at a time
+(`VITEST_MAX_WORKERS=4 pnpm -r --workspace-concurrency=1 test`, see
+[the repository rules](repository.md)). `.github/workflows/ci.yml` runs the
+same three steps on every push and pull request, on Node 24 with a frozen lockfile, split into parallel jobs
 under one `checks` status: build and typecheck, the API's and the SPA's
 suites in three shards each, and every other package (the runner's unit
 suite included). The runner's integration suite has its own workflow. On
@@ -316,8 +317,9 @@ package falls under its floor in `coverage.floors.json`. Each package also
 keeps an HTML report in its `coverage/` directory. The floors only go up:
 after adding tests, `node scripts/coverage-summary.mjs --ratchet` raises
 each floor to the whole percentage just reached; commit the file with the
-tests. `packages/domain` additionally requires 100 % of its lines on every
-plain `pnpm test`.
+tests. The floors are checked by the coverage command; a plain test run does not
+measure coverage (`vitest.shared.ts`), except in `packages/domain`, whose own
+config requires 100 % of its lines on every plain `pnpm test`.
 
 `.github/workflows/coverage.yml` does the same on every pull request and
 push to `main`, apart from `checks`: it never blocks a merge nor a deploy,

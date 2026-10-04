@@ -7,7 +7,7 @@ The platform serves two profiles of teachers with the same interface. The novice
 1. **Progressive disclosure.** The simple path is the default path. Advanced options sit behind a toggle, a menu or the command palette, never in the main flow.
 2. **A single source of truth.** The WYSIWYG and the source view edit the same markdown. The "expected answer" form and the regex matcher write the same configuration. Switching from one mode to the other loses nothing. The journal's two levels are two modes of the journal itself, In Quiz (the novice, edited in the platform) and In a GitHub repository (the expert, edited in their own tools; ADR-057); within the Quiz editor, the WYSIWYG and the source still edit the same markdown.
 3. **The LLM does the thankless work, the teacher decides.** Every "Generate" button produces a proposal in the draft, visible, editable, never published on its own.
-4. **Everything the interface does, the API does.** Every screen is built on `/api/v1`. The expert can script what the novice clicks.
+4. **Everything the interface does, the API does.** The UI and API tokens share `/app/api`; MCP is exposed at `/app/api/mcp` (ADR-022, ADR-023). Token scopes and route restrictions still apply. A screen's presence does not imply its session-only route is available to an API token.
 5. **Keyboard first for the expert, never required for the novice.** Every shortcut has a clickable equivalent.
 
 ## 8.2 Novice mode
@@ -40,7 +40,7 @@ The platform serves two profiles of teachers with the same interface. The novice
 | Do everything from the keyboard | `Ctrl+K` command palette, global shortcuts, `j` `k` navigation in lists, `Enter` to open, `Esc` to close. |
 | Process in bulk | Multiple selection in the pool: add a tag, move to a category, export, add to an evaluation. |
 | Inspect | Version history with diff, LLM call log, event log of an attempt, raw export of an evaluation as JSON. |
-| Plug in one's own LLM | Personal API key, model choice per purpose, prompt templates editable per teacher, phase 3. |
+| Use LLM assistance | The administrator configures one institutional provider key, model and daily cap; teachers use that gateway. No personal key or per-teacher model configuration (ADR-058). |
 | Run a project like a repository | The advanced options of a project: the source's whole history, a deadline commit instead of a lock, review checkpoints dated relative to the deadline (J−3), groups copied from another project; a sync of the source as a pull request into every repository; the runs of each repository, "grade now", a lock per repository (F-PROJ). |
 | Write from one's own tool | MCP server: create and read drafts from Claude Desktop or Claude Code. Planned for phase 3, shipped early with the personal API tokens (ADR-022, ADR-023). |
 
@@ -57,7 +57,7 @@ The platform serves two profiles of teachers with the same interface. The novice
 | Preferences | Theme, language, default source mode |
 | Help | Shortcuts, documentation, data and privacy |
 
-The actions are provided by the mounted screens, through a command registry in `packages/ui`. A screen declares its commands with label, shortcut, condition and handler. The palette knows nothing about the modules.
+The actions are provided by the mounted screens, through the command registry in `apps/web/src/screenCommands.ts`, combined with global commands by `apps/web/src/commands.ts`. A screen declares its commands with label, shortcut, condition and handler. The palette knows nothing about the modules.
 
 ## 8.5 Shortcuts
 
@@ -83,7 +83,7 @@ The actions are provided by the mounted screens, through a command registry in `
 
 - **Generate a variant**: same question, other values or other context, as a draft linked to the original by `origin_question_id`.
 - **Generate a quiz**: duration, tags, difficulty, and the platform composes a draft evaluation from the answer-time statistics. Phase 3.
-- **Session code and QR code** to join a poll or a classroom from a phone.
+- **Session code and QR code** to join a poll from a phone. Classrooms use the teacher-managed roster and matching edu-ID address, without an entry code (ADR-053).
 - **Projection view** without names: presence ring in the waiting room, live distribution for a poll, completion rate during a quiz.
 - **Image difference** for `codeimage`: the target, the student's image and a green / red difference, one grid or two side by side, with the share of correct pixels.
 - **Attempt history** for support: reconstruction of the sequence of revisions of an answer with server timestamps.
