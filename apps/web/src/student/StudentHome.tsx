@@ -23,7 +23,6 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2 } from "lucide-react";
-import { useEffect } from "react";
 
 import type { DrillSession, Me, StudentHome as StudentHomeData } from "@quiz/contracts";
 
@@ -31,9 +30,9 @@ import { api } from "../api";
 import { useDrillAvailability } from "../drill/api";
 import { sessionCourses, sessionLine } from "../drill/format";
 import { useT } from "../i18n";
-import { useServerClock } from "../realtime/useServerClock";
+import { useServerNow } from "../realtime/useServerClock";
 import type { Route } from "../router";
-import { Card, EmptyState, PageHeader, QueryError, SectionHeading, Skeleton, useNow } from "../ui";
+import { Card, EmptyState, PageHeader, QueryError, SectionHeading, Skeleton } from "../ui";
 import { studentHomeKey } from "../queryKeys";
 import {
   ActivityCard,
@@ -68,16 +67,9 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
     queryKey: studentHomeKey,
     queryFn: () => api("/app/api/student/home"),
   });
-  // The server's clock (invariant 5): the payload's `serverNow` is sampled
-  // in, and every countdown and start gate reads its offset, never the
-  // browser's clock alone.
-  const clock = useServerClock();
-  const { sample } = clock;
-  const serverNow = home.data?.serverNow;
-  useEffect(() => {
-    if (serverNow) sample(serverNow);
-  }, [sample, serverNow]);
-  const now = useNow(30_000) + clock.offset;
+  // The server's clock (invariant 5): every countdown and start gate reads
+  // the payload's `serverNow`, never the browser's clock alone.
+  const now = useServerNow(home.data?.serverNow);
   const actions = useCardActions(navigate);
 
   // ADR-041 §6 (#317): today's drill, while it holds something — the home's

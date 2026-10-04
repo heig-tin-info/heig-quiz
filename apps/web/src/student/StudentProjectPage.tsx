@@ -24,18 +24,17 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, FolderGit2 } from "lucide-react";
-import { useEffect } from "react";
 
 import { formatPoints } from "@quiz/domain";
 import type { ProjectInvitationResent, StudentProject, StudentProjectRepo } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
 import { Grade } from "../Grade";
-import { formatDuration, useT } from "../i18n";
+import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { CiBadge } from "../project/parts";
 import { studentProjectKey, studentRootKey } from "../queryKeys";
-import { useServerClock } from "../realtime/useServerClock";
+import { useServerNow } from "../realtime/useServerClock";
 import type { Navigate } from "../router";
 import {
   Badge,
@@ -51,9 +50,8 @@ import {
   ParentLink,
   SectionHeading,
   Stat,
-  useNow,
 } from "../ui";
-import { RowActionControl, startsLine } from "./ActivityRow";
+import { leftLine, RowActionControl, startsLine } from "./ActivityRow";
 import { useProjectAction, useStudentReadOnly } from "./ProjectRow";
 import {
   factsOfProject,
@@ -108,23 +106,20 @@ export function StudentProjectPage({ id, navigate }: { id: string; navigate: Nav
 
 function ProjectBody({ project, readOnly, navigate }: { project: StudentProject; readOnly: boolean; navigate: Navigate }) {
   const t = useT();
-  // The server's clock, from the payload (invariant 5): the offset is state,
-  // so a sample that moves it re-renders every line counting down here.
-  const clock = useServerClock();
-  const { sample } = clock;
-  useEffect(() => sample(project.serverNow), [sample, project.serverNow]);
-  const now = useNow(30_000) + clock.offset;
+  // The server's clock, from the payload (invariant 5).
+  const now = useServerNow(project.serverNow);
 
   const facts = factsOfProject(project);
   const kind = projectActionKind(facts, now);
   const action = useProjectAction(facts, { now, primary: true, readOnly });
-  const left = Date.parse(project.deadlineAt) - now;
+  // The start while it is ahead; "Due …" with the time left beside it while
+  // some remains (`leftLine` says "Due …" by itself once it has passed).
   const timing =
     Date.parse(project.startAt) > now
       ? startsLine(project.startAt, now, t)
-      : [t("shome.dueAt", { when: isoDateTime(project.deadlineAt) }), left > 0 ? t("shome.left", { time: formatDuration(left, t) }) : null]
-          .filter(Boolean)
-          .join(" · ");
+      : Date.parse(project.deadlineAt) > now
+        ? `${t("shome.dueAt", { when: isoDateTime(project.deadlineAt) })} · ${leftLine(project.deadlineAt, now, t)}`
+        : leftLine(project.deadlineAt, now, t);
 
   return (
     <div className="mx-auto max-w-180 space-y-8">

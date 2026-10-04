@@ -2239,9 +2239,10 @@ release. The original card's notes stay here; each part has its card below.
     of `cards.tsx` are written on them); `RowAction` gained `href` +
     `external` for the links.
   - **The clock is the server's** (invariant 5): the home, the classroom's
-    Activities and the project page sample the payload's `serverNow` into
-    `useServerClock` and read `useNow(30_000) + clock.offset` — the offset
-    is state, so a sample that moves it re-renders at once; every
+    Activities and the project page read `useServerNow(serverNow)`
+    (`realtime/useServerClock.ts`: the payload's `serverNow` sampled into
+    `useServerClock`, `useNow(30_000) + clock.offset`) — the offset is
+    state, so a sample that moves it re-renders at once; every
     countdown, the start gate of Accept, the "Evaluated commit" label and
     `mostUrgent` judge on it, never on the browser's clock alone.
   - **Accept** (`useProjectAction`): `POST /app/api/student/projects/:id/accept`;

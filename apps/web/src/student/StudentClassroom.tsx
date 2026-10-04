@@ -32,7 +32,7 @@ import { api, ApiError } from "../api";
 import { useT } from "../i18n";
 import { JournalReader } from "../journal/JournalReader";
 import { studentClassroomKey } from "../queryKeys";
-import { useServerClock } from "../realtime/useServerClock";
+import { useServerNow } from "../realtime/useServerClock";
 import type { Navigate } from "../router";
 import {
   Badge,
@@ -45,7 +45,6 @@ import {
   SectionHeading,
   Skeleton,
   Tabs,
-  useNow,
 } from "../ui";
 import {
   ActivityCard,
@@ -263,12 +262,9 @@ function Activities({
   navigate: Navigate;
 }) {
   const t = useT();
-  // The server's clock (invariant 5), sampled from the payload: the
-  // countdowns, the start gate of a project and `mostUrgent` all read it.
-  const clock = useServerClock();
-  const { sample } = clock;
-  useEffect(() => sample(serverNow), [sample, serverNow]);
-  const now = useNow(30_000) + clock.offset;
+  // The server's clock (invariant 5): the countdowns, the start gate of a
+  // project and `mostUrgent` all read it.
+  const now = useServerNow(serverNow);
   const actions = useCardActions(navigate);
   const { polls, open, upcoming, past } = activities;
   const urgent = mostUrgent(activities, now);

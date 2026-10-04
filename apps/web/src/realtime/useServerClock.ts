@@ -1,4 +1,6 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { useNow } from "../ui";
 
 import {
   applySample,
@@ -60,4 +62,20 @@ export function useServerClock(): ServerClock {
   const now = useCallback(() => Date.now() + state.current.offset, []);
 
   return { offset, now, synced, sample };
+}
+
+/**
+ * The server's "now" for a screen whose payload carries `serverNow` (the
+ * student's home, classroom page and project, M3-13): the sample is folded
+ * in as it lands, and the value ticks every 30 s. The offset is state, so a
+ * sample that moves it re-renders at once rather than at the next tick.
+ * Until a payload has landed (`undefined`), the local clock serves.
+ */
+export function useServerNow(serverNow: string | undefined): number {
+  const clock = useServerClock();
+  const { sample } = clock;
+  useEffect(() => {
+    if (serverNow !== undefined) sample(serverNow);
+  }, [sample, serverNow]);
+  return useNow(30_000) + clock.offset;
 }
