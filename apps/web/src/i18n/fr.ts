@@ -241,7 +241,6 @@ export const fr: Record<keyof Dict, string> = {
   "roster.revokeFailed": "Impossible d'annuler ce rattachement.",
   "roster.updateFailed": "La mise à jour a échoué",
   "roster.join": "S'inscrire comme étudiant",
-  "roster.joined": "Vous avez une place dans cette classe",
 
   "import.title": "Ajouter des étudiants",
   "import.subtitle":

@@ -326,7 +326,7 @@ describe("ClassroomView", () => {
     expect(await screen.findByText(/student view/)).toBeVisible();
   });
 
-  it("says the seat is already taken instead of offering it again", async () => {
+  it("no longer offers a seat that is already taken", async () => {
     mockFetch({
       [`GET ${ME}`]: ok(makeMe()),
       [`GET ${ROOM}`]: ok(
@@ -346,7 +346,8 @@ describe("ClassroomView", () => {
       ),
     });
     renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
-    expect(await screen.findByRole("button", { name: "Join as student" })).toBeDisabled();
+    await screen.findAllByRole("button", { name: /Add students/ });
+    expect(screen.queryByRole("button", { name: "Join as student" })).toBeNull();
   });
 
   it("says so when the classroom cannot be read", async () => {
