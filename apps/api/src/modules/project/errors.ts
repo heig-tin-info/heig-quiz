@@ -10,7 +10,7 @@ import { DomainError } from "../http.js";
 
 type Code = ProjectErrorCode | ProjectAcceptErrorCode | ProjectCheckpointErrorCode;
 
-/** The state of things is a 409; what the clock or GitHub's contents refuse a 422; GitHub failing a 502. */
+/** The state of things is a 409; what the clock or GitHub's contents refuse a 422; too soon a 429; GitHub failing a 502. */
 const STATUS: Record<Code, number> = {
   not_connected: 409,
   app_not_installed: 409,
@@ -38,6 +38,15 @@ const STATUS: Record<Code, number> = {
   due_after_deadline: 422,
   duplicate_checkpoint: 409,
   checkpoint_dispatched: 409,
+  // The staff's writes (M3-08b): the score, the release, the resend.
+  not_frozen: 409,
+  grading_none: 409,
+  score_max_required: 422,
+  score_max_mismatch: 422,
+  score_above_max: 422,
+  invitation_not_pending: 409,
+  resend_too_soon: 429,
+  invite_failed: 502,
 };
 
 /** A refusal: `{ error: code, message, ...details }`. */

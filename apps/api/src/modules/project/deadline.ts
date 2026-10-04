@@ -271,7 +271,7 @@ export function repoDeadlineState(repo: RepoRow, project: ProjectRow): ProjectRe
  * (the project first, as every writer of both takes them), refused when
  * it takes no deadline work ({@link isLive}).
  */
-async function liveRepoForUpdate(tx: Tx, projectId: string, repoId: string): Promise<{ repo: RepoRow; project: ProjectRow }> {
+export async function liveRepoForUpdate(tx: Tx, projectId: string, repoId: string): Promise<{ repo: RepoRow; project: ProjectRow }> {
   const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
   const [repo] = await tx
     .select()

@@ -24,6 +24,8 @@ import {
   FINAL_SCORE_SOURCES,
   PROJECT_PATCH_FIELDS,
   PROJECT_PRIMARY_ACTIONS,
+  PROJECT_REVIEW_REASONS,
+  PROJECT_REVIEW_STATUSES,
   PROJECT_SCALE_KINDS,
   slugify,
 } from "@quiz/domain";
@@ -370,8 +372,20 @@ export type ProjectSummary = z.infer<typeof ProjectSummary>;
  *     asked of a repository that is not provisioned, or was deleted on
  *     GitHub (M3-05a);
  *   - `unassigned_students` — the body names the claimed students in no
- *     group (`students`: enrollment id, nom, prenom), empty when the group
- *     project has no group at all.
+ *     group (`students`: enrollment id, nom, prenom, {@link ProjectUnassigned}),
+ *     empty when the group project has no group at all.
+ * The staff's writes of M3-08b (F-PROJ-07, F-PROJ-08, F-PROJ-14):
+ *   - `not_frozen` — a teacher's score before the repository's definitive
+ *     freeze, or a release while a live repository is not frozen;
+ *   - `grading_none` — a teacher's score or a release under `grading_mode:
+ *     none`;
+ *   - `score_max_required` (422) — a score on a repository without a scored
+ *     run must come with its maximum; `score_max_mismatch` (422) — a
+ *     maximum given beside a scored run's that differs from it;
+ *     `score_above_max` (422);
+ *   - `invitation_not_pending` — a resend of an invitation that is not
+ *     pending; `resend_too_soon` (429) — resent less than a minute ago;
+ *     `invite_failed` (502) — GitHub failed the resend.
  * The response schemas of the refusals come with their first consumer
  * (M3-11).
  */
@@ -388,6 +402,15 @@ export const PROJECT_REFUSALS = [
   "strategy_frozen",
   "unassigned_students",
   "repo_unavailable",
+  // M3-08b.
+  "not_frozen",
+  "grading_none",
+  "score_max_required",
+  "score_max_mismatch",
+  "score_above_max",
+  "invitation_not_pending",
+  "resend_too_soon",
+  "invite_failed",
 ] as const;
 export const ProjectErrorCode = z.enum(PROJECT_REFUSALS);
 export type ProjectErrorCode = z.infer<typeof ProjectErrorCode>;
@@ -614,8 +637,9 @@ export type ProjectSlotScore = z.infer<typeof ProjectSlotScore>;
 /**
  * The final score (F-PROJ-14): the teacher's, else the review's, else the
  * frozen one — the current one while nothing is frozen (`resolveFinalScore`
- * of `@quiz/domain`); `source` names it (I42). `max` is null for a teacher
- * score on a repository without a scored run (M3-08b gives it its own).
+ * of `@quiz/domain`); `source` names it (I42). A teacher's score carries
+ * the maximum it was written with (M3-08b); `max` is null only for an
+ * imported teacher score on a repository without a scored run.
  */
 export const ProjectFinalScore = z.object({
   points: z.number(),
@@ -640,11 +664,42 @@ export const ProjectRepoLive = z.object({
 });
 export type ProjectRepoLive = z.infer<typeof ProjectRepoLive>;
 
+export const ProjectReviewStatus = z.enum(PROJECT_REVIEW_STATUSES);
+export type ProjectReviewStatus = z.infer<typeof ProjectReviewStatus>;
+export const ProjectReviewReason = z.enum(PROJECT_REVIEW_REASONS);
+export type ProjectReviewReason = z.infer<typeof ProjectReviewReason>;
+
+/**
+ * Where a repository's final review stands (F-PROJ-11, M3-05b; added by
+ * M3-08b), from its `grade_dispatches` row (`trigger = deadline`) and its
+ * review slot — `reviewState` of `@quiz/domain`:
+ *   - `pending` — not frozen for good yet, or frozen and not yet asked;
+ *   - `none` — no review will come: an ungraded project, or a freeze with
+ *     no frozen run (`reason: no_frozen_run`);
+ *   - `skipped` — frozen but degraded (`reason`: `archived` as its lock, or
+ *     `protection_suspended`; re-enabling the protection makes it pending
+ *     again);
+ *   - `unconfirmed` — claimed, GitHub's acceptance never recorded: never
+ *     sent again (a manual re-dispatch is a later option);
+ *   - `asked` — accepted by GitHub at `askedAt`, of `sha`;
+ *   - `done` — the review slot is filled: `runId`.
+ */
+export const ProjectRepoReview = z.object({
+  status: ProjectReviewStatus,
+  reason: ProjectReviewReason.nullable(),
+  askedAt: z.iso.datetime().nullable(),
+  sha: z.string().nullable(),
+  runId: z.uuid().nullable(),
+});
+export type ProjectRepoReview = z.infer<typeof ProjectRepoReview>;
+
 /**
  * A repository on the staff's project page: its deadline and lock
  * ({@link ProjectRepoDeadlineState}), its provisioning and invitation, the
  * last STUDENT commit and its CI status (as the webhooks stored them), the
- * live counters, the scores, the release's snapshot, and the flags:
+ * live counters, the scores (the teacher's with the maximum it was written
+ * with, M3-08b), the final review's state (`review`), the release's
+ * snapshot, and the flags:
  *   - `protectionSuspended` — "protected files in conflict" (F-PROJ-08);
  *   - `toVerify` — the run of one of its three slots is to verify;
  *   - `multiple` — one of its runs printed several `GRADE` annotations (an
@@ -668,10 +723,16 @@ export const ProjectRepoView = ProjectRepoDeadlineState.extend({
     frozen: ProjectSlotScore.nullable(),
     review: ProjectSlotScore.nullable(),
     teacher: z
-      .object({ points: z.number(), comment: z.string().nullable(), gradedAt: z.iso.datetime().nullable() })
+      .object({
+        points: z.number(),
+        max: z.number().nullable(),
+        comment: z.string().nullable(),
+        gradedAt: z.iso.datetime().nullable(),
+      })
       .nullable(),
     final: ProjectFinalScore.nullable(),
   }),
+  review: ProjectRepoReview,
   released: z.object({ points: z.number().nullable(), max: z.number().nullable() }).nullable(),
   flags: z.object({
     protectionSuspended: z.boolean(),
@@ -797,3 +858,92 @@ export type ProjectCheckpointParams = z.infer<typeof ProjectCheckpointParams>;
 export const PROJECT_CHECKPOINT_REFUSALS = ["due_past", "due_after_deadline", "duplicate_checkpoint", "checkpoint_dispatched"] as const;
 export const ProjectCheckpointErrorCode = z.enum(PROJECT_CHECKPOINT_REFUSALS);
 export type ProjectCheckpointErrorCode = z.infer<typeof ProjectCheckpointErrorCode>;
+
+// ---------------------------------------------------------- the staff's writes (M3-08b)
+
+/**
+ * `PATCH /app/api/projects/:id/repos/:rid/score` (F-PROJ-14): the
+ * teacher's score, after the repository's definitive freeze (`409
+ * not_frozen`) on a graded project (`409 grading_none`). `points` 0…1000,
+ * or null to clear the score (the maximum and the comment with it). `max`
+ * (product owner, 2026-10-02): required when the repository has no scored
+ * run (`422 score_max_required`) and then the score's own; otherwise the
+ * scored run's maximum applies and a `max` given must equal it (`422
+ * score_max_mismatch`); `points` never exceed it (`422 score_above_max`).
+ * Answers {@link ProjectRepoScores}.
+ */
+export const ScoreOverride = z.strictObject({
+  points: z.number().min(0).max(1000).nullable(),
+  max: z.number().positive().optional(),
+  comment: z.string().max(2000).optional(),
+});
+export type ScoreOverride = z.infer<typeof ScoreOverride>;
+
+/**
+ * The repository's scores as they stand after a write ({@link ScoreOverride}):
+ * the `scores`, `released` and `flags.changedAfterRelease` of its
+ * {@link ProjectRepoView}, so the row can be patched in place.
+ */
+export const ProjectRepoScores = z.object({
+  scores: ProjectRepoView.shape.scores,
+  released: ProjectRepoView.shape.released,
+  changedAfterRelease: z.boolean(),
+});
+export type ProjectRepoScores = z.infer<typeof ProjectRepoScores>;
+
+/**
+ * `POST /app/api/projects/:id/release` (F-PROJ-14, D05): the final scores
+ * made the students' and the gradebook's, once every live repository is
+ * frozen for good (`409 not_frozen`; `409 grading_none`). Writes each
+ * repository's snapshot (`released` of its row); a release again rewrites
+ * it, which clears `changedAfterRelease`. `first`: the project had never
+ * been released (the one release the students are notified of, M3-09);
+ * `repos` the snapshots written, `scored` those with a final score.
+ */
+export const ProjectReleaseResult = z.object({
+  releasedAt: z.iso.datetime(),
+  first: z.boolean(),
+  repos: z.number().int(),
+  scored: z.number().int(),
+});
+export type ProjectReleaseResult = z.infer<typeof ProjectReleaseResult>;
+
+/**
+ * `POST /app/api/projects/:id/repos/:rid/protection` (F-PROJ-08): the
+ * protected files restored again on a repository marked "protected files
+ * in conflict"; only restores after it count toward the cap, the runs
+ * flagged meanwhile stay to verify, nothing is restored at once. Idempotent
+ * on a repository not suspended. `409 repo_unavailable` for a repository
+ * not provisioned, deleted, or of an archived project.
+ */
+export const ProjectRepoProtection = z.object({
+  suspended: z.boolean(),
+  reenabledAt: z.iso.datetime().nullable(),
+});
+export type ProjectRepoProtection = z.infer<typeof ProjectRepoProtection>;
+
+/**
+ * `POST /app/api/projects/:id/repos/:rid/invite` (F-PROJ-07): the staff
+ * resend a PENDING invitation (`409 invitation_not_pending`; `409
+ * repo_unavailable` for a repository not provisioned or deleted), at most
+ * once a minute per repository (`429 resend_too_soon`), with the `push`
+ * permission (N-SEC-21). `invitationStatus` as GitHub answered: `accepted`
+ * when the student already is a collaborator.
+ */
+export const ProjectInvitationResent = z.object({
+  invitationStatus: InvitationStatus,
+  resentAt: z.iso.datetime(),
+});
+export type ProjectInvitationResent = z.infer<typeof ProjectInvitationResent>;
+
+/**
+ * The `409 unassigned_students` body of `POST /app/api/projects/:id/publish`
+ * (ADR-048): the claimed students of the classroom in no group of the
+ * project, by name; empty when the group project has no group at all.
+ */
+export const ProjectUnassigned = z.object({
+  error: z.literal("unassigned_students"),
+  message: z.string(),
+  students: z.array(z.object({ enrollmentId: z.uuid(), nom: z.string(), prenom: z.string() })),
+});
+export type ProjectUnassigned = z.infer<typeof ProjectUnassigned>;

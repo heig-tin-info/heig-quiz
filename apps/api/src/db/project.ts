@@ -284,6 +284,12 @@ export const projectRepos = pgTable(
     acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull(),
     invitationStatus: text("invitation_status", { enum: INVITATION_STATUSES }).notNull().default("none"),
     /**
+     * The staff's last resend of a pending invitation (F-PROJ-07, M3-08b):
+     * at most one a minute per repository. Apart from the reconciliation's
+     * daily re-invite (M3-06), which neither reads nor writes it.
+     */
+    invitationResentAt: timestamp("invitation_resent_at", { withTimezone: true }),
+    /**
      * The repository's own deadline, an individual extension set by its
      * staff (D13 as amended 2026-10-02); null: the project's. The EFFECTIVE
      * deadline, `coalesce(deadline_at, projects.deadline_at)`, is what every
@@ -338,8 +344,17 @@ export const projectRepos = pgTable(
     currentGradeRunId: uuid("current_grade_run_id"),
     frozenGradeRunId: uuid("frozen_grade_run_id"),
     reviewGradeRunId: uuid("review_grade_run_id"),
-    /** The teacher's score, on the score's own maximum (F-PROJ-14); null when none. */
+    /**
+     * The teacher's score (F-PROJ-14), written after the definitive freeze:
+     * `teacher_points` out of `teacher_max` — the scored run's maximum when
+     * the repository has one, the teacher's own otherwise (product owner,
+     * 2026-10-02, M3-08b). Written together, so the score is self-contained:
+     * a later run with another maximum never re-reads it. Null when none;
+     * `teacher_max` null on heig-classroom's imported rows, which read the
+     * CI's maximum (`resolveFinalScore`).
+     */
     teacherPoints: doublePrecision("teacher_points"),
+    teacherMax: doublePrecision("teacher_max"),
     teacherComment: text("teacher_comment"),
     teacherGradedBy: uuid("teacher_graded_by").references(() => users.id),
     teacherGradedAt: timestamp("teacher_graded_at", { withTimezone: true }),
@@ -355,6 +370,12 @@ export const projectRepos = pgTable(
      * (F-PROJ-08). The staff re-enable it by hand, which clears it.
      */
     protectionSuspendedAt: timestamp("protection_suspended_at", { withTimezone: true }),
+    /**
+     * The staff's last re-enable of the protection (M3-08b): only the
+     * restores after it count toward the cap again, the runs flagged during
+     * the suspension stay `to_verify`, nothing is restored at the re-enable.
+     */
+    protectionReenabledAt: timestamp("protection_reenabled_at", { withTimezone: true }),
     /** Gone from GitHub: terminal, never retried. */
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },

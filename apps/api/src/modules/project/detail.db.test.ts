@@ -26,7 +26,7 @@ import { GradeRunList, ProjectDetail, type ProjectGradingScale } from "@quiz/con
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../../auth/session.js";
 import { createApiToken } from "../../auth/tokens.js";
 import { loadConfig } from "../../config.js";
-import { enrollments, githubAccounts, githubOrganizations, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
+import { enrollments, githubAccounts, githubOrganizations, gradeDispatches, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
 import { resetLiveStateCache } from "../../github/metrics.js";
 import { appKey, fakeGithub, json, orgsRoute, type Route } from "../../github/testing.js";
 import { testServer, type TestServer } from "../../test/http.js";
@@ -309,7 +309,8 @@ describe("the project page (F-PROJ-13)", () => {
     const d = await detail(w.projectId);
     const scores = (userId: string) => rowOf(d, userId).repo!.scores;
     expect(scores(s1!.id).final).toEqual({ points: 5.5, max: 6, source: "teacher", grade: { grade: 5.5, fellBack: false } });
-    expect(scores(s1!.id).teacher).toEqual({ points: 5.5, comment: "seen", gradedAt: null });
+    // A row without its own maximum (heig-classroom's imported ones) reads the review's.
+    expect(scores(s1!.id).teacher).toEqual({ points: 5.5, max: null, comment: "seen", gradedAt: null });
     expect(scores(s2!.id).final).toEqual({ points: 3, max: 6, source: "review", grade: { grade: 3, fellBack: false } });
     // A frozen score out of 10 under "the score is the grade": the linear scale, and says so.
     expect(scores(s3!.id).final).toEqual({ points: 7, max: 10, source: "ci", grade: { grade: 4.5, fellBack: true } });
@@ -344,6 +345,46 @@ describe("the project page (F-PROJ-13)", () => {
     expect(rowOf(changed, s1!.id).repo).toMatchObject({ released: { points: 8, max: 10 }, flags: { changedAfterRelease: true } });
     expect(rowOf(changed, s2!.id).repo!.flags.changedAfterRelease).toBe(false);
     expect(changed.primaryAction).toBe("release");
+  });
+
+  it("shows where each repository's final review stands (F-PROJ-11, M3-08b)", async () => {
+    const w = await world({ students: 6, state: "locked" });
+    const [open, noRun, suspended, claimed, asked, done] = w.students;
+    const frozenAt = at("2026-10-09T22:30:00Z");
+    const frozen = { deadlineAppliedAt: frozenAt, frozenAt };
+    await repoOf(w, open!.id);
+    await repoOf(w, noRun!.id, frozen);
+    const withRun = async (userId: string, patch: RepoPatch = {}) => {
+      const repo = await repoOf(w, userId, { ...frozen, ...patch });
+      await setRepo(repo, { frozenGradeRunId: await run(repo, "2026-10-09T20:00:00Z") });
+      return repo;
+    };
+    await withRun(suspended!.id, { protectionSuspendedAt: frozenAt });
+    const sha = "c".repeat(40);
+    const dispatch = (repoId: string, dispatchedAt: Date | null) =>
+      server.app.db.insert(gradeDispatches).values({ id: randomUUID(), repoId, trigger: "deadline", sha, dispatchedAt, createdAt: frozenAt });
+    await dispatch(await withRun(claimed!.id), null);
+    await dispatch(await withRun(asked!.id), at("2026-10-09T22:31:00Z"));
+    const reviewed = await withRun(done!.id);
+    const review = await run(reviewed, "2026-10-09T23:00:00Z", { kind: "review", points: 5, max: 6 });
+    await setRepo(reviewed, { reviewGradeRunId: review });
+    await dispatch(reviewed, at("2026-10-09T22:31:00Z"));
+
+    const d = await detail(w.projectId);
+    const state = (userId: string) => rowOf(d, userId).repo!.review;
+    const none = { reason: null, askedAt: null, sha: null, runId: null };
+    expect(state(open!.id)).toEqual({ ...none, status: "pending" });
+    expect(state(noRun!.id)).toEqual({ ...none, status: "none", reason: "no_frozen_run" });
+    expect(state(suspended!.id)).toEqual({ ...none, status: "skipped", reason: "protection_suspended" });
+    expect(state(claimed!.id)).toEqual({ ...none, status: "unconfirmed", sha });
+    expect(state(asked!.id)).toEqual({ ...none, status: "asked", sha, askedAt: "2026-10-09T22:31:00.000Z" });
+    expect(state(done!.id)).toEqual({ status: "done", reason: null, sha, askedAt: "2026-10-09T22:31:00.000Z", runId: review });
+
+    // Archived as its lock: skipped too; an ungraded project: none, whatever the rows.
+    await setRepo(rowOf(d, suspended!.id).repo!.id, { protectionSuspendedAt: null, archivedAt: frozenAt });
+    expect(rowOf(await detail(w.projectId), suspended!.id).repo!.review).toMatchObject({ status: "skipped", reason: "archived" });
+    await server.app.db.update(projects).set({ gradingMode: "none" }).where(eq(projects.id, w.projectId));
+    expect(rowOf(await detail(w.projectId), noRun!.id).repo!.review).toEqual({ ...none, status: "none" });
   });
 
   it("publishes a draft; a deleted repository does not hold the release back", async () => {

@@ -1,0 +1,173 @@
+/**
+ * The teacher's score and the release (F-PROJ-14, F-GRADE-09, D05; merge
+ * task M3-08b), ported from heig-classroom's grade override and "validate
+ * the grades" (`modules/assignments/actions.ts`) under the product owner's
+ * decisions of 2026-10-02:
+ *
+ * 1. **A teacher's score is written with its maximum** (`teacher_max`): the
+ *    scored run's when the repository has one — the run the final score
+ *    would otherwise come from, a maximum given beside it must equal it —,
+ *    the teacher's own, required, otherwise (`teacherScoreMax` of
+ *    `@quiz/domain`). After the repository's definitive freeze only (`409
+ *    not_frozen`), on a graded project (`409 grading_none`). Null clears it.
+ * 2. **The release waits until every LIVE repository is frozen** for good
+ *    (`scoresFinal`, the page's own rule for its primary action): deleted,
+ *    never-provisioned repositories and the repositories of a user who now
+ *    holds a staff seat do not count. No partial release.
+ * 3. **The release writes a snapshot per repository** (`released_points`,
+ *    `released_max`: the final score as it stood, null without one) and
+ *    `projects.released_at / by`; the readers keep showing the LIVE final
+ *    score, flagged "changed after release" when it differs
+ *    (`changedAfterRelease`, `@quiz/domain`). A release again rewrites the
+ *    snapshots, audited again, and is not a new notification: M3-09 sends
+ *    `project_grade_final` on the FIRST release only (`first`). No
+ *    withdrawal. A reopen after the release is accepted (the deadline's
+ *    rules): the teacher's score then waits for the new freeze.
+ *
+ * Nothing here calls GitHub. Every write is audited (`project_repo.
+ * grade_override`, `project.release`).
+ */
+import { and, eq, isNotNull, notInArray } from "drizzle-orm";
+
+import type { ProjectReleaseResult, ProjectRepoScores, ScoreOverride } from "@quiz/contracts";
+import { resolveFinalScore, scoresFinal, teacherScoreMax } from "@quiz/domain";
+
+import { audit, type AuditActor } from "../../audit.js";
+import { iso } from "../../clock.js";
+import type { Db, Tx } from "../../db/client.js";
+import { enrollments, projectRepos, projects } from "../../db/schema.js";
+import { DomainError } from "../http.js";
+import { isLive } from "./deadline.js";
+import { repoScores, slotRuns } from "./detail.js";
+import { ProjectError } from "./errors.js";
+import type { RepoRow } from "./repos.js";
+import type { ProjectRow } from "./views.js";
+
+/** The project and the repository, both read FOR UPDATE; the route loaded them under `staffAccess` already. */
+async function lockRepo(tx: Tx, projectId: string, repoId: string) {
+  const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
+  const [repo] = await tx
+    .select()
+    .from(projectRepos)
+    .where(and(eq(projectRepos.id, repoId), eq(projectRepos.projectId, projectId)))
+    .for("update");
+  if (!project || !repo) throw new DomainError("not_found", 404, "No such repository");
+  return { project, repo };
+}
+
+/** The teacher's score as the audit records it. */
+const teacherScore = (repo: RepoRow) =>
+  repo.teacherPoints === null ? null : { points: repo.teacherPoints, max: repo.teacherMax, comment: repo.teacherComment };
+
+/**
+ * `PATCH /app/api/projects/:id/repos/:rid/score` (F-PROJ-14): the teacher's
+ * score, or its clearing (`points: null`), on a repository frozen for good.
+ * Answers the repository's scores as they now stand ({@link repoScores}).
+ */
+export async function overrideScore(
+  db: Db,
+  projectId: string,
+  repoId: string,
+  body: ScoreOverride,
+  actor: AuditActor,
+  userId: string,
+  now: Date,
+): Promise<ProjectRepoScores> {
+  return db.transaction(async (tx) => {
+    const { project, repo } = await lockRepo(tx, projectId, repoId);
+    if (project.gradingMode !== "auto") throw new ProjectError("grading_none", "The project is not graded");
+    if (repo.frozenAt === null) throw new ProjectError("not_frozen", "A score can be set once the repository's deadline and grace have passed");
+    const runs = await slotRuns(tx, [repo]);
+    const run = (id: string | null) => (id === null ? null : (runs.get(id) ?? null));
+    let values: Partial<RepoRow>;
+    if (body.points === null) {
+      values = { teacherPoints: null, teacherMax: null, teacherComment: null, teacherGradedBy: null, teacherGradedAt: null };
+    } else {
+      // The run the final score would come from without the teacher's: its maximum is the score's.
+      const scored = resolveFinalScore({
+        reviewScore: run(repo.reviewGradeRunId),
+        frozenScore: run(repo.frozenGradeRunId),
+        score: run(repo.currentGradeRunId),
+      });
+      const max = teacherScoreMax(body.points, body.max, scored?.max ?? null);
+      if ("refusal" in max) throw new ProjectError(max.refusal);
+      values = {
+        teacherPoints: body.points,
+        teacherMax: max.max,
+        teacherComment: body.comment ?? null,
+        teacherGradedBy: userId,
+        teacherGradedAt: now,
+      };
+    }
+    const [updated] = await tx.update(projectRepos).set(values).where(eq(projectRepos.id, repo.id)).returning();
+    await audit(tx, {
+      ...actor,
+      action: "project_repo.grade_override",
+      subjectType: "project_repo",
+      subjectId: repo.id,
+      payload: { before: teacherScore(repo), after: teacherScore(updated!) },
+    });
+    const { scores, released, changedAfterRelease } = repoScores(project, updated!, runs);
+    return { scores, released, changedAfterRelease };
+  });
+}
+
+/**
+ * The repositories of `project` the release counts and snapshots: every one
+ * but those of a user who now holds a STAFF seat of the classroom (a staff
+ * seat is never a student's, ADR-018; the page leaves them out too).
+ */
+async function releasableRepos(tx: Tx, project: ProjectRow): Promise<RepoRow[]> {
+  const staff = tx
+    .select({ userId: enrollments.userId })
+    .from(enrollments)
+    .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, true), isNotNull(enrollments.userId)));
+  return tx
+    .select()
+    .from(projectRepos)
+    .where(and(eq(projectRepos.projectId, project.id), notInArray(projectRepos.userId, staff)));
+}
+
+/**
+ * `POST /app/api/projects/:id/release` (F-PROJ-14, D05): the final scores
+ * made the students' and the gradebook's. Refused on an ungraded project
+ * (`grading_none`) and while a live repository is not frozen for good, or
+ * none is (`not_frozen`). Writes every repository's snapshot and the
+ * project's `released_at`; idempotent in effect, audited each time.
+ */
+export async function releaseProject(db: Db, projectId: string, actor: AuditActor, userId: string, now: Date): Promise<ProjectReleaseResult> {
+  return db.transaction(async (tx) => {
+    const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
+    if (!project) throw new DomainError("not_found", 404, "No such project");
+    if (project.gradingMode !== "auto") throw new ProjectError("grading_none", "The project is not graded");
+    const repos = await releasableRepos(tx, project);
+    const live = repos.filter((repo) => isLive(repo, project));
+    const frozen = live.filter((repo) => repo.frozenAt !== null);
+    if (!scoresFinal({ gradingMode: project.gradingMode, live: live.length, frozen: frozen.length })) {
+      throw new ProjectError("not_frozen", "The scores are final once every repository's deadline and grace have passed", {
+        live: live.length,
+        frozen: frozen.length,
+      });
+    }
+    const first = project.releasedAt === null;
+    const runs = await slotRuns(tx, repos);
+    let scored = 0;
+    for (const repo of repos) {
+      const final = repoScores(project, repo, runs).scores.final;
+      if (final) scored += 1;
+      await tx
+        .update(projectRepos)
+        .set({ releasedPoints: final?.points ?? null, releasedMax: final?.max ?? null })
+        .where(eq(projectRepos.id, repo.id));
+    }
+    await tx.update(projects).set({ releasedAt: now, releasedBy: userId }).where(eq(projects.id, project.id));
+    await audit(tx, {
+      ...actor,
+      action: "project.release",
+      subjectType: "project",
+      subjectId: project.id,
+      payload: { first, repos: repos.length, scored },
+    });
+    return { releasedAt: iso(now), first, repos: repos.length, scored };
+  });
+}

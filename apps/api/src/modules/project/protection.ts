@@ -7,9 +7,11 @@
  *
  * Past five restores in an hour on one repository, restoring stops: the
  * repository's `protection_suspended_at` is set (audited
- * `project_repo.revert_cap`) until the staff re-enable it (M3-08), and the
- * runs ingested meanwhile are `to_verify` (`grading.ts`). The cap is
- * counted under the repository row's lock, as the restore is recorded.
+ * `project_repo.revert_cap`) until the staff re-enable it
+ * ({@link reenableProtection}, M3-08b), and the runs ingested meanwhile are
+ * `to_verify` (`grading.ts`). The cap is counted under the repository row's
+ * lock, as the restore is recorded, over the restores since the last
+ * re-enable.
  *
  * A run on a head the App restored ran the student's own copy of the
  * protected files (a tampered `grading.yml`): it is kept, `to_verify`, and
@@ -26,16 +28,20 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
-import { and, count, eq, gte, inArray } from "drizzle-orm";
+import { and, count, eq, gt, gte, inArray } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
-import { audit, SYSTEM_ACTOR } from "../../audit.js";
+import type { ProjectRepoProtection } from "@quiz/contracts";
+
+import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
+import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
 import { botCommits, projectGradeRuns, projectRepos, reverts } from "../../db/schema.js";
 import { githubStatus, installationClient, isZeroSha, ownerRepo } from "../../github/app.js";
 import { changedFiles, revertProtectedFiles, type RevertResult } from "../../github/revert.js";
 import { projectInstallation } from "../github/service.js";
+import { liveRepoForUpdate } from "./deadline.js";
 import { refreshScoreSelection, restoredHeads } from "./grading.js";
 import type { RepoContext } from "./repos.js";
 
@@ -165,10 +171,17 @@ async function recordRestore(db: Db, ctx: RepoContext, push: ProtectedPush, comm
   return db.transaction(async (tx) => {
     const [row] = await tx.select().from(projectRepos).where(eq(projectRepos.id, ctx.repo.id)).for("update");
     if (!row || row.protectionSuspendedAt !== null) return false;
+    // Only the restores after a re-enable count toward the cap again (M3-08b).
     const [recent] = await tx
       .select({ n: count() })
       .from(reverts)
-      .where(and(eq(reverts.repoId, row.id), gte(reverts.createdAt, new Date(now.getTime() - HOUR_MS))));
+      .where(
+        and(
+          eq(reverts.repoId, row.id),
+          gte(reverts.createdAt, new Date(now.getTime() - HOUR_MS)),
+          row.protectionReenabledAt === null ? undefined : gt(reverts.createdAt, row.protectionReenabledAt),
+        ),
+      );
     if ((recent?.n ?? 0) >= MAX_RESTORES_PER_HOUR) {
       await tx.update(projectRepos).set({ protectionSuspendedAt: now }).where(eq(projectRepos.id, row.id));
       await audit(tx, {
@@ -196,5 +209,42 @@ async function recordRestore(db: Db, ctx: RepoContext, push: ProtectedPush, comm
     if (!counted) return false; // the same push answered meanwhile
     await tx.insert(botCommits).values({ repoId: row.id, sha: commit.sha, kind: "revert" }).onConflictDoNothing();
     return true;
+  });
+}
+
+/**
+ * `POST /app/api/projects/:id/repos/:rid/protection` (F-PROJ-08; M3-08b,
+ * product owner's decision 4 of 2026-10-02): the staff re-enable the
+ * restores on a repository marked "protected files in conflict". Clears
+ * `protection_suspended_at` and records the time (`protection_reenabled_at`)
+ * so that only the restores after it count toward the cap; the runs flagged
+ * `to_verify` during the suspension stay so; nothing is restored now — the
+ * next push that touches a protected file is. Its final review, skipped
+ * while suspended, is due again (`FINAL_REVIEW_DUE`, `review.ts`). A
+ * repository not suspended is left as it is, nothing audited. Audited
+ * `project_repo.protection_reenabled`.
+ */
+export async function reenableProtection(
+  db: Db,
+  projectId: string,
+  repoId: string,
+  actor: AuditActor,
+  now: Date,
+): Promise<ProjectRepoProtection> {
+  return db.transaction(async (tx) => {
+    const { repo } = await liveRepoForUpdate(tx, projectId, repoId);
+    if (repo.protectionSuspendedAt === null) return { suspended: false, reenabledAt: isoOrNull(repo.protectionReenabledAt) };
+    await tx
+      .update(projectRepos)
+      .set({ protectionSuspendedAt: null, protectionReenabledAt: now })
+      .where(eq(projectRepos.id, repo.id));
+    await audit(tx, {
+      ...actor,
+      action: "project_repo.protection_reenabled",
+      subjectType: "project_repo",
+      subjectId: repo.id,
+      payload: { suspendedAt: iso(repo.protectionSuspendedAt) },
+    });
+    return { suspended: false, reenabledAt: iso(now) };
   });
 }

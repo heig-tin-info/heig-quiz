@@ -239,6 +239,14 @@ export type AuditAction =
   | "project.deadline_enforced"
   | "project.deadline_reopened"
   /**
+   * The release (F-PROJ-14, D05; merge task M3-08b), subject the project:
+   * the final scores snapshotted per repository — `payload.first` (never
+   * released before: the one release M3-09 notifies), `repos` (snapshots
+   * written), `scored` (with a final score). A release again is audited
+   * again and rewrites the snapshots.
+   */
+  | "project.release"
+  /**
    * A student's Accept (F-PROJ-05, merge task M3-03), subject the
    * `project_repos` row. `accept`: `payload.repo` (the student's own full
    * name), `invitation`, `protected` (false: a plan without rulesets);
@@ -301,6 +309,18 @@ export type AuditAction =
   | "project_repo.unlock"
   | "project_repo.archived"
   | "project_repo.review_skipped"
+  /**
+   * The staff's writes on a repository (F-PROJ-07, F-PROJ-08, F-PROJ-14;
+   * merge task M3-08b), subject the `project_repos` row. `grade_override`:
+   * the teacher's score, `payload.before` and `after` (`points`, `max`,
+   * `comment`; null when none); `protection_reenabled`: the protected files
+   * restored again, `payload.suspendedAt`; `invite_resent`: a pending
+   * invitation sent again with `push`, `payload.login`, `invitationStatus`
+   * as GitHub answered.
+   */
+  | "project_repo.grade_override"
+  | "project_repo.protection_reenabled"
+  | "project_repo.invite_resent"
   | "question.copy"
   | "question.create"
   | "question.delete"

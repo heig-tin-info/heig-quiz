@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { finalPoints, resolveFinalScore } from "./finalScore.js";
+import { finalPoints, resolveFinalScore, teacherScoreMax } from "./finalScore.js";
 
 const s = (points: number | null, max: number | null = 6, parseStatus = "ok") => ({
   points,
@@ -68,5 +68,32 @@ describe("resolveFinalScore", () => {
 
   it("finalPoints exposes the points only", () => {
     expect(finalPoints({ reviewScore: s(4.5) })).toBe(4.5);
+  });
+
+  it("reads a teacher's score with the maximum it was written with (M3-08b)", () => {
+    expect(resolveFinalScore({ teacherPoints: 7, teacherMax: 10 })).toEqual({ points: 7, max: 10, source: "teacher" });
+    // Written with the run's maximum, a later run with another one never re-reads it.
+    expect(resolveFinalScore({ teacherPoints: 7, teacherMax: 10, frozenScore: s(3, 20) })).toEqual({ points: 7, max: 10, source: "teacher" });
+    // An imported override without its own maximum still reads the CI's.
+    expect(resolveFinalScore({ teacherPoints: 7, teacherMax: null, frozenScore: s(3, 20) })).toEqual({ points: 7, max: 20, source: "teacher" });
+  });
+});
+
+describe("teacherScoreMax (product owner, 2026-10-02)", () => {
+  it("takes the scored run's maximum, and refuses another one", () => {
+    expect(teacherScoreMax(7, undefined, 10)).toEqual({ max: 10 });
+    expect(teacherScoreMax(7, 10, 10)).toEqual({ max: 10 });
+    expect(teacherScoreMax(7, 12, 10)).toEqual({ refusal: "score_max_mismatch" });
+  });
+
+  it("requires the teacher's own maximum without a scored run", () => {
+    expect(teacherScoreMax(7, undefined, null)).toEqual({ refusal: "score_max_required" });
+    expect(teacherScoreMax(7, 12, null)).toEqual({ max: 12 });
+  });
+
+  it("keeps the points within the maximum, the maximum itself allowed", () => {
+    expect(teacherScoreMax(11, undefined, 10)).toEqual({ refusal: "score_above_max" });
+    expect(teacherScoreMax(10, undefined, 10)).toEqual({ max: 10 });
+    expect(teacherScoreMax(13, 12, null)).toEqual({ refusal: "score_above_max" });
   });
 });

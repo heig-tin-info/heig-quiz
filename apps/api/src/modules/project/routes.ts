@@ -6,7 +6,9 @@
  * `packages/contracts/src/project.ts` (invariant 7).
  *
  * From M3-08a, the staff's reads: the project page (`GET
- * /app/api/projects/:id`, `ProjectDetail`) and a repository's runs.
+ * /app/api/projects/:id`, `ProjectDetail`) and a repository's runs. From
+ * M3-08b, the staff's writes: the release, and on one repository the
+ * teacher's score, the protection re-enabled, an invitation resent.
  *
  * Registered only when Quiz's App is configured (`app.ts`), like the
  * `github` module: without it none of these routes exists. Open to every
@@ -37,6 +39,7 @@ import {
   ProjectRepoParams,
   ProjectSourceParams,
   ReviewCheckpointCreate,
+  ScoreOverride,
 } from "@quiz/contracts";
 
 import { actorOf } from "../../audit.js";
@@ -161,6 +164,20 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
     }),
   );
 
+  /**
+   * F-PROJ-14: the release — every live repository frozen for good (`409
+   * not_frozen`), the project graded (`409 grading_none`); a release again
+   * rewrites the snapshots. M3-09 sends `project_grade_final` to the
+   * students when `first` is true, here, and never on a release again.
+   */
+  app.post(
+    "/app/api/projects/:id/release",
+    session,
+    teacher(onProject, async ({ req, now, scope }) =>
+      service.releaseProject(app.db, scope.project.id, actorOf(req), req.user!.id, now),
+    ),
+  );
+
   // ------------------------------------------------------------ one repository (M3-05a)
 
   const onRepo = { params: ProjectRepoParams, load: accessibleProjectRepo.bind(null, app) };
@@ -196,6 +213,35 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
       }),
     );
   }
+
+  // ------------------------------------------------------------ one repository's writes (M3-08b)
+
+  /** F-PROJ-14: the teacher's score, after the repository's definitive freeze; null clears it. */
+  app.patch(
+    "/app/api/projects/:id/repos/:rid/score",
+    session,
+    teacher({ ...onRepo, body: ScoreOverride }, async ({ req, now, body, scope }) =>
+      service.overrideScore(app.db, scope.project.id, scope.repo.id, body, actorOf(req), req.user!.id, now),
+    ),
+  );
+
+  /** F-PROJ-08: the protected files restored again; only the restores from now on count toward the cap. */
+  app.post(
+    "/app/api/projects/:id/repos/:rid/protection",
+    session,
+    teacher(onRepo, async ({ req, now, scope }) =>
+      service.reenableProtection(app.db, scope.project.id, scope.repo.id, actorOf(req), now),
+    ),
+  );
+
+  /** F-PROJ-07: a pending invitation sent again with `push`, once a minute at most. */
+  app.post(
+    "/app/api/projects/:id/repos/:rid/invite",
+    session,
+    teacher(onRepo, async ({ req, now, scope }) =>
+      service.resendInvitation(app.db, config, scope.project.id, scope.repo.id, actorOf(req), now, req.log),
+    ),
+  );
 
   // ------------------------------------------------------------ review checkpoints (M3-05b)
 
