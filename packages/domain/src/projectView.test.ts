@@ -51,6 +51,7 @@ describe("projectPrimaryAction (F-PROJ-13)", () => {
     sourceAhead: false,
     live: 3,
     frozen: 0,
+    unverified: 0,
     released: false,
     changedAfterRelease: 0,
   };
@@ -67,9 +68,11 @@ describe("projectPrimaryAction (F-PROJ-13)", () => {
     expect(projectPrimaryAction({ ...base, state: "locked", frozen: 3, released: true, changedAfterRelease: 1 })).toBe("release");
   });
 
-  it("never releases an ungraded project, nor one without a live repository", () => {
-    expect(scoresFinal({ gradingMode: "none", live: 2, frozen: 2 })).toBe(false);
-    expect(scoresFinal({ gradingMode: "auto", live: 0, frozen: 0 })).toBe(false);
+  it("never releases an ungraded project, one without a live repository, nor one with a score to verify", () => {
+    expect(scoresFinal({ gradingMode: "none", live: 2, frozen: 2, unverified: 0 })).toBe(false);
+    expect(scoresFinal({ gradingMode: "auto", live: 0, frozen: 0, unverified: 0 })).toBe(false);
+    expect(scoresFinal({ gradingMode: "auto", live: 2, frozen: 2, unverified: 1 })).toBe(false);
+    expect(projectPrimaryAction({ ...base, state: "locked", frozen: 3, unverified: 1 })).toBe("none");
   });
 
   it("syncs when the source is ahead and the scores are not final", () => {

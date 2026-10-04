@@ -13,7 +13,9 @@
  * 2. **The release waits until every LIVE repository is frozen** for good
  *    (`scoresFinal`, the page's own rule for its primary action): deleted,
  *    never-provisioned repositories and the repositories of a user who now
- *    holds a staff seat do not count. No partial release.
+ *    holds a staff seat do not count. No partial release. And until no
+ *    final score rests on a run to verify (F-PROJ-08; orchestrator,
+ *    2026-10-04): the teacher's score settles each of those.
  * 3. **The release writes a snapshot per repository** (`released_points`,
  *    `released_max`: the final score as it stood, null without one) and
  *    `projects.released_at / by`; the readers keep showing the LIVE final
@@ -27,33 +29,20 @@
  * Nothing here calls GitHub. Every write is audited (`project_repo.
  * grade_override`, `project.release`).
  */
-import { and, eq, isNotNull, notInArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { ProjectReleaseResult, ProjectRepoScores, ScoreOverride } from "@quiz/contracts";
 import { resolveFinalScore, scoresFinal, teacherScoreMax } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import { iso } from "../../clock.js";
-import type { Db, Tx } from "../../db/client.js";
-import { enrollments, projectRepos, projects } from "../../db/schema.js";
+import type { Db } from "../../db/client.js";
+import { projectRepos, projects } from "../../db/schema.js";
 import { DomainError } from "../http.js";
-import { isLive } from "./deadline.js";
+import { releaseCounts, repoForUpdate } from "./deadline.js";
 import { repoScores, slotRuns } from "./detail.js";
 import { ProjectError } from "./errors.js";
-import type { RepoRow } from "./repos.js";
-import type { ProjectRow } from "./views.js";
-
-/** The project and the repository, both read FOR UPDATE; the route loaded them under `staffAccess` already. */
-async function lockRepo(tx: Tx, projectId: string, repoId: string) {
-  const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
-  const [repo] = await tx
-    .select()
-    .from(projectRepos)
-    .where(and(eq(projectRepos.id, repoId), eq(projectRepos.projectId, projectId)))
-    .for("update");
-  if (!project || !repo) throw new DomainError("not_found", 404, "No such repository");
-  return { project, repo };
-}
+import { studentRepos, type RepoRow } from "./repos.js";
 
 /** The teacher's score as the audit records it. */
 const teacherScore = (repo: RepoRow) =>
@@ -74,7 +63,7 @@ export async function overrideScore(
   now: Date,
 ): Promise<ProjectRepoScores> {
   return db.transaction(async (tx) => {
-    const { project, repo } = await lockRepo(tx, projectId, repoId);
+    const { project, repo } = await repoForUpdate(tx, projectId, repoId);
     if (project.gradingMode !== "auto") throw new ProjectError("grading_none", "The project is not graded");
     if (repo.frozenAt === null) throw new ProjectError("not_frozen", "A score can be set once the repository's deadline and grace have passed");
     const runs = await slotRuns(tx, [repo]);
@@ -83,13 +72,15 @@ export async function overrideScore(
     if (body.points === null) {
       values = { teacherPoints: null, teacherMax: null, teacherComment: null, teacherGradedBy: null, teacherGradedAt: null };
     } else {
-      // The run the final score would come from without the teacher's: its maximum is the score's.
+      // The run the final score would come from without the teacher's: its
+      // maximum is the score's — unless that run is to verify (F-PROJ-08),
+      // which is no scored run at all: the teacher gives their own.
       const scored = resolveFinalScore({
         reviewScore: run(repo.reviewGradeRunId),
         frozenScore: run(repo.frozenGradeRunId),
         score: run(repo.currentGradeRunId),
       });
-      const max = teacherScoreMax(body.points, body.max, scored?.max ?? null);
+      const max = teacherScoreMax(body.points, body.max, scored && !scored.toVerify ? scored.max : null);
       if ("refusal" in max) throw new ProjectError(max.refusal);
       values = {
         teacherPoints: body.points,
@@ -107,53 +98,41 @@ export async function overrideScore(
       subjectId: repo.id,
       payload: { before: teacherScore(repo), after: teacherScore(updated!) },
     });
-    const { scores, released, changedAfterRelease } = repoScores(project, updated!, runs);
-    return { scores, released, changedAfterRelease };
+    return repoScores(project, updated!, runs);
   });
-}
-
-/**
- * The repositories of `project` the release counts and snapshots: every one
- * but those of a user who now holds a STAFF seat of the classroom (a staff
- * seat is never a student's, ADR-018; the page leaves them out too).
- */
-async function releasableRepos(tx: Tx, project: ProjectRow): Promise<RepoRow[]> {
-  const staff = tx
-    .select({ userId: enrollments.userId })
-    .from(enrollments)
-    .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, true), isNotNull(enrollments.userId)));
-  return tx
-    .select()
-    .from(projectRepos)
-    .where(and(eq(projectRepos.projectId, project.id), notInArray(projectRepos.userId, staff)));
 }
 
 /**
  * `POST /app/api/projects/:id/release` (F-PROJ-14, D05): the final scores
  * made the students' and the gradebook's. Refused on an ungraded project
- * (`grading_none`) and while a live repository is not frozen for good, or
- * none is (`not_frozen`). Writes every repository's snapshot and the
- * project's `released_at`; idempotent in effect, audited each time.
+ * (`grading_none`), while a live repository is not frozen for good, or
+ * none is (`not_frozen`), and while a final score rests on a run to verify
+ * (`to_verify`, F-PROJ-08: a score captured under a suspended protection or
+ * on a restored head is released only once the teacher's score settles it;
+ * the body names the repositories). The student repositories
+ * (`studentRepos`) and the counts (`releaseCounts`) are the page's. Writes
+ * every repository's snapshot and the project's `released_at`; idempotent
+ * in effect, audited each time.
  */
 export async function releaseProject(db: Db, projectId: string, actor: AuditActor, userId: string, now: Date): Promise<ProjectReleaseResult> {
   return db.transaction(async (tx) => {
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
     if (!project) throw new DomainError("not_found", 404, "No such project");
     if (project.gradingMode !== "auto") throw new ProjectError("grading_none", "The project is not graded");
-    const repos = await releasableRepos(tx, project);
-    const live = repos.filter((repo) => isLive(repo, project));
-    const frozen = live.filter((repo) => repo.frozenAt !== null);
-    if (!scoresFinal({ gradingMode: project.gradingMode, live: live.length, frozen: frozen.length })) {
-      throw new ProjectError("not_frozen", "The scores are final once every repository's deadline and grace have passed", {
-        live: live.length,
-        frozen: frozen.length,
-      });
+    const repos = await studentRepos(tx, project);
+    const counts = releaseCounts(project, repos);
+    if (!scoresFinal({ gradingMode: project.gradingMode, ...counts, unverified: 0 })) {
+      throw new ProjectError("not_frozen", "The scores are final once every repository's deadline and grace have passed", counts);
+    }
+    const runs = await slotRuns(tx, repos);
+    const finals = repos.map((repo) => ({ repo, final: repoScores(project, repo, runs).scores.final }));
+    const unverified = finals.filter(({ final }) => final?.toVerify === true).map(({ repo }) => repo.id);
+    if (unverified.length > 0) {
+      throw new ProjectError("to_verify", "A score to verify is released once the teacher's score settles it", { repos: unverified });
     }
     const first = project.releasedAt === null;
-    const runs = await slotRuns(tx, repos);
     let scored = 0;
-    for (const repo of repos) {
-      const final = repoScores(project, repo, runs).scores.final;
+    for (const { repo, final } of finals) {
       if (final) scored += 1;
       await tx
         .update(projectRepos)

@@ -35,6 +35,7 @@ import { audit, type AuditActor } from "../../audit.js";
 import { isoOrNull } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
 import { gradeDispatches, projectCheckpoints, projectGradeRuns, projectRepos, projects, pushReceipts } from "../../db/schema.js";
+import { DomainError } from "../http.js";
 import { ProjectError } from "./errors.js";
 import { refreshScoreSelection } from "./grading.js";
 import type { RepoRow } from "./repos.js";
@@ -268,20 +269,39 @@ export function repoDeadlineState(repo: RepoRow, project: ProjectRow): ProjectRe
 
 /**
  * The repository `repoId` of `projectId`, both locked for the transaction
- * (the project first, as every writer of both takes them), refused when
- * it takes no deadline work ({@link isLive}).
+ * (the project first, as every writer of both takes them). The route loaded
+ * them under `staffAccess` already (invariant 6): a row gone since is the
+ * 404 of a missing entity.
  */
-export async function liveRepoForUpdate(tx: Tx, projectId: string, repoId: string): Promise<{ repo: RepoRow; project: ProjectRow }> {
+export async function repoForUpdate(tx: Tx, projectId: string, repoId: string): Promise<{ repo: RepoRow; project: ProjectRow }> {
   const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).for("update");
   const [repo] = await tx
     .select()
     .from(projectRepos)
     .where(and(eq(projectRepos.id, repoId), eq(projectRepos.projectId, projectId)))
     .for("update");
-  if (!project || !repo || !isLive(repo, project)) {
+  if (!project || !repo) throw new DomainError("not_found", 404, "No such repository");
+  return { repo, project };
+}
+
+/** {@link repoForUpdate}, refused when the repository takes no GitHub work ({@link isLive}): `409 repo_unavailable`. */
+export async function liveRepoForUpdate(tx: Tx, projectId: string, repoId: string): Promise<{ repo: RepoRow; project: ProjectRow }> {
+  const found = await repoForUpdate(tx, projectId, repoId);
+  if (!isLive(found.repo, found.project)) {
     throw new ProjectError("repo_unavailable", "The repository is not provisioned, was deleted on GitHub, or its project is archived");
   }
-  return { repo, project };
+  return found;
+}
+
+/**
+ * What the release counts (M3-08b; the page's `counts` and `primaryAction`
+ * read the same): of `repos`, the live ones (`isLive`) and, of those, the
+ * ones frozen for good. Over the project's student repositories
+ * (`studentRepos`, `repos.ts`).
+ */
+export function releaseCounts(project: ProjectRow, repos: readonly RepoRow[]): { live: number; frozen: number } {
+  const live = repos.filter((repo) => isLive(repo, project));
+  return { live: live.length, frozen: live.filter((repo) => repo.frozenAt !== null).length };
 }
 
 /**

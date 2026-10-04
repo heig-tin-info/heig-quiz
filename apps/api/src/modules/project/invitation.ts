@@ -1,9 +1,10 @@
 /**
  * The staff's resend of a student's invitation (F-PROJ-07; merge task
- * M3-08b, product owner's decision 5 of 2026-10-02): a PENDING invitation
- * only (`409 invitation_not_pending`), at most once a minute per repository
- * (`429 resend_too_soon`, claimed on the row before GitHub is called and
- * given back when the call fails), with the `push` permission and never
+ * M3-08b, product owner's decision 5 of 2026-10-02): on a live repository
+ * (`409 repo_unavailable` otherwise), a PENDING invitation only (`409
+ * invitation_not_pending`), at most once a minute per repository (`429
+ * resend_too_soon`, claimed on the row before GitHub is called and given
+ * back when GitHub's part fails), with the `push` permission and never
  * more (N-SEC-21), audited `project_repo.invite_resent`.
  *
  * The student is named by the login GitHub knows TODAY for the immutable
@@ -24,11 +25,11 @@ import { linkedLogin } from "../../auth/githubLink.js";
 import { iso } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { projectRepos, projects } from "../../db/schema.js";
+import { projectRepos } from "../../db/schema.js";
 import { installationClient, ownerRepo } from "../../github/app.js";
 import { inviteCollaborator, isInvitationRefused } from "../../github/collaborators.js";
 import { projectInstallation } from "../github/service.js";
-import { DomainError } from "../http.js";
+import { liveRepoForUpdate } from "./deadline.js";
 import { ProjectError } from "./errors.js";
 
 /** The least time between two resends of one repository's invitation. */
@@ -48,44 +49,33 @@ export async function resendInvitation(
   now: Date,
   log: FastifyBaseLogger,
 ): Promise<ProjectInvitationResent> {
+  // The minute claimed on the row before GitHub is called.
   const { project, repo } = await db.transaction(async (tx) => {
-    const [project] = await tx.select().from(projects).where(eq(projects.id, projectId));
-    const [repo] = await tx
-      .select()
-      .from(projectRepos)
-      .where(and(eq(projectRepos.id, repoId), eq(projectRepos.projectId, projectId)))
-      .for("update");
-    if (!project || !repo) throw new DomainError("not_found", 404, "No such repository");
-    if (repo.deletedAt !== null || repo.provisionStatus !== "ok" || repo.fullName === null) {
-      throw new ProjectError("repo_unavailable", "The repository is not provisioned, or was deleted on GitHub");
-    }
-    if (repo.invitationStatus !== "pending") throw new ProjectError("invitation_not_pending", "The invitation is not pending");
-    if (repo.invitationResentAt !== null && now.getTime() - repo.invitationResentAt.getTime() < RESEND_INTERVAL_MS) {
+    const found = await liveRepoForUpdate(tx, projectId, repoId);
+    if (found.repo.invitationStatus !== "pending") throw new ProjectError("invitation_not_pending", "The invitation is not pending");
+    if (found.repo.invitationResentAt !== null && now.getTime() - found.repo.invitationResentAt.getTime() < RESEND_INTERVAL_MS) {
       throw new ProjectError("resend_too_soon", "The invitation was resent less than a minute ago");
     }
-    await tx.update(projectRepos).set({ invitationResentAt: now }).where(eq(projectRepos.id, repo.id));
-    return { project, repo };
+    await tx.update(projectRepos).set({ invitationResentAt: now }).where(eq(projectRepos.id, found.repo.id));
+    return found;
   });
 
-  /** The minute given back: the resend did not happen. */
-  const giveBack = () =>
-    db
-      .update(projectRepos)
-      .set({ invitationResentAt: repo.invitationResentAt })
-      .where(and(eq(projectRepos.id, repo.id), eq(projectRepos.invitationResentAt, now)));
+  // GitHub's part: a failure here means the resend did not happen, and the minute is given back.
+  let login: string;
+  let invitationStatus: "pending" | "accepted";
   try {
     const org = await projectInstallation(db, project.orgId);
     if (!org) throw new ProjectError("app_not_installed", "Quiz's GitHub App no longer acts on the project's organization");
     const { octokit } = await installationClient(config, org.installationId);
-    const login = await linkedLogin(db, octokit, repo.userId).catch((err: unknown) => {
+    const found = await linkedLogin(db, octokit, repo.userId).catch((err: unknown) => {
       log.warn({ err, repo: repo.id }, "GitHub login lookup failed");
       throw new ProjectError("invite_failed", "GitHub cannot be reached: try again");
     });
-    if (typeof login !== "string") {
+    if (typeof found !== "string") {
       throw new ProjectError("github_account_stale", "The student's GitHub account is gone or renamed: they must relink it");
     }
+    login = found;
     const { owner, repo: name } = ownerRepo(repo.fullName!);
-    let invitationStatus: "pending" | "accepted";
     try {
       invitationStatus = await inviteCollaborator(octokit, owner, name, login, "push");
     } catch (err) {
@@ -95,17 +85,24 @@ export async function resendInvitation(
       log.error({ err, repo: repo.id }, "resending an invitation failed");
       throw new ProjectError("invite_failed", "GitHub refused the invitation: try again");
     }
-    await db.update(projectRepos).set({ invitationStatus }).where(eq(projectRepos.id, repo.id));
-    await audit(db, {
+  } catch (err) {
+    await db
+      .update(projectRepos)
+      .set({ invitationResentAt: repo.invitationResentAt })
+      .where(and(eq(projectRepos.id, repo.id), eq(projectRepos.invitationResentAt, now)));
+    throw err;
+  }
+
+  // GitHub accepted: the row follows its answer, audited with it.
+  await db.transaction(async (tx) => {
+    await tx.update(projectRepos).set({ invitationStatus }).where(eq(projectRepos.id, repo.id));
+    await audit(tx, {
       ...actor,
       action: "project_repo.invite_resent",
       subjectType: "project_repo",
       subjectId: repo.id,
       payload: { login, invitationStatus },
     });
-    return { invitationStatus, resentAt: iso(now) };
-  } catch (err) {
-    await giveBack();
-    throw err;
-  }
+  });
+  return { invitationStatus, resentAt: iso(now) };
 }

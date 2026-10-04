@@ -200,7 +200,7 @@ describe("the protection re-enabled (F-PROJ-08)", () => {
     const reenabledAt = server.clock.now();
     const res = await reenable(p.id, repo!.id);
     expect(res.statusCode, res.body).toBe(200);
-    expect(ProjectRepoProtection.parse(res.json())).toEqual({ suspended: false, reenabledAt: reenabledAt.toISOString() });
+    expect(ProjectRepoProtection.parse(res.json())).toEqual({ reenabledAt: reenabledAt.toISOString() });
     expect(await repoRow(repo!.id)).toMatchObject({ protectionSuspendedAt: null, protectionReenabledAt: reenabledAt });
     // Nothing restored by the re-enable itself; the run flagged meanwhile stays to verify.
     expect(head(repo!.fullName!)).toBe(sixth);
@@ -226,7 +226,7 @@ describe("the protection re-enabled (F-PROJ-08)", () => {
     const [plain, deleted] = p.repos;
     const res = await reenable(p.id, plain!.id);
     expect(res.statusCode, res.body).toBe(200);
-    expect(ProjectRepoProtection.parse(res.json())).toEqual({ suspended: false, reenabledAt: null });
+    expect(ProjectRepoProtection.parse(res.json())).toEqual({ reenabledAt: null });
     expect(await auditOf(plain!.id, "project_repo.protection_reenabled")).toEqual([]);
 
     await server.app.db.update(projectRepos).set({ deletedAt: server.clock.now(), protectionSuspendedAt: server.clock.now() }).where(eq(projectRepos.id, deleted!.id));
@@ -314,13 +314,19 @@ describe("the invitation resent (F-PROJ-07)", () => {
     expect([done.statusCode, done.json().error]).toEqual([409, "invitation_not_pending"]);
   });
 
-  it("refuses a deleted repository, and gives the minute back when GitHub knows the account no more", async () => {
+  it("refuses a deleted repository and an archived project, and gives the minute back when GitHub knows the account no more", async () => {
     const p = await project({ students: 2 });
     const [stale, deleted] = p.repos;
     const student = p.students[0]!;
     await server.app.db.update(projectRepos).set({ deletedAt: server.clock.now() }).where(eq(projectRepos.id, deleted!.id));
     const gone = await resend(p.id, deleted!.id);
     expect([gone.statusCode, gone.json().error]).toEqual([409, "repo_unavailable"]);
+
+    expect((await call("POST", `/app/api/projects/${p.id}/archive`, teacher.headers)).statusCode).toBe(200);
+    const archived = await resend(p.id, stale!.id);
+    expect([archived.statusCode, archived.json().error]).toEqual([409, "repo_unavailable"]);
+    expect((await call("POST", `/app/api/projects/${p.id}/unarchive`, teacher.headers)).statusCode).toBe(200);
+    expect((await repoRow(stale!.id)).invitationResentAt).toBeNull();
 
     accounts.delete(student.githubUserId);
     const refused = await resend(p.id, stale!.id);

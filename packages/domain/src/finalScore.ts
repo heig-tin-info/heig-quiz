@@ -20,6 +20,8 @@ export interface ScoreLike {
   points: number | null;
   max: number | null;
   parseStatus: string;
+  /** Ingested under a suspended protection, or on a restored head (F-PROJ-08): a score the staff verify. */
+  toVerify?: boolean | undefined;
 }
 
 export interface FinalScoreInput {
@@ -44,6 +46,11 @@ export interface FinalScore {
   /** Scale of the score the points come from; null only for an imported override without a scored run. */
   max: number | null;
   source: FinalScoreSource;
+  /**
+   * The run behind the score is to verify (F-PROJ-08): a release waits for
+   * the teacher's score to settle it (M3-08b). Never for a teacher's score.
+   */
+  toVerify: boolean;
 }
 
 function parsed(s: ScoreLike | null | undefined): (ScoreLike & { points: number }) | null {
@@ -55,10 +62,10 @@ export function resolveFinalScore(repo: FinalScoreInput): FinalScore | null {
   const review = parsed(repo.reviewScore);
   const ci = parsed(repo.frozenScore) ?? parsed(repo.score);
   if (repo.teacherPoints != null) {
-    return { points: repo.teacherPoints, max: repo.teacherMax ?? review?.max ?? ci?.max ?? null, source: "teacher" };
+    return { points: repo.teacherPoints, max: repo.teacherMax ?? review?.max ?? ci?.max ?? null, source: "teacher", toVerify: false };
   }
-  if (review) return { points: review.points, max: review.max, source: "review" };
-  if (ci) return { points: ci.points, max: ci.max, source: "ci" };
+  if (review) return { points: review.points, max: review.max, source: "review", toVerify: review.toVerify === true };
+  if (ci) return { points: ci.points, max: ci.max, source: "ci", toVerify: ci.toVerify === true };
   return null;
 }
 
@@ -70,7 +77,8 @@ export type TeacherScoreRefusal = "score_max_required" | "score_max_mismatch" | 
  * merge task M3-08b): the scored run's — the one the final score would
  * otherwise come from, `runMax` — when the repository has one, and a `given`
  * maximum must then equal it; the teacher's own, required, when it has none
- * (pass / fail only, malformed, multiple). The points never exceed it.
+ * (pass / fail only, malformed, multiple) — a run to verify counts as none,
+ * so the caller passes no `runMax` for it. The points never exceed it.
  */
 export function teacherScoreMax(
   points: number,

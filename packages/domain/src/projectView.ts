@@ -39,6 +39,8 @@ export interface PrimaryActionInput {
   live: number;
   /** Of those, the ones definitively frozen. */
   frozen: number;
+  /** Repositories whose final score rests on a run to verify (F-PROJ-08): the teacher's score settles each. */
+  unverified: number;
   released: boolean;
   /** Repositories whose final score moved since the release. */
   changedAfterRelease: number;
@@ -47,11 +49,14 @@ export interface PrimaryActionInput {
 /**
  * Whether the scores are final, so the release may be asked for (product
  * owner, 2026-10-02): a graded project whose every live repository is
- * frozen, and at least one. A deleted repository, one never provisioned, or
- * any repository of an archived project does not hold it back.
+ * frozen, and at least one, and no final score left to verify (M3-08b: a
+ * score captured under a suspended protection, or on a restored head, is
+ * released only once the teacher's score settles it). A deleted
+ * repository, one never provisioned, or any repository of an archived
+ * project does not hold it back.
  */
-export function scoresFinal(p: Pick<PrimaryActionInput, "gradingMode" | "live" | "frozen">): boolean {
-  return p.gradingMode === "auto" && p.live > 0 && p.frozen === p.live;
+export function scoresFinal(p: Pick<PrimaryActionInput, "gradingMode" | "live" | "frozen" | "unverified">): boolean {
+  return p.gradingMode === "auto" && p.live > 0 && p.frozen === p.live && p.unverified === 0;
 }
 
 /**

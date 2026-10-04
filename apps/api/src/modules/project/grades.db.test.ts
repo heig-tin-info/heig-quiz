@@ -209,7 +209,7 @@ describe("the teacher's score (F-PROJ-14)", () => {
     const scores = ProjectRepoScores.parse(res.json());
     // The FROZEN run's maximum (10), never the current one's (20).
     expect(scores.scores.teacher).toEqual({ points: 8, max: 10, comment: "Late fixes counted", gradedAt: NOW });
-    expect(scores.scores.final).toEqual({ points: 8, max: 10, source: "teacher", grade: { grade: 5, fellBack: false } });
+    expect(scores.scores.final).toEqual({ points: 8, max: 10, source: "teacher", toVerify: false, grade: { grade: 5, fellBack: false } });
     expect(scores).toMatchObject({ released: null, changedAfterRelease: false });
     expect(await repoRow(repo)).toMatchObject({ teacherPoints: 8, teacherMax: 10, teacherGradedBy: teacher.id, teacherGradedAt: at(NOW) });
     // The same maximum given is accepted.
@@ -246,10 +246,22 @@ describe("the teacher's score (F-PROJ-14)", () => {
         points: 8,
         max: 20,
         source: "teacher",
+        toVerify: false,
         grade: { grade: 3, fellBack: false },
       });
     }
     expect(await repoRow(noRun)).toMatchObject({ teacherPoints: 8, teacherMax: 20 });
+  });
+
+  it("treats a run to verify as no scored run: the teacher gives their own maximum", async () => {
+    const w = await world();
+    const repo = await repoOf(w, w.students[0]!.id);
+    await setRepo(repo, { frozenGradeRunId: await run(repo, { toVerify: true }) });
+    const missing = await score(w, repo, { points: 8 });
+    expect([missing.statusCode, missing.json().error]).toEqual([422, "score_max_required"]);
+    const res = await score(w, repo, { points: 8, max: 20 });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(ProjectRepoScores.parse(res.json()).scores.final).toMatchObject({ points: 8, max: 20, source: "teacher", toVerify: false });
   });
 
   it("clears the score with null, and audits before and after", async () => {
@@ -286,6 +298,31 @@ describe("the release (F-PROJ-14, D05)", () => {
 
     await setRepo(extended, { deadlineAppliedAt: at("2026-10-12T22:00:00Z"), frozenAt: at("2026-10-12T22:30:00Z") });
     expect((await release(w)).statusCode).toBe(200);
+  });
+
+  it("waits for the teacher's score where a final score rests on a run to verify (F-PROJ-08)", async () => {
+    const w = await world({ students: 2 });
+    const [suspect, plain] = w.students;
+    const tampered = await repoOf(w, suspect!.id);
+    await setRepo(tampered, { frozenGradeRunId: await run(tampered, { toVerify: true }) });
+    const clean = await repoOf(w, plain!.id);
+    await setRepo(clean, { frozenGradeRunId: await run(clean) });
+
+    const before = await detail(w);
+    expect(before.primaryAction).toBe("none");
+    expect(rowOf(before, suspect!.id).scores.final).toMatchObject({ source: "ci", toVerify: true });
+    expect(rowOf(before, plain!.id).scores.final).toMatchObject({ source: "ci", toVerify: false });
+    const refused = await release(w);
+    expect(refused.statusCode, refused.body).toBe(409);
+    expect(refused.json()).toMatchObject({ error: "to_verify", repos: [tampered] });
+    expect((await projectRow(w.projectId)).releasedAt).toBeNull();
+
+    // The teacher's score settles it (the run's maximum does not apply: its own).
+    expect((await score(w, tampered, { points: 5, max: 10 })).statusCode).toBe(200);
+    expect((await detail(w)).primaryAction).toBe("release");
+    const res = await release(w);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(await repoRow(tampered)).toMatchObject({ releasedPoints: 5, releasedMax: 10 });
   });
 
   it("is refused on an ungraded project, and without a single live repository", async () => {

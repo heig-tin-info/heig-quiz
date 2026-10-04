@@ -49,9 +49,9 @@ import { enrollments, githubAccounts, gradeDispatches, projectGradeRuns, project
 import { installationClient } from "../../github/app.js";
 import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
-import { isLive, repoDeadlineState } from "./deadline.js";
+import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
 import { forEachLimit } from "./lease.js";
-import type { RepoRow } from "./repos.js";
+import { studentRepos, type RepoRow } from "./repos.js";
 import { projectSummary, type ProjectRow } from "./views.js";
 
 /** Live-state reads in flight for one page view. */
@@ -189,10 +189,9 @@ async function finalDispatches(db: Db, repoIds: string[]): Promise<Map<string, D
  * the score's write (M3-08b); `runs` holds the repository's slot runs
  * ({@link slotRuns}).
  */
-export function repoScores(project: ProjectRow, repo: RepoRow, runs: Map<string, RunRow>): ProjectRepoScores & { toVerify: boolean } {
+export function repoScores(project: ProjectRow, repo: RepoRow, runs: Map<string, RunRow>): ProjectRepoScores {
   const scale = project.gradingScale;
-  const run = (id: string | null) => (id === null ? undefined : runs.get(id));
-  const [current, frozen, review] = [run(repo.currentGradeRunId), run(repo.frozenGradeRunId), run(repo.reviewGradeRunId)];
+  const [current, frozen, review] = slots(repo, runs);
   const final = resolveFinalScore({
     teacherPoints: repo.teacherPoints,
     teacherMax: repo.teacherMax,
@@ -214,8 +213,12 @@ export function repoScores(project: ProjectRow, repo: RepoRow, runs: Map<string,
     },
     released: released ? { points: repo.releasedPoints, max: repo.releasedMax } : null,
     changedAfterRelease: changedAfterRelease(released, final, { points: repo.releasedPoints, max: repo.releasedMax }),
-    toVerify: [current, frozen, review].some((r) => r?.toVerify === true),
   };
+}
+
+/** The repository's three slot runs — current, frozen, review — from {@link slotRuns}'s map. */
+function slots(repo: RepoRow, runs: Map<string, RunRow>): (RunRow | undefined)[] {
+  return [repo.currentGradeRunId, repo.frozenGradeRunId, repo.reviewGradeRunId].map((id) => (id === null ? undefined : runs.get(id)));
 }
 
 /** The final review's state of a repository, from its row and its ledger row (`reviewState`, `@quiz/domain`). */
@@ -233,7 +236,7 @@ function repoView(
   dispatch: DispatchRow | undefined,
   read: LiveRead | undefined,
 ): ProjectRepoView {
-  const { scores, released, changedAfterRelease: changed, toVerify } = repoScores(project, repo, runs);
+  const { scores, released, changedAfterRelease: changed } = repoScores(project, repo, runs);
   return {
     ...repoDeadlineState(repo, project),
     provisionStatus: repo.provisionStatus,
@@ -248,7 +251,7 @@ function repoView(
     released,
     flags: {
       protectionSuspended: repo.protectionSuspendedAt !== null,
-      toVerify,
+      toVerify: slots(repo, runs).some((r) => r?.toVerify === true),
       multiple: facts?.multiple ?? false,
       malformed: facts?.malformed ?? null,
       deleted: repo.deletedAt !== null || read?.state?.missing === true,
@@ -269,8 +272,9 @@ export interface DetailOptions {
  * (staff seats excepted) with their repository — null when they have not
  * accepted —, then the repositories whose student has left the roster. A
  * repository of a user who now holds a STAFF seat of the classroom is left
- * out altogether — rows, counts and the release's readiness: a staff seat
- * is never a student's (ADR-018).
+ * out altogether — rows, counts and the release's readiness
+ * (`studentRepos`, `releaseCounts`: the release reads the same): a staff
+ * seat is never a student's (ADR-018).
  * The project was loaded under `staffAccess` by the route (invariant 6).
  */
 export async function projectDetail(
@@ -280,9 +284,8 @@ export async function projectDetail(
   now: Date,
   opts: DetailOptions,
 ): Promise<ProjectDetail> {
-  const seats = await db
+  const roster = await db
     .select({
-      staff: enrollments.staff,
       enrollmentId: enrollments.id,
       userId: enrollments.userId,
       nom: enrollments.nom,
@@ -293,28 +296,17 @@ export async function projectDetail(
     })
     .from(enrollments)
     .leftJoin(githubAccounts, eq(githubAccounts.userId, enrollments.userId))
-    .where(eq(enrollments.classroomId, project.classroomId))
+    .where(and(eq(enrollments.classroomId, project.classroomId), eq(enrollments.staff, false)))
     .orderBy(enrollments.nom, enrollments.prenom, enrollments.id);
-  const roster = seats.filter((s) => !s.staff);
-  const staffUsers = new Set(seats.filter((s) => s.staff).map((s) => s.userId));
   // Individual repositories (M3-03); a group's rows join their members with M3-15.
-  const repos = (
-    await db
-      .select({ repo: projectRepos, user: users, githubLogin: githubAccounts.login })
-      .from(projectRepos)
-      .innerJoin(users, eq(users.id, projectRepos.userId))
-      .leftJoin(githubAccounts, eq(githubAccounts.userId, projectRepos.userId))
-      .where(eq(projectRepos.projectId, project.id))
-  ).filter(({ repo }) => !staffUsers.has(repo.userId));
-
-  const repoRows = repos.map(({ repo }) => repo);
-  const repoIds = repoRows.map((repo) => repo.id);
-  const [runs, facts, dispatches] = await Promise.all([slotRuns(db, repoRows), runFacts(db, repoIds), finalDispatches(db, repoIds)]);
-  const liveRepos = repoRows.filter((repo) => isLive(repo, project));
+  const repos = await studentRepos(db, project);
+  const repoIds = repos.map((repo) => repo.id);
+  const [runs, facts, dispatches] = await Promise.all([slotRuns(db, repos), runFacts(db, repoIds), finalDispatches(db, repoIds)]);
+  const liveRepos = repos.filter((repo) => isLive(repo, project));
   const { live, complete } = await liveStates(db, config, project, liveRepos, opts.log, opts.budgetMs ?? LIVE_BUDGET_MS);
 
   const views = new Map(
-    repoRows.map((repo) => [repo.userId, repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), live.get(repo.id))]),
+    repos.map((repo) => [repo.userId, repoView(project, repo, runs, facts.get(repo.id), dispatches.get(repo.id), live.get(repo.id))]),
   );
   const rows: ProjectDetailRow[] = roster.map((s) => ({
     student: {
@@ -328,24 +320,31 @@ export async function projectDetail(
     },
     repo: (s.userId !== null && views.get(s.userId)) || null,
   }));
+  // The repositories whose student has left the roster since, by their account.
   const onRoster = new Set(roster.map((s) => s.userId));
-  for (const { repo, user, githubLogin } of repos) {
-    if (onRoster.has(repo.userId)) continue;
-    const student: ProjectStudent = {
-      enrollmentId: null,
-      userId: user.id,
-      nom: user.familyName,
-      prenom: user.givenName,
-      email: user.email,
-      claimed: false,
-      githubLogin,
-    };
-    rows.push({ student, repo: views.get(repo.userId)! });
+  const leavers = repos.filter((repo) => !onRoster.has(repo.userId)).map((repo) => repo.userId);
+  if (leavers.length > 0) {
+    const accounts = await db
+      .select({ user: users, githubLogin: githubAccounts.login })
+      .from(users)
+      .leftJoin(githubAccounts, eq(githubAccounts.userId, users.id))
+      .where(inArray(users.id, leavers));
+    for (const { user, githubLogin } of accounts) {
+      const student: ProjectStudent = {
+        enrollmentId: null,
+        userId: user.id,
+        nom: user.familyName,
+        prenom: user.givenName,
+        email: user.email,
+        claimed: false,
+        githubLogin,
+      };
+      rows.push({ student, repo: views.get(user.id)! });
+    }
   }
 
   const accepted = [...views.values()];
-  const frozen = liveRepos.filter((r) => r.frozenAt !== null).length;
-  const changed = accepted.filter((v) => v.flags.changedAfterRelease).length;
+  const counts = releaseCounts(project, repos);
   return {
     ...(await projectSummary(db, project, now)),
     releasedAt: isoOrNull(project.releasedAt),
@@ -354,16 +353,15 @@ export async function projectDetail(
       archived: project.archivedAt !== null,
       gradingMode: project.gradingMode,
       sourceAhead: project.sourceAheadSha !== null,
-      live: liveRepos.length,
-      frozen,
+      ...counts,
+      unverified: accepted.filter((v) => v.scores.final?.toVerify === true).length,
       released: project.releasedAt !== null,
-      changedAfterRelease: changed,
+      changedAfterRelease: accepted.filter((v) => v.flags.changedAfterRelease).length,
     }),
     counts: {
       students: roster.length,
       accepted: accepted.length,
-      live: liveRepos.length,
-      frozen,
+      ...counts,
       toVerify: accepted.filter((v) => v.flags.toVerify).length,
       alerts: accepted.filter((v) => v.flags.multiple || v.flags.protectionSuspended).length,
     },

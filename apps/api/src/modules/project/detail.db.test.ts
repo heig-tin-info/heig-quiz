@@ -308,14 +308,14 @@ describe("the project page (F-PROJ-13)", () => {
 
     const d = await detail(w.projectId);
     const scores = (userId: string) => rowOf(d, userId).repo!.scores;
-    expect(scores(s1!.id).final).toEqual({ points: 5.5, max: 6, source: "teacher", grade: { grade: 5.5, fellBack: false } });
+    expect(scores(s1!.id).final).toEqual({ points: 5.5, max: 6, source: "teacher", toVerify: false, grade: { grade: 5.5, fellBack: false } });
     // A row without its own maximum (heig-classroom's imported ones) reads the review's.
     expect(scores(s1!.id).teacher).toEqual({ points: 5.5, max: null, comment: "seen", gradedAt: null });
-    expect(scores(s2!.id).final).toEqual({ points: 3, max: 6, source: "review", grade: { grade: 3, fellBack: false } });
+    expect(scores(s2!.id).final).toEqual({ points: 3, max: 6, source: "review", toVerify: false, grade: { grade: 3, fellBack: false } });
     // A frozen score out of 10 under "the score is the grade": the linear scale, and says so.
-    expect(scores(s3!.id).final).toEqual({ points: 7, max: 10, source: "ci", grade: { grade: 4.5, fellBack: true } });
+    expect(scores(s3!.id).final).toEqual({ points: 7, max: 10, source: "ci", toVerify: false, grade: { grade: 4.5, fellBack: true } });
     expect(scores(s3!.id).frozen).toMatchObject({ points: 7, max: 10, grade: { grade: 4.5, fellBack: true } });
-    expect(scores(s4!.id).final).toEqual({ points: 4.5, max: 6, source: "ci", grade: { grade: 4.5, fellBack: false } });
+    expect(scores(s4!.id).final).toEqual({ points: 4.5, max: 6, source: "ci", toVerify: false, grade: { grade: 4.5, fellBack: false } });
     expect(scores(s4!.id).frozen).toBeNull();
   });
 

@@ -377,6 +377,9 @@ export type ProjectSummary = z.infer<typeof ProjectSummary>;
  * The staff's writes of M3-08b (F-PROJ-07, F-PROJ-08, F-PROJ-14):
  *   - `not_frozen` — a teacher's score before the repository's definitive
  *     freeze, or a release while a live repository is not frozen;
+ *   - `to_verify` — a release while a repository's final score rests on a
+ *     run to verify (F-PROJ-08; the body names them, `repos`): the
+ *     teacher's score settles each;
  *   - `grading_none` — a teacher's score or a release under `grading_mode:
  *     none`;
  *   - `score_max_required` (422) — a score on a repository without a scored
@@ -404,6 +407,7 @@ export const PROJECT_REFUSALS = [
   "repo_unavailable",
   // M3-08b.
   "not_frozen",
+  "to_verify",
   "grading_none",
   "score_max_required",
   "score_max_mismatch",
@@ -639,12 +643,15 @@ export type ProjectSlotScore = z.infer<typeof ProjectSlotScore>;
  * frozen one — the current one while nothing is frozen (`resolveFinalScore`
  * of `@quiz/domain`); `source` names it (I42). A teacher's score carries
  * the maximum it was written with (M3-08b); `max` is null only for an
- * imported teacher score on a repository without a scored run.
+ * imported teacher score on a repository without a scored run. `toVerify`:
+ * the run behind the score is to verify (F-PROJ-08) — the release waits for
+ * the teacher's score to settle it; never for a teacher's score.
  */
 export const ProjectFinalScore = z.object({
   points: z.number(),
   max: z.number().nullable(),
   source: z.enum(FINAL_SCORE_SOURCES),
+  toVerify: z.boolean(),
   grade: ProjectGradeView.nullable(),
 });
 export type ProjectFinalScore = z.infer<typeof ProjectFinalScore>;
@@ -894,7 +901,8 @@ export type ProjectRepoScores = z.infer<typeof ProjectRepoScores>;
 /**
  * `POST /app/api/projects/:id/release` (F-PROJ-14, D05): the final scores
  * made the students' and the gradebook's, once every live repository is
- * frozen for good (`409 not_frozen`; `409 grading_none`). Writes each
+ * frozen for good (`409 not_frozen`) and no final score is left to verify
+ * (`409 to_verify`, `repos` the repository ids; `409 grading_none`). Writes each
  * repository's snapshot (`released` of its row); a release again rewrites
  * it, which clears `changedAfterRelease`. `first`: the project had never
  * been released (the one release the students are notified of, M3-09);
@@ -913,13 +921,11 @@ export type ProjectReleaseResult = z.infer<typeof ProjectReleaseResult>;
  * protected files restored again on a repository marked "protected files
  * in conflict"; only restores after it count toward the cap, the runs
  * flagged meanwhile stay to verify, nothing is restored at once. Idempotent
- * on a repository not suspended. `409 repo_unavailable` for a repository
- * not provisioned, deleted, or of an archived project.
+ * on a repository not suspended (`reenabledAt` then the last re-enable, or
+ * null). `409 repo_unavailable` for a repository not provisioned, deleted,
+ * or of an archived project.
  */
-export const ProjectRepoProtection = z.object({
-  suspended: z.boolean(),
-  reenabledAt: z.iso.datetime().nullable(),
-});
+export const ProjectRepoProtection = z.object({ reenabledAt: z.iso.datetime().nullable() });
 export type ProjectRepoProtection = z.infer<typeof ProjectRepoProtection>;
 
 /**
@@ -940,6 +946,7 @@ export type ProjectInvitationResent = z.infer<typeof ProjectInvitationResent>;
  * The `409 unassigned_students` body of `POST /app/api/projects/:id/publish`
  * (ADR-048): the claimed students of the classroom in no group of the
  * project, by name; empty when the group project has no group at all.
+ * Consumed by the project page (M3-12a), which words it.
  */
 export const ProjectUnassigned = z.object({
   error: z.literal("unassigned_students"),

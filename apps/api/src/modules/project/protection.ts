@@ -233,7 +233,7 @@ export async function reenableProtection(
 ): Promise<ProjectRepoProtection> {
   return db.transaction(async (tx) => {
     const { repo } = await liveRepoForUpdate(tx, projectId, repoId);
-    if (repo.protectionSuspendedAt === null) return { suspended: false, reenabledAt: isoOrNull(repo.protectionReenabledAt) };
+    if (repo.protectionSuspendedAt === null) return { reenabledAt: isoOrNull(repo.protectionReenabledAt) };
     await tx
       .update(projectRepos)
       .set({ protectionSuspendedAt: null, protectionReenabledAt: now })
@@ -245,6 +245,6 @@ export async function reenableProtection(
       subjectId: repo.id,
       payload: { suspendedAt: iso(repo.protectionSuspendedAt) },
     });
-    return { suspended: false, reenabledAt: iso(now) };
+    return { reenabledAt: iso(now) };
   });
 }

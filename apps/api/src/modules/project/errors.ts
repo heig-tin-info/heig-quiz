@@ -40,6 +40,7 @@ const STATUS: Record<Code, number> = {
   checkpoint_dispatched: 409,
   // The staff's writes (M3-08b): the score, the release, the resend.
   not_frozen: 409,
+  to_verify: 409,
   grading_none: 409,
   score_max_required: 422,
   score_max_mismatch: 422,

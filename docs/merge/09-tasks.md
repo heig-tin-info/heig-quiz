@@ -1413,16 +1413,21 @@ that serves them.
     - `POST /app/api/projects/:id/release` → `ProjectReleaseResult` `{
       releasedAt, first, repos, scored }`. `409 grading_none`; `409
       not_frozen` with `live` and `frozen` counts in the body while a live
-      repository is not frozen, or none is (`scoresFinal`, the page's
-      rule). Audited `project.release` (`first`, `repos`, `scored`).
+      repository is not frozen, or none is; `409 to_verify` with `repos`
+      (ids) while a repository's final score rests on a run to verify
+      (F-PROJ-14 amended 2026-10-04: the teacher's score settles it;
+      `ProjectFinalScore.toVerify` says which, `scoresFinal` takes an
+      `unverified` count so the page offers no Release meanwhile). Audited
+      `project.release` (`first`, `repos`, `scored`).
     - `POST /app/api/projects/:id/repos/:rid/protection` →
-      `ProjectRepoProtection` `{ suspended: false, reenabledAt }`; a no-op
-      on a repository not suspended; `409 repo_unavailable` (not
-      provisioned, deleted, archived project). Audited
-      `project_repo.protection_reenabled` (`payload.suspendedAt`).
+      `ProjectRepoProtection` `{ reenabledAt: iso | null }`; a no-op on a
+      repository not suspended (its last re-enable, or null); `409
+      repo_unavailable` (not provisioned, deleted, archived project).
+      Audited `project_repo.protection_reenabled` (`payload.suspendedAt`).
     - `POST /app/api/projects/:id/repos/:rid/invite` →
       `ProjectInvitationResent` `{ invitationStatus, resentAt }`. `409
-      invitation_not_pending`, `409 repo_unavailable`, `429
+      invitation_not_pending`, `409 repo_unavailable` (not provisioned,
+      deleted, archived project: `liveRepoForUpdate`), `429
       resend_too_soon` (less than a minute after the last resend), `409
       github_account_stale` (the student's account is gone or renamed:
       they relink), `502 invite_failed`. Audited `project_repo.invite_resent`
@@ -1440,12 +1445,18 @@ that serves them.
     (`teacherMax ?? review.max ?? ci.max ?? null`); a null `teacher_max`
     (heig-classroom's imported rows) keeps reading the CI's, as before.
     `teacherScoreMax(points, given, runMax)` in `@quiz/domain/finalScore.ts`
-    is the rule. `ProjectRepoView.scores.teacher` gained `max`.
+    is the rule; a run to verify is no scored run (`runMax` null): the
+    teacher gives their own maximum. `ProjectRepoView.scores.teacher`
+    gained `max`; `resolveFinalScore` and `ProjectFinalScore` carry
+    `toVerify` (the run behind the score is to verify; never for a
+    teacher's).
   - **The release** (decisions 2 and 3): `releaseProject`
-    (`modules/project/grades.ts`) counts the live repositories WITHOUT
-    those of a user who now holds a staff seat (as the page does), and
-    writes `released_points / released_max` for EVERY repository of the
-    project but those — a deleted repository with a score gets its
+    (`modules/project/grades.ts`) reads the page's own set and counts —
+    `studentRepos(db, project)` (`repos.ts`: every repository but those of
+    a user who now holds a staff seat) and `releaseCounts(project, repos)`
+    (`deadline.ts`: live, frozen) — and refuses `to_verify` while a final
+    score rests on a run to verify (above). It writes `released_points /
+    released_max` for EVERY repository of that set — a deleted repository with a score gets its
     snapshot too, so its grade is released and `changedAfterRelease` stays
     false. The grade is not stored: `scoreGrade(points, max, scale)` on
     read, everywhere (M5-03 reads the snapshot that way). The readers keep
@@ -1465,7 +1476,9 @@ that serves them.
     `claimReviewWork` and the page).
   - **The resend** (decision 5): `resendInvitation` (`invitation.ts`),
     the minute claimed on a new column `project_repos.invitation_resent_at`
-    before GitHub is called and given back when the call fails;
+    before GitHub is called and given back when GitHub's part fails (not
+    once GitHub accepted: the status and the audit then land in one
+    transaction);
     `linkedLogin` names the student (today's login by the immutable id);
     `inviteCollaborator(…, "push")`. The row's `invitation_status` follows
     GitHub's answer (`accepted` on a 204). Apart from M3-06's daily
@@ -1484,9 +1497,12 @@ that serves them.
     `pending` (due, not yet asked). The ledger wins over the row's state.
     A test per status in `detail.db.test.ts`.
   - Migration `0061_project_staff_writes`: the three additive columns.
-    `detail.ts` exports `repoScores(project, repo, runs)` and
-    `slotRuns(db, repos)`, the one computation behind the rows and the
-    score's write; `liveRepoForUpdate` is exported from `deadline.ts`.
+    `detail.ts` exports `repoScores(project, repo, runs)` (exactly
+    `ProjectRepoScores`, the score route's answer) and `slotRuns(db,
+    repos)`, the one computation behind the rows and the score's write;
+    `deadline.ts` exports `repoForUpdate` (the project then the repository
+    locked) and `liveRepoForUpdate` (the same, refused unless `isLive`),
+    the one lock every repository write takes.
   - Not done here: the web page (M3-12); the notification (M3-09); the
     student's own resend (M3-09); storing a repository's name without its
     owner (the M3-04 follow-up, still open); a manual re-dispatch of an
