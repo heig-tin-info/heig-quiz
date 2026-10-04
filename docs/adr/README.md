@@ -117,6 +117,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-035 — Merging heig-classroom into Quiz: one platform, one roster, activities of several kinds](ADR-035-fusion-de-classroom.md)
 - [ADR-047 — Online workspace: no student credential, therefore no write access](ADR-047-espace-de-travail-en-ligne.md)
 - [ADR-048 — Group assignments: groups per assignment, formed by the staff, delivered in three lots](ADR-048-projets-de-groupe.md)
+- [ADR-070 — Group sets: a classroom's reusable groups, which a project follows until its deadline](ADR-070-repartitions-de-groupes.md)
 - [ADR-049 — The classroom journal: GitHub holds the content, Postgres holds a read model](ADR-049-journal-source-github.md)
 - [ADR-057 — The journal in two modes: in Quiz, or in a GitHub repository](ADR-057-journal-two-modes.md)
 - [ADR-062 — Building a project's distribution repository, and never deleting on GitHub](ADR-062-depot-de-distribution.md)
