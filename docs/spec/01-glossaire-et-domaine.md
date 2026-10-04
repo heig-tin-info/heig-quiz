@@ -25,7 +25,8 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Source repository | The teacher's repository a project is made from, in the classroom's organization. Never shown to a student, nor its existence. Never called a "template", which is an evaluation template's word. |
 | Distribution repository | The private repository the platform builds from the source and hands out from (`<slug>-squashed`): the source's tree in one commit per branch (`squash`), or its history (`whole`). Written by the App only. |
 | Student repository | The repository of one student, or of one group (*group repository*), made at Accept from the distribution repository, with which it shares an ancestor. The student holds the `push` permission, never more. |
-| Project group | A team of students for one project, formed by the staff; one repository per group (ADR-048). A student is in at most one group of a project. |
+| Group set | A named list of groups of a classroom's students (fr *répartition*), reusable by several projects; formed by the staff, by hand or at random, or by the students (ADR-070). A student is in at most one group of a set. The word "team" is not used: it names the course's staff in French and Microsoft Teams in English. |
+| Project group | A project's copy of a group of its group set; it follows the set until the deadline, then no longer moves. One repository per group (ADR-048, ADR-070). A student is in at most one group of a project. |
 | Push receipt | The server's own record of a push to a tracked repository — head commit and the time the platform received the webhook — written as the webhook arrives. The legal reference of a deadline: the commit's date is never trusted (ADR-012). |
 | Grade run | One CI run of `grading.yml` on a student repository, with the score it reported (`points / max`) or why it has none. Immutable. heig-classroom's name, kept for the table (`project_grade_runs`), though it holds a score. |
 | Score | Points out of a maximum, as a project's CI reports them (`4.5/6`). Never a grade: a score becomes a grade through the project's grading scale, at the release. |
@@ -79,7 +80,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Connect a classroom to a GitHub organization, create, choose or remove its journal, edit its pages | No | On own classrooms | With Super Powers, else as a teacher |
 | Read a classroom's journal | Own classrooms, pages neither draft nor before their `visible_from` | On own classrooms, drafts included | With Super Powers, else as a teacher |
 | Link or unlink own GitHub account | Yes | Yes | Yes |
-| Create, publish, sync, lock, grade and release a project; form its groups | No | On own classrooms | With Super Powers, else as a teacher |
+| Create, publish, sync, lock, grade and release a project; form its groups and group sets | No | On own classrooms | With Super Powers, else as a teacher |
 | Accept a project, see own repository and score | Own classrooms, own repository or own group's | No | No |
 | See and export a classroom's gradebook, choose its columns and weights | Own cells, the mean once published | On own classrooms | With Super Powers, else as a teacher |
 | Delete a classroom or an evaluation and its data | No | On own classrooms | With Super Powers, else as a teacher |
@@ -130,6 +131,12 @@ erDiagram
     CLASSROOM_JOURNAL ||--o{ JOURNAL_PAGE : mirrors
     CLASSROOM_JOURNAL ||--o{ JOURNAL_ASSET : mirrors
     CLASSROOM ||--o{ PROJECT : hosts
+    CLASSROOM ||--o{ GROUP_SET : sets
+    GROUP_SET ||--o{ STUDENT_GROUP : groups
+    STUDENT_GROUP ||--o{ STUDENT_GROUP_MEMBER : has
+    ENROLLMENT ||--o{ STUDENT_GROUP_MEMBER : member
+    GROUP_SET |o--o{ PROJECT : followed_by
+    STUDENT_GROUP |o--o{ PROJECT_GROUP : copied_to
     PROJECT ||--o{ PROJECT_GROUP : groups
     PROJECT_GROUP ||--o{ PROJECT_GROUP_MEMBER : has
     ENROLLMENT ||--o{ PROJECT_GROUP_MEMBER : member
@@ -160,7 +167,7 @@ erDiagram
 - **GITHUB_ACCOUNT**: `user_id`, `github_user_id` unique, `login`, `linked_at`.
 - **CLASSROOM_JOURNAL**: `classroom_id`, `mode` `quiz` / `github`, and in GitHub mode `github_repo_id`, `full_name`, `ref`, `root_path`, `last_commit_sha`, `sync_status`, `sync_error`.
 - **JOURNAL_PAGE**: `path`, `title`, `front_matter`, `draft`, `visible_from`, the rendered `html` and `toc`, `warnings`.
-- **PROJECT**: `id`, `classroom_id`, `name`, `slug`, `state` `draft` / `published` / `locked`, `start_at`, `deadline_at`, `grace_minutes`, the source and distribution repositories, `source_strategy` `whole` / `squash`, `deadline_strategy` `lock` / `commit`, `grading_mode` `auto` / `none`, `publish_mode`, `branches`, `protected_files`, `group_mode`, `grading_scale`, `deadline_applied_at`, `released_at`, `archived_at`.
+- **PROJECT**: `id`, `classroom_id`, `name`, `slug`, `state` `draft` / `published` / `locked`, `start_at`, `deadline_at`, `grace_minutes`, the source and distribution repositories, `source_strategy` `whole` / `squash`, `deadline_strategy` `lock` / `commit`, `grading_mode` `auto` / `none`, `publish_mode`, `branches`, `protected_files`, `group_mode`, `group_set_id`, `grading_scale`, `deadline_applied_at`, `released_at`, `archived_at`.
 - **PROJECT_REPO**: `project_id`, `user_id` (who accepted), `group_id` for a group repository, `github_repo_id`, `full_name`, `provision_status`, `invitation_status`, its own `deadline_at` (null: the project's), `deadline_applied_at`, `frozen_at`, `locked_at` (and `archived_at` when the lock fell back to archiving), the staff's hand on the lock (`staff_lock`), `ci_status`, the current, frozen and review grade runs, the teacher's points and comment, `deleted_at`.
 - **GRADE_RUN**: `repo_id`, `workflow_run_id`, `run_attempt`, `head_sha`, `conclusion`, `points`, `max`, `parse_status`, `after_deadline`, `completed_at`.
 - **GRADEBOOK_COLUMN**: `classroom_id`, the activity, `counts`, `weight`; the classroom's `mean_published`.

@@ -1917,20 +1917,70 @@ release. The original card's notes stay here; each part has its card below.
 - **Output**: a short report in the PR; findings as tasks.
 
 ### M3-15 — Groups (API)
-- **Depends on**: M3-03.
-- **Port from**: `C:modules/assignments/groups.ts`, `C:group-repos.ts`,
-  `inviteOnGithubLink`; the org pre-removal hook in
-  `Q:modules/org/service.ts`.
+Redesigned by [ADR-070](../adr/ADR-070-repartitions-de-groupes.md)
+(product owner, 2026-10-04): classroom group sets, a project's copy that
+follows its set until the deadline. Split in two PRs.
+
+#### M3-15a — Group sets and a project's copy (database only)
+- **Depends on**: M3-02.
+- **Create**: `Q:modules/group/{routes,service}.ts`, `Q:db/group.ts`
+  (`group_sets`, `student_groups`, `student_group_members`), the migration
+  (also `projects.group_set_id`, `project_groups.source_group_id`, drop of
+  `projects.group_max_size`), `packages/contracts/src/group.ts`, the pure
+  rules in `@quiz/domain` (`formRandomGroups`: balanced sizes, `smaller` |
+  `larger`; `groupSyncPlan`: the diff of a set and a copy, with the follow
+  predicate of ADR-070 §4), the `group_set.*` and `group.*` audit actions.
+- **Routes** (staff, `staffAccess`): sets (list, create, rename, duplicate,
+  delete with `409 set_in_use`), groups (create, rename, delete), a
+  member's move or removal, the random formation; read-only on an archived
+  classroom (`409 classroom_archived`). A project's `groupSetId` in the
+  draft's PATCH (`not_draft` once published); `409 no_group_set` at
+  publication; the copy made, replaced, and kept in step in the set's
+  transaction where no repository is touched (none exists before M3-15b).
+- **Port from**: `C:modules/assignments/groups.ts` (names, slugs,
+  positions, moves), its `groups.db.test` where the rules survive.
+- **Tests**: the follow predicate and the random formation in the domain;
+  the routes, the copy's step with the set, a stopped copy, staff seats
+  never placed, the 404 of a classroom not reached.
+
+#### M3-15b — Group repositories and their membership on GitHub
+- **Depends on**: M3-15a, M3-03.
+- **Port from**: `C:group-repos.ts`, `inviteOnGithubLink`, the org
+  pre-removal hook in `Q:modules/org/service.ts`.
 - **From M3-03** (orchestrator, 2026-10-02): Accept answers `409 no_group`
   for any group project: this task replaces it by the group's repository
   (`claimGroupRepo`, `joinGroupRepo`), adds `has_repo` and `revoke_failed`
   to `PROJECT_ACCEPT_REFUSALS`, and covers the revocation on leaving the
   roster (F-PROJ-17) for the INDIVIDUAL repositories M3-03 makes too.
-- **Tests**: port `groups.db.test` (22) and `group-repos.db.test` (21).
+- **Create**: the `group.sync` job (one lease per project, the deadlines
+  re-read in its transaction; a departure waits for GitHub, an arrival is
+  invited), the *access to revoke* flag on a repository's row, *Resync with
+  the set*, `409 needs_confirmation` with the consequences and their
+  digest on every membership write that reaches GitHub; a group repository
+  is a student's through the copy's membership only (N-SEC-20); the
+  synchronous revocation before a roster removal or an account change.
+- **Tests**: port `group-repos.db.test` (21); a move between two following
+  groups, into a stopped one, a refused revocation retried, two projects on
+  one set, the creator moved out, a stale digest.
 
 ### M3-16 — Groups (web)
-- **Depends on**: M3-15, M3-12.
-- **Goal**: `/projects/:id/groups` (port of `GroupsPage`).
+- **Depends on**: M3-15a (M3-15b for the confirmations and flags), M3-12.
+- **Goal**: the classroom's *Groups* tab (fr *Groupes*) listing its sets; a
+  set's page: the students in no group and the groups, drag and drop with a
+  keyboard equivalent, *Undo* for a move with no GitHub consequence, the
+  confirmation naming them otherwise, the random formation (size, smaller /
+  larger); the project form's group work (`GROUPS_OFFERED`) with the
+  classroom's sets and *Create new groups*; the project page's set, its
+  drift and *Resync*, one row per group. Read `apps/web/DESIGN.md` and the
+  `quiz-ui` skill first.
+
+### M3-17 — Groups formed by the students (ADR-070 lot 2)
+- **Depends on**: M3-15a, M3-16, M3-09.
+- **Goal**: F-PROJ-22: a set opened to the students until a date, with a
+  binding maximum size; the student routes (create and name, join, leave,
+  rename) on `readableClassroom`'s student branch, refused in
+  impersonation, `seb` and `kiosk` sessions; the module's student view
+  (N-SEC-20) and its tests; the student's screen.
 
 ## M4 — Journal
 
