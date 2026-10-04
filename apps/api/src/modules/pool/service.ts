@@ -62,6 +62,7 @@ export {
 } from "./shared.js";
 export {
   listPools,
+  poolRolesOf,
   createPool,
   PERSONAL_POOL_NAME,
   ensurePersonalPool,

@@ -8,7 +8,7 @@ import type { Db } from "../../db/client.js";
 import { DomainError } from "../http.js";
 import { coursePools, courseStaff, pools } from "../../db/schema.js";
 import { accessRevoked } from "../realtime/bus.js";
-import { questionCount, poolJson, listPools } from "./pools.js";
+import { questionCount, poolJson, poolRolesOf } from "./pools.js";
 import type { Caller } from "../guards.js";
 
 export async function poolsOfCourse(db: Db, courseId: string) {
@@ -84,10 +84,16 @@ export async function setCoursePools(
   // The links as they stand: nothing to write, nobody to notify.
   if (added.length === 0 && !unlinked) return poolsOfCourse(db, courseId);
   if (added.length) {
-    const refused = (await listPools(db, inArray(pools.id, added), viewer)).filter(
-      (p) => !mayLinkPool(p.role),
-    );
-    if (refused.length) throw new PoolLinkForbidden(refused.map(({ id, name }) => ({ id, name })));
+    const roles = await poolRolesOf(db, inArray(pools.id, added), viewer);
+    const refused = [...roles].filter(([, role]) => !mayLinkPool(role)).map(([id]) => id);
+    if (refused.length) {
+      const named = await db
+        .select({ id: pools.id, name: pools.name })
+        .from(pools)
+        .where(inArray(pools.id, refused))
+        .orderBy(asc(pools.name));
+      throw new PoolLinkForbidden(named);
+    }
   }
   await db.transaction(async (tx) => {
     await tx.delete(coursePools).where(eq(coursePools.courseId, courseId));

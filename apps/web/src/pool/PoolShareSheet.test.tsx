@@ -26,6 +26,11 @@ const POOL: PoolSummary = {
   questionCount: 14,
   role: "owner",
   ownerName: "Prof Démo",
+  heldRole: "owner",
+  usedCount: 0,
+  ownerGivenName: "Prof",
+  ownerFamilyName: "Démo",
+  ownerAvatarUrl: null,
   memberCount: 1,
 };
 

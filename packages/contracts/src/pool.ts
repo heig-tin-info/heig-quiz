@@ -81,10 +81,27 @@ export type Pool = z.infer<typeof Pool>;
 
 export const PoolSummary = Pool.extend({
   questionCount: z.number().int(),
-  /** The caller's effective role in this pool. */
+  /**
+   * The questions of the pool (live ones, every version together) that a
+   * student has met: frozen in an exam or exercise with a started attempt of
+   * a student account that is not a staff walk (ADR-013, amendment of
+   * 2026-10-04). Never more than `questionCount`.
+   */
+  usedCount: z.number().int(),
+  /** The caller's effective role in this pool: what the screen gates its actions on. */
   role: PoolRole,
-  /** "Prof Démo" — shown on a pool the caller does not own. */
+  /**
+   * The role the caller holds in their own right, Super Powers set aside —
+   * what the list SHOWS (ADR-013, amendment of 2026-10-04). Equal to `role`
+   * for everyone but an admin with Super Powers on.
+   */
+  heldRole: PoolRole,
+  /** "Prof Démo": the owner's display name (the avatar's label, the sort key). */
   ownerName: z.string(),
+  ownerGivenName: z.string(),
+  ownerFamilyName: z.string(),
+  /** Upload, else IdP picture; null with neither (the client draws initials). */
+  ownerAvatarUrl: z.string().nullable(),
   /** Explicit members (the owner excluded), for the card's "shared with n". */
   memberCount: z.number().int(),
 });

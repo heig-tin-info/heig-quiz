@@ -397,16 +397,18 @@ export function accessWhere(user: Pick<Caller, "reach">, predicate: SQL): SQL | 
 /**
  * "The caller already sees this user somewhere", which is exactly who may
  * fetch their uploaded picture (#318). The front end shows another user's
- * face in two places to a non-admin, and this predicate is their union:
+ * face in three places to a non-admin, and this predicate is their union:
  *   - the staff of a course, on its card (`listCourses`): a fellow seat;
  *   - a classroom's roster (`rosterView`): a seat on the staff of a course
- *     where that user sits a classroom (`enrollments`, claimed).
+ *     where that user sits a classroom (`enrollments`, claimed);
+ *   - the pool list (`listPools`): the OWNER of a pool the caller reaches
+ *     through `poolAccess` (ADR-013, amendment of 2026-10-04).
  * Plus the user themselves (the shell, the settings) and any admin, by ROLE,
  * with or without Super Powers (ADR-054 §2): the administration's account
  * lists show every face, and a picture is not a colleague's content. The one
  * "admin overrides" rule that reads `role`, not `reach`.
- * Nothing more: pool member lists show no avatar, so a shared pool is no
- * reason. Undefined when nothing needs checking; a caller
+ * Nothing more: pool member lists show no avatar, so a seat in a shared
+ * pool is no reason — only its owner shows. Undefined when nothing needs checking; a caller
  * who fails it gets the 404 of a missing picture (invariant 6).
  */
 export function seesUser(user: Caller, subjectId: string): SQL | undefined {
@@ -417,7 +419,8 @@ export function seesUser(user: Caller, subjectId: string): SQL | undefined {
     JOIN ${classrooms} ON ${qualified(classrooms.id)} = ${qualified(enrollments.classroomId)}
     WHERE ${qualified(enrollments.userId)} = ${subjectId}`;
   const subjectCourses = sql`${staffedBySubject} UNION ${satBySubject}`;
-  return sql`EXISTS (SELECT 1 FROM ${courses} WHERE ${staffAccess(user.id, qualified(courses.id))} AND ${qualified(courses.id)} IN (${subjectCourses}))`;
+  return sql`(EXISTS (SELECT 1 FROM ${courses} WHERE ${staffAccess(user.id, qualified(courses.id))} AND ${qualified(courses.id)} IN (${subjectCourses}))
+    OR EXISTS (SELECT 1 FROM ${pools} WHERE ${qualified(pools.ownerId)} = ${subjectId} AND ${poolAccess(user.id)}))`;
 }
 
 /*

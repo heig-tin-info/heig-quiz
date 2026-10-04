@@ -44,7 +44,7 @@ import {
   questions,
   users,
 } from "../../db/schema.js";
-import { listPools } from "../pool/service.js";
+import { poolRolesOf } from "../pool/service.js";
 import type { EvaluationRecord, ItemRecord, DbOrTx } from "./shared.js";
 import type { Caller } from "../guards.js";
 
@@ -510,7 +510,7 @@ async function selfOf(
  * The questions of this evaluation the viewer may open in the editor (issue
  * #127): those whose pool they hold at least `contributor` in — the role
  * every write route of a question asks for. The role is the pool list's own
- * resolution (`listPools`), so this cannot drift from what the editor then
+ * resolution (`poolRolesOf`), so this cannot drift from what the editor then
  * allows. A pool the viewer does not reach at all resolves to `reader`, and
  * its questions are simply not in the list.
  */
@@ -526,10 +526,9 @@ export async function editableQuestionIdsOf(
     .where(inArray(questions.id, [...new Set(items.map((i) => i.questionId))]));
   const poolIds = [...new Set(rows.flatMap((r) => (r.poolId === null ? [] : [r.poolId])))];
   if (poolIds.length === 0) return [];
+  const roles = await poolRolesOf(db, inArray(pools.id, poolIds), viewer);
   const writable = new Set(
-    (await listPools(db, inArray(pools.id, poolIds), viewer))
-      .filter((p) => poolRoleAllows(p.role, "contributor"))
-      .map((p) => p.id),
+    [...roles].filter(([, role]) => poolRoleAllows(role, "contributor")).map(([id]) => id),
   );
   return rows.filter((r) => r.poolId !== null && writable.has(r.poolId)).map((r) => r.id);
 }

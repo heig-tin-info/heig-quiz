@@ -9,6 +9,10 @@ Accepted (2026-09-21, phase 2). Settles F-POOL-05, F-POOL-06 and open question 9
 everywhere" in §4) now reads "an admin with Super Powers on". Without them an admin resolves
 like any teacher; the pure rule's fact is `reachesAll`, formerly `isAdmin`.
 
+**Amended 2026-10-04 (product owner), scope: what the pool list SHOWS** — decision 7 below.
+Access to pools and the resolution order of §3 are unchanged; §7 also records the widening
+of who may fetch an owner's uploaded avatar, which follows from it.
+
 ## Context
 
 Until now a question pool was reached by its owner and by the teaching staff of the courses
@@ -83,6 +87,31 @@ every teacher. Two facts shape the design:
    `read_at`) is written by one function, `notify`, which also publishes a `notifications`
    hint on `user:<id>`. The stream carries no data (ADR-005) and the client re-reads its own
    inbox over HTTP. Two kinds so far: `pool_shared` and `pool_ownership`.
+
+7. **What the pool list shows** *(amendment, 2026-10-04, decided by the product owner)*.
+   - **Used.** `usedCount` is the number of DISTINCT live questions of the pool (every
+     version together, soft-deleted ones left out, so it never exceeds `questionCount`) frozen
+     in an item of an `exam` or an `exercise` that has at least one STARTED attempt of a
+     student account — no guest, no staff walk (`isStaffAttempt`, ADR-018). A poll never
+     counts. It is a historical fact: the `stats_since` reset of ADR-038 does not apply.
+     It is counted through `questions.pool_id`, so a moved question carries its history.
+     Any role that can list the pool sees it: an aggregate, never who sat what.
+   - **Owner.** Every row shows its owner as an avatar alone (`PersonAvatar`, the name as
+     its label), the reader's own pool included, in the accent tone. The list carries the
+     owner's names and picture URL (`ownerGivenName`, `ownerFamilyName`, `ownerAvatarUrl`).
+     The cards keep their attribution line.
+   - **My role, always.** The column is never empty. "Owner" there means only
+     `pools.owner_id` or an `owner` seat: the list shows `heldRole`, resolved by
+     `heldPoolRole` — §3 with Super Powers set aside. An admin with Super Powers who is
+     neither sees the role they would hold without them, while `role`, the effective one,
+     still gates what the screen offers.
+
+   *Consequence introduced by the implementation, not a product-owner decision:* for the
+   owner's uploaded picture to load rather than fall back to initials, `seesUser`
+   (`guards.ts`) now lets a teacher fetch the uploaded picture of the owner of any pool they
+   reach through `poolAccess` — public pools included, so every teacher sees the uploaded
+   avatar of a public pool's owner. Students still never do. Reverting that widening would
+   leave the avatar as initials for those viewers, nothing more.
 
 ## Consequences
 

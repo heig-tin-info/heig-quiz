@@ -67,15 +67,14 @@ export function similarRoutes(app: FastifyInstance, ctx: PoolRouteContext): void
         for (const hit of hits) byPool.set(hit.pool.id, [...(byPool.get(hit.pool.id) ?? []), hit.question.id]);
         if (byPool.size === 0) return { items: [] };
         const [roles, stats] = await Promise.all([
-          service.listPools(app.db, inArray(pools.id, [...byPool.keys()]), callerOf(req)),
+          service.poolRolesOf(app.db, inArray(pools.id, [...byPool.keys()]), callerOf(req)),
           Promise.all([...byPool].map(([poolId, ids]) => poolQuestionStats(app.db, poolId, ids))),
         ]);
-        const roleOf = new Map(roles.map((p) => [p.id, p.role] as const));
         const statsOf = new Map(stats.flatMap((s) => s.items).map((s) => [s.questionId, s] as const));
         return {
           items: hits.map(({ question, pool, latestNumber, linked, searchText }) => {
             const figures = statsOf.get(question.id);
-            const role = roleOf.get(pool.id);
+            const role = roles.get(pool.id);
             return {
               questionId: question.id,
               pool,

@@ -3525,6 +3525,7 @@ export const fr: Record<keyof Dict, string> = {
   "pools.updated": "Mise à jour",
   "pools.updatedColumn": "Mise à jour",
   "pools.questionsColumn": "Questions",
+  "pools.usedColumn": "Utilisées",
 
   "share.title": "Partager cette banque",
   "share.visibility": "Visibilité",

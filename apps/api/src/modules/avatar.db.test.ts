@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { enrollments } from "../db/schema.js";
 import { testServer, type TestServer } from "../test/http.js";
 import { addStaff, createClassroom, createCourse } from "./org/service.js";
+import { createPool } from "./pool/service.js";
 
 type Caller = Awaited<ReturnType<TestServer["signIn"]>>;
 
@@ -137,6 +138,25 @@ describe("avatar", () => {
       }
       // A student never sees their teacher's face: no screen shows it to them.
       expect(await fetchAvatar(teacher, student)).toBe(404);
+    });
+
+    it("serves a pool owner's picture to the teachers who list that pool, and only to them", async () => {
+      // The pool list shows every pool's owner as an avatar (ADR-013,
+      // amendment of 2026-10-04): a public pool's owner is seen by every
+      // teacher, a private one's by nobody new — and never by a student.
+      const db = server.app.db;
+      const [publisher, hermit] = await Promise.all([
+        server.signIn("teacher"),
+        server.signIn("teacher"),
+      ]);
+      for (const who of [publisher, hermit]) {
+        expect((await put(PNG, "image/png", who)).statusCode).toBe(204);
+      }
+      await createPool(db, { name: "Open", visibility: "public", ownerId: publisher.id });
+      await createPool(db, { name: "Closed", visibility: "private", ownerId: hermit.id });
+      expect(await fetchAvatar(publisher, outsider)).toBe(200);
+      expect(await fetchAvatar(hermit, outsider)).toBe(404);
+      expect(await fetchAvatar(publisher, stranger)).toBe(404);
     });
 
     it("still answers 404 for someone with no picture, whoever asks", async () => {
