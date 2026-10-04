@@ -2,6 +2,10 @@
 
 ## Status
 
+Quiz implementation status (verified 2026-10-03): `apps/codespace` is not
+present; M6 remains pending in [merge progress](../merge/PROGRESS.md). The
+accepted workspace design below is future Quiz work, not a shipped service.
+
 **Imported from heig-classroom** (2026-09-30, merge task M0-03, ADR-035),
 where it is ADR-013 — Quiz's own ADR-013 is pool sharing, so it takes the
 next free number, 047. The body below is classroom's, verbatim. Read it

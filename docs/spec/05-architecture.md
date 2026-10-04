@@ -2,7 +2,11 @@
 
 Goal: a single VM, a single database, one repository, operable by one person. Every choice favours simplicity over generality.
 
-**Starting point: the `~/heig-classroom` repository**, same author, same stack, in production. Its ADRs 001 to 010 apply here. What is reused, adapted or dropped is detailed in [07-reutilisation-heig-classroom.md](07-reutilisation-heig-classroom.md). *Amendment (ADR-035, 2026-09-28): heig-classroom now merges into Quiz — its GitHub integration, its projects and its journal come over. The working plan is [`docs/merge/`](../merge/README.md); this spec covers the GitHub substrate, the journal and projects (5.11) and the gradebook.*
+The current implementation map is [the repository page](../development/repository.md).
+The [ADR index](../adr/README.md) holds decision rationale. The classroom
+merge is still in progress: [task cards and progress](../merge/README.md)
+distinguish implemented components from accepted future work. The original
+reuse plan is [historical](07-reutilisation-heig-classroom.md).
 
 ## 5.1 Technical stack
 
@@ -12,8 +16,8 @@ Goal: a single VM, a single database, one repository, operable by one person. Ev
 | Frontend | React 19, Vite, TanStack Query, Tailwind 4 with the tokens and primitives of heig-classroom | SPA, design system already written and proven |
 | Markdown editor | Tiptap with markdown extension, KaTeX, image pasting, source toggle | WYSIWYG for the novice, markdown for the expert, a single source of truth: the markdown |
 | Code editor | Monaco, loaded on demand | VS Code shortcuts expected |
-| Backend | Node 22, Fastify 5, zod 4, schemas shared with the client through `packages/contracts` | Light, fast, typed |
-| Database | PostgreSQL 17, Drizzle ORM, versioned SQL migrations, PGlite for tests | JSONB for configurations and answers, transactions, LISTEN / NOTIFY |
+| Backend | Node (version in root `package.json`), Fastify, Zod, schemas shared with the client through `packages/contracts` | Light, fast, typed |
+| Database | PostgreSQL 17, Drizzle ORM, versioned SQL migrations, PGlite for tests | JSONB for configurations and answers, transactions; cross-process event relay remains planned |
 | Background jobs | pg-boss | Durable queues in Postgres, retries, singletons, no Redis |
 | Real time | SSE server to client, REST client to server, see 5.4 | |
 | Auth | openid-client against edu-ID, opaque hashed sessions, Keycloak in dev, reused from heig-classroom | Already in production with edu-ID |
@@ -34,32 +38,10 @@ Modular monolith, ADR-001 of heig-classroom: a single API process, a single depl
 
 ### Repository
 
-*This tree is the TARGET layout of the specification, not the current one.
-`canonical/` and `cli/` do not exist yet, `deploy/` was
-never created (the deployment files are at the root), and `qt-circuit`, the
-`codeimage` type of `qt-code`, `qt-rich`, `qt-categorize`, and `qt-diagram`
-with its engine `diagram` came later (ADR-019, ADR-021, issue #192, ADR-036,
-ADR-046). The current
-layout is in `CLAUDE.md` and on the development site's repository page.*
-
-```
-quiz/
-  apps/
-    api/                 Fastify: business modules, SSE, jobs, ticker
-    web/                 React SPA
-    runner/              code execution in containers
-  packages/
-    core/                QuestionType contract, type registry, pure utilities
-    contracts/           zod schemas of the HTTP routes and SSE events, shared api / web
-    domain/              pure business rules: grade scale, MCQ policies, cloze, roster, FSRS
-    docrender/           the journal's pure renderer: renderPage, journalTree, repository naming, the code tokenizer (ADR-035)
-    canonical/           YAML format, import / export, GIFT and Moodle XML converters
-    ui/                  design system: tokens, primitives, quiz components
-    qt-mcq/ qt-short/ qt-cloze/ qt-code/ qt-rich/ qt-categorize/ ...   one package per type
-    cli/                 `quiz` on the command line: pull / push of a pool, phase 2
-  docs/
-  deploy/
-```
+Use [the repository map](../development/repository.md#the-map) for current
+packages. `packages/canonical`, `packages/cli`, `packages/ui-kit` and
+`apps/codespace` are accepted future work, not existing packages. Deployment
+files live at the repository root; there is no `deploy/` directory.
 
 ### API modules
 
@@ -111,15 +93,18 @@ qt-mcq/
   src/*.test.ts
 ```
 
-`packages/core` defines the two interfaces and two registries, `serverRegistry` and `clientRegistry`, fed by static imports. Adding a type amounts to creating the package and registering it in both registries. The client registry loads the components on demand through `React.lazy`, so that the code player does not weigh on a multiple-choice quiz.
+`packages/core` defines the contracts; `packages/registry` owns `serverRegistry` and `clientRegistry`, fed by static imports. Core never imports a question-type package. Adding a type amounts to creating the package and registering it in both registries. The client registry loads the components on demand through `React.lazy`, so that the code player does not weigh on a multiple-choice quiz.
 
 **Evolving a type's schema without an SQL migration.** Every JSONB configuration carries `configVersion`. The package exposes `migrate(config, fromVersion)`, which upgrades an old configuration to the current version. The API applies `migrate` on read, the draft is rewritten at the current version on the next save, published versions stay stored as they are and are migrated on the fly. No table moves when a type evolves.
 
 ### Extension interfaces for the expert
 
-- **Public REST API** under `/api/v1`, authenticated by a personal token created in the settings, scope limited to the teacher's pools: list, read, create a draft, publish, export, import. Documented by OpenAPI generated from the zod schemas.
-- **CLI** `quiz` in `packages/cli`: `quiz pull <pool> ./dir` writes the pool as YAML, `quiz push ./dir` creates drafts or publishes with `--publish`, `quiz diff` compares the folder and the server. Lets one version questions in git and edit them in one's own editor.
-- **MCP server** in phase 3, exposing the same operations as the API to an LLM client. *Amendment (ADR-022, ADR-023): shipped ahead of phase 3, with the personal API tokens. The MCP server lives in the `mcp` module at `/app/api/mcp`, and each tool calls the same `/app/api` routes as the web app with the caller's token; assistants connect through OAuth. The token API is served under `/app/api`, not a separate `/api/v1` (PLAN-MVP D18 was rejected).*
+- **Token API** uses the same `/app/api` routes and contracts as the SPA.
+  The separate `/api/v1` design was rejected (ADR-022).
+- **MCP** is implemented at `/app/api/mcp`, with OAuth or a personal token
+  (ADR-022/023). Its tools call those same routes as the caller.
+- **Canonical import/export and CLI** remain planned (F-EXP, spec 04 §4.2):
+  `quiz pull`, `push` and `diff` are intended interfaces, not installed tools.
 
 ## 5.3 Database
 
@@ -134,109 +119,13 @@ qt-mcq/
 
 ### Tables
 
-Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
-
-**Identity and organisation**, reused from heig-classroom
-
-| Table | Key columns | Notes |
-|---|---|---|
-| `users` | `role` enum student / teacher / admin, `display_name`, `locale`, `theme`, `date_format` | Global role |
-| `user_emails` | `user_id`, `email` unique, `source` login / idp / roster | Identity = set of addresses |
-| `user_idp_claims` | `user_id`, `claims` jsonb, `seen_at` | Never exposed |
-| `sessions` | `sid_hash` pk, `user_id`, `expires_at`, `kind` portal / seb / impersonation / kiosk, `actor_user_id` nullable, `evaluation_id` nullable, `device_id` nullable (FK `kiosk_devices`), `seb_config_key` nullable | ADR-027, ADR-034, ADR-051. `evaluation_id` set on a confined session (`seb`, `kiosk`); partial unique index on `device_id`: one session per station |
-| `kiosk_devices` | `google_device_id` unique, `label`, `status` unnamed / active / retired, `attested_at`, `checked_at`, `attestation` ok / unavailable / refused, `credential_hash`, `watch` ok / unavailable / suspended (what the supervisor was last told) | The station registry, admin-only (ADR-051 §5, §6) |
-| `kiosk_pairings` | `device_id`, `device_code_hash`, `user_code_hash`, `state` pending / approved / consumed / expired, `user_id`, `evaluation_id`, `approved_by`, `expires_at` | RFC 8628 device authorization (ADR-051 §7) |
-| `api_tokens` | `user_id`, `token_hash`, `label`, `scopes` text[], `last_used_at`, `expires_at` | Expert, API and CLI |
-| `courses` | `name`, `code` | |
-| `course_staff` | `course_id`, `user_id` | composite pk |
-| `user_course_prefs` | `user_id`, `course_id`, `hidden_at` nullable | composite pk, both FKs cascade; one user's display state for one course (ADR-032), no `id` nor timestamps |
-| `course_pools` | `course_id`, `pool_id` | composite pk |
-| `classrooms` | `course_id`, `name`, `period`, `period_start` / `period_end` text `YYYY-MM` nullable, `archived_at` | `period` is a free label; the months are both or neither, end ≥ start (CHECK). Text, not `date`: a month has no day to pin nor time zone to shift, and `YYYY-MM` compares in calendar order |
-| `enrollments` | `classroom_id`, `user_id`, `time_bonus_percent` int default 0, `note` | unique (classroom, user) |
-| `audit_log` | `actor_id`, `action`, `target_type`, `target_id`, `details` jsonb | Closed catalogue of actions |
-
-**Pool**
-
-| Table | Key columns | Notes |
-|---|---|---|
-| `pools` | `name`, `visibility` private / shared / public, `owner_id` | |
-| `pool_members` | `pool_id`, `user_id`, `role` reader / contributor / owner | Phase 2 |
-| `categories` | `pool_id`, `parent_id` nullable, `name`, `position` | Tree by parent |
-| `questions` | `pool_id` nullable (an unsaved poll question, ADR-014 addendum), `category_id` nullable, `type` text, `internal_name`, `difficulty` smallint 1 to 5, `shuffleable` bool, `randomizable` bool (derived: the latest published version declares variables, ADR-056 §1), `origin_question_id` nullable, `stats_since` nullable, `deleted_at` | Stable metadata. `stats_since`: written only by the statistics reset (ADR-038) |
-| `question_stars` | `user_id`, `question_id`, `starred_at` | composite pk, both FKs cascade, index on `question_id`; one user's favourite (F-POOL-10, ADR-040). "Per pool" is a join on `questions.pool_id` |
-| `question_tags` | `question_id`, `tag` text | composite pk, index on `tag`. No `tags` table: tags are normalised strings, the distinct list comes from a query |
-| `question_versions` | `question_id`, `number` int nullable, `config` jsonb, `config_version` int, `explanation` text, `variables` jsonb nullable (the variables table of a parameterized question, ADR-056; null = static), `search` generated tsvector, `published_at`, `published_by`, `change_note`, `deprecated_at`, `deprecation_note` | unique (question_id, number). `number` null = draft, a single one per question thanks to a partial unique index `WHERE number IS NULL` |
-| `assets` | `owner_id`, `pool_id`, `sha256`, `mime`, `bytes`, `width`, `height`, `path` | Deduplicated by hash. Referenced in the markdown by `asset:<id>` |
-| `question_version_assets` | `version_id`, `asset_id` | For export and cleanup |
-
-**Evaluation**
-
-| Table | Key columns | Notes |
-|---|---|---|
-| `evaluations` | `classroom_id`, `course_id` (FK, cascade) — exactly one home, CHECK `evaluations_home_ck`: a classroom; a course, for an evaluation template (ADR-031); or neither, for an anonymous poll owned by `created_by` (ADR-014 addendum 2026-09-27). `revision` int (template), `origin_template_id` (self FK, set null) and `origin_revision` (instance), `title`, `mode` exam / exercise / poll, `state`, `settings` jsonb, `grading_scale` jsonb (`{ kind: "linear", rounding }`, ADR-052), `feedback_policy` jsonb, `opens_at`, `closes_at`, `closes_at_shift_s` int (how far the live controls — an extension to all, a resume — moved `closes_at` since the teacher last set the timing; `closes_at − opens_at − closes_at_shift_s` is the announced window, the base of the accommodation, decision D8, #253), `duration_s`, `access_code` (a poll's session code, ADR-014), `ip_allowlist` text[], `released_at`, `released_grades` jsonb, `modified_after_release` bool, `correction_published_at` (the instant the teacher published the correction of an exercise still open, from the server's clock; set once by a conditional UPDATE, cleared only by a return to `draft`, ADR-050) | `settings` validated by a schema from `contracts`: navigation, presentation, shuffling, waiting room. CHECK `evaluations_template_ck`: a row with `course_id` has no `opens_at`, `closes_at`, `access_code` nor IP, stays `draft`, is not a `poll`, has a `revision` and no origin. CHECK `evaluations_access_code_poll_ck`: `access_code is null or mode = 'poll'` — an exam or an exercise has no access code ([ADR-053](../adr/ADR-053-retrait-des-codes-d-entree.md), migration `0043_evaluation_access_code_poll`). The `revision` moves only through `bumpTemplateRevision` (`evaluation/templates.ts`), `+ 1` in SQL inside the transaction of the template write that changed the content (ADR-031 addendum d). "Owned poll" is ONE predicate (`classroom_id` and `course_id` null, `mode = 'poll'`), used by every site that used to read `classroom_id is null`; partial indexes `evaluations_owned_poll_idx` and `evaluations_template_idx (course_id)` |
-| `evaluation_items` | `evaluation_id`, `position`, `question_version_id`, `points` numeric, `milestone` bool, `bonus` bool (ADR-052: left out of the total, floored at 0) | unique (evaluation, position). Frozen copy of `question_version_id` |
-| `attempts` | `evaluation_id`, `user_id`, `attempt_number` int (1, then n + 1 per retake), `state`, `seed` int, `instances` jsonb default `{}` (the values of each parameterized item, `{ [itemId]: { versionId, values } }`, drawn at the attempt's creation, ADR-056 §5), `started_at`, `deadline_at`, `bonus_s` int, `submitted_at`, `closed_at`, `closed_by` server / student / teacher, `last_item_id` (the reload bookmark), `shown_item_id` and `shown_since` (the open interval of the dwell, both null or both set), `display_tracked` bool (false for the attempts older than ADR-039) | unique (evaluation, user, attempt_number); partial unique (evaluation, user) `WHERE state IN ('not_started', 'in_progress')`: one unfinished attempt per student (ADR-025). One attempt per student except on an `exercise` with retakes (F-EVAL-15). Partial index `(deadline_at) WHERE state = 'in_progress'` for the ticker |
-| `answers` | `attempt_id`, `item_id`, `payload` jsonb, `revision` int, `marked_done` bool (validated: "Validate and continue", a crossed checkpoint), `skipped` bool ("Leave unanswered"), `flagged` bool (review flag), `first_seen_at`, `first_shown_at` (first on screen, ADR-039), `dwell_ms` int (time on screen, never sent to anyone), `updated_at` | unique (attempt, item). The payload is validated by the type's `answerSchema`. An accepted answer that holds something clears `skipped` (issue #89) |
-| `attempt_events` | `attempt_id`, `kind`, `at`, `details` jsonb. Client kinds (`ClientEventKind`, the only ones `POST /attempts/:id/events` accepts): visibility `{state}`, focus `{focused}`, reconnect. Server kinds, never writable by a client: ip_change, time_added, paused, resumed, run | Light anti-cheat and support log. The client body is a strict schema under a 4 KB limit |
-| `guest_participants` | `evaluation_id`, `pseudonym`, `token_hash` | `poll` mode without an account, phase 2. A guest has an `attempts` row with `user_id` null and `guest_id` |
-
-**Grading and results**
-
-| Table | Key columns | Notes |
-|---|---|---|
-| `gradings` | `answer_id`, `points` numeric, `max_points` numeric, `source` auto / llm / manual, `state` proposed / validated / superseded, `details` jsonb, `confidence` low / medium / high nullable, `comment` text, `graded_by` nullable, `graded_at`, `supersedes_id` nullable, `regrade_note` text | Partial unique index `(answer_id) WHERE state = 'validated'`. `details`: verdict per test case, points per criterion, matcher match |
-| `answer_flags` | `answer_id`, `user_id`, `reason`, `resolved_at` | Student flag, phase 2 |
-| `llm_calls` | `user_id`, `purpose` grade / generate / explain / variant, `provider`, `model`, `input_tokens`, `output_tokens`, `cost_estimate`, `duration_ms`, `ok`, `error` | Never the content of the prompts *Amended (ADR-058): purposes `test` / `grade` / `generate` / `review`, `user_id` nullable (a call no person made), `status` pending / ok / error instead of `ok`, `cost_usd`; the cost is an estimate stored at write time.* |
-
-**Drill**, phase 2
-
-| Table | Key columns | Notes |
-|---|---|---|
-| `drill_cards` | `user_id`, `question_id`, `classroom_id` and `evaluation_id` (where it was met first), `stability`, `difficulty`, `due_at`, `reps`, `lapses`, `last_review_at` null for a new card, `key_hash` (the answer key it was last reviewed on), and the review in progress: `serve_seed` (null when none), `serve_values` (a parameterized question's values, null without a `serve_seed`, ADR-056 §5), `shown_since` (the open interval on screen), `active_ms` | unique (user, question). Created at the release of an exam, at the hand-in of an exercise (ADR-041 §1). A different `key_hash` at a review resets the card (§7). Cascades from the classroom, the evaluation and the question (06, question 28 (a)). Kept five years after its last review (N-DATA-03), purged by the `drill.purge` ticker task |
-| `drill_reviews` | `card_id`, `rating` 1 to 4, `correctness` right / partial / wrong, `elapsed_ms` the ACTIVE time summed by the server, `device_class` coarse / fine, `reviewed_at`, `answer_payload` jsonb, `values` jsonb (the values of a parameterized question it was answered on, ADR-056 §5) | History for the reference times (the `right` reviews of the same device class), the teacher's view, and recomputing the parameters. Kept five years (N-DATA-03) |
-
-The drill's switches live on the rows they qualify, and belong to those rows' modules: `classrooms.drill_enabled_at` (the teacher enabled it, null otherwise) and `enrollments.drill_opted_out_at` (the student opted out of that classroom's drill), written by `org`'s `setClassroomDrill` and `setDrillOptOut`; `allowDrill` in the evaluation's `settings` (ADR-041 §2, §6), absent meaning on for an exercise and off for an exam, chosen at creation and then written only by `evaluation`'s `setAllowDrill`, until the release (the settings PATCH does not carry it). `drill_cards` and `drill_reviews` belong to the `drill` module (migration `0036_drill`).
-
-**GitHub**, module `github` (`db/github.ts`, ADR-035)
-
-| Table | Key columns | Notes |
-|---|---|---|
-| `github_organizations` | `github_org_id` unique nullable, `login` unique, `installation_id` unique nullable, `status` active / deleted, `plan` | One row per organization known to Quiz's App, never deleted; no timestamps. Installed or not is `installation_id` null or not, and nothing else: it is Quiz's App's (D23), null until the organization installs it, and nulled on staging by every refresh from production (N-SEC-18). `status` says only whether the organization still exists on GitHub. The avatar is served same-origin by `GET /app/api/github/orgs/:id/avatar`, from a source derived from `github_org_id` |
-| `github_classroom_links` | `classroom_id` pk (FK, cascade), `org_id`, `linked_by`, `linked_at` | At most one organization per classroom (D02); no `id` nor timestamps |
-| `github_accounts` | `user_id` pk (FK, cascade), `github_user_id` unique, `login`, `linked_at` | The GitHub account link. The id is the person's, not the App's; the login is followed when it changes. `users` stays with `auth` |
-| `webhook_deliveries` | `delivery_id` uuid pk (GitHub's `X-GitHub-Delivery`), `event`, `action`, `payload` jsonb nullable, `received_at` (the intake's clock, no default), `processed_at`, `error` | The primary key is the deduplication, and the row outlives its payload. The payload is what the worker handles and what a replay of an unprocessed delivery re-reads (ADR-011); set to null 30 days after receipt once processed. Partial index `(received_at) WHERE processed_at IS NULL` for the reconciliation |
-| `push_receipts` | `github_repo_id`, `branch`, `head_sha`, `received_at` (the intake's clock, no default), `is_bot`, `forced` | Written synchronously by the intake for the repositories a handler tracks, the repositories of projects (heig-classroom ADR-012: `received_at` is the server's receipt time, the legal reference of a deadline); unique (`github_repo_id`, `head_sha`), the first receipt kept. Keyed on GitHub's repository id, not on a project's row, so `github` holds no foreign key into `project` (the direction is project → github); projects join it through their repositories' `github_repo_id`. The journal writes none |
-
-**Journal**, module `journal` (`db/journal.ts`, `docs/merge/04-journal.md` §4.2): one row per classroom, no shared mirror (D03), two modes (ADR-057). The columns marked *ADR-057* come with M4-07
-
-| Table | Key columns | Notes |
-|---|---|---|
-| `classroom_journals` | `classroom_id` pk (FK, cascade), `mode` quiz / github (*ADR-057*), `github_repo_id`, `full_name`, `ref` (nullable, *ADR-057*), `root_path`, `last_commit_sha`, `sync_status` pending / ok / error, `sync_error`, `created_by`, `version` | CHECK: the three repository columns are set in `github` mode and null in `quiz` mode; rows created before ADR-057 are `github`. In GitHub mode a journal is a repository (D03): two classrooms on the same repository are two rows, each ingested on its own; a push fans out to every row holding that `github_repo_id`. `version` is bumped by every writer of the copy (J2) |
-| `journal_pages` | `classroom_id`, `path`, `parent_path`, `sort_key`, `title`, `front_matter` jsonb, `blob_sha`, `markdown`, `html_staff`, `html_student`, `toc` jsonb, `draft` bool, `visible_from` nullable, `warnings` jsonb, `asset_paths`, `version` int and an explicit order among siblings (*ADR-057*) | unique (classroom, path). In GitHub mode the rendered read model, ordered by `sort_key` from the file names; in Quiz mode the content itself: the path never changes, `parent_path` is the parent page and the order field orders siblings, `version` is the save's optimistic lock. `markdown`, `blob_sha` and `warnings` never leave the staff payload (N-SEC-12) |
-| `journal_assets` | `classroom_id`, `path`, `blob_sha`, `content_type`, `size`, `data` bytea | unique (classroom, path). ≤ 5 MB each (D14). GitHub mode: only the files a page references, a read model rebuilt from the repository. Quiz mode: the content, under a relative path beside its page, `blob_sha` the sha256 of the bytes (the ETag), append-only, collected when no page references it |
-| `journal_page_revisions` (*ADR-057*) | `classroom_id`, `path`, `revision` int, `markdown` (front matter included), `created_by`, `created_at` | Quiz mode: one row per save, no limit, no asset. Staff only: no student route ever joins it (N-SEC-12) |
-
-**Projects**, module `project` (`db/project.ts`, `docs/merge/03-github-projects.md` §3.3), ported from heig-classroom's tables under the merge's words (assignment ⇒ project, student repo ⇒ project repo, milestone ⇒ review checkpoint); the UNIQUE constraints remain the idempotency mechanism:
-
-| Table | Key columns | Notes |
-|---|---|---|
-| `projects` | `classroom_id` (cascade), `org_id` (the organization, copied from the classroom's link at creation), `name`, `slug`, `state`, `start_at`, `deadline_at`, `grace_minutes`, source and distribution repository ids and names, `source_strategy`, `deadline_strategy`, `grading_mode`, `publish_mode`, `duration_minutes`, `group_mode`, `group_max_size`, `branches`, `protected_files`, `grading_scale`, the markers `deadline_applied_at`, `review_dispatched_at`, `reminder_sent_at`, `released_at`, `released_by`, `archived_at`, `created_by`, the lease of the deadline job `deadline_job_at` (ADR-064) | unique (classroom, slug). Two partial indexes feed the ticker's scans: deadline due and not applied, scheduled publication (the freeze is a repository's since M3-05a: `project_repos_freeze_due_idx`) |
-| `project_checkpoints` | `project_id`, `name`, `due_at`, `offset_days` (J±n, re-resolved when the deadline moves), `dispatched_at` | unique (project, name) |
-| `project_groups`, `project_group_members` | the group's `name`, `slug`, `position`; a member is an `enrollment_id` | unique (project, enrollment) (ADR-048) |
-| `project_repos` | `project_id`, `user_id`, `group_id` (set null), `github_repo_id` unique, `full_name`, `provision_status`, `provision_claimed_at`, `invitation_status`, the repository's own `deadline_at` (D13 amended) and its markers `deadline_applied_at`, `frozen_at`, `deadline_committed_at`, `locked_at` (what GitHub holds), `archived_at` (the lock's fallback H8), `staff_lock` (the staff's hand), `ruleset_id` (the protection made at provisioning), `last_commit_*`, `ci_status`, `current_` / `frozen_` / `review_grade_run_id`, `teacher_points`, `teacher_comment`, `released_points` / `released_max` (the release's snapshot: a later difference is "changed after release"), `protection_suspended_at` (F-PROJ-08), `deleted_at` | partial uniques (project, user) for an individual repository and (project, group) for a group's: the idempotency of Accept |
-| `project_grade_runs` | `repo_id`, `workflow_run_id`, `run_attempt`, `head_branch`, `head_sha`, `conclusion`, `points`, `max` (doubles, as reported), `parse_status`, `parse_detail` (a malformed annotation's message), `after_deadline`, `to_verify` (ingested while the protection was suspended, or on a head whose protected files were restored: never the score), `kind` (`ci`, or `review` for the final review) | unique (repo, run, attempt). Immutable |
-| `bot_commits`, `grade_dispatches`, `reverts` | the App's own commits (restore, deadline, sync), the review dispatches (claimed before the call: at-least-once), the restore counter (`reverts.head_sha`, unique per repository: a push is restored once; `covered_sha`, the head the restore was built on) | What tells a bot push from a student's, and what keeps a retry from doubling a write |
-
-**Gradebook**, module `gradebook` (`db/gradebook.ts`): `gradebook_columns` (`classroom_id`, the activity's kind and id, `counts`, `weight`) and the classroom's `mean_published_at`. It stores no grade: a cell is read from the released results of the activity, so a regrade after the release shows at once (F-GBOOK-03).
-
-**Infrastructure**: the `pgboss` schema managed by pg-boss, a `settings` table with jsonb key / value pairs for the global settings, `providers` for the LLM providers with an encrypted key. *Amended (ADR-058): one singleton row, `llm_settings` (provider, encrypted key, model per purpose, daily cap), owned by the `llm` module; the jsonb `settings` table is not built.*
-
-**Scheduled tasks**, module `system` (`db/system.ts`, D10):
-
-| Table | Key columns | Notes |
-|---|---|---|
-| `scheduled_tasks` | `key` text pk, `enabled` bool, `interval_minutes`, `last_run_at`, `last_status` running / ok / error, `last_message`, `last_duration_ms`, `last_ok_at` | One row per task of the catalog, which is code: inserted with the defaults at boot, never deleted; a row whose key left the catalog is ignored. `last_run_at` is the claim (5.4, Clock) |
-| `health_check_states` | `key` text pk (a `SYSTEM_CHECK_KEYS` key), `status` ok / warn / fail / unknown, `since`, `consecutive`, `notified_status` fail / ok, `notified_at`, `checked_at` | What the `health.checks` task keeps of each health check between two runs (ADR-055 §5): the streak the anti-flap rule (`nextCheckState`, `@quiz/domain`) reads, and the last notice sent. Written only by that task, one run at a time |
+The [data model reference](reference/data-model.md) holds detailed fields and
+schema intent, including planned tables. Read only the relevant domain block,
+but read it before touching its tables: its constraints, single-writer notes
+("written only by") and staff-only columns are binding, not illustrative.
+Exact implemented declarations are the exports of `apps/api/src/db/schema.ts`;
+`apps/api/drizzle/` owns migration history. This chapter keeps cross-module
+principles, critical queries and transaction boundaries below.
 
 ### Critical queries and indexes
 
@@ -361,9 +250,9 @@ Alternative evaluated: Piston, a free multi-language runner, isolation by Unix u
 
 ## 5.6 Grading
 
-After closing, the `grading` module enqueues a `grading.evaluation` job over the whole evaluation — one job per request, never deduplicated, since two requests may differ in scope (#273) (on an `exercise`, each attempt is also graded alone as soon as it ends while the exercise runs, whatever its feedback policy, and a reopen stands its automatic gradings down until the next hand-in (ADR-067); an `exam` is graded at its close only; with retakes the results read the KEPT attempt of each student, best or last: ADR-025). The job walks the attempts and, for each answer, calls the type's `grade`. Immediate result: `auto` grading, validated. `pending: 'runner'`: a `grading.runner` job per answer, low-priority queue, worked `GRADING_RUNNER_CONCURRENCY` jobs at a time, one by default (ADR-067). `pending: 'llm'`: a `grading.llm` job per answer, `llm` grading proposed (*amendment, ADR-045: until a real provider exists, the pass calls the service inline, the development stub being the only one, and never while the evaluation runs*; *ADR-063: the `grading.llm` queue exists, worked two jobs at a time, and a successful `llm` proposal is not asked again except by a re-grade*). The jobs are idempotent: they check the absence of a validated, non-superseded grading before writing. `grading.progress` informs the teacher. The evaluation's per-type settings reach `grade` through `GradeContext.defaults` (`gradeDefaults`): the MCQ policy and the categorize policy (`settings.categorizePolicy`, ADR-036) an `inherit` question defers to, and negative marking (ADR-026), which covers `mcq` and `categorize`. Every total of an attempt — grade table, CSV, release snapshot, feedback, cards, kept attempt of a retake — is `attemptTotal` of `@quiz/domain`: per-question points are kept signed, the total is floored at 0, and the grade is computed from it.
+After closing, the `grading` module enqueues a `grading.evaluation` job over the whole evaluation — one job per request, never deduplicated, since two requests may differ in scope (#273) (on an `exercise`, each attempt is also graded alone as soon as it ends while the exercise runs, whatever its feedback policy, and a reopen stands its automatic gradings down until the next hand-in (ADR-067); an `exam` is graded at its close only; with retakes the results read the KEPT attempt of each student, best or last: ADR-025). The job walks the attempts and, for each answer, calls the type's `grade`. Immediate result: `auto` grading, validated. `pending: 'runner'`: a `grading.runner` job per answer, low-priority queue, worked `GRADING_RUNNER_CONCURRENCY` jobs at a time, one by default (ADR-067). A pending LLM result becomes a `grading.llm` job per answer, worked two jobs at a time per process, producing an `llm` proposal. No model call occurs while the evaluation runs or is paused; a successful proposal is retained except on explicit regrading (ADR-063). The jobs are idempotent: they check the absence of a validated, non-superseded grading before writing. `grading.progress` informs the teacher. The evaluation's per-type settings reach `grade` through `GradeContext.defaults` (`gradeDefaults`): the MCQ policy and the categorize policy (`settings.categorizePolicy`, ADR-036) an `inherit` question defers to, and negative marking (ADR-026), which covers `mcq` and `categorize`. Every total of an attempt — grade table, CSV, release snapshot, feedback, cards, kept attempt of a retake — is `attemptTotal` of `@quiz/domain`: per-question points are kept signed, the total is floored at 0, and the grade is computed from it.
 
-The `llm` module builds the prompt from a template per purpose, requires a JSON output validated by zod, retries once on invalid JSON, logs into `llm_calls` without the content. Providers: Anthropic SDK and an OpenAI-compatible client behind a common interface. Default model for grading: Claude Opus, for generation: Claude Sonnet, configurable. *Amended (ADR-058): one model for every purpose, Claude Sonnet by default; the gateway `complete()` of the `llm` module, Anthropic only, an institutional key, a daily cap, and `llm_calls`. The grading pass is wired to it since ADR-063, purpose `grade`.* *Amendment (ADR-063): `@quiz/core` holds only what a type asks and what comes back (`LlmGradeRequest`, `LlmGradeOutcome`); the service is `GradingLlm`, in the API's `llm` module, the gateway's or the stub.* *Amendment (ADR-045): the common interface is `LlmService` (`@quiz/core`), chosen by `LLM_PROVIDER`; its one implementation is a deterministic development stub, refused in production. The prompt templates, the `llm_calls` log and the real providers come with the first of them; an LLM's justification stays in the grading's details, for the teacher only (open question 27).*
+The `llm` gateway accepts a prompt and output schema, validates structured replies, retries once on invalid output, and logs call metadata without content. [ADR-058](../adr/ADR-058-passerelle-llm.md) owns provider, encrypted institutional key, model selection and daily budget rules: Anthropic is the implemented provider, Sonnet the default for every purpose. Grading uses `GradingLlm` in the API over this gateway, or the development stub; `@quiz/core` carries only the request/outcome contracts and the availability flag. [ADR-063](../adr/ADR-063-correction-llm.md) owns the grading queue, name masking, attribution, retries and disclosure rules. The justification and `details.ai` stay teacher-only; validation does not copy them into the student comment, while an explicit teacher action may copy the justification. The earlier stub-only path is recorded in ADR-045.
 
 ## 5.7 Content security
 
@@ -417,13 +306,13 @@ ADR-035; the plan is `docs/merge/03-github-projects.md` and `docs/merge/04-journ
 
 **Webhook intake.** `POST /webhooks/github`, with a raw-body parser scoped to that route: the HMAC over the raw body in constant time (401), deduplication on `X-GitHub-Delivery` (the `webhook_deliveries` primary key), the synchronous receipt hook for the repositories that need one (projects' push receipts), then one `github.webhook` job, and 200. The worker dispatches through a **handler registry**: the `github` module handles `installation`, `organization` and `repository` events itself, and the modules that care register their handlers (`onEvent`, `onReceipt`) — the journal registers a handler for `push` and `repository` on its repositories; `github` never imports them. A delivery whose handling failed keeps its error; the reconciliation re-enqueues local deliveries left unprocessed and asks GitHub to redeliver its recent failures.
 
-**Ingestion.** `journal.ingest` for one classroom's journal: list the tree under the root folder, fetch the changed blobs, re-render every page (links depend on their neighbours), upsert and delete pages, download the changed referenced assets and drop the unreferenced ones, set `last_commit_sha` and `sync_status = ok`, then an SSE hint `journal` on the classroom's topic. A push whose `after` equals `last_commit_sha` is skipped. Every ingestion — webhook, Refresh, the one after a browser write — goes through the queue or under an advisory lock per journal row, and the copy is written in one transaction (fix J2); the queue's policy is chosen at its creation and mirrored by the in-process queue of development (a `singletonKey` alone dedupes nothing, #273). A renamed repository is followed; a deleted one sets `sync_status = error` and keeps the pages.
+**Ingestion.** `journal.ingest` for one classroom's journal: list the tree under the root folder, fetch the changed blobs, re-render every page (links depend on their neighbours), upsert and delete pages, download the changed referenced assets and drop the unreferenced ones, set `last_commit_sha` and `sync_status = ok`, then an SSE hint `journal` on the classroom's topic. A push whose `after` equals `last_commit_sha` is skipped. Every GitHub-mode ingestion — webhook, Refresh or initial repository creation — goes through the queue or under an advisory lock per journal row, and the copy is written in one transaction (fix J2); the queue's policy is chosen at its creation and mirrored by the in-process queue of development (a `singletonKey` alone dedupes nothing, #273). A renamed repository is followed; a deleted one sets `sync_status = error` and keeps the pages.
 
-**Writes, in Quiz mode only** (ADR-057). A save carries the page `version` the editor opened: a stale one is a `409 conflict`, never a merge, and the teacher's draft stays in the browser. In one transaction it writes the markdown, re-renders the page (and its neighbours' student HTML when a link target changes), recomputes `asset_paths`, records a revision and bumps `version`. An asset is stored under a relative path beside its page, its sha256 as `blob_sha`. A GitHub-mode journal is never written from the browser: the page and asset write routes answer it with a refusal, and the staff payload carries each page's "Edit on GitHub" URL (`https://github.com/<full_name>/edit/<ref>/<root_path>/<path>`). The App writes into a journal repository only to create it (a seed `README.md`) and for Move to GitHub, into a new or empty repository: creation never adopts an existing one (ADR-049, point 6). Commits are authored as the teacher.
+**Writes, in Quiz mode only** (ADR-057). A save carries the page `version` the editor opened: a stale one is a `409 conflict`, never a merge, and the teacher's draft stays in the browser. In one transaction it writes the markdown, re-renders the page (and its neighbours' student HTML when a link target changes), recomputes `asset_paths`, records a revision and bumps `version`. An asset is stored under a relative path beside its page, its sha256 as `blob_sha`. A GitHub-mode journal is never written from the browser: the page and asset write routes answer it with a refusal, and the staff payload carries each page's "Edit on GitHub" URL (`https://github.com/<full_name>/edit/<ref>/<root_path>/<path>`). The App writes into a journal repository only to create it (a seed `README.md`) and, once M4-11 is implemented, for Move to GitHub, into a new or empty repository: creation never adopts an existing one (ADR-049, point 6). Commits are authored as the teacher.
 
 **Periodic work**, claim and enqueue only: the delivery reconciliation and the purge of delivery payloads older than 30 days are scheduled tasks (5.4, Clock; D10), visible to the administrator; the sweep every 60 s that emits the `journal` hint when a page's `visible_from` passes (fix J4) is a clock-bound task of the ticker, since a page's visibility is a date and must not depend on an admin setting.
 
-**Routes** of the journal, base `/app/api/classrooms/:id/journal`, every body and payload a schema of `packages/contracts/src/journal.ts`, portal sessions only (ADR-027: never a `seb` session): `GET` (tree, home path, repository), `GET pages/*`, `GET assets/*` (both roles, `readableClassroom`); staff: `POST` (create), `POST use` (choose a repository of the organization, heig-classroom's `attach`), `DELETE` (remove), `POST refresh` (GitHub mode), `POST preview`, and in Quiz mode only `PUT pages/*` (save with `version`), `POST pages`, `DELETE pages/*`, `POST assets/*`; with ADR-057, the revisions of a page and their restore, reorder and move (Quiz mode), Move to GitHub and Bring back into Quiz (task cards M4-08 to M4-12). Every staff write is audited (`journal.*`); an impersonation session never writes.
+**Routes** of the journal, base `/app/api/classrooms/:id/journal`, every body and payload a schema of `packages/contracts/src/journal.ts`, portal sessions only (ADR-027: never a `seb` session): `GET` (tree, home path, repository), `GET pages/*`, `GET assets/*` (both roles, `readableClassroom`); staff: `POST` (create), `POST use` (choose a repository of the organization, heig-classroom's `attach`), `DELETE` (remove), `POST refresh` (GitHub mode), `POST preview`, and in Quiz mode only `PUT pages/*` (save with `version`), `POST pages`, `DELETE pages/*`, `POST assets/*`; Quiz-mode history uses `GET revisions/*`, `GET revision/:revisionId`, `GET deleted` and `POST restore`. Reorder/nesting and mode switches are accepted but pending (ADR-057, task cards M4-10 to M4-12), not current routes. Every staff write is audited (`journal.*`); an impersonation session never writes.
 
 **Projects** (F-PROJ). The `project` module drives GitHub through the adapters of `apps/api/src/github/` and registers on the `github` module's registry: a synchronous **receipt** hook for the pushes to its repositories (`push_receipts`, the deadline's reference, ADR-012), and handlers for `push` (a student's head, a protected-file restore, the source ahead), `workflow_run` (the score pipeline), `pull_request` on `sync/*`, `member` (an invitation accepted) and `repository`. One ingestion path, `ingestCompletedRun`, serves the webhook and the reconciliation (ADR-011). Queues `project.deadline`, `project.sync`, `project.dispatch`, each with its policy chosen at creation (#273). The ticker's project tasks run every 20 s on the 1-s loop and **claim and enqueue only, never call GitHub** (invariant 5): scheduled publication (with the group guard), deadlines due, the day-before reminder, the definitive freeze, the review dispatch, the checkpoints. *As built for the deadline (M3-05a, [ADR-064](../adr/ADR-064-echeance-des-projets-baux.md)):* everything is per repository, on its **effective deadline** (its own, set by the staff, else the project's; `coalesce(project_repos.deadline_at, projects.deadline_at)`); the task `project.deadlines` publishes the scheduled drafts through `publishProject`, locks the projects due, writes each repository's provisional freeze at its effective deadline and its definitive one at that deadline plus the grace, all as conditional writes on the server's clock, then takes the **lease** (`projects.deadline_job_at`, free or ten minutes old) of every project whose repositories need GitHub work — what GitHub should hold (the staff's hand `staff_lock`, else the deadline's lock) differs from what it holds (`locked_at`), or a deadline commit is due — and sends one `project.deadline` job, which settles them four at a time, re-reading each row before each step, renews the lease after each repository (stopping when another job took it over), and gives it back. A failed job backdates its lease so that the work is claimed again some 30 s on (N-PERF-07), a crashed one leaves it to expire, ten minutes after its last renewal; a job whose lease is no longer the row's does nothing. Without a queue the tick claims no GitHub work (a job never runs in the ticker's process); a staff action runs it in its request. A repository takes deadline work only when provisioned, not deleted, and its project not archived. `reconcile.grades` and `reconcile.repos` join the scheduled tasks (D10). Without an App the tasks skip, with no retry loop. Every write to a student repository is the App's (`<slug>[bot]`), with an installation token handed to git through the environment only (invariant 15); a push by the App is recognised by its sender, and heig-classroom's bot is recognised too for the commits it made before the cutover.
 

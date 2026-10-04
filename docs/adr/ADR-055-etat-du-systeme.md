@@ -27,6 +27,9 @@ N-OPS-02): `apps/api/src/serviceHealth.ts`, `apps/api/src/httpMetrics.ts`,
 `POST /app/api/admin/system/test-mail` (`TestMailResult`) and the audit
 action `system.test_mail`. No migration.
 
+Extended by [ADR-058](ADR-058-passerelle-llm.md) §7: LLM health reads gateway state and the
+`llm.budget` check; it does not make a provider call.
+
 ## Context
 
 The operator is one teacher. Before an exam, and when something feels

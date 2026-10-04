@@ -11,31 +11,35 @@ A type is a TypeScript package that exports a `QuestionType` object:
 | `answerSchema` | Zod schema of the student's answer. Validated at every autosave. |
 | `defaultPoints(config)` | Default points when the question is added to an evaluation. |
 | `toStudent(config, seed)` | Returns the configuration visible to the student: no key, no explanation, no hidden tests, choices shuffled according to the seed. Pure function, tested. |
-| `grade(config, answer, ctx)` | Returns `{ points, maxPoints, details }` or `{ pending: 'runner' | 'llm' }`. `ctx` provides the seed, the item's points, and the runner and LLM services. |
+| `grade(config, answer, ctx)` | Returns a graded result or a pending runner/LLM request (`GradeResult` in `packages/core/src/contract.ts`). `ctx` provides the seed, the item's points, the runner service and an LLM-availability flag; the API owns model calls (ADR-063). |
 | `distinctTexts(config)` | Optional (`mcq`). The texts an instance of a parameterized question keeps distinct (ADR-056 §7). Variables themselves are a header field of the version, instantiated by the API before any hook is called, never by the type. |
 | `parameterIssues(template)` | Optional (`short`). What a parameterized template may not do although its instances could (a computed text key, ADR-056 §10). |
 | `sampleIssues(template, sample)` | Optional (`short`). What a parameterized template may not do given the values publication drew: a tolerance below half the step of its key's format (ADR-056 §6). |
 | `Editor` | React component for editing the draft. |
 | `Player` | React component for answering. Receives the student configuration, the current answer, an `onChange` callback. |
 | `Review` | React component for review: answer, key, grading, for the teacher and for the student feedback. |
+| `grading` | Required client member: the type supplies its grading-table columns, expected cells and answer sort keys (ADR-044). |
 | `toCanonical` / `fromCanonical` | Conversion from and to the canonical format, if it differs from the raw configuration. |
 | `configVersion`, `migrate(config, from)` | Version of the configuration schema and upgrade on read. Lets a type evolve without an SQL migration, see 5.2. |
-| `generate(ctx)` | Optional. The type's LLM templates for "Generate the answer", "Generate the explanation", "Generate a variant", see 8.2. |
+| `generator` | Optional `AnswerGenerator`: a narrow proposal schema, instructions and merge; an optional runner settlement computes expected outputs. The API calls the model (ADR-059); variants remain deferred. |
 | `searchText(config)` | Text indexed for the full-text search of the pool. |
 
 Rules:
 
 - A type has no tables. Its configuration and its answers live in JSONB in the core tables.
-- A type makes no direct network call. It goes through `ctx.runner` and `ctx.llm`.
+- A type makes no direct network call. Runner execution uses `ctx.runner`; an LLM request is returned as a pending result for the API to execute. `ctx.llm` is an availability flag, not a service.
 - A type has no drill hook (ADR-041 §4). A question is drillable when its type is in the drill's scope — `mcq`, `short`, `cloze` and `categorize` in v1, `DRILL_TYPES` in `@quiz/domain` — and `grade` settles its answer automatically and finally: graded at once, not pending a runner or an LLM, not a proposal for the teacher. The drill takes its correctness from `grade`'s points and its time from the review.
 - The phase 1 types live in the monorepo under `packages/qt-*`, with two entry points `server` and `client`, see 5.2. Loading is static, through two registries.
 
 ## 4.2 Canonical format
 
-One YAML file per question. Images live in a sibling `assets/` folder, referenced by relative path.
+Planned import/export format (F-EXP): the canonical package and CLI are not
+implemented yet. The examples describe the intended interchange format, not
+a current API payload. One YAML file per question; images live in a sibling
+`assets/` folder, referenced by relative path.
 
 ```yaml
-id: 01J8Z3K9M2X5V7N4Q6R8T0W2Y4      # stable ULID, generated at creation
+id: 01920e6d-1e00-7000-8000-000000000001  # stable UUID v7, generated at creation
 type: mcq
 name: pointeurs-arithmetique-01      # internal name
 tags: [c, pointers, arithmetic]
@@ -243,13 +247,13 @@ Shown as **Essay** / « Rédaction » in the interface; the id `rich` is the one
 
 **Answer**: `{ text }`, markdown or plain text according to `format`. No image in v1: pool assets are readable by every teacher session of the pool, and a student upload would need an ADR on personal data and retention.
 
-**Scoring, v1**: manual. `grade` proposes 0 points (`state: proposed`, `details.reason: manual`) for a written answer, and a validated 0 for nothing written (`reason: empty`); the teacher sets the points and a comment in the grading panel, which shows the answer beside the rubric and the model answer (`toSolution`). The dashboard cell shows the character count, never the text. Not pollable, no drill.
+**Manual fallback**: `grade` proposes 0 points (`state: proposed`, `details.reason: manual`) for a written answer, and a validated 0 for nothing written (`reason: empty`); the teacher sets the points and a comment in the grading panel, which shows the answer beside the rubric and the model answer (`toSolution`). The dashboard cell shows the character count, never the text. Not pollable, no drill.
 
 **The key a student reads**: the rubric never reaches a student, even under `showKey`; the `studentSolution` hook keeps the model answer alone, or nothing (ADR-037).
 
-**Scoring, later**: `grade` returns `pending: 'llm'`. The LLM service receives the statement, the rubric, the reference, the anonymised answer, and must reply in JSON: points per criterion, short justification per criterion, confidence `low` / `medium` / `high`. The teacher validates in the grading panel (F-LLM-01..04). A rubric of criteria with `label`, `points` and `description`, used as the grading form, comes with it.
+**LLM scoring** ([ADR-063](../adr/ADR-063-correction-llm.md)): after the close, when a model is available and the question has a rubric or model answer, `grade` returns a pending LLM request. The API queues it, masks student names in the answer, and sends the statement, rubric, reference, answer and item's points. The reply is a proposal with confidence and a per-criterion breakdown inferred from the free-text rubric. The teacher validates it; a successful proposal is retained unless explicitly regraded. There is no model call while the evaluation runs or is paused. Without a model or grading material, the manual fallback applies.
 
-*Amendment (ADR-045): the path exists, with a development stub as its only provider. `grade` returns `pending: 'llm'` when the process has an LLM service (`GradeContext.llm`, `LLM_PROVIDER`) and the question has a rubric or a model answer; the request holds the rubric, the model answer, the answer text and the item's points, not yet the statement nor a per-criterion reply. The pass writes the reply as an `llm` proposal with its confidence, the justification in its details for the teacher only (open question 27). Without a service, v1's manual scoring above is unchanged.* *Amendment (ADR-063): wired to the real model through the gateway, automatically after the close, through a `grading.llm` job per answer. The request holds the statement too, the answer masked of the names of the students who sat; the reply holds a breakdown per criterion, read by the model from the free-text rubric (the structured rubric above stays deferred), kept with the model's name under `details.ai`, teacher-only like the justification. A successful proposal is not asked again except by a re-grade.*
+The justification and `details.ai` (model and criteria) remain teacher-only even after validation. A teacher may explicitly copy the justification into the comment and edit it before saving (ADR-063 §7). A structured rubric with `label`, `points` and `description` remains deferred. [ADR-045](../adr/ADR-045-service-llm-de-correction.md) preserves the development-stub history.
 
 ## 4.9 Code image `codeimage`
 
@@ -322,17 +326,17 @@ config:
       load: { kind: open }
       points: 1
       visible: false
-    - name: "Bode"             # an AC sweep (ADR-040): the source is the DC bias
+    - name: "Bode"             # an AC sweep (ADR-040 circuit): the source is the DC bias
       source: { kind: dc, volts: 0 }
       load: { kind: open }
       analysis: { kind: ac, fStartHz: 10, fStopHz: 100000, pointsPerDecade: 20 }
       points: 1
   reference: { components: [...], wires: [...] }     # the teacher's own circuit: the key
   grading:
-    mode: simulation         # manual (default), simulation, llm (phase 2)
+    mode: simulation         # manual (default) or simulation; llm is closed (ADR-063)
     tolerance: 0.05          # simulation, transient stimuli: the pass threshold
     bode: { magDb: 1, floorDb: 60, phaseDeg: 10 }    # simulation, AC stimuli: the envelope
-    rubric: "..."            # manual and llm: the criteria
+    rubric: "..."            # criteria for the teacher's manual grading
   showExpected: false        # overlay the reference's curve on the visible stimuli
   simulationsPerMinute: 10   # N-SEC-07, the budget of the Simulate button
 ```
@@ -340,13 +344,13 @@ config:
 - **The palette** lists the kinds the student may place, out of the sixteen of the library (R, C, L, four diodes, four bipolars and MOSFETs, an op-amp, and the `GND`, `VCC`, `VEE` terminals). `maxComponents` caps what is placed: a terminal names a net, it is not a part, so it does not count.
 - **Supplies**: `vcc` and `vee` publish a rail at the voltage the teacher wrote; `null` removes the symbol from the palette. The op-amp is ideal and clamped to those rails.
 - **`commonGround`** (default on) makes `in-` and `out-` the reference node. Off, they are two independent nets the student has to wire, and a `GND` symbol is what names the reference.
-- **A stimulus is a test case**: a name, a source (`dc`, `sine`, `pulse`, `step`), a source resistance, a load (`open`, `resistor`, `capacitor`), an analysis, points, and `visible`. The analysis is either a transient window (`kind: tran`, the default: `stopMs`, `skipMs` to drop the settling, `points` samples kept) or an AC sweep (`kind: ac`, ADR-040: `fStartHz` to `fStopHz`, 0.01 Hz to 1 GHz, `pointsPerDecade` 5 to 200, at most 2000 points). An AC stimulus needs a `dc` source, whose `volts` is the bias the circuit is linearised around (`circuit.ac_needs_dc_source` otherwise): the EMF is `DC <volts> AC 1`, and what is measured is the Bode plot of `v(out)` against it, the source resistance and the load included. A hidden stimulus is only run at grading, exactly like a hidden case of a `code` question (docs/06 Q8 applies to its name).
+- **A stimulus is a test case**: a name, a source (`dc`, `sine`, `pulse`, `step`), a source resistance, a load (`open`, `resistor`, `capacitor`), an analysis, points, and `visible`. The analysis is either a transient window (`kind: tran`, the default: `stopMs`, `skipMs` to drop the settling, `points` samples kept) or an AC sweep (`kind: ac`, [ADR-040](../adr/ADR-040-stimulus-frequentiel-de-circuit.md): `fStartHz` to `fStopHz`, 0.01 Hz to 1 GHz, `pointsPerDecade` 5 to 200, at most 2000 points). An AC stimulus needs a `dc` source, whose `volts` is the bias the circuit is linearised around (`circuit.ac_needs_dc_source` otherwise): the EMF is `DC <volts> AC 1`, and what is measured is the Bode plot of `v(out)` against it, the source resistance and the load included. A hidden stimulus is only run at grading, exactly like a hidden case of a `code` question (docs/06 Q8 applies to its name).
 - **The reference** is a schematic, not a netlist and not a waveform: the teacher draws the circuit they expect. A `simulation` grading without a reference, or without a stimulus, is refused at publication (`circuit.simulation_needs_reference`, `circuit.simulation_needs_stimulus`).
 - **Three grading modes**:
     - `manual` (default): the teacher reads the schematic — and, when there are stimuli, the simulated curves — and grades by hand;
     - `simulation`: both circuits are simulated under every stimulus and the OUTPUT WAVEFORMS are compared (below);
     - `llm`: *closed (ADR-063)*: the simulation is a circuit's grading, never a model. The editor no longer offers it, publication refuses it (`circuit.llm_not_available`), and a version published with it is graded as `manual`.
-- **The grading rule of `simulation`** (ADR-019): the student's schematic and the reference are each turned into a SPICE netlist, run through ngspice for each stimulus, and `v(out)` is compared sample by sample. A TRANSIENT stimulus passes when the normalised RMS distance between the two output voltages is at or under `tolerance` times the reference's peak-to-peak swing. An AC stimulus passes when the student's Bode plot stays, at EVERY frequency of the sweep, inside an envelope around the reference's (ADR-040): with the floor at the reference's peak minus `bode.floorDb`, a frequency where the reference is at or above the floor needs the magnitudes within `bode.magDb` and — unless `bode.phaseDeg` is `null` — the phases, compared modulo 360°, within `bode.phaseDeg`; below the floor the student's output only has to stay under the floor plus `bode.magDb`, and the phase is not compared. The envelope is checked on the full ngspice table, both runs sharing one frequency grid; the details store the decimated curves and the worst gap (`envelope: { worstDb, worstDeg, outside }`, `error` null). Either way a stimulus's points are then earned whole, and the total is the sum of the stimuli that passed. **What is compared is behaviour, never topology**: a circuit drawn differently, with merged resistors or another ordering, that produces the same output is a correct answer.
+- **The grading rule of `simulation`** (ADR-019): the student's schematic and the reference are each turned into a SPICE netlist, run through ngspice for each stimulus, and `v(out)` is compared sample by sample. A TRANSIENT stimulus passes when the normalised RMS distance between the two output voltages is at or under `tolerance` times the reference's peak-to-peak swing. An AC stimulus passes when the student's Bode plot stays, at EVERY frequency of the sweep, inside an envelope around the reference's ([ADR-040](../adr/ADR-040-stimulus-frequentiel-de-circuit.md)): with the floor at the reference's peak minus `bode.floorDb`, a frequency where the reference is at or above the floor needs the magnitudes within `bode.magDb` and — unless `bode.phaseDeg` is `null` — the phases, compared modulo 360°, within `bode.phaseDeg`; below the floor the student's output only has to stay under the floor plus `bode.magDb`, and the phase is not compared. The envelope is checked on the full ngspice table, both runs sharing one frequency grid; the details store the decimated curves and the worst gap (`envelope: { worstDb, worstDeg, outside }`, `error` null). Either way a stimulus's points are then earned whole, and the total is the sum of the stimuli that passed. **What is compared is behaviour, never topology**: a circuit drawn differently, with merged resistors or another ordering, that produces the same output is a correct answer.
 - **When the REFERENCE fails to simulate**, or the runner is unreachable, the grading is stored `proposed` with the reason, never `validated`: an unrunnable question is the teacher's problem, not a zero for the student. A student circuit that fails to simulate is a failed stimulus with its machine reason (`floating_pin`, `spice_failed`), which is information, not an incident.
 - **`showExpected`** overlays the reference's output on the student's plot, for the visible stimuli only. It needs a reference, and it is what decides whether the reference's curve may travel in a grading's details at all.
 - **Answer**: `{ schematic }` — the components with their position, orientation, designator and value, and the wires with their routed polyline. **No netlist is ever stored, and none ever comes from the browser**: it is rebuilt server-side from the stored schematic and the stimulus, every time (invariant 14). Values are parsed case-sensitively, because SPICE reads `1M` as milli and `1Meg` as mega.

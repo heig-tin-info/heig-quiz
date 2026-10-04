@@ -10,6 +10,18 @@ import {
   rovingIndex,
   scrollEdges,
 } from "./ui";
+import { en } from "./i18n/en";
+import { fr } from "./i18n/fr";
+import type { TFunction } from "./i18n";
+
+const tIn =
+  (dict: Record<keyof typeof en, string>): TFunction =>
+  (key, vars) =>
+    dict[key].replace(/\{(\w+)\}/g, (_, name: string) => String(vars?.[name] ?? ""));
+const tEn = tIn(en);
+const tFr = tIn(fr);
+/** The expected text, spaces made non-breaking as the formatter writes them. */
+const nb = (text: string) => text.replace(/ /g, "\u00a0");
 
 // Fixed local date-time: the formatters work on local getters, so building the
 // date from local parts keeps the test free of any timezone assumption.
@@ -144,24 +156,38 @@ describe("scrollEdges", () => {
 });
 
 describe("formatRemaining", () => {
-  it("writes minutes and seconds, zero-padded on the seconds", () => {
-    expect(formatRemaining(14 * 60_000 + 32_000)).toBe("14:32");
-    expect(formatRemaining(9_000)).toBe("0:09");
+  const H = 3_600_000;
+  it("writes minutes and seconds under an hour, zero-padded on the seconds", () => {
+    expect(formatRemaining(14 * 60_000 + 32_000, tEn)).toBe("14:32");
+    expect(formatRemaining(9_000, tEn)).toBe("0:09");
+    expect(formatRemaining(59 * 60_000, tEn)).toBe("59:00");
+    expect(formatRemaining(H - 1_000, tEn)).toBe("59:59");
   });
 
-  it("adds the hours only when there are any, and pads the minutes then", () => {
-    expect(formatRemaining(3_600_000 + 5 * 60_000)).toBe("1:05:00");
-    expect(formatRemaining(59 * 60_000)).toBe("59:00");
+  it("writes hours, minutes and seconds from one hour to under 48", () => {
+    expect(formatRemaining(H, tEn)).toBe(nb("1 h 00 min 00 s"));
+    expect(formatRemaining(H + 5 * 60_000, tEn)).toBe(nb("1 h 05 min 00 s"));
+    expect(formatRemaining(47 * H + 23 * 60_000 + 17_000, tFr)).toBe(nb("47 h 23 min 17 s"));
+    expect(formatRemaining(48 * H - 1_000, tEn)).toBe(nb("47 h 59 min 59 s"));
+  });
+
+  it("writes days and hours from 48 hours on, in the interface language", () => {
+    expect(formatRemaining(48 * H, tEn)).toBe(nb("2 d 0 h"));
+    expect(formatRemaining(48 * H, tFr)).toBe(nb("2 j 0 h"));
+    // The bug: a week-long exercise read "164:20:17".
+    expect(formatRemaining(164 * H + 20 * 60_000 + 17_000, tEn)).toBe(nb("6 d 20 h"));
+    expect(formatRemaining(164 * H + 20 * 60_000 + 17_000, tFr)).toBe(nb("6 j 20 h"));
   });
 
   it("rounds up, so the last second is shown as one and not as zero", () => {
-    expect(formatRemaining(1)).toBe("0:01");
-    expect(formatRemaining(1_001)).toBe("0:02");
+    expect(formatRemaining(1, tEn)).toBe("0:01");
+    expect(formatRemaining(1_001, tEn)).toBe("0:02");
+    expect(formatRemaining(H - 500, tEn)).toBe(nb("1 h 00 min 00 s"));
   });
 
   it("never counts into the negative: the server closes the attempt", () => {
-    expect(formatRemaining(0)).toBe("0:00");
-    expect(formatRemaining(-90_000)).toBe("0:00");
+    expect(formatRemaining(0, tEn)).toBe("0:00");
+    expect(formatRemaining(-90_000, tEn)).toBe("0:00");
   });
 });
 

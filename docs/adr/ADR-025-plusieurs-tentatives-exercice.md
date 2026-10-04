@@ -11,6 +11,10 @@ Amended 2026-09-30 by ADR-050: §4's score-only masking is lifted once the
 teacher publishes the correction of the exercise. Amended 2026-10-02 by
 ADR-067: §4's grading at hand-in now covers every exercise, retakes or not.
 
+Amended by [ADR-053](ADR-053-retrait-des-codes-d-entree.md): the evaluation access code is
+removed, making §2's retake exemption moot. The network allowlist still
+applies on every entry.
+
 ## Context
 
 F-EVAL-15 asks that an `exercise` may allow several attempts, keeping the

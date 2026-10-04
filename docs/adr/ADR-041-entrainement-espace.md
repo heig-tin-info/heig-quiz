@@ -19,6 +19,10 @@ Amends F-DRILL-01 to F-DRILL-04 and adds F-DRILL-06 (docs/spec/02); amends
 N-DATA-02, N-DATA-03 and N-DATA-07 (docs/spec/03), the question-type
 contract (docs/spec/04 §4.1) and the drill tables (docs/spec/05 §5.4).
 
+Amended by [ADR-056](ADR-056-questions-parametrees.md) §5: parameterized drill reviews store their drawn
+values. Read §15 below for the final location of the teacher's drill switch;
+§14 describes the earlier screen arrangement.
+
 ## Context
 
 The spec reserved a phase-2 drill in five lines: every question a student
@@ -386,8 +390,12 @@ confirmation (past activity stays visible; the teacher sees the opt-out).
 
 ### Rollback
 
-Slice 1 is additive and unused until slice 2: removing its files and the
-dependency restores the package.
+The original slice-1 rollback removed the unused pure rules and dependency.
+That description applies only before the persisted drill and its screens
+were delivered; it is not a rollback procedure for the current feature.
+Use the [deployment runbook](../development/deployment.md) for deployment
+and database recovery. Cards and reviews contain student history and must
+not be discarded as if the scheduler were still unused.
 
 ## Alternatives considered
 

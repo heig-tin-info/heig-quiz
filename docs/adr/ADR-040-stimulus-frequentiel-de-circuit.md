@@ -2,6 +2,9 @@
 
 ## Status
 
+This historical ID is shared with [another record](ADR-040-favoris-de-question.md).
+Cite this record by its full filename or title, not by `ADR-040` alone.
+
 Accepted (2026-09-29, with the `ac` analysis of `packages/qt-circuit`).
 Extends ADR-019, which it does not replace: a transient stimulus is graded
 exactly as before.

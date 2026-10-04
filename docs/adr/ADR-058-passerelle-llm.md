@@ -2,10 +2,12 @@
 
 ## Status
 
-Accepted (2026-10-01, decisions of the product owner). First of three
-phases of LLM assistance; [ADR-059](ADR-059-generer-la-reponse.md) (the
+Accepted (2026-10-01, decisions of the product owner). The gateway is the
+foundation of LLM assistance; [ADR-059](ADR-059-generer-la-reponse.md) (the
 "Generate" wand of the editor) and [ADR-060](ADR-060-revue-llm-des-questions.md)
-(the nightly review of the questions) build on it and are only proposed.
+(the nightly review of the questions) build on it and are accepted.
+[ADR-060](ADR-060-revue-llm-des-questions.md) §5 amends the daily cap with a nightly review share;
+[ADR-063](ADR-063-correction-llm.md) supersedes §8 below by wiring grading to the gateway.
 
 Delivers F-LLM-04 (the call log) and N-SEC-08 (the key encrypted at rest)
 for the platform's own key. Delivered with `apps/api/src/modules/llm/`
@@ -31,10 +33,9 @@ Amends:
   in the database"): one secret, the provider key, is stored in the database,
   ENCRYPTED by a master key that lives in the environment like every other
   secret (§3).
-- **[ADR-045](ADR-045-service-llm-de-correction.md)**: unchanged in effect.
-  The grading pass keeps its `LlmService` chosen by `LLM_PROVIDER` (`none` or
-  the development `stub`); the gateway is NOT wired into grading in this
-  phase (§8).
+- **[ADR-045](ADR-045-service-llm-de-correction.md)**: phase 1 left grading
+  unchanged. That intermediate state is historical: [ADR-063](ADR-063-correction-llm.md) now
+  defines gateway grading and supersedes §8.
 
 Defers N-DATA-05's "no-retention mode" and the data-protection review of
 what is sent to the provider to a new open question (docs/spec/06, row 43).
@@ -129,6 +130,9 @@ the model the provider says answered, and stored: a later price change does
 not rewrite history. It is labelled an ESTIMATE everywhere it is shown.
 
 ### 5. A daily cap against runaway spending, checked before the call
+
+Amended by [ADR-060](ADR-060-revue-llm-des-questions.md) §5: nightly review may spend at most its share
+of this cap. The cap still bounds all gateway calls.
 
 The cap is not a quota. It exists so that a bug that loops cannot spend
 thousands overnight, and is set generously enough that no legitimate day
