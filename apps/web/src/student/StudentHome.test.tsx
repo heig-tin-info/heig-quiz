@@ -59,7 +59,9 @@ const home: StudentHomeData = {
       results: "available",
     }),
   ],
-  serverNow: "2026-09-20T10:00:00.000Z",
+  // The page samples it into the server clock (invariant 5): the fixture's
+  // clock is this machine's, so every countdown reads as the cards are dated.
+  serverNow: new Date().toISOString(),
 };
 
 const render = (navigate = vi.fn()) => ({
@@ -246,11 +248,16 @@ describe("the student home", () => {
       "GET /app/api/student/home": ok({ ...home, open: [card({}), project] }),
       "GET /app/api/student/classrooms": ok([]),
     });
-    render();
+    const { navigate } = render();
     const row = (await screen.findByText("Labo 1 — Pointeurs")).closest("div.rounded-card") as HTMLElement;
     expect(within(row).getByText("Projet")).toBeInTheDocument();
     expect(within(row).getByText(/en cours · /)).toBeInTheDocument();
     expect(within(row).queryByRole("button")).toBeNull();
+    // The title is the door to the project's page.
+    const title = within(row).getByRole("link", { name: "Labo 1 — Pointeurs" });
+    expect(title).toHaveAttribute("href", "/projects/p1");
+    await userEvent.click(title);
+    expect(navigate).toHaveBeenCalledWith({ view: "project", id: "p1" });
     const open = within(row).getByRole("link", { name: "Ouvrir le dépôt" });
     expect(open).toHaveAttribute("href", "https://github.com/heig/labo-1-lea");
     // A ready repository never takes the accent: the evaluation beside it keeps the one red fill.
@@ -260,7 +267,7 @@ describe("the student home", () => {
 
   it("shows the empty state when nothing is open", async () => {
     mockFetch({
-      "GET /app/api/student/home": ok({ open: [], upcoming: [], past: [], serverNow: "x" }),
+      "GET /app/api/student/home": ok({ open: [], upcoming: [], past: [], serverNow: new Date().toISOString() }),
       "GET /app/api/student/classrooms": ok([]),
     });
     render();
@@ -393,7 +400,8 @@ describe("Coming up, grouped by day", () => {
 
   const renderUpcoming = (upcoming: EvaluationCard[]) => {
     mockFetch({
-      "GET /app/api/student/home": ok({ ...home, open: [], upcoming }),
+      // The server's clock is the faked one: the day buckets are judged on it.
+      "GET /app/api/student/home": ok({ ...home, open: [], upcoming, serverNow: new Date().toISOString() }),
       "GET /app/api/student/classrooms": ok([]),
     });
     render();

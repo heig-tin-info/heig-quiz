@@ -157,6 +157,22 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
 }
 
 /**
+ * What a refused write says on a screen that words its own refusals: the
+ * code's entry in the screen's `table`, else the server's message (or its
+ * code worded by `WORDED`), else `error.save`. The project page and the
+ * student's project row each keep a table and nothing else.
+ */
+export function wordedRefusal(
+  error: unknown,
+  table: Partial<Record<string, keyof Dict>>,
+  t: (key: keyof Dict) => string,
+): string {
+  const code = refusalCodeOf(error);
+  const key = code !== null && Object.hasOwn(table, code) ? table[code] : undefined;
+  return key ? t(key) : apiErrorMessage(error, t("error.save"));
+}
+
+/**
  * The public configuration (`/app/api/config`), the one unauthenticated
  * endpoint. A failure is not an error state for its readers: each falls back
  * to what the platform does without the option.

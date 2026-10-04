@@ -1,6 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { StudentActivityGroup } from "@quiz/domain";
 import type { Me, StudentProjectCard } from "@quiz/contracts";
@@ -12,10 +12,11 @@ import { meKey, studentHomeKey } from "../queryKeys";
 import { ProjectRow } from "./ProjectRow";
 
 /*
- * The student's project row (M3-13): the one action of each state of
- * `docs/merge/05-web.md` §5.3, the Accept flow with its wait, its re-read
- * and its refusals, and the readers who get no button at all — a teacher in
- * the student view (ADR-018) and an impersonation session (ADR-034).
+ * The student's project row (M3-13): its title opening the project's page,
+ * the one action of each state of `docs/merge/05-web.md` §5.3, the Accept
+ * flow with its wait, its re-read and its refusals, and the readers who get
+ * no button at all — a teacher in the student view (ADR-018) and an
+ * impersonation session (ADR-034).
  */
 
 const NOW = Date.now();
@@ -52,18 +53,34 @@ function render(
     locale = "en",
   }: { me?: Me; primary?: boolean; group?: StudentActivityGroup; locale?: Locale } = {},
 ) {
+  const navigate = vi.fn();
   const queryClient = makeQueryClient();
   queryClient.setQueryData(meKey, me);
   // A home in the cache: what a write must invalidate.
   queryClient.setQueryData(studentHomeKey, { polls: [], open: [], upcoming: [], past: [], serverNow: at(0) });
-  return renderWithProviders(<ProjectRow card={c} group={group} now={NOW} primary={primary} />, {
+  const r = renderWithProviders(<ProjectRow card={c} group={group} now={NOW} navigate={navigate} primary={primary} />, {
     locale,
     route: "/classrooms/r1",
     queryClient,
   });
+  return { ...r, navigate };
 }
 
+/** The row's action link, the title's excluded. */
+const actionLink = (name: string | RegExp) => screen.queryByRole("link", { name });
+
 afterEach(() => sessionStorage.clear());
+
+describe("the title", () => {
+  it("is the door to the project's page: a real address, navigated in the app", async () => {
+    mockFetch({});
+    const { navigate } = render(card());
+    const title = await screen.findByRole("link", { name: "Labo 1 — Pointeurs" });
+    expect(title).toHaveAttribute("href", "/projects/p1");
+    await userEvent.click(title);
+    expect(navigate).toHaveBeenCalledWith({ view: "project", id: "p1" });
+  });
+});
 
 describe("the one action by state", () => {
   it("leads an unlinked student to link their GitHub account, back to this page", async () => {
@@ -73,14 +90,14 @@ describe("the one action by state", () => {
     expect(link).toHaveAttribute("href", "/app/auth/github/link?return=%2Fclassrooms%2Fr1");
     expect(link).not.toHaveAttribute("target");
     expect(link).toHaveClass("bg-accent");
-    expect(screen.getByText(/to accept · .* · link your GitHub account to accept it$/)).toBeInTheDocument();
+    expect(screen.getByText(/to accept · .* · Link your GitHub account to accept it$/)).toBeInTheDocument();
   });
 
   it("offers Accept to a linked student of an open project", async () => {
     mockFetch({});
     render(card());
     expect(await screen.findByRole("button", { name: "Accept" })).toHaveClass("bg-accent");
-    expect(screen.queryByRole("link")).toBeNull();
+    expect(actionLink(/GitHub|repository|invitation/)).toBeNull();
   });
 
   it("opens the pending invitation on GitHub, in a new tab", async () => {
@@ -90,7 +107,7 @@ describe("the one action by state", () => {
     expect(link).toHaveAttribute("href", "https://github.com/heig/labo-1-lea/invitations");
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveClass("bg-accent");
-    expect(screen.getByText(/invitation to accept on GitHub$/)).toBeInTheDocument();
+    expect(screen.getByText(/Invitation pending on GitHub$/)).toBeInTheDocument();
   });
 
   it("opens a ready repository as a secondary link, never the accent", async () => {
@@ -108,13 +125,13 @@ describe("the one action by state", () => {
     unmount();
 
     const r2 = render(card({ status: "locked", deadlineAt: at(-1) }), { group: "past" });
-    expect(await screen.findByText("locked · not accepted")).toBeInTheDocument();
+    expect(await screen.findByText("locked · Not accepted before the deadline")).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
-    expect(screen.queryByRole("link")).toBeNull();
+    expect(actionLink(/GitHub|repository|invitation/)).toBeNull();
     r2.unmount();
 
     render(card({ status: "in_progress" }));
-    expect(await screen.findByText(/in progress · .* · repository deleted on GitHub$/)).toBeInTheDocument();
+    expect(await screen.findByText(/in progress · .* · Repository deleted on GitHub: ask your teacher$/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
   });
 
@@ -146,7 +163,7 @@ describe("a reader who is not the student", () => {
     render(card({ githubLinked: false }), { me: makeMe({ role: "teacher" }) });
     expect(await screen.findByText(/Read-only view: the student's actions are not available$/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
-    expect(screen.queryByRole("link")).toBeNull();
+    expect(actionLink("Link GitHub")).toBeNull();
   });
 
   it("gives an impersonation session no button either, whatever the state", async () => {
@@ -157,7 +174,7 @@ describe("a reader who is not the student", () => {
     });
     render(card({ status: "in_progress", invitation: "pending", ...REPO }), { me });
     expect(await screen.findByText(/Read-only view/)).toBeInTheDocument();
-    expect(screen.queryByRole("link")).toBeNull();
+    expect(actionLink("Open the invitation")).toBeNull();
   });
 });
 
@@ -206,7 +223,7 @@ describe("Accept", () => {
   it.each([
     ["not_started", 409, "This project has not started yet."],
     ["deadline_passed", 409, "The deadline has passed: this project can no longer be accepted."],
-    ["github_not_linked", 409, "Link your GitHub account first."],
+    ["github_not_linked", 409, "Link your GitHub account to accept it"],
     ["no_group", 409, "You are in no group of this project. Ask your teacher."],
     ["app_not_installed", 409, "Your repository could not be created. Ask your teacher."],
     ["distribution_missing", 409, "Your repository could not be created. Ask your teacher."],

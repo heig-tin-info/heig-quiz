@@ -9,7 +9,9 @@
  * repository and its invitation (with the student's own Resend, F-PROJ-07),
  * the evaluated commit, its CI run and status, the current score marked
  * indicative, the frozen score after the deadline (still indicative), and,
- * once released, the final score, the grade and the teacher's comment.
+ * once released, the final score, the grade and the teacher's comment. The
+ * clock is the server's (invariant 5): the payload's `serverNow` is sampled
+ * into `useServerClock`, and every countdown and gate reads its offset.
  *
  * The four decisions:
  *   - Type: the project's title at the page-title step; the score at the
@@ -22,15 +24,18 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, FolderGit2 } from "lucide-react";
+import { useEffect } from "react";
 
 import { formatPoints } from "@quiz/domain";
-import type { CiStatus, ProjectInvitationResent, StudentProject, StudentProjectRepo } from "@quiz/contracts";
+import type { ProjectInvitationResent, StudentProject, StudentProjectRepo } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
 import { Grade } from "../Grade";
-import { useT, type Dict, type TFunction } from "../i18n";
+import { formatDuration, useT } from "../i18n";
 import { useToast } from "../notify";
+import { CiBadge } from "../project/parts";
 import { studentProjectKey, studentRootKey } from "../queryKeys";
+import { useServerClock } from "../realtime/useServerClock";
 import type { Navigate } from "../router";
 import {
   Badge,
@@ -47,25 +52,23 @@ import {
   SectionHeading,
   Stat,
   useNow,
-  type Tone,
 } from "../ui";
-import { RowActionControl } from "./ActivityRow";
-import { deadlineLine, startLine, useProjectAction, useStudentReadOnly } from "./ProjectRow";
+import { RowActionControl, startsLine } from "./ActivityRow";
+import { useProjectAction, useStudentReadOnly } from "./ProjectRow";
 import {
   factsOfProject,
   PROJECT_STATUS_KEY,
   projectActionKind,
   REREAD_REFUSALS,
+  STATE_KEY,
   studentRefusalCode,
   studentRefusalMessage,
-  type ProjectActionKind,
 } from "./projectRow";
 
 const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404;
 
 export function StudentProjectPage({ id, navigate }: { id: string; navigate: Navigate }) {
   const t = useT();
-  const now = useNow(30_000);
   const readOnly = useStudentReadOnly();
   const project = useQuery<StudentProject>({
     queryKey: studentProjectKey(id),
@@ -91,7 +94,7 @@ export function StudentProjectPage({ id, navigate }: { id: string; navigate: Nav
   if (project.isError) {
     return (
       <PageError
-        title={t("sproj.page")}
+        title={t("activities.kind.project")}
         error={project.error}
         onRetry={() => void project.refetch()}
         retrying={project.isFetching}
@@ -100,25 +103,28 @@ export function StudentProjectPage({ id, navigate }: { id: string; navigate: Nav
   }
   if (!project.data) return <PageSkeleton body="summary-and-block" />;
 
-  return <ProjectBody project={project.data} now={now} readOnly={readOnly} navigate={navigate} />;
+  return <ProjectBody project={project.data} readOnly={readOnly} navigate={navigate} />;
 }
 
-function ProjectBody({
-  project,
-  now,
-  readOnly,
-  navigate,
-}: {
-  project: StudentProject;
-  now: number;
-  readOnly: boolean;
-  navigate: Navigate;
-}) {
+function ProjectBody({ project, readOnly, navigate }: { project: StudentProject; readOnly: boolean; navigate: Navigate }) {
   const t = useT();
+  // The server's clock, from the payload (invariant 5): the offset is state,
+  // so a sample that moves it re-renders every line counting down here.
+  const clock = useServerClock();
+  const { sample } = clock;
+  useEffect(() => sample(project.serverNow), [sample, project.serverNow]);
+  const now = useNow(30_000) + clock.offset;
+
   const facts = factsOfProject(project);
   const kind = projectActionKind(facts, now);
   const action = useProjectAction(facts, { now, primary: true, readOnly });
-  const ahead = Date.parse(project.startAt) > now;
+  const left = Date.parse(project.deadlineAt) - now;
+  const timing =
+    Date.parse(project.startAt) > now
+      ? startsLine(project.startAt, now, t)
+      : [t("shome.dueAt", { when: isoDateTime(project.deadlineAt) }), left > 0 ? t("shome.left", { time: formatDuration(left, t) }) : null]
+          .filter(Boolean)
+          .join(" · ");
 
   return (
     <div className="mx-auto max-w-180 space-y-8">
@@ -137,25 +143,27 @@ function ProjectBody({
         description={
           <>
             <p>
-              {project.courseCode} · {project.classroomName}
+              {project.courseCode} · {timing}
             </p>
-            <p className="mt-0.5 text-[13px] text-fg-faint">
-              {ahead
-                ? startLine(project.startAt, now, t)
-                : Date.parse(project.deadlineAt) > now
-                  ? `${t("sproj.deadline", { when: isoDateTime(project.deadlineAt) })} · ${deadlineLine(project.deadlineAt, now, t)}`
-                  : t("sproj.deadline", { when: isoDateTime(project.deadlineAt) })}
-            </p>
-            {readOnly ? <p className="mt-0.5 text-[13px] text-fg-muted">{t("sproj.readOnly")}</p> : null}
+            {readOnly ? <p className="mt-0.5 text-[13px]">{t("sproj.readOnly")}</p> : null}
           </>
         }
         actions={action ? <RowActionControl action={action} className="w-full sm:w-auto" /> : undefined}
-        actionsFullWidth
       />
 
       <section className="space-y-3">
         <SectionHeading title={t("sproj.repo")} />
-        <RepoCard project={project} kind={kind} readOnly={readOnly} now={now} />
+        {project.repo && !project.repo.deleted ? (
+          <RepoCard project={project} repo={project.repo} readOnly={readOnly} now={now} />
+        ) : (
+          <Card className="px-5 py-4 text-sm text-fg-muted">
+            {kind === "accept"
+              ? t("sproj.repo.toAccept")
+              : kind === "notStarted"
+                ? t("sproj.repo.notStarted", { when: isoDateTime(project.startAt) })
+                : t(STATE_KEY[kind] ?? "sproj.repo.toAccept")}
+          </Card>
+        )}
       </section>
 
       {project.release ? (
@@ -167,44 +175,27 @@ function ProjectBody({
   );
 }
 
-/** The sentence of a repository the student does not have (yet, or any more). */
-const NO_REPO_KEY: Partial<Record<ProjectActionKind, keyof Dict>> = {
-  link: "sproj.repo.link",
-  accept: "sproj.repo.toAccept",
-  notAccepted: "sproj.repo.notAccepted",
-  deleted: "sproj.repo.deleted",
-};
-
 /**
- * The student's repository: its name on GitHub, their invitation (and the
- * Resend while it waits), its lock, the commit the view stands on and its CI
- * status — or why there is none.
+ * The student's live repository: its name on GitHub, their invitation (and
+ * the Resend while it waits), its lock, the commit the view stands on — the
+ * evaluated one once the deadline is applied or passed — and its CI status.
  */
 function RepoCard({
   project,
-  kind,
+  repo,
   readOnly,
   now,
 }: {
   project: StudentProject;
-  kind: ProjectActionKind;
+  repo: StudentProjectRepo;
   readOnly: boolean;
   now: number;
 }) {
   const t = useT();
-  const repo = project.repo;
-  if (!repo || repo.deleted) {
-    const key = NO_REPO_KEY[kind];
-    return (
-      <Card className="px-5 py-4 text-sm text-fg-muted">
-        {key ? t(key) : t("sproj.repo.notStarted", { when: isoDateTime(project.startAt) })}
-      </Card>
-    );
-  }
   const commit = repo.lastCommit;
   const afterDeadline = Date.parse(project.deadlineAt) <= now || repo.locked;
   return (
-    <Card className="space-y-3 p-5">
+    <Card className="space-y-2 p-5 text-sm">
       <a
         href={repo.url}
         target="_blank"
@@ -215,46 +206,25 @@ function RepoCard({
         <span className="truncate">{repo.fullName}</span>
         <ExternalLink className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
       </a>
-      <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
-        <dt className="text-fg-muted">{t("sproj.invitation")}</dt>
-        <dd className="flex flex-wrap items-center gap-3">
-          <span>{t(repo.invitation === "pending" ? "sproj.invitation.pending" : "sproj.invitation.accepted")}</span>
-          {repo.invitation === "pending" && !readOnly ? <ResendButton projectId={project.id} /> : null}
-        </dd>
-        {repo.locked ? (
+      <p className="flex flex-wrap items-center gap-3">
+        <span>{t(repo.invitation === "pending" ? "sproj.invitation.pending" : "sproj.invitation.accepted")}</span>
+        {repo.invitation === "pending" && !readOnly ? <ResendButton projectId={project.id} /> : null}
+      </p>
+      {repo.locked ? <p>{t("sproj.locked")}</p> : null}
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-fg-muted">{t(afterDeadline ? "sproj.commit.evaluated" : "sproj.commit.last")}</span>
+        {commit ? (
           <>
-            <dt className="text-fg-muted">{t("sproj.lock")}</dt>
-            <dd>{t("sproj.lock.locked")}</dd>
+            <span className="font-mono text-[13px]">{commit.sha.slice(0, 7)}</span>
+            {commit.at ? <span className="text-fg-faint">{isoDateTime(commit.at)}</span> : null}
+            <CiBadge status={repo.ciStatus} />
           </>
-        ) : null}
-        <dt className="text-fg-muted">{t(afterDeadline ? "sproj.commit.evaluated" : "sproj.commit.last")}</dt>
-        <dd className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          {commit ? (
-            <>
-              <span className="font-mono text-[13px]">{commit.sha.slice(0, 7)}</span>
-              {commit.at ? <span className="text-fg-faint">{isoDateTime(commit.at)}</span> : null}
-              <CiBadge status={repo.ciStatus} />
-            </>
-          ) : (
-            <span className="text-fg-faint">{t("sproj.commit.none")}</span>
-          )}
-        </dd>
-      </dl>
+        ) : (
+          <span className="text-fg-faint">{t("sproj.commit.none")}</span>
+        )}
+      </p>
     </Card>
   );
-}
-
-const CI: Record<Exclude<CiStatus, "none">, { tone: Tone; key: keyof Dict }> = {
-  pending: { tone: "zinc", key: "sproj.ci.pending" },
-  pass: { tone: "green", key: "sproj.ci.pass" },
-  fail: { tone: "red", key: "sproj.ci.fail" },
-};
-
-/** The CI status of the commit the view stands on; nothing while it has no run at all. */
-function CiBadge({ status }: { status: CiStatus }) {
-  const t = useT();
-  if (status === "none") return null;
-  return <Badge tone={CI[status].tone}>{t(CI[status].key)}</Badge>;
 }
 
 /**
@@ -303,29 +273,22 @@ function ScoreSection({ repo }: { repo: StudentProjectRepo }) {
             hint={t(repo.score.frozen ? "sproj.score.frozenHint" : "sproj.score.indicativeHint")}
           />
           {repo.score.grade ? (
-            <Stat label={t("sproj.grade")} value={<Grade value={repo.score.grade.grade} />} hint={t("sgrades.indicative")} />
+            <Stat label={t("results.col.grade")} value={<Grade value={repo.score.grade.grade} />} hint={t("sgrades.indicative")} />
           ) : null}
         </div>
       ) : (
         <Card className="px-5 py-4 text-sm text-fg-muted">{t("sproj.score.none")}</Card>
       )}
-      {repo.run ? <RunLine run={repo.run} t={t} /> : null}
+      {repo.run ? (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-muted">
+          <a href={repo.run.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
+            {t("sproj.run.open")}
+            <ExternalLink className="size-3.5" aria-hidden />
+          </a>
+          <span className="text-fg-faint">{isoDateTime(repo.run.completedAt)}</span>
+        </p>
+      ) : null}
     </section>
-  );
-}
-
-/** The run the score comes from: its commit, its conclusion, when it finished, and the run on GitHub. */
-function RunLine({ run, t }: { run: NonNullable<StudentProjectRepo["run"]>; t: TFunction }) {
-  return (
-    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-muted">
-      <span>{t("sproj.run.commit", { sha: run.sha.slice(0, 7) })}</span>
-      <span className="text-fg-faint">{run.conclusion}</span>
-      <span className="text-fg-faint">{isoDateTime(run.completedAt)}</span>
-      <a href={run.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
-        {t("sproj.run.open")}
-        <ExternalLink className="size-3.5" aria-hidden />
-      </a>
-    </p>
   );
 }
 
@@ -337,11 +300,11 @@ function ReleaseSection({ release }: { release: NonNullable<StudentProject["rele
       <SectionHeading title={t("sproj.result")} description={t("sproj.result.publishedAt", { when: isoDateTime(release.at) })} />
       <div className="grid gap-3 sm:grid-cols-2">
         <Stat label={t("sproj.score.final")} value={release.points === null ? "—" : points(release.points, release.max)} />
-        {release.grade ? <Stat label={t("sproj.grade")} value={<Grade value={release.grade.grade} />} /> : null}
+        {release.grade ? <Stat label={t("results.col.grade")} value={<Grade value={release.grade.grade} />} /> : null}
       </div>
       {release.comment ? (
         <Card className="p-5">
-          <NotePanel eyebrow={t("sproj.comment")} tone="outlined">
+          <NotePanel eyebrow={t("feedback.comment")} tone="outlined">
             <p className="whitespace-pre-wrap text-sm">{release.comment}</p>
           </NotePanel>
         </Card>

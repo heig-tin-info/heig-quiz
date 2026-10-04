@@ -20,7 +20,7 @@ import {
 } from "@quiz/contracts";
 import { isVoidCheckpoint, reopens } from "@quiz/domain";
 
-import { ApiError, apiErrorMessage, refusalCodeOf } from "../api";
+import { ApiError, refusalCodeOf, wordedRefusal } from "../api";
 import type { Dict, TFunction } from "../i18n";
 import type { RouteOf } from "../router";
 import type { Tone } from "../ui";
@@ -303,10 +303,7 @@ export function refusalKey(error: unknown): keyof Dict | null {
 }
 
 /** What a failed write says: the refusal worded when the page knows it, else the server's message, else `error.save`. */
-export function refusalMessage(error: unknown, t: TFunction): string {
-  const key = refusalKey(error);
-  return key ? t(key) : apiErrorMessage(error, t("error.save"));
-}
+export const refusalMessage = (error: unknown, t: TFunction): string => wordedRefusal(error, REFUSAL_KEY, t);
 
 /**
  * The page of the group set a group project follows, coming back to the

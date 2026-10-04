@@ -1,5 +1,5 @@
 import { PenLine } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, isValidElement, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import { cx, HelpIcon, PageHelpButton, Tip, type IconType } from "./layers";
@@ -125,7 +125,6 @@ export function PageHeader({
   help,
   actions,
   menu,
-  actionsFullWidth = false,
   className = "",
 }: {
   eyebrow?: ReactNode;
@@ -136,15 +135,14 @@ export function PageHeader({
   actions?: ReactNode;
   /** The page's overflow `Menu`, placed after the help. */
   menu?: ReactNode;
-  /**
-   * On a phone, the actions take the whole width under the title, so a
-   * single `w-full` action reads as the row's button does (the student's
-   * project page). The desktop layout is unchanged.
-   */
-  actionsFullWidth?: boolean;
   className?: string;
 }) {
   const right = actions || help || menu;
+  // A page whose whole action row is ONE control: on a phone that row takes
+  // the full width under the title, so a `w-full` control reads as the
+  // button of a student's card does (the student's project page). A row of
+  // several controls, or one with help or a menu, keeps its intrinsic width.
+  const soleAction = isValidElement(actions) && actions.type !== Fragment && !help && !menu;
   return (
     <header className={cx("flex flex-wrap items-end justify-between gap-x-6 gap-y-3", className)}>
       <div className="min-w-0">
@@ -153,7 +151,7 @@ export function PageHeader({
         {description ? <div className="mt-1.5 text-sm text-fg-muted">{description}</div> : null}
       </div>
       {right ? (
-        <div className={cx("flex flex-wrap items-center gap-2", actionsFullWidth && "max-sm:w-full")}>
+        <div className={cx("flex flex-wrap items-center gap-2", soleAction && "max-sm:w-full")}>
           {actions}
           {/* "?" and "…" wrap as one: on a phone the row breaks before them,
               never between them, so "…" is not left alone on a line. */}

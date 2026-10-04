@@ -26,25 +26,24 @@ import { api } from "../api";
 import { feedbackLink } from "../grading";
 import { formatDuration, useT, type TFunction } from "../i18n";
 import { studentClassroomsKey } from "../queryKeys";
-import type { Route } from "../router";
+import type { Navigate, Route } from "../router";
 import {
   Badge,
   Card,
   cx,
   EmptyState,
   isoDateParts,
-  isoDateTime,
   localTimeZone,
   pressable,
   QueryError,
   Skeleton,
 } from "../ui";
-import { ActivityRow, type RowAction } from "./ActivityRow";
+import { ActivityRow, leftLine, startsLine, type RowAction } from "./ActivityRow";
 import { ProjectRow } from "./ProjectRow";
 import { useRetake } from "./retake";
 import { SebLaunchModal } from "./SebLaunchModal";
 
-export { ActivityRow, type RowAction } from "./ActivityRow";
+export { ActivityRow, leftLine, startsLine, type RowAction } from "./ActivityRow";
 
 export const MODE_KEY = {
   exam: "shome.mode.exam",
@@ -73,15 +72,9 @@ function timingLine(card: EvaluationCardData, now: number, t: TFunction): string
 }
 
 function timeLeftLine(card: EvaluationCardData, now: number, t: TFunction): string | null {
-  if (card.deadlineAt !== null) {
-    const left = Date.parse(card.deadlineAt) - now;
-    if (left > 0) return t("shome.left", { time: formatDuration(left, t) });
-  }
-  if (card.closesAt !== null) {
-    const left = Date.parse(card.closesAt) - now;
-    if (left > 0) return t("shome.left", { time: formatDuration(left, t) });
-    return t("shome.dueAt", { when: isoDateTime(card.closesAt) });
-  }
+  // The attempt's own deadline while it is ahead; the evaluation's closing otherwise.
+  if (card.deadlineAt !== null && Date.parse(card.deadlineAt) > now) return leftLine(card.deadlineAt, now, t);
+  if (card.closesAt !== null) return leftLine(card.closesAt, now, t);
   if (card.durationS !== null) return t("shome.duration", { n: Math.round(card.durationS / 60) });
   return null;
 }
@@ -167,11 +160,7 @@ export function pastLine(card: EvaluationCardData, t: TFunction): string {
 }
 
 export function upcomingLine(card: EvaluationCardData, now: number, t: TFunction): string {
-  if (card.opensAt === null) return t("shome.upcoming.empty");
-  const wait = Date.parse(card.opensAt) - now;
-  return wait > 0
-    ? t("shome.opensIn", { time: formatDuration(wait, t) })
-    : t("shome.opensAt", { when: isoDateTime(card.opensAt) });
+  return card.opensAt === null ? t("shome.upcoming.empty") : startsLine(card.opensAt, now, t);
 }
 
 /** The instant a card's "coming up" line counts down to: an evaluation opens, a project starts. */
@@ -187,6 +176,7 @@ export function ActivityCard({
   card,
   group,
   now,
+  navigate,
   primary = false,
   showWhere = true,
   actions,
@@ -194,13 +184,14 @@ export function ActivityCard({
   card: StudentActivityCard;
   group: StudentActivityGroup;
   now: number;
+  navigate: Navigate;
   primary?: boolean;
   showWhere?: boolean;
   actions?: Pick<ReturnType<typeof useCardActions>, "open" | "review"> | undefined;
 }) {
   const t = useT();
   if (card.kind === "project") {
-    return <ProjectRow card={card} group={group} now={now} primary={primary} showWhere={showWhere} />;
+    return <ProjectRow card={card} group={group} now={now} navigate={navigate} primary={primary} showWhere={showWhere} />;
   }
   if (group === "open") {
     return <EvaluationRow card={card} showWhere={showWhere} line={openLine(card, now, t)} action={actions?.open(card, primary)} />;
@@ -231,16 +222,18 @@ const DAY_KEY = {
 export function UpcomingByDay({
   cards,
   now,
+  navigate,
   showWhere = true,
 }: {
   cards: readonly StudentActivityCard[];
   now: number;
+  navigate: Navigate;
   showWhere?: boolean;
 }) {
   return (
     <div className="space-y-5">
       {groupByDay(cards, opensAt, now, localTimeZone()).map(({ bucket, rows }) => (
-        <DayGroup key={bucket} bucket={bucket} cards={rows} now={now} showWhere={showWhere} />
+        <DayGroup key={bucket} bucket={bucket} cards={rows} now={now} navigate={navigate} showWhere={showWhere} />
       ))}
     </div>
   );
@@ -251,11 +244,13 @@ function DayGroup({
   bucket,
   cards,
   now,
+  navigate,
   showWhere,
 }: {
   bucket: DayBucket;
   cards: readonly StudentActivityCard[];
   now: number;
+  navigate: Navigate;
   showWhere: boolean;
 }) {
   const t = useT();
@@ -268,7 +263,7 @@ function DayGroup({
       <ul className="space-y-3" aria-labelledby={id}>
         {cards.map((card) => (
           <li key={card.id}>
-            <ActivityCard card={card} group="upcoming" now={now} showWhere={showWhere} />
+            <ActivityCard card={card} group="upcoming" now={now} navigate={navigate} showWhere={showWhere} />
           </li>
         ))}
       </ul>

@@ -54,8 +54,8 @@ export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "te
  * `calculator`: the student's evaluation provides the scientific calculator
  *   (ADR-069); `stdcalc`: the standard one.
  * `provisioning`: the student's Accept of a project takes twenty seconds
- *   (`mock/student.ts`, M3-13); `refused` is a VALUE flag beside it
- *   (`?refused=<code>`, `refused` below): Accept is refused with that code.
+ *   (`mock/student.ts`, M3-13); `refused`: it is refused `409
+ *   repo_name_taken`; `stale`: `409 github_account_stale` (Relink GitHub).
  */
 export const FLAG_NAMES = [
   "empty",
@@ -88,6 +88,8 @@ export const FLAG_NAMES = [
   "calculator",
   "stdcalc",
   "provisioning",
+  "refused",
+  "stale",
 ] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;
@@ -131,21 +133,6 @@ if (sceneParam !== null) {
   urlDirty = true;
 }
 export const scene = (localStorage.getItem(SCENE_KEY) ?? "running") as Scene;
-
-/** A flag that carries a value (`?name=value`), remembered like the scene; `=0` or empty clears it. */
-function valueFlag(name: string): string | null {
-  const key = `quiz-mock-${name}`;
-  const raw = params.get(name);
-  if (raw !== null) {
-    if (raw === "" || raw === "0") localStorage.removeItem(key);
-    else localStorage.setItem(key, raw);
-    params.delete(name);
-    urlDirty = true;
-  }
-  return localStorage.getItem(key);
-}
-/** M3-13: the code Accept is refused with (`ProjectAcceptErrorCode`), or null. */
-export const refused = valueFlag("refused");
 
 /**
  * The HEIG Quiz tab's scene inside the fake Teams (`mock/teams.ts`), from

@@ -78,6 +78,8 @@ import {
   PollSummary,
   PollTeacherView,
   PollIdeaBoard,
+  PROJECT_ACCEPT_REFUSALS,
+  ProjectAcceptance,
   ProjectActivitySummary,
   ProjectCreate,
   ProjectDetail,
@@ -131,8 +133,9 @@ localStorage.setItem("quiz-mock-projects", "1");
 // PRG1-2026's drafts are group projects.
 localStorage.setItem("quiz-mock-groups", "1");
 await import("./index");
-const { routes } = await import("./runtime");
-const { STUDENT_ATTEMPT, STUDENT_RETAKE_ATTEMPT, STUDENT_PROJECT_IDS } = await import("./student");
+const { routes, flags } = await import("./runtime");
+const { STUDENT_ATTEMPT, STUDENT_RETAKE_ATTEMPT, STUDENT_PROJECT_IDS, STUDENT_PROJECT_ACCEPT, STUDENT_PROJECT_INVITED, STUDENT_PROJECT_SOON } =
+  await import("./student");
 
 interface Issue {
   code: string;
@@ -633,6 +636,44 @@ describe("the mock's new project (M3-11)", () => {
     const unknown = await post(classroomId, body("no-such-repo"));
     expect(unknown.status).toBe(422);
     expect(ProjectRefusal.parse(unknown.body).error).toBe("source_not_found");
+  });
+});
+
+describe("the mock's student project writes (M3-13)", () => {
+  const post = async (path: string) => {
+    const res = await fetch(path, { method: "POST" });
+    return { status: res.status, body: (await res.json()) as unknown };
+  };
+
+  it("answers Accept with the student's own repository (ProjectAcceptance), and refuses with a code of Accept's list", async () => {
+    const soon = await post(`/app/api/student/projects/${STUDENT_PROJECT_SOON}/accept`);
+    expect(soon.status).toBe(409);
+    expect(PROJECT_ACCEPT_REFUSALS).toContain((soon.body as { error: string }).error);
+    // `?refused=1`, as the runtime remembers it: the one refusal only the staff can resolve.
+    flags.refused = true;
+    try {
+      const refused = await post(`/app/api/student/projects/${STUDENT_PROJECT_ACCEPT}/accept`);
+      expect(refused.status).toBe(409);
+      expect(refused.body).toMatchObject({ error: "repo_name_taken" });
+    } finally {
+      flags.refused = false;
+    }
+    const made = await post(`/app/api/student/projects/${STUDENT_PROJECT_ACCEPT}/accept`);
+    expect(made.status).toBe(200);
+    expect(issuesOf(ProjectAcceptance, made.body)).toEqual([]);
+    expect(made.body).toMatchObject({ status: "ok", invitationStatus: "pending" });
+    // The card now names the repository, with its invitation pending: the row's next state.
+    const view = (await get(`/app/api/student/projects/${STUDENT_PROJECT_ACCEPT}`)) as StudentProject;
+    expect(view.repo).toMatchObject({ invitation: "pending", fullName: (made.body as { fullName: string }).fullName });
+  });
+
+  it("answers the student's Resend (ProjectInvitationResent), once a minute", async () => {
+    const sent = await post(`/app/api/student/projects/${STUDENT_PROJECT_INVITED}/invite`);
+    expect(sent.status).toBe(200);
+    expect(issuesOf(ProjectInvitationResent, sent.body)).toEqual([]);
+    const again = await post(`/app/api/student/projects/${STUDENT_PROJECT_INVITED}/invite`);
+    expect(again.status).toBe(429);
+    expect(again.body).toMatchObject({ error: "resend_too_soon" });
   });
 });
 

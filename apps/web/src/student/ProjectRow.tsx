@@ -3,7 +3,7 @@
  * task M3-13), and the one action it offers, shared with the project's page:
  * the four-state onboarding of `docs/merge/05-web.md` §5.3 — Link GitHub,
  * Accept, Open the invitation, Open repository — and the states that offer
- * nothing but a line (`projectRow.ts`).
+ * nothing but a line (`projectRow.ts`). Its title opens the project's page.
  *
  * Accept is the one write (`POST /app/api/student/projects/:id/accept`,
  * F-PROJ-05): under a minute, so the button says so while it waits; on
@@ -15,6 +15,9 @@
  * A teacher in the student view (ADR-018) and an impersonation session
  * (ADR-034) get no button: linking is refused to them (F-GH-05) and Accept
  * answers them the 404 of a missing project. One muted line says so.
+ *
+ * `now` is the page's, read off the server's clock (invariant 5): the start
+ * and the deadline are judged against it, never against the browser's.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -23,20 +26,20 @@ import type { ProjectAcceptance, StudentProjectCard } from "@quiz/contracts";
 
 import { api, useMe } from "../api";
 import { githubLinkHref } from "../github/api";
-import { formatDuration, useT, type TFunction } from "../i18n";
+import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
 import { studentRootKey } from "../queryKeys";
+import { routeToPath, type Navigate } from "../router";
 import { useStudentView } from "../studentView";
-import { isoDateTime } from "../ui";
-import { ActivityRow, type RowAction } from "./ActivityRow";
+import { ActivityRow, leftLine, startsLine, type RowAction } from "./ActivityRow";
 import {
   ACCENT_KINDS,
-  actionNote,
   factsOfCard,
   invitationHref,
   PROJECT_STATUS_KEY,
   projectActionKind,
   REREAD_REFUSALS,
+  STATE_KEY,
   studentRefusalCode,
   studentRefusalMessage,
   type ProjectFacts,
@@ -83,39 +86,26 @@ export function useProjectAction(
   if (readOnly) return null;
   const kind = projectActionKind(facts, now);
   const accent = primary && ACCENT_KINDS.has(kind);
-  const relink = studentRefusalCode(accept.error) === "github_account_stale";
-  switch (kind) {
-    case "link":
-      return { label: t("github.link"), primary: accent, href: githubLinkHref(window.location.pathname) };
-    case "accept":
-      return relink
-        ? { label: t("sproj.relink"), primary: accent, href: githubLinkHref(window.location.pathname) }
-        : {
-            label: t(accept.isPending ? "sproj.accepting" : "sproj.accept"),
-            primary: accent,
-            loading: accept.isPending,
-            onClick: () => accept.mutate(),
-          };
-    case "invitation":
-      return { label: t("sproj.openInvitation"), primary: accent, href: invitationHref(facts.repo!.url!), external: true };
-    case "open":
-      return { label: t("sproj.openRepo"), href: facts.repo!.url!, external: true };
-    default:
-      return null;
+  if (facts.repo?.state === "live") {
+    return facts.repo.invitation === "pending"
+      ? { label: t("sproj.openInvitation"), primary: accent, href: invitationHref(facts.repo.url), external: true }
+      : { label: t("sproj.openRepo"), href: facts.repo.url, external: true };
   }
+  if (kind === "link") {
+    return { label: t("github.link"), primary: accent, href: githubLinkHref(window.location.pathname) };
+  }
+  if (kind === "accept") {
+    return studentRefusalCode(accept.error) === "github_account_stale"
+      ? { label: t("sproj.relink"), primary: accent, href: githubLinkHref(window.location.pathname) }
+      : {
+          label: t(accept.isPending ? "sproj.accepting" : "sproj.accept"),
+          primary: accent,
+          loading: accept.isPending,
+          onClick: () => accept.mutate(),
+        };
+  }
+  return null;
 }
-
-/** "{time} left", or the deadline once it has passed. */
-export const deadlineLine = (deadlineAt: string, now: number, t: TFunction): string => {
-  const left = Date.parse(deadlineAt) - now;
-  return left > 0 ? t("shome.left", { time: formatDuration(left, t) }) : t("shome.dueAt", { when: isoDateTime(deadlineAt) });
-};
-
-/** "Starts in {time}", or the start once it has passed. */
-export const startLine = (startAt: string, now: number, t: TFunction): string => {
-  const wait = Date.parse(startAt) - now;
-  return wait > 0 ? t("shome.opensIn", { time: formatDuration(wait, t) }) : t("shome.opensAt", { when: isoDateTime(startAt) });
-};
 
 /**
  * The line of a project card: the start while it waits; its status, then
@@ -131,12 +121,12 @@ export function projectLine(
   t: TFunction,
 ): string {
   const parts: string[] = [];
-  if (group === "upcoming") parts.push(startLine(card.startAt, now, t));
+  if (group === "upcoming") parts.push(startsLine(card.startAt, now, t));
   else {
     parts.push(t(PROJECT_STATUS_KEY[card.status]));
-    if (group === "open") parts.push(deadlineLine(card.deadlineAt, now, t));
-    const note = actionNote(projectActionKind(factsOfCard(card), now), t);
-    if (note) parts.push(note);
+    if (group === "open") parts.push(leftLine(card.deadlineAt, now, t));
+    const key = STATE_KEY[projectActionKind(factsOfCard(card), now)];
+    if (key) parts.push(t(key));
   }
   if (readOnly) parts.push(t("sproj.readOnly"));
   return parts.join(" · ");
@@ -153,21 +143,25 @@ export function ProjectRow({
   card,
   group,
   now,
+  navigate,
   primary = false,
   showWhere = true,
 }: {
   card: StudentProjectCard;
   group: StudentActivityGroup;
   now: number;
+  navigate: Navigate;
   primary?: boolean;
   showWhere?: boolean;
 }) {
   const t = useT();
   const readOnly = useStudentReadOnly();
   const action = useProjectAction(factsOfCard(card), { now, primary, readOnly });
+  const route = { view: "project", id: card.id } as const;
   return (
     <ActivityRow
       title={card.title}
+      link={{ href: routeToPath(route), onNavigate: () => navigate(route) }}
       where={showWhere ? `${card.courseCode} · ${card.classroomName}` : undefined}
       line={projectLine(card, group, now, readOnly, t)}
       badge={{ label: t("activities.kind.project"), accent: false }}

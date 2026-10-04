@@ -13,44 +13,43 @@ import type {
   StudentProjectStatus,
 } from "@quiz/contracts";
 
-import { apiErrorMessage, refusalCodeOf } from "../api";
+import { refusalCodeOf, wordedRefusal } from "../api";
 import type { Dict, TFunction } from "../i18n";
 
 /**
  * What the row and the page both know of a project: the card's facts, and
- * the student's repository as far as each payload tells it. A card names the
+ * the student's repository as far as each payload tells it — live with its
+ * invitation, or lost on GitHub (`deleted`), or none yet. A card names the
  * repository only while it is live, so a card whose project is in progress
- * without a repository is one GitHub lost (`deleted`); the page says it
- * outright.
+ * without a repository is one GitHub lost; the page says it outright.
  */
 export interface ProjectFacts {
   id: string;
   status: StudentProjectStatus;
   startAt: string;
-  deadlineAt: string;
   githubLinked: boolean;
-  /** The student's own repository; `url` null where the payload names none (a card's deleted repository). */
-  repo: { url: string | null; invitation: "pending" | "accepted"; deleted: boolean; locked: boolean } | null;
+  repo: { state: "live"; url: string; invitation: "pending" | "accepted" } | { state: "deleted" } | null;
 }
 
 export function factsOfCard(card: StudentProjectCard): ProjectFacts {
-  const { id, status, startAt, deadlineAt, githubLinked } = card;
-  const repo =
+  const { id, status, startAt, githubLinked } = card;
+  const repo: ProjectFacts["repo"] =
     card.repoUrl !== null && card.invitation !== null
-      ? { url: card.repoUrl, invitation: card.invitation, deleted: false, locked: status === "locked" || status === "released" }
+      ? { state: "live", url: card.repoUrl, invitation: card.invitation }
       : status === "in_progress"
-        ? // Provisioned — the status says so — yet not named: deleted on GitHub.
-          { url: null, invitation: "accepted" as const, deleted: true, locked: false }
+        ? { state: "deleted" }
         : null;
-  return { id, status, startAt, deadlineAt, githubLinked, repo };
+  return { id, status, startAt, githubLinked, repo };
 }
 
 export function factsOfProject(p: StudentProject): ProjectFacts {
-  const { id, status, startAt, deadlineAt, githubLinked } = p;
-  const repo = p.repo
-    ? { url: p.repo.url, invitation: p.repo.invitation, deleted: p.repo.deleted, locked: p.repo.locked }
+  const { id, status, startAt, githubLinked } = p;
+  const repo: ProjectFacts["repo"] = p.repo
+    ? p.repo.deleted
+      ? { state: "deleted" }
+      : { state: "live", url: p.repo.url, invitation: p.repo.invitation }
     : null;
-  return { id, status, startAt, deadlineAt, githubLinked, repo };
+  return { id, status, startAt, githubLinked, repo };
 }
 
 /**
@@ -68,10 +67,8 @@ export function factsOfProject(p: StudentProject): ProjectFacts {
 export type ProjectActionKind = "link" | "accept" | "notStarted" | "invitation" | "open" | "notAccepted" | "deleted";
 
 export function projectActionKind(facts: ProjectFacts, now: number): ProjectActionKind {
-  if (facts.repo !== null) {
-    if (facts.repo.deleted) return "deleted";
-    return facts.repo.invitation === "pending" ? "invitation" : "open";
-  }
+  if (facts.repo?.state === "deleted") return "deleted";
+  if (facts.repo) return facts.repo.invitation === "pending" ? "invitation" : "open";
   if (facts.status === "locked" || facts.status === "released") return "notAccepted";
   if (!facts.githubLinked) return "link";
   return Date.parse(facts.startAt) > now ? "notStarted" : "accept";
@@ -95,17 +92,15 @@ export const PROJECT_STATUS_KEY = {
   released: "sproj.status.released",
 } as const satisfies Record<StudentProjectStatus, keyof Dict>;
 
-/** The note a state adds to the row's line, after the status; none for the states whose button says it all. */
-const NOTE_KEY: Partial<Record<ProjectActionKind, keyof Dict>> = {
-  deleted: "sproj.note.deleted",
-  invitation: "sproj.note.invitation",
-  notAccepted: "sproj.note.notAccepted",
-  link: "sproj.note.link",
-};
-
-export const actionNote = (kind: ProjectActionKind, t: TFunction): string | null => {
-  const key = NOTE_KEY[kind];
-  return key ? t(key) : null;
+/**
+ * The ONE wording of a state, on the row's line after the status and in the
+ * page's repository card alike; none for the states whose button says it all.
+ */
+export const STATE_KEY: Partial<Record<ProjectActionKind, keyof Dict>> = {
+  link: "sproj.state.link",
+  invitation: "sproj.invitation.pending",
+  deleted: "sproj.state.deleted",
+  notAccepted: "sproj.state.notAccepted",
 };
 
 /**
@@ -119,7 +114,7 @@ const REFUSAL_KEY: Record<StudentRefusal, keyof Dict> = {
   not_started: "sproj.refusal.notStarted",
   deadline_passed: "sproj.refusal.deadlinePassed",
   no_group: "sproj.refusal.noGroup",
-  github_not_linked: "sproj.refusal.githubNotLinked",
+  github_not_linked: "sproj.state.link",
   github_account_stale: "sproj.refusal.githubAccountStale",
   app_not_installed: "sproj.refusal.askTeacher",
   distribution_missing: "sproj.refusal.askTeacher",
@@ -139,10 +134,7 @@ export function studentRefusalCode(error: unknown): StudentRefusal | null {
 }
 
 /** What a refused Accept or Resend says: the refusal worded, else the server's message, else `error.save`. */
-export function studentRefusalMessage(error: unknown, t: TFunction): string {
-  const code = studentRefusalCode(error);
-  return code ? t(REFUSAL_KEY[code]) : apiErrorMessage(error, t("error.save"));
-}
+export const studentRefusalMessage = (error: unknown, t: TFunction): string => wordedRefusal(error, REFUSAL_KEY, t);
 
 /**
  * The refusals after which the row re-reads the project rather than

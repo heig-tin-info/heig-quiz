@@ -71,7 +71,7 @@ describe("projectActionKind", () => {
 
   it("reads a card in progress that names no repository as one GitHub lost", () => {
     const facts = factsOfCard(card({ status: "in_progress" }));
-    expect(facts.repo).toEqual({ url: null, invitation: "accepted", deleted: true, locked: false });
+    expect(facts.repo).toEqual({ state: "deleted" });
     expect(projectActionKind(facts, NOW)).toBe("deleted");
   });
 
@@ -115,6 +115,7 @@ describe("projectActionKind", () => {
       release: null,
       serverNow: at(0),
     };
+    expect(factsOfProject(base).repo).toEqual({ state: "deleted" });
     expect(projectActionKind(factsOfProject(base), NOW)).toBe("deleted");
     expect(projectActionKind(factsOfProject({ ...base, repo: { ...base.repo!, deleted: false, invitation: "pending" } }), NOW)).toBe("invitation");
     expect(projectActionKind(factsOfProject({ ...base, repo: null, status: "to_accept" }), NOW)).toBe("accept");
@@ -132,7 +133,8 @@ describe("the refusals of Accept and Resend", () => {
     expect(studentRefusalMessage(refused(409, "not_started"), t)).toBe("This project has not started yet.");
     expect(studentRefusalMessage(refused(409, "deadline_passed"), t)).toMatch(/can no longer be accepted/);
     expect(studentRefusalMessage(refused(409, "no_group"), t)).toMatch(/no group/);
-    expect(studentRefusalMessage(refused(409, "github_not_linked"), t)).toBe("Link your GitHub account first.");
+    // The same words as the row's line and the page's card: one wording per state.
+    expect(studentRefusalMessage(refused(409, "github_not_linked"), t)).toBe("Link your GitHub account to accept it");
     expect(studentRefusalMessage(refused(409, "github_account_stale"), t)).toMatch(/Link it again/);
     expect(studentRefusalMessage(refused(409, "provision_in_progress"), t)).toMatch(/being created/);
     expect(studentRefusalMessage(refused(502, "provision_failed"), t)).toMatch(/Try again/);

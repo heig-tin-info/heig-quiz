@@ -14,7 +14,8 @@ import { StudentProjectPage } from "./StudentProjectPage";
  * The student's project page (F-PROJ-15, M3-13): its states, the facts it
  * shows — the repository and its invitation with the student's Resend, the
  * evaluated commit and its run, the indicative score, the frozen score, the
- * release — and the one action it shares with the row.
+ * release — the one action it shares with the row, and the server's clock
+ * (invariant 5) every gate and countdown reads.
  */
 
 const NOW = Date.now();
@@ -92,27 +93,28 @@ describe("the page's states", () => {
 });
 
 describe("a project in progress", () => {
-  it("names the project, its classroom, its deadline, the repository and the evaluated commit", async () => {
+  it("names the project, its classroom once, its deadline, the repository and the last commit", async () => {
     mockFetch({ [URL]: ok(project()) });
     const { navigate } = render();
     expect(await screen.findByRole("heading", { level: 1, name: /Labo 1 — Pointeurs/ })).toBeInTheDocument();
     expect(screen.getByText("in progress")).toBeInTheDocument();
-    expect(screen.getByText(/^Due .* · .* left$/)).toBeInTheDocument();
+    expect(screen.getByText(/^PRG1 · Due .* · .* left$/)).toBeInTheDocument();
+    expect(screen.getAllByText("PRG1-2026")).toHaveLength(1);
 
     const repo = screen.getByRole("link", { name: /heig\/labo-1-lea/ });
     expect(repo).toHaveAttribute("href", "https://github.com/heig/labo-1-lea");
     expect(repo).toHaveAttribute("target", "_blank");
     expect(screen.getByText("Last commit")).toBeInTheDocument();
-    expect(screen.getByText("9a3f1c7")).toBeInTheDocument();
-    expect(screen.getByText("CI passed")).toBeInTheDocument();
-    expect(screen.getByText("accepted")).toBeInTheDocument();
+    expect(screen.getAllByText("9a3f1c7")).toHaveLength(1);
+    expect(screen.getByText("pass")).toBeInTheDocument();
+    expect(screen.getByText("Invitation accepted")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Resend the invitation" })).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "PRG1-2026" }));
     expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" });
   });
 
-  it("marks the current score indicative, with the run it comes from, and offers the repository as the only action", async () => {
+  it("marks the current score indicative, links the run it comes from, and offers the repository as the only action", async () => {
     mockFetch({ [URL]: ok(project()) });
     render();
     expect(await screen.findByText("Indicative score")).toBeInTheDocument();
@@ -121,11 +123,12 @@ describe("a project in progress", () => {
     expect(screen.getByText("Grade")).toBeInTheDocument();
     expect(screen.getByText("5.3")).toBeInTheDocument();
     expect(screen.getByText("indicative")).toBeInTheDocument();
-    expect(screen.getByText("Evaluated commit 9a3f1c7")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /See the run on GitHub/ })).toHaveAttribute(
       "href",
       "https://github.com/heig/labo-1-lea/actions/runs/42",
     );
+    // GitHub's raw conclusion is never printed: the CI badge says it, translated.
+    expect(screen.queryByText("success")).toBeNull();
     const open = screen.getByRole("link", { name: "Open repository" });
     expect(open).not.toHaveClass("bg-accent");
     expect(document.querySelectorAll(".bg-accent")).toHaveLength(0);
@@ -143,8 +146,21 @@ describe("a project in progress", () => {
     expect(screen.getByText("30 / 40")).toBeInTheDocument();
     expect(screen.getByText(/Frozen at the deadline\. Indicative until/)).toBeInTheDocument();
     expect(screen.getByText("Evaluated commit")).toBeInTheDocument();
-    expect(screen.getByText("read-only since the deadline")).toBeInTheDocument();
+    expect(screen.getByText("Read-only since the deadline")).toBeInTheDocument();
+    // A passed deadline is said once, with no countdown.
+    expect(screen.getByText(/^PRG1 · Due [^·]+$/)).toBeInTheDocument();
     expect(screen.queryByText("Grade")).toBeNull();
+  });
+
+  it("judges the deadline on the server's clock, not the browser's (invariant 5)", async () => {
+    // The browser is a day ahead of the server: the deadline in two hours has
+    // not passed, so the page still counts down to it.
+    const serverNow = at(-1);
+    const p = project({ deadlineAt: new Date(Date.parse(serverNow) + 2 * 3_600_000).toISOString(), serverNow });
+    mockFetch({ [URL]: ok(p) });
+    render();
+    expect(await screen.findByText(/^PRG1 · Due .* · .* left$/)).toBeInTheDocument();
+    expect(screen.getByText("Last commit")).toBeInTheDocument();
   });
 
   it("shows no score section at all under grading none, and 'no score yet' without a graded run", async () => {
@@ -157,7 +173,7 @@ describe("a project in progress", () => {
     mockFetch({ [URL]: ok(project({ repo: { ...project().repo!, score: null, run: null, ciStatus: "pending" } })) });
     render();
     expect(await screen.findByText("No score yet: the CI has not graded a commit of yours.")).toBeInTheDocument();
-    expect(screen.getByText("CI running")).toBeInTheDocument();
+    expect(screen.getByText("running")).toBeInTheDocument();
   });
 });
 
@@ -173,7 +189,7 @@ describe("the invitation", () => {
     const open = await screen.findByRole("link", { name: "Open the invitation" });
     expect(open).toHaveAttribute("href", "https://github.com/heig/labo-1-lea/invitations");
     expect(open).toHaveClass("bg-accent");
-    expect(screen.getByText("pending on GitHub")).toBeInTheDocument();
+    expect(screen.getByText("Invitation pending on GitHub")).toBeInTheDocument();
     expect(screen.getByText("no commit yet")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Resend the invitation" }));
@@ -213,8 +229,8 @@ describe("without a repository", () => {
       "href",
       "/app/auth/github/link?return=%2Fprojects%2Fp1",
     );
-    expect(screen.getByText(/^Starts in /)).toBeInTheDocument();
-    expect(screen.getByText(/Link your GitHub account to accept this project/)).toBeInTheDocument();
+    expect(screen.getByText(/· Starts in /)).toBeInTheDocument();
+    expect(screen.getByText("Link your GitHub account to accept it")).toBeInTheDocument();
   });
 
   it("says when a project not yet started may be accepted, that one was never accepted, that a repository was deleted", async () => {
@@ -226,14 +242,12 @@ describe("without a repository", () => {
 
     mockFetch({ [URL]: ok(project({ status: "locked", deadlineAt: at(-1), repo: null })) });
     const r2 = render();
-    expect(await screen.findByText("You did not accept this project before its deadline.")).toBeInTheDocument();
-    // A passed deadline is said once, with no countdown.
-    expect(screen.getByText(/^Due [^·]+$/)).toBeInTheDocument();
+    expect(await screen.findByText("Not accepted before the deadline")).toBeInTheDocument();
     r2.unmount();
 
     mockFetch({ [URL]: ok(project({ repo: { ...project().repo!, deleted: true } })) });
     render();
-    expect(await screen.findByText(/Your repository was deleted on GitHub/)).toBeInTheDocument();
+    expect(await screen.findByText("Repository deleted on GitHub: ask your teacher")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /heig\/labo-1-lea/ })).toBeNull();
     expect(screen.queryByText("Score")).toBeNull();
   });
@@ -254,7 +268,7 @@ describe("the release", () => {
     expect(screen.getByText("Final score")).toBeInTheDocument();
     expect(screen.getByText("36 / 40")).toBeInTheDocument();
     expect(screen.getByText("5.5")).toBeInTheDocument();
-    const note = screen.getByText("Teacher's comment").parentElement!;
+    const note = screen.getByText("Your teacher's comment").parentElement!;
     expect(within(note).getByText(/Bon travail,\s*attention aux fuites\./)).toBeInTheDocument();
     expect(screen.queryByText("Score at the deadline")).toBeNull();
     expect(screen.queryByText("indicative")).toBeNull();
@@ -268,7 +282,7 @@ describe("the release", () => {
     render();
     expect(await screen.findByText("Final score")).toBeInTheDocument();
     expect(screen.getByText("—")).toBeInTheDocument();
-    expect(screen.queryByText("Teacher's comment")).toBeNull();
+    expect(screen.queryByText("Your teacher's comment")).toBeNull();
   });
 });
 
@@ -291,6 +305,6 @@ describe("in French", () => {
     expect(await screen.findByText("Score indicatif")).toBeInTheDocument();
     expect(screen.getByText("Mon dépôt")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ouvrir le dépôt" })).toBeInTheDocument();
-    expect(screen.getByText("CI réussie")).toBeInTheDocument();
+    expect(screen.getByText("réussie")).toBeInTheDocument();
   });
 });
