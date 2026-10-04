@@ -60,6 +60,7 @@ import { publish } from "../events.js";
 import { githubApp } from "../github/app.js";
 import { currentLogin } from "../github/collaborators.js";
 import { ownSessionGuard } from "../modules/guards.js";
+import { inviteOnGithubLink } from "../modules/project/service.js";
 import { safeReturnTo } from "./returnTo.js";
 // GitHub's return. Its query carries the one-time `code`: the request log masks it (`redact.ts`).
 import { GITHUB_CALLBACK_PATH } from "./paths.js";
@@ -377,15 +378,24 @@ export async function githubLinkPlugin(app: FastifyInstance, opts: { config: App
     const code = (req.query as { code?: unknown }).code;
     if (typeof code !== "string" || code === "") return back("error");
     let outcome: GithubLinkOutcome;
+    let account: GithubUser;
     try {
-      const account = await readAccount(github, code, req.log);
+      account = await readAccount(github, code, req.log);
       outcome = await saveAccount(app.db, state.userId, account, app.clock.now());
     } catch (err) {
       req.log.warn({ err: failure(err) }, "GitHub account linking failed");
       return back("error");
     }
-    // The user's other tabs refresh their card; a GET publishes no hint of its own (`app.ts`).
-    if (outcome === "linked") publish("mutation", [`user:${state.userId}`]);
+    if (outcome === "linked") {
+      // Their groups' repositories they could not be invited on yet (ADR-048
+      // lot 2, M3-15b): best effort, the link never fails on it.
+      const linked = { githubUserId: account.id, login: account.login };
+      await inviteOnGithubLink(app.db, config, state.userId, linked, { now: app.clock.now(), log: req.log }).catch((err: unknown) => {
+        req.log.warn({ err: failure(err) }, "group repository invitations on link failed");
+      });
+      // The user's other tabs refresh their card; a GET publishes no hint of its own (`app.ts`).
+      publish("mutation", [`user:${state.userId}`]);
+    }
     return back(outcome);
   });
 

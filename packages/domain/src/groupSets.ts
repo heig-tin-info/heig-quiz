@@ -79,9 +79,13 @@ export interface SetState {
   members: readonly { enrollmentId: string; groupId: string }[];
 }
 
-/** A project's copy as {@link groupSyncPlan} reads it. */
+/**
+ * A project's copy as {@link groupSyncPlan} reads it. `slugFixed`: the group
+ * has a repository, named after its slug, which never changes again
+ * (ADR-070 §4; M3-15b).
+ */
 export interface CopyState {
-  groups: readonly { id: string; name: string; slug: string; position: number; sourceGroupId: string | null }[];
+  groups: readonly { id: string; name: string; slug: string; position: number; sourceGroupId: string | null; slugFixed?: boolean }[];
   members: readonly { enrollmentId: string; groupId: string }[];
 }
 
@@ -93,7 +97,7 @@ export interface CopyState {
  *   - `delete` — the copy groups whose set group is gone (their members
  *     leave with them, by cascade);
  *   - `update` — a copy group whose name or position differs from its set
- *     group's (the slug follows the name);
+ *     group's (the slug follows the name, unless it is fixed);
  *   - `create` — a set group the copy lacks;
  *   - `place` — a student into the copy group of `sourceGroupId`; `from`
  *     the copy group they leave (a move), null when in none;
@@ -114,7 +118,9 @@ export interface GroupSyncPlan {
  * from (`sourceGroupId`); one without a source, or whose source is gone, is
  * deleted. Names follow the set's; in the copy a name or a slug that
  * clashes is disambiguated (`freeName`, `freeSlug`), and a kept group's
- * slug never changes unless its name does. Empty when in step.
+ * slug never changes unless its name does — nor ever once fixed (a group
+ * with a repository: its slug is reserved first, its name alone follows).
+ * Empty when in step.
  */
 export function groupSyncPlan(set: SetState, copy: CopyState): GroupSyncPlan {
   const plan: GroupSyncPlan = { delete: [], update: [], create: [], place: [], unplace: [] };
@@ -132,6 +138,7 @@ export function groupSyncPlan(set: SetState, copy: CopyState): GroupSyncPlan {
   const slugs = new Set<string>();
   for (const g of ordered) {
     const kept = bySource.get(g.id);
+    if (kept?.slugFixed) slugs.add(kept.slug);
     if (kept && kept.name === g.name) {
       names.add(kept.name);
       slugs.add(kept.slug);
@@ -144,7 +151,7 @@ export function groupSyncPlan(set: SetState, copy: CopyState): GroupSyncPlan {
       continue;
     }
     const name = freeName(g.name, names);
-    const slug = freeSlug(slugify(name) || "group", slugs);
+    const slug = kept?.slugFixed ? kept.slug : freeSlug(slugify(name) || "group", slugs);
     names.add(name);
     slugs.add(slug);
     if (kept) plan.update.push({ id: kept.id, name, slug, position: g.position });

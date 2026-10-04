@@ -100,6 +100,7 @@ export const fr: Record<keyof Dict, string> = {
   "error.taskRunning": "Cette tâche est déjà en cours : attendez son résultat.",
   "error.githubJournalAttached": "Cette classe a un journal : retirez d'abord le journal, puis déconnectez-la ou changez son organisation GitHub.",
   "error.githubAppNotInstalled": "L'app GitHub de Quiz n'est pas installée sur cette organisation. Installez-la, puis réessayez.",
+  "error.githubRevokeFailed": "GitHub n'a pas retiré l'accès de cet étudiant aux dépôts des projets. Rien n'a été modifié : réessayez.",
   "error.superPowersActive": "Les Super Powers sont déjà actifs. Désactivez-les d'abord pour recommencer une heure.",
   "error.superPowersRequired": "Cette action demande les Super Powers. Activez-les d'abord dans les réglages.",
   "error.ownerRequired": "Seul un propriétaire du cours peut faire cela.",

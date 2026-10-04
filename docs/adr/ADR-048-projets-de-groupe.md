@@ -9,9 +9,12 @@ no longer renames a repository; the advisory size moves to the set.
 Decisions 1, 2, 4 and 5 and rejected alternatives 1, 2 and 5 below are
 heig-classroom's, not Quiz's rule; lot 2's GitHub mechanics stand.
 
-Quiz implementation status (verified 2026-10-03): group API/web remain
-M3-15/M3-16 in [merge progress](../merge/PROGRESS.md).
-`modules/project/accept.ts` currently provisions individual repositories.
+Quiz implementation status (2026-10-05): lot 2's group repositories at
+Accept, the invitation on a link and the revocation before leaving the
+roster are delivered by M3-15b-1 (`modules/project/accept.ts`,
+`groupRepos.ts`, `access.ts`); a membership change on GitHub waits for
+M3-15b-2 (`409 has_repo` until then), the web for M3-16, in
+[merge progress](../merge/PROGRESS.md).
 The delivered lots below refer to heig-classroom, not Quiz.
 
 **Imported from heig-classroom** (2026-09-30, merge task M0-03, ADR-035),

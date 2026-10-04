@@ -491,7 +491,8 @@ export type InvitationStatus = z.infer<typeof InvitationStatus>;
 
 /**
  * `POST /app/api/student/projects/:id/accept` (F-PROJ-05): the student's OWN
- * repository and nothing else — never the source nor the distribution
+ * repository — their group's in a group project (ADR-048 lot 2, M3-15b),
+ * `invitationStatus` then THEIR invitation on it — and nothing else — never the source nor the distribution
  * repository (N-SEC-20). `fullName` is null until the repository exists;
  * `invitationStatus` is the student's invitation on it (F-PROJ-07). A second
  * Accept answers the same row; a repository deleted on GitHub is answered as
@@ -510,7 +511,8 @@ export type ProjectAcceptance = z.infer<typeof ProjectAcceptance>;
  * is a 409:
  *   - `not_started`, `deadline_passed` — judged on the project's dates and
  *     the server's clock, no grace;
- *   - `no_group` — a group project (groups come with merge task M3-15);
+ *   - `no_group` — a group project whose copy places the student in no
+ *     group (M3-15b): the staff place them in the set;
  *   - `github_not_linked`; `github_account_stale` — the linked account was
  *     deleted, or GitHub refused to invite it (renamed away): relink;
  *   - `app_not_installed` — Quiz's App no longer acts on the project's

@@ -2259,24 +2259,96 @@ follows its set until the deadline. Split in two PRs.
   keys); `GROUPS_OFFERED` stays false until M3-16.
 
 #### M3-15b — Group repositories and their membership on GitHub
-- **Depends on**: M3-15a, M3-03.
-- **Port from**: `C:group-repos.ts`, `inviteOnGithubLink`, the org
-  pre-removal hook in `Q:modules/org/service.ts`.
+Split in two PRs (orchestrator, 2026-10-05). The product owner's decisions
+of 2026-10-05 (P1: what "nothing to revoke" means; P2: the first deadline
+stops a group) are ADR-070's amendment and F-PROJ-06/F-PROJ-17's wording.
 - **From M3-03** (orchestrator, 2026-10-02): Accept answers `409 no_group`
-  for any group project: this task replaces it by the group's repository
-  (`claimGroupRepo`, `joinGroupRepo`), adds `has_repo` and `revoke_failed`
-  to `PROJECT_ACCEPT_REFUSALS`, and covers the revocation on leaving the
-  roster (F-PROJ-17) for the INDIVIDUAL repositories M3-03 makes too.
-- **Create**: the `group.sync` job (one lease per project, the deadlines
-  re-read in its transaction; a departure waits for GitHub, an arrival is
-  invited), the *access to revoke* flag on a repository's row, *Resync with
-  the set*, `409 needs_confirmation` with the consequences and their
-  digest on every membership write that reaches GitHub; a group repository
-  is a student's through the copy's membership only (N-SEC-20); the
-  synchronous revocation before a roster removal or an account change.
-- **Tests**: port `group-repos.db.test` (21); a move between two following
-  groups, into a stopped one, a refused revocation retried, two projects on
-  one set, the creator moved out, a stale digest.
+  for any group project: this task replaces it by the group's repository,
+  and covers the revocation on leaving the roster (F-PROJ-17) for the
+  INDIVIDUAL repositories M3-03 makes too. (`revoke_failed` is a roster
+  refusal, `has_repo` a group one: Accept answers neither.)
+
+#### M3-15b-1 — Group repositories at Accept, the invited accounts, synchronous revocations
+- **Depends on**: M3-15a, M3-03.
+- **Port from**: `C:group-repos.ts` (`claimGroupRepo`, the name and its
+  disambiguation, `inviteMembers`, `revokeMember`), `inviteOnGithubLink`,
+  `group-repos.db.test` where its rules survive.
+- **Goal**: Accept of a group project (the copy's group, `no_group`
+  without one; the first member provisions, every linked member invited, a
+  later one joins); every invited account recorded; a student linking
+  GitHub invited; whose repository through the copy only (N-SEC-20); the
+  synchronous revocation before a roster removal, an unclaim, an e-mail
+  change, a self-enroll; `409 has_repo` for a set's write that would reach
+  a group with a repository until M3-15b-2.
+- **As delivered** (branch `merge/M3-15b1-group-repos`): migration
+  `0065_project_repo_access` (`Q:db/project.ts`: one row per (repository,
+  roster line, GitHub account), the login invited, `revoked_at`; the
+  individual repositories M3-03 provisioned backfilled from today's link
+  and the student seat). `Q:modules/project/accept.ts`: a group project's
+  Accept — the copy group or `409 no_group`; a provisioned row is joined
+  (the member invited, the answer THEIR invitation; refused like a first
+  Accept on their account), otherwise the claim (the partial UNIQUE (project,
+  group): two Accepts make one row, `provision_in_progress`), the name
+  `<project slug>-<group slug>`, the group's id appended when another
+  tracked row bears it, the allow-list of M3-03 unchanged (`repo_name_taken`),
+  then every other member with a link invited, best effort, read after the
+  provisioning; the row's `invitation_status` pending while any member's
+  is. `Q:modules/project/groupRepos.ts`: `copyGroupOf`, `groupMembers`,
+  `seatRepo` (`pickStudentRepo`: a heig-classroom live individual
+  repository keeps its student — `isLiveIndividualRepo` ported for the
+  reads, Accept and the invitations), read by the student view and cards,
+  the staff page (one row per student, each member reading the group's;
+  a repository no roster student reads listed by its creator's account),
+  the hints (`repoUserIds`: the members, never the creator for having
+  created it) and the resend (the staff's re-invites the members, a
+  student's invites them alone). `Q:modules/project/access.ts`:
+  `recordGrant`, `inviteMember` (audited `project_group.repo_invite`),
+  `inviteOnGithubLink` (called by `auth/githubLink.ts` after a link, best
+  effort), `revokeEnrollmentAccess` (the recorded accounts, by their
+  immutable id's login of today; the seat and a pending invitation; P1
+  skips `app_not_installed`, `repo_deleted`, `account_gone`,
+  `not_invited`, each audited `project_group.repo_revoke`; a refusal is
+  `502 revoke_failed`, `ROSTER_REFUSALS` in contracts `org.ts`), called by
+  the roster routes before `removeEnrollment`, `unclaimEnrollment`, an
+  e-mail change (after `duplicate_email` is ruled out) and a self-enroll
+  that turns a student line into a staff seat (`selfEnrollTarget`).
+  `Q:modules/project/groupCopy.ts`: a copy group with a repository has its
+  slug fixed (`slugFixed` in `groupSyncPlan`'s `CopyState`, reserved before
+  the others' slugs) and a step that would delete it, or take a member out
+  of it or bring one in, throws `RepoGroupTouched` → `409 has_repo` (with
+  the project) in `writeSet`, nothing written; a staff seat leaving it is
+  no GitHub change (revoked at the self-enroll). `acceptRefusal`
+  (`@quiz/domain`) no longer says `no_group`. Web: `revoke_failed` worded
+  (`error.githubRevokeFailed`); `no_group` has no Accept screen to word it
+  yet (M3-13). Known gaps left to M3-15b-2: an Accept racing a removal may
+  invite a departing member after their grants were read (heig-classroom's
+  race too); the reservation of a name while a provisioning is in flight
+  (heig-classroom wrote it on the row) is not ported — two classrooms
+  provisioning the same name at the same second answer the second
+  `repo_name_taken` until the first is done; the M8-01 import must check
+  heig-classroom's individual repositories inside group assignments
+  (lot-1 leftovers) against `isLiveIndividualRepo`.
+- **Tests**: `groupRepos.db.test.ts` (17): the first Accept and its
+  invitations and grants, a later member, two at once, `no_group`, the
+  name disambiguated, an invitation on link; the creator moved out (no
+  row, no student view or card, no hint, no resend); `has_repo` (out, in,
+  deletion; nothing written) and a rename (slug fixed, kept from another
+  group); a removal (seat and pending invitation), `502 revoke_failed`
+  (roster, set, copy, unclaim and e-mail change unchanged), the three P1
+  skips, a relinked account, an unclaim and an e-mail change, a self-enroll,
+  an individual repository.
+
+#### M3-15b-2 — The follow on GitHub: `group.sync`, the per-group stop, confirmations
+- **Depends on**: M3-15b-1.
+- **Create**: the per-group stop (P2: the first of the project's deadline
+  and the repository's own); the `group.sync` job (one lease per project,
+  the deadlines re-read in its transaction; a departure waits for GitHub,
+  an arrival is invited) replacing M3-15b-1's `409 has_repo` for a member's
+  move; the *access to revoke* flag on a repository's row; *Resync with the
+  set*; `409 needs_confirmation` with the consequences and their digest on
+  every membership write that reaches GitHub.
+- **Tests**: a move between two following groups, into a stopped one, a
+  refused revocation retried, two projects on one set, a stale digest.
 
 ### M3-16 — Groups (web)
 - **Depends on**: M3-15a (M3-15b for the confirmations and flags), M3-12.

@@ -1,14 +1,15 @@
 /**
  * The project lifecycle's refusals (`ProjectErrorCode`), Accept's
- * (`ProjectAcceptErrorCode`) and the review checkpoints'
- * (`ProjectCheckpointErrorCode`), worded by the web app (invariant 1): one
- * class, its status by code.
+ * (`ProjectAcceptErrorCode`), the review checkpoints'
+ * (`ProjectCheckpointErrorCode`) and the revocation the roster's writes
+ * call first (`revoke_failed` of `RosterErrorCode`, M3-15b), worded by the
+ * web app (invariant 1): one class, its status by code.
  */
-import type { ProjectAcceptErrorCode, ProjectCheckpointErrorCode, ProjectErrorCode } from "@quiz/contracts";
+import type { ProjectAcceptErrorCode, ProjectCheckpointErrorCode, ProjectErrorCode, RosterErrorCode } from "@quiz/contracts";
 
 import { DomainError } from "../http.js";
 
-type Code = ProjectErrorCode | ProjectAcceptErrorCode | ProjectCheckpointErrorCode;
+type Code = ProjectErrorCode | ProjectAcceptErrorCode | ProjectCheckpointErrorCode | Extract<RosterErrorCode, "revoke_failed">;
 
 /** The state of things is a 409; what the clock or GitHub's contents refuse a 422; too soon a 429; GitHub failing a 502. */
 const STATUS: Record<Code, number> = {
@@ -51,6 +52,8 @@ const STATUS: Record<Code, number> = {
   invitation_not_pending: 409,
   resend_too_soon: 429,
   invite_failed: 502,
+  // The roster's writes (M3-15b): GitHub refused a revocation.
+  revoke_failed: 502,
 };
 
 /** A refusal: `{ error: code, message, ...details }`. */

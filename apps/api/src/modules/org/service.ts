@@ -501,6 +501,37 @@ export async function selfEnroll(
 }
 
 /**
+ * What a self-enroll would do to the classroom's roster: the line it would
+ * turn into the caller's staff seat (the one holding their e-mail), and
+ * whether it would be refused instead (`conflict`: the caller holds another
+ * line, UNIQUE(classroom_id, user_id)). The route revokes a student line's
+ * GitHub accesses before it becomes a staff seat (ADR-070 §5, M3-15b).
+ */
+export async function selfEnrollTarget(
+  db: Db,
+  classroomId: string,
+  me: { id: string; email: string },
+): Promise<{ conflict: boolean; line: EnrollmentRecord | null }> {
+  const email = me.email.trim().toLowerCase();
+  const lines = await db
+    .select()
+    .from(enrollments)
+    .where(and(eq(enrollments.classroomId, classroomId), sql`(${enrollments.email} = ${email} OR ${enrollments.userId} = ${me.id})`));
+  const line = lines.find((l) => l.email === email) ?? null;
+  return { conflict: lines.some((l) => l.email !== email), line };
+}
+
+/** Whether another line of the classroom than `entryId` holds `email`: the `duplicate_email` of an edit. */
+export async function emailTaken(db: Db, classroomId: string, email: string, entryId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: enrollments.id })
+    .from(enrollments)
+    .where(and(eq(enrollments.classroomId, classroomId), eq(enrollments.email, email), sql`${enrollments.id} <> ${entryId}`))
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
  * Edits one roster entry. Changing the e-mail (`emailChanged`) invalidates
  * the attachment: the entry is again claimable by the holder of the new
  * address. Throws on UNIQUE(classroom_id, email).

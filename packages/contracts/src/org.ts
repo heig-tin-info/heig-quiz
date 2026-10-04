@@ -106,6 +106,21 @@ export const EnrollmentPatch = z
   .refine((b) => Object.keys(b).length > 0, { message: "Nothing to update" });
 export type EnrollmentPatch = z.infer<typeof EnrollmentPatch>;
 
+/**
+ * The refusals of the roster's writes, `{ error, message }`:
+ *   - `duplicate_email` (409) — a PATCH to an address another line holds;
+ *   - `already_enrolled` (409) — a self-enroll by a user enrolled under
+ *     another address;
+ *   - `revoke_failed` (502) — GitHub refused to take the student's access
+ *     to a project repository away before a removal, an unclaim, an e-mail
+ *     change or a self-enroll that detaches their account (F-PROJ-17,
+ *     ADR-070 §5): nothing was changed, retry. GitHub out of reach (the App
+ *     gone, the repository deleted) is no refusal: there is nothing to take.
+ */
+export const ROSTER_REFUSALS = ["duplicate_email", "already_enrolled", "revoke_failed"] as const;
+export const RosterErrorCode = z.enum(ROSTER_REFUSALS);
+export type RosterErrorCode = z.infer<typeof RosterErrorCode>;
+
 /** `PUT /courses/:id/pools` — the whole set of pools the course draws from. */
 export const CoursePoolsPut = z.object({ poolIds: z.array(z.uuid()).max(50) });
 export type CoursePoolsPut = z.infer<typeof CoursePoolsPut>;

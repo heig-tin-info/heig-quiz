@@ -11,7 +11,7 @@
  *   an `ok` row never undone by a late failure; the staff told once;
  * - the GitHub account: not linked, deleted, renamed (followed), GitHub
  *   unreachable (the stored login), an invitation refused;
- * - the refusals: not started, deadline passed, a group project, the App
+ * - the refusals: not started, deadline passed, no group (M3-15b), the App
  *   gone; a draft, an archived project, a staff seat, another classroom, an
  *   impersonation, a Bearer token, a `seb` session get the 404 (or 401);
  * - dead stays dead;
@@ -426,7 +426,7 @@ describe("what Accept refuses", () => {
     expect(await repoRows(project.id)).toEqual([]);
   });
 
-  it("refuses a group project (M3-15) and an organization the App left", async () => {
+  it("refuses a group project whose copy places the student nowhere (M3-15b) and an organization the App left", async () => {
     const { project, room, student } = await publishedProject();
     await server.app.db.update(projects).set({ groupMode: true }).where(eq(projects.id, project.id));
     expect(refusal(await accept(project.id, student))).toEqual([409, "no_group"]);

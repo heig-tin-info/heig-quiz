@@ -119,7 +119,9 @@ export type AuditAction =
    * `random_form`: `size`, `remainder`, `groups` (the new ones), `placed`.
    * Every write but the sets' creation and duplication also names
    * `payload.copies`: the projects whose copy it changed (ADR-070 §4;
-   * always empty for a deletion, which no following copy allows).
+   * always empty for a deletion, which no following copy allows). A write
+   * whose step would reach a copy group with a repository is refused
+   * (`409 has_repo`, M3-15b-1) and audits nothing.
    */
   | "group_set.create"
   | "group_set.update"
@@ -345,6 +347,20 @@ export type AuditAction =
   | "project_repo.grade_override"
   | "project_repo.protection_reenabled"
   | "project_repo.invite_resent"
+  /**
+   * A GitHub account let into, or out of, a project repository for a roster
+   * line (ADR-048 lot 2, ADR-070 §4–§5; merge task M3-15b), subject the
+   * `project_repos` row — a group's, or (a revocation) a student's own.
+   * `repo_invite`: `payload.repo`, `enrollmentId`, `login`, `invitation`
+   * (`pending` | `accepted`), `via` (`accept`, `link`); `repo_revoke`:
+   * `payload.repo`, `enrollmentId`, `login` (null: none was ever invited),
+   * `outcome` (`ok` | `skipped`), `reason` of a skip (`app_not_installed`,
+   * `repo_deleted`, `account_gone`, `not_invited`), `invitationsCancelled`
+   * of a revocation, `via` (`roster.remove`, `roster.unclaim`,
+   * `roster.update`, `roster.self_enroll`).
+   */
+  | "project_group.repo_invite"
+  | "project_group.repo_revoke"
   | "question.copy"
   | "question.create"
   | "question.delete"

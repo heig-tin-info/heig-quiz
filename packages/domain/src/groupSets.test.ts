@@ -152,6 +152,16 @@ describe("groupSyncPlan (ADR-070 §4)", () => {
     expect(plan.create).toEqual([{ sourceGroupId: "g2", name: "!!!", slug: "group", position: 0 }]);
   });
 
+  it("keeps a fixed slug (a group with a repository): its name alone follows, and no other group takes the slug", () => {
+    const copy: CopyState = {
+      groups: [{ id: "c1", name: "Group 1", slug: "group-1", position: 0, sourceGroupId: "g1", slugFixed: true }],
+      members: [],
+    };
+    const plan = groupSyncPlan(set([["g1", "Les Pandas"], ["g2", "Group 1"]]), copy);
+    expect(plan.update).toEqual([{ id: "c1", name: "Les Pandas", slug: "group-1", position: 0 }]);
+    expect(plan.create).toEqual([{ sourceGroupId: "g2", name: "Group 1", slug: "group-1-2", position: 1 }]);
+  });
+
   it("follows a swap of names (applied through temporary names)", () => {
     const plan = groupSyncPlan(set([["g1", "B"], ["g2", "A"]]), copyOf([["c1", "A", "g1"], ["c2", "B", "g2"]]));
     expect(plan.update).toEqual([

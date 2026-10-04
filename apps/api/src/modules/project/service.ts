@@ -30,6 +30,11 @@
  * From M3-15a: a group project's copy of its group set (`groupCopy.ts`),
  * which the `group` module steps in its own transaction, never writing
  * these tables itself (ADR-070 §4).
+ * From M3-15b-1: a group's repository at Accept (`accept.ts`), whose
+ * repository is whose through the copy (`groupRepos.ts`, N-SEC-20), and the
+ * accounts let in (`access.ts`): recorded at each invitation, invited when a
+ * student links GitHub (`auth/githubLink.ts`), revoked before the roster's
+ * writes take a line or its account away (`org` routes).
  */
 export { acceptProject } from "./accept.js";
 export { createCheckpoint, deleteCheckpoint, listCheckpoints } from "./checkpoints.js";
@@ -37,7 +42,8 @@ export { projectDetail, repoRuns } from "./detail.js";
 export { repoDeadline, setRepoDeadline, setStaffLock } from "./deadline.js";
 export { overrideScore, releaseProject } from "./grades.js";
 export { projectsChanged } from "./events.js";
-export { followingCopies, stepCopies } from "./groupCopy.js";
+export { followingCopies, RepoGroupTouched, stepCopies } from "./groupCopy.js";
+export { inviteOnGithubLink, revokeEnrollmentAccess, type RevokeVia } from "./access.js";
 export { resendInvitation } from "./invitation.js";
 export { reenableProtection } from "./protection.js";
 export { requestDeadlineWork } from "./jobs.js";

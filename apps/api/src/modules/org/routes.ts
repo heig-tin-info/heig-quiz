@@ -34,7 +34,7 @@ import {
 } from "@quiz/contracts";
 import type { Cell } from "@quiz/domain";
 
-import { tracer } from "../../audit.js";
+import { actorOf, tracer } from "../../audit.js";
 import { issueImpersonationLink } from "../../auth/impersonation.js";
 import type { AppConfig } from "../../config.js";
 import { publish } from "../../events.js";
@@ -56,6 +56,7 @@ import {
 import { invalid, notFound, teacherRoute } from "../http.js";
 import { journalRemovalRefused } from "../journal/service.js";
 import { poolsOfCourse, setCoursePools } from "../pool/service.js";
+import { revokeEnrollmentAccess, type RevokeVia } from "../project/service.js";
 import { claimForExistingUsers, importRoster, rosterView } from "./roster.js";
 import * as service from "./service.js";
 
@@ -113,6 +114,13 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     load: (req: FastifyRequest, reply: FastifyReply, p: { id: string; eid: string }) =>
       accessibleEnrollment(app, req, reply, p),
   };
+  /**
+   * F-PROJ-17, ADR-070 §5: a roster line leaving, or losing its account,
+   * first loses every GitHub access it was given to the classroom's project
+   * repositories — `502 revoke_failed` otherwise, the roster unchanged.
+   */
+  const revokeAccess = (req: FastifyRequest, now: Date, enrollmentId: string, via: RevokeVia) =>
+    revokeEnrollmentAccess(app.db, config, enrollmentId, { actor: actorOf(req), now, log: req.log, via });
 
   // --- Courses ---
 
@@ -409,8 +417,13 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.post(
     "/app/api/classrooms/:id/self-enroll",
     { preHandler: requireTeacher },
-    teacher(onClassroom(), async ({ req, reply, scope }) => {
+    teacher(onClassroom(), async ({ req, reply, now, scope }) => {
       const me = req.user!;
+      // A student line holding the caller's e-mail becomes their staff seat:
+      // its GitHub accesses go first, and only when the seat will be made.
+      const target = await service.selfEnrollTarget(app.db, scope.room.id, me);
+      if (target.conflict) return reply.code(409).send({ error: "already_enrolled" });
+      if (target.line && !target.line.staff) await revokeAccess(req, now, target.line.id, "roster.self_enroll");
       try {
         await service.selfEnroll(app.db, scope.room.id, me);
       } catch {
@@ -459,9 +472,17 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.patch(
     "/app/api/classrooms/:id/roster/:eid",
     { preHandler: requireTeacher },
-    teacher({ ...onEntry, body: EnrollmentPatch }, async ({ req, reply, body, scope: entry }) => {
+    teacher({ ...onEntry, body: EnrollmentPatch }, async ({ req, reply, now, body, scope: entry }) => {
       const email = body.email?.trim().toLowerCase();
       const emailChanged = email !== undefined && email !== entry.email;
+      // A new e-mail detaches the account: its GitHub accesses go first,
+      // once the address is known to be free.
+      if (emailChanged && entry.userId !== null) {
+        if (await service.emailTaken(app.db, entry.classroomId, email, entry.id)) {
+          return reply.code(409).send({ error: "duplicate_email", message: "This e-mail is already in the roster" });
+        }
+        await revokeAccess(req, now, entry.id, "roster.update");
+      }
       let updated: Awaited<ReturnType<typeof service.updateEnrollment>>;
       try {
         updated = await service.updateEnrollment(app.db, entry, body, email, emailChanged);
@@ -481,7 +502,8 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.post(
     "/app/api/classrooms/:id/roster/:eid/unclaim",
     { preHandler: requireTeacher },
-    teacher(onEntry, async ({ req, scope: entry }) => {
+    teacher(onEntry, async ({ req, now, scope: entry }) => {
+      if (entry.userId !== null) await revokeAccess(req, now, entry.id, "roster.unclaim");
       const updated = await service.unclaimEnrollment(app.db, entry);
       await trace(req, "roster.unclaim", "enrollment", entry.id, { previousUserId: entry.userId });
       return updated;
@@ -491,7 +513,8 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.delete(
     "/app/api/classrooms/:id/roster/:eid",
     { preHandler: requireTeacher },
-    teacher(onEntry, async ({ req, reply, scope: entry }) => {
+    teacher(onEntry, async ({ req, reply, now, scope: entry }) => {
+      await revokeAccess(req, now, entry.id, "roster.remove");
       await service.removeEnrollment(app.db, entry);
       await trace(req, "roster.remove", "enrollment", entry.id, {
         nom: entry.nom,

@@ -29,9 +29,12 @@
  * The repository is the seat's: read through a STUDENT seat only — a staff
  * seat (a teacher in the student view, ADR-018) holds none, so the view
  * shows them the project without a repository and Accept stays refused to
- * them (`studentProject`, `guards.ts`).
+ * them (`studentProject`, `guards.ts`). In a group project it is the seat's
+ * copy group's (`seatRepo`, `groupRepos.ts`), never the repository its
+ * creator moved out of (N-SEC-20, M3-15b).
  */
 import { and, eq, isNull, ne, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { FastifyBaseLogger } from "fastify";
 
 import type {
@@ -43,6 +46,7 @@ import type {
 } from "@quiz/contracts";
 import {
   effectiveDeadline,
+  pickStudentRepo,
   scoreGrade,
   studentCiReading,
   studentProjectGroup,
@@ -55,12 +59,13 @@ import type { AuditActor } from "../../audit.js";
 import { iso, isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { classrooms, courses, enrollments, githubAccounts, projectGradeRuns, projectRepos, projects } from "../../db/schema.js";
+import { classrooms, courses, enrollments, githubAccounts, projectGradeRuns, projectGroupMembers, projectRepos, projects } from "../../db/schema.js";
 import { htmlUrl } from "../../github/git.js";
 import type { StudentProjectScope } from "../guards.js";
 import { EFFECTIVE_DEADLINE, isLive } from "./deadline.js";
 import { slotRuns } from "./detail.js";
 import { ProjectError } from "./errors.js";
+import { seatRepo } from "./groupRepos.js";
 import { resendInvitation } from "./invitation.js";
 import type { RepoRow } from "./repos.js";
 import type { ProjectRow } from "./views.js";
@@ -75,16 +80,6 @@ const runUrl = (fullName: string, workflowRunId: number): string => `${htmlUrl(f
 const provisioned = (repo: RepoRow | null): ProvisionedRepo | null =>
   repo !== null && repo.provisionStatus === "ok" && repo.fullName !== null ? (repo as ProvisionedRepo) : null;
 
-/** The student's own individual repository row of `projectId`, provisioned or not; null before Accept. */
-async function ownRepo(db: Db, projectId: string, userId: string): Promise<RepoRow | null> {
-  const [row] = await db
-    .select()
-    .from(projectRepos)
-    .where(and(eq(projectRepos.projectId, projectId), eq(projectRepos.userId, userId), isNull(projectRepos.groupId)))
-    .limit(1);
-  return row ?? null;
-}
-
 /** Whether `userId` linked a GitHub account (F-GH-05): the card leads to linking it otherwise. */
 async function githubLinked(db: Db, userId: string): Promise<boolean> {
   const [row] = await db.select({ id: githubAccounts.userId }).from(githubAccounts).where(eq(githubAccounts.userId, userId)).limit(1);
@@ -95,7 +90,7 @@ interface CardRow {
   project: ProjectRow;
   classroomName: string;
   courseCode: string;
-  /** The student's own row, through a student seat; null without one. */
+  /** The student's row (their own, or their group's), through a student seat; null without one. */
   repo: RepoRow | null;
 }
 
@@ -161,8 +156,9 @@ export async function studentProjectCards(db: Db, userId: string, now: Date, cla
     eq(enrollments.userId, userId),
     classroomId === undefined ? undefined : eq(enrollments.classroomId, classroomId),
   ];
+  const groupRepos = alias(projectRepos, "group_repo");
   const rows = await db
-    .select({ project: projects, classroomName: classrooms.name, courseCode: courses.code, repo: projectRepos })
+    .select({ project: projects, classroomName: classrooms.name, courseCode: courses.code, own: projectRepos, group: groupRepos })
     .from(enrollments)
     .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
@@ -177,12 +173,24 @@ export async function studentProjectCards(db: Db, userId: string, now: Date, cla
         eq(enrollments.staff, false),
       ),
     )
+    // A group project's repository: the seat's copy group's (N-SEC-20).
+    .leftJoin(
+      projectGroupMembers,
+      and(
+        eq(projectGroupMembers.projectId, projects.id),
+        eq(projectGroupMembers.enrollmentId, enrollments.id),
+        eq(projects.groupMode, true),
+        eq(enrollments.staff, false),
+      ),
+    )
+    .leftJoin(groupRepos, and(eq(groupRepos.projectId, projects.id), eq(groupRepos.groupId, projectGroupMembers.groupId)))
     .where(and(...scope))
     .orderBy(EFFECTIVE_DEADLINE, projects.name);
   const linked = rows.length > 0 && (await githubLinked(db, userId));
   const groups: StudentProjectCards = { open: [], upcoming: [], past: [] };
-  for (const row of rows) {
-    const placed = card(row, linked, now);
+  for (const { own, group, ...row } of rows) {
+    const repo = row.project.groupMode ? pickStudentRepo(own ?? undefined, group ?? undefined) : own;
+    const placed = card({ ...row, repo: repo ?? null }, linked, now);
     groups[placed.group].push(placed.card);
   }
   return groups;
@@ -232,7 +240,7 @@ function reading(project: ProjectRow, repo: ProvisionedRepo, runs: Map<string, R
  */
 export async function studentProject(db: Db, scope: StudentProjectScope, userId: string, now: Date): Promise<StudentProject> {
   const { project } = scope;
-  const row = scope.seat !== null && !scope.seat.staff ? await ownRepo(db, project.id, userId) : null;
+  const row = scope.seat !== null && !scope.seat.staff ? await seatRepo(db, project, { enrollmentId: scope.seat.id, userId }) : null;
   const repo = provisioned(row);
   const live = repo !== null && isLive(repo, project) ? repo : null;
   const [linked, runs] = await Promise.all([
@@ -273,19 +281,20 @@ export async function studentProject(db: Db, scope: StudentProjectScope, userId:
  * resend of their pending invitation, through the staff's rule and column
  * (`resendInvitation`: pending only, once a minute per repository — the
  * minute shared with whoever asks), on a project loaded through
- * `studentProject` (a claimed student seat). `409 repo_unavailable` before
- * they accepted.
+ * `studentProject` (a claimed student seat): on their own repository, or
+ * their group's, where they alone are invited. `409 repo_unavailable`
+ * before there is one.
  */
 export async function studentResendInvitation(
   db: Db,
   config: AppConfig,
   project: ProjectRow,
-  userId: string,
+  seat: { enrollmentId: string; userId: string },
   actor: AuditActor,
   now: Date,
   log: FastifyBaseLogger,
 ): Promise<ProjectInvitationResent> {
-  const repo = await ownRepo(db, project.id, userId);
+  const repo = await seatRepo(db, project, seat);
   if (repo === null) throw new ProjectError("repo_unavailable", "You have no repository on this project yet");
-  return resendInvitation(db, config, project.id, repo.id, actor, now, log);
+  return resendInvitation(db, config, project.id, repo.id, actor, now, log, seat);
 }

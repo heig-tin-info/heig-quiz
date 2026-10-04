@@ -20,19 +20,32 @@
  * The copy is the students' side of the set: a staff seat (ADR-018) is
  * never in it, even a line that became one after it was placed (D6).
  *
- * Before M3-15b no group has a repository: a change here touches no
- * repository, and is applied in the set's own transaction. A copy group
- * holding one is a broken invariant (Accept refuses every group project,
- * `no_group`), never stepped silently.
+ * **A copy group with a repository** (M3-15b-1): its slug — its
+ * repository's name — is fixed, its name still follows (`slugFixed`), and
+ * it is never deleted here. Until the `group.sync` job (M3-15b-2) a step
+ * that would take a member out of it, bring one in, or delete it throws
+ * {@link RepoGroupTouched} — the set's write is then refused whole (`409
+ * has_repo`), never applied without GitHub. A staff seat leaving it is no
+ * GitHub change: the seat's accounts were revoked when it became one
+ * (`selfEnroll`, `access.ts`). A draft holds no repository
+ * (`replaceGroupCopy`).
  */
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { groupSyncPlan, isEmptyPlan, type copyFollows, type CopyState, type GroupSyncPlan, type SetState } from "@quiz/domain";
 
 import type { Tx } from "../../db/client.js";
 import { enrollments, projectGroupMembers, projectGroups, projectRepos, projects, studentGroupMembers, studentGroups } from "../../db/schema.js";
+
+/** A set's step would reach a copy group of `projectId` that has a repository: the group module's `409 has_repo`. */
+export class RepoGroupTouched extends Error {
+  constructor(readonly projectId: string) {
+    super(`project ${projectId}: the step reaches a group with a repository`);
+    this.name = "RepoGroupTouched";
+  }
+}
 
 /**
  * The projects whose copy follows set `setId` — {@link copyFollows}, the rule
@@ -61,7 +74,8 @@ async function setState(tx: Tx, setId: string): Promise<SetState> {
   return { groups, members };
 }
 
-async function copyState(tx: Tx, projectId: string): Promise<CopyState> {
+/** The copy, each group's slug fixed when it has a repository (whatever its state), and the staff seats in it. */
+async function copyState(tx: Tx, projectId: string): Promise<CopyState & { staffSeats: Set<string> }> {
   const groups = await tx
     .select({
       id: projectGroups.id,
@@ -69,24 +83,44 @@ async function copyState(tx: Tx, projectId: string): Promise<CopyState> {
       slug: projectGroups.slug,
       position: projectGroups.position,
       sourceGroupId: projectGroups.sourceGroupId,
+      slugFixed: sql<boolean>`${projectRepos.id} IS NOT NULL`,
     })
     .from(projectGroups)
+    .leftJoin(projectRepos, eq(projectRepos.groupId, projectGroups.id))
     .where(eq(projectGroups.projectId, projectId));
   const members = await tx
-    .select({ enrollmentId: projectGroupMembers.enrollmentId, groupId: projectGroupMembers.groupId })
+    .select({ enrollmentId: projectGroupMembers.enrollmentId, groupId: projectGroupMembers.groupId, staff: enrollments.staff })
     .from(projectGroupMembers)
+    .innerJoin(enrollments, eq(enrollments.id, projectGroupMembers.enrollmentId))
     .where(eq(projectGroupMembers.projectId, projectId));
-  return { groups, members };
+  return { groups, members, staffSeats: new Set(members.filter((m) => m.staff).map((m) => m.enrollmentId)) };
 }
 
-/** M3-15b's lot: no copy group may hold a repository yet. */
+/**
+ * Whether `plan` reaches a copy group with a repository on GitHub's side:
+ * deletes it, takes a student out of it (a staff seat aside), or brings
+ * one in. Its rename and its position are not a GitHub change.
+ */
+function touchesRepoGroup(copy: CopyState & { staffSeats: Set<string> }, plan: GroupSyncPlan): boolean {
+  const withRepo = new Set(copy.groups.filter((g) => g.slugFixed).map((g) => g.id));
+  if (withRepo.size === 0) return false;
+  const bySource = new Map(copy.groups.flatMap((g) => (g.sourceGroupId === null ? [] : [[g.sourceGroupId, g.id] as const])));
+  const groupOf = new Map(copy.members.map((m) => [m.enrollmentId, m.groupId]));
+  return (
+    plan.delete.some((id) => withRepo.has(id)) ||
+    plan.place.some((p) => (p.from !== null && withRepo.has(p.from)) || withRepo.has(bySource.get(p.sourceGroupId) ?? "")) ||
+    plan.unplace.some((e) => !copy.staffSeats.has(e) && withRepo.has(groupOf.get(e)!))
+  );
+}
+
+/** A draft's copy is made and replaced freely: no group of it may hold a repository (Accept takes published projects only). */
 async function assertNoGroupRepo(tx: Tx, projectId: string): Promise<void> {
   const [repo] = await tx
     .select({ id: projectRepos.id })
     .from(projectRepos)
     .where(and(eq(projectRepos.projectId, projectId), isNotNull(projectRepos.groupId)))
     .limit(1);
-  if (repo) throw new Error(`project ${projectId}: a group repository exists, which only the group.sync job may follow (M3-15b)`);
+  if (repo) throw new Error(`project ${projectId}: a group repository exists, its copy cannot be replaced`);
 }
 
 /**
@@ -139,7 +173,7 @@ async function stepCopy(tx: Tx, projectId: string, set: SetState, now: Date): Pr
   const copy = await copyState(tx, projectId);
   const plan = groupSyncPlan(set, copy);
   if (isEmptyPlan(plan)) return false;
-  await assertNoGroupRepo(tx, projectId);
+  if (touchesRepoGroup(copy, plan)) throw new RepoGroupTouched(projectId);
   await applyPlan(tx, projectId, copy, plan, now);
   return true;
 }

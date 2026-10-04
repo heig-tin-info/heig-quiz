@@ -3,12 +3,13 @@
  * found by GitHub's immutable repository id, never by name; who hears of a
  * change to it; and its one terminal state, deleted on GitHub.
  */
-import { and, eq, inArray, isNotNull, isNull, notInArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, notInArray, or } from "drizzle-orm";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { Db, Tx } from "../../db/client.js";
-import { classrooms, enrollments, projectGroupMembers, projectRepos, projects } from "../../db/schema.js";
+import { classrooms, enrollments, projectRepos, projects } from "../../db/schema.js";
 import { projectsChanged, repoChanged } from "./events.js";
+import { groupMembers, individualHolders } from "./groupRepos.js";
 
 export type RepoRow = typeof projectRepos.$inferSelect;
 type ProjectRow = typeof projects.$inferSelect;
@@ -16,8 +17,9 @@ type ProjectRow = typeof projects.$inferSelect;
 /**
  * The STUDENT repositories of `project`: every one but those of a user who
  * now holds a staff seat of the classroom — a staff seat is never a
- * student's (ADR-018). The one set the page's rows and counts, and the
- * release, read (M3-08a, M3-08b).
+ * student's (ADR-018). A group's repository is its members' whoever
+ * created it (`user_id`, N-SEC-20): always one. The one set the page's
+ * rows and counts, and the release, read (M3-08a, M3-08b).
  */
 export async function studentRepos(db: Db | Tx, project: Pick<ProjectRow, "id" | "classroomId">): Promise<RepoRow[]> {
   const staff = db
@@ -27,7 +29,7 @@ export async function studentRepos(db: Db | Tx, project: Pick<ProjectRow, "id" |
   return db
     .select()
     .from(projectRepos)
-    .where(and(eq(projectRepos.projectId, project.id), notInArray(projectRepos.userId, staff)));
+    .where(and(eq(projectRepos.projectId, project.id), or(isNotNull(projectRepos.groupId), notInArray(projectRepos.userId, staff))));
 }
 
 /** A project repository with what its events need: its project and the course of its staff. */
@@ -64,18 +66,15 @@ export async function tracksRepo(tx: Tx, githubRepoId: number): Promise<boolean>
 }
 
 /**
- * The accounts that read a repository: the student who accepted it and, for
- * a group's, every member with an account (ADR-048). Who else of the group
- * also holds an individual repository is M3-15's to refine.
+ * The accounts that read a repository: the student who accepted it or, for
+ * a group's, its members of the copy with an account (ADR-048) — never its
+ * creator for having created it (N-SEC-20), nor a holder of a live
+ * individual repository (`groupRepos.ts`).
  */
 async function repoUserIds(db: Db, repo: RepoRow): Promise<string[]> {
   if (repo.groupId === null) return [repo.userId];
-  const members = await db
-    .select({ userId: enrollments.userId })
-    .from(projectGroupMembers)
-    .innerJoin(enrollments, eq(enrollments.id, projectGroupMembers.enrollmentId))
-    .where(and(eq(projectGroupMembers.groupId, repo.groupId), isNotNull(enrollments.userId)));
-  return [repo.userId, ...members.map((m) => m.userId!)];
+  const holders = await individualHolders(db, repo.projectId);
+  return (await groupMembers(db, repo.groupId)).flatMap((m) => (m.userId === null || holders.has(m.userId) ? [] : [m.userId]));
 }
 
 /** The hint of a change to `ctx`'s repository: its students and the course's staff, never the classroom. */

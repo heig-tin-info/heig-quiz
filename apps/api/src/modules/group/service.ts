@@ -10,7 +10,10 @@
  * (an archived one answers `409 classroom_archived`, and an archive waits
  * for the write), the set locked FOR UPDATE, then the projects whose copy
  * follows it; the write; their copies stepped; the audit. The hints go
- * after the commit, to the course's staff only (ADR-070 §9).
+ * after the commit, to the course's staff only (ADR-070 §9). A step that
+ * would reach a copy group with a repository refuses the whole write, `409
+ * has_repo` (M3-15b-1: the `group.sync` job that follows it on GitHub is
+ * M3-15b-2's); a rename still follows, the repository's name fixed.
  *
  * **The students of a set** are the classroom's roster lines, claimed or
  * not, except staff seats (ADR-018): never placed, never counted, never
@@ -32,7 +35,7 @@ import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
 import { classrooms, enrollments, groupSets, projects, studentGroupMembers, studentGroups } from "../../db/schema.js";
 import { DomainError } from "../http.js";
-import { followingCopies, projectsChanged, stepCopies } from "../project/service.js";
+import { followingCopies, projectsChanged, RepoGroupTouched, stepCopies } from "../project/service.js";
 import { GroupError } from "./errors.js";
 import { groupsChanged } from "./events.js";
 
@@ -179,7 +182,11 @@ async function writeSet(db: Db, scope: SetScope, ctx: WriteContext, write: (tx: 
     const copies = await followingCopies(tx, set.id);
     const written = await write(tx, set);
     if (!written) return null;
-    const changed = await stepCopies(tx, set.id, copies, ctx.now);
+    const changed = await stepCopies(tx, set.id, copies, ctx.now).catch(async (err: unknown) => {
+      if (!(err instanceof RepoGroupTouched)) throw err;
+      const [held] = await tx.select({ id: projects.id, name: projects.name }).from(projects).where(eq(projects.id, err.projectId));
+      throw new GroupError("has_repo", "This change reaches a group that has a repository on GitHub", { projects: [held] });
+    });
     await audit(tx, {
       ...ctx.actor,
       action: written.action,
