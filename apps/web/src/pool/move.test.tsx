@@ -50,6 +50,11 @@ const summary = (detail: PoolDetail, role: PoolSummary["role"] = "owner"): PoolS
   questionCount: detail.questionCount,
   role,
   ownerName: "Prof Démo",
+  heldRole: role,
+  usedCount: 0,
+  ownerGivenName: "Prof",
+  ownerFamilyName: "Démo",
+  ownerAvatarUrl: null,
   memberCount: 0,
 });
 

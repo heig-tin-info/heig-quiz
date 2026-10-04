@@ -40,6 +40,7 @@ import {
   Menu,
   type MenuItem,
   PageHeader,
+  PersonAvatar,
   pressable,
   QueryError,
   RelativeTime,
@@ -432,19 +433,23 @@ function PoolRow({
         </span>
       </td>
       <td className={`${T.td} text-right tabular-nums`}>{pool.questionCount}</td>
+      <td className={`${T.td} ${T.colMid} text-right tabular-nums`}>{pool.usedCount}</td>
       <td className={T.td}>
         <VisibilityBadge pool={pool} />
       </td>
       <td className={`${T.td} ${T.colMid}`}>
-        {mine ? <span className="text-fg-faint">—</span> : pool.ownerName}
+        {/* The avatar stands alone, so it carries the name (DESIGN.md ›
+            PersonAvatar); the accent disc is the reader's own, as in the shell. */}
+        <PersonAvatar
+          name={[pool.ownerGivenName, pool.ownerFamilyName]}
+          src={pool.ownerAvatarUrl}
+          label={pool.ownerName}
+          tone={mine ? "accent" : "muted"}
+        />
       </td>
-      <td className={`${T.td} ${T.colLow}`}>
-        {pool.role === "owner" ? (
-          <span className="text-fg-faint">—</span>
-        ) : (
-          t(`share.role.${pool.role}`)
-        )}
-      </td>
+      {/* The role HELD, never the one Super Powers lend: an admin passing
+          through a colleague's pool is not its owner (ADR-013). */}
+      <td className={`${T.td} ${T.colLow}`}>{t(`share.role.${pool.heldRole}`)}</td>
       <td className={`${T.td} ${T.colHigh} whitespace-nowrap text-fg-muted`}>
         <RelativeTime iso={pool.updatedAt} />
       </td>
@@ -456,31 +461,35 @@ function PoolRow({
   );
 }
 
-type PoolSort = "name" | "questions" | "visibility" | "owner" | "role" | "updated";
+type PoolSort = "name" | "questions" | "used" | "visibility" | "owner" | "role" | "updated";
 
 /**
  * What each column of the table reading is ordered ON. The visibility ranks
  * on the ENUM and not on the badge's sentence: what a teacher groups here is
  * private / shared / public, and "shared with 2" would scatter that group by
- * its member count. The two columns that show "—" for the reader's own pools
- * rank those first, where the dash already puts them.
+ * its member count. The owner ranks by name, the one the avatar's label says;
+ * the role by its rank, owner first, so a teacher's own shelf leads.
  */
-function poolRank(pool: PoolSummary, key: PoolSort, mine: boolean, t: TFunction): string | number {
+function poolRank(pool: PoolSummary, key: PoolSort): string | number {
   switch (key) {
     case "questions":
       return pool.questionCount;
+    case "used":
+      return pool.usedCount;
     case "visibility":
       return pool.visibility;
     case "owner":
-      return mine ? "" : pool.ownerName;
+      return pool.ownerName;
     case "role":
-      return pool.role === "owner" ? "" : t(`share.role.${pool.role}`);
+      return ROLE_RANK[pool.heldRole];
     case "updated":
       return pool.updatedAt;
     default:
       return pool.name;
   }
 }
+
+const ROLE_RANK: Record<PoolSummary["heldRole"], number> = { owner: 0, contributor: 1, reader: 2 };
 
 export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
@@ -500,12 +509,13 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
      the reader picks another one by clicking a label. */
   const { sorted, sort, toggle } = useSortableTable<PoolSummary, PoolSort>(
     rows,
-    (pool, key) => poolRank(pool, key, me.data != null && pool.ownerId === me.data.id, t),
+    poolRank,
     null,
   );
   const columns: Column<PoolSort>[] = [
     { key: "name", label: t("pools.name") },
     { key: "questions", label: t("pools.questionsColumn"), right: true },
+    { key: "used", label: t("pools.usedColumn"), right: true, className: T.colMid },
     { key: "visibility", label: t("pools.visibility") },
     { key: "owner", label: t("pools.owner"), className: T.colMid },
     { key: "role", label: t("pools.role"), className: T.colLow },

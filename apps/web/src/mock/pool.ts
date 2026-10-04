@@ -1460,20 +1460,42 @@ const liveQuestions = (poolId: string) => questions.filter((q) => q.poolId === p
 const myMembership = (poolId: string): MockMember | undefined =>
   (poolMembers[poolId] ?? []).find((m) => m.userId === (me?.id ?? "u-me"));
 
-const poolOwnerName = (pool: MockPool) => {
-  const owner = (poolMembers[pool.id] ?? []).find((m) => m.userId === pool.ownerId);
-  return owner ? `${owner.givenName} ${owner.familyName}` : "—";
-};
+/** The owner's member row, or this browser's teacher on a pool it just created. */
+const poolOwner = (pool: MockPool): { givenName: string; familyName: string } | null =>
+  (poolMembers[pool.id] ?? []).find((m) => m.userId === pool.ownerId) ??
+  (pool.ownerId === (me?.id ?? "u-me") && me ? me : null);
 
-export const poolSummary = (pool: MockPool) => ({
-  ...pool,
-  questionCount: liveQuestions(pool.id).filter((q) => !q.deletedAt).length,
+/**
+ * The questions students have met, by id: the evaluation mock knows its
+ * items and attempts and registers its answer here — it imports this file,
+ * so this one cannot import it back.
+ */
+let usedProbe: (questionId: string) => boolean = () => false;
+export function registerUsedProbe(probe: (questionId: string) => boolean): void {
+  usedProbe = probe;
+}
+
+export const poolSummary = (pool: MockPool) => {
+  const owner = poolOwner(pool);
+  const live = liveQuestions(pool.id).filter((q) => !q.deletedAt);
   // The server sends the caller's EFFECTIVE role; a pool with no member row
-  // at all is one this browser just created, so it is theirs.
-  role: myMembership(pool.id)?.role ?? (pool.ownerId === (me?.id ?? "u-me") ? "owner" : "reader"),
-  ownerName: poolOwnerName(pool),
-  memberCount: (poolMembers[pool.id] ?? []).filter((m) => m.userId !== pool.ownerId).length,
-});
+  // at all is one this browser just created, so it is theirs. The mock plays
+  // no Super Powers, so the held role is the same.
+  const role =
+    myMembership(pool.id)?.role ?? (pool.ownerId === (me?.id ?? "u-me") ? "owner" : "reader");
+  return {
+    ...pool,
+    questionCount: live.length,
+    usedCount: live.filter((q) => usedProbe(q.id)).length,
+    role,
+    heldRole: role,
+    ownerName: owner ? `${owner.givenName} ${owner.familyName}` : "—",
+    ownerGivenName: owner?.givenName ?? "",
+    ownerFamilyName: owner?.familyName ?? "",
+    ownerAvatarUrl: null,
+    memberCount: (poolMembers[pool.id] ?? []).filter((m) => m.userId !== pool.ownerId).length,
+  };
+};
 
 interface TreeNode extends MockCategory {
   children: TreeNode[];

@@ -45,6 +45,7 @@ import {
   poolSummary,
   questionOr404,
   questions,
+  registerUsedProbe,
   solutionOf,
   studentView,
 } from "./pool";
@@ -603,6 +604,17 @@ export function makeEvaluation(
 }
 
 export const evaluations: MockEvaluation[] = [];
+
+// The pool list's "Used" (ADR-013): a question frozen in an exam or an
+// exercise where a student seat, not a staff walk, holds an attempt.
+registerUsedProbe((questionId) =>
+  evaluations.some(
+    (e) =>
+      e.mode !== "poll" &&
+      e.items.some((i) => i.questionId === questionId) &&
+      e.rows.some((r) => !r.staff && r.attemptId !== null),
+  ),
+);
 /** The draft exercise with retakes (F-EVAL-15), addressable by id. */
 export const RETAKE_DRAFT_ID = "eeeeeeee-0000-4000-8000-000000000015";
 /** The draft made from a template that has moved since (F-EVAL-26), addressable by id. */

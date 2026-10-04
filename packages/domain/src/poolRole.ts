@@ -45,7 +45,18 @@ export interface PoolRoleFacts {
  * DO, never whether they may see the pool.
  */
 export function effectivePoolRole(facts: PoolRoleFacts): PoolRoleName {
-  if (facts.reachesAll || facts.isOwner || facts.memberRole === "owner") return "owner";
+  return facts.reachesAll ? "owner" : heldPoolRole(facts);
+}
+
+/**
+ * The role an account holds in a pool IN ITS OWN RIGHT: claims 1 to 4 above
+ * with Super Powers set aside. It is what the pool list SHOWS as "My role"
+ * (ADR-013, amendment of 2026-10-04): "Owner" there means the account owns the
+ * pool or holds an `owner` seat, never that an admin switched Super Powers
+ * on. What the caller may DO is still {@link effectivePoolRole}.
+ */
+export function heldPoolRole(facts: Omit<PoolRoleFacts, "reachesAll">): PoolRoleName {
+  if (facts.isOwner || facts.memberRole === "owner") return "owner";
   if (facts.memberRole) return facts.memberRole;
   if (facts.isCourseStaff) return "contributor";
   return "reader";

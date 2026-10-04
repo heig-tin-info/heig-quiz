@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { effectivePoolRole, poolRoleAllows, type PoolRoleFacts } from "./poolRole.js";
+import { effectivePoolRole, heldPoolRole, poolRoleAllows, type PoolRoleFacts } from "./poolRole.js";
 
 const nobody: PoolRoleFacts = {
   reachesAll: false,
@@ -45,6 +45,33 @@ describe("effectivePoolRole", () => {
 
   it("falls back to reader and never invents more", () => {
     expect(effectivePoolRole(nobody)).toBe("reader");
+  });
+});
+
+describe("heldPoolRole", () => {
+  it("never makes an owner of Super Powers alone", () => {
+    // An admin who is neither owner nor seated sees the role they would hold
+    // without Super Powers; the effective role still says owner.
+    expect(heldPoolRole({ ...nobody, isPublic: true })).toBe("reader");
+    expect(heldPoolRole({ ...nobody, isCourseStaff: true })).toBe("contributor");
+    expect(heldPoolRole({ ...nobody, memberRole: "reader", isCourseStaff: true })).toBe("reader");
+    expect(effectivePoolRole({ ...nobody, reachesAll: true, isPublic: true })).toBe("owner");
+  });
+
+  it("keeps the owner and an owner seat owners", () => {
+    expect(heldPoolRole({ ...nobody, isOwner: true })).toBe("owner");
+    expect(heldPoolRole({ ...nobody, memberRole: "owner" })).toBe("owner");
+  });
+
+  it("agrees with the effective role whenever Super Powers are off", () => {
+    const roles = [null, "reader", "contributor", "owner"] as const;
+    for (const memberRole of roles)
+      for (const isOwner of [false, true])
+        for (const isCourseStaff of [false, true])
+          for (const isPublic of [false, true]) {
+            const facts = { ...nobody, memberRole, isOwner, isCourseStaff, isPublic };
+            expect(heldPoolRole(facts)).toBe(effectivePoolRole(facts));
+          }
   });
 });
 

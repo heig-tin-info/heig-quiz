@@ -43,6 +43,11 @@ const POOLS: PoolSummary[] = [
     questionCount: 3,
     role: "owner",
     ownerName: "Marie Dupont",
+    heldRole: "owner",
+    usedCount: 0,
+    ownerGivenName: "Marie",
+    ownerFamilyName: "Dupont",
+    ownerAvatarUrl: null,
     memberCount: 0,
   },
   {
@@ -58,6 +63,11 @@ const POOLS: PoolSummary[] = [
     questionCount: 1,
     role: "contributor",
     ownerName: "Marie Dupont",
+    heldRole: "contributor",
+    usedCount: 0,
+    ownerGivenName: "Marie",
+    ownerFamilyName: "Dupont",
+    ownerAvatarUrl: null,
     memberCount: 2,
   },
 ];

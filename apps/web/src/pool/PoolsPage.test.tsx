@@ -41,8 +41,13 @@ const makePool = (over: Partial<PoolSummary> = {}): PoolSummary => ({
   createdAt: "2026-01-01T08:00:00.000Z",
   updatedAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
   questionCount: 14,
+  usedCount: 9,
   role: "owner",
+  heldRole: "owner",
   ownerName: "Prof Démo",
+  ownerGivenName: "Prof",
+  ownerFamilyName: "Démo",
+  ownerAvatarUrl: null,
   memberCount: 0,
   ...over,
 });
@@ -223,6 +228,67 @@ describe("PoolsPage", () => {
     const row = screen.getByRole("row", { name: /Programmation C/ });
     expect(within(row).getByText("14")).toBeVisible();
     expect(within(row).getByText("shared with 1")).toBeVisible();
+  });
+
+  it("shows every owner as an avatar, my role always, and how many questions were used", async () => {
+    mockFetch({
+      [`GET ${POOLS}`]: ok([
+        makePool(),
+        makePool({
+          id: "p2",
+          name: "Électronique",
+          usedCount: 0,
+          role: "contributor",
+          heldRole: "contributor",
+          ownerId: "t1",
+          ownerName: "Ada Lovelace",
+          ownerGivenName: "Ada",
+          ownerFamilyName: "Lovelace",
+        }),
+      ]),
+    });
+    renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient: withMe() });
+    await screen.findByText("Programmation C");
+    await userEvent.click(screen.getByRole("radio", { name: "List" }));
+
+    expect(screen.getByRole("columnheader", { name: "Used" })).toBeInTheDocument();
+    // My own pool: my own disc, in the accent, and the role written out —
+    // no dash left in either column.
+    const mine = screen.getByRole("row", { name: /Programmation C/ });
+    const myDisc = within(mine).getByRole("img", { name: "Prof Démo" });
+    expect(myDisc).toHaveTextContent("PD");
+    expect(myDisc).toHaveClass("bg-accent");
+    expect(within(mine).getByText("Owner")).toBeVisible();
+    expect(within(mine).getByText("9")).toBeVisible();
+    expect(within(mine).queryByText("—")).toBeNull();
+
+    const theirs = screen.getByRole("row", { name: /Électronique/ });
+    const theirDisc = within(theirs).getByRole("img", { name: "Ada Lovelace" });
+    expect(theirDisc).toHaveTextContent("AL");
+    expect(theirDisc).not.toHaveClass("bg-accent");
+    expect(within(theirs).getByText("Contributor")).toBeVisible();
+    expect(within(theirs).getByText("0")).toBeVisible();
+  });
+
+  it("shows an admin with Super Powers the role they hold, and still offers every action", async () => {
+    // ADR-013 amendment: Super Powers make an owner of every pool for what
+    // can be DONE, never for what the list says.
+    mockFetch({
+      [`GET ${POOLS}`]: ok([
+        makePool({ role: "owner", heldRole: "reader", ownerId: "t1", ownerName: "Ada Lovelace" }),
+      ]),
+    });
+    const queryClient = makeQueryClient();
+    queryClient.setQueryData(["me"], { ...ME, role: "admin" });
+    renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient });
+    await screen.findByText("Programmation C");
+    await userEvent.click(screen.getByRole("radio", { name: "List" }));
+
+    const row = screen.getByRole("row", { name: /Programmation C/ });
+    expect(within(row).getByText("Reader")).toBeVisible();
+    expect(within(row).queryByText("Owner")).toBeNull();
+    await userEvent.click(within(row).getByRole("button", { name: "Actions" }));
+    expect(screen.getByRole("menuitem", { name: /Delete pool/ })).toBeVisible();
   });
 
   it("sorts the table reading by the column label that was clicked", async () => {

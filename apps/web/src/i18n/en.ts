@@ -3461,6 +3461,7 @@ export const en = {
   "pools.updated": "Updated",
   "pools.updatedColumn": "Updated",
   "pools.questionsColumn": "Questions",
+  "pools.usedColumn": "Used",
 
   "share.title": "Share this pool",
   "share.visibility": "Visibility",

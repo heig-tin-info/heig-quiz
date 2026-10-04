@@ -4,11 +4,15 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 
 import type { Pool, PoolColor, PoolInUse, PoolRole, PoolSummary } from "@quiz/contracts";
-import { displayName, effectivePoolRole } from "@quiz/domain";
+import { displayName, effectivePoolRole, heldPoolRole } from "@quiz/domain";
 
 import { isForeignKeyViolation, type Db } from "../../db/client.js";
 import type { Caller } from "../guards.js";
+import { shownAvatar } from "../avatar.js";
+import { isStaffAttempt } from "../evaluation/service.js";
 import {
+  attempts,
+  avatars,
   classrooms,
   coursePools,
   courseStaff,
@@ -25,6 +29,33 @@ import { poolTagNames } from "./tags.js";
 import { categoryTree } from "./categories.js";
 
 export const questionCount = sql<number>`(SELECT count(*) FROM ${questions} WHERE ${qualified(questions.poolId)} = ${qualified(pools.id)} AND ${qualified(questions.deletedAt)} IS NULL)::int`;
+
+/**
+ * How many live questions of the pool a student has met (ADR-013, amendment
+ * of 2026-10-04): DISTINCT questions, every version together, frozen in an
+ * item of an exam or an exercise (never a poll) that has a started attempt
+ * of a student account (no guest) which is not a staff walk (ADR-018). A
+ * historical fact: the `stats_since` reset does not apply. Counted through
+ * `questions.pool_id`, so a moved question carries its history along.
+ *
+ * A function, not a constant: `isStaffAttempt` comes from the evaluation
+ * module, which imports this one, and is only read at call time. Reads
+ * `evaluations`, `evaluation_items` and `attempts` by join.
+ */
+function usedCountOf(): SQL<number> {
+  return sql<number>`(SELECT count(DISTINCT ${qualified(questions.id)}) FROM ${questions}
+    JOIN ${questionVersions} ON ${qualified(questionVersions.questionId)} = ${qualified(questions.id)}
+    JOIN ${evaluationItems} ON ${qualified(evaluationItems.questionVersionId)} = ${qualified(questionVersions.id)}
+    JOIN ${evaluations} ON ${qualified(evaluations.id)} = ${qualified(evaluationItems.evaluationId)}
+    WHERE ${qualified(questions.poolId)} = ${qualified(pools.id)}
+      AND ${qualified(questions.deletedAt)} IS NULL
+      AND ${qualified(evaluations.mode)} IN ('exam', 'exercise')
+      AND EXISTS (SELECT 1 FROM ${attempts}
+        WHERE ${qualified(attempts.evaluationId)} = ${qualified(evaluations.id)}
+          AND ${qualified(attempts.startedAt)} IS NOT NULL
+          AND ${qualified(attempts.userId)} IS NOT NULL
+          AND NOT ${isStaffAttempt}))::int`;
+}
 
 export function poolJson(pool: PoolRow): Pool {
   return {
@@ -69,34 +100,45 @@ export async function listPools(
     .select({
       pool: pools,
       questionCount,
+      usedCount: usedCountOf(),
       memberCount: memberCountOf,
       memberRole: memberRoleOf(viewer.id),
       isCourseStaff: courseStaffOf(viewer.id),
       ownerGivenName: users.givenName,
       ownerFamilyName: users.familyName,
       ownerEmail: users.email,
+      ownerPicture: users.pictureUrl,
+      ownerAvatarAt: avatars.updatedAt,
     })
     .from(pools)
     .leftJoin(users, eq(users.id, pools.ownerId))
+    .leftJoin(avatars, eq(avatars.userId, pools.ownerId))
     .where(where)
     .orderBy(asc(pools.name));
-  return rows.map((r) => ({
-    ...poolJson(r.pool),
-    questionCount: r.questionCount,
-    memberCount: r.memberCount,
-    role: effectivePoolRole({
-      reachesAll: viewer.reach === "all",
+  return rows.map((r) => {
+    const facts = {
       isOwner: r.pool.ownerId === viewer.id,
       memberRole: r.memberRole,
       isCourseStaff: r.isCourseStaff,
       isPublic: r.pool.visibility === "public",
-    }),
-    ownerName: displayName({
-      givenName: r.ownerGivenName,
-      familyName: r.ownerFamilyName,
-      email: r.ownerEmail ?? "",
-    }),
-  }));
+    };
+    return {
+      ...poolJson(r.pool),
+      questionCount: r.questionCount,
+      usedCount: r.usedCount,
+      memberCount: r.memberCount,
+      role: effectivePoolRole({ ...facts, reachesAll: viewer.reach === "all" }),
+      heldRole: heldPoolRole(facts),
+      ownerName: displayName({
+        givenName: r.ownerGivenName,
+        familyName: r.ownerFamilyName,
+        email: r.ownerEmail ?? "",
+      }),
+      ownerGivenName: r.ownerGivenName ?? "",
+      ownerFamilyName: r.ownerFamilyName ?? "",
+      ownerAvatarUrl: shownAvatar(r.pool.ownerId, r.ownerAvatarAt, r.ownerPicture ?? null),
+    };
+  });
 }
 
 export async function createPool(
