@@ -24,7 +24,7 @@ import {
   type ProjectSummary,
 } from "@quiz/contracts";
 
-import { slugify } from "@quiz/domain";
+import { PROJECT_PATCH_FIELDS, slugify } from "@quiz/domain";
 
 import { mockClassroomOrg } from "./github";
 import { courses, rooms } from "./org";
@@ -163,17 +163,10 @@ on("POST", "/app/api/classrooms/:id/projects", async (m, raw): Promise<ProjectSu
     archivedAt: null,
     createdAt: new Date(at).toISOString(),
     accepted: false,
-    editable: [],
+    // A draft changes everything (`projectFieldRefusal`).
+    editable: [...PROJECT_PATCH_FIELDS],
   };
   const course = courses.find((c) => c.id === room.courseId);
-  addMockProject({
-    kind: "project",
-    id: project.id,
-    title: project.name,
-    state: "draft",
-    classroom: { id, name: room.name, courseCode: course?.code ?? "" },
-    startAt: project.startAt,
-    deadlineAt: project.deadlineAt,
-  });
+  addMockProject(project, { id, name: room.name, courseCode: course?.code ?? "" });
   return project;
 });

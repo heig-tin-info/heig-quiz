@@ -128,8 +128,10 @@ function invalid(missing: ReadonlySet<TimingField>, field: TimingField) {
  * scheduled evaluation. Keyed on the stored value by its caller, so a write
  * from elsewhere replaces what the field shows; a refused write puts the
  * stored value back (#254), so no field shows a time the server never took.
+ * A project's deadline and a repository's own deadline (M3-12) are written
+ * the same way.
  */
-function DateField({
+export function DateField({
   value,
   onCommit,
   ...field
@@ -139,6 +141,8 @@ function DateField({
   disabled: boolean;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
+  /** What the date means, one line under the input (the project page's deadline). */
+  description?: ReactNode;
   value: string | null;
   /** Writes the value; `reset` is for a refusal, to show the stored value again. */
   onCommit: (value: string | null, reset: () => void) => void;

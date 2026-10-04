@@ -106,6 +106,15 @@ export const classroomProjectsKey = (id: string) => ["classroom", id, "projects"
 export const projectSourcesKey = (id: string) => ["classroom", id, "project-sources"] as const;
 export const projectSourceKey = (id: string, repo: string) => [...projectSourcesKey(id), repo] as const;
 /**
+ * One project's page (`GET /projects/:id`, M3-12) and what hangs off it — a
+ * repository's runs, the review checkpoints — under a root of its own,
+ * `project`, which the `projects` hint names (`realtime/hints.ts`): a push
+ * or a run on one of its repositories refreshes the page without a reload.
+ */
+export const projectKey = (id: string) => ["project", id] as const;
+export const projectRunsKey = (id: string, rid: string) => [...projectKey(id), "repos", rid, "runs"] as const;
+export const projectCheckpointsKey = (id: string) => [...projectKey(id), "checkpoints"] as const;
+/**
  * The organizations Quiz's App is installed on (the connect sheet's picker).
  * Its own root, which the `classrooms` hint names: an installation that
  * completes adds a row while the sheet is open.

@@ -72,16 +72,21 @@ describe("routeToPath / parsePath", () => {
   it("parses none of the classroom merge's other routes while CLASSROOM_PAGES is off", () => {
     // A production build: every such address reads as it did before them.
     expect(parsePath("/classrooms/c-1/grades")).toEqual({ view: "classroom", id: "c-1" });
-    expect(parsePath("/projects/p-1")).toEqual({ view: "home" });
     expect(parsePath("/projects/p-1/groups")).toEqual({ view: "home" });
     expect(parsePath("/projects/x/groups")).toEqual({ view: "home" });
-    // M3-10's new project: the classroom, as an unknown tab is.
-    expect(parsePath("/classrooms/c-1/projects/new")).toEqual({ view: "classroom", id: "c-1" });
+  });
+
+  it("parses the project page and the new project in every build, since M3-12 (F-PROJ-13)", () => {
+    expect(ROUTES.project.preview).toBeUndefined();
+    expect(ROUTES.projectNew.preview).toBeUndefined();
+    expect(parsePath("/projects/p-1")).toEqual({ view: "project", id: "p-1" });
+    expect(parsePath("/classrooms/c-1/projects/new")).toEqual({ view: "projectNew", classroomId: "c-1" });
   });
 
   it("enables exactly the routes that parse in this build (M3-10)", () => {
-    expect(routeEnabled("project")).toBe(false);
-    expect(routeEnabled("projectNew")).toBe(false);
+    expect(routeEnabled("project")).toBe(true);
+    expect(routeEnabled("projectNew")).toBe(true);
+    expect(routeEnabled("projectGroups")).toBe(false);
     expect(routeEnabled("classroomSettings")).toBe(true);
   });
 

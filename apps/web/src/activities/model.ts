@@ -19,7 +19,7 @@ import { activityBucket, isLiveNow, type ActivityBucket } from "@quiz/domain";
 import { evaluationHome, evaluationStateLabel, stateTone } from "../evaluation/common";
 import type { TFunction } from "../i18n";
 import { projectStateLabel, projectStateTone } from "../project/common";
-import { routeEnabled, type Route } from "../router";
+import type { Route } from "../router";
 import type { Tone } from "../ui";
 
 /** The three ages of an activity (`activityBucket`, shared with the server). */
@@ -86,8 +86,9 @@ export interface ActivityKindSpec<A extends ActivitySummary> {
   /** Where it sits on the gantt; null for what has no date at all. */
   span(a: A, now: number): Span | null;
   /**
-   * Where a click on its row leads; null where its page does not parse in
-   * this build (`routeEnabled`): the row is then not clickable.
+   * Where a click on its row leads; null for a kind whose page does not
+   * parse in this build (`routeEnabled`, none today): the row is then not
+   * clickable.
    */
   home(a: A): Route | null;
   stateLabel(a: A, t: TFunction): string;
@@ -153,8 +154,8 @@ export const KIND: { [K in ActivitySummary["kind"]]: ActivityKindSpec<Extract<Ac
       const s = new Date(a.startAt).getTime();
       return { s, d: Math.max(s, new Date(a.deadlineAt).getTime()) };
     },
-    // M3-12 drops `preview` from `project`, and the rows open.
-    home: (a) => (routeEnabled("project") ? { view: "project", id: a.id } : null),
+    // The project page (M3-12), in every build.
+    home: (a) => ({ view: "project", id: a.id }),
     stateLabel: (a, t) => projectStateLabel(a.state, t),
     stateTone: (a) => projectStateTone(a.state),
   },

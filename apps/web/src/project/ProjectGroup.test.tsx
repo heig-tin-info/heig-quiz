@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { ProjectActivitySummary } from "@quiz/contracts";
 
@@ -9,22 +9,9 @@ import { ProjectGroup } from "./ProjectGroup";
 
 /*
  * The classroom's Projects group (M3-10): drawn only while the classroom has
- * a project, a failure with its retry, a row per project that opens it —
- * where the project page parses (M3-12).
+ * a project, a failure with its retry, a row per project that opens its
+ * page (M3-12).
  */
-
-/*
- * Whether a `preview` route parses is a build flag (`CLASSROOM_PAGES`); the
- * tests choose it per case through `routeEnabled`.
- */
-const gate = vi.hoisted(() => ({ enabled: true }));
-vi.mock("../router", async (original) => ({
-  ...(await original<typeof import("../router")>()),
-  routeEnabled: () => gate.enabled,
-}));
-beforeEach(() => {
-  gate.enabled = true;
-});
 
 const PROJECTS = "/app/api/classrooms/r1/projects";
 const ROOM = { id: "00000000-0000-4000-8000-0000000000aa", name: "PRG1-2026", courseCode: "PRG1" };
@@ -68,18 +55,6 @@ describe("the classroom's Projects group", () => {
     await userEvent.click(within(region).getByText("Labo 2"));
     expect(navigate).toHaveBeenCalledWith({ view: "project", id: project(2).id });
     expect(calls.every((c) => c.method === "GET")).toBe(true);
-  });
-
-  it("does not open a project where its page does not parse (production until M3-12)", async () => {
-    gate.enabled = false;
-    mockFetch({ [`GET ${PROJECTS}`]: ok([project(1)]) });
-    const navigate = renderGroup();
-    const region = await screen.findByRole("region", { name: "Projects" });
-    const row = within(region).getByText("Labo 1").closest("tr")!;
-    expect(row).not.toHaveAttribute("tabindex");
-    expect(row.className).not.toMatch(/cursor-pointer/);
-    await userEvent.click(row);
-    expect(navigate).not.toHaveBeenCalled();
   });
 
   it("draws nothing for a classroom without a project", async () => {

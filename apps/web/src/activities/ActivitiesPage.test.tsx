@@ -13,16 +13,6 @@ import { ActivitiesPage } from "./ActivitiesPage";
  * now" block, and End — for a running poll only, behind a confirmation.
  */
 
-/*
- * Whether a `preview` route parses is a build flag (`CLASSROOM_PAGES`): the
- * project page opens from a row only where it does (M3-12).
- */
-const gate = vi.hoisted(() => ({ enabled: true }));
-vi.mock("../router", async (original) => ({
-  ...(await original<typeof import("../router")>()),
-  routeEnabled: () => gate.enabled,
-}));
-
 const MIN = 60_000;
 const ROOM = { id: id("classroom", 1), name: "PRG1-2026", courseCode: "PRG1" };
 
@@ -67,7 +57,6 @@ const ALL = [EXAM, POLL, SERIES, NEXT, DONE];
 const DRAFT = activity(7, { title: "Quiz 1 — draft" });
 
 beforeEach(() => {
-  gate.enabled = true;
   localStorage.removeItem("quiz-activities-view");
   localStorage.removeItem("quiz-activities-tab");
 });
@@ -326,17 +315,6 @@ describe("ActivitiesPage", () => {
       expect(within(row).queryByRole("button", { name: /Actions/ })).not.toBeInTheDocument();
       await user.click(within(table).getByText("Labo 2 — pointeurs"));
       expect(navigate).toHaveBeenLastCalledWith({ view: "project", id: LAB.id });
-    });
-
-    it("opens no project where its page does not parse (production until M3-12)", async () => {
-      gate.enabled = false;
-      const user = userEvent.setup();
-      const { navigate } = render([LAB, DONE]);
-      const table = await screen.findByRole("table");
-      const row = within(table).getByText("Labo 2 — pointeurs").closest("tr")!;
-      expect(row).not.toHaveAttribute("tabindex");
-      await user.click(row);
-      expect(navigate).not.toHaveBeenCalled();
     });
 
     it("offers a Project chip only when there is a project, and filters by it", async () => {

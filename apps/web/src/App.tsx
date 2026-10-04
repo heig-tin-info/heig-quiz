@@ -57,10 +57,11 @@ const TemplateEditor = lazy(() =>
 const ClassroomView = lazy(() =>
   import("./ClassroomView").then((m) => ({ default: m.ClassroomView })),
 );
-// F-PROJ-01 (M3-11): the new project.
+// F-PROJ-01 (M3-11): the new project; F-PROJ-13 (M3-12): the project page.
 const NewProjectPage = lazy(() =>
   import("./project/NewProjectPage").then((m) => ({ default: m.NewProjectPage })),
 );
+const ProjectPage = lazy(() => import("./project/ProjectPage").then((m) => ({ default: m.ProjectPage })));
 // The pool screens (WP7): the teacher's authoring surface, one chunk each,
 // so a student — or a teacher who only runs quizzes — never downloads them.
 const PoolsPage = lazy(() => import("./pool/PoolsPage").then((m) => ({ default: m.PoolsPage })));
@@ -272,7 +273,8 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // The pages of the classroom merge, placeholders until their screens ship
   // (`CLASSROOM_PAGES`, `router.ts`).
   classroomGrades: (_, c) => <ComingSoon title="bnav.grades" navigate={c.navigate} teacherUi={c.teacherUi} />,
-  project: (_, c) => <ComingSoon title="soon.project" navigate={c.navigate} teacherUi={c.teacherUi} />,
+  // F-PROJ-13: the staff's project page (M3-12).
+  project: (r, c) => <ProjectPage id={r.id} navigate={c.navigate} />,
   projectGroups: (_, c) => <ComingSoon title="soon.projectGroups" navigate={c.navigate} teacherUi={c.teacherUi} />,
   // F-PROJ-01: "New ▾ › Project" (M3-10) leads here, M3-11's form.
   projectNew: (r, c) => <NewProjectPage classroomId={r.classroomId} navigate={c.navigate} />,

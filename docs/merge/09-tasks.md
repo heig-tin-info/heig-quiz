@@ -1204,6 +1204,12 @@ under the half that serves them.
   to the new version. The sync's own commits go to `bot_commits(sync)`
   before the ref moves. The `repository` handler already follows a renamed
   source or distribution by id; a deleted one is this task's to surface.
+- **From M3-12a** (orchestrator, 2026-10-04): the project page says
+  `primaryAction: "sync"` as a sentence in its header
+  (`project.status.sync`, `projectStatus` in `project/projectPage.ts`) and
+  draws no button for it. This task adds the **Sync** primary button in
+  `project/ProjectPage.tsx` (the `actions` of its `PageHeader`, beside the
+  `publish` branch) on its route, and the `-sync-banner` scene.
 
 ### M3-08 — split (orchestrator, 2026-10-02)
 M3-08 (teacher views, grades, release) is split in two: **M3-08a** the
@@ -1699,7 +1705,14 @@ that serves them.
     Scenes `project-new`, `-advanced`, `-refusal`, `-unconnected`.
   - Not done: checkpoints (M3-05), the project page (M3-12).
 
-### M3-12 — Web: project page
+### M3-12 — split (orchestrator, 2026-10-04)
+M3-12 (the project page) is split in three PRs: **M3-12a** the page on what
+`main` holds today (M3-08a's reads, M3-05a's repository routes, M3-05b's
+checkpoints, M3-02's lifecycle), **M3-12b** the per-repository writes of
+M3-08b (score, resend, re-enable) and the review field, **M3-12c** the
+release. The original card's notes stay here; each part has its card below.
+
+### M3-12a — Web: project page (reads, lifecycle, deadline, checkpoints)
 - **Depends on**: M3-08a contracts (M3-08b for the writes). ‖ M3-11.
 - **From M3-08a** (2026-10-02): the page reads `GET /app/api/projects/:id`
   (`ProjectDetail`: the summary, `counts`, `primaryAction` decided by the
@@ -1727,6 +1740,167 @@ that serves them.
   its response schema here, `ProjectUnassigned` beside M3-11's
   `ProjectRefusal`. The protected files' edit reuses
   `project/ProtectedFiles.tsx`.
+- **Decided for it** (product owner and orchestrator, 2026-10-04): (1)
+  projects go live in production with this PR — `preview` dropped from
+  `project` AND `projectNew` (New ▾, the form and the page); `projectGroups`
+  stays `preview`; (2) an action is drawn only when its route exists:
+  Release and Sync are said in the header as text, never derived, until
+  M3-12c and M3-07 turn them into the primary button; `none` ⇒ no accent;
+  (3) group mode hidden in the new project form until M3-16, the 409
+  `unassigned_students` still lists the names (no link); (4) a deadline
+  moved later after it passed asks for confirmation, naming the reopen and
+  the repositories it reaches; (5) refetch every 30 s while the tab is
+  visible, once ~3 s after a `liveStale: true` response (SSE with M3-09);
+  (6) the edits are the fields F-PROJ-03 allows once published (name,
+  deadline, deadline strategy, protected files), the full draft edit a
+  follow-up; (7) the final review state per repository waits for M3-08b's
+  `review` field (M3-12b).
+- **As delivered** (branch `merge/M3-12a-project-page`). What M3-12b,
+  M3-12c, M3-07, M3-09, M3-13 and M3-16 inherit:
+  - **Routes** (`router.ts`): `project` and `projectNew` are no longer
+    `preview` — New ▾ › Project, the form and `/projects/:id` ship in every
+    build; `projectGroups` alone stays behind `CLASSROOM_PAGES`. `App.tsx`
+    renders `project/ProjectPage.tsx`; `soon.project` is gone.
+  - **The page** (`project/ProjectPage.tsx`; keys `projectKey(id)`,
+    `projectRunsKey(id, rid)`, `projectCheckpointsKey(id)` under a root
+    `project` that `HINT_ROOTS.projects` now names): `GET /app/api/projects/
+    :id` (`ProjectDetail`), refetched every 30 s while visible and once 3 s
+    after `liveStale: true` (`projectRefetchInterval`, `projectPage.ts`).
+    States: skeleton, a 404 as the classroom's (`QueryError` titled
+    `project.notFound`), `PageError` with retry, the empty roster (`EmptyState` →
+    the classroom's Roster tab). Header: name renamed in place
+    (`EditableTitle`, `PATCH {name}`) when `editable` names it, the state
+    badge (`project/common.ts`), the archived badge, ONE sentence
+    (`projectStatus`, the key and the date it names: draft / scheduled /
+    open until / locked since / locked not yet frozen / released on /
+    **release** and **sync** as text) and
+    the counts line; the primary button only for `primaryAction:
+    "publish"` (`POST …/publish`, success → `projectKey`,
+    `classroomProjectsKey`, `activitiesKey` invalidated); overflow menu
+    Archive (confirmation) / Restore / Delete (`typeToConfirm` the name,
+    the body says nothing is deleted on GitHub, F-PROJ-16; then the
+    classroom). Publish's `409 unassigned_students` is parsed by a LOCAL
+    zod schema `UnassignedBody` (`projectPage.ts`) and shown as a danger
+    alert listing the names, no link — **M3-08b adds `ProjectUnassigned`
+    to the contracts; M3-12b replaces the local schema by it.** Any
+    grade with `fellBack` ⇒ one warning alert on the scale.
+  - **Settings** (`project/ProjectSettings.tsx`, one `PATCH` per change,
+    the detail invalidated — PATCH answers `ProjectSummary`, a subset):
+    the deadline (`DateField` of `evaluation/TimingStep.tsx`, now exported
+    and taking a `description`; written on blur; `422 deadline_past` under
+    the field, the stored value back; a reopen — `isReopen`,
+    `reopenedRepos`: the project's `deadlineAppliedAt`, or a live
+    repository applied and following the project's deadline — asks first
+    through `useConfirm`; a manual draft by duration sends
+    `durationMinutes: null` with the date), the deadline strategy
+    (`Segmented`), the protected files (`ProtectedFiles.tsx`, `suggested`
+    widened to `readonly string[]`: the source's `suggestedProtected` read
+    from `GET …/sources/:repo` ∪ the files protected today). Each disabled
+    where `editable` does not name it, every control while the project is
+    archived. The facts set at creation (source, distribution, branches,
+    history, publication, grace, score, scale) as a read-only `dl`. The
+    full draft edit (start, grace, grading, scale, publication mode) is a
+    follow-up.
+  - **Repositories** (`project/ProjectRepos.tsx`): one `tr` per `rows`
+    entry, `repo: null` "not accepted" (a seat not claimed said), a row
+    without `enrollmentId` tagged "left the roster"; columns Student,
+    Repository (link, provisioning / invitation state), Last commit (sha,
+    relative time, live commit count), CI, Score (final points/max,
+    `Grade`, source), Deadline (effective, "own deadline" tag), State (the
+    lock — by staff —, the freeze, the flags of `repoFlags`: deleted,
+    several GRADE annotations (red), protected files in conflict, to
+    verify, modified after publication (amber), malformed score, locked
+    by archiving / no protection ruleset (zinc)). A phone keeps Student,
+    Score and State, the flags folded into "n flags" (`@2xl` container
+    query). A deleted repository is a muted row. `liveStale` ⇒ "Refreshing
+    GitHub's state…" on the heading. A row with a repository opens the
+    sheet; 100 rows are a plain table.
+  - **The sheet** (`project/RepoSheet.tsx`, read from the page's own
+    data): invitation, last commit, CI (+ live checks), the five scores,
+    the deadline and lock — own deadline `PUT …/repos/:rid/deadline`
+    (set, or "Follow the project's" = null; `422 deadline_past` under the
+    field), `POST …/repos/:rid/{lock,unlock}` — each answer laid over the
+    row (`setQueryData`) then the page invalidated; `actionable` (not
+    provisioned, deleted, or archived project ⇒ disabled, said why; `409
+    repo_unavailable` toasted); the runs (`GET …/repos/:rid/runs`): kind,
+    branch@sha, conclusion, points, tests, parse status and detail, the
+    slot marks current / frozen / review, after the deadline, to verify.
+  - **Checkpoints** (`project/ProjectCheckpoints.tsx`, graded `auto`
+    only): list with status sent (with its time) / scheduled / **void**
+    (`checkpointStatus` on `isVoidCheckpoint`); add in a `FormDialog`
+    (name, days before the deadline → `offsetDays: -n`, or a date); delete
+    after a confirmation (none offered once dispatched; `409
+    checkpoint_dispatched` toasted); `422 due_past` / `due_after_deadline`
+    and `409 duplicate_checkpoint` worded in the dialog.
+  - **Refusals** worded by `refusalMessage(error, t)` (`projectPage.ts`,
+    on `refusalKey` and `api.ts`'s new `refusalCodeOf`, which
+    `refusedWith` now reads too): `not_draft`, `distribution_missing`,
+    `deadline_past`, `strategy_frozen`, `publish_mode_frozen`,
+    `repo_unavailable`, the four checkpoint codes; the rest show the
+    server's message, else `error.save`.
+  - **Shared pieces**: `project/parts.tsx` (`RepoLink`, `Points`, `Score`,
+    `CiBadge`, `SCORE_SOURCE_KEY`), `project/RunHistory.tsx` (the sheet's
+    run table, GitHub's `conclusion` worded through
+    `project.run.conclusion.*`, an unknown one shown raw), `Fact` in
+    `ui/page.tsx` (a `<dt>`/`<dd>` pair). One key per word: `project.review`
+    (a run's kind, its slot, a score's source), `project.col.ci`,
+    `project.frozen`, `project.flag.toVerify`, `project.flag.multiple`,
+    `project.deadline`, `results.col.student`, `question.publish`.
+  - **Form** (`ProjectAdvanced.tsx`): group mode hidden (`GROUPS_OFFERED
+    = false`) until M3-16.
+  - **Mock** (`mock/project.ts`, `?projects=1`): the three seeded projects
+    now carry a page — the published one's rows walk every state
+    (pending provisioning, invitation pending, CI fail, to verify +
+    conflict, multiple, malformed, deleted, own deadline, staff lock,
+    degraded, a review run, a student off the roster), the locked one is
+    frozen, released with one score changed since (Release said) and on
+    `score_is_grade` over scores out of 100 (the scale warning); every
+    write above, the checkpoints (one void on the locked project), the
+    first read of a project `liveStale: true`; `?unassigned=1` refuses
+    Publish with three names. `addMockProject` takes the created
+    `ProjectSummary`, fully `editable`. Checked by `contract.test.ts`
+    (`ProjectDetail`, `GradeRunList`, `ReviewCheckpoint`). Scenes
+    `project`, `project-sheet`, `project-draft`, `project-unassigned`,
+    `project-locked` (`--width=390` for the phone).
+  - **Tests**: `project/projectPage.test.ts` (rules),
+    `project/ProjectPage.test.tsx` (states, primary action, publish 409,
+    archive / delete, edits and reopen, flags, sheet, checkpoints,
+    refetch, French), fixtures `test/project-fixtures.ts`; router tests
+    updated (`project` and `projectNew` parse everywhere).
+  - Not done here: see M3-12b and M3-12c; the final review state per
+    repository (`review` field, M3-08b); the "students cannot accept yet"
+    line of the empty repositories hint (`project.repos.noneAccepted`)
+    goes with M3-13.
+
+### M3-12b — Web: per-repository writes and the review state
+- **Depends on**: M3-12a, M3-08b.
+- **Goal**: in the row's sheet (`project/RepoSheet.tsx`): the teacher's
+  score with its comment (`PATCH …/repos/:rid/score`, `ScoreOverride`;
+  `409 not_frozen` and `grading_none` worded), the resend of a pending
+  invitation (409 otherwise, 429 once a minute), the re-enable of the
+  protection (clears "protected files in conflict"); the **final review**
+  state per repository from M3-08b's `review` field (asked at / of sha,
+  **not confirmed**, no review — degraded when archived as its lock or
+  protection suspended) in the table's State column and the sheet.
+  Replace `UnassignedBody` (`project/projectPage.ts`) by the contracts'
+  `ProjectUnassigned`. Scene `project-grades` (the sheet with a teacher
+  score).
+- **From M3-12a**: the sheet reads its row from `projectKey(id)` and lays
+  each repository answer over it (`settle` in `RepoSheet.tsx`); the
+  refusals go through `refusalMessage`; the mock's `MockRepo` carries
+  `teacher` and `protectionSuspended` already.
+
+### M3-12c — Web: the release
+- **Depends on**: M3-12a, M3-08b.
+- **Goal**: `primaryAction: "release"` becomes the header's primary button
+  (`POST …/release`; `409 not_frozen` / `grading_none` worded; a
+  re-release rewrites the snapshot, said as such), the sentence
+  `project.status.release` kept as its description; the "modified after
+  publication" flag then offers the re-release. Scenes `project-release`
+  and `-released`.
+- **From M3-12a**: `ProjectPage.tsx` draws the button for `publish` only
+  (`actions` of its `PageHeader`); add the `release` branch there, and the
+  status sentence stays (`projectStatus`).
 
 ### M3-13 — Web: student `ProjectRow`
 - **Depends on**: M3-09 contracts, M2-07.

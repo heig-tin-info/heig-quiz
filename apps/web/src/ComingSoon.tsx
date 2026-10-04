@@ -9,7 +9,8 @@ import { Card, EmptyState, PageHeader, ParentLink } from "./ui";
  * The page of a route of the classroom merge whose screen is not built yet
  * (`CLASSROOM_PAGES`, `router.ts`): the page's name and "coming soon", with the
  * way home as its only link. Replaced route by route — the classroom's
- * Settings (M2-07) and Grades (M5-04), the project pages (M3-12) — and
+ * Settings (M2-07), the project page (M3-12), Grades (M5-04), the project's
+ * groups (M3-16) — and
  * deleted with the last of them.
  */
 export function ComingSoon({

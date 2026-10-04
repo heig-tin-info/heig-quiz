@@ -63,8 +63,9 @@ export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
   // The journal's copy was synchronised, or a page became visible (M4-02).
   journal: ["journal"],
   // A project's repository changed (M3-04): a classroom's projects
-  // (`classroomProjectsKey`); the project page's keys join with M3-12.
-  projects: ["classroom"],
+  // (`classroomProjectsKey`) and the project page with its runs and
+  // checkpoints (`projectKey`, M3-12).
+  projects: ["classroom", "project"],
   mutation: "all",
 };
 
